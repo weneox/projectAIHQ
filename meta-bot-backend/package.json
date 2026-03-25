@@ -12,7 +12,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@aihq/shared-contracts": "file:../shared-contracts",
+    "@aihq/shared-contracts": "1.0.0",
     "dotenv": "^16.4.5",
     "express": "^4.18.2",
     "helmet": "^7.1.0"

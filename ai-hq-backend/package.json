@@ -14,7 +14,7 @@
     "test:setup-review": "node --test --test-isolation=none tests/setup-review-session.test.js"
   },
   "dependencies": {
-    "@aihq/shared-contracts": "file:../shared-contracts",
+    "@aihq/shared-contracts": "1.0.0",
     "archiver": "^7.0.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
