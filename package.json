@@ -1,0 +1,21 @@
+{
+  "name": "projectAIHQ",
+  "private": true,
+  "workspaces": [
+    "ai-hq-backend",
+    "ai-hq-frontend",
+    "meta-bot-backend",
+    "twilio-voice-backend",
+    "shared-contracts"
+  ],
+  "scripts": {
+    "start:ai-hq-backend": "npm run start -w ai-hq-backend",
+    "migrate:ai-hq-backend": "npm run migrate -w ai-hq-backend",
+    "start:meta-bot-backend": "npm run start -w meta-bot-backend",
+    "start:twilio-voice-backend": "npm run start -w twilio-voice-backend",
+    "build:ai-hq-frontend": "npm run build -w ai-hq-frontend"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
