@@ -11,8 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CI: "true"
-      NODE_ENV: production
-      APP_ENV: production
       PORT: "8080"
       CORS_ORIGIN: https://app.example.com
       PUBLIC_BASE_URL: https://api.example.com
