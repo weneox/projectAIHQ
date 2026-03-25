@@ -20,3 +20,7 @@ Thumbs.db
 **/.git_backup/
 **/.git_backup_*/
 **/.git/
+
+**/.git_backup/
+**/.git_backup_*/
+**/.git/
