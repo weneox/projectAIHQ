@@ -10,6 +10,9 @@
     "./logger": "./logger.js"
   },
   "scripts": {
+    "validate:env": "node ../scripts/noop-validate-env.mjs shared-contracts",
+    "lint": "node ../scripts/check-js-syntax.mjs index.js critical.js realtime.js logger.js tests",
+    "build": "npm run lint",
     "test": "node --test"
   }
 }

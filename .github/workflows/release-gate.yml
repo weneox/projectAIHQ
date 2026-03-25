@@ -1,0 +1,72 @@
+name: Release Gate
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+jobs:
+  monorepo-release-gate:
+    runs-on: ubuntu-latest
+    env:
+      CI: "true"
+      NODE_ENV: production
+      APP_ENV: production
+      PORT: "8080"
+      CORS_ORIGIN: https://app.example.com
+      PUBLIC_BASE_URL: https://api.example.com
+      DATABASE_URL: postgresql://ci_user:ci_password@127.0.0.1:5432/aihq_ci
+      WS_AUTH_TOKEN: ci-ws-token
+      OPENAI_API_KEY: ci-openai-key
+      OPENAI_REALTIME_MODEL: gpt-4o-realtime-preview
+      OPENAI_REALTIME_VOICE: alloy
+      ADMIN_SESSION_SECRET: ci-admin-session-secret
+      USER_SESSION_SECRET: ci-user-session-secret
+      AIHQ_INTERNAL_TOKEN: ci-internal-token
+      DEBUG_API_TOKEN: ci-debug-token
+      CRON_SECRET: ci-cron-secret
+      TENANT_SECRET_MASTER_KEY: ci-tenant-master-key
+      VAPID_PUBLIC_KEY: BElCiExamplePublicKey1234567890abcdefghijklmnop
+      VAPID_PRIVATE_KEY: ci-vapid-private-key
+      VAPID_SUBJECT: mailto:platform@example.com
+      VERIFY_TOKEN: ci-meta-verify-token
+      META_APP_ID: "123456789012345"
+      META_APP_SECRET: ci-meta-app-secret
+      META_REDIRECT_URI: https://api.example.com/oauth/meta/callback
+      AIHQ_BASE_URL: https://aihq.example.com
+      CONTACT_EMAIL: platform@example.com
+      TWILIO_ACCOUNT_SID: ci_placeholder
+      TWILIO_API_KEY: ci_placeholder
+      TWILIO_API_SECRET: ci-twilio-api-secret
+      TWILIO_TWIML_APP_SID: AP12345678901234567890123456789012
+      TWILIO_AUTH_TOKEN: ci-twilio-auth-token
+      TWILIO_CALLER_ID: "+15555550100"
+      VITE_API_BASE: https://api.example.com
+      VITE_WS_URL: wss://api.example.com/ws
+      VITE_ENABLE_INTERNAL_ROUTES: "0"
+      VITE_DEBUG_PUSH: "0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate environment
+        run: npm run validate:env
+
+      - name: Lint all workspaces
+        run: npm run lint:all
+
+      - name: Run test gate
+        run: npm run test:all
+
+      - name: Run build gate
+        run: npm run build:all

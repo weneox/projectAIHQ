@@ -19,6 +19,7 @@ function b(v, fallback = false) {
 }
 
 export const PORT = n(process.env.PORT, 8080);
+export const APP_ENV = s(process.env.APP_ENV, process.env.NODE_ENV || "development");
 
 export const VERIFY_TOKEN = s(process.env.VERIFY_TOKEN, "neox_verify_token");
 export const META_APP_SECRET = s(process.env.META_APP_SECRET, "");

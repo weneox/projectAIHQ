@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
+    "validate:env": "node scripts/validate-env.mjs",
+    "lint": "node ../scripts/check-js-syntax.mjs server.js src tests",
+    "build": "npm run validate:env && npm run lint",
     "test": "node --test"
   },
   "engines": {

@@ -10,6 +10,9 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "migrate": "node scripts/migrate.js",
+    "validate:env": "node scripts/validate-env.mjs",
+    "lint": "node ../scripts/check-js-syntax.mjs server.js src tests scripts",
+    "build": "npm run validate:env && npm run lint",
     "test": "node --test --test-isolation=none tests/*.test.js",
     "test:setup-review": "node --test --test-isolation=none tests/setup-review-session.test.js"
   },
