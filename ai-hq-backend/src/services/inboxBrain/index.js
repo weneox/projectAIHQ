@@ -1,0 +1,885 @@
+import { getInboxPolicy, isPolicyQuietHours } from "../inboxPolicy.js";
+import {
+  buildMeta,
+  createLeadAction,
+  handoffAction,
+  markSeenAction,
+  noReplyAction,
+  sendMessageAction,
+  typingOffAction,
+  typingOnAction,
+} from "./actions.js";
+import { aiDecideInbox } from "./ai.js";
+import {
+  buildFallbackReply,
+  buildKnowledgeReply,
+  buildPlaybookReply,
+  buildUnsupportedServiceReply,
+} from "./fallback.js";
+import { isAckOnlyText, normalizeRecentMessages } from "./messages.js";
+import {
+  classifyTenantAwareIntent,
+  forceSafeIntent,
+  matchKnowledgeEntries,
+  matchPlaybook,
+  shouldAllowHandoffByText,
+} from "./matchers.js";
+import { resolveInboxRuntime, getTenantBusinessProfile } from "./runtime.js";
+import { getResolvedTenantKey, includesAny, lower, s, sanitizeReplyText } from "./shared.js";
+import {
+  buildSuppressedReplyReason,
+  getReliabilityFlags,
+  getThreadHandoffState,
+  isDuplicateReplyCandidate,
+} from "./threadState.js";
+
+function buildInboxActionsFallback({
+  text,
+  channel,
+  externalUserId,
+  tenantKey,
+  thread,
+  message,
+  tenant = null,
+  policy,
+  quietHoursApplied,
+  recentMessages = [],
+  reliability = {},
+  services = [],
+  knowledgeEntries = [],
+  responsePlaybooks = [],
+  threadState = null,
+  runtime = null,
+}) {
+  const actions = [];
+  const profile =
+    runtime ||
+    getTenantBusinessProfile(tenant, tenantKey, services);
+
+  const runtimeKnowledge = Array.isArray(runtime?.knowledgeEntries)
+    ? runtime.knowledgeEntries
+    : knowledgeEntries;
+
+  const runtimePlaybooks = Array.isArray(runtime?.responsePlaybooks)
+    ? runtime.responsePlaybooks
+    : responsePlaybooks;
+
+  const effectiveThreadState = runtime?.threadState || threadState || null;
+
+  const classified = classifyTenantAwareIntent(text, profile, policy);
+  const matchedKnowledge = matchKnowledgeEntries(text, runtimeKnowledge, 5);
+  const matchedPlaybook = matchPlaybook(text, runtimePlaybooks);
+
+  let intent = classified.intent;
+  let leadScore = classified.score;
+
+  if (matchedPlaybook) {
+    intent = "playbook";
+    leadScore = Math.max(leadScore, matchedPlaybook.createLead ? 60 : 28);
+  } else if (matchedKnowledge.length && ["general", "support", "service_interest"].includes(intent)) {
+    intent = "knowledge_answer";
+    leadScore = Math.max(leadScore, 32);
+  }
+
+  let replyText = sanitizeReplyText(
+    buildFallbackReply({
+      intent,
+      profile,
+      knowledgeEntries: matchedKnowledge,
+      playbook: matchedPlaybook,
+    })
+  );
+
+  let shouldCreateLead =
+    Boolean(matchedPlaybook?.createLead) ||
+    ["pricing", "service_interest", "handoff_request", "urgent_interest", "general"].includes(intent);
+
+  let shouldHandoff =
+    Boolean(matchedPlaybook?.handoff) ||
+    ["handoff_request", "urgent_interest"].includes(intent);
+
+  let shouldReply = Boolean(policy.autoReplyEnabled);
+  let shouldMarkSeen = Boolean(policy.markSeenEnabled);
+  let shouldTyping = Boolean(policy.typingIndicatorEnabled);
+
+  let handoffReason = matchedPlaybook?.handoffReason || "";
+  let handoffPriority = matchedPlaybook?.handoffPriority || "normal";
+
+  if (intent === "handoff_request") {
+    handoffReason = handoffReason || "user_requested_human";
+    handoffPriority = handoffPriority || "high";
+  }
+
+  if (intent === "urgent_interest") {
+    handoffReason = handoffReason || "urgent_request";
+    handoffPriority = handoffPriority || "high";
+    leadScore = Math.max(leadScore, 92);
+  }
+
+  if (quietHoursApplied) {
+    shouldReply = false;
+    shouldTyping = false;
+  }
+
+  if (reliability?.operatorRecentlyReplied && getThreadHandoffState(thread, effectiveThreadState).active) {
+    shouldReply = false;
+    shouldTyping = false;
+  }
+
+  if (reliability?.leadAlreadyCreated && !["urgent_interest", "handoff_request"].includes(intent)) {
+    shouldCreateLead = false;
+  }
+
+  if (!policy.createLeadEnabled) shouldCreateLead = false;
+  if (!policy.handoffEnabled) shouldHandoff = false;
+  if (shouldHandoff && !shouldAllowHandoffByText(text, profile) && !matchedPlaybook?.handoff) {
+    shouldHandoff = false;
+  }
+
+  const duplicateReply = isDuplicateReplyCandidate(replyText, reliability);
+  const handoffState = getThreadHandoffState(thread, effectiveThreadState);
+
+  const commonMeta = buildMeta({
+    tenantKey,
+    thread,
+    message,
+    intent,
+    score: leadScore,
+    extra: {
+      quietHoursApplied,
+      recentMessageCount: normalizeRecentMessages(recentMessages).length,
+      policyAutoReplyEnabled: Boolean(policy.autoReplyEnabled),
+      policyCreateLeadEnabled: Boolean(policy.createLeadEnabled),
+      policyHandoffEnabled: Boolean(policy.handoffEnabled),
+      policyMarkSeenEnabled: Boolean(policy.markSeenEnabled),
+      policyTypingIndicatorEnabled: Boolean(policy.typingIndicatorEnabled),
+      policySuppressAiDuringHandoff: Boolean(policy.suppressAiDuringHandoff),
+      timezone: s(policy.timezone || "Asia/Baku"),
+      engine: matchedPlaybook ? "playbook" : matchedKnowledge.length ? "knowledge" : "fallback",
+      brandName: profile.displayName,
+      industry: profile.industry,
+      services: profile.services,
+      disabledServices: profile.disabledServices,
+      operatorRecentlyReplied: Boolean(reliability?.operatorRecentlyReplied),
+      duplicateOfLastAiReply: Boolean(reliability?.duplicateOfLastAiReply),
+      duplicateReplyCandidate: duplicateReply,
+      lastKnownAiReplyText: s(reliability?.lastKnownAiReplyText || ""),
+      awaitingCustomerAnswerTo: s(reliability?.awaitingCustomerAnswerTo || ""),
+      repeatIntentCount: Number(reliability?.repeatIntentCount || 0),
+      leadAlreadyCreated: Boolean(reliability?.leadAlreadyCreated),
+      threadState: effectiveThreadState || {},
+      matchedKnowledgeTitles: matchedKnowledge.map((x) => x.title).filter(Boolean),
+      matchedPlaybookName: s(matchedPlaybook?.name),
+    },
+  });
+
+  if (shouldMarkSeen) {
+    actions.push(markSeenAction({ channel, recipientId: externalUserId, meta: commonMeta }));
+  }
+
+  if (shouldCreateLead) {
+    actions.push(
+      createLeadAction({
+        channel,
+        externalUserId,
+        thread,
+        text,
+        intent,
+        meta: commonMeta,
+      })
+    );
+  }
+
+  if (shouldHandoff) {
+    actions.push(
+      handoffAction({
+        channel,
+        externalUserId,
+        thread,
+        reason: handoffReason || "manual_review",
+        priority: handoffPriority || "normal",
+        meta: commonMeta,
+      })
+    );
+  }
+
+  if (shouldReply && shouldTyping && replyText && !duplicateReply) {
+    actions.push(typingOnAction({ channel, recipientId: externalUserId, meta: commonMeta }));
+  }
+
+  if (shouldReply && replyText && !duplicateReply) {
+    actions.push(
+      sendMessageAction({
+        channel,
+        recipientId: externalUserId,
+        text: replyText,
+        meta: commonMeta,
+      })
+    );
+  } else {
+    actions.push(
+      noReplyAction({
+        reason: buildSuppressedReplyReason({
+          quietHoursApplied,
+          reliability,
+          handoffActive: handoffState.active,
+          duplicateReply,
+        }),
+        meta: commonMeta,
+      })
+    );
+  }
+
+  if (shouldReply && shouldTyping && replyText && !duplicateReply) {
+    actions.push(typingOffAction({ channel, recipientId: externalUserId, meta: commonMeta }));
+  }
+
+  return {
+    intent,
+    leadScore,
+    policy,
+    actions,
+  };
+}
+
+export async function buildInboxActions({
+  text,
+  channel,
+  externalUserId,
+  tenantKey,
+  thread,
+  message,
+  tenant = null,
+  recentMessages = [],
+  customerContext = {},
+  formData = {},
+  leadContext = {},
+  conversationContext = {},
+  tenantContext = {},
+  services = [],
+  knowledgeEntries = [],
+  responsePlaybooks = [],
+  threadState = null,
+  runtime = null,
+}) {
+  const resolvedTenantKey = getResolvedTenantKey(tenantKey);
+
+  const policy = getInboxPolicy({
+    tenantKey: resolvedTenantKey,
+    channel,
+    tenant,
+  });
+
+  const resolvedRuntime = await resolveInboxRuntime({
+    tenantKey: resolvedTenantKey,
+    tenant,
+    services,
+    knowledgeEntries,
+    responsePlaybooks,
+    threadState,
+    channel,
+    thread,
+    message,
+    recentMessages,
+    customerContext,
+    formData,
+    leadContext,
+    conversationContext,
+    runtime: runtime || tenantContext?.runtime || tenantContext,
+  });
+
+  const effectiveThreadState = resolvedRuntime.threadState || threadState || null;
+
+  const incoming = lower(text);
+  const actions = [];
+  const handoff = getThreadHandoffState(thread, effectiveThreadState);
+  const quietHoursApplied = isPolicyQuietHours(policy);
+  const reliability = getReliabilityFlags({
+    text,
+    thread,
+    recentMessages,
+    quietHoursApplied,
+    policy,
+    threadState: effectiveThreadState,
+  });
+
+  const profile = resolvedRuntime;
+  const matchedKnowledge = matchKnowledgeEntries(text, resolvedRuntime.knowledgeEntries, 5);
+  const matchedPlaybook = matchPlaybook(text, resolvedRuntime.responsePlaybooks);
+
+  const metaBase = {
+    tenantKey: resolvedTenantKey,
+    threadId: s(thread?.id),
+    messageId: s(message?.id),
+    channelAllowed: Boolean(policy.channelAllowed),
+    quietHoursApplied,
+    handoffActive: Boolean(handoff.active),
+    operatorRecentlyReplied: Boolean(reliability.operatorRecentlyReplied),
+    duplicateOfLastAiReply: Boolean(reliability.duplicateOfLastAiReply),
+    recentMessageCount: normalizeRecentMessages(recentMessages).length,
+    brandName: profile.displayName,
+    industry: profile.industry,
+    services: profile.services,
+    disabledServices: profile.disabledServices,
+    threadState: effectiveThreadState || {},
+    matchedKnowledgeTitles: matchedKnowledge.map((x) => x.title).filter(Boolean),
+    matchedPlaybookName: s(matchedPlaybook?.name),
+    awaitingCustomerAnswerTo: s(reliability?.awaitingCustomerAnswerTo || ""),
+    repeatIntentCount: Number(reliability?.repeatIntentCount || 0),
+    leadAlreadyCreated: Boolean(reliability?.leadAlreadyCreated),
+    lastKnownAiReplyText: s(reliability?.lastKnownAiReplyText || ""),
+  };
+
+  if (!policy.channelAllowed) {
+    return {
+      intent: "channel_blocked",
+      leadScore: 0,
+      policy,
+      actions: [
+        noReplyAction({
+          reason: "channel_not_allowed",
+          meta: metaBase,
+        }),
+      ],
+    };
+  }
+
+  if (!incoming) {
+    return {
+      intent: "empty",
+      leadScore: 0,
+      policy,
+      actions: [
+        noReplyAction({
+          reason: "empty_text",
+          meta: metaBase,
+        }),
+      ],
+    };
+  }
+
+  if (thread?.status === "spam") {
+    return {
+      intent: "thread_blocked",
+      leadScore: 0,
+      policy,
+      actions: [
+        noReplyAction({
+          reason: "thread_status_blocked",
+          meta: {
+            ...metaBase,
+            threadStatus: s(thread?.status),
+          },
+        }),
+      ],
+    };
+  }
+
+  if (handoff.active && policy.suppressAiDuringHandoff && reliability.operatorRecentlyReplied) {
+    if (policy.markSeenEnabled) {
+      actions.push(
+        markSeenAction({
+          channel,
+          recipientId: externalUserId,
+          meta: buildMeta({
+            tenantKey: resolvedTenantKey,
+            thread,
+            message,
+            intent: "handoff_active",
+            score: 0,
+            extra: {
+              ...metaBase,
+              handoffReason: handoff.reason,
+              handoffPriority: handoff.priority,
+            },
+          }),
+        })
+      );
+    }
+
+    actions.push(
+      noReplyAction({
+        reason: "handoff_active",
+        meta: buildMeta({
+          tenantKey: resolvedTenantKey,
+          thread,
+          message,
+          intent: "handoff_active",
+          score: 0,
+          extra: {
+            ...metaBase,
+            handoffReason: handoff.reason,
+            handoffPriority: handoff.priority,
+          },
+        }),
+      })
+    );
+
+    return {
+      intent: "handoff_active",
+      leadScore: 0,
+      policy,
+      actions,
+    };
+  }
+
+  if (isAckOnlyText(incoming)) {
+    if (policy.markSeenEnabled) {
+      actions.push(
+        markSeenAction({
+          channel,
+          recipientId: externalUserId,
+          meta: buildMeta({
+            tenantKey: resolvedTenantKey,
+            thread,
+            message,
+            intent: "ack",
+            score: 0,
+            extra: { ...metaBase, engine: "rule_ack" },
+          }),
+        })
+      );
+    }
+
+    actions.push(
+      noReplyAction({
+        reason: "ack_only",
+        meta: buildMeta({
+          tenantKey: resolvedTenantKey,
+          thread,
+          message,
+          intent: "ack",
+          score: 0,
+          extra: { ...metaBase, engine: "rule_ack" },
+        }),
+      })
+    );
+
+    return {
+      intent: "ack",
+      leadScore: 0,
+      policy,
+      actions,
+    };
+  }
+
+  if (reliability.operatorRecentlyReplied && handoff.active) {
+    if (policy.markSeenEnabled) {
+      actions.push(
+        markSeenAction({
+          channel,
+          recipientId: externalUserId,
+          meta: buildMeta({
+            tenantKey: resolvedTenantKey,
+            thread,
+            message,
+            intent: "operator_recently_replied",
+            score: 0,
+            extra: metaBase,
+          }),
+        })
+      );
+    }
+
+    actions.push(
+      noReplyAction({
+        reason: "operator_recently_replied",
+        meta: buildMeta({
+          tenantKey: resolvedTenantKey,
+          thread,
+          message,
+          intent: "operator_recently_replied",
+          score: 0,
+          extra: metaBase,
+        }),
+      })
+    );
+
+    return {
+      intent: "operator_recently_replied",
+      leadScore: 0,
+      policy,
+      actions,
+    };
+  }
+
+  if (matchedPlaybook && matchedPlaybook.replyTemplate) {
+    const replyText = sanitizeReplyText(buildPlaybookReply(matchedPlaybook, profile));
+    const intent = "playbook";
+    const leadScore = matchedPlaybook.createLead ? 60 : 28;
+    const shouldReply = Boolean(policy.autoReplyEnabled) && !quietHoursApplied;
+    const shouldTyping = Boolean(policy.typingIndicatorEnabled) && shouldReply;
+    const shouldMarkSeen = Boolean(policy.markSeenEnabled);
+    let shouldCreateLead = Boolean(policy.createLeadEnabled && matchedPlaybook.createLead);
+    const shouldHandoff = Boolean(policy.handoffEnabled && matchedPlaybook.handoff);
+
+    if (reliability?.leadAlreadyCreated) shouldCreateLead = false;
+
+    const commonMeta = buildMeta({
+      tenantKey: resolvedTenantKey,
+      thread,
+      message,
+      intent,
+      score: leadScore,
+      extra: {
+        ...metaBase,
+        engine: "playbook",
+      },
+    });
+
+    if (shouldMarkSeen) {
+      actions.push(markSeenAction({ channel, recipientId: externalUserId, meta: commonMeta }));
+    }
+
+    if (shouldCreateLead) {
+      actions.push(
+        createLeadAction({
+          channel,
+          externalUserId,
+          thread,
+          text,
+          intent,
+          meta: commonMeta,
+        })
+      );
+    }
+
+    if (shouldHandoff) {
+      actions.push(
+        handoffAction({
+          channel,
+          externalUserId,
+          thread,
+          reason: matchedPlaybook.handoffReason || "manual_review",
+          priority: matchedPlaybook.handoffPriority || "normal",
+          meta: commonMeta,
+        })
+      );
+    }
+
+    const duplicateReply = isDuplicateReplyCandidate(replyText, reliability);
+
+    if (shouldReply && shouldTyping && replyText && !duplicateReply) {
+      actions.push(typingOnAction({ channel, recipientId: externalUserId, meta: commonMeta }));
+    }
+
+    if (shouldReply && replyText && !duplicateReply) {
+      actions.push(
+        sendMessageAction({
+          channel,
+          recipientId: externalUserId,
+          text: replyText,
+          meta: commonMeta,
+        })
+      );
+    } else {
+      actions.push(
+        noReplyAction({
+          reason: buildSuppressedReplyReason({
+            quietHoursApplied,
+            reliability,
+            handoffActive: handoff.active,
+            duplicateReply,
+          }),
+          meta: commonMeta,
+        })
+      );
+    }
+
+    if (shouldReply && shouldTyping && replyText && !duplicateReply) {
+      actions.push(typingOffAction({ channel, recipientId: externalUserId, meta: commonMeta }));
+    }
+
+    return {
+      intent,
+      leadScore,
+      policy,
+      actions,
+    };
+  }
+
+  if (
+    matchedKnowledge.length &&
+    !includesAny(incoming, profile?.humanKeywords) &&
+    !includesAny(incoming, profile?.urgentKeywords)
+  ) {
+    const replyText = sanitizeReplyText(buildKnowledgeReply(matchedKnowledge, profile));
+    if (replyText) {
+      const intent = "knowledge_answer";
+      const leadScore = 30;
+      const shouldReply = Boolean(policy.autoReplyEnabled) && !quietHoursApplied;
+      const shouldTyping = Boolean(policy.typingIndicatorEnabled) && shouldReply;
+      const shouldMarkSeen = Boolean(policy.markSeenEnabled);
+
+      const commonMeta = buildMeta({
+        tenantKey: resolvedTenantKey,
+        thread,
+        message,
+        intent,
+        score: leadScore,
+        extra: {
+          ...metaBase,
+          engine: "knowledge",
+        },
+      });
+
+      if (shouldMarkSeen) {
+        actions.push(markSeenAction({ channel, recipientId: externalUserId, meta: commonMeta }));
+      }
+
+      const duplicateReply = isDuplicateReplyCandidate(replyText, reliability);
+
+      if (shouldReply && shouldTyping && replyText && !duplicateReply) {
+        actions.push(typingOnAction({ channel, recipientId: externalUserId, meta: commonMeta }));
+      }
+
+      if (shouldReply && replyText && !duplicateReply) {
+        actions.push(
+          sendMessageAction({
+            channel,
+            recipientId: externalUserId,
+            text: replyText,
+            meta: commonMeta,
+          })
+        );
+      } else {
+        actions.push(
+          noReplyAction({
+            reason: buildSuppressedReplyReason({
+              quietHoursApplied,
+              reliability,
+              handoffActive: handoff.active,
+              duplicateReply,
+            }),
+            meta: commonMeta,
+          })
+        );
+      }
+
+      if (shouldReply && shouldTyping && replyText && !duplicateReply) {
+        actions.push(typingOffAction({ channel, recipientId: externalUserId, meta: commonMeta }));
+      }
+
+      return {
+        intent,
+        leadScore,
+        policy,
+        actions,
+      };
+    }
+  }
+
+  const ai = await aiDecideInbox({
+    text,
+    channel,
+    externalUserId,
+    tenantKey: resolvedTenantKey,
+    thread,
+    message,
+    tenant,
+    policy,
+    quietHoursApplied,
+    recentMessages,
+    reliability,
+    customerContext,
+    formData,
+    leadContext,
+    conversationContext,
+    services,
+    knowledgeEntries: resolvedRuntime.knowledgeEntries,
+    responsePlaybooks: resolvedRuntime.responsePlaybooks,
+    threadState: effectiveThreadState,
+    runtime: resolvedRuntime,
+  });
+
+  if (ai) {
+    const aiProfile = ai.profile || profile;
+
+    let intent = forceSafeIntent(ai.intent, aiProfile, text);
+    let replyText = sanitizeReplyText(ai.replyText || "");
+    let leadScore = Math.max(0, Math.min(100, Number(ai.leadScore || 0)));
+
+    let shouldCreateLead =
+      Boolean(ai.createLead) ||
+      ["pricing", "service_interest", "general"].includes(intent);
+
+    let shouldHandoff =
+      Boolean(ai.handoff) &&
+      shouldAllowHandoffByText(text, aiProfile);
+
+    let shouldReply = Boolean(policy.autoReplyEnabled) && !Boolean(ai.noReply);
+    let shouldMarkSeen = Boolean(policy.markSeenEnabled);
+    let shouldTyping = Boolean(policy.typingIndicatorEnabled);
+    let handoffReason = s(ai.handoffReason || "");
+    let handoffPriority = s(ai.handoffPriority || "normal").toLowerCase() || "normal";
+
+    if (intent === "unsupported_service") {
+      replyText = sanitizeReplyText(buildUnsupportedServiceReply(aiProfile));
+      shouldCreateLead = false;
+      shouldHandoff = false;
+      shouldReply = Boolean(policy.autoReplyEnabled);
+    }
+
+    if (quietHoursApplied) {
+      shouldReply = false;
+      shouldTyping = false;
+    }
+
+    if (reliability?.leadAlreadyCreated && !["urgent_interest", "handoff_request"].includes(intent)) {
+      shouldCreateLead = false;
+    }
+
+    if (!policy.createLeadEnabled) shouldCreateLead = false;
+    if (!policy.handoffEnabled) shouldHandoff = false;
+
+    if (
+      !replyText &&
+      ["greeting", "pricing", "service_interest", "support", "general", "unsupported_service", "knowledge_answer"].includes(intent)
+    ) {
+      replyText = sanitizeReplyText(
+        buildFallbackReply({
+          intent,
+          profile: aiProfile,
+          knowledgeEntries: ai.matchedKnowledge || matchedKnowledge,
+          playbook: ai.matchedPlaybook || matchedPlaybook,
+        })
+      );
+      shouldReply = true;
+    }
+
+    if (
+      ai.noReply &&
+      ["greeting", "pricing", "service_interest", "support", "general", "unsupported_service", "knowledge_answer"].includes(intent)
+    ) {
+      shouldReply = true;
+    }
+
+    const duplicateReply = isDuplicateReplyCandidate(replyText, reliability);
+
+    if (duplicateReply) {
+      shouldReply = false;
+      shouldTyping = false;
+    }
+
+    const commonMeta = buildMeta({
+      tenantKey: resolvedTenantKey,
+      thread,
+      message,
+      intent,
+      score: leadScore,
+      extra: {
+        quietHoursApplied,
+        recentMessageCount: normalizeRecentMessages(recentMessages).length,
+        policyAutoReplyEnabled: Boolean(policy.autoReplyEnabled),
+        policyCreateLeadEnabled: Boolean(policy.createLeadEnabled),
+        policyHandoffEnabled: Boolean(policy.handoffEnabled),
+        policyMarkSeenEnabled: Boolean(policy.markSeenEnabled),
+        policyTypingIndicatorEnabled: Boolean(policy.typingIndicatorEnabled),
+        policySuppressAiDuringHandoff: Boolean(policy.suppressAiDuringHandoff),
+        timezone: s(policy.timezone || "Asia/Baku"),
+        engine: "ai",
+        brandName: aiProfile.displayName,
+        industry: aiProfile.industry,
+        services: aiProfile.services,
+        disabledServices: aiProfile.disabledServices,
+        operatorRecentlyReplied: Boolean(reliability.operatorRecentlyReplied),
+        duplicateOfLastAiReply: Boolean(reliability.duplicateOfLastAiReply),
+        duplicateReplyCandidate: duplicateReply,
+        lastKnownAiReplyText: s(reliability?.lastKnownAiReplyText || ""),
+        awaitingCustomerAnswerTo: s(reliability?.awaitingCustomerAnswerTo || ""),
+        repeatIntentCount: Number(reliability?.repeatIntentCount || 0),
+        leadAlreadyCreated: Boolean(reliability?.leadAlreadyCreated),
+        threadState: effectiveThreadState || {},
+        matchedKnowledgeTitles: (ai.matchedKnowledge || matchedKnowledge).map((x) => x.title).filter(Boolean),
+        matchedPlaybookName: s((ai.matchedPlaybook || matchedPlaybook)?.name),
+      },
+    });
+
+    if (shouldMarkSeen) {
+      actions.push(markSeenAction({ channel, recipientId: externalUserId, meta: commonMeta }));
+    }
+
+    if (shouldCreateLead) {
+      actions.push(
+        createLeadAction({
+          channel,
+          externalUserId,
+          thread,
+          text,
+          intent,
+          meta: commonMeta,
+        })
+      );
+    }
+
+    if (shouldHandoff) {
+      actions.push(
+        handoffAction({
+          channel,
+          externalUserId,
+          thread,
+          reason: handoffReason || "manual_review",
+          priority: handoffPriority || "normal",
+          meta: commonMeta,
+        })
+      );
+    }
+
+    if (shouldReply && shouldTyping && replyText) {
+      actions.push(typingOnAction({ channel, recipientId: externalUserId, meta: commonMeta }));
+    }
+
+    if (shouldReply && replyText) {
+      actions.push(
+        sendMessageAction({
+          channel,
+          recipientId: externalUserId,
+          text: replyText,
+          meta: commonMeta,
+        })
+      );
+    } else {
+      actions.push(
+        noReplyAction({
+          reason: buildSuppressedReplyReason({
+            quietHoursApplied,
+            reliability,
+            handoffActive: handoff.active,
+            duplicateReply,
+          }),
+          meta: commonMeta,
+        })
+      );
+    }
+
+    if (shouldReply && shouldTyping && replyText) {
+      actions.push(typingOffAction({ channel, recipientId: externalUserId, meta: commonMeta }));
+    }
+
+    return {
+      intent,
+      leadScore,
+      policy,
+      actions,
+    };
+  }
+
+  return buildInboxActionsFallback({
+    text,
+    channel,
+    externalUserId,
+    tenantKey: resolvedTenantKey,
+    thread,
+    message,
+    tenant,
+    policy,
+    quietHoursApplied,
+    recentMessages,
+    reliability,
+    services,
+    knowledgeEntries: resolvedRuntime.knowledgeEntries,
+    responsePlaybooks: resolvedRuntime.responsePlaybooks,
+    threadState: effectiveThreadState,
+    runtime: resolvedRuntime,
+  });
+}

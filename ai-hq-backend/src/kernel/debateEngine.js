@@ -1,0 +1,1 @@
+export { runDebate, DEBATE_ENGINE_VERSION } from "./debate/core.js";

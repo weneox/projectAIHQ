@@ -1,0 +1,1 @@
+export * from "./tenantKnowledge/index.js";

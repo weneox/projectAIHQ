@@ -1,0 +1,654 @@
+TASK: Generate a DAILY SOCIAL CONTENT DRAFT for the tenant.
+
+Context:
+- This is a single-day content idea.
+- The draft will be reviewed by a decision-maker inside AI HQ.
+- Output must be detailed and production-ready.
+- The output will later be used for premium asset generation.
+- Readable text and image/video generation are separated in production.
+- The AI visual generation stage must generate TEXT-FREE visuals only.
+- A separate render engine will place all final readable text later.
+- The visual generation stage must produce a clean industry-relevant scene, object, environment, atmosphere, or commercially useful cinematic setup.
+- The goal is to generate a strong premium visual base, not a poster, not a website section, not UI, and not interface design.
+- If FORMAT = reel, the output will be used for scene-by-scene AI video generation with external video tools such as Runway-like systems.
+
+DATE: {{today}}
+TENANT: {{tenantId}}
+
+TENANT BRAND CONTEXT:
+Use the provided tenant / brand / company context as the primary source of truth for:
+- company type
+- service categories
+- market positioning
+- tone
+- offer structure
+- audience
+- geography
+- language style
+- trust level
+- premium vs mass-market positioning
+
+INDUSTRY CONTEXT:
+Use the provided industry prompt layer to adapt:
+- business framing
+- pain points
+- realistic customer expectations
+- trust and compliance tone
+- proposal angle
+- lead and inbox relevance
+- content realism
+- visual atmosphere appropriateness
+
+HIGHEST-LEVEL ALIGNMENT RULE:
+- The tenant is NOT automatically a technology company.
+- Do NOT force AI, robotics, futuristic machinery, dashboards, interfaces, software panels, or abstract tech-core imagery unless:
+  1. the tenant is actually technology-related, OR
+  2. the current topic clearly requires a technology-oriented visual metaphor.
+- For non-technology industries, visual direction must stay natural to the business category.
+- The output must feel like it belongs to a real company in its real industry.
+- Industry realism is more important than generic futuristic creativity.
+
+FORMAT RULE (STRICT):
+The format is PRESELECTED by the system.
+
+FORMAT = {{format}}
+
+You MUST use this format.
+Do NOT choose another format.
+
+Allowed formats:
+- image
+- carousel
+- reel
+
+If FORMAT = image:
+- produce exactly 1 slide
+- this is a premium static social post
+- include one strong headline
+- include one short supporting subtitle
+- the visual base must be a single clean industry-relevant scene or object
+- the cover must feel premium enough to reuse as campaign key art
+
+If FORMAT = carousel:
+- produce 5 to 8 slides
+- slide 1 must be a strong hook / cover
+- middle slides must provide value, process, proof, benefits, pain-point clarification, or use-case breakdown
+- final slide must contain a clear CTA
+- every slide must have practical visual guidance
+- every slide must be renderable as a premium branded social slide
+- the cover visual must be the cleanest and strongest scene
+- the whole carousel must feel visually coherent, premium, and business-relevant
+
+If FORMAT = reel:
+- produce exactly 3 scenes by default unless the idea absolutely needs 4
+- opening scene must work as a thumbnail / hero frame
+- each scene must be designed as a REAL AI-GENERATED VIDEO SHOT, not a slideshow frame
+- include motion notes
+- include approximate duration
+- scenes must feel producible as short-form social video
+- visuals must feel cinematic, clean, premium, and commercially usable
+- the reel must be planned as scene-by-scene video generation for external video tools
+- each scene must be independently strong enough to send to a video generation model
+- the reel must include a clear voiceover flow from beginning to end
+- the reel must prioritize realistic motion, camera behavior, environment, and atmosphere over text layout
+- scenes must feel coherent as one short premium commercial micro-film
+- motion must describe believable camera movement, subject movement, environmental movement, or energy movement
+- do NOT describe slide transitions, title cards, subtitles, or text overlays
+
+BRAND TONE:
+Use the tenant’s real tone. Default to:
+- premium
+- modern
+- intelligent
+- confident but not arrogant
+- polished
+- visually memorable
+- commercially credible
+
+AUDIENCE:
+Use the tenant context and industry layer.
+If audience is broad or missing, assume likely business-relevant audience segments such as:
+- founders
+- managers
+- operators
+- buyers
+- service customers
+- decision-makers
+- teams relevant to the tenant’s industry
+
+CORE CREATIVE DIRECTION:
+- Think like a premium brand-content systems designer.
+- Prefer clean industry-relevant scenes, premium objects, professional environments, architectural forms, elegant atmospheres, cinematic commercial setups, or commercially useful visual worlds.
+- Focus on focal subject, materials, lighting, atmosphere, depth, camera feel, industrial/design quality, and clean composition.
+- Prefer a single strong object or a very limited number of objects.
+- Avoid clutter.
+- The most important visual rule is: text-free premium scene with strong composition.
+- The image or video frame must feel commercially usable, premium, and believable.
+- The visual should feel more like premium source material for later rendering than a finished ad layout.
+- Keep the composition cleaner on the left side for later rendering.
+- Reduce heavy left-side blur, haze, fog, glow bloom, or large dark overlay masses.
+- Do NOT bury the image under left-side blur or gradient fog.
+- The left side may be slightly calmer for text placement later, but must still feel clean and elegant.
+- The image must remain visually strong and balanced, not washed out or blocked by blur panels.
+- Prefer depth, object separation, reflective materials, and atmospheric lighting over fake design overlays.
+- For reel scenes, think like a premium AI video director, not like a slide designer.
+- For reel scenes, prefer coherent visual continuity between scenes.
+- For reel scenes, each shot must feel like part of one premium commercial story.
+
+BUSINESS TOPIC EXPANSION RULE:
+You MUST choose a topic that fits the tenant’s business and service reality.
+Rotate across a WIDE variety of practical business topics.
+Avoid repeating the same few topics too often.
+Prefer highly useful, commercially relevant, decision-maker-friendly themes.
+
+Use topic directions relevant to the tenant and industry, including but not limited to:
+- awareness
+- trust-building
+- offer explanation
+- process clarity
+- benefits
+- pain-point clarification
+- customer education
+- objection handling
+- operational efficiency
+- automation
+- service convenience
+- lead handling
+- support quality
+- booking flow
+- communication quality
+- retention
+- reactivation
+- internal workflow improvement
+- reporting clarity
+- team productivity
+- business growth systems
+- better customer experience
+- time-saving
+- cost-saving
+- consistency
+- premium positioning
+- service differentiation
+
+If and only if the tenant is genuinely AI / software / automation / digital-services related, topics may also include:
+- AI chatbot systems
+- customer support automation
+- lead capture automation
+- sales automation
+- messaging automation
+- CRM automation
+- follow-up automation
+- missed lead recovery
+- reporting automation
+- workflow orchestration
+- content approval systems
+- call handling automation
+- internal knowledge assistant
+- business process standardization
+- AI copilots for teams
+- operational efficiency systems
+- custom AI tools for SMEs
+
+INDUSTRY-SAFE TOPIC RULE:
+- For clinic, legal, finance, education, hospitality, beauty, retail, real estate, logistics, restaurant, automotive, and other non-tech businesses, prefer topics that are naturally publishable for that category.
+- Do NOT force everything into “automation” messaging if the tenant is not selling automation.
+- The output must feel like something the real company would actually publish, approve, or use.
+
+VISUAL PRESET SYSTEM:
+You MUST choose a visualPreset for the draft.
+
+Allowed visualPreset values:
+- robotic_unit
+- ai_core
+- automation_device
+- abstract_tech_scene
+- chatbot_operator
+- sales_flow_machine
+- support_ai_hub
+- workflow_engine
+
+IMPORTANT PRESET REALISM RULE:
+- visualPreset is REQUIRED in the JSON.
+- But preset choice must NOT override industry reality.
+- For non-technology tenants, the preset should function mainly as an internal creative style anchor, not as permission to force robots or futuristic hardware into the scene.
+- For non-technology tenants, interpret presets more abstractly:
+  - ai_core -> premium focal atmosphere, central iconic form, controlled depth
+  - abstract_tech_scene -> premium structured environment, not necessarily “technology”
+  - workflow_engine -> system/order/process metaphor only if visually natural
+  - support_ai_hub -> central support/service atmosphere if natural to the business
+- For non-tech industries, do NOT literalize these presets into sci-fi machines unless clearly appropriate.
+
+Preset meanings:
+
+1. robotic_unit
+- a premium robotic or semi-robotic object
+- elegant service-robot or intelligent machine form
+- premium industrial design
+- often dark studio scene
+- object should feel sculptural and high-end
+- best for futuristic, flagship, premium innovation messaging
+- do NOT use literally for non-tech businesses unless explicitly appropriate
+
+2. ai_core
+- an abstract premium central form, system core, iconic nucleus, or atmospheric focal structure
+- can be interpreted more abstractly for non-tech businesses
+- controlled glow, layered depth, premium form
+- ideal for visionary / awareness themes
+
+3. automation_device
+- a premium engineered object, system object, terminal, tool, instrument, or control-like module
+- for non-tech businesses, use only if it still feels natural to the industry
+- ideal for practical systems, business operations, or tool-oriented themes
+
+4. abstract_tech_scene
+- a clean premium structured environment without needing a literal hero device
+- for non-tech businesses, interpret as premium abstract commercial environment, spatial structure, or industry-fit atmosphere
+- ideal when a more atmospheric and less product-centric scene is better
+
+5. chatbot_operator
+- a premium conversational AI presence
+- can be a humanoid or machine-like assistant form
+- should feel elegant, premium, service-oriented, and technologically advanced
+- use literally only for tech-oriented businesses or explicitly AI-related topics
+
+6. sales_flow_machine
+- a premium sales-routing or lead-flow machine-like system
+- ideal for sales automation, CRM, qualification, routing, and conversion topics
+- use literally only when business context supports this kind of metaphor
+
+7. support_ai_hub
+- a premium support or orchestration center visual
+- for non-tech businesses, this may become a premium central service atmosphere rather than a literal AI object
+- ideal for booking, support, service routing, inquiry coordination, and communication-heavy topics
+
+8. workflow_engine
+- a premium orchestration or process-engine visual
+- for non-tech businesses, this may be interpreted as elegant process embodiment, operational structure, or organized service system
+- ideal for ops, task routing, internal systems, structured process, and business coordination themes
+
+VISUAL RULES:
+- Do NOT rely on AI-generated readable text inside images or video.
+- Background visuals must be text-free.
+- visualPlan.textOnVisual must always be [].
+- Do NOT ask the image or video model to generate interface layouts or readable UI details.
+- Do NOT ask for website sections, browser frames, dashboards, app screens, menus, buttons, chat windows, analytics boards, CMS views, or software panels.
+- Do NOT ask for poster design.
+- Do NOT ask for campaign headline text baked into the visual.
+- Do NOT ask for typography, copy-safe area, text blocks, title area, hero layout, product marketing layout, or branded poster composition.
+- Prefer scene language over layout language.
+- Describe visuals in terms of subject, materials, atmosphere, lighting, shape language, depth, camera angle, motion, and environment.
+- If a device appears, its screen must remain abstract and unreadable.
+- Prefer clean studio scenes, elegant environments, premium forms, modern architectural spaces, professional atmospheres, refined materials, premium commercial realism, or cinematic industry-appropriate setups.
+- The cover slide or opening scene must feel the most premium and visually striking.
+- Avoid busy multi-object scenes unless absolutely necessary.
+- Prefer one dominant focal subject.
+- Avoid cheap clichés.
+- Avoid cartoonish visuals.
+- Avoid generic illustration language.
+- Avoid laptop mockup hero shots unless absolutely necessary.
+- Avoid floating dashboard compositions.
+- Avoid fake website hero scene language.
+- Avoid readable labels, symbols, letters, numbers, logos, signage, UI text, charts, or interface components.
+- Avoid obvious social media template aesthetics.
+- The visual must feel like premium source material for later rendering or editing.
+- For reel scenes, motion must be described as real camera/subject/environment motion, not slide animation.
+- For reel scenes, do NOT ask for transition graphics, title cards, or kinetic typography.
+
+NON-TECH INDUSTRY VISUAL PROTECTION RULE:
+- If the tenant is not in technology, software, AI, automation, or digital systems:
+  - do NOT default to dark futuristic tech scenes
+  - do NOT default to robotic forms
+  - do NOT default to sci-fi objects
+  - do NOT default to holograms, server rooms, data tunnels, or machine cores
+- Instead, choose premium visual worlds natural to the industry:
+  - clinic -> clean care environment, reception, consultation, calm medical interior
+  - legal -> structured advisory office, meeting table, calm corporate authority
+  - finance -> clear professional office, advisory setting, document/review atmosphere
+  - beauty -> polished salon/studio, premium self-care scene, refined tools and atmosphere
+  - hospitality -> room, lobby, reception, stay atmosphere, guest comfort
+  - restaurant -> food, table, hospitality mood, inviting dining or cafe scene
+  - retail/ecommerce -> product-led composition, merchandising, shopping confidence scene
+  - real estate -> architectural space, interior/exterior, lifestyle-fit environment
+  - logistics -> warehouse/dispatch/route/fulfillment coordination environment
+  - education -> classroom/workshop/learning support environment
+  - automotive -> workshop, dealership, vehicle-care, trusted service scene
+  - creative agency -> premium editorial/studio/brand-world visual
+- The visual must still feel premium and commercially strong, but industry-correct.
+
+IMPORTANT IMAGE / VIDEO PROMPT DIRECTION:
+When writing assetBrief.imagePrompt, assetBrief.videoPrompt, and slides[].visualPrompt:
+- describe a clean industry-relevant visual scene
+- describe one hero object, one premium environment, one coherent space, one premium cinematic commercial scene, or one brand-appropriate focal subject
+- if the tenant is tech-oriented, you may use technology-specific scene language strongly
+- if the tenant is non-tech, adapt the scene language to the industry while preserving premium commercial quality
+- prefer premium realism, elegant materials, believable atmosphere, good depth, and strong focal control
+- for healthcare / legal / finance / education / hospitality / retail / beauty / real estate / logistics / restaurant / automotive / creative agency or other industries, use atmosphere and material logic appropriate to that industry
+- avoid advertising language that encourages the model to add text
+- avoid words like poster, ad poster, campaign poster, website hero, landing page, branded layout, title area, headline area, copy space, or text-safe area
+- do not ask for social media cover design
+- do not ask for poster-like typography composition
+- do not ask for logos or labels inside the visual
+- prompts must align with the chosen visualPreset, but business realism comes first
+- the prompt should sound like premium generation direction, not slide-design instruction
+- keep left side visually calmer but not blurred-out or dead
+- preserve a clean balanced composition for later render placement
+- prefer strong subject readability over excessive atmosphere
+- prefer premium realism over fantasy chaos
+- if using light streaks, keep them elegant and controlled
+- if using glow, keep it refined and limited
+- avoid excessive fog on the left side
+- avoid large opaque blur masses on the left side
+- avoid muddy black gradients covering too much of the composition
+- for reel scenes, include realistic subject motion, camera motion, and ambient scene motion
+- for reel scenes, do NOT describe text overlays, subtitles, title cards, UI transitions, or slideshow-like frame changes
+- for reel scenes, make each scene sound producible by a premium AI video model
+- for non-tech industries, visual prompts should usually sound like premium commercial photography / cinematic direction, not futuristic system design
+
+PRESET SELECTION RULES:
+- Choose exactly one visualPreset for the draft.
+- visualPreset is REQUIRED.
+- The cover slide or opening scene must follow the chosen visualPreset most strongly, while still staying industry-correct.
+- Middle slides or scenes may become slightly simpler, but must remain visually coherent with it.
+- If the topic is visionary, future-looking, innovation-oriented, or brand-awareness oriented, prefer ai_core or abstract_tech_scene.
+- If the topic is practical, operational, or process oriented, prefer automation_device or workflow_engine.
+- If the topic benefits from a memorable physical or iconic focal subject, prefer robotic_unit or ai_core, but only if industry-fit.
+- If the topic is support, assistant, booking, communication, or service related, prefer chatbot_operator or support_ai_hub for technology tenants, or support_ai_hub for non-tech tenants only as an abstract support-style anchor.
+- If the topic is sales, routing, qualification, pipeline, or conversion related, prefer sales_flow_machine only when the metaphor remains commercially and visually believable.
+- Avoid changing visualPreset from slide to slide unless absolutely necessary.
+- Maintain one visual language across the whole set.
+
+TOPIC-TO-PRESET GUIDANCE:
+- support, AI assistant, customer communication, receptionist, help flow -> chatbot_operator or support_ai_hub
+- workflow automation, CRM, lead routing, reporting, internal ops -> workflow_engine or automation_device
+- future, innovation, transformation, premium awareness -> ai_core or abstract_tech_scene
+- premium authority, flagship perception, abstract business-tech message -> ai_core
+- structured process, systemization, orchestration, business coordination -> workflow_engine or automation_device
+- memorable hero object, flagship machine identity -> robotic_unit
+- support coordination, booking, inquiry handling, guest communication -> support_ai_hub
+- sales routing, lead scoring, pipeline automation, qualification -> sales_flow_machine
+
+LANGUAGE RULES:
+- Main output language should follow the tenant / requested output language.
+- If no language is specified, default to Azerbaijani.
+- assetBrief.imagePrompt must be in English.
+- assetBrief.videoPrompt must be in English if FORMAT = reel.
+- slides[].visualPrompt must be in English.
+- voiceoverText should be in the output language unless otherwise specified.
+
+Return STRICT JSON only.
+
+JSON SCHEMA:
+
+{
+  "type": "content_draft",
+  "tenantKey": "{{tenantId}}",
+  "language": "az",
+  "format": "{{format}}",
+  "topic": "string",
+  "goal": "lead|awareness|trust|offer",
+  "targetAudience": "string",
+  "hook": "string",
+  "caption": "string",
+  "cta": "string",
+  "hashtags": ["#..."],
+
+  "visualPlan": {
+    "visualPreset": "robotic_unit|ai_core|automation_device|abstract_tech_scene|chatbot_operator|sales_flow_machine|support_ai_hub|workflow_engine",
+    "style": "string",
+    "aspectRatio": "1:1|4:5|9:16",
+    "composition": "string",
+    "colorNotes": "string",
+    "textOnVisual": [],
+    "frames": [
+      {
+        "index": 1,
+        "frameType": "cover|slide|scene",
+        "headline": "string",
+        "subline": "string",
+        "layout": "string",
+        "visualElements": ["string"],
+        "motion": "string",
+        "durationSec": 0
+      }
+    ]
+  },
+
+  "slides": [
+    {
+      "id": "slide_1",
+      "index": 1,
+      "frameType": "cover|slide|scene",
+      "title": "string",
+      "subtitle": "string",
+      "cta": "string",
+      "badge": "string",
+      "align": "left|center",
+      "theme": "premium_dark",
+      "slideNumber": 1,
+      "totalSlides": 5,
+      "renderHints": {
+        "layoutFamily": "editorial_left|cinematic_center|luxury_top_left|dramatic_bottom_left",
+        "textPosition": "left|center|top-left|bottom-left",
+        "safeArea": "left-heavy|centered|top-left|bottom-left",
+        "overlayStrength": "soft|medium|strong",
+        "focalBias": "right|center|lower-right|upper-right"
+      },
+      "visualDirection": "string",
+      "visualPrompt": "string"
+    }
+  ],
+
+  "assetBrief": {
+    "neededAssets": ["image|video|thumbnail|icons|mockups"],
+    "imagePrompt": "string",
+    "videoPrompt": "string",
+    "voiceoverText": "string",
+    "brollIdeas": ["string"]
+  },
+
+  "imagePrompt": "string",
+  "videoPrompt": "string",
+  "voiceoverText": "string",
+  "aspectRatio": "1:1|4:5|9:16",
+  "neededAssets": ["image|video|thumbnail|icons|mockups"],
+
+  "reelMeta": {
+    "sceneCount": 3,
+    "durationSec": 10,
+    "motionIntensity": "low|medium|high",
+    "cameraStyle": "string",
+    "deliveryStyle": "string",
+    "videoModelHint": "runway"
+  },
+
+  "complianceNotes": ["string"],
+  "reviewQuestionsForCEO": ["string"]
+}
+
+STRICT OUTPUT RULES:
+
+1. assetBrief.imagePrompt is REQUIRED.
+2. assetBrief.imagePrompt must NEVER be empty.
+3. assetBrief.imagePrompt must be a real production-ready visual generation prompt in English.
+4. assetBrief.imagePrompt must describe the COVER visual first.
+5. assetBrief.videoPrompt is REQUIRED if FORMAT = reel.
+6. assetBrief.videoPrompt must NEVER be empty if FORMAT = reel.
+7. assetBrief.videoPrompt must be in English.
+8. assetBrief.videoPrompt must describe the FULL reel concept as a premium cinematic AI-generated vertical short video.
+9. assetBrief.voiceoverText is REQUIRED if FORMAT = reel.
+10. assetBrief.voiceoverText must NEVER be empty if FORMAT = reel.
+11. assetBrief.voiceoverText must be natural spoken text in the selected output language.
+12. slides[] is REQUIRED.
+13. Every slides[].visualPrompt is REQUIRED and must NEVER be empty.
+14. Every slides[].visualPrompt must be in English.
+15. Every slides[].visualPrompt must describe a TEXT-FREE premium visual.
+16. Every slides[].visualPrompt must describe a scene, object, environment, or atmosphere only, not final typeset composition.
+17. visualPlan.textOnVisual must be an empty array.
+18. visualPlan.visualPreset is REQUIRED and must be one of:
+   - robotic_unit
+   - ai_core
+   - automation_device
+   - abstract_tech_scene
+   - chatbot_operator
+   - sales_flow_machine
+   - support_ai_hub
+   - workflow_engine
+19. imagePrompt must duplicate assetBrief.imagePrompt.
+20. If FORMAT = reel, videoPrompt must duplicate assetBrief.videoPrompt.
+21. If FORMAT = reel, voiceoverText must duplicate assetBrief.voiceoverText.
+22. neededAssets must duplicate assetBrief.neededAssets.
+23. aspectRatio must match visualPlan.aspectRatio.
+24. If FORMAT = image:
+   - visualPlan.frames must contain exactly 1 item
+   - slides[] must contain exactly 1 item
+25. If FORMAT = carousel:
+   - visualPlan.frames must contain 5 to 8 items
+   - slides[] must contain 5 to 8 items
+26. If FORMAT = reel:
+   - visualPlan.aspectRatio must be 9:16
+   - aspectRatio must be 9:16
+   - visualPlan.frames must contain 3 or 4 items
+   - slides[] must contain 3 or 4 items
+   - every slides[].frameType must be "scene"
+   - every slides[].visualPrompt must describe a REAL VIDEO SHOT, not a static poster frame
+   - every slides[].visualPrompt must include clear cinematic motion direction
+   - every visualPlan.frames[].durationSec must be between 2 and 5
+   - reelMeta is REQUIRED
+   - reelMeta.videoModelHint must be "runway"
+27. Do not leave keys empty unless absolutely impossible.
+28. Do not use placeholders like "insert headline here".
+29. Do not output markdown.
+30. Do not output explanations.
+31. Do not wrap JSON in code fences.
+32. The cover slide or opening scene must feel the most premium and visually striking.
+33. The final slide or final scene must push CTA clearly.
+34. Every visualPrompt must be commercially usable and designer-friendly.
+35. Prefer premium scene language over marketing-poster language.
+36. Do not ask for readable text, letters, words, numbers, labels, logos, symbols, menus, or interface details in the visual.
+37. Do not ask for website hero sections, landing pages, product posters, ad posters, social media cover layouts, branded typography compositions, dashboards, app screens, or interface structure.
+38. If a device appears, the screen must remain abstract, ambient, and unreadable.
+39. Prefer one dominant focal subject rather than many competing objects.
+40. Keep the scene simple, premium, and uncluttered.
+41. visual prompts must stay aligned with the chosen visualPreset.
+42. The cover slide or opening scene should express the selected preset most strongly.
+43. Topics should come from a wide business-relevant pool, not only from one narrow service angle.
+44. Prefer commercially useful themes that real customers, operators, founders, or teams care about.
+45. The composition should preserve a cleaner left side without using excessive blur mass.
+46. The left side must NOT be aggressively fogged, muddied, or blocked by dark blur overlays.
+47. The visual should remain balanced, premium, and render-friendly.
+48. If FORMAT = reel, the output must be usable for this pipeline:
+   - scene planning
+   - AI video generation
+   - voice generation
+   - final merge/render
+49. If FORMAT = reel, scenes must feel coherent as one short commercial story.
+50. If FORMAT = reel, motion must feel believable, premium, and producible in external AI video tools.
+51. If the tenant is non-technology, the visual must remain naturally industry-fit even when using an abstract preset.
+52. If the tenant is non-technology, do NOT output robot-heavy, dashboard-heavy, sci-fi, or AI-core imagery unless the topic explicitly justifies it.
+53. If industry realism conflicts with generic futuristic creativity, choose industry realism.
+
+CAPTION RULES:
+- must sound natural
+- must not sound robotic
+- structure: hook -> value -> CTA
+- max 1200 characters
+
+HASHTAG RULES:
+- between 8 and 18
+- mix local-language and English when appropriate
+- if tenant is genuinely AI / automation related, include #AI #Automation
+- include a tenant-relevant branded hashtag if one exists in context
+- do not add irrelevant trendy hashtags
+
+SLIDES RULES:
+- title must be concise and strong
+- subtitle must be shorter than title
+- visualPrompt must be practical for premium generation
+- renderHints must help a design renderer place text cleanly
+- cover slide or opening scene should feel most premium
+- final slide or final scene should push CTA clearly
+- slides should feel like a coherent campaign set
+- if FORMAT = reel, each slide is actually a scene plan for video generation
+
+ASSET BRIEF RULES:
+- must be practical
+- must be usable by AI image tools
+- must be usable by AI video tools
+- must be usable by designers
+- imagePrompt must be high quality, descriptive, and concrete
+- imagePrompt language must be English even if the rest of the draft is in another language
+- imagePrompt must describe a premium text-free scene only
+- imagePrompt must not request readable typography baked into the image
+- imagePrompt must not request poster design, social cover composition, website layout, app UI, dashboard UI, or interface structure
+- if a device appears, its screen must remain abstract and unreadable
+- imagePrompt must align strongly with visualPreset while remaining industry-correct
+- videoPrompt must describe a premium vertical cinematic AI-generated commercial video concept
+- videoPrompt must avoid slideshow language
+- videoPrompt must avoid template language
+- videoPrompt must avoid subtitles, title cards, and baked typography
+- videoPrompt must describe realistic motion, camera behavior, lighting, scene energy, and subject behavior
+- voiceoverText must sound natural when spoken aloud
+- voiceoverText must match the story arc of the reel scenes
+- for technology tenants, useful English prompt language may include:
+  - futuristic object
+  - premium environment
+  - robotic element
+  - automation device
+  - AI core
+  - premium industrial design
+  - dark studio environment
+  - abstract light trails
+  - reflective surface
+  - cinematic lighting
+  - clean composition
+  - engineered material detail
+  - controlled glow
+  - elegant depth
+  - high-end object
+  - premium cinematic vertical shot
+  - realistic camera motion
+  - atmospheric scene transition
+- for non-technology tenants, prefer English prompt language like:
+  - premium commercial scene
+  - refined professional environment
+  - clean architectural space
+  - elegant interior
+  - polished product presentation
+  - trustworthy service atmosphere
+  - realistic lifestyle context
+  - calm premium lighting
+  - structured composition
+  - believable material detail
+  - cinematic commercial realism
+  - modern industry-appropriate setting
+- avoid language like:
+  - poster
+  - landing page
+  - hero banner
+  - dashboard
+  - user interface
+  - app screen
+  - copy space
+  - headline area
+  - branded layout
+  - website section
+  - slideshow
+  - frame with text
+  - title card
+
+QUALITY BAR:
+- Think premium scene, not generic social template.
+- Think polished source visual or cinematic commercial shot, not startup website header.
+- Think text-free visual base, not poster with baked text.
+- Think elegant atmosphere and focal control, not clutter.
+- Think premium materials, premium lighting, and believable composition.
+- Think commercially strong, premium, reusable source visuals.
+- Think refined composition with reduced left blur and better balance.
+- For reel, think premium AI-generated commercial micro-film, not templated promo video.
+- For non-tech industries, think premium industry-correct commercial photography or cinematic brand film.
+- For tech industries, think premium business-tech visual systems without becoming childish or chaotic.
+
+Return JSON only.
+No explanation.
+No markdown.
+No text outside JSON.

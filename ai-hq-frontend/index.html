@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="icon" type="image/png" sizes="32x32" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <meta name="theme-color" content="#050b17" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="AI HQ" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      html,
+      body,
+      #root {
+        min-height: 100%;
+      }
+
+      html {
+        background: #050b17;
+      }
+
+      body {
+        margin: 0;
+        overflow-x: hidden;
+        color: #e8f3ff;
+        font-family:
+          "Inter",
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          Helvetica,
+          Arial,
+          "Apple Color Emoji",
+          "Segoe UI Emoji";
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        background:
+          radial-gradient(1100px circle at 14% 10%, rgba(18, 76, 190, 0.14), transparent 34%),
+          radial-gradient(900px circle at 84% 18%, rgba(56, 189, 248, 0.12), transparent 24%),
+          radial-gradient(1000px circle at 50% 120%, rgba(14, 165, 233, 0.08), transparent 34%),
+          linear-gradient(180deg, #030712 0%, #040916 24%, #050b17 100%);
+      }
+
+      #app-boot {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+        z-index: 0;
+        isolation: isolate;
+      }
+
+      #app-boot::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at center, transparent 40%, rgba(0, 0, 0, 0.24) 100%),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 18%);
+      }
+
+      #app-boot::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+          linear-gradient(rgba(101, 163, 255, 0.07) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(101, 163, 255, 0.07) 1px, transparent 1px);
+        background-size: 72px 72px;
+        mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.85), transparent 88%);
+        -webkit-mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.85), transparent 88%);
+        opacity: 0.34;
+        animation: bootGridMove 22s linear infinite;
+      }
+
+      .boot-scanlines {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          180deg,
+          transparent 0%,
+          rgba(255, 255, 255, 0.018) 50%,
+          transparent 100%
+        );
+        background-size: 100% 5px;
+        mix-blend-mode: screen;
+        opacity: 0.16;
+      }
+
+      .boot-ambient {
+        position: absolute;
+        border-radius: 999px;
+        filter: blur(72px);
+        will-change: transform, opacity;
+      }
+
+      .boot-ambient-a {
+        left: -8%;
+        top: 6%;
+        width: 420px;
+        height: 320px;
+        background: radial-gradient(circle, rgba(56, 189, 248, 0.2), transparent 72%);
+        animation: bootDriftA 16s ease-in-out infinite;
+      }
+
+      .boot-ambient-b {
+        right: -6%;
+        top: 18%;
+        width: 460px;
+        height: 420px;
+        background: radial-gradient(circle, rgba(37, 99, 235, 0.22), transparent 72%);
+        animation: bootDriftB 20s ease-in-out infinite;
+      }
+
+      .boot-ambient-c {
+        left: 26%;
+        bottom: -10%;
+        width: 560px;
+        height: 300px;
+        background: radial-gradient(circle, rgba(6, 182, 212, 0.16), transparent 74%);
+        animation: bootDriftC 18s ease-in-out infinite;
+      }
+
+      .boot-ring {
+        position: absolute;
+        left: 68%;
+        top: 50%;
+        border-radius: 999px;
+        transform: translate(-50%, -50%);
+        border: 1px solid rgba(110, 196, 255, 0.12);
+        box-shadow:
+          inset 0 0 60px rgba(56, 189, 248, 0.04),
+          0 0 40px rgba(37, 99, 235, 0.04);
+        will-change: transform;
+      }
+
+      .boot-ring-a {
+        width: 900px;
+        height: 900px;
+        animation: bootSpin 44s linear infinite;
+      }
+
+      .boot-ring-b {
+        width: 620px;
+        height: 620px;
+        border-color: rgba(103, 232, 249, 0.1);
+        animation: bootSpinReverse 34s linear infinite;
+      }
+
+      .boot-ring-c {
+        width: 380px;
+        height: 380px;
+        border-color: rgba(96, 165, 250, 0.14);
+        animation: bootSpin 28s linear infinite;
+      }
+
+      .boot-beam {
+        position: absolute;
+        height: 1px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, transparent, rgba(103, 232, 249, 0.42), transparent);
+        filter: blur(1px);
+        will-change: transform, opacity;
+      }
+
+      .boot-beam-a {
+        left: -10%;
+        top: 24%;
+        width: 74vw;
+        transform: rotate(-18deg);
+        animation: bootBeamA 14s ease-in-out infinite;
+      }
+
+      .boot-beam-b {
+        right: -8%;
+        top: 72%;
+        width: 56vw;
+        transform: rotate(22deg);
+        animation: bootBeamB 12s ease-in-out infinite;
+      }
+
+      .boot-vertical,
+      .boot-horizontal {
+        position: absolute;
+      }
+
+      .boot-vertical {
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: linear-gradient(180deg, transparent, rgba(96, 165, 250, 0.16), transparent);
+      }
+
+      .boot-vertical-a {
+        left: 8%;
+      }
+
+      .boot-vertical-b {
+        right: 9%;
+      }
+
+      .boot-horizontal {
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.14), transparent);
+      }
+
+      .boot-horizontal-a {
+        top: 16%;
+      }
+
+      .boot-horizontal-b {
+        bottom: 12%;
+      }
+
+      .boot-node {
+        position: absolute;
+        left: 68%;
+        top: 50%;
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        transform: translate(-50%, -50%);
+        background: radial-gradient(circle at 35% 35%, #e0fbff, #67e8f9 48%, #2563eb 100%);
+        box-shadow:
+          0 0 0 10px rgba(103, 232, 249, 0.06),
+          0 0 24px rgba(103, 232, 249, 0.55),
+          0 0 54px rgba(37, 99, 235, 0.28);
+        animation: bootPulse 3.6s ease-in-out infinite;
+      }
+
+      .boot-node::before,
+      .boot-node::after {
+        content: "";
+        position: absolute;
+        inset: 50%;
+        border-radius: 999px;
+        transform: translate(-50%, -50%);
+        border: 1px solid rgba(103, 232, 249, 0.16);
+      }
+
+      .boot-node::before {
+        width: 82px;
+        height: 82px;
+      }
+
+      .boot-node::after {
+        width: 132px;
+        height: 132px;
+        border-color: rgba(96, 165, 250, 0.1);
+      }
+
+      #root {
+        position: relative;
+        z-index: 1;
+        min-height: 100vh;
+      }
+
+      @keyframes bootPulse {
+        0%,
+        100% {
+          transform: translate(-50%, -50%) scale(1);
+          opacity: 0.88;
+        }
+        50% {
+          transform: translate(-50%, -50%) scale(1.08);
+          opacity: 1;
+        }
+      }
+
+      @keyframes bootDriftA {
+        0% {
+          transform: translate3d(0, 0, 0);
+          opacity: 0.44;
+        }
+        50% {
+          transform: translate3d(24px, -18px, 0);
+          opacity: 0.72;
+        }
+        100% {
+          transform: translate3d(0, 0, 0);
+          opacity: 0.44;
+        }
+      }
+
+      @keyframes bootDriftB {
+        0% {
+          transform: translate3d(0, 0, 0);
+          opacity: 0.4;
+        }
+        50% {
+          transform: translate3d(-18px, 22px, 0);
+          opacity: 0.62;
+        }
+        100% {
+          transform: translate3d(0, 0, 0);
+          opacity: 0.4;
+        }
+      }
+
+      @keyframes bootDriftC {
+        0% {
+          transform: translate3d(0, 0, 0);
+          opacity: 0.34;
+        }
+        50% {
+          transform: translate3d(12px, -12px, 0);
+          opacity: 0.56;
+        }
+        100% {
+          transform: translate3d(0, 0, 0);
+          opacity: 0.34;
+        }
+      }
+
+      @keyframes bootSpin {
+        0% {
+          transform: translate(-50%, -50%) rotate(0deg);
+        }
+        100% {
+          transform: translate(-50%, -50%) rotate(360deg);
+        }
+      }
+
+      @keyframes bootSpinReverse {
+        0% {
+          transform: translate(-50%, -50%) rotate(360deg);
+        }
+        100% {
+          transform: translate(-50%, -50%) rotate(0deg);
+        }
+      }
+
+      @keyframes bootBeamA {
+        0%,
+        100% {
+          opacity: 0.18;
+          transform: rotate(-18deg) translate3d(0, 0, 0);
+        }
+        50% {
+          opacity: 0.6;
+          transform: rotate(-16deg) translate3d(14px, -8px, 0);
+        }
+      }
+
+      @keyframes bootBeamB {
+        0%,
+        100% {
+          opacity: 0.16;
+          transform: rotate(22deg) translate3d(0, 0, 0);
+        }
+        50% {
+          opacity: 0.52;
+          transform: rotate(24deg) translate3d(-10px, 8px, 0);
+        }
+      }
+
+      @keyframes bootGridMove {
+        0% {
+          background-position: 0 0, 0 0;
+        }
+        100% {
+          background-position: 72px 72px, 72px 72px;
+        }
+      }
+
+      @media (max-width: 1023px) {
+        .boot-ring {
+          left: 50%;
+          top: 34%;
+        }
+
+        .boot-node {
+          left: 50%;
+          top: 34%;
+        }
+
+        .boot-ring-a {
+          width: 640px;
+          height: 640px;
+        }
+
+        .boot-ring-b {
+          width: 420px;
+          height: 420px;
+        }
+
+        .boot-ring-c {
+          width: 260px;
+          height: 260px;
+        }
+      }
+
+      @media (max-width: 767px) {
+        #app-boot::after {
+          background-size: 44px 44px;
+          opacity: 0.26;
+        }
+
+        .boot-ambient-a,
+        .boot-ambient-b,
+        .boot-ambient-c {
+          filter: blur(56px);
+        }
+
+        .boot-ring-a {
+          width: 420px;
+          height: 420px;
+        }
+
+        .boot-ring-b {
+          width: 280px;
+          height: 280px;
+        }
+
+        .boot-ring-c {
+          width: 180px;
+          height: 180px;
+        }
+
+        .boot-vertical-a,
+        .boot-vertical-b,
+        .boot-horizontal-a,
+        .boot-horizontal-b {
+          opacity: 0.5;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #app-boot::after,
+        .boot-ambient,
+        .boot-ring,
+        .boot-beam,
+        .boot-node {
+          animation: none !important;
+        }
+      }
+    </style>
+
+    <title>AI HQ</title>
+  </head>
+
+  <body>
+    <div id="app-boot" aria-hidden="true">
+      <div class="boot-scanlines"></div>
+
+      <div class="boot-ambient boot-ambient-a"></div>
+      <div class="boot-ambient boot-ambient-b"></div>
+      <div class="boot-ambient boot-ambient-c"></div>
+
+      <div class="boot-vertical boot-vertical-a"></div>
+      <div class="boot-vertical boot-vertical-b"></div>
+      <div class="boot-horizontal boot-horizontal-a"></div>
+      <div class="boot-horizontal boot-horizontal-b"></div>
+
+      <div class="boot-beam boot-beam-a"></div>
+      <div class="boot-beam boot-beam-b"></div>
+
+      <div class="boot-ring boot-ring-a"></div>
+      <div class="boot-ring boot-ring-b"></div>
+      <div class="boot-ring boot-ring-c"></div>
+
+      <div class="boot-node"></div>
+    </div>
+
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
