@@ -181,9 +181,14 @@ jobs:
         run: npm run validate:env
 
       - name: Apply AI HQ migrations
+        env:
+          DATABASE_URL: postgresql://ci_user:ci_password@127.0.0.1:5432/aihq_ci
         run: npm run migrate:ai-hq-backend
 
-      - name: Run AI HQ DB-backed integration harness
+      - name: Run AI HQ DB-backed integration harness against CI Postgres
+        env:
+          DATABASE_URL: postgresql://ci_user:ci_password@127.0.0.1:5432/aihq_ci
+          AIHQ_DB_HARNESS_SKIP_MIGRATE: "1"
         run: npm run test:aihq:db
 
       - name: Check operational readiness

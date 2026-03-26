@@ -10,6 +10,11 @@ function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
+function isTruthyFlag(value) {
+  const normalized = s(value).toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes";
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -110,7 +115,9 @@ async function runAihqDbSuite(databaseUrl) {
     DATABASE_URL: databaseUrl,
   };
 
-  await run("npm", ["run", "migrate:ai-hq-backend"], { env });
+  if (!isTruthyFlag(process.env.AIHQ_DB_HARNESS_SKIP_MIGRATE)) {
+    await run("npm", ["run", "migrate:ai-hq-backend"], { env });
+  }
   await run("npm", ["run", "test:integration:db", "-w", "ai-hq-backend"], { env });
 }
 
