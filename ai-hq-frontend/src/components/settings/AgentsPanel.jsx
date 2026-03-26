@@ -7,6 +7,7 @@ import Card from "../ui/Card.jsx";
 import Badge from "../ui/Badge.jsx";
 import SettingsSection from "./SettingsSection.jsx";
 import AgentEditorCard from "./AgentEditorCard.jsx";
+import SettingsSurfaceBanner from "./SettingsSurfaceBanner.jsx";
 
 function StatTile({ label, value, hint, tone = "neutral" }) {
   return (
@@ -30,8 +31,8 @@ function StatTile({ label, value, hint, tone = "neutral" }) {
 
 export default function AgentsPanel({
   agents = [],
-  loading = false,
   canManage = true,
+  surface,
   onSaveAgent,
 }) {
   const enabledCount = agents.filter((x) => !!x?.enabled).length;
@@ -50,6 +51,10 @@ export default function AgentsPanel({
       tone="default"
     >
       <div className="space-y-6">
+        <SettingsSurfaceBanner
+          surface={surface}
+          unavailableMessage="Agent settings are temporarily unavailable."
+        />
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
           <Card variant="surface" padded="lg" className="rounded-[28px]">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -150,7 +155,7 @@ export default function AgentsPanel({
           </Card>
         </div>
 
-        {loading ? (
+        {surface?.loading ? (
           <Card variant="subtle" padded="lg" className="rounded-[28px]">
             <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
               <Loader2 className="h-4 w-4 animate-spin" />

@@ -1,21 +1,33 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost } from "../api/client.js";
+import { useSurfaceActionState } from "../components/settings/hooks/useSurfaceActionState.js";
 import { mapCommentToUi, s } from "../features/comments/comment-utils.js";
 import { getAppSessionContext } from "../lib/appSession.js";
+import { useSettingsSurfaceState } from "../pages/Settings/hooks/useSettingsSurfaceState.js";
 
 export function useCommentsData() {
-  const [items, setItems] = useState([]);
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedId, setSelectedId] = useState("");
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
   const [replyDraft, setReplyDraft] = useState("");
-  const [actionLoading, setActionLoading] = useState("");
   const [sessionContext, setSessionContext] = useState({
     tenantKey: "",
     actorName: "operator",
+  });
+  const actionState = useSurfaceActionState();
+  const {
+    data: items,
+    setData: setItems,
+    surface,
+    beginRefresh,
+    succeedRefresh,
+    failRefresh,
+    beginSave,
+    succeedSave,
+    failSave,
+    clearSaveState,
+  } = useSettingsSurfaceState({
+    initialData: [],
   });
 
   useEffect(() => {
@@ -36,12 +48,9 @@ export function useCommentsData() {
     };
   }, []);
 
-  const loadComments = useCallback(async ({ silent = false } = {}) => {
+  const loadComments = useCallback(async () => {
     try {
-      if (silent) setRefreshing(true);
-      else setLoading(true);
-
-      setError("");
+      beginRefresh();
 
       const params = new URLSearchParams();
       params.set("limit", "100");
@@ -54,14 +63,14 @@ export function useCommentsData() {
         ? response.comments.map(mapCommentToUi)
         : [];
 
-      setItems(mapped);
+      return succeedRefresh(mapped);
     } catch (e) {
-      setError(String(e?.message || e || "Failed to load comments"));
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      return failRefresh(String(e?.message || e || "Failed to load comments"), {
+        fallbackData: [],
+        unavailable: true,
+      });
     }
-  }, [sessionContext.tenantKey]);
+  }, [beginRefresh, failRefresh, sessionContext.tenantKey, succeedRefresh]);
 
   useEffect(() => {
     loadComments();
@@ -133,23 +142,23 @@ export function useCommentsData() {
     if (!selected?.id) return;
 
     try {
-      setActionLoading(`review:${status}`);
-
-      const j = await apiPost(`/api/comments/${selected.id}/review`, {
-        status,
-        actor: sessionContext.actorName || "operator",
-        note: status === "manual_review" ? "Sent to manual review" : "",
-      });
+      beginSave();
+      const j = await actionState.runAction(`review:${status}`, () =>
+        apiPost(`/api/comments/${selected.id}/review`, {
+          status,
+          actor: sessionContext.actorName || "operator",
+          note: status === "manual_review" ? "Sent to manual review" : "",
+        })
+      );
 
       if (j?.ok === false) {
         throw new Error(j?.error || j?.details?.message || "Failed to review comment");
       }
 
-      await loadComments({ silent: true });
+      await loadComments();
+      succeedSave({ message: status === "manual_review" ? "Comment sent to manual review." : "Comment review updated." });
     } catch (e) {
-      setError(String(e?.message || e || "Failed to review comment"));
-    } finally {
-      setActionLoading("");
+      failSave(String(e?.message || e || "Failed to review comment"));
     }
   }
 
@@ -158,28 +167,28 @@ export function useCommentsData() {
 
     const replyText = s(replyDraft);
     if (!replyText) {
-      setError("Reply text is required");
+      failSave("Reply text is required");
       return;
     }
 
     try {
-      setActionLoading("reply");
-
-      const j = await apiPost(`/api/comments/${selected.id}/reply`, {
-        replyText,
-        actor: sessionContext.actorName || "operator",
-        approved: true,
-      });
+      beginSave();
+      const j = await actionState.runAction("reply", () =>
+        apiPost(`/api/comments/${selected.id}/reply`, {
+          replyText,
+          actor: sessionContext.actorName || "operator",
+          approved: true,
+        })
+      );
 
       if (j?.ok === false) {
         throw new Error(j?.error || j?.details?.message || "Failed to save reply");
       }
 
-      await loadComments({ silent: true });
+      await loadComments();
+      succeedSave({ message: "Reply saved." });
     } catch (e) {
-      setError(String(e?.message || e || "Failed to save reply"));
-    } finally {
-      setActionLoading("");
+      failSave(String(e?.message || e || "Failed to save reply"));
     }
   }
 
@@ -187,22 +196,22 @@ export function useCommentsData() {
     if (!selected?.id) return;
 
     try {
-      setActionLoading("ignore");
-
-      const j = await apiPost(`/api/comments/${selected.id}/ignore`, {
-        actor: sessionContext.actorName || "operator",
-        note: "Ignored from comments panel",
-      });
+      beginSave();
+      const j = await actionState.runAction("ignore", () =>
+        apiPost(`/api/comments/${selected.id}/ignore`, {
+          actor: sessionContext.actorName || "operator",
+          note: "Ignored from comments panel",
+        })
+      );
 
       if (j?.ok === false) {
         throw new Error(j?.error || j?.details?.message || "Failed to ignore comment");
       }
 
-      await loadComments({ silent: true });
+      await loadComments();
+      succeedSave({ message: "Comment ignored." });
     } catch (e) {
-      setError(String(e?.message || e || "Failed to ignore comment"));
-    } finally {
-      setActionLoading("");
+      failSave(String(e?.message || e || "Failed to ignore comment"));
     }
   }
 
@@ -214,16 +223,19 @@ export function useCommentsData() {
     setSelectedId,
     search,
     setSearch,
-    loading,
-    refreshing,
-    error,
     replyDraft,
     setReplyDraft,
-    actionLoading,
     loadComments,
     filtered,
     selected,
     stats,
+    surface: {
+      ...surface,
+      refresh: loadComments,
+      clearSaveState,
+    },
+    actionState,
+    actionLoading: actionState.pendingAction,
     handleReview,
     handleReplySave,
     handleIgnore,

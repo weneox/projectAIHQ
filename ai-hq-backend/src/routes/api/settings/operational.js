@@ -12,6 +12,7 @@ import { dbGetTenantByKey } from "../../../db/helpers/tenants.js";
 import { buildOperationalChannels } from "../../../services/operationalChannels.js";
 import {
   buildOperationalRepairGuidance,
+  buildReadinessSurface,
 } from "../../../services/operationalReadiness.js";
 import {
   ok,
@@ -228,13 +229,17 @@ function buildOperationalSettingsPayload({
       },
     },
     operationalChannels,
-    repair: {
+    readiness: buildReadinessSurface({
+      status:
+        voiceRepair.blocked || metaRepair.blocked
+          ? "blocked"
+          : "ready",
+      message:
+        voiceRepair.blocked || metaRepair.blocked
+          ? "Production traffic is blocked until operational dependencies are repaired."
+          : "Operational dependencies are ready for production traffic.",
       blockers: [voiceRepair, metaRepair].filter((item) => item.blocked),
-      nextActions: [voiceRepair, metaRepair]
-        .filter((item) => item?.blocked)
-        .map((item) => item.nextAction)
-        .filter(Boolean),
-    },
+    }),
   };
 }
 

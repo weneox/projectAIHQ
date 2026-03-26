@@ -1,3 +1,5 @@
+import { validateReadinessSurface } from "./operations.js";
+
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
@@ -173,6 +175,10 @@ export function validateResolveChannelProjectedResponse(input = {}) {
     input.projectedRuntime || input.projected_runtime
   );
   if (!checked.ok) return checked;
+  const readiness = obj(input.readiness)
+    ? validateReadinessSurface(input.readiness)
+    : { ok: true, value: null };
+  if (!readiness.ok) return readiness;
 
   return ok({
     ...input,
@@ -180,10 +186,11 @@ export function validateResolveChannelProjectedResponse(input = {}) {
     tenantId,
     resolvedChannel: lower(
       input.resolvedChannel || input?.channelConfig?.channelType || ""
-    ),
-    projectedRuntime: checked.value,
-    tenant: obj(input.tenant),
-    channelConfig: obj(input.channelConfig),
-    providerSecrets: obj(input.providerSecrets),
-  });
-}
+      ),
+      projectedRuntime: checked.value,
+      readiness: readiness.value,
+      tenant: obj(input.tenant),
+      channelConfig: obj(input.channelConfig),
+      providerSecrets: obj(input.providerSecrets),
+    });
+  }

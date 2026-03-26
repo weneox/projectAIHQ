@@ -7,14 +7,17 @@ import { cx } from "../../lib/cx.js";
 
 export default function SettingsSaveBar({
   dirty = false,
-  saving = false,
-  message = "",
+  surface = null,
   onReset,
   onSave,
 }) {
+  const saving = !!surface?.saving;
+  const message = String(surface?.saveError || surface?.saveSuccess || "").trim();
+
   if (!dirty && !message) return null;
 
-  const isSuccess = !dirty && !!message;
+  const isSuccess = !dirty && !!surface?.saveSuccess && !surface?.saveError;
+  const isError = !!surface?.saveError;
   const isWarning = dirty;
 
   return (
@@ -35,6 +38,8 @@ export default function SettingsSaveBar({
                   "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-300",
                 isSuccess &&
                   "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-300",
+                isError &&
+                  "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-300",
                 saving &&
                   "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-400/20 dark:bg-blue-400/10 dark:text-blue-300"
               )}
@@ -43,6 +48,8 @@ export default function SettingsSaveBar({
                 <Loader2 className="h-4.5 w-4.5 animate-spin" strokeWidth={2} />
               ) : isSuccess ? (
                 <CheckCircle2 className="h-4.5 w-4.5" strokeWidth={2} />
+              ) : isError ? (
+                <AlertCircle className="h-4.5 w-4.5" strokeWidth={2} />
               ) : (
                 <AlertCircle className="h-4.5 w-4.5" strokeWidth={2} />
               )}
@@ -55,6 +62,8 @@ export default function SettingsSaveBar({
                     ? "Saving changes"
                     : dirty
                     ? "Unsaved changes"
+                    : isError
+                    ? "Save failed"
                     : "Workspace updated"}
                 </div>
 

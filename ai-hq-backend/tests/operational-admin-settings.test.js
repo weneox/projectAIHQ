@@ -275,7 +275,8 @@ test("operational settings route returns sanitized readiness metadata", async ()
   assert.equal(res.body?.voice?.operational?.ready, true);
   assert.equal(res.body?.channels?.meta?.providerSecrets?.ready, true);
   assert.deepEqual(res.body?.channels?.meta?.providerSecrets?.missingSecretKeys, []);
-  assert.equal(res.body?.repair?.blockers?.length, 0);
+  assert.equal(res.body?.readiness?.status, "ready");
+  assert.equal(res.body?.readiness?.blockers?.length, 0);
 });
 
 test("operational voice settings route rejects enabled voice without phone number", async () => {
@@ -318,7 +319,8 @@ test("operational settings route returns guided repair metadata for blocked depe
   assert.equal(res.body?.channels?.meta?.repair?.blocked, true);
   assert.equal(res.body?.channels?.meta?.repair?.nextAction?.id, "open_provider_secrets");
   assert.equal(res.body?.channels?.meta?.repair?.nextAction?.allowed, false);
-  assert.equal(res.body?.repair?.blockers?.length, 2);
+  assert.equal(res.body?.readiness?.status, "blocked");
+  assert.equal(res.body?.readiness?.blockers?.length, 2);
 });
 
 test("operator can update voice operational settings through admin route", async () => {

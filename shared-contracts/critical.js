@@ -1,3 +1,5 @@
+import { validateReadinessSurface } from "./operations.js";
+
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
@@ -59,6 +61,11 @@ export function validateResolveChannelResponse(input = {}) {
     return fail("resolve_channel_response_invalid");
   }
 
+  const readiness = isObj(input.readiness)
+    ? validateReadinessSurface(input.readiness)
+    : { ok: true, value: null };
+  if (!readiness.ok) return readiness;
+
   return ok({
     tenantKey,
     tenantId,
@@ -66,6 +73,7 @@ export function validateResolveChannelResponse(input = {}) {
     channelConfig: isObj(input.channelConfig) ? input.channelConfig : {},
     providerSecrets: isObj(input.providerSecrets) ? input.providerSecrets : {},
     resolvedChannel: lower(input.resolvedChannel || input?.channelConfig?.channelType),
+    readiness: readiness.value,
   });
 }
 

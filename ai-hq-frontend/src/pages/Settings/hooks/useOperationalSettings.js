@@ -5,6 +5,7 @@ import {
   saveOperationalChannelSettings,
   saveOperationalVoiceSettings,
 } from "../../../api/settings.js";
+import { useSettingsSurfaceState } from "./useSettingsSurfaceState.js";
 
 function emptyOperationalData() {
   return {
@@ -41,82 +42,98 @@ function emptyOperationalData() {
 }
 
 export function useOperationalSettings({ tenantKey, setMessage }) {
-  const [loading, setLoading] = useState(true);
+  const {
+    data: operationalData,
+    setData: setOperationalData,
+    surface,
+    beginRefresh,
+    succeedRefresh,
+    failRefresh,
+    beginSave,
+    succeedSave,
+    failSave,
+    clearSaveState,
+  } = useSettingsSurfaceState({
+    initialData: emptyOperationalData,
+    initialLoading: true,
+  });
   const [savingVoice, setSavingVoice] = useState(false);
   const [savingChannel, setSavingChannel] = useState(false);
-  const [operationalData, setOperationalData] = useState(emptyOperationalData);
-  const [operationalMessage, setOperationalMessage] = useState("");
 
   const refreshOperationalSettings = useCallback(async (tenantKeyOverride = "") => {
     const resolvedTenantKey = String(tenantKeyOverride || tenantKey || "").trim();
     if (!resolvedTenantKey) {
-      setLoading(false);
-      return emptyOperationalData();
+      return failRefresh("", {
+        fallbackData: emptyOperationalData(),
+        unavailable: false,
+      });
     }
 
-    setLoading(true);
-    setOperationalMessage("");
-
+    beginRefresh();
     try {
       const payload = await getOperationalSettings();
-      setOperationalData(payload);
-      return payload;
+      return succeedRefresh(payload);
     } catch (err) {
       const message = String(err?.message || err);
-      setOperationalMessage(message);
       setMessage?.(message);
-      return emptyOperationalData();
-    } finally {
-      setLoading(false);
+      return failRefresh(message, {
+        fallbackData: emptyOperationalData(),
+      });
     }
-  }, [setMessage, tenantKey]);
+  }, [beginRefresh, failRefresh, setMessage, succeedRefresh, tenantKey]);
 
   const saveVoiceSettings = useCallback(
     async (payload) => {
       setSavingVoice(true);
-      setOperationalMessage("");
+      beginSave();
 
       try {
         const next = await saveOperationalVoiceSettings(payload);
         setOperationalData(next);
-        setOperationalMessage("Operational voice settings saved.");
+        succeedSave({
+          nextData: next,
+          message: "Operational voice settings saved.",
+        });
         return next;
       } catch (err) {
-        const message = String(err?.message || err);
-        setOperationalMessage(message);
+        failSave(err);
         throw err;
       } finally {
         setSavingVoice(false);
       }
     },
-    []
+    [beginSave, failSave, setOperationalData, succeedSave]
   );
 
   const saveChannelSettings = useCallback(async (channelType, payload) => {
     setSavingChannel(true);
-    setOperationalMessage("");
+    beginSave();
 
     try {
       const next = await saveOperationalChannelSettings(channelType, payload);
       setOperationalData(next);
-      setOperationalMessage("Operational channel settings saved.");
+      succeedSave({
+        nextData: next,
+        message: "Operational channel settings saved.",
+      });
       return next;
     } catch (err) {
-      const message = String(err?.message || err);
-      setOperationalMessage(message);
+      failSave(err);
       throw err;
     } finally {
       setSavingChannel(false);
     }
-  }, []);
+  }, [beginSave, failSave, setOperationalData, succeedSave]);
 
   return {
-    loading,
+    surface: {
+      ...surface,
+      refresh: refreshOperationalSettings,
+      clearSaveState,
+    },
     savingVoice,
     savingChannel,
     operationalData,
-    operationalMessage,
-    setOperationalMessage,
     refreshOperationalSettings,
     saveVoiceSettings,
     saveChannelSettings,

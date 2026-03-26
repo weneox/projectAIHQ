@@ -48,6 +48,10 @@ import {
   buildSavedBusinessPayload,
   buildSavedRuntimePayload,
 } from "../../../services/workspace/mutations/normalize.js";
+import {
+  buildOperationalRepairGuidance,
+  buildReadinessSurface,
+} from "../../../services/operationalReadiness.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -1642,10 +1646,45 @@ async function loadSetupTruthPayload({ db, actor }, deps = {}) {
       tenant: actor.tenant,
     }),
   ]);
+  const truthProfile = buildCanonicalTruthProfile(profile);
+  const hasApprovedTruth =
+    Object.keys(truthProfile).length > 0 ||
+    !!s(profile?.approved_at) ||
+    !!s(profile?.approved_by) ||
+    arr(versions).length > 0;
+  const nextRoute = s(
+    setup?.progress?.nextRoute ||
+      setup?.progress?.nextSetupRoute ||
+      "/setup/studio"
+  );
+  const truthBlocker = buildOperationalRepairGuidance({
+    reasonCode: hasApprovedTruth ? "" : "approved_truth_unavailable",
+    viewerRole: s(actor?.role || "operator"),
+    missingFields: hasApprovedTruth
+      ? []
+      : [
+          s(setup?.progress?.primaryMissingStep || "approved_truth"),
+          nextRoute ? `route:${nextRoute}` : "",
+        ].filter(Boolean),
+    title: "Approved truth unavailable",
+    subtitle:
+      "Approved truth is unavailable and non-approved fallback data is intentionally hidden.",
+    action: {
+      id: "open_setup_route",
+      kind: "route",
+      label: "Open next setup step",
+      requiredRole: "operator",
+    },
+    target: {
+      path: nextRoute,
+      section: "truth",
+      setupStep: s(setup?.progress?.primaryMissingStep),
+    },
+  });
 
   return {
     truth: {
-      profile: buildCanonicalTruthProfile(profile),
+      profile: truthProfile,
       fieldProvenance: buildCanonicalTruthFieldProvenance(profile),
       history: arr(truthVersionHelper.buildHistoryEntries(versions)).filter(
         (item) => Object.keys(item).length
@@ -1657,6 +1696,13 @@ async function loadSetupTruthPayload({ db, actor }, deps = {}) {
       profileStatus: s(profile?.profile_status),
       sourceSummary: obj(profile?.source_summary_json),
       metadata: obj(profile?.metadata_json),
+      readiness: buildReadinessSurface({
+        status: truthBlocker.blocked ? "blocked" : "ready",
+        message: truthBlocker.blocked
+          ? "Approved truth is unavailable until the next setup/runtime step is completed."
+          : "Approved truth is available.",
+        blockers: truthBlocker.blocked ? [truthBlocker] : [],
+      }),
     },
     setup,
   };

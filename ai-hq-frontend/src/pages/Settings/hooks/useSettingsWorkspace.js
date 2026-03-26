@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   getWorkspaceSettings,
@@ -12,6 +12,7 @@ import {
   normalizeWorkspace,
   syncWorkspaceAndInitial,
 } from "../settingsShared.js";
+import { useSettingsSurfaceState } from "./useSettingsSurfaceState.js";
 
 function emptyWorkspace() {
   return normalizeWorkspace({
@@ -29,13 +30,24 @@ function emptyWorkspace() {
   });
 }
 
-export function useSettingsWorkspace({ setMessage }) {
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [workspace, setWorkspace] = useState(emptyWorkspace);
+export function useSettingsWorkspace() {
+  const {
+    data: workspace,
+    setData: setWorkspace,
+    surface,
+    beginRefresh,
+    succeedRefresh,
+    failRefresh,
+    beginSave,
+    succeedSave,
+    failSave,
+    clearSaveState,
+  } = useSettingsSurfaceState({
+    initialData: emptyWorkspace,
+    initialLoading: true,
+  });
   const [initialWorkspace, setInitialWorkspace] = useState(emptyWorkspace);
   const [agents, setAgents] = useState([]);
-  const [agentsLoading, setAgentsLoading] = useState(true);
 
   const dirty = useMemo(() => isSettingsDirty(workspace, initialWorkspace), [workspace, initialWorkspace]);
   const dirtyMap = useMemo(
@@ -47,129 +59,171 @@ export function useSettingsWorkspace({ setMessage }) {
   const canManageSettings = viewerRole === "owner" || viewerRole === "admin";
   const tenantKey = String(workspace?.tenantKey || initialWorkspace?.tenantKey || "neox").trim() || "neox";
 
-  function patchTenant(key, value) {
-    if (!canManageSettings) return;
-    setWorkspace((prev) => ({ ...prev, tenant: { ...prev.tenant, [key]: value } }));
-  }
+  const patchTenant = useCallback(
+    (key, value) => {
+      if (!canManageSettings) return;
+      setWorkspace((prev) => ({ ...prev, tenant: { ...prev.tenant, [key]: value } }));
+    },
+    [canManageSettings, setWorkspace]
+  );
 
-  function patchProfile(key, value) {
-    if (!canManageSettings) return;
-    setWorkspace((prev) => ({ ...prev, profile: { ...prev.profile, [key]: value } }));
-  }
+  const patchProfile = useCallback(
+    (key, value) => {
+      if (!canManageSettings) return;
+      setWorkspace((prev) => ({ ...prev, profile: { ...prev.profile, [key]: value } }));
+    },
+    [canManageSettings, setWorkspace]
+  );
 
-  function patchAi(key, value) {
-    if (!canManageSettings) return;
-    setWorkspace((prev) => ({ ...prev, aiPolicy: { ...prev.aiPolicy, [key]: value } }));
-  }
+  const patchAi = useCallback(
+    (key, value) => {
+      if (!canManageSettings) return;
+      setWorkspace((prev) => ({ ...prev, aiPolicy: { ...prev.aiPolicy, [key]: value } }));
+    },
+    [canManageSettings, setWorkspace]
+  );
 
-  async function loadWorkspaceBase() {
-    const settings = await getWorkspaceSettings();
-    const detectedTenantKey =
-      String(settings?.tenant?.tenant_key || settings?.tenantKey || "neox").trim() || "neox";
-    const ag = await getWorkspaceAgents().catch(() => []);
-
-    const normalized = normalizeWorkspace({
-      ...settings,
-      tenantKey: detectedTenantKey,
-      agents: Array.isArray(ag) ? ag : [],
-    });
-
-    setWorkspace(normalized);
-    setInitialWorkspace(normalized);
-    setAgents(normalized.agents);
-    return { normalized, tenantKey: detectedTenantKey };
-  }
-
-  function applyDomainSlices(patch) {
-    syncWorkspaceAndInitial({
-      setWorkspace,
-      setInitialWorkspace,
-      patch,
-    });
-  }
-
-  async function onSaveWorkspace(extraSlices = {}) {
-    if (!canManageSettings) {
-      setMessage("Bu hissəni yalnız owner/admin dəyişə bilər.");
-      return;
-    }
-
-    setSaving(true);
-    setMessage("");
+  const refreshWorkspace = useCallback(async () => {
+    beginRefresh();
 
     try {
-      const payload = buildSafeWorkspaceSavePayload(workspace);
-      const res = await saveWorkspaceSettings(payload);
-
+      const settings = await getWorkspaceSettings();
+      const detectedTenantKey =
+        String(settings?.tenant?.tenant_key || settings?.tenantKey || "neox").trim() || "neox";
+      const ag = await getWorkspaceAgents().catch(() => []);
       const normalized = normalizeWorkspace({
-        ...res,
-        tenantKey,
-        agents,
-        ...extraSlices,
+        ...settings,
+        tenantKey: detectedTenantKey,
+        agents: Array.isArray(ag) ? ag : [],
       });
 
-      setWorkspace(normalized);
       setInitialWorkspace(normalized);
-      setMessage("✅ Workspace settings yadda saxlanıldı.");
-    } catch (e) {
-      setMessage(String(e?.message || e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function onResetWorkspace() {
-    const reset = initialWorkspace;
-    setWorkspace(reset);
-    setAgents(Array.isArray(reset?.agents) ? reset.agents : []);
-    setMessage("↩️ Dəyişikliklər geri qaytarıldı.");
-    return reset;
-  }
-
-  async function saveAgent(agentKey, payload) {
-    if (!canManageSettings) {
-      setMessage("Agent dəyişiklikləri yalnız owner/admin üçündür.");
-      return;
-    }
-
-    try {
-      await saveWorkspaceAgent(agentKey, {
-        display_name: payload.display_name,
-        role_summary: payload.role_summary,
-        enabled: payload.enabled,
-        model: payload.model,
-        temperature: payload.temperature,
-        prompt_overrides: payload.prompt_overrides || {},
-        tool_access: payload.tool_access || {},
-        limits: payload.limits || {},
+      setAgents(normalized.agents);
+      succeedRefresh(normalized);
+      return { normalized, tenantKey: detectedTenantKey };
+    } catch (error) {
+      failRefresh(error, {
+        fallbackData: emptyWorkspace(),
       });
+      return { normalized: emptyWorkspace(), tenantKey: "neox" };
+    }
+  }, [beginRefresh, failRefresh, setInitialWorkspace, succeedRefresh]);
 
-      const ag = await getWorkspaceAgents();
-      const nextAgents = Array.isArray(ag) ? ag : [];
-      setAgents(nextAgents);
+  const applyDomainSlices = useCallback(
+    (patch) => {
       syncWorkspaceAndInitial({
         setWorkspace,
         setInitialWorkspace,
-        patch: { agents: nextAgents },
+        patch,
       });
-      setMessage(`✅ ${agentKey} agent yeniləndi.`);
-    } catch (e) {
-      setMessage(String(e?.message || e));
-    }
-  }
+    },
+    [setWorkspace]
+  );
+
+  const onSaveWorkspace = useCallback(
+    async (extraSlices = {}) => {
+      if (!canManageSettings) {
+        failSave("This workspace is read-only for the current operator.");
+        return null;
+      }
+
+      beginSave();
+
+      try {
+        const payload = buildSafeWorkspaceSavePayload(workspace);
+        const res = await saveWorkspaceSettings(payload);
+        const normalized = normalizeWorkspace({
+          ...res,
+          tenantKey,
+          agents,
+          ...extraSlices,
+        });
+
+        setWorkspace(normalized);
+        setInitialWorkspace(normalized);
+        succeedSave({
+          nextData: normalized,
+          message: "Workspace settings saved.",
+        });
+        return normalized;
+      } catch (error) {
+        failSave(error);
+        throw error;
+      }
+    },
+    [
+      agents,
+      beginSave,
+      canManageSettings,
+      failSave,
+      succeedSave,
+      tenantKey,
+      workspace,
+      setWorkspace,
+    ]
+  );
+
+  const onResetWorkspace = useCallback(() => {
+    const reset = initialWorkspace;
+    setWorkspace(reset);
+    setAgents(Array.isArray(reset?.agents) ? reset.agents : []);
+    clearSaveState();
+    return reset;
+  }, [clearSaveState, initialWorkspace, setWorkspace]);
+
+  const saveAgent = useCallback(
+    async (agentKey, payload) => {
+      if (!canManageSettings) {
+        failSave("Agent changes are limited to owner/admin access.");
+        return null;
+      }
+
+      beginSave();
+
+      try {
+        await saveWorkspaceAgent(agentKey, {
+          display_name: payload.display_name,
+          role_summary: payload.role_summary,
+          enabled: payload.enabled,
+          model: payload.model,
+          temperature: payload.temperature,
+          prompt_overrides: payload.prompt_overrides || {},
+          tool_access: payload.tool_access || {},
+          limits: payload.limits || {},
+        });
+
+        const ag = await getWorkspaceAgents();
+        const nextAgents = Array.isArray(ag) ? ag : [];
+        setAgents(nextAgents);
+        syncWorkspaceAndInitial({
+          setWorkspace,
+          setInitialWorkspace,
+          patch: { agents: nextAgents },
+        });
+        succeedSave({
+          message: `${agentKey} agent updated.`,
+        });
+        return nextAgents;
+      } catch (error) {
+        failSave(error);
+        throw error;
+      }
+    },
+    [beginSave, canManageSettings, failSave, setWorkspace, succeedSave]
+  );
 
   return {
-    loading,
-    setLoading,
-    saving,
+    surface: {
+      ...surface,
+      refresh: refreshWorkspace,
+      clearSaveState,
+    },
     workspace,
     setWorkspace,
     initialWorkspace,
     setInitialWorkspace,
     agents,
     setAgents,
-    agentsLoading,
-    setAgentsLoading,
     dirty,
     dirtyMap,
     canManageSettings,
@@ -177,7 +231,7 @@ export function useSettingsWorkspace({ setMessage }) {
     patchTenant,
     patchProfile,
     patchAi,
-    loadWorkspaceBase,
+    refreshWorkspace,
     applyDomainSlices,
     onSaveWorkspace,
     onResetWorkspace,

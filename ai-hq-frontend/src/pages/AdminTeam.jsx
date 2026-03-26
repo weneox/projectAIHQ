@@ -1,27 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
 import {
-  AlertCircle,
-  CheckCircle2,
   Building2,
-  Mail,
-  User2,
-  KeyRound,
-  Search,
   ChevronRight,
-  ShieldCheck,
-  Users,
-  UserPlus,
+  KeyRound,
+  Mail,
   PencilLine,
+  Search,
+  ShieldCheck,
+  User2,
+  UserPlus,
+  Users,
 } from "lucide-react";
-import {
-  listTenants,
-  listTenantUsers,
-  createTenantUser,
-  updateTenantUser,
-  setTenantUserStatus,
-  setTenantUserPassword,
-  deleteTenantUser,
-} from "../api/tenants.js";
+
+import SettingsSurfaceBanner from "../components/settings/SettingsSurfaceBanner.jsx";
+import { useAdminTeamSurface } from "./hooks/useAdminTeamSurface.js";
 
 function cx(...arr) {
   return arr.filter(Boolean).join(" ");
@@ -37,21 +28,6 @@ function Surface({ className = "", children }) {
     >
       {children}
     </section>
-  );
-}
-
-function Banner({ type = "success", children }) {
-  const tone =
-    type === "success"
-      ? "border-emerald-400/16 bg-emerald-500/10 text-emerald-200"
-      : "border-rose-400/16 bg-rose-500/10 text-rose-200";
-  const Icon = type === "success" ? CheckCircle2 : AlertCircle;
-
-  return (
-    <div className={cx("flex items-center gap-3 rounded-[24px] border px-5 py-4 text-sm", tone)}>
-      <Icon className="h-4 w-4 shrink-0" />
-      <span>{children}</span>
-    </div>
   );
 }
 
@@ -102,10 +78,10 @@ function Btn({ children, variant = "secondary", className = "", ...props }) {
     variant === "primary"
       ? "border border-cyan-400/24 bg-cyan-400 text-slate-950 hover:brightness-110"
       : variant === "danger"
-      ? "border border-rose-400/16 bg-rose-500/16 text-rose-200 hover:bg-rose-500/22"
-      : variant === "ghost"
-      ? "border border-transparent bg-transparent text-slate-400 hover:bg-white/[0.04] hover:text-white"
-      : "border border-white/[0.08] bg-white/[0.04] text-slate-200 hover:bg-white/[0.07]";
+        ? "border border-rose-400/16 bg-rose-500/16 text-rose-200 hover:bg-rose-500/22"
+        : variant === "ghost"
+          ? "border border-transparent bg-transparent text-slate-400 hover:bg-white/[0.04] hover:text-white"
+          : "border border-white/[0.08] bg-white/[0.04] text-slate-200 hover:bg-white/[0.07]";
 
   return (
     <button
@@ -137,280 +113,83 @@ function Chip({ children, className = "" }) {
 }
 
 function roleTone(role) {
-  const r = String(role || "").toLowerCase();
-  if (r === "owner") return "border-violet-400/16 bg-violet-400/10 text-violet-200";
-  if (r === "admin") return "border-sky-400/16 bg-sky-400/10 text-sky-200";
-  if (r === "operator") return "border-emerald-400/16 bg-emerald-400/10 text-emerald-200";
-  if (r === "marketer") return "border-fuchsia-400/16 bg-fuchsia-400/10 text-fuchsia-200";
-  if (r === "analyst") return "border-amber-400/16 bg-amber-400/10 text-amber-200";
+  const normalized = String(role || "").toLowerCase();
+  if (normalized === "owner") return "border-violet-400/16 bg-violet-400/10 text-violet-200";
+  if (normalized === "admin") return "border-sky-400/16 bg-sky-400/10 text-sky-200";
+  if (normalized === "operator") return "border-emerald-400/16 bg-emerald-400/10 text-emerald-200";
+  if (normalized === "marketer") return "border-fuchsia-400/16 bg-fuchsia-400/10 text-fuchsia-200";
+  if (normalized === "analyst") return "border-amber-400/16 bg-amber-400/10 text-amber-200";
   return "border-white/10 bg-white/[0.04] text-slate-200";
 }
 
 function statusTone(status) {
-  const s = String(status || "").toLowerCase();
-  if (s === "active") return "border-emerald-400/16 bg-emerald-400/10 text-emerald-200";
-  if (s === "invited") return "border-amber-400/16 bg-amber-400/10 text-amber-200";
-  if (s === "disabled") return "border-rose-400/16 bg-rose-400/10 text-rose-200";
-  if (s === "removed") return "border-slate-400/16 bg-slate-400/10 text-slate-300";
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "active") return "border-emerald-400/16 bg-emerald-400/10 text-emerald-200";
+  if (normalized === "invited") return "border-amber-400/16 bg-amber-400/10 text-amber-200";
+  if (normalized === "disabled") return "border-rose-400/16 bg-rose-400/10 text-rose-200";
+  if (normalized === "removed") return "border-slate-400/16 bg-slate-400/10 text-slate-300";
   return "border-white/10 bg-white/[0.04] text-slate-200";
 }
 
 function roleLabel(role) {
-  const r = String(role || "").toLowerCase();
-  if (r === "owner") return "Owner";
-  if (r === "admin") return "Administrator";
-  if (r === "operator") return "Operator";
-  if (r === "marketer") return "Marketing";
-  if (r === "analyst") return "Analyst";
+  const normalized = String(role || "").toLowerCase();
+  if (normalized === "owner") return "Owner";
+  if (normalized === "admin") return "Administrator";
+  if (normalized === "operator") return "Operator";
+  if (normalized === "marketer") return "Marketing";
+  if (normalized === "analyst") return "Analyst";
   return "Team member";
 }
 
 function statusLabel(status) {
-  const s = String(status || "").toLowerCase();
-  if (s === "active") return "Active";
-  if (s === "invited") return "Pending setup";
-  if (s === "disabled") return "Disabled";
-  if (s === "removed") return "Removed";
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "active") return "Active";
+  if (normalized === "invited") return "Pending setup";
+  if (normalized === "disabled") return "Disabled";
+  if (normalized === "removed") return "Removed";
   return "Unknown";
 }
 
-const EMPTY_CREATE = {
-  email: "",
-  full_name: "",
-  role: "member",
-  status: "active",
-  password: "",
-};
-
-const EMPTY_EDIT = {
-  id: "",
-  email: "",
-  full_name: "",
-  role: "member",
-  status: "invited",
-};
-
 export default function AdminTeam() {
-  const [tenants, setTenants] = useState([]);
-  const [tenantKey, setTenantKey] = useState("");
-  const [users, setUsers] = useState([]);
-  const [loadingTenants, setLoadingTenants] = useState(true);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [savingPassword, setSavingPassword] = useState(false);
-  const [removingId, setRemovingId] = useState("");
-  const [query, setQuery] = useState("");
-  const [createForm, setCreateForm] = useState(EMPTY_CREATE);
-  const [editForm, setEditForm] = useState(EMPTY_EDIT);
-  const [passwordUserId, setPasswordUserId] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
-  async function loadTenants() {
-    setLoadingTenants(true);
-    try {
-      const rows = await listTenants();
-      setTenants(Array.isArray(rows) ? rows : []);
-      if (!tenantKey && rows?.[0]?.tenant_key) {
-        setTenantKey(rows[0].tenant_key);
-      }
-    } catch (e) {
-      setError(String(e?.message || e || "Unable to load workspaces"));
-      setTenants([]);
-    } finally {
-      setLoadingTenants(false);
-    }
-  }
-
-  async function loadUsers(key) {
-    if (!key) {
-      setUsers([]);
-      return;
-    }
-
-    setLoadingUsers(true);
-    setError("");
-    try {
-      const rows = await listTenantUsers(key);
-      setUsers(Array.isArray(rows) ? rows : []);
-    } catch (e) {
-      setError(String(e?.message || e || "Unable to load users"));
-      setUsers([]);
-    } finally {
-      setLoadingUsers(false);
-    }
-  }
-
-  useEffect(() => {
-    loadTenants();
-  }, []);
-
-  useEffect(() => {
-    if (tenantKey) {
-      loadUsers(tenantKey);
-      setEditForm(EMPTY_EDIT);
-      setPasswordUserId("");
-      setNewPassword("");
-    }
-  }, [tenantKey]);
-
-  const filteredUsers = useMemo(() => {
-    const q = String(query || "").trim().toLowerCase();
-    if (!q) return users;
-
-    return users.filter((u) => {
-      const hay = [u?.user_email, u?.full_name, u?.role, u?.status]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      return hay.includes(q);
-    });
-  }, [users, query]);
-
-  const selectedWorkspace = useMemo(
-    () => tenants.find((t) => t.tenant_key === tenantKey),
-    [tenants, tenantKey]
-  );
-
-  function patchCreate(key, value) {
-    setCreateForm((p) => ({ ...p, [key]: value }));
-  }
-
-  function patchEdit(key, value) {
-    setEditForm((p) => ({ ...p, [key]: value }));
-  }
-
-  function startEdit(user) {
-    setEditForm({
-      id: String(user?.id || ""),
-      email: String(user?.user_email || ""),
-      full_name: String(user?.full_name || ""),
-      role: String(user?.role || "member"),
-      status: String(user?.status || "invited"),
-    });
-  }
-
-  async function handleCreateUser() {
-    setCreating(true);
-    setError("");
-    setSuccess("");
-
-    try {
-      if (!tenantKey) throw new Error("Please select a workspace");
-      if (!createForm.email.trim()) throw new Error("Email address is required");
-      if (!createForm.full_name.trim()) throw new Error("Full name is required");
-
-      const res = await createTenantUser(tenantKey, {
-        user_email: createForm.email.trim().toLowerCase(),
-        full_name: createForm.full_name.trim(),
-        role: createForm.role,
-        status: createForm.status,
-        password: createForm.password || undefined,
-      });
-
-      setSuccess(`${res?.user?.user_email || "User"} has been created`);
-      setCreateForm(EMPTY_CREATE);
-      await loadUsers(tenantKey);
-    } catch (e) {
-      setError(String(e?.message || e || "Unable to create user"));
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  async function handleSaveEdit() {
-    setSavingEdit(true);
-    setError("");
-    setSuccess("");
-
-    try {
-      if (!tenantKey) throw new Error("Please select a workspace");
-      if (!editForm.id) throw new Error("Please select a user");
-
-      const res = await updateTenantUser(tenantKey, editForm.id, {
-        user_email: editForm.email.trim().toLowerCase(),
-        full_name: editForm.full_name.trim(),
-        role: editForm.role,
-        status: editForm.status,
-      });
-
-      setSuccess(`${res?.user?.user_email || "User"} has been updated`);
-      await loadUsers(tenantKey);
-    } catch (e) {
-      setError(String(e?.message || e || "Unable to save changes"));
-    } finally {
-      setSavingEdit(false);
-    }
-  }
-
-  async function handleQuickStatus(userId, status) {
-    setError("");
-    setSuccess("");
-
-    try {
-      if (!tenantKey) throw new Error("Please select a workspace");
-      const res = await setTenantUserStatus(tenantKey, userId, status);
-      setSuccess(`${res?.user?.user_email || "User"} status has been updated`);
-      await loadUsers(tenantKey);
-    } catch (e) {
-      setError(String(e?.message || e || "Unable to update status"));
-    }
-  }
-
-  async function handleSetPassword() {
-    setSavingPassword(true);
-    setError("");
-    setSuccess("");
-
-    try {
-      if (!tenantKey) throw new Error("Please select a workspace");
-      if (!passwordUserId) throw new Error("Please select a user");
-      if (!newPassword) throw new Error("A new password is required");
-      if (newPassword.length < 8) throw new Error("Password must be at least 8 characters");
-
-      const res = await setTenantUserPassword(tenantKey, passwordUserId, newPassword);
-      setSuccess(`${res?.user?.user_email || "User"} password has been updated`);
-      setNewPassword("");
-      await loadUsers(tenantKey);
-    } catch (e) {
-      setError(String(e?.message || e || "Unable to update password"));
-    } finally {
-      setSavingPassword(false);
-    }
-  }
+  const {
+    tenants,
+    users,
+    tenantKey,
+    setTenantKey,
+    filteredUsers,
+    selectedWorkspace,
+    query,
+    setQuery,
+    createForm,
+    patchCreate,
+    editForm,
+    patchEdit,
+    passwordUserId,
+    setPasswordUserId,
+    newPassword,
+    setNewPassword,
+    surface,
+    actionState,
+    startEdit,
+    createUser,
+    saveEdit,
+    updateQuickStatus,
+    updatePassword,
+    removeUser,
+  } = useAdminTeamSurface();
 
   async function handleDelete(userId) {
-    setRemovingId(userId);
-    setError("");
-    setSuccess("");
-
-    try {
-      if (!tenantKey) throw new Error("Please select a workspace");
-      await deleteTenantUser(tenantKey, userId);
-      setSuccess("User has been deleted");
-
-      if (editForm.id === userId) setEditForm(EMPTY_EDIT);
-      if (passwordUserId === userId) {
-        setPasswordUserId("");
-        setNewPassword("");
-      }
-
-      await loadUsers(tenantKey);
-    } catch (e) {
-      setError(String(e?.message || e || "Unable to delete user"));
-    } finally {
-      setRemovingId("");
-    }
+    await removeUser(userId);
   }
 
   return (
     <div className="grid gap-8 xl:grid-cols-[440px_minmax(0,1fr)]">
       <div className="space-y-8">
-        {error ? <Banner type="error">{error}</Banner> : null}
-        {success ? <Banner type="success">{success}</Banner> : null}
+        <SettingsSurfaceBanner
+          surface={surface}
+          unavailableMessage="Admin team management is temporarily unavailable."
+          refreshLabel="Refresh Team Admin"
+        />
 
         <Surface className="sticky top-5">
           <div className="px-7 py-7">
@@ -436,16 +215,16 @@ export default function AdminTeam() {
               <div className="space-y-4">
                 <Label>Workspace</Label>
 
-                {loadingTenants ? (
+                {surface.loading ? (
                   <div className="rounded-[22px] border border-white/[0.08] bg-white/[0.03] px-4 py-3.5 text-sm text-slate-400">
                     Loading workspaces...
                   </div>
                 ) : (
                   <Select value={tenantKey} onChange={(e) => setTenantKey(e.target.value)}>
                     <option value="">Select workspace</option>
-                    {tenants.map((t) => (
-                      <option key={t.tenant_key} value={t.tenant_key}>
-                        {t.company_name || t.tenant_key} ({t.tenant_key})
+                    {tenants.map((tenant) => (
+                      <option key={tenant.tenant_key} value={tenant.tenant_key}>
+                        {tenant.company_name || tenant.tenant_key} ({tenant.tenant_key})
                       </option>
                     ))}
                   </Select>
@@ -523,10 +302,10 @@ export default function AdminTeam() {
                 <div className="flex justify-end">
                   <Btn
                     variant="primary"
-                    onClick={handleCreateUser}
-                    disabled={creating || !tenantKey}
+                    onClick={createUser}
+                    disabled={surface.saving || !tenantKey}
                   >
-                    {creating ? "Creating..." : "Create user"}
+                    {actionState.isActionPending("create-user") ? "Creating..." : "Create user"}
                   </Btn>
                 </div>
               </div>
@@ -584,10 +363,10 @@ export default function AdminTeam() {
                 <div className="flex justify-end">
                   <Btn
                     variant="secondary"
-                    onClick={handleSaveEdit}
-                    disabled={savingEdit || !editForm.id}
+                    onClick={saveEdit}
+                    disabled={surface.saving || !editForm.id}
                   >
-                    {savingEdit ? "Saving..." : "Save changes"}
+                    {actionState.isActionPending("save-edit") ? "Saving..." : "Save changes"}
                   </Btn>
                 </div>
               </div>
@@ -605,9 +384,9 @@ export default function AdminTeam() {
                   onChange={(e) => setPasswordUserId(e.target.value)}
                 >
                   <option value="">Select user</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.full_name || u.user_email} ({u.user_email})
+                  {users.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.full_name || user.user_email} ({user.user_email})
                     </option>
                   ))}
                 </Select>
@@ -623,10 +402,10 @@ export default function AdminTeam() {
                 <div className="flex justify-end">
                   <Btn
                     variant="secondary"
-                    onClick={handleSetPassword}
-                    disabled={savingPassword || !tenantKey}
+                    onClick={updatePassword}
+                    disabled={surface.saving || !tenantKey}
                   >
-                    {savingPassword ? "Updating..." : "Update password"}
+                    {actionState.isActionPending("password") ? "Updating..." : "Update password"}
                   </Btn>
                 </div>
               </div>
@@ -676,7 +455,7 @@ export default function AdminTeam() {
 
         <div className="px-7 py-7">
           <div className="space-y-4">
-            {loadingUsers ? (
+            {surface.loading ? (
               <div className="rounded-[24px] border border-white/[0.08] bg-white/[0.03] px-5 py-5 text-sm text-slate-400">
                 Loading users...
               </div>
@@ -745,27 +524,29 @@ export default function AdminTeam() {
                         {user.status !== "active" ? (
                           <Btn
                             variant="secondary"
-                            onClick={() => handleQuickStatus(user.id, "active")}
+                            onClick={() => updateQuickStatus(user.id, "active")}
+                            disabled={surface.saving}
                           >
-                            Activate
+                            {actionState.isActionPending(`status:${user.id}:active`) ? "Activating..." : "Activate"}
                           </Btn>
                         ) : null}
 
                         {user.status !== "disabled" ? (
                           <Btn
                             variant="secondary"
-                            onClick={() => handleQuickStatus(user.id, "disabled")}
+                            onClick={() => updateQuickStatus(user.id, "disabled")}
+                            disabled={surface.saving}
                           >
-                            Disable
+                            {actionState.isActionPending(`status:${user.id}:disabled`) ? "Disabling..." : "Disable"}
                           </Btn>
                         ) : null}
 
                         <Btn
                           variant="danger"
                           onClick={() => handleDelete(user.id)}
-                          disabled={removingId === user.id}
+                          disabled={surface.saving}
                         >
-                          {removingId === user.id ? "Deleting..." : "Delete"}
+                          {actionState.isActionPending(`delete:${user.id}`) ? "Deleting..." : "Delete"}
                         </Btn>
                       </div>
                     </div>

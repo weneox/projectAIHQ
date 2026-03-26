@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../api/truth.js", () => ({
   getCanonicalTruthSnapshot: vi.fn().mockResolvedValue({
@@ -31,6 +31,10 @@ vi.mock("../../api/truth.js", () => ({
     ],
     notices: [],
     hasProvenance: true,
+    readiness: {
+      status: "ready",
+      blockers: [],
+    },
   }),
   getTruthVersionDetail: vi.fn().mockResolvedValue({
     selectedVersion: {
@@ -70,6 +74,16 @@ import {
 
 afterEach(() => {
   cleanup();
+});
+
+beforeEach(() => {
+  Object.defineProperty(window, "location", {
+    writable: true,
+    value: {
+      ...window.location,
+      assign: vi.fn(),
+    },
+  });
 });
 
 describe("Truth viewer smoke", () => {
@@ -113,6 +127,33 @@ describe("Truth viewer smoke", () => {
       ],
       hasProvenance: false,
       approvedTruthUnavailable: true,
+      readiness: {
+        status: "blocked",
+        reasonCode: "approved_truth_unavailable",
+        intentionallyUnavailable: true,
+        blockers: [
+          {
+            blocked: true,
+            category: "truth",
+            dependencyType: "approved_truth",
+            reasonCode: "approved_truth_unavailable",
+            title: "Approved truth blocker",
+            subtitle: "No approved truth is being shown.",
+            missing: ["approved_truth"],
+            suggestedRepairActionId: "open_setup_route",
+            nextAction: {
+              id: "open_setup_route",
+              kind: "route",
+              label: "Open setup",
+              requiredRole: "operator",
+              allowed: true,
+              target: {
+                path: "/setup/studio",
+              },
+            },
+          },
+        ],
+      },
     });
 
     render(<TruthViewerPage />);
@@ -120,8 +161,12 @@ describe("Truth viewer smoke", () => {
     expect(
       await screen.findByText(/approved truth is currently unavailable/i)
     ).toBeInTheDocument();
+    expect(screen.getByText(/approved truth blocker/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open setup/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /open setup/i }));
+    expect(window.location.assign).toHaveBeenCalledWith("/setup/studio");
     expect(
-      screen.getByText(/no approved fields were returned by the backend/i)
+      screen.getByText(/no non-approved fallback data is being shown/i)
     ).toBeInTheDocument();
   });
 });

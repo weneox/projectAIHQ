@@ -1,10 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import {
-  getOutboundSummary,
-  listFailedOutboundAttempts,
-  resendOutboundAttempt,
-  markOutboundAttemptDead,
-} from "../../api/inbox.js";
+import SettingsSurfaceBanner from "../settings/SettingsSurfaceBanner.jsx";
+import { useRetryQueueSurface } from "./hooks/useRetryQueueSurface.js";
 
 function s(v) {
   return String(v ?? "").trim();
@@ -62,95 +57,8 @@ export default function RetryQueuePanel({
   actor = "operator",
   className = "",
 }) {
-  const [summary, setSummary] = useState(null);
-  const [attempts, setAttempts] = useState([]);
-  const [statusFilter, setStatusFilter] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState("");
-  const [error, setError] = useState("");
-
-  async function load() {
-    setLoading(true);
-    setError("");
-
-    try {
-      const [sumRes, failedRes] = await Promise.all([
-        getOutboundSummary({ tenantKey }),
-        listFailedOutboundAttempts({
-          tenantKey,
-          limit: 50,
-          ...(statusFilter ? { status: statusFilter } : {}),
-        }),
-      ]);
-
-      setSummary(sumRes?.summary || null);
-      setAttempts(Array.isArray(failedRes?.attempts) ? failedRes.attempts : []);
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, [tenantKey, statusFilter]);
-
-  useEffect(() => {
-    const onRefresh = () => {
-      load();
-    };
-
-    window.addEventListener("inbox:retry-queue-refresh", onRefresh);
-    return () => {
-      window.removeEventListener("inbox:retry-queue-refresh", onRefresh);
-    };
-  }, [tenantKey, statusFilter]);
-
-  const cards = useMemo(
-    () => [
-      ["Queued", Number(summary?.queued || 0)],
-      ["Sending", Number(summary?.sending || 0)],
-      ["Failed", Number(summary?.failed || 0)],
-      ["Retrying", Number(summary?.retrying || 0)],
-      ["Dead", Number(summary?.dead || 0)],
-      ["Sent", Number(summary?.sent || 0)],
-    ],
-    [summary]
-  );
-
-  async function handleResend(attemptId) {
-    if (!attemptId) return;
-    setBusyId(attemptId);
-    setError("");
-
-    try {
-      await resendOutboundAttempt(attemptId, {
-        actor,
-        retryDelaySeconds: 0,
-      });
-      await load();
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setBusyId("");
-    }
-  }
-
-  async function handleMarkDead(attemptId) {
-    if (!attemptId) return;
-    setBusyId(attemptId);
-    setError("");
-
-    try {
-      await markOutboundAttemptDead(attemptId, { actor });
-      await load();
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setBusyId("");
-    }
-  }
+  const { attempts, cards, statusFilter, setStatusFilter, surface, actionState, handleResend, handleMarkDead } =
+    useRetryQueueSurface({ tenantKey, actor });
 
   return (
     <section className={className}>
@@ -181,7 +89,8 @@ export default function RetryQueuePanel({
 
             <button
               type="button"
-              onClick={load}
+              onClick={surface.refresh}
+              disabled={surface.loading || surface.saving}
               className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-medium text-white/78 transition hover:bg-white/[0.08]"
             >
               Refresh
@@ -195,14 +104,16 @@ export default function RetryQueuePanel({
           ))}
         </div>
 
-        {error ? (
-          <div className="mt-4 rounded-[22px] border border-rose-400/20 bg-rose-400/[0.06] px-4 py-3 text-sm text-rose-100">
-            {error}
-          </div>
-        ) : null}
+        <div className="mt-4">
+          <SettingsSurfaceBanner
+            surface={surface}
+            unavailableMessage="Retry queue is temporarily unavailable."
+            refreshLabel="Refresh retry queue"
+          />
+        </div>
 
         <div className="mt-5 overflow-hidden rounded-[24px] border border-white/10 bg-black/20">
-          {loading ? (
+          {surface.loading ? (
             <div className="p-6 text-sm text-white/52">Loading queue...</div>
           ) : attempts.length === 0 ? (
             <div className="p-6 text-sm text-white/46">No retry items.</div>
@@ -210,7 +121,9 @@ export default function RetryQueuePanel({
             <div className="divide-y divide-white/10">
               {attempts.map((item) => {
                 const id = s(item?.id);
-                const isBusy = busyId === id;
+                const retryBusy = actionState.isActionPending(`retry:${id}`);
+                const deadBusy = actionState.isActionPending(`dead:${id}`);
+                const isBusy = retryBusy || deadBusy;
 
                 return (
                   <div
@@ -277,7 +190,7 @@ export default function RetryQueuePanel({
                         onClick={() => handleResend(id)}
                         className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-slate-900 transition disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {isBusy ? "..." : "Retry"}
+                        {retryBusy ? "..." : "Retry"}
                       </button>
 
                       <button
@@ -286,7 +199,7 @@ export default function RetryQueuePanel({
                         onClick={() => handleMarkDead(id)}
                         className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-medium text-white/78 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        Dead
+                        {deadBusy ? "..." : "Dead"}
                       </button>
                     </div>
                   </div>

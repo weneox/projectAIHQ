@@ -1,9 +1,5 @@
-import { useEffect, useState } from "react";
-import {
-  listThreadOutboundAttempts,
-  resendOutboundAttempt,
-  markOutboundAttemptDead,
-} from "../../api/inbox.js";
+import SettingsSurfaceBanner from "../settings/SettingsSurfaceBanner.jsx";
+import { useThreadOutboundAttemptsSurface } from "./hooks/useThreadOutboundAttemptsSurface.js";
 
 function s(v) {
   return String(v ?? "").trim();
@@ -47,83 +43,9 @@ export default function ThreadOutboundAttemptsPanel({
   selectedThread,
   actor = "operator",
 }) {
-  const [attempts, setAttempts] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [busyId, setBusyId] = useState("");
-  const [error, setError] = useState("");
-
   const threadId = s(selectedThread?.id);
-
-  async function load() {
-    if (!threadId) {
-      setAttempts([]);
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-
-    try {
-      const res = await listThreadOutboundAttempts(threadId, { limit: 30 });
-      setAttempts(Array.isArray(res?.attempts) ? res.attempts : []);
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, [threadId]);
-
-  useEffect(() => {
-    const onRefresh = (ev) => {
-      const evThreadId = s(ev?.detail?.threadId);
-      if (!threadId) return;
-      if (!evThreadId || evThreadId === threadId) {
-        load();
-      }
-    };
-
-    window.addEventListener("inbox:retry-queue-refresh", onRefresh);
-    return () => {
-      window.removeEventListener("inbox:retry-queue-refresh", onRefresh);
-    };
-  }, [threadId]);
-
-  async function handleResend(attemptId) {
-    if (!attemptId) return;
-    setBusyId(attemptId);
-    setError("");
-
-    try {
-      await resendOutboundAttempt(attemptId, {
-        actor,
-        retryDelaySeconds: 0,
-      });
-      await load();
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setBusyId("");
-    }
-  }
-
-  async function handleMarkDead(attemptId) {
-    if (!attemptId) return;
-    setBusyId(attemptId);
-    setError("");
-
-    try {
-      await markOutboundAttemptDead(attemptId, { actor });
-      await load();
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setBusyId("");
-    }
-  }
+  const { attempts, surface, actionState, handleResend, handleMarkDead } =
+    useThreadOutboundAttemptsSurface({ threadId, actor });
 
   return (
     <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
@@ -139,23 +61,26 @@ export default function ThreadOutboundAttemptsPanel({
 
         <button
           type="button"
-          onClick={load}
+          onClick={surface.refresh}
+          disabled={surface.loading || surface.saving || !threadId}
           className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-medium text-white/78 transition hover:bg-white/[0.08]"
         >
           Refresh
         </button>
       </div>
 
-      {error ? (
-        <div className="mt-4 rounded-[22px] border border-rose-400/20 bg-rose-400/[0.06] px-4 py-3 text-sm text-rose-100">
-          {error}
-        </div>
-      ) : null}
+      <div className="mt-4">
+        <SettingsSurfaceBanner
+          surface={surface}
+          unavailableMessage="Thread delivery attempts are temporarily unavailable."
+          refreshLabel="Refresh attempts"
+        />
+      </div>
 
       <div className="mt-5 rounded-[22px] border border-white/10 bg-black/20">
         {!threadId ? (
           <div className="px-4 py-5 text-sm text-white/46">No thread selected.</div>
-        ) : loading ? (
+        ) : surface.loading ? (
           <div className="px-4 py-5 text-sm text-white/52">Loading attempts...</div>
         ) : attempts.length === 0 ? (
           <div className="px-4 py-5 text-sm text-white/46">No delivery attempts for this thread.</div>
@@ -163,7 +88,9 @@ export default function ThreadOutboundAttemptsPanel({
           <div className="divide-y divide-white/10">
             {attempts.map((item) => {
               const id = s(item?.id);
-              const isBusy = busyId === id;
+              const retryBusy = actionState.isActionPending(`retry:${id}`);
+              const deadBusy = actionState.isActionPending(`dead:${id}`);
+              const isBusy = retryBusy || deadBusy;
 
               return (
                 <div key={id} className="p-4">
@@ -196,7 +123,7 @@ export default function ThreadOutboundAttemptsPanel({
                       onClick={() => handleResend(id)}
                       className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-slate-900 transition disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {isBusy ? "..." : "Retry"}
+                      {retryBusy ? "..." : "Retry"}
                     </button>
 
                     <button
@@ -205,7 +132,7 @@ export default function ThreadOutboundAttemptsPanel({
                       onClick={() => handleMarkDead(id)}
                       className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-medium text-white/78 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Dead
+                      {deadBusy ? "..." : "Dead"}
                     </button>
                   </div>
                 </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback } from "react";
 
 import {
   getTenantBusinessFacts,
@@ -15,112 +15,198 @@ import {
   deleteTenantContact,
 } from "../../../api/settings.js";
 import { syncWorkspaceAndInitial } from "../settingsShared.js";
+import { useSettingsSurfaceState } from "./useSettingsSurfaceState.js";
+
+function emptyBusinessBrainData() {
+  return {
+    businessFacts: [],
+    channelPolicies: [],
+    locations: [],
+    contacts: [],
+  };
+}
 
 export function useBusinessBrain({
   canManageSettings,
   setWorkspace,
   setInitialWorkspace,
-  setMessage,
 }) {
-  const [businessFacts, setBusinessFacts] = useState([]);
-  const [channelPolicies, setChannelPolicies] = useState([]);
-  const [locations, setLocations] = useState([]);
-  const [contacts, setContacts] = useState([]);
+  const {
+    data,
+    setData,
+    surface,
+    beginRefresh,
+    succeedRefresh,
+    failRefresh,
+    beginSave,
+    succeedSave,
+    failSave,
+    clearSaveState,
+  } = useSettingsSurfaceState({
+    initialData: emptyBusinessBrainData,
+    initialLoading: true,
+  });
 
-  async function refreshBusinessBrain() {
-    const [facts, policies, locs, conts] = await Promise.all([
-      getTenantBusinessFacts().catch(() => []),
-      getTenantChannelPolicies().catch(() => []),
-      getTenantLocations().catch(() => []),
-      getTenantContacts().catch(() => []),
-    ]);
+  const businessFacts = data.businessFacts || [];
+  const channelPolicies = data.channelPolicies || [];
+  const locations = data.locations || [];
+  const contacts = data.contacts || [];
 
-    const nextFacts = Array.isArray(facts) ? facts : [];
-    const nextPolicies = Array.isArray(policies) ? policies : [];
-    const nextLocations = Array.isArray(locs) ? locs : [];
-    const nextContacts = Array.isArray(conts) ? conts : [];
+  const setBusinessFacts = useCallback(
+    (nextValue) => {
+      setData((prev) => ({
+        ...prev,
+        businessFacts:
+          typeof nextValue === "function" ? nextValue(prev.businessFacts || []) : nextValue,
+      }));
+    },
+    [setData]
+  );
 
-    setBusinessFacts(nextFacts);
-    setChannelPolicies(nextPolicies);
-    setLocations(nextLocations);
-    setContacts(nextContacts);
+  const setChannelPolicies = useCallback(
+    (nextValue) => {
+      setData((prev) => ({
+        ...prev,
+        channelPolicies:
+          typeof nextValue === "function" ? nextValue(prev.channelPolicies || []) : nextValue,
+      }));
+    },
+    [setData]
+  );
 
-    syncWorkspaceAndInitial({
-      setWorkspace,
-      setInitialWorkspace,
-      patch: {
-        businessFacts: nextFacts,
-        channelPolicies: nextPolicies,
-        locations: nextLocations,
-        contacts: nextContacts,
-      },
-    });
+  const setLocations = useCallback(
+    (nextValue) => {
+      setData((prev) => ({
+        ...prev,
+        locations: typeof nextValue === "function" ? nextValue(prev.locations || []) : nextValue,
+      }));
+    },
+    [setData]
+  );
 
-    return {
-      businessFacts: nextFacts,
-      channelPolicies: nextPolicies,
-      locations: nextLocations,
-      contacts: nextContacts,
-    };
-  }
+  const setContacts = useCallback(
+    (nextValue) => {
+      setData((prev) => ({
+        ...prev,
+        contacts: typeof nextValue === "function" ? nextValue(prev.contacts || []) : nextValue,
+      }));
+    },
+    [setData]
+  );
 
-  async function handleSaveBusinessFact(payload) {
-    if (!canManageSettings) return;
-    await saveTenantBusinessFact(payload);
-    await refreshBusinessBrain();
-    setMessage("✅ Business fact yadda saxlanıldı.");
-  }
+  const refreshBusinessBrain = useCallback(async () => {
+    beginRefresh();
 
-  async function handleDeleteBusinessFact(id) {
-    if (!canManageSettings || !id) return;
-    await deleteTenantBusinessFact(id);
-    await refreshBusinessBrain();
-    setMessage("✅ Business fact silindi.");
-  }
+    try {
+      const [facts, policies, locs, conts] = await Promise.all([
+        getTenantBusinessFacts(),
+        getTenantChannelPolicies(),
+        getTenantLocations(),
+        getTenantContacts(),
+      ]);
 
-  async function handleSaveChannelPolicy(payload) {
-    if (!canManageSettings) return;
-    await saveTenantChannelPolicy(payload);
-    await refreshBusinessBrain();
-    setMessage("✅ Channel policy yadda saxlanıldı.");
-  }
+      const nextData = {
+        businessFacts: Array.isArray(facts) ? facts : [],
+        channelPolicies: Array.isArray(policies) ? policies : [],
+        locations: Array.isArray(locs) ? locs : [],
+        contacts: Array.isArray(conts) ? conts : [],
+      };
 
-  async function handleDeleteChannelPolicy(id) {
-    if (!canManageSettings || !id) return;
-    await deleteTenantChannelPolicy(id);
-    await refreshBusinessBrain();
-    setMessage("✅ Channel policy silindi.");
-  }
+      syncWorkspaceAndInitial({
+        setWorkspace,
+        setInitialWorkspace,
+        patch: nextData,
+      });
 
-  async function handleSaveLocation(payload) {
-    if (!canManageSettings) return;
-    await saveTenantLocation(payload);
-    await refreshBusinessBrain();
-    setMessage("✅ Location yadda saxlanıldı.");
-  }
+      return succeedRefresh(nextData);
+    } catch (error) {
+      return failRefresh(error, {
+        fallbackData: emptyBusinessBrainData(),
+      });
+    }
+  }, [beginRefresh, failRefresh, setInitialWorkspace, setWorkspace, succeedRefresh]);
 
-  async function handleDeleteLocation(id) {
-    if (!canManageSettings || !id) return;
-    await deleteTenantLocation(id);
-    await refreshBusinessBrain();
-    setMessage("✅ Location silindi.");
-  }
+  const runSaveAction = useCallback(
+    async (action, successMessage) => {
+      if (!canManageSettings) {
+        failSave("This business brain surface is read-only for the current operator.");
+        return null;
+      }
 
-  async function handleSaveContact(payload) {
-    if (!canManageSettings) return;
-    await saveTenantContact(payload);
-    await refreshBusinessBrain();
-    setMessage("✅ Contact yadda saxlanıldı.");
-  }
+      beginSave();
 
-  async function handleDeleteContact(id) {
-    if (!canManageSettings || !id) return;
-    await deleteTenantContact(id);
-    await refreshBusinessBrain();
-    setMessage("✅ Contact silindi.");
-  }
+      try {
+        await action();
+        await refreshBusinessBrain();
+        succeedSave({ message: successMessage });
+        return true;
+      } catch (error) {
+        failSave(error);
+        throw error;
+      }
+    },
+    [beginSave, canManageSettings, failSave, refreshBusinessBrain, succeedSave]
+  );
+
+  const handleSaveBusinessFact = useCallback(
+    async (payload) => runSaveAction(() => saveTenantBusinessFact(payload), "Business fact saved."),
+    [runSaveAction]
+  );
+
+  const handleDeleteBusinessFact = useCallback(
+    async (id) => {
+      if (!id) return null;
+      return runSaveAction(() => deleteTenantBusinessFact(id), "Business fact deleted.");
+    },
+    [runSaveAction]
+  );
+
+  const handleSaveChannelPolicy = useCallback(
+    async (payload) =>
+      runSaveAction(() => saveTenantChannelPolicy(payload), "Channel policy saved."),
+    [runSaveAction]
+  );
+
+  const handleDeleteChannelPolicy = useCallback(
+    async (id) => {
+      if (!id) return null;
+      return runSaveAction(() => deleteTenantChannelPolicy(id), "Channel policy deleted.");
+    },
+    [runSaveAction]
+  );
+
+  const handleSaveLocation = useCallback(
+    async (payload) => runSaveAction(() => saveTenantLocation(payload), "Location saved."),
+    [runSaveAction]
+  );
+
+  const handleDeleteLocation = useCallback(
+    async (id) => {
+      if (!id) return null;
+      return runSaveAction(() => deleteTenantLocation(id), "Location deleted.");
+    },
+    [runSaveAction]
+  );
+
+  const handleSaveContact = useCallback(
+    async (payload) => runSaveAction(() => saveTenantContact(payload), "Contact saved."),
+    [runSaveAction]
+  );
+
+  const handleDeleteContact = useCallback(
+    async (id) => {
+      if (!id) return null;
+      return runSaveAction(() => deleteTenantContact(id), "Contact deleted.");
+    },
+    [runSaveAction]
+  );
 
   return {
+    surface: {
+      ...surface,
+      refresh: refreshBusinessBrain,
+      clearSaveState,
+    },
     businessFacts,
     setBusinessFacts,
     channelPolicies,

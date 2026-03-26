@@ -6,6 +6,10 @@ import Button from "../../../components/ui/Button.jsx";
 import Input from "../../../components/ui/Input.jsx";
 import Badge from "../../../components/ui/Badge.jsx";
 import SettingsSection from "../../../components/settings/SettingsSection.jsx";
+import SettingsSurfaceBanner from "../../../components/settings/SettingsSurfaceBanner.jsx";
+import RepairHub from "../../../components/readiness/RepairHub.jsx";
+import { dispatchRepairAction } from "../../../components/readiness/dispatchRepairAction.js";
+import { createReadinessViewModel } from "../../../components/readiness/readinessViewModel.js";
 import { getMetaConnectUrl } from "../../../api/settings.js";
 
 function s(v, d = "") {
@@ -154,56 +158,17 @@ function Field({ label, hint, children }) {
   );
 }
 
-function RepairPanel({ repair, canManage, loading, onRunAction }) {
-  if (!obj(repair).blocked) return null;
-
-  const action = obj(repair.nextAction);
-  const disabled = loading || action.allowed === false;
-  const helper =
-    action.allowed === false
-      ? action.requiredRole === "admin"
-        ? "Owner/admin access is required for this repair path."
-        : "Owner/admin/operator access is required for this repair path."
-      : repair.subtitle;
-
-  return (
-    <div className="rounded-[20px] border border-rose-200/80 bg-rose-50/90 px-4 py-4 text-sm text-rose-800 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">
-      <div className="font-semibold text-rose-900 dark:text-rose-100">{repair.title}</div>
-      <div className="mt-1 leading-6">{helper}</div>
-      <div className="mt-2 text-xs uppercase tracking-[0.16em] text-rose-500 dark:text-rose-200/80">
-        {repair.category} · {repair.dependencyType} · {repair.reasonCode || "ready"}
-      </div>
-      {arr(repair.missing).length ? (
-        <div className="mt-3">Missing: {arr(repair.missing).join(", ")}</div>
-      ) : null}
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button
-          onClick={() => onRunAction(action)}
-          disabled={!canManage || disabled}
-        >
-          {action.label || "Review blocker"}
-        </Button>
-        {action.allowed === false ? (
-          <div className="text-xs text-rose-600 dark:text-rose-200/80">
-            Requires {action.requiredRole || "operator"} access
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 export default function OperationalSection({
   data,
-  loading,
   savingVoice,
   savingChannel,
   canManage,
-  message,
-  onRefresh,
+  surface,
   onSaveVoice,
   onSaveChannel,
 }) {
+  const loading = surface?.loading === true;
+  const refresh = surface?.refresh;
   const [voiceForm, setVoiceForm] = useState(buildVoiceForm(data));
   const [channelForm, setChannelForm] = useState(buildChannelForm(data));
   const [actionMessage, setActionMessage] = useState("");
@@ -224,6 +189,7 @@ export default function OperationalSection({
   const missingSecretKeys = arr(providerSecrets.missingSecretKeys);
   const voiceRepair = obj(data.voice?.repair);
   const metaRepair = obj(data.channels?.meta?.repair);
+  const readinessSurface = createReadinessViewModel(data.readiness);
 
   const operationalSummary = useMemo(
     () => ({
@@ -234,57 +200,33 @@ export default function OperationalSection({
     [metaOperational.ready, providerSecrets.ready, voiceOperational.ready]
   );
 
-  function focusRepairTarget(target = {}) {
-    const field = s(target.field);
-    if (field === "twilioPhoneNumber") {
-      voicePhoneRef.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
-      voicePhoneRef.current?.focus?.();
-      return;
-    }
-    if (field === "enabled") {
-      voiceEnabledRef.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
-      voiceEnabledRef.current?.focus?.();
-      return;
-    }
-    if (field === "externalPageId") {
-      channelPageIdRef.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
-      channelPageIdRef.current?.focus?.();
-      return;
-    }
-    if (field === "providerSecrets") {
-      secretsPanelRef.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
-      secretsPanelRef.current?.focus?.();
-    }
-  }
-
   async function handleRepairAction(action = {}) {
     setActionMessage("");
-
-    if (action.allowed === false) {
-      setActionMessage(
-        action.requiredRole === "admin"
-          ? "This repair flow stays behind owner/admin access."
-          : "This repair flow needs owner/admin/operator access."
-      );
-      return;
-    }
-
-    if (action.kind === "oauth") {
-      try {
-        const url = await getMetaConnectUrl();
-        window.location.assign(url);
-      } catch (err) {
-        setActionMessage(String(err?.message || err || "Failed to start Meta connect"));
-      }
-      return;
-    }
-
-    if (action.kind === "admin_route") {
-      window.location.assign(s(action?.target?.path || "/admin/secrets"));
-      return;
-    }
-
-    focusRepairTarget(action.target);
+    await dispatchRepairAction(action, {
+      focusTargets: {
+        twilioPhoneNumber: voicePhoneRef,
+        "voice.twilioPhoneNumber": voicePhoneRef,
+        enabled: voiceEnabledRef,
+        "voice.enabled": voiceEnabledRef,
+        externalPageId: channelPageIdRef,
+        "meta.externalPageId": channelPageIdRef,
+        providerSecrets: secretsPanelRef,
+        "meta.providerSecrets": secretsPanelRef,
+      },
+      oauthHandlers: {
+        meta: getMetaConnectUrl,
+      },
+      onBlocked(blockedAction) {
+        setActionMessage(
+          blockedAction.requiredRole === "admin"
+            ? "This repair flow stays behind owner/admin access."
+            : "This repair flow needs owner/admin/operator access."
+        );
+      },
+      onError(error) {
+        setActionMessage(String(error?.message || error || "Repair action failed"));
+      },
+    });
   }
 
   async function handleSaveVoice() {
@@ -342,16 +284,27 @@ export default function OperationalSection({
       tone="default"
     >
       <div className="space-y-6">
-        {message ? (
-          <div className="rounded-[24px] border border-slate-200/80 bg-white/80 px-4 py-4 text-sm text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300">
-            {message}
-          </div>
-        ) : null}
+        <SettingsSurfaceBanner
+          surface={surface}
+          unavailableMessage="Operational readiness is temporarily unavailable. Production remains fail-closed until readiness can be confirmed again."
+          refreshLabel="Refresh Readiness"
+        />
         {actionMessage ? (
           <div className="rounded-[24px] border border-amber-200/80 bg-amber-50/90 px-4 py-4 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
             {actionMessage}
           </div>
         ) : null}
+
+        <RepairHub
+          title="Operational Repair Hub"
+          readiness={readinessSurface}
+          blockers={readinessSurface.blockers}
+          canManage={canManage}
+          loading={loading || savingVoice || savingChannel}
+          emptyMessage="Operational voice, channel, and provider prerequisites are aligned."
+          unavailableMessage="Production traffic stays fail-closed until the persisted operational contract and provider dependencies converge."
+          onRunAction={handleRepairAction}
+        />
 
         <div className="grid gap-4 md:grid-cols-3">
           <Card variant="subtle" padded="md" tone={operationalSummary.voiceReady ? "success" : "warn"} className="rounded-[24px]">
@@ -382,10 +335,16 @@ export default function OperationalSection({
           reasonCode={voiceOperational.reasonCode}
           missingFields={data.voice?.missingFields}
         >
-          <RepairPanel
-            repair={voiceRepair}
+          <RepairHub
+            title="Voice Repair"
+            readiness={{
+              status: voiceRepair.blocked ? "blocked" : "ready",
+              reasonCode: voiceRepair.reasonCode,
+            }}
+            blockers={voiceRepair.blocked ? [voiceRepair] : []}
             canManage={canManage}
             loading={loading || savingVoice}
+            emptyMessage="Voice operational settings are complete."
             onRunAction={handleRepairAction}
           />
           <div className="grid gap-4 md:grid-cols-2">
@@ -535,7 +494,7 @@ export default function OperationalSection({
             <Button onClick={handleSaveVoice} disabled={!canManage || loading || savingVoice}>
               {savingVoice ? "Saving..." : "Save Voice Settings"}
             </Button>
-            <Button variant="secondary" onClick={onRefresh} disabled={loading || savingVoice}>
+            <Button variant="secondary" onClick={refresh} disabled={loading || savingVoice}>
               Refresh Readiness
             </Button>
           </div>
@@ -549,10 +508,16 @@ export default function OperationalSection({
           reasonCode={metaOperational.reasonCode}
           missingFields={data.channels?.meta?.missingFields}
         >
-          <RepairPanel
-            repair={metaRepair}
+          <RepairHub
+            title="Meta Repair"
+            readiness={{
+              status: metaRepair.blocked ? "blocked" : "ready",
+              reasonCode: metaRepair.reasonCode,
+            }}
+            blockers={metaRepair.blocked ? [metaRepair] : []}
             canManage={canManage}
             loading={loading || savingChannel}
+            emptyMessage="Meta operational identifiers and secret coverage are aligned."
             onRunAction={handleRepairAction}
           />
           <div className="grid gap-4 md:grid-cols-2">
@@ -679,7 +644,7 @@ export default function OperationalSection({
             <Button onClick={handleSaveChannel} disabled={!canManage || loading || savingChannel}>
               {savingChannel ? "Saving..." : "Save Channel Identifiers"}
             </Button>
-            <Button variant="secondary" onClick={onRefresh} disabled={loading || savingChannel}>
+            <Button variant="secondary" onClick={refresh} disabled={loading || savingChannel}>
               Refresh Readiness
             </Button>
           </div>

@@ -1,120 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
 import Card from "../ui/Card.jsx";
 import Button from "../ui/Button.jsx";
 import Input from "../ui/Input.jsx";
-import {
-  getAdminSecrets,
-  saveAdminSecret,
-  deleteAdminSecret,
-} from "../../api/adminSecrets.js";
-
-const PROVIDER_PRESETS = {
-  meta: ["page_access_token", "page_id", "ig_user_id", "app_secret"],
-  cloudinary: ["cloud_name", "api_key", "api_secret", "folder"],
-  together: ["api_key", "image_model"],
-  openai: ["api_key", "model"],
-  twilio: ["account_sid", "auth_token", "api_key", "api_secret", "phone_number"],
-};
-
-function clean(x) {
-  return String(x || "").trim();
-}
-
-function lower(x) {
-  return clean(x).toLowerCase();
-}
+import SettingsSurfaceBanner from "./SettingsSurfaceBanner.jsx";
+import { useSecretsSurface } from "./hooks/useSecretsSurface.js";
 
 export default function SecretsPanel({ canManage = false }) {
-  const [provider, setProvider] = useState("meta");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [secrets, setSecrets] = useState([]);
-
-  const [secretKey, setSecretKey] = useState("");
-  const [secretValue, setSecretValue] = useState("");
-
-  const presetKeys = useMemo(() => {
-    return PROVIDER_PRESETS[provider] || [];
-  }, [provider]);
-
-  async function loadSecrets(nextProvider = provider) {
-    setLoading(true);
-    setMessage("");
-    try {
-      const rows = await getAdminSecrets(nextProvider);
-      setSecrets(Array.isArray(rows) ? rows : []);
-    } catch (e) {
-      setMessage(String(e?.message || e));
-      setSecrets([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    loadSecrets(provider);
-  }, [provider]);
-
-  async function onSave() {
-    if (!canManage) {
-      setMessage("Secrets yalnız owner/admin tərəfindən idarə oluna bilər.");
-      return;
-    }
-
-    const p = lower(provider);
-    const k = lower(secretKey);
-    const v = clean(secretValue);
-
-    if (!p) {
-      setMessage("Provider seçilməlidir.");
-      return;
-    }
-
-    if (!k) {
-      setMessage("Secret key tələb olunur.");
-      return;
-    }
-
-    if (!v) {
-      setMessage("Secret value tələb olunur.");
-      return;
-    }
-
-    setSaving(true);
-    setMessage("");
-
-    try {
-      await saveAdminSecret(p, k, v);
-      setSecretValue("");
-      setSecretKey("");
-      await loadSecrets(p);
-      setMessage(`✅ ${p}.${k} yadda saxlanıldı.`);
-    } catch (e) {
-      setMessage(String(e?.message || e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function onDelete(k) {
-    if (!canManage) {
-      setMessage("Secrets yalnız owner/admin tərəfindən idarə oluna bilər.");
-      return;
-    }
-
-    const p = lower(provider);
-    const key = lower(k);
-    if (!p || !key) return;
-
-    try {
-      await deleteAdminSecret(p, key);
-      await loadSecrets(p);
-      setMessage(`🗑️ ${p}.${key} silindi.`);
-    } catch (e) {
-      setMessage(String(e?.message || e));
-    }
-  }
+  const {
+    provider,
+    setProvider,
+    presetKeys,
+    secretKey,
+    setSecretKey,
+    secretValue,
+    setSecretValue,
+    secrets,
+    surface,
+    saveSecret,
+    removeSecret,
+  } = useSecretsSurface({ canManage });
 
   return (
     <Card className="p-6">
@@ -124,9 +27,15 @@ export default function SecretsPanel({ canManage = false }) {
             Provider Secrets
           </h3>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Tenant-ə məxsus gizli provider məlumatları burada saxlanılır. Dəyərlər maskalanmış görünür.
+            Tenant-specific provider secrets are managed here. Values stay masked and never appear in standard operator payloads.
           </p>
         </div>
+
+        <SettingsSurfaceBanner
+          surface={surface}
+          unavailableMessage="Secret management is temporarily unavailable."
+          refreshLabel="Refresh Secrets"
+        />
 
         <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2">
@@ -135,12 +44,7 @@ export default function SecretsPanel({ canManage = false }) {
             </label>
             <select
               value={provider}
-              onChange={(e) => {
-                const p = lower(e.target.value);
-                setProvider(p);
-                setSecretKey("");
-                setSecretValue("");
-              }}
+              onChange={(e) => setProvider(e.target.value)}
               className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none ring-0 transition focus:border-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-white"
             >
               <option value="meta">Meta</option>
@@ -157,19 +61,19 @@ export default function SecretsPanel({ canManage = false }) {
             </label>
             <Input
               value={secretKey}
-              onChange={(e) => setSecretKey(lower(e.target.value))}
+              onChange={(e) => setSecretKey(String(e.target.value || "").trim().toLowerCase())}
               placeholder={presetKeys[0] || "api_key"}
             />
             {presetKeys.length ? (
               <div className="flex flex-wrap gap-2 pt-1">
-                {presetKeys.map((k) => (
+                {presetKeys.map((keyName) => (
                   <button
-                    key={k}
+                    key={keyName}
                     type="button"
-                    onClick={() => setSecretKey(k)}
+                    onClick={() => setSecretKey(keyName)}
                     className="rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-600 transition hover:border-slate-300 hover:text-slate-900 dark:border-white/10 dark:text-slate-300 dark:hover:border-white/20 dark:hover:text-white"
                   >
-                    {k}
+                    {keyName}
                   </button>
                 ))}
               </div>
@@ -190,17 +94,13 @@ export default function SecretsPanel({ canManage = false }) {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button onClick={onSave} disabled={!canManage || saving}>
-            {saving ? "Saving..." : "Save Secret"}
+          <Button onClick={saveSecret} disabled={!canManage || surface.saving}>
+            {surface.saving ? "Saving..." : "Save Secret"}
           </Button>
 
-          <Button variant="secondary" onClick={() => loadSecrets(provider)} disabled={loading}>
+          <Button variant="secondary" onClick={surface.refresh} disabled={surface.loading || surface.saving}>
             Refresh
           </Button>
-
-          {message ? (
-            <div className="text-sm text-slate-500 dark:text-slate-400">{message}</div>
-          ) : null}
         </div>
 
         <div className="rounded-2xl border border-slate-200 dark:border-white/10">
@@ -208,7 +108,7 @@ export default function SecretsPanel({ canManage = false }) {
             Saved secrets: {provider}
           </div>
 
-          {loading ? (
+          {surface.loading ? (
             <div className="px-4 py-6 text-sm text-slate-500 dark:text-slate-400">
               Loading secrets...
             </div>
@@ -243,8 +143,8 @@ export default function SecretsPanel({ canManage = false }) {
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => onDelete(row.secret_key)}
-                      disabled={!canManage}
+                      onClick={() => removeSecret(row.secret_key)}
+                      disabled={!canManage || surface.saving}
                     >
                       Delete
                     </Button>

@@ -1,12 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, LoaderCircle, RefreshCcw, RotateCcw } from "lucide-react";
+import { AlertTriangle, LoaderCircle, RotateCcw } from "lucide-react";
 
-import {
-  getDurableExecution,
-  getDurableExecutionSummary,
-  listDurableExecutions,
-  retryDurableExecution,
-} from "../api/executions.js";
+import AdminPageShell from "../components/admin/AdminPageShell.jsx";
 import {
   cn,
   displayValue,
@@ -17,6 +11,7 @@ import {
   queueLabel,
   statusMeta,
 } from "../components/executions/execution-ui.jsx";
+import { useExecutionsSurface } from "./hooks/useExecutionsSurface.js";
 
 const STATUS_FILTERS = [
   { value: "", label: "All queues" },
@@ -29,130 +24,54 @@ const STATUS_FILTERS = [
 ];
 
 export default function Executions() {
-  const [items, setItems] = useState([]);
-  const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [providerFilter, setProviderFilter] = useState("");
-  const [channelFilter, setChannelFilter] = useState("");
-  const [tenantFilter, setTenantFilter] = useState("");
-  const [selectedId, setSelectedId] = useState("");
-  const [detail, setDetail] = useState(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState("");
-  const [retrying, setRetrying] = useState(false);
+  const {
+    summary,
+    providers,
+    channels,
+    filteredItems,
+    selectedId,
+    openExecution,
+    detail,
+    detailSurface,
+    statusFilter,
+    setStatusFilter,
+    providerFilter,
+    setProviderFilter,
+    channelFilter,
+    setChannelFilter,
+    tenantFilter,
+    setTenantFilter,
+    surface,
+    actionState,
+    retrySelectedExecution,
+  } = useExecutionsSurface();
 
-  async function loadSurface() {
-    setLoading(true);
-    setError("");
-
-    try {
-      const [summaryResult, listResult] = await Promise.all([
-        getDurableExecutionSummary(),
-        listDurableExecutions({ status: "", limit: 160 }),
-      ]);
-      setSummary(summaryResult);
-      setItems(Array.isArray(listResult) ? listResult : []);
-    } catch (err) {
-      setError(String(err?.message || err));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function openExecution(id) {
-    if (!id) return;
-    setSelectedId(String(id));
-    setDetailLoading(true);
-    setDetailError("");
-
-    try {
-      const payload = await getDurableExecution(id);
-      setDetail(payload);
-    } catch (err) {
-      setDetail(null);
-      setDetailError(String(err?.message || err));
-    } finally {
-      setDetailLoading(false);
-    }
-  }
-
-  async function handleRetry() {
-    if (!selectedId) return;
-    setRetrying(true);
-    setDetailError("");
-
-    try {
-      const payload = await retryDurableExecution(selectedId);
-      await loadSurface();
-      await openExecution(selectedId);
-      setDetail((current) =>
-        current
-          ? {
-              ...current,
-              execution: payload.execution || current.execution,
-              auditTrail: payload.auditTrail || current.auditTrail || [],
-            }
-          : current
-      );
-    } catch (err) {
-      setDetailError(String(err?.message || err));
-    } finally {
-      setRetrying(false);
-    }
-  }
-
-  useEffect(() => {
-    loadSurface();
-  }, []);
-
-  const providers = useMemo(
-    () => [...new Set(items.map((item) => String(item.provider || "")).filter(Boolean))].sort(),
-    [items]
-  );
-  const channels = useMemo(
-    () => [...new Set(items.map((item) => String(item.channel || "")).filter(Boolean))].sort(),
-    [items]
-  );
-
-  const filteredItems = useMemo(() => {
-    return items.filter((item) => {
-      const tenantValue = `${item.tenant_key || ""} ${item.tenant_id || ""}`.toLowerCase();
-      if (statusFilter && String(item.status || "").toLowerCase() !== statusFilter) return false;
-      if (providerFilter && String(item.provider || "").toLowerCase() !== providerFilter) return false;
-      if (channelFilter && String(item.channel || "").toLowerCase() !== channelFilter) return false;
-      if (tenantFilter && !tenantValue.includes(tenantFilter.toLowerCase())) return false;
-      return true;
-    });
-  }, [items, statusFilter, providerFilter, channelFilter, tenantFilter]);
+  const retryDisabled =
+    !detail?.execution ||
+    !["retryable", "terminal", "dead_lettered"].includes(String(detail?.execution?.status || "").toLowerCase()) ||
+    surface.saving;
 
   return (
-    <div className="space-y-5">
+    <AdminPageShell
+      eyebrow="Durable execution control plane"
+      title="Operator execution surface"
+      description="Primary queue view for durable runtime control. Legacy jobs stay out of this operator path."
+      surface={surface}
+      refreshLabel="Refresh durable surface"
+      unavailableMessage="Durable execution controls are temporarily unavailable."
+      actions={
+        <button
+          onClick={retrySelectedExecution}
+          disabled={retryDisabled}
+          className="inline-flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm text-white/84 transition disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <RotateCcw className={cn("h-4 w-4", actionState.isActionPending("retry") && "animate-spin")} />
+          Manual retry
+        </button>
+      }
+    >
       <section className="rounded-[28px] border border-white/10 bg-[#07111d] px-5 py-5">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.26em] text-white/42">
-              Durable execution control plane
-            </div>
-            <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.04em] text-white">
-              Operator execution surface
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm text-white/58">
-              Primary queue view for durable runtime control. Legacy jobs stay out of this operator path.
-            </p>
-          </div>
-
-          <button
-            onClick={loadSurface}
-            className="inline-flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm font-medium text-white/86 transition hover:bg-white/[0.08]"
-          >
-            <RefreshCcw className={cn("h-4 w-4", loading && "animate-spin")} />
-            Refresh durable surface
-          </button>
-        </div>
-
-        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <SummaryCard label="Retryable" value={summary?.counts?.retryable} tone="amber" />
           <SummaryCard label="Dead-lettered" value={summary?.deadLetterCount} tone="rose" />
           <SummaryCard
@@ -171,9 +90,7 @@ export default function Executions() {
 
         {summary?.operational?.alerts?.length ? (
           <div className="mt-4 rounded-[22px] border border-amber-400/18 bg-amber-400/[0.08] px-4 py-4">
-            <div className="text-[11px] uppercase tracking-[0.24em] text-amber-100/72">
-              Attention needed
-            </div>
+            <div className="text-[11px] uppercase tracking-[0.24em] text-amber-100/72">Attention needed</div>
             <div className="mt-2 text-sm text-amber-50">
               {summary.operational.alerts.map((item) => item.message).join(" ")}
             </div>
@@ -225,12 +142,6 @@ export default function Executions() {
         </div>
       </section>
 
-      {error ? (
-        <section className="rounded-[24px] border border-rose-400/16 bg-rose-400/[0.08] px-4 py-4 text-sm text-rose-100">
-          {error}
-        </section>
-      ) : null}
-
       <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
         <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -243,7 +154,7 @@ export default function Executions() {
             <div className="text-sm text-white/48">{filteredItems.length} items</div>
           </div>
 
-          {loading ? (
+          {surface.loading ? (
             <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-[#08111d] px-4 py-5 text-sm text-white/60">
               <LoaderCircle className="h-4 w-4 animate-spin" />
               Loading durable execution queues
@@ -251,12 +162,7 @@ export default function Executions() {
           ) : filteredItems.length ? (
             <div className="space-y-3">
               {filteredItems.map((item) => (
-                <ExecutionRow
-                  key={item.id}
-                  item={item}
-                  selected={selectedId === item.id}
-                  onOpen={openExecution}
-                />
+                <ExecutionRow key={item.id} item={item} selected={selectedId === item.id} onOpen={openExecution} />
               ))}
             </div>
           ) : (
@@ -274,24 +180,18 @@ export default function Executions() {
                 {detail?.execution?.action_type || "Select a durable execution"}
               </h2>
             </div>
-            <button
-              onClick={handleRetry}
-              disabled={!detail?.execution || !["retryable", "terminal", "dead_lettered"].includes(String(detail?.execution?.status || "").toLowerCase()) || retrying}
-              className="inline-flex h-10 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-4 text-sm text-white/84 transition disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <RotateCcw className={cn("h-4 w-4", retrying && "animate-spin")} />
-              Manual retry
-            </button>
           </div>
 
-          {detailLoading ? (
+          {!detailSurface.unavailable && detailSurface.error ? (
+            <div className="mb-4 rounded-[22px] border border-rose-400/16 bg-rose-400/[0.08] px-4 py-5 text-sm text-rose-100">
+              {detailSurface.error}
+            </div>
+          ) : null}
+
+          {detailSurface.loading ? (
             <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-[#08111d] px-4 py-5 text-sm text-white/60">
               <LoaderCircle className="h-4 w-4 animate-spin" />
               Loading execution detail
-            </div>
-          ) : detailError ? (
-            <div className="rounded-[22px] border border-rose-400/16 bg-rose-400/[0.08] px-4 py-5 text-sm text-rose-100">
-              {detailError}
             </div>
           ) : detail?.execution ? (
             <ExecutionDetail detail={detail} />
@@ -302,7 +202,7 @@ export default function Executions() {
           )}
         </section>
       </div>
-    </div>
+    </AdminPageShell>
   );
 }
 
@@ -365,7 +265,9 @@ function ExecutionRow({ item, selected, onOpen }) {
             <span className={cn("rounded-full border px-2.5 py-1 text-[11px] font-medium", meta.badge)}>
               {meta.label}
             </span>
-            <span className="text-xs text-white/44">{item.provider} / {item.channel}</span>
+            <span className="text-xs text-white/44">
+              {item.provider} / {item.channel}
+            </span>
           </div>
           <div className="mt-3 text-sm font-medium text-white">{item.action_type}</div>
           <div className="mt-1 text-xs text-white/46">
@@ -374,7 +276,9 @@ function ExecutionRow({ item, selected, onOpen }) {
         </div>
         <div className="text-right text-xs text-white/44">
           <div>{formatRelative(item.next_retry_at || item.updated_at || item.created_at)}</div>
-          <div className="mt-1">attempt {item.attempt_count}/{item.max_attempts}</div>
+          <div className="mt-1">
+            attempt {item.attempt_count}/{item.max_attempts}
+          </div>
         </div>
       </div>
     </button>
@@ -389,10 +293,10 @@ function ExecutionDetail({ detail }) {
     <div className="space-y-4">
       <div className={cn("rounded-[22px] border p-4", meta.panel)}>
         <div className="flex flex-wrap items-center gap-2">
-          <span className={cn("rounded-full border px-2.5 py-1 text-[11px] font-medium", meta.badge)}>
-            {meta.label}
+          <span className={cn("rounded-full border px-2.5 py-1 text-[11px] font-medium", meta.badge)}>{meta.label}</span>
+          <span className="text-xs text-white/46">
+            {execution.provider} / {execution.channel}
           </span>
-          <span className="text-xs text-white/46">{execution.provider} / {execution.channel}</span>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <Metric label="Execution ID" value={execution.id} mono />
@@ -415,9 +319,7 @@ function ExecutionDetail({ detail }) {
         <div className="text-[11px] uppercase tracking-[0.24em] text-white/42">Payload summary</div>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           {extractSummary(execution.payload_summary).length ? (
-            extractSummary(execution.payload_summary).map((item) => (
-              <Metric key={item.key} label={item.key} value={item.value} />
-            ))
+            extractSummary(execution.payload_summary).map((item) => <Metric key={item.key} label={item.key} value={item.value} />)
           ) : (
             <div className="text-sm text-white/56">No safe payload summary stored.</div>
           )}
@@ -437,9 +339,7 @@ function ExecutionDetail({ detail }) {
                 <div className="mt-2 text-xs text-white/54">
                   {displayValue(attempt.status_from)} → {displayValue(attempt.status_to)}
                 </div>
-                {attempt.error_message ? (
-                  <div className="mt-2 text-sm text-rose-100">{attempt.error_message}</div>
-                ) : null}
+                {attempt.error_message ? <div className="mt-2 text-sm text-rose-100">{attempt.error_message}</div> : null}
               </div>
             ))
           ) : (
@@ -480,9 +380,7 @@ function Metric({ label, value, mono = false }) {
   return (
     <div className="rounded-[18px] border border-white/10 bg-white/[0.04] px-3 py-3">
       <div className="text-[10px] uppercase tracking-[0.24em] text-white/38">{label}</div>
-      <div className={cn("mt-2 text-sm text-white/86 break-words", mono && "font-mono text-xs")}>
-        {displayValue(value)}
-      </div>
+      <div className={cn("mt-2 break-words text-sm text-white/86", mono && "font-mono text-xs")}>{displayValue(value)}</div>
     </div>
   );
 }

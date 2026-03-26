@@ -9,6 +9,10 @@ import {
   getTenantRuntimeProjectionFreshness,
 } from "../../../db/helpers/tenantRuntimeProjection.js";
 import { getActiveSetupReviewSession } from "../../../db/helpers/tenantSetupReview.js";
+import {
+  buildOperationalRepairGuidance,
+  buildReadinessSurface,
+} from "../../../services/operationalReadiness.js";
 import { requireDb, requireTenant, ok, bad } from "./utils.js";
 
 function s(v, d = "") {
@@ -60,6 +64,143 @@ function buildSourceReviewRequired(item = {}) {
 
 function pickLatest(items = [], predicate = () => true) {
   return arr(items).find((item) => predicate(item)) || null;
+}
+
+function buildTrustReadiness({
+  runtimeProjection = {},
+  latestTruthVersion = {},
+  activeReviewSession = {},
+} = {}) {
+  const runtimeStatus = lower(runtimeProjection?.status || "");
+  const runtimeStale = !!runtimeProjection?.stale;
+  const reviewActive = !!activeReviewSession?.id;
+  const blockers = [];
+
+  if (!s(runtimeProjection?.id) || !runtimeStatus) {
+    blockers.push(
+      buildOperationalRepairGuidance({
+        reasonCode: "runtime_projection_missing",
+        viewerRole: "operator",
+        missingFields: ["runtime_projection"],
+        title: "Runtime projection blocker",
+        subtitle: "No approved runtime projection is currently available for trust-controlled runtime surfaces.",
+        action: {
+          id: "open_setup_route",
+          kind: "route",
+          label: "Open runtime setup",
+          requiredRole: "operator",
+        },
+        target: {
+          path: "/setup/runtime",
+          section: "runtime",
+        },
+      })
+    );
+  } else if (runtimeStale) {
+    blockers.push(
+      buildOperationalRepairGuidance({
+        reasonCode: "runtime_projection_stale",
+        viewerRole: "operator",
+        missingFields: arr(runtimeProjection?.reasons),
+        title: "Runtime projection stale",
+        subtitle: "The approved runtime projection is stale and may not reflect the latest review-protected setup state.",
+        action: {
+          id: "open_setup_route",
+          kind: "route",
+          label: "Review runtime setup",
+          requiredRole: "operator",
+        },
+        target: {
+          path: "/setup/runtime",
+          section: "runtime",
+        },
+      })
+    );
+  }
+
+  if (!s(latestTruthVersion?.id)) {
+    blockers.push(
+      buildOperationalRepairGuidance({
+        reasonCode: "approved_truth_unavailable",
+        viewerRole: "operator",
+        missingFields: ["approved_truth"],
+        title: "Approved truth blocker",
+        subtitle: "Trust-controlled approved truth is unavailable. No fallback profile data is being substituted here.",
+        action: {
+          id: "open_setup_route",
+          kind: "route",
+          label: "Open truth setup",
+          requiredRole: "operator",
+        },
+        target: {
+          path: "/setup/studio",
+          section: "truth",
+        },
+      })
+    );
+  }
+
+  if (reviewActive) {
+    blockers.push(
+      buildOperationalRepairGuidance({
+        reasonCode: "review_required",
+        viewerRole: "operator",
+        missingFields: [s(activeReviewSession?.currentStep || activeReviewSession?.current_step)],
+        title: "Review session active",
+        subtitle: "A setup review is still active. Approved truth and runtime projection remain protected until review is completed.",
+        action: {
+          id: "open_review_workspace",
+          kind: "route",
+          label: "Open review workspace",
+          requiredRole: "operator",
+        },
+        target: {
+          path: "/settings?tab=knowledge-review",
+          section: "review",
+          reviewSessionId: s(activeReviewSession?.id),
+        },
+      })
+    );
+  }
+
+  return {
+    runtimeProjection: buildReadinessSurface({
+      status:
+        !s(runtimeProjection?.id) || !runtimeStatus
+          ? "blocked"
+          : runtimeStale
+          ? "blocked"
+          : "ready",
+      message:
+        !s(runtimeProjection?.id) || !runtimeStatus
+          ? "Runtime projection is unavailable."
+          : runtimeStale
+          ? "Runtime projection is stale."
+          : "Runtime projection is ready.",
+      blockers: blockers.filter((item) => item.category === "runtime"),
+    }),
+    truth: buildReadinessSurface({
+      status: !s(latestTruthVersion?.id) ? "blocked" : "ready",
+      message: !s(latestTruthVersion?.id)
+        ? "Approved truth is unavailable."
+        : "Approved truth is available.",
+      blockers: blockers.filter((item) => item.category === "truth"),
+    }),
+    review: buildReadinessSurface({
+      status: reviewActive ? "blocked" : "ready",
+      message: reviewActive
+        ? "A protected review is still active."
+        : "No active protected review session is blocking trust maintenance.",
+      blockers: blockers.filter((item) => item.category === "review"),
+    }),
+    overall: buildReadinessSurface({
+      status: blockers.some((item) => item.blocked) ? "blocked" : "ready",
+      message: blockers.some((item) => item.blocked)
+        ? "Trust maintenance remains blocked until the listed runtime/truth prerequisites are repaired."
+        : "Trust maintenance prerequisites are aligned.",
+      blockers,
+    }),
+  };
 }
 
 export function settingsTrustRoutes({ db }) {
@@ -160,6 +301,16 @@ export function settingsTrustRoutes({ db }) {
         return status === "failed" || status === "error";
       });
       const conflictCount = arr(reviewQueue).filter((item) => lower(item.status) === "conflict").length;
+      const readiness = buildTrustReadiness({
+        runtimeProjection: {
+          id: s(runtimeProjection?.id),
+          status: lower(runtimeProjection?.status || ""),
+          stale: !!runtimeFreshness?.stale,
+          reasons: arr(runtimeFreshness?.reasons),
+        },
+        latestTruthVersion,
+        activeReviewSession,
+      });
 
       return ok(res, {
         tenantId: tenant.tenant_id,
@@ -189,12 +340,14 @@ export function settingsTrustRoutes({ db }) {
             updatedAt: iso(runtimeProjection?.updated_at || runtimeProjection?.created_at),
             stale: !!runtimeFreshness?.stale,
             reasons: arr(runtimeFreshness?.reasons),
+            readiness: readiness.runtimeProjection,
           },
           truth: {
             latestVersionId: s(latestTruthVersion?.id),
             approvedAt: iso(latestTruthVersion?.approved_at || latestTruthVersion?.created_at),
             approvedBy: s(latestTruthVersion?.approved_by),
             reviewSessionId: s(latestTruthVersion?.review_session_id),
+            readiness: readiness.truth,
           },
           setupReview: {
             active: !!activeReviewSession?.id,
@@ -202,7 +355,9 @@ export function settingsTrustRoutes({ db }) {
             status: lower(activeReviewSession?.status || ""),
             currentStep: s(activeReviewSession?.currentStep || activeReviewSession?.current_step),
             updatedAt: iso(activeReviewSession?.updatedAt || activeReviewSession?.updated_at),
+            readiness: readiness.review,
           },
+          readiness: readiness.overall,
         },
         recentRuns: arr(recentRuns).slice(0, 6).map((run) => {
           const source = sourceMap.get(s(run.source_id));

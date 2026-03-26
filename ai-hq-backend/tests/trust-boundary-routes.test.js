@@ -356,6 +356,7 @@ test("route-level internal tenant resolve keeps secret metadata but strips raw v
     assert.equal(res.body?.projectedRuntime?.tenant?.tenantKey, "acme");
     assert.equal(res.body?.projectedRuntime?.channels?.meta?.pageId, "page-1");
     assert.equal(res.body?.operationalChannels?.meta?.pageId, "page-1");
+    assert.equal(res.body?.readiness?.status, "ready");
   } finally {
     cfg.security.aihqInternalToken = previousInternalToken;
     cfg.security.tenantSecretMasterKey = previousMasterKey;
@@ -517,6 +518,7 @@ test("route-level internal meta provider access returns secret-backed internal a
     assert.equal(res.body?.providerAccess?.pageId, "page-1");
     assert.equal(res.body?.providerAccess?.pageAccessToken.length > 0, true);
     assert.equal(res.body?.operationalChannels?.meta?.pageId, "page-1");
+    assert.equal(res.body?.readiness?.status, "ready");
   } finally {
     cfg.security.aihqInternalToken = previousInternalToken;
     cfg.security.tenantSecretMasterKey = previousMasterKey;
@@ -582,6 +584,8 @@ test("route-level internal meta provider access fails closed when channel ids ar
     assert.equal(res.statusCode, 409);
     assert.equal(res.body?.error, "meta_operational_unavailable");
     assert.equal(res.body?.reasonCode, "channel_identifiers_missing");
+    assert.equal(res.body?.readiness?.status, "blocked");
+    assert.equal(res.body?.readiness?.blockers?.[0]?.reasonCode, "channel_identifiers_missing");
   } finally {
     cfg.security.aihqInternalToken = previousInternalToken;
     cfg.security.tenantSecretMasterKey = previousMasterKey;
@@ -647,6 +651,8 @@ test("route-level internal meta provider access fails closed when provider secre
     assert.equal(res.statusCode, 409);
     assert.equal(res.body?.error, "provider_access_unavailable");
     assert.equal(res.body?.reasonCode, "provider_secret_missing");
+    assert.equal(res.body?.readiness?.status, "blocked");
+    assert.equal(res.body?.readiness?.blockers?.[0]?.reasonCode, "provider_secret_missing");
   } finally {
     cfg.security.aihqInternalToken = previousInternalToken;
     cfg.security.tenantSecretMasterKey = previousMasterKey;

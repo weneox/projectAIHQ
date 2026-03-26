@@ -56,6 +56,27 @@ function normalizeRepairGuidance(input = {}) {
   };
 }
 
+function normalizeReadinessBlocker(input = {}) {
+  const item = obj(input);
+  const nextAction = normalizeRepairAction(
+    item.nextAction || item.next_action || item.repairAction || item.repair_action
+  );
+
+  return {
+    blocked: bool(item.blocked, false),
+    category: lower(item.category || ""),
+    dependencyType: lower(item.dependencyType || item.dependency_type || ""),
+    reasonCode: s(item.reasonCode || item.reason_code || ""),
+    title: s(item.title || item.label || ""),
+    subtitle: s(item.subtitle || item.message || ""),
+    missing: arr(item.missing).map((entry) => s(entry)).filter(Boolean),
+    suggestedRepairActionId: s(
+      item.suggestedRepairActionId || item.suggested_repair_action_id || nextAction.id
+    ),
+    nextAction,
+  };
+}
+
 function ok(value) {
   return { ok: true, value };
 }
@@ -187,6 +208,36 @@ export function validateOperationalRepairGuidance(input = {}) {
   });
 }
 
+export function validateReadinessSurface(input = {}) {
+  const value = obj(input);
+  const blockersSource = Array.isArray(value.blockers)
+    ? value.blockers
+    : arr(value.blockers?.items);
+  const blockers = blockersSource.map((entry) => normalizeReadinessBlocker(entry));
+  const status = lower(value.status || (blockers.length ? "blocked" : "ready"));
+
+  if (!status) {
+    return fail("readiness_surface_invalid");
+  }
+
+  for (const blocker of blockers) {
+    if (!blocker.reasonCode || !blocker.nextAction.id) {
+      return fail("readiness_surface_blocker_invalid");
+    }
+  }
+
+  return ok({
+    status,
+    reasonCode: s(value.reasonCode || value.reason_code || ""),
+    intentionallyUnavailable: bool(
+      value.intentionallyUnavailable ?? value.intentionally_unavailable,
+      false
+    ),
+    message: s(value.message || ""),
+    blockers,
+  });
+}
+
 export function validateOperationalReadiness(input = {}) {
   const value = obj(input);
   const blockers = obj(value.blockers);
@@ -255,7 +306,15 @@ export function validateProviderAccessResponse(input = {}) {
     return fail("provider_access_response_invalid");
   }
 
-  if (!value.ok) return ok(value);
+  const readinessChecked = isOptionalObject(value.readiness)
+    ? validateReadinessSurface(value.readiness)
+    : { ok: true, value: null };
+  if (!readinessChecked.ok) return readinessChecked;
+
+  if (!value.ok) return ok({
+    ...value,
+    readiness: readinessChecked.value,
+  });
 
   const access = obj(value.providerAccess || value.provider_access);
   const operationalChecked = validateOperationalChannels(
@@ -274,6 +333,7 @@ export function validateProviderAccessResponse(input = {}) {
   return ok({
     ...value,
     operationalChannels: operationalChecked.value,
+    readiness: readinessChecked.value,
     providerAccess: {
       provider,
       tenantKey,
@@ -293,4 +353,8 @@ export function validateProviderAccessResponse(input = {}) {
       authority: obj(access.authority),
     },
   });
+}
+
+function isOptionalObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
 }

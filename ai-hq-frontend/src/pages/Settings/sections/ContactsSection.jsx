@@ -4,6 +4,7 @@ import { Contact2 } from "lucide-react";
 import Button from "../../../components/ui/Button.jsx";
 import Card from "../../../components/ui/Card.jsx";
 import SettingsSection from "../../../components/settings/SettingsSection.jsx";
+import SettingsSurfaceBanner from "../../../components/settings/SettingsSurfaceBanner.jsx";
 import {
   EmptyState,
   FeatureToggleCard,
@@ -146,6 +147,7 @@ function ContactCard({ item, canManage, onSave, onDelete, saving, deleting }) {
 export default function ContactsSection({
   items,
   canManage,
+  surface,
   onCreate,
   onSave,
   onDelete,
@@ -179,6 +181,10 @@ export default function ContactsSection({
       tone="default"
     >
       <div className="space-y-4">
+        <SettingsSurfaceBanner
+          surface={surface}
+          unavailableMessage="Contacts are temporarily unavailable."
+        />
         <div className="flex justify-end">
           <Button onClick={onCreate} disabled={!canManage} leftIcon={<Contact2 className="h-4 w-4" />}>
             Add Contact

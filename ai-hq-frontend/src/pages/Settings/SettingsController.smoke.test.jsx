@@ -17,9 +17,17 @@ vi.mock("../../lib/pushClient.js", () => ({
 
 vi.mock("./hooks/useSettingsWorkspace.js", () => ({
   useSettingsWorkspace: () => ({
-    loading: false,
-    setLoading: vi.fn(),
-    saving: false,
+    surface: {
+      loading: false,
+      error: "",
+      unavailable: false,
+      ready: true,
+      saving: false,
+      saveError: "",
+      saveSuccess: "Workspace settings saved.",
+      refresh: vi.fn().mockResolvedValue({ tenantKey: "tenant-a" }),
+      clearSaveState: vi.fn(),
+    },
     workspace: {
       tenantKey: "tenant-a",
       viewerRole: "operator",
@@ -29,8 +37,6 @@ vi.mock("./hooks/useSettingsWorkspace.js", () => ({
     },
     setWorkspace: vi.fn(),
     agents: [],
-    agentsLoading: false,
-    setAgentsLoading: vi.fn(),
     dirty: false,
     dirtyMap: {},
     canManageSettings: true,
@@ -38,7 +44,7 @@ vi.mock("./hooks/useSettingsWorkspace.js", () => ({
     patchTenant: vi.fn(),
     patchProfile: vi.fn(),
     patchAi: vi.fn(),
-    loadWorkspaceBase: vi.fn().mockResolvedValue({ tenantKey: "tenant-a" }),
+    refreshWorkspace: vi.fn().mockResolvedValue({ tenantKey: "tenant-a" }),
     onSaveWorkspace: vi.fn(),
     onResetWorkspace: vi.fn().mockReturnValue({}),
     saveAgent: vi.fn(),
@@ -48,6 +54,17 @@ vi.mock("./hooks/useSettingsWorkspace.js", () => ({
 
 vi.mock("./hooks/useBusinessBrain.js", () => ({
   useBusinessBrain: () => ({
+    surface: {
+      loading: false,
+      error: "",
+      unavailable: false,
+      ready: true,
+      saving: false,
+      saveError: "",
+      saveSuccess: "Business fact saved.",
+      refresh: vi.fn().mockResolvedValue({}),
+      clearSaveState: vi.fn(),
+    },
     businessFacts: [],
     setBusinessFacts: vi.fn(),
     channelPolicies: [],
@@ -71,9 +88,69 @@ vi.mock("./hooks/useBusinessBrain.js", () => ({
 vi.mock("./hooks/useOperationalSettings.js", () => ({
   useOperationalSettings: () => ({
     loading: false,
+    surface: {
+      loading: false,
+      error: "",
+      unavailable: false,
+      ready: true,
+      saving: false,
+      saveError: "",
+      saveSuccess: "",
+      refresh: vi.fn().mockResolvedValue({}),
+    },
     savingVoice: false,
     savingChannel: false,
     operationalData: {
+      readiness: {
+        status: "blocked",
+        reasonCode: "voice_phone_number_missing",
+        blockers: {
+          items: [
+            {
+              blocked: true,
+              category: "voice",
+              dependencyType: "voice_phone_number",
+              reasonCode: "voice_phone_number_missing",
+              title: "Voice operational blocker",
+              subtitle: "Production voice traffic stays fail-closed until persisted tenant voice settings are complete.",
+              missing: ["twilio_phone_number"],
+              suggestedRepairActionId: "repair_voice_phone_number",
+              repairAction: {
+                id: "repair_voice_phone_number",
+                kind: "focus",
+                label: "Add voice phone number",
+                requiredRole: "operator",
+                allowed: true,
+                target: {
+                  panel: "voice",
+                  field: "twilioPhoneNumber",
+                },
+              },
+            },
+            {
+              blocked: true,
+              category: "meta",
+              dependencyType: "provider_secret",
+              reasonCode: "provider_secret_missing",
+              title: "Meta provider secret blocker",
+              subtitle: "Meta delivery stays fail-closed until provider secret coverage is complete.",
+              missing: ["page_access_token"],
+              suggestedRepairActionId: "open_provider_secrets",
+              repairAction: {
+                id: "open_provider_secrets",
+                kind: "admin_route",
+                label: "Open secure secrets",
+                requiredRole: "admin",
+                allowed: false,
+                target: {
+                  path: "/admin/secrets",
+                  provider: "meta",
+                },
+              },
+            },
+          ],
+        },
+      },
       voice: {
         settings: {
           enabled: true,
@@ -210,55 +287,157 @@ vi.mock("./hooks/useSourceIntelligence.js", () => ({
     setSyncRunsOpen: vi.fn(),
     syncRunsSource: null,
     syncRunsItems: [],
-    trustSummary: {
-      sources: {
-        total: 1,
-        connected: 1,
-        enabled: 1,
-        running: 0,
-        failed: 0,
-        reviewRequired: 1,
-        lastRunAt: "2026-03-25T10:00:00.000Z",
-      },
-      runtimeProjection: {
-        status: "ready",
-        stale: false,
-        updatedAt: "2026-03-25T10:05:00.000Z",
-      },
-      truth: {
-        latestVersionId: "truth-v1",
-        approvedAt: "2026-03-25T10:06:00.000Z",
-      },
-      reviewQueue: {
-        pending: 1,
-        conflicts: 0,
-      },
+    surface: {
+      loading: false,
+      error: "",
+      unavailable: false,
+      ready: true,
+      saving: false,
+      saveError: "",
+      saveSuccess: "",
+      refresh: vi.fn().mockResolvedValue({}),
     },
-    trustRecentRuns: [
-      {
-        id: "run-1",
-        sourceDisplayName: "Main Website",
-        status: "completed",
-        startedAt: "2026-03-25T10:00:00.000Z",
-        finishedAt: "2026-03-25T10:02:00.000Z",
-        reviewRequired: true,
-      },
-    ],
-    trustAudit: [
-      {
-        id: "audit-1",
-        action: "settings.source.sync.requested",
-        actor: "owner@example.com",
-        createdAt: "2026-03-25T10:01:00.000Z",
-      },
-    ],
-    trustStatus: "ready",
     refreshSourceIntelligence: vi.fn().mockResolvedValue({}),
     handleSaveSource: vi.fn(),
     handleStartSourceSync: vi.fn(),
     handleViewSourceSyncRuns: vi.fn(),
     handleApproveKnowledge: vi.fn(),
     handleRejectKnowledge: vi.fn(),
+  }),
+}));
+
+vi.mock("./hooks/useTrustSurface.js", () => ({
+  useTrustSurface: () => ({
+    trust: {
+      status: "ready",
+      loading: false,
+      error: "",
+      unavailable: false,
+      surface: {
+        loading: false,
+        error: "",
+        unavailable: false,
+        ready: true,
+        refresh: vi.fn().mockResolvedValue({}),
+        saving: false,
+        saveError: "",
+        saveSuccess: "",
+      },
+      view: {
+        summary: {
+          readiness: {
+            status: "blocked",
+            blockers: [
+              {
+                blocked: true,
+                category: "runtime",
+                dependencyType: "runtime_projection",
+                reasonCode: "runtime_projection_missing",
+                title: "Runtime projection blocker",
+                subtitle: "No approved runtime projection is currently available for trust-controlled runtime surfaces.",
+                missing: ["runtime_projection"],
+                nextAction: {
+                  id: "open_setup_route",
+                  kind: "route",
+                  label: "Open runtime setup",
+                  requiredRole: "operator",
+                  allowed: true,
+                  target: {
+                    path: "/setup/runtime",
+                  },
+                },
+              },
+            ],
+          },
+          sources: {
+            total: 1,
+            connected: 1,
+            enabled: 1,
+            running: 0,
+            failed: 0,
+            reviewRequired: 1,
+            lastRunAt: "2026-03-25T10:00:00.000Z",
+          },
+          runtimeProjection: {
+            status: "ready",
+            stale: false,
+            updatedAt: "2026-03-25T10:05:00.000Z",
+            readiness: {
+              status: "blocked",
+              blockers: [
+                {
+                  blocked: true,
+                  category: "runtime",
+                  dependencyType: "runtime_projection",
+                  reasonCode: "runtime_projection_missing",
+                  title: "Runtime projection blocker",
+                  subtitle: "No approved runtime projection is currently available for trust-controlled runtime surfaces.",
+                  missing: ["runtime_projection"],
+                  nextAction: {
+                    id: "open_setup_route",
+                    kind: "route",
+                    label: "Open runtime setup",
+                    requiredRole: "operator",
+                    allowed: true,
+                    target: {
+                      path: "/setup/runtime",
+                    },
+                  },
+                },
+              ],
+            },
+          },
+          truth: {
+            latestVersionId: "truth-v1",
+            approvedAt: "2026-03-25T10:06:00.000Z",
+            readiness: {
+              status: "ready",
+              blockers: [],
+            },
+          },
+          setupReview: {
+            active: false,
+            readiness: {
+              status: "ready",
+              blockers: [],
+            },
+          },
+          reviewQueue: {
+            pending: 1,
+            conflicts: 0,
+          },
+        },
+        recentRuns: [
+          {
+            id: "run-1",
+            sourceDisplayName: "Main Website",
+            status: "completed",
+            startedAt: "2026-03-25T10:00:00.000Z",
+            finishedAt: "2026-03-25T10:02:00.000Z",
+            reviewRequired: true,
+          },
+        ],
+        audit: [
+          {
+            id: "audit-1",
+            action: "settings.source.sync.requested",
+            actor: "owner@example.com",
+            createdAt: "2026-03-25T10:01:00.000Z",
+          },
+        ],
+      },
+    },
+    surface: {
+      loading: false,
+      error: "",
+      unavailable: false,
+      ready: true,
+      saving: false,
+      saveError: "",
+      saveSuccess: "",
+      refresh: vi.fn().mockResolvedValue({}),
+    },
+    refreshTrust: vi.fn().mockResolvedValue({}),
   }),
 }));
 
@@ -270,16 +449,27 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.stubGlobal("scrollTo", vi.fn());
+  HTMLElement.prototype.scrollIntoView = vi.fn();
   Object.defineProperty(window, "location", {
     writable: true,
     value: {
       ...window.location,
+      assign: vi.fn(),
       reload: vi.fn(),
     },
   });
 });
 
 describe("Settings truth-maintenance smoke", () => {
+  it("renders workspace and business-brain sections through the shared async surface language", async () => {
+    render(<SettingsController />);
+
+    expect(await screen.findByText(/workspace settings saved/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /business facts/i }));
+    expect(await screen.findByText(/business fact saved/i)).toBeInTheDocument();
+  });
+
   it("renders source sync and knowledge review truth-maintenance messaging", async () => {
     render(<SettingsController />);
 
@@ -287,6 +477,11 @@ describe("Settings truth-maintenance smoke", () => {
     expect(
       await screen.findByText(/refresh source evidence here, then route anything important into review/i)
     ).toBeInTheDocument();
+    expect(screen.getByText(/trust repair hub/i)).toBeInTheDocument();
+    expect(screen.getByText(/runtime projection blocker/i)).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /open runtime setup/i }).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole("button", { name: /open runtime setup/i })[0]);
+    expect(window.location.assign).toHaveBeenCalledWith("/setup/runtime");
     expect(
       screen.getByText(/sync refreshes source evidence only/i)
     ).toBeInTheDocument();
@@ -316,12 +511,16 @@ describe("Settings truth-maintenance smoke", () => {
     expect(
       await screen.findByText(/production traffic is blocked until operational records are complete/i)
     ).toBeInTheDocument();
+    expect(screen.getByText(/operational repair hub/i)).toBeInTheDocument();
     expect(screen.getByText(/voice operational settings/i)).toBeInTheDocument();
     expect(screen.getByText(/missing: twilio_phone_number/i)).toBeInTheDocument();
+    expect(screen.getByText(/open secure secrets/i)).toBeInTheDocument();
     expect(screen.getByText(/provider secret readiness/i)).toBeInTheDocument();
     expect(screen.getByText(/missing required: page_access_token/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add voice phone number/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /add channel identifiers/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /add voice phone number/i }));
+    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
     expect(
       screen.getByText(/production traffic is fail-closed while operational rows or required provider readiness are incomplete/i)
     ).toBeInTheDocument();

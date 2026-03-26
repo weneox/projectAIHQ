@@ -5,6 +5,7 @@ import {
   Link2,
   Target,
 } from "lucide-react";
+
 import {
   formatMoneyAZN,
   leadHandle,
@@ -16,6 +17,7 @@ import {
   stageTone,
   statusTone,
 } from "../../lib/inbox-ui.js";
+import SettingsSurfaceBanner from "../settings/SettingsSurfaceBanner.jsx";
 import InboxMiniInfo from "./InboxMiniInfo.jsx";
 
 function Button({ children, onClick, tone = "default", disabled = false, icon: Icon }) {
@@ -41,12 +43,7 @@ function Button({ children, onClick, tone = "default", disabled = false, icon: I
   );
 }
 
-export default function InboxLeadPanel({
-  selectedThread,
-  loadingLead,
-  relatedLead,
-  openLeadDetail,
-}) {
+export default function InboxLeadPanel({ selectedThread, surface, relatedLead, openLeadDetail }) {
   const hasThread = Boolean(selectedThread?.id);
   const hasLead = Boolean(relatedLead?.id);
   const relatedLeadValue = hasLead ? formatMoneyAZN(pickLeadValue(relatedLead)) : "—";
@@ -59,103 +56,67 @@ export default function InboxLeadPanel({
           <BriefcaseBusiness className="h-4 w-4 text-white/72" />
         </div>
         <div>
-          <div className="text-[16px] font-semibold tracking-[-0.03em] text-white">
-            Related Lead
-          </div>
-          <div className="mt-1 text-sm text-white/46">
-            Bu thread-ə bağlı lead varsa burada görünəcək.
-          </div>
+          <div className="text-[16px] font-semibold tracking-[-0.03em] text-white">Related Lead</div>
+          <div className="mt-1 text-sm text-white/46">Lead data linked to the selected thread appears here.</div>
         </div>
       </div>
+
+      {hasThread ? (
+        <div className="mt-4">
+          <SettingsSurfaceBanner
+            surface={surface}
+            unavailableMessage="Related lead data is temporarily unavailable."
+            refreshLabel="Refresh lead"
+          />
+        </div>
+      ) : null}
 
       <div className="mt-5 rounded-[22px] border border-white/10 bg-black/20 p-4">
         {!hasThread ? (
           <div className="text-sm text-white/46">No thread selected.</div>
-        ) : loadingLead ? (
+        ) : surface?.loading ? (
           <div className="text-sm text-white/52">Loading related lead...</div>
         ) : !hasLead ? (
           <div className="rounded-[18px] border border-dashed border-white/10 px-4 py-8 text-center">
             <div className="text-sm font-medium text-white/66">No related lead</div>
-            <div className="mt-2 text-sm leading-6 text-white/40">
-              Bu thread üçün hələ lead yaradılmayıb və ya sistemdə görünmür.
-            </div>
+            <div className="mt-2 text-sm leading-6 text-white/40">No lead is linked to this thread yet.</div>
           </div>
         ) : (
           <>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <div className="truncate text-[17px] font-semibold tracking-[-0.03em] text-white">
-                  {leadName(relatedLead)}
-                </div>
-                <div className="mt-1 text-sm text-white/44">
-                  {leadHandle(relatedLead)}
-                </div>
+                <div className="truncate text-[17px] font-semibold tracking-[-0.03em] text-white">{leadName(relatedLead)}</div>
+                <div className="mt-1 text-sm text-white/44">{leadHandle(relatedLead)}</div>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <span
-                  className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${stageTone(
-                    relatedLead.stage
-                  )}`}
-                >
+                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${stageTone(relatedLead.stage)}`}>
                   {relatedLead.stage || "new"}
                 </span>
-
-                <span
-                  className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${statusTone(
-                    relatedLead.status
-                  )}`}
-                >
+                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${statusTone(relatedLead.status)}`}>
                   {relatedLead.status || "open"}
                 </span>
               </div>
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <InboxMiniInfo
-                label="Source"
-                value={prettyLeadSource(relatedLead)}
-                icon={Link2}
-              />
-              <InboxMiniInfo
-                label="Interest"
-                value={relatedLead.interest || "—"}
-                icon={BriefcaseBusiness}
-              />
-              <InboxMiniInfo
-                label="Score"
-                value={String(relatedLead.score ?? 0)}
-                icon={Target}
-              />
-              <InboxMiniInfo
-                label="Pipeline value"
-                value={relatedLeadValue}
-                icon={BadgeDollarSign}
-              />
+              <InboxMiniInfo label="Source" value={prettyLeadSource(relatedLead)} icon={Link2} />
+              <InboxMiniInfo label="Interest" value={relatedLead.interest || "—"} icon={BriefcaseBusiness} />
+              <InboxMiniInfo label="Score" value={String(relatedLead.score ?? 0)} icon={Target} />
+              <InboxMiniInfo label="Pipeline value" value={relatedLeadValue} icon={BadgeDollarSign} />
             </div>
 
             <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-white/32">
-                Score band
-              </div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-white/32">Score band</div>
               <div className="mt-2">
-                <span
-                  className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${scoreTone(
-                    relatedLeadScore
-                  )}`}
-                >
+                <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${scoreTone(relatedLeadScore)}`}>
                   {scoreBand(relatedLeadScore)}
                 </span>
               </div>
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button
-                tone="violet"
-                icon={ArrowUpRight}
-                onClick={() => openLeadDetail(relatedLead)}
-                disabled={!hasLead}
-              >
+              <Button tone="violet" icon={ArrowUpRight} onClick={() => openLeadDetail(relatedLead)} disabled={!hasLead}>
                 Open in Leads
               </Button>
             </div>

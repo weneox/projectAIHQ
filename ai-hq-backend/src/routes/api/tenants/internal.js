@@ -16,6 +16,10 @@ import {
   resolveTenantChannelByExternalIds,
   resolveTenantMetaProviderAccess,
 } from "../../../services/tenantProviderSecrets.js";
+import {
+  buildOperationalRepairGuidance,
+  buildReadinessSurface,
+} from "../../../services/operationalReadiness.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -38,6 +42,10 @@ function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
 
+function arr(v) {
+  return Array.isArray(v) ? v : [];
+}
+
 function ok(res, data = {}) {
   return res.status(200).json({ ok: true, ...data });
 }
@@ -48,6 +56,75 @@ function bad(res, error, extra = {}) {
 
 function serverErr(res, error, extra = {}) {
   return res.status(500).json({ ok: false, error, ...extra });
+}
+
+function buildMetaRuntimeReadiness({
+  operationalChannels = {},
+  providerAccess = {},
+  includeProviderAccess = false,
+} = {}) {
+  const blockers = [];
+  const operationalMeta = obj(operationalChannels.meta);
+  const access = obj(providerAccess);
+
+  if (operationalMeta.ready !== true) {
+    blockers.push(
+      buildOperationalRepairGuidance({
+        reasonCode: s(operationalMeta.reasonCode || "channel_identifiers_missing"),
+        viewerRole: "internal",
+        missingFields: [
+          !s(operationalMeta.pageId) && !s(operationalMeta.igUserId)
+            ? "external_page_id_or_external_user_id"
+            : "",
+        ].filter(Boolean),
+        title: "Meta operational blocker",
+        subtitle: "Strict runtime delivery is blocked until the persisted Meta operational identifiers are complete.",
+        action: {
+          id: "repair_channel_identifiers",
+          kind: "focus",
+          label: "Repair channel identifiers",
+          requiredRole: "operator",
+        },
+        target: {
+          section: "operational",
+          panel: "meta",
+          field: "externalPageId",
+        },
+      })
+    );
+  }
+
+  if (includeProviderAccess && access.available !== true) {
+    blockers.push(
+      buildOperationalRepairGuidance({
+        reasonCode: s(access.reasonCode || "provider_secret_missing"),
+        viewerRole: "internal",
+        missingFields: arr(access.secretKeys).length
+          ? arr(access.secretKeys)
+          : ["provider_access"],
+        title: "Provider access blocker",
+        subtitle: "Internal provider access remains unavailable until the required secret-backed Meta access is repaired.",
+        action: {
+          id: "open_provider_secrets",
+          kind: "admin_route",
+          label: "Open secure secrets",
+          requiredRole: "admin",
+        },
+        target: {
+          path: "/admin/secrets",
+          provider: "meta",
+        },
+      })
+    );
+  }
+
+  return buildReadinessSurface({
+    status: blockers.length ? "blocked" : "ready",
+    message: blockers.length
+      ? "Strict runtime dependencies for Meta delivery are blocked."
+      : "Strict runtime dependencies for Meta delivery are aligned.",
+    blockers,
+  });
 }
 
 export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime }) {
@@ -227,6 +304,9 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         },
         operationalChannels,
         projectedRuntime,
+        readiness: buildMetaRuntimeReadiness({
+          operationalChannels,
+        }),
       });
     } catch (err) {
       console.error("[ai-hq] resolve-channel failed", {
@@ -304,6 +384,12 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
           authority: obj(runtime.authority),
         };
 
+        const readiness = buildMetaRuntimeReadiness({
+          operationalChannels,
+          providerAccess,
+          includeProviderAccess: true,
+        });
+
         if (operationalChannels?.meta?.ready !== true) {
           return res.status(409).json({
             ok: false,
@@ -313,6 +399,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
             reasonCode: s(
               operationalChannels?.meta?.reasonCode || "channel_identifiers_missing"
             ),
+            readiness,
           });
         }
 
@@ -323,6 +410,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
             tenantKey: resolved.tenantKey,
             tenantId: resolved.tenantId,
             reasonCode: s(providerAccess.reasonCode || "provider_access_incomplete"),
+            readiness,
           });
         }
 
@@ -332,6 +420,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
           projectedRuntime,
           operationalChannels,
           providerAccess,
+          readiness,
         });
       } catch (err) {
         console.error("[ai-hq] meta-channel-access failed", {

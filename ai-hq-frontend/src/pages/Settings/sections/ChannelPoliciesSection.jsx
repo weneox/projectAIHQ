@@ -4,6 +4,7 @@ import { ListTree } from "lucide-react";
 import Button from "../../../components/ui/Button.jsx";
 import Card from "../../../components/ui/Card.jsx";
 import SettingsSection from "../../../components/settings/SettingsSection.jsx";
+import SettingsSurfaceBanner from "../../../components/settings/SettingsSurfaceBanner.jsx";
 import {
   EmptyState,
   FeatureToggleCard,
@@ -201,6 +202,7 @@ function ChannelPolicyCard({ item, canManage, onSave, onDelete, saving, deleting
 export default function ChannelPoliciesSection({
   items,
   canManage,
+  surface,
   onCreate,
   onSave,
   onDelete,
@@ -234,6 +236,10 @@ export default function ChannelPoliciesSection({
       tone="default"
     >
       <div className="space-y-4">
+        <SettingsSurfaceBanner
+          surface={surface}
+          unavailableMessage="Channel policies are temporarily unavailable."
+        />
         <div className="flex justify-end">
           <Button onClick={onCreate} disabled={!canManage} leftIcon={<ListTree className="h-4 w-4" />}>
             Add Policy

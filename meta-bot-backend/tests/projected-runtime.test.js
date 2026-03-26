@@ -15,6 +15,7 @@ const { getTenantMetaConfigByChannel } = await import(
 const {
   checkAihqOperationalBootReadiness,
 } = await import("../src/services/bootReadiness.js");
+const { createHealthHandler } = await import("../src/services/healthRoute.js");
 
 function mockFetchJson(json, { ok = true, status = 200 } = {}) {
   global.fetch = async () => ({
@@ -245,4 +246,47 @@ test("meta boot readiness reports structured blocker reason codes when requested
   assert.equal(readiness.status, "blocked");
   assert.equal(readiness.reasonCode, "channel_identifiers_missing");
   assert.equal(readiness.intentionallyUnavailable, true);
+});
+
+test("meta health route response exposes direct structured readiness", () => {
+  const handler = createHealthHandler({
+    service: "meta-bot-backend",
+    bootReadiness: {
+      status: "blocked",
+      reasonCode: "channel_identifiers_missing",
+      blockerReasonCodes: ["channel_identifiers_missing"],
+      intentionallyUnavailable: true,
+      dependency: {
+        aihqReady: false,
+      },
+      aihq: {
+        ok: false,
+      },
+      localDecision: {
+        failClosed: true,
+      },
+    },
+  });
+  const res = {
+    statusCode: 200,
+    body: null,
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    json(payload) {
+      this.body = payload;
+      return this;
+    },
+  };
+  handler({}, res);
+
+  assert.equal(res.statusCode, 503);
+  assert.equal(res.body.service, "meta-bot-backend");
+  assert.equal(res.body.readiness.status, "blocked");
+  assert.equal(res.body.readiness.reasonCode, "channel_identifiers_missing");
+  assert.deepEqual(res.body.readiness.blockerReasonCodes, [
+    "channel_identifiers_missing",
+  ]);
+  assert.equal(res.body.readiness.intentionallyUnavailable, true);
 });

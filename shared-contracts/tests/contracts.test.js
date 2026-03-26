@@ -12,6 +12,7 @@ import {
   validateOperationalReadiness,
   validateOperationalRepairAction,
   validateOperationalRepairGuidance,
+  validateReadinessSurface,
   validateProviderAccessResponse,
   validateProjectedRuntime,
   validateResolveChannelProjectedResponse,
@@ -156,6 +157,27 @@ test("resolve-channel projected response requires projectedRuntime", () => {
     tenantKey: "acme",
     tenantId: "tenant-1",
     resolvedChannel: "instagram",
+    readiness: {
+      status: "blocked",
+      reasonCode: "channel_identifiers_missing",
+      blockers: [
+        {
+          blocked: true,
+          category: "meta",
+          dependencyType: "channel_identifier",
+          reasonCode: "channel_identifiers_missing",
+          title: "Meta operational blocker",
+          suggestedRepairActionId: "repair_channel_identifiers",
+          nextAction: {
+            id: "repair_channel_identifiers",
+            kind: "focus",
+            label: "Repair channel identifiers",
+            requiredRole: "operator",
+            allowed: true,
+          },
+        },
+      ],
+    },
     projectedRuntime: {
       authority: {
         mode: "strict",
@@ -173,6 +195,7 @@ test("resolve-channel projected response requires projectedRuntime", () => {
     },
   });
   assert.equal(good.ok, true);
+  assert.equal(good.value.readiness.status, "blocked");
 });
 
 test("voice projected runtime response validates successful payloads", () => {
@@ -278,11 +301,16 @@ test("provider access response validates secret-backed internal access payloads"
       appSecret: "secret-app",
       secretKeys: ["page_access_token", "app_secret"],
     },
+    readiness: {
+      status: "ready",
+      blockers: [],
+    },
   });
 
   assert.equal(checked.ok, true);
   assert.equal(checked.value.providerAccess.provider, "meta");
   assert.equal(checked.value.providerAccess.secretKeys.length, 2);
+  assert.equal(checked.value.readiness.status, "ready");
 });
 
 test("operational repair action contract requires safe structured descriptors", () => {
@@ -366,4 +394,39 @@ test("operational readiness contract validates blocker reason codes and repair a
 
   assert.equal(checked.ok, true);
   assert.equal(checked.value.blockers.items[0].reasonCode, "provider_secret_missing");
+});
+
+test("shared readiness surface contract validates cross-surface blocker items", () => {
+  const checked = validateReadinessSurface({
+    status: "blocked",
+    reasonCode: "approved_truth_unavailable",
+    intentionallyUnavailable: true,
+    message: "Approved truth is unavailable.",
+    blockers: [
+      {
+        blocked: true,
+        category: "truth",
+        dependencyType: "approved_truth",
+        reasonCode: "approved_truth_unavailable",
+        title: "Approved truth blocker",
+        subtitle: "No approved truth is being projected.",
+        missing: ["approved_truth"],
+        suggestedRepairActionId: "open_setup_route",
+        nextAction: {
+          id: "open_setup_route",
+          kind: "route",
+          label: "Open setup",
+          requiredRole: "operator",
+          allowed: true,
+          target: {
+            path: "/setup/studio",
+          },
+        },
+      },
+    ],
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.blockers[0].reasonCode, "approved_truth_unavailable");
+  assert.equal(checked.value.blockers[0].nextAction.kind, "route");
 });

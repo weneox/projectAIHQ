@@ -21,6 +21,7 @@ const {
   getRuntimeMetricsSnapshot,
   resetRuntimeMetrics,
 } = await import("../src/services/runtimeObservability.js");
+const { createHealthHandler } = await import("../src/services/healthRoute.js");
 
 const originalFetch = global.fetch;
 
@@ -224,6 +225,38 @@ test("boot readiness can report converged blocker reason codes without throwing"
     "voice_phone_number_missing",
     "provider_secret_missing",
   ]);
+});
+
+test("health route response exposes direct structured readiness", () => {
+  const handler = createHealthHandler({
+    service: "twilio-voice-backend",
+    bootReadiness: {
+      status: "blocked",
+      reasonCode: "voice_phone_number_missing",
+      blockerReasonCodes: ["voice_phone_number_missing"],
+      intentionallyUnavailable: true,
+      dependency: {
+        aihqReady: false,
+      },
+      aihq: {
+        ok: false,
+      },
+      localDecision: {
+        failClosed: true,
+      },
+    },
+  });
+  const res = createMockRes();
+  handler({}, res);
+
+  assert.equal(res.statusCode, 503);
+  assert.equal(res.body.service, "twilio-voice-backend");
+  assert.equal(res.body.readiness.status, "blocked");
+  assert.equal(res.body.readiness.reasonCode, "voice_phone_number_missing");
+  assert.deepEqual(res.body.readiness.blockerReasonCodes, [
+    "voice_phone_number_missing",
+  ]);
+  assert.equal(res.body.readiness.intentionallyUnavailable, true);
 });
 
 test("allowed flows work with correct auth and signature", async () => {

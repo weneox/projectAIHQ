@@ -22,6 +22,7 @@ import {
   getMetaConnectUrl,
 } from "../../../api/settings.js";
 import FocusDialog from "../../../components/ui/FocusDialog.jsx";
+import { dispatchRepairAction } from "../../../components/readiness/dispatchRepairAction.js";
 
 const DISPLAY_FONT_STYLE = {
   fontFamily:
@@ -989,8 +990,24 @@ export default function SetupStudioEntryStage({
         error: "",
       }));
 
-      const url = await getMetaConnectUrl();
-      window.location.assign(url);
+      const result = await dispatchRepairAction(
+        {
+          id: "connect_meta_channel",
+          kind: "oauth",
+          allowed: true,
+          target: {
+            provider: "meta",
+          },
+        },
+        {
+          oauthHandlers: {
+            meta: getMetaConnectUrl,
+          },
+        }
+      );
+      if (!result?.ok) {
+        throw new Error("Failed to start Instagram connect");
+      }
     } catch (error) {
       setInstagramMeta((prev) => ({
         ...prev,

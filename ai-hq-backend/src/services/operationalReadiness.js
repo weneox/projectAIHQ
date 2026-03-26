@@ -11,6 +11,10 @@ function arr(v) {
   return Array.isArray(v) ? v : [];
 }
 
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+
 function bool(v, fallback = false) {
   return typeof v === "boolean" ? v : fallback;
 }
@@ -145,6 +149,96 @@ const OPERATIONAL_REASON_METADATA = {
         secretKeys: ["page_access_token"],
       },
       requiredRole: "admin",
+    },
+  },
+  approved_truth_unavailable: {
+    category: "truth",
+    dependencyType: "approved_truth",
+    title: "Approved truth unavailable",
+    action: {
+      id: "open_setup_route",
+      kind: "route",
+      label: "Continue setup",
+      target: {
+        path: "/setup/studio",
+        section: "truth",
+      },
+      requiredRole: "operator",
+    },
+  },
+  approved_truth_empty: {
+    category: "truth",
+    dependencyType: "approved_truth",
+    title: "Approved truth empty",
+    action: {
+      id: "open_setup_route",
+      kind: "route",
+      label: "Continue setup",
+      target: {
+        path: "/setup/studio",
+        section: "truth",
+      },
+      requiredRole: "operator",
+    },
+  },
+  runtime_projection_missing: {
+    category: "runtime",
+    dependencyType: "runtime_projection",
+    title: "Runtime projection missing",
+    action: {
+      id: "open_setup_route",
+      kind: "route",
+      label: "Open setup runtime",
+      target: {
+        path: "/setup/runtime",
+        section: "runtime",
+      },
+      requiredRole: "operator",
+    },
+  },
+  runtime_projection_stale: {
+    category: "runtime",
+    dependencyType: "runtime_projection",
+    title: "Runtime projection stale",
+    action: {
+      id: "open_setup_route",
+      kind: "route",
+      label: "Review runtime setup",
+      target: {
+        path: "/setup/runtime",
+        section: "runtime",
+      },
+      requiredRole: "operator",
+    },
+  },
+  runtime_authority_unavailable: {
+    category: "runtime",
+    dependencyType: "runtime_authority",
+    title: "Runtime authority unavailable",
+    action: {
+      id: "open_setup_route",
+      kind: "route",
+      label: "Review runtime authority",
+      target: {
+        path: "/setup/runtime",
+        section: "runtime",
+      },
+      requiredRole: "operator",
+    },
+  },
+  review_required: {
+    category: "review",
+    dependencyType: "review",
+    title: "Review required",
+    action: {
+      id: "open_review_workspace",
+      kind: "route",
+      label: "Open review workspace",
+      target: {
+        path: "/settings?tab=knowledge-review",
+        section: "review",
+      },
+      requiredRole: "operator",
     },
   },
 };
@@ -519,10 +613,12 @@ export function buildOperationalRepairGuidance({
   missingFields = [],
   title = "",
   subtitle = "",
+  action = {},
   target = {},
 } = {}) {
   const metadata = getReasonMetadata(reasonCode);
   const nextAction = buildRepairActionDescriptor(reasonCode, {
+    ...obj(action),
     allowed: isActionAllowedForRole(metadata.action, viewerRole),
     target,
   });
@@ -537,5 +633,25 @@ export function buildOperationalRepairGuidance({
     missing: arr(missingFields).map((item) => s(item)).filter(Boolean),
     suggestedRepairActionId: nextAction.id,
     nextAction,
+  };
+}
+
+export function buildReadinessSurface({
+  status = "ready",
+  blockers = [],
+  message = "",
+} = {}) {
+  const items = arr(blockers)
+    .map((item) => item && typeof item === "object" ? item : null)
+    .filter(Boolean);
+
+  return {
+    status: lower(status || (items.some((item) => item.blocked) ? "blocked" : "ready")),
+    blocked: items.some((item) => item.blocked),
+    message: s(message),
+    blockers: items,
+    repairActions: items
+      .map((item) => obj(item.nextAction))
+      .filter((item) => s(item.id)),
   };
 }

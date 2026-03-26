@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import {
   listSettingsSources,
@@ -6,12 +6,12 @@ import {
   updateSettingsSource,
   getSettingsSourceSyncRuns,
   startSettingsSourceSync,
-  getSettingsTrustSummary,
   listKnowledgeReviewQueue,
   approveKnowledgeCandidate,
   rejectKnowledgeCandidate,
 } from "../../../api/settings.js";
 import { syncWorkspaceAndInitial } from "../settingsShared.js";
+import { useSettingsSurfaceState } from "./useSettingsSurfaceState.js";
 
 function toFiniteNumber(value, fallback = 0) {
   const x = Number(value);
@@ -68,60 +68,81 @@ export function useSourceIntelligence({
   canManageSettings,
   setWorkspace,
   setInitialWorkspace,
-  setMessage,
   onRefreshBusinessBrain,
+  onRefreshTrust,
 }) {
-  const [sources, setSources] = useState([]);
-  const [knowledgeReview, setKnowledgeReview] = useState([]);
   const [syncRunsOpen, setSyncRunsOpen] = useState(false);
   const [syncRunsSource, setSyncRunsSource] = useState(null);
   const [syncRunsItems, setSyncRunsItems] = useState([]);
-  const [trustSummary, setTrustSummary] = useState({});
-  const [trustRecentRuns, setTrustRecentRuns] = useState([]);
-  const [trustAudit, setTrustAudit] = useState([]);
-  const [trustStatus, setTrustStatus] = useState("idle");
+  const {
+    data,
+    setData,
+    surface,
+    beginRefresh,
+    succeedRefresh,
+    failRefresh,
+    beginSave,
+    succeedSave,
+    failSave,
+    clearSaveState,
+  } = useSettingsSurfaceState({
+    initialData: () => ({
+      sources: [],
+      knowledgeReview: [],
+    }),
+    initialLoading: true,
+  });
+  const sources = data.sources || [];
+  const knowledgeReview = data.knowledgeReview || [];
+  const setSources = useCallback(
+    (nextValue) => {
+      setData((prev) => ({
+        ...prev,
+        sources: typeof nextValue === "function" ? nextValue(prev.sources || []) : nextValue,
+      }));
+    },
+    [setData]
+  );
+  const setKnowledgeReview = useCallback(
+    (nextValue) => {
+      setData((prev) => ({
+        ...prev,
+        knowledgeReview:
+          typeof nextValue === "function" ? nextValue(prev.knowledgeReview || []) : nextValue,
+      }));
+    },
+    [setData]
+  );
 
-  async function refreshSourceIntelligence(overrideTenantKey = tenantKey) {
-    const [srcs, review, trust] = await Promise.all([
-      listSettingsSources({ tenantKey: overrideTenantKey }).then((x) => x.items).catch(() => []),
-      listKnowledgeReviewQueue({ tenantKey: overrideTenantKey }).then((x) => x.items).catch(() => []),
-      getSettingsTrustSummary({ tenantKey: overrideTenantKey, limit: 8 }).catch(() => null),
-    ]);
+  const refreshSourceIntelligence = useCallback(async (overrideTenantKey = tenantKey) => {
+    beginRefresh();
+    try {
+      const [srcs, review] = await Promise.all([
+        listSettingsSources({ tenantKey: overrideTenantKey }).then((x) => x.items),
+        listKnowledgeReviewQueue({ tenantKey: overrideTenantKey }).then((x) => x.items),
+      ]);
 
-    const nextSources = Array.isArray(srcs) ? srcs : [];
-    const nextReview = Array.isArray(review) ? review : [];
-    const nextTrustSummary =
-      trust?.summary && typeof trust.summary === "object" && !Array.isArray(trust.summary)
-        ? trust.summary
-        : {};
-    const nextTrustRuns = Array.isArray(trust?.recentRuns) ? trust.recentRuns : [];
-    const nextTrustAudit = Array.isArray(trust?.audit) ? trust.audit : [];
+      const nextData = {
+        sources: Array.isArray(srcs) ? srcs : [],
+        knowledgeReview: Array.isArray(review) ? review : [],
+      };
 
-    setSources(nextSources);
-    setKnowledgeReview(nextReview);
-    setTrustSummary(nextTrustSummary);
-    setTrustRecentRuns(nextTrustRuns);
-    setTrustAudit(nextTrustAudit);
-    setTrustStatus(trust ? "ready" : "unavailable");
+      syncWorkspaceAndInitial({
+        setWorkspace,
+        setInitialWorkspace,
+        patch: nextData,
+      });
 
-    syncWorkspaceAndInitial({
-      setWorkspace,
-      setInitialWorkspace,
-      patch: {
-        sources: nextSources,
-        knowledgeReview: nextReview,
-        trustSummary: nextTrustSummary,
-      },
-    });
-
-    return {
-      sources: nextSources,
-      knowledgeReview: nextReview,
-      trustSummary: nextTrustSummary,
-      trustRecentRuns: nextTrustRuns,
-      trustAudit: nextTrustAudit,
-    };
-  }
+      return succeedRefresh(nextData);
+    } catch (error) {
+      return failRefresh(error, {
+        fallbackData: {
+          sources: [],
+          knowledgeReview: [],
+        },
+      });
+    }
+  }, [beginRefresh, failRefresh, setInitialWorkspace, setWorkspace, succeedRefresh, tenantKey]);
 
   async function handleSaveSource(payload) {
     if (!canManageSettings) return;
@@ -164,13 +185,21 @@ export function useSourceIntelligence({
 
     if (payload?.id) {
       await updateSettingsSource(payload.id, cleanPayload);
-      setMessage("✅ Source yeniləndi.");
     } else {
       await createSettingsSource(cleanPayload);
-      setMessage("✅ Source əlavə olundu.");
     }
 
-    await refreshSourceIntelligence();
+    beginSave();
+    try {
+      await refreshSourceIntelligence();
+      await onRefreshTrust?.();
+      succeedSave({
+        message: payload?.id ? "Source updated." : "Source added.",
+      });
+    } catch (error) {
+      failSave(error);
+      throw error;
+    }
   }
 
   async function handleStartSourceSync(item) {
@@ -183,8 +212,17 @@ export function useSourceIntelligence({
       runnerKey: "settings.manual",
     });
 
-    await refreshSourceIntelligence();
-    setMessage(`✅ ${describeSourceSyncOutcome(result)}`);
+    beginSave();
+    try {
+      await refreshSourceIntelligence();
+      await onRefreshTrust?.();
+      succeedSave({
+        message: describeSourceSyncOutcome(result),
+      });
+    } catch (error) {
+      failSave(error);
+      throw error;
+    }
   }
 
   async function handleViewSourceSyncRuns(item) {
@@ -208,11 +246,19 @@ export function useSourceIntelligence({
       reason: "Approved from Settings knowledge review",
     });
 
-    await refreshSourceIntelligence();
-    await onRefreshBusinessBrain?.();
-    setMessage(
-      "✅ Knowledge candidate approved for truth maintenance review. Approved truth remains explicit and protected."
-    );
+    beginSave();
+    try {
+      await refreshSourceIntelligence();
+      await onRefreshTrust?.();
+      await onRefreshBusinessBrain?.();
+      succeedSave({
+        message:
+          "Knowledge candidate approved for truth maintenance review. Approved truth remains explicit and protected.",
+      });
+    } catch (error) {
+      failSave(error);
+      throw error;
+    }
   }
 
   async function handleRejectKnowledge(item) {
@@ -223,11 +269,25 @@ export function useSourceIntelligence({
       reason: "Rejected from Settings knowledge review",
     });
 
-    await refreshSourceIntelligence();
-    setMessage("✅ Knowledge candidate rejected. Approved truth remains unchanged.");
+    beginSave();
+    try {
+      await refreshSourceIntelligence();
+      await onRefreshTrust?.();
+      succeedSave({
+        message: "Knowledge candidate rejected. Approved truth remains unchanged.",
+      });
+    } catch (error) {
+      failSave(error);
+      throw error;
+    }
   }
 
   return {
+    surface: {
+      ...surface,
+      refresh: refreshSourceIntelligence,
+      clearSaveState,
+    },
     sources,
     setSources,
     knowledgeReview,
@@ -236,10 +296,6 @@ export function useSourceIntelligence({
     setSyncRunsOpen,
     syncRunsSource,
     syncRunsItems,
-    trustSummary,
-    trustRecentRuns,
-    trustAudit,
-    trustStatus,
     refreshSourceIntelligence,
     handleSaveSource,
     handleStartSourceSync,

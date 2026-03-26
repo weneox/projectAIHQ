@@ -12,6 +12,7 @@ import { registerPublicPages } from "./src/routes/publicPages.js";
 import { registerWebhookRoutes } from "./src/routes/webhook.js";
 import { internalOutboundRoutes } from "./src/routes/internal.outbound.js";
 import { checkAihqOperationalBootReadiness } from "./src/services/bootReadiness.js";
+import { createHealthHandler } from "./src/services/healthRoute.js";
 
 const app = express();
 const bootReadiness = await checkAihqOperationalBootReadiness({
@@ -38,23 +39,13 @@ app.get("/", (_req, res) => {
   return res.status(200).send("Meta Bot Backend is working");
 });
 
-app.get("/health", (_req, res) => {
-  const statusCode = bootReadiness.intentionallyUnavailable ? 503 : 200;
-  return res.status(statusCode).json({
-    ok: !bootReadiness.intentionallyUnavailable,
+app.get(
+  "/health",
+  createHealthHandler({
     service: "meta-bot-backend",
-    readiness: {
-      status: bootReadiness.status,
-      reasonCode: bootReadiness.reasonCode,
-      blockerReasonCodes: bootReadiness.blockerReasonCodes,
-      intentionallyUnavailable: bootReadiness.intentionallyUnavailable,
-      dependency: bootReadiness.dependency,
-      aihq: bootReadiness.aihq,
-      localDecision: bootReadiness.localDecision,
-    },
     bootReadiness,
-  });
-});
+  })
+);
 
 app.use((req, res, next) => {
   if (!bootReadiness.intentionallyUnavailable || req.path === "/health") {

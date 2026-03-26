@@ -1,4 +1,5 @@
 import { Bot, Send } from "lucide-react";
+import SettingsSurfaceBanner from "../settings/SettingsSurfaceBanner.jsx";
 
 function Button({
   children,
@@ -32,17 +33,18 @@ function Button({
 }
 
 export default function InboxComposer({
+  selectedThread,
+  surface,
+  actionState,
   replyText,
   setReplyText,
-  selectedThread,
-  busyAction,
-  sendOperatorReply,
-  releaseHandoff,
+  onSend,
+  onReleaseHandoff,
 }) {
   const hasThread = Boolean(selectedThread?.id);
   const handoffActive = Boolean(selectedThread?.handoff_active);
-  const sending = busyAction === "reply";
-  const releasing = busyAction === "release";
+  const sending = actionState?.isActionPending?.("reply");
+  const releasing = actionState?.isActionPending?.("release");
 
   return (
     <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
@@ -60,6 +62,16 @@ export default function InboxComposer({
         </div>
       </div>
 
+      {hasThread ? (
+        <div className="mt-4">
+          <SettingsSurfaceBanner
+            surface={surface}
+            unavailableMessage="Operator reply controls are temporarily unavailable."
+            refreshLabel="Refresh reply controls"
+          />
+        </div>
+      ) : null}
+
       <div className="mt-5 rounded-[22px] border border-white/10 bg-black/20 p-4">
         <textarea
           value={replyText}
@@ -75,7 +87,7 @@ export default function InboxComposer({
           <Button
             tone="violet"
             icon={Send}
-            onClick={sendOperatorReply}
+            onClick={onSend}
             disabled={!hasThread || !replyText.trim() || sending}
           >
             {sending ? "Sending..." : "Send operator reply"}
@@ -84,7 +96,7 @@ export default function InboxComposer({
           <Button
             tone="cyan"
             icon={Bot}
-            onClick={() => releaseHandoff(selectedThread?.id)}
+            onClick={onReleaseHandoff}
             disabled={!hasThread || !handoffActive || releasing}
           >
             {releasing ? "Releasing..." : "Release handoff"}

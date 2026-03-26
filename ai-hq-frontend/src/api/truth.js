@@ -331,6 +331,7 @@ function normalizeCompareResponse(payload = {}, versionId = "", compareTo = "") 
 function normalizeTruthResponse(payload = {}, source = "") {
   const root = obj(payload);
   const truth = pickFirstObject(root.truth, root.snapshot);
+  const readiness = pickFirstObject(truth.readiness, root.readiness);
 
   const profile = pickFirstObject(
     truth.profile,
@@ -392,6 +393,7 @@ function normalizeTruthResponse(payload = {}, source = "") {
     history,
     hasProvenance: fields.some((field) => field.hasProvenance),
     hasTruth,
+    readiness,
   };
 }
 
@@ -411,6 +413,35 @@ function buildApprovedTruthUnavailableSnapshot(
     approvedTruthUnavailable: true,
     unavailableReasonCode: s(reasonCode),
     notices: [s(notice)],
+    readiness: {
+      status: "blocked",
+      reasonCode: s(reasonCode),
+      intentionallyUnavailable: true,
+      message: s(notice),
+      blockers: [
+        {
+          blocked: true,
+          category: "truth",
+          dependencyType: "approved_truth",
+          reasonCode: s(reasonCode),
+          title: "Approved truth blocker",
+          subtitle: s(notice),
+          missing: ["approved_truth"],
+          suggestedRepairActionId: "open_setup_route",
+          nextAction: {
+            id: "open_setup_route",
+            kind: "route",
+            label: "Open setup",
+            requiredRole: "operator",
+            allowed: true,
+            target: {
+              path: "/setup/studio",
+              section: "truth",
+            },
+          },
+        },
+      ],
+    },
   };
 }
 
@@ -433,19 +464,29 @@ export async function getCanonicalTruthSnapshot() {
   const truth = await getSetupTruth().catch(() => null);
   if (truth) {
     const normalized = normalizeTruthResponse(truth, "/api/setup/truth/current");
+    const approvedTruthUnavailable = !(
+      normalized.hasTruth || normalized.hasApprovalMeta || normalized.hasHistory
+    );
+    const unavailableReasonCode = approvedTruthUnavailable ? "approved_truth_empty" : "";
+    const notices = approvedTruthUnavailable
+      ? ["Approved truth is unavailable. The backend returned no approved truth fields."]
+      : [];
     return {
       ...normalized,
-      approvedTruthUnavailable: !(
-        normalized.hasTruth || normalized.hasApprovalMeta || normalized.hasHistory
-      ),
-      unavailableReasonCode:
-        normalized.hasTruth || normalized.hasApprovalMeta || normalized.hasHistory
-          ? ""
-          : "approved_truth_empty",
-      notices:
-        normalized.hasTruth || normalized.hasApprovalMeta || normalized.hasHistory
-          ? []
-          : ["Approved truth is unavailable. The backend returned no approved truth fields."],
+      approvedTruthUnavailable,
+      unavailableReasonCode,
+      notices,
+      readiness: Object.keys(obj(normalized.readiness)).length > 0
+        ? normalized.readiness
+        : approvedTruthUnavailable
+        ? buildApprovedTruthUnavailableSnapshot(
+            unavailableReasonCode || "approved_truth_empty",
+            notices[0] || "Approved truth is unavailable. The backend returned no approved truth fields."
+          ).readiness
+        : {
+            status: "ready",
+            blockers: [],
+          },
     };
   }
 

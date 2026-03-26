@@ -9,6 +9,9 @@ import TruthFieldTable from "../../components/truth/TruthFieldTable.jsx";
 import TruthProvenancePanel from "../../components/truth/TruthProvenancePanel.jsx";
 import TruthHistoryPanel from "../../components/truth/TruthHistoryPanel.jsx";
 import TruthVersionComparePanel from "../../components/truth/TruthVersionComparePanel.jsx";
+import RepairHub from "../../components/readiness/RepairHub.jsx";
+import { dispatchRepairAction } from "../../components/readiness/dispatchRepairAction.js";
+import { createReadinessViewModel } from "../../components/readiness/readinessViewModel.js";
 
 function initialState() {
   return {
@@ -21,6 +24,7 @@ function initialState() {
       notices: [],
       hasProvenance: false,
       approvedTruthUnavailable: false,
+      readiness: {},
     },
   };
 }
@@ -33,6 +37,7 @@ export default function TruthViewerPage() {
     error: "",
     detail: null,
   });
+  const truthReadiness = createReadinessViewModel(state.data.readiness);
 
   useEffect(() => {
     let alive = true;
@@ -50,6 +55,7 @@ export default function TruthViewerPage() {
             notices: data.notices || [],
             hasProvenance: !!data.hasProvenance,
             approvedTruthUnavailable: !!data.approvedTruthUnavailable,
+            readiness: data.readiness || {},
           },
         });
       })
@@ -145,12 +151,21 @@ export default function TruthViewerPage() {
         <TruthFieldTable fields={state.data.fields} />
       </div>
 
-      {state.data.approvedTruthUnavailable ? (
-        <div className="mt-6 rounded-[24px] border border-amber-200 bg-amber-50/90 px-5 py-4 text-sm leading-6 text-amber-800">
-          Approved truth is currently unavailable. Setup drafts or saved profile data are not being
-          shown here as a fallback.
-        </div>
-      ) : null}
+      <div className="mt-6">
+        <RepairHub
+          title="Truth Readiness"
+          readiness={truthReadiness}
+          blockers={truthReadiness.blockers}
+          canManage
+          emptyMessage="Approved truth is available. No draft or fallback profile data is being substituted here."
+          unavailableMessage={
+            state.data.approvedTruthUnavailable
+              ? "Approved truth is currently unavailable. Setup drafts or saved profile data are not being shown here as a fallback."
+              : ""
+          }
+          onRunAction={(action) => dispatchRepairAction(action)}
+        />
+      </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <TruthProvenancePanel hasProvenance={state.data.hasProvenance} />

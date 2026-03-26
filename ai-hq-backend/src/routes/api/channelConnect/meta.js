@@ -5,6 +5,10 @@ import { cfg } from "../../../config.js";
 import { createTenantSourcesHelpers } from "../../../db/helpers/tenantSources.js";
 import { createTenantKnowledgeHelpers } from "../../../db/helpers/tenantKnowledge.js";
 import {
+  buildOperationalRepairGuidance,
+  buildReadinessSurface,
+} from "../../../services/operationalReadiness.js";
+import {
   s,
   cleanNullable,
   signState,
@@ -368,6 +372,42 @@ export async function getMetaStatus({ db, req }) {
   const channel = await getPrimaryInstagramChannel(db, tenant.id);
   const secrets = await getMetaSecrets(db, tenant.id);
   const hasToken = Boolean(s(secrets?.page_access_token));
+  const reasonCode = !channel
+    ? "channel_not_connected"
+    : !s(channel?.external_page_id) && !s(channel?.external_user_id)
+    ? "channel_identifiers_missing"
+    : !hasToken
+    ? "provider_secret_missing"
+    : "";
+  const repair = buildOperationalRepairGuidance({
+    reasonCode,
+    viewerRole: "admin",
+    missingFields: [
+      !channel ? "tenant_channels" : "",
+      !s(channel?.external_page_id) && !s(channel?.external_user_id)
+        ? "external_page_id_or_external_user_id"
+        : "",
+      !hasToken ? "page_access_token" : "",
+    ].filter(Boolean),
+    title: "Meta channel blocker",
+    subtitle:
+      "Meta delivery stays fail-closed until the channel connection, identifiers, and required secret are aligned.",
+    action: reasonCode === "provider_secret_missing"
+      ? {
+          requiredRole: "admin",
+        }
+      : undefined,
+    target:
+      reasonCode === "provider_secret_missing"
+        ? {
+            path: "/admin/secrets",
+            provider: "meta",
+          }
+        : {
+            provider: "meta",
+            channelType: "instagram",
+          },
+  });
 
   return {
     connected:
@@ -389,6 +429,13 @@ export async function getMetaStatus({ db, req }) {
         }
       : null,
     hasToken,
+    readiness: buildReadinessSurface({
+      status: reasonCode ? "blocked" : "ready",
+      message: reasonCode
+        ? "Meta channel delivery is blocked until the missing dependency is repaired."
+        : "Meta channel delivery is ready.",
+      blockers: repair.blocked ? [repair] : [],
+    }),
   };
 }
 

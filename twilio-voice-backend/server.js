@@ -11,6 +11,7 @@ import { twilioRouter } from "./src/routes/twilio.js";
 import { attachRealtimeBridge } from "./src/services/realtimeBridge.js";
 import { createReporters } from "./src/services/reporting.js";
 import { checkAihqOperationalBootReadiness } from "./src/services/bootReadiness.js";
+import { createHealthHandler } from "./src/services/healthRoute.js";
 
 function normalizeOriginList(value = "") {
   return String(value || "")
@@ -87,23 +88,13 @@ const bootReadiness = await checkAihqOperationalBootReadiness({
   throwOnBlocked: false,
 });
 
-app.get("/health", (_req, res) => {
-  const statusCode = bootReadiness.intentionallyUnavailable ? 503 : 200;
-  return res.status(statusCode).json({
-    ok: !bootReadiness.intentionallyUnavailable,
+app.get(
+  "/health",
+  createHealthHandler({
     service: "twilio-voice-backend",
-    readiness: {
-      status: bootReadiness.status,
-      reasonCode: bootReadiness.reasonCode,
-      blockerReasonCodes: bootReadiness.blockerReasonCodes,
-      intentionallyUnavailable: bootReadiness.intentionallyUnavailable,
-      dependency: bootReadiness.dependency,
-      aihq: bootReadiness.aihq,
-      localDecision: bootReadiness.localDecision,
-    },
     bootReadiness,
-  });
-});
+  })
+);
 
 app.use((req, res, next) => {
   if (!bootReadiness.intentionallyUnavailable || req.path === "/health") {
