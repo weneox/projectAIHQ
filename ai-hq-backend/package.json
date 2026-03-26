@@ -13,8 +13,8 @@
     "validate:env": "node scripts/validate-env.mjs",
     "lint": "node ../scripts/check-js-syntax.mjs server.js src tests scripts",
     "build": "npm run validate:env && npm run lint",
-    "test": "node --test --test-isolation=none tests/*.test.js",
-    "test:setup-review": "node --test --test-isolation=none tests/setup-review-session.test.js"
+    "test": "node --test --test-concurrency=1 tests/*.test.js",
+    "test:setup-review": "node --test --test-concurrency=1 tests/setup-review-session.test.js"
   },
   "dependencies": {
     "@aihq/shared-contracts": "1.0.0",
