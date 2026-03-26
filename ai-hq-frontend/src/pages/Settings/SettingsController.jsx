@@ -71,9 +71,7 @@ export default function SettingsController() {
 
   const env = useMemo(() => {
     const VAPID = String(import.meta.env?.VITE_VAPID_PUBLIC_KEY || "").trim();
-    const API_BASE = String(import.meta.env?.VITE_API_BASE || "").trim();
-    const DEBUG_PUSH = String(import.meta.env?.VITE_DEBUG_PUSH || "").trim();
-    return { VAPID, API_BASE, DEBUG_PUSH };
+    return { VAPID };
   }, []);
 
   const workspaceState = useSettingsWorkspace();
@@ -189,13 +187,7 @@ export default function SettingsController() {
 
   useEffect(() => {
     getNotificationPermission().then(setPerm).catch(() => setPerm("default"));
-
-    if (env.DEBUG_PUSH === "1") {
-      console.log("[push][env] VITE_API_BASE =", env.API_BASE || "(empty)");
-      console.log("[push][env] VITE_VAPID_PUBLIC_KEY present =", Boolean(env.VAPID));
-      console.log("[push][env] VITE_VAPID_PUBLIC_KEY len =", env.VAPID ? env.VAPID.length : 0);
-    }
-  }, [env.API_BASE, env.DEBUG_PUSH, env.VAPID]);
+  }, [env.VAPID]);
 
   useEffect(() => {
     let mounted = true;

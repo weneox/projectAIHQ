@@ -11,6 +11,7 @@ import {
 } from "../../utils/adminAuth.js";
 import { isDbReady, serviceUnavailableJson } from "../../utils/http.js";
 import { hasFeature } from "../../config/features.js";
+import { shouldEnableDebugRoutes } from "../../utils/securitySurface.js";
 
 import { healthRoutes } from "./health/index.js";
 import { tenantsRoutes } from "./tenants/index.js";
@@ -151,7 +152,9 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   r.use("/", settingsRoutes({ db }));
   r.use("/", channelConnectRoutes({ db }));
   r.use("/", teamRoutes({ db }));
-  r.use("/", debugRoutes());
+  if (shouldEnableDebugRoutes()) {
+    r.use("/", debugRoutes());
+  }
   r.use("/", mediaRoutes({ db }));
 
   if (hasFeature("media.render")) {

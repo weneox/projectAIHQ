@@ -16,7 +16,6 @@ import {
 import { normalizeDraftProposalObject } from "./contentDraft.normalize.js";
 
 export const DEBATE_ENGINE_VERSION = "final-v10.0-multitenant-industry-aware";
-console.log(`[debateEngine] LOADED ${DEBATE_ENGINE_VERSION}`);
 
 const DEFAULT_AGENTS = ["orion", "nova", "atlas", "echo"];
 
@@ -476,15 +475,15 @@ function logRawIfEmpty(kind, agentId, resp, text) {
   if (String(text || "").trim()) return;
   if (!cfg.DEBUG_DEBATE_RAW) return;
   try {
-    console.log("[debate] EMPTY", {
+    console.warn("[debate] EMPTY_TEXT", {
       kind,
       agentId,
       status: resp?.status,
       model: resp?.model,
       id: resp?.id,
+      outputTokens: resp?.usage?.output_tokens ?? null,
+      reasoningTokens: resp?.usage?.output_tokens_details?.reasoning_tokens ?? null,
     });
-    const raw = JSON.stringify(resp, null, 2);
-    console.log(`[debate] RAW(${kind}) first 1600:\n${raw.slice(0, 1600)}`);
   } catch {}
 }
 
@@ -521,16 +520,14 @@ async function askAgent({
 
   let text = extractText(resp);
 
-  console.log(
-    "[debate] agent",
-    agentId,
-    "status=",
-    resp?.status || null,
-    "id=",
-    resp?.id || null,
-    "len=",
-    (text || "").length
-  );
+  if (cfg.DEBUG_DEBATE_RAW) {
+    console.log("[debate] agent", {
+      agentId,
+      status: resp?.status || null,
+      id: resp?.id || null,
+      textLength: (text || "").length,
+    });
+  }
 
   if (!String(text || "").trim()) {
     logRawIfEmpty("agent", agentId, resp, text);

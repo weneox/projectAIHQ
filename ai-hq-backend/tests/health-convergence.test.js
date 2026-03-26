@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { validateAihqHealthEnvelope } from "@aihq/shared-contracts/health";
+import { cfg } from "../src/config.js";
 
 import {
   buildApiHealthResponse,
@@ -81,4 +82,24 @@ test("root and api health derive operational readiness from the same blocker log
   assert.equal(rootHealth.operationalReadiness.repairActions.length, 2);
   assert.equal(validateAihqHealthEnvelope(apiHealth).ok, true);
   assert.equal(validateAihqHealthEnvelope(rootHealth).ok, true);
+});
+
+test("api health does not advertise debug endpoints when debug routes are disabled", async () => {
+  const previousEnv = cfg.app.env;
+  const previousDebugRoutesEnabled = cfg.security.debugRoutesEnabled;
+
+  try {
+    cfg.app.env = "production";
+    cfg.security.debugRoutesEnabled = false;
+
+    const health = await buildApiHealthResponse({ db: null });
+    assert.equal(health.endpoints.includes("POST /api/debug/openai"), false);
+
+    cfg.security.debugRoutesEnabled = true;
+    const debugHealth = await buildApiHealthResponse({ db: null });
+    assert.equal(debugHealth.endpoints.includes("POST /api/debug/openai"), true);
+  } finally {
+    cfg.app.env = previousEnv;
+    cfg.security.debugRoutesEnabled = previousDebugRoutesEnabled;
+  }
 });

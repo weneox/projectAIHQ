@@ -4,8 +4,6 @@ import {
   APP_ENV,
   CONTACT_EMAIL,
   META_APP_SECRET,
-  META_PAGE_ACCESS_TOKEN,
-  META_TOKEN_FALLBACK_ENABLED,
   REQUIRE_OPERATIONAL_READINESS_ON_BOOT,
   N8N_WEBHOOK_URL,
   PUBLIC_BASE_URL,
@@ -114,24 +112,6 @@ export function getConfigIssues() {
       "error",
       "N8N_WEBHOOK_URL",
       "N8N_WEBHOOK_URL must be a valid http:// or https:// URL when provided."
-    );
-  }
-
-  if (META_TOKEN_FALLBACK_ENABLED && !s(META_PAGE_ACCESS_TOKEN)) {
-    pushIssue(
-      issues,
-      "warning",
-      "META_PAGE_ACCESS_TOKEN",
-      "META_TOKEN_FALLBACK_ENABLED=true but META_PAGE_ACCESS_TOKEN is empty; tenant-secret fallback must be available at runtime."
-    );
-  }
-
-  if (isProd && META_TOKEN_FALLBACK_ENABLED) {
-    pushIssue(
-      issues,
-      "warning",
-      "META_TOKEN_FALLBACK_ENABLED",
-      "META_TOKEN_FALLBACK_ENABLED=true enables legacy env-token fallback and should remain disabled in production-like environments."
     );
   }
 

@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import { executeMetaActions } from "../services/actionExecutor.js";
 import { AIHQ_INTERNAL_TOKEN } from "../config.js";
 import {
@@ -21,7 +22,15 @@ function isObject(v) {
 function requireInternalToken(req) {
   const token = s(req.headers["x-internal-token"]);
   const expected = s(AIHQ_INTERNAL_TOKEN);
-  return Boolean(token && expected && token === expected);
+  if (!token || !expected) return false;
+
+  const providedBuffer = Buffer.from(token, "utf8");
+  const expectedBuffer = Buffer.from(expected, "utf8");
+
+  return (
+    providedBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(providedBuffer, expectedBuffer)
+  );
 }
 
 function pickTenantKey(req) {

@@ -1,7 +1,6 @@
 // src/routes/api/inbox/internal.js
 // FINAL v2.3 — inbox internal routes
 // canonical business runtime aware + thread state + outbound execution queue
-// + runtime db fingerprint logging
 // + tenant_id propagation/backfill for inbox_threads
 
 import crypto from "crypto";
@@ -66,27 +65,6 @@ function logInfo(message, data = null) {
     if (data) console.log(`[ai-hq] ${message}`, data);
     else console.log(`[ai-hq] ${message}`);
   } catch {}
-}
-
-async function logRuntimeDbFingerprint(client, label = "inbox-runtime", extra = {}) {
-  try {
-    const meta = await client.query(`
-      select
-        current_database() as current_database,
-        current_user as current_user,
-        current_schema() as current_schema,
-        current_setting('search_path') as search_path,
-        inet_server_addr()::text as server_addr,
-        inet_server_port() as server_port
-    `);
-
-    console.log(`[${label}] fingerprint`, {
-      ...(extra && typeof extra === "object" ? extra : {}),
-      ...(meta.rows?.[0] || {}),
-    });
-  } catch (err) {
-    console.error(`[${label}] fingerprint failed`, err);
-  }
 }
 
 async function resolveTenantRow(client, tenantKey = "") {
@@ -889,14 +867,6 @@ export function inboxInternalRoutes({ db, wsHub, getRuntime = getTenantBrainRunt
       client = await db.connect();
       await client.query("BEGIN");
 
-      await logRuntimeDbFingerprint(client, "inbox.ingest.db", {
-        tenantKey,
-        channel,
-        externalThreadId,
-        externalUserId,
-        externalMessageId,
-      });
-
       const tenantRow = await resolveTenantRow(client, tenantKey);
       const tenantId = s(tenantRow?.id || "");
 
@@ -1377,14 +1347,6 @@ export function inboxInternalRoutes({ db, wsHub, getRuntime = getTenantBrainRunt
 
       client = await db.connect();
       await client.query("BEGIN");
-
-      await logRuntimeDbFingerprint(client, "inbox.outbound.db", {
-        tenantKey,
-        channel,
-        threadId,
-        recipientId,
-        externalMessageId,
-      });
 
       const tenantRow = await resolveTenantRow(client, tenantKey);
       const tenantId = s(existingThread?.tenant_id || tenantRow?.id || "");

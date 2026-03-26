@@ -5,6 +5,7 @@ import {
   withOperationalReadinessContext,
 } from "../../../services/operationalReadiness.js";
 import { isDbReady } from "../../../utils/http.js";
+import { shouldEnableDebugRoutes } from "../../../utils/securitySurface.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -63,37 +64,42 @@ export async function buildApiHealthResponse({
     startupOperationalReadiness,
   });
 
+  const endpoints = [
+    "GET /api",
+    "GET /api/mode?tenantId=",
+    "POST /api/mode {tenantId, mode}",
+    "GET /api/agents",
+    "POST /api/chat",
+    "POST /api/debate",
+    "GET /api/threads/:id/messages",
+    "GET /api/proposals?status=pending|in_progress|approved|published|rejected",
+    "POST /api/proposals/:id/decision",
+    "POST /api/proposals/:id/request-changes",
+    "POST /api/proposals/:id/publish",
+    "GET /api/notifications?recipient=ceo&unread=1",
+    "POST /api/notifications/:id/read",
+    "GET /api/push/vapid",
+    "POST /api/push/subscribe",
+    "POST /api/push/test",
+    "GET /api/executions?status=&limit=&executionId=",
+    "GET /api/executions/:id",
+    "POST /api/executions/callback",
+    "GET /api/content?proposalId=",
+    "POST /api/content/:id/feedback",
+    "POST /api/content/:id/approve",
+    "POST /api/content/:id/publish",
+    "POST /api/render/slides",
+    "POST /api/media/image",
+  ];
+
+  if (shouldEnableDebugRoutes()) {
+    endpoints.push("POST /api/debug/openai");
+  }
+
   return {
     ...core,
     debateEngine: DEBATE_ENGINE_VERSION,
-    endpoints: [
-      "GET /api",
-      "GET /api/mode?tenantId=",
-      "POST /api/mode {tenantId, mode}",
-      "GET /api/agents",
-      "POST /api/chat",
-      "POST /api/debate",
-      "GET /api/threads/:id/messages",
-      "GET /api/proposals?status=pending|in_progress|approved|published|rejected",
-      "POST /api/proposals/:id/decision",
-      "POST /api/proposals/:id/request-changes",
-      "POST /api/proposals/:id/publish",
-      "GET /api/notifications?recipient=ceo&unread=1",
-      "POST /api/notifications/:id/read",
-      "GET /api/push/vapid",
-      "POST /api/push/subscribe",
-      "POST /api/push/test",
-      "GET /api/executions?status=&limit=&executionId=",
-      "GET /api/executions/:id",
-      "POST /api/executions/callback",
-      "GET /api/content?proposalId=",
-      "POST /api/content/:id/feedback",
-      "POST /api/content/:id/approve",
-      "POST /api/content/:id/publish",
-      "POST /api/render/slides",
-      "POST /api/media/image",
-      "POST /api/debug/openai",
-    ],
+    endpoints,
     defaults: {
       tenant: cfg.tenant.defaultTenantKey,
       mode: cfg.app.defaultMode,

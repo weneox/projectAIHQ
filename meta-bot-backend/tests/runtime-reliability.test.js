@@ -4,7 +4,6 @@ import assert from "node:assert/strict";
 import {
   executeMetaActions,
 } from "../src/services/actionExecutor.js";
-import { META_TOKEN_FALLBACK_ENABLED } from "../src/config.js";
 import { __test__ as metaSendTest } from "../src/services/metaSend.js";
 import {
   __test__ as reliabilityTest,
@@ -79,13 +78,12 @@ test("terminal execution failures are classified and recorded", async () => {
   assert.equal(listExecutionFailures().length, 1);
 });
 
-test("legacy env token fallback is disabled by default", async () => {
+test("meta send fails closed without projected tenant credentials", async () => {
   const resolved = await metaSendTest.resolveMetaAccessToken({
     tenantKey: "acme",
     channel: "instagram",
   });
 
-  assert.equal(META_TOKEN_FALLBACK_ENABLED, false);
   assert.equal(resolved.accessToken, "");
   assert.equal(resolved.source, "none");
 });

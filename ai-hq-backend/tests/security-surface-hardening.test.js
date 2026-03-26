@@ -13,6 +13,7 @@ import {
   isAllowedOrigin,
   sanitizeProviderSecrets,
   shouldAllowDiagnosticsRequest,
+  shouldEnableDebugRoutes,
 } from "../src/utils/securitySurface.js";
 
 test("production CORS policy denies wildcard origin defaults", () => {
@@ -101,6 +102,27 @@ test("diagnostics are deny-by-default outside test without debug or internal tok
   assert.equal(deniedInDev, false);
   assert.equal(denied, false);
   assert.equal(allowedInTest, true);
+});
+
+test("debug routes stay disabled in production unless explicitly enabled", () => {
+  const previousEnv = cfg.app.env;
+  const previousDebugRoutesEnabled = cfg.security.debugRoutesEnabled;
+
+  try {
+    cfg.app.env = "production";
+    cfg.security.debugRoutesEnabled = false;
+    assert.equal(shouldEnableDebugRoutes(), false);
+
+    cfg.security.debugRoutesEnabled = true;
+    assert.equal(shouldEnableDebugRoutes(), true);
+
+    cfg.app.env = "development";
+    cfg.security.debugRoutesEnabled = false;
+    assert.equal(shouldEnableDebugRoutes(), true);
+  } finally {
+    cfg.app.env = previousEnv;
+    cfg.security.debugRoutesEnabled = previousDebugRoutesEnabled;
+  }
 });
 
 test("provider secret sanitization strips raw values by default", () => {

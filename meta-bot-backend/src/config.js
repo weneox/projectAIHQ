@@ -56,16 +56,10 @@ export const AIHQ_SECRETS_PATH = s(
 
 // --------------------------------------------------
 // Meta send
-// fallback env token only for temporary / legacy support
-// real production path should be tenant secrets from AI HQ
+// production path is tenant secrets from AI HQ
 // --------------------------------------------------
-export const META_PAGE_ACCESS_TOKEN = s(process.env.META_PAGE_ACCESS_TOKEN, "");
 export const META_API_VERSION = s(process.env.META_API_VERSION, "v23.0");
 export const META_REPLY_TIMEOUT_MS = n(process.env.META_REPLY_TIMEOUT_MS, 15000);
-export const META_TOKEN_FALLBACK_ENABLED = b(
-  process.env.META_TOKEN_FALLBACK_ENABLED,
-  false
-);
 
 // --------------------------------------------------
 // optional logs

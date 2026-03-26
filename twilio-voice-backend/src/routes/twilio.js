@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import twilio from "twilio";
 import { cfg } from "../config.js";
 import { resolveTenantFromRequest } from "../services/tenantResolver.js";
@@ -114,7 +115,13 @@ function requireInternalToken(req, res, next) {
     });
   }
 
-  if (!provided || provided !== expected) {
+  const providedBuffer = Buffer.from(provided, "utf8");
+  const expectedBuffer = Buffer.from(expected, "utf8");
+  const authorized =
+    providedBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(providedBuffer, expectedBuffer);
+
+  if (!provided || !authorized) {
     incrementRuntimeMetric("twilio_internal_auth_failures_total:unauthorized");
     recordRuntimeSignal({
       level: "warn",

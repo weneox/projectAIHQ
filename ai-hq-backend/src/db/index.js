@@ -12,28 +12,6 @@ function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
-function redact(url) {
-  try {
-    const u = new URL(url);
-    if (u.password) u.password = "****";
-    return u.toString();
-  } catch {
-    return "(invalid DATABASE_URL)";
-  }
-}
-
-function maskDbUrl(url = "") {
-  try {
-    const u = new URL(String(url || ""));
-    const host = u.hostname || "";
-    const dbName = (u.pathname || "").replace(/^\//, "");
-    const user = u.username || "";
-    return `${u.protocol}//${user ? `${user}@` : ""}${host}/${dbName}`;
-  } catch {
-    return "(invalid DATABASE_URL)";
-  }
-}
-
 function shouldUseSsl(url) {
   try {
     const u = new URL(url);
@@ -56,51 +34,6 @@ function shouldUseSsl(url) {
     return false;
   } catch {
     return true;
-  }
-}
-
-async function logDbFingerprint(client, label = "db") {
-  try {
-    const meta = await client.query(`
-      select
-        current_database() as current_database,
-        current_user as current_user,
-        current_schema() as current_schema,
-        current_setting('search_path') as search_path,
-        inet_server_addr()::text as server_addr,
-        inet_server_port() as server_port
-    `);
-
-    console.log(`[${label}] fingerprint`, meta.rows[0]);
-
-    const tables = await client.query(`
-      select
-        n.nspname as schema_name,
-        c.relname as table_name
-      from pg_class c
-      join pg_namespace n on n.oid = c.relnamespace
-      where c.relname = 'inbox_messages'
-      order by 1, 2
-    `);
-
-    console.log(`[${label}] inbox_messages tables`, tables.rows);
-
-    const constraints = await client.query(`
-      select
-        n.nspname as schema_name,
-        c.relname as table_name,
-        con.conname,
-        pg_get_constraintdef(con.oid) as definition
-      from pg_constraint con
-      join pg_class c on c.oid = con.conrelid
-      join pg_namespace n on n.oid = c.relnamespace
-      where c.relname = 'inbox_messages'
-      order by 1, 2, 3
-    `);
-
-    console.log(`[${label}] inbox_messages constraints`, constraints.rows);
-  } catch (err) {
-    console.error(`[${label}] fingerprint failed`, err);
   }
 }
 
@@ -139,20 +72,18 @@ export async function initDb() {
 
   try {
     await pool.query("select 1 as ok");
-    console.log("[ai-hq] DB=ON", redact(url), `ssl=${useSsl ? "on" : "off"}`);
-    console.log("[db-runtime] DATABASE_URL masked =", maskDbUrl(url));
-    console.log(
-      "[db-runtime] DB_SCHEMA_DEMO =",
-      process.env.DB_SCHEMA_DEMO || null
-    );
-
-    await logDbFingerprint(pool, "db-runtime");
+    console.log("[ai-hq] DB=ON", {
+      ssl: useSsl ? "on" : "off",
+      demoSeedEnabled: s(process.env.DB_SCHEMA_DEMO).toLowerCase() === "true",
+    });
 
     db = pool;
     return pool;
   } catch (e) {
-    console.error("[ai-hq] DB connect failed:", redact(url));
-    console.error("[ai-hq]", e?.code || "", String(e?.message || e));
+    console.error("[ai-hq] DB connect failed", {
+      code: e?.code || null,
+      message: String(e?.message || e),
+    });
     try {
       await pool.end();
     } catch {}

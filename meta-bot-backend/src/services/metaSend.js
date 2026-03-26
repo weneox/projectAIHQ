@@ -1,8 +1,6 @@
 import {
-  META_PAGE_ACCESS_TOKEN,
   META_API_VERSION,
   META_REPLY_TIMEOUT_MS,
-  META_TOKEN_FALLBACK_ENABLED,
 } from "../config.js";
 import { getTenantMetaConfigByChannel } from "./tenantProviderSecrets.js";
 import { createStructuredLogger } from "@aihq/shared-contracts/logger";
@@ -72,9 +70,7 @@ async function resolveMetaAccessToken({
   igUserId = "",
   meta = null,
 } = {}) {
-  const envToken = s(META_PAGE_ACCESS_TOKEN);
   const safeTenantKey = lower(tenantKey);
-  const allowEnvFallback = Boolean(META_TOKEN_FALLBACK_ENABLED);
 
   const safeMeta = meta && typeof meta === "object" ? meta : {};
 
@@ -154,17 +150,6 @@ async function resolveMetaAccessToken({
     }, err);
   }
 
-  if (allowEnvFallback && envToken) {
-    return {
-      accessToken: envToken,
-      source: "env",
-      pageId: safePageId,
-      igUserId: safeIgUserId,
-      projectedRuntimeAuthority: null,
-      operationalAuthority: null,
-    };
-  }
-
   return {
     accessToken: "",
     source: "none",
@@ -195,7 +180,7 @@ async function postJson(url, body, opts = {}) {
   const token = s(creds.accessToken);
   if (!token) {
     return fail(
-      "META_PAGE_ACCESS_TOKEN missing and tenant meta secret not found",
+      "tenant meta access token missing",
       0,
       null,
       {
@@ -284,7 +269,7 @@ async function postForm(url, params, opts = {}) {
   const token = s(creds.accessToken);
   if (!token) {
     return fail(
-      "META_PAGE_ACCESS_TOKEN missing and tenant meta secret not found",
+      "tenant meta access token missing",
       0,
       null,
       {
