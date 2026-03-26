@@ -1,5 +1,5 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./hooks/useTeamSurface.js", () => ({
   useTeamSurface: () => ({
@@ -43,7 +43,12 @@ vi.mock("./hooks/useTeamSurface.js", () => ({
   }),
 }));
 
-import TeamPanel from "./TeamPanel.jsx";
+let TeamPanel;
+
+beforeEach(async () => {
+  vi.resetModules();
+  ({ default: TeamPanel } = await import("./TeamPanel.jsx"));
+});
 
 afterEach(() => {
   cleanup();

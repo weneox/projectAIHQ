@@ -154,6 +154,8 @@ const Input = forwardRef(function Input({
   disabled,
   readOnly,
   invalid = false,
+  leftIcon,
+  right,
   ...props
 }, ref) {
   return (
@@ -164,21 +166,38 @@ const Input = forwardRef(function Input({
         readOnly={readOnly}
         invalid={invalid}
       >
-        <input
-          ref={ref}
-          disabled={disabled}
-          readOnly={readOnly}
-          className={cx(
-            "h-12 w-full rounded-[22px] bg-transparent px-4 text-[14px] outline-none",
-            "placeholder:text-slate-400 dark:placeholder:text-slate-500",
-            readOnly
-              ? "text-slate-600 dark:text-slate-300"
-              : "text-slate-900 dark:text-slate-100",
-            disabled ? "cursor-not-allowed" : "",
-            inputClassName
-          )}
-          {...props}
-        />
+        <div className="flex h-12 items-center gap-2.5 px-3.5">
+          {leftIcon ? (
+            <span
+              className={cx(
+                "shrink-0 transition-colors",
+                readOnly
+                  ? "text-slate-400 dark:text-slate-500"
+                  : "text-slate-400 dark:text-slate-500"
+              )}
+            >
+              {leftIcon}
+            </span>
+          ) : null}
+
+          <input
+            ref={ref}
+            disabled={disabled}
+            readOnly={readOnly}
+            className={cx(
+              "min-w-0 w-full bg-transparent text-[14px] outline-none",
+              "placeholder:text-slate-400 dark:placeholder:text-slate-500",
+              readOnly
+                ? "text-slate-600 dark:text-slate-300"
+                : "text-slate-900 dark:text-slate-100",
+              disabled ? "cursor-not-allowed" : "",
+              inputClassName
+            )}
+            {...props}
+          />
+
+          {right ? <div className="shrink-0">{right}</div> : null}
+        </div>
       </Surface>
     </div>
   );
