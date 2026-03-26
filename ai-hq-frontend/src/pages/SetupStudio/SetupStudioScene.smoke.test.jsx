@@ -13,52 +13,62 @@ describe("Setup Studio entry smoke", () => {
   it("opens on entry first and shows explicit review/truth actions when relevant", () => {
     render(
       <SetupStudioScene
-        loading={false}
-        refreshing={false}
-        importingWebsite={false}
-        savingBusiness={false}
-        actingKnowledgeId=""
-        savingServiceSuggestion=""
-        showRefine={false}
-        showKnowledge={false}
-        error=""
-        businessForm={{}}
-        discoveryForm={{}}
-        discoveryState={{ mode: "idle" }}
-        reviewDraft={{}}
-        manualSections={{}}
-        meta={{ setupCompleted: false }}
-        currentTitle=""
-        currentDescription=""
-        discoveryProfileRows={[]}
-        knowledgePreview=""
-        knowledgeItems={[]}
-        serviceSuggestionTitle=""
-        studioProgress={{ nextStudioStage: "" }}
-        services={[]}
-        reviewSources={[]}
-        reviewEvents={[]}
-        reviewSyncState={{}}
-        hasVisibleResults={false}
-        hasStoredReview
-        hasApprovedTruth
-        visibleKnowledgeCount={0}
-        visibleServiceCount={0}
-        onSetBusinessField={noop}
-        onSetManualSection={noop}
-        onSetDiscoveryField={noop}
-        onContinueFlow={noop}
-        onResumeReview={noop}
-        onSaveBusiness={noop}
-        onApproveKnowledge={noop}
-        onRejectKnowledge={noop}
-        onCreateSuggestedService={vi.fn()}
-        onOpenWorkspace={noop}
-        onOpenTruth={noop}
-        onReloadReviewDraft={noop}
-        onRefresh={noop}
-        onToggleRefine={noop}
-        onToggleKnowledge={noop}
+        status={{
+          loading: false,
+          refreshing: false,
+          importingWebsite: false,
+          savingBusiness: false,
+          actingKnowledgeId: "",
+          savingServiceSuggestion: "",
+          showRefine: false,
+          showKnowledge: false,
+          error: "",
+        }}
+        forms={{
+          businessForm: {},
+          discoveryForm: {},
+          manualSections: {},
+        }}
+        review={{
+          discoveryState: { mode: "idle" },
+          reviewDraft: {},
+          meta: { setupCompleted: false },
+          reviewSources: [],
+          reviewEvents: [],
+          reviewSyncState: {},
+          hasStoredReview: true,
+          hasApprovedTruth: true,
+        }}
+        content={{
+          currentTitle: "",
+          currentDescription: "",
+          discoveryProfileRows: [],
+          knowledgePreview: "",
+          knowledgeItems: [],
+          serviceSuggestionTitle: "",
+          studioProgress: { nextStudioStage: "" },
+          services: [],
+          hasVisibleResults: false,
+          visibleKnowledgeCount: 0,
+          visibleServiceCount: 0,
+        }}
+        actions={{
+          setBusinessField: noop,
+          setManualSection: noop,
+          setDiscoveryField: noop,
+          continueFlow: noop,
+          resumeReview: noop,
+          saveBusiness: noop,
+          approveKnowledge: noop,
+          rejectKnowledge: noop,
+          createSuggestedService: vi.fn(),
+          openWorkspace: noop,
+          openTruth: noop,
+          reloadReviewDraft: noop,
+          refresh: noop,
+          toggleRefine: noop,
+          toggleKnowledge: noop,
+        }}
         discoveryModeLabel={() => "Draft flow"}
       />
     );

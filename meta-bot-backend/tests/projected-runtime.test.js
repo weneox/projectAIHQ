@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { validateServiceHealthEnvelope } from "@aihq/shared-contracts/health";
 
 process.env.AIHQ_BASE_URL = "https://aihq.example.test";
 process.env.AIHQ_INTERNAL_TOKEN = "internal-token";
@@ -216,9 +217,32 @@ test("meta boot readiness blocks prod-like startup when AI HQ has blockers", asy
   mockFetchJson(
     {
       ok: true,
+      service: "ai-hq-backend",
+      env: "test",
+      db: { enabled: true },
       operationalReadiness: {
+        ok: false,
+        enabled: true,
+        enforced: true,
+        status: "blocked",
+        blockerReasonCodes: ["channel_identifiers_missing"],
         blockers: {
           total: 1,
+          items: [
+            {
+              category: "meta",
+              dependencyType: "channel_identifier",
+              reasonCode: "channel_identifiers_missing",
+              suggestedRepairActionId: "repair_channel_identifiers",
+              repairAction: {
+                id: "repair_channel_identifiers",
+                kind: "focus",
+                label: "Repair channel identifiers",
+                requiredRole: "operator",
+                allowed: true,
+              },
+            },
+          ],
         },
       },
     },
@@ -242,10 +266,32 @@ test("meta boot readiness reports structured blocker reason codes when requested
   mockFetchJson(
     {
       ok: true,
+      service: "ai-hq-backend",
+      env: "test",
+      db: { enabled: true },
       operationalReadiness: {
+        ok: false,
+        enabled: true,
+        enforced: true,
+        status: "blocked",
         blockerReasonCodes: ["channel_identifiers_missing"],
         blockers: {
           total: 1,
+          items: [
+            {
+              category: "meta",
+              dependencyType: "channel_identifier",
+              reasonCode: "channel_identifiers_missing",
+              suggestedRepairActionId: "repair_channel_identifiers",
+              repairAction: {
+                id: "repair_channel_identifiers",
+                kind: "focus",
+                label: "Repair channel identifiers",
+                requiredRole: "operator",
+                allowed: true,
+              },
+            },
+          ],
         },
       },
     },
@@ -265,6 +311,43 @@ test("meta boot readiness reports structured blocker reason codes when requested
   assert.equal(readiness.status, "blocked");
   assert.equal(readiness.reasonCode, "channel_identifiers_missing");
   assert.equal(readiness.intentionallyUnavailable, true);
+});
+
+test("meta boot readiness fails closed when AI HQ readiness contract is malformed", async () => {
+  mockFetchJson(
+    {
+      ok: true,
+      service: "ai-hq-backend",
+      env: "test",
+      db: { enabled: true },
+      operationalReadiness: {
+        enabled: true,
+        blockers: {
+          total: 1,
+          items: [
+            {
+              category: "meta",
+            },
+          ],
+        },
+      },
+    },
+    { ok: true, status: 200 }
+  );
+
+  const readiness = await checkAihqOperationalBootReadiness({
+    fetchFn: global.fetch,
+    baseUrl: "https://aihq.example.test",
+    internalToken: "internal-token",
+    appEnv: "production",
+    requireOnBoot: true,
+    throwOnBlocked: false,
+  });
+
+  assert.equal(readiness.ok, false);
+  assert.equal(readiness.status, "blocked");
+  assert.equal(readiness.reasonCode, "aihq_operational_readiness_contract_invalid");
+  assert.equal(readiness.error, "operational_readiness_blocker_invalid");
 });
 
 test("meta health route response exposes direct structured readiness", () => {
@@ -314,6 +397,7 @@ test("meta health route response exposes direct structured readiness", () => {
   ]);
   assert.equal(res.body.readiness.blockersTotal, 1);
   assert.equal(res.body.readiness.intentionallyUnavailable, true);
+  assert.equal(validateServiceHealthEnvelope(res.body).ok, true);
 });
 
 test("meta runtime signals response exposes sanitized failures and counters", () => {

@@ -1,7 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { Pool } from "pg";
+import pg from "pg/lib/index.js";
+import {
+  validateProviderAccessResponse,
+  validateVoiceOperationalResponse,
+} from "@aihq/shared-contracts/operations";
+import {
+  validateSetupTruthPayload,
+  validateSetupTruthPublicationSummary,
+} from "@aihq/shared-contracts/setup";
+import { validateProjectedRuntime } from "@aihq/shared-contracts/runtime";
 
 import { cfg } from "../src/config.js";
 import { runSchemaMigrations } from "../src/db/runSchemaMigrations.js";
@@ -14,6 +23,8 @@ import { processVoiceTenantConfig } from "../src/services/voiceInternalRuntime.j
 import { getTenantBrainRuntime } from "../src/services/businessBrain/getTenantBrainRuntime.js";
 import { tenantInternalRoutes } from "../src/routes/api/tenants/internal.js";
 import { __test__ as setupTest } from "../src/routes/api/workspace/setup.js";
+
+const { Pool } = pg;
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -223,6 +234,10 @@ test(
         s(projectionSummary?.truthVersion?.id),
         "finalize should create a truth version"
       );
+      assert.equal(
+        validateSetupTruthPublicationSummary(projectionSummary).ok,
+        true
+      );
 
       const refreshed = await refreshTenantRuntimeProjectionStrict(
         {
@@ -236,6 +251,30 @@ test(
 
       assert.ok(s(refreshed?.projection?.id), "runtime projection should exist");
       assert.equal(refreshed?.freshness?.stale, false);
+
+      const truthPayload = await setupTest.loadSetupTruthPayload(
+        {
+          db: client,
+          actor: {
+            tenantId: tenant.id,
+            tenantKey,
+            role: "admin",
+            tenant: null,
+          },
+        },
+        {
+          async setupBuilder() {
+            return {
+              progress: {
+                nextRoute: "/setup/truth",
+              },
+            };
+          },
+        }
+      );
+
+      assert.equal(validateSetupTruthPayload(truthPayload).ok, true);
+      assert.equal(truthPayload?.truth?.readiness?.status, "ready");
 
       await upsertTenantVoiceSettings(client, tenant.id, {
         enabled: true,
@@ -321,6 +360,14 @@ test(
 
       assert.equal(voiceConfig?.ok, true);
       assert.equal(
+        validateVoiceOperationalResponse(voiceConfig?.payload || {}).ok,
+        true
+      );
+      assert.equal(
+        validateProjectedRuntime(voiceConfig?.payload?.projectedRuntime || {}).ok,
+        true
+      );
+      assert.equal(
         voiceConfig?.payload?.operationalChannels?.voice?.source,
         "tenant_voice_settings"
       );
@@ -362,6 +409,7 @@ test(
       );
 
       assert.equal(res.statusCode, 200);
+      assert.equal(validateProviderAccessResponse(res.body || {}).ok, true);
       assert.equal(res.body?.providerAccess?.available, true);
       assert.equal(
         res.body?.providerAccess?.pageAccessToken,

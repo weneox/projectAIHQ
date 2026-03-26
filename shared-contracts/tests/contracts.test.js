@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 
 import {
   buildRealtimeEnvelope,
+  validateAihqHealthEnvelope,
   validateAihqOutboundAckRequest,
+  validateDependencyReadinessEnvelope,
   validateDurableExecutionResponse,
   validateDurableVoiceSyncRequest,
   validateMetaCommentActionResponse,
@@ -18,6 +20,12 @@ import {
   validateResolveChannelProjectedResponse,
   validateRuntimeIncidentRequest,
   validateRuntimeIncidentResponse,
+  validateSetupCurrentReviewPayload,
+  validateSetupFinalizeResponse,
+  validateSetupReviewShape,
+  validateSetupTruthPayload,
+  validateSetupTruthPublicationSummary,
+  validateServiceHealthEnvelope,
   validateVoiceOperationalResponse,
   validateVoiceProjectedRuntimeResponse,
   validateVoiceInternalResponse,
@@ -462,4 +470,263 @@ test("shared readiness surface contract validates cross-surface blocker items", 
   assert.equal(checked.ok, true);
   assert.equal(checked.value.blockers[0].reasonCode, "approved_truth_unavailable");
   assert.equal(checked.value.blockers[0].nextAction.kind, "route");
+});
+
+test("setup review contract validates frontend review payload shape", () => {
+  const checked = validateSetupReviewShape({
+    session: {
+      id: "session-1",
+      status: "draft",
+      currentStep: "review",
+    },
+    draft: {
+      version: 3,
+      businessProfile: {
+        companyName: "Acme",
+      },
+      services: [],
+    },
+    sources: [],
+    events: [],
+    bundleSources: [],
+    contributionSummary: [],
+    fieldProvenance: {},
+    reviewDraftSummary: {
+      completeness: {},
+      confidence: {},
+      warningCount: 0,
+      warnings: [],
+      serviceCount: 0,
+      knowledgeCount: 0,
+      hasBusinessProfile: true,
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.session.id, "session-1");
+  assert.equal(checked.value.draft.version, 3);
+});
+
+test("setup current review payload contract validates setup envelope", () => {
+  const checked = validateSetupCurrentReviewPayload({
+    review: {
+      session: {
+        id: "session-1",
+        status: "draft",
+      },
+      draft: {
+        version: 2,
+      },
+      sources: [],
+      events: [],
+      bundleSources: [],
+      contributionSummary: [],
+      fieldProvenance: {},
+      reviewDraftSummary: {
+        warningCount: 0,
+        warnings: [],
+        serviceCount: 0,
+        knowledgeCount: 0,
+        hasBusinessProfile: false,
+      },
+    },
+    setup: {
+      progress: {
+        nextRoute: "/setup/studio",
+      },
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.setup.progress.nextRoute, "/setup/studio");
+});
+
+test("setup truth payload contract validates readiness-backed truth surface", () => {
+  const checked = validateSetupTruthPayload({
+    truth: {
+      profile: {
+        companyName: "Acme",
+      },
+      fieldProvenance: {},
+      history: [],
+      readiness: {
+        status: "blocked",
+        reasonCode: "approved_truth_unavailable",
+        blockers: [
+          {
+            blocked: true,
+            category: "truth",
+            dependencyType: "approved_truth",
+            reasonCode: "approved_truth_unavailable",
+            title: "Approved truth blocker",
+            suggestedRepairActionId: "open_setup_route",
+            nextAction: {
+              id: "open_setup_route",
+              kind: "route",
+              label: "Open setup",
+              requiredRole: "operator",
+              allowed: true,
+            },
+          },
+        ],
+      },
+    },
+    setup: {
+      progress: {},
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.truth.readiness.status, "blocked");
+});
+
+test("setup truth publication summary requires a truth version id", () => {
+  const bad = validateSetupTruthPublicationSummary({});
+  assert.equal(bad.ok, false);
+
+  const good = validateSetupTruthPublicationSummary({
+    projectedProfile: true,
+    truthVersion: {
+      id: "version-1",
+      approvedAt: "2026-03-26T00:00:00.000Z",
+      approvedBy: "Reviewer One",
+    },
+    serviceProjection: {
+      total: 1,
+    },
+  });
+
+  assert.equal(good.ok, true);
+  assert.equal(good.value.truthVersion.id, "version-1");
+});
+
+test("setup finalize response validates success payloads with projection summary", () => {
+  const checked = validateSetupFinalizeResponse({
+    ok: true,
+    message: "Setup review finalized",
+    session: {
+      id: "session-1",
+      status: "finalized",
+    },
+    projectionSummary: {
+      projectedProfile: true,
+      truthVersion: {
+        id: "version-1",
+      },
+      serviceProjection: {
+        total: 1,
+      },
+    },
+    concurrency: {
+      sessionId: "session-1",
+    },
+    finalizeProtection: {
+      mode: "canonical_baseline_drift",
+    },
+    setup: {
+      progress: {},
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.projectionSummary.truthVersion.id, "version-1");
+});
+
+test("dependency readiness envelope contract validates normalized sidecar readiness", () => {
+  const checked = validateDependencyReadinessEnvelope({
+    status: "blocked",
+    checkedAt: "2026-03-26T00:00:00.000Z",
+    enforced: true,
+    reasonCode: "channel_identifiers_missing",
+    blockerReasonCodes: ["channel_identifiers_missing"],
+    blockersTotal: 1,
+    intentionallyUnavailable: true,
+    error: "",
+    dependency: {
+      service: "ai-hq",
+    },
+    aihq: {
+      httpStatus: 200,
+      reachable: true,
+      readinessStatus: "blocked",
+    },
+    localDecision: {
+      ready: false,
+      status: "blocked",
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.status, "blocked");
+});
+
+test("service health envelope contract validates sidecar health responses", () => {
+  const checked = validateServiceHealthEnvelope({
+    ok: false,
+    service: "meta-bot-backend",
+    readiness: {
+      status: "blocked",
+      checkedAt: "2026-03-26T00:00:00.000Z",
+      enforced: true,
+      reasonCode: "channel_identifiers_missing",
+      blockerReasonCodes: ["channel_identifiers_missing"],
+      blockersTotal: 1,
+      intentionallyUnavailable: true,
+      dependency: {
+        service: "ai-hq",
+      },
+      aihq: {
+        httpStatus: 200,
+        reachable: true,
+        readinessStatus: "blocked",
+      },
+      localDecision: {
+        ready: false,
+        status: "blocked",
+      },
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.service, "meta-bot-backend");
+});
+
+test("AI HQ health envelope contract validates top-level operational health payloads", () => {
+  const checked = validateAihqHealthEnvelope({
+    ok: false,
+    service: "ai-hq-backend",
+    env: "test",
+    db: {
+      enabled: true,
+    },
+    operationalReadiness: {
+      ok: false,
+      enabled: true,
+      enforced: true,
+      status: "blocked",
+      blockerReasonCodes: ["provider_secret_missing"],
+      blockers: {
+        total: 1,
+        items: [
+          {
+            category: "meta",
+            dependencyType: "provider_secret",
+            reasonCode: "provider_secret_missing",
+            suggestedRepairActionId: "open_provider_secrets",
+            repairAction: {
+              id: "open_provider_secrets",
+              kind: "admin_route",
+              label: "Open secure secrets",
+              requiredRole: "admin",
+              allowed: false,
+            },
+          },
+        ],
+      },
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.service, "ai-hq-backend");
+  assert.equal(checked.value.operationalReadiness.status, "blocked");
 });

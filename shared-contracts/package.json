@@ -6,14 +6,16 @@
   "exports": {
     ".": "./index.js",
     "./critical": "./critical.js",
+    "./health": "./health.js",
     "./operations": "./operations.js",
     "./realtime": "./realtime.js",
     "./logger": "./logger.js",
-    "./runtime": "./runtime.js"
+    "./runtime": "./runtime.js",
+    "./setup": "./setup.js"
   },
   "scripts": {
     "validate:env": "node ../scripts/noop-validate-env.mjs shared-contracts",
-    "lint": "node ../scripts/check-js-syntax.mjs index.js critical.js operations.js realtime.js logger.js runtime.js tests",
+    "lint": "node ../scripts/check-js-syntax.mjs index.js critical.js health.js operations.js realtime.js logger.js runtime.js setup.js tests",
     "build": "npm run lint",
     "test": "node --test"
   }

@@ -3,23 +3,25 @@ import {
   listRuntimeSignals,
   listExecutionFailures,
 } from "./runtimeReliability.js";
+import { validateDependencyReadinessEnvelope } from "@aihq/shared-contracts/health";
 
 function buildSharedReadiness(bootReadiness = {}) {
-  return {
-    status: String(bootReadiness.status || "").trim().toLowerCase(),
-    checkedAt: String(bootReadiness.checkedAt || "").trim(),
-    enforced: bootReadiness.enforced === true,
-    reasonCode: String(bootReadiness.reasonCode || "").trim(),
-    blockerReasonCodes: Array.isArray(bootReadiness.blockerReasonCodes)
-      ? bootReadiness.blockerReasonCodes
-      : [],
-    blockersTotal: Number(bootReadiness.blockersTotal || 0),
-    intentionallyUnavailable: bootReadiness.intentionallyUnavailable === true,
-    error: String(bootReadiness.error || "").trim(),
-    dependency: bootReadiness.dependency || {},
-    aihq: bootReadiness.aihq || {},
-    localDecision: bootReadiness.localDecision || {},
-  };
+  const checked = validateDependencyReadinessEnvelope(bootReadiness);
+  return checked.ok
+    ? checked.value
+    : {
+        status: "attention",
+        checkedAt: "",
+        enforced: false,
+        reasonCode: "sidecar_health_contract_invalid",
+        blockerReasonCodes: [],
+        blockersTotal: 0,
+        intentionallyUnavailable: false,
+        error: checked.error,
+        dependency: {},
+        aihq: {},
+        localDecision: {},
+      };
 }
 
 export function buildHealthResponse({

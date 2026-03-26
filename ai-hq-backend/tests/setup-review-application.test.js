@@ -1,5 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {
+  validateSetupCurrentReviewPayload,
+  validateSetupFinalizeResponse,
+  validateSetupTruthPayload,
+  validateSetupTruthPublicationSummary,
+} from "@aihq/shared-contracts/setup";
 
 import {
   applySetupReviewPatch,
@@ -11,6 +17,7 @@ import {
   loadSetupTruthVersionPayloadWithStatus,
 } from "../src/services/workspace/setup/readApp.js";
 import { executeSetupImport } from "../src/services/workspace/setup/importApp.js";
+import { buildFrontendReviewShape } from "../src/services/workspace/setup/reviewShape.js";
 
 test("review app normalizes patch aliases into canonical draft patch fields", () => {
   const patch = normalizeReviewPatchBody({
@@ -156,6 +163,11 @@ test("review finalize composition audits finalized session and truth version cre
   assert.equal(projected, true);
   assert.equal(result.status, 200);
   assert.equal(result.body.projectionSummary.truthVersion.id, "version-1");
+  assert.equal(validateSetupFinalizeResponse(result.body).ok, true);
+  assert.equal(
+    validateSetupTruthPublicationSummary(result.body.projectionSummary).ok,
+    true
+  );
   assert.equal(auditCalls.length, 2);
   assert.equal(auditCalls[0][2], "setup.review.finalized");
   assert.equal(auditCalls[1][2], "truth.version.created");
@@ -210,6 +222,38 @@ test("read app injects setup status builder into truth payload loaders", async (
   );
 
   assert.equal(current.setup.progress.nextRoute, "/setup/business");
+  assert.equal(
+    validateSetupTruthPayload({
+      truth: {
+        profile: {},
+        fieldProvenance: {},
+        history: [],
+        readiness: {
+          status: "blocked",
+          reasonCode: "approved_truth_unavailable",
+          blockers: [
+            {
+              blocked: true,
+              category: "truth",
+              dependencyType: "approved_truth",
+              reasonCode: "approved_truth_unavailable",
+              title: "Approved truth blocker",
+              suggestedRepairActionId: "open_setup_route",
+              nextAction: {
+                id: "open_setup_route",
+                kind: "route",
+                label: "Open setup",
+                requiredRole: "operator",
+                allowed: true,
+              },
+            },
+          ],
+        },
+      },
+      setup: current.setup,
+    }).ok,
+    true
+  );
 
   const version = await loadSetupTruthVersionPayloadWithStatus(
     {
@@ -272,6 +316,182 @@ test("read app injects setup status builder into truth payload loaders", async (
 
   assert.equal(version.truthVersion.id, "version-1");
   assert.equal(version.setup.progress.nextRoute, "/setup/truth");
+});
+
+test("truth payload contract stays compatible with shared setup truth surface", async () => {
+  const payload = await loadSetupTruthPayloadWithStatus(
+    {
+      db: {},
+      actor: {
+        tenantId: "tenant-1",
+        tenantKey: "alpha",
+        role: "owner",
+        tenant: null,
+      },
+    },
+    {
+      async loadSetupTruthPayload(args, deps) {
+        const setup = await deps.setupBuilder({
+          db: args.db,
+          tenantId: args.actor.tenantId,
+          tenantKey: args.actor.tenantKey,
+          role: args.actor.role,
+          tenant: args.actor.tenant,
+        });
+
+        return {
+          truth: {
+            profile: {
+              companyName: "Alpha Studio",
+            },
+            fieldProvenance: {},
+            history: [],
+            approvedAt: "",
+            approvedBy: "",
+            generatedAt: "2026-03-26T00:00:00.000Z",
+            generatedBy: "system",
+            profileStatus: "draft",
+            sourceSummary: {},
+            metadata: {},
+            readiness: {
+              status: "blocked",
+              reasonCode: "approved_truth_unavailable",
+              blockers: [
+                {
+                  blocked: true,
+                  category: "truth",
+                  dependencyType: "approved_truth",
+                  reasonCode: "approved_truth_unavailable",
+                  title: "Approved truth blocker",
+                  suggestedRepairActionId: "open_setup_route",
+                  nextAction: {
+                    id: "open_setup_route",
+                    kind: "route",
+                    label: "Open setup",
+                    requiredRole: "operator",
+                    allowed: true,
+                  },
+                },
+              ],
+            },
+          },
+          setup,
+        };
+      },
+      async setupBuilder() {
+        return {
+          progress: {
+            nextRoute: "/setup/business",
+            primaryMissingStep: "approved_truth",
+          },
+        };
+      },
+    }
+  );
+
+  const checked = validateSetupTruthPayload(payload);
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.truth.readiness.status, "blocked");
+});
+
+test("review current payload shape stays compatible with shared setup contract", () => {
+  const checked = validateSetupCurrentReviewPayload({
+    review: {
+      session: {
+        id: "session-1",
+        status: "draft",
+        currentStep: "review",
+      },
+      draft: {
+        version: 4,
+        businessProfile: {
+          companyName: "Alpha",
+        },
+      },
+      sources: [],
+      events: [],
+      bundleSources: [],
+      contributionSummary: [],
+      fieldProvenance: {},
+      reviewDraftSummary: {
+        warningCount: 0,
+        warnings: [],
+        serviceCount: 0,
+        knowledgeCount: 0,
+        hasBusinessProfile: true,
+      },
+    },
+    bundleSources: [],
+    contributionSummary: [],
+    fieldProvenance: {},
+    reviewDraftSummary: {
+      warningCount: 0,
+    },
+    setup: {
+      progress: {
+        nextRoute: "/setup/review",
+      },
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.review.session.id, "session-1");
+});
+
+test("frontend review shape producer stays compatible with shared setup review contract", () => {
+  const review = buildFrontendReviewShape({
+    session: {
+      id: "session-1",
+      status: "draft",
+      currentStep: "review",
+      primarySourceId: "source-1",
+    },
+    draft: {
+      version: 4,
+      businessProfile: {
+        companyName: "Alpha",
+        fieldSources: {
+          companyName: {
+            sourceType: "website",
+            sourceUrl: "https://alpha.example",
+            authorityRank: 10,
+          },
+        },
+      },
+      warnings: [],
+      services: [{ title: "Branding" }],
+      knowledgeItems: [],
+      draftPayload: {},
+      sourceSummary: {
+        imports: [],
+      },
+    },
+    sources: [
+      {
+        sourceId: "source-1",
+        sourceType: "website",
+        role: "primary",
+        label: "Alpha",
+      },
+    ],
+    events: [],
+  });
+
+  const checked = validateSetupCurrentReviewPayload({
+    review,
+    bundleSources: review.bundleSources,
+    contributionSummary: review.contributionSummary,
+    fieldProvenance: review.fieldProvenance,
+    reviewDraftSummary: review.reviewDraftSummary,
+    setup: {
+      progress: {
+        nextRoute: "/setup/review",
+      },
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.review.session.id, "session-1");
 });
 
 test("import app centralizes response wiring and response body extensions", async () => {

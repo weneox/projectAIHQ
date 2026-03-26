@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { validateAihqHealthEnvelope } from "@aihq/shared-contracts/health";
 
 import {
   buildApiHealthResponse,
@@ -78,4 +79,6 @@ test("root and api health derive operational readiness from the same blocker log
     apiHealth.operationalReadiness.blockers.items.map((item) => item.reasonCode)
   );
   assert.equal(rootHealth.operationalReadiness.repairActions.length, 2);
+  assert.equal(validateAihqHealthEnvelope(apiHealth).ok, true);
+  assert.equal(validateAihqHealthEnvelope(rootHealth).ok, true);
 });

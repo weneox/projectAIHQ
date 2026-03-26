@@ -1,0 +1,95 @@
+import { useEffect } from "react";
+
+import { arr, s } from "../lib/setupStudioHelpers.js";
+import { hasExtractedIdentityProfile } from "../state/profile.js";
+
+export function useSetupStudioControllerEffects({
+  actions,
+  autoRevealRef,
+  freshEntryMode,
+  meta,
+  knowledgeCandidates,
+  discoveryState,
+  hasVisibleResults,
+  autoRevealKey,
+  activeReviewAligned,
+  visibleKnowledgeItems,
+  visibleServiceItems,
+  discoveryProfileRows,
+  setShowKnowledge,
+  setShowRefine,
+  barrierOnlyAutoReveal,
+}) {
+  useEffect(() => {
+    actions.loadData({
+      hydrateReview: true,
+      preserveBusinessForm: true,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (freshEntryMode) return;
+    if (meta.setupCompleted) return;
+
+    if (
+      s(meta.nextStudioStage).toLowerCase() === "knowledge" &&
+      knowledgeCandidates.length > 0
+    ) {
+      setShowKnowledge(true);
+    }
+  }, [
+    freshEntryMode,
+    meta.nextStudioStage,
+    meta.setupCompleted,
+    knowledgeCandidates.length,
+    setShowKnowledge,
+  ]);
+
+  useEffect(() => {
+    if (freshEntryMode) return;
+
+    const mode = s(discoveryState.mode).toLowerCase();
+
+    if (!hasVisibleResults) return;
+    if (mode === "idle" || mode === "running") return;
+    if (!autoRevealKey) return;
+
+    if (
+      !activeReviewAligned &&
+      !hasExtractedIdentityProfile(discoveryState.profile) &&
+      arr(discoveryState.warnings).length === 0
+    ) {
+      return;
+    }
+
+    if (autoRevealRef.current === autoRevealKey) return;
+    autoRevealRef.current = autoRevealKey;
+
+    setShowRefine(!barrierOnlyAutoReveal);
+
+    if (
+      !barrierOnlyAutoReveal &&
+      (visibleKnowledgeItems.length > 0 ||
+        visibleServiceItems.length > 0 ||
+        discoveryProfileRows.length > 0)
+    ) {
+      setShowKnowledge(true);
+    }
+  }, [
+    freshEntryMode,
+    autoRevealKey,
+    hasVisibleResults,
+    discoveryState.mode,
+    discoveryState.profile,
+    discoveryState.warnings,
+    visibleKnowledgeItems.length,
+    visibleServiceItems.length,
+    discoveryProfileRows.length,
+    activeReviewAligned,
+    autoRevealRef,
+    setShowKnowledge,
+    setShowRefine,
+    barrierOnlyAutoReveal,
+  ]);
+}

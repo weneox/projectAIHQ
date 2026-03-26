@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "../env.js";
 import crypto from "crypto";
 
 function s(v, fallback = "") {

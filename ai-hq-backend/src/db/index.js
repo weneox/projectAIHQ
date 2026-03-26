@@ -1,5 +1,5 @@
 // src/db/index.js
-import pg from "pg";
+import pg from "pg/lib/index.js";
 import { cfg } from "../config.js";
 import {
   describeSchemaMigrations,

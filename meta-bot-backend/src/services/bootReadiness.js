@@ -1,3 +1,5 @@
+import { validateAihqHealthEnvelope } from "@aihq/shared-contracts/health";
+
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
@@ -113,9 +115,8 @@ export async function checkAihqOperationalBootReadiness({
 
   const json = await safeReadJson(resp);
   const checkedAt = new Date().toISOString();
-  const readiness = isObject(json?.operationalReadiness)
-    ? json.operationalReadiness
-    : {};
+  const healthChecked = validateAihqHealthEnvelope(json || {});
+  const readiness = healthChecked.ok ? healthChecked.value.operationalReadiness : {};
   const blockersTotal = Number(readiness?.blockers?.total || 0);
   const blockerReasonCodes = arr(
     readiness?.blockerReasonCodes || readiness?.blocker_reason_codes
@@ -130,6 +131,25 @@ export async function checkAihqOperationalBootReadiness({
       reasonCode: "aihq_health_unavailable",
       intentionallyUnavailable: enforced,
       error: s(json?.error || `aihq_health_failed_${Number(resp.status || 0)}`),
+      httpStatus: Number(resp.status || 0),
+    });
+
+    if (throwOnBlocked && enforced) {
+      throw new Error(result.error || result.reasonCode);
+    }
+
+    return result;
+  }
+
+  if (!healthChecked.ok) {
+    const result = buildBootReadinessResult({
+      ok: false,
+      enforced,
+      status: enforced ? "blocked" : "attention",
+      checkedAt,
+      reasonCode: "aihq_operational_readiness_contract_invalid",
+      intentionallyUnavailable: enforced,
+      error: healthChecked.error,
       httpStatus: Number(resp.status || 0),
     });
 

@@ -3,35 +3,19 @@ import { getCurrentSetupReview } from "../../../api/setup.js";
 import { getKnowledgeCandidates } from "../../../api/knowledge.js";
 import { getSetupServices } from "../../../api/services.js";
 
+import { arr, obj, s } from "../lib/setupStudioHelpers.js";
+import { applyUiHintsFromMeta } from "../state/shared.js";
 import {
-  arr,
-  extractItems,
-  firstLanguage,
-  isPendingKnowledge,
-  obj,
-  s,
-} from "../lib/setupStudioHelpers.js";
+  buildSetupStudioBootSnapshot,
+  buildSetupStudioLoaderErrorResult,
+} from "../logic/loaderFlowBoot.js";
 import {
-  applyUiHintsFromMeta,
-  normalizeBootMeta,
-  normalizeReviewState,
-  pickSetupProfile,
-  resolveMainLanguageValue,
-} from "../state/shared.js";
-import {
-  chooseBestProfileForForm,
-  formFromProfile,
-  hasMeaningfulProfile,
-  hydrateBusinessFormFromProfile,
-} from "../state/profile.js";
-import {
-  buildManualSectionsFromReview,
-  mapCurrentReviewToLegacyDraft,
-  resolveReviewSourceInfo,
-  reviewStateMatchesSource,
-} from "../state/reviewState.js";
-import { lowerText } from "../logic/helpers.js";
-import { DEFAULT_BUSINESS_FORM } from "../logic/constants.js";
+  buildSetupStudioHydratedBusinessForm,
+  buildSetupStudioHydratedReviewUi,
+  buildSetupStudioReviewLoadFailureIssue,
+  buildSetupStudioSourceMismatchIssue,
+  reconcileSetupStudioLoadedReview,
+} from "../logic/loaderFlowReview.js";
 
 export function createSetupStudioLoaders(ctx, shared) {
   const {
@@ -71,39 +55,28 @@ export function createSetupStudioLoaders(ctx, shared) {
   } = {}) {
     try {
       const payload = await getCurrentSetupReview({ eventLimit: 30 });
-      const normalized = normalizeReviewState(payload);
-      const legacy = mapCurrentReviewToLegacyDraft(normalized);
       const sourceScope = resolveActiveSourceScope({
         sourceType: activeSourceType,
         sourceUrl: activeSourceUrl,
       });
-
-      const shouldApplyIntoActiveStudio =
-        !preserveBusinessForm ||
-        !s(sourceScope.sourceUrl) ||
-        sourceScope.sourceType === "manual" ||
-        reviewStateMatchesSource(
-          normalized,
-          legacy,
-          sourceScope.sourceType,
-          sourceScope.sourceUrl
-        );
+      const { normalized, legacy, shouldApplyIntoActiveStudio } =
+        reconcileSetupStudioLoadedReview({
+          reviewPayload: payload,
+          preserveBusinessForm,
+          sourceScope,
+        });
 
       if (!shouldApplyIntoActiveStudio) {
         setCurrentReview(normalized);
         setReviewDraft(legacy);
-        setReviewSyncIssue({
-          sessionId: s(normalized?.session?.id || legacy?.reviewSessionId),
-          sessionStatus: s(
-            normalized?.session?.status || legacy?.reviewSessionStatus
-          ),
-          revision: s(
-            normalized?.session?.revision || legacy?.reviewSessionRevision
-          ),
-          freshness: "source_mismatch",
-          message:
-            "A review session exists, but it belongs to a different source than the active draft.",
-        });
+        setReviewSyncIssue(
+          buildSetupStudioSourceMismatchIssue({
+            normalized,
+            legacy,
+            message:
+              "A review session exists, but it belongs to a different source than the active draft.",
+          })
+        );
 
         if (activateReviewSession) {
           setFreshEntryMode(false);
@@ -124,12 +97,7 @@ export function createSetupStudioLoaders(ctx, shared) {
 
       return applyReviewState(payload, { preserveBusinessForm });
     } catch (e) {
-      setReviewSyncIssue({
-        freshness: "unknown",
-        message: String(
-          e?.message || e || "The current review session could not be loaded."
-        ),
-      });
+      setReviewSyncIssue(buildSetupStudioReviewLoadFailureIssue(e));
 
       return {
         currentReview,
@@ -165,86 +133,57 @@ export function createSetupStudioLoaders(ctx, shared) {
 
       const responses = await Promise.all(requests);
 
-      const boot = responses[0];
-      const knowledgePayload = responses[1];
-      const servicesPayload = responses[2];
+      const bootSnapshot = buildSetupStudioBootSnapshot({
+        boot: responses[0],
+        knowledgePayload: responses[1],
+        servicesPayload: responses[2],
+      });
       const reviewPayload = hydrateReview ? responses[3] : { review: {} };
 
-      const workspace = obj(boot?.workspace);
-      const setup = obj(boot?.setup);
-      const profile = pickSetupProfile(setup, workspace);
-
-      const rawKnowledge = extractItems(knowledgePayload);
-      const pendingKnowledge = rawKnowledge.filter(isPendingKnowledge);
-      const serviceItems = extractItems(servicesPayload);
-
-      const nextMeta = normalizeBootMeta(boot, pendingKnowledge, serviceItems);
-
-      setMeta(nextMeta);
-      setKnowledgeCandidates(pendingKnowledge);
-      setServices(serviceItems);
+      setMeta(bootSnapshot.meta);
+      setKnowledgeCandidates(bootSnapshot.pendingKnowledge);
+      setServices(bootSnapshot.serviceItems);
 
       if (!hydrateReview) {
         if (!preserveBusinessForm) {
           clearStudioReviewState({ preserveActiveSource: false });
-          seedBusinessFormFromBootProfile(profile);
+          seedBusinessFormFromBootProfile(bootSnapshot.profile);
         }
 
         return {
-          boot,
-          workspace,
-          setup,
-          profile,
-          pendingKnowledge,
-          serviceItems,
-          meta: nextMeta,
+          ...bootSnapshot,
           currentReview: createEmptyReviewState(),
         };
       }
-
-      const reviewState = normalizeReviewState(reviewPayload);
-      const legacyDraft = mapCurrentReviewToLegacyDraft(reviewState);
 
       const sourceScope = resolveActiveSourceScope({
         sourceType: activeSourceType,
         sourceUrl: activeSourceUrl,
       });
-
-      const shouldApplyIntoActiveStudio =
-        !preserveBusinessForm ||
-        !s(sourceScope.sourceUrl) ||
-        sourceScope.sourceType === "manual" ||
-        reviewStateMatchesSource(
-          reviewState,
-          legacyDraft,
-          sourceScope.sourceType,
-          sourceScope.sourceUrl
-        );
+      const {
+        normalized: reviewState,
+        legacy: legacyDraft,
+        shouldApplyIntoActiveStudio,
+      } = reconcileSetupStudioLoadedReview({
+        reviewPayload,
+        preserveBusinessForm,
+        sourceScope,
+      });
 
       if (!shouldApplyIntoActiveStudio) {
         setCurrentReview(reviewState);
         setReviewDraft(legacyDraft);
-        setReviewSyncIssue({
-          sessionId: s(reviewState?.session?.id || legacyDraft?.reviewSessionId),
-          sessionStatus: s(
-            reviewState?.session?.status || legacyDraft?.reviewSessionStatus
-          ),
-          revision: s(
-            reviewState?.session?.revision || legacyDraft?.reviewSessionRevision
-          ),
-          freshness: "source_mismatch",
-          message:
-            "A review session was loaded, but it does not match the active source draft.",
-        });
+        setReviewSyncIssue(
+          buildSetupStudioSourceMismatchIssue({
+            normalized: reviewState,
+            legacy: legacyDraft,
+            message:
+              "A review session was loaded, but it does not match the active source draft.",
+          })
+        );
 
         return {
-          boot,
-          workspace,
-          setup,
-          profile,
-          pendingKnowledge,
-          serviceItems,
-          meta: nextMeta,
+          ...bootSnapshot,
           currentReview: reviewState,
         };
       }
@@ -252,71 +191,40 @@ export function createSetupStudioLoaders(ctx, shared) {
       setCurrentReview(reviewState);
       setReviewDraft(legacyDraft);
 
-      const reviewInfo = resolveReviewSourceInfo(reviewState, legacyDraft);
+      const reviewUi = buildSetupStudioHydratedReviewUi({
+        reviewState,
+        legacyDraft,
+      });
 
-      if (s(reviewInfo.sourceUrl) || lowerText(reviewInfo.sourceType) === "manual") {
-        updateActiveSourceScope(reviewInfo.sourceType, reviewInfo.sourceUrl);
+      if (reviewUi.shouldUpdateActiveSource) {
+        updateActiveSourceScope(
+          reviewUi.reviewInfo.sourceType,
+          reviewUi.reviewInfo.sourceUrl
+        );
       }
 
-      const baseProfile = chooseBestProfileForForm(legacyDraft?.overview);
-
       setBusinessForm((prev) => {
-        if (!hasMeaningfulProfile(baseProfile)) {
-          return {
-            ...DEFAULT_BUSINESS_FORM,
-            timezone: s(prev.timezone || "Asia/Baku"),
-            language: s(prev.language || "en"),
-            websiteUrl: s(reviewInfo.sourceUrl),
-          };
-        }
-
-        if (!preserveBusinessForm) {
-          return hydrateBusinessFormFromProfile(
-            formFromProfile(baseProfile, {
-              ...prev,
-              timezone: s(baseProfile?.timezone || "Asia/Baku"),
-              language:
-                resolveMainLanguageValue(
-                  baseProfile?.mainLanguage,
-                  baseProfile?.primaryLanguage,
-                  baseProfile?.language,
-                  firstLanguage(baseProfile)
-                ) || "en",
-            }),
-            baseProfile,
-            { force: true }
-          );
-        }
-
-        return hydrateBusinessFormFromProfile(prev, baseProfile, {
-          force: false,
+        return buildSetupStudioHydratedBusinessForm({
+          prev,
+          baseProfile: reviewUi.baseProfile,
+          preserveBusinessForm,
+          reviewInfo: reviewUi.reviewInfo,
         });
       });
 
-      const nextManualSections = buildManualSectionsFromReview(reviewState);
-      setManualSections(() => ({
-        servicesText: s(nextManualSections.servicesText),
-        faqsText: s(nextManualSections.faqsText),
-        policiesText: s(nextManualSections.policiesText),
-      }));
+      setManualSections(() => ({ ...reviewUi.manualSections }));
 
       syncDiscoveryStateFromReview(reviewState, { preserveCounts: false });
 
       applyUiHintsFromMeta({
-        nextMeta,
-        pendingKnowledge,
+        nextMeta: bootSnapshot.meta,
+        pendingKnowledge: bootSnapshot.pendingKnowledge,
         setShowKnowledge,
         setShowRefine,
       });
 
       return {
-        boot,
-        workspace,
-        setup,
-        profile,
-        pendingKnowledge,
-        serviceItems,
-        meta: nextMeta,
+        ...bootSnapshot,
         currentReview: reviewState,
       };
     } catch (e) {
@@ -325,17 +233,7 @@ export function createSetupStudioLoaders(ctx, shared) {
       );
       setError(message);
 
-      return {
-        boot: {},
-        workspace: {},
-        setup: {},
-        profile: {},
-        pendingKnowledge: [],
-        serviceItems: [],
-        meta: {},
-        currentReview: {},
-        error: message,
-      };
+      return buildSetupStudioLoaderErrorResult(message);
     } finally {
       setLoading(false);
       setRefreshing(false);

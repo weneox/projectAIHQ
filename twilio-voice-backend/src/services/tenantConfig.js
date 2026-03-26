@@ -280,7 +280,7 @@ export async function getTenantVoiceConfig({ tenant, requestContext = {} }) {
     return {
       ok: false,
       error: s(operationalVoice.reasonCode || "voice_operational_unavailable"),
-      status: Number(remote?.status || 409),
+      status: 409,
       authority: {
         ...(obj(projectedRuntime.authority)),
         source: "aihq_operational_contract",

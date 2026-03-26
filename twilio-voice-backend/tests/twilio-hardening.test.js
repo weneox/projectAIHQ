@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import twilio from "twilio";
+import twilio from "../src/vendor/twilioImport.js";
+import { validateServiceHealthEnvelope } from "@aihq/shared-contracts/health";
 
 process.env.PUBLIC_BASE_URL = "https://voice.example.test";
 process.env.AIHQ_INTERNAL_TOKEN = "voice-internal-token";
@@ -183,9 +184,45 @@ test("boot readiness blocks prod-like startup when AI HQ reports operational blo
     status: 200,
     json: {
       ok: true,
+      service: "ai-hq-backend",
+      env: "test",
+      db: { enabled: true },
       operationalReadiness: {
+        ok: false,
+        enabled: true,
+        enforced: true,
+        status: "blocked",
+        blockerReasonCodes: ["voice_phone_number_missing", "provider_secret_missing"],
         blockers: {
           total: 2,
+          items: [
+            {
+              category: "voice",
+              dependencyType: "phone_number",
+              reasonCode: "voice_phone_number_missing",
+              suggestedRepairActionId: "repair_voice_number",
+              repairAction: {
+                id: "repair_voice_number",
+                kind: "focus",
+                label: "Repair voice number",
+                requiredRole: "operator",
+                allowed: true,
+              },
+            },
+            {
+              category: "meta",
+              dependencyType: "provider_secret",
+              reasonCode: "provider_secret_missing",
+              suggestedRepairActionId: "open_provider_secrets",
+              repairAction: {
+                id: "open_provider_secrets",
+                kind: "admin_route",
+                label: "Open secure secrets",
+                requiredRole: "admin",
+                allowed: false,
+              },
+            },
+          ],
         },
       },
     },
@@ -210,10 +247,45 @@ test("boot readiness can report converged blocker reason codes without throwing"
     status: 200,
     json: {
       ok: true,
+      service: "ai-hq-backend",
+      env: "test",
+      db: { enabled: true },
       operationalReadiness: {
+        ok: false,
+        enabled: true,
+        enforced: true,
+        status: "blocked",
         blockerReasonCodes: ["voice_phone_number_missing", "provider_secret_missing"],
         blockers: {
           total: 2,
+          items: [
+            {
+              category: "voice",
+              dependencyType: "phone_number",
+              reasonCode: "voice_phone_number_missing",
+              suggestedRepairActionId: "repair_voice_number",
+              repairAction: {
+                id: "repair_voice_number",
+                kind: "focus",
+                label: "Repair voice number",
+                requiredRole: "operator",
+                allowed: true,
+              },
+            },
+            {
+              category: "meta",
+              dependencyType: "provider_secret",
+              reasonCode: "provider_secret_missing",
+              suggestedRepairActionId: "open_provider_secrets",
+              repairAction: {
+                id: "open_provider_secrets",
+                kind: "admin_route",
+                label: "Open secure secrets",
+                requiredRole: "admin",
+                allowed: false,
+              },
+            },
+          ],
         },
       },
     },
@@ -235,6 +307,44 @@ test("boot readiness can report converged blocker reason codes without throwing"
     "voice_phone_number_missing",
     "provider_secret_missing",
   ]);
+});
+
+test("boot readiness fails closed when AI HQ readiness contract is malformed", async () => {
+  mockFetchJson({
+    ok: true,
+    status: 200,
+    json: {
+      ok: true,
+      service: "ai-hq-backend",
+      env: "test",
+      db: { enabled: true },
+      operationalReadiness: {
+        enabled: true,
+        blockers: {
+          total: 1,
+          items: [
+            {
+              category: "voice",
+            },
+          ],
+        },
+      },
+    },
+  });
+
+  const readiness = await checkAihqOperationalBootReadiness({
+    fetchFn: global.fetch,
+    baseUrl: "https://aihq.example.test",
+    internalToken: "voice-internal-token",
+    appEnv: "production",
+    requireOnBoot: true,
+    throwOnBlocked: false,
+  });
+
+  assert.equal(readiness.ok, false);
+  assert.equal(readiness.status, "blocked");
+  assert.equal(readiness.reasonCode, "aihq_operational_readiness_contract_invalid");
+  assert.equal(readiness.error, "operational_readiness_blocker_invalid");
 });
 
 test("health route response exposes direct structured readiness", () => {
@@ -273,6 +383,7 @@ test("health route response exposes direct structured readiness", () => {
   ]);
   assert.equal(res.body.readiness.blockersTotal, 1);
   assert.equal(res.body.readiness.intentionallyUnavailable, true);
+  assert.equal(validateServiceHealthEnvelope(res.body).ok, true);
 });
 
 test("voice AI HQ client forwards request and correlation headers", async () => {

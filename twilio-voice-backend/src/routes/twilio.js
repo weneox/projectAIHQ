@@ -1,5 +1,5 @@
 import express from "express";
-import twilio from "twilio";
+import twilio from "../vendor/twilioImport.js";
 import { cfg } from "../config.js";
 import { resolveTenantFromRequest } from "../services/tenantResolver.js";
 import { getTenantVoiceConfig } from "../services/tenantConfig.js";
