@@ -7,16 +7,17 @@
     "node": ">=18"
   },
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "migrate": "node scripts/migrate.js",
-    "backfill:operational-data": "node scripts/backfill-operational-data.mjs",
-    "check:operational-readiness": "node scripts/check-operational-readiness.mjs",
-    "validate:env": "node scripts/validate-env.mjs",
+    "start": "node --import ../scripts/workspace-module-loader.mjs server.js",
+    "dev": "node --watch --import ../scripts/workspace-module-loader.mjs server.js",
+    "migrate": "node --import ../scripts/workspace-module-loader.mjs scripts/migrate.js",
+    "backfill:operational-data": "node --import ../scripts/workspace-module-loader.mjs scripts/backfill-operational-data.mjs",
+    "check:operational-readiness": "node --import ../scripts/workspace-module-loader.mjs scripts/check-operational-readiness.mjs",
+    "validate:env": "node --import ../scripts/workspace-module-loader.mjs scripts/validate-env.mjs",
     "lint": "node ../scripts/check-js-syntax.mjs server.js src tests scripts",
     "build": "npm run validate:env && npm run lint",
-    "test": "node --test --test-concurrency=1 tests/*.test.js",
-    "test:setup-review": "node --test --test-concurrency=1 tests/setup-review-session.test.js"
+    "test": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/*.test.js",
+    "test:setup-review": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/setup-review-session.test.js",
+    "test:integration:db": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/operational-channel-integration.test.js"
   },
   "dependencies": {
     "@aihq/shared-contracts": "1.0.0",

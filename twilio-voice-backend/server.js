@@ -1,9 +1,9 @@
-import "./env.js";
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import http from "http";
-import twilio from "./src/vendor/twilioImport.js";
+import twilio from "twilio";
 import { WebSocketServer } from "ws";
 import {
   createStructuredLogger,

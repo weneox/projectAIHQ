@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import twilio from "../src/vendor/twilioImport.js";
+import twilio from "twilio";
 import { validateServiceHealthEnvelope } from "@aihq/shared-contracts/health";
 
 process.env.PUBLIC_BASE_URL = "https://voice.example.test";

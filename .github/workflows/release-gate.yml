@@ -183,6 +183,9 @@ jobs:
       - name: Apply AI HQ migrations
         run: npm run migrate:ai-hq-backend
 
+      - name: Run AI HQ DB-backed integration harness
+        run: npm run test:aihq:db
+
       - name: Check operational readiness
         run: npm run check:operational-readiness
 

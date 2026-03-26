@@ -1,4 +1,4 @@
-import "./env.js";
+import "dotenv/config";
 import express from "express";
 import {
   createStructuredLogger,

@@ -4,12 +4,12 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "dev": "node --watch server.js",
-    "start": "node server.js",
-    "validate:env": "node scripts/validate-env.mjs",
+    "dev": "node --watch --import ../scripts/workspace-module-loader.mjs server.js",
+    "start": "node --import ../scripts/workspace-module-loader.mjs server.js",
+    "validate:env": "node --import ../scripts/workspace-module-loader.mjs scripts/validate-env.mjs",
     "lint": "node ../scripts/check-js-syntax.mjs server.js src tests",
     "build": "npm run validate:env && npm run lint",
-    "test": "node --test"
+    "test": "node --import ../scripts/workspace-module-loader.mjs --test"
   },
   "engines": {
     "node": ">=18"

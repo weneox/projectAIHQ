@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import pg from "pg/lib/index.js";
+import pg from "pg";
 import {
   validateProviderAccessResponse,
   validateVoiceOperationalResponse,
