@@ -8,6 +8,15 @@ import {
   validateDurableVoiceSyncRequest,
   validateMetaCommentActionResponse,
   validateMetaGatewayOutboundResponse,
+  validateOperationalChannels,
+  validateOperationalReadiness,
+  validateOperationalRepairAction,
+  validateOperationalRepairGuidance,
+  validateProviderAccessResponse,
+  validateProjectedRuntime,
+  validateResolveChannelProjectedResponse,
+  validateVoiceOperationalResponse,
+  validateVoiceProjectedRuntimeResponse,
   validateVoiceInternalResponse,
   validateVoiceSessionUpsertRequest,
 } from "../index.js";
@@ -100,4 +109,261 @@ test("durable execution response contract requires an execution id and status", 
     },
   });
   assert.equal(good.ok, true);
+});
+
+test("projected runtime contract requires authority and tenant scope", () => {
+  const bad = validateProjectedRuntime({
+    authority: {},
+    tenant: {},
+  });
+  assert.equal(bad.ok, false);
+
+  const good = validateProjectedRuntime({
+    authority: {
+      mode: "strict",
+      required: true,
+      available: true,
+      source: "approved_runtime_projection",
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+      runtimeProjectionId: "projection-1",
+    },
+    tenant: {
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+      companyName: "Acme",
+    },
+    channels: {
+      voice: {
+        enabled: true,
+      },
+    },
+  });
+  assert.equal(good.ok, true);
+  assert.equal(good.value.authority.tenantKey, "acme");
+});
+
+test("resolve-channel projected response requires projectedRuntime", () => {
+  const bad = validateResolveChannelProjectedResponse({
+    ok: true,
+    tenantKey: "acme",
+    tenantId: "tenant-1",
+  });
+  assert.equal(bad.ok, false);
+
+  const good = validateResolveChannelProjectedResponse({
+    ok: true,
+    tenantKey: "acme",
+    tenantId: "tenant-1",
+    resolvedChannel: "instagram",
+    projectedRuntime: {
+      authority: {
+        mode: "strict",
+        required: true,
+        available: true,
+        source: "approved_runtime_projection",
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+      },
+      tenant: {
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+        companyName: "Acme",
+      },
+    },
+  });
+  assert.equal(good.ok, true);
+});
+
+test("voice projected runtime response validates successful payloads", () => {
+  const checked = validateVoiceProjectedRuntimeResponse({
+    ok: true,
+    projectedRuntime: {
+      authority: {
+        mode: "strict",
+        required: true,
+        available: true,
+        source: "approved_runtime_projection",
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+      },
+      tenant: {
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+        companyName: "Acme",
+      },
+      channels: {
+        voice: {
+          enabled: true,
+        },
+      },
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.projectedRuntime.tenant.tenantKey, "acme");
+});
+
+test("operational channels contract validates explicit voice and meta payloads", () => {
+  const checked = validateOperationalChannels({
+    voice: {
+      available: true,
+      ready: true,
+      provider: "twilio",
+      operator: {
+        enabled: true,
+        phone: "+15550001111",
+      },
+      operatorRouting: {
+        mode: "manual",
+        departments: {},
+      },
+      realtime: {
+        model: "gpt-4o-realtime-preview",
+      },
+    },
+    meta: {
+      available: true,
+      ready: true,
+      provider: "meta",
+      channelType: "instagram",
+      pageId: "page-1",
+      igUserId: "ig-1",
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.voice.provider, "twilio");
+  assert.equal(checked.value.meta.pageId, "page-1");
+  assert.equal(checked.value.voice.reasonCode, "");
+});
+
+test("voice operational response requires operationalChannels", () => {
+  const checked = validateVoiceOperationalResponse({
+    ok: true,
+    operationalChannels: {
+      voice: {
+        available: true,
+        ready: true,
+        provider: "twilio",
+      },
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.operationalChannels.voice.provider, "twilio");
+});
+
+test("provider access response validates secret-backed internal access payloads", () => {
+  const checked = validateProviderAccessResponse({
+    ok: true,
+    operationalChannels: {
+      meta: {
+        available: true,
+        ready: true,
+        provider: "meta",
+        channelType: "instagram",
+        pageId: "page-1",
+        igUserId: "ig-1",
+      },
+    },
+    providerAccess: {
+      provider: "meta",
+      tenantKey: "acme",
+      tenantId: "tenant-1",
+      available: true,
+      pageId: "page-1",
+      igUserId: "ig-1",
+      pageAccessToken: "secret-token",
+      appSecret: "secret-app",
+      secretKeys: ["page_access_token", "app_secret"],
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.providerAccess.provider, "meta");
+  assert.equal(checked.value.providerAccess.secretKeys.length, 2);
+});
+
+test("operational repair action contract requires safe structured descriptors", () => {
+  const checked = validateOperationalRepairAction({
+    id: "open_provider_secrets",
+    kind: "admin_route",
+    label: "Open secure secrets",
+    requiredRole: "admin",
+    allowed: false,
+    target: {
+      path: "/admin/secrets",
+      provider: "meta",
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.requiredRole, "admin");
+});
+
+test("operational repair guidance contract requires reason-backed next actions when blocked", () => {
+  const checked = validateOperationalRepairGuidance({
+    blocked: true,
+    category: "meta",
+    dependencyType: "provider_secret",
+    reasonCode: "provider_secret_missing",
+    title: "Provider secret missing",
+    suggestedRepairActionId: "open_provider_secrets",
+    nextAction: {
+      id: "open_provider_secrets",
+      kind: "admin_route",
+      label: "Open secure secrets",
+      requiredRole: "admin",
+      allowed: false,
+      target: {
+        path: "/admin/secrets",
+      },
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.nextAction.kind, "admin_route");
+});
+
+test("operational readiness contract validates blocker reason codes and repair actions", () => {
+  const checked = validateOperationalReadiness({
+    ok: false,
+    enabled: true,
+    enforced: true,
+    status: "blocked",
+    blockerReasonCodes: ["provider_secret_missing"],
+    repairActions: [
+      {
+        id: "open_provider_secrets",
+        kind: "admin_route",
+        label: "Open secure secrets",
+        requiredRole: "admin",
+        allowed: false,
+      },
+    ],
+    blockers: {
+      total: 1,
+      items: [
+        {
+          category: "meta",
+          dependencyType: "provider_secret",
+          reasonCode: "provider_secret_missing",
+          suggestedRepairActionId: "open_provider_secrets",
+          repairAction: {
+            id: "open_provider_secrets",
+            kind: "admin_route",
+            label: "Open secure secrets",
+            requiredRole: "admin",
+            allowed: false,
+          },
+        },
+      ],
+      voice: {},
+      meta: {},
+    },
+  });
+
+  assert.equal(checked.ok, true);
+  assert.equal(checked.value.blockers.items[0].reasonCode, "provider_secret_missing");
 });

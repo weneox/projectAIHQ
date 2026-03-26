@@ -2,12 +2,13 @@ import {
   validateDurableExecutionResponse,
   validateDurableVoiceSyncRequest,
   validateVoiceOperatorJoinRequest,
-  validateVoiceInternalResponse,
   validateVoiceSessionStateRequest,
   validateVoiceSessionUpsertRequest,
   validateVoiceTenantConfigRequest,
   validateVoiceTranscriptRequest,
 } from "@aihq/shared-contracts/critical";
+import { validateVoiceOperationalResponse } from "@aihq/shared-contracts/operations";
+import { validateVoiceProjectedRuntimeResponse } from "@aihq/shared-contracts/runtime";
 import { createStructuredLogger } from "@aihq/shared-contracts/logger";
 import { buildVoiceSyncKey } from "./voiceSyncReliability.js";
 import { incrementRuntimeMetric } from "./runtimeObservability.js";
@@ -213,7 +214,11 @@ export function createAihqVoiceClient({
         text: checked.error,
       };
     }
-    return call("/api/internal/voice/tenant-config", payload, validateVoiceInternalResponse);
+    return call("/api/internal/voice/tenant-config", payload, (input) => {
+      const runtimeChecked = validateVoiceProjectedRuntimeResponse(input);
+      if (!runtimeChecked.ok) return runtimeChecked;
+      return validateVoiceOperationalResponse(input);
+    });
   }
 
   async function enqueueVoiceSync(actionType, payload = {}) {

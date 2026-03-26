@@ -4,13 +4,24 @@ import {
   getVoiceCallSessionByProviderCallSid,
   updateVoiceCallSession,
 } from "../db/helpers/voice.js";
-import { buildVoiceConfigFromTenantRow } from "../routes/api/voice/config.js";
+import { buildVoiceConfigFromProjectedRuntime } from "../routes/api/voice/config.js";
 import { upsertCallAndSession } from "../routes/api/voice/mutations.js";
 import { findTenantByKeyOrPhone } from "../routes/api/voice/repository.js";
 import { appendEventSafe } from "../routes/api/voice/utils.js";
 import { s, b, isObj, normalizePhone, normalizeTranscriptItem } from "../routes/api/voice/shared.js";
+import {
+  getTenantBrainRuntime,
+  isRuntimeAuthorityError,
+} from "./businessBrain/getTenantBrainRuntime.js";
+import { buildOperationalChannels } from "./operationalChannels.js";
+import { buildProjectedTenantRuntime } from "./projectedTenantRuntime.js";
 
-export async function processVoiceTenantConfig({ db, tenantKey, toNumber }) {
+export async function processVoiceTenantConfig({
+  db,
+  tenantKey,
+  toNumber,
+  getRuntime = getTenantBrainRuntime,
+}) {
   const tenant = await findTenantByKeyOrPhone(db, {
     tenantKey,
     toNumber,
@@ -27,10 +38,66 @@ export async function processVoiceTenantConfig({ db, tenantKey, toNumber }) {
     };
   }
 
+  let runtime = null;
+  try {
+    runtime = await getRuntime({
+      db,
+      tenantId: tenant.id,
+      tenantKey: tenant.tenant_key,
+      authorityMode: "strict",
+    });
+  } catch (error) {
+    if (isRuntimeAuthorityError(error)) {
+      return {
+        ok: false,
+        statusCode: Number(error?.statusCode || 409),
+        error: "runtime_authority_unavailable",
+        tenantKey: s(tenant?.tenant_key || tenantKey),
+        toNumber,
+      };
+    }
+    throw error;
+  }
+
+  const operationalChannels = await buildOperationalChannels({
+    db,
+    tenantId: tenant.id,
+    tenantRow: tenant,
+  });
+
+  const projectedRuntime = buildProjectedTenantRuntime({
+    runtime,
+    tenantRow: tenant,
+    operationalChannels,
+  });
+
+  if (operationalChannels?.voice?.ready !== true) {
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "voice_operational_unavailable",
+      tenantKey: s(tenant?.tenant_key || tenantKey),
+      toNumber,
+      details: {
+        authority: projectedRuntime?.authority || runtime?.authority || null,
+        operationalChannels,
+        reasonCode: s(
+          operationalChannels?.voice?.reasonCode || "voice_settings_missing"
+        ),
+      },
+    };
+  }
+
   return {
     ok: true,
     statusCode: 200,
-    payload: buildVoiceConfigFromTenantRow(tenant, { tenantKey, toNumber }),
+    payload: {
+      ...buildVoiceConfigFromProjectedRuntime(projectedRuntime, {
+        tenantKey,
+        toNumber,
+      }),
+      operationalChannels,
+    },
   };
 }
 

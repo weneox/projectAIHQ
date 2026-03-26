@@ -8,6 +8,12 @@ function normalizePhone(v) {
   return s(v).replace(/[^\d+]/g, "");
 }
 
+function isDevLikeEnv() {
+  return ["", "development", "dev", "test"].includes(
+    s(cfg.APP_ENV, "development").toLowerCase()
+  );
+}
+
 export async function resolveTenantFromRequest(req) {
   const tenantKey =
     s(req.headers["x-tenant-key"]) ||
@@ -20,7 +26,7 @@ export async function resolveTenantFromRequest(req) {
     normalizePhone(req.body?.Called) ||
     normalizePhone(req.query?.Called);
 
-  if (tenantKey) {
+  if (tenantKey && cfg.ALLOW_UNSAFE_TENANT_KEY_RESOLUTION && isDevLikeEnv()) {
     return {
       ok: true,
       tenantKey,
@@ -40,7 +46,9 @@ export async function resolveTenantFromRequest(req) {
 
   return {
     ok: false,
-    error: "tenant_resolution_required",
+    error: tenantKey
+      ? "unsafe_tenant_key_resolution_blocked"
+      : "tenant_resolution_required",
     tenantKey: "",
     matchedBy: "",
     toNumber: null,

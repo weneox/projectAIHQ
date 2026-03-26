@@ -31,6 +31,7 @@
 \i ./49_setup_review_sessions.sql
 \i ./50_voice.sql
 \i ./51_canonical_truth_versions.sql
+\i ./52_operational_data_backfill.sql
 \i ./60_inbox_brain.sql
 
 \i ./90_backfill_tenant_ids.sql

@@ -184,6 +184,95 @@ export function buildChannelSaveInput(input = {}, role = "member") {
   return out;
 }
 
+export function buildOperationalChannelSaveInput(input = {}, role = "member") {
+  const out = {
+    provider: cleanLower(input.provider || "meta"),
+    display_name: cleanString(input.display_name),
+    status: cleanLower(input.status || "disconnected"),
+    is_primary: normalizeBool(input.is_primary, false),
+  };
+
+  if (
+    role === "owner" ||
+    role === "admin" ||
+    role === "operator" ||
+    role === "internal"
+  ) {
+    out.external_account_id = cleanNullableString(input.external_account_id);
+    out.external_page_id = cleanNullableString(input.external_page_id);
+    out.external_user_id = cleanNullableString(input.external_user_id);
+    out.external_username = cleanNullableString(input.external_username);
+    out.secrets_ref = cleanNullableString(input.secrets_ref);
+    out.last_sync_at = normalizeJsonDateish(input.last_sync_at);
+  }
+
+  return out;
+}
+
+export function buildVoiceOperationalSaveInput(input = {}) {
+  const metaInput = safeJsonObj(input.meta, {});
+  const twilioConfigInput = safeJsonObj(input.twilioConfig, {});
+  const operatorRoutingInput = safeJsonObj(
+    metaInput.operatorRouting || metaInput.operator_routing,
+    {}
+  );
+
+  const out = {
+    enabled: normalizeBool(input.enabled, false),
+    provider: cleanLower(input.provider || "twilio"),
+    mode: cleanLower(input.mode || "assistant"),
+    displayName: cleanString(input.displayName),
+    defaultLanguage: cleanLower(input.defaultLanguage || "en"),
+    supportedLanguages: safeJsonArr(input.supportedLanguages, ["en"])
+      .map((item) => cleanLower(item))
+      .filter(Boolean),
+    instructions: cleanString(input.instructions),
+    operatorEnabled: normalizeBool(input.operatorEnabled, true),
+    operatorPhone: cleanString(input.operatorPhone),
+    operatorLabel: cleanString(input.operatorLabel || "operator"),
+    transferStrategy: cleanLower(input.transferStrategy || "handoff"),
+    callbackEnabled: normalizeBool(input.callbackEnabled, true),
+    callbackMode: cleanLower(input.callbackMode || "lead_only"),
+    maxCallSeconds: Math.max(0, normalizeNumber(input.maxCallSeconds, 180)),
+    silenceHangupSeconds: Math.max(
+      0,
+      normalizeNumber(input.silenceHangupSeconds, 12)
+    ),
+    twilioPhoneNumber: cleanString(input.twilioPhoneNumber),
+    twilioPhoneSid: cleanString(input.twilioPhoneSid),
+    twilioConfig: {
+      callerId: cleanString(
+        twilioConfigInput.callerId || twilioConfigInput.caller_id
+      ),
+    },
+    meta: {
+      realtimeModel: cleanString(
+        metaInput.realtimeModel || metaInput.model || "gpt-4o-realtime-preview"
+      ),
+      realtimeVoice: cleanString(
+        metaInput.realtimeVoice || metaInput.voice || "alloy"
+      ),
+      instructions: cleanString(metaInput.instructions || input.instructions),
+      operatorRouting: {
+        mode: cleanLower(
+          operatorRoutingInput.mode || input.transferStrategy || "handoff"
+        ),
+        defaultDepartment: cleanLower(
+          operatorRoutingInput.defaultDepartment ||
+            operatorRoutingInput.default_department
+        ),
+        departments: safeJsonObj(operatorRoutingInput.departments, {}),
+      },
+    },
+  };
+
+  if (!out.supportedLanguages.length) {
+    out.supportedLanguages = [out.defaultLanguage || "en"];
+  }
+
+  return out;
+}
+
 export function buildAgentSaveInput(input = {}, role = "member") {
   const out = {
     display_name: cleanString(input.display_name),

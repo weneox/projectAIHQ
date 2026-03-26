@@ -1,14 +1,66 @@
 import { cfg } from "../../../config.js";
 import { DEBATE_ENGINE_VERSION } from "../../../kernel/debateEngine.js";
+import {
+  getOperationalReadinessSummary,
+  withOperationalReadinessContext,
+} from "../../../services/operationalReadiness.js";
 import { isDbReady } from "../../../utils/http.js";
 
-export function buildHealthResponse({ db }) {
+function s(v, d = "") {
+  return String(v ?? d).trim();
+}
+
+export async function resolveOperationalReadinessForHealth({
+  db,
+  startupOperationalReadiness = null,
+} = {}) {
+  const dbEnabled = isDbReady(db);
+
+  if (!dbEnabled) {
+    return withOperationalReadinessContext({
+      ok: false,
+      enabled: false,
+    });
+  }
+
+  const enforced = startupOperationalReadiness?.enforced === true;
+  return getOperationalReadinessSummary(db, {
+    enforced,
+  });
+}
+
+export async function buildHealthCore({
+  db,
+  startupOperationalReadiness = null,
+} = {}) {
+  const dbEnabled = isDbReady(db);
+  const operationalReadiness = await resolveOperationalReadinessForHealth({
+    db,
+    startupOperationalReadiness,
+  });
+
   return {
-    ok: true,
+    ok: operationalReadiness.status !== "blocked",
     service: "ai-hq-backend",
+    env: cfg.app.env,
     db: {
-      enabled: isDbReady(db),
+      enabled: dbEnabled,
     },
+    operationalReadiness,
+  };
+}
+
+export async function buildApiHealthResponse({
+  db,
+  startupOperationalReadiness = null,
+} = {}) {
+  const core = await buildHealthCore({
+    db,
+    startupOperationalReadiness,
+  });
+
+  return {
+    ...core,
     debateEngine: DEBATE_ENGINE_VERSION,
     endpoints: [
       "GET /api",
@@ -42,5 +94,34 @@ export function buildHealthResponse({ db }) {
       tenant: cfg.tenant.defaultTenantKey,
       mode: cfg.app.defaultMode,
     },
+  };
+}
+
+export async function buildRootHealthResponse({
+  db,
+  startupOperationalReadiness = null,
+  providers = {},
+  workers = {},
+  operational = {},
+} = {}) {
+  const core = await buildHealthCore({
+    db,
+    startupOperationalReadiness,
+  });
+
+  return {
+    ...core,
+    marker: "HEALTH_BUILD_V4_FEATURES",
+    providers,
+    workers,
+    operational,
+    startupOperationalReadiness:
+      startupOperationalReadiness && typeof startupOperationalReadiness === "object"
+        ? {
+            status: s(startupOperationalReadiness.status),
+            enforced: startupOperationalReadiness.enforced === true,
+            error: s(startupOperationalReadiness.error),
+          }
+        : null,
   };
 }

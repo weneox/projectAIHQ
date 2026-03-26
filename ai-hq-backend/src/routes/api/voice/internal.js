@@ -24,6 +24,7 @@ function writeResult(res, result) {
       error: result?.error || "voice_internal_failed",
       ...(result?.tenantKey ? { tenantKey: result.tenantKey } : {}),
       ...(result?.toNumber ? { toNumber: result.toNumber } : {}),
+      ...(result?.details ? { details: result.details } : {}),
     });
   }
 

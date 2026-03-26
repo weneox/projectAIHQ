@@ -64,6 +64,9 @@ vi.mock("../../api/truth.js", () => ({
 }));
 
 import TruthViewerPage from "./TruthViewerPage.jsx";
+import {
+  getCanonicalTruthSnapshot,
+} from "../../api/truth.js";
 
 afterEach(() => {
   cleanup();
@@ -98,5 +101,27 @@ describe("Truth viewer smoke", () => {
     expect(await screen.findByText(/version detail/i)).toBeInTheDocument();
     expect(screen.getByText(/old clinic/i)).toBeInTheDocument();
     expect(screen.getAllByText(/north clinic/i).length).toBeGreaterThan(1);
+  });
+
+  it("shows an explicit approved truth unavailable state without fallback data", async () => {
+    getCanonicalTruthSnapshot.mockResolvedValueOnce({
+      fields: [],
+      approval: { approvedAt: "", approvedBy: "", version: "" },
+      history: [],
+      notices: [
+        "Approved truth is unavailable. No non-approved fallback data is being shown.",
+      ],
+      hasProvenance: false,
+      approvedTruthUnavailable: true,
+    });
+
+    render(<TruthViewerPage />);
+
+    expect(
+      await screen.findByText(/approved truth is currently unavailable/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/no approved fields were returned by the backend/i)
+    ).toBeInTheDocument();
   });
 });

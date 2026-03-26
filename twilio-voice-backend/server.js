@@ -10,6 +10,7 @@ import { cfg } from "./src/config.js";
 import { twilioRouter } from "./src/routes/twilio.js";
 import { attachRealtimeBridge } from "./src/services/realtimeBridge.js";
 import { createReporters } from "./src/services/reporting.js";
+import { checkAihqOperationalBootReadiness } from "./src/services/bootReadiness.js";
 
 function normalizeOriginList(value = "") {
   return String(value || "")
@@ -77,6 +78,45 @@ async function getFetch() {
 }
 
 const fetchFn = await getFetch();
+const bootReadiness = await checkAihqOperationalBootReadiness({
+  fetchFn,
+  baseUrl: cfg.AIHQ_BASE_URL,
+  internalToken: cfg.AIHQ_INTERNAL_TOKEN,
+  appEnv: cfg.APP_ENV,
+  requireOnBoot: cfg.REQUIRE_OPERATIONAL_READINESS_ON_BOOT,
+  throwOnBlocked: false,
+});
+
+app.get("/health", (_req, res) => {
+  const statusCode = bootReadiness.intentionallyUnavailable ? 503 : 200;
+  return res.status(statusCode).json({
+    ok: !bootReadiness.intentionallyUnavailable,
+    service: "twilio-voice-backend",
+    readiness: {
+      status: bootReadiness.status,
+      reasonCode: bootReadiness.reasonCode,
+      blockerReasonCodes: bootReadiness.blockerReasonCodes,
+      intentionallyUnavailable: bootReadiness.intentionallyUnavailable,
+      dependency: bootReadiness.dependency,
+      aihq: bootReadiness.aihq,
+      localDecision: bootReadiness.localDecision,
+    },
+    bootReadiness,
+  });
+});
+
+app.use((req, res, next) => {
+  if (!bootReadiness.intentionallyUnavailable || req.path === "/health") {
+    return next();
+  }
+
+  return res.status(503).json({
+    ok: false,
+    error: "service_intentionally_unavailable",
+    service: "twilio-voice-backend",
+    bootReadiness,
+  });
+});
 
 const wss = new WebSocketServer({
   server,

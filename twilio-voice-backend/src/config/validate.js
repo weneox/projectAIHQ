@@ -130,6 +130,33 @@ export function getConfigIssues() {
     );
   }
 
+  if (cfg.ALLOW_UNSAFE_TENANT_KEY_RESOLUTION) {
+    pushIssue(
+      issues,
+      isProd ? "error" : "warning",
+      "ALLOW_UNSAFE_TENANT_KEY_RESOLUTION",
+      "ALLOW_UNSAFE_TENANT_KEY_RESOLUTION enables request-supplied tenant keys for call routing and must stay disabled in production-like environments."
+    );
+  }
+
+  if (cfg.ALLOW_LOCAL_TENANT_CONFIG_FALLBACK) {
+    pushIssue(
+      issues,
+      isProd ? "error" : "warning",
+      "ALLOW_LOCAL_TENANT_CONFIG_FALLBACK",
+      "ALLOW_LOCAL_TENANT_CONFIG_FALLBACK enables generic local voice config fallback and must stay disabled in production-like environments."
+    );
+  }
+
+  if (isProd && !cfg.REQUIRE_OPERATIONAL_READINESS_ON_BOOT) {
+    pushIssue(
+      issues,
+      "warning",
+      "REQUIRE_OPERATIONAL_READINESS_ON_BOOT",
+      "REQUIRE_OPERATIONAL_READINESS_ON_BOOT=false disables startup blocking when AI HQ reports operational readiness blockers."
+    );
+  }
+
   return issues;
 }
 

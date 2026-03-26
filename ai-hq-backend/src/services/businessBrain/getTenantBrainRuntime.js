@@ -39,6 +39,136 @@ function boolOrUndefined(v) {
   return typeof v === "boolean" ? v : undefined;
 }
 
+function normalizeAuthorityMode(v) {
+  const mode = lower(v || "tolerant");
+  return mode === "strict" ? "strict" : "tolerant";
+}
+
+function buildRuntimeAuthority({
+  mode = "tolerant",
+  available = false,
+  tenantId = "",
+  tenantKey = "",
+  runtimeProjection = null,
+  freshness = null,
+  reasonCode = "",
+  reason = "",
+} = {}) {
+  const projection = obj(runtimeProjection);
+  const normalizedFreshness = obj(freshness);
+
+  return {
+    mode: normalizeAuthorityMode(mode),
+    required: normalizeAuthorityMode(mode) === "strict",
+    available: Boolean(available),
+    source: available ? "approved_runtime_projection" : "",
+    tenantId: s(tenantId || projection?.tenant_id || normalizedFreshness?.tenantId),
+    tenantKey: s(tenantKey || projection?.tenant_key || normalizedFreshness?.tenantKey),
+    runtimeProjectionId: s(
+      projection?.id || normalizedFreshness?.runtimeProjectionId || ""
+    ),
+    runtimeProjectionStatus: s(
+      projection?.status || normalizedFreshness?.runtimeStatus || ""
+    ),
+    projectionHash: s(
+      projection?.projection_hash || normalizedFreshness?.currentProjectionHash || ""
+    ),
+    sourceSnapshotId: s(
+      projection?.source_snapshot_id || normalizedFreshness?.currentSources?.sourceSnapshotId
+    ),
+    sourceProfileId: s(
+      projection?.source_profile_id || normalizedFreshness?.currentSources?.sourceProfileId
+    ),
+    sourceCapabilitiesId: s(
+      projection?.source_capabilities_id ||
+        normalizedFreshness?.currentSources?.sourceCapabilitiesId
+    ),
+    readinessLabel: s(projection?.readiness_label),
+    readinessScore:
+      typeof projection?.readiness_score === "number"
+        ? projection.readiness_score
+        : Number.isFinite(Number(projection?.readiness_score))
+          ? Number(projection.readiness_score)
+          : null,
+    confidenceLabel: s(projection?.confidence_label),
+    confidence:
+      typeof projection?.confidence === "number"
+        ? projection.confidence
+        : Number.isFinite(Number(projection?.confidence))
+          ? Number(projection.confidence)
+          : null,
+    stale: Boolean(normalizedFreshness?.stale),
+    freshnessReasons: arr(normalizedFreshness?.reasons),
+    reasonCode: s(reasonCode),
+    reason: s(reason),
+  };
+}
+
+function createRuntimeAuthorityError({
+  mode = "strict",
+  tenantId = "",
+  tenantKey = "",
+  runtimeProjection = null,
+  freshness = null,
+  reasonCode = "",
+  reason = "",
+  message = "",
+} = {}) {
+  const authority = buildRuntimeAuthority({
+    mode,
+    available: false,
+    tenantId,
+    tenantKey,
+    runtimeProjection,
+    freshness,
+    reasonCode,
+    reason,
+  });
+
+  const error = new Error(
+    message || "Approved runtime authority is unavailable for this tenant."
+  );
+  error.code = "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE";
+  error.statusCode = 409;
+  error.runtimeAuthority = authority;
+  return error;
+}
+
+export function isRuntimeAuthorityError(error) {
+  return (
+    s(error?.code) === "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE" &&
+    !!error?.runtimeAuthority
+  );
+}
+
+export function buildRuntimeAuthorityFailurePayload(
+  error,
+  { service = "", tenantKey = "" } = {}
+) {
+  const authority = obj(
+    error?.runtimeAuthority ||
+      buildRuntimeAuthority({
+        mode: "strict",
+        tenantKey,
+        reasonCode: "runtime_authority_unavailable",
+        reason: "runtime_authority_unavailable",
+      })
+  );
+
+  return {
+    ok: false,
+    error: "runtime_authority_unavailable",
+    details: {
+      service: s(service),
+      message: s(
+        error?.message || "Approved runtime authority is unavailable for this tenant."
+      ),
+      code: s(error?.code || "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE"),
+      authority,
+    },
+  };
+}
+
 function uniqStrings(list = []) {
   const out = [];
   const seen = new Set();
@@ -1552,6 +1682,7 @@ function buildRuntimeOutput({
   knowledgeEntries,
   responsePlaybooks,
   threadState = null,
+  authority = null,
   raw = {},
 }) {
   const profile = obj(tenant?.profile);
@@ -1749,10 +1880,12 @@ function buildRuntimeOutput({
 
     profile,
     tenant,
+    authority: authority && typeof authority === "object" ? authority : null,
     threadState: threadState || null,
 
     raw: {
       ...obj(raw),
+      authority: authority && typeof authority === "object" ? authority : null,
       services,
       knowledgeEntries,
       responsePlaybooks,
@@ -2120,7 +2253,10 @@ async function loadCurrentProjection({ db, tenantId = "", tenantKey = "" }) {
     );
 
     if (!freshness?.stale) {
-      return current;
+      return {
+        projection: current,
+        freshness,
+      };
     }
 
     const refreshed = await safeQuery(
@@ -2145,15 +2281,22 @@ async function loadCurrentProjection({ db, tenantId = "", tenantKey = "" }) {
     );
 
     if (obj(refreshed?.projection).id) {
-      return refreshed.projection;
+      return {
+        projection: refreshed.projection,
+        freshness: refreshed.freshness || freshness,
+      };
     }
 
-    const error = new Error(
-      "Runtime projection is stale and could not be refreshed."
-    );
-    error.code = "TENANT_RUNTIME_PROJECTION_STALE";
-    error.freshness = freshness;
-    throw error;
+    throw createRuntimeAuthorityError({
+      mode: "strict",
+      tenantId,
+      tenantKey,
+      runtimeProjection: current,
+      freshness,
+      reasonCode: "runtime_projection_stale",
+      reason: "runtime_projection_stale",
+      message: "Approved runtime projection is stale and could not be refreshed.",
+    });
   }
 
   const refreshed = await safeQuery(
@@ -2172,7 +2315,17 @@ async function loadCurrentProjection({ db, tenantId = "", tenantKey = "" }) {
     null
   );
 
-  return obj(refreshed?.projection) && refreshed?.projection?.id ? refreshed.projection : null;
+  if (obj(refreshed?.projection).id) {
+    return {
+      projection: refreshed.projection,
+      freshness: refreshed.freshness || null,
+    };
+  }
+
+  return {
+    projection: null,
+    freshness: null,
+  };
 }
 
 async function buildProjectionFirstRuntime({
@@ -2180,6 +2333,7 @@ async function buildProjectionFirstRuntime({
   legacyTenant,
   input,
   projection,
+  freshness = null,
   dbData,
 }) {
   const projectionServices = arr(projection?.services_json);
@@ -2233,6 +2387,14 @@ async function buildProjectionFirstRuntime({
     knowledgeEntries,
     responsePlaybooks,
     threadState: input?.threadState || null,
+    authority: buildRuntimeAuthority({
+      mode: input?.authorityMode,
+      available: true,
+      tenantId: legacyTenant?.id,
+      tenantKey: legacyTenant?.tenant_key,
+      runtimeProjection: projection,
+      freshness,
+    }),
     raw: {
       mode: "projection_first",
       projection,
@@ -2252,6 +2414,7 @@ async function buildProjectionFirstRuntime({
 
 export async function getTenantBusinessRuntime(input = {}) {
   const db = input?.db || null;
+  const authorityMode = normalizeAuthorityMode(input?.authorityMode);
 
   const tenantIdInput =
     s(input?.tenantId) ||
@@ -2273,6 +2436,17 @@ export async function getTenantBusinessRuntime(input = {}) {
   });
 
   if (!legacyTenant?.id && !legacyTenant?.tenant_key) {
+    if (authorityMode === "strict") {
+      throw createRuntimeAuthorityError({
+        mode: authorityMode,
+        tenantId: tenantIdInput,
+        tenantKey: resolvedTenantKey || tenantKeyInput,
+        reasonCode: "tenant_not_resolved",
+        reason: "tenant_not_resolved",
+        message: "Approved runtime authority is unavailable because the tenant could not be resolved.",
+      });
+    }
+
     const fallbackKey = resolvedTenantKey || tenantKeyInput || "default";
     const fallbackLanguage = "az";
 
@@ -2315,6 +2489,14 @@ export async function getTenantBusinessRuntime(input = {}) {
       commentPolicy: {},
       profile: {},
       tenant: null,
+      authority: buildRuntimeAuthority({
+        mode: authorityMode,
+        available: false,
+        tenantId: tenantIdInput,
+        tenantKey: fallbackKey,
+        reasonCode: "tenant_not_resolved",
+        reason: "tenant_not_resolved",
+      }),
       threadState: input?.threadState || null,
       raw: {
         mode: "fallback_empty",
@@ -2331,11 +2513,13 @@ export async function getTenantBusinessRuntime(input = {}) {
     };
   }
 
-  const projection = await loadCurrentProjection({
+  const projectionResult = await loadCurrentProjection({
     db,
     tenantId: legacyTenant.id,
     tenantKey: legacyTenant.tenant_key,
   });
+  const projection = projectionResult?.projection || null;
+  const projectionFreshness = projectionResult?.freshness || null;
 
   const dbData = await loadDbBrainData({ db, tenant: legacyTenant });
 
@@ -2345,7 +2529,20 @@ export async function getTenantBusinessRuntime(input = {}) {
       legacyTenant,
       input,
       projection,
+      freshness: projectionFreshness,
       dbData,
+    });
+  }
+
+  if (authorityMode === "strict") {
+    throw createRuntimeAuthorityError({
+      mode: authorityMode,
+      tenantId: legacyTenant.id,
+      tenantKey: legacyTenant.tenant_key,
+      reasonCode: "runtime_projection_missing",
+      reason: "runtime_projection_missing",
+      message:
+        "Approved runtime authority is unavailable because no fresh runtime projection exists.",
     });
   }
 
@@ -2392,6 +2589,14 @@ export async function getTenantBusinessRuntime(input = {}) {
     knowledgeEntries,
     responsePlaybooks,
     threadState: input?.threadState || null,
+    authority: buildRuntimeAuthority({
+      mode: authorityMode,
+      available: false,
+      tenantId: legacyTenant.id,
+      tenantKey: legacyTenant.tenant_key,
+      reasonCode: "legacy_fallback_runtime",
+      reason: "legacy_fallback_runtime",
+    }),
     raw: {
       mode: "legacy_fallback",
       businessProfile: dbData.businessProfile,
@@ -2416,5 +2621,10 @@ export const buildTenantBusinessRuntime = getTenantBusinessRuntime;
 export const createTenantBusinessRuntime = getTenantBusinessRuntime;
 export const resolveBusinessRuntime = getTenantBusinessRuntime;
 export const resolveTenantBusinessRuntime = getTenantBusinessRuntime;
+export const __test__ = {
+  normalizeAuthorityMode,
+  buildRuntimeAuthority,
+  createRuntimeAuthorityError,
+};
 
 export default getTenantBusinessRuntime;

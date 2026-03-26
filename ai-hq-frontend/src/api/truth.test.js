@@ -110,3 +110,15 @@ test("normalizeCompareResponse maps backend truth version compare detail", () =>
   assert.equal(normalized.sectionChanges.length, 1);
   assert.equal(normalized.hasStructuredDiff, true);
 });
+
+test("approved truth unavailable snapshot refuses non-approved fallback data", () => {
+  const snapshot = __test__.buildApprovedTruthUnavailableSnapshot();
+
+  assert.equal(snapshot.hasTruth, false);
+  assert.equal(snapshot.approvedTruthUnavailable, true);
+  assert.equal(snapshot.unavailableReasonCode, "approved_truth_unavailable");
+  assert.match(
+    snapshot.notices[0],
+    /no non-approved fallback data is being shown/i
+  );
+});

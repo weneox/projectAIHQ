@@ -10,7 +10,11 @@ import { okJson, isDbReady, isUuid } from "../../../utils/http.js";
 import { requireInternalToken } from "../../../utils/auth.js";
 import { fixText } from "../../../utils/textFix.js";
 import { buildInboxActions } from "../../../services/inboxBrain.js";
-import { getTenantBrainRuntime } from "../../../services/businessBrain/getTenantBrainRuntime.js";
+import {
+  buildRuntimeAuthorityFailurePayload,
+  getTenantBrainRuntime,
+  isRuntimeAuthorityError,
+} from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import { resolveTenantKeyFromReq } from "../../../tenancy/index.js";
 import { emitRealtimeEvent } from "../../../realtime/events.js";
 import { enqueueMetaOutboundExecution } from "../../../services/durableExecutionService.js";
@@ -766,7 +770,7 @@ function buildThreadStateForOutbound({
   };
 }
 
-export function inboxInternalRoutes({ db, wsHub }) {
+export function inboxInternalRoutes({ db, wsHub, getRuntime = getTenantBrainRuntime }) {
   const r = express.Router();
 
   r.post("/inbox/ingest", requireInternalToken, async (req, res) => {
@@ -1067,11 +1071,32 @@ export function inboxInternalRoutes({ db, wsHub }) {
 
       const priorThreadState = await getInboxThreadState(client, thread.id);
 
-      const runtimePack = await getTenantBrainRuntime({
-        db: client,
-        tenantKey,
-        threadState: priorThreadState || null,
-      });
+      let runtimePack = null;
+
+      try {
+        runtimePack = await getRuntime({
+          db: client,
+          tenantKey,
+          threadState: priorThreadState || null,
+          authorityMode: "strict",
+        });
+      } catch (error) {
+        if (isRuntimeAuthorityError(error)) {
+          await client.query("ROLLBACK");
+          client.release();
+          client = null;
+
+          return okJson(
+            res,
+            buildRuntimeAuthorityFailurePayload(error, {
+              service: "inbox.ingest",
+              tenantKey,
+            })
+          );
+        }
+
+        throw error;
+      }
 
       const tenant = mergeTenant(runtimePack?.tenant, tenantRow, tenantKey);
       const services = Array.isArray(runtimePack?.serviceCatalog)

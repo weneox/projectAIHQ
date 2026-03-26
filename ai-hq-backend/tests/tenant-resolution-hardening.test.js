@@ -8,6 +8,7 @@ import {
   getRequestedTenantId,
 } from "../src/utils/auth.js";
 import {
+  getDefaultTenantKey,
   resolveTenantKeyFromReq,
   resolveTenantIdFromReq,
 } from "../src/tenancy/index.js";
@@ -99,5 +100,20 @@ test("settings internal tenant resolution still works only through internal-toke
     assert.equal(resolveSettingsTenantKey(userReq), "tenant-auth");
   } finally {
     cfg.security.aihqInternalToken = previousToken;
+  }
+});
+
+test("default tenant key is sourced from cfg.tenant.defaultTenantKey consistently", () => {
+  const previousTenantDefault = cfg.tenant.defaultTenantKey;
+  const previousLegacyAlias = cfg.DEFAULT_TENANT_KEY;
+
+  try {
+    cfg.tenant.defaultTenantKey = "authority-default";
+    cfg.DEFAULT_TENANT_KEY = "stale-legacy-value";
+
+    assert.equal(getDefaultTenantKey(), "authority-default");
+  } finally {
+    cfg.tenant.defaultTenantKey = previousTenantDefault;
+    cfg.DEFAULT_TENANT_KEY = previousLegacyAlias;
   }
 });

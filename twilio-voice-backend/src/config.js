@@ -15,6 +15,18 @@ function b(v, d = false) {
   return d;
 }
 
+function prodDefaultBool(v, fallbackProd = true) {
+  const raw = String(v ?? "").trim().toLowerCase();
+  if (raw) {
+    if (["1", "true", "yes", "y", "on"].includes(raw)) return true;
+    if (["0", "false", "no", "n", "off"].includes(raw)) return false;
+  }
+
+  const env = s(process.env.APP_ENV, process.env.NODE_ENV || "development").toLowerCase();
+  const prodLike = !["", "development", "dev", "test"].includes(env);
+  return prodLike ? fallbackProd : false;
+}
+
 const DEFAULT_OPERATOR_PHONE = s(
   process.env.OPERATOR_PHONE || process.env.DEFAULT_OPERATOR_PHONE
 );
@@ -49,9 +61,21 @@ export const cfg = {
 
   AIHQ_BASE_URL: s(process.env.AIHQ_BASE_URL).replace(/\/+$/, ""),
   AIHQ_INTERNAL_TOKEN: s(process.env.AIHQ_INTERNAL_TOKEN),
+  REQUIRE_OPERATIONAL_READINESS_ON_BOOT: prodDefaultBool(
+    process.env.REQUIRE_OPERATIONAL_READINESS_ON_BOOT,
+    true
+  ),
 
   DEFAULT_TENANT_KEY: s(process.env.DEFAULT_TENANT_KEY, "default"),
   DEFAULT_LANGUAGE: s(process.env.DEFAULT_LANGUAGE, "en"),
+  ALLOW_UNSAFE_TENANT_KEY_RESOLUTION: b(
+    process.env.ALLOW_UNSAFE_TENANT_KEY_RESOLUTION,
+    false
+  ),
+  ALLOW_LOCAL_TENANT_CONFIG_FALLBACK: b(
+    process.env.ALLOW_LOCAL_TENANT_CONFIG_FALLBACK,
+    false
+  ),
 
   // system-level fallback only
   DEFAULT_TRANSFER_MODE: s(process.env.DEFAULT_TRANSFER_MODE, "manual"),

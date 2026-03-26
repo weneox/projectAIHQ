@@ -157,6 +157,14 @@ function createSimpleSayXml(text) {
   return vr.toString();
 }
 
+function writeStructuredRouteError(res, status, error, details = {}) {
+  return res.status(status).json({
+    ok: false,
+    error: s(error || "voice_route_failed"),
+    details: isObj(details) ? details : {},
+  });
+}
+
 function detectPreferredLang(req, tenantConfig) {
   const explicit =
     s(req.body?.lang) ||
@@ -276,15 +284,6 @@ function buildFallbackUnavailableReply(lang) {
 export function twilioRouter() {
   const r = express.Router();
 
-  r.get("/health", (_req, res) => {
-    res.json({
-      ok: true,
-      service: "twilio-voice-backend",
-      env: cfg.APP_ENV,
-      port: cfg.PORT,
-    });
-  });
-
   r.options("/twilio/token", (_req, res) => res.sendStatus(204));
 
   r.get("/twilio/token", (_req, res) => {
@@ -349,27 +348,47 @@ export function twilioRouter() {
     try {
       const tenant = await resolveTenantFromRequest(req);
       if (!tenant?.ok) {
-        return res.status(400).json({
-          ok: false,
-          error: tenant?.error || "tenant_resolution_required",
-        });
+        console.error("[twilio/voice] tenant resolution blocked", tenant);
+        return writeStructuredRouteError(
+          res,
+          400,
+          tenant?.error || "tenant_resolution_required",
+          {
+            matchedBy: s(tenant?.matchedBy || ""),
+          }
+        );
       }
-      const tenantConfig = await getTenantVoiceConfig({ tenant });
-      if (!s(tenantConfig?.tenantKey)) {
-        return res.status(404).json({
-          ok: false,
-          error: "tenant_config_not_found",
+      const tenantConfigResult = await getTenantVoiceConfig({ tenant });
+      if (
+        !tenantConfigResult?.ok ||
+        !s(tenantConfigResult?.config?.tenantKey) ||
+        tenantConfigResult?.config?.authority?.available !== true
+      ) {
+        console.error("[twilio/voice] tenant config unavailable", {
+          tenantKey: s(tenant?.tenantKey || ""),
+          toNumber: s(tenant?.toNumber || ""),
+          error: s(tenantConfigResult?.error || "tenant_config_not_found"),
+          authority: tenantConfigResult?.authority || null,
         });
+        return writeStructuredRouteError(
+          res,
+          Number(tenantConfigResult?.status || 404),
+          tenantConfigResult?.error || "tenant_config_not_found",
+          {
+            tenantKey: s(tenant?.tenantKey || ""),
+            toNumber: s(tenant?.toNumber || ""),
+            authority: tenantConfigResult?.authority || null,
+          }
+        );
       }
+      const tenantConfig = tenantConfigResult.config;
 
       const baseUrl = getBaseUrlFromReq(req);
       const wsUrl = `${toWsUrl(baseUrl)}/twilio/stream`;
 
       const from = s(req.body?.From || req.query?.From);
       const to = s(req.body?.To || req.query?.To || req.body?.Called || req.query?.Called);
-      const tenantKey = s(
-        tenantConfig?.tenantKey || tenant?.tenantKey || cfg.DEFAULT_TENANT_KEY || "default"
-      );
+      const tenantKey = s(tenantConfig?.tenantKey);
 
       const xml = createVoiceResponseXml({
         wsUrl,
@@ -392,18 +411,40 @@ export function twilioRouter() {
     try {
       const tenant = await resolveTenantFromRequest(req);
       if (!tenant?.ok) {
-        return res.status(400).json({
-          ok: false,
-          error: tenant?.error || "tenant_resolution_required",
-        });
+        console.error("[twilio/transfer] tenant resolution blocked", tenant);
+        return writeStructuredRouteError(
+          res,
+          400,
+          tenant?.error || "tenant_resolution_required",
+          {
+            matchedBy: s(tenant?.matchedBy || ""),
+          }
+        );
       }
-      const tenantConfig = await getTenantVoiceConfig({ tenant });
-      if (!s(tenantConfig?.tenantKey)) {
-        return res.status(404).json({
-          ok: false,
-          error: "tenant_config_not_found",
+      const tenantConfigResult = await getTenantVoiceConfig({ tenant });
+      if (
+        !tenantConfigResult?.ok ||
+        !s(tenantConfigResult?.config?.tenantKey) ||
+        tenantConfigResult?.config?.authority?.available !== true
+      ) {
+        console.error("[twilio/transfer] tenant config unavailable", {
+          tenantKey: s(tenant?.tenantKey || ""),
+          toNumber: s(tenant?.toNumber || ""),
+          error: s(tenantConfigResult?.error || "tenant_config_not_found"),
+          authority: tenantConfigResult?.authority || null,
         });
+        return writeStructuredRouteError(
+          res,
+          Number(tenantConfigResult?.status || 404),
+          tenantConfigResult?.error || "tenant_config_not_found",
+          {
+            tenantKey: s(tenant?.tenantKey || ""),
+            toNumber: s(tenant?.toNumber || ""),
+            authority: tenantConfigResult?.authority || null,
+          }
+        );
       }
+      const tenantConfig = tenantConfigResult.config;
       const lang = detectPreferredLang(req, tenantConfig);
 
       const requestedDepartment = getRequestedDepartment(req);
@@ -452,7 +493,8 @@ export function twilioRouter() {
   r.post("/twilio/voice/fallback", async (req, res) => {
     try {
       const tenant = await resolveTenantFromRequest(req).catch(() => null);
-      const tenantConfig = await getTenantVoiceConfig({ tenant }).catch(() => null);
+      const tenantConfigResult = await getTenantVoiceConfig({ tenant }).catch(() => null);
+      const tenantConfig = tenantConfigResult?.ok ? tenantConfigResult.config : null;
       const lang = detectPreferredLang(req, tenantConfig);
       const text = buildFallbackUnavailableReply(lang);
 

@@ -9,6 +9,20 @@ on:
 jobs:
   monorepo-release-gate:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: aihq_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_user -d aihq_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     env:
       CI: "true"
       PORT: "8080"
@@ -24,7 +38,7 @@ jobs:
       AIHQ_INTERNAL_TOKEN: ci-internal-token
       DEBUG_API_TOKEN: ci-debug-token
       CRON_SECRET: ci-cron-secret
-      TENANT_SECRET_MASTER_KEY: ci-tenant-master-key
+      TENANT_SECRET_MASTER_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       VAPID_PUBLIC_KEY: BElCiExamplePublicKey1234567890abcdefghijklmnop
       VAPID_PRIVATE_KEY: ci-vapid-private-key
       VAPID_SUBJECT: mailto:platform@example.com
@@ -59,6 +73,12 @@ jobs:
 
       - name: Validate environment
         run: npm run validate:env
+
+      - name: Apply AI HQ migrations
+        run: npm run migrate:ai-hq-backend
+
+      - name: Check operational readiness
+        run: npm run check:operational-readiness
 
       - name: Lint all workspaces
         run: npm run lint:all

@@ -58,6 +58,29 @@ export async function saveWorkspaceChannel(channelType, payload) {
 }
 
 // ---------------------------------------------------------
+// operational control plane
+// ---------------------------------------------------------
+
+export async function getOperationalSettings() {
+  const j = await apiGet(`/api/settings/operational`);
+  ensureOk(j, "Failed to load operational settings");
+  return j;
+}
+
+export async function saveOperationalVoiceSettings(payload) {
+  const j = await apiPost(`/api/settings/operational/voice`, payload);
+  ensureOk(j, "Failed to save voice operational settings");
+  return j;
+}
+
+export async function saveOperationalChannelSettings(channelType, payload) {
+  const t = encodeURIComponent(String(channelType || "").trim().toLowerCase());
+  const j = await apiPost(`/api/settings/operational/channels/${t}`, payload);
+  ensureOk(j, "Failed to save operational channel");
+  return j;
+}
+
+// ---------------------------------------------------------
 // agents
 // ---------------------------------------------------------
 

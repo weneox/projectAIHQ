@@ -20,6 +20,7 @@ function initialState() {
       history: [],
       notices: [],
       hasProvenance: false,
+      approvedTruthUnavailable: false,
     },
   };
 }
@@ -48,6 +49,7 @@ export default function TruthViewerPage() {
             history: data.history || [],
             notices: data.notices || [],
             hasProvenance: !!data.hasProvenance,
+            approvedTruthUnavailable: !!data.approvedTruthUnavailable,
           },
         });
       })
@@ -142,6 +144,13 @@ export default function TruthViewerPage() {
       <div className="mt-8">
         <TruthFieldTable fields={state.data.fields} />
       </div>
+
+      {state.data.approvedTruthUnavailable ? (
+        <div className="mt-6 rounded-[24px] border border-amber-200 bg-amber-50/90 px-5 py-4 text-sm leading-6 text-amber-800">
+          Approved truth is currently unavailable. Setup drafts or saved profile data are not being
+          shown here as a fallback.
+        </div>
+      ) : null}
 
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
         <TruthProvenancePanel hasProvenance={state.data.hasProvenance} />

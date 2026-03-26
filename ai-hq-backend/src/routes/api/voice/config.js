@@ -1,114 +1,66 @@
-import { s, isObj, toArray } from "./shared.js";
-
-export function normalizeDepartmentMap(input) {
-  const src = isObj(input) ? input : {};
-  const out = {};
-
-  for (const [rawKey, rawValue] of Object.entries(src)) {
-    const key = s(rawKey).toLowerCase();
-    if (!key) continue;
-
-    const item = isObj(rawValue) ? rawValue : {};
-    out[key] = {
-      enabled: String(item.enabled ?? "true").trim() !== "false",
-      label: s(item.label || key),
-      phone: s(item.phone),
-      callerId: s(item.callerId),
-      fallbackDepartment: s(item.fallbackDepartment).toLowerCase(),
-      keywords: toArray(item.keywords).map((x) => s(x)).filter(Boolean),
-      businessHours: isObj(item.businessHours) ? item.businessHours : {},
-      meta: isObj(item.meta) ? item.meta : {},
-    };
-  }
-
-  return out;
+function s(v, d = "") {
+  return String(v ?? d).trim();
 }
 
-export function buildOperatorRouting(meta = {}, operator = {}, voiceProfile = {}) {
-  const routing = isObj(operator.routing)
-    ? operator.routing
-    : isObj(meta.operatorRouting)
-      ? meta.operatorRouting
-      : isObj(meta.operator_routing)
-        ? meta.operator_routing
-        : {};
-
-  const departments = normalizeDepartmentMap(
-    routing.departments ||
-      operator.departments ||
-      operator.department ||
-      meta.operatorDepartments ||
-      meta.operator_departments ||
-      {}
-  );
-
-  const defaultDepartment = s(
-    routing.defaultDepartment ||
-      operator.defaultDepartment ||
-      meta.defaultOperatorDepartment ||
-      meta.default_operator_department
-  ).toLowerCase();
-
-  const mode = s(
-    routing.mode || operator.mode || voiceProfile.transferMode || "manual"
-  ).toLowerCase();
-
-  return {
-    mode: mode || "manual",
-    defaultDepartment: defaultDepartment || "",
-    departments,
-  };
+function lower(v, d = "") {
+  return s(v, d).toLowerCase();
 }
 
-export function buildVoiceConfigFromTenantRow(row, { tenantKey, toNumber }) {
-  const meta = isObj(row?.meta) ? row.meta : {};
-  const voice = isObj(meta.voice) ? meta.voice : {};
-  const contact = isObj(meta.contact) ? meta.contact : {};
-  const operator = isObj(meta.operator) ? meta.operator : {};
-  const realtime = isObj(meta.realtime) ? meta.realtime : {};
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
 
-  const voiceProfile = isObj(voice.voiceProfile)
-    ? voice.voiceProfile
-    : isObj(meta.voiceProfile)
-      ? meta.voiceProfile
-      : {};
+export function buildVoiceConfigFromProjectedRuntime(
+  projectedRuntime,
+  { tenantKey, toNumber } = {}
+) {
+  const runtime = obj(projectedRuntime);
+  const authority = obj(runtime.authority);
+  const tenant = obj(runtime.tenant);
+  const voice = obj(obj(runtime.channels).voice);
+  const operationalVoice = obj(obj(runtime.operational).voice);
+  const contact = obj(voice.contact);
+  const operator = obj(operationalVoice.operator);
+  const operatorRouting = obj(operationalVoice.operatorRouting);
+  const realtime = obj(operationalVoice.realtime);
+  const voiceProfile = obj(voice.profile);
 
-  const resolvedTenantKey = s(row?.tenant_key || tenantKey || "default");
-  const companyName = s(
-    row?.company_name || voiceProfile.companyName || resolvedTenantKey || "Company"
+  const resolvedTenantKey = lower(
+    tenant.tenantKey || authority.tenantKey || tenantKey || "default"
   );
-  const defaultLanguage = s(
-    row?.default_language || voiceProfile.defaultLanguage || "en"
-  ).toLowerCase();
-
-  const operatorRouting = buildOperatorRouting(meta, operator, voiceProfile);
+  const companyName = s(tenant.companyName || tenant.displayName || resolvedTenantKey);
+  const defaultLanguage = lower(
+    voiceProfile.defaultLanguage || tenant.mainLanguage || "en"
+  );
 
   return {
     ok: true,
-    tenantId: s(row?.id),
+    tenantId: s(tenant.tenantId || authority.tenantId),
     tenantKey: resolvedTenantKey,
     companyName,
     defaultLanguage,
+    authority,
+    projectedRuntime: runtime,
     match: {
       tenantKey: s(tenantKey),
       toNumber: s(toNumber),
     },
     contact: {
-      phoneLocal: s(contact.phoneLocal || meta.phone_local || ""),
-      phoneIntl: s(contact.phoneIntl || meta.phone_intl || meta.phone || ""),
-      emailLocal: s(contact.emailLocal || meta.email_local || ""),
-      emailIntl: s(contact.emailIntl || meta.email_intl || meta.email || ""),
-      website: s(contact.website || meta.website || ""),
+      phoneLocal: s(obj(operationalVoice.contact).phoneLocal),
+      phoneIntl: s(contact.phoneIntl || obj(operationalVoice.contact).phoneIntl),
+      emailLocal: s(obj(operationalVoice.contact).emailLocal),
+      emailIntl: s(contact.emailIntl || obj(operationalVoice.contact).emailIntl),
+      website: s(contact.website || obj(operationalVoice.contact).website),
     },
     operator: {
-      phone: s(operator.phone || meta.operator_phone || ""),
-      callerId: s(operator.callerId || meta.twilio_caller_id || ""),
-      mode: s(operator.mode || "manual").toLowerCase(),
+      phone: s(operator.phone),
+      callerId: s(operator.callerId),
+      mode: lower(operator.mode || "manual"),
     },
     operatorRouting,
     realtime: {
-      model: s(realtime.model || voice.realtimeModel || "gpt-4o-realtime-preview"),
-      voice: s(realtime.voice || voice.realtimeVoice || "alloy"),
+      model: s(realtime.model || "gpt-4o-realtime-preview"),
+      voice: s(realtime.voice || "alloy"),
       instructions: s(realtime.instructions || ""),
     },
     voiceProfile: {
@@ -120,23 +72,33 @@ export function buildVoiceConfigFromTenantRow(row, { tenantKey, toNumber }) {
       tone: s(voiceProfile.tone || "professional"),
       answerStyle: s(voiceProfile.answerStyle || "short_clear"),
       askStyle: s(voiceProfile.askStyle || "single_question"),
-      businessSummary: s(
-        voiceProfile.businessSummary ||
-          meta.business_summary ||
-          "Help callers clearly and accurately using only the configured company information."
-      ),
-      allowedTopics: toArray(voiceProfile.allowedTopics),
-      forbiddenTopics: toArray(voiceProfile.forbiddenTopics),
+      businessSummary: s(voiceProfile.businessSummary),
+      allowedTopics: Array.isArray(voiceProfile.allowedTopics)
+        ? voiceProfile.allowedTopics
+        : [],
+      forbiddenTopics: Array.isArray(voiceProfile.forbiddenTopics)
+        ? voiceProfile.forbiddenTopics
+        : [],
       leadCaptureMode: s(voiceProfile.leadCaptureMode || "none"),
-      transferMode: s(voiceProfile.transferMode || operatorRouting.mode || "manual"),
-      contactPolicy: isObj(voiceProfile.contactPolicy)
-        ? voiceProfile.contactPolicy
-        : {
-            sharePhone: false,
-            shareEmail: false,
-            shareWebsite: false,
-          },
-      texts: isObj(voiceProfile.texts) ? voiceProfile.texts : {},
+      transferMode: s(
+        voiceProfile.transferMode || operatorRouting.mode || "manual"
+      ),
+      contactPolicy:
+        voiceProfile.contactPolicy &&
+        typeof voiceProfile.contactPolicy === "object" &&
+        !Array.isArray(voiceProfile.contactPolicy)
+          ? voiceProfile.contactPolicy
+          : {
+              sharePhone: false,
+              shareEmail: false,
+              shareWebsite: false,
+            },
+      texts:
+        voiceProfile.texts &&
+        typeof voiceProfile.texts === "object" &&
+        !Array.isArray(voiceProfile.texts)
+          ? voiceProfile.texts
+          : {},
     },
   };
 }

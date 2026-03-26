@@ -1,5 +1,5 @@
 import { apiGet } from "./client.js";
-import { getSetupOverview, getSetupTruth } from "./setup.js";
+import { getSetupTruth } from "./setup.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -395,9 +395,29 @@ function normalizeTruthResponse(payload = {}, source = "") {
   };
 }
 
+function buildApprovedTruthUnavailableSnapshot(
+  reasonCode = "approved_truth_unavailable",
+  notice = "Approved truth is unavailable. No non-approved fallback data is being shown."
+) {
+  return {
+    source: "/api/setup/truth/current",
+    fields: [],
+    approval: { approvedAt: "", approvedBy: "", version: "" },
+    hasApprovalMeta: false,
+    hasHistory: false,
+    history: [],
+    hasProvenance: false,
+    hasTruth: false,
+    approvedTruthUnavailable: true,
+    unavailableReasonCode: s(reasonCode),
+    notices: [s(notice)],
+  };
+}
+
 export const __test__ = {
   normalizeTruthResponse,
   normalizeCompareResponse,
+  buildApprovedTruthUnavailableSnapshot,
 };
 
 export async function getTruthVersionDetail(versionId, options = {}) {
@@ -415,35 +435,21 @@ export async function getCanonicalTruthSnapshot() {
     const normalized = normalizeTruthResponse(truth, "/api/setup/truth/current");
     return {
       ...normalized,
+      approvedTruthUnavailable: !(
+        normalized.hasTruth || normalized.hasApprovalMeta || normalized.hasHistory
+      ),
+      unavailableReasonCode:
+        normalized.hasTruth || normalized.hasApprovalMeta || normalized.hasHistory
+          ? ""
+          : "approved_truth_empty",
       notices:
         normalized.hasTruth || normalized.hasApprovalMeta || normalized.hasHistory
           ? []
-          : ["Approved truth exists, but the backend did not return populated truth fields."],
-    };
-  }
-
-  const overview = await getSetupOverview().catch(() => null);
-  if (overview) {
-    const fallback = normalizeTruthResponse(overview, "/api/setup/overview");
-    return {
-      ...fallback,
-      notices: [
-        "Dedicated approved truth could not be loaded. Showing the current saved business profile instead.",
-      ],
+          : ["Approved truth is unavailable. The backend returned no approved truth fields."],
     };
   }
 
   return {
-    source: "/api/setup/truth/current",
-    fields: [],
-    approval: { approvedAt: "", approvedBy: "", version: "" },
-    hasApprovalMeta: false,
-    hasHistory: false,
-    history: [],
-    hasProvenance: false,
-    hasTruth: false,
-    notices: [
-      "Approved truth could not be loaded from the backend.",
-    ],
+    ...buildApprovedTruthUnavailableSnapshot(),
   };
 }

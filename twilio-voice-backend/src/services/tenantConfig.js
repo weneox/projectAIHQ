@@ -1,118 +1,122 @@
+import { validateVoiceOperationalResponse } from "@aihq/shared-contracts/operations";
+import { validateVoiceProjectedRuntimeResponse } from "@aihq/shared-contracts/runtime";
 import { cfg } from "../config.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
-function n(v, d) {
-  const x = Number(v);
-  return Number.isFinite(x) ? x : d;
+function lower(v, d = "") {
+  return s(v, d).toLowerCase();
 }
 
-function clone(x) {
-  return x ? JSON.parse(JSON.stringify(x)) : x;
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
 
-function isObj(x) {
-  return !!x && typeof x === "object" && !Array.isArray(x);
+function isDevLikeEnv() {
+  return ["", "development", "dev", "test"].includes(
+    lower(cfg.APP_ENV, "development")
+  );
 }
 
-function mergeDeep(base, extra) {
-  const out = clone(base) || {};
-
-  if (!isObj(extra)) return out;
-
-  for (const [k, v] of Object.entries(extra)) {
-    if (Array.isArray(v)) {
-      out[k] = [...v];
-      continue;
-    }
-
-    if (isObj(v)) {
-      out[k] = mergeDeep(isObj(out[k]) ? out[k] : {}, v);
-      continue;
-    }
-
-    if (v !== undefined && v !== null && String(v) !== "") {
-      out[k] = v;
-    } else if (!(k in out)) {
-      out[k] = v;
-    }
-  }
-
-  return out;
-}
-
-function buildGenericBaseConfig(tenant = {}) {
-  const tenantKey = s(tenant?.tenantKey).toLowerCase();
-  const defaultLanguage = s(cfg.DEFAULT_LANGUAGE || "en").toLowerCase();
+function buildVoiceConfigFromContracts(projectedRuntime, operationalChannels) {
+  const runtime = obj(projectedRuntime);
+  const authority = obj(runtime.authority);
+  const tenant = obj(runtime.tenant);
+  const voice = obj(obj(runtime.channels).voice);
+  const operationalVoice = obj(obj(operationalChannels).voice);
+  const voiceProfile = obj(voice.profile);
+  const contact = obj(voice.contact);
+  const operator = obj(operationalVoice.operator);
+  const operatorRouting = obj(operationalVoice.operatorRouting);
+  const realtime = obj(operationalVoice.realtime);
+  const defaultLanguage = lower(
+    voiceProfile.defaultLanguage || tenant.mainLanguage || cfg.DEFAULT_LANGUAGE || "en"
+  );
 
   return {
     ok: true,
-    tenantKey,
-    companyName: s(tenant?.companyName || "Company"),
+    tenantId: s(tenant.tenantId || authority.tenantId),
+    tenantKey: lower(tenant.tenantKey || authority.tenantKey),
+    companyName: s(tenant.companyName || tenant.displayName || "Company"),
     defaultLanguage,
-
+    authority,
+    projectedRuntime: runtime,
+    operationalChannels: obj(operationalChannels),
     contact: {
       phoneLocal: "",
-      phoneIntl: "",
+      phoneIntl: s(contact.phoneIntl),
       emailLocal: "",
-      emailIntl: "",
-      website: "",
+      emailIntl: s(contact.emailIntl),
+      website: s(contact.website),
     },
-
     operator: {
-      phone: s(cfg.OPERATOR_PHONE),
-      callerId: s(cfg.TWILIO_CALLER_ID),
+      phone: s(operator.phone || cfg.OPERATOR_PHONE),
+      callerId: s(operator.callerId || cfg.TWILIO_CALLER_ID),
+      mode: lower(operator.mode || "manual"),
     },
-
+    operatorRouting,
     realtime: {
-      model: s(cfg.OPENAI_REALTIME_MODEL, "gpt-4o-realtime-preview"),
-      voice: s(cfg.OPENAI_REALTIME_VOICE, "alloy"),
-      instructions: s(cfg.OPENAI_REALTIME_INSTRUCTIONS),
-      reconnectMax: n(cfg.OPENAI_REALTIME_RECONNECT_MAX, 2),
+      model: s(realtime.model || cfg.OPENAI_REALTIME_MODEL || "gpt-4o-realtime-preview"),
+      voice: s(realtime.voice || cfg.OPENAI_REALTIME_VOICE || "alloy"),
+      instructions: s(realtime.instructions || cfg.OPENAI_REALTIME_INSTRUCTIONS),
+      reconnectMax: Number(cfg.OPENAI_REALTIME_RECONNECT_MAX || 2) || 2,
     },
-
     voiceProfile: {
-      companyName: s(tenant?.companyName || "Company"),
-      assistantName: "",
-      roleLabel: "virtual assistant",
+      companyName: s(voiceProfile.companyName || tenant.companyName || "Company"),
+      assistantName: s(voiceProfile.assistantName || "Virtual Assistant"),
+      roleLabel: s(voiceProfile.roleLabel || "virtual assistant"),
       defaultLanguage,
-      purpose: "general",
-      tone: "professional",
-      answerStyle: "short_clear",
-      askStyle: "single_question",
-      businessSummary: "",
-      allowedTopics: [],
-      forbiddenTopics: [],
-      leadCaptureMode: "none",
-      transferMode: "manual",
-      contactPolicy: {
-        sharePhone: false,
-        shareEmail: false,
-        shareWebsite: false,
-      },
-      texts: {
-        greeting: {},
-      },
+      purpose: s(voiceProfile.purpose || "general"),
+      tone: s(voiceProfile.tone || "professional"),
+      answerStyle: s(voiceProfile.answerStyle || "short_clear"),
+      askStyle: s(voiceProfile.askStyle || "single_question"),
+      businessSummary: s(voiceProfile.businessSummary),
+      allowedTopics: Array.isArray(voiceProfile.allowedTopics)
+        ? voiceProfile.allowedTopics
+        : [],
+      forbiddenTopics: Array.isArray(voiceProfile.forbiddenTopics)
+        ? voiceProfile.forbiddenTopics
+        : [],
+      leadCaptureMode: s(voiceProfile.leadCaptureMode || "none"),
+      transferMode: s(
+        voiceProfile.transferMode || operatorRouting.mode || "manual"
+      ),
+      contactPolicy:
+        voiceProfile.contactPolicy &&
+        typeof voiceProfile.contactPolicy === "object" &&
+        !Array.isArray(voiceProfile.contactPolicy)
+          ? voiceProfile.contactPolicy
+          : {
+              sharePhone: false,
+              shareEmail: false,
+              shareWebsite: false,
+            },
+      texts:
+        voiceProfile.texts &&
+        typeof voiceProfile.texts === "object" &&
+        !Array.isArray(voiceProfile.texts)
+          ? voiceProfile.texts
+          : {
+              greeting: {},
+            },
     },
   };
 }
 
 async function tryFetchTenantFromAiHq({ tenantKey, toNumber }) {
   if (!cfg.AIHQ_BASE_URL || !cfg.AIHQ_INTERNAL_TOKEN) {
-    console.log("[tenantConfig] AIHQ fetch skipped: missing AIHQ_BASE_URL or AIHQ_INTERNAL_TOKEN");
-    return null;
+    return {
+      ok: false,
+      error: "aihq_unconfigured",
+      status: 0,
+      json: null,
+    };
   }
 
   try {
     const url = `${s(cfg.AIHQ_BASE_URL).replace(/\/+$/, "")}/api/internal/voice/tenant-config`;
-
-    console.log("[tenantConfig] fetching from AIHQ", {
-      url,
-      tenantKey: s(tenantKey),
-      toNumber: s(toNumber),
-    });
 
     const resp = await fetch(url, {
       method: "POST",
@@ -136,101 +140,111 @@ async function tryFetchTenantFromAiHq({ tenantKey, toNumber }) {
     }
 
     if (!resp.ok) {
-      console.log("[tenantConfig] AIHQ fetch non-200", {
+      return {
+        ok: false,
+        error: s(json?.error || "tenant_config_fetch_failed"),
         status: resp.status,
-        body: text || null,
-      });
-      return null;
+        json,
+      };
     }
 
-    if (!json?.ok) {
-      console.log("[tenantConfig] AIHQ fetch invalid payload", {
-        body: json || text || null,
-      });
-      return null;
+    const checked = validateVoiceProjectedRuntimeResponse(json || {});
+    if (!checked.ok) {
+      return {
+        ok: false,
+        error: checked.error,
+        status: resp.status,
+        json,
+      };
     }
 
-    console.log("[tenantConfig] AIHQ fetch success", {
-      tenantKey: json?.tenantKey || null,
-      companyName: json?.companyName || null,
-    });
+    const operationalChecked = validateVoiceOperationalResponse(json || {});
+    if (!operationalChecked.ok) {
+      return {
+        ok: false,
+        error: operationalChecked.error,
+        status: resp.status,
+        json,
+      };
+    }
 
-    return json;
+    return {
+      ok: true,
+      status: resp.status,
+      json: {
+        ...checked.value,
+        operationalChannels: operationalChecked.value.operationalChannels,
+      },
+    };
   } catch (err) {
-    console.log("[tenantConfig] AIHQ fetch failed", {
-      error: String(err?.message || err || "unknown"),
-    });
-    return null;
-  }
-}
-
-function finalizeConfig(remoteConfig, tenant) {
-  const base = buildGenericBaseConfig(tenant);
-
-  if (!remoteConfig) return base;
-
-  const merged = mergeDeep(base, remoteConfig);
-
-  merged.ok = true;
-  merged.tenantKey = s(
-    remoteConfig?.tenantKey || tenant?.tenantKey || base.tenantKey || ""
-  ).toLowerCase();
-
-  merged.companyName = s(
-    remoteConfig?.companyName || tenant?.companyName || base.companyName || "Company"
-  );
-
-  merged.defaultLanguage = s(
-    remoteConfig?.defaultLanguage || base.defaultLanguage || "en"
-  ).toLowerCase();
-
-  merged.contact = mergeDeep(base.contact || {}, remoteConfig?.contact || {});
-  merged.operator = mergeDeep(base.operator || {}, remoteConfig?.operator || {});
-  merged.realtime = mergeDeep(base.realtime || {}, remoteConfig?.realtime || {});
-  merged.voiceProfile = mergeDeep(base.voiceProfile || {}, remoteConfig?.voiceProfile || {});
-
-  merged.voiceProfile.companyName = s(
-    merged.voiceProfile.companyName || merged.companyName || "Company"
-  );
-
-  merged.voiceProfile.defaultLanguage = s(
-    merged.voiceProfile.defaultLanguage || merged.defaultLanguage || "en"
-  ).toLowerCase();
-
-  if (!isObj(merged.voiceProfile.contactPolicy)) {
-    merged.voiceProfile.contactPolicy = {
-      sharePhone: false,
-      shareEmail: false,
-      shareWebsite: false,
+    return {
+      ok: false,
+      error: "tenant_config_fetch_exception",
+      status: 0,
+      json: null,
+      details: s(err?.message || err),
     };
   }
-
-  if (!isObj(merged.voiceProfile.texts)) {
-    merged.voiceProfile.texts = {};
-  }
-
-  if (!isObj(merged.voiceProfile.texts.greeting)) {
-    merged.voiceProfile.texts.greeting = {};
-  }
-
-  return merged;
 }
 
 export async function getTenantVoiceConfig({ tenant }) {
-  const aiTenant = await tryFetchTenantFromAiHq({
+  const remote = await tryFetchTenantFromAiHq({
     tenantKey: tenant?.tenantKey || null,
     toNumber: tenant?.toNumber || null,
   });
 
-  const resolved = finalizeConfig(aiTenant, tenant);
+  if (!remote?.ok) {
+    if (cfg.ALLOW_LOCAL_TENANT_CONFIG_FALLBACK && isDevLikeEnv()) {
+      return {
+        ok: false,
+        error: "unsafe_local_voice_config_fallback_blocked",
+        status: 503,
+        authority: {
+          source: "local_dev_fallback_disabled",
+          error: s(remote?.error || "tenant_config_fetch_failed"),
+        },
+      };
+    }
 
-  console.log("[tenantConfig] resolved config", {
-    tenantKey: resolved?.tenantKey || null,
-    companyName: resolved?.companyName || null,
-    hasRemote: !!aiTenant,
-    operatorPhone: resolved?.operator?.phone || null,
-    contactPhoneIntl: resolved?.contact?.phoneIntl || null,
-  });
+    return {
+      ok: false,
+      error: s(remote?.error || "tenant_config_fetch_failed"),
+      status: Number(remote?.status || 503),
+      authority: {
+        source: "aihq",
+        error: s(remote?.error || "tenant_config_fetch_failed"),
+      },
+    };
+  }
 
-  return resolved;
+  const projectedRuntime = obj(remote.json?.projectedRuntime);
+  const operationalChannels = obj(remote.json?.operationalChannels);
+  const operationalVoice = obj(operationalChannels.voice);
+
+  if (operationalVoice.available !== true || operationalVoice.ready !== true) {
+    return {
+      ok: false,
+      error: s(operationalVoice.reasonCode || "voice_operational_unavailable"),
+      status: Number(remote?.status || 409),
+      authority: {
+        ...(obj(projectedRuntime.authority)),
+        source: "aihq_operational_contract",
+      },
+    };
+  }
+
+  const config = buildVoiceConfigFromContracts(
+    projectedRuntime,
+    operationalChannels
+  );
+
+  return {
+    ok: true,
+    config,
+    authority: config.authority,
+  };
 }
+
+export const __test__ = {
+  buildVoiceConfigFromContracts,
+};

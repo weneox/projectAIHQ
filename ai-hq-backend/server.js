@@ -20,6 +20,7 @@ import {
 import { createWsHub } from "./src/wsHub.js";
 import { apiRouter } from "./src/routes/api.js";
 import { adminAuthRoutes } from "./src/routes/api/adminAuth/index.js";
+import { buildRootHealthResponse } from "./src/routes/api/health/builders.js";
 import { createLogger, requestContextMiddleware } from "./src/utils/logger.js";
 import {
   buildAllowedCorsOrigins,
@@ -36,6 +37,12 @@ import {
   classifyWorkerHealth,
 } from "./src/observability/runtimeSignals.js";
 import { createDurableExecutionHelpers } from "./src/db/helpers/durableExecutions.js";
+import {
+  buildOperationalReadinessBlockerError,
+  getOperationalReadinessSummary,
+  hasOperationalReadinessBlockers,
+  shouldEnforceOperationalReadinessOnStartup,
+} from "./src/services/operationalReadiness.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -92,6 +99,13 @@ async function main() {
   assertConfigValid(console);
   printFeatureReport(console);
   const logger = createLogger({ service: "ai-hq-backend", env: cfg.app.env });
+  let startupOperationalReadiness = {
+    ok: false,
+    enabled: false,
+    enforced: false,
+    blockers: { total: 0 },
+    status: "unknown",
+  };
 
   const app = express();
 
@@ -211,16 +225,9 @@ async function main() {
   app.get("/health", async (_req, res) => {
     const hasDbUrl = Boolean(s(cfg.db.url));
     const db = getDb();
-
-    const out = {
-      ok: true,
-      service: "ai-hq-backend",
-      env: cfg.app.env,
-      marker: "HEALTH_BUILD_V4_FEATURES",
-      db: {
-        enabled: hasDbUrl,
-        ok: false,
-      },
+    const out = await buildRootHealthResponse({
+      db,
+      startupOperationalReadiness,
       providers: {
         openai: !!cfg.ai.openaiApiKey,
         runway: !!cfg.media.runwayApiKey,
@@ -238,7 +245,8 @@ async function main() {
         durableExecution: null,
         sourceSync: null,
       },
-    };
+    });
+    out.db.ok = false;
 
     if (!hasDbUrl || !db) {
       res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -348,10 +356,53 @@ async function main() {
   }
 
   const db = getDb();
+  if (db) {
+    const enforceOperationalReadiness = shouldEnforceOperationalReadinessOnStartup({
+      appEnv: cfg.app.env,
+      enforceFlag: cfg.operational.enforceReadinessOnStartup,
+    });
+
+    try {
+      const readinessSummary = await getOperationalReadinessSummary(db, {
+        enforced: enforceOperationalReadiness,
+      });
+      startupOperationalReadiness = {
+        ...readinessSummary,
+        enforced: enforceOperationalReadiness,
+        status: hasOperationalReadinessBlockers(readinessSummary)
+          ? "blocked"
+          : "ready",
+      };
+
+      if (
+        enforceOperationalReadiness &&
+        hasOperationalReadinessBlockers(readinessSummary)
+      ) {
+        throw buildOperationalReadinessBlockerError(readinessSummary);
+      }
+    } catch (err) {
+      startupOperationalReadiness = {
+        ...startupOperationalReadiness,
+        ok: false,
+        enforced: enforceOperationalReadiness,
+        status: enforceOperationalReadiness ? "blocked" : "attention",
+        error: String(err?.message || err || "operational_readiness_failed"),
+      };
+
+      if (enforceOperationalReadiness) {
+        throw err;
+      }
+
+      logger.warn("app.operational_readiness.skipped", {
+        error: startupOperationalReadiness.error,
+      });
+    }
+  }
   const dbDisabled = !db;
   const audit = createAuditLogger(db);
 
   app.locals.db = db;
+  app.locals.operationalReadinessStartup = startupOperationalReadiness;
 
   const server = http.createServer(app);
   const wsHub = createWsHub({

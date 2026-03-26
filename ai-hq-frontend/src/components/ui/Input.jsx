@@ -5,6 +5,7 @@
 // ✅ stronger readOnly + disabled states
 // ✅ compatible with existing Input and InputGroup usage
 
+import { forwardRef } from "react";
 import { cx } from "../../lib/cx.js";
 
 function XIcon({ className }) {
@@ -147,14 +148,14 @@ export function InputGroup({
   );
 }
 
-export default function Input({
+const Input = forwardRef(function Input({
   className,
   inputClassName,
   disabled,
   readOnly,
   invalid = false,
   ...props
-}) {
+}, ref) {
   return (
     <div className="relative w-full min-w-0">
       <Surface
@@ -164,6 +165,7 @@ export default function Input({
         invalid={invalid}
       >
         <input
+          ref={ref}
           disabled={disabled}
           readOnly={readOnly}
           className={cx(
@@ -180,4 +182,6 @@ export default function Input({
       </Surface>
     </div>
   );
-}
+});
+
+export default Input;

@@ -5,6 +5,17 @@ import { requireInternalToken } from "../../../utils/auth.js";
 import { dbGetTenantProviderSecrets } from "../../../db/helpers/tenantSecrets.js";
 import { sanitizeProviderSecrets } from "../../../utils/securitySurface.js";
 import { validateResolveChannelQuery } from "@aihq/shared-contracts/critical";
+import {
+  buildRuntimeAuthorityFailurePayload,
+  getTenantBrainRuntime,
+  isRuntimeAuthorityError,
+} from "../../../services/businessBrain/getTenantBrainRuntime.js";
+import { buildProjectedTenantRuntime } from "../../../services/projectedTenantRuntime.js";
+import { buildOperationalChannels } from "../../../services/operationalChannels.js";
+import {
+  resolveTenantChannelByExternalIds,
+  resolveTenantMetaProviderAccess,
+} from "../../../services/tenantProviderSecrets.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -23,6 +34,10 @@ function cleanLower(v, d = "") {
   return s(v, d).toLowerCase();
 }
 
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+
 function ok(res, data = {}) {
   return res.status(200).json({ ok: true, ...data });
 }
@@ -35,188 +50,7 @@ function serverErr(res, error, extra = {}) {
   return res.status(500).json({ ok: false, error, ...extra });
 }
 
-function rowOrNull(r) {
-  return r?.rows?.[0] || null;
-}
-
-async function dbResolveTenantChannel(
-  db,
-  { channel, recipientId, pageId, igUserId }
-) {
-  if (!db?.query) return null;
-
-  const safeChannel = cleanLower(channel);
-  const safeRecipientId = cleanNullableString(recipientId);
-  const safePageId = cleanNullableString(pageId);
-  const safeIgUserId = cleanNullableString(igUserId);
-
-  if (!safeChannel) return null;
-  if (!safeRecipientId && !safePageId && !safeIgUserId) return null;
-
-  if (safePageId) {
-    const q = await db.query(
-      `
-        select
-          tc.id,
-          tc.tenant_id,
-          tc.channel_type,
-          tc.provider,
-          tc.display_name,
-          tc.external_account_id,
-          tc.external_page_id,
-          tc.external_user_id,
-          tc.external_username,
-          tc.status,
-          tc.is_primary,
-          tc.config,
-          tc.secrets_ref,
-          tc.health,
-          tc.last_sync_at,
-          tc.created_at,
-          tc.updated_at,
-          t.tenant_key,
-          t.company_name,
-          t.legal_name,
-          t.industry_key,
-          t.country_code,
-          t.timezone,
-          t.default_language,
-          t.enabled_languages,
-          t.market_region,
-          t.plan_key,
-          t.status as tenant_status,
-          t.active as tenant_active
-        from tenant_channels tc
-        join tenants t on t.id = tc.tenant_id
-        where tc.channel_type = $1
-          and (
-            tc.external_page_id = $2
-            or tc.external_user_id = $2
-            or tc.external_account_id = $2
-          )
-        order by
-          tc.is_primary desc,
-          tc.updated_at desc,
-          tc.created_at desc
-        limit 1
-      `,
-      [safeChannel, safePageId]
-    );
-
-    const row = rowOrNull(q);
-    if (row) return row;
-  }
-
-  if (safeIgUserId) {
-    const q = await db.query(
-      `
-        select
-          tc.id,
-          tc.tenant_id,
-          tc.channel_type,
-          tc.provider,
-          tc.display_name,
-          tc.external_account_id,
-          tc.external_page_id,
-          tc.external_user_id,
-          tc.external_username,
-          tc.status,
-          tc.is_primary,
-          tc.config,
-          tc.secrets_ref,
-          tc.health,
-          tc.last_sync_at,
-          tc.created_at,
-          tc.updated_at,
-          t.tenant_key,
-          t.company_name,
-          t.legal_name,
-          t.industry_key,
-          t.country_code,
-          t.timezone,
-          t.default_language,
-          t.enabled_languages,
-          t.market_region,
-          t.plan_key,
-          t.status as tenant_status,
-          t.active as tenant_active
-        from tenant_channels tc
-        join tenants t on t.id = tc.tenant_id
-        where tc.channel_type = $1
-          and (
-            tc.external_user_id = $2
-            or tc.external_account_id = $2
-          )
-        order by
-          tc.is_primary desc,
-          tc.updated_at desc,
-          tc.created_at desc
-        limit 1
-      `,
-      [safeChannel, safeIgUserId]
-    );
-
-    const row = rowOrNull(q);
-    if (row) return row;
-  }
-
-  if (safeRecipientId) {
-    const q = await db.query(
-      `
-        select
-          tc.id,
-          tc.tenant_id,
-          tc.channel_type,
-          tc.provider,
-          tc.display_name,
-          tc.external_account_id,
-          tc.external_page_id,
-          tc.external_user_id,
-          tc.external_username,
-          tc.status,
-          tc.is_primary,
-          tc.config,
-          tc.secrets_ref,
-          tc.health,
-          tc.last_sync_at,
-          tc.created_at,
-          tc.updated_at,
-          t.tenant_key,
-          t.company_name,
-          t.legal_name,
-          t.industry_key,
-          t.country_code,
-          t.timezone,
-          t.default_language,
-          t.enabled_languages,
-          t.market_region,
-          t.plan_key,
-          t.status as tenant_status,
-          t.active as tenant_active
-        from tenant_channels tc
-        join tenants t on t.id = tc.tenant_id
-        where tc.channel_type = $1
-          and (
-            tc.external_user_id = $2
-            or tc.external_account_id = $2
-            or tc.external_page_id = $2
-          )
-        order by
-          tc.is_primary desc,
-          tc.updated_at desc,
-          tc.created_at desc
-        limit 1
-      `,
-      [safeChannel, safeRecipientId]
-    );
-
-    return rowOrNull(q);
-  }
-
-  return null;
-}
-
-export function tenantInternalRoutes({ db }) {
+export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime }) {
   const router = express.Router();
 
   router.get("/tenants/resolve-channel", requireInternalToken, async (req, res) => {
@@ -249,7 +83,7 @@ export function tenantInternalRoutes({ db }) {
         candidateIds: [recipientId, pageId, igUserId].filter(Boolean),
       });
 
-      const match = await dbResolveTenantChannel(db, {
+      const match = await resolveTenantChannelByExternalIds(db, {
         channel,
         recipientId,
         pageId,
@@ -294,6 +128,42 @@ export function tenantInternalRoutes({ db }) {
 
       const secretSummary = sanitizeProviderSecrets(providerSecrets, {
         includeValues: false,
+      });
+
+      let runtime = null;
+      try {
+        runtime = await getRuntime({
+          db,
+          tenantId: match.tenant_id,
+          tenantKey: match.tenant_key,
+          authorityMode: "strict",
+        });
+      } catch (error) {
+        if (isRuntimeAuthorityError(error)) {
+          const failure = buildRuntimeAuthorityFailurePayload(error, {
+            service: "tenants.resolve-channel",
+            tenantKey: match.tenant_key,
+          });
+          return res.status(Number(error?.statusCode || 409)).json(failure);
+        }
+        throw error;
+      }
+
+      const operationalChannels = await buildOperationalChannels({
+        db,
+        tenantId: match.tenant_id,
+        matchedChannel: match,
+      });
+
+      const projectedRuntime = buildProjectedTenantRuntime({
+        runtime,
+        matchedChannel: match,
+        operationalChannels,
+        providerSecrets: {
+          provider: providerKey,
+          rawValuesExposed: false,
+          ...secretSummary,
+        },
       });
 
       console.log("[ai-hq] resolve-channel secrets loaded", {
@@ -355,6 +225,8 @@ export function tenantInternalRoutes({ db }) {
           rawValuesExposed: false,
           ...secretSummary,
         },
+        operationalChannels,
+        projectedRuntime,
       });
     } catch (err) {
       console.error("[ai-hq] resolve-channel failed", {
@@ -364,6 +236,115 @@ export function tenantInternalRoutes({ db }) {
       return serverErr(res, err?.message || "Failed to resolve tenant channel");
     }
   });
+
+  router.get(
+    "/internal/providers/meta-channel-access",
+    requireInternalToken,
+    async (req, res) => {
+      try {
+        if (!db?.query) {
+          return res.status(500).json({
+            ok: false,
+            error: "Database is not available",
+          });
+        }
+
+        const checked = validateResolveChannelQuery(req.query || {});
+        if (!checked.ok) {
+          return bad(res, checked.error);
+        }
+
+        const resolved = await resolveTenantMetaProviderAccess(db, {
+          channel: checked.value.channel,
+          recipientId: cleanNullableString(checked.value.recipientId),
+          pageId: cleanNullableString(checked.value.pageId),
+          igUserId: cleanNullableString(checked.value.igUserId),
+        });
+
+        if (!resolved?.ok || !resolved?.tenantId) {
+          return res.status(404).json({
+            ok: false,
+            error: s(resolved?.error || "tenant_channel_not_found"),
+          });
+        }
+
+        let runtime = null;
+        try {
+          runtime = await getRuntime({
+            db,
+            tenantId: resolved.tenantId,
+            tenantKey: resolved.tenantKey,
+            authorityMode: "strict",
+          });
+        } catch (error) {
+          if (isRuntimeAuthorityError(error)) {
+            const failure = buildRuntimeAuthorityFailurePayload(error, {
+              service: "providers.meta-channel-access",
+              tenantKey: resolved.tenantKey,
+            });
+            return res.status(Number(error?.statusCode || 409)).json(failure);
+          }
+          throw error;
+        }
+
+        const operationalChannels = await buildOperationalChannels({
+          db,
+          tenantId: resolved.tenantId,
+          matchedChannel: resolved.matchedChannel,
+        });
+
+        const projectedRuntime = buildProjectedTenantRuntime({
+          runtime,
+          matchedChannel: resolved.matchedChannel,
+          operationalChannels,
+        });
+
+        const providerAccess = {
+          ...obj(resolved.providerAccess),
+          authority: obj(runtime.authority),
+        };
+
+        if (operationalChannels?.meta?.ready !== true) {
+          return res.status(409).json({
+            ok: false,
+            error: "meta_operational_unavailable",
+            tenantKey: resolved.tenantKey,
+            tenantId: resolved.tenantId,
+            reasonCode: s(
+              operationalChannels?.meta?.reasonCode || "channel_identifiers_missing"
+            ),
+          });
+        }
+
+        if (!providerAccess.available) {
+          return res.status(409).json({
+            ok: false,
+            error: "provider_access_unavailable",
+            tenantKey: resolved.tenantKey,
+            tenantId: resolved.tenantId,
+            reasonCode: s(providerAccess.reasonCode || "provider_access_incomplete"),
+          });
+        }
+
+        return ok(res, {
+          tenantKey: resolved.tenantKey,
+          tenantId: resolved.tenantId,
+          projectedRuntime,
+          operationalChannels,
+          providerAccess,
+        });
+      } catch (err) {
+        console.error("[ai-hq] meta-channel-access failed", {
+          error: err?.message || String(err),
+        });
+
+        return serverErr(
+          res,
+          err?.message || "Failed to resolve provider channel access"
+        );
+      }
+    }
+  );
 
   return router;
 }

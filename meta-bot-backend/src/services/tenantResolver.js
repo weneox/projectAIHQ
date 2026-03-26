@@ -1,8 +1,8 @@
 import { AIHQ_BASE_URL, AIHQ_INTERNAL_TOKEN, AIHQ_TIMEOUT_MS } from "../config.js";
 import {
   validateResolveChannelQuery,
-  validateResolveChannelResponse,
 } from "@aihq/shared-contracts/critical";
+import { validateResolveChannelProjectedResponse } from "@aihq/shared-contracts/runtime";
 
 function s(v) {
   return String(v ?? "").trim();
@@ -167,7 +167,7 @@ export async function resolveTenantContextFromMetaEvent({
       };
     }
 
-    const checked = validateResolveChannelResponse(json || {});
+    const checked = validateResolveChannelProjectedResponse(json || {});
     if (!checked.ok) {
       return {
         ok: false,
@@ -190,6 +190,7 @@ export async function resolveTenantContextFromMetaEvent({
       tenantId: checked.value.tenantId,
       tenant: checked.value.tenant,
       channelConfig: checked.value.channelConfig,
+      projectedRuntime: checked.value.projectedRuntime,
       resolvedChannel: s(checked.value.resolvedChannel || safeInput.channel || ""),
       input: safeInput,
       json,

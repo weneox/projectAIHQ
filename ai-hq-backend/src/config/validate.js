@@ -176,6 +176,15 @@ export function getConfigIssues() {
     );
   }
 
+  if (isProd && cfg?.operational?.enforceReadinessOnStartup !== true) {
+    pushIssue(
+      issues,
+      "warning",
+      "operational.enforceReadinessOnStartup",
+      "ENFORCE_OPERATIONAL_READINESS_ON_STARTUP=false disables startup blocking when operational blockers are present."
+    );
+  }
+
   const hasAnyAiProvider =
     isNonEmpty(cfg?.ai?.openaiApiKey) ||
     isNonEmpty(cfg?.ai?.geminiApiKey) ||

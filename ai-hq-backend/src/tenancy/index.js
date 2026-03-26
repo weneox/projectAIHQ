@@ -15,7 +15,7 @@ function lower(v, d = "") {
 }
 
 export function getDefaultTenantKey() {
-  return lower(cfg.DEFAULT_TENANT_KEY, "default");
+  return lower(cfg.tenant?.defaultTenantKey, "default");
 }
 
 export function resolveTenantKey(input, fallback = "") {

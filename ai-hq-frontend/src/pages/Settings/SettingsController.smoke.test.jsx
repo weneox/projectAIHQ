@@ -1,6 +1,14 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../api/settings.js", async () => {
+  const actual = await vi.importActual("../../api/settings.js");
+  return {
+    ...actual,
+    getMetaConnectUrl: vi.fn().mockResolvedValue("https://meta.example.test/connect"),
+  };
+});
+
 vi.mock("../../lib/pushClient.js", () => ({
   askPermission: vi.fn(),
   getNotificationPermission: vi.fn().mockResolvedValue("default"),
@@ -14,6 +22,7 @@ vi.mock("./hooks/useSettingsWorkspace.js", () => ({
     saving: false,
     workspace: {
       tenantKey: "tenant-a",
+      viewerRole: "operator",
       tenant: {},
       profile: {},
       aiPolicy: {},
@@ -56,6 +65,105 @@ vi.mock("./hooks/useBusinessBrain.js", () => ({
     handleDeleteLocation: vi.fn(),
     handleSaveContact: vi.fn(),
     handleDeleteContact: vi.fn(),
+  }),
+}));
+
+vi.mock("./hooks/useOperationalSettings.js", () => ({
+  useOperationalSettings: () => ({
+    loading: false,
+    savingVoice: false,
+    savingChannel: false,
+    operationalData: {
+      voice: {
+        settings: {
+          enabled: true,
+          defaultLanguage: "en",
+          supportedLanguages: ["en", "az"],
+          twilioPhoneNumber: "+15550001111",
+          operatorPhone: "+15550002222",
+          twilioConfig: {
+            callerId: "+15550003333",
+          },
+          meta: {
+            realtimeModel: "gpt-4o-realtime-preview",
+            realtimeVoice: "alloy",
+          },
+        },
+        operational: {
+          ready: false,
+          reasonCode: "voice_phone_number_missing",
+        },
+        missingFields: ["twilio_phone_number"],
+        repair: {
+          blocked: true,
+          category: "voice",
+          dependencyType: "voice_phone_number",
+          reasonCode: "voice_phone_number_missing",
+          title: "Voice operational blocker",
+          subtitle: "Production voice traffic stays fail-closed until persisted tenant voice settings are complete.",
+          missing: ["twilio_phone_number"],
+          suggestedRepairActionId: "repair_voice_phone_number",
+          nextAction: {
+            id: "repair_voice_phone_number",
+            kind: "focus",
+            label: "Add voice phone number",
+            requiredRole: "operator",
+            allowed: true,
+            target: {
+              panel: "voice",
+              field: "twilioPhoneNumber",
+            },
+          },
+        },
+      },
+      channels: {
+        meta: {
+          channel: {
+            channel_type: "instagram",
+            provider: "meta",
+            status: "connected",
+            external_page_id: "",
+            external_user_id: "ig-1",
+            secrets_ref: "meta",
+          },
+          operational: {
+            ready: false,
+            reasonCode: "channel_identifiers_missing",
+          },
+          missingFields: ["external_page_id_or_external_user_id"],
+          repair: {
+            blocked: true,
+            category: "meta",
+            dependencyType: "channel_identifier",
+            reasonCode: "channel_identifiers_missing",
+            title: "Meta operational blocker",
+            subtitle: "Meta delivery stays fail-closed until the connected channel, identifiers, and required secret coverage are aligned.",
+            missing: ["external_page_id_or_external_user_id"],
+            suggestedRepairActionId: "repair_channel_identifiers",
+            nextAction: {
+              id: "repair_channel_identifiers",
+              kind: "focus",
+              label: "Add channel identifiers",
+              requiredRole: "operator",
+              allowed: true,
+              target: {
+                panel: "meta",
+                field: "externalPageId",
+              },
+            },
+          },
+          providerSecrets: {
+            ready: false,
+            presentSecretKeys: [],
+            missingSecretKeys: ["page_access_token"],
+          },
+        },
+      },
+    },
+    operationalMessage: "Production traffic is blocked until operational records are complete.",
+    refreshOperationalSettings: vi.fn().mockResolvedValue({}),
+    saveVoiceSettings: vi.fn().mockResolvedValue({}),
+    saveChannelSettings: vi.fn().mockResolvedValue({}),
   }),
 }));
 
@@ -199,5 +307,23 @@ describe("Settings truth-maintenance smoke", () => {
       screen.getByText(/this is source evidence under review, not approved truth yet/i)
     ).toBeInTheDocument();
     expect(screen.getByText(/recent trust activity/i)).toBeInTheDocument();
+  });
+
+  it("renders operational readiness fail states honestly", async () => {
+    render(<SettingsController />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /operational/i }));
+    expect(
+      await screen.findByText(/production traffic is blocked until operational records are complete/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/voice operational settings/i)).toBeInTheDocument();
+    expect(screen.getByText(/missing: twilio_phone_number/i)).toBeInTheDocument();
+    expect(screen.getByText(/provider secret readiness/i)).toBeInTheDocument();
+    expect(screen.getByText(/missing required: page_access_token/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add voice phone number/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add channel identifiers/i })).toBeInTheDocument();
+    expect(
+      screen.getByText(/production traffic is fail-closed while operational rows or required provider readiness are incomplete/i)
+    ).toBeInTheDocument();
   });
 });

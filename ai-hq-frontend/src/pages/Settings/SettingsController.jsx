@@ -23,6 +23,7 @@ import {
   FileText,
   Link2,
   ShieldPlus,
+  PhoneCall,
 } from "lucide-react";
 
 import Card from "../../components/ui/Card.jsx";
@@ -73,6 +74,7 @@ import {
 import { cx } from "../../lib/cx.js";
 import { useSettingsWorkspace } from "./hooks/useSettingsWorkspace.js";
 import { useBusinessBrain } from "./hooks/useBusinessBrain.js";
+import { useOperationalSettings } from "./hooks/useOperationalSettings.js";
 import { useSourceIntelligence } from "./hooks/useSourceIntelligence.js";
 import GeneralSection from "./sections/GeneralSection.jsx";
 import BrandSection from "./sections/BrandSection.jsx";
@@ -85,6 +87,7 @@ import BusinessFactsSection from "./sections/BusinessFactsSection.jsx";
 import ChannelPoliciesSection from "./sections/ChannelPoliciesSection.jsx";
 import LocationsSection from "./sections/LocationsSection.jsx";
 import ContactsSection from "./sections/ContactsSection.jsx";
+import OperationalSection from "./sections/OperationalSection.jsx";
 import {
   createNewBusinessFact,
   createNewChannelPolicy,
@@ -1498,6 +1501,9 @@ export default function SettingsController() {
     saveAgent,
     setInitialWorkspace,
   } = workspaceState;
+  const viewerRole = String(workspace?.viewerRole || "member").toLowerCase();
+  const canManageOperational =
+    viewerRole === "owner" || viewerRole === "admin" || viewerRole === "operator";
 
   const businessBrain = useBusinessBrain({
     canManageSettings,
@@ -1525,6 +1531,20 @@ export default function SettingsController() {
     handleSaveContact,
     handleDeleteContact,
   } = businessBrain;
+
+  const {
+    loading: operationalLoading,
+    savingVoice,
+    savingChannel,
+    operationalData,
+    operationalMessage,
+    refreshOperationalSettings,
+    saveVoiceSettings,
+    saveChannelSettings,
+  } = useOperationalSettings({
+    tenantKey,
+    setMessage,
+  });
 
   const sourceIntelligence = useSourceIntelligence({
     tenantKey,
@@ -1563,6 +1583,7 @@ export default function SettingsController() {
       { key: "ai_policy", label: "AI Policy", description: "Auto reply, approvals, quiet hours", dirty: !!dirtyMap.ai_policy, icon: ShieldCheck },
       { key: "business_facts", label: "Business Facts", description: "Structured company facts for AI", dirty: !!dirtyMap.business_facts, icon: BrainCircuit },
       { key: "channel_policies", label: "Channel Policies", description: "Per-channel reply behavior rules", dirty: !!dirtyMap.channel_policies, icon: ListTree },
+      { key: "operational", label: "Operational", description: "Voice runtime, channel readiness, provider state", dirty: false, icon: PhoneCall },
       { key: "locations", label: "Locations", description: "Branches, address, working hours", dirty: !!dirtyMap.locations, icon: MapPin },
       { key: "contacts", label: "Contacts", description: "Phone, email, WhatsApp, public lines", dirty: !!dirtyMap.contacts, icon: Contact2 },
       { key: "sources", label: "Sources", description: "Connected data sources and sync intelligence", dirty: !!dirtyMap.sources, icon: Database },
@@ -1598,6 +1619,7 @@ export default function SettingsController() {
         if (!mounted) return;
         await Promise.all([
           refreshBusinessBrain(),
+          refreshOperationalSettings(base.tenantKey),
           refreshSourceIntelligence(base.tenantKey),
         ]);
       } catch (e) {
@@ -1614,7 +1636,7 @@ export default function SettingsController() {
     return () => {
       mounted = false;
     };
-  }, [loadWorkspaceBase, refreshBusinessBrain, refreshSourceIntelligence, setAgentsLoading, setLoading]);
+  }, [loadWorkspaceBase, refreshBusinessBrain, refreshOperationalSettings, refreshSourceIntelligence, setAgentsLoading, setLoading]);
 
   function handleResetWorkspace() {
     const reset = onResetWorkspace();
@@ -1707,6 +1729,20 @@ export default function SettingsController() {
             }}
             onSave={handleSaveChannelPolicy}
             onDelete={handleDeleteChannelPolicy}
+          />
+        );
+      case "operational":
+        return (
+          <OperationalSection
+            data={operationalData}
+            loading={operationalLoading}
+            savingVoice={savingVoice}
+            savingChannel={savingChannel}
+            canManage={canManageOperational}
+            message={operationalMessage}
+            onRefresh={refreshOperationalSettings}
+            onSaveVoice={saveVoiceSettings}
+            onSaveChannel={saveChannelSettings}
           />
         );
       case "locations":
@@ -1813,8 +1849,16 @@ export default function SettingsController() {
         <div className="space-y-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={canManageSettings ? "success" : "warn"} variant="subtle" dot={canManageSettings}>
-                {canManageSettings ? "Owner / Admin Access" : "Read Only Access"}
+              <Badge
+                tone={canManageSettings || canManageOperational ? "success" : "warn"}
+                variant="subtle"
+                dot={canManageSettings || canManageOperational}
+              >
+                {canManageSettings
+                  ? "Owner / Admin Access"
+                  : canManageOperational
+                  ? "Operator Operational Access"
+                  : "Read Only Access"}
               </Badge>
               <Badge tone={dirty ? "info" : "neutral"} variant="subtle" dot={dirty}>
                 {dirty ? "Unsaved Workspace Edits" : "Workspace Synced"}
@@ -1833,7 +1877,9 @@ export default function SettingsController() {
 
           {!canManageSettings ? (
             <div className="rounded-[24px] border border-amber-200/80 bg-amber-50/90 px-4 py-4 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
-              Bu workspace-d? settings d?yi?m?k s?lahiyy?ti yaln?z owner/admin ???nd?r.
+              {canManageOperational
+                ? "This account can manage operational records, but broader workspace settings remain read-only."
+                : "Bu workspace-d? settings d?yi?m?k s?lahiyy?ti yaln?z owner/admin ???nd?r."}
             </div>
           ) : null}
 

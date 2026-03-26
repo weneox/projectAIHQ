@@ -9,7 +9,11 @@ import { deepFix, fixText } from "../../../utils/textFix.js";
 import { writeAudit } from "../../../utils/auditLog.js";
 import { emitRealtimeEvent } from "../../../realtime/events.js";
 import { classifyComment } from "../../../services/commentBrain.js";
-import { getTenantBrainRuntime } from "../../../services/businessBrain/getTenantBrainRuntime.js";
+import {
+  buildRuntimeAuthorityFailurePayload,
+  getTenantBrainRuntime,
+  isRuntimeAuthorityError,
+} from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import { resolveTenantKeyFromReq } from "../../../tenancy/index.js";
 import { getTenantByKey } from "./repository.js";
 
@@ -106,7 +110,7 @@ function buildCommentRuntimePayload(runtimePack) {
   };
 }
 
-export function ingestCommentHandler({ db, wsHub }) {
+export function ingestCommentHandler({ db, wsHub, getRuntime = getTenantBrainRuntime }) {
   return async function ingestComment(req, res) {
     const internalAuth = getInternalTokenAuthResult(req);
     if (!internalAuth.ok) {
@@ -155,7 +159,27 @@ export function ingestCommentHandler({ db, wsHub }) {
         });
       }
 
-      const runtimePack = await getTenantBrainRuntime({ db, tenantKey });
+      let runtimePack = null;
+
+      try {
+        runtimePack = await getRuntime({
+          db,
+          tenantKey,
+          authorityMode: "strict",
+        });
+      } catch (error) {
+        if (isRuntimeAuthorityError(error)) {
+          return okJson(
+            res,
+            buildRuntimeAuthorityFailurePayload(error, {
+              service: "comments.ingest",
+              tenantKey,
+            })
+          );
+        }
+        throw error;
+      }
+
       const tenant = runtimePack?.tenant || (await getTenantByKey(db, tenantKey));
       const runtime = buildCommentRuntimePayload(runtimePack);
 

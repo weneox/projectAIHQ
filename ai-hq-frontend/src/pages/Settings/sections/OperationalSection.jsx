@@ -1,0 +1,705 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, PhoneCall, ShieldCheck, Waypoints } from "lucide-react";
+
+import Card from "../../../components/ui/Card.jsx";
+import Button from "../../../components/ui/Button.jsx";
+import Input from "../../../components/ui/Input.jsx";
+import Badge from "../../../components/ui/Badge.jsx";
+import SettingsSection from "../../../components/settings/SettingsSection.jsx";
+import { getMetaConnectUrl } from "../../../api/settings.js";
+
+function s(v, d = "") {
+  return String(v ?? d).trim();
+}
+
+function arr(v) {
+  return Array.isArray(v) ? v : [];
+}
+
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+
+function bool(v, fallback = false) {
+  return typeof v === "boolean" ? v : fallback;
+}
+
+function reasonLabel(value = "") {
+  const raw = s(value);
+  if (!raw) return "ready";
+  return raw.replace(/[_-]+/g, " ");
+}
+
+function toneForReady(ready, reasonCode = "") {
+  if (ready === true) return "success";
+  if (s(reasonCode)) return "warn";
+  return "neutral";
+}
+
+function buildVoiceForm(data = {}) {
+  const settings = obj(data.voice?.settings);
+  const twilioConfig = obj(settings.twilioConfig);
+  const meta = obj(settings.meta);
+
+  return {
+    enabled: bool(settings.enabled, false),
+    provider: s(settings.provider || "twilio"),
+    mode: s(settings.mode || "assistant"),
+    displayName: s(settings.displayName),
+    defaultLanguage: s(settings.defaultLanguage || "en"),
+    supportedLanguages: arr(settings.supportedLanguages).join(", "),
+    twilioPhoneNumber: s(settings.twilioPhoneNumber),
+    twilioPhoneSid: s(settings.twilioPhoneSid),
+    operatorEnabled: bool(settings.operatorEnabled, true),
+    operatorPhone: s(settings.operatorPhone),
+    operatorLabel: s(settings.operatorLabel || "operator"),
+    transferStrategy: s(settings.transferStrategy || "handoff"),
+    callbackEnabled: bool(settings.callbackEnabled, true),
+    callbackMode: s(settings.callbackMode || "lead_only"),
+    maxCallSeconds: Number(settings.maxCallSeconds || 180),
+    silenceHangupSeconds: Number(settings.silenceHangupSeconds || 12),
+    instructions: s(settings.instructions),
+    callerId: s(twilioConfig.callerId || twilioConfig.caller_id),
+    realtimeModel: s(meta.realtimeModel || meta.model || "gpt-4o-realtime-preview"),
+    realtimeVoice: s(meta.realtimeVoice || meta.voice || "alloy"),
+  };
+}
+
+function buildChannelForm(data = {}) {
+  const channel = obj(data.channels?.meta?.channel);
+  return {
+    channelType: s(channel.channel_type || "instagram"),
+    provider: s(channel.provider || "meta"),
+    displayName: s(channel.display_name),
+    status: s(channel.status || "disconnected"),
+    isPrimary: bool(channel.is_primary, true),
+    externalPageId: s(channel.external_page_id),
+    externalUserId: s(channel.external_user_id),
+    externalAccountId: s(channel.external_account_id),
+    externalUsername: s(channel.external_username),
+    secretsRef: s(channel.secrets_ref || "meta"),
+    lastSyncAt: s(channel.last_sync_at),
+  };
+}
+
+function ReadinessCard({
+  icon,
+  title,
+  subtitle,
+  ready,
+  reasonCode,
+  missingFields = [],
+  children,
+}) {
+  const Icon = icon;
+
+  return (
+    <Card variant="surface" padded="lg" className="rounded-[28px]">
+      <div className="space-y-4">
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-[18px] border border-slate-200/80 bg-white/90 text-slate-700 dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200">
+            <Icon className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-lg font-semibold text-slate-950 dark:text-white">
+                {title}
+              </div>
+              <Badge tone={toneForReady(ready, reasonCode)} variant="subtle" dot={ready === true}>
+                {ready === true ? "Ready" : "Attention"}
+              </Badge>
+              {s(reasonCode) ? (
+                <Badge tone="warn" variant="subtle" dot>
+                  {reasonLabel(reasonCode)}
+                </Badge>
+              ) : null}
+            </div>
+            <div className="text-sm leading-6 text-slate-500 dark:text-slate-400">
+              {subtitle}
+            </div>
+          </div>
+        </div>
+
+        {arr(missingFields).length ? (
+          <div className="rounded-[20px] border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+            Missing: {arr(missingFields).join(", ")}
+          </div>
+        ) : (
+          <div className="rounded-[20px] border border-emerald-200/80 bg-emerald-50/90 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200">
+            This operational contract is ready for production traffic.
+          </div>
+        )}
+
+        {children}
+      </div>
+    </Card>
+  );
+}
+
+function Field({ label, hint, children }) {
+  return (
+    <label className="block space-y-2">
+      <div className="space-y-1">
+        <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">
+          {label}
+        </div>
+        {hint ? (
+          <div className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+            {hint}
+          </div>
+        ) : null}
+      </div>
+      {children}
+    </label>
+  );
+}
+
+function RepairPanel({ repair, canManage, loading, onRunAction }) {
+  if (!obj(repair).blocked) return null;
+
+  const action = obj(repair.nextAction);
+  const disabled = loading || action.allowed === false;
+  const helper =
+    action.allowed === false
+      ? action.requiredRole === "admin"
+        ? "Owner/admin access is required for this repair path."
+        : "Owner/admin/operator access is required for this repair path."
+      : repair.subtitle;
+
+  return (
+    <div className="rounded-[20px] border border-rose-200/80 bg-rose-50/90 px-4 py-4 text-sm text-rose-800 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">
+      <div className="font-semibold text-rose-900 dark:text-rose-100">{repair.title}</div>
+      <div className="mt-1 leading-6">{helper}</div>
+      <div className="mt-2 text-xs uppercase tracking-[0.16em] text-rose-500 dark:text-rose-200/80">
+        {repair.category} · {repair.dependencyType} · {repair.reasonCode || "ready"}
+      </div>
+      {arr(repair.missing).length ? (
+        <div className="mt-3">Missing: {arr(repair.missing).join(", ")}</div>
+      ) : null}
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button
+          onClick={() => onRunAction(action)}
+          disabled={!canManage || disabled}
+        >
+          {action.label || "Review blocker"}
+        </Button>
+        {action.allowed === false ? (
+          <div className="text-xs text-rose-600 dark:text-rose-200/80">
+            Requires {action.requiredRole || "operator"} access
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export default function OperationalSection({
+  data,
+  loading,
+  savingVoice,
+  savingChannel,
+  canManage,
+  message,
+  onRefresh,
+  onSaveVoice,
+  onSaveChannel,
+}) {
+  const [voiceForm, setVoiceForm] = useState(buildVoiceForm(data));
+  const [channelForm, setChannelForm] = useState(buildChannelForm(data));
+  const [actionMessage, setActionMessage] = useState("");
+  const voicePhoneRef = useRef(null);
+  const voiceEnabledRef = useRef(null);
+  const channelPageIdRef = useRef(null);
+  const secretsPanelRef = useRef(null);
+
+  useEffect(() => {
+    setVoiceForm(buildVoiceForm(data));
+    setChannelForm(buildChannelForm(data));
+  }, [data]);
+
+  const voiceOperational = obj(data.voice?.operational);
+  const metaOperational = obj(data.channels?.meta?.operational);
+  const providerSecrets = obj(data.channels?.meta?.providerSecrets);
+  const presentSecretKeys = arr(providerSecrets.presentSecretKeys);
+  const missingSecretKeys = arr(providerSecrets.missingSecretKeys);
+  const voiceRepair = obj(data.voice?.repair);
+  const metaRepair = obj(data.channels?.meta?.repair);
+
+  const operationalSummary = useMemo(
+    () => ({
+      voiceReady: voiceOperational.ready === true,
+      metaReady: metaOperational.ready === true,
+      providerReady: providerSecrets.ready === true,
+    }),
+    [metaOperational.ready, providerSecrets.ready, voiceOperational.ready]
+  );
+
+  function focusRepairTarget(target = {}) {
+    const field = s(target.field);
+    if (field === "twilioPhoneNumber") {
+      voicePhoneRef.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      voicePhoneRef.current?.focus?.();
+      return;
+    }
+    if (field === "enabled") {
+      voiceEnabledRef.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      voiceEnabledRef.current?.focus?.();
+      return;
+    }
+    if (field === "externalPageId") {
+      channelPageIdRef.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      channelPageIdRef.current?.focus?.();
+      return;
+    }
+    if (field === "providerSecrets") {
+      secretsPanelRef.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      secretsPanelRef.current?.focus?.();
+    }
+  }
+
+  async function handleRepairAction(action = {}) {
+    setActionMessage("");
+
+    if (action.allowed === false) {
+      setActionMessage(
+        action.requiredRole === "admin"
+          ? "This repair flow stays behind owner/admin access."
+          : "This repair flow needs owner/admin/operator access."
+      );
+      return;
+    }
+
+    if (action.kind === "oauth") {
+      try {
+        const url = await getMetaConnectUrl();
+        window.location.assign(url);
+      } catch (err) {
+        setActionMessage(String(err?.message || err || "Failed to start Meta connect"));
+      }
+      return;
+    }
+
+    if (action.kind === "admin_route") {
+      window.location.assign(s(action?.target?.path || "/admin/secrets"));
+      return;
+    }
+
+    focusRepairTarget(action.target);
+  }
+
+  async function handleSaveVoice() {
+    await onSaveVoice({
+      enabled: voiceForm.enabled,
+      provider: voiceForm.provider,
+      mode: voiceForm.mode,
+      displayName: voiceForm.displayName,
+      defaultLanguage: voiceForm.defaultLanguage,
+      supportedLanguages: voiceForm.supportedLanguages
+        .split(",")
+        .map((item) => item.trim().toLowerCase())
+        .filter(Boolean),
+      twilioPhoneNumber: voiceForm.twilioPhoneNumber,
+      twilioPhoneSid: voiceForm.twilioPhoneSid,
+      operatorEnabled: voiceForm.operatorEnabled,
+      operatorPhone: voiceForm.operatorPhone,
+      operatorLabel: voiceForm.operatorLabel,
+      transferStrategy: voiceForm.transferStrategy,
+      callbackEnabled: voiceForm.callbackEnabled,
+      callbackMode: voiceForm.callbackMode,
+      maxCallSeconds: Number(voiceForm.maxCallSeconds || 0),
+      silenceHangupSeconds: Number(voiceForm.silenceHangupSeconds || 0),
+      instructions: voiceForm.instructions,
+      twilioConfig: {
+        callerId: voiceForm.callerId,
+      },
+      meta: {
+        realtimeModel: voiceForm.realtimeModel,
+        realtimeVoice: voiceForm.realtimeVoice,
+      },
+    });
+  }
+
+  async function handleSaveChannel() {
+    await onSaveChannel(channelForm.channelType || "instagram", {
+      provider: channelForm.provider,
+      display_name: channelForm.displayName,
+      status: channelForm.status,
+      is_primary: channelForm.isPrimary,
+      external_page_id: channelForm.externalPageId,
+      external_user_id: channelForm.externalUserId,
+      external_account_id: channelForm.externalAccountId,
+      external_username: channelForm.externalUsername,
+      secrets_ref: channelForm.secretsRef,
+      last_sync_at: channelForm.lastSyncAt || null,
+    });
+  }
+
+  return (
+    <SettingsSection
+      eyebrow="Operational Control Plane"
+      title="Operational Runtime"
+      subtitle="Manage the persisted voice/channel records that production sidecars depend on. Secrets stay separate and only readiness is exposed here."
+      tone="default"
+    >
+      <div className="space-y-6">
+        {message ? (
+          <div className="rounded-[24px] border border-slate-200/80 bg-white/80 px-4 py-4 text-sm text-slate-700 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300">
+            {message}
+          </div>
+        ) : null}
+        {actionMessage ? (
+          <div className="rounded-[24px] border border-amber-200/80 bg-amber-50/90 px-4 py-4 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+            {actionMessage}
+          </div>
+        ) : null}
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card variant="subtle" padded="md" tone={operationalSummary.voiceReady ? "success" : "warn"} className="rounded-[24px]">
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Voice</div>
+            <div className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">
+              {operationalSummary.voiceReady ? "Ready" : "Blocked"}
+            </div>
+          </Card>
+          <Card variant="subtle" padded="md" tone={operationalSummary.metaReady ? "success" : "warn"} className="rounded-[24px]">
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Meta Channel</div>
+            <div className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">
+              {operationalSummary.metaReady ? "Ready" : "Blocked"}
+            </div>
+          </Card>
+          <Card variant="subtle" padded="md" tone={operationalSummary.providerReady ? "success" : "warn"} className="rounded-[24px]">
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Provider Secrets</div>
+            <div className="mt-2 text-xl font-semibold text-slate-950 dark:text-white">
+              {operationalSummary.providerReady ? "Ready" : "Missing"}
+            </div>
+          </Card>
+        </div>
+
+        <ReadinessCard
+          icon={PhoneCall}
+          title="Voice Operational Settings"
+          subtitle="Twilio routing and realtime behavior now come only from persisted tenant voice settings."
+          ready={voiceOperational.ready === true}
+          reasonCode={voiceOperational.reasonCode}
+          missingFields={data.voice?.missingFields}
+        >
+          <RepairPanel
+            repair={voiceRepair}
+            canManage={canManage}
+            loading={loading || savingVoice}
+            onRunAction={handleRepairAction}
+          />
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Voice Enabled">
+              <select
+                ref={voiceEnabledRef}
+                className="h-12 w-full rounded-[18px] border border-slate-200/80 bg-white/90 px-4 text-sm dark:border-white/10 dark:bg-white/[0.04]"
+                value={voiceForm.enabled ? "true" : "false"}
+                onChange={(event) =>
+                  setVoiceForm((prev) => ({
+                    ...prev,
+                    enabled: event.target.value === "true",
+                  }))
+                }
+                disabled={!canManage || loading}
+              >
+                <option value="true">Enabled</option>
+                <option value="false">Disabled</option>
+              </select>
+            </Field>
+            <Field label="Default Language">
+              <Input
+                value={voiceForm.defaultLanguage}
+                onChange={(event) =>
+                  setVoiceForm((prev) => ({
+                    ...prev,
+                    defaultLanguage: event.target.value,
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+            <Field label="Display Name">
+              <Input
+                value={voiceForm.displayName}
+                onChange={(event) =>
+                  setVoiceForm((prev) => ({
+                    ...prev,
+                    displayName: event.target.value,
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+            <Field label="Supported Languages" hint="Comma-separated language codes">
+              <Input
+                value={voiceForm.supportedLanguages}
+                onChange={(event) =>
+                  setVoiceForm((prev) => ({
+                    ...prev,
+                    supportedLanguages: event.target.value,
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+            <Field label="Twilio Phone Number">
+              <Input
+                ref={voicePhoneRef}
+                value={voiceForm.twilioPhoneNumber}
+                onChange={(event) =>
+                  setVoiceForm((prev) => ({
+                    ...prev,
+                    twilioPhoneNumber: event.target.value,
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+            <Field label="Twilio Phone SID">
+              <Input
+                value={voiceForm.twilioPhoneSid}
+                onChange={(event) =>
+                  setVoiceForm((prev) => ({
+                    ...prev,
+                    twilioPhoneSid: event.target.value,
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+            <Field label="Operator Phone">
+              <Input
+                value={voiceForm.operatorPhone}
+                onChange={(event) =>
+                  setVoiceForm((prev) => ({
+                    ...prev,
+                    operatorPhone: event.target.value,
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+            <Field label="Caller ID">
+              <Input
+                value={voiceForm.callerId}
+                onChange={(event) =>
+                  setVoiceForm((prev) => ({
+                    ...prev,
+                    callerId: event.target.value,
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+            <Field label="Realtime Model">
+              <Input
+                value={voiceForm.realtimeModel}
+                onChange={(event) =>
+                  setVoiceForm((prev) => ({
+                    ...prev,
+                    realtimeModel: event.target.value,
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+            <Field label="Realtime Voice">
+              <Input
+                value={voiceForm.realtimeVoice}
+                onChange={(event) =>
+                  setVoiceForm((prev) => ({
+                    ...prev,
+                    realtimeVoice: event.target.value,
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+          </div>
+
+          <Field label="Realtime Instructions">
+            <textarea
+              className="min-h-[120px] w-full rounded-[20px] border border-slate-200/80 bg-white/90 px-4 py-3 text-sm dark:border-white/10 dark:bg-white/[0.04]"
+              value={voiceForm.instructions}
+              onChange={(event) =>
+                setVoiceForm((prev) => ({
+                  ...prev,
+                  instructions: event.target.value,
+                }))
+              }
+              disabled={!canManage || loading}
+            />
+          </Field>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={handleSaveVoice} disabled={!canManage || loading || savingVoice}>
+              {savingVoice ? "Saving..." : "Save Voice Settings"}
+            </Button>
+            <Button variant="secondary" onClick={onRefresh} disabled={loading || savingVoice}>
+              Refresh Readiness
+            </Button>
+          </div>
+        </ReadinessCard>
+
+        <ReadinessCard
+          icon={Waypoints}
+          title="Meta Operational Channel"
+          subtitle="Persisted channel identifiers and provider refs used by downstream Meta flows."
+          ready={metaOperational.ready === true}
+          reasonCode={metaOperational.reasonCode}
+          missingFields={data.channels?.meta?.missingFields}
+        >
+          <RepairPanel
+            repair={metaRepair}
+            canManage={canManage}
+            loading={loading || savingChannel}
+            onRunAction={handleRepairAction}
+          />
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Channel Type">
+              <Input
+                value={channelForm.channelType}
+                onChange={(event) =>
+                  setChannelForm((prev) => ({
+                    ...prev,
+                    channelType: event.target.value.toLowerCase(),
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+            <Field label="Provider">
+              <Input
+                value={channelForm.provider}
+                onChange={(event) =>
+                  setChannelForm((prev) => ({
+                    ...prev,
+                    provider: event.target.value.toLowerCase(),
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+            <Field label="Display Name">
+              <Input
+                value={channelForm.displayName}
+                onChange={(event) =>
+                  setChannelForm((prev) => ({
+                    ...prev,
+                    displayName: event.target.value,
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+            <Field label="Status">
+              <Input
+                value={channelForm.status}
+                onChange={(event) =>
+                  setChannelForm((prev) => ({
+                    ...prev,
+                    status: event.target.value.toLowerCase(),
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+            <Field label="External Page ID">
+              <Input
+                ref={channelPageIdRef}
+                value={channelForm.externalPageId}
+                onChange={(event) =>
+                  setChannelForm((prev) => ({
+                    ...prev,
+                    externalPageId: event.target.value,
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+            <Field label="External User ID">
+              <Input
+                value={channelForm.externalUserId}
+                onChange={(event) =>
+                  setChannelForm((prev) => ({
+                    ...prev,
+                    externalUserId: event.target.value,
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+            <Field label="External Account ID">
+              <Input
+                value={channelForm.externalAccountId}
+                onChange={(event) =>
+                  setChannelForm((prev) => ({
+                    ...prev,
+                    externalAccountId: event.target.value,
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+            <Field label="External Username">
+              <Input
+                value={channelForm.externalUsername}
+                onChange={(event) =>
+                  setChannelForm((prev) => ({
+                    ...prev,
+                    externalUsername: event.target.value,
+                  }))
+                }
+                disabled={!canManage || loading}
+              />
+            </Field>
+          </div>
+
+          <div
+            ref={secretsPanelRef}
+            tabIndex={-1}
+            className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-4 text-sm text-slate-700 outline-none dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300"
+          >
+            <div className="flex items-center gap-2 font-semibold text-slate-900 dark:text-white">
+              <ShieldCheck className="h-4 w-4" />
+              Provider Secret Readiness
+            </div>
+            <div className="mt-2">
+              Present: {presentSecretKeys.length ? presentSecretKeys.join(", ") : "none"}
+            </div>
+            <div className="mt-1">
+              Missing required: {missingSecretKeys.length ? missingSecretKeys.join(", ") : "none"}
+            </div>
+            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Secret values stay hidden. Manage them through the secure secrets flow, not this form.
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <Button onClick={handleSaveChannel} disabled={!canManage || loading || savingChannel}>
+              {savingChannel ? "Saving..." : "Save Channel Identifiers"}
+            </Button>
+            <Button variant="secondary" onClick={onRefresh} disabled={loading || savingChannel}>
+              Refresh Readiness
+            </Button>
+          </div>
+        </ReadinessCard>
+
+        {!canManage ? (
+          <div className="rounded-[24px] border border-amber-200/80 bg-amber-50/90 px-4 py-4 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+            Operational records are visible here, but only owner/admin/operator can change them.
+          </div>
+        ) : null}
+
+        {(voiceOperational.ready !== true || metaOperational.ready !== true) ? (
+          <div className="rounded-[24px] border border-rose-200/80 bg-rose-50/90 px-4 py-4 text-sm text-rose-800 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">
+            <div className="flex items-center gap-2 font-semibold">
+              <AlertTriangle className="h-4 w-4" />
+              Production traffic is fail-closed while operational rows or required provider readiness are incomplete.
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </SettingsSection>
+  );
+}

@@ -109,14 +109,14 @@ export async function findTenantByKeyOrPhone(db, { tenantKey, toNumber, normaliz
     const q = await db.query(
       `
       select
-        id,
-        tenant_key,
-        company_name,
-        timezone,
-        default_language,
-        meta,
-        inbox_policy
-      from tenants
+        t.id,
+        t.tenant_key,
+        t.company_name,
+        t.timezone,
+        t.default_language,
+        t.meta,
+        t.inbox_policy
+      from tenants t
       where lower(tenant_key) = lower($1)
       limit 1
       `,
@@ -130,17 +130,17 @@ export async function findTenantByKeyOrPhone(db, { tenantKey, toNumber, normaliz
     const q = await db.query(
       `
       select
-        id,
-        tenant_key,
-        company_name,
-        timezone,
-        default_language,
-        meta,
-        inbox_policy
-      from tenants
+        t.id,
+        t.tenant_key,
+        t.company_name,
+        t.timezone,
+        t.default_language,
+        t.meta,
+        t.inbox_policy
+      from tenants t
+      left join tenant_voice_settings tvs on tvs.tenant_id = t.id
       where
-        regexp_replace(coalesce(meta->>'twilio_phone',''), '[^0-9+]', '', 'g') = $1
-        or regexp_replace(coalesce(meta->>'phone',''), '[^0-9+]', '', 'g') = $1
+        regexp_replace(coalesce(tvs.twilio_phone_number, ''), '[^0-9+]', '', 'g') = $1
       limit 1
       `,
       [to]

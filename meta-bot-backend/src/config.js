@@ -18,6 +18,18 @@ function b(v, fallback = false) {
   return fallback;
 }
 
+function prodDefaultBool(v, fallbackProd = true) {
+  const raw = String(v ?? "").trim().toLowerCase();
+  if (raw) {
+    if (["1", "true", "yes", "y", "on"].includes(raw)) return true;
+    if (["0", "false", "no", "n", "off"].includes(raw)) return false;
+  }
+
+  const env = s(process.env.APP_ENV, process.env.NODE_ENV || "development").toLowerCase();
+  const prodLike = !["", "development", "dev", "test"].includes(env);
+  return prodLike ? fallbackProd : false;
+}
+
 export const PORT = n(process.env.PORT, 8080);
 export const APP_ENV = s(process.env.APP_ENV, process.env.NODE_ENV || "development");
 
@@ -33,6 +45,10 @@ export const PUBLIC_BASE_URL = s(process.env.PUBLIC_BASE_URL, "").replace(/\/+$/
 export const AIHQ_BASE_URL = s(process.env.AIHQ_BASE_URL, "").replace(/\/+$/, "");
 export const AIHQ_INTERNAL_TOKEN = s(process.env.AIHQ_INTERNAL_TOKEN, "");
 export const AIHQ_TIMEOUT_MS = n(process.env.AIHQ_TIMEOUT_MS, 20000);
+export const REQUIRE_OPERATIONAL_READINESS_ON_BOOT = prodDefaultBool(
+  process.env.REQUIRE_OPERATIONAL_READINESS_ON_BOOT,
+  true
+);
 export const AIHQ_SECRETS_PATH = s(
   process.env.AIHQ_SECRETS_PATH,
   "/api/settings/secrets"
@@ -48,7 +64,7 @@ export const META_API_VERSION = s(process.env.META_API_VERSION, "v23.0");
 export const META_REPLY_TIMEOUT_MS = n(process.env.META_REPLY_TIMEOUT_MS, 15000);
 export const META_TOKEN_FALLBACK_ENABLED = b(
   process.env.META_TOKEN_FALLBACK_ENABLED,
-  true
+  false
 );
 
 // --------------------------------------------------

@@ -23,6 +23,18 @@ function mode(v, d = "manual") {
   return d;
 }
 
+function prodDefaultBool(v, fallbackProd = true) {
+  const raw = String(v ?? "").trim().toLowerCase();
+  if (raw) {
+    if (["1", "true", "yes", "y", "on"].includes(raw)) return true;
+    if (["0", "false", "no", "n", "off"].includes(raw)) return false;
+  }
+
+  const env = s(process.env.APP_ENV, process.env.NODE_ENV || "production").toLowerCase();
+  const prodLike = !["", "development", "dev", "test"].includes(env);
+  return prodLike ? fallbackProd : false;
+}
+
 export const cfg = {
   app: {
     port: n(process.env.PORT, 8080),
@@ -47,6 +59,13 @@ export const cfg = {
     url: s(process.env.DATABASE_URL, ""),
     migrateTx: b(process.env.DB_MIGRATE_TX, true),
     autoMigrateOnStartup: b(process.env.DB_AUTO_MIGRATE_ON_STARTUP, false),
+  },
+
+  operational: {
+    enforceReadinessOnStartup: prodDefaultBool(
+      process.env.ENFORCE_OPERATIONAL_READINESS_ON_STARTUP,
+      true
+    ),
   },
 
   ws: {
@@ -432,3 +451,5 @@ export const cfg = {
     debateRaw: b(process.env.DEBUG_DEBATE_RAW, false),
   },
 };
+
+cfg.DEFAULT_TENANT_KEY = cfg.tenant.defaultTenantKey;

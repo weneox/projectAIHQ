@@ -129,6 +129,22 @@ export function requireOwnerOrAdmin(req, res) {
   return role;
 }
 
+export function requireOperationalManager(req, res) {
+  if (isInternalServiceRequest(req)) {
+    return "internal";
+  }
+
+  const role = getUserRole(req);
+  if (role !== "owner" && role !== "admin" && role !== "operator") {
+    forbidden(
+      res,
+      "Only owner/admin/operator can manage operational settings"
+    );
+    return null;
+  }
+  return role;
+}
+
 export async function auditSafe(db, req, tenant, action, objectType, objectId, meta = {}) {
   try {
     await dbAudit(db, getActor(req), action, objectType, objectId, {

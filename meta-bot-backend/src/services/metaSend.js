@@ -120,6 +120,12 @@ async function resolveMetaAccessToken({
     });
 
     const tenantToken = s(metaCfg?.pageAccessToken);
+    const providerAccess = metaCfg?.providerAccess || null;
+    const operationalMeta =
+      metaCfg?.operationalChannels &&
+      typeof metaCfg.operationalChannels === "object"
+        ? metaCfg.operationalChannels.meta || null
+        : null;
 
     logInfo("meta credential resolve", {
       tenantKey: safeTenantKey,
@@ -131,14 +137,18 @@ async function resolveMetaAccessToken({
       source: s(metaCfg?.source || ""),
       error: s(metaCfg?.error || ""),
       status: Number(metaCfg?.status || 0),
+      providerAccessAvailable: Boolean(providerAccess?.available),
+      channelReady: Boolean(operationalMeta?.ready),
     });
 
     if (tenantToken) {
       return {
         accessToken: tenantToken,
         source: "tenant_secret",
-        pageId: s(metaCfg?.pageId || safePageId),
-        igUserId: s(metaCfg?.igUserId || safeIgUserId),
+        pageId: s(providerAccess?.pageId || metaCfg?.pageId || safePageId),
+        igUserId: s(providerAccess?.igUserId || metaCfg?.igUserId || safeIgUserId),
+        projectedRuntimeAuthority: metaCfg?.projectedRuntime?.authority || null,
+        operationalAuthority: operationalMeta || null,
       };
     }
   } catch (err) {
@@ -158,6 +168,8 @@ async function resolveMetaAccessToken({
       source: "env",
       pageId: safePageId,
       igUserId: safeIgUserId,
+      projectedRuntimeAuthority: null,
+      operationalAuthority: null,
     };
   }
 
@@ -166,6 +178,8 @@ async function resolveMetaAccessToken({
     source: "none",
     pageId: safePageId,
     igUserId: safeIgUserId,
+    projectedRuntimeAuthority: null,
+    operationalAuthority: null,
   };
 }
 
@@ -619,3 +633,7 @@ export async function sendFacebookPrivateCommentReply({
     meta,
   });
 }
+
+export const __test__ = {
+  resolveMetaAccessToken,
+};

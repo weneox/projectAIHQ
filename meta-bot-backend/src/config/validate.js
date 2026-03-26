@@ -6,6 +6,7 @@ import {
   META_APP_SECRET,
   META_PAGE_ACCESS_TOKEN,
   META_TOKEN_FALLBACK_ENABLED,
+  REQUIRE_OPERATIONAL_READINESS_ON_BOOT,
   N8N_WEBHOOK_URL,
   PUBLIC_BASE_URL,
   VERIFY_TOKEN,
@@ -122,6 +123,24 @@ export function getConfigIssues() {
       "warning",
       "META_PAGE_ACCESS_TOKEN",
       "META_TOKEN_FALLBACK_ENABLED=true but META_PAGE_ACCESS_TOKEN is empty; tenant-secret fallback must be available at runtime."
+    );
+  }
+
+  if (isProd && META_TOKEN_FALLBACK_ENABLED) {
+    pushIssue(
+      issues,
+      "warning",
+      "META_TOKEN_FALLBACK_ENABLED",
+      "META_TOKEN_FALLBACK_ENABLED=true enables legacy env-token fallback and should remain disabled in production-like environments."
+    );
+  }
+
+  if (isProd && !REQUIRE_OPERATIONAL_READINESS_ON_BOOT) {
+    pushIssue(
+      issues,
+      "warning",
+      "REQUIRE_OPERATIONAL_READINESS_ON_BOOT",
+      "REQUIRE_OPERATIONAL_READINESS_ON_BOOT=false disables startup blocking when AI HQ reports operational readiness blockers."
     );
   }
 

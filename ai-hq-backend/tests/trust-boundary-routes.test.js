@@ -125,11 +125,16 @@ class FakeUserSessionDb {
 }
 
 class FakeTenantInternalDb {
+  constructor(options = {}) {
+    this.options = options;
+  }
+
   async query(input, values = []) {
     const text = String(input?.text || input || "").trim().toLowerCase();
     const params = Array.isArray(input?.values) ? input.values : values;
 
     if (text.includes("from tenant_channels tc") && text.includes("join tenants t")) {
+      const missingIds = this.options.missingChannelIds === true;
       return {
         rows: [
           {
@@ -139,10 +144,10 @@ class FakeTenantInternalDb {
             provider: "meta",
             display_name: "IG",
             external_account_id: "acct-1",
-            external_page_id: "page-1",
-            external_user_id: "ig-1",
+            external_page_id: missingIds ? "" : "page-1",
+            external_user_id: missingIds ? "" : "ig-1",
             external_username: "brand",
-            status: "active",
+            status: "connected",
             is_primary: true,
             config: {},
             secrets_ref: "meta",
@@ -167,7 +172,14 @@ class FakeTenantInternalDb {
       };
     }
 
+    if (text.includes("from tenant_voice_settings")) {
+      return { rows: [] };
+    }
+
     if (text.includes("from tenant_secrets")) {
+      if (this.options.missingProviderSecret === true) {
+        return { rows: [] };
+      }
       return {
         rows: [
           {
@@ -244,6 +256,81 @@ test("route-level internal tenant resolve keeps secret metadata but strips raw v
 
     const router = tenantInternalRoutes({
       db: new FakeTenantInternalDb(),
+      getRuntime: async () => ({
+        authority: {
+          mode: "strict",
+          required: true,
+          available: true,
+          source: "approved_runtime_projection",
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+          runtimeProjectionId: "projection-1",
+          runtimeProjectionStatus: "ready",
+          projectionHash: "hash-1",
+        },
+        raw: {
+          projection: {
+            projection_hash: "hash-1",
+            readiness_label: "ready",
+            confidence_label: "high",
+            identity_json: {
+              tenantId: "tenant-1",
+              tenantKey: "acme",
+              companyName: "Acme",
+              displayName: "Acme",
+              industryKey: "beauty",
+              mainLanguage: "az",
+              supportedLanguages: ["az"],
+            },
+            profile_json: {
+              summaryShort: "Acme summary",
+              toneProfile: "premium",
+            },
+            contacts_json: [
+              {
+                channel: "phone",
+                isPrimary: true,
+                value: "+994555000000",
+              },
+            ],
+            services_json: [
+              {
+                serviceKey: "hair",
+                title: "Hair care",
+                description: "Hair service",
+              },
+            ],
+            inbox_json: {
+              enabled: true,
+            },
+            comments_json: {
+              enabled: true,
+            },
+            voice_json: {
+              enabled: true,
+              supportsCalls: true,
+              primaryPhone: "+994555000000",
+            },
+            lead_capture_json: {
+              enabled: true,
+              contactCaptureMode: "guided",
+            },
+            handoff_json: {
+              enabled: true,
+              escalationMode: "manual",
+            },
+            channels_json: [
+              {
+                channelType: "instagram",
+                label: "IG",
+                endpoint: "instagram",
+                isPrimary: true,
+                status: "active",
+              },
+            ],
+          },
+        },
+      }),
     });
 
     const { res } = await invokeRoute(router, "get", "/tenants/resolve-channel", {
@@ -262,6 +349,13 @@ test("route-level internal tenant resolve keeps secret metadata but strips raw v
     assert.deepEqual(res.body?.providerSecrets?.secretKeys, ["page_access_token"]);
     assert.equal(res.body?.providerSecrets?.secrets?.[0]?.value, undefined);
     assert.equal(res.body?.providerSecrets?.secrets?.[0]?.present, false);
+    assert.equal(
+      res.body?.projectedRuntime?.authority?.source,
+      "approved_runtime_projection"
+    );
+    assert.equal(res.body?.projectedRuntime?.tenant?.tenantKey, "acme");
+    assert.equal(res.body?.projectedRuntime?.channels?.meta?.pageId, "page-1");
+    assert.equal(res.body?.operationalChannels?.meta?.pageId, "page-1");
   } finally {
     cfg.security.aihqInternalToken = previousInternalToken;
     cfg.security.tenantSecretMasterKey = previousMasterKey;
@@ -276,6 +370,25 @@ test("route-level internal tenant resolve rejects missing internal token", async
 
     const router = tenantInternalRoutes({
       db: new FakeTenantInternalDb(),
+      getRuntime: async () => ({
+        authority: {
+          mode: "strict",
+          required: true,
+          available: true,
+          source: "approved_runtime_projection",
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+        },
+        raw: {
+          projection: {
+            identity_json: {
+              tenantId: "tenant-1",
+              tenantKey: "acme",
+              companyName: "Acme",
+            },
+          },
+        },
+      }),
     });
 
     const { res } = await invokeRoute(router, "get", "/tenants/resolve-channel", {
@@ -303,6 +416,25 @@ test("route-level internal tenant resolve fails closed when internal auth is mis
 
     const router = tenantInternalRoutes({
       db: new FakeTenantInternalDb(),
+      getRuntime: async () => ({
+        authority: {
+          mode: "strict",
+          required: true,
+          available: true,
+          source: "approved_runtime_projection",
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+        },
+        raw: {
+          projection: {
+            identity_json: {
+              tenantId: "tenant-1",
+              tenantKey: "acme",
+              companyName: "Acme",
+            },
+          },
+        },
+      }),
     });
 
     const { res } = await invokeRoute(router, "get", "/tenants/resolve-channel", {
@@ -319,5 +451,204 @@ test("route-level internal tenant resolve fails closed when internal auth is mis
   } finally {
     cfg.app.env = previousEnv;
     cfg.security.aihqInternalToken = previousInternalToken;
+  }
+});
+
+test("route-level internal meta provider access returns secret-backed internal access", async () => {
+  const previousInternalToken = cfg.security.aihqInternalToken;
+  const previousMasterKey = cfg.security.tenantSecretMasterKey;
+
+  try {
+    cfg.security.aihqInternalToken = "internal-secret";
+    cfg.security.tenantSecretMasterKey =
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    const router = tenantInternalRoutes({
+      db: new FakeTenantInternalDb(),
+      getRuntime: async () => ({
+        authority: {
+          mode: "strict",
+          required: true,
+          available: true,
+          source: "approved_runtime_projection",
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+          runtimeProjectionId: "projection-1",
+        },
+        raw: {
+          projection: {
+            identity_json: {
+              tenantId: "tenant-1",
+              tenantKey: "acme",
+              companyName: "Acme",
+            },
+            profile_json: {},
+            contacts_json: [],
+            services_json: [],
+            inbox_json: {},
+            comments_json: {},
+            voice_json: {},
+            lead_capture_json: {},
+            handoff_json: {},
+            channels_json: [],
+          },
+        },
+      }),
+    });
+
+    const { res } = await invokeRoute(
+      router,
+      "get",
+      "/internal/providers/meta-channel-access",
+      {
+        headers: {
+          "x-internal-token": "internal-secret",
+        },
+        query: {
+          channel: "instagram",
+          pageId: "page-1",
+        },
+      }
+    );
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body?.providerAccess?.provider, "meta");
+    assert.equal(res.body?.providerAccess?.available, true);
+    assert.equal(res.body?.providerAccess?.pageId, "page-1");
+    assert.equal(res.body?.providerAccess?.pageAccessToken.length > 0, true);
+    assert.equal(res.body?.operationalChannels?.meta?.pageId, "page-1");
+  } finally {
+    cfg.security.aihqInternalToken = previousInternalToken;
+    cfg.security.tenantSecretMasterKey = previousMasterKey;
+  }
+});
+
+test("route-level internal meta provider access fails closed when channel ids are missing", async () => {
+  const previousInternalToken = cfg.security.aihqInternalToken;
+  const previousMasterKey = cfg.security.tenantSecretMasterKey;
+
+  try {
+    cfg.security.aihqInternalToken = "internal-secret";
+    cfg.security.tenantSecretMasterKey =
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    const router = tenantInternalRoutes({
+      db: new FakeTenantInternalDb({ missingChannelIds: true }),
+      getRuntime: async () => ({
+        authority: {
+          mode: "strict",
+          required: true,
+          available: true,
+          source: "approved_runtime_projection",
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+        },
+        raw: {
+          projection: {
+            identity_json: {
+              tenantId: "tenant-1",
+              tenantKey: "acme",
+              companyName: "Acme",
+            },
+            profile_json: {},
+            contacts_json: [],
+            services_json: [],
+            inbox_json: {},
+            comments_json: {},
+            voice_json: {},
+            lead_capture_json: {},
+            handoff_json: {},
+            channels_json: [],
+          },
+        },
+      }),
+    });
+
+    const { res } = await invokeRoute(
+      router,
+      "get",
+      "/internal/providers/meta-channel-access",
+      {
+        headers: {
+          "x-internal-token": "internal-secret",
+        },
+        query: {
+          channel: "instagram",
+          pageId: "page-1",
+        },
+      }
+    );
+
+    assert.equal(res.statusCode, 409);
+    assert.equal(res.body?.error, "meta_operational_unavailable");
+    assert.equal(res.body?.reasonCode, "channel_identifiers_missing");
+  } finally {
+    cfg.security.aihqInternalToken = previousInternalToken;
+    cfg.security.tenantSecretMasterKey = previousMasterKey;
+  }
+});
+
+test("route-level internal meta provider access fails closed when provider secret rows are missing", async () => {
+  const previousInternalToken = cfg.security.aihqInternalToken;
+  const previousMasterKey = cfg.security.tenantSecretMasterKey;
+
+  try {
+    cfg.security.aihqInternalToken = "internal-secret";
+    cfg.security.tenantSecretMasterKey =
+      "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    const router = tenantInternalRoutes({
+      db: new FakeTenantInternalDb({ missingProviderSecret: true }),
+      getRuntime: async () => ({
+        authority: {
+          mode: "strict",
+          required: true,
+          available: true,
+          source: "approved_runtime_projection",
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+        },
+        raw: {
+          projection: {
+            identity_json: {
+              tenantId: "tenant-1",
+              tenantKey: "acme",
+              companyName: "Acme",
+            },
+            profile_json: {},
+            contacts_json: [],
+            services_json: [],
+            inbox_json: {},
+            comments_json: {},
+            voice_json: {},
+            lead_capture_json: {},
+            handoff_json: {},
+            channels_json: [],
+          },
+        },
+      }),
+    });
+
+    const { res } = await invokeRoute(
+      router,
+      "get",
+      "/internal/providers/meta-channel-access",
+      {
+        headers: {
+          "x-internal-token": "internal-secret",
+        },
+        query: {
+          channel: "instagram",
+          pageId: "page-1",
+        },
+      }
+    );
+
+    assert.equal(res.statusCode, 409);
+    assert.equal(res.body?.error, "provider_access_unavailable");
+    assert.equal(res.body?.reasonCode, "provider_secret_missing");
+  } finally {
+    cfg.security.aihqInternalToken = previousInternalToken;
+    cfg.security.tenantSecretMasterKey = previousMasterKey;
   }
 });

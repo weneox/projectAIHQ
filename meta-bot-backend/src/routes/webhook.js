@@ -142,52 +142,40 @@ function buildConversationContextFromEvent(ev) {
 }
 
 function buildTenantContextFromResolved(tenantCtx) {
-  const tenant = normalizeObj(tenantCtx?.tenant);
-  const profile = normalizeObj(tenant?.profile);
-  const brand = normalizeObj(tenant?.brand);
-  const meta = normalizeObj(tenant?.meta);
-  const aiPolicy = normalizeObj(tenant?.ai_policy || tenant?.aiPolicy);
+  const projectedRuntime = normalizeObj(tenantCtx?.projectedRuntime);
+  const projectedTenant = normalizeObj(projectedRuntime?.tenant);
+  const projectedProfile = normalizeObj(projectedTenant?.profile);
+  const projectedVoice = normalizeObj(
+    normalizeObj(projectedRuntime?.channels).voice
+  );
   const channelConfig = normalizeObj(tenantCtx?.channelConfig);
 
   return {
-    tenantKey: s(tenantCtx?.tenantKey || ""),
-    companyName:
-      s(brand?.displayName) ||
-      s(brand?.name) ||
-      s(profile?.companyName) ||
-      s(profile?.displayName) ||
-      s(tenant?.company_name) ||
-      s(tenant?.name) ||
-      s(tenantCtx?.tenantKey || ""),
-    industryKey:
-      s(profile?.industryKey) ||
-      s(profile?.industry_key) ||
-      s(tenant?.industry_key) ||
-      s(meta?.industry) ||
-      "generic_business",
-    defaultLanguage:
-      s(profile?.defaultLanguage) ||
-      s(profile?.default_language) ||
-      s(tenant?.default_language) ||
-      "az",
-    enabledLanguages:
-      Array.isArray(tenant?.enabled_languages)
-        ? tenant.enabled_languages
-        : Array.isArray(profile?.languages)
-          ? profile.languages
-          : [],
-    tone:
-      s(profile?.tone_of_voice) ||
-      s(meta?.tone) ||
-      "professional, concise, premium",
-    services:
-      Array.isArray(profile?.services)
-        ? profile.services
-        : Array.isArray(meta?.services)
-          ? meta.services
-          : [],
-    aiPolicy,
+    tenantKey: s(projectedTenant?.tenantKey || tenantCtx?.tenantKey || ""),
+    companyName: s(
+      projectedTenant?.companyName ||
+        projectedTenant?.displayName ||
+        tenantCtx?.tenantKey ||
+        ""
+    ),
+    industryKey: s(projectedTenant?.industryKey || "generic_business"),
+    defaultLanguage: s(projectedTenant?.mainLanguage || "az"),
+    enabledLanguages: Array.isArray(projectedTenant?.supportedLanguages)
+      ? projectedTenant.supportedLanguages
+      : [],
+    tone: s(
+      projectedVoice?.profile?.tone ||
+        projectedProfile?.toneProfile ||
+        "professional, concise, premium"
+    ),
+    services: Array.isArray(projectedTenant?.services)
+      ? projectedTenant.services
+          .map((item) => s(item?.title || item?.serviceKey || ""))
+          .filter(Boolean)
+      : [],
+    aiPolicy: {},
     channelConfig,
+    projectedRuntime,
   };
 }
 
@@ -310,6 +298,7 @@ async function resolveTenantForEvent(ev) {
     tenantKey: s(out.tenantKey),
     tenant: out.tenant || null,
     channelConfig: out.channelConfig || null,
+    projectedRuntime: out.projectedRuntime || null,
   };
 }
 
