@@ -132,6 +132,18 @@ if (s(env.VITE_DEBUG_PUSH) && !["0", "1", "true", "false"].includes(lower(env.VI
   );
 }
 
+if (
+  s(env.VITE_ENABLE_SERVICE_WORKER) &&
+  !["0", "1", "true", "false"].includes(lower(env.VITE_ENABLE_SERVICE_WORKER))
+) {
+  pushIssue(
+    issues,
+    "error",
+    "VITE_ENABLE_SERVICE_WORKER",
+    "VITE_ENABLE_SERVICE_WORKER must be one of: 0, 1, true, false."
+  );
+}
+
 if (s(env.VITE_VAPID_PUBLIC_KEY) && !/^[A-Za-z0-9\-_]+$/.test(s(env.VITE_VAPID_PUBLIC_KEY))) {
   pushIssue(
     issues,

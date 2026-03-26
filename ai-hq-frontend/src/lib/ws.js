@@ -7,11 +7,6 @@ function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
-function getBrowserOrigin() {
-  if (typeof window === "undefined" || !window.location?.origin) return "";
-  return String(window.location.origin || "").trim().replace(/\/+$/, "");
-}
-
 function safeJson(x) {
   try {
     if (typeof x === "string") return JSON.parse(x);
@@ -23,13 +18,19 @@ function safeJson(x) {
 
 function buildFallbackWsUrl() {
   if (WS_URL) return WS_URL.replace(/\/+$/, "");
-  const base = API_BASE || getBrowserOrigin();
+  const base = API_BASE;
   if (!base) return "";
   return base.replace(/^https:/i, "wss:").replace(/^http:/i, "ws:") + "/ws";
 }
 
 async function requestRealtimeSession() {
-  const endpoint = `${API_BASE || getBrowserOrigin()}/api/auth/realtime-session`;
+  if (!API_BASE) {
+    const err = new Error("missing VITE_API_BASE");
+    err.status = 0;
+    throw err;
+  }
+
+  const endpoint = `${API_BASE}/api/auth/realtime-session`;
   const res = await fetch(endpoint, {
     method: "GET",
     credentials: "include",
@@ -150,7 +151,7 @@ export function createWsClient({ onEvent, onStatus, maxDelayMs = 12000 } = {}) {
     if (!buildFallbackWsUrl()) {
       notifyStatus({
         state: "off",
-        detail: "missing VITE_API_BASE or VITE_WS_URL",
+        detail: "missing realtime endpoint configuration",
       });
       return;
     }
