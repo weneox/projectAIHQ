@@ -68,3 +68,14 @@ jobs:
 
       - name: Run build gate
         run: npm run build:all
+
+  trigger-cloudflare-pages-deploy:
+    runs-on: ubuntu-latest
+    needs: monorepo-release-gate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Trigger Cloudflare Pages production deploy
+        env:
+          CLOUDFLARE_PAGES_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
+        run: |
+          curl --fail --silent --show-error --request POST "$CLOUDFLARE_PAGES_DEPLOY_HOOK"
