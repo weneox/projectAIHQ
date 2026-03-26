@@ -1,9 +1,15 @@
 // src/services/reporting.js
 // Telegram + Google Sheets (GAS) + n8n + dedup + optional OpenAI lead extraction
+import { createStructuredLogger } from "@aihq/shared-contracts/logger";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
+
+const logger = createStructuredLogger({
+  service: "twilio-voice-backend",
+  component: "voice-reporting",
+});
 
 function safeJsonParse(v) {
   try {
@@ -76,7 +82,9 @@ async function dedupOnce(redis, key, ttlSec = 86400) {
       return r === "OK";
     }
   } catch (e) {
-    console.log("[dedup] redis set failed", e?.message || e);
+    logger.warn("voice.reporting.dedup_redis_failed", {
+      error: s(e?.message || e),
+    }, e);
   }
 
   return localDedupKeySet(key, ttlSec);
@@ -179,7 +187,9 @@ async function extractLeadFromTranscripts({
 
     return null;
   } catch (e) {
-    console.log("[lead] extract error", e?.message || e);
+    logger.warn("voice.reporting.lead_extract_failed", {
+      error: s(e?.message || e),
+    }, e);
     return null;
   }
 }
@@ -407,7 +417,12 @@ export function createReporters({ fetchFn, redis, OPENAI_API_KEY, OPENAI_MODEL }
       : payload || {};
 
     const r = await postJson(fetchFn, GOOGLE_SHEETS_WEBHOOK_URL, body, {});
-    if (!r.ok) console.log("[sheets] webhook failed", r.status, r.text);
+    if (!r.ok) {
+      logger.warn("voice.reporting.sheets_failed", {
+        status: Number(r.status || 0),
+        error: s(r.text || "").slice(0, 300),
+      });
+    }
     return r.ok;
   }
 
@@ -435,7 +450,10 @@ export function createReporters({ fetchFn, redis, OPENAI_API_KEY, OPENAI_MODEL }
         continue;
       }
 
-      console.log("[n8n] webhook failed", r.status, r.text);
+      logger.warn("voice.reporting.n8n_failed", {
+        status: Number(r.status || 0),
+        error: s(r.text || "").slice(0, 300),
+      });
       return false;
     }
 

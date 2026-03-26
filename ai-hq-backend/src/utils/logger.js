@@ -48,12 +48,22 @@ export function buildRequestLogContext(req = {}) {
   const requestId =
     s(req.requestId) ||
     s(req.headers?.["x-request-id"]) ||
+    s(req.headers?.["x-correlation-id"]) ||
     generateCorrelationId();
+  const correlationId =
+    s(req.correlationId) ||
+    s(req.headers?.["x-correlation-id"]) ||
+    s(req.headers?.["x-request-id"]) ||
+    requestId;
 
   return compactObject({
     requestId,
+    correlationId,
     method: s(req.method),
     path: s(req.originalUrl || req.url),
+    remoteIp:
+      s(req.headers?.["x-forwarded-for"]).split(",")[0]?.trim?.() ||
+      s(req.ip || req.socket?.remoteAddress),
     tenantId: s(req.auth?.tenantId || req.user?.tenantId || req.tenantId),
     tenantKey: s(req.auth?.tenantKey || req.user?.tenantKey || req.tenantKey),
     userId: s(req.auth?.user?.id || req.user?.id),
@@ -131,8 +141,10 @@ export function requestContextMiddleware({ logger = createLogger({ service: "ai-
   return function requestContext(req, res, next) {
     const context = buildRequestLogContext(req);
     req.requestId = context.requestId;
+    req.correlationId = context.correlationId;
     req.log = logger.child(context);
     res.setHeader("x-request-id", context.requestId);
+    res.setHeader("x-correlation-id", context.correlationId);
 
     const startedAt = Date.now();
     req.log.info("http.request.started");

@@ -14,6 +14,7 @@ test("request log context preserves caller request id and auth context", () => {
     originalUrl: "/api/setup/import/source",
     headers: {
       "x-request-id": "req-123",
+      "x-correlation-id": "corr-123",
     },
     auth: {
       tenantId: "tenant-1",
@@ -25,6 +26,7 @@ test("request log context preserves caller request id and auth context", () => {
   });
 
   assert.equal(context.requestId, "req-123");
+  assert.equal(context.correlationId, "corr-123");
   assert.equal(context.method, "POST");
   assert.equal(context.path, "/api/setup/import/source");
   assert.equal(context.tenantId, "tenant-1");
@@ -80,6 +82,7 @@ test("request context middleware emits request lifecycle logs with one correlati
     originalUrl: "/health",
     headers: {
       "x-request-id": "req-health-1",
+      "x-correlation-id": "corr-health-1",
     },
     auth: {
       tenantId: "tenant-2",
@@ -105,7 +108,9 @@ test("request context middleware emits request lifecycle logs with one correlati
 
   assert.equal(nextCalled, true);
   assert.equal(req.requestId, "req-health-1");
+  assert.equal(req.correlationId, "corr-health-1");
   assert.equal(res.headers["x-request-id"], "req-health-1");
+  assert.equal(res.headers["x-correlation-id"], "corr-health-1");
   assert.equal(typeof req.log?.info, "function");
 
   finishHandler?.();
@@ -115,6 +120,8 @@ test("request context middleware emits request lifecycle logs with one correlati
   assert.equal(entries[1].event, "http.request.completed");
   assert.equal(entries[0].requestId, "req-health-1");
   assert.equal(entries[1].requestId, "req-health-1");
+  assert.equal(entries[0].correlationId, "corr-health-1");
+  assert.equal(entries[1].correlationId, "corr-health-1");
   assert.equal(entries[0].tenantId, "tenant-2");
   assert.equal(entries[1].tenantKey, "globex");
   assert.equal(entries[1].statusCode, 204);

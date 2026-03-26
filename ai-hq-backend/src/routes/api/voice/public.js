@@ -1,5 +1,7 @@
 import express from "express";
 import { requireOperatorSurfaceAccess } from "../../../utils/auth.js";
+import { createLogger } from "../../../utils/logger.js";
+import { recordRuntimeSignal } from "../../../observability/runtimeSignals.js";
 import { s, n, b, ok, fail, getActor, isLiveVoiceStatus } from "./shared.js";
 import {
   getTenantVoiceSettings,
@@ -20,7 +22,47 @@ import {
   auditSafe,
 } from "./utils.js";
 
+const fallbackLogger = createLogger({
+  service: "ai-hq-backend",
+  component: "voice-public-routes",
+});
+
+function getRouteLogger(req, route = "") {
+  const base = req?.log || fallbackLogger;
+  return base.child?.({
+    component: "voice-public-routes",
+    route: s(route),
+    tenantKey: s(req?.auth?.tenantKey || req?.user?.tenantKey || ""),
+    tenantId: s(req?.auth?.tenantId || req?.user?.tenantId || ""),
+  }) || fallbackLogger;
+}
+
+function recordVoiceRouteFailure({
+  route = "",
+  reasonCode = "",
+  err = null,
+  req = null,
+  status = 500,
+  context = {},
+} = {}) {
+  recordRuntimeSignal({
+    level: "error",
+    category: "voice_public",
+    code: s(route || "voice_route_failed"),
+    reasonCode: s(reasonCode || "voice_route_failed"),
+    message: s(err?.message || err || reasonCode || "voice route failed"),
+    context: {
+      route: s(route),
+      status: Number(status || 0),
+      tenantKey: s(req?.auth?.tenantKey || req?.user?.tenantKey || ""),
+      tenantId: s(req?.auth?.tenantId || req?.user?.tenantId || ""),
+      ...context,
+    },
+  });
+}
+
 async function handleSettingsGet(req, res, { db, dbDisabled }) {
+  const logger = getRouteLogger(req, "voice.settings.get");
   try {
     if (dbDisabled || !db) {
       return ok(res, {
@@ -35,12 +77,19 @@ async function handleSettingsGet(req, res, { db, dbDisabled }) {
     const settings = await getTenantVoiceSettings(db, scope.tenantId);
     return ok(res, { settings });
   } catch (err) {
-    console.error("[voice/settings:get] error", err);
+    logger.error("voice.settings.get.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.settings.get",
+      reasonCode: "voice_settings_read_failed",
+      err,
+      req,
+    });
     return fail(res, 500, "voice_settings_read_failed");
   }
 }
 
 async function handleSettingsPost(req, res, { db, dbDisabled, audit }) {
+  const logger = getRouteLogger(req, "voice.settings.post");
   try {
     if (dbDisabled || !db) {
       return fail(res, 503, "db_unavailable");
@@ -69,7 +118,13 @@ async function handleSettingsPost(req, res, { db, dbDisabled, audit }) {
 
     return ok(res, { settings });
   } catch (err) {
-    console.error("[voice/settings:post] error", err);
+    logger.error("voice.settings.post.failed", err);
+    recordVoiceRouteFailure({
+      route: "voice.settings.post",
+      reasonCode: "voice_settings_save_failed",
+      err,
+      req,
+    });
     return fail(res, 500, "voice_settings_save_failed");
   }
 }
@@ -94,6 +149,7 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
   );
 
   r.post("/voice/toggle", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.toggle");
     try {
       if (dbDisabled || !db) {
         return fail(res, 503, "db_unavailable");
@@ -123,12 +179,19 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
 
       return ok(res, { settings });
     } catch (err) {
-      console.error("[voice/toggle] error", err);
+      logger.error("voice.toggle.failed", err);
+      recordVoiceRouteFailure({
+        route: "voice.toggle",
+        reasonCode: "voice_toggle_failed",
+        err,
+        req,
+      });
       return fail(res, 500, "voice_toggle_failed");
     }
   });
 
   r.get("/voice/overview", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.overview");
     try {
       if (dbDisabled || !db) {
         return ok(res, {
@@ -182,12 +245,19 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
         defaultLanguage,
       });
     } catch (err) {
-      console.error("[voice/overview] error", err);
+      logger.error("voice.overview.failed", err);
+      recordVoiceRouteFailure({
+        route: "voice.overview",
+        reasonCode: "voice_overview_failed",
+        err,
+        req,
+      });
       return fail(res, 500, "voice_overview_failed");
     }
   });
 
   r.get("/voice/calls", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.calls.list");
     try {
       if (dbDisabled || !db) {
         return ok(res, {
@@ -207,12 +277,19 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
 
       return ok(res, { calls });
     } catch (err) {
-      console.error("[voice/calls:list] error", err);
+      logger.error("voice.calls.list.failed", err);
+      recordVoiceRouteFailure({
+        route: "voice.calls.list",
+        reasonCode: "voice_calls_list_failed",
+        err,
+        req,
+      });
       return fail(res, 500, "voice_calls_list_failed");
     }
   });
 
   r.get("/voice/calls/:id", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.calls.get");
     try {
       if (dbDisabled || !db) {
         return fail(res, 503, "db_unavailable");
@@ -232,12 +309,24 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
       const events = await listVoiceCallEvents(db, call.id);
       return ok(res, { call, events });
     } catch (err) {
-      console.error("[voice/calls:get] error", err);
+      logger.error("voice.calls.get.failed", err, {
+        callId: s(req.params?.id),
+      });
+      recordVoiceRouteFailure({
+        route: "voice.calls.get",
+        reasonCode: "voice_call_read_failed",
+        err,
+        req,
+        context: {
+          callId: s(req.params?.id),
+        },
+      });
       return fail(res, 500, "voice_call_read_failed");
     }
   });
 
   r.get("/voice/calls/:id/events", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.calls.events");
     try {
       if (dbDisabled || !db) {
         return ok(res, {
@@ -260,12 +349,24 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
       const events = await listVoiceCallEvents(db, call.id);
       return ok(res, { events });
     } catch (err) {
-      console.error("[voice/calls:events] error", err);
+      logger.error("voice.calls.events.failed", err, {
+        callId: s(req.params?.id),
+      });
+      recordVoiceRouteFailure({
+        route: "voice.calls.events",
+        reasonCode: "voice_call_events_failed",
+        err,
+        req,
+        context: {
+          callId: s(req.params?.id),
+        },
+      });
       return fail(res, 500, "voice_call_events_failed");
     }
   });
 
   r.get("/voice/calls/:id/sessions", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.calls.sessions");
     try {
       if (dbDisabled || !db) {
         return ok(res, {
@@ -303,12 +404,24 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
 
       return ok(res, { sessions });
     } catch (err) {
-      console.error("[voice/calls:sessions] error", err);
+      logger.error("voice.calls.sessions.failed", err, {
+        callId: s(req.params?.id),
+      });
+      recordVoiceRouteFailure({
+        route: "voice.calls.sessions",
+        reasonCode: "voice_call_sessions_failed",
+        err,
+        req,
+        context: {
+          callId: s(req.params?.id),
+        },
+      });
       return fail(res, 500, "voice_call_sessions_failed");
     }
   });
 
   r.post("/voice/calls/:id/join", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.calls.join");
     try {
       if (dbDisabled || !db) {
         return fail(res, 503, "db_unavailable");
@@ -380,12 +493,26 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
 
       return ok(res, { session: updated });
     } catch (err) {
-      console.error("[voice/calls:join] error", err);
+      logger.error("voice.calls.join.failed", err, {
+        callId: s(req.params?.id),
+        sessionId: s(req.body?.sessionId),
+      });
+      recordVoiceRouteFailure({
+        route: "voice.calls.join",
+        reasonCode: "voice_join_failed",
+        err,
+        req,
+        context: {
+          callId: s(req.params?.id),
+          sessionId: s(req.body?.sessionId),
+        },
+      });
       return fail(res, 500, "voice_join_failed");
     }
   });
 
   r.post("/voice/calls/:id/end", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.calls.end");
     try {
       if (dbDisabled || !db) {
         return fail(res, 503, "db_unavailable");
@@ -435,12 +562,26 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
 
       return ok(res, { session: updated });
     } catch (err) {
-      console.error("[voice/calls:end] error", err);
+      logger.error("voice.calls.end.failed", err, {
+        callId: s(req.params?.id),
+        sessionId: s(req.body?.sessionId),
+      });
+      recordVoiceRouteFailure({
+        route: "voice.calls.end",
+        reasonCode: "voice_end_failed",
+        err,
+        req,
+        context: {
+          callId: s(req.params?.id),
+          sessionId: s(req.body?.sessionId),
+        },
+      });
       return fail(res, 500, "voice_end_failed");
     }
   });
 
   r.get("/voice/usage", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.usage");
     try {
       if (dbDisabled || !db) {
         return ok(res, {
@@ -460,12 +601,19 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
 
       return ok(res, { usage });
     } catch (err) {
-      console.error("[voice/usage] error", err);
+      logger.error("voice.usage.failed", err);
+      recordVoiceRouteFailure({
+        route: "voice.usage",
+        reasonCode: "voice_usage_read_failed",
+        err,
+        req,
+      });
       return fail(res, 500, "voice_usage_read_failed");
     }
   });
 
   r.get("/voice/live", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.live.list");
     try {
       if (dbDisabled || !db) {
         return ok(res, { sessions: [], dbDisabled: true });
@@ -482,12 +630,19 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
 
       return ok(res, { sessions });
     } catch (err) {
-      console.error("[voice/live:list] error", err);
+      logger.error("voice.live.list.failed", err);
+      recordVoiceRouteFailure({
+        route: "voice.live.list",
+        reasonCode: "voice_live_list_failed",
+        err,
+        req,
+      });
       return fail(res, 500, "voice_live_list_failed");
     }
   });
 
   r.get("/voice/live/:id", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.live.get");
     try {
       if (dbDisabled || !db) {
         return fail(res, 503, "db_unavailable");
@@ -506,12 +661,24 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
 
       return ok(res, { session });
     } catch (err) {
-      console.error("[voice/live:get] error", err);
+      logger.error("voice.live.get.failed", err, {
+        sessionId: s(req.params?.id),
+      });
+      recordVoiceRouteFailure({
+        route: "voice.live.get",
+        reasonCode: "voice_live_read_failed",
+        err,
+        req,
+        context: {
+          sessionId: s(req.params?.id),
+        },
+      });
       return fail(res, 500, "voice_live_read_failed");
     }
   });
 
   r.post("/voice/live/:id/request-handoff", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.live.request_handoff");
     try {
       if (dbDisabled || !db) {
         return fail(res, 503, "db_unavailable");
@@ -566,12 +733,24 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
 
       return ok(res, { session: updated });
     } catch (err) {
-      console.error("[voice/live:request-handoff] error", err);
+      logger.error("voice.live.request_handoff.failed", err, {
+        sessionId: s(req.params?.id),
+      });
+      recordVoiceRouteFailure({
+        route: "voice.live.request_handoff",
+        reasonCode: "voice_handoff_request_failed",
+        err,
+        req,
+        context: {
+          sessionId: s(req.params?.id),
+        },
+      });
       return fail(res, 500, "voice_handoff_request_failed");
     }
   });
 
   r.post("/voice/live/:id/joined", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.live.joined");
     try {
       if (dbDisabled || !db) {
         return fail(res, 503, "db_unavailable");
@@ -612,12 +791,24 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
 
       return ok(res, { session: updated });
     } catch (err) {
-      console.error("[voice/live:joined] error", err);
+      logger.error("voice.live.joined.failed", err, {
+        sessionId: s(req.params?.id),
+      });
+      recordVoiceRouteFailure({
+        route: "voice.live.joined",
+        reasonCode: "voice_operator_join_failed",
+        err,
+        req,
+        context: {
+          sessionId: s(req.params?.id),
+        },
+      });
       return fail(res, 500, "voice_operator_join_failed");
     }
   });
 
   r.post("/voice/live/:id/takeover", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.live.takeover");
     try {
       if (dbDisabled || !db) {
         return fail(res, 503, "db_unavailable");
@@ -656,12 +847,24 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
 
       return ok(res, { session: updated });
     } catch (err) {
-      console.error("[voice/live:takeover] error", err);
+      logger.error("voice.live.takeover.failed", err, {
+        sessionId: s(req.params?.id),
+      });
+      recordVoiceRouteFailure({
+        route: "voice.live.takeover",
+        reasonCode: "voice_takeover_failed",
+        err,
+        req,
+        context: {
+          sessionId: s(req.params?.id),
+        },
+      });
       return fail(res, 500, "voice_takeover_failed");
     }
   });
 
   r.post("/voice/live/:id/end", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.live.end");
     try {
       if (dbDisabled || !db) {
         return fail(res, 503, "db_unavailable");
@@ -697,12 +900,24 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
 
       return ok(res, { session: updated });
     } catch (err) {
-      console.error("[voice/live:end] error", err);
+      logger.error("voice.live.end.failed", err, {
+        sessionId: s(req.params?.id),
+      });
+      recordVoiceRouteFailure({
+        route: "voice.live.end",
+        reasonCode: "voice_end_failed",
+        err,
+        req,
+        context: {
+          sessionId: s(req.params?.id),
+        },
+      });
       return fail(res, 500, "voice_end_failed");
     }
   });
 
   r.post("/voice/test", requireOperatorSurfaceAccess, async (req, res) => {
+    const logger = getRouteLogger(req, "voice.test");
     try {
       const scope = await resolveTenantScope(req, db);
       if (!scope?.tenantId) return fail(res, 400, "tenant_required");
@@ -732,7 +947,13 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
         settings,
       });
     } catch (err) {
-      console.error("[voice/test] error", err);
+      logger.error("voice.test.failed", err);
+      recordVoiceRouteFailure({
+        route: "voice.test",
+        reasonCode: "voice_test_failed",
+        err,
+        req,
+      });
       return fail(res, 500, "voice_test_failed");
     }
   });

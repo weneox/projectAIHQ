@@ -2,6 +2,8 @@ import { AIHQ_BASE_URL, AIHQ_INTERNAL_TOKEN, AIHQ_TIMEOUT_MS } from "../config.j
 import {
   validateProviderAccessResponse,
 } from "@aihq/shared-contracts/operations";
+import { createStructuredLogger } from "@aihq/shared-contracts/logger";
+import { recordRuntimeSignal } from "./runtimeReliability.js";
 
 function s(v) {
   return String(v ?? "").trim();
@@ -35,19 +37,10 @@ function buildHeaders() {
   };
 }
 
-function logInfo(message, data = null) {
-  try {
-    if (data) console.log(`[meta-bot] ${message}`, data);
-    else console.log(`[meta-bot] ${message}`);
-  } catch {}
-}
-
-function logWarn(message, data = null) {
-  try {
-    if (data) console.warn(`[meta-bot] ${message}`, data);
-    else console.warn(`[meta-bot] ${message}`);
-  } catch {}
-}
+const logger = createStructuredLogger({
+  service: "meta-bot-backend",
+  component: "tenant-provider-secrets",
+});
 
 async function fetchMetaProviderAccess({
   channel = "instagram",
@@ -157,13 +150,20 @@ export async function getTenantMetaConfigByChannel({
   });
 
   if (!result.ok) {
-    logWarn("meta provider access unavailable", {
+    logger.warn("meta.provider_access.unavailable", {
       channel,
       recipientId,
       pageId,
       igUserId,
       error: result.error,
       status: result.status,
+    });
+    recordRuntimeSignal({
+      level: "warn",
+      category: "provider_access",
+      code: "meta_provider_access_unavailable",
+      reasonCode: s(result.error || "meta_provider_access_failed"),
+      status: Number(result.status || 0),
     });
 
     return {
@@ -188,7 +188,7 @@ export async function getTenantMetaConfigByChannel({
       ? operationalChannels.meta || null
       : null;
 
-  logInfo("meta provider access resolved", {
+  logger.info("meta.provider_access.resolved", {
     tenantKey: access.tenantKey,
     pageId: access.pageId,
     igUserId: access.igUserId,
@@ -197,6 +197,16 @@ export async function getTenantMetaConfigByChannel({
   });
 
   if (access.available !== true || operationalMeta?.ready !== true) {
+    recordRuntimeSignal({
+      level: "warn",
+      category: "provider_access",
+      code: "meta_provider_access_blocked",
+      reasonCode: s(
+        access.reasonCode || operationalMeta?.reasonCode || "provider_access_unavailable"
+      ),
+      status: Number(result.status || 409),
+      tenantKey: s(access.tenantKey),
+    });
     return {
       tenantKey: s(access.tenantKey),
       pageAccessToken: "",

@@ -16,6 +16,8 @@ import {
   validateProviderAccessResponse,
   validateProjectedRuntime,
   validateResolveChannelProjectedResponse,
+  validateRuntimeIncidentRequest,
+  validateRuntimeIncidentResponse,
   validateVoiceOperationalResponse,
   validateVoiceProjectedRuntimeResponse,
   validateVoiceInternalResponse,
@@ -107,6 +109,37 @@ test("durable execution response contract requires an execution id and status", 
     execution: {
       id: "exec-1",
       status: "pending",
+    },
+  });
+  assert.equal(good.ok, true);
+});
+
+test("runtime incident contract requires service, area, and code", () => {
+  const bad = validateRuntimeIncidentRequest({
+    service: "meta-bot-backend",
+  });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.error, "runtime_incident_area_required");
+
+  const good = validateRuntimeIncidentRequest({
+    service: "meta-bot-backend",
+    area: "provider_access",
+    code: "meta_provider_access_unavailable",
+    severity: "warn",
+    reasonCode: "provider_secret_missing",
+  });
+  assert.equal(good.ok, true);
+  assert.equal(good.value.severity, "warn");
+});
+
+test("runtime incident response requires explicit incident payload", () => {
+  const bad = validateRuntimeIncidentResponse({ ok: true });
+  assert.equal(bad.ok, false);
+
+  const good = validateRuntimeIncidentResponse({
+    ok: true,
+    incident: {
+      id: "incident-1",
     },
   });
   assert.equal(good.ok, true);

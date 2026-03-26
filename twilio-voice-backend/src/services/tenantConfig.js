@@ -1,5 +1,9 @@
 import { validateVoiceOperationalResponse } from "@aihq/shared-contracts/operations";
 import { validateVoiceProjectedRuntimeResponse } from "@aihq/shared-contracts/runtime";
+import {
+  buildCorrelationHeaders,
+  createStructuredLogger,
+} from "@aihq/shared-contracts/logger";
 import { cfg } from "../config.js";
 
 function s(v, d = "") {
@@ -19,6 +23,11 @@ function isDevLikeEnv() {
     lower(cfg.APP_ENV, "development")
   );
 }
+
+const logger = createStructuredLogger({
+  service: "twilio-voice-backend",
+  component: "tenant-config",
+});
 
 function buildVoiceConfigFromContracts(projectedRuntime, operationalChannels) {
   const runtime = obj(projectedRuntime);
@@ -105,7 +114,7 @@ function buildVoiceConfigFromContracts(projectedRuntime, operationalChannels) {
   };
 }
 
-async function tryFetchTenantFromAiHq({ tenantKey, toNumber }) {
+async function tryFetchTenantFromAiHq({ tenantKey, toNumber, requestContext = {} }) {
   if (!cfg.AIHQ_BASE_URL || !cfg.AIHQ_INTERNAL_TOKEN) {
     return {
       ok: false,
@@ -120,10 +129,14 @@ async function tryFetchTenantFromAiHq({ tenantKey, toNumber }) {
 
     const resp = await fetch(url, {
       method: "POST",
-      headers: {
+      headers: buildCorrelationHeaders({
+        requestId: s(requestContext?.requestId),
+        correlationId: s(requestContext?.correlationId),
+        headers: {
         "x-internal-token": s(cfg.AIHQ_INTERNAL_TOKEN),
         "Content-Type": "application/json; charset=utf-8",
-      },
+        },
+      }),
       body: JSON.stringify({
         tenantKey: s(tenantKey),
         toNumber: s(toNumber),
@@ -140,6 +153,14 @@ async function tryFetchTenantFromAiHq({ tenantKey, toNumber }) {
     }
 
     if (!resp.ok) {
+      logger.warn("voice.tenant_config.fetch_failed", {
+        status: Number(resp.status || 0),
+        tenantKey: s(tenantKey).toLowerCase(),
+        toNumber: s(toNumber),
+        requestId: s(requestContext?.requestId),
+        correlationId: s(requestContext?.correlationId),
+        error: s(json?.error || "tenant_config_fetch_failed"),
+      });
       return {
         ok: false,
         error: s(json?.error || "tenant_config_fetch_failed"),
@@ -150,6 +171,14 @@ async function tryFetchTenantFromAiHq({ tenantKey, toNumber }) {
 
     const checked = validateVoiceProjectedRuntimeResponse(json || {});
     if (!checked.ok) {
+      logger.warn("voice.tenant_config.contract_invalid", {
+        status: Number(resp.status || 0),
+        tenantKey: s(tenantKey).toLowerCase(),
+        toNumber: s(toNumber),
+        requestId: s(requestContext?.requestId),
+        correlationId: s(requestContext?.correlationId),
+        error: checked.error,
+      });
       return {
         ok: false,
         error: checked.error,
@@ -160,6 +189,14 @@ async function tryFetchTenantFromAiHq({ tenantKey, toNumber }) {
 
     const operationalChecked = validateVoiceOperationalResponse(json || {});
     if (!operationalChecked.ok) {
+      logger.warn("voice.tenant_config.operational_contract_invalid", {
+        status: Number(resp.status || 0),
+        tenantKey: s(tenantKey).toLowerCase(),
+        toNumber: s(toNumber),
+        requestId: s(requestContext?.requestId),
+        correlationId: s(requestContext?.correlationId),
+        error: operationalChecked.error,
+      });
       return {
         ok: false,
         error: operationalChecked.error,
@@ -167,6 +204,16 @@ async function tryFetchTenantFromAiHq({ tenantKey, toNumber }) {
         json,
       };
     }
+
+    logger.info("voice.tenant_config.fetch_succeeded", {
+      status: Number(resp.status || 0),
+      tenantKey: s(tenantKey).toLowerCase(),
+      toNumber: s(toNumber),
+      requestId: s(requestContext?.requestId),
+      correlationId: s(requestContext?.correlationId),
+      authoritySource: s(checked.value?.projectedRuntime?.authority?.source),
+      operationalReasonCode: s(operationalChecked.value?.operationalChannels?.voice?.reasonCode),
+    });
 
     return {
       ok: true,
@@ -177,6 +224,13 @@ async function tryFetchTenantFromAiHq({ tenantKey, toNumber }) {
       },
     };
   } catch (err) {
+    logger.warn("voice.tenant_config.fetch_exception", {
+      tenantKey: s(tenantKey).toLowerCase(),
+      toNumber: s(toNumber),
+      requestId: s(requestContext?.requestId),
+      correlationId: s(requestContext?.correlationId),
+      error: s(err?.message || err),
+    });
     return {
       ok: false,
       error: "tenant_config_fetch_exception",
@@ -187,10 +241,11 @@ async function tryFetchTenantFromAiHq({ tenantKey, toNumber }) {
   }
 }
 
-export async function getTenantVoiceConfig({ tenant }) {
+export async function getTenantVoiceConfig({ tenant, requestContext = {} }) {
   const remote = await tryFetchTenantFromAiHq({
     tenantKey: tenant?.tenantKey || null,
     toNumber: tenant?.toNumber || null,
+    requestContext,
   });
 
   if (!remote?.ok) {

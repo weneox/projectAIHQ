@@ -4,6 +4,7 @@ import { requireExecutionCallbackRateLimit } from "../../../utils/rateLimit.js";
 import { requireInternalToken } from "../../../utils/auth.js";
 import {
   enqueueVoiceSyncExecutionRequest,
+  recordRuntimeIncidentRequest,
   getDurableExecutionById,
   getDurableExecutionSummary,
   listExecutions,
@@ -18,6 +19,10 @@ export function executionsRoutes({ db, wsHub }) {
 
   r.post("/internal/executions/voice-sync", requireInternalToken, (req, res) => {
     return enqueueVoiceSyncExecutionRequest(req, res, { db, wsHub });
+  });
+
+  r.post("/internal/runtime-signals/incidents", requireInternalToken, (req, res) => {
+    return recordRuntimeIncidentRequest(req, res, { db, wsHub });
   });
 
   r.get("/executions", requireOperatorSurfaceAccess, (req, res) => {

@@ -14,14 +14,24 @@ process.env.TWILIO_TWIML_APP_SID = "APaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const { twilioRouter } = await import("../src/routes/twilio.js");
 const { resolveTenantFromRequest } = await import("../src/services/tenantResolver.js");
 const { __test__: tenantConfigTest } = await import("../src/services/tenantConfig.js");
+const { createAihqVoiceClient } = await import("../src/services/aihqVoiceClient.js");
 const {
   checkAihqOperationalBootReadiness,
 } = await import("../src/services/bootReadiness.js");
 const {
+  configureRuntimeSignalPersistence,
   getRuntimeMetricsSnapshot,
+  listRuntimeSignals,
+  recordRuntimeSignal,
   resetRuntimeMetrics,
 } = await import("../src/services/runtimeObservability.js");
-const { createHealthHandler } = await import("../src/services/healthRoute.js");
+const { createAihqRuntimeIncidentClient } = await import(
+  "../src/services/aihqRuntimeIncidentClient.js"
+);
+const {
+  buildRuntimeSignalsResponse,
+  createHealthHandler,
+} = await import("../src/services/healthRoute.js");
 
 const originalFetch = global.fetch;
 
@@ -231,9 +241,12 @@ test("health route response exposes direct structured readiness", () => {
   const handler = createHealthHandler({
     service: "twilio-voice-backend",
     bootReadiness: {
+      checkedAt: "2026-03-26T00:00:00.000Z",
+      enforced: true,
       status: "blocked",
       reasonCode: "voice_phone_number_missing",
       blockerReasonCodes: ["voice_phone_number_missing"],
+      blockersTotal: 1,
       intentionallyUnavailable: true,
       dependency: {
         aihqReady: false,
@@ -252,11 +265,159 @@ test("health route response exposes direct structured readiness", () => {
   assert.equal(res.statusCode, 503);
   assert.equal(res.body.service, "twilio-voice-backend");
   assert.equal(res.body.readiness.status, "blocked");
+  assert.equal(res.body.readiness.checkedAt, "2026-03-26T00:00:00.000Z");
+  assert.equal(res.body.readiness.enforced, true);
   assert.equal(res.body.readiness.reasonCode, "voice_phone_number_missing");
   assert.deepEqual(res.body.readiness.blockerReasonCodes, [
     "voice_phone_number_missing",
   ]);
+  assert.equal(res.body.readiness.blockersTotal, 1);
   assert.equal(res.body.readiness.intentionallyUnavailable, true);
+});
+
+test("voice AI HQ client forwards request and correlation headers", async () => {
+  let seenHeaders = null;
+  const client = createAihqVoiceClient({
+    fetchFn: async (_url, options = {}) => {
+      seenHeaders = options.headers || {};
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            execution: {
+              id: "exec-1",
+              status: "pending",
+            },
+          });
+        },
+      };
+    },
+    baseUrl: "https://aihq.example.test",
+    internalToken: "voice-internal-token",
+  });
+
+  const out = await client.updateSessionState(
+    {
+      providerCallSid: "CA123",
+      eventType: "session_state_updated",
+      status: "in_progress",
+    },
+    {
+      requestId: "req-voice-1",
+      correlationId: "corr-voice-1",
+    }
+  );
+
+  assert.equal(out.ok, true);
+  assert.equal(seenHeaders["x-request-id"], "req-voice-1");
+  assert.equal(seenHeaders["x-correlation-id"], "corr-voice-1");
+});
+
+test("voice runtime signals response exposes readiness and runtime counters", () => {
+  resetRuntimeMetrics();
+  recordRuntimeSignal({
+    level: "warn",
+    category: "voice_route",
+    code: "voice_tenant_config_unavailable",
+    reasonCode: "tenant_config_not_found",
+    requestId: "req-voice-2",
+    correlationId: "corr-voice-2",
+    status: 404,
+    tenantKey: "acme",
+  });
+
+  const response = buildRuntimeSignalsResponse({
+    service: "twilio-voice-backend",
+    bootReadiness: {
+      status: "ok",
+      checkedAt: "2026-03-26T00:00:00.000Z",
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.service, "twilio-voice-backend");
+  assert.equal(response.body.readiness.status, "ok");
+  assert.equal(typeof response.body.runtime.checkedAt, "string");
+  assert.deepEqual(response.body.runtime.metrics, getRuntimeMetricsSnapshot());
+  assert.equal(response.body.runtime.recentSignals[0]?.code, "voice_tenant_config_unavailable");
+  assert.equal(response.body.runtime.recentSignals[0]?.requestId, "req-voice-2");
+  assert.equal(response.body.runtime.recentSignals[0]?.correlationId, "corr-voice-2");
+  assert.equal(listRuntimeSignals()[0]?.tenantKey, "acme");
+});
+
+test("voice durable incident client posts sanitized incident payload to AI HQ", async () => {
+  let seenUrl = "";
+  let seenHeaders = null;
+  let seenBody = null;
+  const client = createAihqRuntimeIncidentClient({
+    fetchFn: async (url, options = {}) => {
+      seenUrl = url;
+      seenHeaders = options.headers || {};
+      seenBody = JSON.parse(options.body || "{}");
+      return {
+        ok: true,
+        status: 202,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            incident: {
+              id: "incident-2",
+            },
+          });
+        },
+      };
+    },
+    baseUrl: "https://aihq.example.test",
+    internalToken: "voice-internal-token",
+  });
+
+  const result = await client.recordIncident({
+    service: "twilio-voice-backend",
+    area: "voice_sync",
+    severity: "warn",
+    code: "voice_sync_request_failed",
+    reasonCode: "request_failed",
+    requestId: "req-voice-3",
+    correlationId: "corr-voice-3",
+    tenantKey: "ACME",
+    detailSummary: "AI HQ request failed",
+    context: {
+      status: 504,
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(seenUrl, "https://aihq.example.test/api/internal/runtime-signals/incidents");
+  assert.equal(seenHeaders["x-request-id"], "req-voice-3");
+  assert.equal(seenHeaders["x-correlation-id"], "corr-voice-3");
+  assert.equal(seenBody.tenantKey, "acme");
+  assert.equal(seenBody.code, "voice_sync_request_failed");
+});
+
+test("voice runtime observability forwards only warn/error signals to durable sink", async () => {
+  resetRuntimeMetrics();
+  const forwarded = [];
+  configureRuntimeSignalPersistence(async (entry) => {
+    forwarded.push(entry);
+  });
+
+  recordRuntimeSignal({
+    level: "info",
+    category: "realtime",
+    code: "voice_realtime_heartbeat",
+  });
+  recordRuntimeSignal({
+    level: "error",
+    category: "voice_route",
+    code: "voice_route_failed",
+    reasonCode: "voice_route_failed",
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(forwarded.length, 1);
+  assert.equal(forwarded[0]?.code, "voice_route_failed");
 });
 
 test("allowed flows work with correct auth and signature", async () => {

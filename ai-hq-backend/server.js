@@ -33,9 +33,16 @@ import { createDraftScheduleWorker } from "./src/workers/draftScheduleWorker.js"
 import { createMediaJobWorker } from "./src/workers/mediaJobWorker.js";
 import { createSourceSyncWorker } from "./src/workers/sourceSyncWorker.js";
 import {
+  buildRuntimeSignalsSummary,
   buildDurableOperationalStatus,
   classifyWorkerHealth,
+  configureRuntimeSignalPersistence,
 } from "./src/observability/runtimeSignals.js";
+import {
+  listRecentRuntimeIncidents,
+  pruneRuntimeIncidentTrail,
+  persistRuntimeIncident,
+} from "./src/services/runtimeIncidentTrail.js";
 import { createDurableExecutionHelpers } from "./src/db/helpers/durableExecutions.js";
 import {
   buildOperationalReadinessBlockerError,
@@ -99,6 +106,11 @@ async function main() {
   assertConfigValid(console);
   printFeatureReport(console);
   const logger = createLogger({ service: "ai-hq-backend", env: cfg.app.env });
+  const runtimeIncidentRetentionPolicy = {
+    retainDays: 14,
+    maxRows: 5000,
+    pruneIntervalHours: 6,
+  };
   let startupOperationalReadiness = {
     ok: false,
     enabled: false,
@@ -141,6 +153,7 @@ async function main() {
       "x-webhook-token",
       "x-callback-token",
       "x-debug-token",
+      "x-correlation-id",
       "x-tenant-key",
       "Accept",
     ],
@@ -293,9 +306,75 @@ async function main() {
     return res.status(200).json(out);
   });
 
+  app.get("/__runtime-signals", diagnosticsGuard, async (req, res) => {
+    const db = getDb();
+    let durableSummary = {};
+    let durableIncidents = [];
+    const serviceFilter = String(req.query.service || "").trim();
+
+    if (db?.query) {
+      try {
+        const helpers = createDurableExecutionHelpers({ db });
+        durableSummary = await helpers.getExecutionSummary();
+      } catch {}
+      try {
+        durableIncidents = await listRecentRuntimeIncidents({
+          db,
+          limit: 20,
+          service: serviceFilter,
+        });
+      } catch {}
+    }
+
+    return res.status(200).json({
+      ok: true,
+      service: "ai-hq-backend",
+      filters: {
+        service: serviceFilter || null,
+      },
+      runtimeSignals: buildRuntimeSignalsSummary({
+        startupOperationalReadiness,
+        durableSummary,
+      }),
+      durableRecentHistory: durableIncidents,
+    });
+  });
+
   try {
     await initDb();
     if (getDb()) {
+      configureRuntimeSignalPersistence((incident) =>
+        persistRuntimeIncident({
+          db: getDb(),
+          incident: {
+            ...incident,
+            service: "ai-hq-backend",
+          },
+        })
+      );
+      const pruneOutcome = await pruneRuntimeIncidentTrail({
+        db: getDb(),
+        retainDays: runtimeIncidentRetentionPolicy.retainDays,
+        maxRows: runtimeIncidentRetentionPolicy.maxRows,
+      });
+      logger.info("runtime_incident_trail.pruned", pruneOutcome);
+      const pruneTimer = setInterval(async () => {
+        try {
+          const outcome = await pruneRuntimeIncidentTrail({
+            db: getDb(),
+            retainDays: runtimeIncidentRetentionPolicy.retainDays,
+            maxRows: runtimeIncidentRetentionPolicy.maxRows,
+          });
+          if (Number(outcome.deletedByAge || 0) > 0 || Number(outcome.deletedByCount || 0) > 0) {
+            logger.info("runtime_incident_trail.pruned", outcome);
+          }
+        } catch (error) {
+          logger.warn("runtime_incident_trail.prune_failed", {
+            error: String(error?.message || error || "runtime_incident_trail_prune_failed"),
+          });
+        }
+      }, runtimeIncidentRetentionPolicy.pruneIntervalHours * 60 * 60 * 1000);
+      pruneTimer.unref?.();
       const migrationStatus = await getMigrationStatus();
       const pendingMigrations = Array.isArray(migrationStatus?.pending)
         ? migrationStatus.pending.map((item) => s(item?.name)).filter(Boolean)
@@ -474,10 +553,12 @@ async function main() {
   const draftScheduleWorker = createDraftScheduleWorker({
     db,
   });
+  app.locals.draftScheduleWorker = draftScheduleWorker;
 
   const mediaJobWorker = createMediaJobWorker({
     db,
   });
+  app.locals.mediaJobWorker = mediaJobWorker;
 
   if (cfg.workers.sourceSyncWorkerEnabled) {
     sourceSyncWorker?.start?.();

@@ -35,6 +35,10 @@ export function voiceInternalRoutes({ db }) {
   const r = express.Router();
 
   r.post("/internal/voice/tenant-config", requireInternalToken, async (req, res) => {
+    const logger = req.log?.child?.({
+      component: "voice-internal-routes",
+      route: "tenant-config",
+    });
     try {
       const checked = validateVoiceTenantConfigRequest(req.body || {});
       if (!checked.ok) {
@@ -50,12 +54,16 @@ export function voiceInternalRoutes({ db }) {
         })
       );
     } catch (err) {
-      console.error("[voiceInternal/tenant-config] error:", err);
+      logger?.error("voice.internal.tenant_config.failed", err);
       return res.status(500).json({ ok: false, error: "voice_tenant_config_failed" });
     }
   });
 
   r.post("/internal/voice/session/upsert", requireInternalToken, async (req, res) => {
+    const logger = req.log?.child?.({
+      component: "voice-internal-routes",
+      route: "session-upsert",
+    });
     try {
       if (!db?.query) {
         return res.status(503).json({ ok: false, error: "db_unavailable" });
@@ -74,12 +82,16 @@ export function voiceInternalRoutes({ db }) {
         })
       );
     } catch (err) {
-      console.error("[voiceInternal/session/upsert] error:", err);
+      logger?.error("voice.internal.session_upsert.failed", err);
       return res.status(500).json({ ok: false, error: "voice_session_upsert_failed" });
     }
   });
 
   r.post("/internal/voice/session/transcript", requireInternalToken, async (req, res) => {
+    const logger = req.log?.child?.({
+      component: "voice-internal-routes",
+      route: "session-transcript",
+    });
     try {
       if (!db?.query) {
         return res.status(503).json({ ok: false, error: "db_unavailable" });
@@ -101,12 +113,16 @@ export function voiceInternalRoutes({ db }) {
         })
       );
     } catch (err) {
-      console.error("[voiceInternal/session/transcript] error:", err);
+      logger?.error("voice.internal.session_transcript.failed", err);
       return res.status(500).json({ ok: false, error: "voice_transcript_append_failed" });
     }
   });
 
   r.post("/internal/voice/session/state", requireInternalToken, async (req, res) => {
+    const logger = req.log?.child?.({
+      component: "voice-internal-routes",
+      route: "session-state",
+    });
     try {
       if (!db?.query) {
         return res.status(503).json({ ok: false, error: "db_unavailable" });
@@ -126,12 +142,16 @@ export function voiceInternalRoutes({ db }) {
         })
       );
     } catch (err) {
-      console.error("[voiceInternal/session/state] error:", err);
+      logger?.error("voice.internal.session_state.failed", err);
       return res.status(500).json({ ok: false, error: "voice_session_state_update_failed" });
     }
   });
 
   r.post("/internal/voice/session/operator-join", requireInternalToken, async (req, res) => {
+    const logger = req.log?.child?.({
+      component: "voice-internal-routes",
+      route: "operator-join",
+    });
     try {
       if (!db?.query) {
         return res.status(503).json({ ok: false, error: "db_unavailable" });
@@ -151,16 +171,20 @@ export function voiceInternalRoutes({ db }) {
         })
       );
     } catch (err) {
-      console.error("[voiceInternal/session/operator-join] error:", err);
+      logger?.error("voice.internal.operator_join.failed", err);
       return res.status(500).json({ ok: false, error: "voice_operator_join_update_failed" });
     }
   });
 
-  r.post("/internal/voice/report", requireInternalToken, async (_req, res) => {
+  r.post("/internal/voice/report", requireInternalToken, async (req, res) => {
+    const logger = req.log?.child?.({
+      component: "voice-internal-routes",
+      route: "report",
+    });
     try {
       return writeResult(res, await processVoiceReportPing());
     } catch (err) {
-      console.error("[voiceInternal/report] error:", err);
+      logger?.error("voice.internal.report.failed", err);
       return res.status(500).json({ ok: false, error: "voice_report_failed" });
     }
   });

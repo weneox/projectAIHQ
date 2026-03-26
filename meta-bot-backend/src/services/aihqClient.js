@@ -1,4 +1,8 @@
 import { AIHQ_BASE_URL, AIHQ_INTERNAL_TOKEN, AIHQ_TIMEOUT_MS } from "../config.js";
+import {
+  buildCorrelationHeaders,
+  createStructuredLogger,
+} from "@aihq/shared-contracts/logger";
 
 function s(v) {
   return String(v ?? "").trim();
@@ -27,12 +31,21 @@ async function safeReadJson(res) {
   }
 }
 
-function buildHeaders() {
-  return {
+const logger = createStructuredLogger({
+  service: "meta-bot-backend",
+  component: "aihq-client",
+});
+
+function buildHeaders(requestContext = {}) {
+  return buildCorrelationHeaders({
+    requestId: s(requestContext?.requestId),
+    correlationId: s(requestContext?.correlationId),
+    headers: {
     "Content-Type": "application/json; charset=utf-8",
     Accept: "application/json",
     ...(s(AIHQ_INTERNAL_TOKEN) ? { "x-internal-token": s(AIHQ_INTERNAL_TOKEN) } : {}),
-  };
+    },
+  });
 }
 
 function normalizeUser(obj) {
@@ -207,7 +220,7 @@ function normalizePayload(payload) {
   };
 }
 
-async function postToAiHq(path, payload) {
+async function postToAiHq(path, payload, requestContext = {}) {
   const base = trimSlash(AIHQ_BASE_URL);
 
   if (!base) {
@@ -227,15 +240,36 @@ async function postToAiHq(path, payload) {
 
   try {
     const safePayload = normalizePayload(payload);
+    const startedAt = Date.now();
 
     const res = await fetch(`${base}${path}`, {
       method: "POST",
-      headers: buildHeaders(),
+      headers: buildHeaders(requestContext),
       body: JSON.stringify(safePayload),
       signal: controller.signal,
     });
 
     const json = await safeReadJson(res);
+    const durationMs = Math.max(0, Date.now() - startedAt);
+
+    if (!res.ok || json?.ok === false) {
+      logger.warn("meta.aihq.request_failed", {
+        path,
+        status: Number(res.status || 0),
+        durationMs,
+        requestId: s(requestContext?.requestId),
+        correlationId: s(requestContext?.correlationId),
+        error: s(json?.error || json?.message || "aihq_request_failed"),
+      });
+    } else {
+      logger.info("meta.aihq.request_succeeded", {
+        path,
+        status: Number(res.status || 0),
+        durationMs,
+        requestId: s(requestContext?.requestId),
+        correlationId: s(requestContext?.correlationId),
+      });
+    }
 
     return {
       ok: res.ok && json?.ok !== false,
@@ -246,6 +280,15 @@ async function postToAiHq(path, payload) {
         : json?.error || json?.message || "AI HQ request failed",
     };
   } catch (err) {
+    logger.warn("meta.aihq.request_exception", {
+      path,
+      requestId: s(requestContext?.requestId),
+      correlationId: s(requestContext?.correlationId),
+      error:
+        err?.name === "AbortError"
+          ? "AI HQ timeout"
+          : String(err?.message || err),
+    });
     return {
       ok: false,
       status: 0,
@@ -260,10 +303,10 @@ async function postToAiHq(path, payload) {
   }
 }
 
-export async function forwardToAiHq(payload) {
-  return postToAiHq("/api/inbox/ingest", payload);
+export async function forwardToAiHq(payload, requestContext = {}) {
+  return postToAiHq("/api/inbox/ingest", payload, requestContext);
 }
 
-export async function forwardCommentToAiHq(payload) {
-  return postToAiHq("/api/comments/ingest", payload);
+export async function forwardCommentToAiHq(payload, requestContext = {}) {
+  return postToAiHq("/api/comments/ingest", payload, requestContext);
 }

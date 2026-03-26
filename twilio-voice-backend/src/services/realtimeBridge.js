@@ -43,6 +43,15 @@ function buildConferenceName(tenantKey, callSid) {
   return `${s(tenantKey || "default")}:${s(callSid || "call")}`;
 }
 
+function safeDebugValue(value) {
+  if (typeof value === "string") return s(value);
+  try {
+    return s(JSON.stringify(value));
+  } catch {
+    return s(value);
+  }
+}
+
 export function attachRealtimeBridge({
   wss,
   OPENAI_API_KEY,
@@ -80,7 +89,10 @@ export function attachRealtimeBridge({
 
   function dlog(...args) {
     if (!DEBUG_REALTIME) return;
-    console.log("[bridge]", ...args);
+    logger.info("voice.bridge.debug", {
+      debug: true,
+      args: args.map((item) => safeDebugValue(item)).slice(0, 8),
+    });
   }
 
   wss.on("connection", (twilioWs, req) => {
@@ -134,6 +146,19 @@ export function attachRealtimeBridge({
 
     let turnId = 0;
     let respondedTurnId = -1;
+
+    function buildAihqRequestContext() {
+      const correlationId =
+        s(callSid) ||
+        s(streamSid) ||
+        s(tenantKey) ||
+        "voice-bridge";
+
+      return {
+        requestId: correlationId,
+        correlationId,
+      };
+    }
 
     function durationSec() {
       const durMs = Date.now() - metricStartedAt;
@@ -265,7 +290,7 @@ export function attachRealtimeBridge({
           },
           startedAt: new Date().toISOString(),
           ...extra,
-        });
+        }, buildAihqRequestContext());
       } catch (e) {
         dlog("syncSessionUpsert failed", e?.message || e);
       }
@@ -281,7 +306,7 @@ export function attachRealtimeBridge({
           role: s(role, "customer"),
           text: s(text),
           ts: new Date().toISOString(),
-        });
+        }, buildAihqRequestContext());
       } catch (e) {
         dlog("syncTranscript failed", e?.message || e);
       }
@@ -331,7 +356,7 @@ export function attachRealtimeBridge({
               }
             : {},
           endedAt: extra.endedAt || null,
-        });
+        }, buildAihqRequestContext());
       } catch (e) {
         dlog("syncState failed", e?.message || e);
       }
@@ -351,7 +376,7 @@ export function attachRealtimeBridge({
           botActive:
             typeof extra.botActive === "boolean" ? extra.botActive : false,
           operatorJoinedAt: new Date().toISOString(),
-        });
+        }, buildAihqRequestContext());
       } catch (e) {
         dlog("syncOperatorJoin failed", e?.message || e);
       }

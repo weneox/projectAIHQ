@@ -3,6 +3,10 @@ import {
   validateResolveChannelQuery,
 } from "@aihq/shared-contracts/critical";
 import { validateResolveChannelProjectedResponse } from "@aihq/shared-contracts/runtime";
+import {
+  buildCorrelationHeaders,
+  createStructuredLogger,
+} from "@aihq/shared-contracts/logger";
 
 function s(v) {
   return String(v ?? "").trim();
@@ -53,25 +57,20 @@ function buildUrl({ channel = "", recipientId = "", pageId = "", igUserId = "" }
   return `${base}/api/tenants/resolve-channel?${qs.toString()}`;
 }
 
-function buildHeaders() {
-  return {
+const logger = createStructuredLogger({
+  service: "meta-bot-backend",
+  component: "tenant-resolver",
+});
+
+function buildHeaders(requestContext = {}) {
+  return buildCorrelationHeaders({
+    requestId: s(requestContext?.requestId),
+    correlationId: s(requestContext?.correlationId),
+    headers: {
     Accept: "application/json",
     ...(s(AIHQ_INTERNAL_TOKEN) ? { "x-internal-token": s(AIHQ_INTERNAL_TOKEN) } : {}),
-  };
-}
-
-function logInfo(message, data = null) {
-  try {
-    if (data) console.log(`[meta-bot] ${message}`, data);
-    else console.log(`[meta-bot] ${message}`);
-  } catch {}
-}
-
-function logWarn(message, data = null) {
-  try {
-    if (data) console.warn(`[meta-bot] ${message}`, data);
-    else console.warn(`[meta-bot] ${message}`);
-  } catch {}
+    },
+  });
 }
 
 export async function resolveTenantContextFromMetaEvent({
@@ -79,6 +78,7 @@ export async function resolveTenantContextFromMetaEvent({
   recipientId = "",
   pageId = "",
   igUserId = "",
+  requestContext = {},
 }) {
   const safeInput = {
     channel: lower(channel),
@@ -119,12 +119,13 @@ export async function resolveTenantContextFromMetaEvent({
     };
   }
 
-  logInfo("tenant resolve request", {
+  logger.info("meta.tenant_resolve.requested", {
     base,
-    url,
     timeoutMs,
     hasInternalToken: Boolean(s(AIHQ_INTERNAL_TOKEN)),
     input: safeInput,
+    requestId: s(requestContext?.requestId),
+    correlationId: s(requestContext?.correlationId),
   });
 
   const controller = new AbortController();
@@ -135,21 +136,20 @@ export async function resolveTenantContextFromMetaEvent({
 
     const res = await fetch(url, {
       method: "GET",
-      headers: buildHeaders(),
+      headers: buildHeaders(requestContext),
       signal: controller.signal,
     });
 
     const tookMs = Date.now() - startedAt;
     const json = await safeReadJson(res);
 
-    logInfo("tenant resolve response", {
+    logger.info("meta.tenant_resolve.responded", {
       status: res.status,
       tookMs,
       ok: res.ok,
-      preview:
-        json && typeof json === "object"
-          ? JSON.stringify(json).slice(0, 300)
-          : "",
+      requestId: s(requestContext?.requestId),
+      correlationId: s(requestContext?.correlationId),
+      reasonCode: s(json?.reasonCode || json?.error || ""),
     });
 
     if (!res.ok || json?.ok === false) {
@@ -201,13 +201,14 @@ export async function resolveTenantContextFromMetaEvent({
         ? "tenant resolve timeout"
         : String(err?.message || err);
 
-    logWarn("tenant resolve fetch failed", {
+    logger.warn("meta.tenant_resolve.failed", {
       error,
       base,
-      url,
       timeoutMs,
       hasInternalToken: Boolean(s(AIHQ_INTERNAL_TOKEN)),
       input: safeInput,
+      requestId: s(requestContext?.requestId),
+      correlationId: s(requestContext?.correlationId),
     });
 
     return {

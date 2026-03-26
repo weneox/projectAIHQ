@@ -80,6 +80,9 @@ vi.mock("./pages/Leads.jsx", () => ({
 vi.mock("./pages/Comments.jsx", () => ({
   default: () => <div>Comments Page</div>,
 }));
+vi.mock("./pages/Incidents.jsx", () => ({
+  default: () => <div>Incidents Page</div>,
+}));
 vi.mock("./pages/Voice.jsx", () => ({
   default: () => <div>Voice Page</div>,
 }));
@@ -118,6 +121,7 @@ describe("App critical route smoke", () => {
     ["/truth", "Truth Page"],
     ["/settings", "Settings Page"],
     ["/inbox", "Inbox Page"],
+    ["/incidents", "Incidents Page"],
     ["/leads", "Leads Page"],
     ["/proposals", "Proposals Page"],
   ])("loads %s without a blank screen", async (path, text) => {

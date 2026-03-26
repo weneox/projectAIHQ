@@ -14,6 +14,7 @@ const Settings = lazy(() => import("./pages/Settings.jsx"));
 const Inbox = lazy(() => import("./pages/Inbox.jsx"));
 const Leads = lazy(() => import("./pages/Leads.jsx"));
 const Comments = lazy(() => import("./pages/Comments.jsx"));
+const Incidents = lazy(() => import("./pages/Incidents.jsx"));
 const Voice = lazy(() => import("./pages/Voice.jsx"));
 const Login = lazy(() => import("./pages/Login.jsx"));
 const TruthViewerPage = lazy(() => import("./pages/Truth/TruthViewerPage.jsx"));
@@ -188,6 +189,17 @@ export default function App() {
                 description="Comments is a moderation and response workspace. It stays gated to operational roles for this launch slice."
               >
                 {withSuspense(<Comments />)}
+              </OperatorRouteGuard>
+            }
+          />
+          <Route
+            path="incidents"
+            element={
+              <OperatorRouteGuard
+                title="Operator access required"
+                description="Incident history is an operational triage surface. It stays available only to owner, admin, and operator roles."
+              >
+                {withSuspense(<Incidents />)}
               </OperatorRouteGuard>
             }
           />

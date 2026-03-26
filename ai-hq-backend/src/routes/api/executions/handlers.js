@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import {
   validateDurableVoiceSyncRequest,
+  validateRuntimeIncidentRequest,
 } from "@aihq/shared-contracts/critical";
 
 import {
@@ -42,6 +43,7 @@ import { pushBroadcastToCeo } from "../../../services/pushBroadcast.js";
 import { notifyN8n } from "../../../services/n8nNotify.js";
 import { runMediaJobNow } from "../../../services/media/mediaExecutionRunner.js";
 import { enqueueVoiceSyncExecution } from "../../../services/durableExecutionService.js";
+import { persistRuntimeIncident } from "../../../services/runtimeIncidentTrail.js";
 
 import {
   clean,
@@ -143,6 +145,42 @@ export async function enqueueVoiceSyncExecutionRequest(req, res, { db }) {
     return res.status(500).json({
       ok: false,
       error: "durable_voice_sync_enqueue_failed",
+      details: serializeError(e),
+    });
+  }
+}
+
+export async function recordRuntimeIncidentRequest(req, res, { db }) {
+  try {
+    if (!isDbReady(db)) {
+      return serviceUnavailableJson(
+        res,
+        "database unavailable; durable runtime incident trail requires persistent storage"
+      );
+    }
+
+    const checked = validateRuntimeIncidentRequest(req.body || {});
+    if (!checked.ok) {
+      return res.status(400).json({
+        ok: false,
+        error: checked.error,
+      });
+    }
+
+    const incident = await persistRuntimeIncident({
+      db,
+      incident: checked.value,
+    });
+
+    return res.status(202).json({
+      ok: true,
+      accepted: true,
+      incident,
+    });
+  } catch (e) {
+    return res.status(500).json({
+      ok: false,
+      error: "runtime_incident_record_failed",
       details: serializeError(e),
     });
   }

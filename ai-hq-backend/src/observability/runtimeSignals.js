@@ -54,6 +54,31 @@ function parseMetricKey(key = "") {
 const counterStore = new Map();
 const recentStore = new Map();
 const workerStore = new Map();
+const recentEventStore = [];
+let persistenceSink = null;
+
+function pushRecentEvent(entry = {}) {
+  recentEventStore.unshift({
+    ts: nowIso(),
+    ...entry,
+  });
+
+  const maxEntries = Math.max(
+    20,
+    n(cfg?.observability?.recentRuntimeSignalHistoryLimit, 100)
+  );
+  if (recentEventStore.length > maxEntries) {
+    recentEventStore.length = maxEntries;
+  }
+}
+
+function persistRuntimeEvent(entry = {}) {
+  if (typeof persistenceSink !== "function") return;
+
+  Promise.resolve()
+    .then(() => persistenceSink(entry))
+    .catch(() => {});
+}
 
 function incrementCounter(name, labels = {}, amount = 1) {
   const key = metricKey(name, labels);
@@ -247,6 +272,12 @@ export function recordRealtimeAuthFailure({ reason = "" } = {}) {
   recordRecent("realtime_auth_failures_recent_total", {
     reason,
   });
+  pushRecentEvent({
+    level: "warn",
+    category: "realtime",
+    code: "realtime_auth_failure",
+    reasonCode: s(reason || "unknown"),
+  });
 }
 
 export function recordSourceSyncOutcome({ outcome = "" } = {}) {
@@ -259,7 +290,67 @@ export function recordSourceSyncOutcome({ outcome = "" } = {}) {
     recordRecent("source_sync_attention_recent_total", {
       outcome: normalized,
     });
+    pushRecentEvent({
+      level: normalized === "error" ? "error" : "warn",
+      category: "source_sync",
+      code: "source_sync_attention",
+      reasonCode: normalized,
+    });
   }
+}
+
+export function recordRuntimeSignal({
+  level = "info",
+  category = "",
+  code = "",
+  reasonCode = "",
+  message = "",
+  context = {},
+  service = "ai-hq-backend",
+  requestId = "",
+  correlationId = "",
+  tenantId = "",
+  tenantKey = "",
+  durable = true,
+} = {}) {
+  const entry = {
+    level: lower(level || "info"),
+    category: s(category || "runtime"),
+    code: s(code || "runtime_signal"),
+    reasonCode: s(reasonCode),
+    message: s(message).slice(0, 240),
+    service: s(service || "ai-hq-backend"),
+    requestId: s(requestId),
+    correlationId: s(correlationId),
+    tenantId: s(tenantId),
+    tenantKey: s(tenantKey),
+    context: isObj(context)
+      ? Object.fromEntries(
+          Object.entries(context)
+            .filter(([, value]) => value !== undefined)
+            .map(([key, value]) => [
+              s(key),
+              typeof value === "string" ? s(value).slice(0, 240) : value,
+            ])
+        )
+      : {},
+  };
+  pushRecentEvent(entry);
+  if (durable) {
+    persistRuntimeEvent(entry);
+  }
+}
+
+export function listRecentRuntimeSignals(limit = null) {
+  const max = Math.max(1, n(limit, 20));
+  return recentEventStore.slice(0, max).map((item) => ({
+    ...item,
+    context: isObj(item?.context) ? { ...item.context } : {},
+  }));
+}
+
+export function configureRuntimeSignalPersistence(sink = null) {
+  persistenceSink = typeof sink === "function" ? sink : null;
 }
 
 export function getMetricsSnapshot() {
@@ -390,10 +481,65 @@ export function buildDurableOperationalStatus({
   };
 }
 
+export function buildRuntimeSignalsSummary({
+  startupOperationalReadiness = {},
+  durableSummary = {},
+} = {}) {
+  const workers = getAllWorkerSnapshots();
+  const durableWorker = workers["durable-execution-worker"] || null;
+  const sourceSyncWorker = workers["source-sync-worker"] || null;
+  const durableOperational = buildDurableOperationalStatus({
+    summary: durableSummary,
+    durableWorker,
+    sourceSyncWorker,
+  });
+
+  return {
+    checkedAt: nowIso(),
+    startupOperationalReadiness: {
+      status: lower(startupOperationalReadiness?.status || "unknown"),
+      enforced: startupOperationalReadiness?.enforced === true,
+      blockersTotal: n(startupOperationalReadiness?.blockers?.total, 0),
+      blockerReasonCodes: Array.isArray(
+        startupOperationalReadiness?.blockerReasonCodes
+      )
+        ? startupOperationalReadiness.blockerReasonCodes
+            .map((item) => s(item))
+            .filter(Boolean)
+            .slice(0, 10)
+        : [],
+    },
+    durableExecution: {
+      status: durableOperational.status,
+      retryableCount: n(durableSummary?.counts?.retryable, 0),
+      deadLetterCount: n(durableSummary?.deadLetterCount, 0),
+      oldestRetryableAgeMs: durableOperational.oldestRetryableAgeMs,
+      oldestInProgressAgeMs: durableOperational.oldestInProgressAgeMs,
+      alerts: Array.isArray(durableOperational.alerts)
+        ? durableOperational.alerts.slice(0, 10)
+        : [],
+    },
+    recentSignals: durableOperational.recentSignals,
+    recentHistory: listRecentRuntimeSignals(20),
+    workers: Object.fromEntries(
+      Object.entries(workers).map(([key, state]) => [
+        key,
+        {
+          ...state,
+          health: classifyWorkerHealth(state),
+        },
+      ])
+    ),
+    metrics: getMetricsSnapshot(),
+  };
+}
+
 export function resetRuntimeSignals() {
   counterStore.clear();
   recentStore.clear();
   workerStore.clear();
+  recentEventStore.length = 0;
+  persistenceSink = null;
 }
 
 export const __test__ = {

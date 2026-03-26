@@ -14,6 +14,12 @@ import { writeAudit } from "../utils/auditLog.js";
 import { createLogger } from "../utils/logger.js";
 import { emitRealtimeEvent } from "../realtime/events.js";
 import { validateMetaGatewayOutboundResponse } from "@aihq/shared-contracts/critical";
+import {
+  markWorkerStarted,
+  markWorkerStopped,
+  recordRuntimeSignal,
+  touchWorkerHeartbeat,
+} from "../observability/runtimeSignals.js";
 
 function s(v) {
   return String(v ?? "").trim();
@@ -249,15 +255,39 @@ async function processAttempt({ db, wsHub, attempt }) {
 
 export function startOutboundRetryWorker({ db, wsHub }) {
   const workerCfg = getWorkerConfig();
+  const logger = createLogger({
+    service: "ai-hq-backend",
+    component: "outbound-retry-worker",
+  });
 
   let stopped = false;
   let timer = null;
   let running = false;
   let started = false;
+  let startedAt = null;
+  let lastHeartbeatAt = null;
+  let lastCompletedAt = null;
+  let lastOutcome = "";
+
+  function getState() {
+    return {
+      enabled: workerCfg.enabled,
+      intervalMs: workerCfg.intervalMs,
+      batchSize: workerCfg.batchSize,
+      running,
+      stopped,
+      startedAt,
+      lastHeartbeatAt,
+      lastCompletedAt,
+      lastOutcome,
+    };
+  }
 
   const tick = async () => {
     if (stopped || running) return;
     running = true;
+    lastHeartbeatAt = new Date().toISOString();
+    touchWorkerHeartbeat("outbound-retry-worker", getState());
 
     try {
       const attempts = await listRetryableOutboundAttempts(db, workerCfg.batchSize);
@@ -267,25 +297,50 @@ export function startOutboundRetryWorker({ db, wsHub }) {
 
         try {
           await processAttempt({ db, wsHub, attempt });
+          lastCompletedAt = new Date().toISOString();
+          lastOutcome = "processed";
+          lastHeartbeatAt = lastCompletedAt;
+          touchWorkerHeartbeat("outbound-retry-worker", getState());
           await sleep(150);
         } catch (e) {
-          try {
-            console.error(
-              "[ai-hq] outbound retry attempt error:",
-              String(e?.message || e)
-            );
-          } catch {}
+          lastCompletedAt = new Date().toISOString();
+          lastOutcome = "attempt_failed";
+          lastHeartbeatAt = lastCompletedAt;
+          touchWorkerHeartbeat("outbound-retry-worker", getState());
+          logger.error("outbound_retry.worker.attempt_failed", e, {
+            attemptId: s(attempt?.id),
+            tenantKey: s(attempt?.tenant_key),
+            threadId: s(attempt?.thread_id),
+            messageId: s(attempt?.message_id),
+          });
+          recordRuntimeSignal({
+            level: "error",
+            category: "worker",
+            code: "outbound_retry_attempt_failed",
+            reasonCode: "attempt_failed",
+            message: s(e?.message || e),
+            context: {
+              attemptId: s(attempt?.id),
+              tenantKey: s(attempt?.tenant_key),
+              threadId: s(attempt?.thread_id),
+            },
+          });
         }
       }
     } catch (e) {
-      try {
-        console.error(
-          "[ai-hq] outbound retry worker error:",
-          String(e?.message || e)
-        );
-      } catch {}
+      lastOutcome = "tick_failed";
+      logger.error("outbound_retry.worker.tick_failed", e);
+      recordRuntimeSignal({
+        level: "error",
+        category: "worker",
+        code: "outbound_retry_tick_failed",
+        reasonCode: "tick_failed",
+        message: s(e?.message || e),
+      });
     } finally {
       running = false;
+      lastHeartbeatAt = new Date().toISOString();
+      touchWorkerHeartbeat("outbound-retry-worker", getState());
       if (!stopped && started) {
         timer = setTimeout(tick, workerCfg.intervalMs);
       }
@@ -295,7 +350,7 @@ export function startOutboundRetryWorker({ db, wsHub }) {
   return {
     start() {
       if (!workerCfg.enabled) {
-        console.log("[ai-hq] outbound retry worker: disabled");
+        logger.info("outbound_retry.worker.disabled");
         return;
       }
 
@@ -303,11 +358,14 @@ export function startOutboundRetryWorker({ db, wsHub }) {
 
       started = true;
       stopped = false;
+      startedAt = new Date().toISOString();
+      lastHeartbeatAt = startedAt;
       timer = setTimeout(tick, workerCfg.intervalMs);
-
-      console.log(
-        `[ai-hq] outbound retry worker: ON interval=${workerCfg.intervalMs}ms batch=${workerCfg.batchSize}`
-      );
+      markWorkerStarted("outbound-retry-worker", getState());
+      logger.info("outbound_retry.worker.started", {
+        intervalMs: workerCfg.intervalMs,
+        batchSize: workerCfg.batchSize,
+      });
     },
 
     stop() {
@@ -315,6 +373,10 @@ export function startOutboundRetryWorker({ db, wsHub }) {
       started = false;
       if (timer) clearTimeout(timer);
       timer = null;
+      markWorkerStopped("outbound-retry-worker", getState());
+      logger.info("outbound_retry.worker.stopped");
     },
+
+    getState,
   };
 }

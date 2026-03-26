@@ -2,10 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildRuntimeSignalsSummary,
   buildDurableOperationalStatus,
   classifyWorkerHealth,
   getMetricsSnapshot,
+  listRecentRuntimeSignals,
   markWorkerStarted,
+  recordRuntimeSignal,
   recordDurableExecutionClaimed,
   recordDurableExecutionCreated,
   recordDurableExecutionFinalized,
@@ -102,4 +105,64 @@ test("stale worker heartbeat and repeated failure signals produce attention stat
     cfg.observability.sourceSyncAttentionCount = previousSourceSyncThreshold;
     cfg.observability.staleWorkerHeartbeatMs = previousStaleMs;
   }
+});
+
+test("runtime signals summary exposes sanitized worker, backlog, and startup blocker state", () => {
+  resetRuntimeSignals();
+
+  markWorkerStarted("media-job-worker", {
+    enabled: true,
+    running: true,
+    startedAt: "2026-03-26T00:00:00.000Z",
+    lastHeartbeatAt: "2026-03-26T00:01:00.000Z",
+    lastOutcome: "processed",
+  });
+
+  const summary = buildRuntimeSignalsSummary({
+    startupOperationalReadiness: {
+      status: "blocked",
+      enforced: true,
+      blockers: { total: 2 },
+      blockerReasonCodes: ["voice_phone_number_missing", "provider_secret_missing"],
+    },
+    durableSummary: {
+      counts: { retryable: 3 },
+      deadLetterCount: 1,
+    },
+  });
+
+  assert.equal(summary.startupOperationalReadiness.status, "blocked");
+  assert.equal(summary.startupOperationalReadiness.enforced, true);
+  assert.equal(summary.startupOperationalReadiness.blockersTotal, 2);
+  assert.deepEqual(summary.startupOperationalReadiness.blockerReasonCodes, [
+    "voice_phone_number_missing",
+    "provider_secret_missing",
+  ]);
+  assert.equal(summary.durableExecution.retryableCount, 3);
+  assert.equal(summary.durableExecution.deadLetterCount, 1);
+  assert.equal(summary.workers["media-job-worker"]?.health?.status, "running");
+  assert.ok(Array.isArray(summary.recentHistory));
+});
+
+test("runtime signals retain recent critical event history", () => {
+  resetRuntimeSignals();
+
+  recordRuntimeSignal({
+    level: "error",
+    category: "voice_public",
+    code: "voice_test_failed",
+    reasonCode: "voice_test_failed",
+    message: "voice route failed",
+    context: {
+      tenantKey: "acme",
+      status: 500,
+    },
+  });
+
+  const history = listRecentRuntimeSignals(5);
+  assert.equal(history.length, 1);
+  assert.equal(history[0].category, "voice_public");
+  assert.equal(history[0].code, "voice_test_failed");
+  assert.equal(history[0].reasonCode, "voice_test_failed");
+  assert.equal(history[0].context?.tenantKey, "acme");
 });

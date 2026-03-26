@@ -1,18 +1,49 @@
 import { cfg } from "../config.js";
 import { deepFix } from "../utils/textFix.js";
 import { pollMediaJob } from "../services/media/mediaExecutionRunner.js";
+import { createLogger } from "../utils/logger.js";
+import {
+  markWorkerStarted,
+  markWorkerStopped,
+  recordRuntimeSignal,
+  touchWorkerHeartbeat,
+} from "../observability/runtimeSignals.js";
 
 function clean(x) {
   return String(x || "").trim();
 }
 
 export function createMediaJobWorker({ db }) {
+  const logger = createLogger({
+    service: "ai-hq-backend",
+    component: "media-job-worker",
+  });
   let timer = null;
   let running = false;
+  let startedAt = null;
+  let lastHeartbeatAt = null;
+  let lastCompletedAt = null;
+  let lastOutcome = "";
+
+  function getState() {
+    return {
+      enabled: Boolean(cfg.MEDIA_JOB_WORKER_ENABLED),
+      intervalMs: Number(cfg.MEDIA_JOB_WORKER_INTERVAL_MS || 15000),
+      batchSize: Number(cfg.MEDIA_JOB_WORKER_BATCH_SIZE || 10),
+      running,
+      stopped: !timer,
+      startedAt,
+      lastHeartbeatAt,
+      lastCompletedAt,
+      lastOutcome,
+    };
+  }
 
   async function tick() {
     if (running || !db) return;
     running = true;
+    lastHeartbeatAt = new Date().toISOString();
+    touchWorkerHeartbeat("media-job-worker", getState());
 
     try {
       const q = await db.query(
@@ -30,41 +61,74 @@ export function createMediaJobWorker({ db }) {
           row.input = deepFix(row.input || {});
           row.output = deepFix(row.output || {});
           await pollMediaJob({ db, job: row });
+          lastCompletedAt = new Date().toISOString();
+          lastOutcome = "processed";
+          lastHeartbeatAt = lastCompletedAt;
+          touchWorkerHeartbeat("media-job-worker", getState());
         } catch (e) {
-          console.error(
-            "[media-worker] poll failed",
-            row.id,
-            clean(e?.message || e)
-          );
+          lastCompletedAt = new Date().toISOString();
+          lastOutcome = "poll_failed";
+          lastHeartbeatAt = lastCompletedAt;
+          touchWorkerHeartbeat("media-job-worker", getState());
+          logger.error("media.worker.poll_failed", e, {
+            jobId: String(row.id || ""),
+          });
+          recordRuntimeSignal({
+            level: "error",
+            category: "worker",
+            code: "media_poll_failed",
+            reasonCode: "poll_failed",
+            message: clean(e?.message || e),
+            context: {
+              jobId: String(row.id || ""),
+            },
+          });
         }
       }
     } catch (e) {
-      console.error("[media-worker] tick error:", clean(e?.message || e));
+      lastOutcome = "tick_failed";
+      logger.error("media.worker.tick_failed", e, {
+        error: clean(e?.message || e),
+      });
+      recordRuntimeSignal({
+        level: "error",
+        category: "worker",
+        code: "media_tick_failed",
+        reasonCode: "tick_failed",
+        message: clean(e?.message || e),
+      });
     } finally {
       running = false;
+      lastHeartbeatAt = new Date().toISOString();
+      touchWorkerHeartbeat("media-job-worker", getState());
     }
   }
 
   return {
     start() {
       if (!cfg.MEDIA_JOB_WORKER_ENABLED || timer) return;
+      startedAt = new Date().toISOString();
+      lastHeartbeatAt = startedAt;
       timer = setInterval(
         tick,
         Number(cfg.MEDIA_JOB_WORKER_INTERVAL_MS || 15000)
       );
       timer.unref?.();
       tick().catch(() => {});
-      console.log(
-        `[media-worker] started interval=${Number(
-          cfg.MEDIA_JOB_WORKER_INTERVAL_MS || 15000
-        )}ms batch=${Number(cfg.MEDIA_JOB_WORKER_BATCH_SIZE || 10)}`
-      );
+      markWorkerStarted("media-job-worker", getState());
+      logger.info("media.worker.started", {
+        intervalMs: Number(cfg.MEDIA_JOB_WORKER_INTERVAL_MS || 15000),
+        batchSize: Number(cfg.MEDIA_JOB_WORKER_BATCH_SIZE || 10),
+      });
     },
     stop() {
       if (!timer) return;
       clearInterval(timer);
       timer = null;
-      console.log("[media-worker] stopped");
+      markWorkerStopped("media-job-worker", getState());
+      logger.info("media.worker.stopped");
     },
+
+    getState,
   };
 }

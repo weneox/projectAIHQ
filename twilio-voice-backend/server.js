@@ -5,13 +5,22 @@ import helmet from "helmet";
 import http from "http";
 import twilio from "twilio";
 import { WebSocketServer } from "ws";
+import {
+  createStructuredLogger,
+  requestContextMiddleware,
+} from "@aihq/shared-contracts/logger";
 
 import { cfg } from "./src/config.js";
 import { twilioRouter } from "./src/routes/twilio.js";
 import { attachRealtimeBridge } from "./src/services/realtimeBridge.js";
 import { createReporters } from "./src/services/reporting.js";
 import { checkAihqOperationalBootReadiness } from "./src/services/bootReadiness.js";
-import { createHealthHandler } from "./src/services/healthRoute.js";
+import {
+  createHealthHandler,
+  createRuntimeSignalsHandler,
+} from "./src/services/healthRoute.js";
+import { createAihqRuntimeIncidentClient } from "./src/services/aihqRuntimeIncidentClient.js";
+import { configureRuntimeSignalPersistence } from "./src/services/runtimeObservability.js";
 
 function normalizeOriginList(value = "") {
   return String(value || "")
@@ -26,12 +35,17 @@ const allowedOrigins = Array.from(
 
 const app = express();
 const server = http.createServer(app);
+const logger = createStructuredLogger({
+  service: "twilio-voice-backend",
+  env: cfg.APP_ENV,
+});
 
 if (cfg.TRUST_PROXY) {
   app.set("trust proxy", 1);
 }
 
 app.disable("x-powered-by");
+app.use(requestContextMiddleware({ logger }));
 
 app.use(
   helmet({
@@ -87,6 +101,25 @@ const bootReadiness = await checkAihqOperationalBootReadiness({
   requireOnBoot: cfg.REQUIRE_OPERATIONAL_READINESS_ON_BOOT,
   throwOnBlocked: false,
 });
+const runtimeIncidentClient = createAihqRuntimeIncidentClient({
+  fetchFn,
+});
+
+configureRuntimeSignalPersistence((incident) =>
+  runtimeIncidentClient.recordIncident({
+    ...incident,
+    service: "twilio-voice-backend",
+  })
+);
+
+logger.info("voice.boot_readiness.checked", {
+  status: bootReadiness.status,
+  reasonCode: bootReadiness.reasonCode,
+  blockerReasonCodes: bootReadiness.blockerReasonCodes,
+  blockersTotal: Number(bootReadiness.blockersTotal || 0),
+  enforced: bootReadiness.enforced === true,
+  intentionallyUnavailable: bootReadiness.intentionallyUnavailable === true,
+});
 
 app.get(
   "/health",
@@ -96,8 +129,20 @@ app.get(
   })
 );
 
+app.get(
+  "/runtime-signals",
+  createRuntimeSignalsHandler({
+    service: "twilio-voice-backend",
+    bootReadiness,
+  })
+);
+
 app.use((req, res, next) => {
-  if (!bootReadiness.intentionallyUnavailable || req.path === "/health") {
+  if (
+    !bootReadiness.intentionallyUnavailable ||
+    req.path === "/health" ||
+    req.path === "/runtime-signals"
+  ) {
     return next();
   }
 
@@ -134,6 +179,29 @@ attachRealtimeBridge({
   RECONNECT_MAX: cfg.OPENAI_REALTIME_RECONNECT_MAX,
 });
 
+app.use((err, req, res, next) => {
+  try {
+    (req?.log || logger).error("voice.http.unhandled_error", err, {
+      path: String(req?.originalUrl || req?.url || "").trim(),
+      method: String(req?.method || "").trim(),
+    });
+  } catch {}
+
+  if (res.headersSent) return next(err);
+
+  return res.status(500).json({
+    ok: false,
+    error: "internal_server_error",
+  });
+});
+
 server.listen(cfg.PORT, "0.0.0.0", () => {
-  console.log(`[twilio-voice-backend] listening on :${cfg.PORT}`);
+  logger.info("voice.app.started", {
+    port: Number(cfg.PORT || 0),
+    healthPath: "/health",
+    runtimeSignalsPath: "/runtime-signals",
+    streamPath: "/twilio/stream",
+    intentionallyUnavailable: bootReadiness.intentionallyUnavailable === true,
+    durableIncidentTrailEnabled: runtimeIncidentClient.canUse(),
+  });
 });

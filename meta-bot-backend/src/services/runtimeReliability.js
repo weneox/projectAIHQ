@@ -122,7 +122,25 @@ const outboundActionCache = createTtlCache({
 const failureBuffer = createFailureBuffer({
   maxEntries: 250,
 });
+const signalBuffer = createFailureBuffer({
+  maxEntries: 150,
+});
 const metrics = createCounterStore();
+let persistenceSink = null;
+
+function shouldPersistSignal(entry = {}) {
+  const level = lower(entry?.level || "");
+  const category = lower(entry?.category || "");
+  return level === "error" || level === "warn" || category === "execution";
+}
+
+function persistRuntimeSignal(entry = {}) {
+  if (typeof persistenceSink !== "function" || !shouldPersistSignal(entry)) return;
+
+  Promise.resolve()
+    .then(() => persistenceSink(entry))
+    .catch(() => {});
+}
 
 export function buildInboundEventKey(ev = {}) {
   return [
@@ -215,6 +233,20 @@ export function classifyExecutionFailure(result = {}) {
 
 export function recordExecutionFailure(entry = {}) {
   failureBuffer.record(entry);
+  const signal = {
+    level: entry?.retryable ? "warn" : "error",
+    category: "execution",
+    code: "meta_execution_failure",
+    reasonCode: s(entry?.failureClass || ""),
+    tenantKey: s(entry?.tenantKey || ""),
+    threadId: s(entry?.threadId || ""),
+    requestId: s(entry?.requestId || ""),
+    correlationId: s(entry?.correlationId || ""),
+    status: Number(entry?.status || 0),
+    error: s(entry?.error || ""),
+  };
+  signalBuffer.record(signal);
+  persistRuntimeSignal(signal);
 }
 
 export function listExecutionFailures() {
@@ -223,10 +255,52 @@ export function listExecutionFailures() {
 
 export function recordWebhookVerificationFailure(reason = "") {
   metrics.increment(`meta_webhook_verification_failures_total:${lower(reason || "unknown")}`);
+  const signal = {
+    level: "warn",
+    category: "webhook",
+    code: "meta_webhook_verification_failure",
+    reasonCode: lower(reason || "unknown"),
+  };
+  signalBuffer.record(signal);
+  persistRuntimeSignal(signal);
+}
+
+export function recordRuntimeSignal(entry = {}) {
+  const signal = {
+    level: lower(entry?.level || "info"),
+    category: s(entry?.category || "runtime"),
+    code: s(entry?.code || "runtime_signal"),
+    reasonCode: s(entry?.reasonCode || ""),
+    tenantKey: s(entry?.tenantKey || ""),
+    threadId: s(entry?.threadId || ""),
+    requestId: s(entry?.requestId || ""),
+    correlationId: s(entry?.correlationId || ""),
+    status: Number(entry?.status || 0),
+    error: s(entry?.error || ""),
+  };
+  signalBuffer.record(signal);
+  persistRuntimeSignal(signal);
+}
+
+export function listRuntimeSignals() {
+  return signalBuffer.list();
 }
 
 export function getRuntimeMetricsSnapshot() {
   return metrics.snapshot();
+}
+
+export function configureRuntimeSignalPersistence(sink = null) {
+  persistenceSink = typeof sink === "function" ? sink : null;
+}
+
+export function resetRuntimeReliability() {
+  inboundWebhookCache.clear();
+  outboundActionCache.clear();
+  failureBuffer.clear();
+  signalBuffer.clear();
+  metrics.clear();
+  persistenceSink = null;
 }
 
 export const __test__ = {
@@ -235,5 +309,7 @@ export const __test__ = {
   inboundWebhookCache,
   outboundActionCache,
   failureBuffer,
+  signalBuffer,
   metrics,
+  shouldPersistSignal,
 };

@@ -148,17 +148,14 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
       const recipientId = cleanNullableString(checked.value.recipientId);
       const pageId = cleanNullableString(checked.value.pageId);
       const igUserId = cleanNullableString(checked.value.igUserId);
-      console.log("[ai-hq] resolve-channel hit", { channel, recipientId, pageId, igUserId });
-
-      const startedAt = Date.now();
-
-      console.log("[ai-hq] resolve-channel before db", {
+      req.log?.info("internal.resolve_channel.requested", {
         channel,
         recipientId,
         pageId,
         igUserId,
-        candidateIds: [recipientId, pageId, igUserId].filter(Boolean),
       });
+
+      const startedAt = Date.now();
 
       const match = await resolveTenantChannelByExternalIds(db, {
         channel,
@@ -167,7 +164,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         igUserId,
       });
 
-      console.log("[ai-hq] resolve-channel after db", {
+      req.log?.info("internal.resolve_channel.lookup_completed", {
         tookMs: Date.now() - startedAt,
         found: Boolean(match?.tenant_id),
       });
@@ -183,7 +180,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         });
       }
 
-      console.log("[ai-hq] resolve-channel matched", {
+      req.log?.info("internal.resolve_channel.matched", {
         tenantKey: match.tenant_key,
         tenantId: match.tenant_id,
         channelType: match.channel_type,
@@ -243,7 +240,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         },
       });
 
-      console.log("[ai-hq] resolve-channel secrets loaded", {
+      req.log?.info("internal.resolve_channel.provider_secrets_resolved", {
         tenantKey: match.tenant_key,
         provider: providerKey,
         secretKeys: secretSummary.secretKeys,
@@ -309,9 +306,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         }),
       });
     } catch (err) {
-      console.error("[ai-hq] resolve-channel failed", {
-        error: err?.message || String(err),
-      });
+      req.log?.error("internal.resolve_channel.failed", err);
 
       return serverErr(res, err?.message || "Failed to resolve tenant channel");
     }
@@ -391,6 +386,13 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         });
 
         if (operationalChannels?.meta?.ready !== true) {
+          req.log?.warn("internal.meta_channel_access.operational_unavailable", {
+            tenantKey: resolved.tenantKey,
+            tenantId: resolved.tenantId,
+            reasonCode: s(
+              operationalChannels?.meta?.reasonCode || "channel_identifiers_missing"
+            ),
+          });
           return res.status(409).json({
             ok: false,
             error: "meta_operational_unavailable",
@@ -404,6 +406,11 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         }
 
         if (!providerAccess.available) {
+          req.log?.warn("internal.meta_channel_access.provider_unavailable", {
+            tenantKey: resolved.tenantKey,
+            tenantId: resolved.tenantId,
+            reasonCode: s(providerAccess.reasonCode || "provider_access_incomplete"),
+          });
           return res.status(409).json({
             ok: false,
             error: "provider_access_unavailable",
@@ -423,9 +430,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
           readiness,
         });
       } catch (err) {
-        console.error("[ai-hq] meta-channel-access failed", {
-          error: err?.message || String(err),
-        });
+        req.log?.error("internal.meta_channel_access.failed", err);
 
         return serverErr(
           res,

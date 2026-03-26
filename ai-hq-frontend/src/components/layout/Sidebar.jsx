@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { NavLink } from "react-router-dom";
 import {
+  AlertTriangle,
   BriefcaseBusiness,
   ChevronRight,
   ShieldCheck,
@@ -15,6 +16,7 @@ const ExecutiveMark3D = lazy(() => import("./ExecutiveMark3D.jsx"));
 const NAV_ITEMS = [
   { label: "Setup Studio", icon: BriefcaseBusiness, to: "/setup/studio" },
   { label: "Inbox", icon: MessageSquareText, to: "/inbox", badgeKey: "inboxUnread" },
+  { label: "Incidents", icon: AlertTriangle, to: "/incidents" },
   { label: "Business Truth", icon: ScrollText, to: "/truth" },
   { label: "Settings", icon: SlidersHorizontal, to: "/settings" },
 ];

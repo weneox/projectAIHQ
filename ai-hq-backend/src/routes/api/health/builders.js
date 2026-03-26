@@ -10,6 +10,10 @@ function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
+function arr(v) {
+  return Array.isArray(v) ? v : [];
+}
+
 export async function resolveOperationalReadinessForHealth({
   db,
   startupOperationalReadiness = null,
@@ -121,6 +125,14 @@ export async function buildRootHealthResponse({
             status: s(startupOperationalReadiness.status),
             enforced: startupOperationalReadiness.enforced === true,
             error: s(startupOperationalReadiness.error),
+            blockersTotal: Number(startupOperationalReadiness?.blockers?.total || 0),
+            blockerReasonCodes: arr(
+              startupOperationalReadiness.blockerReasonCodes ||
+                startupOperationalReadiness.blocker_reason_codes
+            )
+              .map((item) => s(item))
+              .filter(Boolean)
+              .slice(0, 10),
           }
         : null,
   };

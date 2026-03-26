@@ -10,14 +10,18 @@ import {
 import { validateVoiceOperationalResponse } from "@aihq/shared-contracts/operations";
 import { validateVoiceProjectedRuntimeResponse } from "@aihq/shared-contracts/runtime";
 import { createStructuredLogger } from "@aihq/shared-contracts/logger";
+import { buildCorrelationHeaders } from "@aihq/shared-contracts/logger";
 import { buildVoiceSyncKey } from "./voiceSyncReliability.js";
-import { incrementRuntimeMetric } from "./runtimeObservability.js";
+import {
+  incrementRuntimeMetric,
+  recordRuntimeSignal,
+} from "./runtimeObservability.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
-async function postJson(fetchFn, url, token, payload, timeoutMs = 8000) {
+async function postJson(fetchFn, url, token, payload, timeoutMs = 8000, requestContext = {}) {
   if (!url) {
     return { ok: false, status: 0, data: null, text: "missing_url" };
   }
@@ -28,10 +32,14 @@ async function postJson(fetchFn, url, token, payload, timeoutMs = 8000) {
   try {
     const resp = await fetchFn(url, {
       method: "POST",
-      headers: {
+      headers: buildCorrelationHeaders({
+        requestId: s(requestContext?.requestId),
+        correlationId: s(requestContext?.correlationId),
+        headers: {
         "Content-Type": "application/json; charset=utf-8",
         "x-internal-token": s(token),
-      },
+        },
+      }),
       body: JSON.stringify(payload || {}),
       signal: controller.signal,
     });
@@ -77,18 +85,23 @@ export function createAihqVoiceClient({
     component: "aihq-voice-client",
   });
 
-  function log(...args) {
+  function debugLog(event, data = {}) {
     if (!debug) return;
-    console.log("[aihqVoiceClient]", ...args);
+    logger.info(event, data);
   }
 
   function canUse() {
     return !!(root && token && fetchFn);
   }
 
-  async function call(path, payload = {}, validateResponse = validateDurableExecutionResponse) {
+  async function call(
+    path,
+    payload = {},
+    validateResponse = validateDurableExecutionResponse,
+    requestContext = {}
+  ) {
     if (!canUse()) {
-      log("skipped", {
+      debugLog("voice.sync.client_skipped", {
         hasBaseUrl: !!root,
         hasToken: !!token,
         hasFetch: !!fetchFn,
@@ -105,7 +118,7 @@ export function createAihqVoiceClient({
     }
 
     const url = `${root}${path.startsWith("/") ? path : `/${path}`}`;
-    const result = await postJson(fetchFn, url, token, payload, timeoutMs);
+    const result = await postJson(fetchFn, url, token, payload, timeoutMs, requestContext);
     const checked = result.ok
       ? validateResponse(result.data || { ok: false })
       : { ok: false, error: result.text || "request_failed" };
@@ -119,10 +132,21 @@ export function createAihqVoiceClient({
 
     if (!result.ok || !checked.ok) {
       incrementRuntimeMetric("voice_sync_failures_total");
+      recordRuntimeSignal({
+        level: "warn",
+        category: "voice_sync",
+        code: "voice_sync_request_failed",
+        reasonCode: result.ok ? "contract_invalid" : "request_failed",
+        status: Number(result.status || 0),
+        callSid: providerCallSid,
+        error: result.ok ? checked.error : s(result.text).slice(0, 300),
+      });
       logger.warn("voice.sync.request_failed", {
         path,
         status: Number(result.status || 0),
         providerCallSid,
+        requestId: s(requestContext?.requestId),
+        correlationId: s(requestContext?.correlationId),
         error: result.ok ? checked.error : s(result.text).slice(0, 300),
         dedupeKey,
       });
@@ -132,6 +156,8 @@ export function createAihqVoiceClient({
         path,
         status: Number(result.status || 0),
         providerCallSid,
+        requestId: s(requestContext?.requestId),
+        correlationId: s(requestContext?.correlationId),
         dedupeKey,
         executionId: s(result?.data?.execution?.id),
         executionStatus: s(result?.data?.execution?.status),
@@ -147,7 +173,7 @@ export function createAihqVoiceClient({
         };
   }
 
-  async function upsertSession(payload = {}) {
+  async function upsertSession(payload = {}, requestContext = {}) {
     const checked = validateVoiceSessionUpsertRequest(payload);
     if (!checked.ok) {
       return {
@@ -158,10 +184,10 @@ export function createAihqVoiceClient({
         text: checked.error,
       };
     }
-    return enqueueVoiceSync("voice.sync.session_upsert", payload);
+    return enqueueVoiceSync("voice.sync.session_upsert", payload, requestContext);
   }
 
-  async function appendTranscript(payload = {}) {
+  async function appendTranscript(payload = {}, requestContext = {}) {
     const checked = validateVoiceTranscriptRequest(payload);
     if (!checked.ok) {
       return {
@@ -172,10 +198,10 @@ export function createAihqVoiceClient({
         text: checked.error,
       };
     }
-    return enqueueVoiceSync("voice.sync.transcript", payload);
+    return enqueueVoiceSync("voice.sync.transcript", payload, requestContext);
   }
 
-  async function updateSessionState(payload = {}) {
+  async function updateSessionState(payload = {}, requestContext = {}) {
     const checked = validateVoiceSessionStateRequest(payload);
     if (!checked.ok) {
       return {
@@ -186,10 +212,10 @@ export function createAihqVoiceClient({
         text: checked.error,
       };
     }
-    return enqueueVoiceSync("voice.sync.state", payload);
+    return enqueueVoiceSync("voice.sync.state", payload, requestContext);
   }
 
-  async function markOperatorJoin(payload = {}) {
+  async function markOperatorJoin(payload = {}, requestContext = {}) {
     const checked = validateVoiceOperatorJoinRequest(payload);
     if (!checked.ok) {
       return {
@@ -200,10 +226,10 @@ export function createAihqVoiceClient({
         text: checked.error,
       };
     }
-    return enqueueVoiceSync("voice.sync.operator_join", payload);
+    return enqueueVoiceSync("voice.sync.operator_join", payload, requestContext);
   }
 
-  async function fetchTenantConfig(payload = {}) {
+  async function fetchTenantConfig(payload = {}, requestContext = {}) {
     const checked = validateVoiceTenantConfigRequest(payload);
     if (!checked.ok) {
       return {
@@ -218,10 +244,10 @@ export function createAihqVoiceClient({
       const runtimeChecked = validateVoiceProjectedRuntimeResponse(input);
       if (!runtimeChecked.ok) return runtimeChecked;
       return validateVoiceOperationalResponse(input);
-    });
+    }, requestContext);
   }
 
-  async function enqueueVoiceSync(actionType, payload = {}) {
+  async function enqueueVoiceSync(actionType, payload = {}, requestContext = {}) {
     // AI HQ's durable ledger is the control-plane source of truth for these
     // voice sync mutations. This client only enqueues idempotent work.
     const request = {
@@ -243,7 +269,12 @@ export function createAihqVoiceClient({
       };
     }
 
-    return call("/api/internal/executions/voice-sync", checked.value);
+    return call(
+      "/api/internal/executions/voice-sync",
+      checked.value,
+      validateDurableExecutionResponse,
+      requestContext
+    );
   }
 
   return {

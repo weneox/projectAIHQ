@@ -127,3 +127,42 @@ test("voice mutations allow operator roles through authorization guard", async (
   });
   assert.equal(joinResult.res.statusCode, 503);
 });
+
+test("voice public routes log structured failures through request logger", async () => {
+  const entries = [];
+  const requestLogger = {
+    child(extra = {}) {
+      return {
+        ...this,
+        extra,
+      };
+    },
+    error(event, error, data = {}) {
+      entries.push({
+        event,
+        error: String(error?.message || error),
+        data,
+      });
+    },
+  };
+
+  const router = voiceRoutes({
+    db: {
+      async query() {
+        throw new Error("db exploded");
+      },
+    },
+    dbDisabled: false,
+    audit: null,
+  });
+
+  const result = await invokeRouter(router, "get", "/voice/settings", {
+    ...buildAuth("operator"),
+    log: requestLogger,
+  });
+
+  assert.equal(result.res.statusCode, 500);
+  assert.equal(result.res.body?.error, "voice_settings_read_failed");
+  assert.equal(entries[0]?.event, "voice.settings.get.failed");
+  assert.equal(entries[0]?.error, "db exploded");
+});

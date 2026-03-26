@@ -1,3 +1,11 @@
+import { createLogger } from "../utils/logger.js";
+import {
+  markWorkerStarted,
+  markWorkerStopped,
+  recordRuntimeSignal,
+  touchWorkerHeartbeat,
+} from "../observability/runtimeSignals.js";
+
 // src/workers/draftScheduleWorker.js
 //
 // FINAL v2.0 — tenant-aware scheduler with new publish_policy structure
@@ -219,11 +227,32 @@ async function triggerN8n({ webhookUrl, webhookToken, payload }) {
 
 export function createDraftScheduleWorker({ db }) {
   const cfg = getWorkerConfig();
+  const logger = createLogger({
+    service: "ai-hq-backend",
+    component: "draft-schedule-worker",
+  });
   let timer = null;
   let running = false;
+  let startedAt = null;
+  let lastHeartbeatAt = null;
+  let lastCompletedAt = null;
+  let lastOutcome = "";
 
   // dedupe key => tenantKey:YYYY-MM-DD:HH:MM:mode
   const lastRunByTenant = new Map();
+
+  function getState() {
+    return {
+      enabled: cfg.enabled,
+      intervalMs: cfg.intervalMs,
+      running,
+      stopped: !timer,
+      startedAt,
+      lastHeartbeatAt,
+      lastCompletedAt,
+      lastOutcome,
+    };
+  }
 
   async function tick() {
     if (!cfg.enabled) return;
@@ -231,6 +260,8 @@ export function createDraftScheduleWorker({ db }) {
     if (running) return;
 
     running = true;
+    lastHeartbeatAt = new Date().toISOString();
+    touchWorkerHeartbeat("draft-schedule-worker", getState());
 
     try {
       const rows = await listTenantSchedules(db);
@@ -280,10 +311,16 @@ export function createDraftScheduleWorker({ db }) {
         });
 
         lastRunByTenant.set(row.tenant_key, dedupeKey);
-
-        console.log(
-          `[draft-schedule-worker] triggered tenant=${row.tenant_key} mode=${mode} at=${schedule.time} tz=${schedule.timezone}`
-        );
+        lastCompletedAt = new Date().toISOString();
+        lastOutcome = "triggered";
+        lastHeartbeatAt = lastCompletedAt;
+        touchWorkerHeartbeat("draft-schedule-worker", getState());
+        logger.info("draft_schedule.worker.triggered", {
+          tenantKey: clean(row.tenant_key),
+          automationMode: mode,
+          scheduledTime: schedule.time,
+          timezone: schedule.timezone,
+        });
       }
 
       if (lastRunByTenant.size > 5000) {
@@ -292,24 +329,38 @@ export function createDraftScheduleWorker({ db }) {
         for (const [k, v] of entries) lastRunByTenant.set(k, v);
       }
     } catch (err) {
-      console.error("[draft-schedule-worker]", String(err?.message || err));
+      lastOutcome = "tick_failed";
+      logger.error("draft_schedule.worker.tick_failed", err, {
+        error: String(err?.message || err),
+      });
+      recordRuntimeSignal({
+        level: "error",
+        category: "worker",
+        code: "draft_schedule_tick_failed",
+        reasonCode: "tick_failed",
+        message: clean(err?.message || err),
+      });
     } finally {
       running = false;
+      lastHeartbeatAt = new Date().toISOString();
+      touchWorkerHeartbeat("draft-schedule-worker", getState());
     }
   }
 
   return {
     start() {
       if (!cfg.enabled) {
-        console.log("[draft-schedule-worker] disabled");
+        logger.info("draft_schedule.worker.disabled");
         return;
       }
       if (timer) return;
 
-      console.log(
-        "[draft-schedule-worker] started",
-        `interval=${cfg.intervalMs}ms`
-      );
+      startedAt = new Date().toISOString();
+      lastHeartbeatAt = startedAt;
+      markWorkerStarted("draft-schedule-worker", getState());
+      logger.info("draft_schedule.worker.started", {
+        intervalMs: cfg.intervalMs,
+      });
 
       tick();
       timer = setInterval(tick, cfg.intervalMs);
@@ -320,7 +371,10 @@ export function createDraftScheduleWorker({ db }) {
         clearInterval(timer);
         timer = null;
       }
-      console.log("[draft-schedule-worker] stopped");
+      markWorkerStopped("draft-schedule-worker", getState());
+      logger.info("draft_schedule.worker.stopped");
     },
+
+    getState,
   };
 }

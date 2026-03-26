@@ -8,7 +8,11 @@ import {
   pickLang,
   makeI18n,
 } from "../services/voice/i18n.js";
-import { incrementRuntimeMetric } from "../services/runtimeObservability.js";
+import {
+  incrementRuntimeMetric,
+  recordRuntimeSignal,
+} from "../services/runtimeObservability.js";
+import { createStructuredLogger } from "@aihq/shared-contracts/logger";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -41,6 +45,12 @@ function toWsUrl(httpUrl) {
 
 function getTwilioSignatureValidationResult(req) {
   if (!cfg.TWILIO_AUTH_TOKEN) {
+    recordRuntimeSignal({
+      level: "error",
+      category: "voice_route",
+      code: "twilio_auth_not_configured",
+      reasonCode: "twilio_auth_not_configured",
+    });
     return {
       ok: false,
       status: 500,
@@ -72,6 +82,13 @@ function requireTwilioSignature(req, res, next) {
   const result = getTwilioSignatureValidationResult(req);
   if (result.ok) return next();
   incrementRuntimeMetric(`twilio_signature_failures_total:${s(result.error || "unknown")}`);
+  recordRuntimeSignal({
+    level: "warn",
+    category: "voice_route",
+    code: "twilio_signature_failed",
+    reasonCode: s(result.error || "unknown"),
+    status: Number(result.status || 403),
+  });
   return res.status(result.status || 403).type("text/plain").send(result.error || "Forbidden");
 }
 
@@ -84,6 +101,13 @@ function requireInternalToken(req, res, next) {
 
   if (!expected) {
     incrementRuntimeMetric("twilio_internal_auth_failures_total:misconfigured");
+    recordRuntimeSignal({
+      level: "error",
+      category: "internal_auth",
+      code: "twilio_internal_auth_misconfigured",
+      reasonCode: "misconfigured",
+      status: 500,
+    });
     return res.status(500).json({
       ok: false,
       error: "internal_auth_misconfigured",
@@ -92,6 +116,13 @@ function requireInternalToken(req, res, next) {
 
   if (!provided || provided !== expected) {
     incrementRuntimeMetric("twilio_internal_auth_failures_total:unauthorized");
+    recordRuntimeSignal({
+      level: "warn",
+      category: "internal_auth",
+      code: "twilio_internal_auth_unauthorized",
+      reasonCode: "unauthorized",
+      status: 401,
+    });
     return res.status(401).json({
       ok: false,
       error: "unauthorized",
@@ -281,6 +312,11 @@ function buildFallbackUnavailableReply(lang) {
   return "Bağışlayın, xidmət hazırda müvəqqəti olaraq əlçatan deyil.";
 }
 
+const routeLogger = createStructuredLogger({
+  service: "twilio-voice-backend",
+  component: "twilio-routes",
+});
+
 export function twilioRouter() {
   const r = express.Router();
 
@@ -345,10 +381,23 @@ export function twilioRouter() {
   });
 
   r.post("/twilio/voice", requireTwilioSignature, async (req, res) => {
+    const logger = (req.log || routeLogger).child({ route: "twilio-voice" });
     try {
       const tenant = await resolveTenantFromRequest(req);
       if (!tenant?.ok) {
-        console.error("[twilio/voice] tenant resolution blocked", tenant);
+        logger.warn("voice.route.tenant_resolution_blocked", {
+          error: s(tenant?.error || "tenant_resolution_required"),
+          matchedBy: s(tenant?.matchedBy || ""),
+          toNumber: s(tenant?.toNumber || ""),
+        });
+        recordRuntimeSignal({
+          level: "warn",
+          category: "voice_route",
+          code: "voice_tenant_resolution_blocked",
+          reasonCode: s(tenant?.error || "tenant_resolution_required"),
+          status: 400,
+          tenantKey: s(tenant?.tenantKey || ""),
+        });
         return writeStructuredRouteError(
           res,
           400,
@@ -358,17 +407,31 @@ export function twilioRouter() {
           }
         );
       }
-      const tenantConfigResult = await getTenantVoiceConfig({ tenant });
+      const tenantConfigResult = await getTenantVoiceConfig({
+        tenant,
+        requestContext: {
+          requestId: s(req.requestId),
+          correlationId: s(req.correlationId),
+        },
+      });
       if (
         !tenantConfigResult?.ok ||
         !s(tenantConfigResult?.config?.tenantKey) ||
         tenantConfigResult?.config?.authority?.available !== true
       ) {
-        console.error("[twilio/voice] tenant config unavailable", {
+        logger.warn("voice.route.tenant_config_unavailable", {
           tenantKey: s(tenant?.tenantKey || ""),
           toNumber: s(tenant?.toNumber || ""),
           error: s(tenantConfigResult?.error || "tenant_config_not_found"),
           authority: tenantConfigResult?.authority || null,
+        });
+        recordRuntimeSignal({
+          level: "warn",
+          category: "voice_route",
+          code: "voice_tenant_config_unavailable",
+          reasonCode: s(tenantConfigResult?.error || "tenant_config_not_found"),
+          status: Number(tenantConfigResult?.status || 404),
+          tenantKey: s(tenant?.tenantKey || ""),
         });
         return writeStructuredRouteError(
           res,
@@ -399,7 +462,15 @@ export function twilioRouter() {
 
       return res.type("text/xml").send(xml);
     } catch (err) {
-      console.error("[twilio/voice] error:", err);
+      logger.error("voice.route.failed", err);
+      recordRuntimeSignal({
+        level: "error",
+        category: "voice_route",
+        code: "voice_route_failed",
+        reasonCode: "voice_route_failed",
+        status: 500,
+        error: s(err?.message || err),
+      });
       return res.status(500).json({
         ok: false,
         error: "voice_route_failed",
@@ -408,10 +479,23 @@ export function twilioRouter() {
   });
 
   r.post("/twilio/transfer", requireTwilioSignature, async (req, res) => {
+    const logger = (req.log || routeLogger).child({ route: "twilio-transfer" });
     try {
       const tenant = await resolveTenantFromRequest(req);
       if (!tenant?.ok) {
-        console.error("[twilio/transfer] tenant resolution blocked", tenant);
+        logger.warn("voice.transfer.tenant_resolution_blocked", {
+          error: s(tenant?.error || "tenant_resolution_required"),
+          matchedBy: s(tenant?.matchedBy || ""),
+          toNumber: s(tenant?.toNumber || ""),
+        });
+        recordRuntimeSignal({
+          level: "warn",
+          category: "voice_transfer",
+          code: "transfer_tenant_resolution_blocked",
+          reasonCode: s(tenant?.error || "tenant_resolution_required"),
+          status: 400,
+          tenantKey: s(tenant?.tenantKey || ""),
+        });
         return writeStructuredRouteError(
           res,
           400,
@@ -421,17 +505,31 @@ export function twilioRouter() {
           }
         );
       }
-      const tenantConfigResult = await getTenantVoiceConfig({ tenant });
+      const tenantConfigResult = await getTenantVoiceConfig({
+        tenant,
+        requestContext: {
+          requestId: s(req.requestId),
+          correlationId: s(req.correlationId),
+        },
+      });
       if (
         !tenantConfigResult?.ok ||
         !s(tenantConfigResult?.config?.tenantKey) ||
         tenantConfigResult?.config?.authority?.available !== true
       ) {
-        console.error("[twilio/transfer] tenant config unavailable", {
+        logger.warn("voice.transfer.tenant_config_unavailable", {
           tenantKey: s(tenant?.tenantKey || ""),
           toNumber: s(tenant?.toNumber || ""),
           error: s(tenantConfigResult?.error || "tenant_config_not_found"),
           authority: tenantConfigResult?.authority || null,
+        });
+        recordRuntimeSignal({
+          level: "warn",
+          category: "voice_transfer",
+          code: "transfer_tenant_config_unavailable",
+          reasonCode: s(tenantConfigResult?.error || "tenant_config_not_found"),
+          status: Number(tenantConfigResult?.status || 404),
+          tenantKey: s(tenant?.tenantKey || ""),
         });
         return writeStructuredRouteError(
           res,
@@ -482,7 +580,15 @@ export function twilioRouter() {
 
       return res.type("text/xml").send(xml);
     } catch (err) {
-      console.error("[twilio/transfer] error:", err);
+      logger.error("voice.transfer.failed", err);
+      recordRuntimeSignal({
+        level: "error",
+        category: "voice_transfer",
+        code: "transfer_route_failed",
+        reasonCode: "transfer_route_failed",
+        status: 500,
+        error: s(err?.message || err),
+      });
       return res.status(500).json({
         ok: false,
         error: "transfer_route_failed",
@@ -491,16 +597,31 @@ export function twilioRouter() {
   });
 
   r.post("/twilio/voice/fallback", async (req, res) => {
+    const logger = (req.log || routeLogger).child({ route: "twilio-voice-fallback" });
     try {
       const tenant = await resolveTenantFromRequest(req).catch(() => null);
-      const tenantConfigResult = await getTenantVoiceConfig({ tenant }).catch(() => null);
+      const tenantConfigResult = await getTenantVoiceConfig({
+        tenant,
+        requestContext: {
+          requestId: s(req.requestId),
+          correlationId: s(req.correlationId),
+        },
+      }).catch(() => null);
       const tenantConfig = tenantConfigResult?.ok ? tenantConfigResult.config : null;
       const lang = detectPreferredLang(req, tenantConfig);
       const text = buildFallbackUnavailableReply(lang);
 
       return res.type("text/xml").send(createSimpleSayXml(text));
     } catch (err) {
-      console.error("[twilio/voice/fallback] error:", err);
+      logger.error("voice.fallback.failed", err);
+      recordRuntimeSignal({
+        level: "error",
+        category: "voice_fallback",
+        code: "voice_fallback_failed",
+        reasonCode: "voice_fallback_failed",
+        status: 500,
+        error: s(err?.message || err),
+      });
       return res
         .type("text/xml")
         .send(createSimpleSayXml("The service is temporarily unavailable."));

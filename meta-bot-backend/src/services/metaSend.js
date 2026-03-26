@@ -5,6 +5,7 @@ import {
   META_TOKEN_FALLBACK_ENABLED,
 } from "../config.js";
 import { getTenantMetaConfigByChannel } from "./tenantProviderSecrets.js";
+import { createStructuredLogger } from "@aihq/shared-contracts/logger";
 
 function s(v) {
   return String(v ?? "").trim();
@@ -24,19 +25,10 @@ function fail(error, status = 0, json = null, meta = null) {
   };
 }
 
-function logInfo(message, data = null) {
-  try {
-    if (data) console.log(`[meta-bot] ${message}`, data);
-    else console.log(`[meta-bot] ${message}`);
-  } catch {}
-}
-
-function logWarn(message, data = null) {
-  try {
-    if (data) console.warn(`[meta-bot] ${message}`, data);
-    else console.warn(`[meta-bot] ${message}`);
-  } catch {}
-}
+const logger = createStructuredLogger({
+  service: "meta-bot-backend",
+  component: "meta-send",
+});
 
 async function safeReadJson(res) {
   const text = await res.text().catch(() => "");
@@ -127,7 +119,7 @@ async function resolveMetaAccessToken({
         ? metaCfg.operationalChannels.meta || null
         : null;
 
-    logInfo("meta credential resolve", {
+    logger.info("meta.credentials.resolved", {
       tenantKey: safeTenantKey,
       channel: safeChannel,
       recipientId: safeRecipientId,
@@ -152,14 +144,14 @@ async function resolveMetaAccessToken({
       };
     }
   } catch (err) {
-    logWarn("meta credential resolve failed", {
+    logger.warn("meta.credentials.resolve_failed", {
       tenantKey: safeTenantKey,
       channel: safeChannel,
       recipientId: safeRecipientId,
       pageId: safePageId,
       igUserId: safeIgUserId,
       error: s(err?.message || err),
-    });
+    }, err);
   }
 
   if (allowEnvFallback && envToken) {

@@ -39,11 +39,13 @@ function buildBootReadinessResult({
   intentionallyUnavailable = false,
   error = "",
   httpStatus = 0,
+  checkedAt = "",
 } = {}) {
   return {
     ok,
     enforced,
     status,
+    checkedAt: s(checkedAt || new Date().toISOString()),
     reasonCode: s(reasonCode),
     blockerReasonCodes: arr(blockerReasonCodes).map((item) => s(item)).filter(Boolean),
     blockersTotal: Number(blockersTotal || 0),
@@ -110,6 +112,7 @@ export async function checkAihqOperationalBootReadiness({
   });
 
   const json = await safeReadJson(resp);
+  const checkedAt = new Date().toISOString();
   const readiness = isObject(json?.operationalReadiness)
     ? json.operationalReadiness
     : {};
@@ -123,6 +126,7 @@ export async function checkAihqOperationalBootReadiness({
       ok: false,
       enforced,
       status: enforced ? "blocked" : "attention",
+      checkedAt,
       reasonCode: "aihq_health_unavailable",
       intentionallyUnavailable: enforced,
       error: s(json?.error || `aihq_health_failed_${Number(resp.status || 0)}`),
@@ -142,6 +146,7 @@ export async function checkAihqOperationalBootReadiness({
       ok: false,
       enforced,
       status: enforced ? "blocked" : "attention",
+      checkedAt,
       reasonCode,
       blockerReasonCodes,
       blockersTotal,
@@ -162,6 +167,7 @@ export async function checkAihqOperationalBootReadiness({
     ok: true,
     enforced,
     status: "ready",
+    checkedAt,
     blockerReasonCodes,
     blockersTotal,
     httpStatus: Number(resp.status || 0),

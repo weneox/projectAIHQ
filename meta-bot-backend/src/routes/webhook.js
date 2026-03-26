@@ -275,12 +275,13 @@ function summarizeInbound(ev) {
   };
 }
 
-async function resolveTenantForEvent(ev) {
+async function resolveTenantForEvent(ev, requestContext = {}) {
   const out = await resolveTenantContextFromMetaEvent({
     channel: s(ev?.channel || "instagram").toLowerCase() || "instagram",
     recipientId: s(ev?.recipientId || ""),
     pageId: s(ev?.pageId || ""),
     igUserId: s(ev?.igUserId || ""),
+    requestContext,
   });
 
   if (!out?.ok || !s(out?.tenantKey)) {
@@ -306,11 +307,15 @@ function pickResolvedTenantKey(aihqResponse, tenantCtx) {
   return s(aihqResponse?.json?.tenant?.tenant_key || tenantCtx?.tenantKey || "");
 }
 
-async function handleSupportedTextEvent(ev, rawBody) {
-  const tenantCtx = await resolveTenantForEvent(ev);
+async function handleSupportedTextEvent(ev, rawBody, requestContext = {}) {
+  const requestLogger = logger.child({
+    requestId: s(requestContext?.requestId),
+    correlationId: s(requestContext?.correlationId),
+  });
+  const tenantCtx = await resolveTenantForEvent(ev, requestContext);
 
   if (!tenantCtx.ok) {
-    logger.warn("meta.webhook.text.tenant_resolution_failed", {
+    requestLogger.warn("meta.webhook.text.tenant_resolution_failed", {
       ...summarizeInbound(ev),
       error: tenantCtx.error,
     });
@@ -319,15 +324,15 @@ async function handleSupportedTextEvent(ev, rawBody) {
 
   const payload = buildAihqInboxPayload(ev, rawBody, tenantCtx);
 
-  logger.info("meta.webhook.text.received", {
+  requestLogger.info("meta.webhook.text.received", {
     ...summarizeInbound(ev),
     tenantKey: tenantCtx.tenantKey,
   });
 
-  const out = await forwardToAiHq(payload);
+  const out = await forwardToAiHq(payload, requestContext);
   const resolvedTenantKey = pickResolvedTenantKey(out, tenantCtx);
 
-  logger.info("meta.webhook.text.forwarded", {
+  requestLogger.info("meta.webhook.text.forwarded", {
     ok: out.ok,
     status: out.status,
     error: out.error,
@@ -342,7 +347,7 @@ async function handleSupportedTextEvent(ev, rawBody) {
   });
 
   if (!out.ok) {
-    logger.warn("meta.webhook.text.forward_failed", {
+    requestLogger.warn("meta.webhook.text.forward_failed", {
       channel: s(ev?.channel || ""),
       userId: s(ev?.userId || ""),
       externalMessageId: s(ev?.messageId || ev?.mid || ""),
@@ -356,7 +361,7 @@ async function handleSupportedTextEvent(ev, rawBody) {
   const actions = Array.isArray(out?.json?.actions) ? out.json.actions : [];
 
   if (!actions.length) {
-    logger.info("meta.webhook.text.no_actions", {
+    requestLogger.info("meta.webhook.text.no_actions", {
       duplicate: Boolean(out?.json?.duplicate),
       deduped: Boolean(out?.json?.deduped),
       intent: s(out?.json?.intent || ""),
@@ -380,17 +385,21 @@ async function handleSupportedTextEvent(ev, rawBody) {
     },
   });
 
-  logger.info("meta.webhook.text.actions_executed", {
+  requestLogger.info("meta.webhook.text.actions_executed", {
     tenantKey: resolvedTenantKey,
     ...summarizeExec(exec),
   });
 }
 
-async function handleSupportedCommentEvent(ev, rawBody) {
-  const tenantCtx = await resolveTenantForEvent(ev);
+async function handleSupportedCommentEvent(ev, rawBody, requestContext = {}) {
+  const requestLogger = logger.child({
+    requestId: s(requestContext?.requestId),
+    correlationId: s(requestContext?.correlationId),
+  });
+  const tenantCtx = await resolveTenantForEvent(ev, requestContext);
 
   if (!tenantCtx.ok) {
-    logger.warn("meta.webhook.comment.tenant_resolution_failed", {
+    requestLogger.warn("meta.webhook.comment.tenant_resolution_failed", {
       ...summarizeInbound(ev),
       error: tenantCtx.error,
     });
@@ -399,15 +408,15 @@ async function handleSupportedCommentEvent(ev, rawBody) {
 
   const payload = buildAihqCommentPayload(ev, rawBody, tenantCtx);
 
-  logger.info("meta.webhook.comment.received", {
+  requestLogger.info("meta.webhook.comment.received", {
     ...summarizeInbound(ev),
     tenantKey: tenantCtx.tenantKey,
   });
 
-  const out = await forwardCommentToAiHq(payload);
+  const out = await forwardCommentToAiHq(payload, requestContext);
   const resolvedTenantKey = pickResolvedTenantKey(out, tenantCtx);
 
-  logger.info("meta.webhook.comment.forwarded", {
+  requestLogger.info("meta.webhook.comment.forwarded", {
     ok: out.ok,
     status: out.status,
     error: out.error,
@@ -421,7 +430,7 @@ async function handleSupportedCommentEvent(ev, rawBody) {
   });
 
   if (!out.ok) {
-    logger.warn("meta.webhook.comment.forward_failed", {
+    requestLogger.warn("meta.webhook.comment.forward_failed", {
       channel: s(ev?.channel || ""),
       userId: s(ev?.userId || ""),
       externalCommentId: s(ev?.externalCommentId || ""),
@@ -435,7 +444,7 @@ async function handleSupportedCommentEvent(ev, rawBody) {
   const actions = Array.isArray(out?.json?.actions) ? out.json.actions : [];
 
   if (!actions.length) {
-    logger.info("meta.webhook.comment.no_actions", {
+    requestLogger.info("meta.webhook.comment.no_actions", {
       classification: s(out?.json?.classification?.category || ""),
       commentId: s(out?.json?.comment?.id || ""),
       tenantKey: resolvedTenantKey,
@@ -461,7 +470,7 @@ async function handleSupportedCommentEvent(ev, rawBody) {
     },
   });
 
-  logger.info("meta.webhook.comment.actions_executed", {
+  requestLogger.info("meta.webhook.comment.actions_executed", {
     tenantKey: resolvedTenantKey,
     ...summarizeExec(exec),
   });
@@ -544,7 +553,10 @@ export function registerWebhookRoutes(app) {
             continue;
           }
 
-          await handleSupportedTextEvent(ev, req.body);
+          await handleSupportedTextEvent(ev, req.body, {
+            requestId: s(req.requestId),
+            correlationId: s(req.correlationId),
+          });
           continue;
         }
 
@@ -565,7 +577,10 @@ export function registerWebhookRoutes(app) {
             continue;
           }
 
-          await handleSupportedCommentEvent(ev, req.body);
+          await handleSupportedCommentEvent(ev, req.body, {
+            requestId: s(req.requestId),
+            correlationId: s(req.correlationId),
+          });
           continue;
         }
 

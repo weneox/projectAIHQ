@@ -283,3 +283,20 @@ jobs:
           CLOUDFLARE_PAGES_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
         run: |
           curl --fail --silent --show-error --request POST "$CLOUDFLARE_PAGES_DEPLOY_HOOK"
+
+      - name: Summarize post-deploy verification references
+        if: always()
+        run: |
+          cat <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          ## Post-deploy verification
+
+          After production deploy completes, run:
+
+          - `npm run ops:postdeploy:verify`
+
+          Runbooks:
+
+          - `docs/runbooks/post-deploy-verification.md`
+          - `docs/runbooks/schema-migration-safety.md`
+          - `docs/runbooks/production-rollback.md`
+          EOF

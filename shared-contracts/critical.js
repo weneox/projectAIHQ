@@ -256,3 +256,37 @@ export function validateDurableExecutionResponse(input = {}) {
   if (!s(input.execution.status)) return fail("durable_execution_status_required");
   return ok(input);
 }
+
+export function validateRuntimeIncidentRequest(input = {}) {
+  const body = isObj(input) ? input : {};
+  const severity = lower(body.severity || body.level || "info");
+  const value = {
+    service: s(body.service),
+    area: s(body.area || body.category),
+    severity:
+      severity === "error" ? "error" : severity === "warn" || severity === "warning" ? "warn" : "info",
+    code: s(body.code),
+    reasonCode: s(body.reasonCode),
+    requestId: s(body.requestId),
+    correlationId: s(body.correlationId),
+    tenantId: s(body.tenantId),
+    tenantKey: lower(body.tenantKey),
+    detailSummary: s(body.detailSummary || body.message || body.error),
+    context: isObj(body.context) ? body.context : {},
+    occurredAt: s(body.occurredAt),
+  };
+
+  if (!value.service) return fail("runtime_incident_service_required");
+  if (!value.area) return fail("runtime_incident_area_required");
+  if (!value.code) return fail("runtime_incident_code_required");
+
+  return ok(value);
+}
+
+export function validateRuntimeIncidentResponse(input = {}) {
+  if (!isObj(input)) return fail("runtime_incident_response_required");
+  if (typeof input.ok !== "boolean") return fail("runtime_incident_response_invalid");
+  if (!isObj(input.incident)) return fail("runtime_incident_payload_required");
+  if (!s(input.incident.id)) return fail("runtime_incident_id_required");
+  return ok(input);
+}

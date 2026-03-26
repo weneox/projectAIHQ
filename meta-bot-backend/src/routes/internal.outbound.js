@@ -107,6 +107,13 @@ export function internalOutboundRoutes() {
     const meta = checked.value.meta;
 
     try {
+      req.log?.info("meta.internal_outbound.send.requested", {
+        tenantKey,
+        tenantId,
+        channel,
+        threadId,
+        recipientId,
+      });
       const actionMeta = {
         ...meta,
         tenantKey,
@@ -163,6 +170,11 @@ export function internalOutboundRoutes() {
         result,
       });
     } catch (e) {
+      req.log?.error("meta.internal_outbound.send.failed", e, {
+        tenantKey,
+        tenantId,
+        channel,
+      });
       return res.status(500).json({
         ok: false,
         error: String(e?.message || e),
@@ -192,6 +204,11 @@ export function internalOutboundRoutes() {
     const context = normalizeContext(req, tenantKey, tenantId);
 
     try {
+      req.log?.info("meta.internal_comment_actions.requested", {
+        tenantKey,
+        tenantId,
+        actionCount: actions.length,
+      });
       const exec = await executeMetaActions(actions, context);
 
       return res.status(exec?.ok ? 200 : 502).json({
@@ -202,6 +219,11 @@ export function internalOutboundRoutes() {
         results: Array.isArray(exec?.results) ? exec.results : [],
       });
     } catch (e) {
+      req.log?.error("meta.internal_comment_actions.failed", e, {
+        tenantKey,
+        tenantId,
+        actionCount: actions.length,
+      });
       return res.status(500).json({
         ok: false,
         error: String(e?.message || e),

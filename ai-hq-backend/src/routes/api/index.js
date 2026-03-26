@@ -30,6 +30,7 @@ import { debateRoutes } from "./debate/index.js";
 import { debugRoutes } from "./debug/index.js";
 import { leadsRoutes } from "./leads/index.js";
 import { commentsRoutes } from "./comments/index.js";
+import { incidentsRoutes } from "./incidents/index.js";
 import { settingsRoutes } from "./settings/index.js";
 import { teamRoutes } from "./team/index.js";
 import { voiceRoutes, voiceInternalRoutes } from "./voice/index.js";
@@ -54,6 +55,7 @@ function isInternalBypassPath(req) {
     path === "/inbox/ingest" ||
     path === "/inbox/outbound" ||
     path.startsWith("/internal/voice/") ||
+    path.startsWith("/internal/runtime-signals/") ||
     path.startsWith("/internal/executions/")
   );
 }
@@ -183,6 +185,8 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   if (hasFeature("inbox.comments")) {
     r.use("/", commentsRoutes({ db, wsHub }));
   }
+
+  r.use("/", incidentsRoutes({ db }));
 
   r.use(
     "/",
