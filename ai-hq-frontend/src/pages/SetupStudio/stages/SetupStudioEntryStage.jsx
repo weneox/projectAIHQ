@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ArrowRight,
   Check,
@@ -486,7 +486,6 @@ function SourceModal({
       <motion.div
         initial={{ opacity: 0, y: 18, scale: 0.985 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 18, scale: 0.985 }}
         transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
         className="overflow-hidden rounded-[30px] border border-white/80 bg-[rgba(249,249,249,.98)] shadow-[0_32px_80px_-36px_rgba(15,23,42,.28)]"
       >
@@ -1338,22 +1337,20 @@ export default function SetupStudioEntryStage({
         </div>
       </section>
 
-      <AnimatePresence>
-        {activeSource ? (
-          <SourceModal
-            source={activeSource}
-            value={modalValue}
-            hasExistingValue={!!s(obj(sourceDrafts[activeSource.key]).value)}
-            onChange={setModalValue}
-            onSave={handleSaveSource}
-            onRemove={handleRemoveSource}
-            onClose={closeSourceModal}
-            instagramMeta={instagramMeta}
-            onInstagramConnect={handleInstagramConnect}
-            onUseConnectedInstagram={handleUseConnectedInstagram}
-          />
-        ) : null}
-      </AnimatePresence>
+      {activeSource ? (
+        <SourceModal
+          source={activeSource}
+          value={modalValue}
+          hasExistingValue={!!s(obj(sourceDrafts[activeSource.key]).value)}
+          onChange={setModalValue}
+          onSave={handleSaveSource}
+          onRemove={handleRemoveSource}
+          onClose={closeSourceModal}
+          instagramMeta={instagramMeta}
+          onInstagramConnect={handleInstagramConnect}
+          onUseConnectedInstagram={handleUseConnectedInstagram}
+        />
+      ) : null}
     </>
   );
 }
