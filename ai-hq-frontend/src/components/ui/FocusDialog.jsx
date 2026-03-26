@@ -30,6 +30,16 @@ export default function FocusDialog({
   const titleId = useId();
   const panelRef = useRef(null);
   const returnFocusRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  const initialFocusRefRef = useRef(initialFocusRef);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    initialFocusRefRef.current = initialFocusRef;
+  }, [initialFocusRef]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -41,7 +51,7 @@ export default function FocusDialog({
       const panel = panelRef.current;
       if (!panel) return;
 
-      const preferred = initialFocusRef?.current;
+      const preferred = initialFocusRefRef.current?.current;
       if (preferred && typeof preferred.focus === "function") {
         preferred.focus();
         return;
@@ -61,7 +71,7 @@ export default function FocusDialog({
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose?.();
+        onCloseRef.current?.();
         return;
       }
 
@@ -101,7 +111,7 @@ export default function FocusDialog({
         previous.focus();
       }
     };
-  }, [open, onClose, initialFocusRef]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -113,7 +123,7 @@ export default function FocusDialog({
       <div
         aria-hidden="true"
         className={`absolute inset-0 pointer-events-auto ${backdropClassName} z-0`}
-        onClick={() => onClose?.()}
+        onClick={() => onCloseRef.current?.()}
       />
 
       <div

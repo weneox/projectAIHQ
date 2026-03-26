@@ -469,6 +469,7 @@ function SourceModal({
 }) {
   if (!source) return null;
 
+  const inputRef = useRef(null);
   const isInstagram = source.key === "instagram";
   const connected = Boolean(instagramMeta?.connected);
   const connectedHandle = s(instagramMeta?.username)
@@ -482,6 +483,7 @@ function SourceModal({
       title={`${source.title} source`}
       backdropClassName="bg-[rgba(15,23,42,.14)] backdrop-blur-[14px]"
       panelClassName="w-full max-w-[620px]"
+      initialFocusRef={inputRef}
     >
       <motion.div
         initial={{ opacity: 0, y: 18, scale: 0.985 }}
@@ -587,6 +589,7 @@ function SourceModal({
                     <div className="flex min-h-[56px] items-center gap-3 border-b border-[rgba(15,23,42,.10)] px-1 pb-3">
                       <Link2 className="h-[16px] w-[16px] shrink-0 text-slate-400" />
                       <input
+                        ref={inputRef}
                         type="text"
                         name={`${source.key}-source`}
                         autoComplete="off"
@@ -613,6 +616,7 @@ function SourceModal({
               <div className="flex min-h-[56px] items-center gap-3 border-b border-[rgba(15,23,42,.10)] px-1 pb-3">
                 <Link2 className="h-[16px] w-[16px] shrink-0 text-slate-400" />
                 <input
+                  ref={inputRef}
                   type="text"
                   name={`${source.key}-source`}
                   autoComplete="off"
