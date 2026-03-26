@@ -6,7 +6,6 @@ import AdminRouteGuard from "./components/admin/AdminRouteGuard.jsx";
 import OperatorRouteGuard from "./components/auth/OperatorRouteGuard.jsx";
 import UserRouteGuard from "./components/auth/UserRouteGuard.jsx";
 import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
-import GuestRouteGuard from "./components/guards/GuestRouteGuard.jsx";
 import { areInternalRoutesEnabled } from "./lib/appEntry.js";
 
 const Proposals = lazy(() => import("./pages/Proposals.jsx"));
@@ -50,11 +49,7 @@ export default function App() {
       <Routes>
         <Route
           path="/login"
-          element={
-            <GuestRouteGuard>
-              {withSuspense(<Login />)}
-            </GuestRouteGuard>
-          }
+          element={withSuspense(<Login />)}
         />
 
         <Route path="/admin/login" element={withSuspense(<AdminLogin />)} />

@@ -10,6 +10,7 @@ import {
 } from "../src/utils/auth.js";
 import {
   buildAllowedCorsOrigins,
+  isAllowedOrigin,
   sanitizeProviderSecrets,
   shouldAllowDiagnosticsRequest,
 } from "../src/utils/securitySurface.js";
@@ -21,6 +22,18 @@ test("production CORS policy denies wildcard origin defaults", () => {
     buildAllowedCorsOrigins("https://app.example.com, https://admin.example.com", "production"),
     ["https://app.example.com", "https://admin.example.com"]
   );
+});
+
+test("wildcard preview origin patterns stay explicit to the configured Pages project", () => {
+  const allowed = buildAllowedCorsOrigins(
+    "https://hq.weneox.com, https://*.hq.pages.dev",
+    "production"
+  );
+
+  assert.equal(isAllowedOrigin("https://feature-123.hq.pages.dev", allowed, "production"), true);
+  assert.equal(isAllowedOrigin("https://preview.hq.pages.dev", allowed, "production"), true);
+  assert.equal(isAllowedOrigin("https://feature-123.other.pages.dev", allowed, "production"), false);
+  assert.equal(isAllowedOrigin("http://feature-123.hq.pages.dev", allowed, "production"), false);
 });
 
 test("config validation rejects wildcard cors origin in production", () => {

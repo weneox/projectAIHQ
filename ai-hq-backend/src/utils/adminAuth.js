@@ -1,6 +1,10 @@
 import crypto from "crypto";
 import { cfg } from "../config.js";
-import { buildAllowedCorsOrigins } from "./securitySurface.js";
+import {
+  buildAllowedCorsOrigins,
+  isAllowedOrigin,
+  normalizeOriginValue,
+} from "./securitySurface.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -67,6 +71,17 @@ function sessionSameSite() {
   }
 
   return "lax";
+}
+
+function registrableDomain(host = "") {
+  const parts = s(host)
+    .toLowerCase()
+    .split(".")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (parts.length <= 2) return parts.join(".");
+  return parts.slice(-2).join(".");
 }
 
 function ttlHoursToMs(hours, fallbackHours) {
@@ -212,10 +227,39 @@ export function getUserCookieName() {
   return s(cfg.auth.userSessionCookieName, "aihq_user");
 }
 
-export function adminCookieOptions() {
+function shouldUseCrossSiteSessionCookie(req) {
+  const requestOrigin = normalizeOriginValue(
+    req?.headers?.origin || req?.headers?.referer
+  );
+  if (!requestOrigin) return false;
+
+  const trustedOrigins = buildTrustedBrowserOrigins(req);
+  if (!isAllowedOrigin(requestOrigin, trustedOrigins, cfg.app.env)) {
+    return false;
+  }
+
+  const requestHostOrigin = getRequestHostOrigin(req);
+  if (!requestHostOrigin) return false;
+
+  try {
+    const originHost = new URL(requestOrigin).hostname;
+    const requestHost = new URL(requestHostOrigin).hostname;
+    if (!originHost || !requestHost) return false;
+
+    return registrableDomain(originHost) !== registrableDomain(requestHost);
+  } catch {
+    return false;
+  }
+}
+
+function resolveSessionSameSite(req) {
+  return shouldUseCrossSiteSessionCookie(req) ? "none" : sessionSameSite();
+}
+
+export function adminCookieOptions(req = null) {
   const maxAgeMs = ttlHoursToMs(cfg.auth.adminSessionTtlHours, 12);
   const domain = cookieDomain();
-  const sameSite = sessionSameSite();
+  const sameSite = resolveSessionSameSite(req);
 
   return {
     httpOnly: true,
@@ -227,10 +271,10 @@ export function adminCookieOptions() {
   };
 }
 
-export function userCookieOptions() {
+export function userCookieOptions(req = null) {
   const maxAgeMs = ttlHoursToMs(cfg.auth.userSessionTtlHours, 24 * 7);
   const domain = cookieDomain();
-  const sameSite = sessionSameSite();
+  const sameSite = resolveSessionSameSite(req);
 
   return {
     httpOnly: true,
@@ -245,19 +289,6 @@ export function userCookieOptions() {
 function isUnsafeBrowserMutationMethod(method = "") {
   const normalized = s(method).toUpperCase();
   return ["POST", "PUT", "PATCH", "DELETE"].includes(normalized);
-}
-
-function normalizeOriginValue(value = "") {
-  const raw = s(value);
-  if (!raw) return "";
-
-  try {
-    const parsed = new URL(raw);
-    if (!parsed.protocol || !parsed.host) return "";
-    return parsed.origin;
-  } catch {
-    return "";
-  }
 }
 
 function getRequestHostOrigin(req) {
@@ -288,6 +319,8 @@ export function buildTrustedBrowserOrigins(
     const normalized = normalizeOriginValue(origin);
     if (normalized && normalized !== "*") {
       trusted.add(normalized);
+    } else if (s(origin).includes("*.")) {
+      trusted.add(s(origin));
     }
   }
 
@@ -335,7 +368,7 @@ export function getBrowserOriginProtectionResult(
     };
   }
 
-  if (!trustedOrigins.includes(requestOrigin)) {
+  if (!isAllowedOrigin(requestOrigin, trustedOrigins, options?.env || cfg.app.env)) {
     return {
       ok: false,
       status: 403,

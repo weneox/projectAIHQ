@@ -93,7 +93,7 @@ export function adminLoginRoutes({ db } = {}) {
     });
 
     clearAdminCookie(res);
-    res.cookie(getAdminCookieName(), token, adminCookieOptions());
+    res.cookie(getAdminCookieName(), token, adminCookieOptions(req));
 
     return res.status(200).json({
       ok: true,

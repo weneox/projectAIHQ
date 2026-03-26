@@ -5,14 +5,16 @@ import {
   AlertCircle,
   ArrowRight,
   Building2,
+  CheckCircle2,
   Eye,
   EyeOff,
   Loader2,
   Lock,
   Mail,
+  LogOut,
   WifiOff,
 } from "lucide-react";
-import { getAuthMe, loginUser } from "../api/auth.js";
+import { getAuthMe, loginUser, logoutUser } from "../api/auth.js";
 
 const RESERVED_SUBDOMAINS = new Set([
   "www",
@@ -180,8 +182,10 @@ export default function Login() {
   const [checking, setChecking] = useState(true);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [sessionActionBusy, setSessionActionBusy] = useState(false);
   const [error, setError] = useState("");
   const [focusedField, setFocusedField] = useState("");
+  const [activeSession, setActiveSession] = useState(null);
   const [serviceNotice, setServiceNotice] = useState({
     visible: false,
     title: "",
@@ -215,19 +219,32 @@ export default function Login() {
         if (!alive) return;
 
         if (auth?.authenticated) {
-          navigate(redirectTo, { replace: true });
-          return;
-        }
+          const user = auth?.user || {};
+          setActiveSession({
+            email: s(user.email),
+            fullName: s(user.fullName),
+            tenantKey: s(user.tenantKey).toLowerCase(),
+          });
 
-        setServiceNotice({
-          visible: false,
-          title: "",
-          body: "",
-          tone: "warning",
-        });
+          setServiceNotice({
+            visible: true,
+            title: "Already signed in",
+            body: "This session is active. Continue to your workspace or sign out to switch accounts.",
+            tone: "neutral",
+          });
+        } else {
+          setActiveSession(null);
+          setServiceNotice({
+            visible: false,
+            title: "",
+            body: "",
+            tone: "warning",
+          });
+        }
       } catch (authError) {
         if (!alive) return;
 
+        setActiveSession(null);
         setServiceNotice({
           visible: true,
           title: "Service unavailable",
@@ -246,6 +263,42 @@ export default function Login() {
       alive = false;
     };
   }, [navigate, redirectTo]);
+
+  async function handleContinueWithSession() {
+    if (sessionActionBusy) return;
+
+    setSessionActionBusy(true);
+    try {
+      navigate(redirectTo === "/login" ? "/" : redirectTo, { replace: true });
+    } finally {
+      setSessionActionBusy(false);
+    }
+  }
+
+  async function handleSignOutCurrentSession() {
+    if (sessionActionBusy) return;
+
+    setSessionActionBusy(true);
+    try {
+      await logoutUser();
+      setActiveSession(null);
+      setServiceNotice({
+        visible: false,
+        title: "",
+        body: "",
+        tone: "warning",
+      });
+    } catch (logoutError) {
+      setServiceNotice({
+        visible: true,
+        title: "Session sign-out failed",
+        body: getFriendlyError(logoutError, "We could not end the current session."),
+        tone: "warning",
+      });
+    } finally {
+      setSessionActionBusy(false);
+    }
+  }
 
   function onChange(e) {
     const { name, value, type, checked } = e.target;
@@ -401,7 +454,7 @@ export default function Login() {
                 <div className="mt-6 space-y-3">
                   {serviceNotice.visible ? (
                     <StatusLine
-                      icon={WifiOff}
+                      icon={activeSession ? CheckCircle2 : WifiOff}
                       title={serviceNotice.title}
                       body={serviceNotice.body}
                       tone={serviceNotice.tone}
@@ -425,6 +478,39 @@ export default function Login() {
                     />
                   ) : null}
                 </div>
+
+                {activeSession ? (
+                  <div className="mt-6 rounded-[24px] border border-black/8 bg-white/72 px-4 py-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      Current session
+                    </div>
+                    <div className="mt-2 text-sm leading-7 text-slate-700">
+                      {activeSession.fullName || activeSession.email || "Signed-in user"}
+                      {activeSession.tenantKey
+                        ? ` - ${formatWorkspaceName(activeSession.tenantKey) || activeSession.tenantKey}`
+                        : ""}
+                    </div>
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleContinueWithSession}
+                        disabled={sessionActionBusy}
+                        className="inline-flex h-11 items-center justify-center rounded-full bg-slate-950 px-5 text-[14px] font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
+                      >
+                        {sessionActionBusy ? "Opening..." : "Open workspace"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSignOutCurrentSession}
+                        disabled={sessionActionBusy}
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-black/10 bg-white px-5 text-[14px] font-medium text-slate-700 transition hover:border-black/20 hover:text-slate-950 disabled:opacity-60"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Use another account
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
                 <form className="mt-7 space-y-5" onSubmit={onSubmit}>
                   <Field

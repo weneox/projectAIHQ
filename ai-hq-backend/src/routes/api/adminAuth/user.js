@@ -169,7 +169,7 @@ export function userLoginRoutes({ db } = {}) {
     });
 
     clearUserCookie(res);
-    res.cookie(getUserCookieName(), token, userCookieOptions());
+    res.cookie(getUserCookieName(), token, userCookieOptions(req));
 
     await markUserLogin(db, user.id);
 

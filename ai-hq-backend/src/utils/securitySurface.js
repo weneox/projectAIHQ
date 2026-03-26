@@ -20,6 +20,70 @@ export function isProductionLikeEnv(env = cfg.app.env) {
   return s(env, "production").toLowerCase() === "production";
 }
 
+export function normalizeOriginValue(value = "") {
+  const raw = s(value);
+  if (!raw) return "";
+
+  try {
+    const parsed = new URL(raw);
+    if (!parsed.protocol || !parsed.host) return "";
+    return parsed.origin;
+  } catch {
+    return "";
+  }
+}
+
+function parseWildcardOriginPattern(value = "") {
+  const raw = s(value).toLowerCase();
+  const match = raw.match(/^(https?):\/\/\*\.([a-z0-9.-]+)$/i);
+  if (!match) return null;
+
+  return {
+    protocol: `${match[1]}:`,
+    hostSuffix: `.${match[2]}`,
+  };
+}
+
+export function isAllowedOrigin(origin, allowedOrigins = [], env = cfg.app.env) {
+  const normalizedOrigin = normalizeOriginValue(origin);
+  if (!normalizedOrigin) return false;
+
+  let parsedOrigin = null;
+  try {
+    parsedOrigin = new URL(normalizedOrigin);
+  } catch {
+    return false;
+  }
+
+  for (const candidate of allowedOrigins || []) {
+    const rawCandidate = s(candidate);
+    if (!rawCandidate) continue;
+
+    if (rawCandidate === "*" && !isProductionLikeEnv(env)) {
+      return true;
+    }
+
+    const normalizedCandidate = normalizeOriginValue(rawCandidate);
+    if (normalizedCandidate && normalizedCandidate === normalizedOrigin) {
+      return true;
+    }
+
+    const wildcard = parseWildcardOriginPattern(rawCandidate);
+    if (!wildcard) continue;
+
+    const host = String(parsedOrigin.host || "").toLowerCase();
+    if (
+      parsedOrigin.protocol === wildcard.protocol &&
+      host.endsWith(wildcard.hostSuffix) &&
+      host.length > wildcard.hostSuffix.length
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function buildAllowedCorsOrigins(raw = cfg.urls.corsOrigin, env = cfg.app.env) {
   const value = s(raw, "");
   if (!value) return [];
@@ -87,6 +151,8 @@ export function sanitizeProviderSecrets(secretMap = {}, { includeValues = false 
 
 export const __test__ = {
   buildAllowedCorsOrigins,
+  isAllowedOrigin,
+  normalizeOriginValue,
   shouldAllowDiagnosticsRequest,
   sanitizeProviderSecrets,
 };

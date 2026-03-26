@@ -4,7 +4,10 @@ import assert from "node:assert/strict";
 import { cfg } from "../src/config.js";
 import { adminAuthRoutes } from "../src/routes/api/adminAuth/index.js";
 import { apiRouter } from "../src/routes/api/index.js";
-import { getBrowserOriginProtectionResult } from "../src/utils/adminAuth.js";
+import {
+  getBrowserOriginProtectionResult,
+  userCookieOptions,
+} from "../src/utils/adminAuth.js";
 
 function createMockRes(onFinish) {
   return {
@@ -254,5 +257,34 @@ test("api router protects user and admin cookie mutations while leaving internal
     cfg.urls.corsOrigin = previousCors;
     cfg.urls.publicBaseUrl = previousPublicBaseUrl;
     cfg.security.aihqInternalToken = previousInternalToken;
+  }
+});
+
+test("trusted Cloudflare Pages preview origins pass csrf checks and receive cross-site cookie settings", () => {
+  const previousCors = cfg.urls.corsOrigin;
+
+  try {
+    cfg.urls.corsOrigin = "https://hq.weneox.com, https://*.hq.pages.dev";
+
+    const req = {
+      method: "POST",
+      headers: {
+        host: "api.hq.weneox.com",
+        origin: "https://feature-123.hq.pages.dev",
+      },
+      protocol: "https",
+      get(name) {
+        return this.headers[String(name || "").toLowerCase()];
+      },
+    };
+
+    const result = getBrowserOriginProtectionResult(req);
+    assert.equal(result.ok, true);
+
+    const cookie = userCookieOptions(req);
+    assert.equal(cookie.sameSite, "none");
+    assert.equal(cookie.secure, true);
+  } finally {
+    cfg.urls.corsOrigin = previousCors;
   }
 });

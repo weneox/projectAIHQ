@@ -23,6 +23,7 @@ import { adminAuthRoutes } from "./src/routes/api/adminAuth/index.js";
 import { createLogger, requestContextMiddleware } from "./src/utils/logger.js";
 import {
   buildAllowedCorsOrigins,
+  isAllowedOrigin,
   requireSafeDiagnostics,
 } from "./src/utils/securitySurface.js";
 
@@ -110,11 +111,7 @@ async function main() {
     origin(origin, cb) {
       if (!origin) return cb(null, true);
 
-      if (allowedOrigins.includes("*")) {
-        return cb(null, true);
-      }
-
-      if (allowedOrigins.includes(origin)) {
+      if (isAllowedOrigin(origin, allowedOrigins, cfg.app.env)) {
         return cb(null, true);
       }
 

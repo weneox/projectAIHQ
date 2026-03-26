@@ -516,7 +516,7 @@ function SourceModal({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-white hover:text-slate-700"
+              className="relative z-10 inline-flex h-11 w-11 shrink-0 self-start items-center justify-center rounded-full text-slate-400 transition hover:bg-white hover:text-slate-700"
             >
               <X className="h-[18px] w-[18px]" />
             </button>
