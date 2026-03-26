@@ -480,7 +480,7 @@ function SourceModal({
       open={!!source}
       onClose={onClose}
       title={`${source.title} source`}
-      backdropClassName="z-[95] bg-[rgba(15,23,42,.14)] backdrop-blur-[14px]"
+      backdropClassName="bg-[rgba(15,23,42,.14)] backdrop-blur-[14px]"
       panelClassName="w-full max-w-[620px]"
     >
       <motion.div

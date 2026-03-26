@@ -107,11 +107,12 @@ export default function FocusDialog({
 
   return (
     <div
+      data-focus-dialog-root="true"
       className="fixed inset-0 z-50 flex items-center justify-center px-4 py-4 pointer-events-none"
     >
       <div
         aria-hidden="true"
-        className={`absolute inset-0 pointer-events-auto ${backdropClassName}`}
+        className={`absolute inset-0 pointer-events-auto ${backdropClassName} z-0`}
         onClick={() => onClose?.()}
       />
 
@@ -121,7 +122,7 @@ export default function FocusDialog({
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         tabIndex={-1}
-        className={`relative z-10 pointer-events-auto ${panelClassName}`}
+        className={`relative pointer-events-auto ${panelClassName} z-10`}
       >
         {title ? <h2 id={titleId} className="sr-only">{title}</h2> : null}
         {children}
