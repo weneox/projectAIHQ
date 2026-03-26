@@ -1,7 +1,13 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import TrustMaintenanceSection from "./TrustMaintenanceSection.jsx";
+const dispatchRepairAction = vi.fn();
+
+vi.mock("../../../components/readiness/dispatchRepairAction.js", () => ({
+  dispatchRepairAction: (...args) => dispatchRepairAction(...args),
+}));
+
+let TrustMaintenanceSection;
 
 afterEach(() => {
   cleanup();
@@ -9,13 +15,17 @@ afterEach(() => {
 
 beforeEach(() => {
   HTMLElement.prototype.scrollIntoView = vi.fn();
-  Object.defineProperty(window, "location", {
-    writable: true,
-    value: {
-      ...window.location,
-      assign: vi.fn(),
-    },
-  });
+  dispatchRepairAction.mockReset();
+  dispatchRepairAction.mockResolvedValue({ ok: true });
+});
+
+beforeEach(async () => {
+  vi.resetModules();
+  ({ default: TrustMaintenanceSection } = await import("./TrustMaintenanceSection.jsx"));
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe("TrustMaintenanceSection", () => {
@@ -131,9 +141,17 @@ describe("TrustMaintenanceSection", () => {
     );
 
     expect(screen.getByText(/trust repair hub/i)).toBeInTheDocument();
-    expect(screen.getByText(/runtime projection blocker/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/runtime projection blocker/i).length).toBeGreaterThan(0);
     fireEvent.click(screen.getAllByRole("button", { name: /open runtime setup/i })[0]);
-    expect(window.location.assign).toHaveBeenCalledWith("/setup/runtime");
+    await waitFor(() => {
+      expect(dispatchRepairAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "open_setup_route",
+          kind: "route",
+          target: { path: "/setup/runtime" },
+        })
+      );
+    });
     expect(screen.getByText(/recent sync health/i)).toBeInTheDocument();
   });
 });

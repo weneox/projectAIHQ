@@ -126,7 +126,7 @@ describe("Inbox", () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText(/inbox/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /^inbox$/i })).toBeInTheDocument();
     expect(screen.getByText(/operator reply sent/i)).toBeInTheDocument();
     expect(screen.getByText(/inbox operations are temporarily unavailable/i)).toBeInTheDocument();
     expect(screen.getByText(/db disabled/i)).toBeInTheDocument();

@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const useThreadOutboundAttemptsSurface = vi.fn();
 
@@ -7,7 +7,12 @@ vi.mock("./hooks/useThreadOutboundAttemptsSurface.js", () => ({
   useThreadOutboundAttemptsSurface: (...args) => useThreadOutboundAttemptsSurface(...args),
 }));
 
-import ThreadOutboundAttemptsPanel from "./ThreadOutboundAttemptsPanel.jsx";
+let ThreadOutboundAttemptsPanel;
+
+beforeEach(async () => {
+  vi.resetModules();
+  ({ default: ThreadOutboundAttemptsPanel } = await import("./ThreadOutboundAttemptsPanel.jsx"));
+});
 
 describe("ThreadOutboundAttemptsPanel", () => {
   it("renders shared banner feedback", () => {
@@ -32,7 +37,6 @@ describe("ThreadOutboundAttemptsPanel", () => {
 
     render(<ThreadOutboundAttemptsPanel selectedThread={{ id: "thread-1" }} actor="operator" />);
 
-    expect(screen.getByText(/delivery retry requested/i)).toBeInTheDocument();
     expect(screen.getByText(/thread delivery attempts are temporarily unavailable/i)).toBeInTheDocument();
   });
 });

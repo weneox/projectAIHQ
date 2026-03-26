@@ -1,5 +1,4 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 
 import {
   buildReviewConcurrencyPayload,
@@ -7,7 +6,8 @@ import {
   parseReviewConcurrencyError,
 } from "./setupStudioActionShared.js";
 
-test("currentReviewConcurrencyMeta uses backend draft version and session id", () => {
+describe("setup studio action shared", () => {
+it("currentReviewConcurrencyMeta uses backend draft version and session id", () => {
   const meta = currentReviewConcurrencyMeta(
     {
       session: { id: "session-9", status: "active" },
@@ -17,16 +17,16 @@ test("currentReviewConcurrencyMeta uses backend draft version and session id", (
     {}
   );
 
-  assert.equal(meta.sessionId, "session-9");
-  assert.equal(meta.sessionStatus, "active");
-  assert.equal(meta.revision, "draft-42");
-  assert.deepEqual(buildReviewConcurrencyPayload(meta), {
+  expect(meta.sessionId).toBe("session-9");
+  expect(meta.sessionStatus).toBe("active");
+  expect(meta.revision).toBe("draft-42");
+  expect(buildReviewConcurrencyPayload(meta)).toEqual({
     sessionId: "session-9",
     draftVersion: "draft-42",
   });
 });
 
-test("parseReviewConcurrencyError recognizes explicit backend mismatch codes", () => {
+it("parseReviewConcurrencyError recognizes explicit backend mismatch codes", () => {
   const issue = parseReviewConcurrencyError(
     {
       message: "Draft version no longer matches",
@@ -36,14 +36,14 @@ test("parseReviewConcurrencyError recognizes explicit backend mismatch codes", (
     { sessionId: "session-9", revision: "draft-42" }
   );
 
-  assert.equal(issue.conflicted, true);
-  assert.equal(issue.stale, false);
-  assert.equal(issue.freshness, "conflict");
-  assert.equal(issue.sessionId, "session-9");
-  assert.equal(issue.revision, "draft-42");
+  expect(issue.conflicted).toBe(true);
+  expect(issue.stale).toBe(false);
+  expect(issue.freshness).toBe("conflict");
+  expect(issue.sessionId).toBe("session-9");
+  expect(issue.revision).toBe("draft-42");
 });
 
-test("parseReviewConcurrencyError recognizes baseline drift payloads as stale", () => {
+it("parseReviewConcurrencyError recognizes baseline drift payloads as stale", () => {
   const issue = parseReviewConcurrencyError({
     message: "Canonical baseline drift detected",
     payload: {
@@ -54,8 +54,9 @@ test("parseReviewConcurrencyError recognizes baseline drift payloads as stale", 
     },
   });
 
-  assert.equal(issue.stale, true);
-  assert.equal(issue.conflicted, false);
-  assert.equal(issue.freshness, "stale");
-  assert.equal(issue.message, "Approved truth changed before finalize.");
+  expect(issue.stale).toBe(true);
+  expect(issue.conflicted).toBe(false);
+  expect(issue.freshness).toBe("stale");
+  expect(issue.message).toBe("Approved truth changed before finalize.");
+});
 });

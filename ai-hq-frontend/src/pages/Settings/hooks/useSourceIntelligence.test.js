@@ -1,9 +1,9 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 
 import { __test__ } from "./useSourceIntelligence.js";
 
-test("describeSourceSyncOutcome uses backend review object for queued review work", () => {
+describe("useSourceIntelligence helpers", () => {
+it("describeSourceSyncOutcome uses backend review object for queued review work", () => {
   const message = __test__.describeSourceSyncOutcome({
     accepted: true,
     status: "queued",
@@ -17,12 +17,12 @@ test("describeSourceSyncOutcome uses backend review object for queued review wor
     },
   });
 
-  assert.match(message, /queued/i);
-  assert.match(message, /review-backed follow-up work/i);
-  assert.match(message, /Approved truth will not change until review is completed/i);
+  expect(message).toMatch(/queued/i);
+  expect(message).toMatch(/review-backed follow-up work/i);
+  expect(message).toMatch(/Approved truth will not change until review is completed/i);
 });
 
-test("describeSourceSyncOutcome reports candidate counts from backend review object", () => {
+it("describeSourceSyncOutcome reports candidate counts from backend review object", () => {
   const message = __test__.describeSourceSyncOutcome({
     status: "completed",
     review: {
@@ -32,5 +32,6 @@ test("describeSourceSyncOutcome reports candidate counts from backend review obj
     },
   });
 
-  assert.match(message, /3 review items may affect approved truth next/i);
+  expect(message).toMatch(/3 review items may affect approved truth next/i);
+});
 });

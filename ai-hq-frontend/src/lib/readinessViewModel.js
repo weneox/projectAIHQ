@@ -24,7 +24,7 @@ function normalizeAction(value = {}) {
 
 function normalizeBlocker(value = {}) {
   const item = obj(value);
-  const action = normalizeAction(item.nextAction || item.repairAction);
+  const action = normalizeAction(item.action || item.nextAction || item.repairAction);
 
   return {
     blocked:

@@ -32,7 +32,7 @@ describe("AdminPageShell", () => {
     expect(screen.getByText("Execution Center")).toBeInTheDocument();
     expect(screen.getByText("Retry accepted.")).toBeInTheDocument();
     expect(screen.getByText("Execution surface unavailable.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /refresh surface/i })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /refresh surface/i })).toHaveLength(2);
     expect(screen.getByRole("button", { name: /custom action/i })).toBeInTheDocument();
     expect(screen.getByText("Page content")).toBeInTheDocument();
   });

@@ -21,7 +21,7 @@ import { useChannelsSurface } from "./useChannelsSurface.js";
 describe("useChannelsSurface", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    window.history.replaceState({}, "", "http://localhost/settings");
+    window.history.replaceState({}, "", "/settings");
   });
 
   it("exposes the shared surface contract on refresh", async () => {

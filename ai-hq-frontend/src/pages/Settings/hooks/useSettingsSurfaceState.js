@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 function resolveInitialData(initialData) {
   return typeof initialData === "function" ? initialData() : initialData;
@@ -9,7 +9,12 @@ function nowIso() {
 }
 
 export function useSettingsSurfaceState({ initialData, initialLoading = true }) {
-  const [data, setData] = useState(() => resolveInitialData(initialData));
+  const initialDataRef = useRef();
+  if (typeof initialDataRef.current === "undefined") {
+    initialDataRef.current = resolveInitialData(initialData);
+  }
+
+  const [data, setData] = useState(() => initialDataRef.current);
   const [loading, setLoading] = useState(initialLoading);
   const [error, setError] = useState("");
   const [unavailable, setUnavailable] = useState(false);
@@ -43,7 +48,7 @@ export function useSettingsSurfaceState({ initialData, initialLoading = true }) 
       const fallbackData =
         Object.prototype.hasOwnProperty.call(options, "fallbackData")
           ? options.fallbackData
-          : resolveInitialData(initialData);
+          : initialDataRef.current;
 
       setData(fallbackData);
       setUnavailable(options.unavailable !== false);
@@ -51,7 +56,7 @@ export function useSettingsSurfaceState({ initialData, initialLoading = true }) 
       setLoading(false);
       return fallbackData;
     },
-    [initialData]
+    []
   );
 
   const beginSave = useCallback(() => {

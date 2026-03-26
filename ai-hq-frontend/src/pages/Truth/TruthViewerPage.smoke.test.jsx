@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const dispatchRepairAction = vi.fn();
+
 vi.mock("../../api/truth.js", () => ({
   getCanonicalTruthSnapshot: vi.fn().mockResolvedValue({
     fields: [
@@ -67,6 +69,10 @@ vi.mock("../../api/truth.js", () => ({
   }),
 }));
 
+vi.mock("../../components/readiness/dispatchRepairAction.js", () => ({
+  dispatchRepairAction: (...args) => dispatchRepairAction(...args),
+}));
+
 import TruthViewerPage from "./TruthViewerPage.jsx";
 import {
   getCanonicalTruthSnapshot,
@@ -77,13 +83,8 @@ afterEach(() => {
 });
 
 beforeEach(() => {
-  Object.defineProperty(window, "location", {
-    writable: true,
-    value: {
-      ...window.location,
-      assign: vi.fn(),
-    },
-  });
+  dispatchRepairAction.mockReset();
+  dispatchRepairAction.mockResolvedValue({ ok: true });
 });
 
 describe("Truth viewer smoke", () => {
@@ -164,7 +165,13 @@ describe("Truth viewer smoke", () => {
     expect(screen.getByText(/approved truth blocker/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open setup/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /open setup/i }));
-    expect(window.location.assign).toHaveBeenCalledWith("/setup/studio");
+    expect(dispatchRepairAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "open_setup_route",
+        kind: "route",
+        target: { path: "/setup/studio" },
+      })
+    );
     expect(
       screen.getByText(/no non-approved fallback data is being shown/i)
     ).toBeInTheDocument();

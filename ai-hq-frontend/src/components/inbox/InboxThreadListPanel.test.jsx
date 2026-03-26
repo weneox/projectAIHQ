@@ -33,7 +33,7 @@ describe("InboxThreadListPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "resolved" }));
     expect(setFilter).toHaveBeenCalledWith("resolved");
 
-    fireEvent.click(screen.getByText(/B/i));
+    fireEvent.click(screen.getAllByRole("button", { name: /open/i })[1]);
     expect(openThread).toHaveBeenCalled();
   });
 });

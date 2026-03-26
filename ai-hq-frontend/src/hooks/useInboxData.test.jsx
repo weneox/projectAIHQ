@@ -15,9 +15,9 @@ describe("useInboxData", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiGet.mockImplementation((path) => {
-      if (String(path).startsWith("/api/inbox/threads?")) {
+      if (String(path) === "/api/inbox/threads") {
         return Promise.resolve({
-          threads: [{ id: "thread-1", status: "open", handoff_active: false }],
+          threads: [{ id: "thread-1", status: "open", handoff_active: false, unread_count: 1 }],
           dbDisabled: false,
         });
       }
@@ -58,6 +58,6 @@ describe("useInboxData", () => {
     });
 
     expect(result.current.surface.saveSuccess).toMatch(/operator reply sent/i);
-    expect(result.current.busyAction).toBe("");
+    expect(result.current.actionState.pendingAction).toBe("");
   });
 });

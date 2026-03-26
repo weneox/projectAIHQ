@@ -187,6 +187,8 @@ describe("Executions durable surface", () => {
     listDurableExecutions.mockRejectedValueOnce(new Error("backend unavailable"));
     render(<Executions />);
 
-    expect(await screen.findByText(/backend unavailable/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/durable execution controls are temporarily unavailable/i)
+    ).toBeInTheDocument();
   });
 });

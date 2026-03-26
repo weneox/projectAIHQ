@@ -40,7 +40,7 @@ describe("Comments", () => {
 
     render(<Comments />);
 
-    expect(screen.getByText(/comments/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Comments" })).toBeInTheDocument();
     expect(screen.getByText(/comment ignored/i)).toBeInTheDocument();
     expect(screen.getByText(/comments moderation is temporarily unavailable/i)).toBeInTheDocument();
   });

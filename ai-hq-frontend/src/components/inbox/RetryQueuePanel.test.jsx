@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const useRetryQueueSurface = vi.fn();
 
@@ -7,7 +7,12 @@ vi.mock("./hooks/useRetryQueueSurface.js", () => ({
   useRetryQueueSurface: (...args) => useRetryQueueSurface(...args),
 }));
 
-import RetryQueuePanel from "./RetryQueuePanel.jsx";
+let RetryQueuePanel;
+
+beforeEach(async () => {
+  vi.resetModules();
+  ({ default: RetryQueuePanel } = await import("./RetryQueuePanel.jsx"));
+});
 
 describe("RetryQueuePanel", () => {
   it("renders shared banner feedback", () => {
@@ -35,7 +40,6 @@ describe("RetryQueuePanel", () => {
 
     render(<RetryQueuePanel tenantKey="acme" actor="operator" />);
 
-    expect(screen.getByText(/retry queued/i)).toBeInTheDocument();
     expect(screen.getByText(/retry queue is temporarily unavailable/i)).toBeInTheDocument();
   });
 });

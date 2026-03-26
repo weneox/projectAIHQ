@@ -27,6 +27,6 @@ describe("InboxComposer", () => {
     );
 
     expect(screen.getByText(/operator reply sent/i)).toBeInTheDocument();
-    expect(screen.getByText(/operator reply/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /send operator reply/i })).toBeInTheDocument();
   });
 });

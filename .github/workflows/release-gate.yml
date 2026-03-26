@@ -6,7 +6,113 @@ on:
       - "**"
   pull_request:
 
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
 jobs:
+  frontend-stable-windows:
+    runs-on: windows-latest
+    env:
+      CI: "true"
+      VITE_API_BASE: https://api.example.com
+      VITE_WS_URL: wss://api.example.com/ws
+      VITE_ENABLE_INTERNAL_ROUTES: "0"
+      VITE_DEBUG_PUSH: "0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate frontend environment
+        run: npm run validate:env -w ai-hq-frontend
+
+      - name: Prepare frontend test result directory
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path ai-hq-frontend/test-results | Out-Null
+
+      - name: Run frontend stable tests on Windows
+        id: frontend_stable_windows
+        run: npm run test:frontend:stable:ci
+
+      - name: Upload Windows frontend test results
+        id: upload_frontend_windows_results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-stable-windows-test-results
+          path: ai-hq-frontend/test-results
+          if-no-files-found: warn
+
+      - name: Publish Windows frontend stable test report
+        id: publish_frontend_windows_report
+        if: always()
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: "ai-hq-frontend/test-results/*.junit.xml"
+          check_name: "Frontend Stable Tests (Windows)"
+          require_tests: true
+          detailed_summary: true
+          include_passed: false
+          annotate_only: false
+
+      - name: Inspect Windows frontend test outputs
+        id: inspect_frontend_windows_outputs
+        if: always()
+        shell: pwsh
+        run: |
+          $contractsJunit = Test-Path "ai-hq-frontend/test-results/frontend-contracts.junit.xml"
+          $smokeHooksJunit = Test-Path "ai-hq-frontend/test-results/frontend-smoke-hooks.junit.xml"
+          $smokeUiJunit = Test-Path "ai-hq-frontend/test-results/frontend-smoke-ui.junit.xml"
+          $contractsJson = Test-Path "ai-hq-frontend/test-results/frontend-contracts.json"
+          $smokeHooksJson = Test-Path "ai-hq-frontend/test-results/frontend-smoke-hooks.json"
+          $smokeUiJson = Test-Path "ai-hq-frontend/test-results/frontend-smoke-ui.json"
+          "contracts_junit=$contractsJunit" >> $env:GITHUB_OUTPUT
+          "smoke_hooks_junit=$smokeHooksJunit" >> $env:GITHUB_OUTPUT
+          "smoke_ui_junit=$smokeUiJunit" >> $env:GITHUB_OUTPUT
+          "contracts_json=$contractsJson" >> $env:GITHUB_OUTPUT
+          "smoke_hooks_json=$smokeHooksJson" >> $env:GITHUB_OUTPUT
+          "smoke_ui_json=$smokeUiJson" >> $env:GITHUB_OUTPUT
+
+      - name: Summarize Windows frontend stable results
+        if: always()
+        shell: pwsh
+        run: |
+          @"
+          ## Frontend Stable Tests (Windows)
+
+          | Item | Status |
+          | --- | --- |
+          | Stable test command | `${{ steps.frontend_stable_windows.outcome }}` |
+          | JUnit publish step | `${{ steps.publish_frontend_windows_report.outcome }}` |
+          | Artifact upload step | `${{ steps.upload_frontend_windows_results.outcome }}` |
+          | Contracts JUnit file | `${{ steps.inspect_frontend_windows_outputs.outputs.contracts_junit }}` |
+          | Smoke hooks JUnit file | `${{ steps.inspect_frontend_windows_outputs.outputs.smoke_hooks_junit }}` |
+          | Smoke UI JUnit file | `${{ steps.inspect_frontend_windows_outputs.outputs.smoke_ui_junit }}` |
+          | Contracts JSON file | `${{ steps.inspect_frontend_windows_outputs.outputs.contracts_json }}` |
+          | Smoke hooks JSON file | `${{ steps.inspect_frontend_windows_outputs.outputs.smoke_hooks_json }}` |
+          | Smoke UI JSON file | `${{ steps.inspect_frontend_windows_outputs.outputs.smoke_ui_json }}` |
+
+          Checks:
+          - `Frontend Stable Tests (Windows)` for file-level failures and test names
+
+          Artifacts:
+          - `frontend-stable-windows-test-results` for JUnit and JSON outputs
+
+          Deeper inspection:
+          - Open the Windows frontend check for direct failing test/file visibility
+          - Download the Windows artifact if you need the raw JUnit or JSON payloads
+          "@ >> $env:GITHUB_STEP_SUMMARY
+
   monorepo-release-gate:
     runs-on: ubuntu-latest
     services:
@@ -83,15 +189,93 @@ jobs:
       - name: Lint all workspaces
         run: npm run lint:all
 
+      - name: Prepare frontend test result directory
+        run: mkdir -p ai-hq-frontend/test-results
+
+      - name: Run frontend stable tests on Linux
+        id: frontend_stable_linux
+        run: npm run test:frontend:stable:ci
+
+      - name: Upload Linux frontend test results
+        id: upload_frontend_linux_results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-stable-linux-test-results
+          path: ai-hq-frontend/test-results
+          if-no-files-found: warn
+
+      - name: Publish Linux frontend stable test report
+        id: publish_frontend_linux_report
+        if: always()
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: "ai-hq-frontend/test-results/*.junit.xml"
+          check_name: "Frontend Stable Tests (Linux)"
+          require_tests: true
+          detailed_summary: true
+          include_passed: false
+          annotate_only: false
+
+      - name: Inspect Linux frontend test outputs
+        id: inspect_frontend_linux_outputs
+        if: always()
+        shell: pwsh
+        run: |
+          $contractsJunit = Test-Path "ai-hq-frontend/test-results/frontend-contracts.junit.xml"
+          $smokeHooksJunit = Test-Path "ai-hq-frontend/test-results/frontend-smoke-hooks.junit.xml"
+          $smokeUiJunit = Test-Path "ai-hq-frontend/test-results/frontend-smoke-ui.junit.xml"
+          $contractsJson = Test-Path "ai-hq-frontend/test-results/frontend-contracts.json"
+          $smokeHooksJson = Test-Path "ai-hq-frontend/test-results/frontend-smoke-hooks.json"
+          $smokeUiJson = Test-Path "ai-hq-frontend/test-results/frontend-smoke-ui.json"
+          "contracts_junit=$contractsJunit" >> $env:GITHUB_OUTPUT
+          "smoke_hooks_junit=$smokeHooksJunit" >> $env:GITHUB_OUTPUT
+          "smoke_ui_junit=$smokeUiJunit" >> $env:GITHUB_OUTPUT
+          "contracts_json=$contractsJson" >> $env:GITHUB_OUTPUT
+          "smoke_hooks_json=$smokeHooksJson" >> $env:GITHUB_OUTPUT
+          "smoke_ui_json=$smokeUiJson" >> $env:GITHUB_OUTPUT
+
+      - name: Summarize Linux frontend stable results
+        if: always()
+        shell: pwsh
+        run: |
+          @"
+          ## Frontend Stable Tests (Linux)
+
+          | Item | Status |
+          | --- | --- |
+          | Stable test command | `${{ steps.frontend_stable_linux.outcome }}` |
+          | JUnit publish step | `${{ steps.publish_frontend_linux_report.outcome }}` |
+          | Artifact upload step | `${{ steps.upload_frontend_linux_results.outcome }}` |
+          | Contracts JUnit file | `${{ steps.inspect_frontend_linux_outputs.outputs.contracts_junit }}` |
+          | Smoke hooks JUnit file | `${{ steps.inspect_frontend_linux_outputs.outputs.smoke_hooks_junit }}` |
+          | Smoke UI JUnit file | `${{ steps.inspect_frontend_linux_outputs.outputs.smoke_ui_junit }}` |
+          | Contracts JSON file | `${{ steps.inspect_frontend_linux_outputs.outputs.contracts_json }}` |
+          | Smoke hooks JSON file | `${{ steps.inspect_frontend_linux_outputs.outputs.smoke_hooks_json }}` |
+          | Smoke UI JSON file | `${{ steps.inspect_frontend_linux_outputs.outputs.smoke_ui_json }}` |
+
+          Checks:
+          - `Frontend Stable Tests (Linux)` for file-level failures and test names
+
+          Artifacts:
+          - `frontend-stable-linux-test-results` for JUnit and JSON outputs
+
+          Deeper inspection:
+          - Open the Linux frontend check for direct failing test/file visibility
+          - Download the Linux artifact if you need the raw JUnit or JSON payloads
+          "@ >> $env:GITHUB_STEP_SUMMARY
+
       - name: Run test gate
-        run: npm run test:all
+        run: npm run test:backend:all
 
       - name: Run build gate
         run: npm run build:all
 
   trigger-cloudflare-pages-deploy:
     runs-on: ubuntu-latest
-    needs: monorepo-release-gate
+    needs:
+      - monorepo-release-gate
+      - frontend-stable-windows
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Trigger Cloudflare Pages production deploy

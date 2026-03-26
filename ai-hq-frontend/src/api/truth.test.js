@@ -1,9 +1,9 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 
 import { __test__ } from "./truth.js";
 
-test("normalizeTruthResponse maps approved truth metadata, provenance, and history", () => {
+describe("truth api normalization", () => {
+it("normalizeTruthResponse maps approved truth metadata, provenance, and history", () => {
   const normalized = __test__.normalizeTruthResponse(
     {
       truth: {
@@ -41,23 +41,23 @@ test("normalizeTruthResponse maps approved truth metadata, provenance, and histo
     "/api/setup/truth/current"
   );
 
-  assert.equal(normalized.source, "/api/setup/truth/current");
-  assert.equal(normalized.hasTruth, true);
-  assert.equal(normalized.hasApprovalMeta, true);
-  assert.equal(normalized.hasHistory, true);
-  assert.equal(normalized.hasProvenance, true);
-  assert.equal(normalized.approval.approvedAt, "2026-03-25T10:00:00.000Z");
-  assert.equal(normalized.approval.approvedBy, "reviewer@aihq.test");
-  assert.equal(normalized.approval.version, "approved");
-  assert.equal(normalized.history.length, 1);
-  assert.equal(normalized.history[0].version, "v3");
-  assert.equal(normalized.history[0].versionLabel, "Truth version v3");
-  assert.match(normalized.history[0].sourceSummary, /Website/);
-  assert.match(normalized.history[0].diffSummary, /companyName/);
-  assert.match(normalized.fields[0].provenance, /Website/);
+  expect(normalized.source).toBe("/api/setup/truth/current");
+  expect(normalized.hasTruth).toBe(true);
+  expect(normalized.hasApprovalMeta).toBe(true);
+  expect(normalized.hasHistory).toBe(true);
+  expect(normalized.hasProvenance).toBe(true);
+  expect(normalized.approval.approvedAt).toBe("2026-03-25T10:00:00.000Z");
+  expect(normalized.approval.approvedBy).toBe("reviewer@aihq.test");
+  expect(normalized.approval.version).toBe("approved");
+  expect(normalized.history).toHaveLength(1);
+  expect(normalized.history[0].version).toBe("v3");
+  expect(normalized.history[0].versionLabel).toBe("Truth version v3");
+  expect(normalized.history[0].sourceSummary).toMatch(/Website/);
+  expect(normalized.history[0].diffSummary).toMatch(/companyName/);
+  expect(normalized.fields[0].provenance).toMatch(/Website/);
 });
 
-test("normalizeCompareResponse maps backend truth version compare detail", () => {
+it("normalizeCompareResponse maps backend truth version compare detail", () => {
   const normalized = __test__.normalizeCompareResponse(
     {
       version: {
@@ -101,24 +101,22 @@ test("normalizeCompareResponse maps backend truth version compare detail", () =>
     "v2"
   );
 
-  assert.equal(normalized.selectedVersion.version, "v3");
-  assert.equal(normalized.comparedVersion.version, "v2");
-  assert.equal(normalized.changedFields.length, 2);
-  assert.equal(normalized.fieldChanges.length, 1);
-  assert.equal(normalized.fieldChanges[0].beforeSummary, "Old Clinic");
-  assert.equal(normalized.fieldChanges[0].afterSummary, "North Clinic");
-  assert.equal(normalized.sectionChanges.length, 1);
-  assert.equal(normalized.hasStructuredDiff, true);
+  expect(normalized.selectedVersion.version).toBe("v3");
+  expect(normalized.comparedVersion.version).toBe("v2");
+  expect(normalized.changedFields).toHaveLength(2);
+  expect(normalized.fieldChanges).toHaveLength(1);
+  expect(normalized.fieldChanges[0].beforeSummary).toBe("Old Clinic");
+  expect(normalized.fieldChanges[0].afterSummary).toBe("North Clinic");
+  expect(normalized.sectionChanges).toHaveLength(1);
+  expect(normalized.hasStructuredDiff).toBe(true);
 });
 
-test("approved truth unavailable snapshot refuses non-approved fallback data", () => {
+it("approved truth unavailable snapshot refuses non-approved fallback data", () => {
   const snapshot = __test__.buildApprovedTruthUnavailableSnapshot();
 
-  assert.equal(snapshot.hasTruth, false);
-  assert.equal(snapshot.approvedTruthUnavailable, true);
-  assert.equal(snapshot.unavailableReasonCode, "approved_truth_unavailable");
-  assert.match(
-    snapshot.notices[0],
-    /no non-approved fallback data is being shown/i
-  );
+  expect(snapshot.hasTruth).toBe(false);
+  expect(snapshot.approvedTruthUnavailable).toBe(true);
+  expect(snapshot.unavailableReasonCode).toBe("approved_truth_unavailable");
+  expect(snapshot.notices[0]).toMatch(/no non-approved fallback data is being shown/i);
+});
 });

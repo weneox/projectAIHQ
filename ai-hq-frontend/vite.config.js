@@ -7,6 +7,11 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: "./src/test/vitest.setup.js",
     css: true,
+    pool: "vmThreads",
+    fileParallelism: false,
+    maxWorkers: 1,
+    minWorkers: 1,
+    isolate: true,
   },
   build: {
     rollupOptions: {

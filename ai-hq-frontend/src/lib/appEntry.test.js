@@ -1,9 +1,9 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 
 import { resolveAuthenticatedLanding } from "./appEntry.js";
 
-test("routes incomplete workspaces into setup studio", () => {
+describe("resolveAuthenticatedLanding", () => {
+it("routes incomplete workspaces into setup studio", () => {
   const target = resolveAuthenticatedLanding({
     workspace: {
       progress: {
@@ -13,10 +13,10 @@ test("routes incomplete workspaces into setup studio", () => {
     },
   });
 
-  assert.equal(target, "/setup/studio");
+  expect(target).toBe("/setup/studio");
 });
 
-test("routes completed workspaces into backend-provided core route", () => {
+it("routes completed workspaces into backend-provided core route", () => {
   const target = resolveAuthenticatedLanding({
     workspace: {
       progress: {
@@ -26,10 +26,10 @@ test("routes completed workspaces into backend-provided core route", () => {
     },
   });
 
-  assert.equal(target, "/settings");
+  expect(target).toBe("/settings");
 });
 
-test("falls back to truth when completed workspace points at non-product root", () => {
+it("falls back to truth when completed workspace points at non-product root", () => {
   const target = resolveAuthenticatedLanding({
     workspace: {
       progress: {
@@ -39,5 +39,6 @@ test("falls back to truth when completed workspace points at non-product root", 
     },
   });
 
-  assert.equal(target, "/truth");
+  expect(target).toBe("/truth");
+});
 });

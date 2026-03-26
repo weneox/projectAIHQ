@@ -1,9 +1,9 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 
 import { __test__ } from "./trust.js";
 
-test("normalizeTrustViewResponse produces a stable trust view-model", () => {
+describe("trust api normalization", () => {
+it("normalizeTrustViewResponse produces a stable trust view-model", () => {
   const normalized = __test__.normalizeTrustViewResponse({
     tenantId: "tenant-1",
     tenantKey: "acme",
@@ -80,10 +80,11 @@ test("normalizeTrustViewResponse produces a stable trust view-model", () => {
     ],
   });
 
-  assert.equal(normalized.tenantKey, "acme");
-  assert.equal(normalized.summary.readiness.blocked, true);
-  assert.equal(normalized.summary.readiness.blockedItems[0].reasonCode, "runtime_projection_missing");
-  assert.equal(normalized.summary.sources.total, 2);
-  assert.equal(normalized.recentRuns[0].sourceDisplayName, "Main Website");
-  assert.equal(normalized.audit[0].action, "settings.source.sync.requested");
+  expect(normalized.tenantKey).toBe("acme");
+  expect(normalized.summary.readiness.blocked).toBe(true);
+  expect(normalized.summary.readiness.blockedItems[0].reasonCode).toBe("runtime_projection_missing");
+  expect(normalized.summary.sources.total).toBe(2);
+  expect(normalized.recentRuns[0].sourceDisplayName).toBe("Main Website");
+  expect(normalized.audit[0].action).toBe("settings.source.sync.requested");
+});
 });

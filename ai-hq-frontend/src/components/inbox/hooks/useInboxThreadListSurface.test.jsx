@@ -50,7 +50,7 @@ describe("useInboxThreadListSurface", () => {
 
     rerender({
       threads: [
-        { id: "thread-1", status: "open", handoff_active: false },
+        { id: "thread-1", status: "open", handoff_active: false, unread_count: 2 },
         { id: "thread-2", status: "resolved", handoff_active: false },
       ],
       requestedThreadId: "",
