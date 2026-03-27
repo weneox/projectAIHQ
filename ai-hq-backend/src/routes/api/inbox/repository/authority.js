@@ -66,6 +66,20 @@ function buildStrictRuntimeAuthorityError(error, tenantKey, extra = {}) {
   return source;
 }
 
+function buildFailClosedInboxBrainContext() {
+  return {
+    tenant: null,
+    services: [],
+    knowledgeEntries: [],
+    responsePlaybooks: [],
+    threadState: null,
+  };
+}
+
+function shouldThrowOnMissingTenantPayload(runtimeLoader) {
+  return runtimeLoader === getTenantBrainRuntime;
+}
+
 export async function getTenantByKey(
   db,
   tenantKey,
@@ -315,13 +329,23 @@ export async function getTenantInboxBrainContext(
   const tenant = runtime?.tenant || null;
 
   if (!tenant?.id) {
-    return {
-      tenant: null,
-      services: [],
-      knowledgeEntries: [],
-      responsePlaybooks: [],
-      threadState: null,
-    };
+    if (shouldThrowOnMissingTenantPayload(runtimeLoader)) {
+      throw buildStrictRuntimeAuthorityError(
+        {
+          code: "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE",
+          reasonCode: "runtime_authority_unavailable",
+          statusCode: 409,
+          message:
+            "Tenant runtime authority is unavailable because no authoritative tenant payload was returned.",
+        },
+        tenantKey,
+        {
+          consumer: "inbox_brain_context",
+        }
+      );
+    }
+
+    return buildFailClosedInboxBrainContext();
   }
 
   let threadState = null;
