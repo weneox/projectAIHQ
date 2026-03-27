@@ -29,38 +29,63 @@ function buildStrictRuntimeAuthorityError(error, tenantKey, extra = {}) {
       : new Error(s(error?.message || "Runtime authority is unavailable"));
 
   const resolvedTenantKey = resolveTenantKey(tenantKey);
+  const incoming = obj(error);
   const existing = obj(source.runtimeAuthority);
 
   const code = s(
-    existing.code || source.code || "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE"
+    existing.code ||
+      incoming.code ||
+      source.code ||
+      "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE"
   );
+
   const reasonCode = s(
     existing.reasonCode ||
+      incoming.reasonCode ||
       source.reasonCode ||
       lowerSlug(code) ||
       "runtime_authority_unavailable"
   );
-  const statusCode = Number(source.statusCode || existing.statusCode || 409);
-  const message = s(
-    existing.message || source.message || "Runtime authority is unavailable"
+
+  const statusCode = Number(
+    existing.statusCode || incoming.statusCode || source.statusCode || 409
   );
 
+  const message = s(
+    existing.message ||
+      incoming.message ||
+      source.message ||
+      "Runtime authority is unavailable"
+  );
+
+  source.name = s(source.name || "Error");
   source.code = code;
   source.statusCode = statusCode;
+
+  // important for fail-closed tests
   source.blocked = true;
+  source.failClosed = true;
+  source.strict = true;
   source.authorityMode = "strict";
+  source.runtimeAuthorityUnavailable = true;
   source.reasonCode = reasonCode;
   source.tenantKey = resolvedTenantKey;
+
   source.runtimeAuthority = {
     ...existing,
+    ...incoming.runtimeAuthority,
     ...obj(extra),
     blocked: true,
+    failClosed: true,
+    strict: true,
+    unavailable: true,
     authorityMode: "strict",
     tenantKey: resolvedTenantKey,
     code,
     reasonCode,
     statusCode,
     message,
+    status: "blocked",
   };
 
   return source;
@@ -162,7 +187,9 @@ export async function getTenantByKey(
       legal_name: s(normalized?.legal_name || row.legal_name),
       industry_key: s(normalized?.industry_key || row.industry_key),
       timezone: s(normalized?.timezone || row.timezone || "Asia/Baku"),
-      default_language: s(normalized?.default_language || row.default_language || "az"),
+      default_language: s(
+        normalized?.default_language || row.default_language || "az"
+      ),
       supported_languages: languages.supported_languages,
       enabled_languages: languages.enabled_languages,
       market_region: s(normalized?.market_region || row.market_region),
