@@ -1,7 +1,12 @@
-import { WebSocketServer } from "ws";
+import wsPkg from "ws";
 import { isOperatorRealtimeRole, verifyRealtimeTicket } from "./realtime/auth.js";
-import { buildRealtimeEnvelope, inferRealtimeAudience } from "@aihq/shared-contracts/realtime";
+import {
+  buildRealtimeEnvelope,
+  inferRealtimeAudience,
+} from "@aihq/shared-contracts/realtime";
 import { recordRealtimeAuthFailure } from "./observability/runtimeSignals.js";
+
+const { WebSocketServer } = wsPkg;
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -119,8 +124,12 @@ function canReceive(scope = {}, message = {}) {
   const messageTenantId = s(message.tenantId);
 
   const tenantMatch =
-    (scopeTenantKey && messageTenantKey && scopeTenantKey === messageTenantKey) ||
-    (scopeTenantId && messageTenantId && scopeTenantId === messageTenantId);
+    (scopeTenantKey &&
+      messageTenantKey &&
+      scopeTenantKey === messageTenantKey) ||
+    (scopeTenantId &&
+      messageTenantId &&
+      scopeTenantId === messageTenantId);
 
   if (!tenantMatch) return false;
 
@@ -194,17 +203,20 @@ export function createWsHub({ server, logger = null }) {
 
     ws.scope = verified.scope;
     ws.isAlive = true;
+
     ws.on("pong", () => {
       ws.isAlive = true;
     });
 
     clients.add(ws);
+
     logger?.info?.("realtime.connect.accepted", {
       tenantKey: ws.scope.tenantKey,
       tenantId: ws.scope.tenantId,
       userId: ws.scope.userId,
       role: ws.scope.role,
     });
+
     send(ws, {
       type: "hello",
       tenantKey: ws.scope.tenantKey,

@@ -1,5 +1,3 @@
-// ai-hq-backend/src/routes/api/inbox/repository/authority.js
-
 import { isDbReady, isUuid } from "../../../../utils/http.js";
 import {
   getDefaultTenantKey,
@@ -46,20 +44,27 @@ function buildStrictRuntimeAuthorityError(error, tenantKey, extra = {}) {
       "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE"
   );
 
-  const reasonCode = s(
+  const explicitReasonCode = s(
     existingAuthority.reasonCode ||
+      existingAuthority.reason_code ||
       incoming.reasonCode ||
       incoming.reason_code ||
       incomingDetails.reasonCode ||
       incomingDetails.reason_code ||
       source.reasonCode ||
-      source.reason_code ||
-      lowerSlug(code) ||
-      "runtime_authority_unavailable"
+      source.reason_code
   );
+
+  const fallbackReasonCode =
+    code === "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE"
+      ? "runtime_projection_missing"
+      : lowerSlug(code) || "runtime_authority_unavailable";
+
+  const reasonCode = s(explicitReasonCode || fallbackReasonCode);
 
   const statusCode = Number(
     existingAuthority.statusCode ||
+      existingAuthority.status_code ||
       incoming.statusCode ||
       incoming.status_code ||
       incomingDetails.statusCode ||
@@ -489,7 +494,7 @@ export async function getTenantInboxBrainContext(
       throw buildStrictRuntimeAuthorityError(
         {
           code: "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE",
-          reasonCode: "runtime_authority_unavailable",
+          reasonCode: "runtime_projection_missing",
           statusCode: 409,
           message:
             "Tenant runtime authority is unavailable because no authoritative tenant payload was returned.",
