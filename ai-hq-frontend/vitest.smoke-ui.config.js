@@ -31,7 +31,7 @@ export default mergeConfig(
       passWithNoTests: false,
       server: {
         deps: {
-          inline: ["react-router", "react-router-dom"],
+          inline: [/^react-router$/, /^react-router-dom$/, /^react-router\/.*/],
         },
       },
     },
