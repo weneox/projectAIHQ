@@ -8,7 +8,13 @@ import { buildVoiceConfigFromProjectedRuntime } from "../routes/api/voice/config
 import { upsertCallAndSession } from "../routes/api/voice/mutations.js";
 import { findTenantByKeyOrPhone } from "../routes/api/voice/repository.js";
 import { appendEventSafe } from "../routes/api/voice/utils.js";
-import { s, b, isObj, normalizePhone, normalizeTranscriptItem } from "../routes/api/voice/shared.js";
+import {
+  s,
+  b,
+  isObj,
+  normalizePhone,
+  normalizeTranscriptItem,
+} from "../routes/api/voice/shared.js";
 import {
   getTenantBrainRuntime,
   isRuntimeAuthorityError,
@@ -16,19 +22,279 @@ import {
 import { buildOperationalChannels } from "./operationalChannels.js";
 import { buildProjectedTenantRuntime } from "./projectedTenantRuntime.js";
 
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+
+function arr(v) {
+  return Array.isArray(v) ? v : [];
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    const normalized = s(value);
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+function pickBoolean(...values) {
+  for (const value of values) {
+    if (typeof value === "boolean") return value;
+  }
+  return false;
+}
+
+function pickArray(...values) {
+  for (const value of values) {
+    if (Array.isArray(value)) return value;
+  }
+  return [];
+}
+
+function normalizeRuntimeTenantRow({
+  tenant = null,
+  runtime = null,
+  tenantKey = "",
+  toNumber = "",
+} = {}) {
+  const tenantRow = obj(tenant);
+  const runtimeValue = obj(runtime);
+  const authority = obj(runtimeValue.authority);
+  const runtimeTenant =
+    obj(runtimeValue.tenant) ||
+    obj(runtimeValue.tenantRow) ||
+    obj(runtimeValue.tenantScope);
+  const runtimeProfile = obj(runtimeValue.profile);
+  const runtimeIdentity = obj(runtimeValue.identity);
+
+  const resolvedTenantId = firstNonEmpty(
+    tenantRow.id,
+    tenantRow.tenant_id,
+    runtimeTenant.id,
+    runtimeTenant.tenant_id,
+    authority.tenantId,
+    authority.tenant_id,
+    runtimeValue.tenantId,
+    runtimeValue.tenant_id
+  );
+
+  const resolvedTenantKey = firstNonEmpty(
+    tenantRow.tenant_key,
+    tenantRow.tenantKey,
+    runtimeTenant.tenant_key,
+    runtimeTenant.tenantKey,
+    authority.tenantKey,
+    authority.tenant_key,
+    runtimeValue.tenantKey,
+    runtimeValue.tenant_key,
+    tenantKey
+  );
+
+  return {
+    id: resolvedTenantId || null,
+    tenant_id: resolvedTenantId || null,
+    tenant_key: resolvedTenantKey,
+    tenantKey: resolvedTenantKey,
+    company_name: firstNonEmpty(
+      runtimeProfile.companyName,
+      runtimeIdentity.companyName,
+      runtimeTenant.company_name,
+      runtimeTenant.companyName,
+      tenantRow.company_name
+    ),
+    legal_name: firstNonEmpty(
+      runtimeProfile.legalName,
+      runtimeIdentity.legalName,
+      runtimeTenant.legal_name,
+      runtimeTenant.legalName,
+      tenantRow.legal_name
+    ),
+    industry_key: firstNonEmpty(
+      runtimeProfile.industryKey,
+      runtimeTenant.industry_key,
+      tenantRow.industry_key
+    ),
+    country_code: firstNonEmpty(
+      runtimeProfile.countryCode,
+      runtimeTenant.country_code,
+      tenantRow.country_code
+    ),
+    timezone: firstNonEmpty(
+      runtimeProfile.timezone,
+      runtimeTenant.timezone,
+      tenantRow.timezone
+    ),
+    default_language: firstNonEmpty(
+      runtimeProfile.defaultLanguage,
+      runtimeTenant.default_language,
+      tenantRow.default_language
+    ),
+    enabled_languages: pickArray(
+      runtimeProfile.enabledLanguages,
+      runtimeTenant.enabled_languages,
+      tenantRow.enabled_languages
+    ),
+    market_region: firstNonEmpty(
+      runtimeProfile.marketRegion,
+      runtimeTenant.market_region,
+      tenantRow.market_region
+    ),
+    plan_key: firstNonEmpty(
+      runtimeTenant.plan_key,
+      tenantRow.plan_key
+    ),
+    tenant_status: firstNonEmpty(
+      runtimeTenant.status,
+      runtimeTenant.tenant_status,
+      tenantRow.status,
+      tenantRow.tenant_status
+    ),
+    tenant_active: pickBoolean(
+      runtimeTenant.active,
+      runtimeTenant.tenant_active,
+      tenantRow.active,
+      tenantRow.tenant_active
+    ),
+    to_number: firstNonEmpty(toNumber, tenantRow.to_number),
+  };
+}
+
+async function resolveVoiceTenantContext({
+  db,
+  tenantKey,
+  toNumber,
+  getRuntime = getTenantBrainRuntime,
+}) {
+  const normalizedTenantKey = s(tenantKey);
+  const normalizedToNumber = s(toNumber);
+
+  let tenant = null;
+  let runtime = null;
+  let runtimeAuthorityError = null;
+
+  if (normalizedTenantKey) {
+    try {
+      runtime = await getRuntime({
+        db,
+        tenantKey: normalizedTenantKey,
+        authorityMode: "strict",
+      });
+    } catch (error) {
+      if (isRuntimeAuthorityError(error)) {
+        runtimeAuthorityError = error;
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  if (!runtime || !s(normalizedRuntimeTenantKey(runtime))) {
+    const resolvedTenant = await findTenantByKeyOrPhone(db, {
+      tenantKey: normalizedTenantKey,
+      toNumber: normalizedToNumber,
+      normalizePhone,
+    });
+
+    if (resolvedTenant) {
+      tenant = resolvedTenant;
+    }
+  }
+
+  if (!runtime && tenant) {
+    try {
+      runtime = await getRuntime({
+        db,
+        tenantId: tenant.id,
+        tenantKey: tenant.tenant_key,
+        authorityMode: "strict",
+      });
+      runtimeAuthorityError = null;
+    } catch (error) {
+      if (isRuntimeAuthorityError(error)) {
+        runtimeAuthorityError = error;
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  const normalizedTenant = normalizeRuntimeTenantRow({
+    tenant,
+    runtime,
+    tenantKey: normalizedTenantKey,
+    toNumber: normalizedToNumber,
+  });
+
+  return {
+    tenant: normalizedTenant,
+    runtime,
+    runtimeAuthorityError,
+  };
+}
+
+function normalizedRuntimeTenantKey(runtime = null) {
+  const value = obj(runtime);
+  const authority = obj(value.authority);
+  const tenant = obj(value.tenant);
+
+  return firstNonEmpty(
+    authority.tenantKey,
+    authority.tenant_key,
+    value.tenantKey,
+    value.tenant_key,
+    tenant.tenant_key,
+    tenant.tenantKey
+  );
+}
+
+function buildVoiceAuthorityDetails(error = null, runtime = null) {
+  const runtimeValue = obj(runtime);
+  const authority = obj(runtimeValue.authority);
+  const runtimeAuthority = obj(error?.runtimeAuthority);
+
+  const reasonCode = firstNonEmpty(
+    runtimeAuthority.reasonCode,
+    runtimeAuthority.reason_code,
+    authority.reasonCode,
+    authority.reason_code,
+    error?.code,
+    "runtime_authority_unavailable"
+  );
+
+  return {
+    unavailable: true,
+    strict: true,
+    reasonCode,
+    reason_code: reasonCode,
+    authority: {
+      ...authority,
+      strict: authority.strict === true || true,
+      unavailable: true,
+      reasonCode,
+      reason_code: reasonCode,
+    },
+  };
+}
+
 export async function processVoiceTenantConfig({
   db,
   tenantKey,
   toNumber,
   getRuntime = getTenantBrainRuntime,
 }) {
-  const tenant = await findTenantByKeyOrPhone(db, {
+  const context = await resolveVoiceTenantContext({
+    db,
     tenantKey,
     toNumber,
-    normalizePhone,
+    getRuntime,
   });
 
-  if (!tenant) {
+  const tenant = obj(context.tenant);
+  const runtime = context.runtime;
+  const runtimeAuthorityError = context.runtimeAuthorityError;
+
+  if (!s(tenant.id) && !s(tenant.tenant_key)) {
     return {
       ok: false,
       statusCode: 404,
@@ -38,25 +304,26 @@ export async function processVoiceTenantConfig({
     };
   }
 
-  let runtime = null;
-  try {
-    runtime = await getRuntime({
-      db,
-      tenantId: tenant.id,
-      tenantKey: tenant.tenant_key,
-      authorityMode: "strict",
-    });
-  } catch (error) {
-    if (isRuntimeAuthorityError(error)) {
+  if (!runtime) {
+    if (runtimeAuthorityError && isRuntimeAuthorityError(runtimeAuthorityError)) {
       return {
         ok: false,
-        statusCode: Number(error?.statusCode || 409),
+        statusCode: Number(runtimeAuthorityError?.statusCode || 409),
         error: "runtime_authority_unavailable",
-        tenantKey: s(tenant?.tenant_key || tenantKey),
+        tenantKey: s(tenant.tenant_key || tenantKey),
         toNumber,
+        details: buildVoiceAuthorityDetails(runtimeAuthorityError, runtime),
       };
     }
-    throw error;
+
+    return {
+      ok: false,
+      statusCode: 409,
+      error: "runtime_authority_unavailable",
+      tenantKey: s(tenant.tenant_key || tenantKey),
+      toNumber,
+      details: buildVoiceAuthorityDetails(null, runtime),
+    };
   }
 
   const operationalChannels = await buildOperationalChannels({
@@ -79,25 +346,37 @@ export async function processVoiceTenantConfig({
       tenantKey: s(tenant?.tenant_key || tenantKey),
       toNumber,
       details: {
-        authority: projectedRuntime?.authority || runtime?.authority || null,
+        unavailable: true,
+        strict: true,
+        authority: obj(projectedRuntime?.authority || runtime?.authority),
         operationalChannels,
         reasonCode: s(
+          operationalChannels?.voice?.reasonCode || "voice_settings_missing"
+        ),
+        reason_code: s(
           operationalChannels?.voice?.reasonCode || "voice_settings_missing"
         ),
       },
     };
   }
 
+  const payload = {
+    ...buildVoiceConfigFromProjectedRuntime(projectedRuntime, {
+      tenantKey: s(tenant?.tenant_key || tenantKey),
+      toNumber,
+    }),
+    operationalChannels,
+    authority: {
+      ...obj(projectedRuntime?.authority || runtime?.authority),
+      strict: true,
+      unavailable: false,
+    },
+  };
+
   return {
     ok: true,
     statusCode: 200,
-    payload: {
-      ...buildVoiceConfigFromProjectedRuntime(projectedRuntime, {
-        tenantKey,
-        toNumber,
-      }),
-      operationalChannels,
-    },
+    payload,
   };
 }
 
