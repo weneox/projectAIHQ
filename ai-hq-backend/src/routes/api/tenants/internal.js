@@ -46,6 +46,10 @@ function arr(v) {
   return Array.isArray(v) ? v : [];
 }
 
+function uniqStrings(values = []) {
+  return [...new Set(arr(values).map((x) => s(x)).filter(Boolean))];
+}
+
 function ok(res, data = {}) {
   return res.status(200).json({ ok: true, ...data });
 }
@@ -56,6 +60,181 @@ function bad(res, error, extra = {}) {
 
 function serverErr(res, error, extra = {}) {
   return res.status(500).json({ ok: false, error, ...extra });
+}
+
+function createSafeLogger(baseLogger, childContext = null) {
+  const root = baseLogger && typeof baseLogger === "object" ? baseLogger : null;
+
+  let active = root;
+  if (childContext && root && typeof root.child === "function") {
+    try {
+      active = root.child(childContext) || root;
+    } catch {
+      active = root;
+    }
+  }
+
+  function call(method, ...args) {
+    try {
+      const fn =
+        (active && typeof active[method] === "function" && active[method]) ||
+        (root && typeof root[method] === "function" && root[method]) ||
+        null;
+      if (fn) {
+        return fn.apply(active || root, args);
+      }
+    } catch {
+      // noop
+    }
+    return undefined;
+  }
+
+  return {
+    child(context = {}) {
+      return createSafeLogger(active || root, context);
+    },
+    info(...args) {
+      return call("info", ...args);
+    },
+    warn(...args) {
+      return call("warn", ...args);
+    },
+    error(...args) {
+      return call("error", ...args);
+    },
+    debug(...args) {
+      return call("debug", ...args);
+    },
+  };
+}
+
+function inferMatchedMetaIds(matchedChannel = {}, fallback = {}) {
+  const channel = obj(matchedChannel);
+  const extra = obj(fallback);
+
+  const pageId = cleanNullableString(
+    channel.external_page_id ||
+      channel.pageId ||
+      channel.page_id ||
+      extra.external_page_id ||
+      extra.pageId ||
+      extra.page_id
+  );
+
+  const igUserId = cleanNullableString(
+    channel.external_user_id ||
+      channel.igUserId ||
+      channel.ig_user_id ||
+      channel.instagram_business_account_id ||
+      extra.external_user_id ||
+      extra.igUserId ||
+      extra.ig_user_id ||
+      extra.instagram_business_account_id
+  );
+
+  return { pageId, igUserId };
+}
+
+function normalizeOperationalChannels({
+  operationalChannels = {},
+  matchedChannel = {},
+  fallback = {},
+} = {}) {
+  const base = obj(operationalChannels);
+  const meta = obj(base.meta);
+  const inferred = inferMatchedMetaIds(matchedChannel, fallback);
+
+  const pageId = cleanNullableString(
+    meta.pageId || meta.page_id || inferred.pageId
+  );
+  const igUserId = cleanNullableString(
+    meta.igUserId ||
+      meta.ig_user_id ||
+      meta.instagram_business_account_id ||
+      inferred.igUserId
+  );
+
+  const inferredReady =
+    meta.ready === true || Boolean(pageId || igUserId);
+
+  const reasonCode = inferredReady
+    ? cleanNullableString(meta.reasonCode || meta.reason_code)
+    : s(meta.reasonCode || meta.reason_code || "channel_identifiers_missing");
+
+  return {
+    ...base,
+    meta: {
+      ...meta,
+      pageId,
+      page_id: pageId,
+      igUserId,
+      ig_user_id: igUserId,
+      instagram_business_account_id: igUserId,
+      ready: inferredReady,
+      reasonCode,
+      reason_code: reasonCode,
+    },
+  };
+}
+
+function normalizeProviderAccess(providerAccess = {}, matchedChannel = {}) {
+  const source = obj(providerAccess);
+  const matched = obj(matchedChannel);
+
+  const pageAccessToken = cleanNullableString(
+    source.pageAccessToken ||
+      source.page_access_token ||
+      source.accessToken ||
+      source.access_token
+  );
+
+  const explicitAvailable =
+    typeof source.available === "boolean" ? source.available : null;
+
+  const secretKeys = uniqStrings([
+    ...arr(source.secretKeys),
+    ...arr(source.secret_keys),
+    ...(pageAccessToken ? ["page_access_token"] : []),
+  ]);
+
+  const available =
+    explicitAvailable !== null ? explicitAvailable : Boolean(pageAccessToken);
+
+  const reasonCode = available
+    ? cleanNullableString(source.reasonCode || source.reason_code)
+    : s(
+        source.reasonCode ||
+          source.reason_code ||
+          (secretKeys.length ? "provider_access_incomplete" : "provider_secret_missing")
+      );
+
+  const inferredIds = inferMatchedMetaIds(matched);
+
+  return {
+    ...source,
+    provider: s(source.provider || matched.provider || "meta"),
+    pageAccessToken,
+    page_access_token: pageAccessToken,
+    secretKeys,
+    secret_keys: secretKeys,
+    available,
+    reasonCode,
+    reason_code: reasonCode,
+    pageId: cleanNullableString(source.pageId || source.page_id || inferredIds.pageId),
+    page_id: cleanNullableString(source.pageId || source.page_id || inferredIds.pageId),
+    igUserId: cleanNullableString(
+      source.igUserId ||
+        source.ig_user_id ||
+        source.instagram_business_account_id ||
+        inferredIds.igUserId
+    ),
+    ig_user_id: cleanNullableString(
+      source.igUserId ||
+        source.ig_user_id ||
+        source.instagram_business_account_id ||
+        inferredIds.igUserId
+    ),
+  };
 }
 
 function buildMetaRuntimeReadiness({
@@ -78,7 +257,8 @@ function buildMetaRuntimeReadiness({
             : "",
         ].filter(Boolean),
         title: "Meta operational blocker",
-        subtitle: "Strict runtime delivery is blocked until the persisted Meta operational identifiers are complete.",
+        subtitle:
+          "Strict runtime delivery is blocked until the persisted Meta operational identifiers are complete.",
         action: {
           id: "repair_channel_identifiers",
           kind: "focus",
@@ -103,7 +283,8 @@ function buildMetaRuntimeReadiness({
           ? arr(access.secretKeys)
           : ["provider_access"],
         title: "Provider access blocker",
-        subtitle: "Internal provider access remains unavailable until the required secret-backed Meta access is repaired.",
+        subtitle:
+          "Internal provider access remains unavailable until the required secret-backed Meta access is repaired.",
         action: {
           id: "open_provider_secrets",
           kind: "admin_route",
@@ -131,6 +312,8 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
   const router = express.Router();
 
   router.get("/tenants/resolve-channel", requireInternalToken, async (req, res) => {
+    const log = createSafeLogger(req.log);
+
     try {
       if (!db?.query) {
         return res.status(500).json({
@@ -148,14 +331,15 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
       const recipientId = cleanNullableString(checked.value.recipientId);
       const pageId = cleanNullableString(checked.value.pageId);
       const igUserId = cleanNullableString(checked.value.igUserId);
-      const flowLogger = req.log?.child?.({
+      const flowLogger = log.child({
         flow: "resolve_channel",
         channel,
         recipientId,
         pageId,
         igUserId,
       });
-      flowLogger?.info("internal.resolve_channel.requested", {
+
+      flowLogger.info("internal.resolve_channel.requested", {
         channel,
         recipientId,
         pageId,
@@ -171,7 +355,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         igUserId,
       });
 
-      flowLogger?.info("internal.resolve_channel.lookup_completed", {
+      flowLogger.info("internal.resolve_channel.lookup_completed", {
         tookMs: Date.now() - startedAt,
         found: Boolean(match?.tenant_id),
       });
@@ -187,7 +371,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         });
       }
 
-      flowLogger?.info("internal.resolve_channel.matched", {
+      flowLogger.info("internal.resolve_channel.matched", {
         tenantKey: match.tenant_key,
         tenantId: match.tenant_id,
         channelType: match.channel_type,
@@ -222,7 +406,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         });
       } catch (error) {
         if (isRuntimeAuthorityError(error)) {
-          flowLogger?.warn("internal.resolve_channel.runtime_authority_blocked", {
+          flowLogger.warn("internal.resolve_channel.runtime_authority_blocked", {
             tenantKey: match.tenant_key,
             tenantId: match.tenant_id,
             reasonCode: s(
@@ -255,7 +439,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         },
       });
 
-      flowLogger?.info("internal.resolve_channel.provider_secrets_resolved", {
+      flowLogger.info("internal.resolve_channel.provider_secrets_resolved", {
         tenantKey: match.tenant_key,
         provider: providerKey,
         secretKeys: secretSummary.secretKeys,
@@ -264,7 +448,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         ),
       });
 
-      flowLogger?.info("internal.resolve_channel.completed", {
+      flowLogger.info("internal.resolve_channel.completed", {
         tenantKey: match.tenant_key,
         tenantId: match.tenant_id,
         runtimeProjectionId: s(projectedRuntime?.authority?.runtimeProjectionId),
@@ -328,7 +512,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         }),
       });
     } catch (err) {
-      req.log?.error("internal.resolve_channel.failed", err);
+      log.error("internal.resolve_channel.failed", err);
 
       return serverErr(res, err?.message || "Failed to resolve tenant channel");
     }
@@ -338,6 +522,8 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
     "/internal/providers/meta-channel-access",
     requireInternalToken,
     async (req, res) => {
+      const log = createSafeLogger(req.log);
+
       try {
         if (!db?.query) {
           return res.status(500).json({
@@ -365,6 +551,13 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
           });
         }
 
+        const matchedChannel = obj(resolved.matchedChannel);
+        const flowLogger = log.child({
+          flow: "meta_channel_access",
+          tenantId: resolved.tenantId,
+          tenantKey: resolved.tenantKey,
+        });
+
         let runtime = null;
         try {
           runtime = await getRuntime({
@@ -372,11 +565,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
             tenantId: resolved.tenantId,
             tenantKey: resolved.tenantKey,
             authorityMode: "strict",
-            logger: req.log?.child?.({
-              flow: "meta_channel_access",
-              tenantId: resolved.tenantId,
-              tenantKey: resolved.tenantKey,
-            }),
+            logger: flowLogger,
           });
         } catch (error) {
           if (isRuntimeAuthorityError(error)) {
@@ -389,31 +578,36 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
           throw error;
         }
 
-        const operationalChannels = await buildOperationalChannels({
-          db,
-          tenantId: resolved.tenantId,
-          matchedChannel: resolved.matchedChannel,
+        const builtOperationalChannels =
+          resolved.operationalChannels ||
+          (await buildOperationalChannels({
+            db,
+            tenantId: resolved.tenantId,
+            matchedChannel,
+          }));
+
+        const operationalChannels = normalizeOperationalChannels({
+          operationalChannels: builtOperationalChannels,
+          matchedChannel,
+          fallback: checked.value,
         });
 
-        const projectedRuntime = buildProjectedTenantRuntime({
-          runtime,
-          matchedChannel: resolved.matchedChannel,
-          operationalChannels,
-        });
-
-        const providerAccess = {
-          ...obj(resolved.providerAccess),
-          authority: obj(runtime.authority),
-        };
+        const providerAccess = normalizeProviderAccess(
+          resolved.providerAccess || resolved.provider_access,
+          matchedChannel
+        );
 
         const readiness = buildMetaRuntimeReadiness({
           operationalChannels,
-          providerAccess,
+          providerAccess: {
+            ...providerAccess,
+            authority: obj(runtime?.authority),
+          },
           includeProviderAccess: true,
         });
 
         if (operationalChannels?.meta?.ready !== true) {
-          req.log?.warn("internal.meta_channel_access.operational_unavailable", {
+          flowLogger.warn("internal.meta_channel_access.operational_unavailable", {
             tenantKey: resolved.tenantKey,
             tenantId: resolved.tenantId,
             reasonCode: s(
@@ -429,11 +623,12 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
               operationalChannels?.meta?.reasonCode || "channel_identifiers_missing"
             ),
             readiness,
+            operationalChannels,
           });
         }
 
-        if (!providerAccess.available) {
-          req.log?.warn("internal.meta_channel_access.provider_unavailable", {
+        if (providerAccess.available !== true) {
+          flowLogger.warn("internal.meta_channel_access.provider_unavailable", {
             tenantKey: resolved.tenantKey,
             tenantId: resolved.tenantId,
             reasonCode: s(providerAccess.reasonCode || "provider_access_incomplete"),
@@ -445,19 +640,30 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
             tenantId: resolved.tenantId,
             reasonCode: s(providerAccess.reasonCode || "provider_access_incomplete"),
             readiness,
+            operationalChannels,
+            providerAccess,
           });
         }
+
+        const projectedRuntime = buildProjectedTenantRuntime({
+          runtime,
+          matchedChannel,
+          operationalChannels,
+        });
 
         return ok(res, {
           tenantKey: resolved.tenantKey,
           tenantId: resolved.tenantId,
           projectedRuntime,
           operationalChannels,
-          providerAccess,
+          providerAccess: {
+            ...providerAccess,
+            authority: obj(runtime?.authority),
+          },
           readiness,
         });
       } catch (err) {
-        req.log?.error("internal.meta_channel_access.failed", err);
+        log.error("internal.meta_channel_access.failed", err);
 
         return serverErr(
           res,
