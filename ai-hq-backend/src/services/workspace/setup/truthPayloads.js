@@ -11,10 +11,45 @@ import {
 } from "../../operationalReadiness.js";
 import { arr, obj, s } from "./utils.js";
 
+function pickVersionDiff(version = {}) {
+  const value = obj(version);
+
+  return (
+    value.diff ||
+    value.compare ||
+    value.diffSummary ||
+    value.diff_summary ||
+    value.diff_json ||
+    value.compare_json ||
+    value.comparison ||
+    value.comparison_json ||
+    obj(value.metadata_json).diff ||
+    obj(value.metadata_json).compare ||
+    null
+  );
+}
+
 function normalizeTruthHistoryEntries(versions = []) {
   return arr(versions)
-    .map((version) => buildTruthVersionHistoryEntry(version))
-    .filter((item) => item && Object.keys(item).length);
+    .map((version) => {
+      const entry = buildTruthVersionHistoryEntry(version, pickVersionDiff(version));
+      return obj(entry);
+    })
+    .filter((item) => Object.keys(item).length)
+    .map((item) => {
+      const compare = obj(
+        item.compare ||
+          item.diff ||
+          item.diffSummary ||
+          item.diff_summary ||
+          null
+      );
+
+      return {
+        ...item,
+        compare: Object.keys(compare).length ? compare : null,
+      };
+    });
 }
 
 function hasApprovedTruthState(profile = {}, versions = []) {
@@ -28,6 +63,20 @@ function hasApprovedTruthState(profile = {}, versions = []) {
   if (arr(versions).length > 0) return true;
 
   return false;
+}
+
+function normalizeTruthBlocker(blocker = {}, reasonCode = "") {
+  const value = obj(blocker);
+  const normalizedReasonCode =
+    s(value.reasonCode) ||
+    s(value.reason_code) ||
+    s(reasonCode);
+
+  return {
+    ...value,
+    reasonCode: normalizedReasonCode,
+    reason_code: normalizedReasonCode,
+  };
 }
 
 export async function loadSetupTruthPayload({ db, actor }, deps = {}) {
@@ -68,35 +117,39 @@ export async function loadSetupTruthPayload({ db, actor }, deps = {}) {
   );
 
   const truthBlocked = !hasApprovedTruth;
+  const blockerReasonCode = truthBlocked ? "approved_truth_unavailable" : "";
 
-  const truthBlocker = buildOperationalRepairGuidance({
-    reasonCode: truthBlocked ? "approved_truth_unavailable" : "",
-    viewerRole: s(actor?.role || "operator"),
-    missingFields: truthBlocked
-      ? [
-          s(setup?.progress?.primaryMissingStep || "approved_truth"),
-          nextRoute ? `route:${nextRoute}` : "",
-        ].filter(Boolean)
-      : [],
-    title: "Approved truth unavailable",
-    subtitle:
-      "Approved truth is unavailable and non-approved fallback data is intentionally hidden.",
-    action: truthBlocked
-      ? {
-          id: "open_setup_route",
-          kind: "route",
-          label: "Open next setup step",
-          requiredRole: "operator",
-        }
-      : null,
-    target: truthBlocked
-      ? {
-          path: nextRoute,
-          section: "truth",
-          setupStep: s(setup?.progress?.primaryMissingStep),
-        }
-      : null,
-  });
+  const truthBlocker = normalizeTruthBlocker(
+    buildOperationalRepairGuidance({
+      reasonCode: blockerReasonCode,
+      viewerRole: s(actor?.role || "operator"),
+      missingFields: truthBlocked
+        ? [
+            s(setup?.progress?.primaryMissingStep || "approved_truth"),
+            nextRoute ? `route:${nextRoute}` : "",
+          ].filter(Boolean)
+        : [],
+      title: "Approved truth unavailable",
+      subtitle:
+        "Approved truth is unavailable and non-approved fallback data is intentionally hidden.",
+      action: truthBlocked
+        ? {
+            id: "open_setup_route",
+            kind: "route",
+            label: "Open next setup step",
+            requiredRole: "operator",
+          }
+        : null,
+      target: truthBlocked
+        ? {
+            path: nextRoute,
+            section: "truth",
+            setupStep: s(setup?.progress?.primaryMissingStep),
+          }
+        : null,
+    }),
+    blockerReasonCode
+  );
 
   return {
     truth: {
