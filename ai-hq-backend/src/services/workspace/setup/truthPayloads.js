@@ -182,12 +182,30 @@ function buildTruthHistoryEntries(versions = [], truthVersionHelper = null) {
     .filter((item) => Object.keys(obj(item)).length > 0);
 }
 
-function hasUsableApprovedTruth(profile = {}) {
-  const truthProfile = buildCanonicalTruthProfile(profile);
+function hasApprovedVersionHistory(versions = []) {
+  return arr(versions).some((version) => {
+    const row = obj(version);
+    const status = s(
+      row.profileStatus || row.profile_status || row.status
+    ).toLowerCase();
 
-  if (Object.keys(truthProfile).length > 0) return true;
+    return (
+      !!s(row.approvedAt || row.approved_at) ||
+      !!s(row.approvedBy || row.approved_by) ||
+      status === "approved"
+    );
+  });
+}
+
+function hasUsableApprovedTruth(profile = {}, versions = []) {
+  const profileStatus = s(
+    profile?.profileStatus || profile?.profile_status || profile?.status
+  ).toLowerCase();
+
   if (s(profile?.approved_at)) return true;
   if (s(profile?.approved_by)) return true;
+  if (profileStatus === "approved") return true;
+  if (hasApprovedVersionHistory(versions)) return true;
 
   return false;
 }
@@ -220,7 +238,7 @@ export async function loadSetupTruthPayload({ db, actor }, deps = {}) {
   ]);
 
   const truthProfile = buildCanonicalTruthProfile(profile);
-  const approvedTruthAvailable = hasUsableApprovedTruth(profile);
+  const approvedTruthAvailable = hasUsableApprovedTruth(profile, versions);
 
   const nextRoute = s(
     setup?.progress?.nextRoute ||
