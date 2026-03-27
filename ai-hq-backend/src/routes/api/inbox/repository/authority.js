@@ -32,46 +32,67 @@ function buildStrictRuntimeAuthorityError(error, tenantKey, extra = {}) {
       : new Error(s(error?.message || "Runtime authority is unavailable"));
 
   const incoming = obj(error);
-  const existing = obj(source.runtimeAuthority);
+  const existingAuthority = obj(source.runtimeAuthority);
+  const existingDetails = obj(source.details);
+  const incomingDetails = obj(incoming.details);
   const extraObj = obj(extra);
   const resolvedTenantKey = resolveTenantKey(tenantKey);
 
   const code = s(
-    existing.code ||
+    existingAuthority.code ||
       incoming.code ||
+      incomingDetails.code ||
       source.code ||
       "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE"
   );
 
   const reasonCode = s(
-    existing.reasonCode ||
+    existingAuthority.reasonCode ||
       incoming.reasonCode ||
+      incoming.reason_code ||
+      incomingDetails.reasonCode ||
+      incomingDetails.reason_code ||
       source.reasonCode ||
+      source.reason_code ||
       lowerSlug(code) ||
       "runtime_authority_unavailable"
   );
 
   const statusCode = Number(
-    existing.statusCode || incoming.statusCode || source.statusCode || 409
+    existingAuthority.statusCode ||
+      incoming.statusCode ||
+      incoming.status_code ||
+      incomingDetails.statusCode ||
+      incomingDetails.status_code ||
+      source.statusCode ||
+      source.status_code ||
+      409
   );
 
   const message = s(
-    existing.message ||
+    existingAuthority.message ||
       incoming.message ||
+      incomingDetails.message ||
       source.message ||
       "Runtime authority is unavailable"
   );
 
   const authorityPayload = {
-    ...existing,
+    ...existingAuthority,
     ...obj(incoming.runtimeAuthority),
+    ...obj(incoming.authority),
+    ...obj(existingDetails.authority),
+    ...obj(incomingDetails.authority),
     ...extraObj,
+
+    required: true,
     blocked: true,
     failClosed: true,
     fail_closed: true,
     strict: true,
     strictMode: true,
     strict_mode: true,
+    mode: "strict",
     unavailable: true,
     available: false,
     authorityMode: "strict",
@@ -102,6 +123,39 @@ function buildStrictRuntimeAuthorityError(error, tenantKey, extra = {}) {
     is_strict: true,
     resolved: false,
     authoritative: false,
+  };
+
+  const detailsPayload = {
+    ...existingDetails,
+    ...incomingDetails,
+    ...extraObj,
+
+    code,
+    reasonCode,
+    reason_code: reasonCode,
+    statusCode,
+    status_code: statusCode,
+    message,
+    tenantKey: resolvedTenantKey,
+    tenant_key: resolvedTenantKey,
+
+    blocked: true,
+    failClosed: true,
+    fail_closed: true,
+    strict: true,
+    strictMode: true,
+    strict_mode: true,
+    unavailable: true,
+    available: false,
+    authorityMode: "strict",
+    authority_mode: "strict",
+    ok: false,
+    retryable: false,
+    resolved: false,
+    authoritative: false,
+
+    authority: authorityPayload,
+    runtimeAuthority: authorityPayload,
   };
 
   source.name = s(source.name || "Error");
@@ -145,7 +199,9 @@ function buildStrictRuntimeAuthorityError(error, tenantKey, extra = {}) {
   source.isStrict = true;
   source.is_strict = true;
 
+  source.authority = authorityPayload;
   source.runtimeAuthority = authorityPayload;
+  source.details = detailsPayload;
 
   return source;
 }
