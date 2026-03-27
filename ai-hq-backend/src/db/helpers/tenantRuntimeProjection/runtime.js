@@ -10,6 +10,7 @@ import {
 } from "./shared.js";
 import { resolveTenant, loadTenantCanonicalGraph } from "./graph.js";
 import { buildTenantRuntimeProjection } from "./projection.js";
+import { buildRuntimeProjectionHealthModel } from "./health.js";
 
 function normalizeProjectionSources(input = {}) {
   return {
@@ -626,6 +627,111 @@ export async function getLatestTenantRuntimeProjectionRun(
   return row ? normalizeProjectionRunRow(row) : null;
 }
 
+export async function getLatestTenantRuntimeProjectionRunByStatus(
+  { tenantId = "", tenantKey = "", statuses = [] } = {},
+  dbOrClient = db
+) {
+  const client = pickDb(dbOrClient);
+  const tenant = await resolveTenant(client, { tenantId, tenantKey });
+  if (!tenant) return null;
+
+  const safeStatuses = arr(statuses).map((item) => s(item)).filter(Boolean);
+  if (!safeStatuses.length) {
+    return getLatestTenantRuntimeProjectionRun({ tenantId, tenantKey }, client);
+  }
+
+  const row = await one(
+    client,
+    `
+    select *
+    from tenant_business_runtime_projection_runs
+    where tenant_id = $1
+      and status = any($2::text[])
+    order by started_at desc, created_at desc
+    limit 1
+    `,
+    [tenant.id, safeStatuses]
+  );
+
+  return row ? normalizeProjectionRunRow(row) : null;
+}
+
+export async function getTenantRuntimeProjectionHealth(
+  {
+    tenantId = "",
+    tenantKey = "",
+    runtimeProjection = null,
+    freshness = null,
+    latestTruthVersion = null,
+    activeReviewSession = null,
+    authority = null,
+    markStale = true,
+  } = {},
+  dbOrClient = db
+) {
+  const client = pickDb(dbOrClient);
+  const tenant = await resolveTenant(client, { tenantId, tenantKey });
+  if (!tenant) {
+    return buildRuntimeProjectionHealthModel({
+      runtimeProjection: null,
+      freshness: {
+        stale: true,
+        reasons: ["runtime_projection_missing"],
+        tenantId,
+        tenantKey,
+      },
+      latestTruthVersion,
+      activeReviewSession,
+      authority,
+    });
+  }
+
+  const current =
+    runtimeProjection ||
+    (await getCurrentTenantRuntimeProjection(
+      { tenantId: tenant.id, tenantKey: tenant.tenant_key },
+      client
+    ));
+
+  const resolvedFreshness =
+    freshness ||
+    (await getTenantRuntimeProjectionFreshness(
+      {
+        tenantId: tenant.id,
+        tenantKey: tenant.tenant_key,
+        runtimeProjection: current,
+        markStale,
+      },
+      client
+    ));
+
+  const [latestRun, latestSuccessRun, latestFailureRun] = await Promise.all([
+    getLatestTenantRuntimeProjectionRun(
+      { tenantId: tenant.id, tenantKey: tenant.tenant_key },
+      client
+    ),
+    getLatestTenantRuntimeProjectionRunByStatus(
+      { tenantId: tenant.id, tenantKey: tenant.tenant_key, statuses: ["success"] },
+      client
+    ),
+    getLatestTenantRuntimeProjectionRunByStatus(
+      { tenantId: tenant.id, tenantKey: tenant.tenant_key, statuses: ["failed", "error"] },
+      client
+    ),
+  ]);
+
+  return buildRuntimeProjectionHealthModel({
+    runtimeProjection: current,
+    freshness: resolvedFreshness,
+    latestRun,
+    latestSuccessRun,
+    latestFailureRun,
+    latestTruthVersion,
+    activeReviewSession,
+    authority,
+  });
+}
+
 export async function getTenantRuntimeProjectionFreshness(
   {
     tenantId = "",
@@ -669,7 +775,21 @@ export async function getTenantRuntimeProjectionFreshness(
     });
   }
 
-  return freshness;
+  const health = await getTenantRuntimeProjectionHealth(
+    {
+      tenantId: tenant.id,
+      tenantKey: tenant.tenant_key,
+      runtimeProjection: current,
+      freshness,
+      markStale: false,
+    },
+    client
+  );
+
+  return {
+    ...freshness,
+    health,
+  };
 }
 
 export async function ensureTenantRuntimeProjectionFresh(
@@ -858,9 +978,11 @@ export async function refreshTenantRuntimeProjection(
         graph.synthesis?.id || null,
         JSON.stringify({
           runtimeStatus: s(saved.status),
+          projectionHash: s(saved.projection_hash),
           readinessLabel: s(saved.readiness_label),
           readinessScore: num(saved.readiness_score, 0),
           confidence: num(saved.confidence, 0),
+          confidenceLabel: s(saved.confidence_label),
           serviceCount: arr(saved.services_json).length,
           faqCount: arr(saved.faq_json).length,
           channelCount: arr(saved.channels_json).length,
@@ -937,5 +1059,6 @@ export async function refreshTenantRuntimeProjectionStrict(
   return {
     ...result,
     freshness,
+    health: freshness?.health || null,
   };
 }

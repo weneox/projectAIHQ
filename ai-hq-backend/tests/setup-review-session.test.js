@@ -1109,6 +1109,29 @@ test("Case Y: canonical truth helpers expose approved truth fields, provenance, 
     authorityRank: 300,
   });
 
+  const enrichedProvenance = setupTest.buildCanonicalTruthFieldProvenance({
+    profile_json: {
+      fieldSources: {
+        companyName: {
+          sourceType: "website",
+          sourceUrl: "https://alpha.example",
+          authorityRank: 300,
+          trustTier: "official_website",
+          trustScore: 0.9,
+          freshnessBucket: "fresh",
+          conflictClassification: "stronger_source_wins",
+        },
+      },
+    },
+  });
+
+  assert.equal(enrichedProvenance.companyName.trustTier, "official_website");
+  assert.equal(enrichedProvenance.companyName.freshnessBucket, "fresh");
+  assert.equal(
+    enrichedProvenance.companyName.conflictClassification,
+    "stronger_source_wins"
+  );
+
   const history = setupTest.buildTruthVersionHistoryEntry({
     id: "version-1",
     approved_at: "2026-03-25T01:00:00.000Z",
@@ -1225,6 +1248,8 @@ test("Case Z: finalize projection writes a truth version snapshot from canonical
   assert.equal(projected.projectedProfile, true);
   assert.equal(projected.projectedCapabilities, true);
   assert.equal(projected.truthVersion.id, "version-1");
+  assert.ok(projected.impactSummary.canonicalAreas.includes("business_profile"));
+  assert.ok(projected.impactSummary.runtimeAreas.includes("tenant_profile"));
   assert.equal(versionInput.reviewSessionId, "session-1");
   assert.equal(versionInput.businessProfileId, "profile-1");
   assert.equal(versionInput.businessCapabilitiesId, "capabilities-1");
@@ -1233,6 +1258,14 @@ test("Case Z: finalize projection writes a truth version snapshot from canonical
   assert.equal(
     versionInput.profile.source_summary_json.primarySourceUrl,
     "https://alpha.example"
+  );
+  assert.ok(
+    versionInput.profile.source_summary_json.finalizeImpact.canonicalAreas.includes(
+      "business_profile"
+    )
+  );
+  assert.ok(
+    versionInput.metadataJson.finalizeImpact.runtimeAreas.includes("tenant_profile")
   );
 });
 

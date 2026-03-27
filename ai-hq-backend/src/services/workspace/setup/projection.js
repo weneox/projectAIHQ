@@ -18,6 +18,7 @@ import {
   s,
   toFiniteNumber,
 } from "./utils.js";
+import { buildFinalizeImpactSummary } from "../../sourceFusion/governance.js";
 
 function hasDbQuery(db) {
   return Boolean(db && typeof db.query === "function");
@@ -125,6 +126,8 @@ function normalizeServiceForProjection(item = {}) {
       sourceId: s(value.sourceId || value.source_id),
       sourceRunId: s(value.sourceRunId || value.source_run_id),
       sourceType: s(value.sourceType || value.source_type),
+      governance: obj(value.governance),
+      impact: obj(value.impact),
     }),
   };
 }
@@ -157,6 +160,8 @@ function normalizeKnowledgeForProjection(item = {}) {
     sourceType: s(value.sourceType || value.source_type),
     metadataJson: mergeDeep(obj(value.metadataJson || value.metadata_json), {
       origin: s(value.origin || "setup_review_session"),
+      governance: obj(value.governance),
+      impact: obj(value.impact),
     }),
   };
 }
@@ -214,6 +219,7 @@ export function buildCanonicalProfileSourceSummary({
   sourceInfo = {},
   approvedAt = "",
 } = {}) {
+  const impactSummary = buildFinalizeImpactSummary({ draft });
   return compactObject({
     reviewSessionId: s(session?.id),
     primarySourceType: s(sourceInfo.primarySourceType),
@@ -222,6 +228,8 @@ export function buildCanonicalProfileSourceSummary({
     latestRunId: s(sourceInfo.latestRunId),
     lastSnapshotId: s(draft?.lastSnapshotId),
     approvedAt: s(approvedAt),
+    governance: obj(draft?.sourceSummary?.governance),
+    finalizeImpact: impactSummary,
     sources: arr(sources)
       .map((item) =>
         compactObject({
@@ -479,6 +487,7 @@ export async function projectSetupReviewDraftToCanonical(
     deps.refreshRuntimeProjectionBestEffort || refreshRuntimeProjectionBestEffort;
 
   const sourceInfo = extractPrimarySourceInfo(session, draft, sources);
+  const impactSummary = buildFinalizeImpactSummary({ draft });
   const persistedReviewSessionId = await resolvePersistedReviewSessionId(
     db,
     actor,
@@ -541,13 +550,14 @@ export async function projectSetupReviewDraftToCanonical(
         sourceInfo,
         approvedAt,
       }),
-      metadataJson: {
-        reviewSessionProjection: true,
-        reviewSessionId: s(session?.id),
-        persistedReviewSessionId: persistedReviewSessionId || undefined,
-        draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
-      },
-      generatedBy: requestedBy,
+        metadataJson: {
+          reviewSessionProjection: true,
+          reviewSessionId: s(session?.id),
+          persistedReviewSessionId: persistedReviewSessionId || undefined,
+          draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
+          finalizeImpact: impactSummary,
+        },
+        generatedBy: requestedBy,
       approvedBy: requestedBy,
       approvedAt,
       runtimeRefreshMode: "defer",
@@ -572,6 +582,7 @@ export async function projectSetupReviewDraftToCanonical(
         reviewSessionProjection: true,
         reviewSessionId: s(session?.id),
         persistedReviewSessionId: persistedReviewSessionId || undefined,
+        finalizeImpact: impactSummary,
       },
       approvedBy: requestedBy,
       runtimeRefreshMode: "defer",
@@ -618,6 +629,7 @@ export async function projectSetupReviewDraftToCanonical(
         draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
         sourceId: sourceInfo.primarySourceId || undefined,
         sourceRunId: sourceInfo.latestRunId || undefined,
+        finalizeImpact: impactSummary,
       }),
     });
   }
@@ -690,5 +702,6 @@ export async function projectSetupReviewDraftToCanonical(
     serviceProjection,
     knowledgeProjection,
     sourceInfo,
+    impactSummary,
   };
 }

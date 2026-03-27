@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  getApprovedRuntimeAuthorityFailure,
   buildRealtimeEnvelope,
   validateAihqHealthEnvelope,
   validateAihqOutboundAckRequest,
@@ -183,6 +184,70 @@ test("projected runtime contract requires authority and tenant scope", () => {
   });
   assert.equal(good.ok, true);
   assert.equal(good.value.authority.tenantKey, "acme");
+});
+
+test("approved runtime authority helper rejects stale or incomplete authority", () => {
+  const missingProjectionId = getApprovedRuntimeAuthorityFailure({
+    authority: {
+      mode: "strict",
+      required: true,
+      available: true,
+      source: "approved_runtime_projection",
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+    },
+  });
+  assert.equal(missingProjectionId?.reasonCode, "runtime_projection_missing");
+
+  const stale = getApprovedRuntimeAuthorityFailure({
+    authority: {
+      mode: "strict",
+      required: true,
+      available: true,
+      source: "approved_runtime_projection",
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+      runtimeProjectionId: "projection-1",
+      stale: true,
+      reasonCode: "runtime_projection_stale",
+    },
+  });
+  assert.equal(stale?.reasonCode, "runtime_projection_stale");
+
+  const valid = getApprovedRuntimeAuthorityFailure({
+    authority: {
+      mode: "strict",
+      required: true,
+      available: true,
+      source: "approved_runtime_projection",
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+      runtimeProjectionId: "projection-1",
+    },
+  });
+  assert.equal(valid, null);
+
+  const blockedByHealth = getApprovedRuntimeAuthorityFailure({
+    authority: {
+      mode: "strict",
+      required: true,
+      available: true,
+      source: "approved_runtime_projection",
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+      runtimeProjectionId: "projection-1",
+      health: {
+        status: "blocked",
+        primaryReasonCode: "approval_required",
+        lastKnownGood: {
+          runtimeProjectionId: "projection-0",
+          diagnosticOnly: true,
+          usableAsAuthority: false,
+        },
+      },
+    },
+  });
+  assert.equal(blockedByHealth?.reasonCode, "approval_required");
 });
 
 test("resolve-channel projected response requires projectedRuntime", () => {

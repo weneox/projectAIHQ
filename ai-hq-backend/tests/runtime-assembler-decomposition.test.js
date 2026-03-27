@@ -242,6 +242,65 @@ test("projection-backed tenant merge shaping preserves projection metadata and p
   assert.equal(merged.meta.confidenceLabel, "high");
 });
 
+test("projection-backed tenant merge does not silently fall back to legacy business fields", () => {
+  const merged = buildTenantFromProjection({
+    legacy: {
+      ...buildLegacyTenant(),
+      company_name: "Legacy Clinic",
+      legal_name: "Legacy Clinic LLC",
+      industry_key: "legacy-clinic",
+      profile: {
+        ...buildLegacyTenant().profile,
+        website_url: "https://legacy.example",
+        public_email: "legacy@acme.example",
+        public_phone: "+15559990000",
+        tone_of_voice: "legacy tone",
+        banned_phrases: ["Legacy phrase"],
+      },
+      ai_policy: {
+        auto_reply_enabled: true,
+        create_lead_enabled: true,
+      },
+    },
+    projection: {
+      id: "projection-2",
+      status: "ready",
+      identity_json: {
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+        companyName: "Acme Clinic",
+        displayName: "Acme Clinic",
+        mainLanguage: "en",
+        supportedLanguages: ["en"],
+      },
+      profile_json: {
+        companyName: "Acme Clinic",
+      },
+      capabilities_json: {},
+      inbox_json: {},
+      comments_json: {},
+      content_json: {},
+      lead_capture_json: {},
+      handoff_json: {},
+    },
+    services: [],
+    facts: [],
+    contacts: [],
+    locations: [],
+    channelPolicies: [],
+    activeKnowledge: [],
+  });
+
+  assert.equal(merged.company_name, "Acme Clinic");
+  assert.equal(merged.profile.website_url, "");
+  assert.equal(merged.profile.public_email, "");
+  assert.equal(merged.profile.public_phone, "");
+  assert.equal(merged.profile.tone_of_voice, "professional, warm, concise");
+  assert.deepEqual(merged.profile.banned_phrases, []);
+  assert.equal(merged.ai_policy.auto_reply_enabled, undefined);
+  assert.equal(merged.ai_policy.create_lead_enabled, undefined);
+});
+
 test("final runtime output shaping keeps the public compatibility surface", () => {
   const runtime = buildRuntimeOutput({
     tenant: {

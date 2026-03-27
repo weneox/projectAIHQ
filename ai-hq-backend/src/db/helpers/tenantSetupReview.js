@@ -1468,13 +1468,15 @@ export async function finalizeSetupReviewSession(
       cx,
     );
 
-    if (typeof projectDraftToCanonical === "function") {
-      await projectDraftToCanonical({
-        client: cx,
-        tenantId: session.tenantId,
-        session,
-        draft,
-        sources,
+      let projectionResult = null;
+
+      if (typeof projectDraftToCanonical === "function") {
+        projectionResult = await projectDraftToCanonical({
+          client: cx,
+          tenantId: session.tenantId,
+          session,
+          draft,
+          sources,
       });
     } else {
       throw new Error(
@@ -1520,11 +1522,11 @@ export async function finalizeSetupReviewSession(
       cx,
     );
 
-    await insertSetupReviewEvent(cx, {
-      sessionId: session.id,
-      tenantId: session.tenantId,
-      eventType: "session_finalized",
-      payload: {
+      await insertSetupReviewEvent(cx, {
+        sessionId: session.id,
+        tenantId: session.tenantId,
+        eventType: "session_finalized",
+        payload: {
         refreshRuntime: bool(refreshRuntime, true),
         servicesCount: arr(draft.services).length,
         knowledgeCount: arr(draft.knowledgeItems).length,
@@ -1534,20 +1536,22 @@ export async function finalizeSetupReviewSession(
         currentProjectionHash: s(baselineCheck.current?.projectionHash),
         runtimeProjectionId: s(runtimeProjection?.id),
         runtimeProjectionStatus: s(runtimeProjection?.status),
-        runtimeProjectionHash: s(runtimeProjection?.projection_hash),
-        runtimeProjectionFresh: !runtimeProjectionFreshness.stale,
-        runtimeProjectionFreshnessReasons: arr(runtimeProjectionFreshness.reasons),
-        ...obj(metadata),
-      },
-    });
+          runtimeProjectionHash: s(runtimeProjection?.projection_hash),
+          runtimeProjectionFresh: !runtimeProjectionFreshness.stale,
+          runtimeProjectionFreshnessReasons: arr(runtimeProjectionFreshness.reasons),
+          finalizeImpact: obj(projectionResult?.impactSummary),
+          ...obj(metadata),
+        },
+      });
 
-    return {
-      session: finalized,
-      draft,
-      sources,
-      runtimeProjection: runtimeProjection || null,
-      runtimeProjectionFreshness: runtimeProjectionFreshness || null,
-    };
+      return {
+        session: finalized,
+        draft,
+        sources,
+        runtimeProjection: runtimeProjection || null,
+        runtimeProjectionFreshness: runtimeProjectionFreshness || null,
+        impactSummary: obj(projectionResult?.impactSummary),
+      };
   };
 
   return client ? run(client) : withTx(run);

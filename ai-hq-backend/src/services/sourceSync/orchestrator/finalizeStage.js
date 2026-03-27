@@ -139,6 +139,7 @@ export async function runFinalizeSourceSyncStage(
     observationCount: deps.arr(state.createdObservations).length,
     candidateCount: persisted.createdCount,
     conflictCount: deps.arr(state.synthesis?.conflicts).length,
+    quarantinedClaimCount: deps.arr(state.synthesis?.governance?.quarantinedClaims).length,
     scopedObservationCount: deps.arr(state.scopedObservations).length,
     scopedObservationScope: state.scopedObservationScope,
     droppedDraftObservationCount:
@@ -193,6 +194,7 @@ export async function runFinalizeSourceSyncStage(
             scopedObservationCount: deps.arr(state.scopedObservations).length,
             scopedObservationScope: state.scopedObservationScope,
             conflictCount: deps.arr(state.synthesis?.conflicts).length,
+            quarantinedClaimCount: deps.arr(state.synthesis?.governance?.quarantinedClaims).length,
             currentSnapshotId: persisted.snapshot?.id || "",
             canonicalProjection: "deferred_to_review",
           },
@@ -223,6 +225,7 @@ export async function runFinalizeSourceSyncStage(
           rawWarnings: state.warnings,
           debugWarnings: state.debugWarnings,
           synthesisMetrics: deps.obj(state.synthesis?.metrics),
+          governance: deps.obj(state.synthesis?.governance),
           canonicalProjection: "deferred_to_review",
         },
         pagesScanned:
@@ -253,6 +256,7 @@ export async function runFinalizeSourceSyncStage(
             scopedObservationScope: state.scopedObservationScope,
             candidateCount: persisted.createdCount,
             conflictCount: deps.arr(state.synthesis?.conflicts).length,
+            quarantinedClaimCount: deps.arr(state.synthesis?.governance?.quarantinedClaims).length,
             weakGoogleMapsExtraction: state.weakGoogleMapsExtraction,
             weakWebsiteExtraction: state.weakWebsiteExtraction,
             weakInstagramExtraction: state.weakInstagramExtraction,

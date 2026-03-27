@@ -13,6 +13,9 @@ import {
   uniqStrings,
 } from "./shared.js";
 import {
+  summarizeEvidenceGovernance,
+} from "./governance.js";
+import {
   claimPolicy,
   getSourceProfile,
 } from "./policies.js";
@@ -32,6 +35,7 @@ function summarizeSources(observations = []) {
   const counts = {};
   const runIds = new Set();
   const sourceIds = new Set();
+  const evidenceGovernance = summarizeEvidenceGovernance(observations);
 
   for (const item of arr(observations)) {
     const type = lower(item.source_type || item.sourceType || "unknown");
@@ -49,6 +53,9 @@ function summarizeSources(observations = []) {
   return {
     sourceCount: sourceIds.size,
     runCount: runIds.size,
+    trust: evidenceGovernance.trust,
+    freshness: evidenceGovernance.freshness,
+    support: evidenceGovernance.support,
     sources: Object.entries(counts)
       .map(([source_type, count]) => ({
         source_type,
@@ -294,6 +301,35 @@ function synthesizeTenantBusinessFromObservations({
   const profile = synthesizeProfile({ clusterMap, sourceSummary });
   const capabilities = synthesizeCapabilities(profile, sourceSummary);
   const selectedClaims = buildSelectedClaims(clusterMap);
+  const flattenedClaims = Object.entries(selectedClaims).flatMap(([claimType, claims]) =>
+    arr(claims).map((claim) => ({
+      claimType,
+      status: s(claim.status),
+      governance: obj(claim.governance),
+      impact: obj(claim.impact),
+      valueText: s(claim.valueText || claim.value_text),
+    }))
+  );
+  const quarantinedClaims = flattenedClaims
+    .filter((claim) => claim.governance.quarantine)
+    .map((claim) => ({
+      claimType: claim.claimType,
+      valueText: claim.valueText,
+      reasons: arr(claim.governance.quarantineReasons),
+      conflict: obj(claim.governance.conflict),
+      trust: obj(claim.governance.trust),
+      freshness: obj(claim.governance.freshness),
+      impact: obj(claim.impact),
+    }));
+  const promotableClaims = flattenedClaims
+    .filter((claim) => !claim.governance.quarantine)
+    .map((claim) => ({
+      claimType: claim.claimType,
+      valueText: claim.valueText,
+      trust: obj(claim.governance.trust),
+      freshness: obj(claim.governance.freshness),
+      impact: obj(claim.impact),
+    }));
 
   const confidence = normalizeConfidence(profile.confidence, 0.56);
 
@@ -319,6 +355,15 @@ function synthesizeTenantBusinessFromObservations({
     conflicts,
     sourceSummary,
     selectedClaims,
+    governance: {
+      sourceTrust: obj(sourceSummary.trust),
+      sourceFreshness: obj(sourceSummary.freshness),
+      quarantinedClaims,
+      promotableClaims,
+      reviewableConflicts: arr(conflicts).filter(
+        (item) => s(item.classification) === "conflicting_but_reviewable"
+      ),
+    },
     confidence,
     confidenceLabel: confidenceLabel(confidence),
     summaryText,

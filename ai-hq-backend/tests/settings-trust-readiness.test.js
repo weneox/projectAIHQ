@@ -443,7 +443,7 @@ test("settings trust route exposes normalized trust readiness blockers", async (
   assert.equal(res.body?.summary?.readiness?.status, "blocked");
   assert.equal(
     res.body?.summary?.runtimeProjection?.readiness?.blockers?.[0]?.reasonCode,
-    "runtime_projection_missing"
+    "projection_missing"
   );
   assert.equal(
     res.body?.summary?.runtimeProjection?.readiness?.blockers?.[0]?.nextAction?.id,
@@ -453,7 +453,11 @@ test("settings trust route exposes normalized trust readiness blockers", async (
     res.body?.summary?.truth?.readiness?.blockers?.[0]?.reasonCode,
     "approved_truth_unavailable"
   );
-  assert.equal(res.body?.summary?.runtimeProjection?.health?.reasonCode, "runtime_projection_missing");
+  assert.equal(res.body?.summary?.runtimeProjection?.health?.primaryReasonCode, "projection_missing");
+  assert.equal(res.body?.summary?.runtimeProjection?.health?.autonomousAllowed, false);
+  assert.ok(
+    res.body?.summary?.runtimeProjection?.health?.affectedSurfaces?.includes("inbox")
+  );
   assert.equal(res.body?.summary?.runtimeProjection?.repair?.canRepair, false);
 });
 
@@ -490,7 +494,7 @@ test("settings trust route hides projection repair action from non-admin operato
   });
 
   assert.equal(res.statusCode, 200);
-  assert.equal(res.body?.summary?.runtimeProjection?.health?.canRepair, false);
+  assert.equal(res.body?.capabilities?.canRepairRuntimeProjection, false);
   assert.equal(res.body?.summary?.runtimeProjection?.repair?.action || null, null);
   assert.deepEqual(res.body?.audit || [], []);
   assert.equal(res.body?.permissions?.auditHistoryRead?.allowed, false);
@@ -529,7 +533,7 @@ test("settings trust route surfaces projection repairability for owner/admin whe
   });
 
   assert.equal(res.statusCode, 200);
-  assert.equal(res.body?.summary?.runtimeProjection?.health?.canRepair, true);
+  assert.equal(res.body?.capabilities?.canRepairRuntimeProjection, true);
   assert.equal(
     res.body?.summary?.runtimeProjection?.repair?.action?.id,
     "rebuild_runtime_projection"

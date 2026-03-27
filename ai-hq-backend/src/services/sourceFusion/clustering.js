@@ -18,6 +18,12 @@ import {
   uniqStrings,
 } from "./shared.js";
 import {
+  buildCandidateImpact,
+  buildClaimGovernance,
+  classifyConflictOutcome,
+  getSourceTrustProfile,
+} from "./governance.js";
+import {
   claimPolicy,
   isListClaim,
   isProtectedScalarClaim,
@@ -416,6 +422,12 @@ function weightedTopAverage(scores = []) {
   return totalWeight ? total / totalWeight : 0;
 }
 
+function clampUnit(value = 0) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.max(0, Math.min(1, numeric));
+}
+
 function clusterScore(claimType = "", cluster = {}) {
   const items = arr(cluster.observations);
   if (!items.length) return 0;
@@ -500,6 +512,10 @@ function evidencePreview(items = []) {
     evidence_text: s(item.evidence_text || item.evidenceText),
     confidence: normalizeConfidence(item.confidence, 0),
     confidence_label: s(item.confidence_label || item.confidenceLabel),
+    first_seen_at: s(item.first_seen_at || item.firstSeenAt),
+    last_seen_at: s(item.last_seen_at || item.lastSeenAt),
+    trust_tier: getSourceTrustProfile(item.source_type || item.sourceType).trustTier,
+    trust_score: getSourceTrustProfile(item.source_type || item.sourceType).trustScore,
   }));
 }
 
@@ -537,13 +553,14 @@ function enrichCluster(claimType = "", items = [], normalizedKey = "") {
   const bestType =
     [...uniqueTypes].sort((a, b) => sourceRank(b) - sourceRank(a))[0] || "";
 
-  return {
+  const score = clusterScore(claimType, { observations: items });
+  const base = {
     claimType,
     normalizedKey,
     observations: items,
     representativeText: selectRepresentativeText(items),
     representativeJson: selectRepresentativeJson(items),
-    score: clusterScore(claimType, { observations: items }),
+    score,
     evidence,
     sourceTypes: uniqueTypes,
     bestSourceType: bestType,
@@ -551,6 +568,16 @@ function enrichCluster(claimType = "", items = [], normalizedKey = "") {
     onlyWeakSources:
       uniqueTypes.length > 0 && uniqueTypes.every((x) => isWeakSourceType(x)),
     observationCount: items.length,
+  };
+
+  return {
+    ...base,
+    governance: buildClaimGovernance({
+      claimType,
+      score,
+      evidence,
+      onlyWeakSources: base.onlyWeakSources,
+    }),
   };
 }
 
@@ -643,7 +670,7 @@ function scalarSelectionScore(claimType = "", cluster = null) {
     Math.max(0, (priorityCount - bestPriority) / priorityCount) * 0.22;
   const trustedBonus = cluster.onlyWeakSources ? 0 : 0.04;
 
-  return normalizeConfidence(cluster.score + priorityBonus + trustedBonus, 0);
+  return clampUnit(cluster.score + priorityBonus + trustedBonus);
 }
 
 function pickScalarCluster(claimType = "", clusters = []) {
@@ -676,7 +703,7 @@ function listSelectionScore(claimType = "", cluster = null) {
   const priorityBonus =
     Math.max(0, (priorityCount - bestPriority) / priorityCount) * 0.18;
 
-  return normalizeConfidence(cluster.score + priorityBonus, 0);
+  return clampUnit(cluster.score + priorityBonus);
 }
 
 function isViableListCluster(claimType = "", cluster = null) {
@@ -739,8 +766,22 @@ function detectConflicts(clusterMap = {}) {
     if (!first || !second) continue;
 
     if (second.score >= first.score * 0.8) {
+      const outcome = classifyConflictOutcome({
+        claimType,
+        winner: first,
+        runnerUp: second,
+      });
+
       conflicts.push({
         claim_type: claimType,
+        category: "claim_conflict",
+        type: "source_claim_conflict",
+        key: claimType,
+        severity: outcome.reviewRequired ? "medium" : "low",
+        classification: outcome.classification,
+        resolution: outcome.resolution,
+        review_required: outcome.reviewRequired,
+        message: `${claimType} has competing evidence that requires ${outcome.reviewRequired ? "review" : "winner selection"}`,
         winner: {
           value: cleanClaimTextForType(
             claimType,
@@ -750,6 +791,7 @@ function detectConflicts(clusterMap = {}) {
           score: first.score,
           evidence_count: first.evidence.length,
           source_types: first.sourceTypes,
+          governance: first.governance,
         },
         runner_up: {
           value: cleanClaimTextForType(
@@ -760,6 +802,26 @@ function detectConflicts(clusterMap = {}) {
           score: second.score,
           evidence_count: second.evidence.length,
           source_types: second.sourceTypes,
+          governance: second.governance,
+        },
+        values: [
+          cleanClaimTextForType(claimType, first.representativeText, first.representativeJson),
+          cleanClaimTextForType(claimType, second.representativeText, second.representativeJson),
+        ].filter(Boolean),
+        items: [first, second].map((cluster) => ({
+          value: cleanClaimTextForType(
+            claimType,
+            cluster.representativeText,
+            cluster.representativeJson
+          ),
+          score: cluster.score,
+          sourceTypes: cluster.sourceTypes,
+          governance: cluster.governance,
+        })),
+        metadataJson: {
+          claimType,
+          classification: outcome.classification,
+          resolution: outcome.resolution,
         },
       });
     }
@@ -818,12 +880,31 @@ function mapFaqClusters(clusters = []) {
 
 function buildSelectedClaims(clusterMap = {}) {
   const out = {};
+  const conflictMap = new Map(
+    detectConflicts(clusterMap).map((conflict) => [s(conflict.claim_type), conflict])
+  );
 
   for (const [claimType, clusters] of Object.entries(obj(clusterMap))) {
     const safeType = s(claimType).toLowerCase();
 
     if (isProtectedScalarClaim(safeType)) {
       const winner = pickScalarCluster(safeType, clusters);
+      const conflict = conflictMap.get(safeType) || null;
+      const governance = winner
+        ? buildClaimGovernance({
+            claimType: safeType,
+            score: winner.score,
+            evidence: winner.evidence,
+            onlyWeakSources: winner.onlyWeakSources,
+            conflict: conflict
+              ? {
+                  classification: s(conflict.classification),
+                  resolution: s(conflict.resolution),
+                  reviewRequired: !!conflict.review_required,
+                }
+              : null,
+          })
+        : null;
       out[safeType] = winner
         ? [
             {
@@ -839,6 +920,30 @@ function buildSelectedClaims(clusterMap = {}) {
               evidence: winner.evidence,
               sourceTypes: winner.sourceTypes,
               bestSourceType: winner.bestSourceType,
+              governance,
+              status: governance?.quarantine ? "quarantined" : "promotable",
+              impact: buildCandidateImpact({
+                category:
+                  safeType === "company_name" || safeType === "website_url"
+                    ? "company"
+                    : safeType.startsWith("summary")
+                      ? "summary"
+                      : safeType.startsWith("primary_")
+                        ? safeType === "primary_address"
+                          ? "location"
+                          : "contact"
+                        : safeType === "pricing_policy"
+                          ? "pricing_policy"
+                          : safeType === "support_mode"
+                            ? "support"
+                            : "knowledge",
+                itemKey:
+                  safeType === "company_name"
+                    ? "canonical_company_name"
+                    : safeType === "website_url"
+                      ? "canonical_website_url"
+                      : safeType,
+              }),
             },
           ]
         : [];
@@ -861,6 +966,12 @@ function buildSelectedClaims(clusterMap = {}) {
 
       out[safeType] = winners
         .map((cluster) => {
+          const governance = buildClaimGovernance({
+            claimType: safeType,
+            score: cluster.score,
+            evidence: cluster.evidence,
+            onlyWeakSources: cluster.onlyWeakSources,
+          });
           const cleaned = cleanClaimTextForType(
             safeType,
             cluster.representativeText,
@@ -889,6 +1000,25 @@ function buildSelectedClaims(clusterMap = {}) {
             evidence: cluster.evidence,
             sourceTypes: cluster.sourceTypes,
             bestSourceType: cluster.bestSourceType,
+            governance,
+            status: governance.quarantine ? "quarantined" : "promotable",
+            impact: buildCandidateImpact({
+              category:
+                safeType === "service"
+                  ? "service"
+                  : safeType === "product"
+                    ? "product"
+                    : safeType === "pricing_hint"
+                      ? "pricing"
+                      : safeType === "working_hours"
+                        ? "hours"
+                        : safeType === "social_link"
+                          ? "social_link"
+                          : safeType === "booking_link" || safeType === "whatsapp_link"
+                            ? "booking"
+                            : "faq",
+              itemKey: safeType,
+            }),
           };
         })
         .filter(Boolean);

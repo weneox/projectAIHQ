@@ -15,7 +15,6 @@ function buildProjectionFirstRuntime({
   input,
   projection,
   freshness = null,
-  dbData,
 }) {
   const projectionServices = arr(projection?.services_json);
   const projectionKnowledge = arr(projection?.approved_knowledge_json);
@@ -25,18 +24,16 @@ function buildProjectionFirstRuntime({
   const projectionChannelPolicies = normalizeProjectionChannelsPolicies(
     projection?.channel_policies_json
   );
-  const selectedFacts = projectionFacts.length ? projectionFacts : dbData.facts;
-  const selectedKnowledge = projectionKnowledge.length
-    ? projectionKnowledge
-    : dbData.activeKnowledge;
+  const selectedFacts = projectionFacts;
+  const selectedKnowledge = projectionKnowledge;
 
   const services = buildServices({
     incomingServices: input?.services,
-    tenantServices: projectionServices.length ? projectionServices : dbData.tenantServices,
+    tenantServices: projectionServices,
     facts: selectedFacts,
     activeKnowledge: selectedKnowledge,
     tenant: legacyTenant,
-    legacy: legacyTenant,
+    legacy: null,
   });
   const knowledgeEntries = buildKnowledgeEntries({
     incomingKnowledgeEntries: input?.knowledgeEntries,
@@ -46,7 +43,7 @@ function buildProjectionFirstRuntime({
   });
   const responsePlaybooks = buildResponsePlaybooks({
     incomingResponsePlaybooks: input?.responsePlaybooks,
-    storedResponsePlaybooks: dbData.storedResponsePlaybooks,
+    storedResponsePlaybooks: [],
     facts: selectedFacts,
     activeKnowledge: selectedKnowledge,
     capabilities: obj(projection?.capabilities_json),
@@ -57,10 +54,9 @@ function buildProjectionFirstRuntime({
     projection,
     services,
     facts: selectedFacts,
-    contacts: projectionContacts.length ? projectionContacts : dbData.contacts,
-    locations: projectionLocations.length ? projectionLocations : dbData.locations,
-    channelPolicies:
-      projectionChannelPolicies.length ? projectionChannelPolicies : dbData.channelPolicies,
+    contacts: projectionContacts,
+    locations: projectionLocations,
+    channelPolicies: projectionChannelPolicies,
     activeKnowledge: selectedKnowledge,
   });
 
@@ -81,16 +77,13 @@ function buildProjectionFirstRuntime({
     raw: {
       mode: "projection_first",
       projection,
-      businessProfile: dbData.businessProfile,
-      capabilities: dbData.capabilities,
       facts: selectedFacts,
-      contacts: projectionContacts.length ? projectionContacts : dbData.contacts,
-      locations: projectionLocations.length ? projectionLocations : dbData.locations,
-      channelPolicies:
-        projectionChannelPolicies.length ? projectionChannelPolicies : dbData.channelPolicies,
+      contacts: projectionContacts,
+      locations: projectionLocations,
+      channelPolicies: projectionChannelPolicies,
       activeKnowledge: selectedKnowledge,
-      tenantServices: projectionServices.length ? projectionServices : dbData.tenantServices,
-      storedResponsePlaybooks: dbData.storedResponsePlaybooks,
+      tenantServices: projectionServices,
+      storedResponsePlaybooks: [],
     },
   });
 }

@@ -2,7 +2,10 @@ import { AIHQ_BASE_URL, AIHQ_INTERNAL_TOKEN, AIHQ_TIMEOUT_MS } from "../config.j
 import {
   validateResolveChannelQuery,
 } from "@aihq/shared-contracts/critical";
-import { validateResolveChannelProjectedResponse } from "@aihq/shared-contracts/runtime";
+import {
+  getApprovedRuntimeAuthorityFailure,
+  validateResolveChannelProjectedResponse,
+} from "@aihq/shared-contracts/runtime";
 import {
   buildCorrelationHeaders,
   createStructuredLogger,
@@ -22,23 +25,6 @@ function trimSlash(x) {
 
 function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
-}
-
-function getRuntimeAuthorityFailure(projectedRuntime) {
-  const authority = obj(obj(projectedRuntime).authority);
-  const source = s(authority.source);
-  const available = authority.available === true;
-  const reasonCode = s(authority.reasonCode || authority.reason || "");
-
-  if (available && source === "approved_runtime_projection") {
-    return null;
-  }
-
-  return {
-    error: "runtime_authority_unavailable",
-    reasonCode: reasonCode || (!available ? "runtime_authority_unavailable" : "runtime_authority_source_invalid"),
-    authority,
-  };
 }
 
 async function safeReadJson(res) {
@@ -212,7 +198,7 @@ export async function resolveTenantContextFromMetaEvent({
       };
     }
 
-    const authorityFailure = getRuntimeAuthorityFailure(
+    const authorityFailure = getApprovedRuntimeAuthorityFailure(
       checked.value.projectedRuntime
     );
     if (authorityFailure) {

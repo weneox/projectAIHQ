@@ -202,6 +202,9 @@ function normalizeSelectedClaim(item = null) {
       arr(item.sourceTypes || item.source_types).map((x) => s(x)).filter(Boolean)
     ),
     bestSourceType: s(item.bestSourceType || item.best_source_type),
+    status: s(item.status || "promotable"),
+    governance: jsonObject(item.governance),
+    impact: jsonObject(item.impact),
   };
 }
 
@@ -233,9 +236,15 @@ function normalizeConflictRecord(item = null) {
     ...item,
     category: s(item.category || "general"),
     type: s(item.type || item.conflictType || item.conflict_type),
+    claimType: s(item.claimType || item.claim_type),
     key: s(item.key || item.claimKey || item.claim_key),
     message: s(item.message),
     severity: s(item.severity || "low"),
+    classification: s(item.classification),
+    resolution: s(item.resolution),
+    reviewRequired: Boolean(item.reviewRequired ?? item.review_required),
+    winner: jsonObject(item.winner),
+    runnerUp: jsonObject(item.runnerUp || item.runner_up),
     items: arr(item.items).filter(Boolean),
     values: arr(item.values).filter(Boolean),
     metadataJson: jsonObject(item.metadataJson ?? item.metadata_json),
@@ -256,12 +265,18 @@ function normalizeSourceEvidenceItem(item = null) {
   return {
     sourceId: s(item.sourceId || item.source_id),
     sourceRunId: s(item.sourceRunId || item.source_run_id),
+    sourceType: s(item.sourceType || item.source_type),
     pageUrl: s(item.pageUrl || item.page_url),
     pageTitle: s(item.pageTitle || item.page_title),
     evidenceText: s(item.evidenceText || item.evidence_text || item.text),
     claimType: s(item.claimType || item.claim_type),
     claimKey: s(item.claimKey || item.claim_key),
     confidence: normalizeConfidence(item.confidence, 0),
+    confidenceLabel: s(item.confidenceLabel || item.confidence_label),
+    firstSeenAt: normalizeIsoDate(item.firstSeenAt || item.first_seen_at),
+    lastSeenAt: normalizeIsoDate(item.lastSeenAt || item.last_seen_at),
+    trustTier: s(item.trustTier || item.trust_tier),
+    trustScore: normalizeConfidence(item.trustScore || item.trust_score, 0),
     metadataJson: jsonObject(item.metadataJson ?? item.metadata_json),
   };
 }
@@ -313,9 +328,9 @@ function normalizeCandidateRecord(item = null) {
     return null;
   }
 
-  return {
-    ...item,
-    candidateGroup: s(item.candidateGroup || item.candidate_group || "general"),
+    return {
+      ...item,
+      candidateGroup: s(item.candidateGroup || item.candidate_group || "general"),
     category,
     itemKey,
     title,
@@ -326,13 +341,14 @@ function normalizeCandidateRecord(item = null) {
     confidence: normalizeConfidence(item.confidence, 0),
     confidenceLabel: s(item.confidenceLabel || item.confidence_label),
     status: s(item.status || "pending"),
-    reviewReason: s(item.reviewReason || item.review_reason),
-    sourceEvidenceJson: arr(item.sourceEvidenceJson || item.source_evidence_json)
-      .map((entry) => normalizeSourceEvidenceItem(entry))
-      .filter(Boolean),
-    extractionMethod: s(item.extractionMethod || item.extraction_method || "ai"),
-    extractionModel: s(item.extractionModel || item.extraction_model),
-    sourceId: s(item.sourceId || item.source_id),
+      reviewReason: s(item.reviewReason || item.review_reason),
+      sourceEvidenceJson: arr(item.sourceEvidenceJson || item.source_evidence_json)
+        .map((entry) => normalizeSourceEvidenceItem(entry))
+        .filter(Boolean),
+      metadataJson: jsonObject(item.metadataJson ?? item.metadata_json),
+      extractionMethod: s(item.extractionMethod || item.extraction_method || "ai"),
+      extractionModel: s(item.extractionModel || item.extraction_model),
+      sourceId: s(item.sourceId || item.source_id),
     sourceRunId: s(item.sourceRunId || item.source_run_id),
     firstSeenAt: normalizeIsoDate(item.firstSeenAt || item.first_seen_at),
     lastSeenAt: normalizeIsoDate(item.lastSeenAt || item.last_seen_at),
@@ -663,13 +679,14 @@ function normalizeSynthesisResult(
       sourceUrl: s(sourceSummaryBase.sourceUrl || sourceUrl),
       sources: safeSources,
     },
-    conflicts: arr(x.conflicts)
-      .map((item) => normalizeConflictRecord(item))
-      .filter(Boolean),
-    selectedClaims: normalizeSelectedClaimsMap(x.selectedClaims || x.selected_claims),
-    confidence: normalizeConfidence(x.confidence, 0),
-    confidenceLabel: s(x.confidenceLabel || x.confidence_label || "low"),
-    summaryText: s(
+      conflicts: arr(x.conflicts)
+        .map((item) => normalizeConflictRecord(item))
+        .filter(Boolean),
+      selectedClaims: normalizeSelectedClaimsMap(x.selectedClaims || x.selected_claims),
+      governance: jsonObject(x.governance),
+      confidence: normalizeConfidence(x.confidence, 0),
+      confidenceLabel: s(x.confidenceLabel || x.confidence_label || "low"),
+      summaryText: s(
       x.summaryText ||
         x.summary_text ||
         safeProfile.summaryShort ||
@@ -698,19 +715,22 @@ function candidateIdentityKey(item = null) {
 function flattenSelectedClaims(selectedClaims = {}) {
   const safe = normalizeSelectedClaimsMap(selectedClaims);
   return Object.entries(safe).flatMap(([claimType, claims]) =>
-    arr(claims).map((claim) => ({
-      claimType,
-      valueText: s(claim.valueText || claim.value_text),
-      valueJson: jsonObject(claim.valueJson || claim.value_json),
-      score: normalizeConfidence(claim.score, 0),
+      arr(claims).map((claim) => ({
+        claimType,
+        valueText: s(claim.valueText || claim.value_text),
+        valueJson: jsonObject(claim.valueJson || claim.value_json),
+        score: normalizeConfidence(claim.score, 0),
       evidenceCount: Math.max(0, n(claim.evidenceCount || claim.evidence_count, 0)),
       evidence: arr(claim.evidence),
-      sourceTypes: arr(claim.sourceTypes || claim.source_types)
-        .map((x) => s(x))
-        .filter(Boolean),
-      bestSourceType: s(claim.bestSourceType || claim.best_source_type),
-    }))
-  );
+        sourceTypes: arr(claim.sourceTypes || claim.source_types)
+          .map((x) => s(x))
+          .filter(Boolean),
+        bestSourceType: s(claim.bestSourceType || claim.best_source_type),
+        status: s(claim.status || "promotable"),
+        governance: jsonObject(claim.governance),
+        impact: jsonObject(claim.impact),
+      }))
+    );
 }
 
 export {

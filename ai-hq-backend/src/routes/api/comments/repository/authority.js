@@ -7,7 +7,6 @@ import {
 } from "../../../../services/businessBrain/getTenantBrainRuntime.js";
 import {
   normalizeTenantRow,
-  queryOne,
   s,
 } from "./shared.js";
 
@@ -92,33 +91,9 @@ export async function resolveTenantScopeForLead(
     };
   }
 
-  const inspectTenant = await tenantLoader(db, resolvedTenantKey, {
-    allowLegacyInspection: true,
-  });
-  if (inspectTenant?.id || inspectTenant?.tenant_key) {
-    return {
-      tenantId: s(inspectTenant?.id || ""),
-      tenantKey: s(inspectTenant?.tenant_key || resolvedTenantKey),
-      companyName:
-        s(inspectTenant?.company_name || "") ||
-        s(inspectTenant?.profile?.brand_name || ""),
-    };
-  }
-
-  const row = await queryOne(
-    db,
-    `
-    select id, tenant_key, company_name
-    from tenants
-    where tenant_key = $1::text
-    limit 1
-    `,
-    [resolvedTenantKey]
-  );
-
   return {
-    tenantId: s(row?.id || ""),
-    tenantKey: s(row?.tenant_key || resolvedTenantKey),
-    companyName: s(row?.company_name || ""),
+    tenantId: "",
+    tenantKey: resolvedTenantKey,
+    companyName: "",
   };
 }

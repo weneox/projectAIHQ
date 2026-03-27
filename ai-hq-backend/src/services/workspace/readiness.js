@@ -240,6 +240,7 @@ async function getRuntimeSnapshot({ db, tenantId, tenantKey }) {
     return {
       raw: null,
       ready: false,
+      health: {},
       hasKnowledge: false,
       hasServices: false,
       hasPlaybooks: false,
@@ -270,6 +271,8 @@ async function getRuntimeSnapshot({ db, tenantId, tenantKey }) {
   }
 
   const runtime = obj(raw?.runtime || raw);
+  const authority = obj(runtime.authority);
+  const runtimeHealth = obj(runtime.projectionHealth || authority.health);
   const knowledgeEntries = extractItems(
     runtime.knowledgeEntries || runtime.knowledge || []
   );
@@ -291,6 +294,7 @@ async function getRuntimeSnapshot({ db, tenantId, tenantKey }) {
       serviceCatalog.length ||
       responsePlaybooks.length
     ),
+    health: runtimeHealth,
     hasKnowledge: knowledgeEntries.length > 0,
     hasServices: serviceCatalog.length > 0,
     hasPlaybooks: responsePlaybooks.length > 0,
@@ -740,6 +744,7 @@ export async function getWorkspaceReadiness({
       tone: runtime.tone,
       language: runtime.language,
       disabledServicesCount: runtime.disabledServicesCount,
+      health: runtime.health,
     },
 
     debug: {

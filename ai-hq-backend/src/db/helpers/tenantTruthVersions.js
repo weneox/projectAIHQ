@@ -112,6 +112,13 @@ export function buildCanonicalTruthFieldProvenance(profile = {}) {
       sourceUrl: s(raw?.sourceUrl || raw?.source_url),
       authorityRank: toFiniteNumber(raw?.authorityRank ?? raw?.authority_rank, 0) || undefined,
       sourceLabel: s(raw?.sourceLabel || raw?.source_label),
+      trustTier: s(raw?.trustTier || raw?.trust_tier),
+      trustScore:
+        toFiniteNumber(raw?.trustScore ?? raw?.trust_score, 0) || undefined,
+      freshnessBucket: s(raw?.freshnessBucket || raw?.freshness_bucket),
+      conflictClassification: s(
+        raw?.conflictClassification || raw?.conflict_classification
+      ),
     });
 
     if (Object.keys(item).length) out[field] = item;

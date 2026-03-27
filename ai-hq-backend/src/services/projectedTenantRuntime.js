@@ -14,6 +14,22 @@ function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
 
+function createProjectedRuntimeAuthorityError(authority = {}, reasonCode = "") {
+  const error = new Error(
+    "Approved runtime authority is unavailable for downstream projected runtime consumers."
+  );
+  error.code = "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE";
+  error.statusCode = 409;
+  error.reasonCode = s(reasonCode || authority.reasonCode || authority.reason || "runtime_authority_unavailable");
+  error.runtimeAuthority = {
+    ...obj(authority),
+    available: false,
+    reasonCode: error.reasonCode,
+    reason: error.reasonCode,
+  };
+  return error;
+}
+
 function pickPrimaryContact(contacts = [], channel = "") {
   const safeChannel = lower(channel);
   const list = arr(contacts);
@@ -174,10 +190,44 @@ export function buildProjectedTenantRuntime({
   const authority = obj(runtime.authority);
   const projection = obj(raw.projection);
   const projectionId = s(projection.id || authority.runtimeProjectionId);
+  const health = obj(authority.health);
 
-  if (authority.available !== true || !projectionId) {
-    throw new Error(
-      "Approved projected runtime is required to build downstream tenant runtime."
+  if (authority.mode !== "strict" || authority.required !== true) {
+    throw createProjectedRuntimeAuthorityError(
+      authority,
+      "runtime_authority_mode_invalid"
+    );
+  }
+
+  if (authority.available !== true) {
+    throw createProjectedRuntimeAuthorityError(authority);
+  }
+
+  if (s(authority.source) !== "approved_runtime_projection") {
+    throw createProjectedRuntimeAuthorityError(
+      authority,
+      "runtime_authority_source_invalid"
+    );
+  }
+
+  if (authority.stale === true) {
+    throw createProjectedRuntimeAuthorityError(
+      authority,
+      s(authority.reasonCode || authority.reason || "runtime_projection_stale")
+    );
+  }
+
+  if (!projectionId) {
+    throw createProjectedRuntimeAuthorityError(
+      authority,
+      "runtime_projection_missing"
+    );
+  }
+
+  if (["missing", "stale", "blocked", "invalid"].includes(lower(health.status))) {
+    throw createProjectedRuntimeAuthorityError(
+      authority,
+      s(health.primaryReasonCode || authority.reasonCode || "runtime_authority_unavailable")
     );
   }
 
@@ -206,6 +256,7 @@ export function buildProjectedTenantRuntime({
   return {
     authority: {
       ...authority,
+      health,
       runtimeProjectionId: projectionId,
       projectionHash: s(projection.projection_hash),
       sourceSnapshotId: s(projection.source_snapshot_id),
@@ -222,6 +273,7 @@ export function buildProjectedTenantRuntime({
           ? Number(projection.confidence)
           : null,
     },
+    projectionHealth: health,
     tenant: {
       tenantId: s(identity.tenantId || authority.tenantId),
       tenantKey: lower(identity.tenantKey || authority.tenantKey),

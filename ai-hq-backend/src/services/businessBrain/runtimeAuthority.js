@@ -12,11 +12,13 @@ function buildRuntimeAuthority({
   tenantKey = "",
   runtimeProjection = null,
   freshness = null,
+  health = null,
   reasonCode = "",
   reason = "",
 } = {}) {
   const projection = obj(runtimeProjection);
   const normalizedFreshness = obj(freshness);
+  const normalizedHealth = obj(health || normalizedFreshness.health);
 
   return {
     mode: normalizeAuthorityMode(mode),
@@ -58,6 +60,7 @@ function buildRuntimeAuthority({
           : null,
     stale: Boolean(normalizedFreshness?.stale),
     freshnessReasons: arr(normalizedFreshness?.reasons),
+    health: normalizedHealth,
     reasonCode: s(reasonCode),
     reason: s(reason),
   };
@@ -80,6 +83,7 @@ function createRuntimeAuthorityError({
     tenantKey,
     runtimeProjection,
     freshness,
+    health: obj(freshness?.health),
     reasonCode,
     reason,
   });

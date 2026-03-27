@@ -71,7 +71,82 @@ function normalizeRuntimeAuthority(input = {}) {
       .filter(Boolean),
     reasonCode: s(input.reasonCode || input.reason_code || ""),
     reason: s(input.reason || ""),
+    health: obj(input.health),
   });
+}
+
+function getApprovedRuntimeAuthorityFailure(projectedRuntime = {}) {
+  const runtime = obj(projectedRuntime);
+  const authorityChecked = normalizeRuntimeAuthority(runtime.authority);
+  if (!authorityChecked.ok) {
+    return {
+      error: "runtime_authority_unavailable",
+      reasonCode: "projected_runtime_authority_invalid",
+      authority: obj(runtime.authority),
+    };
+  }
+
+  const authority = authorityChecked.value;
+
+  if (authority.mode !== "strict" || authority.required !== true) {
+    return {
+      error: "runtime_authority_unavailable",
+      reasonCode: "runtime_authority_mode_invalid",
+      authority,
+    };
+  }
+
+  if (authority.available !== true) {
+    return {
+      error: "runtime_authority_unavailable",
+      reasonCode: s(authority.reasonCode || authority.reason || "runtime_authority_unavailable"),
+      authority,
+    };
+  }
+
+  if (authority.source !== "approved_runtime_projection") {
+    return {
+      error: "runtime_authority_unavailable",
+      reasonCode: "runtime_authority_source_invalid",
+      authority,
+    };
+  }
+
+  if (!authority.runtimeProjectionId) {
+    return {
+      error: "runtime_authority_unavailable",
+      reasonCode: "runtime_projection_missing",
+      authority,
+    };
+  }
+
+  if (authority.stale) {
+    return {
+      error: "runtime_authority_unavailable",
+      reasonCode: s(authority.reasonCode || authority.reason || "runtime_projection_stale"),
+      authority,
+    };
+  }
+
+  const health = obj(authority.health);
+  if (
+    ["missing", "stale", "blocked", "invalid"].includes(
+      lower(health.status || "")
+    )
+  ) {
+    return {
+      error: "runtime_authority_unavailable",
+      reasonCode: s(
+        health.primaryReasonCode ||
+          authority.reasonCode ||
+          authority.reason ||
+          "runtime_authority_unavailable"
+      ),
+      authority,
+    };
+  }
+
+  return null;
 }
 
 function normalizeTenantProjection(input = {}, authority = {}) {
@@ -141,6 +216,8 @@ function normalizeProjectedRuntime(input = {}) {
 export function validateProjectedRuntime(input = {}) {
   return normalizeProjectedRuntime(input);
 }
+
+export { getApprovedRuntimeAuthorityFailure };
 
 export function validateVoiceProjectedRuntimeResponse(input = {}) {
   if (!obj(input) || typeof input.ok !== "boolean") {

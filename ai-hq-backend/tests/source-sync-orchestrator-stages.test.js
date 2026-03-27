@@ -227,3 +227,66 @@ test("website timeout failures still finish as partial with timeout metadata", a
   assert.equal(finishCalls[0].runStatus, "partial");
   assert.equal(markErrorCalls.length, 0);
 });
+
+test("quarantined weak claims surface explicit warnings and skip promotion", async () => {
+  const { source, run, sources, knowledge, fusion } = buildBase();
+
+  const result = await runSourceSync({
+    db: null,
+    source,
+    run,
+    requestedBy: "worker",
+    sources,
+    knowledge,
+    fusion,
+    stageDeps: buildStageDeps({
+      synthesizeTenantBusinessFromObservations: () => ({
+        profile: {
+          summaryShort: "Noisy scrape summary",
+        },
+        conflicts: [],
+        governance: {
+          quarantinedClaims: [
+            {
+              claimType: "summary_short",
+              reasons: ["weak_only_sources", "low_score"],
+            },
+          ],
+        },
+        selectedClaims: {
+          summary_short: [
+            {
+              valueText: "Noisy scrape summary",
+              score: 0.41,
+              evidence: [{ source_type: "google_maps" }],
+              governance: {
+                quarantine: true,
+                quarantineReasons: ["weak_only_sources", "low_score"],
+              },
+              status: "quarantined",
+            },
+          ],
+        },
+      }),
+      buildCandidatesFromSynthesis: () => [],
+      persistSynthesisOutputs: async ({ synthesis }) => ({
+        createdCount: 0,
+        createdRows: [],
+        snapshot: {
+          id: "snapshot-1",
+          metadataJson: {
+            governance: synthesis?.governance,
+          },
+        },
+      }),
+    }),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.candidateCount, 0);
+  assert.ok(
+    result.rawWarnings.some((item) =>
+      item.includes("weak or conflicting claim(s) were quarantined from candidate promotion")
+    )
+  );
+});

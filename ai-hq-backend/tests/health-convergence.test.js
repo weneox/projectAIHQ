@@ -54,6 +54,25 @@ class FakeHealthDb {
       };
     }
 
+    if (text.includes("with latest_truth")) {
+      return {
+        rows: [
+          {
+            missing_projection: 1,
+            stale_projection: 0,
+            invalid_projection: 0,
+            samples: [
+              {
+                tenantKey: "acme",
+                tenantId: "tenant-1",
+                reasonCode: "projection_missing",
+              },
+            ],
+          },
+        ],
+      };
+    }
+
     throw new Error(`Unhandled query: ${text}`);
   }
 }
@@ -79,7 +98,10 @@ test("root and api health derive operational readiness from the same blocker log
     rootHealth.operationalReadiness.blockers.items.map((item) => item.reasonCode),
     apiHealth.operationalReadiness.blockers.items.map((item) => item.reasonCode)
   );
-  assert.equal(rootHealth.operationalReadiness.repairActions.length, 2);
+  assert.equal(rootHealth.operationalReadiness.repairActions.length, 3);
+  assert.ok(
+    rootHealth.operationalReadiness.blockerReasonCodes.includes("projection_missing")
+  );
   assert.equal(validateAihqHealthEnvelope(apiHealth).ok, true);
   assert.equal(validateAihqHealthEnvelope(rootHealth).ok, true);
 });

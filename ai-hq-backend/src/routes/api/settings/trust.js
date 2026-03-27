@@ -7,6 +7,7 @@ import { createTenantTruthVersionHelpers } from "../../../db/helpers/tenantTruth
 import {
   getCurrentTenantRuntimeProjection,
   getTenantRuntimeProjectionFreshness,
+  getTenantRuntimeProjectionHealth,
   getLatestTenantRuntimeProjectionRun,
   refreshTenantRuntimeProjectionStrict,
 } from "../../../db/helpers/tenantRuntimeProjection.js";
@@ -115,70 +116,6 @@ function buildRuntimeProjectionRepairAction({
   };
 }
 
-function buildRuntimeProjectionHealth({
-  runtimeProjection = {},
-  runtimeFreshness = {},
-  latestTruthVersion = {},
-  latestRepairRun = {},
-  viewerRole = "operator",
-} = {}) {
-  const projectionId = s(runtimeProjection?.id);
-  const runtimeStatus = lower(runtimeProjection?.status || "");
-  const stale = !!runtimeFreshness?.stale;
-  const freshnessReasons = arr(runtimeFreshness?.reasons).map((item) => s(item)).filter(Boolean);
-  const latestRun = obj(latestRepairRun);
-  const latestRunStatus = lower(latestRun.status);
-  const latestRunReasonCode = s(
-    latestRun.error_code ||
-      arr(runtimeFreshness?.reasons)[0] ||
-      ""
-  );
-
-  let reasonCode = "";
-  if (!projectionId || !runtimeStatus) {
-    reasonCode = "runtime_projection_missing";
-  } else if (stale) {
-    reasonCode = "runtime_projection_stale";
-  } else if (runtimeStatus !== "ready") {
-    reasonCode = "runtime_projection_not_ready";
-  }
-
-  const usable = !!projectionId && runtimeStatus === "ready" && !stale;
-  const repairAction = buildRuntimeProjectionRepairAction({
-    latestTruthVersion,
-    viewerRole,
-    label:
-      !projectionId || !runtimeStatus
-        ? "Rebuild runtime projection"
-        : "Rebuild projection from approved truth",
-  });
-
-  return {
-    present: !!projectionId,
-    usable,
-    stale,
-    status: runtimeStatus,
-    reasonCode,
-    reasons: freshnessReasons,
-    canRepair: !!repairAction,
-    repairAction,
-    latestRepair: {
-      id: s(latestRun.id),
-      status: latestRunStatus,
-      triggerType: s(latestRun.trigger_type),
-      requestedBy: s(latestRun.requested_by),
-      startedAt: iso(latestRun.started_at),
-      finishedAt: iso(latestRun.finished_at),
-      durationMs: n(latestRun.duration_ms, 0),
-      errorCode: s(latestRun.error_code),
-      errorMessage: s(latestRun.error_message),
-      runtimeProjectionId: s(latestRun.runtime_projection_id),
-      outputSummary: obj(latestRun.output_summary_json),
-      reasonCode: latestRunReasonCode,
-    },
-  };
-}
-
 function getRepairLogger(req, tenant = {}, viewerRole = "") {
   return req.log?.child?.({
     flow: "runtime_projection_repair",
@@ -189,14 +126,14 @@ function getRepairLogger(req, tenant = {}, viewerRole = "") {
 }
 
 function buildTrustReadiness({
-  runtimeProjection = {},
+  runtimeProjectionHealth = {},
   latestTruthVersion = {},
   activeReviewSession = {},
-  latestRepairRun = {},
   viewerRole = "operator",
 } = {}) {
-  const runtimeStatus = lower(runtimeProjection?.status || "");
-  const runtimeStale = !!runtimeProjection?.stale;
+  const runtimeHealth = obj(runtimeProjectionHealth);
+  const runtimeStatus = lower(runtimeHealth.status || "");
+  const runtimeBlocked = ["missing", "stale", "blocked", "invalid"].includes(runtimeStatus);
   const reviewActive = !!activeReviewSession?.id;
   const blockers = [];
   const runtimeRepairAction = buildRuntimeProjectionRepairAction({
@@ -204,10 +141,10 @@ function buildTrustReadiness({
     viewerRole,
   });
 
-  if (!s(runtimeProjection?.id) || !runtimeStatus) {
+  if (runtimeStatus === "missing" || !runtimeStatus) {
     blockers.push(
       buildOperationalRepairGuidance({
-        reasonCode: "runtime_projection_missing",
+        reasonCode: s(runtimeHealth.primaryReasonCode || "projection_missing"),
         viewerRole: "operator",
         missingFields: ["runtime_projection"],
         title: "Runtime projection blocker",
@@ -226,18 +163,40 @@ function buildTrustReadiness({
             },
       })
     );
-  } else if (runtimeStale) {
+  } else if (runtimeStatus === "stale") {
     blockers.push(
       buildOperationalRepairGuidance({
-        reasonCode: "runtime_projection_stale",
+        reasonCode: s(runtimeHealth.primaryReasonCode || "projection_stale"),
         viewerRole: "operator",
-        missingFields: arr(runtimeProjection?.reasons),
+        missingFields: arr(runtimeHealth.reasonCodes),
         title: "Runtime projection stale",
         subtitle: "The approved runtime projection is stale and may not reflect the latest review-protected setup state.",
         action: runtimeRepairAction || {
           id: "open_setup_route",
           kind: "route",
           label: "Review runtime setup",
+          requiredRole: "operator",
+        },
+        target: runtimeRepairAction
+          ? obj(runtimeRepairAction.target)
+          : {
+              path: "/setup/runtime",
+              section: "runtime",
+            },
+      })
+    );
+  } else if (runtimeBlocked) {
+    blockers.push(
+      buildOperationalRepairGuidance({
+        reasonCode: s(runtimeHealth.primaryReasonCode || "authority_invalid"),
+        viewerRole: "operator",
+        missingFields: arr(runtimeHealth.reasonCodes),
+        title: "Runtime projection blocked",
+        subtitle: "Runtime projection health is blocking autonomous runtime use until the listed repair path is completed.",
+        action: runtimeRepairAction || {
+          id: "open_setup_route",
+          kind: "route",
+          label: "Open runtime setup",
           requiredRole: "operator",
         },
         target: runtimeRepairAction
@@ -297,17 +256,14 @@ function buildTrustReadiness({
 
   return {
     runtimeProjection: buildReadinessSurface({
-      status:
-        !s(runtimeProjection?.id) || !runtimeStatus
-          ? "blocked"
-          : runtimeStale
-          ? "blocked"
-          : "ready",
+      status: runtimeBlocked || !runtimeStatus ? "blocked" : "ready",
       message:
-        !s(runtimeProjection?.id) || !runtimeStatus
+        runtimeStatus === "missing" || !runtimeStatus
           ? "Runtime projection is unavailable."
-          : runtimeStale
+          : runtimeStatus === "stale"
           ? "Runtime projection is stale."
+          : runtimeBlocked
+          ? "Runtime projection is blocked."
           : "Runtime projection is ready.",
       blockers: blockers.filter((item) => item.category === "runtime"),
       repairActions: runtimeRepairAction ? [runtimeRepairAction] : [],
@@ -450,26 +406,22 @@ export function settingsTrustRoutes({ db }) {
         return status === "failed" || status === "error";
       });
       const conflictCount = arr(reviewQueue).filter((item) => lower(item.status) === "conflict").length;
-      const readiness = buildTrustReadiness({
-        runtimeProjection: {
-          id: s(runtimeProjection?.id),
-          status: lower(runtimeProjection?.status || ""),
-          stale: !!runtimeFreshness?.stale,
-          reasons: arr(runtimeFreshness?.reasons),
-        },
+      const projectionHealth = await getTenantRuntimeProjectionHealth({
+        tenantId: tenant.tenant_id,
+        tenantKey: tenant.tenant_key,
+        runtimeProjection,
+        freshness: runtimeFreshness,
         latestTruthVersion,
         activeReviewSession,
-        latestRepairRun,
+      }, db).catch(() => null);
+      const readiness = buildTrustReadiness({
+        runtimeProjectionHealth: projectionHealth,
+        latestTruthVersion,
+        activeReviewSession,
         viewerRole,
       });
-      const projectionHealth = buildRuntimeProjectionHealth({
-        runtimeProjection: {
-          id: s(runtimeProjection?.id),
-          status: lower(runtimeProjection?.status || ""),
-        },
-        runtimeFreshness,
+      const repairAction = buildRuntimeProjectionRepairAction({
         latestTruthVersion,
-        latestRepairRun,
         viewerRole,
       });
 
@@ -478,9 +430,9 @@ export function settingsTrustRoutes({ db }) {
         tenantKey: tenant.tenant_key,
         viewerRole,
         capabilities: {
-          canRepairRuntimeProjection: projectionHealth.canRepair,
+          canRepairRuntimeProjection: !!repairAction,
           runtimeProjectionRepair: {
-            allowed: projectionHealth.canRepair,
+            allowed: !!repairAction,
             requiredRoles: ["owner", "admin"],
             message: "Only owner/admin can rebuild runtime projection.",
           },
@@ -512,9 +464,21 @@ export function settingsTrustRoutes({ db }) {
             reasons: arr(runtimeFreshness?.reasons),
             health: projectionHealth,
             repair: {
-              canRepair: projectionHealth.canRepair,
-              action: projectionHealth.repairAction,
-              latestRun: projectionHealth.latestRepair,
+              canRepair: !!repairAction,
+              action: repairAction,
+              latestRun: {
+                id: s(latestRepairRun?.id),
+                status: lower(latestRepairRun?.status || ""),
+                triggerType: s(latestRepairRun?.trigger_type),
+                requestedBy: s(latestRepairRun?.requested_by),
+                startedAt: iso(latestRepairRun?.started_at),
+                finishedAt: iso(latestRepairRun?.finished_at),
+                durationMs: n(latestRepairRun?.duration_ms, 0),
+                errorCode: s(latestRepairRun?.error_code),
+                errorMessage: s(latestRepairRun?.error_message),
+                runtimeProjectionId: s(latestRepairRun?.runtime_projection_id),
+                outputSummary: obj(latestRepairRun?.output_summary_json),
+              },
             },
             readiness: readiness.runtimeProjection,
           },

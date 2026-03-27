@@ -150,6 +150,14 @@ export async function runProcessingStage(context, state) {
           })
         )
         .filter(Boolean);
+
+      const quarantinedCount = deps.arr(state.synthesis?.governance?.quarantinedClaims).length;
+      if (quarantinedCount > 0) {
+        state.warnings = deps.dedupeWarnings([
+          ...state.warnings,
+          `${quarantinedCount} weak or conflicting claim(s) were quarantined from candidate promotion`,
+        ]);
+      }
     } catch (candidateErr) {
       state.candidateDrafts = [];
       state.warnings = deps.dedupeWarnings([

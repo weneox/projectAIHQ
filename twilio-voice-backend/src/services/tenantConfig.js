@@ -1,5 +1,8 @@
 import { validateVoiceOperationalResponse } from "@aihq/shared-contracts/operations";
-import { validateVoiceProjectedRuntimeResponse } from "@aihq/shared-contracts/runtime";
+import {
+  getApprovedRuntimeAuthorityFailure,
+  validateVoiceProjectedRuntimeResponse,
+} from "@aihq/shared-contracts/runtime";
 import {
   buildCorrelationHeaders,
   createStructuredLogger,
@@ -16,29 +19,6 @@ function lower(v, d = "") {
 
 function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
-}
-
-function getRuntimeAuthorityFailure(projectedRuntime) {
-  const authority = obj(obj(projectedRuntime).authority);
-  const source = s(authority.source);
-  const available = authority.available === true;
-  const reasonCode = s(authority.reasonCode || authority.reason || "");
-
-  if (available && source === "approved_runtime_projection") {
-    return null;
-  }
-
-  return {
-    error: "runtime_authority_unavailable",
-    reasonCode: reasonCode || (!available ? "runtime_authority_unavailable" : "runtime_authority_source_invalid"),
-    authority,
-  };
-}
-
-function isDevLikeEnv() {
-  return ["", "development", "dev", "test"].includes(
-    lower(cfg.APP_ENV, "development")
-  );
 }
 
 const baseLogger = createStructuredLogger({
@@ -280,18 +260,6 @@ export async function getTenantVoiceConfig({
   });
 
   if (!remote?.ok) {
-    if (cfg.ALLOW_LOCAL_TENANT_CONFIG_FALLBACK && isDevLikeEnv()) {
-      return {
-        ok: false,
-        error: "unsafe_local_voice_config_fallback_blocked",
-        status: 503,
-        authority: {
-          source: "local_dev_fallback_disabled",
-          error: s(remote?.error || "tenant_config_fetch_failed"),
-        },
-      };
-    }
-
     return {
       ok: false,
       error: s(remote?.error || "tenant_config_fetch_failed"),
@@ -306,7 +274,7 @@ export async function getTenantVoiceConfig({
   const projectedRuntime = obj(remote.json?.projectedRuntime);
   const operationalChannels = obj(remote.json?.operationalChannels);
   const operationalVoice = obj(operationalChannels.voice);
-  const authorityFailure = getRuntimeAuthorityFailure(projectedRuntime);
+  const authorityFailure = getApprovedRuntimeAuthorityFailure(projectedRuntime);
 
   if (authorityFailure) {
     logger.warn("voice.tenant_config.authority_blocked", {

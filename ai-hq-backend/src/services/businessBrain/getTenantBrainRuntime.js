@@ -86,7 +86,6 @@ async function loadTenantBusinessRuntime(input = {}) {
   });
   const projection = projectionResult?.projection || null;
   const projectionFreshness = projectionResult?.freshness || null;
-  const dbData = await loadDbBrainData({ db, tenant: legacyTenant });
 
   if (projection?.id) {
     telemetryLogger?.info("runtime.authority.resolved", {
@@ -99,7 +98,6 @@ async function loadTenantBusinessRuntime(input = {}) {
       input,
       projection,
       freshness: projectionFreshness,
-      dbData,
     });
   }
 
@@ -126,6 +124,7 @@ async function loadTenantBusinessRuntime(input = {}) {
     tenantKey: s(legacyTenant?.tenant_key),
     reasonCode: "inspection_legacy_runtime_fallback",
   });
+  const dbData = await loadDbBrainData({ db, tenant: legacyTenant });
   return buildInspectionFallbackRuntime({
     legacyTenant,
     input,

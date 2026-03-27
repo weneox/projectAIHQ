@@ -196,6 +196,21 @@ const OPERATIONAL_REASON_METADATA = {
       requiredRole: "operator",
     },
   },
+  projection_missing: {
+    category: "runtime",
+    dependencyType: "runtime_projection",
+    title: "Runtime projection missing",
+    action: {
+      id: "refresh_projection",
+      kind: "route",
+      label: "Open runtime setup",
+      target: {
+        path: "/setup/runtime",
+        section: "runtime",
+      },
+      requiredRole: "operator",
+    },
+  },
   runtime_projection_stale: {
     category: "runtime",
     dependencyType: "runtime_projection",
@@ -204,6 +219,36 @@ const OPERATIONAL_REASON_METADATA = {
       id: "open_setup_route",
       kind: "route",
       label: "Review runtime setup",
+      target: {
+        path: "/setup/runtime",
+        section: "runtime",
+      },
+      requiredRole: "operator",
+    },
+  },
+  projection_stale: {
+    category: "runtime",
+    dependencyType: "runtime_projection",
+    title: "Runtime projection stale",
+    action: {
+      id: "refresh_projection",
+      kind: "route",
+      label: "Review runtime setup",
+      target: {
+        path: "/setup/runtime",
+        section: "runtime",
+      },
+      requiredRole: "operator",
+    },
+  },
+  truth_version_drift: {
+    category: "runtime",
+    dependencyType: "runtime_projection",
+    title: "Runtime projection drifted from approved truth",
+    action: {
+      id: "refresh_projection",
+      kind: "route",
+      label: "Refresh projection",
       target: {
         path: "/setup/runtime",
         section: "runtime",
@@ -222,6 +267,80 @@ const OPERATIONAL_REASON_METADATA = {
       target: {
         path: "/setup/runtime",
         section: "runtime",
+      },
+      requiredRole: "operator",
+    },
+  },
+  authority_invalid: {
+    category: "runtime",
+    dependencyType: "runtime_authority",
+    title: "Runtime authority invalid",
+    action: {
+      id: "rebuild_runtime",
+      kind: "route",
+      label: "Rebuild runtime",
+      target: {
+        path: "/setup/runtime",
+        section: "runtime",
+      },
+      requiredRole: "operator",
+    },
+  },
+  projection_build_failed: {
+    category: "runtime",
+    dependencyType: "runtime_projection",
+    title: "Runtime projection build failed",
+    action: {
+      id: "rebuild_runtime",
+      kind: "route",
+      label: "Rebuild runtime",
+      target: {
+        path: "/setup/runtime",
+        section: "runtime",
+      },
+      requiredRole: "operator",
+    },
+  },
+  repair_pending: {
+    category: "runtime",
+    dependencyType: "runtime_projection",
+    title: "Runtime repair pending",
+    action: {
+      id: "refresh_projection",
+      kind: "route",
+      label: "Monitor runtime repair",
+      target: {
+        path: "/setup/runtime",
+        section: "runtime",
+      },
+      requiredRole: "operator",
+    },
+  },
+  source_dependency_failed: {
+    category: "runtime",
+    dependencyType: "runtime_dependency",
+    title: "Runtime dependency failed",
+    action: {
+      id: "investigate_dependency_failure",
+      kind: "focus",
+      label: "Investigate dependency failure",
+      target: {
+        section: "runtime",
+      },
+      requiredRole: "operator",
+    },
+  },
+  approval_required: {
+    category: "runtime",
+    dependencyType: "approved_truth",
+    title: "Truth approval required",
+    action: {
+      id: "verify_truth_publish",
+      kind: "route",
+      label: "Open truth setup",
+      target: {
+        path: "/setup/studio",
+        section: "truth",
       },
       requiredRole: "operator",
     },
@@ -326,8 +445,8 @@ function buildOperationalBlockerItem(sample = {}, viewerRole = "") {
   };
 }
 
-function buildOperationalBlockers({ voice = {}, meta = {}, viewerRole = "" } = {}) {
-  const items = [...arr(voice.samples), ...arr(meta.samples)]
+function buildOperationalBlockers({ voice = {}, meta = {}, runtime = {}, viewerRole = "" } = {}) {
+  const items = [...arr(voice.samples), ...arr(meta.samples), ...arr(runtime.samples)]
     .map((sample) => buildOperationalBlockerItem(sample, viewerRole))
     .filter((item) => item.reasonCode);
   const reasonCodes = Array.from(
@@ -368,6 +487,12 @@ function buildDisabledOperationalReadinessSummary({ enforced = false, error = ""
         missingPageAccessToken: 0,
         samples: [],
       },
+      runtime: {
+        missingProjection: 0,
+        staleProjection: 0,
+        invalidProjection: 0,
+        samples: [],
+      },
     },
   };
 }
@@ -375,9 +500,11 @@ function buildDisabledOperationalReadinessSummary({ enforced = false, error = ""
 function finalizeOperationalReadinessSummary(summary = {}, { enforced = false, viewerRole = "" } = {}) {
   const voice = summary?.blockers?.voice || {};
   const meta = summary?.blockers?.meta || {};
+  const runtime = summary?.blockers?.runtime || {};
   const derived = buildOperationalBlockers({
     voice,
     meta,
+    runtime,
     viewerRole,
   });
   const total = n(summary?.blockers?.total, 0);
@@ -407,6 +534,12 @@ function finalizeOperationalReadinessSummary(summary = {}, { enforced = false, v
         missingChannelIds: n(meta.missingChannelIds),
         missingPageAccessToken: n(meta.missingPageAccessToken),
         samples: normalizeSamples(meta.samples),
+      },
+      runtime: {
+        missingProjection: n(runtime.missingProjection),
+        staleProjection: n(runtime.staleProjection),
+        invalidProjection: n(runtime.invalidProjection),
+        samples: normalizeSamples(runtime.samples),
       },
     },
   };
@@ -526,14 +659,61 @@ export async function getOperationalReadinessSummary(db, options = {}) {
     from meta_channels
   `);
 
+  const runtimeSummaryQ = await db.query(`
+    with latest_truth as (
+      select distinct on (tenant_id)
+        tenant_id,
+        tenant_key
+      from tenant_business_profile_versions
+      order by tenant_id, approved_at desc nulls last, created_at desc
+    ),
+    runtime_projection as (
+      select tenant_id, tenant_key, id, status
+      from tenant_business_runtime_projection
+      where is_current = true
+    )
+    select
+      count(*) filter (where rp.id is null) as missing_projection,
+      count(*) filter (where lower(coalesce(rp.status, '')) = 'stale') as stale_projection,
+      count(*) filter (
+        where rp.id is not null
+          and lower(coalesce(rp.status, '')) not in ('ready', 'stale')
+      ) as invalid_projection,
+      coalesce(
+        jsonb_agg(
+          jsonb_build_object(
+            'tenantKey', lt.tenant_key,
+            'tenantId', lt.tenant_id,
+            'reasonCode',
+            case
+              when rp.id is null then 'projection_missing'
+              when lower(coalesce(rp.status, '')) = 'stale' then 'projection_stale'
+              else 'authority_invalid'
+            end
+          )
+        ) filter (
+          where rp.id is null
+             or lower(coalesce(rp.status, '')) = 'stale'
+             or lower(coalesce(rp.status, '')) not in ('ready', 'stale')
+        ),
+        '[]'::jsonb
+      ) as samples
+    from latest_truth lt
+    left join runtime_projection rp on rp.tenant_id = lt.tenant_id
+  `);
+
   const voice = voiceSummaryQ?.rows?.[0] || {};
   const meta = metaSummaryQ?.rows?.[0] || {};
+  const runtime = runtimeSummaryQ?.rows?.[0] || {};
   const totalBlockers =
     n(voice.missing_settings) +
     n(voice.disabled_settings) +
     n(voice.missing_phone_number) +
     n(meta.missing_channel_ids) +
-    n(meta.missing_page_access_token);
+    n(meta.missing_page_access_token) +
+    n(runtime.missing_projection) +
+    n(runtime.stale_projection) +
+    n(runtime.invalid_projection);
 
   return finalizeOperationalReadinessSummary(
     {
@@ -551,6 +731,12 @@ export async function getOperationalReadinessSummary(db, options = {}) {
           missingChannelIds: n(meta.missing_channel_ids),
           missingPageAccessToken: n(meta.missing_page_access_token),
           samples: normalizeSamples(meta.samples),
+        },
+        runtime: {
+          missingProjection: n(runtime.missing_projection),
+          staleProjection: n(runtime.stale_projection),
+          invalidProjection: n(runtime.invalid_projection),
+          samples: normalizeSamples(runtime.samples),
         },
       },
     },

@@ -258,14 +258,13 @@ function buildTenantFromProjection({
     s(identity.displayName) ||
     s(profileJson.displayName) ||
     s(profileJson.companyName) ||
-    s(legacy?.profile?.brand_name) ||
-    s(legacy?.company_name) ||
+    s(identity.companyName) ||
+    s(identity.tenantKey) ||
     s(legacy?.tenant_key);
   const defaultLanguage = normalizeLanguage(
     identity.mainLanguage ||
       capabilitiesJson.primaryLanguage ||
       profileJson.mainLanguage ||
-      legacy?.default_language ||
       "az",
     "az"
   );
@@ -273,7 +272,6 @@ function buildTenantFromProjection({
     identity.supportedLanguages,
     capabilitiesJson.supportedLanguages,
     profileJson.supportedLanguages,
-    legacy?.supported_languages,
     defaultLanguage
   );
   const businessSummary = compactText(
@@ -298,7 +296,6 @@ function buildTenantFromProjection({
     s(profileJson.toneProfile) ||
     s(contentJson.toneProfile) ||
     s(capabilitiesJson.replyStyle) ||
-    s(legacy?.profile?.tone_of_voice) ||
     "professional, warm, concise";
   const maxSentences =
     lower(capabilitiesJson.replyLength) === "short"
@@ -307,7 +304,6 @@ function buildTenantFromProjection({
         ? 3
         : Number(commentsJson.maxReplySentences || 2);
   const bannedPhrases = uniqStrings([
-    ...arr(legacy?.profile?.banned_phrases),
     ...(capabilitiesJson.shouldAvoidCompetitorComparisons
       ? ["Do not compare competitors aggressively."]
       : []),
@@ -323,20 +319,18 @@ function buildTenantFromProjection({
     null;
 
   return {
-    ...legacy,
     id: s(identity.tenantId || legacy?.id),
     tenant_key: s(identity.tenantKey || legacy?.tenant_key),
-    company_name: s(profileJson.companyName || identity.companyName || legacy?.company_name),
-    legal_name: s(profileJson.legalName || identity.legalName || legacy?.legal_name),
-    industry_key: s(profileJson.industryKey || identity.industryKey || legacy?.industry_key || "generic_business"),
+    company_name: s(profileJson.companyName || identity.companyName),
+    legal_name: s(profileJson.legalName || identity.legalName),
+    industry_key: s(profileJson.industryKey || identity.industryKey || "generic_business"),
     timezone: s(legacy?.timezone || "Asia/Baku"),
     default_language: defaultLanguage,
     supported_languages: supportedLanguages,
     enabled_languages: supportedLanguages,
     profile: {
-      ...obj(legacy?.profile),
       brand_name: displayName,
-      website_url: s(profileJson.websiteUrl || identity.websiteUrl || legacy?.profile?.website_url),
+      website_url: s(profileJson.websiteUrl || identity.websiteUrl),
       public_email: primaryEmail,
       public_phone: primaryPhone,
       audience_summary: s(profileJson.targetAudience),
@@ -347,7 +341,6 @@ function buildTenantFromProjection({
       preferred_cta: preferredCta,
       banned_phrases: bannedPhrases,
       communication_rules: {
-        ...obj(legacy?.profile?.communication_rules),
         maxSentences,
         replyStyle: s(capabilitiesJson.replyStyle || "professional"),
         replyLength: s(capabilitiesJson.replyLength || "medium"),
@@ -355,7 +348,6 @@ function buildTenantFromProjection({
         ctaStyle: s(capabilitiesJson.ctaStyle || "soft"),
       },
       extra_context: {
-        ...obj(legacy?.profile?.extra_context),
         business_brain_enabled: true,
         projection_first: true,
         projection_status: s(projection?.status),
@@ -369,12 +361,11 @@ function buildTenantFromProjection({
       name: displayName,
       displayName,
       tone: toneOfVoice,
-      industry: s(profileJson.industryKey || identity.industryKey || legacy?.industry_key || "generic_business"),
+      industry: s(profileJson.industryKey || identity.industryKey || "generic_business"),
       defaultLanguage,
       languages: supportedLanguages,
     },
     meta: {
-      ...obj(legacy?.meta),
       businessSummary,
       about: s(profileJson.summaryLong || profileJson.summaryShort),
       services: uniqStrings(arr(services).map((x) => s(x.title))),
@@ -401,21 +392,19 @@ function buildTenantFromProjection({
       confidenceLabel: s(projection?.confidence_label || projection?.confidenceLabel),
     },
     ai_policy: {
-      ...obj(legacy?.ai_policy),
       auto_reply_enabled:
         typeof inboxJson.enabled === "boolean"
           ? inboxJson.enabled
-          : legacy?.ai_policy?.auto_reply_enabled,
+          : undefined,
       create_lead_enabled:
         typeof leadCaptureJson.enabled === "boolean"
           ? leadCaptureJson.enabled
-          : legacy?.ai_policy?.create_lead_enabled,
+          : undefined,
       businessContext: businessSummary,
       toneText: toneOfVoice,
       servicesText: uniqStrings(arr(services).map((x) => s(x.title))).join(", "),
     },
     inbox_policy: {
-      ...obj(legacy?.inbox_policy),
       reply_style: s(capabilitiesJson.replyStyle || ""),
       max_reply_sentences: maxSentences,
       pricing_visibility: s(preferredChannelPolicy?.pricing_visibility || ""),
@@ -427,7 +416,6 @@ function buildTenantFromProjection({
             : undefined,
     },
     comment_policy: {
-      ...obj(legacy?.comment_policy),
       reply_style: s(commentsJson.replyStyle || capabilitiesJson.replyStyle || ""),
       cta_style: s(capabilitiesJson.ctaStyle || ""),
       public_reply_mode: s(commentsJson.publicReplyMode || preferredChannelPolicy?.public_reply_mode || ""),

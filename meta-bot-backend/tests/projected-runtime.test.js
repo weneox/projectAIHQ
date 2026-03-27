@@ -95,6 +95,7 @@ test("meta tenant resolution returns projected runtime contract from AI HQ", asy
         source: "approved_runtime_projection",
         tenantId: "tenant-1",
         tenantKey: "acme",
+        runtimeProjectionId: "projection-1",
       },
       tenant: {
         tenantId: "tenant-1",
@@ -169,6 +170,63 @@ test("meta tenant resolution fails closed when projected runtime authority is un
   assert.equal(resolved.reasonCode, "runtime_projection_missing");
 });
 
+test("meta tenant resolution treats unhealthy runtime health as fail-closed authority", async () => {
+  mockFetchJson({
+    ok: true,
+    tenantKey: "acme",
+    tenantId: "tenant-1",
+    resolvedChannel: "instagram",
+    tenant: {
+      id: "tenant-1",
+      tenant_key: "acme",
+    },
+    channelConfig: {
+      channelType: "instagram",
+    },
+    projectedRuntime: {
+      authority: {
+        mode: "strict",
+        required: true,
+        available: true,
+        source: "approved_runtime_projection",
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+        runtimeProjectionId: "projection-1",
+        health: {
+          status: "stale",
+          primaryReasonCode: "projection_stale",
+          lastKnownGood: {
+            runtimeProjectionId: "projection-0",
+            diagnosticOnly: true,
+            usableAsAuthority: false,
+          },
+        },
+      },
+      tenant: {
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+        companyName: "Acme",
+      },
+      channels: {
+        meta: {
+          channelType: "instagram",
+          pageId: "page-1",
+          igUserId: "ig-1",
+        },
+      },
+    },
+  });
+
+  const resolved = await resolveTenantContextFromMetaEvent({
+    channel: "instagram",
+    pageId: "page-1",
+  });
+
+  assert.equal(resolved.ok, false);
+  assert.equal(resolved.error, "runtime_authority_unavailable");
+  assert.equal(resolved.reasonCode, "projection_stale");
+});
+
 test("meta tenant resolution emits authority telemetry without leaking tokens", async () => {
   const entries = [];
   mockFetchJson({
@@ -220,6 +278,53 @@ test("meta tenant resolution emits authority telemetry without leaking tokens", 
   assert.equal(JSON.stringify(entries).includes("internal-token"), false);
 });
 
+test("meta tenant resolution fails closed when authority is missing a projection id", async () => {
+  mockFetchJson({
+    ok: true,
+    tenantKey: "acme",
+    tenantId: "tenant-1",
+    resolvedChannel: "instagram",
+    tenant: {
+      id: "tenant-1",
+      tenant_key: "acme",
+    },
+    channelConfig: {
+      channelType: "instagram",
+    },
+    projectedRuntime: {
+      authority: {
+        mode: "strict",
+        required: true,
+        available: true,
+        source: "approved_runtime_projection",
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+      },
+      tenant: {
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+        companyName: "Acme",
+      },
+      channels: {
+        meta: {
+          channelType: "instagram",
+          pageId: "page-1",
+          igUserId: "ig-1",
+        },
+      },
+    },
+  });
+
+  const resolved = await resolveTenantContextFromMetaEvent({
+    channel: "instagram",
+    pageId: "page-1",
+  });
+
+  assert.equal(resolved.ok, false);
+  assert.equal(resolved.error, "runtime_authority_unavailable");
+  assert.equal(resolved.reasonCode, "runtime_projection_missing");
+});
+
 test("meta provider resolve prefers projected runtime channel ids", async () => {
   mockFetchJson({
     ok: true,
@@ -233,6 +338,7 @@ test("meta provider resolve prefers projected runtime channel ids", async () => 
         source: "approved_runtime_projection",
         tenantId: "tenant-1",
         tenantKey: "acme",
+        runtimeProjectionId: "projection-3",
       },
       tenant: {
         tenantId: "tenant-1",

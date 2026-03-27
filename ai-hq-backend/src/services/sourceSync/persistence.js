@@ -96,6 +96,7 @@ function buildKnowledgeItemsPreview(candidates = []) {
     status: "needs_review",
     sourceId: s(item.sourceId),
     sourceRunId: s(item.sourceRunId),
+    metadataJson: obj(item.metadataJson),
   }));
 }
 
@@ -187,6 +188,7 @@ async function persistSynthesisOutputs({
       source_fusion_version: SOURCE_FUSION_VERSION,
       trust: trust ? obj(trust) : null,
       candidate_admission: candidateAdmission ? obj(candidateAdmission) : null,
+      governance: obj(safeSynthesis.governance),
     },
     observationsJson: {
       total: safeCreatedObservations.length,
@@ -222,6 +224,8 @@ async function persistSynthesisOutputs({
       canonical_projection: "deferred_to_review",
       candidate_admission: candidateAdmission ? obj(candidateAdmission) : null,
       trust: trust ? obj(trust) : null,
+      governance: obj(safeSynthesis.governance),
+      quarantined_claim_count: arr(safeSynthesis.governance?.quarantinedClaims).length,
     },
     createdBy: requestedBy || SOURCE_FUSION_VERSION,
   });
