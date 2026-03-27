@@ -128,7 +128,9 @@ function isMissingRelationError(error) {
 }
 
 function canUseSavepoint(db) {
-  return Boolean(db && typeof db.query === "function" && typeof db.release === "function");
+  return Boolean(
+    db && typeof db.query === "function" && typeof db.release === "function"
+  );
 }
 
 function makeSavepointName(prefix = "runtime_optional") {
@@ -152,18 +154,21 @@ async function runOptionalDbStep(step, tenant, db, fn, fallbackValue = []) {
 
     return result;
   } catch (error) {
-    console.warn(`[runtimeTenantData] ${step} optional step failed; falling back`, {
-      tenantId: s(tenant?.id),
-      tenantKey: s(tenant?.tenant_key),
-      message: error?.message || String(error),
-      code: error?.code || null,
-      detail: error?.detail || null,
-      hint: error?.hint || null,
-      where: error?.where || null,
-      constraint: error?.constraint || null,
-      table: error?.table || null,
-      column: error?.column || null,
-    });
+    console.warn(
+      `[runtimeTenantData] ${step} optional step failed; falling back`,
+      {
+        tenantId: s(tenant?.id),
+        tenantKey: s(tenant?.tenant_key),
+        message: error?.message || String(error),
+        code: error?.code || null,
+        detail: error?.detail || null,
+        hint: error?.hint || null,
+        where: error?.where || null,
+        constraint: error?.constraint || null,
+        table: error?.table || null,
+        column: error?.column || null,
+      }
+    );
 
     if (useSavepoint) {
       try {
