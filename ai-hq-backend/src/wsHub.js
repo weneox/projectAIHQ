@@ -1,12 +1,23 @@
 import wsPkg from "ws";
-import { isOperatorRealtimeRole, verifyRealtimeTicket } from "./realtime/auth.js";
+import {
+  isOperatorRealtimeRole,
+  verifyRealtimeTicket,
+} from "./realtime/auth.js";
 import {
   buildRealtimeEnvelope,
   inferRealtimeAudience,
 } from "@aihq/shared-contracts/realtime";
 import { recordRealtimeAuthFailure } from "./observability/runtimeSignals.js";
 
-const { WebSocketServer } = wsPkg;
+const WebSocketServer =
+  wsPkg?.WebSocketServer ||
+  wsPkg?.Server ||
+  wsPkg?.default?.WebSocketServer ||
+  wsPkg?.default?.Server;
+
+if (typeof WebSocketServer !== "function") {
+  throw new TypeError("Compatible WebSocketServer export was not found from ws");
+}
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -175,7 +186,9 @@ export function createWsHub({ server, logger = null }) {
         clients.delete(ws);
         continue;
       }
+
       ws.isAlive = false;
+
       try {
         ws.ping();
       } catch {}
@@ -193,10 +206,12 @@ export function createWsHub({ server, logger = null }) {
       recordRealtimeAuthFailure({
         reason: verified.error,
       });
+
       logger?.warn?.("realtime.connect.denied", {
         reason: verified.error,
         remoteAddress: s(req.socket?.remoteAddress),
       });
+
       ws.close(1008, "unauthorized");
       return;
     }
@@ -228,6 +243,7 @@ export function createWsHub({ server, logger = null }) {
 
     ws.on("close", () => {
       clients.delete(ws);
+
       logger?.info?.("realtime.connect.closed", {
         tenantKey: ws.scope?.tenantKey,
         tenantId: ws.scope?.tenantId,
