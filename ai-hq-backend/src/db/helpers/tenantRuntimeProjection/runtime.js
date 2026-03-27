@@ -103,7 +103,11 @@ function buildAuthorityScopeSummary({
     currentSources: obj(freshnessValue.currentSources),
     expectedSources: obj(freshnessValue.expectedSources),
     hasTenant: Boolean(
-      s(graphTenantScope.tenantId || tenantScope.tenantId || freshnessValue.tenantId)
+      s(
+        graphTenantScope.tenantId ||
+          tenantScope.tenantId ||
+          freshnessValue.tenantId
+      )
     ),
     hasCanonicalTenant: Boolean(s(graphTenantScope.tenantId)),
     hasSynthesis: Boolean(s(graphValue.synthesis?.id)),
@@ -170,7 +174,8 @@ function resolveProjectionGraphOrThrow({ tenant = null, graph = null } = {}) {
       graph,
       reason: "tenant_not_found",
       missing: ["tenant"],
-      message: "Tenant runtime authority is unavailable because the tenant could not be resolved.",
+      message:
+        "Tenant runtime authority is unavailable because the tenant could not be resolved.",
     });
   }
 
@@ -219,6 +224,46 @@ function pickAuthorityUnavailableReasonFromFreshness(freshness = {}) {
   }
 
   return "tenant_runtime_authority_unavailable";
+}
+
+function assertProjectionRunOrThrow({
+  run = null,
+  tenant = null,
+  graph = null,
+} = {}) {
+  const runId = s(run?.id);
+  if (runId) return runId;
+
+  throw createTenantRuntimeAuthorityUnavailableError({
+    tenant,
+    graph,
+    reason: "runtime_projection_run_unavailable",
+    missing: ["runtime_projection_run"],
+    message:
+      "Tenant runtime authority is unavailable because the runtime projection run could not be created.",
+  });
+}
+
+function assertSavedProjectionOrThrow({
+  saved = null,
+  tenant = null,
+  graph = null,
+} = {}) {
+  const projectionRow = obj(saved);
+  const projectionId = s(projectionRow.id);
+
+  if (projectionId) {
+    return projectionRow;
+  }
+
+  throw createTenantRuntimeAuthorityUnavailableError({
+    tenant,
+    graph,
+    reason: "runtime_projection_persist_unavailable",
+    missing: ["runtime_projection"],
+    message:
+      "Tenant runtime authority is unavailable because the runtime projection could not be persisted.",
+  });
 }
 
 export function assessTenantRuntimeProjectionFreshness(
@@ -757,30 +802,37 @@ export async function refreshTenantRuntimeProjection(
       ]
     );
 
-    runId = s(run?.id);
+    runId = assertProjectionRunOrThrow({
+      run,
+      tenant,
+      graph,
+    });
 
-    const projection = promoteProjectionForRuntimeRefresh(
-      buildTenantRuntimeProjection(graph)
-    );
+    const builtProjection = buildTenantRuntimeProjection(graph);
+    const projection = promoteProjectionForRuntimeRefresh(builtProjection);
 
-    const saved = await upsertTenantRuntimeProjection(
-      {
-        tenantId: graph.tenant.id,
-        tenantKey: s(graph.tenant.tenant_key),
-        sourceSnapshotId: graph.synthesis?.id || null,
-        sourceProfileId: graph.profile?.id || null,
-        sourceCapabilitiesId: graph.capabilities?.id || null,
-        projection,
-        generatedBy,
-        approvedBy: s(approvedBy || generatedBy || "system"),
-        metadata: {
-          ...obj(metadata),
-          source: "refreshTenantRuntimeProjection",
-          refreshedByRuntimeProjection: true,
+    const saved = assertSavedProjectionOrThrow({
+      saved: await upsertTenantRuntimeProjection(
+        {
+          tenantId: graph.tenant.id,
+          tenantKey: s(graph.tenant.tenant_key),
+          sourceSnapshotId: graph.synthesis?.id || null,
+          sourceProfileId: graph.profile?.id || null,
+          sourceCapabilitiesId: graph.capabilities?.id || null,
+          projection,
+          generatedBy,
+          approvedBy: s(approvedBy || generatedBy || "system"),
+          metadata: {
+            ...obj(metadata),
+            source: "refreshTenantRuntimeProjection",
+            refreshedByRuntimeProjection: true,
+          },
         },
-      },
-      client
-    );
+        client
+      ),
+      tenant,
+      graph,
+    });
 
     await client.query(
       `
