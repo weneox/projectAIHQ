@@ -6,11 +6,11 @@ import { validateServiceHealthEnvelope } from "@aihq/shared-contracts/health";
 process.env.PUBLIC_BASE_URL = "https://voice.example.test";
 process.env.AIHQ_INTERNAL_TOKEN = "voice-internal-token";
 process.env.AIHQ_BASE_URL = "https://aihq.example.test";
-process.env.TWILIO_AUTH_TOKEN = "twilio-auth-token";
-process.env.TWILIO_ACCOUNT_SID = "ACaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-process.env.TWILIO_API_KEY = "SKaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-process.env.TWILIO_API_SECRET = "secret";
-process.env.TWILIO_TWIML_APP_SID = "APaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+process.env.TWILIO_AUTH_TOKEN = "twilio-auth-token-placeholder";
+process.env.TWILIO_ACCOUNT_SID = "AC_PLACEHOLDER_FOR_TESTS";
+process.env.TWILIO_API_KEY = "SK_PLACEHOLDER_FOR_TESTS";
+process.env.TWILIO_API_SECRET = "twilio-api-secret-placeholder";
+process.env.TWILIO_TWIML_APP_SID = "AP_PLACEHOLDER_FOR_TESTS";
 
 const { twilioRouter } = await import("../src/routes/twilio.js");
 const { resolveTenantFromRequest } = await import("../src/services/tenantResolver.js");
@@ -640,7 +640,7 @@ test("allowed flows work with correct auth and signature", async () => {
     From: "+15557654321",
   };
   const signature = twilio.getExpectedTwilioSignature(
-    "twilio-auth-token",
+    "twilio-auth-token-placeholder",
     "https://voice.example.test/twilio/voice",
     params
   );
@@ -672,7 +672,7 @@ test("voice route fails closed when AIHQ tenant config cannot be resolved", asyn
     From: "+15557654321",
   };
   const signature = twilio.getExpectedTwilioSignature(
-    "twilio-auth-token",
+    "twilio-auth-token-placeholder",
     "https://voice.example.test/twilio/voice",
     params
   );
@@ -748,7 +748,7 @@ test("voice route fails closed when projected runtime authority is unavailable",
     From: "+15557654321",
   };
   const signature = twilio.getExpectedTwilioSignature(
-    "twilio-auth-token",
+    "twilio-auth-token-placeholder",
     "https://voice.example.test/twilio/voice",
     params
   );
@@ -887,7 +887,7 @@ test("voice route fails closed when operational voice contract is not ready", as
     From: "+15557654321",
   };
   const signature = twilio.getExpectedTwilioSignature(
-    "twilio-auth-token",
+    "twilio-auth-token-placeholder",
     "https://voice.example.test/twilio/voice",
     params
   );

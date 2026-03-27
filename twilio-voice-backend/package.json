@@ -11,6 +11,9 @@
     "build": "npm run validate:env && npm run lint",
     "test": "node --import ../scripts/workspace-module-loader.mjs --test"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@aihq/shared-contracts": "1.0.0",
     "cors": "^2.8.5",

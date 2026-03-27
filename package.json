@@ -14,6 +14,7 @@
     "backfill:operational-data": "npm run backfill:operational-data -w ai-hq-backend",
     "check:operational-readiness": "npm run check:operational-readiness -w ai-hq-backend",
     "test:aihq:db": "node --import ./scripts/workspace-module-loader.mjs ./scripts/run-aihq-db-tests.mjs",
+    "check:workspace-startup-compat": "node ./scripts/check-workspace-startup-compat.mjs",
     "start:meta-bot-backend": "npm run start -w meta-bot-backend",
     "start:twilio-voice-backend": "npm run start -w twilio-voice-backend",
     "build:ai-hq-frontend": "npm run build -w ai-hq-frontend",

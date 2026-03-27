@@ -4,7 +4,7 @@ import cors from "cors";
 import helmet from "helmet";
 import http from "http";
 import twilio from "twilio";
-import { WebSocketServer } from "ws";
+import ws from "ws";
 import {
   createStructuredLogger,
   requestContextMiddleware,
@@ -39,6 +39,10 @@ const logger = createStructuredLogger({
   service: "twilio-voice-backend",
   env: cfg.APP_ENV,
 });
+const { WebSocketServer } = ws;
+const startupSmoke = ["1", "true", "yes"].includes(
+  String(process.env.STARTUP_SMOKE || "").trim().toLowerCase()
+);
 
 if (cfg.TRUST_PROXY) {
   app.set("trust proxy", 1);
@@ -154,30 +158,32 @@ app.use((req, res, next) => {
   });
 });
 
-const wss = new WebSocketServer({
-  server,
-  path: "/twilio/stream",
-});
+if (!startupSmoke) {
+  const wss = new WebSocketServer({
+    server,
+    path: "/twilio/stream",
+  });
 
-const reporters = createReporters({
-  fetchFn,
-  redis: null,
-  PUBLIC_BASE_URL: cfg.PUBLIC_BASE_URL,
-  OPENAI_API_KEY: cfg.OPENAI_API_KEY,
-  OPENAI_MODEL: "gpt-4.1-mini",
-});
+  const reporters = createReporters({
+    fetchFn,
+    redis: null,
+    PUBLIC_BASE_URL: cfg.PUBLIC_BASE_URL,
+    OPENAI_API_KEY: cfg.OPENAI_API_KEY,
+    OPENAI_MODEL: "gpt-4.1-mini",
+  });
 
-attachRealtimeBridge({
-  wss,
-  OPENAI_API_KEY: cfg.OPENAI_API_KEY,
-  DEBUG_REALTIME: cfg.DEBUG_REALTIME,
-  PUBLIC_BASE_URL: cfg.PUBLIC_BASE_URL,
-  reporters,
-  twilioClient: getTwilioClient(),
-  REALTIME_MODEL: cfg.OPENAI_REALTIME_MODEL,
-  REALTIME_VOICE: cfg.OPENAI_REALTIME_VOICE,
-  RECONNECT_MAX: cfg.OPENAI_REALTIME_RECONNECT_MAX,
-});
+  attachRealtimeBridge({
+    wss,
+    OPENAI_API_KEY: cfg.OPENAI_API_KEY,
+    DEBUG_REALTIME: cfg.DEBUG_REALTIME,
+    PUBLIC_BASE_URL: cfg.PUBLIC_BASE_URL,
+    reporters,
+    twilioClient: getTwilioClient(),
+    REALTIME_MODEL: cfg.OPENAI_REALTIME_MODEL,
+    REALTIME_VOICE: cfg.OPENAI_REALTIME_VOICE,
+    RECONNECT_MAX: cfg.OPENAI_REALTIME_RECONNECT_MAX,
+  });
+}
 
 app.use((err, req, res, next) => {
   try {
@@ -195,13 +201,22 @@ app.use((err, req, res, next) => {
   });
 });
 
-server.listen(cfg.PORT, "0.0.0.0", () => {
-  logger.info("voice.app.started", {
-    port: Number(cfg.PORT || 0),
+if (startupSmoke) {
+  logger.info("voice.app.startup_smoke.ok", {
     healthPath: "/health",
     runtimeSignalsPath: "/runtime-signals",
     streamPath: "/twilio/stream",
     intentionallyUnavailable: bootReadiness.intentionallyUnavailable === true,
-    durableIncidentTrailEnabled: runtimeIncidentClient.canUse(),
   });
-});
+} else {
+  server.listen(cfg.PORT, "0.0.0.0", () => {
+    logger.info("voice.app.started", {
+      port: Number(cfg.PORT || 0),
+      healthPath: "/health",
+      runtimeSignalsPath: "/runtime-signals",
+      streamPath: "/twilio/stream",
+      intentionallyUnavailable: bootReadiness.intentionallyUnavailable === true,
+      durableIncidentTrailEnabled: runtimeIncidentClient.canUse(),
+    });
+  });
+}

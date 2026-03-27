@@ -37,6 +37,9 @@ const bootReadiness = await checkAihqOperationalBootReadiness({
   throwOnBlocked: false,
 });
 const runtimeIncidentClient = createAihqRuntimeIncidentClient();
+const startupSmoke = ["1", "true", "yes"].includes(
+  String(process.env.STARTUP_SMOKE || "").trim().toLowerCase()
+);
 
 configureRuntimeSignalPersistence((incident) =>
   runtimeIncidentClient.recordIncident({
@@ -127,14 +130,24 @@ app.use((err, _req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  logger.info("meta.app.started", {
-    port: Number(PORT || 0),
+if (startupSmoke) {
+  logger.info("meta.app.startup_smoke.ok", {
     healthPath: "/health",
     runtimeSignalsPath: "/runtime-signals",
     webhookPath: "/webhook",
     internalOutboundPath: "/internal/outbound/send",
     intentionallyUnavailable: bootReadiness.intentionallyUnavailable === true,
-    durableIncidentTrailEnabled: runtimeIncidentClient.canUse(),
   });
-});
+} else {
+  app.listen(PORT, () => {
+    logger.info("meta.app.started", {
+      port: Number(PORT || 0),
+      healthPath: "/health",
+      runtimeSignalsPath: "/runtime-signals",
+      webhookPath: "/webhook",
+      internalOutboundPath: "/internal/outbound/send",
+      intentionallyUnavailable: bootReadiness.intentionallyUnavailable === true,
+      durableIncidentTrailEnabled: runtimeIncidentClient.canUse(),
+    });
+  });
+}
