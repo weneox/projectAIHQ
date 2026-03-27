@@ -6,7 +6,7 @@ function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
-const CORE_APP_ROUTES = new Set([
+export const CORE_APP_ROUTES = Object.freeze([
   "/truth",
   "/settings",
   "/inbox",
@@ -16,6 +16,16 @@ const CORE_APP_ROUTES = new Set([
   "/proposals",
   "/executions",
 ]);
+
+export const INTERNAL_ONLY_APP_ROUTES = Object.freeze([
+  "/command-demo",
+  "/analytics",
+  "/agents",
+  "/threads",
+]);
+
+const CORE_APP_ROUTE_SET = new Set(CORE_APP_ROUTES);
+const INTERNAL_ONLY_ROUTE_SET = new Set(INTERNAL_ONLY_APP_ROUTES);
 
 export function areInternalRoutesEnabled() {
   return s(import.meta.env?.VITE_ENABLE_INTERNAL_ROUTES) === "1";
@@ -28,7 +38,12 @@ export function isSetupPath(path = "") {
 
 export function isCoreAppPath(path = "") {
   const next = s(path);
-  return CORE_APP_ROUTES.has(next);
+  return CORE_APP_ROUTE_SET.has(next);
+}
+
+export function isInternalOnlyPath(path = "") {
+  const next = s(path);
+  return INTERNAL_ONLY_ROUTE_SET.has(next);
 }
 
 export function resolveAuthenticatedLanding(bootstrap = {}) {
@@ -52,7 +67,7 @@ export function resolveAuthenticatedLanding(bootstrap = {}) {
     return isSetupPath(nextSetupRoute) ? nextSetupRoute : "/setup/studio";
   }
 
-  if (isCoreAppPath(nextRoute)) {
+  if (isCoreAppPath(nextRoute) && !isInternalOnlyPath(nextRoute)) {
     return nextRoute;
   }
 

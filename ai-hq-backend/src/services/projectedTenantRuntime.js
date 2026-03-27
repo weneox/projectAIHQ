@@ -171,8 +171,16 @@ export function buildProjectedTenantRuntime({
   operationalChannels = null,
 } = {}) {
   const raw = obj(runtime.raw);
-  const projection = obj(raw.projection);
   const authority = obj(runtime.authority);
+  const projection = obj(raw.projection);
+  const projectionId = s(projection.id || authority.runtimeProjectionId);
+
+  if (authority.available !== true || !projectionId) {
+    throw new Error(
+      "Approved projected runtime is required to build downstream tenant runtime."
+    );
+  }
+
   const identity = obj(projection.identity_json);
   const profile = obj(projection.profile_json);
   const contacts = arr(projection.contacts_json);
@@ -198,6 +206,7 @@ export function buildProjectedTenantRuntime({
   return {
     authority: {
       ...authority,
+      runtimeProjectionId: projectionId,
       projectionHash: s(projection.projection_hash),
       sourceSnapshotId: s(projection.source_snapshot_id),
       sourceProfileId: s(projection.source_profile_id),

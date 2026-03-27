@@ -23,7 +23,7 @@ export function buildSetupStudioSceneContract({
     },
     review: {
       discoveryState: state.discoveryState,
-      reviewDraft: viewModel.scopedReviewDraft,
+      currentReview: viewModel.scopedCurrentReview,
       meta: viewModel.effectiveMeta,
       reviewSources: viewModel.visibleSources,
       reviewEvents: viewModel.visibleEvents,

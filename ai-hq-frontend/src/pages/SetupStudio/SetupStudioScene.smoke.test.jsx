@@ -1,7 +1,12 @@
+/* @vitest-environment jsdom */
+
+import React from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import SetupStudioScene from "./SetupStudioScene.jsx";
+
+globalThis.React = React;
 
 afterEach(() => {
   cleanup();
@@ -31,7 +36,7 @@ describe("Setup Studio entry smoke", () => {
         }}
         review={{
           discoveryState: { mode: "idle" },
-          reviewDraft: {},
+          currentReview: {},
           meta: { setupCompleted: false },
           reviewSources: [],
           reviewEvents: [],
@@ -77,18 +82,18 @@ describe("Setup Studio entry smoke", () => {
       screen.getByRole("heading", {
         name: /build your business draft from real signals/i,
       })
-    ).toBeInTheDocument();
+    ).toBeTruthy();
     expect(
       screen.getByRole("button", { name: /create draft/i })
-    ).toBeInTheDocument();
+    ).toBeTruthy();
     expect(
       screen.getByRole("button", { name: /resume review/i })
-    ).toBeInTheDocument();
+    ).toBeTruthy();
     expect(
       screen.getByRole("button", { name: /open review workspace/i })
-    ).toBeInTheDocument();
+    ).toBeTruthy();
     expect(
       screen.getByRole("button", { name: /view approved truth/i })
-    ).toBeInTheDocument();
+    ).toBeTruthy();
   });
 });

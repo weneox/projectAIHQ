@@ -1,6 +1,8 @@
 import { ArrowRight, Check, ExternalLink, X } from "lucide-react";
+import React from "react";
 
 import SetupStudioStageShell from "../components/SetupStudioStageShell.jsx";
+import SetupStudioEvidenceNotice from "../components/SetupStudioEvidenceNotice.jsx";
 import {
   GhostButton,
   MetricCard,
@@ -209,6 +211,7 @@ export default function SetupStudioKnowledgeStage({
   actingKnowledgeId,
   sourceLabel,
   warnings,
+  honestySummary = {},
   onApproveKnowledge,
   onRejectKnowledge,
   onNext,
@@ -261,6 +264,14 @@ export default function SetupStudioKnowledgeStage({
               </div>
             </StageSection>
           ) : null}
+
+          <SetupStudioEvidenceNotice
+            tone={honestySummary?.tone || "default"}
+            title={honestySummary?.title || "Knowledge review"}
+            body={honestySummary?.message || ""}
+            chips={honestySummary?.chips || []}
+            className="mt-6"
+          />
 
           <StageSection className="mt-6">
             {items.length ? (

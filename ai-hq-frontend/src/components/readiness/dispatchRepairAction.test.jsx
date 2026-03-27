@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("../../api/client.js", () => ({
+  apiRequest: vi.fn().mockResolvedValue({ ok: true, repaired: true }),
+}));
+
 import { dispatchRepairAction } from "./dispatchRepairAction.js";
+import { apiRequest } from "../../api/client.js";
 
 describe("dispatchRepairAction", () => {
   it("routes safe route actions through window.location.assign", async () => {
@@ -76,5 +81,26 @@ describe("dispatchRepairAction", () => {
     expect(result.ok).toBe(true);
     expect(scrollIntoView).toHaveBeenCalled();
     expect(focus).toHaveBeenCalled();
+  });
+
+  it("executes API repair actions against the configured endpoint", async () => {
+    const result = await dispatchRepairAction({
+      id: "rebuild_runtime_projection",
+      kind: "api",
+      allowed: true,
+      target: {
+        path: "/api/settings/trust/runtime-projection/repair",
+        method: "POST",
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(apiRequest).toHaveBeenCalledWith(
+      "/api/settings/trust/runtime-projection/repair",
+      expect.objectContaining({
+        method: "POST",
+        body: {},
+      })
+    );
   });
 });

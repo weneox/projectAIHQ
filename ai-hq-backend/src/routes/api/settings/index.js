@@ -11,6 +11,7 @@ import { contactsSettingsRoutes } from "./contacts.js";
 import { operationalSettingsRoutes } from "./operational.js";
 import { settingsSourcesRoutes } from "./sources.js";
 import { settingsTrustRoutes } from "./trust.js";
+import { auditHistorySettingsRoutes } from "./auditHistory.js";
 
 export function settingsRoutes({ db }) {
   const router = express.Router();
@@ -27,6 +28,7 @@ export function settingsRoutes({ db }) {
   router.use("/settings", operationalSettingsRoutes({ db }));
   router.use("/settings", settingsSourcesRoutes({ db }));
   router.use("/settings", settingsTrustRoutes({ db }));
+  router.use("/settings", auditHistorySettingsRoutes({ db }));
 
   return router;
 }

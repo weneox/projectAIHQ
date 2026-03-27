@@ -5,6 +5,7 @@
 import { runSourceSync } from "../sourceSync/index.js";
 import { buildSetupStatus } from "./setup.js";
 import { createLogger } from "../../utils/logger.js";
+import { assertSafePublicFetchUrl } from "../../utils/publicFetchSafety.js";
 import {
   attachSourceToSetupReviewSession,
   createSetupReviewSession,
@@ -1149,6 +1150,19 @@ async function importSourceByType({
 
   if (!normalizedUrl) {
     throw new Error("Valid source URL is required");
+  }
+
+  if (normalizedType === "website") {
+    try {
+      await assertSafePublicFetchUrl(normalizedUrl);
+    } catch (error) {
+      if (error?.code === "UNSAFE_PUBLIC_FETCH_URL_DENIED") {
+        throw new Error(
+          `Unsafe website source URL denied: ${s(error?.reasonCode || "unsafe_destination_denied")}`
+        );
+      }
+      throw error;
+    }
   }
 
   const actor = normalizeActorContext({

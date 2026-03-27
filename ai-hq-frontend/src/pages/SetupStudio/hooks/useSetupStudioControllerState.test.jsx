@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { useSetupStudioControllerState } from "./useSetupStudioControllerState.js";
+import { deriveCanonicalReviewProjection } from "../state/reviewState.js";
 
 describe("useSetupStudioControllerState", () => {
   it("normalizes and stores the active source scope", () => {
@@ -78,7 +79,10 @@ describe("useSetupStudioControllerState", () => {
     });
 
     expect(result.current.currentReview.session.id).toBe("session-42");
-    expect(result.current.reviewDraft.overview.companyName).toBe("Acme Bakery");
+    expect(result.current.reviewDraft).toBeUndefined();
+    expect(
+      deriveCanonicalReviewProjection(result.current.currentReview).overview.companyName
+    ).toBe("Acme Bakery");
     expect(result.current.businessForm.companyName).toBe("Acme Bakery");
     expect(result.current.businessForm.websiteUrl).toBe("https://acme.example");
     expect(result.current.manualSections.servicesText).toContain("Custom Cakes");

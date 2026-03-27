@@ -220,6 +220,7 @@ export async function fetchRobotsFile(baseUrl = "") {
         url: robotsUrl,
         text: "",
         parsed: null,
+        error: s(fetched?.error || ""),
       };
     }
 
@@ -228,6 +229,7 @@ export async function fetchRobotsFile(baseUrl = "") {
       url: robotsUrl,
       text: fetched.text,
       parsed: parseRobotsTxt(fetched.text),
+      error: "",
     };
   } catch {
     return {
@@ -235,6 +237,7 @@ export async function fetchRobotsFile(baseUrl = "") {
       url: "",
       text: "",
       parsed: null,
+      error: "robots_fetch_failed",
     };
   }
 }
@@ -331,6 +334,7 @@ export async function fetchSitemapCandidates(baseUrl = "", robots = null) {
           status: fetched?.status || 0,
           discoveredUrlCount: 0,
           kind: "unknown",
+          error: s(fetched?.error || "sitemap_fetch_failed"),
         });
         continue;
       }
@@ -355,6 +359,7 @@ export async function fetchSitemapCandidates(baseUrl = "", robots = null) {
           status: fetched.status || 200,
           discoveredUrlCount: parsedUrls.length,
           kind,
+          error: "",
         });
       }
     }
@@ -363,12 +368,14 @@ export async function fetchSitemapCandidates(baseUrl = "", robots = null) {
       found: sitemapSummaries.some((x) => x.ok),
       sitemaps: sitemapSummaries,
       candidates: rankSitemapCandidates(uniq(allUrls).slice(0, maxSitemapUrls), baseUrl),
+      error: s(sitemapSummaries.find((item) => s(item?.error).startsWith("unsafe_"))?.error),
     };
   } catch {
     return {
       found: false,
       sitemaps: [],
       candidates: [],
+      error: "sitemap_fetch_failed",
     };
   }
 }

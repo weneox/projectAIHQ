@@ -62,6 +62,8 @@ export function createEmptyReviewState() {
     session: null,
     concurrency: {},
     finalizeProtection: {},
+    viewerRole: "member",
+    permissions: {},
     sessionMeta: {
       sessionId: "",
       sessionStatus: "",
@@ -996,6 +998,8 @@ export function normalizeReviewState(payload = {}) {
     session,
     concurrency,
     finalizeProtection,
+    viewerRole: firstNonEmpty(payload?.viewerRole, review?.viewerRole, payload?.role, review?.role),
+    permissions: firstObject(payload?.permissions, review?.permissions),
     sessionMeta,
     draft: obj(review?.draft),
     sources: arr(review?.sources),

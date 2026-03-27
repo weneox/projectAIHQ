@@ -7,6 +7,12 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
   const normalized = __test__.normalizeTrustViewResponse({
     tenantId: "tenant-1",
     tenantKey: "acme",
+    viewerRole: "admin",
+    permissions: {
+      auditHistoryRead: {
+        allowed: true,
+      },
+    },
     summary: {
       readiness: {
         status: "blocked",
@@ -39,6 +45,30 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
         id: "projection-1",
         status: "ready",
         stale: false,
+        health: {
+          present: true,
+          usable: true,
+          stale: false,
+          status: "ready",
+          reasonCode: "",
+          canRepair: true,
+        },
+        repair: {
+          canRepair: true,
+          action: {
+            id: "rebuild_runtime_projection",
+            kind: "api",
+            label: "Rebuild runtime projection",
+            target: {
+              path: "/api/settings/trust/runtime-projection/repair",
+              method: "POST",
+            },
+          },
+          latestRun: {
+            id: "repair-1",
+            status: "success",
+          },
+        },
         readiness: {
           status: "ready",
           blockers: [],
@@ -81,9 +111,15 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
   });
 
   expect(normalized.tenantKey).toBe("acme");
+  expect(normalized.viewerRole).toBe("admin");
+  expect(normalized.permissions.auditHistoryRead.allowed).toBe(true);
   expect(normalized.summary.readiness.blocked).toBe(true);
   expect(normalized.summary.readiness.blockedItems[0].reasonCode).toBe("runtime_projection_missing");
   expect(normalized.summary.sources.total).toBe(2);
+  expect(normalized.summary.runtimeProjection.health.usable).toBe(true);
+  expect(normalized.summary.runtimeProjection.repair.action?.id).toBe(
+    "rebuild_runtime_projection"
+  );
   expect(normalized.recentRuns[0].sourceDisplayName).toBe("Main Website");
   expect(normalized.audit[0].action).toBe("settings.source.sync.requested");
 });

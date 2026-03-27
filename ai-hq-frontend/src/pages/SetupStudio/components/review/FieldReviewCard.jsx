@@ -1,4 +1,5 @@
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import React from "react";
 
 import { TinyChip } from "../SetupStudioUi.jsx";
 
@@ -66,6 +67,7 @@ export default function FieldReviewCard({
   multiline = false,
   needsAttention = false,
   evidence = [],
+  honesty = {},
 }) {
   const visibleEvidence = arr(evidence).filter(
     (item) => s(item.label) || s(item.value) || s(item.note)
@@ -88,12 +90,18 @@ export default function FieldReviewCard({
             Reviewed
           </TinyChip>
         )}
+        {s(honesty.label) ? (
+          <TinyChip tone={honesty.tone === "success" ? "success" : honesty.tone === "warn" ? "warn" : "default"}>
+            {honesty.label}
+          </TinyChip>
+        ) : null}
+        {s(honesty.provenanceLabel) ? <TinyChip>{honesty.provenanceLabel}</TinyChip> : null}
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div className="min-w-0">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Proposed truth
+            Review-session draft
           </div>
           <FieldValue
             value={value}
@@ -107,7 +115,7 @@ export default function FieldReviewCard({
 
         <div className="min-w-0">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Observed evidence
+            Source-derived evidence
           </div>
           <FieldValue
             value={observedValue}
@@ -117,6 +125,12 @@ export default function FieldReviewCard({
           />
         </div>
       </div>
+
+      {s(honesty.note) ? (
+        <div className="mt-4 rounded-[18px] border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm leading-6 text-amber-900">
+          {honesty.note}
+        </div>
+      ) : null}
 
       {visibleEvidence.length ? (
         <div className="mt-4 rounded-[22px] border border-slate-200/80 bg-slate-50/70 p-4">

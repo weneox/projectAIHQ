@@ -190,6 +190,9 @@ export async function fetchTextDocument(url = "", opts = {}) {
       ok: false,
       url: s(fetchResult?.url || url),
       error: normalizeFetchError(fetchResult, "fetch_failed"),
+      reasonCode: s(fetchResult?.reasonCode || fetchResult?.error || ""),
+      denied: fetchResult?.denied === true,
+      errorDetail: obj(fetchResult?.errorDetail),
       status: Number(fetchResult?.status || 0),
       text: "",
       bytes: 0,
@@ -292,6 +295,14 @@ export async function fetchWebsiteEntry(sourceUrl = "", opts = {}) {
       timeoutMs: candidateTotalTimeoutMs,
       attemptTimeoutMs: candidateAttemptTimeoutMs,
     });
+
+    if (s(htmlDoc?.error).startsWith("unsafe_")) {
+      return {
+        ok: false,
+        error: s(htmlDoc.error),
+        attempts,
+      };
+    }
 
     if (htmlDoc.ok) {
       return {

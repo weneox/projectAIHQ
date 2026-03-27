@@ -36,6 +36,13 @@ export async function auditSetupAction(
       tenantId: actor?.tenantId || actor?.tenant?.id || null,
       tenantKey: actor?.tenantKey || actor?.tenant?.tenant_key || null,
       role: s(actor?.role || actor?.user?.role || "member"),
+      actorType: "user",
+      actorId: getSetupAuditActor(actor),
+      requestId: s(actor?.requestId),
+      correlationId: s(actor?.correlationId),
+      outcome: s(meta?.outcome || "succeeded"),
+      reasonCode: s(meta?.reasonCode),
+      targetArea: s(meta?.targetArea || "setup_review"),
       ...compactDraftObject(meta),
     });
   } catch {}

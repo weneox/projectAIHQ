@@ -262,6 +262,7 @@ export function createSourceSyncWorker({ db }) {
         touchWorkerHeartbeat("source-sync-worker", getState());
         const runLogger = logger.child({
           requestId: s(claimedRun.metadata_json?.requestId),
+          correlationId: s(claimedRun.metadata_json?.correlationId),
           runId: s(claimedRun.id),
           sourceId: s(claimedRun.source_id),
           reviewSessionId: s(claimedRun.review_session_id),
@@ -312,6 +313,7 @@ export function createSourceSyncWorker({ db }) {
               new Error(buildFailureDetails(result).errorMessage),
               {
                 stage: buildFailureDetails(result).stage,
+                reasonCode: s(result?.code || ""),
               }
             );
           } else {
@@ -319,6 +321,7 @@ export function createSourceSyncWorker({ db }) {
             runLogger.warn("source_sync.execution.retry_scheduled", {
               nextRetryAt: resolution?.retryPlan?.nextRetryAt || "",
               delayMs: Number(resolution?.retryPlan?.delayMs || 0),
+              reasonCode: s(result?.code || ""),
             });
           }
         } else {
@@ -328,6 +331,7 @@ export function createSourceSyncWorker({ db }) {
           runLogger.info("source_sync.execution.completed", {
             mode: s(result?.mode || "success"),
             stage: s(result?.stage),
+            reasonCode: s(result?.code || ""),
           });
         }
 

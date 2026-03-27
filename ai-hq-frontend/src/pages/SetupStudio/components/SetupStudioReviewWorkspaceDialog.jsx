@@ -62,7 +62,7 @@ export default function SetupStudioReviewWorkspaceDialog({
   businessForm,
   discoveryProfileRows,
   manualSections,
-  reviewDraft,
+  currentReview,
   reviewSources,
   reviewSyncState,
   onSetBusinessField,
@@ -97,7 +97,7 @@ export default function SetupStudioReviewWorkspaceDialog({
           onSetManualSection={onSetManualSection}
           onSaveBusiness={onSaveBusiness}
           onClose={onClose}
-          reviewDraft={reviewDraft}
+          currentReview={currentReview}
           reviewSources={reviewSources}
           reviewSyncState={reviewSyncState}
         />

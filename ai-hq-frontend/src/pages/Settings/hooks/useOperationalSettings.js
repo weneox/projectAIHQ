@@ -38,6 +38,7 @@ function emptyOperationalData() {
     },
     operationalChannels: {},
     viewerRole: "member",
+    capabilities: {},
   };
 }
 

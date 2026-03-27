@@ -1,3 +1,5 @@
+import React from "react";
+
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
@@ -5,17 +7,20 @@ function s(v, d = "") {
 export default function FinalizeFooter({
   savingBusiness,
   blockingMessage = "",
+  permissionMessage = "",
+  honestyMessage = "",
   onClose,
   onSubmit,
 }) {
-  const blocked = !!s(blockingMessage);
+  const blocked = !!s(blockingMessage) || !!s(permissionMessage);
+  const message = s(permissionMessage) || s(blockingMessage) || s(honestyMessage);
 
   return (
     <div className="relative z-10 border-t border-slate-200/80 bg-[rgba(250,250,250,0.9)] px-5 py-4 backdrop-blur-[16px] sm:px-6">
       <div className="mx-auto flex w-full max-w-[1040px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm leading-6 text-slate-500">
-          {blocked
-            ? blockingMessage
+          {message
+            ? message
             : "Finalize only after the proposed truth and the observed evidence both look correct."}
         </div>
 

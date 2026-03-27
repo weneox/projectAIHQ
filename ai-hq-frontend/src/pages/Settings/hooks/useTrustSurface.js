@@ -8,6 +8,9 @@ function createEmptyTrustView() {
     summary: {},
     recentRuns: [],
     audit: [],
+    viewerRole: "member",
+    capabilities: {},
+    permissions: {},
   };
 }
 

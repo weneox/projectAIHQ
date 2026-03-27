@@ -1,44 +1,90 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveAuthenticatedLanding } from "./appEntry.js";
+import {
+  areInternalRoutesEnabled,
+  CORE_APP_ROUTES,
+  INTERNAL_ONLY_APP_ROUTES,
+  isInternalOnlyPath,
+  resolveAuthenticatedLanding,
+} from "./appEntry.js";
 
 describe("resolveAuthenticatedLanding", () => {
-it("routes incomplete workspaces into setup studio", () => {
-  const target = resolveAuthenticatedLanding({
-    workspace: {
-      progress: {
-        setupCompleted: false,
-        nextSetupRoute: "/setup/studio",
+  it("routes incomplete workspaces into setup studio", () => {
+    const target = resolveAuthenticatedLanding({
+      workspace: {
+        progress: {
+          setupCompleted: false,
+          nextSetupRoute: "/setup/studio",
+        },
       },
-    },
+    });
+
+    expect(target).toBe("/setup/studio");
   });
 
-  expect(target).toBe("/setup/studio");
-});
-
-it("routes completed workspaces into backend-provided core route", () => {
-  const target = resolveAuthenticatedLanding({
-    workspace: {
-      progress: {
-        setupCompleted: true,
-        nextRoute: "/settings",
+  it("routes completed workspaces into backend-provided core route", () => {
+    const target = resolveAuthenticatedLanding({
+      workspace: {
+        progress: {
+          setupCompleted: true,
+          nextRoute: "/settings",
+        },
       },
-    },
+    });
+
+    expect(target).toBe("/settings");
   });
 
-  expect(target).toBe("/settings");
-});
-
-it("falls back to truth when completed workspace points at non-product root", () => {
-  const target = resolveAuthenticatedLanding({
-    workspace: {
-      progress: {
-        setupCompleted: true,
-        nextRoute: "/",
+  it("falls back to truth when completed workspace points at non-product root", () => {
+    const target = resolveAuthenticatedLanding({
+      workspace: {
+        progress: {
+          setupCompleted: true,
+          nextRoute: "/",
+        },
       },
-    },
+    });
+
+    expect(target).toBe("/truth");
   });
 
-  expect(target).toBe("/truth");
-});
+  it("refuses internal-only routes as authenticated landing targets", () => {
+    const target = resolveAuthenticatedLanding({
+      workspace: {
+        progress: {
+          setupCompleted: true,
+          nextRoute: "/analytics",
+        },
+      },
+    });
+
+    expect(target).toBe("/truth");
+  });
+
+  it("defines a bounded production route list and a separate internal-only route list", () => {
+    expect(CORE_APP_ROUTES).toEqual([
+      "/truth",
+      "/settings",
+      "/inbox",
+      "/leads",
+      "/comments",
+      "/voice",
+      "/proposals",
+      "/executions",
+    ]);
+
+    expect(INTERNAL_ONLY_APP_ROUTES).toEqual([
+      "/command-demo",
+      "/analytics",
+      "/agents",
+      "/threads",
+    ]);
+
+    expect(isInternalOnlyPath("/agents")).toBe(true);
+    expect(isInternalOnlyPath("/truth")).toBe(false);
+  });
+
+  it("keeps internal routes disabled by default", () => {
+    expect(areInternalRoutesEnabled()).toBe(false);
+  });
 });

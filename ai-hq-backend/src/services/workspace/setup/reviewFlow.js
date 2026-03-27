@@ -1,5 +1,6 @@
 import { buildFrontendReviewShape } from "./reviewShape.js";
 import { arr, compactObject, obj, s, toFiniteNumber } from "./utils.js";
+import { can, normalizeRole } from "../../../utils/roles.js";
 
 export async function loadCurrentReviewPayload(
   { db, actor, eventLimit = 30 },
@@ -27,9 +28,21 @@ export async function loadCurrentReviewPayload(
     sources: arr(review?.sources),
     events,
   });
+  const viewerRole = normalizeRole(actor?.role);
+  const canFinalize = can(viewerRole, "workspace", "manage");
 
   return {
     review: frontendReview,
+    viewerRole,
+    permissions: {
+      setupReviewFinalize: {
+        allowed: canFinalize,
+        requiredRoles: ["owner", "admin"],
+        message: canFinalize
+          ? ""
+          : "Only owner/admin can finalize setup review.",
+      },
+    },
     bundleSources: frontendReview.bundleSources,
     contributionSummary: frontendReview.contributionSummary,
     fieldProvenance: frontendReview.fieldProvenance,

@@ -95,7 +95,7 @@ function buildProjectionFirstRuntime({
   });
 }
 
-function buildLegacyFallbackRuntime({ legacyTenant, input, dbData, authorityMode }) {
+function buildInspectionFallbackRuntime({ legacyTenant, input, dbData, authorityMode }) {
   const services = buildServices({
     incomingServices: input?.services,
     tenantServices: dbData.tenantServices,
@@ -141,11 +141,11 @@ function buildLegacyFallbackRuntime({ legacyTenant, input, dbData, authorityMode
       available: false,
       tenantId: legacyTenant.id,
       tenantKey: legacyTenant.tenant_key,
-      reasonCode: "legacy_fallback_runtime",
-      reason: "legacy_fallback_runtime",
+      reasonCode: "inspection_legacy_runtime_fallback",
+      reason: "inspection_legacy_runtime_fallback",
     }),
     raw: {
-      mode: "legacy_fallback",
+      mode: "inspection_fallback",
       businessProfile: dbData.businessProfile,
       capabilities: dbData.capabilities,
       facts: dbData.facts,
@@ -160,7 +160,9 @@ function buildLegacyFallbackRuntime({ legacyTenant, input, dbData, authorityMode
 }
 
 export {
-  buildLegacyFallbackRuntime,
+  buildInspectionFallbackRuntime,
   buildProjectionFirstRuntime,
   buildUnresolvedTenantFallback,
 };
+
+export const buildLegacyFallbackRuntime = buildInspectionFallbackRuntime;

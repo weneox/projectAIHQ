@@ -940,6 +940,7 @@ export function attachRealtimeBridge({
             toNumber,
             matchedBy: tenantKey ? "tenantKey" : "toNumber",
           },
+          logger,
         });
 
         core.setTenantConfig(tenantConfig);

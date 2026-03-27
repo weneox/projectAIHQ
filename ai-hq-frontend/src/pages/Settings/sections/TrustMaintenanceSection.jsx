@@ -55,6 +55,19 @@ export default function TrustMaintenanceSection({
   const summary = trust?.view?.summary || {};
   const sourceHealth = summary.sources || {};
   const runtimeHealth = summary.runtimeProjection || {};
+  const projectionHealth = runtimeHealth.health || {};
+  const projectionRepair = runtimeHealth.repair || {};
+  const trustCapabilities = trust?.view?.capabilities || trust?.capabilities || {};
+  const viewerRole = trust?.view?.viewerRole || trust?.viewerRole || "";
+  const canRepairProjection =
+    trustCapabilities?.runtimeProjectionRepair?.allowed ??
+    trustCapabilities?.canRepairRuntimeProjection ??
+    false;
+  const repairRestrictionMessage =
+    trustCapabilities?.runtimeProjectionRepair?.message ||
+    (viewerRole && !canRepairProjection
+      ? "Runtime projection rebuild stays behind owner/admin access."
+      : "");
   const truthHealth = summary.truth || {};
   const reviewHealth = summary.reviewQueue || {};
   const trustUnavailable = trust?.unavailable === true;
@@ -67,6 +80,14 @@ export default function TrustMaintenanceSection({
   const connectedCount = items.filter((x) => String(x.status).toLowerCase() === "connected").length;
   const enabledCount = items.filter((x) => !!x.is_enabled).length;
   const recentRuns = Array.isArray(trust?.view?.recentRuns) ? trust.view.recentRuns : [];
+
+  async function handleRepairAction(action) {
+    const result = await dispatchRepairAction(action);
+    if (result?.ok && typeof trust?.surface?.refresh === "function") {
+      await trust.surface.refresh();
+    }
+    return result;
+  }
 
   return (
     <SettingsSection
@@ -167,8 +188,25 @@ export default function TrustMaintenanceSection({
                 </Badge>
               </div>
               <div className="text-sm leading-6 text-slate-500 dark:text-slate-400">
-                Status: {runtimeReadiness.reasonCode || runtimeHealth.status || "unknown"}
+                Status: {projectionHealth.reasonCode || runtimeReadiness.reasonCode || runtimeHealth.status || "unknown"}
               </div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                {projectionHealth.usable
+                  ? "Strict runtime authority is usable."
+                  : projectionRepair.canRepair
+                    ? "Approved truth is present and a rebuild can be triggered here."
+                    : "Projection authority is fail-closed until repair prerequisites are met."}
+              </div>
+              {repairRestrictionMessage ? (
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  {repairRestrictionMessage}
+                </div>
+              ) : null}
+              {projectionRepair.latestRun?.status ? (
+                <div className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                  Last repair {projectionRepair.latestRun.status}
+                </div>
+              ) : null}
               <div className="text-xs uppercase tracking-[0.18em] text-slate-400">
                 Updated {formatTimestampLabel(runtimeHealth.updatedAt)}
               </div>
@@ -213,7 +251,7 @@ export default function TrustMaintenanceSection({
               blockers={runtimeReadiness.blockers}
               canManage={canManage}
               emptyMessage="Runtime projection is current."
-              onRunAction={(action) => dispatchRepairAction(action)}
+              onRunAction={handleRepairAction}
             />
             <RepairHub
               title="Approved Truth"
@@ -221,7 +259,7 @@ export default function TrustMaintenanceSection({
               blockers={truthReadiness.blockers}
               canManage={canManage}
               emptyMessage="Approved truth is available."
-              onRunAction={(action) => dispatchRepairAction(action)}
+              onRunAction={handleRepairAction}
             />
             <RepairHub
               title="Protected Review"
@@ -229,7 +267,7 @@ export default function TrustMaintenanceSection({
               blockers={reviewReadiness.blockers}
               canManage={canManage}
               emptyMessage="No active protected review is blocking trust maintenance."
-              onRunAction={(action) => dispatchRepairAction(action)}
+              onRunAction={handleRepairAction}
             />
           </div>
         ) : null}

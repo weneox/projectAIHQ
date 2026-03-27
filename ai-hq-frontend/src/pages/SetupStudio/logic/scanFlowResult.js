@@ -21,7 +21,7 @@ import {
   deriveVisibleKnowledgeItems,
   deriveVisibleServiceItems,
   deriveVisibleSources,
-  mapCurrentReviewToLegacyDraft,
+  deriveCanonicalReviewProjection,
   resolveReviewSourceInfo,
   reviewStateMatchesSource,
 } from "../state/reviewState.js";
@@ -33,18 +33,40 @@ export function reconcileSetupStudioScanResult({
   analyzeResult,
   reviewPayload,
   createEmptyReviewState,
-  createEmptyLegacyDraft,
 }) {
   const importedReview = normalizeReviewState(reviewPayload);
-  const legacyImportedDraft = mapCurrentReviewToLegacyDraft(importedReview);
-  const reviewInfo = resolveReviewSourceInfo(importedReview, legacyImportedDraft);
+  const reviewProjection = deriveCanonicalReviewProjection(importedReview);
+  const reviewInfo = resolveReviewSourceInfo(importedReview);
 
   const effectiveSourceType = s(
-    reviewInfo.sourceType || analyzeResult?.sourceType || plan.uiSourceType || "manual"
+    (reviewStateMatchesSource(
+      importedReview,
+      plan.hasImportableSource
+        ? plan.requestedPrimarySourceType || plan.sourceType
+        : "manual",
+      plan.hasImportableSource
+        ? plan.requestedPrimarySourceUrl || plan.sourceUrl
+        : ""
+    )
+      ? reviewInfo.sourceType
+      : "") ||
+      analyzeResult?.sourceType ||
+      plan.uiSourceType ||
+      "manual"
   );
 
   const effectiveSourceUrl = s(
-    reviewInfo.sourceUrl ||
+    (reviewStateMatchesSource(
+      importedReview,
+      plan.hasImportableSource
+        ? plan.requestedPrimarySourceType || plan.sourceType
+        : "manual",
+      plan.hasImportableSource
+        ? plan.requestedPrimarySourceUrl || plan.sourceUrl
+        : ""
+    )
+      ? reviewInfo.sourceUrl
+      : "") ||
       analyzeResult?.sourceUrl ||
       (plan.hasImportableSource ? plan.displaySourceUrl : "")
   );
@@ -59,12 +81,7 @@ export function reconcileSetupStudioScanResult({
   const importedReviewMatchesActiveSource =
     expectedReviewSourceType === "manual"
       ? !!s(importedReview?.session?.id)
-      : reviewStateMatchesSource(
-          importedReview,
-          legacyImportedDraft,
-          expectedReviewSourceType,
-          expectedReviewSourceUrl
-        );
+      : reviewStateMatchesSource(importedReview, expectedReviewSourceType, expectedReviewSourceUrl);
 
   const importWarnings = arr(importResult?.warnings)
     .map((x) => s(x))
@@ -82,7 +99,7 @@ export function reconcileSetupStudioScanResult({
       : []),
     ...(!importedReviewMatchesActiveSource && plan.hasImportableSource
       ? [
-          "The backend review session did not match this source yet, so the editable draft stayed isolated.",
+      "The backend review session did not match this source yet, so the editable draft stayed isolated.",
         ]
       : []),
   ];
@@ -96,12 +113,12 @@ export function reconcileSetupStudioScanResult({
     isBarrierOnlyImportResult(importResult, plan.sourceType) &&
     !hasMeaningfulProfile(
       chooseBestProfileForForm(
-        obj(legacyImportedDraft?.overview),
+        obj(reviewProjection?.overview),
         obj(analyzeResult?.profile)
       )
     );
 
-  const reviewBackedProfile = obj(legacyImportedDraft?.overview);
+  const reviewBackedProfile = obj(reviewProjection?.overview);
   const helperProfilePatch = profilePatchFromDiscovery(
     obj(analyzeResult?.profile || importResult?.profile)
   );
@@ -109,20 +126,20 @@ export function reconcileSetupStudioScanResult({
   const resultMetadata = {
     reviewRequired: !!(
       analyzeResult?.reviewRequired ??
-      legacyImportedDraft?.reviewRequired ??
+      reviewProjection?.reviewRequired ??
       false
     ),
     reviewFlags: arr(
-      analyzeResult?.reviewFlags || legacyImportedDraft?.reviewFlags || []
+      analyzeResult?.reviewFlags || reviewProjection?.reviewFlags || []
     ),
     fieldConfidence: obj(
       analyzeResult?.fieldConfidence ||
-        legacyImportedDraft?.fieldConfidence ||
+        reviewProjection?.fieldConfidence ||
         {}
     ),
     mainLanguage:
       s(analyzeResult?.mainLanguage) ||
-      s(legacyImportedDraft?.mainLanguage) ||
+      s(reviewProjection?.mainLanguage) ||
       resolveMainLanguageValue(
         reviewBackedProfile?.mainLanguage,
         reviewBackedProfile?.primaryLanguage,
@@ -130,7 +147,7 @@ export function reconcileSetupStudioScanResult({
       ),
     primaryLanguage:
       s(analyzeResult?.primaryLanguage) ||
-      s(legacyImportedDraft?.primaryLanguage) ||
+      s(reviewProjection?.primaryLanguage) ||
       resolveMainLanguageValue(
         reviewBackedProfile?.primaryLanguage,
         reviewBackedProfile?.mainLanguage,
@@ -163,15 +180,15 @@ export function reconcileSetupStudioScanResult({
   const sourceId = s(
     analyzeResult?.source?.id ||
       importResult?.source?.id ||
-      legacyImportedDraft?.sourceId
+      reviewProjection?.sourceId
   );
   const sourceRunId = s(
     analyzeResult?.run?.id ||
       importResult?.run?.id ||
-      legacyImportedDraft?.sourceRunId
+      reviewProjection?.sourceRunId
   );
   const snapshotId = s(
-    legacyImportedDraft?.snapshotId ||
+    reviewProjection?.snapshotId ||
       analyzeResult?.snapshot?.id ||
       importResult?.snapshot?.id
   );
@@ -180,10 +197,6 @@ export function reconcileSetupStudioScanResult({
     !barrierOnlyResult && importedReviewMatchesActiveSource
       ? importedReview
       : createEmptyReviewState();
-  const scopedImportedDraft =
-    !barrierOnlyResult && importedReviewMatchesActiveSource
-      ? legacyImportedDraft
-      : createEmptyLegacyDraft();
 
   const intakeContext = {
     ...obj(importResult?.intakeContext),
@@ -209,10 +222,10 @@ export function reconcileSetupStudioScanResult({
     snapshotId,
     importedKnowledgeItems: barrierOnlyResult
       ? []
-      : arr(scopedImportedDraft?.reviewQueue),
+      : arr(scopedImportedReview?.draft?.knowledgeItems),
     importedServices: barrierOnlyResult
       ? []
-      : arr(scopedImportedDraft?.sections?.services),
+      : arr(scopedImportedReview?.draft?.services),
     mainLanguage: resultMetadata.mainLanguage,
     primaryLanguage: resultMetadata.primaryLanguage,
     reviewRequired: !!resultMetadata.reviewRequired,
@@ -223,14 +236,12 @@ export function reconcileSetupStudioScanResult({
   const importedVisibleKnowledgeItems = barrierOnlyResult
     ? []
     : deriveVisibleKnowledgeItems({
-        reviewDraft: scopedImportedDraft,
         currentReview: scopedImportedReview,
         discoveryState: immediateDiscoveryState,
       });
   const importedVisibleServiceItems = barrierOnlyResult
     ? []
     : deriveVisibleServiceItems({
-        reviewDraft: scopedImportedDraft,
         currentReview: scopedImportedReview,
         discoveryState: immediateDiscoveryState,
       });
@@ -298,10 +309,10 @@ export function reconcileSetupStudioScanResult({
       importedProfileRows.length,
     importedKnowledgeItems: barrierOnlyResult
       ? []
-      : arr(scopedImportedDraft?.reviewQueue),
+      : arr(scopedImportedReview?.draft?.knowledgeItems),
     importedServices: barrierOnlyResult
       ? []
-      : arr(scopedImportedDraft?.sections?.services),
+      : arr(scopedImportedReview?.draft?.services),
     mainLanguage: immediateDiscoveryState.mainLanguage,
     primaryLanguage: immediateDiscoveryState.primaryLanguage,
     reviewRequired: immediateDiscoveryState.reviewRequired,
@@ -311,7 +322,7 @@ export function reconcileSetupStudioScanResult({
 
   return {
     importedReview,
-    legacyImportedDraft,
+    reviewProjection,
     effectiveSourceType,
     effectiveSourceUrl,
     importedReviewMatchesActiveSource,
@@ -320,7 +331,6 @@ export function reconcileSetupStudioScanResult({
     resultMetadata,
     bestIncomingProfile,
     scopedImportedReview,
-    scopedImportedDraft,
     importedVisibleKnowledgeItems,
     importedVisibleServiceItems,
     importedVisibleSources,
@@ -333,30 +343,30 @@ export function reconcileSetupStudioScanResult({
 
 export function buildSetupStudioReviewSyncIssue({
   importedReview,
-  legacyImportedDraft,
+  reviewProjection,
   hasImportableSource,
   importedReviewMatchesActiveSource,
 }) {
   return {
-    sessionId: s(importedReview?.session?.id || legacyImportedDraft?.reviewSessionId),
+    sessionId: s(importedReview?.session?.id || reviewProjection?.reviewSessionId),
     sessionStatus: s(
-      importedReview?.session?.status || legacyImportedDraft?.reviewSessionStatus
+      importedReview?.session?.status || reviewProjection?.reviewSessionStatus
     ),
     revision: s(
-      importedReview?.session?.revision || legacyImportedDraft?.reviewSessionRevision
+      importedReview?.session?.revision || reviewProjection?.reviewSessionRevision
     ),
     freshness:
       hasImportableSource && !importedReviewMatchesActiveSource
         ? "source_mismatch"
         : s(
             importedReview?.session?.freshness ||
-              legacyImportedDraft?.reviewFreshness ||
+              reviewProjection?.reviewFreshness ||
               "unknown"
           ),
     message:
       hasImportableSource && !importedReviewMatchesActiveSource
         ? "The backend review session did not match this source yet, so editing remains isolated."
-        : s(legacyImportedDraft?.reviewConflictMessage),
+        : s(reviewProjection?.reviewConflictMessage),
   };
 }
 

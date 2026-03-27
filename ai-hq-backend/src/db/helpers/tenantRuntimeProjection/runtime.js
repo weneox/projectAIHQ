@@ -24,6 +24,32 @@ function refsMatch(left = "", right = "") {
   return s(left) === s(right);
 }
 
+function normalizeProjectionRunRow(row = {}) {
+  const value = obj(row);
+  return {
+    id: s(value.id),
+    tenant_id: s(value.tenant_id),
+    tenant_key: s(value.tenant_key),
+    runtime_projection_id: s(value.runtime_projection_id),
+    trigger_type: s(value.trigger_type),
+    status: s(value.status),
+    projection_version: s(value.projection_version),
+    requested_by: s(value.requested_by),
+    runner_key: s(value.runner_key),
+    started_at: s(value.started_at),
+    finished_at: s(value.finished_at),
+    duration_ms: num(value.duration_ms, 0),
+    source_snapshot_id: s(value.source_snapshot_id),
+    error_code: s(value.error_code),
+    error_message: s(value.error_message),
+    input_summary_json: obj(value.input_summary_json),
+    output_summary_json: obj(value.output_summary_json),
+    metadata_json: obj(value.metadata_json),
+    created_at: s(value.created_at),
+    updated_at: s(value.updated_at),
+  };
+}
+
 export function assessTenantRuntimeProjectionFreshness(
   {
     runtimeProjection = null,
@@ -347,6 +373,29 @@ export async function getCurrentTenantRuntimeProjection(
     `,
     [tenant.id]
   );
+}
+
+export async function getLatestTenantRuntimeProjectionRun(
+  { tenantId = "", tenantKey = "" } = {},
+  dbOrClient = db
+) {
+  const client = pickDb(dbOrClient);
+  const tenant = await resolveTenant(client, { tenantId, tenantKey });
+  if (!tenant) return null;
+
+  const row = await one(
+    client,
+    `
+    select *
+    from tenant_business_runtime_projection_runs
+    where tenant_id = $1
+    order by started_at desc, created_at desc
+    limit 1
+    `,
+    [tenant.id]
+  );
+
+  return row ? normalizeProjectionRunRow(row) : null;
 }
 
 export async function getTenantRuntimeProjectionFreshness(

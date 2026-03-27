@@ -4,7 +4,7 @@ import Input from "../ui/Input.jsx";
 import SettingsSurfaceBanner from "./SettingsSurfaceBanner.jsx";
 import { useSecretsSurface } from "./hooks/useSecretsSurface.js";
 
-export default function SecretsPanel({ canManage = false }) {
+export default function SecretsPanel({ canManage = false, permissionMessage = "" }) {
   const {
     provider,
     setProvider,
@@ -37,6 +37,12 @@ export default function SecretsPanel({ canManage = false }) {
           refreshLabel="Refresh Secrets"
         />
 
+        {!canManage ? (
+          <div className="rounded-[20px] border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+            {permissionMessage || "Provider secret changes stay behind owner/admin access."}
+          </div>
+        ) : null}
+
         <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2">
             <label className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -45,6 +51,7 @@ export default function SecretsPanel({ canManage = false }) {
             <select
               value={provider}
               onChange={(e) => setProvider(e.target.value)}
+              disabled={!canManage}
               className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none ring-0 transition focus:border-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-white"
             >
               <option value="meta">Meta</option>
@@ -63,6 +70,7 @@ export default function SecretsPanel({ canManage = false }) {
               value={secretKey}
               onChange={(e) => setSecretKey(String(e.target.value || "").trim().toLowerCase())}
               placeholder={presetKeys[0] || "api_key"}
+              disabled={!canManage}
             />
             {presetKeys.length ? (
               <div className="flex flex-wrap gap-2 pt-1">
@@ -71,6 +79,7 @@ export default function SecretsPanel({ canManage = false }) {
                     key={keyName}
                     type="button"
                     onClick={() => setSecretKey(keyName)}
+                    disabled={!canManage}
                     className="rounded-full border border-slate-200 px-2.5 py-1 text-xs text-slate-600 transition hover:border-slate-300 hover:text-slate-900 dark:border-white/10 dark:text-slate-300 dark:hover:border-white/20 dark:hover:text-white"
                   >
                     {keyName}
@@ -89,6 +98,7 @@ export default function SecretsPanel({ canManage = false }) {
               onChange={(e) => setSecretValue(e.target.value)}
               placeholder="Enter secret value"
               type="password"
+              disabled={!canManage}
             />
           </div>
         </div>
@@ -137,6 +147,7 @@ export default function SecretsPanel({ canManage = false }) {
                       variant="outline"
                       size="sm"
                       onClick={() => setSecretKey(row.secret_key)}
+                      disabled={!canManage}
                     >
                       Use Key
                     </Button>

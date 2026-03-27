@@ -1,3 +1,5 @@
+/* @vitest-environment jsdom */
+
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -34,7 +36,7 @@ describe("useSetupStudioSceneView", () => {
           sourceValue: "https://acme.example",
           note: "Bakery with daily specials.",
         },
-        reviewDraft: {},
+        currentReview: {},
         businessForm: {
           companyName: "Acme Bakery",
         },
@@ -56,6 +58,8 @@ describe("useSetupStudioSceneView", () => {
 
     expect(result.current.sourceLabel).toBe("Website");
     expect(result.current.discoveryWarnings).toEqual(["http_403"]);
+    expect(result.current.honestySummary.title).toBe("Barrier-limited source draft");
+    expect(result.current.honestySummary.barrierWarnings).toEqual(["http_403"]);
     expect(result.current.scanningView).toMatchObject({
       sourceType: "website",
       hasSourceInput: true,
@@ -96,6 +100,7 @@ describe("useSetupStudioSceneView", () => {
           lastSourceType: "website",
         },
         discoveryForm: { websiteUrl: "https://acme.example" },
+        currentReview: {},
       })
     ).toMatchObject({
       sourceType: "website",
@@ -115,7 +120,7 @@ describe("useSetupStudioSceneView", () => {
       onSaveBusiness: vi.fn(),
       onReloadReviewDraft: vi.fn(),
       onToggleRefine: vi.fn(),
-      reviewDraft: {},
+      currentReview: {},
       reviewSources: [],
       reviewSyncState: {},
     });

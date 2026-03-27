@@ -7,6 +7,7 @@ import {
 } from "./reviewFlow.js";
 import { compactDraftObject, safeUuidOrNull } from "./draftShared.js";
 import { arr, obj, s } from "./utils.js";
+import { can, normalizeRole } from "../../../utils/roles.js";
 
 async function defaultGetCurrentSetupReview(tenantId) {
   const reviewHelper = await import("../../../db/helpers/tenantSetupReview.js");
@@ -251,6 +252,47 @@ export async function finalizeSetupReviewComposition(
 
   try {
     current = await getCurrentSetupReview(actor.tenantId);
+    const actorRole = normalizeRole(actor?.role);
+    if (!can(actorRole, "workspace", "manage")) {
+      await auditSetupAction(
+        db,
+        actor,
+        "setup.review.finalize",
+        "tenant_setup_review_session",
+        current?.session?.id || current?.id || null,
+        {
+          outcome: "blocked",
+          reasonCode: "insufficient_role",
+          targetArea: "setup_review",
+          reviewSessionId: s(current?.session?.id || current?.id),
+          attemptedRole: actorRole,
+          requiredRoles: ["owner", "admin"],
+          reason: s(body?.reason),
+        }
+      );
+
+      log?.warn?.("setup.review.finalize.blocked", {
+        tenantKey: actor?.tenantKey,
+        tenantId: actor?.tenantId,
+        role: actorRole,
+        reasonCode: "insufficient_role",
+      });
+
+      return {
+        status: 403,
+        body: {
+          ok: false,
+          error: "Forbidden",
+          reason: "Only owner/admin can finalize setup review",
+          reasonCode: "insufficient_role",
+          viewerRole: actorRole,
+          requiredRoles: ["owner", "admin"],
+          concurrency: current ? reviewConcurrency(current) : {},
+          finalizeProtection: current ? finalizeProtection(current) : {},
+        },
+      };
+    }
+
     log?.info?.("setup.review.finalize.requested", {
       tenantKey: actor.tenantKey,
       tenantId: actor.tenantId,
@@ -342,6 +384,20 @@ export async function finalizeSetupReviewComposition(
       },
     };
   } catch (err) {
+    await auditSetupAction(
+      db,
+      actor,
+      "setup.review.finalize",
+      "tenant_setup_review_session",
+      current?.session?.id || current?.id || null,
+      {
+        outcome: "failed",
+        reasonCode: s(err?.code || "setup_review_finalize_failed"),
+        targetArea: "setup_review",
+        reviewSessionId: s(current?.session?.id || current?.id),
+        reason: s(body?.reason),
+      }
+    );
     log?.error?.("setup.review.finalize.failed", err, {
       tenantKey: actor?.tenantKey,
       tenantId: actor?.tenantId,

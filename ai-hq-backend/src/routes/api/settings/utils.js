@@ -6,6 +6,7 @@ import {
   getAuthActor,
 } from "../../../utils/auth.js";
 import { dbAudit } from "../../../db/helpers/audit.js";
+import { canReadAudit } from "../../../utils/roles.js";
 
 export function ok(res, data = {}) {
   return res.status(200).json({ ok: true, ...data });
@@ -99,6 +100,20 @@ export function getActor(req) {
   return cleanNullableString(getAuthActor(req)) || "system";
 }
 
+export function buildMutationAuditMeta(req, meta = {}) {
+  return {
+    actorType: isInternalServiceRequest(req) ? "internal_service" : "user",
+    actorId: getActor(req),
+    actorRole: isInternalServiceRequest(req) ? "internal" : getUserRole(req),
+    requestId: cleanNullableString(req?.requestId),
+    correlationId: cleanNullableString(req?.correlationId),
+    outcome: cleanLower(meta?.outcome || "succeeded"),
+    reasonCode: cleanLower(meta?.reasonCode || ""),
+    targetArea: cleanLower(meta?.targetArea || meta?.area || ""),
+    ...meta,
+  };
+}
+
 export function resolveTenantKey(req) {
   if (isInternalServiceRequest(req)) {
     return cleanLower(getRequestedTenantKey(req));
@@ -145,13 +160,100 @@ export function requireOperationalManager(req, res) {
   return role;
 }
 
+export function canReadControlPlaneAuditHistoryRole(role = "") {
+  return canReadAudit(role);
+}
+
+export function requireAuditHistoryReader(req, res) {
+  if (isInternalServiceRequest(req)) {
+    return "internal";
+  }
+
+  const role = getUserRole(req);
+  if (!canReadControlPlaneAuditHistoryRole(role)) {
+    forbidden(res, "Only owner/admin/analyst can read control-plane audit history", {
+      reasonCode: "insufficient_role",
+      viewerRole: role,
+      requiredRoles: ["owner", "admin", "analyst"],
+    });
+    return null;
+  }
+
+  return role;
+}
+
+export async function requireMutationRole(
+  req,
+  res,
+  {
+    db,
+    tenant = null,
+    allowedRoles = ["owner", "admin"],
+    message = "Only owner/admin can manage this control-plane mutation",
+    reasonCode = "insufficient_role",
+    auditAction = "settings.mutation.blocked",
+    objectType = "tenant_setting",
+    objectId = "",
+    targetArea = "control_plane",
+    auditMeta = {},
+  } = {}
+) {
+  if (isInternalServiceRequest(req)) {
+    return "internal";
+  }
+
+  const role = getUserRole(req);
+  const normalizedAllowed = Array.isArray(allowedRoles)
+    ? allowedRoles.map((item) => cleanLower(item)).filter(Boolean)
+    : [];
+
+  if (normalizedAllowed.includes(role)) {
+    return role;
+  }
+
+  await auditSafe(
+    db,
+    req,
+    tenant || { tenant_key: resolveTenantKey(req) || null },
+    auditAction,
+    objectType,
+    objectId || tenant?.id || tenant?.tenant_key || resolveTenantKey(req) || "unknown",
+    {
+      outcome: "blocked",
+      reasonCode,
+      targetArea,
+      attemptedRole: role,
+      requiredRoles: normalizedAllowed,
+      ...auditMeta,
+    }
+  );
+
+  forbidden(res, message, {
+    reasonCode,
+    viewerRole: role,
+    requiredRoles: normalizedAllowed,
+  });
+  return null;
+}
+
+export async function requireOwnerOrAdminMutation(
+  req,
+  res,
+  options = {}
+) {
+  return requireMutationRole(req, res, {
+    allowedRoles: ["owner", "admin"],
+    ...options,
+  });
+}
+
 export async function auditSafe(db, req, tenant, action, objectType, objectId, meta = {}) {
   try {
     await dbAudit(db, getActor(req), action, objectType, objectId, {
       tenantId: tenant?.id || null,
       tenantKey: tenant?.tenant_key || tenant?.tenantKey || null,
       viewerRole: isInternalServiceRequest(req) ? "internal" : getUserRole(req),
-      ...meta,
+      ...buildMutationAuditMeta(req, meta),
     });
   } catch {}
 }

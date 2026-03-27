@@ -17,6 +17,27 @@ function trimSlash(v) {
   return s(v).replace(/\/+$/, "");
 }
 
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+
+function getRuntimeAuthorityFailure(projectedRuntime) {
+  const authority = obj(obj(projectedRuntime).authority);
+  const source = s(authority.source);
+  const available = authority.available === true;
+  const reasonCode = s(authority.reasonCode || authority.reason || "");
+
+  if (available && source === "approved_runtime_projection") {
+    return null;
+  }
+
+  return {
+    error: "runtime_authority_unavailable",
+    reasonCode: reasonCode || (!available ? "runtime_authority_unavailable" : "runtime_authority_source_invalid"),
+    authority,
+  };
+}
+
 async function safeReadJson(res) {
   const text = await res.text().catch(() => "");
   if (!text) return null;
@@ -183,6 +204,7 @@ export async function getTenantMetaConfigByChannel({
 
   const access = result.json?.providerAccess || {};
   const operationalChannels = result.json?.operationalChannels || {};
+  const authorityFailure = getRuntimeAuthorityFailure(result.json?.projectedRuntime);
   const operationalMeta =
     operationalChannels && typeof operationalChannels === "object"
       ? operationalChannels.meta || null
@@ -195,6 +217,32 @@ export async function getTenantMetaConfigByChannel({
     available: Boolean(access.available),
     channelReady: Boolean(operationalMeta?.ready),
   });
+
+  if (authorityFailure) {
+    recordRuntimeSignal({
+      level: "warn",
+      category: "provider_access",
+      code: "meta_provider_access_blocked",
+      reasonCode: authorityFailure.reasonCode,
+      status: Number(result.status || 503),
+      tenantKey: s(access.tenantKey),
+    });
+    return {
+      tenantKey: s(access.tenantKey),
+      pageAccessToken: "",
+      pageId: s(access.pageId),
+      igUserId: s(access.igUserId),
+      appSecret: "",
+      source: "none",
+      error: authorityFailure.error,
+      status: Number(result.status || 503),
+      projectedRuntime: result.json?.projectedRuntime || null,
+      operationalChannels,
+      providerAccess: access,
+      reasonCode: authorityFailure.reasonCode,
+      authority: authorityFailure.authority,
+    };
+  }
 
   if (access.available !== true || operationalMeta?.ready !== true) {
     recordRuntimeSignal({

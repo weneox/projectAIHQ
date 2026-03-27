@@ -173,6 +173,111 @@ test("review finalize composition audits finalized session and truth version cre
   assert.equal(auditCalls[1][2], "truth.version.created");
 });
 
+test("review finalize composition audits failed finalize attempts with outcome metadata", async () => {
+  const auditCalls = [];
+
+  await assert.rejects(
+    () =>
+      finalizeSetupReviewComposition(
+        {
+          db: {},
+          actor: {
+            tenantId: "tenant-1",
+            tenantKey: "alpha",
+            role: "owner",
+            requestId: "req-finalize-1",
+            correlationId: "corr-finalize-1",
+            tenant: null,
+            user: {
+              email: "ops@example.com",
+              name: "Ops",
+            },
+          },
+          body: { reason: "ship it" },
+          log: {
+            info() {},
+            error() {},
+          },
+        },
+        {
+          async getCurrentSetupReview() {
+            return {
+              session: { id: "session-1", status: "ready" },
+              draft: { version: 9 },
+            };
+          },
+          async finalizeSetupReviewSession() {
+            const error = new Error("baseline drift");
+            error.code = "SETUP_REVIEW_DRAFT_VERSION_MISMATCH";
+            throw error;
+          },
+          async auditSetupAction(...args) {
+            auditCalls.push(args);
+          },
+        }
+      ),
+    /baseline drift/
+  );
+
+  assert.equal(auditCalls.length, 1);
+  assert.equal(auditCalls[0][2], "setup.review.finalize");
+  assert.equal(auditCalls[0][5].outcome, "failed");
+  assert.equal(auditCalls[0][5].reasonCode, "SETUP_REVIEW_DRAFT_VERSION_MISMATCH");
+  assert.equal(auditCalls[0][1].requestId, "req-finalize-1");
+  assert.equal(auditCalls[0][1].correlationId, "corr-finalize-1");
+});
+
+test("review finalize composition blocks insufficient roles and audits the denial", async () => {
+  const auditCalls = [];
+
+  const result = await finalizeSetupReviewComposition(
+    {
+      db: {},
+      actor: {
+        tenantId: "tenant-1",
+        tenantKey: "alpha",
+        role: "operator",
+        requestId: "req-finalize-blocked-1",
+        correlationId: "corr-finalize-blocked-1",
+        tenant: null,
+        user: {
+          email: "operator@example.com",
+          name: "Operator",
+        },
+      },
+      body: { reason: "ship it" },
+      log: {
+        info() {},
+        warn() {},
+        error() {},
+      },
+    },
+    {
+      async getCurrentSetupReview() {
+        return {
+          session: { id: "session-1", status: "ready" },
+          draft: { version: 9 },
+        };
+      },
+      async finalizeSetupReviewSession() {
+        throw new Error("not expected");
+      },
+      async auditSetupAction(...args) {
+        auditCalls.push(args);
+      },
+    }
+  );
+
+  assert.equal(result.status, 403);
+  assert.equal(result.body?.error, "Forbidden");
+  assert.equal(result.body?.reasonCode, "insufficient_role");
+  assert.equal(auditCalls.length, 1);
+  assert.equal(auditCalls[0][2], "setup.review.finalize");
+  assert.equal(auditCalls[0][5].outcome, "blocked");
+  assert.equal(auditCalls[0][5].reasonCode, "insufficient_role");
+  assert.equal(auditCalls[0][5].attemptedRole, "operator");
+});
+
 test("read app injects setup status builder into truth payload loaders", async () => {
   const current = await loadSetupTruthPayloadWithStatus(
     {

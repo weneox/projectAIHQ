@@ -339,6 +339,7 @@ export async function createSourceRun(
     sourceUrl = "",
     intakeContext = {},
     requestId = "",
+    correlationId = "",
     reviewSessionId = "",
   }
 ) {
@@ -375,6 +376,7 @@ export async function createSourceRun(
 
   const runMetadata = {
     requestId,
+    correlationId: s(correlationId),
     reviewSessionId: s(reviewSessionId),
     workerTaskType: "setup_import_source_sync",
     sourceAuthorityClass: sourceAuthorityClass(normalizedType),

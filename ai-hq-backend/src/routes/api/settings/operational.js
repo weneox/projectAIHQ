@@ -20,6 +20,7 @@ import {
   requireDb,
   requireTenant,
   requireOperationalManager,
+  requireOwnerOrAdminMutation,
   serverErr,
   safeJsonObj,
   cleanLower,
@@ -144,6 +145,7 @@ function buildOperationalSettingsPayload({
   metaSecretRows = [],
   viewerRole = "member",
 } = {}) {
+  const ownerAdminAllowed = ["internal", "owner", "admin"].includes(lower(viewerRole));
   const voiceOperational = obj(operationalChannels.voice);
   const metaOperational = obj(operationalChannels.meta);
   const primaryMetaChannel = pickPrimaryMetaChannel(channels);
@@ -229,6 +231,20 @@ function buildOperationalSettingsPayload({
       },
     },
     operationalChannels,
+    capabilities: {
+      canManageOperationalSettings: ownerAdminAllowed,
+      canManageProviderSecrets: ownerAdminAllowed,
+      operationalSettingsWrite: {
+        allowed: ownerAdminAllowed,
+        requiredRoles: ["owner", "admin"],
+        message: "Only owner/admin can manage operational voice and channel settings.",
+      },
+      providerSecretsMutation: {
+        allowed: ownerAdminAllowed,
+        requiredRoles: ["owner", "admin"],
+        message: "Only owner/admin can manage provider secrets.",
+      },
+    },
     readiness: buildReadinessSurface({
       status:
         voiceRepair.blocked || metaRepair.blocked
@@ -298,17 +314,40 @@ export function operationalSettingsRoutes({ db }) {
       const tenantKey = requireTenant(req, res);
       if (!tenantKey) return;
 
-      const role = requireOperationalManager(req, res);
-      if (!role) return;
-
       const tenant = await dbGetTenantByKey(db, tenantKey);
       if (!tenant?.id) {
         return res.status(404).json({ ok: false, error: "Tenant not found" });
       }
 
+      const role = await requireOwnerOrAdminMutation(req, res, {
+        db,
+        tenant,
+        message: "Only owner/admin can manage operational settings",
+        auditAction: "settings.operational.voice.updated",
+        objectType: "tenant_voice_settings",
+        objectId: tenant.id,
+        targetArea: "operational_voice",
+      });
+      if (!role) return;
+
       const body = safeJsonObj(req.body, {});
       const saveInput = buildVoiceOperationalSaveInput(body);
       if (!s(saveInput.twilioPhoneNumber) && saveInput.enabled === true) {
+        await auditSafe(
+          db,
+          req,
+          tenant,
+          "settings.operational.voice.updated",
+          "tenant_voice_settings",
+          tenant.id,
+          {
+            outcome: "blocked",
+            reasonCode: "twilio_phone_number_required",
+            targetArea: "operational_voice",
+            enabled: true,
+            provider: s(saveInput.provider || "twilio"),
+          }
+        );
         return bad(res, "twilio_phone_number_required", {
           field: "twilioPhoneNumber",
         });
@@ -342,6 +381,8 @@ export function operationalSettingsRoutes({ db }) {
         "tenant_voice_settings",
         tenant.id,
         {
+          outcome: "succeeded",
+          targetArea: "operational_voice",
           enabled: voiceSettings?.enabled === true,
           provider: s(voiceSettings?.provider || "twilio"),
         }
@@ -370,9 +411,6 @@ export function operationalSettingsRoutes({ db }) {
       const tenantKey = requireTenant(req, res);
       if (!tenantKey) return;
 
-      const role = requireOperationalManager(req, res);
-      if (!role) return;
-
       const channelType = cleanLower(req.params.type);
       if (!channelType) {
         return bad(res, "channel_type_required");
@@ -383,6 +421,20 @@ export function operationalSettingsRoutes({ db }) {
         return res.status(404).json({ ok: false, error: "Tenant not found" });
       }
 
+      const role = await requireOwnerOrAdminMutation(req, res, {
+        db,
+        tenant,
+        message: "Only owner/admin can manage operational settings",
+        auditAction: "settings.operational.channel.updated",
+        objectType: "tenant_channel",
+        objectId: channelType,
+        targetArea: "operational_channel",
+        auditMeta: {
+          channelType,
+        },
+      });
+      if (!role) return;
+
       const body = safeJsonObj(req.body, {});
       const saveInput = buildOperationalChannelSaveInput(body, role);
 
@@ -391,6 +443,21 @@ export function operationalSettingsRoutes({ db }) {
         !s(saveInput.external_page_id) &&
         !s(saveInput.external_user_id)
       ) {
+        await auditSafe(
+          db,
+          req,
+          tenant,
+          "settings.operational.channel.updated",
+          "tenant_channel",
+          channelType,
+          {
+            outcome: "blocked",
+            reasonCode: "channel_identifiers_required",
+            targetArea: "operational_channel",
+            channelType,
+            provider: saveInput.provider,
+          }
+        );
         return bad(res, "channel_identifiers_required", {
           fields: ["external_page_id", "external_user_id"],
         });
@@ -422,6 +489,8 @@ export function operationalSettingsRoutes({ db }) {
         "tenant_channel",
         channelType,
         {
+          outcome: "succeeded",
+          targetArea: "operational_channel",
           channelType,
           provider: saveInput.provider,
           status: saveInput.status,

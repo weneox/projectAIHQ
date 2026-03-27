@@ -1,1 +1,1 @@
-export { runSourceSync } from "./run.js";
+export { runSourceSync, __test__ } from "./run.js";

@@ -1,6 +1,7 @@
 // src/pages/Settings.jsx
 // PREMIUM v5.4 — final settings assembly + tenant business brain + source intelligence + stable dirty sync
 
+import React from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   BellRing,
@@ -18,6 +19,7 @@ import {
   Database,
   SearchCheck,
   PhoneCall,
+  ScrollText,
 } from "lucide-react";
 
 import Button from "../../components/ui/Button.jsx";
@@ -40,6 +42,7 @@ import { useBusinessBrain } from "./hooks/useBusinessBrain.js";
 import { useOperationalSettings } from "./hooks/useOperationalSettings.js";
 import { useSourceIntelligence } from "./hooks/useSourceIntelligence.js";
 import { useTrustSurface } from "./hooks/useTrustSurface.js";
+import { useAuditHistory } from "./hooks/useAuditHistory.js";
 import GeneralSection from "./sections/GeneralSection.jsx";
 import BrandSection from "./sections/BrandSection.jsx";
 import AiPolicySection from "./sections/AiPolicySection.jsx";
@@ -55,6 +58,7 @@ import ChannelPoliciesSection from "./sections/ChannelPoliciesSection.jsx";
 import LocationsSection from "./sections/LocationsSection.jsx";
 import ContactsSection from "./sections/ContactsSection.jsx";
 import OperationalSection from "./sections/OperationalSection.jsx";
+import ChangeHistorySection from "./sections/ChangeHistorySection.jsx";
 import {
   createNewBusinessFact,
   createNewChannelPolicy,
@@ -62,6 +66,7 @@ import {
   createNewLocation,
 } from "./settingsShared.js";
 import { createNewSource } from "./sections/trustSurfaceShared.jsx";
+import { getControlPlanePermissions } from "../../lib/controlPlanePermissions.js";
 
 export default function SettingsController() {
   const [activeSection, setActiveSection] = useState("general");
@@ -94,8 +99,6 @@ export default function SettingsController() {
     setInitialWorkspace,
   } = workspaceState;
   const viewerRole = String(workspace?.viewerRole || "member").toLowerCase();
-  const canManageOperational =
-    viewerRole === "owner" || viewerRole === "admin" || viewerRole === "operator";
 
   const businessBrain = useBusinessBrain({
     canManageSettings,
@@ -135,8 +138,14 @@ export default function SettingsController() {
   } = useOperationalSettings({
     tenantKey,
   });
+  const controlPlanePermissions = getControlPlanePermissions({
+    viewerRole,
+    capabilities: operationalData?.capabilities,
+  });
+  const canManageOperational = controlPlanePermissions.operationalSettingsWrite.allowed;
 
   const { trust, refreshTrust } = useTrustSurface({ tenantKey });
+  const { auditHistory, surface: auditHistorySurface, refreshAuditHistory } = useAuditHistory();
 
   const sourceIntelligence = useSourceIntelligence({
     tenantKey,
@@ -177,12 +186,23 @@ export default function SettingsController() {
       { key: "contacts", label: "Contacts", description: "Phone, email, WhatsApp, public lines", dirty: !!dirtyMap.contacts, icon: Contact2 },
       { key: "sources", label: "Sources", description: "Connected data sources and sync intelligence", dirty: !!dirtyMap.sources, icon: Database },
       { key: "knowledge_review", label: "Knowledge Review", description: "Approve AI-discovered business knowledge", dirty: !!dirtyMap.knowledge_review, icon: SearchCheck },
+      ...(controlPlanePermissions.auditHistoryRead.allowed
+        ? [
+            {
+              key: "change_history",
+              label: "Change History",
+              description: "Sensitive control-plane mutation timeline",
+              dirty: false,
+              icon: ScrollText,
+            },
+          ]
+        : []),
       { key: "channels", label: "Channels", description: "Instagram, WhatsApp, Messenger", dirty: !!dirtyMap.channels, icon: Waypoints },
       { key: "agents", label: "Agents", description: "Agent status, model, enable/disable", dirty: !!dirtyMap.agents, icon: Bot },
       { key: "team", label: "Team", description: "Workspace users, roles, access", dirty: !!dirtyMap.team, icon: Users },
       { key: "notifications", label: "Notifications", description: "Push subscription and browser status", dirty: !!dirtyMap.notifications, icon: BellRing },
     ],
-    [dirtyMap]
+    [controlPlanePermissions.auditHistoryRead.allowed, dirtyMap]
   );
 
   useEffect(() => {
@@ -201,6 +221,7 @@ export default function SettingsController() {
           refreshOperationalSettings(base.tenantKey),
           refreshSourceIntelligence(base.tenantKey),
           refreshTrust(base.tenantKey),
+          refreshAuditHistory(),
         ]);
       } catch {}
     }
@@ -209,7 +230,7 @@ export default function SettingsController() {
     return () => {
       mounted = false;
     };
-  }, [refreshWorkspace, refreshBusinessBrain, refreshOperationalSettings, refreshSourceIntelligence, refreshTrust]);
+  }, [refreshWorkspace, refreshBusinessBrain, refreshOperationalSettings, refreshSourceIntelligence, refreshTrust, refreshAuditHistory]);
 
   function handleResetWorkspace() {
     const reset = onResetWorkspace();
@@ -330,6 +351,7 @@ export default function SettingsController() {
             savingVoice={savingVoice}
             savingChannel={savingChannel}
             canManage={canManageOperational}
+            permissionState={controlPlanePermissions}
             onSaveVoice={saveVoiceSettings}
             onSaveChannel={saveChannelSettings}
           />
@@ -396,6 +418,14 @@ export default function SettingsController() {
             />
           </KnowledgeReviewSection>
         );
+      case "change_history":
+        return (
+          <ChangeHistorySection
+            history={auditHistory}
+            surface={auditHistorySurface}
+            viewerRole={viewerRole}
+          />
+        );
       case "channels":
         return <ChannelsPanel canManage={canManageSettings} />;
       case "agents":
@@ -454,7 +484,7 @@ export default function SettingsController() {
                 {canManageSettings
                   ? "Owner / Admin Access"
                   : canManageOperational
-                  ? "Operator Operational Access"
+                  ? "Operational Write Access"
                   : "Read Only Access"}
               </Badge>
               <Badge tone={dirty ? "info" : "neutral"} variant="subtle" dot={dirty}>
@@ -479,7 +509,7 @@ export default function SettingsController() {
             <div className="rounded-[24px] border border-amber-200/80 bg-amber-50/90 px-4 py-4 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
               {canManageOperational
                 ? "This account can manage operational records, but broader workspace settings remain read-only."
-                : "Bu workspace-d? settings d?yi?m?k s?lahiyy?ti yaln?z owner/admin ???nd?r."}
+                : "This workspace is read-only here. Sensitive control-plane changes remain limited to owner/admin."}
             </div>
           ) : null}
 

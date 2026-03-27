@@ -437,7 +437,11 @@ function buildBlockedExtractionResult({
 
 function isEntryHardBlocked(entry = {}) {
   const status = safeNum(entry?.status, 0);
-  return [401, 403, 406, 410, 429, 451].includes(status);
+  const error = s(entry?.error);
+  return (
+    [401, 403, 406, 410, 429, 451].includes(status) ||
+    error.startsWith("unsafe_")
+  );
 }
 
 async function crawlPendingQueue({
@@ -666,6 +670,9 @@ export async function extractWebsiteSource(source) {
         "robots_fetch"
       );
       robots = robotsFile?.parsed || null;
+      if (s(robotsFile?.error).startsWith("unsafe_")) {
+        discoveryWarnings.push(`robots_${s(robotsFile.error)}`);
+      }
     } catch (err) {
       discoveryWarnings.push(
         err?.isTimeout ? "robots_fetch_timeout" : "robots_fetch_failed"
@@ -733,6 +740,9 @@ export async function extractWebsiteSource(source) {
         sitemapBudget,
         "sitemap_fetch"
       );
+      if (s(sitemap?.error).startsWith("unsafe_")) {
+        discoveryWarnings.push(`sitemap_${s(sitemap.error)}`);
+      }
     } catch (err) {
       discoveryWarnings.push(
         err?.isTimeout ? "sitemap_fetch_timeout" : "sitemap_fetch_failed"

@@ -1,4 +1,7 @@
 import { useMemo } from "react";
+import { resolveReviewSourceInfo } from "../state/reviewState.js";
+import { deriveCanonicalReviewProjection } from "../state/reviewState.js";
+import { summarizeSetupStudioHonesty } from "../logic/reviewHonesty.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -75,14 +78,15 @@ export function getSetupStudioHasVoiceInput({
 export function getSetupStudioScanningView({
   discoveryState = {},
   discoveryForm = {},
-  reviewDraft = {},
+  currentReview = {},
   businessForm = {},
   manualSections = {},
 }) {
+  const reviewInfo = resolveReviewSourceInfo(currentReview);
   const scanningSourceType = s(
     discoveryState?.lastSourceType ||
       discoveryForm?.sourceType ||
-      reviewDraft?.sourceType
+      reviewInfo?.sourceType
   );
 
   const hasSourceInput = !!s(
@@ -141,7 +145,7 @@ export function buildSetupStudioReviewWorkspaceDialogProps({
   onSaveBusiness,
   onReloadReviewDraft,
   onToggleRefine,
-  reviewDraft,
+  currentReview,
   reviewSources,
   reviewSyncState,
 }) {
@@ -156,7 +160,7 @@ export function buildSetupStudioReviewWorkspaceDialogProps({
     onSaveBusiness,
     onReloadReviewDraft,
     onClose: onToggleRefine,
-    reviewDraft,
+    currentReview,
     reviewSources,
     reviewSyncState,
   };
@@ -166,7 +170,7 @@ export function useSetupStudioSceneView({
   discoveryState,
   discoveryModeLabel,
   discoveryForm,
-  reviewDraft,
+  currentReview,
   businessForm,
   manualSections,
   showRefine,
@@ -195,11 +199,21 @@ export function useSetupStudioSceneView({
       getSetupStudioScanningView({
         discoveryState,
         discoveryForm,
-        reviewDraft,
+        currentReview,
         businessForm,
         manualSections,
       }),
-    [discoveryState, discoveryForm, reviewDraft, businessForm, manualSections]
+    [discoveryState, discoveryForm, currentReview, businessForm, manualSections]
+  );
+
+  const honestySummary = useMemo(
+    () =>
+      summarizeSetupStudioHonesty({
+        reviewProjection: deriveCanonicalReviewProjection(currentReview),
+        reviewSources,
+        extraWarnings: discoveryState?.warnings,
+      }),
+    [currentReview, reviewSources, discoveryState?.warnings]
   );
 
   const reviewWorkspaceDialogProps = useMemo(
@@ -215,7 +229,7 @@ export function useSetupStudioSceneView({
         onSaveBusiness,
         onReloadReviewDraft,
         onToggleRefine,
-        reviewDraft,
+        currentReview,
         reviewSources,
         reviewSyncState,
       }),
@@ -230,7 +244,7 @@ export function useSetupStudioSceneView({
       onSaveBusiness,
       onReloadReviewDraft,
       onToggleRefine,
-      reviewDraft,
+      currentReview,
       reviewSources,
       reviewSyncState,
     ]
@@ -239,6 +253,7 @@ export function useSetupStudioSceneView({
   return {
     sourceLabel,
     discoveryWarnings,
+    honestySummary,
     scanningView,
     reviewWorkspaceDialogProps,
   };

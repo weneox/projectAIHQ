@@ -1,10 +1,18 @@
 import { motion } from "framer-motion";
 import { AlertTriangle, CheckCircle2, X } from "lucide-react";
+import React from "react";
 
 import { StageSection, TinyChip, TinyLabel } from "../SetupStudioUi.jsx";
+import SetupStudioEvidenceNotice from "../SetupStudioEvidenceNotice.jsx";
 import FieldReviewCard from "./FieldReviewCard.jsx";
 import FinalizeFooter from "./FinalizeFooter.jsx";
 import { humanizeStudioIssue } from "../../logic/helpers.js";
+import { deriveCanonicalReviewProjection } from "../../state/reviewState.js";
+import { getControlPlanePermissions } from "../../../../lib/controlPlanePermissions.js";
+import {
+  describeSetupStudioFieldHonesty,
+  summarizeSetupStudioHonesty,
+} from "../../logic/reviewHonesty.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -33,6 +41,7 @@ function textFromValue(value) {
 
 function normalizeEvidenceEntries(value, fallbackSources = []) {
   const item = obj(value);
+  const authorityRank = Number(item.authorityRank || item.authority_rank);
   const sources = arr(
     item.sources ||
       item.sourceList ||
@@ -48,7 +57,8 @@ function normalizeEvidenceEntries(value, fallbackSources = []) {
           item.sourceLabel ||
           item.source_label ||
           item.displayName ||
-          item.title
+          item.title ||
+          item.sourceType
       ),
       value: textFromValue(
         item.observedValue ||
@@ -57,7 +67,14 @@ function normalizeEvidenceEntries(value, fallbackSources = []) {
           item.summary ||
           item.display
       ),
-      note: s(item.note || item.reason || item.role),
+      note: s(
+        item.note ||
+          item.reason ||
+          item.role ||
+          (Number.isFinite(authorityRank) && authorityRank > 0
+            ? `Authority rank ${authorityRank}`
+            : "")
+      ),
       url: s(item.url || item.sourceUrl || item.source_url),
     },
   ].filter((entry) => entry.label || entry.value || entry.note || entry.url);
@@ -113,14 +130,15 @@ function buildFieldCards({
   businessForm = {},
   manualSections = {},
   discoveryProfileRows = [],
-  reviewDraft = {},
+  reviewProjection = {},
   reviewSources = [],
 }) {
   const form = obj(businessForm);
   const sections = obj(manualSections);
-  const draft = obj(reviewDraft);
+  const draft = obj(reviewProjection);
   const overview = obj(draft.overview);
   const fieldProvenance = obj(draft.fieldProvenance);
+  const fieldConfidence = obj(draft.fieldConfidence);
   const rowMap = new Map(
     arr(discoveryProfileRows).map((row) => {
       const item = Array.isArray(row)
@@ -239,11 +257,19 @@ function buildFieldCards({
     const row = rowMap.get(field.key) || {};
     const provenance = fieldProvenance[field.key] || {};
     const evidence = normalizeEvidenceEntries(provenance, reviewSources);
+    const honesty = describeSetupStudioFieldHonesty({
+      fieldKey: field.key,
+      fieldConfidence,
+      observedValue: s(field.observedValue || row.value),
+      evidence,
+      warnings: [...arr(draft.reviewFlags), ...arr(draft.warnings)],
+    });
 
     return {
       ...field,
       observedValue: s(field.observedValue || row.value),
       needsAttention: !s(field.value),
+      honesty,
       evidence:
         evidence.length > 0
           ? evidence
@@ -264,11 +290,11 @@ export default function ReviewWorkspace({
   onSetManualSection,
   onSaveBusiness,
   onClose,
-  reviewDraft,
+  currentReview,
   reviewSources = [],
   reviewSyncState = {},
 }) {
-  const draft = obj(reviewDraft);
+  const draft = deriveCanonicalReviewProjection(currentReview);
   const overview = obj(draft.overview);
   const quickSummary = s(
     draft.quickSummary ||
@@ -281,7 +307,7 @@ export default function ReviewWorkspace({
     businessForm,
     manualSections,
     discoveryProfileRows,
-    reviewDraft,
+    reviewProjection: draft,
     reviewSources,
   });
 
@@ -294,6 +320,15 @@ export default function ReviewWorkspace({
     .slice(0, 8);
 
   const attentionCount = fieldCards.filter((field) => field.needsAttention).length;
+  const honestySummary = summarizeSetupStudioHonesty({
+    reviewProjection: draft,
+    reviewSources,
+  });
+  const permissionState = getControlPlanePermissions({
+    viewerRole: currentReview?.viewerRole,
+    permissions: currentReview?.permissions,
+  });
+  const finalizePermission = permissionState.setupReviewFinalize;
   const blockingMessage = reviewSyncState?.blocksFinalize
     ? s(reviewSyncState?.message || "Reload the review draft before finalizing.")
     : "";
@@ -360,6 +395,15 @@ export default function ReviewWorkspace({
           ) : null}
 
           <StageSection className={issues.length ? "mt-6" : ""} border={!issues.length}>
+            <SetupStudioEvidenceNotice
+              tone={honestySummary.tone}
+              title={honestySummary.title}
+              body={honestySummary.message}
+              chips={honestySummary.chips}
+            />
+          </StageSection>
+
+          <StageSection className="mt-6">
             <div className="grid gap-4">
               {fieldCards.map((field) => (
                 <FieldReviewCard
@@ -371,6 +415,7 @@ export default function ReviewWorkspace({
                   multiline={field.multiline}
                   needsAttention={field.needsAttention}
                   evidence={field.evidence}
+                  honesty={field.honesty}
                   onChange={(nextValue) => {
                     if (field.sectionKey) {
                       onSetManualSection?.(field.sectionKey, nextValue);
@@ -389,6 +434,8 @@ export default function ReviewWorkspace({
       <FinalizeFooter
         savingBusiness={savingBusiness}
         blockingMessage={blockingMessage}
+        permissionMessage={finalizePermission.allowed ? "" : finalizePermission.message}
+        honestyMessage={honestySummary.finalizeMessage}
         onClose={onClose}
         onSubmit={onSaveBusiness}
       />

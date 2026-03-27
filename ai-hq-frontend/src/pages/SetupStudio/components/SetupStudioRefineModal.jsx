@@ -9,7 +9,7 @@ export default function SetupStudioRefineModal({
   onSetManualSection,
   onSaveBusiness,
   onClose,
-  reviewDraft,
+  currentReview,
   reviewSources = [],
   reviewSyncState = {},
 }) {
@@ -23,7 +23,7 @@ export default function SetupStudioRefineModal({
       onSetManualSection={onSetManualSection}
       onSaveBusiness={onSaveBusiness}
       onClose={onClose}
-      reviewDraft={reviewDraft}
+      currentReview={currentReview}
       reviewSources={reviewSources}
       reviewSyncState={reviewSyncState}
     />

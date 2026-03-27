@@ -21,6 +21,7 @@ import {
   getDiscoveryProfileRows,
   getEffectiveMeta,
   getHasStoredReview,
+  getReviewProjection,
   getHasVisibleResults,
   getKnowledgePreview,
   getReviewSyncState,
@@ -35,7 +36,6 @@ export function useSetupStudioViewModel(state) {
     freshEntryMode,
     activeSourceScope,
     currentReview,
-    reviewDraft,
     discoveryState,
     meta,
     businessForm,
@@ -60,7 +60,6 @@ export function useSetupStudioViewModel(state) {
 
     return reviewStateMatchesSource(
       currentReview,
-      reviewDraft,
       scopedType,
       scopedUrl
     );
@@ -68,14 +67,13 @@ export function useSetupStudioViewModel(state) {
     freshEntryMode,
     activeSourceScope,
     currentReview,
-    reviewDraft,
     discoveryState.lastSourceType,
     discoveryState.lastUrl,
   ]);
 
   const hasStoredReview = useMemo(
-    () => getHasStoredReview(currentReview, reviewDraft),
-    [currentReview, reviewDraft]
+    () => getHasStoredReview(currentReview),
+    [currentReview]
   );
 
   const reviewSyncState = useMemo(
@@ -96,15 +94,21 @@ export function useSetupStudioViewModel(state) {
     ]
   );
 
-  const { scopedCurrentReview, scopedReviewDraft } = useMemo(
+  const { scopedCurrentReview } = useMemo(
     () =>
       getScopedReviewState({
         hasStoredReview,
         activeReviewAligned,
         currentReview,
-        reviewDraft,
+        activeSourceScope,
+        discoveryState,
       }),
-    [hasStoredReview, activeReviewAligned, currentReview, reviewDraft]
+    [hasStoredReview, activeReviewAligned, currentReview, activeSourceScope, discoveryState]
+  );
+
+  const reviewProjection = useMemo(
+    () => getReviewProjection(scopedCurrentReview),
+    [scopedCurrentReview]
   );
 
   const {
@@ -116,26 +120,25 @@ export function useSetupStudioViewModel(state) {
     () =>
       getVisibleCollections({
         freshEntryMode,
-        scopedReviewDraft,
         scopedCurrentReview,
         discoveryState,
       }),
-    [freshEntryMode, scopedReviewDraft, scopedCurrentReview, discoveryState]
+    [freshEntryMode, scopedCurrentReview, discoveryState]
   );
 
   const draftBackedProfile = useMemo(
     () =>
       getDraftBackedProfile({
         freshEntryMode,
-        scopedReviewDraft,
+        reviewProjection,
         discoveryState,
       }),
-    [freshEntryMode, scopedReviewDraft, discoveryState]
+    [freshEntryMode, reviewProjection, discoveryState]
   );
 
   const discoveryProfileRows = useMemo(
-    () => getDiscoveryProfileRows(freshEntryMode, draftBackedProfile, scopedReviewDraft),
-    [freshEntryMode, draftBackedProfile, scopedReviewDraft]
+    () => getDiscoveryProfileRows(freshEntryMode, draftBackedProfile, reviewProjection),
+    [freshEntryMode, draftBackedProfile, reviewProjection]
   );
 
   const hasVisibleResults = useMemo(
@@ -149,7 +152,7 @@ export function useSetupStudioViewModel(state) {
         visibleSources,
         visibleEvents,
         discoveryState,
-        scopedReviewDraft,
+        reviewProjection,
       }),
     [
       freshEntryMode,
@@ -160,7 +163,7 @@ export function useSetupStudioViewModel(state) {
       visibleSources,
       visibleEvents,
       discoveryState,
-      scopedReviewDraft,
+      reviewProjection,
     ]
   );
 
@@ -170,7 +173,7 @@ export function useSetupStudioViewModel(state) {
         meta,
         visibleKnowledgeItems,
         visibleServiceItems,
-        scopedReviewDraft,
+        reviewProjection,
         discoveryState,
         draftBackedProfile,
         businessForm,
@@ -179,7 +182,7 @@ export function useSetupStudioViewModel(state) {
       meta,
       visibleKnowledgeItems,
       visibleServiceItems,
-      scopedReviewDraft,
+      reviewProjection,
       discoveryState,
       draftBackedProfile,
       businessForm,
@@ -220,29 +223,29 @@ export function useSetupStudioViewModel(state) {
     () =>
       getCurrentTitle({
         businessForm,
-        scopedReviewDraft,
+        reviewProjection,
         discoveryState,
         extractProfileName,
       }),
-    [businessForm, scopedReviewDraft, discoveryState]
+    [businessForm, reviewProjection, discoveryState]
   );
 
   const currentDescription = useMemo(
     () =>
       getCurrentDescription({
-        scopedReviewDraft,
+        reviewProjection,
         businessForm,
         discoveryState,
         extractProfileSummary,
       }),
-    [scopedReviewDraft, businessForm, discoveryState]
+    [reviewProjection, businessForm, discoveryState]
   );
 
   const autoRevealKey = useMemo(
     () =>
       getAutoRevealKey({
         discoveryState,
-        scopedReviewDraft,
+        reviewProjection,
         discoveryProfileRows,
         visibleKnowledgeItems,
         visibleServiceItems,
@@ -251,7 +254,7 @@ export function useSetupStudioViewModel(state) {
       }),
     [
       discoveryState,
-      scopedReviewDraft,
+      reviewProjection,
       discoveryProfileRows,
       visibleKnowledgeItems,
       visibleServiceItems,
@@ -281,7 +284,7 @@ export function useSetupStudioViewModel(state) {
     hasStoredReview,
     reviewSyncState,
     scopedCurrentReview,
-    scopedReviewDraft,
+    reviewProjection,
     visibleKnowledgeItems,
     visibleServiceItems,
     visibleSources,

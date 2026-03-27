@@ -7,13 +7,28 @@ import { createTenantTruthVersionHelpers } from "../../../db/helpers/tenantTruth
 import {
   getCurrentTenantRuntimeProjection,
   getTenantRuntimeProjectionFreshness,
+  getLatestTenantRuntimeProjectionRun,
+  refreshTenantRuntimeProjectionStrict,
 } from "../../../db/helpers/tenantRuntimeProjection.js";
 import { getActiveSetupReviewSession } from "../../../db/helpers/tenantSetupReview.js";
 import {
   buildOperationalRepairGuidance,
   buildReadinessSurface,
 } from "../../../services/operationalReadiness.js";
-import { requireDb, requireTenant, ok, bad } from "./utils.js";
+import {
+  requireDb,
+  requireTenant,
+  requireOperationalManager,
+  requireOwnerOrAdminMutation,
+  canReadControlPlaneAuditHistoryRole,
+  ok,
+  bad,
+  serverErr,
+  getActor,
+  getUserRole,
+  isInternalServiceRequest,
+  auditSafe,
+} from "./utils.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -66,15 +81,128 @@ function pickLatest(items = [], predicate = () => true) {
   return arr(items).find((item) => predicate(item)) || null;
 }
 
+function canRepairRuntimeProjection({
+  latestTruthVersion = {},
+  viewerRole = "operator",
+} = {}) {
+  return Boolean(
+    s(latestTruthVersion?.id) &&
+      ["internal", "owner", "admin"].includes(lower(viewerRole))
+  );
+}
+
+function buildRuntimeProjectionRepairAction({
+  latestTruthVersion = {},
+  viewerRole = "operator",
+  label = "Rebuild runtime projection",
+} = {}) {
+  if (!canRepairRuntimeProjection({ latestTruthVersion, viewerRole })) {
+    return null;
+  }
+
+  return {
+    id: "rebuild_runtime_projection",
+    kind: "api",
+    label: s(label),
+    requiredRole: "admin",
+    allowed: true,
+    target: {
+      path: "/api/settings/trust/runtime-projection/repair",
+      method: "POST",
+      section: "runtime",
+      refreshSurface: "trust",
+    },
+  };
+}
+
+function buildRuntimeProjectionHealth({
+  runtimeProjection = {},
+  runtimeFreshness = {},
+  latestTruthVersion = {},
+  latestRepairRun = {},
+  viewerRole = "operator",
+} = {}) {
+  const projectionId = s(runtimeProjection?.id);
+  const runtimeStatus = lower(runtimeProjection?.status || "");
+  const stale = !!runtimeFreshness?.stale;
+  const freshnessReasons = arr(runtimeFreshness?.reasons).map((item) => s(item)).filter(Boolean);
+  const latestRun = obj(latestRepairRun);
+  const latestRunStatus = lower(latestRun.status);
+  const latestRunReasonCode = s(
+    latestRun.error_code ||
+      arr(runtimeFreshness?.reasons)[0] ||
+      ""
+  );
+
+  let reasonCode = "";
+  if (!projectionId || !runtimeStatus) {
+    reasonCode = "runtime_projection_missing";
+  } else if (stale) {
+    reasonCode = "runtime_projection_stale";
+  } else if (runtimeStatus !== "ready") {
+    reasonCode = "runtime_projection_not_ready";
+  }
+
+  const usable = !!projectionId && runtimeStatus === "ready" && !stale;
+  const repairAction = buildRuntimeProjectionRepairAction({
+    latestTruthVersion,
+    viewerRole,
+    label:
+      !projectionId || !runtimeStatus
+        ? "Rebuild runtime projection"
+        : "Rebuild projection from approved truth",
+  });
+
+  return {
+    present: !!projectionId,
+    usable,
+    stale,
+    status: runtimeStatus,
+    reasonCode,
+    reasons: freshnessReasons,
+    canRepair: !!repairAction,
+    repairAction,
+    latestRepair: {
+      id: s(latestRun.id),
+      status: latestRunStatus,
+      triggerType: s(latestRun.trigger_type),
+      requestedBy: s(latestRun.requested_by),
+      startedAt: iso(latestRun.started_at),
+      finishedAt: iso(latestRun.finished_at),
+      durationMs: n(latestRun.duration_ms, 0),
+      errorCode: s(latestRun.error_code),
+      errorMessage: s(latestRun.error_message),
+      runtimeProjectionId: s(latestRun.runtime_projection_id),
+      outputSummary: obj(latestRun.output_summary_json),
+      reasonCode: latestRunReasonCode,
+    },
+  };
+}
+
+function getRepairLogger(req, tenant = {}, viewerRole = "") {
+  return req.log?.child?.({
+    flow: "runtime_projection_repair",
+    tenantId: s(tenant?.tenant_id || tenant?.id),
+    tenantKey: s(tenant?.tenant_key),
+    viewerRole: s(viewerRole),
+  });
+}
+
 function buildTrustReadiness({
   runtimeProjection = {},
   latestTruthVersion = {},
   activeReviewSession = {},
+  latestRepairRun = {},
+  viewerRole = "operator",
 } = {}) {
   const runtimeStatus = lower(runtimeProjection?.status || "");
   const runtimeStale = !!runtimeProjection?.stale;
   const reviewActive = !!activeReviewSession?.id;
   const blockers = [];
+  const runtimeRepairAction = buildRuntimeProjectionRepairAction({
+    latestTruthVersion,
+    viewerRole,
+  });
 
   if (!s(runtimeProjection?.id) || !runtimeStatus) {
     blockers.push(
@@ -84,16 +212,18 @@ function buildTrustReadiness({
         missingFields: ["runtime_projection"],
         title: "Runtime projection blocker",
         subtitle: "No approved runtime projection is currently available for trust-controlled runtime surfaces.",
-        action: {
+        action: runtimeRepairAction || {
           id: "open_setup_route",
           kind: "route",
           label: "Open runtime setup",
           requiredRole: "operator",
         },
-        target: {
-          path: "/setup/runtime",
-          section: "runtime",
-        },
+        target: runtimeRepairAction
+          ? obj(runtimeRepairAction.target)
+          : {
+              path: "/setup/runtime",
+              section: "runtime",
+            },
       })
     );
   } else if (runtimeStale) {
@@ -104,16 +234,18 @@ function buildTrustReadiness({
         missingFields: arr(runtimeProjection?.reasons),
         title: "Runtime projection stale",
         subtitle: "The approved runtime projection is stale and may not reflect the latest review-protected setup state.",
-        action: {
+        action: runtimeRepairAction || {
           id: "open_setup_route",
           kind: "route",
           label: "Review runtime setup",
           requiredRole: "operator",
         },
-        target: {
-          path: "/setup/runtime",
-          section: "runtime",
-        },
+        target: runtimeRepairAction
+          ? obj(runtimeRepairAction.target)
+          : {
+              path: "/setup/runtime",
+              section: "runtime",
+            },
       })
     );
   }
@@ -178,6 +310,7 @@ function buildTrustReadiness({
           ? "Runtime projection is stale."
           : "Runtime projection is ready.",
       blockers: blockers.filter((item) => item.category === "runtime"),
+      repairActions: runtimeRepairAction ? [runtimeRepairAction] : [],
     }),
     truth: buildReadinessSurface({
       status: !s(latestTruthVersion?.id) ? "blocked" : "ready",
@@ -199,6 +332,7 @@ function buildTrustReadiness({
         ? "Trust maintenance remains blocked until the listed runtime/truth prerequisites are repaired."
         : "Trust maintenance prerequisites are aligned.",
       blockers,
+      repairActions: runtimeRepairAction ? [runtimeRepairAction] : [],
     }),
   };
 }
@@ -225,9 +359,16 @@ export function settingsTrustRoutes({ db }) {
         tenantId,
         tenantKey: requestedTenantKey,
       });
-      if (!tenant?.tenant_id) return bad(res, 404, "tenant not found");
+      if (!tenant?.tenant_id) {
+        return res.status(404).json({ ok: false, error: "tenant not found" });
+      }
 
-      const [sourceItems, reviewQueue, recentRuns, runtimeProjection, runtimeFreshness, latestTruthVersion, activeReviewSession, audit] = await Promise.all([
+      const viewerRole = isInternalServiceRequest(req)
+        ? "internal"
+        : getUserRole(req);
+      const canReadAuditHistory = canReadControlPlaneAuditHistoryRole(viewerRole);
+
+      const [sourceItems, reviewQueue, recentRuns, runtimeProjection, runtimeFreshness, latestTruthVersion, activeReviewSession, latestRepairRun, audit] = await Promise.all([
         sources.listSources({
           tenantId: tenant.tenant_id,
           tenantKey: tenant.tenant_key,
@@ -260,6 +401,10 @@ export function settingsTrustRoutes({ db }) {
           tenantKey: tenant.tenant_key,
         }).catch(() => null),
         getActiveSetupReviewSession(tenant.tenant_id, db).catch(() => null),
+        getLatestTenantRuntimeProjectionRun({
+          tenantId: tenant.tenant_id,
+          tenantKey: tenant.tenant_key,
+        }, db).catch(() => null),
         dbListAuditEntries(db, {
           tenantId: tenant.tenant_id,
           tenantKey: tenant.tenant_key,
@@ -267,11 +412,15 @@ export function settingsTrustRoutes({ db }) {
             "settings.workspace.updated",
             "settings.secret.updated",
             "settings.secret.deleted",
+            "settings.operational.voice.updated",
+            "settings.operational.channel.updated",
             "settings.source.created",
             "settings.source.updated",
             "settings.source.sync.requested",
             "settings.knowledge.approved",
             "settings.knowledge.rejected",
+            "settings.trust.runtime_projection.repair",
+            "settings.trust.runtime_projection.repaired",
             "team.user.created",
             "team.user.updated",
             "team.user.status.updated",
@@ -310,11 +459,32 @@ export function settingsTrustRoutes({ db }) {
         },
         latestTruthVersion,
         activeReviewSession,
+        latestRepairRun,
+        viewerRole,
+      });
+      const projectionHealth = buildRuntimeProjectionHealth({
+        runtimeProjection: {
+          id: s(runtimeProjection?.id),
+          status: lower(runtimeProjection?.status || ""),
+        },
+        runtimeFreshness,
+        latestTruthVersion,
+        latestRepairRun,
+        viewerRole,
       });
 
       return ok(res, {
         tenantId: tenant.tenant_id,
         tenantKey: tenant.tenant_key,
+        viewerRole,
+        capabilities: {
+          canRepairRuntimeProjection: projectionHealth.canRepair,
+          runtimeProjectionRepair: {
+            allowed: projectionHealth.canRepair,
+            requiredRoles: ["owner", "admin"],
+            message: "Only owner/admin can rebuild runtime projection.",
+          },
+        },
         summary: {
           sources: {
             total: arr(sourceItems).length,
@@ -340,6 +510,12 @@ export function settingsTrustRoutes({ db }) {
             updatedAt: iso(runtimeProjection?.updated_at || runtimeProjection?.created_at),
             stale: !!runtimeFreshness?.stale,
             reasons: arr(runtimeFreshness?.reasons),
+            health: projectionHealth,
+            repair: {
+              canRepair: projectionHealth.canRepair,
+              action: projectionHealth.repairAction,
+              latestRun: projectionHealth.latestRepair,
+            },
             readiness: readiness.runtimeProjection,
           },
           truth: {
@@ -366,10 +542,188 @@ export function settingsTrustRoutes({ db }) {
             sourceDisplayName: s(source?.display_name || source?.source_key || source?.source_url),
           };
         }),
-        audit,
+        audit: canReadAuditHistory ? audit : [],
+        permissions: {
+          auditHistoryRead: {
+            allowed: canReadAuditHistory,
+            requiredRoles: ["owner", "admin", "analyst"],
+            message: canReadAuditHistory
+              ? ""
+              : "Only owner/admin/analyst can read control-plane audit history.",
+          },
+        },
       });
     } catch (err) {
       return bad(res, 500, err?.message || "failed to load trust summary");
+    }
+  });
+
+  router.post("/settings/trust/runtime-projection/repair", async (req, res) => {
+    try {
+      if (!requireDb(res, db)) return;
+
+      const tenantKey = requireTenant(req, res);
+      if (!tenantKey) return;
+
+      const tenantId = s(getAuthTenantId(req));
+      const requestedTenantKey = s(getAuthTenantKey(req) || tenantKey).toLowerCase();
+      const sources = createTenantSourcesHelpers({ db });
+      const truthVersions = createTenantTruthVersionHelpers({ db });
+
+      const tenant = await sources.resolveTenantIdentity({
+        tenantId,
+        tenantKey: requestedTenantKey,
+      });
+      if (!tenant?.tenant_id) {
+        return res.status(404).json({ ok: false, error: "tenant not found" });
+      }
+
+      const viewerRole = await requireOwnerOrAdminMutation(req, res, {
+        db,
+        tenant: { id: tenant.tenant_id, tenant_key: tenant.tenant_key },
+        message: "Only owner/admin can repair runtime projection",
+        auditAction: "settings.trust.runtime_projection.repair",
+        objectType: "tenant_business_runtime_projection",
+        objectId: tenant.tenant_id,
+        targetArea: "trust_runtime_projection",
+      });
+      if (!viewerRole) return;
+      const repairLogger = getRepairLogger(req, tenant, viewerRole);
+
+      const latestTruthVersion = await truthVersions.getLatestVersion({
+        tenantId: tenant.tenant_id,
+        tenantKey: tenant.tenant_key,
+      }).catch(() => null);
+
+      repairLogger?.info("runtime_projection.repair.requested", {
+        latestTruthVersionId: s(latestTruthVersion?.id),
+      });
+
+      if (!s(latestTruthVersion?.id)) {
+        await auditSafe(
+          db,
+          req,
+          { id: tenant.tenant_id, tenant_key: tenant.tenant_key },
+          "settings.trust.runtime_projection.repair",
+          "tenant_business_runtime_projection",
+          tenant.tenant_id,
+          {
+            outcome: "blocked",
+            reasonCode: "approved_truth_unavailable",
+            targetArea: "trust_runtime_projection",
+          }
+        );
+        repairLogger?.warn("runtime_projection.repair.blocked", {
+          reasonCode: "approved_truth_unavailable",
+        });
+        return res.status(409).json({
+          ok: false,
+          error: "approved_truth_unavailable",
+          reasonCode: "approved_truth_unavailable",
+          details: {
+            tenantKey: tenant.tenant_key,
+            canRepair: false,
+            message: "Runtime projection rebuild requires approved truth.",
+          },
+        });
+      }
+
+      let refreshed = null;
+      try {
+        refreshed = await refreshTenantRuntimeProjectionStrict(
+          {
+            tenantId: tenant.tenant_id,
+            tenantKey: tenant.tenant_key,
+            triggerType: "manual_repair",
+            requestedBy: getActor(req),
+            runnerKey: "settings.trust.runtime_projection.repair",
+            generatedBy: getActor(req),
+            approvedBy: s(latestTruthVersion?.approved_by),
+            metadata: {
+              source: "settingsTrustRoutes.runtimeProjectionRepair",
+              initiatedByRole: viewerRole,
+            },
+          },
+          db
+        );
+      } catch (error) {
+        await auditSafe(
+          db,
+          req,
+          { id: tenant.tenant_id, tenant_key: tenant.tenant_key },
+          "settings.trust.runtime_projection.repair",
+          "tenant_business_runtime_projection",
+          tenant.tenant_id,
+          {
+            outcome: "failed",
+            reasonCode:
+              s(error?.freshness?.reasons?.[0]) ||
+              s(error?.code || "runtime_projection_repair_failed").toLowerCase(),
+            targetArea: "trust_runtime_projection",
+            freshness: obj(error?.freshness),
+          }
+        );
+        repairLogger?.warn("runtime_projection.repair.failed", {
+          reasonCode:
+            s(error?.freshness?.reasons?.[0]) ||
+            s(error?.code || "runtime_projection_repair_failed").toLowerCase(),
+          runtimeProjectionId: s(error?.runtimeProjectionId),
+        });
+        return res.status(409).json({
+          ok: false,
+          error: "runtime_projection_repair_failed",
+          reasonCode:
+            s(error?.freshness?.reasons?.[0]) ||
+            s(error?.code || "runtime_projection_repair_failed").toLowerCase(),
+          details: {
+            tenantKey: tenant.tenant_key,
+            message: s(error?.message || "runtime projection repair failed"),
+            freshness: obj(error?.freshness),
+          },
+        });
+      }
+
+      await auditSafe(
+        db,
+        req,
+        { id: tenant.tenant_id, tenant_key: tenant.tenant_key },
+        "settings.trust.runtime_projection.repaired",
+        "tenant_business_runtime_projection",
+        s(refreshed?.projection?.id),
+        {
+          outcome: "succeeded",
+          targetArea: "trust_runtime_projection",
+          triggerType: "manual_repair",
+          runtimeProjectionId: s(refreshed?.projection?.id),
+          freshnessReasons: arr(refreshed?.freshness?.reasons),
+        }
+      );
+
+      repairLogger?.info("runtime_projection.repair.completed", {
+        repairRunId: s(refreshed?.runId),
+        runtimeProjectionId: s(refreshed?.projection?.id),
+        projectionStatus: s(refreshed?.projection?.status).toLowerCase(),
+        reasonCode: s(refreshed?.freshness?.reasons?.[0] || ""),
+      });
+
+      return ok(res, {
+        tenantId: tenant.tenant_id,
+        tenantKey: tenant.tenant_key,
+        repaired: true,
+        projection: {
+          id: s(refreshed?.projection?.id),
+          status: s(refreshed?.projection?.status).toLowerCase(),
+          projectionHash: s(refreshed?.projection?.projection_hash),
+          updatedAt: iso(
+            refreshed?.projection?.updated_at || refreshed?.projection?.created_at
+          ),
+        },
+        freshness: obj(refreshed?.freshness),
+        repairRunId: s(refreshed?.runId),
+      });
+    } catch (err) {
+      req.log?.error("runtime_projection.repair.unhandled_failed", err);
+      return serverErr(res, err?.message || "failed to repair runtime projection");
     }
   });
 

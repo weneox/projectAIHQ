@@ -1,6 +1,13 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { Outlet } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const areInternalRoutesEnabled = vi.fn();
+
+vi.mock("./lib/appEntry.js", () => ({
+  areInternalRoutesEnabled: (...args) => areInternalRoutesEnabled(...args),
+  INTERNAL_ONLY_APP_ROUTES: ["/command-demo", "/analytics", "/agents", "/threads"],
+}));
 
 vi.mock("./components/layout/Shell.jsx", () => ({
   default: function ShellMock() {
@@ -112,6 +119,11 @@ import App from "./App.jsx";
 
 afterEach(() => {
   cleanup();
+  areInternalRoutesEnabled.mockReset();
+});
+
+beforeEach(() => {
+  areInternalRoutesEnabled.mockReturnValue(false);
 });
 
 describe("App critical route smoke", () => {
@@ -128,5 +140,23 @@ describe("App critical route smoke", () => {
     window.history.pushState({}, "", path);
     render(<App />);
     expect(await screen.findByText(text)).toBeInTheDocument();
+  });
+
+  it.each([
+    ["/command-demo"],
+    ["/analytics"],
+    ["/agents"],
+    ["/threads"],
+  ])("redirects %s back to the production product surface by default", async (path) => {
+    window.history.pushState({}, "", path);
+    render(<App />);
+    expect(await screen.findByText("Truth Page")).toBeInTheDocument();
+  });
+
+  it("keeps internal-only routes explicitly reachable when internal routing is enabled", async () => {
+    areInternalRoutesEnabled.mockReturnValue(true);
+    window.history.pushState({}, "", "/analytics");
+    render(<App />);
+    expect(await screen.findByText("Analytics Page")).toBeInTheDocument();
   });
 });

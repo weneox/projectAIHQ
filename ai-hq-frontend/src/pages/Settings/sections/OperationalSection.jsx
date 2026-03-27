@@ -163,6 +163,7 @@ export default function OperationalSection({
   savingVoice,
   savingChannel,
   canManage,
+  permissionState = {},
   surface,
   onSaveVoice,
   onSaveChannel,
@@ -190,6 +191,8 @@ export default function OperationalSection({
   const voiceRepair = obj(data.voice?.repair);
   const metaRepair = obj(data.channels?.meta?.repair);
   const readinessSurface = createReadinessViewModel(data.readiness);
+  const operationalPermissionMessage = s(permissionState?.operationalSettingsWrite?.message);
+  const providerSecretsPermissionMessage = s(permissionState?.providerSecretsMutation?.message);
 
   const operationalSummary = useMemo(
     () => ({
@@ -292,6 +295,11 @@ export default function OperationalSection({
         {actionMessage ? (
           <div className="rounded-[24px] border border-amber-200/80 bg-amber-50/90 px-4 py-4 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
             {actionMessage}
+          </div>
+        ) : null}
+        {!canManage ? (
+          <div className="rounded-[24px] border border-amber-200/80 bg-amber-50/90 px-4 py-4 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+            {operationalPermissionMessage || "Operational voice and channel changes stay behind owner/admin access."}
           </div>
         ) : null}
 
@@ -650,9 +658,9 @@ export default function OperationalSection({
           </div>
         </ReadinessCard>
 
-        {!canManage ? (
-          <div className="rounded-[24px] border border-amber-200/80 bg-amber-50/90 px-4 py-4 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
-            Operational records are visible here, but only owner/admin/operator can change them.
+        {!permissionState?.providerSecretsMutation?.allowed ? (
+          <div className="rounded-[24px] border border-slate-200/80 bg-slate-50/90 px-4 py-4 text-sm text-slate-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
+            {providerSecretsPermissionMessage || "Provider secret changes stay behind owner/admin access."}
           </div>
         ) : null}
 

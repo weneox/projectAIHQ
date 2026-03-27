@@ -39,7 +39,7 @@ describe("loaderFlowReview", () => {
 
     const issue = buildSetupStudioSourceMismatchIssue({
       normalized: result.normalized,
-      legacy: result.legacy,
+      reviewProjection: result.reviewProjection,
       message: "A review session exists, but it belongs to a different source than the active draft.",
     });
 
@@ -85,7 +85,6 @@ describe("loaderFlowReview", () => {
 
     const reviewUi = buildSetupStudioHydratedReviewUi({
       reviewState: reconciled.normalized,
-      legacyDraft: reconciled.legacy,
       preserveBusinessForm: false,
     });
 

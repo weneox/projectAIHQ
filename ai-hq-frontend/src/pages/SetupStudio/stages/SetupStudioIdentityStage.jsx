@@ -1,6 +1,8 @@
 import { ArrowRight, PencilLine } from "lucide-react";
+import React from "react";
 
 import SetupStudioStageShell from "../components/SetupStudioStageShell.jsx";
+import SetupStudioEvidenceNotice from "../components/SetupStudioEvidenceNotice.jsx";
 import {
   GhostButton,
   StageSection,
@@ -71,6 +73,7 @@ export default function SetupStudioIdentityStage({
   currentDescription,
   discoveryProfileRows,
   discoveryWarnings = [],
+  honestySummary = {},
   sourceLabel = "",
   reviewSources = [],
   onNext,
@@ -143,6 +146,14 @@ export default function SetupStudioIdentityStage({
             ) : null}
           </div>
         </div>
+
+        <SetupStudioEvidenceNotice
+          tone={honestySummary?.tone || "default"}
+          title={honestySummary?.title || "Reviewed session draft"}
+          body={honestySummary?.message || ""}
+          chips={honestySummary?.chips || []}
+          className="mt-8"
+        />
 
         {warnings.length ? (
           <StageSection className="mt-8">

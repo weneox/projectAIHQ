@@ -271,7 +271,7 @@ function draftItemsToText(items = [], mode = "default") {
     .join("\n");
 }
 
-export function mapCurrentReviewToLegacyDraft(review = {}) {
+export function deriveCanonicalReviewProjection(review = {}) {
   const session = review?.session || null;
   const sessionMeta = obj(review?.sessionMeta);
   const draft = obj(review?.draft);
@@ -417,6 +417,10 @@ export function mapCurrentReviewToLegacyDraft(review = {}) {
   };
 }
 
+export function mapCurrentReviewToLegacyDraft(review = {}) {
+  return deriveCanonicalReviewProjection(review);
+}
+
 export function buildManualSectionsFromReview(review = {}) {
   const draft = obj(review?.draft);
   const services = arr(draft?.services).map((item) =>
@@ -440,7 +444,7 @@ export function buildManualSectionsFromReview(review = {}) {
   };
 }
 
-export function resolveReviewSourceInfo(review = {}, legacyDraft = {}) {
+export function resolveReviewSourceInfo(review = {}) {
   const normalizedReview = normalizeReviewState(review);
   const draft = obj(normalizedReview?.draft);
   const sourceSummary = obj(draft?.sourceSummary);
@@ -469,8 +473,7 @@ export function resolveReviewSourceInfo(review = {}, legacyDraft = {}) {
     firstSource?.sourceType,
     firstSource?.source_type,
     profile?.sourceType,
-    profile?.source_type,
-    legacyDraft?.rawDraft?.sourceSummary?.latestImport?.sourceType
+    profile?.source_type
   );
 
   const sourceUrl = firstNonEmpty(
@@ -488,8 +491,7 @@ export function resolveReviewSourceInfo(review = {}, legacyDraft = {}) {
     profile?.sourceUrl,
     profile?.source_url,
     profile?.websiteUrl,
-    profile?.website_url,
-    legacyDraft?.rawDraft?.sourceSummary?.latestImport?.sourceUrl
+    profile?.website_url
   );
 
   return {
@@ -500,12 +502,11 @@ export function resolveReviewSourceInfo(review = {}, legacyDraft = {}) {
 
 export function reviewStateMatchesSource(
   review = {},
-  legacyDraft = {},
   sourceType = "",
   sourceUrl = ""
 ) {
   const expectedKey = sourceIdentityKey(sourceType, sourceUrl);
-  const reviewInfo = resolveReviewSourceInfo(review, legacyDraft);
+  const reviewInfo = resolveReviewSourceInfo(review);
   const reviewKey = sourceIdentityKey(reviewInfo.sourceType, reviewInfo.sourceUrl);
 
   if (!expectedKey || !reviewKey) return false;
@@ -654,14 +655,9 @@ export function buildKnowledgeDraftItemsFromManual({
 }
 
 export function deriveVisibleKnowledgeItems({
-  reviewDraft = {},
   currentReview = {},
   discoveryState = {},
 }) {
-  const reviewQueueItems = arr(reviewDraft?.reviewQueue).map((item) =>
-    normalizeVisibleKnowledgeItem(item)
-  );
-
   const currentDraftItems = arr(currentReview?.draft?.knowledgeItems).map((item) =>
     normalizeVisibleKnowledgeItem(item)
   );
@@ -672,24 +668,20 @@ export function deriveVisibleKnowledgeItems({
       discoveryState?.importedKnowledgeItems
   ).map((item) => normalizeVisibleKnowledgeItem(item));
 
-  const merged = mergeItemsByKey(
-    reviewQueueItems,
-    [...currentDraftItems, ...snapshotItems],
-    ["candidateId", "key", "title", "category"]
-  );
+  const merged = mergeItemsByKey(currentDraftItems, snapshotItems, [
+    "candidateId",
+    "key",
+    "title",
+    "category",
+  ]);
 
   return merged.map((item) => normalizeVisibleKnowledgeItem(item));
 }
 
 export function deriveVisibleServiceItems({
-  reviewDraft = {},
   currentReview = {},
   discoveryState = {},
 }) {
-  const sectionServices = arr(reviewDraft?.sections?.services).map((item) =>
-    normalizeVisibleServiceItem(item)
-  );
-
   const currentDraftServices = arr(currentReview?.draft?.services).map((item) =>
     normalizeVisibleServiceItem(item)
   );
@@ -709,8 +701,8 @@ export function deriveVisibleServiceItems({
   );
 
   const merged = mergeItemsByKey(
-    sectionServices,
-    [...currentDraftServices, ...snapshotServices],
+    currentDraftServices,
+    snapshotServices,
     ["id", "key", "title", "category"]
   );
 

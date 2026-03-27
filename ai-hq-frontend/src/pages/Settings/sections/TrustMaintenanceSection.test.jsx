@@ -87,6 +87,20 @@ describe("TrustMaintenanceSection", () => {
             },
             runtimeProjection: {
               status: "blocked",
+              health: {
+                present: false,
+                usable: false,
+                stale: false,
+                status: "",
+                reasonCode: "runtime_projection_missing",
+                canRepair: true,
+              },
+              repair: {
+                canRepair: true,
+                latestRun: {
+                  status: "failed",
+                },
+              },
               updatedAt: "2026-03-25T10:05:00.000Z",
               readiness: {
                 status: "blocked",
@@ -99,12 +113,15 @@ describe("TrustMaintenanceSection", () => {
                     title: "Runtime projection blocker",
                     missing: ["runtime_projection"],
                     nextAction: {
-                      id: "open_setup_route",
-                      kind: "route",
-                      label: "Open runtime setup",
+                      id: "rebuild_runtime_projection",
+                      kind: "api",
+                      label: "Rebuild runtime projection",
                       allowed: true,
                       requiredRole: "operator",
-                      target: { path: "/setup/runtime" },
+                      target: {
+                        path: "/api/settings/trust/runtime-projection/repair",
+                        method: "POST",
+                      },
                     },
                   },
                 ],
@@ -142,13 +159,18 @@ describe("TrustMaintenanceSection", () => {
 
     expect(screen.getByText(/trust repair hub/i)).toBeInTheDocument();
     expect(screen.getAllByText(/runtime projection blocker/i).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getAllByRole("button", { name: /open runtime setup/i })[0]);
+    expect(screen.getByText(/approved truth is present and a rebuild can be triggered here/i)).toBeInTheDocument();
+    expect(screen.getByText(/last repair failed/i)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: /rebuild runtime projection/i })[0]);
     await waitFor(() => {
       expect(dispatchRepairAction).toHaveBeenCalledWith(
         expect.objectContaining({
-          id: "open_setup_route",
-          kind: "route",
-          target: { path: "/setup/runtime" },
+          id: "rebuild_runtime_projection",
+          kind: "api",
+          target: {
+            path: "/api/settings/trust/runtime-projection/repair",
+            method: "POST",
+          },
         })
       );
     });

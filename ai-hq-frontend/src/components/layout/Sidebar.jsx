@@ -262,13 +262,13 @@ function BrandDock({ expanded }) {
                 </div>
 
                 <div className="mt-[7px] truncate text-[17px] font-semibold tracking-[-0.05em] text-white/96">
-                  Executive Command
+                  Truth Control Plane
                 </div>
 
                 <div className="mt-[11px] flex items-center gap-2.5">
                   <span className="h-[5px] w-[5px] rounded-full bg-cyan-200/80 shadow-[0_0_12px_rgba(165,243,252,0.28)]" />
                   <span className="truncate text-[10px] font-medium tracking-[0.02em] text-white/54">
-                    Private operational navigation rail
+                    Approved truth and operator workflows
                   </span>
                 </div>
               </div>
@@ -400,10 +400,10 @@ function RailFooter({ expanded }) {
           )}
         >
           <div className="truncate text-[9.5px] uppercase tracking-[0.24em] text-white/34">
-            Secure Rail
+            Core Product
           </div>
           <div className="truncate pt-0.5 text-[10.5px] text-white/56">
-            Private operational layer
+            Truth-governed workspace
           </div>
         </div>
       </div>

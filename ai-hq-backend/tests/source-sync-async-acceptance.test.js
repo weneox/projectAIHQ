@@ -4,7 +4,10 @@ import assert from "node:assert/strict";
 import { __test__ as setupTest } from "../src/routes/api/workspace/setup.js";
 import { __test__ as settingsSourcesTest } from "../src/routes/api/settings/sources.js";
 import { __test__ as importTest } from "../src/services/workspace/import.js";
-import { ensureSource } from "../src/services/workspace/import/records.js";
+import {
+  createSourceRun,
+  ensureSource,
+} from "../src/services/workspace/import/records.js";
 import {
   __test__ as asyncTaskTest,
   dispatchDetachedTask,
@@ -159,6 +162,99 @@ test("retry plan marks terminal failure after max attempts", () => {
   assert.equal(plan.terminal, true);
   assert.equal(plan.nextStatus, "failed");
   assert.equal(plan.nextRetryAt, "");
+});
+
+test("created source sync runs retain request and correlation ids in metadata", async () => {
+  let insertedMetadata = null;
+  const db = {
+    async query(text, params = []) {
+      if (text.includes("select to_regclass")) {
+        return { rows: [{ regclass: "public.tenant_source_sync_runs" }] };
+      }
+
+      if (text.includes("from information_schema.columns")) {
+        return {
+          rows: [
+            { column_name: "id", data_type: "uuid", udt_name: "uuid" },
+            { column_name: "tenant_id", data_type: "uuid", udt_name: "uuid" },
+            { column_name: "tenant_key", data_type: "text", udt_name: "text" },
+            { column_name: "source_id", data_type: "uuid", udt_name: "uuid" },
+            { column_name: "source_key", data_type: "text", udt_name: "text" },
+            { column_name: "run_key", data_type: "text", udt_name: "text" },
+            { column_name: "source_type", data_type: "text", udt_name: "text" },
+            { column_name: "source_url", data_type: "text", udt_name: "text" },
+            { column_name: "url", data_type: "text", udt_name: "text" },
+            { column_name: "review_session_id", data_type: "uuid", udt_name: "uuid" },
+            { column_name: "status", data_type: "text", udt_name: "text" },
+            { column_name: "requested_by", data_type: "text", udt_name: "text" },
+            { column_name: "created_by", data_type: "text", udt_name: "text" },
+            { column_name: "attempt_count", data_type: "integer", udt_name: "int4" },
+            { column_name: "max_attempts", data_type: "integer", udt_name: "int4" },
+            { column_name: "next_retry_at", data_type: "timestamp", udt_name: "timestamp" },
+            { column_name: "lease_token", data_type: "text", udt_name: "text" },
+            { column_name: "claimed_by", data_type: "text", udt_name: "text" },
+            { column_name: "input_summary_json", data_type: "jsonb", udt_name: "jsonb" },
+            { column_name: "metadata_json", data_type: "jsonb", udt_name: "jsonb" },
+            { column_name: "meta_json", data_type: "jsonb", udt_name: "jsonb" },
+            { column_name: "created_at", data_type: "timestamp", udt_name: "timestamp" },
+            { column_name: "updated_at", data_type: "timestamp", udt_name: "timestamp" },
+          ],
+        };
+      }
+
+      if (text.includes("from pg_constraint")) {
+        return { rows: [] };
+      }
+
+      if (text.includes("insert into")) {
+        insertedMetadata =
+          params
+            .map((value) => {
+              if (value && typeof value === "object" && !Array.isArray(value)) {
+                return value;
+              }
+              try {
+                return JSON.parse(value);
+              } catch {
+                return null;
+              }
+            })
+            .find(
+              (value) =>
+                value &&
+                typeof value === "object" &&
+                value.workerTaskType === "setup_import_source_sync"
+            ) || null;
+        return {
+          rows: [
+            {
+              id: "run-1",
+              metadata_json: insertedMetadata,
+            },
+          ],
+        };
+      }
+
+      throw new Error(`Unhandled query in test: ${text}`);
+    },
+  };
+
+  const created = await createSourceRun(db, {
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    sourceId: "source-1",
+    sourceType: "website",
+    sourceUrl: "https://example.com",
+    requestedBy: "ops@example.com",
+    requestId: "req-sync-1",
+    correlationId: "corr-sync-1",
+    reviewSessionId: "33333333-3333-4333-8333-333333333333",
+  });
+
+  assert.equal(created.run.id, "run-1");
+  assert.equal(insertedMetadata.requestId, "req-sync-1");
+  assert.equal(insertedMetadata.correlationId, "corr-sync-1");
+  assert.equal(insertedMetadata.workerTaskType, "setup_import_source_sync");
 });
 
 test("ensureSource reuses an existing tenant source when insert hits duplicate source_key", async () => {

@@ -12,6 +12,7 @@ import {
   requireDb,
   requireTenant,
   requireOwnerOrAdmin,
+  requireOwnerOrAdminMutation,
   serverErr,
   cleanLower,
   cleanString,
@@ -71,21 +72,50 @@ export function secretsSettingsRoutes({ db }) {
       const tenantKey = requireTenant(req, res);
       if (!tenantKey) return;
 
-      const role = requireOwnerOrAdmin(req, res);
-      if (!role) return;
-
       const provider = cleanLower(req.params.provider);
       const secretKey = cleanLower(req.params.key);
 
       if (!provider) return bad(res, "provider is required");
       if (!secretKey) return bad(res, "secret key is required");
 
-      const secretValue = cleanString(req.body?.value || req.body?.secret || "");
-      if (!secretValue) return bad(res, "secret value is required");
-
       const tenant = await dbGetTenantByKey(db, tenantKey);
       if (!tenant?.id) {
         return res.status(404).json({ ok: false, error: "Tenant not found" });
+      }
+
+      const role = await requireOwnerOrAdminMutation(req, res, {
+        db,
+        tenant,
+        message: "Only owner/admin can manage provider secrets",
+        auditAction: "settings.secret.updated",
+        objectType: "tenant_secret",
+        objectId: `${provider}:${secretKey}`,
+        targetArea: "provider_secret",
+        auditMeta: {
+          provider,
+          secretKey,
+        },
+      });
+      if (!role) return;
+
+      const secretValue = cleanString(req.body?.value || req.body?.secret || "");
+      if (!secretValue) {
+        await auditSafe(
+          db,
+          req,
+          tenant,
+          "settings.secret.updated",
+          "tenant_secret",
+          `${provider}:${secretKey}`,
+          {
+            outcome: "blocked",
+            reasonCode: "secret_value_required",
+            targetArea: "provider_secret",
+            provider,
+            secretKey,
+          }
+        );
+        return bad(res, "secret value is required");
       }
 
       const saved = await dbUpsertTenantSecret(
@@ -105,6 +135,8 @@ export function secretsSettingsRoutes({ db }) {
         "tenant_secret",
         saved?.id || `${provider}:${secretKey}`,
         {
+          outcome: "succeeded",
+          targetArea: "provider_secret",
           provider,
           secretKey,
         }
@@ -127,9 +159,6 @@ export function secretsSettingsRoutes({ db }) {
       const tenantKey = requireTenant(req, res);
       if (!tenantKey) return;
 
-      const role = requireOwnerOrAdmin(req, res);
-      if (!role) return;
-
       const provider = cleanLower(req.params.provider);
       const secretKey = cleanLower(req.params.key);
 
@@ -141,8 +170,38 @@ export function secretsSettingsRoutes({ db }) {
         return res.status(404).json({ ok: false, error: "Tenant not found" });
       }
 
+      const role = await requireOwnerOrAdminMutation(req, res, {
+        db,
+        tenant,
+        message: "Only owner/admin can manage provider secrets",
+        auditAction: "settings.secret.deleted",
+        objectType: "tenant_secret",
+        objectId: `${provider}:${secretKey}`,
+        targetArea: "provider_secret",
+        auditMeta: {
+          provider,
+          secretKey,
+        },
+      });
+      if (!role) return;
+
       const deleted = await dbDeleteTenantSecret(db, tenant.id, provider, secretKey);
       if (!deleted) {
+        await auditSafe(
+          db,
+          req,
+          tenant,
+          "settings.secret.deleted",
+          "tenant_secret",
+          `${provider}:${secretKey}`,
+          {
+            outcome: "blocked",
+            reasonCode: "secret_not_found",
+            targetArea: "provider_secret",
+            provider,
+            secretKey,
+          }
+        );
         return res.status(404).json({ ok: false, error: "Secret not found" });
       }
 
@@ -154,6 +213,8 @@ export function secretsSettingsRoutes({ db }) {
         "tenant_secret",
         `${provider}:${secretKey}`,
         {
+          outcome: "succeeded",
+          targetArea: "provider_secret",
           provider,
           secretKey,
         }

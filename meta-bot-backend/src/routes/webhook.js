@@ -275,13 +275,14 @@ function summarizeInbound(ev) {
   };
 }
 
-async function resolveTenantForEvent(ev, requestContext = {}) {
+async function resolveTenantForEvent(ev, requestContext = {}, requestLogger = null) {
   const out = await resolveTenantContextFromMetaEvent({
     channel: s(ev?.channel || "instagram").toLowerCase() || "instagram",
     recipientId: s(ev?.recipientId || ""),
     pageId: s(ev?.pageId || ""),
     igUserId: s(ev?.igUserId || ""),
     requestContext,
+    logger: requestLogger,
   });
 
   if (!out?.ok || !s(out?.tenantKey)) {
@@ -312,7 +313,7 @@ async function handleSupportedTextEvent(ev, rawBody, requestContext = {}) {
     requestId: s(requestContext?.requestId),
     correlationId: s(requestContext?.correlationId),
   });
-  const tenantCtx = await resolveTenantForEvent(ev, requestContext);
+  const tenantCtx = await resolveTenantForEvent(ev, requestContext, requestLogger);
 
   if (!tenantCtx.ok) {
     requestLogger.warn("meta.webhook.text.tenant_resolution_failed", {
@@ -396,7 +397,7 @@ async function handleSupportedCommentEvent(ev, rawBody, requestContext = {}) {
     requestId: s(requestContext?.requestId),
     correlationId: s(requestContext?.correlationId),
   });
-  const tenantCtx = await resolveTenantForEvent(ev, requestContext);
+  const tenantCtx = await resolveTenantForEvent(ev, requestContext, requestLogger);
 
   if (!tenantCtx.ok) {
     requestLogger.warn("meta.webhook.comment.tenant_resolution_failed", {

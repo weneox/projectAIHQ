@@ -6,11 +6,7 @@ import {
   profilePreviewRowsWithProvenance,
   s,
 } from "./lib/setupStudioHelpers.js";
-import {
-  createEmptyLegacyDraft,
-  createEmptyReviewState,
-  resolveMainLanguageValue,
-} from "./state/shared.js";
+import { createEmptyReviewState, resolveMainLanguageValue } from "./state/shared.js";
 import {
   deriveSuggestedServicePayload,
   extractProfileName,
@@ -19,6 +15,7 @@ import {
   shouldPreferCandidateCompanyName,
 } from "./state/profile.js";
 import {
+  deriveCanonicalReviewProjection,
   deriveVisibleEvents,
   deriveVisibleKnowledgeItems,
   deriveVisibleServiceItems,
@@ -26,14 +23,12 @@ import {
 } from "./state/reviewState.js";
 import { sanitizeUiIdentityText } from "./logic/helpers.js";
 
-export function getHasStoredReview(currentReview, reviewDraft) {
+export function getHasStoredReview(currentReview) {
   return !!(
     s(currentReview?.session?.id) ||
     Object.keys(obj(currentReview?.draft)).length ||
     arr(currentReview?.sources).length ||
-    arr(currentReview?.bundleSources).length ||
-    s(reviewDraft?.quickSummary) ||
-    Object.keys(obj(reviewDraft?.overview)).length
+    arr(currentReview?.bundleSources).length
   );
 }
 
@@ -122,27 +117,34 @@ export function getScopedReviewState({
   hasStoredReview,
   activeReviewAligned,
   currentReview,
-  reviewDraft,
+  activeSourceScope = {},
+  discoveryState = {},
 }) {
-  return {
-    scopedCurrentReview:
-      hasStoredReview
+  const hasScopedSource = !!s(
+    activeSourceScope?.sourceUrl || discoveryState?.lastUrl
+  );
+
+  if (!hasStoredReview) {
+    return {
+      scopedCurrentReview: activeReviewAligned
         ? currentReview
-        : !activeReviewAligned
-          ? createEmptyReviewState()
-          : currentReview,
-    scopedReviewDraft:
-      hasStoredReview
-        ? reviewDraft
-        : !activeReviewAligned
-          ? createEmptyLegacyDraft()
-          : reviewDraft,
+        : createEmptyReviewState(),
+    };
+  }
+
+  if (hasScopedSource && !activeReviewAligned) {
+    return {
+      scopedCurrentReview: createEmptyReviewState(),
+    };
+  }
+
+  return {
+    scopedCurrentReview: currentReview,
   };
 }
 
 export function getVisibleCollections({
   freshEntryMode,
-  scopedReviewDraft,
   scopedCurrentReview,
   discoveryState,
 }) {
@@ -157,12 +159,10 @@ export function getVisibleCollections({
 
   return {
     visibleKnowledgeItems: deriveVisibleKnowledgeItems({
-      reviewDraft: scopedReviewDraft,
       currentReview: scopedCurrentReview,
       discoveryState,
     }),
     visibleServiceItems: deriveVisibleServiceItems({
-      reviewDraft: scopedReviewDraft,
       currentReview: scopedCurrentReview,
       discoveryState,
     }),
@@ -176,12 +176,12 @@ export function getVisibleCollections({
 
 export function getDraftBackedProfile({
   freshEntryMode,
-  scopedReviewDraft,
+  reviewProjection,
   discoveryState,
 }) {
   if (freshEntryMode) return obj(discoveryState.profile);
-  if (Object.keys(obj(scopedReviewDraft?.overview)).length) {
-    return obj(scopedReviewDraft?.overview);
+  if (Object.keys(obj(reviewProjection?.overview)).length) {
+    return obj(reviewProjection?.overview);
   }
   return obj(discoveryState.profile);
 }
@@ -195,7 +195,7 @@ export function getHasVisibleResults({
   visibleSources,
   visibleEvents,
   discoveryState,
-  scopedReviewDraft,
+  reviewProjection,
 }) {
   if (freshEntryMode) return false;
 
@@ -208,7 +208,7 @@ export function getHasVisibleResults({
     visibleEvents.length > 0 ||
     arr(discoveryState?.warnings).length > 0 ||
     arr(discoveryState?.reviewFlags).length > 0 ||
-    s(scopedReviewDraft?.quickSummary)
+    s(reviewProjection?.quickSummary)
   );
 }
 
@@ -216,7 +216,7 @@ export function getEffectiveMeta({
   meta,
   visibleKnowledgeItems,
   visibleServiceItems,
-  scopedReviewDraft,
+  reviewProjection,
   discoveryState,
   draftBackedProfile,
   businessForm,
@@ -226,8 +226,8 @@ export function getEffectiveMeta({
     return !status || status === "pending" || status === "review";
   }).length;
 
-  const mergedReviewFlags = arr(scopedReviewDraft?.reviewFlags).length
-    ? arr(scopedReviewDraft.reviewFlags)
+  const mergedReviewFlags = arr(reviewProjection?.reviewFlags).length
+    ? arr(reviewProjection.reviewFlags)
     : arr(discoveryState.reviewFlags);
 
   return {
@@ -242,17 +242,17 @@ export function getEffectiveMeta({
     ),
     mainLanguage:
       resolveMainLanguageValue(
-        scopedReviewDraft?.mainLanguage,
+        reviewProjection?.mainLanguage,
         draftBackedProfile?.mainLanguage,
         discoveryState?.mainLanguage,
         businessForm?.language
       ) || "",
     reviewRequired: !!(
-      scopedReviewDraft?.reviewRequired || discoveryState?.reviewRequired
+      reviewProjection?.reviewRequired || discoveryState?.reviewRequired
     ),
     reviewFlags: mergedReviewFlags,
-    fieldConfidence: Object.keys(obj(scopedReviewDraft?.fieldConfidence)).length
-      ? obj(scopedReviewDraft.fieldConfidence)
+    fieldConfidence: Object.keys(obj(reviewProjection?.fieldConfidence)).length
+      ? obj(reviewProjection.fieldConfidence)
       : obj(discoveryState.fieldConfidence),
   };
 }
@@ -306,14 +306,19 @@ export function getKnowledgePreview(visibleKnowledgeItems, pickKnowledgeRowId, p
   }));
 }
 
-export function getCurrentTitle({ businessForm, scopedReviewDraft, discoveryState, extractProfileName }) {
+export function getCurrentTitle({
+  businessForm,
+  reviewProjection,
+  discoveryState,
+  extractProfileName,
+}) {
   const warningSet = arr(discoveryState.warnings);
   const businessName = sanitizeUiIdentityText(
     businessForm.companyName,
     warningSet
   );
   const reviewName = sanitizeUiIdentityText(
-    extractProfileName(scopedReviewDraft?.overview),
+    extractProfileName(reviewProjection?.overview),
     warningSet
   );
 
@@ -325,15 +330,15 @@ export function getCurrentTitle({ businessForm, scopedReviewDraft, discoveryStat
 }
 
 export function getCurrentDescription({
-  scopedReviewDraft,
+  reviewProjection,
   businessForm,
   discoveryState,
   extractProfileSummary,
 }) {
   return sanitizeUiIdentityText(
-    scopedReviewDraft?.quickSummary ||
+    reviewProjection?.quickSummary ||
       businessForm.description ||
-      extractProfileSummary(scopedReviewDraft?.overview) ||
+      extractProfileSummary(reviewProjection?.overview) ||
       extractProfileSummary(discoveryState?.profile),
     arr(discoveryState.warnings)
   );
@@ -341,7 +346,7 @@ export function getCurrentDescription({
 
 export function getAutoRevealKey({
   discoveryState,
-  scopedReviewDraft,
+  reviewProjection,
   discoveryProfileRows,
   visibleKnowledgeItems,
   visibleServiceItems,
@@ -351,7 +356,7 @@ export function getAutoRevealKey({
   return [
     s(discoveryState.requestId),
     s(discoveryState.sourceRunId),
-    s(scopedReviewDraft.sourceRunId),
+    s(reviewProjection.sourceRunId),
     String(discoveryProfileRows.length),
     String(visibleKnowledgeItems.length),
     String(visibleServiceItems.length),
@@ -366,12 +371,16 @@ export function getAutoRevealKey({
     .join("|");
 }
 
-export function getDiscoveryProfileRows(freshEntryMode, draftBackedProfile, scopedReviewDraft) {
+export function getDiscoveryProfileRows(
+  freshEntryMode,
+  draftBackedProfile,
+  reviewProjection
+) {
   return freshEntryMode
     ? []
     : profilePreviewRowsWithProvenance(
         draftBackedProfile,
-        scopedReviewDraft?.fieldProvenance
+        reviewProjection?.fieldProvenance
       );
 }
 
@@ -382,6 +391,10 @@ export function getServiceSuggestionTitle(discoveryForm, discoveryState, visible
     knowledgeCandidates: visibleKnowledgeItems,
   });
   return s(derived.title);
+}
+
+export function getReviewProjection(currentReview) {
+  return deriveCanonicalReviewProjection(currentReview);
 }
 
 export { discoveryModeLabel };

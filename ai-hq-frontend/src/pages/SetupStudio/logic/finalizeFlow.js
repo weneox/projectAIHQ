@@ -13,6 +13,7 @@ import {
   currentReviewConcurrencyMeta,
   parseReviewConcurrencyError,
 } from "../hooks/setupStudioActionShared.js";
+import { getControlPlanePermissions } from "../../../lib/controlPlanePermissions.js";
 
 export function buildSetupStudioFinalizeGuard({
   currentReview,
@@ -22,16 +23,30 @@ export function buildSetupStudioFinalizeGuard({
   const reviewMeta = currentReviewConcurrencyMeta(currentReview, discoveryState);
   const concurrencyPayload = buildReviewConcurrencyPayload(reviewMeta);
   const activeSessionId = s(reviewMeta.sessionId);
+  const permissions = getControlPlanePermissions({
+    viewerRole: currentReview?.viewerRole,
+    permissions: currentReview?.permissions,
+  });
 
   return {
     reviewMeta,
     concurrencyPayload,
     activeSessionId,
     activeReviewAligned: !!activeReviewAligned,
+    finalizePermission: permissions.setupReviewFinalize,
   };
 }
 
 export function assertSetupStudioFinalizeGuard(guard = {}, setReviewSyncIssue) {
+  if (guard.finalizePermission?.allowed === false) {
+    throw new Error(
+      s(
+        guard.finalizePermission?.message ||
+          "Only owner/admin can finalize setup review."
+      )
+    );
+  }
+
   if (!s(guard.activeSessionId)) {
     throw new Error("No active matching review session was found for this draft yet.");
   }

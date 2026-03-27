@@ -3,7 +3,33 @@ import assert from "node:assert/strict";
 
 import { buildTenantRuntimeProjection } from "../src/db/helpers/tenantRuntimeProjection.js";
 import { loadTenantCanonicalGraph } from "../src/db/helpers/tenantRuntimeProjection/graph.js";
-import { getTenantBrainRuntime } from "../src/services/businessBrain/getTenantBrainRuntime.js";
+import {
+  getTenantBrainRuntime,
+  inspectTenantBrainRuntime,
+} from "../src/services/businessBrain/getTenantBrainRuntime.js";
+
+function createCaptureLogger(entries = [], context = {}) {
+  return {
+    child(extra = {}) {
+      return createCaptureLogger(entries, { ...context, ...extra });
+    },
+    info(event, data = {}) {
+      entries.push({ level: "info", event, ...context, ...data });
+    },
+    warn(event, data = {}) {
+      entries.push({ level: "warn", event, ...context, ...data });
+    },
+    error(event, error = null, data = {}) {
+      entries.push({
+        level: "error",
+        event,
+        ...context,
+        ...data,
+        error: error?.message || String(error || ""),
+      });
+    },
+  };
+}
 
 function buildProvidedTenant() {
   return {
@@ -46,21 +72,60 @@ test("strict authority stays fail-closed when no runtime projection is available
   );
 });
 
-test("legacy fallback runtime preserves shaping for hydrated tenant input", async () => {
-  const runtime = await getTenantBrainRuntime({
+test("default runtime lookup is strict and fails closed without a projection", async () => {
+  await assert.rejects(
+    () =>
+      getTenantBrainRuntime({
+        tenant: buildProvidedTenant(),
+      }),
+    (error) => {
+      assert.equal(error?.code, "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE");
+      assert.equal(error?.runtimeAuthority?.required, true);
+      assert.equal(error?.runtimeAuthority?.reasonCode, "runtime_projection_missing");
+      return true;
+    }
+  );
+});
+
+test("strict authority failure emits reason-coded telemetry context", async () => {
+  const entries = [];
+
+  await assert.rejects(
+    () =>
+      getTenantBrainRuntime({
+        tenant: buildProvidedTenant(),
+        logger: createCaptureLogger(entries, {
+          requestId: "req-runtime-1",
+          correlationId: "corr-runtime-1",
+        }),
+      }),
+    (error) => {
+      assert.equal(error?.runtimeAuthority?.reasonCode, "runtime_projection_missing");
+      return true;
+    }
+  );
+
+  const blocked = entries.find((entry) => entry.event === "runtime.authority.blocked");
+  assert.equal(blocked?.requestId, "req-runtime-1");
+  assert.equal(blocked?.correlationId, "corr-runtime-1");
+  assert.equal(blocked?.tenantKey, "acme");
+  assert.equal(blocked?.reasonCode, "runtime_projection_missing");
+});
+
+test("inspection runtime preserves shaping for hydrated tenant input", async () => {
+  const runtime = await inspectTenantBrainRuntime({
     tenant: buildProvidedTenant(),
-    authorityMode: "tolerant",
   });
 
   assert.equal(runtime.authority.available, false);
-  assert.equal(runtime.authority.reasonCode, "legacy_fallback_runtime");
+  assert.equal(runtime.authority.reasonCode, "inspection_legacy_runtime_fallback");
   assert.deepEqual(runtime.languages, ["en", "az"]);
   assert.equal(runtime.defaultLanguage, "en");
   assert.equal(runtime.autoReplyEnabled, false);
   assert.equal(runtime.createLeadEnabled, true);
   assert.equal(runtime.companyName, "Acme Clinic");
   assert.deepEqual(runtime.services, ["Consultation", "Fillings"]);
-  assert.equal(runtime.raw.mode, "legacy_fallback");
+  assert.equal(runtime.raw.mode, "inspection_fallback");
 });
 
 function buildProjectionRows() {

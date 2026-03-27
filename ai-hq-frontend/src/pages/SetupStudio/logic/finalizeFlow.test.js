@@ -17,6 +17,22 @@ describe("finalizeFlow", () => {
         {
           reviewMeta: {},
           concurrencyPayload: {},
+          activeSessionId: "session-42",
+          activeReviewAligned: true,
+          finalizePermission: {
+            allowed: false,
+            message: "Only owner/admin can finalize setup review.",
+          },
+        },
+        vi.fn()
+      )
+    ).toThrow(/only owner\/admin can finalize setup review/i);
+
+    expect(() =>
+      assertSetupStudioFinalizeGuard(
+        {
+          reviewMeta: {},
+          concurrencyPayload: {},
           activeSessionId: "",
           activeReviewAligned: true,
         },
@@ -103,6 +119,12 @@ describe("finalizeFlow", () => {
       currentReview: {
         session: { id: "session-42", status: "active" },
         draft: { version: "draft-7" },
+        viewerRole: "owner",
+        permissions: {
+          setupReviewFinalize: {
+            allowed: true,
+          },
+        },
       },
       discoveryState: {},
       activeReviewAligned: true,
@@ -118,6 +140,7 @@ describe("finalizeFlow", () => {
     expect(patchPayload.draftVersion).toBe("draft-7");
     expect(patchPayload.metadata).toEqual({ requestId: "req-1" });
     expect(finalizePayload.reason).toBe("setup_studio_finalize");
+    expect(guard.finalizePermission.allowed).toBe(true);
 
     expect(
       buildSetupStudioPostFinalizeRefreshRequest({

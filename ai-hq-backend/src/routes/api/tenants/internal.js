@@ -148,7 +148,14 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
       const recipientId = cleanNullableString(checked.value.recipientId);
       const pageId = cleanNullableString(checked.value.pageId);
       const igUserId = cleanNullableString(checked.value.igUserId);
-      req.log?.info("internal.resolve_channel.requested", {
+      const flowLogger = req.log?.child?.({
+        flow: "resolve_channel",
+        channel,
+        recipientId,
+        pageId,
+        igUserId,
+      });
+      flowLogger?.info("internal.resolve_channel.requested", {
         channel,
         recipientId,
         pageId,
@@ -164,7 +171,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         igUserId,
       });
 
-      req.log?.info("internal.resolve_channel.lookup_completed", {
+      flowLogger?.info("internal.resolve_channel.lookup_completed", {
         tookMs: Date.now() - startedAt,
         found: Boolean(match?.tenant_id),
       });
@@ -180,7 +187,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         });
       }
 
-      req.log?.info("internal.resolve_channel.matched", {
+      flowLogger?.info("internal.resolve_channel.matched", {
         tenantKey: match.tenant_key,
         tenantId: match.tenant_id,
         channelType: match.channel_type,
@@ -211,9 +218,17 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
           tenantId: match.tenant_id,
           tenantKey: match.tenant_key,
           authorityMode: "strict",
+          logger: flowLogger,
         });
       } catch (error) {
         if (isRuntimeAuthorityError(error)) {
+          flowLogger?.warn("internal.resolve_channel.runtime_authority_blocked", {
+            tenantKey: match.tenant_key,
+            tenantId: match.tenant_id,
+            reasonCode: s(
+              error?.runtimeAuthority?.reasonCode || "runtime_authority_unavailable"
+            ),
+          });
           const failure = buildRuntimeAuthorityFailurePayload(error, {
             service: "tenants.resolve-channel",
             tenantKey: match.tenant_key,
@@ -240,13 +255,20 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         },
       });
 
-      req.log?.info("internal.resolve_channel.provider_secrets_resolved", {
+      flowLogger?.info("internal.resolve_channel.provider_secrets_resolved", {
         tenantKey: match.tenant_key,
         provider: providerKey,
         secretKeys: secretSummary.secretKeys,
         hasPageAccessToken: secretSummary.secrets.some(
           (x) => cleanLower(x.key) === "page_access_token" && x.present
         ),
+      });
+
+      flowLogger?.info("internal.resolve_channel.completed", {
+        tenantKey: match.tenant_key,
+        tenantId: match.tenant_id,
+        runtimeProjectionId: s(projectedRuntime?.authority?.runtimeProjectionId),
+        authoritySource: s(projectedRuntime?.authority?.source),
       });
 
       return ok(res, {
@@ -350,6 +372,11 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
             tenantId: resolved.tenantId,
             tenantKey: resolved.tenantKey,
             authorityMode: "strict",
+            logger: req.log?.child?.({
+              flow: "meta_channel_access",
+              tenantId: resolved.tenantId,
+              tenantKey: resolved.tenantKey,
+            }),
           });
         } catch (error) {
           if (isRuntimeAuthorityError(error)) {

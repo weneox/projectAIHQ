@@ -52,6 +52,44 @@ function normalizeAudit(items = []) {
   }));
 }
 
+function normalizeProjectionRepair(input = {}) {
+  const source = obj(input);
+  const action = source.action ? obj(source.action) : source.repairAction ? obj(source.repairAction) : {};
+  const latestRun = obj(source.latestRun || source.lastRun);
+  return {
+    canRepair: source.canRepair === true,
+    action: Object.keys(action).length ? action : null,
+    latestRun: {
+      id: s(latestRun.id),
+      status: s(latestRun.status).toLowerCase(),
+      triggerType: s(latestRun.triggerType || latestRun.trigger_type),
+      requestedBy: s(latestRun.requestedBy || latestRun.requested_by),
+      startedAt: s(latestRun.startedAt || latestRun.started_at),
+      finishedAt: s(latestRun.finishedAt || latestRun.finished_at),
+      errorCode: s(latestRun.errorCode || latestRun.error_code),
+      errorMessage: s(latestRun.errorMessage || latestRun.error_message),
+      reasonCode: s(latestRun.reasonCode || latestRun.reason_code),
+    },
+  };
+}
+
+function normalizeProjectionHealth(input = {}) {
+  const source = obj(input);
+  return {
+    present: source.present === true,
+    usable: source.usable === true,
+    stale: source.stale === true,
+    status: s(source.status).toLowerCase(),
+    reasonCode: s(source.reasonCode || source.reason_code).toLowerCase(),
+    reasons: arr(source.reasons).map((item) => s(item)).filter(Boolean),
+    canRepair: source.canRepair === true,
+    repairAction: Object.keys(obj(source.repairAction || source.repair_action)).length
+      ? obj(source.repairAction || source.repair_action)
+      : null,
+    latestRepair: normalizeProjectionRepair({ latestRun: source.latestRepair || source.latest_repair }).latestRun,
+  };
+}
+
 export function normalizeTrustViewResponse(payload = {}) {
   const root = obj(payload);
   const summary = obj(root.summary);
@@ -64,6 +102,8 @@ export function normalizeTrustViewResponse(payload = {}) {
   return {
     tenantId: s(root.tenantId || root.tenant_id),
     tenantKey: s(root.tenantKey || root.tenant_key).toLowerCase(),
+    viewerRole: s(root.viewerRole || root.viewer_role || "member").toLowerCase(),
+    permissions: obj(root.permissions),
     status: root ? "ready" : "unavailable",
     summary: {
       readiness: createReadinessViewModel(summary.readiness),
@@ -86,6 +126,8 @@ export function normalizeTrustViewResponse(payload = {}) {
         updatedAt: s(runtimeProjection.updatedAt || runtimeProjection.updated_at),
         stale: runtimeProjection.stale === true,
         reasons: arr(runtimeProjection.reasons).map((item) => s(item)).filter(Boolean),
+        health: normalizeProjectionHealth(runtimeProjection.health),
+        repair: normalizeProjectionRepair(runtimeProjection.repair),
         readiness: createReadinessViewModel(runtimeProjection.readiness),
       },
       truth: {

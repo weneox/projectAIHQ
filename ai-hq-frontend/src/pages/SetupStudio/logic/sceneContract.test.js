@@ -25,7 +25,9 @@ describe("buildSetupStudioSceneContract", () => {
       setDiscoveryField: vi.fn(),
     };
     const viewModel = {
-      scopedReviewDraft: { overview: { companyName: "Acme Bakery" } },
+      scopedCurrentReview: {
+        draft: { businessProfile: { companyName: "Acme Bakery" } },
+      },
       effectiveMeta: { setupCompleted: true },
       visibleSources: [{ id: "source-1" }],
       visibleEvents: [{ id: "event-1" }],

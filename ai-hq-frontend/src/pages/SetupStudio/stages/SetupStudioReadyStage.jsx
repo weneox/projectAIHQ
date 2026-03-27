@@ -1,6 +1,8 @@
 import { ArrowRight, BadgeCheck, PencilLine } from "lucide-react";
+import React from "react";
 
 import SetupStudioStageShell from "../components/SetupStudioStageShell.jsx";
+import SetupStudioEvidenceNotice from "../components/SetupStudioEvidenceNotice.jsx";
 import {
   GhostButton,
   MetricCard,
@@ -27,6 +29,7 @@ export default function SetupStudioReadyStage({
   meta,
   studioProgress,
   hasKnowledge,
+  honestySummary = {},
   onToggleRefine,
   onToggleKnowledge,
   onOpenTruth,
@@ -64,6 +67,14 @@ export default function SetupStudioReadyStage({
         <div className="mx-auto mt-5 max-w-[620px] text-[18px] leading-8 text-slate-600">
           Review the proposed fields against visible evidence, finalize the reviewed truth, then continue into the workspace.
         </div>
+
+        <SetupStudioEvidenceNotice
+          tone={honestySummary?.tone || "default"}
+          title={honestySummary?.title || "Temporary review draft"}
+          body={honestySummary?.finalizeMessage || honestySummary?.message || ""}
+          chips={honestySummary?.chips || []}
+          className="mx-auto mt-8 max-w-[720px] text-left"
+        />
 
         <StageSection border={false} className="mt-10 grid gap-8 sm:grid-cols-3 text-left">
           <MetricCard label="Readiness" value={`${readinessScore}%`} />

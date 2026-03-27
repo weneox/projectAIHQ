@@ -10,7 +10,15 @@ vi.mock("./hooks/useSecretsSurface.js", () => ({
     setSecretKey: vi.fn(),
     secretValue: "",
     setSecretValue: vi.fn(),
-    secrets: [],
+    secrets: [
+      {
+        id: "secret-1",
+        provider: "meta",
+        secret_key: "api_key",
+        masked_value: "***",
+        version: 1,
+      },
+    ],
     surface: {
       loading: false,
       error: "",
@@ -40,5 +48,21 @@ describe("SecretsPanel", () => {
 
     expect(screen.getByText(/meta\.api_key saved/i)).toBeInTheDocument();
     expect(screen.getByText(/secret management is temporarily unavailable/i)).toBeInTheDocument();
+  });
+
+  it("renders provider secret access as read-only for insufficient roles", () => {
+    render(
+      <SecretsPanel
+        canManage={false}
+        permissionMessage="Provider secret changes stay behind owner/admin access."
+      />
+    );
+
+    expect(
+      screen.getByText(/provider secret changes stay behind owner\/admin access/i)
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save secret/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /use key/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /delete/i })).toBeDisabled();
   });
 });

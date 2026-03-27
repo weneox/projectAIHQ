@@ -18,13 +18,30 @@ function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
 
+function getRuntimeAuthorityFailure(projectedRuntime) {
+  const authority = obj(obj(projectedRuntime).authority);
+  const source = s(authority.source);
+  const available = authority.available === true;
+  const reasonCode = s(authority.reasonCode || authority.reason || "");
+
+  if (available && source === "approved_runtime_projection") {
+    return null;
+  }
+
+  return {
+    error: "runtime_authority_unavailable",
+    reasonCode: reasonCode || (!available ? "runtime_authority_unavailable" : "runtime_authority_source_invalid"),
+    authority,
+  };
+}
+
 function isDevLikeEnv() {
   return ["", "development", "dev", "test"].includes(
     lower(cfg.APP_ENV, "development")
   );
 }
 
-const logger = createStructuredLogger({
+const baseLogger = createStructuredLogger({
   service: "twilio-voice-backend",
   component: "tenant-config",
 });
@@ -153,7 +170,7 @@ async function tryFetchTenantFromAiHq({ tenantKey, toNumber, requestContext = {}
     }
 
     if (!resp.ok) {
-      logger.warn("voice.tenant_config.fetch_failed", {
+      baseLogger.warn("voice.tenant_config.fetch_failed", {
         status: Number(resp.status || 0),
         tenantKey: s(tenantKey).toLowerCase(),
         toNumber: s(toNumber),
@@ -171,7 +188,7 @@ async function tryFetchTenantFromAiHq({ tenantKey, toNumber, requestContext = {}
 
     const checked = validateVoiceProjectedRuntimeResponse(json || {});
     if (!checked.ok) {
-      logger.warn("voice.tenant_config.contract_invalid", {
+      baseLogger.warn("voice.tenant_config.contract_invalid", {
         status: Number(resp.status || 0),
         tenantKey: s(tenantKey).toLowerCase(),
         toNumber: s(toNumber),
@@ -189,7 +206,7 @@ async function tryFetchTenantFromAiHq({ tenantKey, toNumber, requestContext = {}
 
     const operationalChecked = validateVoiceOperationalResponse(json || {});
     if (!operationalChecked.ok) {
-      logger.warn("voice.tenant_config.operational_contract_invalid", {
+      baseLogger.warn("voice.tenant_config.operational_contract_invalid", {
         status: Number(resp.status || 0),
         tenantKey: s(tenantKey).toLowerCase(),
         toNumber: s(toNumber),
@@ -205,7 +222,7 @@ async function tryFetchTenantFromAiHq({ tenantKey, toNumber, requestContext = {}
       };
     }
 
-    logger.info("voice.tenant_config.fetch_succeeded", {
+    baseLogger.info("voice.tenant_config.fetch_succeeded", {
       status: Number(resp.status || 0),
       tenantKey: s(tenantKey).toLowerCase(),
       toNumber: s(toNumber),
@@ -224,7 +241,7 @@ async function tryFetchTenantFromAiHq({ tenantKey, toNumber, requestContext = {}
       },
     };
   } catch (err) {
-    logger.warn("voice.tenant_config.fetch_exception", {
+    baseLogger.warn("voice.tenant_config.fetch_exception", {
       tenantKey: s(tenantKey).toLowerCase(),
       toNumber: s(toNumber),
       requestId: s(requestContext?.requestId),
@@ -241,10 +258,24 @@ async function tryFetchTenantFromAiHq({ tenantKey, toNumber, requestContext = {}
   }
 }
 
-export async function getTenantVoiceConfig({ tenant, requestContext = {} }) {
+export async function getTenantVoiceConfig({
+  tenant,
+  requestContext = {},
+  logger: providedLogger = null,
+}) {
+  const tenantKey = s(tenant?.tenantKey || tenant?.tenant_key).toLowerCase();
+  const toNumber = s(tenant?.toNumber || tenant?.to_number);
+  const logger = (providedLogger || baseLogger).child?.({
+    flow: "voice_tenant_config",
+    tenantKey,
+    toNumber,
+    requestId: s(requestContext?.requestId),
+    correlationId: s(requestContext?.correlationId),
+  }) || (providedLogger || baseLogger);
+
   const remote = await tryFetchTenantFromAiHq({
-    tenantKey: tenant?.tenantKey || null,
-    toNumber: tenant?.toNumber || null,
+    tenantKey: tenantKey || null,
+    toNumber: toNumber || null,
     requestContext,
   });
 
@@ -275,6 +306,25 @@ export async function getTenantVoiceConfig({ tenant, requestContext = {} }) {
   const projectedRuntime = obj(remote.json?.projectedRuntime);
   const operationalChannels = obj(remote.json?.operationalChannels);
   const operationalVoice = obj(operationalChannels.voice);
+  const authorityFailure = getRuntimeAuthorityFailure(projectedRuntime);
+
+  if (authorityFailure) {
+    logger.warn("voice.tenant_config.authority_blocked", {
+      reasonCode: authorityFailure.reasonCode,
+      authoritySource: s(authorityFailure?.authority?.source),
+      runtimeProjectionId: s(authorityFailure?.authority?.runtimeProjectionId),
+    });
+    return {
+      ok: false,
+      error: authorityFailure.error,
+      status: 503,
+      authority: {
+        ...(obj(authorityFailure.authority)),
+        reasonCode: authorityFailure.reasonCode,
+        source: "aihq_runtime_contract",
+      },
+    };
+  }
 
   if (operationalVoice.available !== true || operationalVoice.ready !== true) {
     return {
@@ -292,6 +342,12 @@ export async function getTenantVoiceConfig({ tenant, requestContext = {} }) {
     projectedRuntime,
     operationalChannels
   );
+
+  logger.info("voice.tenant_config.resolved", {
+    runtimeProjectionId: s(config?.authority?.runtimeProjectionId),
+    authoritySource: s(config?.authority?.source),
+    operationalReasonCode: s(operationalVoice.reasonCode),
+  });
 
   return {
     ok: true,

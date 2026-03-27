@@ -1,6 +1,7 @@
 // src/components/settings/SettingsSection.jsx
 // PREMIUM v2.0 — section surface
 
+import React from "react";
 import { cx } from "../../lib/cx.js";
 
 export default function SettingsSection({

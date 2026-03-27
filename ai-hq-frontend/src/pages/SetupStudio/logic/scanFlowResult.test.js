@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  createEmptyLegacyDraft,
-  createEmptyReviewState,
-} from "../state/shared.js";
+import { createEmptyReviewState } from "../state/shared.js";
 import {
   buildSetupStudioReviewSyncIssue,
   buildSetupStudioScanErrorState,
@@ -89,7 +86,6 @@ describe("reconcileSetupStudioScanResult", () => {
         },
       },
       createEmptyReviewState,
-      createEmptyLegacyDraft,
     });
 
     expect(result.importedReviewMatchesActiveSource).toBe(false);
@@ -97,12 +93,12 @@ describe("reconcileSetupStudioScanResult", () => {
       "The backend review session did not match this source yet, so the editable draft stayed isolated."
     );
     expect(result.finalDiscoveryState.lastSourceType).toBe("website");
-    expect(result.finalDiscoveryState.lastUrl).toBe("https://other.example");
+    expect(result.finalDiscoveryState.lastUrl).toBe("https://acme.example");
     expect(result.finalDiscoveryState.hasResults).toBe(true);
 
     const syncIssue = buildSetupStudioReviewSyncIssue({
       importedReview: result.importedReview,
-      legacyImportedDraft: result.legacyImportedDraft,
+      reviewProjection: result.reviewProjection,
       hasImportableSource: true,
       importedReviewMatchesActiveSource: false,
     });

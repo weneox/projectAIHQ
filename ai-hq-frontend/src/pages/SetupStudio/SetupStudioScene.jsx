@@ -1,5 +1,6 @@
 import { AnimatePresence } from "framer-motion";
 import { RefreshCw } from "lucide-react";
+import React from "react";
 
 import { TinyChip, TinyLabel } from "./components/SetupStudioUi.jsx";
 
@@ -41,7 +42,7 @@ export default function SetupStudioScene({
   const { businessForm, discoveryForm, manualSections } = obj(forms);
   const {
     discoveryState,
-    reviewDraft,
+    currentReview,
     meta,
     reviewSources = [],
     reviewEvents = [],
@@ -102,7 +103,7 @@ export default function SetupStudioScene({
     discoveryState,
     discoveryModeLabel,
     discoveryForm,
-    reviewDraft,
+    currentReview,
     businessForm,
     manualSections,
     showRefine,
@@ -210,6 +211,7 @@ export default function SetupStudioScene({
                 currentDescription={currentDescription}
                 discoveryProfileRows={discoveryProfileRows}
                 discoveryWarnings={sceneView.discoveryWarnings}
+                honestySummary={sceneView.honestySummary}
                 sourceLabel={sceneView.sourceLabel}
                 reviewSources={reviewSources}
                 onNext={stageFlow.goNextFromIdentity}
@@ -225,6 +227,7 @@ export default function SetupStudioScene({
                 actingKnowledgeId={actingKnowledgeId}
                 sourceLabel={sceneView.sourceLabel}
                 warnings={sceneView.discoveryWarnings}
+                honestySummary={sceneView.honestySummary}
                 onApproveKnowledge={onApproveKnowledge}
                 onRejectKnowledge={onRejectKnowledge}
                 onNext={stageFlow.goNextFromKnowledge}
@@ -252,6 +255,7 @@ export default function SetupStudioScene({
                 meta={meta}
                 studioProgress={studioProgress}
                 hasKnowledge={visibleKnowledgeCount > 0}
+                honestySummary={sceneView.honestySummary}
                 onToggleRefine={onToggleRefine}
                 onToggleKnowledge={onToggleKnowledge}
                 onOpenTruth={onOpenTruth}

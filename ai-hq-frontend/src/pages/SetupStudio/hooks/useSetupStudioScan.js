@@ -13,14 +13,12 @@ export function createSetupStudioScan(ctx, helpers) {
     discoveryForm,
     businessForm,
     manualSections,
-    createEmptyLegacyDraft,
     createEmptyReviewState,
     updateActiveSourceScope,
     applyReviewState,
     clearStudioReviewState,
     resetBusinessTwinDraftForNewScan,
     setCurrentReview,
-    setReviewDraft,
     setDiscoveryState,
     setImportingWebsite,
     setFreshEntryMode,
@@ -78,12 +76,11 @@ export function createSetupStudioScan(ctx, helpers) {
         analyzeResult,
         reviewPayload,
         createEmptyReviewState,
-        createEmptyLegacyDraft,
       });
 
       const {
         importedReview,
-        legacyImportedDraft,
+        reviewProjection,
         effectiveSourceType,
         effectiveSourceUrl,
         importedReviewMatchesActiveSource,
@@ -113,11 +110,10 @@ export function createSetupStudioScan(ctx, helpers) {
         });
       } else {
         setCurrentReview(importedReview);
-        setReviewDraft(legacyImportedDraft);
         setReviewSyncIssue(
           buildSetupStudioReviewSyncIssue({
             importedReview,
-            legacyImportedDraft,
+            reviewProjection,
             hasImportableSource: plan.hasImportableSource,
             importedReviewMatchesActiveSource,
           })

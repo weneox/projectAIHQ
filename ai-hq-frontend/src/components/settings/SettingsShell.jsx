@@ -1,6 +1,7 @@
 // src/components/settings/SettingsShell.jsx
 // PREMIUM v2.1 — editorial settings shell (stable sticky + scroll-safe nav)
 
+import React from "react";
 import Card from "../ui/Card.jsx";
 import SettingsNav from "./SettingsNav.jsx";
 

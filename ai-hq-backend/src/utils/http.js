@@ -7,6 +7,8 @@
 // - reduce retry fan-out and total waiting time
 // - keep website entry fetch from burning 30s+ on one source
 
+import { validatePublicFetchUrl } from "./publicFetchSafety.js";
+
 export function okJson(res, payload) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
   return res.status(200).json(payload);
@@ -550,6 +552,35 @@ function buildTimeoutLikeError(timeoutMs = 0, cause = null) {
   return err;
 }
 
+function isRedirectStatus(status = 0) {
+  return [301, 302, 303, 307, 308].includes(Number(status || 0));
+}
+
+function buildDeniedFetchResult(checked = {}, extra = {}) {
+  return {
+    ok: false,
+    denied: true,
+    status: 0,
+    statusText: "FETCH_DENIED",
+    url: s(checked?.url || extra?.url || ""),
+    headers: {},
+    contentType: "",
+    text: "",
+    error: s(checked?.reasonCode || "unsafe_destination_denied"),
+    reasonCode: s(checked?.reasonCode || "unsafe_destination_denied"),
+    deniedBy: "public_fetch_guard",
+    errorDetail: {
+      reasonCode: s(checked?.reasonCode || "unsafe_destination_denied"),
+      hostname: s(checked?.hostname || ""),
+      protocol: s(checked?.protocol || ""),
+      addresses: Array.isArray(checked?.addresses) ? checked.addresses : [],
+      redirectChain: Array.isArray(extra?.redirectChain) ? extra.redirectChain : [],
+    },
+    attempt: Number(extra?.attempt || 0),
+    attempts: Array.isArray(extra?.attempts) ? extra.attempts : [],
+  };
+}
+
 export async function readResponseTextLimited(response, maxBytes = 2_000_000) {
   const limit = clamp(maxBytes, 1, 50_000_000);
   const contentType = s(response?.headers?.get?.("content-type") || "");
@@ -612,9 +643,12 @@ export async function safeFetchText(url, options = {}) {
     totalTimeoutMs,
     maxBytes = 2_000_000,
     body,
-    redirect = "follow",
+    redirect = "manual",
     retryCount,
     retryDelayMs = 180,
+    maxRedirects = 5,
+    fetchImpl = globalThis.fetch,
+    dnsLookup,
   } = options;
 
   const methodUpper = String(method || "GET").toUpperCase();
@@ -639,6 +673,17 @@ export async function safeFetchText(url, options = {}) {
       attempt: 0,
       attempts: [],
     };
+  }
+
+  const initialSafety = await validatePublicFetchUrl(finalUrl, {
+    dnsLookup,
+  });
+  if (!initialSafety.ok) {
+    return buildDeniedFetchResult(initialSafety, {
+      url: finalUrl,
+      attempt: 0,
+      attempts: [],
+    });
   }
 
   const perAttemptTimeoutMs = clamp(timeoutMs, 1000, 300000);
@@ -676,98 +721,245 @@ export async function safeFetchText(url, options = {}) {
       break;
     }
 
-    const thisAttemptTimeoutMs = clamp(
+    const attemptDeadlineAt = Date.now() + clamp(
       Math.min(perAttemptTimeoutMs, budgetLeftMs),
       1000,
       300000
     );
 
-    const timeoutCtl = withTimeout(thisAttemptTimeoutMs);
-
-    try {
-      const response = await fetch(plan.url, {
-        method: methodUpper,
-        headers: plan.headers,
-        body,
-        redirect,
-        signal: timeoutCtl.signal,
-        referrerPolicy: "strict-origin-when-cross-origin",
-      });
-
-      const responseHeaders = Object.fromEntries(response.headers.entries());
-      const contentType = s(response.headers.get("content-type") || "");
-      const text =
-        methodUpper === "HEAD"
-          ? ""
-          : await readResponseTextLimited(response, maxBytes);
-
-      timeoutCtl.cleanup();
-
-      const result = {
-        ok: response.ok,
-        status: response.status,
-        statusText: response.statusText,
-        url: response.url || plan.url || finalUrl,
-        headers: responseHeaders,
-        contentType,
-        text,
-        error: response.ok ? "" : buildNonOkErrorCode(response.status),
+    const validatedPlan = await validatePublicFetchUrl(plan.url, {
+      dnsLookup,
+    });
+    if (!validatedPlan.ok) {
+      const deniedResult = buildDeniedFetchResult(validatedPlan, {
+        url: plan.url || finalUrl,
         attempt: i,
-        requestHeaders: plan.headers,
         attempts,
-      };
+      });
 
       attempts.push({
         attempt: i,
-        ok: response.ok,
-        status: response.status,
-        statusText: response.statusText,
-        url: response.url || plan.url || finalUrl,
+        ok: false,
+        denied: true,
+        status: 0,
+        statusText: "FETCH_DENIED",
+        url: plan.url || finalUrl,
         plannedUrl: plan.url,
         headerProfileIndex: plan.headerProfileIndex,
         urlVariantIndex: plan.urlVariantIndex,
-        timeoutMs: thisAttemptTimeoutMs,
-        error: response.ok ? "" : buildNonOkErrorCode(response.status),
+        timeoutMs: clamp(Math.min(perAttemptTimeoutMs, budgetLeftMs), 1000, 300000),
+        error: deniedResult.reasonCode,
       });
-
-      if (response.ok) {
-        return result;
-      }
-
-      bestNonOkResult = chooseBetterNonOk(bestNonOkResult, {
-        ...result,
-        bodyExcerpt: String(text || "").slice(0, 600),
-        headerProfileIndex: plan.headerProfileIndex,
-        urlVariantIndex: plan.urlVariantIndex,
-      });
-
-      const shouldContinue =
-        canRetry &&
-        i < selectedPlans.length - 1 &&
-        remainingBudget(deadlineAt) > 800 &&
-        shouldRetryNonOk(response.status);
-
-      if (shouldContinue) {
-        await sleep(
-          Math.min(
-            jitter(retryDelayMs * (i + 1), 80),
-            Math.max(80, remainingBudget(deadlineAt) - 150)
-          )
-        );
-        continue;
-      }
 
       return {
-        ...result,
+        ...deniedResult,
         attempts,
       };
+    }
+
+    try {
+      let currentUrl = validatedPlan.url;
+      const redirectChain = [];
+      let hopCount = 0;
+
+      while (true) {
+        const hopBudgetMs = remainingBudget(attemptDeadlineAt);
+        if (hopBudgetMs <= 0) {
+          throw buildTimeoutLikeError(perAttemptTimeoutMs);
+        }
+
+        const timeoutCtl = withTimeout(
+          clamp(hopBudgetMs, 1000, 300000)
+        );
+
+        let response;
+        try {
+          response = await fetchImpl(currentUrl, {
+            method: methodUpper,
+            headers: plan.headers,
+            body,
+            redirect,
+            signal: timeoutCtl.signal,
+            referrerPolicy: "strict-origin-when-cross-origin",
+          });
+        } finally {
+          timeoutCtl.cleanup();
+        }
+
+        if (isRedirectStatus(response.status)) {
+          const location = s(response.headers.get("location") || "");
+          if (!location) {
+            const result = {
+              ok: false,
+              status: Number(response.status || 0),
+              statusText: response.statusText || "REDIRECT_MISSING_LOCATION",
+              url: currentUrl,
+              headers: Object.fromEntries(response.headers.entries()),
+              contentType: "",
+              text: "",
+              error: "redirect_missing_location",
+              attempt: i,
+              requestHeaders: plan.headers,
+              attempts,
+              redirectChain,
+            };
+
+            attempts.push({
+              attempt: i,
+              ok: false,
+              status: Number(response.status || 0),
+              statusText: response.statusText || "REDIRECT_MISSING_LOCATION",
+              url: currentUrl,
+              plannedUrl: plan.url,
+              headerProfileIndex: plan.headerProfileIndex,
+              urlVariantIndex: plan.urlVariantIndex,
+              timeoutMs: clamp(Math.min(perAttemptTimeoutMs, budgetLeftMs), 1000, 300000),
+              error: "redirect_missing_location",
+            });
+
+            return {
+              ...result,
+              attempts,
+            };
+          }
+
+          if (hopCount >= clamp(maxRedirects, 0, 10)) {
+            attempts.push({
+              attempt: i,
+              ok: false,
+              status: Number(response.status || 0),
+              statusText: response.statusText || "REDIRECT_LIMIT",
+              url: currentUrl,
+              plannedUrl: plan.url,
+              headerProfileIndex: plan.headerProfileIndex,
+              urlVariantIndex: plan.urlVariantIndex,
+              timeoutMs: clamp(Math.min(perAttemptTimeoutMs, budgetLeftMs), 1000, 300000),
+              error: "redirect_limit_exceeded",
+            });
+
+            return {
+              ok: false,
+              status: Number(response.status || 0),
+              statusText: response.statusText || "REDIRECT_LIMIT",
+              url: currentUrl,
+              headers: Object.fromEntries(response.headers.entries()),
+              contentType: "",
+              text: "",
+              error: "redirect_limit_exceeded",
+              attempt: i,
+              requestHeaders: plan.headers,
+              attempts,
+              redirectChain,
+            };
+          }
+
+          const nextUrl = new URL(location, currentUrl).toString();
+          const redirectSafety = await validatePublicFetchUrl(nextUrl, {
+            dnsLookup,
+          });
+          if (!redirectSafety.ok) {
+            attempts.push({
+              attempt: i,
+              ok: false,
+              denied: true,
+              status: 0,
+              statusText: "FETCH_DENIED",
+              url: nextUrl,
+              plannedUrl: plan.url,
+              headerProfileIndex: plan.headerProfileIndex,
+              urlVariantIndex: plan.urlVariantIndex,
+              timeoutMs: clamp(Math.min(perAttemptTimeoutMs, budgetLeftMs), 1000, 300000),
+              error: redirectSafety.reasonCode,
+            });
+
+            return {
+              ...buildDeniedFetchResult(redirectSafety, {
+                url: nextUrl,
+                attempt: i,
+                attempts,
+                redirectChain: [...redirectChain, currentUrl, nextUrl],
+              }),
+              attempts,
+            };
+          }
+
+          redirectChain.push(currentUrl);
+          currentUrl = redirectSafety.url;
+          hopCount += 1;
+          continue;
+        }
+
+        const responseHeaders = Object.fromEntries(response.headers.entries());
+        const contentType = s(response.headers.get("content-type") || "");
+        const text =
+          methodUpper === "HEAD"
+            ? ""
+            : await readResponseTextLimited(response, maxBytes);
+
+        const result = {
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url || currentUrl || plan.url || finalUrl,
+          headers: responseHeaders,
+          contentType,
+          text,
+          error: response.ok ? "" : buildNonOkErrorCode(response.status),
+          attempt: i,
+          requestHeaders: plan.headers,
+          attempts,
+          redirectChain,
+        };
+
+        attempts.push({
+          attempt: i,
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url || currentUrl || plan.url || finalUrl,
+          plannedUrl: plan.url,
+          headerProfileIndex: plan.headerProfileIndex,
+          urlVariantIndex: plan.urlVariantIndex,
+          timeoutMs: clamp(Math.min(perAttemptTimeoutMs, budgetLeftMs), 1000, 300000),
+          error: response.ok ? "" : buildNonOkErrorCode(response.status),
+        });
+
+        if (response.ok) {
+          return result;
+        }
+
+        bestNonOkResult = chooseBetterNonOk(bestNonOkResult, {
+          ...result,
+          bodyExcerpt: String(text || "").slice(0, 600),
+          headerProfileIndex: plan.headerProfileIndex,
+          urlVariantIndex: plan.urlVariantIndex,
+        });
+
+        const shouldContinue =
+          canRetry &&
+          i < selectedPlans.length - 1 &&
+          remainingBudget(deadlineAt) > 800 &&
+          shouldRetryNonOk(response.status);
+
+        if (shouldContinue) {
+          await sleep(
+            Math.min(
+              jitter(retryDelayMs * (i + 1), 80),
+              Math.max(80, remainingBudget(deadlineAt) - 150)
+            )
+          );
+          break;
+        }
+
+        return {
+          ...result,
+          attempts,
+        };
+      }
     } catch (rawErr) {
-      timeoutCtl.cleanup();
-
-      const err = timeoutCtl.didTimeout()
-        ? buildTimeoutLikeError(thisAttemptTimeoutMs, rawErr)
+      const err = rawErr?.code === "FETCH_TIMEOUT"
+        ? rawErr
         : rawErr;
-
       lastError = err;
 
       attempts.push({
@@ -779,7 +971,7 @@ export async function safeFetchText(url, options = {}) {
         plannedUrl: plan.url,
         headerProfileIndex: plan.headerProfileIndex,
         urlVariantIndex: plan.urlVariantIndex,
-        timeoutMs: thisAttemptTimeoutMs,
+        timeoutMs: clamp(Math.min(perAttemptTimeoutMs, budgetLeftMs), 1000, 300000),
         error: err?.message || String(err) || "Fetch failed",
       });
 

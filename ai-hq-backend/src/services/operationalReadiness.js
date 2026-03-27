@@ -51,7 +51,7 @@ const OPERATIONAL_REASON_METADATA = {
         field: "twilioPhoneNumber",
         section: "operational",
       },
-      requiredRole: "operator",
+      requiredRole: "admin",
     },
   },
   voice_disabled: {
@@ -67,7 +67,7 @@ const OPERATIONAL_REASON_METADATA = {
         field: "enabled",
         section: "operational",
       },
-      requiredRole: "operator",
+      requiredRole: "admin",
     },
   },
   voice_phone_number_missing: {
@@ -83,7 +83,7 @@ const OPERATIONAL_REASON_METADATA = {
         field: "twilioPhoneNumber",
         section: "operational",
       },
-      requiredRole: "operator",
+      requiredRole: "admin",
     },
   },
   voice_provider_unsupported: {
@@ -99,7 +99,7 @@ const OPERATIONAL_REASON_METADATA = {
         field: "provider",
         section: "operational",
       },
-      requiredRole: "operator",
+      requiredRole: "admin",
     },
   },
   channel_not_connected: {
@@ -132,7 +132,7 @@ const OPERATIONAL_REASON_METADATA = {
         field: "externalPageId",
         section: "operational",
       },
-      requiredRole: "operator",
+      requiredRole: "admin",
     },
   },
   provider_secret_missing: {

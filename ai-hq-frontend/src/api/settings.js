@@ -303,12 +303,46 @@ export async function getSettingsTrustSummary(params = {}) {
   return {
     tenantId: j?.tenantId || "",
     tenantKey: j?.tenantKey || "",
+    viewerRole: j?.viewerRole || "",
+    permissions:
+      j?.permissions && typeof j.permissions === "object" && !Array.isArray(j.permissions)
+        ? j.permissions
+        : {},
     summary:
       j?.summary && typeof j.summary === "object" && !Array.isArray(j.summary)
         ? j.summary
         : {},
     recentRuns: Array.isArray(j?.recentRuns) ? j.recentRuns : [],
     audit: Array.isArray(j?.audit) ? j.audit : [],
+  };
+}
+
+export async function getSettingsAuditHistory(params = {}) {
+  const suffix = qsFrom({
+    area: params.area,
+    outcome: params.outcome,
+    limit: params.limit,
+  });
+
+  const j = await apiGet(`/api/settings/audit-history${suffix}`);
+  ensureOk(j, "Failed to load audit history");
+  return {
+    tenantId: j?.tenantId || "",
+    tenantKey: j?.tenantKey || "",
+    viewerRole: j?.viewerRole || "",
+    permissions:
+      j?.permissions && typeof j.permissions === "object" && !Array.isArray(j.permissions)
+        ? j.permissions
+        : {},
+    filters:
+      j?.filters && typeof j.filters === "object" && !Array.isArray(j.filters)
+        ? j.filters
+        : {},
+    summary:
+      j?.summary && typeof j.summary === "object" && !Array.isArray(j.summary)
+        ? j.summary
+        : {},
+    items: Array.isArray(j?.items) ? j.items : [],
   };
 }
 

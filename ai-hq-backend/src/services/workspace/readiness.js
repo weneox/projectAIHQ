@@ -222,7 +222,11 @@ async function firstScopedRow(db, tableName, scope) {
 async function loadTenantBrainRuntimeGetter() {
   try {
     const mod = await import("../businessBrain/getTenantBrainRuntime.js");
-    const fn = mod?.getTenantBrainRuntime || mod?.default;
+    const fn =
+      mod?.inspectTenantBrainRuntime ||
+      mod?.inspectTenantBusinessRuntime ||
+      mod?.getTenantBrainRuntime ||
+      mod?.default;
     return typeof fn === "function" ? fn : null;
   } catch {
     return null;

@@ -213,16 +213,13 @@ export function parseReviewConcurrencyError(error, meta = {}) {
 export function createSetupStudioActionState(ctx) {
   const {
     createEmptyReviewState,
-    createEmptyLegacyDraft,
     setCurrentReview,
-    setReviewDraft,
     setDiscoveryState,
   } = ctx;
 
   function clearActiveReviewSession() {
     const empty = createEmptyReviewState();
     setCurrentReview(empty);
-    setReviewDraft(createEmptyLegacyDraft());
     return empty;
   }
 

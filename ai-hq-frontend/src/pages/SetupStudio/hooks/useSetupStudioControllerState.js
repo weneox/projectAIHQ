@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 
 import { arr, obj, s } from "../lib/setupStudioHelpers.js";
 import {
-  createEmptyLegacyDraft,
   createEmptyReviewState,
   createEmptySourceScope,
   createIdleDiscoveryState,
@@ -18,7 +17,7 @@ import {
 } from "../state/profile.js";
 import {
   buildManualSectionsFromReview,
-  mapCurrentReviewToLegacyDraft,
+  deriveCanonicalReviewProjection,
   resolveReviewSourceInfo,
 } from "../state/reviewState.js";
 import {
@@ -51,7 +50,6 @@ export function useSetupStudioControllerState() {
     ...DEFAULT_DISCOVERY_FORM,
   });
   const [currentReview, setCurrentReview] = useState(createEmptyReviewState);
-  const [reviewDraft, setReviewDraft] = useState(createEmptyLegacyDraft);
   const [discoveryState, setDiscoveryState] = useState(createIdleDiscoveryState);
   const [activeSourceScope, setActiveSourceScope] = useState(
     createEmptySourceScope
@@ -118,7 +116,6 @@ export function useSetupStudioControllerState() {
   function clearStudioReviewState({ preserveActiveSource = false } = {}) {
     autoRevealRef.current = "";
     setCurrentReview(createEmptyReviewState());
-    setReviewDraft(createEmptyLegacyDraft());
     setDiscoveryState(createIdleDiscoveryState());
     setShowRefine(false);
     setShowKnowledge(false);
@@ -152,24 +149,24 @@ export function useSetupStudioControllerState() {
 
   function syncDiscoveryStateFromReview(review = {}, { preserveCounts = true } = {}) {
     const normalized = normalizeReviewState(review);
-    const legacy = mapCurrentReviewToLegacyDraft(normalized);
-    const profile = obj(legacy.overview);
-    const reviewInfo = resolveReviewSourceInfo(normalized, legacy);
+    const reviewProjection = deriveCanonicalReviewProjection(normalized);
+    const profile = obj(reviewProjection.overview);
+    const reviewInfo = resolveReviewSourceInfo(normalized);
     const session = obj(normalized?.session);
 
     const metadata = {
-      reviewRequired: !!legacy.reviewRequired,
-      reviewFlags: arr(legacy.reviewFlags),
-      fieldConfidence: obj(legacy.fieldConfidence),
+      reviewRequired: !!reviewProjection.reviewRequired,
+      reviewFlags: arr(reviewProjection.reviewFlags),
+      fieldConfidence: obj(reviewProjection.fieldConfidence),
       mainLanguage:
-        legacy.mainLanguage ||
+        reviewProjection.mainLanguage ||
         resolveMainLanguageValue(
           profile.mainLanguage,
           profile.primaryLanguage,
           profile.language
         ),
       primaryLanguage:
-        legacy.primaryLanguage ||
+        reviewProjection.primaryLanguage ||
         resolveMainLanguageValue(
           profile.primaryLanguage,
           profile.mainLanguage,
@@ -193,38 +190,45 @@ export function useSetupStudioControllerState() {
         normalized?.session?.status || prev.reviewSessionStatus
       ),
       reviewSessionRevision: s(
-        session?.revision || legacy?.reviewSessionRevision || prev.reviewSessionRevision
+        session?.revision ||
+          reviewProjection?.reviewSessionRevision ||
+          prev.reviewSessionRevision
       ),
       reviewFreshness: s(
-        session?.freshness || legacy?.reviewFreshness || prev.reviewFreshness || "unknown"
+        session?.freshness ||
+          reviewProjection?.reviewFreshness ||
+          prev.reviewFreshness ||
+          "unknown"
       ),
-      reviewStale: !!(session?.stale || legacy?.reviewStale || false),
-      reviewConflicted: !!(session?.conflicted || legacy?.reviewConflicted || false),
+      reviewStale: !!(session?.stale || reviewProjection?.reviewStale || false),
+      reviewConflicted: !!(
+        session?.conflicted || reviewProjection?.reviewConflicted || false
+      ),
       reviewConflictMessage: s(
-        session?.conflictMessage || legacy?.reviewConflictMessage || ""
+        session?.conflictMessage || reviewProjection?.reviewConflictMessage || ""
       ),
       hasResults:
         hasMeaningfulProfile(profile) ||
         arr(normalized?.bundleSources).length > 0 ||
         arr(normalized?.sources).length > 0 ||
         arr(normalized?.events).length > 0 ||
-        arr(legacy.reviewQueue).length > 0 ||
-        arr(legacy.sections?.services).length > 0,
+        arr(normalized?.draft?.knowledgeItems).length > 0 ||
+        arr(normalized?.draft?.services).length > 0,
       resultCount: preserveCounts
         ? prev.resultCount
-        : arr(legacy.reviewQueue).length +
-          arr(legacy.sections?.services).length +
+        : arr(normalized?.draft?.knowledgeItems).length +
+          arr(normalized?.draft?.services).length +
           arr(normalized?.bundleSources).length +
           arr(normalized?.sources).length +
           arr(normalized?.events).length,
       profile,
-      warnings: arr(legacy.warnings),
+      warnings: arr(reviewProjection.warnings),
       candidateCount: preserveCounts
         ? prev.candidateCount
-        : Number(legacy.stats?.knowledgeCount || 0),
-      sourceRunId: s(legacy.sourceRunId),
-      snapshotId: s(legacy.snapshotId),
-      sourceId: s(legacy.sourceId),
+        : Number(reviewProjection.stats?.knowledgeCount || 0),
+      sourceRunId: s(reviewProjection.sourceRunId),
+      snapshotId: s(reviewProjection.snapshotId),
+      sourceId: s(reviewProjection.sourceId),
       lastSourceType: s(reviewInfo.sourceType),
       lastUrl: s(reviewInfo.sourceUrl),
     }));
@@ -235,19 +239,18 @@ export function useSetupStudioControllerState() {
     { preserveBusinessForm = false, fallbackProfile = {} } = {}
   ) {
     const normalized = normalizeReviewState(reviewPayload);
-    const legacy = mapCurrentReviewToLegacyDraft(normalized);
+    const reviewProjection = deriveCanonicalReviewProjection(normalized);
     const nextManualSections = buildManualSectionsFromReview(normalized);
-    const reviewInfo = resolveReviewSourceInfo(normalized, legacy);
+    const reviewInfo = resolveReviewSourceInfo(normalized);
 
     if (s(reviewInfo.sourceUrl) || lowerText(reviewInfo.sourceType) === "manual") {
       updateActiveSourceScope(reviewInfo.sourceType, reviewInfo.sourceUrl);
     }
 
     setCurrentReview(normalized);
-    setReviewDraft(legacy);
 
     const preferredProfile = chooseBestProfileForForm(
-      legacy.overview,
+      reviewProjection.overview,
       fallbackProfile
     );
 
@@ -262,7 +265,9 @@ export function useSetupStudioControllerState() {
       }
 
       return hydrateBusinessFormFromProfile(
-        preserveBusinessForm ? prev : formFromProfile(legacy.overview, prev),
+        preserveBusinessForm
+          ? prev
+          : formFromProfile(reviewProjection.overview, prev),
         preferredProfile,
         { force: !preserveBusinessForm }
       );
@@ -278,7 +283,6 @@ export function useSetupStudioControllerState() {
 
     return {
       currentReview: normalized,
-      reviewDraft: legacy,
     };
   }
 
@@ -299,7 +303,6 @@ export function useSetupStudioControllerState() {
     manualSections,
     discoveryForm,
     currentReview,
-    reviewDraft,
     discoveryState,
     activeSourceScope,
     knowledgeCandidates,
@@ -319,7 +322,6 @@ export function useSetupStudioControllerState() {
     setManualSections,
     setDiscoveryForm,
     setCurrentReview,
-    setReviewDraft,
     setDiscoveryState,
     setActiveSourceScope,
     setKnowledgeCandidates,
@@ -336,6 +338,5 @@ export function useSetupStudioControllerState() {
     syncDiscoveryStateFromReview,
     applyReviewState,
     createEmptyReviewState,
-    createEmptyLegacyDraft,
   };
 }

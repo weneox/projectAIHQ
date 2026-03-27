@@ -46,5 +46,7 @@ export function pickWorkspaceActor(req) {
     tenantId,
     tenantKey,
     role,
+    requestId: s(req.requestId),
+    correlationId: s(req.correlationId),
   };
 }

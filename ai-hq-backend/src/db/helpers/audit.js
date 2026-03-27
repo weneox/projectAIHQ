@@ -13,6 +13,41 @@ function asObject(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
 
+const REDACTED_VALUE = "[redacted]";
+const SENSITIVE_KEY_PATTERN =
+  /(secret|token|password|credential|api[_-]?key|access[_-]?key|private[_-]?key|app[_-]?secret|page[_-]?access[_-]?token|authorization|cookie|session)/i;
+const SAFE_SENSITIVE_KEY_NAMES = new Set([
+  "secretkey",
+  "requiredsecretkeys",
+  "presentsecretkeys",
+  "missingsecretkeys",
+  "optionalsecretkeys",
+]);
+
+function sanitizeAuditMeta(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeAuditMeta(item));
+  }
+
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const [key, raw] of Object.entries(value)) {
+      const normalizedKey = String(key).replace(/[^a-z0-9]/gi, "").toLowerCase();
+      if (
+        SENSITIVE_KEY_PATTERN.test(String(key)) &&
+        !SAFE_SENSITIVE_KEY_NAMES.has(normalizedKey)
+      ) {
+        out[key] = REDACTED_VALUE;
+        continue;
+      }
+      out[key] = sanitizeAuditMeta(raw);
+    }
+    return out;
+  }
+
+  return value;
+}
+
 function toIso(v) {
   if (!v) return null;
   try {
@@ -41,7 +76,7 @@ export function normalizeAuditRow(row = {}) {
 
 export async function dbAudit(db, actor, action, objectType, objectId, meta = {}) {
   try {
-    const safeMeta = deepFix(meta || {});
+    const safeMeta = deepFix(sanitizeAuditMeta(meta || {}));
 
     const tenantId =
       safeMeta.tenantId ||

@@ -8,7 +8,7 @@ import {
 } from "../state/profile.js";
 import {
   buildManualSectionsFromReview,
-  mapCurrentReviewToLegacyDraft,
+  deriveCanonicalReviewProjection,
   resolveReviewSourceInfo,
   reviewStateMatchesSource,
 } from "../state/reviewState.js";
@@ -21,35 +21,34 @@ export function reconcileSetupStudioLoadedReview({
   sourceScope = {},
 }) {
   const normalized = normalizeReviewState(reviewPayload);
-  const legacy = mapCurrentReviewToLegacyDraft(normalized);
+  const reviewProjection = deriveCanonicalReviewProjection(normalized);
 
   const shouldApplyIntoActiveStudio =
     !preserveBusinessForm ||
     !s(sourceScope.sourceUrl) ||
     sourceScope.sourceType === "manual" ||
-    reviewStateMatchesSource(
-      normalized,
-      legacy,
-      sourceScope.sourceType,
-      sourceScope.sourceUrl
-    );
+    reviewStateMatchesSource(normalized, sourceScope.sourceType, sourceScope.sourceUrl);
 
   return {
     normalized,
-    legacy,
+    reviewProjection,
     shouldApplyIntoActiveStudio,
   };
 }
 
 export function buildSetupStudioSourceMismatchIssue({
   normalized = {},
-  legacy = {},
+  reviewProjection = {},
   message = "",
 }) {
   return {
-    sessionId: s(normalized?.session?.id || legacy?.reviewSessionId),
-    sessionStatus: s(normalized?.session?.status || legacy?.reviewSessionStatus),
-    revision: s(normalized?.session?.revision || legacy?.reviewSessionRevision),
+    sessionId: s(normalized?.session?.id || reviewProjection?.reviewSessionId),
+    sessionStatus: s(
+      normalized?.session?.status || reviewProjection?.reviewSessionStatus
+    ),
+    revision: s(
+      normalized?.session?.revision || reviewProjection?.reviewSessionRevision
+    ),
     freshness: "source_mismatch",
     message,
   };
@@ -104,10 +103,10 @@ export function buildSetupStudioHydratedBusinessForm({
 
 export function buildSetupStudioHydratedReviewUi({
   reviewState = {},
-  legacyDraft = {},
 }) {
-  const reviewInfo = resolveReviewSourceInfo(reviewState, legacyDraft);
-  const baseProfile = chooseBestProfileForForm(legacyDraft?.overview);
+  const reviewProjection = deriveCanonicalReviewProjection(reviewState);
+  const reviewInfo = resolveReviewSourceInfo(reviewState);
+  const baseProfile = chooseBestProfileForForm(reviewProjection?.overview);
   const manualSections = buildManualSectionsFromReview(reviewState);
   const shouldUpdateActiveSource =
     !!s(reviewInfo.sourceUrl) || lowerText(reviewInfo.sourceType) === "manual";

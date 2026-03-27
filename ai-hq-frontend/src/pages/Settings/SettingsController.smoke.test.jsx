@@ -1,5 +1,10 @@
+/* @vitest-environment jsdom */
+
+import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+globalThis.React = React;
 
 vi.mock("../../api/settings.js", async () => {
   const actual = await vi.importActual("../../api/settings.js");
@@ -101,6 +106,20 @@ vi.mock("./hooks/useOperationalSettings.js", () => ({
     savingVoice: false,
     savingChannel: false,
     operationalData: {
+      capabilities: {
+        canManageOperationalSettings: false,
+        canManageProviderSecrets: false,
+        operationalSettingsWrite: {
+          allowed: false,
+          requiredRoles: ["owner", "admin"],
+          message: "Only owner/admin can manage operational voice and channel settings.",
+        },
+        providerSecretsMutation: {
+          allowed: false,
+          requiredRoles: ["owner", "admin"],
+          message: "Only owner/admin can manage provider secrets.",
+        },
+      },
       readiness: {
         status: "blocked",
         reasonCode: "voice_phone_number_missing",
@@ -119,8 +138,8 @@ vi.mock("./hooks/useOperationalSettings.js", () => ({
                 id: "repair_voice_phone_number",
                 kind: "focus",
                 label: "Add voice phone number",
-                requiredRole: "operator",
-                allowed: true,
+                requiredRole: "admin",
+                allowed: false,
                 target: {
                   panel: "voice",
                   field: "twilioPhoneNumber",
@@ -180,15 +199,15 @@ vi.mock("./hooks/useOperationalSettings.js", () => ({
           subtitle: "Production voice traffic stays fail-closed until persisted tenant voice settings are complete.",
           missing: ["twilio_phone_number"],
           suggestedRepairActionId: "repair_voice_phone_number",
-          nextAction: {
-            id: "repair_voice_phone_number",
-            kind: "focus",
-            label: "Add voice phone number",
-            requiredRole: "operator",
-            allowed: true,
-            target: {
-              panel: "voice",
-              field: "twilioPhoneNumber",
+            nextAction: {
+              id: "repair_voice_phone_number",
+              kind: "focus",
+              label: "Add voice phone number",
+              requiredRole: "admin",
+              allowed: false,
+              target: {
+                panel: "voice",
+                field: "twilioPhoneNumber",
             },
           },
         },
@@ -221,8 +240,8 @@ vi.mock("./hooks/useOperationalSettings.js", () => ({
               id: "repair_channel_identifiers",
               kind: "focus",
               label: "Add channel identifiers",
-              requiredRole: "operator",
-              allowed: true,
+              requiredRole: "admin",
+              allowed: false,
               target: {
                 panel: "meta",
                 field: "externalPageId",
@@ -441,6 +460,45 @@ vi.mock("./hooks/useTrustSurface.js", () => ({
   }),
 }));
 
+vi.mock("./hooks/useAuditHistory.js", () => ({
+  useAuditHistory: () => ({
+    auditHistory: {
+      viewerRole: "operator",
+      permissions: {
+        auditHistoryRead: {
+          allowed: false,
+          message: "Only owner/admin/analyst can read control-plane audit history.",
+        },
+      },
+      filters: {
+        availableAreas: [],
+        availableOutcomes: [],
+      },
+      summary: {
+        total: 0,
+        outcomes: {
+          succeeded: 0,
+          blocked: 0,
+          failed: 0,
+        },
+        areaItems: [],
+      },
+      items: [],
+    },
+    surface: {
+      loading: false,
+      error: "",
+      unavailable: false,
+      ready: true,
+      saving: false,
+      saveError: "",
+      saveSuccess: "",
+      refresh: vi.fn().mockResolvedValue({}),
+    },
+    refreshAuditHistory: vi.fn().mockResolvedValue({}),
+  }),
+}));
+
 import SettingsController from "./SettingsController.jsx";
 
 afterEach(() => {
@@ -457,9 +515,10 @@ describe("Settings truth-maintenance smoke", () => {
     render(<SettingsController />);
 
     expect((await screen.findAllByText(/workspace settings saved/i)).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /change history/i })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /business facts/i }));
-    expect(await screen.findByText(/business fact saved/i)).toBeInTheDocument();
+    expect(await screen.findByText(/business fact saved/i)).toBeTruthy();
   });
 
   it("renders source sync and knowledge review truth-maintenance messaging", async () => {
@@ -468,51 +527,56 @@ describe("Settings truth-maintenance smoke", () => {
     fireEvent.click(await screen.findByRole("button", { name: /sources/i }));
     expect(
       await screen.findByText(/refresh source evidence here, then route anything important into review/i)
-    ).toBeInTheDocument();
-    expect(screen.getByText(/trust repair hub/i)).toBeInTheDocument();
+    ).toBeTruthy();
+    expect(screen.getByText(/trust repair hub/i)).toBeTruthy();
     expect(screen.getAllByText(/runtime projection blocker/i).length).toBeGreaterThan(0);
     expect(screen.getAllByRole("button", { name: /open runtime setup/i }).length).toBeGreaterThan(0);
     expect(
       screen.getByText(/sync refreshes source evidence only/i)
-    ).toBeInTheDocument();
+    ).toBeTruthy();
     expect(
       screen.getByText(/2 review items waiting/i)
-    ).toBeInTheDocument();
+    ).toBeTruthy();
     expect(
       screen.getByText(/new source evidence created candidate changes/i)
-    ).toBeInTheDocument();
-    expect(screen.getByText(/recent sync health/i)).toBeInTheDocument();
+    ).toBeTruthy();
+    expect(screen.getByText(/recent sync health/i)).toBeTruthy();
     expect(screen.getAllByText(/runtime projection/i).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: /knowledge review/i }));
     expect(
       await screen.findByText(/candidates from source sync and source evidence land here/i)
-    ).toBeInTheDocument();
+    ).toBeTruthy();
     expect(
       screen.getByText(/this is source evidence under review, not approved truth yet/i)
-    ).toBeInTheDocument();
-    expect(screen.getByText(/recent trust activity/i)).toBeInTheDocument();
+    ).toBeTruthy();
+    expect(screen.getByText(/recent trust activity/i)).toBeTruthy();
   });
 
   it("renders operational readiness fail states honestly", async () => {
     render(<SettingsController />);
 
     fireEvent.click(await screen.findByRole("button", { name: /operational/i }));
-    expect(screen.getByText(/operational repair hub/i)).toBeInTheDocument();
+    expect(screen.getByText(/operational repair hub/i)).toBeTruthy();
     expect(
       await screen.findByText(/production traffic stays fail-closed until the persisted operational contract and provider dependencies converge/i)
-    ).toBeInTheDocument();
-    expect(screen.getByText(/voice operational settings/i)).toBeInTheDocument();
+    ).toBeTruthy();
+    expect(screen.getByText(/voice operational settings/i)).toBeTruthy();
     expect(screen.getAllByText(/missing: twilio_phone_number/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/open secure secrets/i)).toBeInTheDocument();
-    expect(screen.getByText(/provider secret readiness/i)).toBeInTheDocument();
-    expect(screen.getByText(/missing required: page_access_token/i)).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /add voice phone number/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: /add channel identifiers/i }).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getAllByRole("button", { name: /add voice phone number/i })[0]);
-    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(screen.getByText(/open secure secrets/i)).toBeTruthy();
+    expect(screen.getByText(/provider secret readiness/i)).toBeTruthy();
+    expect(screen.getByText(/missing required: page_access_token/i)).toBeTruthy();
+    expect(screen.getAllByText(/requires admin access/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/only owner\/admin can manage operational voice and channel settings/i)
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/only owner\/admin can manage provider secrets/i)
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: /save voice settings/i }).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: /save channel identifiers/i }).disabled).toBe(true);
     expect(
       screen.getByText(/production traffic is fail-closed while operational rows or required provider readiness are incomplete/i)
-    ).toBeInTheDocument();
+    ).toBeTruthy();
   });
 });

@@ -6,7 +6,7 @@ import AdminRouteGuard from "./components/admin/AdminRouteGuard.jsx";
 import OperatorRouteGuard from "./components/auth/OperatorRouteGuard.jsx";
 import UserRouteGuard from "./components/auth/UserRouteGuard.jsx";
 import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
-import { areInternalRoutesEnabled } from "./lib/appEntry.js";
+import { areInternalRoutesEnabled, INTERNAL_ONLY_APP_ROUTES } from "./lib/appEntry.js";
 
 const Proposals = lazy(() => import("./pages/Proposals.jsx"));
 const Executions = lazy(() => import("./pages/Executions.jsx"));
@@ -40,6 +40,31 @@ function RouteFallback() {
 
 function withSuspense(element) {
   return <Suspense fallback={<RouteFallback />}>{element}</Suspense>;
+}
+
+function renderInternalRouteSet(enabled) {
+  if (enabled) {
+    return (
+      <>
+        <Route path="command-demo" element={withSuspense(<CommandPage />)} />
+        <Route path="analytics" element={withSuspense(<Analytics />)} />
+        <Route path="agents" element={withSuspense(<Agents />)} />
+        <Route path="threads" element={withSuspense(<Threads />)} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      {INTERNAL_ONLY_APP_ROUTES.map((path) => (
+        <Route
+          key={path}
+          path={path.slice(1)}
+          element={<Navigate to="/truth" replace />}
+        />
+      ))}
+    </>
+  );
 }
 
 export default function App() {
@@ -227,21 +252,7 @@ export default function App() {
             }
           />
           <Route path="settings" element={withSuspense(<Settings />)} />
-          {internalRoutesEnabled ? (
-            <>
-              <Route path="command-demo" element={withSuspense(<CommandPage />)} />
-              <Route path="analytics" element={withSuspense(<Analytics />)} />
-              <Route path="agents" element={withSuspense(<Agents />)} />
-              <Route path="threads" element={withSuspense(<Threads />)} />
-            </>
-          ) : (
-            <>
-              <Route path="command-demo" element={<Navigate to="/" replace />} />
-              <Route path="analytics" element={<Navigate to="/" replace />} />
-              <Route path="agents" element={<Navigate to="/" replace />} />
-              <Route path="threads" element={<Navigate to="/" replace />} />
-            </>
-          )}
+          {renderInternalRouteSet(internalRoutesEnabled)}
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

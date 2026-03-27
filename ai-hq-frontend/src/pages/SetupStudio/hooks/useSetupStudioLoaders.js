@@ -22,12 +22,10 @@ export function createSetupStudioLoaders(ctx, shared) {
     navigate,
     freshEntryMode,
     currentReview,
-    reviewDraft,
     setLoading,
     setRefreshing,
     setError,
     setCurrentReview,
-    setReviewDraft,
     setBusinessForm,
     setManualSections,
     setKnowledgeCandidates,
@@ -59,7 +57,7 @@ export function createSetupStudioLoaders(ctx, shared) {
         sourceType: activeSourceType,
         sourceUrl: activeSourceUrl,
       });
-      const { normalized, legacy, shouldApplyIntoActiveStudio } =
+      const { normalized, reviewProjection, shouldApplyIntoActiveStudio } =
         reconcileSetupStudioLoadedReview({
           reviewPayload: payload,
           preserveBusinessForm,
@@ -68,11 +66,10 @@ export function createSetupStudioLoaders(ctx, shared) {
 
       if (!shouldApplyIntoActiveStudio) {
         setCurrentReview(normalized);
-        setReviewDraft(legacy);
         setReviewSyncIssue(
           buildSetupStudioSourceMismatchIssue({
             normalized,
-            legacy,
+            reviewProjection,
             message:
               "A review session exists, but it belongs to a different source than the active draft.",
           })
@@ -84,12 +81,10 @@ export function createSetupStudioLoaders(ctx, shared) {
 
         return {
           currentReview: normalized,
-          reviewDraft: legacy,
         };
       }
 
       setCurrentReview(normalized);
-      setReviewDraft(legacy);
 
       if (activateReviewSession) {
         setFreshEntryMode(false);
@@ -101,7 +96,6 @@ export function createSetupStudioLoaders(ctx, shared) {
 
       return {
         currentReview,
-        reviewDraft,
       };
     }
   }
@@ -162,7 +156,7 @@ export function createSetupStudioLoaders(ctx, shared) {
       });
       const {
         normalized: reviewState,
-        legacy: legacyDraft,
+        reviewProjection,
         shouldApplyIntoActiveStudio,
       } = reconcileSetupStudioLoadedReview({
         reviewPayload,
@@ -172,11 +166,10 @@ export function createSetupStudioLoaders(ctx, shared) {
 
       if (!shouldApplyIntoActiveStudio) {
         setCurrentReview(reviewState);
-        setReviewDraft(legacyDraft);
         setReviewSyncIssue(
           buildSetupStudioSourceMismatchIssue({
             normalized: reviewState,
-            legacy: legacyDraft,
+            reviewProjection,
             message:
               "A review session was loaded, but it does not match the active source draft.",
           })
@@ -189,11 +182,9 @@ export function createSetupStudioLoaders(ctx, shared) {
       }
 
       setCurrentReview(reviewState);
-      setReviewDraft(legacyDraft);
 
       const reviewUi = buildSetupStudioHydratedReviewUi({
         reviewState,
-        legacyDraft,
       });
 
       if (reviewUi.shouldUpdateActiveSource) {

@@ -20,6 +20,27 @@ function trimSlash(x) {
   return s(x).replace(/\/+$/, "");
 }
 
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+
+function getRuntimeAuthorityFailure(projectedRuntime) {
+  const authority = obj(obj(projectedRuntime).authority);
+  const source = s(authority.source);
+  const available = authority.available === true;
+  const reasonCode = s(authority.reasonCode || authority.reason || "");
+
+  if (available && source === "approved_runtime_projection") {
+    return null;
+  }
+
+  return {
+    error: "runtime_authority_unavailable",
+    reasonCode: reasonCode || (!available ? "runtime_authority_unavailable" : "runtime_authority_source_invalid"),
+    authority,
+  };
+}
+
 async function safeReadJson(res) {
   const text = await res.text().catch(() => "");
   if (!text) return null;
@@ -57,7 +78,7 @@ function buildUrl({ channel = "", recipientId = "", pageId = "", igUserId = "" }
   return `${base}/api/tenants/resolve-channel?${qs.toString()}`;
 }
 
-const logger = createStructuredLogger({
+const baseLogger = createStructuredLogger({
   service: "meta-bot-backend",
   component: "tenant-resolver",
 });
@@ -79,6 +100,7 @@ export async function resolveTenantContextFromMetaEvent({
   pageId = "",
   igUserId = "",
   requestContext = {},
+  logger: providedLogger = null,
 }) {
   const safeInput = {
     channel: lower(channel),
@@ -90,6 +112,15 @@ export async function resolveTenantContextFromMetaEvent({
   const base = trimSlash(AIHQ_BASE_URL);
   const url = buildUrl(safeInput);
   const timeoutMs = Number(AIHQ_TIMEOUT_MS || 20000);
+  const logger = (providedLogger || baseLogger).child?.({
+    flow: "meta_tenant_resolution",
+    requestId: s(requestContext?.requestId),
+    correlationId: s(requestContext?.correlationId),
+    channel: safeInput.channel,
+    recipientId: safeInput.recipientId,
+    pageId: safeInput.pageId,
+    igUserId: safeInput.igUserId,
+  }) || (providedLogger || baseLogger);
 
   if (!base) {
     return {
@@ -147,8 +178,6 @@ export async function resolveTenantContextFromMetaEvent({
       status: res.status,
       tookMs,
       ok: res.ok,
-      requestId: s(requestContext?.requestId),
-      correlationId: s(requestContext?.correlationId),
       reasonCode: s(json?.reasonCode || json?.error || ""),
     });
 
@@ -183,6 +212,40 @@ export async function resolveTenantContextFromMetaEvent({
       };
     }
 
+    const authorityFailure = getRuntimeAuthorityFailure(
+      checked.value.projectedRuntime
+    );
+    if (authorityFailure) {
+      logger.warn("meta.tenant_resolve.authority_blocked", {
+        status: res.status,
+        tenantKey: s(
+          checked.value?.tenantKey ||
+            checked.value?.projectedRuntime?.tenant?.tenantKey
+        ),
+        tenantId: s(
+          checked.value?.tenantId ||
+            checked.value?.projectedRuntime?.tenant?.tenantId
+        ),
+        reasonCode: authorityFailure.reasonCode,
+        authoritySource: s(authorityFailure?.authority?.source),
+        runtimeProjectionId: s(authorityFailure?.authority?.runtimeProjectionId),
+      });
+      return {
+        ok: false,
+        status: res.status,
+        error: authorityFailure.error,
+        reasonCode: authorityFailure.reasonCode,
+        authority: authorityFailure.authority,
+        tenantKey: "",
+        tenantId: "",
+        tenant: null,
+        channelConfig: null,
+        resolvedChannel: safeInput.channel || "",
+        input: safeInput,
+        json,
+      };
+    }
+
     return {
       ok: true,
       status: res.status,
@@ -207,8 +270,6 @@ export async function resolveTenantContextFromMetaEvent({
       timeoutMs,
       hasInternalToken: Boolean(s(AIHQ_INTERNAL_TOKEN)),
       input: safeInput,
-      requestId: s(requestContext?.requestId),
-      correlationId: s(requestContext?.correlationId),
     });
 
     return {

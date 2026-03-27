@@ -420,6 +420,7 @@ export function twilioRouter() {
           requestId: s(req.requestId),
           correlationId: s(req.correlationId),
         },
+        logger,
       });
       if (
         !tenantConfigResult?.ok ||
@@ -518,6 +519,7 @@ export function twilioRouter() {
           requestId: s(req.requestId),
           correlationId: s(req.correlationId),
         },
+        logger,
       });
       if (
         !tenantConfigResult?.ok ||
@@ -613,6 +615,7 @@ export function twilioRouter() {
           requestId: s(req.requestId),
           correlationId: s(req.correlationId),
         },
+        logger,
       }).catch(() => null);
       const tenantConfig = tenantConfigResult?.ok ? tenantConfigResult.config : null;
       const lang = detectPreferredLang(req, tenantConfig);

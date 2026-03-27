@@ -14,7 +14,10 @@ process.env.TWILIO_TWIML_APP_SID = "APaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 const { twilioRouter } = await import("../src/routes/twilio.js");
 const { resolveTenantFromRequest } = await import("../src/services/tenantResolver.js");
-const { __test__: tenantConfigTest } = await import("../src/services/tenantConfig.js");
+const {
+  getTenantVoiceConfig,
+  __test__: tenantConfigTest,
+} = await import("../src/services/tenantConfig.js");
 const { createAihqVoiceClient } = await import("../src/services/aihqVoiceClient.js");
 const {
   checkAihqOperationalBootReadiness,
@@ -35,6 +38,29 @@ const {
 } = await import("../src/services/healthRoute.js");
 
 const originalFetch = global.fetch;
+
+function createCaptureLogger(entries = [], context = {}) {
+  return {
+    child(extra = {}) {
+      return createCaptureLogger(entries, { ...context, ...extra });
+    },
+    info(event, data = {}) {
+      entries.push({ level: "info", event, ...context, ...data });
+    },
+    warn(event, data = {}) {
+      entries.push({ level: "warn", event, ...context, ...data });
+    },
+    error(event, error = null, data = {}) {
+      entries.push({
+        level: "error",
+        event,
+        ...context,
+        ...data,
+        error: error?.message || String(error || ""),
+      });
+    },
+  };
+}
 
 function createMockRes(onFinish) {
   return {
@@ -661,6 +687,148 @@ test("voice route fails closed when AIHQ tenant config cannot be resolved", asyn
   assert.equal(res.statusCode, 404);
   assert.equal(res.body?.ok, false);
   assert.equal(res.body?.error, "tenant_not_found");
+});
+
+test("voice route fails closed when projected runtime authority is unavailable", async () => {
+  const router = twilioRouter();
+  mockFetchJson({
+    ok: true,
+    status: 200,
+    json: {
+      ok: true,
+      projectedRuntime: {
+        authority: {
+          mode: "strict",
+          required: true,
+          available: false,
+          source: "approved_runtime_projection",
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+          reasonCode: "runtime_projection_missing",
+        },
+        tenant: {
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+          companyName: "Acme",
+        },
+        channels: {
+          voice: {
+            enabled: true,
+            supportsCalls: true,
+            primaryPhone: "+15550001111",
+            profile: {
+              defaultLanguage: "en",
+            },
+            contact: {},
+          },
+        },
+      },
+      operationalChannels: {
+        voice: {
+          available: true,
+          ready: true,
+          provider: "twilio",
+          operator: {
+            enabled: true,
+            phone: "+15550001111",
+            mode: "manual",
+          },
+          operatorRouting: {
+            mode: "manual",
+            departments: {},
+          },
+          realtime: {},
+        },
+      },
+    },
+  });
+
+  const params = {
+    To: "+15551234567",
+    From: "+15557654321",
+  };
+  const signature = twilio.getExpectedTwilioSignature(
+    "twilio-auth-token",
+    "https://voice.example.test/twilio/voice",
+    params
+  );
+
+  const { res } = await invokeHandler(router, "post", "/twilio/voice", {
+    headers: {
+      "x-twilio-signature": signature,
+    },
+    body: params,
+  });
+
+  assert.equal(res.statusCode, 503);
+  assert.equal(res.body?.ok, false);
+  assert.equal(res.body?.error, "runtime_authority_unavailable");
+  assert.equal(res.body?.details?.authority?.reasonCode, "runtime_projection_missing");
+});
+
+test("voice tenant config emits authority telemetry without leaking internal tokens", async () => {
+  const entries = [];
+  mockFetchJson({
+    ok: true,
+    status: 200,
+    json: {
+      ok: true,
+      projectedRuntime: {
+        authority: {
+          mode: "strict",
+          required: true,
+          available: false,
+          source: "approved_runtime_projection",
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+          runtimeProjectionId: "projection-voice-1",
+          reasonCode: "runtime_projection_missing",
+        },
+        tenant: {
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+          companyName: "Acme",
+        },
+        channels: {
+          voice: {
+            enabled: true,
+            supportsCalls: true,
+          },
+        },
+      },
+      operationalChannels: {
+        voice: {
+          available: true,
+          ready: true,
+          provider: "twilio",
+        },
+      },
+    },
+  });
+
+  const result = await getTenantVoiceConfig({
+    tenant: {
+      tenantKey: "acme",
+      toNumber: "+15551234567",
+    },
+    requestContext: {
+      requestId: "req-voice-trace-1",
+      correlationId: "corr-voice-trace-1",
+    },
+    logger: createCaptureLogger(entries),
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "runtime_authority_unavailable");
+  const blocked = entries.find(
+    (entry) => entry.event === "voice.tenant_config.authority_blocked"
+  );
+  assert.equal(blocked?.requestId, "req-voice-trace-1");
+  assert.equal(blocked?.correlationId, "corr-voice-trace-1");
+  assert.equal(blocked?.tenantKey, "acme");
+  assert.equal(blocked?.runtimeProjectionId, "projection-voice-1");
+  assert.equal(blocked?.reasonCode, "runtime_projection_missing");
+  assert.equal(JSON.stringify(entries).includes("twilio-internal-token"), false);
 });
 
 test("voice route fails closed when operational voice contract is not ready", async () => {

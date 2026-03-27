@@ -1,12 +1,12 @@
 import { arr, lower, obj, s } from "./runtimeShared.js";
 
 function normalizeAuthorityMode(v) {
-  const mode = lower(v || "tolerant");
+  const mode = lower(v || "strict");
   return mode === "strict" ? "strict" : "tolerant";
 }
 
 function buildRuntimeAuthority({
-  mode = "tolerant",
+  mode = "strict",
   available = false,
   tenantId = "",
   tenantKey = "",

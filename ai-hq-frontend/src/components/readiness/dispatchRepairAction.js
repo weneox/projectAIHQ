@@ -1,3 +1,5 @@
+import { apiRequest } from "../../api/client.js";
+
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
@@ -71,6 +73,18 @@ export async function dispatchRepairAction(action = {}, options = {}) {
         assignWindowLocation(result, windowRef);
       }
       return { ok: true, reason: "" };
+    }
+
+    if (kind === "api") {
+      const target = obj(nextAction.target);
+      const path = s(target.path);
+      const method = s(target.method || "POST").toUpperCase() || "POST";
+      if (!path) return { ok: false, reason: "path_missing" };
+      const payload = await apiRequest(path, {
+        method,
+        body: obj(target.body),
+      });
+      return { ok: true, reason: "", payload };
     }
 
     if (kind === "focus") {

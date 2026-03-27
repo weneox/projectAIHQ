@@ -1,1 +1,1 @@
-export { runSourceSync } from "./orchestrator.js";
+export { runSourceSync, __test__ } from "./orchestrator.js";

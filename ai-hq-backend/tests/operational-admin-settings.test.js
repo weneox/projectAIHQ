@@ -165,6 +165,7 @@ class FakeOperationalDb {
         is_active: true,
       },
     ];
+    this.auditEntries = [];
   }
 
   async query(input, values = []) {
@@ -252,6 +253,15 @@ class FakeOperationalDb {
     }
 
     if (text.includes("insert into audit_log")) {
+      this.auditEntries.unshift({
+        tenant_id: params[0],
+        tenant_key: params[1],
+        actor: params[2],
+        action: params[3],
+        object_type: params[4],
+        object_id: params[5],
+        meta: params[6],
+      });
       return { rows: [] };
     }
 
@@ -279,8 +289,9 @@ test("operational settings route returns sanitized readiness metadata", async ()
   assert.equal(res.body?.readiness?.blockers?.length, 0);
 });
 
-test("operational voice settings route rejects enabled voice without phone number", async () => {
-  const router = operationalSettingsRoutes({ db: new FakeOperationalDb() });
+test("operational voice settings route blocks non-admin operators with audited permission semantics", async () => {
+  const db = new FakeOperationalDb();
+  const router = operationalSettingsRoutes({ db });
   const { res } = await invokeRoute(router, "post", "/settings/operational/voice", {
     auth: {
       tenantKey: "acme",
@@ -288,20 +299,29 @@ test("operational voice settings route rejects enabled voice without phone numbe
       userId: "user-1",
       email: "ops@example.com",
     },
+    requestId: "req-op-1",
+    correlationId: "corr-op-1",
     body: {
       enabled: true,
       twilioPhoneNumber: "",
     },
   });
 
-  assert.equal(res.statusCode, 400);
-  assert.equal(res.body?.error, "twilio_phone_number_required");
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body?.error, "Only owner/admin can manage operational settings");
+  assert.equal(db.auditEntries[0]?.action, "settings.operational.voice.updated");
+  assert.equal(db.auditEntries[0]?.meta?.outcome, "blocked");
+  assert.equal(db.auditEntries[0]?.meta?.reasonCode, "insufficient_role");
+  assert.equal(db.auditEntries[0]?.meta?.attemptedRole, "operator");
+  assert.equal(db.auditEntries[0]?.meta?.requestId, "req-op-1");
 });
 
 test("operational settings route returns guided repair metadata for blocked dependencies", async () => {
   const db = new FakeOperationalDb();
   db.voiceSettings.twilio_phone_number = "";
   db.secretRows = [];
+  db.channel.external_page_id = "";
+  db.channel.external_user_id = "";
 
   const router = operationalSettingsRoutes({ db });
   const { res } = await invokeRoute(router, "get", "/settings/operational", {
@@ -317,18 +337,18 @@ test("operational settings route returns guided repair metadata for blocked depe
   assert.equal(res.body?.voice?.repair?.blocked, true);
   assert.equal(res.body?.voice?.repair?.nextAction?.id, "repair_voice_phone_number");
   assert.equal(res.body?.channels?.meta?.repair?.blocked, true);
-  assert.equal(res.body?.channels?.meta?.repair?.nextAction?.id, "open_provider_secrets");
-  assert.equal(res.body?.channels?.meta?.repair?.nextAction?.allowed, false);
+  assert.equal(res.body?.channels?.meta?.repair?.nextAction?.id, "repair_channel_identifiers");
   assert.equal(res.body?.readiness?.status, "blocked");
   assert.equal(res.body?.readiness?.blockers?.length, 2);
 });
 
-test("operator can update voice operational settings through admin route", async () => {
-  const router = operationalSettingsRoutes({ db: new FakeOperationalDb() });
+test("owner/admin can update voice operational settings", async () => {
+  const db = new FakeOperationalDb();
+  const router = operationalSettingsRoutes({ db });
   const { res } = await invokeRoute(router, "post", "/settings/operational/voice", {
     auth: {
       tenantKey: "acme",
-      role: "operator",
+      role: "owner",
       userId: "user-1",
       email: "ops@example.com",
     },
@@ -362,6 +382,9 @@ test("operator can update voice operational settings through admin route", async
   assert.equal(res.body?.ok, true);
   assert.equal(res.body?.voice?.settings?.twilioPhoneNumber, "+15550002222");
   assert.equal(res.body?.voice?.operational?.ready, true);
+  assert.equal(db.auditEntries[0]?.action, "settings.operational.voice.updated");
+  assert.equal(db.auditEntries[0]?.meta?.outcome, "succeeded");
+  assert.equal(db.auditEntries[0]?.meta?.targetArea, "operational_voice");
 });
 
 test("operational channel route rejects meta channel without persisted identifiers", async () => {
@@ -374,7 +397,7 @@ test("operational channel route rejects meta channel without persisted identifie
       params: { type: "instagram" },
       auth: {
         tenantKey: "acme",
-        role: "operator",
+        role: "owner",
         userId: "user-1",
         email: "ops@example.com",
       },
@@ -389,6 +412,40 @@ test("operational channel route rejects meta channel without persisted identifie
 
   assert.equal(res.statusCode, 400);
   assert.equal(res.body?.error, "channel_identifiers_required");
+});
+
+test("operational channel route blocks non-admin operators with audited permission semantics", async () => {
+  const db = new FakeOperationalDb();
+  const router = operationalSettingsRoutes({ db });
+  const { res } = await invokeRoute(
+    router,
+    "post",
+    "/settings/operational/channels/:type",
+    {
+      params: { type: "instagram" },
+      auth: {
+        tenantKey: "acme",
+        role: "operator",
+        userId: "user-1",
+        email: "ops@example.com",
+      },
+      requestId: "req-op-channel-1",
+      correlationId: "corr-op-channel-1",
+      body: {
+        provider: "meta",
+        status: "connected",
+        external_page_id: "page-2",
+        external_user_id: "ig-2",
+      },
+    }
+  );
+
+  assert.equal(res.statusCode, 403);
+  assert.equal(res.body?.error, "Only owner/admin can manage operational settings");
+  assert.equal(db.auditEntries[0]?.action, "settings.operational.channel.updated");
+  assert.equal(db.auditEntries[0]?.meta?.outcome, "blocked");
+  assert.equal(db.auditEntries[0]?.meta?.reasonCode, "insufficient_role");
+  assert.equal(db.auditEntries[0]?.meta?.attemptedRole, "operator");
 });
 
 test("startup readiness helpers block prod-like boot when enforcement is enabled", () => {
