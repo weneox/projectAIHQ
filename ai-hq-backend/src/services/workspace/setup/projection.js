@@ -19,6 +19,49 @@ import {
   toFiniteNumber,
 } from "./utils.js";
 
+function hasDbQuery(db) {
+  return Boolean(db && typeof db.query === "function");
+}
+
+function resolveKnowledgeHelper(db, explicitHelper = null) {
+  if (explicitHelper) return explicitHelper;
+  if (!hasDbQuery(db)) return null;
+  return createTenantKnowledgeHelpers({ db });
+}
+
+function resolveTruthVersionHelper(db, explicitHelper = null) {
+  if (explicitHelper) return explicitHelper;
+  if (!hasDbQuery(db)) return null;
+  return createTenantTruthVersionHelpers({ db });
+}
+
+function buildDeferredRuntimeProjection({
+  actor = {},
+  requestedBy = "",
+  session = {},
+  draft = {},
+  sourceInfo = {},
+  truthVersion = null,
+} = {}) {
+  return compactObject({
+    status: "deferred",
+    triggerType: "review_approval",
+    requestedBy: s(requestedBy),
+    tenantId: s(actor?.tenantId),
+    tenantKey: s(actor?.tenantKey),
+    reviewSessionId: s(session?.id),
+    truthVersionId: s(truthVersion?.id),
+    metadata: compactObject({
+      source: "projectSetupReviewDraftToCanonical",
+      reviewSessionId: s(session?.id),
+      draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
+      primarySourceId: s(sourceInfo.primarySourceId),
+      latestRunId: s(sourceInfo.latestRunId),
+      reasonCode: "db_projection_deferred",
+    }),
+  });
+}
+
 function extractPrimarySourceInfo(session = {}, draft = {}, sources = []) {
   const summary = obj(draft?.sourceSummary);
   const latestImport = obj(summary.latestImport);
@@ -144,20 +187,25 @@ async function resolvePersistedReviewSessionId(db, actor = {}, session = {}) {
   const tenantId = s(actor?.tenantId);
 
   if (!rawSessionId || !tenantId) return "";
+  if (!hasDbQuery(db)) return rawSessionId;
 
-  const result = await q(
-    db,
-    `
-      select id
-      from tenant_setup_review_sessions
-      where id = $1
-        and tenant_id = $2
-      limit 1
-    `,
-    [rawSessionId, tenantId]
-  );
+  try {
+    const result = await q(
+      db,
+      `
+        select id
+        from tenant_setup_review_sessions
+        where id = $1
+          and tenant_id = $2
+        limit 1
+      `,
+      [rawSessionId, tenantId]
+    );
 
-  return s(result.rows?.[0]?.id);
+    return s(result.rows?.[0]?.id || rawSessionId);
+  } catch {
+    return rawSessionId;
+  }
 }
 
 export function buildCanonicalProfileSourceSummary({
@@ -308,7 +356,7 @@ async function projectDraftKnowledgeToCanonical({
   draft,
   session,
   sourceInfo,
-  knowledgeHelper = createTenantKnowledgeHelpers({ db }),
+  knowledgeHelper,
 }) {
   const items = arr(draft?.knowledgeItems)
     .map((item) => normalizeKnowledgeForProjection(item))
@@ -319,6 +367,17 @@ async function projectDraftKnowledgeToCanonical({
       projected: 0,
       skipped: 0,
       total: 0,
+      method: "",
+    };
+  }
+
+  const helper = knowledgeHelper || resolveKnowledgeHelper(db);
+
+  if (!helper) {
+    return {
+      projected: 0,
+      skipped: items.length,
+      total: items.length,
       method: "",
     };
   }
@@ -353,8 +412,8 @@ async function projectDraftKnowledgeToCanonical({
     "createKnowledgeItemsBulk",
     "mergeKnowledgeItems",
   ]) {
-    if (typeof knowledgeHelper[method] === "function") {
-      await knowledgeHelper[method](payload);
+    if (typeof helper[method] === "function") {
+      await helper[method](payload);
       return {
         projected: payload.length,
         skipped: 0,
@@ -369,12 +428,12 @@ async function projectDraftKnowledgeToCanonical({
     "createKnowledgeItem",
     "saveKnowledgeItem",
   ]) {
-    if (typeof knowledgeHelper[method] === "function") {
+    if (typeof helper[method] === "function") {
       let projected = 0;
 
       for (const item of payload) {
         try {
-          await knowledgeHelper[method](item);
+          await helper[method](item);
           projected += 1;
         } catch (error) {
           const label = s(item?.title || item?.key);
@@ -412,10 +471,14 @@ export async function projectSetupReviewDraftToCanonical(
   },
   deps = {}
 ) {
-  const knowledgeHelper =
-    deps.knowledgeHelper || createTenantKnowledgeHelpers({ db });
-  const truthVersionHelper =
-    deps.truthVersionHelper || createTenantTruthVersionHelpers({ db });
+  const knowledgeHelper = resolveKnowledgeHelper(db, deps.knowledgeHelper);
+  const truthVersionHelper = resolveTruthVersionHelper(
+    db,
+    deps.truthVersionHelper
+  );
+  const refreshProjection =
+    deps.refreshRuntimeProjectionBestEffort || refreshRuntimeProjectionBestEffort;
+
   const sourceInfo = extractPrimarySourceInfo(session, draft, sources);
   const persistedReviewSessionId = await resolvePersistedReviewSessionId(
     db,
@@ -432,7 +495,7 @@ export async function projectSetupReviewDraftToCanonical(
     "system";
 
   const currentProfile =
-    typeof knowledgeHelper.getBusinessProfile === "function"
+    typeof knowledgeHelper?.getBusinessProfile === "function"
       ? await knowledgeHelper.getBusinessProfile({
           tenantId: actor.tenantId,
           tenantKey: actor.tenantKey,
@@ -440,7 +503,7 @@ export async function projectSetupReviewDraftToCanonical(
       : null;
 
   const currentCapabilities =
-    typeof knowledgeHelper.getBusinessCapabilities === "function"
+    typeof knowledgeHelper?.getBusinessCapabilities === "function"
       ? await knowledgeHelper.getBusinessCapabilities({
           tenantId: actor.tenantId,
           tenantKey: actor.tenantKey,
@@ -458,7 +521,7 @@ export async function projectSetupReviewDraftToCanonical(
 
   if (
     Object.keys(businessProfile).length &&
-    typeof knowledgeHelper.upsertBusinessProfile === "function"
+    typeof knowledgeHelper?.upsertBusinessProfile === "function"
   ) {
     const approvedAt = new Date().toISOString();
 
@@ -495,7 +558,7 @@ export async function projectSetupReviewDraftToCanonical(
 
   if (
     Object.keys(capabilities).length &&
-    typeof knowledgeHelper.upsertBusinessCapabilities === "function"
+    typeof knowledgeHelper?.upsertBusinessCapabilities === "function"
   ) {
     savedCapabilities = await knowledgeHelper.upsertBusinessCapabilities({
       tenantId: actor.tenantId,
@@ -517,7 +580,16 @@ export async function projectSetupReviewDraftToCanonical(
     projectedCapabilities = true;
   }
 
-  if (typeof truthVersionHelper.createVersion === "function") {
+  const businessProfileId = s(savedProfile?.id || currentProfile?.id);
+  const businessCapabilitiesId = s(
+    savedCapabilities?.id || currentCapabilities?.id
+  );
+
+  if (
+    typeof truthVersionHelper?.createVersion === "function" &&
+    businessProfileId &&
+    businessCapabilitiesId
+  ) {
     const approvedAt =
       s(savedProfile?.approved_at) ||
       s(currentProfile?.approved_at) ||
@@ -532,8 +604,8 @@ export async function projectSetupReviewDraftToCanonical(
     truthVersion = await truthVersionHelper.createVersion({
       tenantId: actor.tenantId,
       tenantKey: actor.tenantKey,
-      businessProfileId: s(savedProfile?.id),
-      businessCapabilitiesId: s(savedCapabilities?.id),
+      businessProfileId,
+      businessCapabilitiesId,
       reviewSessionId: persistedReviewSessionId || null,
       approvedAt,
       approvedBy,
@@ -574,8 +646,11 @@ export async function projectSetupReviewDraftToCanonical(
     serviceProjection.total > 0 ||
     knowledgeProjection.total > 0;
 
-  const runtimeRefresh = shouldRefreshRuntime
-    ? await refreshRuntimeProjectionBestEffort(db, {
+  let runtimeRefresh = null;
+
+  if (shouldRefreshRuntime) {
+    if (hasDbQuery(db) && typeof refreshProjection === "function") {
+      runtimeRefresh = await refreshProjection(db, {
         tenantId: actor.tenantId,
         tenantKey: actor.tenantKey,
         triggerType: "review_approval",
@@ -591,8 +666,20 @@ export async function projectSetupReviewDraftToCanonical(
           primarySourceId: s(sourceInfo.primarySourceId),
           latestRunId: s(sourceInfo.latestRunId),
         }),
-      })
-    : null;
+      });
+    } else {
+      runtimeRefresh = {
+        projection: buildDeferredRuntimeProjection({
+          actor,
+          requestedBy,
+          session,
+          draft,
+          sourceInfo,
+          truthVersion,
+        }),
+      };
+    }
+  }
 
   const runtimeProjection = obj(runtimeRefresh?.projection || runtimeRefresh);
 
