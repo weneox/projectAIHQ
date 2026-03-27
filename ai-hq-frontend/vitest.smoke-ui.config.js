@@ -1,5 +1,4 @@
 import { defineConfig, mergeConfig } from "vite";
-
 import baseConfig from "./vite.config.js";
 
 export default mergeConfig(
@@ -30,6 +29,11 @@ export default mergeConfig(
       ],
       exclude: ["playwright/**", "dist/**", "node_modules/**"],
       passWithNoTests: false,
+      server: {
+        deps: {
+          inline: ["react-router", "react-router-dom"],
+        },
+      },
     },
   })
 );
