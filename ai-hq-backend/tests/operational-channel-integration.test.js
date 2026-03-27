@@ -14,7 +14,11 @@ import { validateProjectedRuntime } from "@aihq/shared-contracts/runtime";
 
 import { cfg } from "../src/config.js";
 import { runSchemaMigrations } from "../src/db/runSchemaMigrations.js";
-import { dbUpsertTenantCore, dbUpsertTenantChannel } from "../src/db/helpers/settings.js";
+import {
+  dbUpsertTenantCore,
+  dbUpsertTenantChannel,
+  dbUpsertTenantProfile,
+} from "../src/db/helpers/settings.js";
 import { dbUpsertTenantSecret } from "../src/db/helpers/tenantSecrets.js";
 import { upsertTenantVoiceSettings } from "../src/db/helpers/voice.js";
 import { runOperationalDataBackfill } from "../src/db/helpers/operationalBackfill.js";
@@ -450,35 +454,29 @@ test(
         enabled_languages: ["en"],
       });
 
-      await client.query(
-        `
-          update tenants
-          set meta = $2::jsonb
-          where id = $1
-        `,
-        [
-          tenant.id,
-          JSON.stringify({
-            twilio_phone: "+15555550150",
-            twilio_caller_id: "+15555550150",
-            operator_phone: "+15555550151",
-            operator: {
-              phone: "+15555550151",
-              label: "front desk",
-              callerId: "+15555550150",
-            },
-            realtime: {
-              model: "gpt-4o-realtime-preview",
-              voice: "alloy",
-              instructions: "Backfilled operational instructions",
-            },
-            operatorRouting: {
-              mode: "handoff",
-              defaultDepartment: "sales",
-            },
-          }),
-        ]
-      );
+      await dbUpsertTenantProfile(client, tenant.id, {
+        brand_name: "Backfill Ops Co",
+        public_phone: "+15555550150",
+        extra_context: {
+          twilio_phone: "+15555550150",
+          twilio_caller_id: "+15555550150",
+          operator_phone: "+15555550151",
+          operator: {
+            phone: "+15555550151",
+            label: "front desk",
+            callerId: "+15555550150",
+          },
+          realtime: {
+            model: "gpt-4o-realtime-preview",
+            voice: "alloy",
+            instructions: "Backfilled operational instructions",
+          },
+          operatorRouting: {
+            mode: "handoff",
+            defaultDepartment: "sales",
+          },
+        },
+      });
 
       await dbUpsertTenantChannel(client, tenant.id, "instagram", {
         provider: "meta",
