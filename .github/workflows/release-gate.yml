@@ -64,27 +64,6 @@ jobs:
         id: frontend_stable_windows
         run: npm run test:frontend:stable:ci
 
-      - name: Upload Windows frontend test results
-        id: upload_frontend_windows_results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-stable-windows-test-results
-          path: ai-hq-frontend/test-results
-          if-no-files-found: warn
-
-      - name: Publish Windows frontend stable test report
-        id: publish_frontend_windows_report
-        if: always()
-        uses: mikepenz/action-junit-report@v5
-        with:
-          report_paths: "ai-hq-frontend/test-results/*.junit.xml"
-          check_name: "Frontend Stable Tests (Windows)"
-          require_tests: true
-          detailed_summary: true
-          include_passed: false
-          annotate_only: false
-
       - name: Inspect Windows frontend test outputs
         id: inspect_frontend_windows_outputs
         if: always()
@@ -102,6 +81,31 @@ jobs:
           "contracts_json=$contractsJson" >> $env:GITHUB_OUTPUT
           "smoke_hooks_json=$smokeHooksJson" >> $env:GITHUB_OUTPUT
           "smoke_ui_json=$smokeUiJson" >> $env:GITHUB_OUTPUT
+          $hasJunit = $contractsJunit -or $smokeHooksJunit -or $smokeUiJunit
+          $hasJson = $contractsJson -or $smokeHooksJson -or $smokeUiJson
+          "has_junit=$hasJunit" >> $env:GITHUB_OUTPUT
+          "has_json=$hasJson" >> $env:GITHUB_OUTPUT
+
+      - name: Upload Windows frontend test results
+        id: upload_frontend_windows_results
+        if: always() && (steps.inspect_frontend_windows_outputs.outputs.has_junit == 'true' || steps.inspect_frontend_windows_outputs.outputs.has_json == 'true')
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-stable-windows-test-results
+          path: ai-hq-frontend/test-results
+          if-no-files-found: warn
+
+      - name: Publish Windows frontend stable test report
+        id: publish_frontend_windows_report
+        if: always() && steps.inspect_frontend_windows_outputs.outputs.has_junit == 'true'
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: "ai-hq-frontend/test-results/*.junit.xml"
+          check_name: "Frontend Stable Tests (Windows)"
+          require_tests: true
+          detailed_summary: true
+          include_passed: false
+          annotate_only: false
 
       - name: Summarize Windows frontend stable results
         if: always()
@@ -224,27 +228,6 @@ jobs:
         id: frontend_stable_linux
         run: npm run test:frontend:stable:ci
 
-      - name: Upload Linux frontend test results
-        id: upload_frontend_linux_results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-stable-linux-test-results
-          path: ai-hq-frontend/test-results
-          if-no-files-found: warn
-
-      - name: Publish Linux frontend stable test report
-        id: publish_frontend_linux_report
-        if: always()
-        uses: mikepenz/action-junit-report@v5
-        with:
-          report_paths: "ai-hq-frontend/test-results/*.junit.xml"
-          check_name: "Frontend Stable Tests (Linux)"
-          require_tests: true
-          detailed_summary: true
-          include_passed: false
-          annotate_only: false
-
       - name: Inspect Linux frontend test outputs
         id: inspect_frontend_linux_outputs
         if: always()
@@ -262,6 +245,31 @@ jobs:
           "contracts_json=$contractsJson" >> $env:GITHUB_OUTPUT
           "smoke_hooks_json=$smokeHooksJson" >> $env:GITHUB_OUTPUT
           "smoke_ui_json=$smokeUiJson" >> $env:GITHUB_OUTPUT
+          $hasJunit = $contractsJunit -or $smokeHooksJunit -or $smokeUiJunit
+          $hasJson = $contractsJson -or $smokeHooksJson -or $smokeUiJson
+          "has_junit=$hasJunit" >> $env:GITHUB_OUTPUT
+          "has_json=$hasJson" >> $env:GITHUB_OUTPUT
+
+      - name: Upload Linux frontend test results
+        id: upload_frontend_linux_results
+        if: always() && (steps.inspect_frontend_linux_outputs.outputs.has_junit == 'true' || steps.inspect_frontend_linux_outputs.outputs.has_json == 'true')
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-stable-linux-test-results
+          path: ai-hq-frontend/test-results
+          if-no-files-found: warn
+
+      - name: Publish Linux frontend stable test report
+        id: publish_frontend_linux_report
+        if: always() && steps.inspect_frontend_linux_outputs.outputs.has_junit == 'true'
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: "ai-hq-frontend/test-results/*.junit.xml"
+          check_name: "Frontend Stable Tests (Linux)"
+          require_tests: true
+          detailed_summary: true
+          include_passed: false
+          annotate_only: false
 
       - name: Summarize Linux frontend stable results
         if: always()
