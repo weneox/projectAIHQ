@@ -1,5 +1,3 @@
-// src/services/tenantProviderSecrets.js
-
 import { dbGetTenantByKey } from "../db/helpers/settings.js";
 import { dbGetTenantProviderSecrets } from "../db/helpers/tenantSecrets.js";
 
@@ -56,7 +54,6 @@ async function listActiveTenantSecretRows(db, tenantId, provider) {
       `
         select
           secret_key,
-          secret_value,
           secret_value_enc,
           secret_value_iv,
           secret_value_tag,
@@ -94,11 +91,6 @@ function inferPresentSecretValue(secretRows = [], keys = []) {
   for (const row of arr(secretRows)) {
     const secretKey = lower(row?.secret_key);
     if (!wanted.has(secretKey)) continue;
-
-    const directValue = s(
-      row?.secret_value || row?.value || row?.secretValue || row?.secret_value_plain
-    );
-    if (directValue) return directValue;
 
     const hasEncryptedPayload =
       Boolean(s(row?.secret_value_enc)) ||
