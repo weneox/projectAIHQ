@@ -40,6 +40,65 @@ import { mergeKnowledgeItem, resolveWriteIntent } from "./merge.js";
 import { projectApprovedCandidateToCanonicalInternal } from "./projection.js";
 import { rowToApproval } from "./mappers.js";
 
+const PLAYBOOK_TABLE_CANDIDATES = [
+  "tenant_response_playbooks",
+  "response_playbooks",
+];
+
+function sortPlaybookRows(rows = []) {
+  return arr(rows).slice().sort((left, right) => {
+    const priorityDelta = n(left?.priority, 100) - n(right?.priority, 100);
+    if (priorityDelta !== 0) return priorityDelta;
+
+    const leftUpdated = Date.parse(left?.updated_at || left?.created_at || 0) || 0;
+    const rightUpdated = Date.parse(right?.updated_at || right?.created_at || 0) || 0;
+    return rightUpdated - leftUpdated;
+  });
+}
+
+function isPlaybookRowActive(row = {}) {
+  if (typeof row?.is_active === "boolean") return row.is_active;
+  if (typeof row?.enabled === "boolean") return row.enabled;
+
+  const status = s(row?.status).toLowerCase();
+  if (!status) return true;
+
+  return ["active", "approved", "published", "enabled"].includes(status);
+}
+
+async function findExistingPlaybookTable(db) {
+  for (const tableName of PLAYBOOK_TABLE_CANDIDATES) {
+    const result = await q(db, `select to_regclass($1) as regclass`, [
+      `public.${tableName}`,
+    ]);
+
+    if (s(result?.rows?.[0]?.regclass)) {
+      return tableName;
+    }
+  }
+
+  return "";
+}
+
+async function listResponsePlaybookRowsInternal(db, tenantId) {
+  if (!tenantId) return [];
+
+  const tableName = await findExistingPlaybookTable(db);
+  if (!tableName) return [];
+
+  const result = await q(
+    db,
+    `
+      select *
+      from ${tableName}
+      where tenant_id = $1::uuid
+    `,
+    [tenantId]
+  );
+
+  return sortPlaybookRows(result?.rows || []);
+}
+
 export function createTenantKnowledgeHelpers({ db }) {
   if (!hasQueryApi(db)) {
     throw new Error("createTenantKnowledgeHelpers: valid db.query(...) adapter required");
@@ -435,6 +494,46 @@ export function createTenantKnowledgeHelpers({ db }) {
         approved_at: iso(row.approved_at),
         updated_at: iso(row.updated_at),
       }));
+    },
+
+    async listResponsePlaybooks({
+      tenantId,
+      tenantKey,
+      limit = 200,
+      offset = 0,
+    } = {}) {
+      const tenant = await resolveTenantIdentity(db, { tenantId, tenantKey });
+      if (!tenant) return [];
+
+      const rows = await listResponsePlaybookRowsInternal(db, tenant.tenant_id);
+      const safeOffset = Math.max(0, n(offset, 0));
+      const safeLimit = Math.max(1, Math.min(500, n(limit, 200)));
+
+      return rows.slice(safeOffset, safeOffset + safeLimit);
+    },
+
+    async listTenantResponsePlaybooks(input = {}) {
+      return helpers.listResponsePlaybooks(input);
+    },
+
+    async listActiveResponsePlaybooks({
+      tenantId,
+      tenantKey,
+      limit = 200,
+      offset = 0,
+    } = {}) {
+      const rows = await helpers.listResponsePlaybooks({
+        tenantId,
+        tenantKey,
+        limit: 1000,
+        offset: 0,
+      });
+
+      const activeRows = rows.filter((row) => isPlaybookRowActive(row));
+      const safeOffset = Math.max(0, n(offset, 0));
+      const safeLimit = Math.max(1, Math.min(500, n(limit, 200)));
+
+      return activeRows.slice(safeOffset, safeOffset + safeLimit);
     },
 
     async updateKnowledgeItem(id, patch = {}) {
@@ -840,9 +939,15 @@ export function createTenantKnowledgeHelpers({ db }) {
         canOfferConsultation: current.can_offer_consultation ?? false,
         canOfferCallback: current.can_offer_callback ?? true,
         supportsInstagramDm: types.has("instagram"),
-        supportsFacebookMessenger: types.has("messenger") || types.has("facebook_page") || types.has("facebook"),
+        supportsFacebookMessenger:
+          types.has("messenger") ||
+          types.has("facebook_page") ||
+          types.has("facebook"),
         supportsWhatsapp: types.has("whatsapp_business"),
-        supportsComments: types.has("facebook_comments") || types.has("instagram") || types.has("facebook"),
+        supportsComments:
+          types.has("facebook_comments") ||
+          types.has("instagram") ||
+          types.has("facebook"),
         supportsVoice: false,
         supportsEmail: types.has("email") || current.supports_email,
         supportsMultilanguage: current.supports_multilanguage ?? false,
@@ -851,9 +956,11 @@ export function createTenantKnowledgeHelpers({ db }) {
         handoffEnabled: current.handoff_enabled ?? true,
         autoHandoffOnHumanRequest: current.auto_handoff_on_human_request ?? true,
         autoHandoffOnLowConfidence: current.auto_handoff_on_low_confidence ?? true,
-        shouldAvoidCompetitorComparisons: current.should_avoid_competitor_comparisons ?? true,
+        shouldAvoidCompetitorComparisons:
+          current.should_avoid_competitor_comparisons ?? true,
         shouldAvoidLegalClaims: current.should_avoid_legal_claims ?? true,
-        shouldAvoidUnverifiedPromises: current.should_avoid_unverified_promises ?? true,
+        shouldAvoidUnverifiedPromises:
+          current.should_avoid_unverified_promises ?? true,
         replyStyle: current.reply_style || "professional",
         replyLength: current.reply_length || "medium",
         emojiLevel: current.emoji_level || "low",
@@ -874,7 +981,9 @@ export function createTenantKnowledgeHelpers({ db }) {
         tenantId: tenant.tenant_id,
         tenantKey: tenant.tenant_key,
         triggerType: "source_change",
-        requestedBy: s(approvedBy || "tenantKnowledge.refreshChannelCapabilitiesFromSources"),
+        requestedBy: s(
+          approvedBy || "tenantKnowledge.refreshChannelCapabilitiesFromSources"
+        ),
         runnerKey: "tenantKnowledge.refreshChannelCapabilitiesFromSources",
         generatedBy: s(approvedBy || "system"),
         metadata: {
