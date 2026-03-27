@@ -1,3 +1,5 @@
+// ai-hq-backend/tests/observability-runtime-signals.test.js
+
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -110,11 +112,13 @@ test("stale worker heartbeat and repeated failure signals produce attention stat
 test("runtime signals summary exposes sanitized worker, backlog, and startup blocker state", () => {
   resetRuntimeSignals();
 
+  const now = Date.now();
+
   markWorkerStarted("media-job-worker", {
     enabled: true,
     running: true,
-    startedAt: "2026-03-26T00:00:00.000Z",
-    lastHeartbeatAt: "2026-03-26T00:01:00.000Z",
+    startedAt: new Date(now - 60_000).toISOString(),
+    lastHeartbeatAt: new Date(now - 5_000).toISOString(),
     lastOutcome: "processed",
   });
 
