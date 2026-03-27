@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="17" failures="0" errors="0" time="0.0927451">
+    <testsuite name="src/api/trust.test.js" timestamp="2026-03-27T05:47:54.870Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0030901">
+        <testcase classname="src/api/trust.test.js" name="trust api normalization &gt; normalizeTrustViewResponse produces a stable trust view-model" time="0.0028844">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/api/truth.test.js" timestamp="2026-03-27T05:47:54.878Z" hostname="Emil" tests="3" failures="0" errors="0" skipped="0" time="0.0219841">
+        <testcase classname="src/api/truth.test.js" name="truth api normalization &gt; normalizeTruthResponse maps approved truth metadata, provenance, and history" time="0.0124755">
+        </testcase>
+        <testcase classname="src/api/truth.test.js" name="truth api normalization &gt; normalizeCompareResponse maps backend truth version compare detail" time="0.002903">
+        </testcase>
+        <testcase classname="src/api/truth.test.js" name="truth api normalization &gt; approved truth unavailable snapshot refuses non-approved fallback data" time="0.0011709">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/lib/appEntry.test.js" timestamp="2026-03-27T05:47:54.892Z" hostname="Emil" tests="6" failures="0" errors="0" skipped="0" time="0.047072">
+        <testcase classname="src/lib/appEntry.test.js" name="resolveAuthenticatedLanding &gt; routes incomplete workspaces into setup studio" time="0.0038335">
+        </testcase>
+        <testcase classname="src/lib/appEntry.test.js" name="resolveAuthenticatedLanding &gt; routes completed workspaces into backend-provided core route" time="0.0070981">
+        </testcase>
+        <testcase classname="src/lib/appEntry.test.js" name="resolveAuthenticatedLanding &gt; falls back to truth when completed workspace points at non-product root" time="0.0078242">
+        </testcase>
+        <testcase classname="src/lib/appEntry.test.js" name="resolveAuthenticatedLanding &gt; refuses internal-only routes as authenticated landing targets" time="0.0013234">
+        </testcase>
+        <testcase classname="src/lib/appEntry.test.js" name="resolveAuthenticatedLanding &gt; defines a bounded production route list and a separate internal-only route list" time="0.0138063">
+        </testcase>
+        <testcase classname="src/lib/appEntry.test.js" name="resolveAuthenticatedLanding &gt; keeps internal routes disabled by default" time="0.0008327">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/pages/SetupStudio/hooks/setupStudioActionShared.test.js" timestamp="2026-03-27T05:47:54.922Z" hostname="Emil" tests="3" failures="0" errors="0" skipped="0" time="0.0082391">
+        <testcase classname="src/pages/SetupStudio/hooks/setupStudioActionShared.test.js" name="setup studio action shared &gt; currentReviewConcurrencyMeta uses backend draft version and session id" time="0.0032216">
+        </testcase>
+        <testcase classname="src/pages/SetupStudio/hooks/setupStudioActionShared.test.js" name="setup studio action shared &gt; parseReviewConcurrencyError recognizes explicit backend mismatch codes" time="0.0022672">
+        </testcase>
+        <testcase classname="src/pages/SetupStudio/hooks/setupStudioActionShared.test.js" name="setup studio action shared &gt; parseReviewConcurrencyError recognizes baseline drift payloads as stale" time="0.0016141">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/pages/Settings/hooks/useSourceIntelligence.test.js" timestamp="2026-03-27T05:47:54.929Z" hostname="Emil" tests="2" failures="0" errors="0" skipped="0" time="0.0087341">
+        <testcase classname="src/pages/Settings/hooks/useSourceIntelligence.test.js" name="useSourceIntelligence helpers &gt; describeSourceSyncOutcome uses backend review object for queued review work" time="0.0015649">
+        </testcase>
+        <testcase classname="src/pages/Settings/hooks/useSourceIntelligence.test.js" name="useSourceIntelligence helpers &gt; describeSourceSyncOutcome reports candidate counts from backend review object" time="0.0046913">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/pages/SetupStudio/state/shared.test.js" timestamp="2026-03-27T05:47:54.931Z" hostname="Emil" tests="2" failures="0" errors="0" skipped="0" time="0.0036257">
+        <testcase classname="src/pages/SetupStudio/state/shared.test.js" name="setup studio shared state &gt; createEmptyReviewState keeps concurrency containers available" time="0.0007657">
+        </testcase>
+        <testcase classname="src/pages/SetupStudio/state/shared.test.js" name="setup studio shared state &gt; normalizeReviewState preserves backend concurrency and draft version" time="0.0023408">
+        </testcase>
+    </testsuite>
+</testsuites>

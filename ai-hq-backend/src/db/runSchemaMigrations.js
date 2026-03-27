@@ -5,6 +5,14 @@ import path from "path";
 
 const DEFAULT_LEDGER_TABLE = "schema_migrations";
 const DEFAULT_LOCK_KEY = 2146124091;
+const LEGACY_MIGRATION_CHECKSUMS = new Map([
+  [
+    "52_operational_data_backfill.sql",
+    new Set([
+      "0da24391c435b20c39e0caefe5d42d96346415a7b50ceb09f71d6b02dd478f87",
+    ]),
+  ],
+]);
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -20,6 +28,11 @@ function assertSafeIdentifier(value, fallback) {
 
 function sha256(text = "") {
   return crypto.createHash("sha256").update(String(text || ""), "utf8").digest("hex");
+}
+
+function acceptsLegacyChecksum(migrationName = "", checksum = "") {
+  const accepted = LEGACY_MIGRATION_CHECKSUMS.get(s(migrationName));
+  return Boolean(accepted?.has(s(checksum)));
 }
 
 async function fileExists(filePath) {
@@ -283,7 +296,10 @@ export async function describeSchemaMigrations(db, options = {}) {
       continue;
     }
 
-    if (s(applied.checksum) !== s(step.checksum)) {
+    if (
+      s(applied.checksum) !== s(step.checksum) &&
+      !acceptsLegacyChecksum(step.name, applied.checksum)
+    ) {
       drifted.push({
         name: step.name,
         expectedChecksum: step.checksum,
@@ -346,7 +362,10 @@ export async function runSchemaMigrations(db, options = {}) {
       const existing = appliedByName.get(step.name);
 
       if (existing) {
-        if (s(existing.checksum) !== s(step.checksum)) {
+        if (
+          s(existing.checksum) !== s(step.checksum) &&
+          !acceptsLegacyChecksum(step.name, existing.checksum)
+        ) {
           throw new Error(
             `Applied migration was modified after execution: ${step.name}`
           );
@@ -424,4 +443,5 @@ export async function runSchemaMigrations(db, options = {}) {
 export const __test__ = {
   buildMigrationPlan,
   splitSqlStatements,
+  acceptsLegacyChecksum,
 };

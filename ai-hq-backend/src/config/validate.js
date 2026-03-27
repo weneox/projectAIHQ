@@ -485,6 +485,23 @@ export function getConfigWarnings() {
 
 export function printConfigReport(logger = console) {
   const issues = getConfigIssues();
+  return printConfigIssues(issues, logger);
+}
+
+export function printSelectedConfigReport(keys = [], logger = console) {
+  const selectedKeys = new Set(
+    Array.isArray(keys)
+      ? keys.map((value) => String(value || "").trim()).filter(Boolean)
+      : []
+  );
+  const issues =
+    selectedKeys.size === 0
+      ? getConfigIssues()
+      : getConfigIssues().filter((item) => selectedKeys.has(item.key));
+  return printConfigIssues(issues, logger);
+}
+
+function printConfigIssues(issues, logger = console) {
   const errors = issues.filter((x) => x.level === "error");
   const warnings = issues.filter((x) => x.level === "warning");
 
@@ -516,6 +533,20 @@ export function printConfigReport(logger = console) {
 
 export function assertConfigValid(logger = console) {
   const report = printConfigReport(logger);
+
+  if (!report.ok) {
+    const summary = report.errors
+      .map((x) => `${x.key}: ${x.message}`)
+      .join("\n");
+
+    throw new Error(`Config validation failed:\n${summary}`);
+  }
+
+  return report;
+}
+
+export function assertSelectedConfigValid(keys = [], logger = console) {
+  const report = printSelectedConfigReport(keys, logger);
 
   if (!report.ok) {
     const summary = report.errors

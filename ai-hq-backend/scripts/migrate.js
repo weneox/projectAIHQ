@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 import { cfg } from "../src/config.js";
-import { assertConfigValid } from "../src/config/validate.js";
+import { assertSelectedConfigValid } from "../src/config/validate.js";
 import {
   closeDb,
   getDb,
@@ -22,7 +22,7 @@ async function main() {
     env: cfg.app.env,
   });
 
-  assertConfigValid(console);
+  assertSelectedConfigValid(["db.url"], console);
   await initDb();
 
   if (!cfg?.db?.url) {
