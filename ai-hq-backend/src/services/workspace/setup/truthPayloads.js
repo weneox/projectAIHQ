@@ -1,3 +1,5 @@
+// ai-hq-backend/src/services/workspace/setup/truthPayloads.js
+
 import {
   buildCanonicalTruthFieldProvenance,
   buildCanonicalTruthProfile,
@@ -198,16 +200,76 @@ function hasApprovedVersionHistory(versions = []) {
 }
 
 function hasUsableApprovedTruth(profile = {}, versions = []) {
+  const row = obj(profile);
   const profileStatus = s(
-    profile?.profileStatus || profile?.profile_status || profile?.status
+    row.profileStatus || row.profile_status || row.status
   ).toLowerCase();
 
-  if (s(profile?.approved_at)) return true;
-  if (s(profile?.approved_by)) return true;
+  if (s(row.approvedAt || row.approved_at)) return true;
+  if (s(row.approvedBy || row.approved_by)) return true;
   if (profileStatus === "approved") return true;
   if (hasApprovedVersionHistory(versions)) return true;
 
   return false;
+}
+
+function buildTruthReadiness({
+  approvedTruthAvailable = false,
+  actor = {},
+  setup = {},
+}) {
+  const blocked = approvedTruthAvailable !== true;
+  const nextRoute = s(
+    setup?.progress?.nextRoute ||
+      setup?.progress?.nextSetupRoute ||
+      "/setup/studio"
+  );
+  const primaryMissingStep = s(
+    setup?.progress?.primaryMissingStep || "approved_truth"
+  );
+  const reasonCode = blocked ? "approved_truth_unavailable" : "";
+
+  const blocker = blocked
+    ? buildOperationalRepairGuidance({
+        reasonCode,
+        viewerRole: s(actor?.role || "operator"),
+        missingFields: [
+          primaryMissingStep,
+          nextRoute ? `route:${nextRoute}` : "",
+        ].filter(Boolean),
+        title: "Approved truth unavailable",
+        subtitle:
+          "Approved truth is unavailable and non-approved fallback data is intentionally hidden.",
+        action: {
+          id: "open_setup_route",
+          kind: "route",
+          label: "Open next setup step",
+          requiredRole: "operator",
+        },
+        target: {
+          path: nextRoute,
+          section: "truth",
+          setupStep: primaryMissingStep,
+        },
+      })
+    : null;
+
+  const surface = buildReadinessSurface({
+    status: blocked ? "blocked" : "ready",
+    message: blocked
+      ? "Approved truth is unavailable until the next setup/runtime step is completed."
+      : "Approved truth is available.",
+    blockers: blocker ? [blocker] : [],
+  });
+
+  return {
+    ...obj(surface),
+    status: blocked ? "blocked" : "ready",
+    blocked,
+    reasonCode: reasonCode || s(surface?.reasonCode),
+    reason_code: reasonCode || s(surface?.reason_code),
+    blockers: blocker ? [blocker] : arr(surface?.blockers),
+  };
 }
 
 export async function loadSetupTruthPayload({ db, actor }, deps = {}) {
@@ -215,7 +277,7 @@ export async function loadSetupTruthPayload({ db, actor }, deps = {}) {
     deps.knowledgeHelper || createTenantKnowledgeHelpers({ db });
   const truthVersionHelper =
     deps.truthVersionHelper || createTenantTruthVersionHelpers({ db });
-  const setupBuilder = deps.setupBuilder;
+  const setupBuilder = deps.setupBuilder || (async () => ({}));
 
   const [profile, versions, setup] = await Promise.all([
     knowledgeHelper.getBusinessProfile({
@@ -239,59 +301,33 @@ export async function loadSetupTruthPayload({ db, actor }, deps = {}) {
 
   const truthProfile = buildCanonicalTruthProfile(profile);
   const approvedTruthAvailable = hasUsableApprovedTruth(profile, versions);
-
-  const nextRoute = s(
-    setup?.progress?.nextRoute ||
-      setup?.progress?.nextSetupRoute ||
-      "/setup/studio"
-  );
-
-  const truthBlocker = buildOperationalRepairGuidance({
-    reasonCode: approvedTruthAvailable ? "" : "approved_truth_unavailable",
-    viewerRole: s(actor?.role || "operator"),
-    missingFields: approvedTruthAvailable
-      ? []
-      : [
-          s(setup?.progress?.primaryMissingStep || "approved_truth"),
-          nextRoute ? `route:${nextRoute}` : "",
-        ].filter(Boolean),
-    title: "Approved truth unavailable",
-    subtitle:
-      "Approved truth is unavailable and non-approved fallback data is intentionally hidden.",
-    action: {
-      id: "open_setup_route",
-      kind: "route",
-      label: "Open next setup step",
-      requiredRole: "operator",
-    },
-    target: {
-      path: nextRoute,
-      section: "truth",
-      setupStep: s(setup?.progress?.primaryMissingStep),
-    },
-  });
-
   const history = buildTruthHistoryEntries(versions, truthVersionHelper);
+  const readiness = buildTruthReadiness({
+    approvedTruthAvailable,
+    actor,
+    setup,
+  });
 
   return {
     truth: {
       profile: truthProfile,
       fieldProvenance: buildCanonicalTruthFieldProvenance(profile),
       history,
-      approvedAt: s(profile?.approved_at),
-      approvedBy: s(profile?.approved_by),
-      generatedAt: s(profile?.generated_at),
-      generatedBy: s(profile?.generated_by),
-      profileStatus: s(profile?.profile_status),
-      sourceSummary: obj(profile?.source_summary_json),
-      metadata: obj(profile?.metadata_json),
-      readiness: buildReadinessSurface({
-        status: truthBlocker.blocked ? "blocked" : "ready",
-        message: truthBlocker.blocked
-          ? "Approved truth is unavailable until the next setup/runtime step is completed."
-          : "Approved truth is available.",
-        blockers: truthBlocker.blocked ? [truthBlocker] : [],
-      }),
+      approvedAt: s(profile?.approvedAt || profile?.approved_at),
+      approvedBy: s(profile?.approvedBy || profile?.approved_by),
+      generatedAt: s(profile?.generatedAt || profile?.generated_at),
+      generatedBy: s(profile?.generatedBy || profile?.generated_by),
+      profileStatus: s(
+        profile?.profileStatus || profile?.profile_status || profile?.status
+      ),
+      sourceSummary: pickFirstObject(
+        profile?.sourceSummary,
+        profile?.source_summary,
+        profile?.sourceSummaryJson,
+        profile?.source_summary_json
+      ),
+      metadata: pickFirstObject(profile?.metadata, profile?.metadata_json),
+      readiness,
     },
     setup,
   };
@@ -303,7 +339,7 @@ export async function loadSetupTruthVersionPayload(
 ) {
   const truthVersionHelper =
     deps.truthVersionHelper || createTenantTruthVersionHelpers({ db });
-  const setupBuilder = deps.setupBuilder;
+  const setupBuilder = deps.setupBuilder || (async () => ({}));
 
   const [comparison, setup] = await Promise.all([
     truthVersionHelper.compareVersions({
