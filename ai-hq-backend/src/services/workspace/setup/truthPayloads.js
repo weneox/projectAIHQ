@@ -182,6 +182,16 @@ function buildTruthHistoryEntries(versions = [], truthVersionHelper = null) {
     .filter((item) => Object.keys(obj(item)).length > 0);
 }
 
+function hasUsableApprovedTruth(profile = {}) {
+  const truthProfile = buildCanonicalTruthProfile(profile);
+
+  if (Object.keys(truthProfile).length > 0) return true;
+  if (s(profile?.approved_at)) return true;
+  if (s(profile?.approved_by)) return true;
+
+  return false;
+}
+
 export async function loadSetupTruthPayload({ db, actor }, deps = {}) {
   const knowledgeHelper =
     deps.knowledgeHelper || createTenantKnowledgeHelpers({ db });
@@ -210,11 +220,7 @@ export async function loadSetupTruthPayload({ db, actor }, deps = {}) {
   ]);
 
   const truthProfile = buildCanonicalTruthProfile(profile);
-  const hasApprovedTruth =
-    Object.keys(truthProfile).length > 0 ||
-    !!s(profile?.approved_at) ||
-    !!s(profile?.approved_by) ||
-    arr(versions).length > 0;
+  const approvedTruthAvailable = hasUsableApprovedTruth(profile);
 
   const nextRoute = s(
     setup?.progress?.nextRoute ||
@@ -223,9 +229,9 @@ export async function loadSetupTruthPayload({ db, actor }, deps = {}) {
   );
 
   const truthBlocker = buildOperationalRepairGuidance({
-    reasonCode: hasApprovedTruth ? "" : "approved_truth_unavailable",
+    reasonCode: approvedTruthAvailable ? "" : "approved_truth_unavailable",
     viewerRole: s(actor?.role || "operator"),
-    missingFields: hasApprovedTruth
+    missingFields: approvedTruthAvailable
       ? []
       : [
           s(setup?.progress?.primaryMissingStep || "approved_truth"),
