@@ -555,20 +555,34 @@ export function createTenantKnowledgeHelpers({ db }) {
     async upsertBusinessProfile(input = {}) {
       const row = await upsertBusinessProfileInternal(db, input);
 
-      await refreshRuntimeProjectionRequired(db, {
-        tenantId: row?.tenant_id,
-        tenantKey: row?.tenant_key,
-        triggerType: "manual",
-        requestedBy: s(
-          input.approvedBy || input.generatedBy || "tenantKnowledge.upsertBusinessProfile"
-        ),
-        runnerKey: "tenantKnowledge.upsertBusinessProfile",
-        generatedBy: s(input.generatedBy || input.approvedBy || "system"),
-        metadata: {
-          source: "upsertBusinessProfile",
-          profileId: row?.id || "",
-        },
-      });
+      const refreshMode = s(
+        input.runtimeRefreshMode ||
+          (input.deferRuntimeProjectionRefresh ? "defer" : "")
+      ).toLowerCase();
+
+      if (refreshMode !== "defer" && refreshMode !== "skip") {
+        const refreshFn =
+          refreshMode === "best_effort"
+            ? refreshRuntimeProjectionBestEffort
+            : refreshRuntimeProjectionRequired;
+
+        await refreshFn(db, {
+          tenantId: row?.tenant_id,
+          tenantKey: row?.tenant_key,
+          triggerType: "manual",
+          requestedBy: s(
+            input.approvedBy ||
+              input.generatedBy ||
+              "tenantKnowledge.upsertBusinessProfile"
+          ),
+          runnerKey: "tenantKnowledge.upsertBusinessProfile",
+          generatedBy: s(input.generatedBy || input.approvedBy || "system"),
+          metadata: {
+            source: "upsertBusinessProfile",
+            profileId: row?.id || "",
+          },
+        });
+      }
 
       return row;
     },
@@ -580,18 +594,32 @@ export function createTenantKnowledgeHelpers({ db }) {
     async upsertBusinessCapabilities(input = {}) {
       const row = await upsertBusinessCapabilitiesInternal(db, input);
 
-      await refreshRuntimeProjectionRequired(db, {
-        tenantId: row?.tenant_id,
-        tenantKey: row?.tenant_key,
-        triggerType: "manual",
-        requestedBy: s(input.approvedBy || "tenantKnowledge.upsertBusinessCapabilities"),
-        runnerKey: "tenantKnowledge.upsertBusinessCapabilities",
-        generatedBy: s(input.approvedBy || "system"),
-        metadata: {
-          source: "upsertBusinessCapabilities",
-          capabilitiesId: row?.id || "",
-        },
-      });
+      const refreshMode = s(
+        input.runtimeRefreshMode ||
+          (input.deferRuntimeProjectionRefresh ? "defer" : "")
+      ).toLowerCase();
+
+      if (refreshMode !== "defer" && refreshMode !== "skip") {
+        const refreshFn =
+          refreshMode === "best_effort"
+            ? refreshRuntimeProjectionBestEffort
+            : refreshRuntimeProjectionRequired;
+
+        await refreshFn(db, {
+          tenantId: row?.tenant_id,
+          tenantKey: row?.tenant_key,
+          triggerType: "manual",
+          requestedBy: s(
+            input.approvedBy || "tenantKnowledge.upsertBusinessCapabilities"
+          ),
+          runnerKey: "tenantKnowledge.upsertBusinessCapabilities",
+          generatedBy: s(input.approvedBy || "system"),
+          metadata: {
+            source: "upsertBusinessCapabilities",
+            capabilitiesId: row?.id || "",
+          },
+        });
+      }
 
       return row;
     },

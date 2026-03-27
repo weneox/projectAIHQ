@@ -1,5 +1,6 @@
 import { createTenantKnowledgeHelpers } from "../../../db/helpers/tenantKnowledge.js";
 import { createTenantTruthVersionHelpers } from "../../../db/helpers/tenantTruthVersions.js";
+import { refreshRuntimeProjectionRequired } from "../../../db/helpers/tenantKnowledge/core.js";
 import {
   createSetupService,
   listSetupServices,
@@ -387,6 +388,15 @@ export async function projectSetupReviewDraftToCanonical(
   const truthVersionHelper =
     deps.truthVersionHelper || createTenantTruthVersionHelpers({ db });
   const sourceInfo = extractPrimarySourceInfo(session, draft, sources);
+
+  const requestedBy =
+    s(actor?.user?.name) ||
+    s(actor?.user?.full_name) ||
+    s(actor?.user?.fullName) ||
+    s(actor?.user?.email) ||
+    s(actor?.user?.id) ||
+    "system";
+
   const currentProfile =
     typeof knowledgeHelper.getBusinessProfile === "function"
       ? await knowledgeHelper.getBusinessProfile({
@@ -394,6 +404,7 @@ export async function projectSetupReviewDraftToCanonical(
           tenantKey: actor.tenantKey,
         })
       : null;
+
   const currentCapabilities =
     typeof knowledgeHelper.getBusinessCapabilities === "function"
       ? await knowledgeHelper.getBusinessCapabilities({
@@ -416,13 +427,6 @@ export async function projectSetupReviewDraftToCanonical(
     typeof knowledgeHelper.upsertBusinessProfile === "function"
   ) {
     const approvedAt = new Date().toISOString();
-    const approvedBy =
-      s(actor?.user?.name) ||
-      s(actor?.user?.full_name) ||
-      s(actor?.user?.fullName) ||
-      s(actor?.user?.email) ||
-      s(actor?.user?.id) ||
-      "system";
 
     savedProfile = await knowledgeHelper.upsertBusinessProfile({
       tenantId: actor.tenantId,
@@ -446,9 +450,10 @@ export async function projectSetupReviewDraftToCanonical(
         reviewSessionId: s(session?.id),
         draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
       },
-      generatedBy: approvedBy,
-      approvedBy,
+      generatedBy: requestedBy,
+      approvedBy: requestedBy,
       approvedAt,
+      runtimeRefreshMode: "defer",
     });
     projectedProfile = true;
   }
@@ -457,14 +462,6 @@ export async function projectSetupReviewDraftToCanonical(
     Object.keys(capabilities).length &&
     typeof knowledgeHelper.upsertBusinessCapabilities === "function"
   ) {
-    const approvedBy =
-      s(actor?.user?.name) ||
-      s(actor?.user?.full_name) ||
-      s(actor?.user?.fullName) ||
-      s(actor?.user?.email) ||
-      s(actor?.user?.id) ||
-      "system";
-
     savedCapabilities = await knowledgeHelper.upsertBusinessCapabilities({
       tenantId: actor.tenantId,
       tenantKey: actor.tenantKey,
@@ -478,7 +475,8 @@ export async function projectSetupReviewDraftToCanonical(
         reviewSessionProjection: true,
         reviewSessionId: s(session?.id),
       },
-      approvedBy,
+      approvedBy: requestedBy,
+      runtimeRefreshMode: "defer",
     });
     projectedCapabilities = true;
   }
@@ -488,16 +486,12 @@ export async function projectSetupReviewDraftToCanonical(
       s(savedProfile?.approved_at) ||
       s(currentProfile?.approved_at) ||
       new Date().toISOString();
+
     const approvedBy =
       s(savedProfile?.approved_by) ||
       s(savedCapabilities?.approved_by) ||
       s(currentProfile?.approved_by) ||
-      s(actor?.user?.name) ||
-      s(actor?.user?.full_name) ||
-      s(actor?.user?.fullName) ||
-      s(actor?.user?.email) ||
-      s(actor?.user?.id) ||
-      "system";
+      requestedBy;
 
     truthVersion = await truthVersionHelper.createVersion({
       tenantId: actor.tenantId,
@@ -536,6 +530,32 @@ export async function projectSetupReviewDraftToCanonical(
     knowledgeHelper,
   });
 
+  const shouldRefreshRuntime =
+    projectedProfile ||
+    projectedCapabilities ||
+    Boolean(truthVersion?.id) ||
+    serviceProjection.total > 0 ||
+    knowledgeProjection.total > 0;
+
+  const runtimeProjection = shouldRefreshRuntime
+    ? await refreshRuntimeProjectionRequired(db, {
+        tenantId: actor.tenantId,
+        tenantKey: actor.tenantKey,
+        triggerType: "review_approval",
+        requestedBy,
+        runnerKey: "workspace.setup.projectSetupReviewDraftToCanonical",
+        generatedBy: requestedBy,
+        metadata: compactObject({
+          source: "projectSetupReviewDraftToCanonical",
+          reviewSessionId: s(session?.id),
+          truthVersionId: s(truthVersion?.id),
+          draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
+          primarySourceId: s(sourceInfo.primarySourceId),
+          latestRunId: s(sourceInfo.latestRunId),
+        }),
+      })
+    : null;
+
   return {
     projectedProfile,
     projectedCapabilities,
@@ -543,5 +563,6 @@ export async function projectSetupReviewDraftToCanonical(
     serviceProjection,
     knowledgeProjection,
     sourceInfo,
+    runtimeProjection,
   };
 }
