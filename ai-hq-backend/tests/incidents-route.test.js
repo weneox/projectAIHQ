@@ -1,18 +1,45 @@
+// ai-hq-backend/tests/incidents-route.test.js
+
 import test from "node:test";
 import assert from "node:assert/strict";
 
 import { incidentsRoutes } from "../src/routes/api/incidents/index.js";
 
-function createResponse() {
+function createResponse(onSend) {
   return {
     statusCode: 200,
     body: null,
+    finished: false,
+    headersSent: false,
+
     status(code) {
       this.statusCode = code;
       return this;
     },
+
     json(payload) {
       this.body = payload;
+      this.headersSent = true;
+      this.finished = true;
+      if (typeof onSend === "function") onSend(this);
+      return this;
+    },
+
+    send(payload) {
+      this.body = payload;
+      this.headersSent = true;
+      this.finished = true;
+      if (typeof onSend === "function") onSend(this);
+      return this;
+    },
+
+    end(payload) {
+      if (payload !== undefined && this.body === null) {
+        this.body = payload;
+      }
+      this.headersSent = true;
+      this.finished = true;
+      if (typeof onSend === "function") onSend(this);
       return this;
     },
   };
@@ -20,16 +47,38 @@ function createResponse() {
 
 async function invokeRouter(router, req) {
   return new Promise((resolve, reject) => {
-    const res = createResponse();
-    router.handle(req, res, (error) => {
-      if (error) {
-        reject(error);
-        return;
-      }
+    let settled = false;
+
+    const done = (res) => {
+      if (settled) return;
+      settled = true;
       resolve(res);
-    });
-    if (res.body !== null) {
-      resolve(res);
+    };
+
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+
+    const res = createResponse(done);
+
+    try {
+      router.handle(req, res, (error) => {
+        if (error) {
+          fail(error);
+          return;
+        }
+
+        if (res.finished || res.body !== null) {
+          done(res);
+          return;
+        }
+
+        fail(new Error("Router completed without sending a response"));
+      });
+    } catch (error) {
+      fail(error);
     }
   });
 }
@@ -43,6 +92,7 @@ test("incidents route returns filtered recent incidents with explicit retention 
         assert.equal(args[2], "request_failed");
         assert.equal(args[3], 24);
         assert.equal(args[4], 25);
+
         return {
           rows: [
             {
@@ -70,6 +120,7 @@ test("incidents route returns filtered recent incidents with explicit retention 
   };
 
   const router = incidentsRoutes({ db });
+
   const res = await invokeRouter(router, {
     method: "GET",
     url: "/incidents",
