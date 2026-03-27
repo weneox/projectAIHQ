@@ -11,8 +11,28 @@ import {
 } from "../../operationalReadiness.js";
 import { arr, obj, s } from "./utils.js";
 
+function normalizeTruthHistoryEntries(versions = []) {
+  return arr(versions)
+    .map((version) => buildTruthVersionHistoryEntry(version))
+    .filter((item) => item && Object.keys(item).length);
+}
+
+function hasApprovedTruthState(profile = {}, versions = []) {
+  const profileStatus = s(profile?.profile_status).toLowerCase();
+  const approvedAt = s(profile?.approved_at);
+  const approvedBy = s(profile?.approved_by);
+
+  if (profileStatus === "approved") return true;
+  if (approvedAt) return true;
+  if (approvedBy) return true;
+  if (arr(versions).length > 0) return true;
+
+  return false;
+}
+
 export async function loadSetupTruthPayload({ db, actor }, deps = {}) {
-  const knowledgeHelper = deps.knowledgeHelper || createTenantKnowledgeHelpers({ db });
+  const knowledgeHelper =
+    deps.knowledgeHelper || createTenantKnowledgeHelpers({ db });
   const truthVersionHelper =
     deps.truthVersionHelper || createTenantTruthVersionHelpers({ db });
   const setupBuilder = deps.setupBuilder;
@@ -38,49 +58,51 @@ export async function loadSetupTruthPayload({ db, actor }, deps = {}) {
   ]);
 
   const truthProfile = buildCanonicalTruthProfile(profile);
-  const hasApprovedTruth =
-    Object.keys(truthProfile).length > 0 ||
-    !!s(profile?.approved_at) ||
-    !!s(profile?.approved_by) ||
-    arr(versions).length > 0;
+  const history = normalizeTruthHistoryEntries(versions);
+  const hasApprovedTruth = hasApprovedTruthState(profile, versions);
+
   const nextRoute = s(
     setup?.progress?.nextRoute ||
       setup?.progress?.nextSetupRoute ||
       "/setup/studio"
   );
 
+  const truthBlocked = !hasApprovedTruth;
+
   const truthBlocker = buildOperationalRepairGuidance({
-    reasonCode: hasApprovedTruth ? "" : "approved_truth_unavailable",
+    reasonCode: truthBlocked ? "approved_truth_unavailable" : "",
     viewerRole: s(actor?.role || "operator"),
-    missingFields: hasApprovedTruth
-      ? []
-      : [
+    missingFields: truthBlocked
+      ? [
           s(setup?.progress?.primaryMissingStep || "approved_truth"),
           nextRoute ? `route:${nextRoute}` : "",
-        ].filter(Boolean),
+        ].filter(Boolean)
+      : [],
     title: "Approved truth unavailable",
     subtitle:
       "Approved truth is unavailable and non-approved fallback data is intentionally hidden.",
-    action: {
-      id: "open_setup_route",
-      kind: "route",
-      label: "Open next setup step",
-      requiredRole: "operator",
-    },
-    target: {
-      path: nextRoute,
-      section: "truth",
-      setupStep: s(setup?.progress?.primaryMissingStep),
-    },
+    action: truthBlocked
+      ? {
+          id: "open_setup_route",
+          kind: "route",
+          label: "Open next setup step",
+          requiredRole: "operator",
+        }
+      : null,
+    target: truthBlocked
+      ? {
+          path: nextRoute,
+          section: "truth",
+          setupStep: s(setup?.progress?.primaryMissingStep),
+        }
+      : null,
   });
 
   return {
     truth: {
       profile: truthProfile,
       fieldProvenance: buildCanonicalTruthFieldProvenance(profile),
-      history: arr(truthVersionHelper.buildHistoryEntries(versions)).filter(
-        (item) => Object.keys(item).length
-      ),
+      history,
       approvedAt: s(profile?.approved_at),
       approvedBy: s(profile?.approved_by),
       generatedAt: s(profile?.generated_at),
@@ -89,11 +111,11 @@ export async function loadSetupTruthPayload({ db, actor }, deps = {}) {
       sourceSummary: obj(profile?.source_summary_json),
       metadata: obj(profile?.metadata_json),
       readiness: buildReadinessSurface({
-        status: truthBlocker.blocked ? "blocked" : "ready",
-        message: truthBlocker.blocked
+        status: truthBlocked ? "blocked" : "ready",
+        message: truthBlocked
           ? "Approved truth is unavailable until the next setup/runtime step is completed."
           : "Approved truth is available.",
-        blockers: truthBlocker.blocked ? [truthBlocker] : [],
+        blockers: truthBlocked ? [truthBlocker] : [],
       }),
     },
     setup,
