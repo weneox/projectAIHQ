@@ -1,5 +1,5 @@
 // src/services/workspace/services.js
-// FINAL v1.1 — workspace service catalog setup services
+// FINAL v1.2 — workspace service catalog setup services, projection-safe setup status gating
 
 import { normalizeStringArray, obj, s } from "./shared.js";
 import { buildSetupStatus } from "./setup.js";
@@ -188,7 +188,9 @@ async function buildUniqueServiceKey(db, tenantId, title) {
     [tenantId, `${base}%`]
   );
 
-  const taken = new Set(arr(existing?.rows).map((row) => s(row.service_key)).filter(Boolean));
+  const taken = new Set(
+    arr(existing?.rows).map((row) => s(row.service_key)).filter(Boolean)
+  );
 
   if (!taken.has(base)) {
     return base;
@@ -204,12 +206,32 @@ async function buildUniqueServiceKey(db, tenantId, title) {
   return `${base}-${Date.now().toString(36)}`;
 }
 
+async function maybeBuildSetup({
+  includeSetup = true,
+  db,
+  tenantId,
+  tenantKey,
+  role = "",
+  tenant = null,
+}) {
+  if (!includeSetup) return null;
+
+  return buildSetupStatus({
+    db,
+    tenantId,
+    tenantKey,
+    role,
+    tenant,
+  });
+}
+
 export async function listSetupServices({
   db,
   tenantId,
   tenantKey,
   role = "",
   tenant = null,
+  includeSetup = true,
 }) {
   const scope = await resolveTenantScope({
     db,
@@ -243,7 +265,8 @@ export async function listSetupServices({
     [scope.id]
   );
 
-  const setup = await buildSetupStatus({
+  const setup = await maybeBuildSetup({
+    includeSetup,
     db,
     tenantId: scope.id,
     tenantKey: scope.tenantKey,
@@ -253,7 +276,7 @@ export async function listSetupServices({
 
   return {
     items: rows.map(mapServiceRow),
-    setup,
+    ...(setup ? { setup } : {}),
   };
 }
 
@@ -264,6 +287,7 @@ export async function createSetupService({
   role = "",
   tenant = null,
   body = {},
+  includeSetup = true,
 }) {
   const scope = await resolveTenantScope({
     db,
@@ -330,7 +354,8 @@ export async function createSetupService({
     ]
   );
 
-  const setup = await buildSetupStatus({
+  const setup = await maybeBuildSetup({
+    includeSetup,
     db,
     tenantId: scope.id,
     tenantKey: scope.tenantKey,
@@ -340,7 +365,7 @@ export async function createSetupService({
 
   return {
     item: mapServiceRow(rows?.[0] || {}),
-    setup,
+    ...(setup ? { setup } : {}),
   };
 }
 
@@ -352,6 +377,7 @@ export async function updateSetupService({
   tenant = null,
   serviceId,
   body = {},
+  includeSetup = true,
 }) {
   const scope = await resolveTenantScope({
     db,
@@ -409,7 +435,8 @@ export async function updateSetupService({
     throw new Error("Service not found");
   }
 
-  const setup = await buildSetupStatus({
+  const setup = await maybeBuildSetup({
+    includeSetup,
     db,
     tenantId: scope.id,
     tenantKey: scope.tenantKey,
@@ -419,7 +446,7 @@ export async function updateSetupService({
 
   return {
     item: mapServiceRow(rows[0]),
-    setup,
+    ...(setup ? { setup } : {}),
   };
 }
 
@@ -430,6 +457,7 @@ export async function deleteSetupService({
   role = "",
   tenant = null,
   serviceId,
+  includeSetup = true,
 }) {
   const scope = await resolveTenantScope({
     db,
@@ -458,7 +486,8 @@ export async function deleteSetupService({
     throw new Error("Service not found");
   }
 
-  const setup = await buildSetupStatus({
+  const setup = await maybeBuildSetup({
+    includeSetup,
     db,
     tenantId: scope.id,
     tenantKey: scope.tenantKey,
@@ -471,6 +500,6 @@ export async function deleteSetupService({
       id: s(rows[0].id),
       title: s(rows[0].title),
     },
-    setup,
+    ...(setup ? { setup } : {}),
   };
 }

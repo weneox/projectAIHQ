@@ -21,7 +21,6 @@ import {
   normalizeLanguageList,
   obj,
   s,
-  safeQuery,
   sortRowsByPriority,
 } from "./runtimeShared.js";
 
@@ -54,7 +53,9 @@ function normalizeProvidedTenant(input = {}) {
     tenant_key: s(tenant.tenant_key || tenant.tenantKey),
     company_name: s(tenant.company_name || tenant.companyName || displayName),
     legal_name: s(tenant.legal_name || tenant.legalName),
-    industry_key: s(tenant.industry_key || tenant.industryKey || "generic_business"),
+    industry_key: s(
+      tenant.industry_key || tenant.industryKey || "generic_business"
+    ),
     country_code: s(tenant.country_code || tenant.countryCode || "AZ"),
     timezone: s(tenant.timezone || "Asia/Baku"),
     default_language: defaultLanguage,
@@ -84,7 +85,9 @@ function normalizeProvidedTenant(input = {}) {
       name: displayName,
       displayName,
       tone: s(tenant?.brand?.tone || tenant?.profile?.tone_of_voice),
-      industry: s(tenant?.brand?.industry || tenant.industry_key || "generic_business"),
+      industry: s(
+        tenant?.brand?.industry || tenant.industry_key || "generic_business"
+      ),
       defaultLanguage,
       languages: supportedLanguages,
     },
@@ -93,6 +96,99 @@ function normalizeProvidedTenant(input = {}) {
     comment_policy: obj(tenant.comment_policy || tenant.commentPolicy),
     meta: obj(tenant.meta),
   };
+}
+
+function logDbStepError(step, tenant, error) {
+  console.error(`[runtimeTenantData] ${step} failed`, {
+    tenantId: s(tenant?.id),
+    tenantKey: s(tenant?.tenant_key),
+    message: error?.message || String(error),
+    code: error?.code || null,
+    detail: error?.detail || null,
+    hint: error?.hint || null,
+    where: error?.where || null,
+    constraint: error?.constraint || null,
+    table: error?.table || null,
+    column: error?.column || null,
+    stack: error?.stack || null,
+  });
+}
+
+async function runDbStep(step, tenant, fn) {
+  try {
+    return await fn();
+  } catch (error) {
+    logDbStepError(step, tenant, error);
+    throw error;
+  }
+}
+
+function isMissingRelationError(error) {
+  return s(error?.code) === "42P01";
+}
+
+function canUseSavepoint(db) {
+  return Boolean(db && typeof db.query === "function" && typeof db.release === "function");
+}
+
+function makeSavepointName(prefix = "runtime_optional") {
+  return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+async function runOptionalDbStep(step, tenant, db, fn, fallbackValue = []) {
+  const useSavepoint = canUseSavepoint(db);
+  const savepoint = useSavepoint ? makeSavepointName("runtime_optional") : "";
+
+  try {
+    if (useSavepoint) {
+      await db.query(`SAVEPOINT ${savepoint}`);
+    }
+
+    const result = await fn();
+
+    if (useSavepoint) {
+      await db.query(`RELEASE SAVEPOINT ${savepoint}`);
+    }
+
+    return result;
+  } catch (error) {
+    console.warn(`[runtimeTenantData] ${step} optional step failed; falling back`, {
+      tenantId: s(tenant?.id),
+      tenantKey: s(tenant?.tenant_key),
+      message: error?.message || String(error),
+      code: error?.code || null,
+      detail: error?.detail || null,
+      hint: error?.hint || null,
+      where: error?.where || null,
+      constraint: error?.constraint || null,
+      table: error?.table || null,
+      column: error?.column || null,
+    });
+
+    if (useSavepoint) {
+      try {
+        await db.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+        await db.query(`RELEASE SAVEPOINT ${savepoint}`);
+      } catch (rollbackError) {
+        console.error(`[runtimeTenantData] ${step} optional rollback failed`, {
+          tenantId: s(tenant?.id),
+          tenantKey: s(tenant?.tenant_key),
+          message: rollbackError?.message || String(rollbackError),
+          code: rollbackError?.code || null,
+          detail: rollbackError?.detail || null,
+          hint: rollbackError?.hint || null,
+          where: rollbackError?.where || null,
+          constraint: rollbackError?.constraint || null,
+          table: rollbackError?.table || null,
+          column: rollbackError?.column || null,
+          stack: rollbackError?.stack || null,
+        });
+        throw rollbackError;
+      }
+    }
+
+    return fallbackValue;
+  }
 }
 
 async function loadLegacyTenant({
@@ -108,7 +204,12 @@ async function loadLegacyTenant({
   }
 
   if (!hasDb(db)) {
-    if (providedTenant && (providedTenant.id || providedTenant.tenant_key || providedTenant.tenantKey)) {
+    if (
+      providedTenant &&
+      (providedTenant.id ||
+        providedTenant.tenant_key ||
+        providedTenant.tenantKey)
+    ) {
       return normalizeProvidedTenant(providedTenant);
     }
     return null;
@@ -117,7 +218,9 @@ async function loadLegacyTenant({
   const id = s(tenantId) || s(providedTenant.id) || s(providedTenant.tenant_id);
   const resolvedTenantKey = tenantKey
     ? resolveTenantKey(tenantKey)
-    : resolveTenantKey(s(providedTenant.tenant_key || providedTenant.tenantKey));
+    : resolveTenantKey(
+        s(providedTenant.tenant_key || providedTenant.tenantKey)
+      );
 
   let result;
 
@@ -235,7 +338,12 @@ async function loadLegacyTenant({
       `,
       [resolvedTenantKey]
     );
-  } else if (providedTenant && (providedTenant.id || providedTenant.tenant_key || providedTenant.tenantKey)) {
+  } else if (
+    providedTenant &&
+    (providedTenant.id ||
+      providedTenant.tenant_key ||
+      providedTenant.tenantKey)
+  ) {
     return normalizeProvidedTenant(providedTenant);
   } else {
     return null;
@@ -243,7 +351,12 @@ async function loadLegacyTenant({
 
   const row = result?.rows?.[0];
   if (!row) {
-    if (providedTenant && (providedTenant.id || providedTenant.tenant_key || providedTenant.tenantKey)) {
+    if (
+      providedTenant &&
+      (providedTenant.id ||
+        providedTenant.tenant_key ||
+        providedTenant.tenantKey)
+    ) {
       return normalizeProvidedTenant(providedTenant);
     }
     return null;
@@ -255,7 +368,9 @@ async function loadLegacyTenant({
     row.default_language,
     defaultLanguage
   );
-  const supportedLanguages = enabledLanguages.length ? enabledLanguages : [defaultLanguage];
+  const supportedLanguages = enabledLanguages.length
+    ? enabledLanguages
+    : [defaultLanguage];
   const displayName = s(row.brand_name || row.company_name || row.tenant_key);
 
   return {
@@ -299,12 +414,18 @@ async function loadLegacyTenant({
     },
     ai_policy: {
       auto_reply_enabled: boolOrUndefined(row.auto_reply_enabled),
-      suppress_ai_during_handoff: boolOrUndefined(row.suppress_ai_during_handoff),
+      suppress_ai_during_handoff: boolOrUndefined(
+        row.suppress_ai_during_handoff
+      ),
       mark_seen_enabled: boolOrUndefined(row.mark_seen_enabled),
       typing_indicator_enabled: boolOrUndefined(row.typing_indicator_enabled),
       create_lead_enabled: boolOrUndefined(row.create_lead_enabled),
-      approval_required_content: boolOrUndefined(row.approval_required_content),
-      approval_required_publish: boolOrUndefined(row.approval_required_publish),
+      approval_required_content: boolOrUndefined(
+        row.approval_required_content
+      ),
+      approval_required_publish: boolOrUndefined(
+        row.approval_required_publish
+      ),
       quiet_hours_enabled: boolOrUndefined(row.quiet_hours_enabled),
       quiet_hours: obj(row.quiet_hours),
       inbox_policy: obj(row.inbox_policy),
@@ -324,19 +445,16 @@ async function loadLegacyTenant({
 async function loadTenantServices({ db, tenantId }) {
   if (!hasDb(db) || !tenantId) return [];
 
-  try {
-    const result = await db.query(
-      `
-      select *
-      from tenant_services
-      where tenant_id = $1::uuid
-      `,
-      [tenantId]
-    );
-    return sortRowsByPriority(arr(result?.rows));
-  } catch {
-    return [];
-  }
+  const result = await db.query(
+    `
+    select *
+    from tenant_services
+    where tenant_id = $1::uuid
+    `,
+    [tenantId]
+  );
+
+  return sortRowsByPriority(arr(result?.rows));
 }
 
 async function loadTenantResponsePlaybooks({ db, tenantId }) {
@@ -354,10 +472,20 @@ async function loadTenantResponsePlaybooks({ db, tenantId }) {
         `,
         [tenantId]
       );
+
       const rows = sortRowsByPriority(arr(result?.rows));
       if (rows.length) return rows;
-    } catch {
-      // ignore
+    } catch (error) {
+      if (isMissingRelationError(error)) {
+        continue;
+      }
+
+      logDbStepError(
+        `loadTenantResponsePlaybooks:${tableName}`,
+        { id: tenantId },
+        error
+      );
+      throw error;
     }
   }
 
@@ -380,47 +508,89 @@ async function loadDbBrainData({ db, tenant }) {
   }
 
   const knowledge = createTenantKnowledgeHelpers({ db });
-  const businessProfile = await safeQuery(
-    () => knowledge.getBusinessProfile({ tenantId: tenant.id, tenantKey: tenant.tenant_key }),
-    null
-  );
-  const capabilities = await safeQuery(
-    () => knowledge.getBusinessCapabilities({ tenantId: tenant.id, tenantKey: tenant.tenant_key }),
-    null
-  );
-  const activeKnowledge = await safeQuery(
-    () => knowledge.listActiveKnowledge({ tenantId: tenant.id, tenantKey: tenant.tenant_key }),
-    []
-  );
-  const facts = await safeQuery(
-    () => dbListTenantBusinessFacts(db, tenant.id, { enabledOnly: true }),
-    []
-  );
-  const contacts = await safeQuery(() => dbListTenantContacts(db, tenant.id), []);
-  const locations = await safeQuery(() => dbListTenantLocations(db, tenant.id), []);
-  const channelPolicies = await safeQuery(() => dbListTenantChannelPolicies(db, tenant.id), []);
-  const tenantServices = await safeQuery(
-    () => loadTenantServices({ db, tenantId: tenant.id }),
-    []
-  );
-  const storedResponsePlaybooks = await safeQuery(async () => {
-    if (typeof knowledge.listResponsePlaybooks === "function") {
-      return knowledge.listResponsePlaybooks({ tenantId: tenant.id, tenantKey: tenant.tenant_key });
-    }
-    if (typeof knowledge.listTenantResponsePlaybooks === "function") {
-      return knowledge.listTenantResponsePlaybooks({
+
+  const businessProfile = await runDbStep(
+    "knowledge.getBusinessProfile",
+    tenant,
+    () =>
+      knowledge.getBusinessProfile({
         tenantId: tenant.id,
         tenantKey: tenant.tenant_key,
-      });
-    }
-    if (typeof knowledge.listActiveResponsePlaybooks === "function") {
-      return knowledge.listActiveResponsePlaybooks({
+      })
+  );
+
+  const capabilities = await runDbStep(
+    "knowledge.getBusinessCapabilities",
+    tenant,
+    () =>
+      knowledge.getBusinessCapabilities({
         tenantId: tenant.id,
         tenantKey: tenant.tenant_key,
-      });
-    }
-    return loadTenantResponsePlaybooks({ db, tenantId: tenant.id });
-  }, []);
+      })
+  );
+
+  const activeKnowledge = await runDbStep(
+    "knowledge.listActiveKnowledge",
+    tenant,
+    () =>
+      knowledge.listActiveKnowledge({
+        tenantId: tenant.id,
+        tenantKey: tenant.tenant_key,
+      })
+  );
+
+  const facts = await runDbStep("dbListTenantBusinessFacts", tenant, () =>
+    dbListTenantBusinessFacts(db, tenant.id, { enabledOnly: true })
+  );
+
+  const contacts = await runDbStep("dbListTenantContacts", tenant, () =>
+    dbListTenantContacts(db, tenant.id)
+  );
+
+  const locations = await runDbStep("dbListTenantLocations", tenant, () =>
+    dbListTenantLocations(db, tenant.id)
+  );
+
+  const channelPolicies = await runDbStep(
+    "dbListTenantChannelPolicies",
+    tenant,
+    () => dbListTenantChannelPolicies(db, tenant.id)
+  );
+
+  const tenantServices = await runDbStep("loadTenantServices", tenant, () =>
+    loadTenantServices({ db, tenantId: tenant.id })
+  );
+
+  const storedResponsePlaybooks = await runOptionalDbStep(
+    "loadStoredResponsePlaybooks",
+    tenant,
+    db,
+    async () => {
+      if (typeof knowledge.listResponsePlaybooks === "function") {
+        return knowledge.listResponsePlaybooks({
+          tenantId: tenant.id,
+          tenantKey: tenant.tenant_key,
+        });
+      }
+
+      if (typeof knowledge.listTenantResponsePlaybooks === "function") {
+        return knowledge.listTenantResponsePlaybooks({
+          tenantId: tenant.id,
+          tenantKey: tenant.tenant_key,
+        });
+      }
+
+      if (typeof knowledge.listActiveResponsePlaybooks === "function") {
+        return knowledge.listActiveResponsePlaybooks({
+          tenantId: tenant.id,
+          tenantKey: tenant.tenant_key,
+        });
+      }
+
+      return loadTenantResponsePlaybooks({ db, tenantId: tenant.id });
+    },
+    []
+  );
 
   return {
     businessProfile,
@@ -438,13 +608,18 @@ async function loadDbBrainData({ db, tenant }) {
 async function loadCurrentProjection({ db, tenantId = "", tenantKey = "" }) {
   if (!hasDb(db)) return null;
 
-  const current = await safeQuery(
-    () => getCurrentTenantRuntimeProjection({ tenantId, tenantKey }, db),
-    null
+  const tenantRef = { id: tenantId, tenant_key: tenantKey };
+
+  const current = await runDbStep(
+    "getCurrentTenantRuntimeProjection",
+    tenantRef,
+    () => getCurrentTenantRuntimeProjection({ tenantId, tenantKey }, db)
   );
 
   if (current) {
-    const freshness = await safeQuery(
+    const freshness = await runDbStep(
+      "getTenantRuntimeProjectionFreshness",
+      tenantRef,
       () =>
         getTenantRuntimeProjectionFreshness(
           {
@@ -453,15 +628,16 @@ async function loadCurrentProjection({ db, tenantId = "", tenantKey = "" }) {
             runtimeProjection: current,
           },
           db
-        ),
-      null
+        )
     );
 
     if (!freshness?.stale) {
       return { projection: current, freshness };
     }
 
-    const refreshed = await safeQuery(
+    const refreshed = await runDbStep(
+      "refreshTenantRuntimeProjectionStrict:stale",
+      tenantRef,
       () =>
         refreshTenantRuntimeProjectionStrict(
           {
@@ -478,8 +654,7 @@ async function loadCurrentProjection({ db, tenantId = "", tenantKey = "" }) {
             },
           },
           db
-        ),
-      null
+        )
     );
 
     if (obj(refreshed?.projection).id) {
@@ -497,11 +672,14 @@ async function loadCurrentProjection({ db, tenantId = "", tenantKey = "" }) {
       freshness,
       reasonCode: "runtime_projection_stale",
       reason: "runtime_projection_stale",
-      message: "Approved runtime projection is stale and could not be refreshed.",
+      message:
+        "Approved runtime projection is stale and could not be refreshed.",
     });
   }
 
-  const refreshed = await safeQuery(
+  const refreshed = await runDbStep(
+    "refreshTenantRuntimeProjectionStrict:missing",
+    tenantRef,
     () =>
       refreshTenantRuntimeProjectionStrict(
         {
@@ -513,8 +691,7 @@ async function loadCurrentProjection({ db, tenantId = "", tenantKey = "" }) {
           generatedBy: "system",
         },
         db
-      ),
-    null
+      )
   );
 
   if (obj(refreshed?.projection).id) {

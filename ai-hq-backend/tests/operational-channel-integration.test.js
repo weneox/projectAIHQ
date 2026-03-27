@@ -121,6 +121,23 @@ async function invokeRoute(router, method, path, req = {}) {
   return { req: fullReq, res };
 }
 
+async function assertTxHealthy(client, label) {
+  try {
+    await client.query("select 1 as ok");
+    console.log(`[tx:ok] ${label}`);
+  } catch (error) {
+    console.error(`[tx:broken] ${label}`, {
+      message: error?.message || String(error),
+      code: error?.code || null,
+      detail: error?.detail || null,
+      hint: error?.hint || null,
+      where: error?.where || null,
+      stack: error?.stack || null,
+    });
+    throw error;
+  }
+}
+
 let pool = null;
 let migrationsReady = false;
 
@@ -149,7 +166,11 @@ test.after(async () => {
 
 test(
   "db-backed finalize refresh exposes strict operational contracts for voice and provider access",
-  { skip: !hasRealDb() ? "DATABASE_URL not configured for integration test" : false },
+  {
+    skip: !hasRealDb()
+      ? "DATABASE_URL not configured for integration test"
+      : false,
+  },
   async () => {
     const previousInternalToken = cfg.security.aihqInternalToken;
     const previousMasterKey = cfg.security.tenantSecretMasterKey;
@@ -163,6 +184,7 @@ test(
 
     try {
       await client.query("begin");
+      await assertTxHealthy(client, "after begin");
 
       const tenant = await dbUpsertTenantCore(client, tenantKey, {
         company_name: "Operational Control Co",
@@ -175,64 +197,73 @@ test(
         market_region: "US",
       });
 
+      await assertTxHealthy(client, "after dbUpsertTenantCore");
+
       assert.ok(tenant?.id, "tenant should be created");
 
-      const projectionSummary = await setupTest.projectSetupReviewDraftToCanonical({
-        db: client,
-        actor: {
-          tenantId: tenant.id,
-          tenantKey,
-          role: "admin",
-          user: {
-            id: "reviewer-1",
-            name: "Reviewer One",
+      const projectionSummary =
+        await setupTest.projectSetupReviewDraftToCanonical({
+          db: client,
+          actor: {
+            tenantId: tenant.id,
+            tenantKey,
+            role: "admin",
+            user: {
+              id: "reviewer-1",
+              name: "Reviewer One",
+            },
           },
-        },
-        session: {
-          id: randomUUID(),
-          primarySourceType: "website",
-        },
-        draft: {
-          version: 1,
-          businessProfile: {
-            companyName: "Operational Control Co",
-            description: "High-touch consulting for multi-channel operations.",
-            websiteUrl: "https://ops.example.com",
-            timezone: "America/New_York",
-            languages: ["en", "es"],
-            tone: "professional",
+          session: {
+            id: randomUUID(),
+            primarySourceType: "website",
           },
-          capabilities: {
-            primaryLanguage: "en",
-            supportedLanguages: ["en", "es"],
-            toneProfile: "professional",
-            autoReplyEnabled: true,
-            humanApprovalRequired: false,
-            inboxApprovalMode: "manual",
-            commentApprovalMode: "manual",
+          draft: {
+            version: 1,
+            businessProfile: {
+              companyName: "Operational Control Co",
+              description:
+                "High-touch consulting for multi-channel operations.",
+              websiteUrl: "https://ops.example.com",
+              timezone: "America/New_York",
+              languages: ["en", "es"],
+              tone: "professional",
+            },
+            capabilities: {
+              primaryLanguage: "en",
+              supportedLanguages: ["en", "es"],
+              toneProfile: "professional",
+              autoReplyEnabled: true,
+              humanApprovalRequired: false,
+              inboxApprovalMode: "manual",
+              commentApprovalMode: "manual",
+            },
+            services: [
+              {
+                key: "ops-consulting",
+                title: "Ops Consulting",
+                description: "Operational channel strategy and setup.",
+              },
+            ],
+            knowledgeItems: [],
+            sourceSummary: {
+              primarySourceType: "website",
+              primarySourceUrl: "https://ops.example.com",
+            },
           },
-          services: [
+          sources: [
             {
-              key: "ops-consulting",
-              title: "Ops Consulting",
-              description: "Operational channel strategy and setup.",
+              sourceId: randomUUID(),
+              sourceType: "website",
+              role: "primary",
+              sourceUrl: "https://ops.example.com",
             },
           ],
-          knowledgeItems: [],
-          sourceSummary: {
-            primarySourceType: "website",
-            primarySourceUrl: "https://ops.example.com",
-          },
-        },
-        sources: [
-          {
-            sourceId: randomUUID(),
-            sourceType: "website",
-            role: "primary",
-            sourceUrl: "https://ops.example.com",
-          },
-        ],
-      });
+        });
+
+      await assertTxHealthy(
+        client,
+        "after projectSetupReviewDraftToCanonical"
+      );
 
       assert.ok(
         s(projectionSummary?.truthVersion?.id),
@@ -247,11 +278,13 @@ test(
         {
           tenantId: tenant.id,
           tenantKey,
-          triggerType: "integration_test",
+          triggerType: "review_approval",
           requestedBy: "integration-test",
         },
         client
       );
+
+      await assertTxHealthy(client, "after refreshTenantRuntimeProjectionStrict");
 
       assert.ok(s(refreshed?.projection?.id), "runtime projection should exist");
       assert.equal(refreshed?.freshness?.stale, false);
@@ -276,6 +309,8 @@ test(
           },
         }
       );
+
+      await assertTxHealthy(client, "after loadSetupTruthPayload");
 
       assert.equal(validateSetupTruthPayload(truthPayload).ok, true);
       assert.equal(truthPayload?.truth?.readiness?.status, "ready");
@@ -318,6 +353,8 @@ test(
         },
       });
 
+      await assertTxHealthy(client, "after upsertTenantVoiceSettings");
+
       await dbUpsertTenantChannel(client, tenant.id, "instagram", {
         provider: "meta",
         display_name: "Ops Instagram",
@@ -329,6 +366,8 @@ test(
         secrets_ref: "meta",
       });
 
+      await assertTxHealthy(client, "after dbUpsertTenantChannel");
+
       await dbUpsertTenantSecret(
         client,
         tenant.id,
@@ -337,6 +376,12 @@ test(
         "meta-page-token-integration",
         "integration-test"
       );
+
+      await assertTxHealthy(
+        client,
+        "after dbUpsertTenantSecret page_access_token"
+      );
+
       await dbUpsertTenantSecret(
         client,
         tenant.id,
@@ -346,12 +391,16 @@ test(
         "integration-test"
       );
 
+      await assertTxHealthy(client, "after dbUpsertTenantSecret app_secret");
+
       const runtime = await getTenantBrainRuntime({
         db: client,
         tenantId: tenant.id,
         tenantKey,
         authorityMode: "strict",
       });
+
+      await assertTxHealthy(client, "after getTenantBrainRuntime");
 
       assert.equal(runtime?.authority?.available, true);
       assert.equal(runtime?.authority?.source, "approved_runtime_projection");
@@ -361,6 +410,8 @@ test(
         db: client,
         tenantKey,
       });
+
+      await assertTxHealthy(client, "after processVoiceTenantConfig");
 
       assert.equal(voiceConfig?.ok, true);
       assert.equal(
@@ -389,10 +440,13 @@ test(
         toNumber: "+1 (555) 555-0100",
       });
 
+      await assertTxHealthy(client, "after processVoiceTenantConfig by number");
+
       assert.equal(voiceConfigByNumber?.ok, true);
       assert.equal(voiceConfigByNumber?.payload?.tenantKey, tenantKey);
       assert.equal(
-        voiceConfigByNumber?.payload?.operationalChannels?.voice?.telephony?.phoneNumber,
+        voiceConfigByNumber?.payload?.operationalChannels?.voice?.telephony
+          ?.phoneNumber,
         "+15555550100"
       );
 
@@ -412,6 +466,8 @@ test(
         }
       );
 
+      await assertTxHealthy(client, "after tenantInternalRoutes meta-channel-access");
+
       assert.equal(res.statusCode, 200);
       assert.equal(validateProviderAccessResponse(res.body || {}).ok, true);
       assert.equal(res.body?.providerAccess?.available, true);
@@ -419,8 +475,14 @@ test(
         res.body?.providerAccess?.pageAccessToken,
         "meta-page-token-integration"
       );
-      assert.equal(res.body?.operationalChannels?.meta?.source, "tenant_channels");
-      assert.equal(res.body?.operationalChannels?.meta?.pageId, "page-integration-1");
+      assert.equal(
+        res.body?.operationalChannels?.meta?.source,
+        "tenant_channels"
+      );
+      assert.equal(
+        res.body?.operationalChannels?.meta?.pageId,
+        "page-integration-1"
+      );
       assert.equal(
         res.body?.projectedRuntime?.authority?.runtimeProjectionId,
         runtime.authority.runtimeProjectionId
@@ -436,7 +498,11 @@ test(
 
 test(
   "db-backed operational backfill populates persisted voice settings and channel identifiers",
-  { skip: !hasRealDb() ? "DATABASE_URL not configured for integration test" : false },
+  {
+    skip: !hasRealDb()
+      ? "DATABASE_URL not configured for integration test"
+      : false,
+  },
   async () => {
     const client = await pool.connect();
     const tenantKey = `backfill-${randomUUID().slice(0, 8)}`;

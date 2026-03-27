@@ -51,6 +51,15 @@ function normalizeProjectionRunRow(row = {}) {
   };
 }
 
+function promoteProjectionForRuntimeRefresh(projection = {}) {
+  const value = obj(projection);
+
+  return {
+    ...value,
+    status: "ready",
+  };
+}
+
 export function assessTenantRuntimeProjectionFreshness(
   {
     runtimeProjection = null,
@@ -524,7 +533,9 @@ export async function refreshTenantRuntimeProjection(
 
     runId = s(run?.id);
 
-    const projection = buildTenantRuntimeProjection(graph);
+    const projection = promoteProjectionForRuntimeRefresh(
+      buildTenantRuntimeProjection(graph)
+    );
 
     const saved = await upsertTenantRuntimeProjection(
       {
@@ -535,10 +546,11 @@ export async function refreshTenantRuntimeProjection(
         sourceCapabilitiesId: graph.capabilities?.id || null,
         projection,
         generatedBy,
-        approvedBy,
+        approvedBy: s(approvedBy || generatedBy || "system"),
         metadata: {
           ...obj(metadata),
           source: "refreshTenantRuntimeProjection",
+          refreshedByRuntimeProjection: true,
         },
       },
       client
@@ -567,13 +579,14 @@ export async function refreshTenantRuntimeProjection(
         saved.id,
         graph.synthesis?.id || null,
         JSON.stringify({
-          readinessLabel: projection.readiness_label,
-          readinessScore: projection.readiness_score,
-          confidence: projection.confidence,
-          serviceCount: arr(projection.services_json).length,
-          faqCount: arr(projection.faq_json).length,
-          channelCount: arr(projection.channels_json).length,
-          retrievalCorpusCount: arr(projection.retrieval_corpus_json).length,
+          runtimeStatus: s(saved.status),
+          readinessLabel: s(saved.readiness_label),
+          readinessScore: num(saved.readiness_score, 0),
+          confidence: num(saved.confidence, 0),
+          serviceCount: arr(saved.services_json).length,
+          faqCount: arr(saved.faq_json).length,
+          channelCount: arr(saved.channels_json).length,
+          retrievalCorpusCount: arr(saved.retrieval_corpus_json).length,
         }),
       ]
     );

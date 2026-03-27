@@ -1,6 +1,9 @@
 import { createTenantKnowledgeHelpers } from "../../../db/helpers/tenantKnowledge.js";
 import { createTenantTruthVersionHelpers } from "../../../db/helpers/tenantTruthVersions.js";
-import { refreshRuntimeProjectionRequired } from "../../../db/helpers/tenantKnowledge/core.js";
+import {
+  refreshRuntimeProjectionBestEffort,
+  q,
+} from "../../../db/helpers/tenantKnowledge/core.js";
 import {
   createSetupService,
   listSetupServices,
@@ -136,6 +139,27 @@ function buildCapabilitiesProjection(draft = {}) {
   return compactObject(draft?.capabilities);
 }
 
+async function resolvePersistedReviewSessionId(db, actor = {}, session = {}) {
+  const rawSessionId = s(session?.id);
+  const tenantId = s(actor?.tenantId);
+
+  if (!rawSessionId || !tenantId) return "";
+
+  const result = await q(
+    db,
+    `
+      select id
+      from tenant_setup_review_sessions
+      where id = $1
+        and tenant_id = $2
+      limit 1
+    `,
+    [rawSessionId, tenantId]
+  );
+
+  return s(result.rows?.[0]?.id);
+}
+
 export function buildCanonicalProfileSourceSummary({
   session = {},
   draft = {},
@@ -191,6 +215,7 @@ async function projectDraftServicesToCanonical({
       tenantKey: actor.tenantKey,
       role: actor.role,
       tenant: actor.tenant,
+      includeSetup: false,
     })
   );
 
@@ -200,20 +225,15 @@ async function projectDraftServicesToCanonical({
 
     return existingServices.find((row) => {
       const rowKey = lower(
-        row?.key ||
-          row?.serviceKey ||
-          row?.service_key ||
-          row?.slug
+        row?.key || row?.serviceKey || row?.service_key || row?.slug
       );
 
-      const rowTitle = lower(
-        row?.title ||
-          row?.name ||
-          row?.label
-      );
+      const rowTitle = lower(row?.title || row?.name || row?.label);
 
-      return (serviceKey && rowKey && serviceKey === rowKey) ||
-        (serviceTitle && rowTitle && serviceTitle === rowTitle);
+      return (
+        (serviceKey && rowKey && serviceKey === rowKey) ||
+        (serviceTitle && rowTitle && serviceTitle === rowTitle)
+      );
     });
   };
 
@@ -249,6 +269,7 @@ async function projectDraftServicesToCanonical({
         tenant: actor.tenant,
         serviceId: match.id,
         body,
+        includeSetup: false,
       });
       updated += 1;
       continue;
@@ -262,10 +283,14 @@ async function projectDraftServicesToCanonical({
         role: actor.role,
         tenant: actor.tenant,
         body,
+        includeSetup: false,
       });
       created += 1;
-    } catch {
-      skipped += 1;
+    } catch (error) {
+      const message = s(error?.message || error);
+      throw new Error(
+        `projectDraftServicesToCanonical:createSetupService failed for "${service.title || service.key}" (${message})`
+      );
     }
   }
 
@@ -346,20 +371,23 @@ async function projectDraftKnowledgeToCanonical({
   ]) {
     if (typeof knowledgeHelper[method] === "function") {
       let projected = 0;
-      let skipped = 0;
 
       for (const item of payload) {
         try {
           await knowledgeHelper[method](item);
           projected += 1;
-        } catch {
-          skipped += 1;
+        } catch (error) {
+          const label = s(item?.title || item?.key);
+          const message = s(error?.message || error);
+          throw new Error(
+            `projectDraftKnowledgeToCanonical:${method} failed for "${label}" (${message})`
+          );
         }
       }
 
       return {
         projected,
-        skipped,
+        skipped: 0,
         total: payload.length,
         method,
       };
@@ -382,12 +410,18 @@ export async function projectSetupReviewDraftToCanonical(
     draft,
     sources,
   },
-  deps = {},
+  deps = {}
 ) {
-  const knowledgeHelper = deps.knowledgeHelper || createTenantKnowledgeHelpers({ db });
+  const knowledgeHelper =
+    deps.knowledgeHelper || createTenantKnowledgeHelpers({ db });
   const truthVersionHelper =
     deps.truthVersionHelper || createTenantTruthVersionHelpers({ db });
   const sourceInfo = extractPrimarySourceInfo(session, draft, sources);
+  const persistedReviewSessionId = await resolvePersistedReviewSessionId(
+    db,
+    actor,
+    session
+  );
 
   const requestedBy =
     s(actor?.user?.name) ||
@@ -431,7 +465,7 @@ export async function projectSetupReviewDraftToCanonical(
     savedProfile = await knowledgeHelper.upsertBusinessProfile({
       tenantId: actor.tenantId,
       tenantKey: actor.tenantKey,
-      reviewSessionId: s(session?.id),
+      reviewSessionId: persistedReviewSessionId || null,
       sourceId: sourceInfo.primarySourceId || null,
       sourceRunId: sourceInfo.latestRunId || null,
       profileStatus: "approved",
@@ -448,6 +482,7 @@ export async function projectSetupReviewDraftToCanonical(
       metadataJson: {
         reviewSessionProjection: true,
         reviewSessionId: s(session?.id),
+        persistedReviewSessionId: persistedReviewSessionId || undefined,
         draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
       },
       generatedBy: requestedBy,
@@ -465,7 +500,7 @@ export async function projectSetupReviewDraftToCanonical(
     savedCapabilities = await knowledgeHelper.upsertBusinessCapabilities({
       tenantId: actor.tenantId,
       tenantKey: actor.tenantKey,
-      reviewSessionId: s(session?.id),
+      reviewSessionId: persistedReviewSessionId || null,
       sourceId: sourceInfo.primarySourceId || null,
       sourceRunId: sourceInfo.latestRunId || null,
       capabilitiesJson: capabilities,
@@ -474,6 +509,7 @@ export async function projectSetupReviewDraftToCanonical(
       metadataJson: {
         reviewSessionProjection: true,
         reviewSessionId: s(session?.id),
+        persistedReviewSessionId: persistedReviewSessionId || undefined,
       },
       approvedBy: requestedBy,
       runtimeRefreshMode: "defer",
@@ -498,7 +534,7 @@ export async function projectSetupReviewDraftToCanonical(
       tenantKey: actor.tenantKey,
       businessProfileId: s(savedProfile?.id),
       businessCapabilitiesId: s(savedCapabilities?.id),
-      reviewSessionId: s(session?.id),
+      reviewSessionId: persistedReviewSessionId || null,
       approvedAt,
       approvedBy,
       profile: savedProfile,
@@ -507,6 +543,7 @@ export async function projectSetupReviewDraftToCanonical(
       metadataJson: compactObject({
         reviewSessionProjection: true,
         reviewSessionId: s(session?.id),
+        persistedReviewSessionId: persistedReviewSessionId || undefined,
         draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
         sourceId: sourceInfo.primarySourceId || undefined,
         sourceRunId: sourceInfo.latestRunId || undefined,
@@ -537,8 +574,8 @@ export async function projectSetupReviewDraftToCanonical(
     serviceProjection.total > 0 ||
     knowledgeProjection.total > 0;
 
-  const runtimeProjection = shouldRefreshRuntime
-    ? await refreshRuntimeProjectionRequired(db, {
+  const runtimeRefresh = shouldRefreshRuntime
+    ? await refreshRuntimeProjectionBestEffort(db, {
         tenantId: actor.tenantId,
         tenantKey: actor.tenantKey,
         triggerType: "review_approval",
@@ -548,6 +585,7 @@ export async function projectSetupReviewDraftToCanonical(
         metadata: compactObject({
           source: "projectSetupReviewDraftToCanonical",
           reviewSessionId: s(session?.id),
+          persistedReviewSessionId: persistedReviewSessionId || undefined,
           truthVersionId: s(truthVersion?.id),
           draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
           primarySourceId: s(sourceInfo.primarySourceId),
@@ -556,13 +594,15 @@ export async function projectSetupReviewDraftToCanonical(
       })
     : null;
 
+  const runtimeProjection = obj(runtimeRefresh?.projection || runtimeRefresh);
+
   return {
     projectedProfile,
     projectedCapabilities,
     truthVersion,
+    runtimeProjection: Object.keys(runtimeProjection).length ? runtimeProjection : null,
     serviceProjection,
     knowledgeProjection,
     sourceInfo,
-    runtimeProjection,
   };
 }
