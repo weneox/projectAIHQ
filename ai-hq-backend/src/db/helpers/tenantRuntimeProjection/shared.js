@@ -71,6 +71,25 @@ export function pickDb(dbOrClient) {
   return dbOrClient || db;
 }
 
+export async function resolveClientAccess(dbOrPool = db) {
+  const candidate = pickDb(dbOrPool);
+  if (candidate && typeof candidate.query === "function") {
+    return {
+      client: candidate,
+      ownsClient: false,
+    };
+  }
+
+  if (candidate && typeof candidate.connect === "function") {
+    return {
+      client: await candidate.connect(),
+      ownsClient: true,
+    };
+  }
+
+  throw new Error("Database client is not available");
+}
+
 export async function one(client, sql, params = []) {
   const r = await client.query(sql, params);
   return r.rows?.[0] || null;

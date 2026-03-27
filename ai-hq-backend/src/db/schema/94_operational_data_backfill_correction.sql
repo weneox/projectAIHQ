@@ -1,5 +1,5 @@
 -- ============================================================
--- operational data backfill
+-- operational data backfill correction
 -- ============================================================
 
 insert into tenant_voice_settings (
@@ -24,19 +24,20 @@ insert into tenant_voice_settings (
 select
   t.id,
   case
-    when lower(coalesce(t.meta #>> '{voice,enabled}', '')) in ('true', '1', 'yes', 'on') then true
-    when btrim(coalesce(t.meta->>'twilio_phone', '')) <> '' then true
-    when btrim(coalesce(t.meta->>'phone', '')) <> '' then true
+    when lower(coalesce(tp.extra_context #>> '{voice,enabled}', '')) in ('true', '1', 'yes', 'on') then true
+    when btrim(coalesce(tp.extra_context->>'twilio_phone', '')) <> '' then true
+    when btrim(coalesce(tp.extra_context->>'phone', tp.public_phone, '')) <> '' then true
     else false
   end,
   'twilio',
   case
-    when lower(coalesce(t.meta #>> '{voice,mode}', '')) in ('assistant', 'ivr', 'hybrid', 'disabled')
-      then lower(coalesce(t.meta #>> '{voice,mode}', ''))
+    when lower(coalesce(tp.extra_context #>> '{voice,mode}', '')) in ('assistant', 'ivr', 'hybrid', 'disabled')
+      then lower(coalesce(tp.extra_context #>> '{voice,mode}', ''))
     else 'assistant'
   end,
   coalesce(
-    nullif(btrim(t.meta #>> '{voice,voiceProfile,assistantName}'), ''),
+    nullif(btrim(tp.extra_context #>> '{voice,voiceProfile,assistantName}'), ''),
+    nullif(btrim(tp.brand_name), ''),
     nullif(btrim(t.company_name), ''),
     ''
   ),
@@ -47,28 +48,28 @@ select
     else '["en"]'::jsonb
   end,
   coalesce(
-    nullif(btrim(t.meta #>> '{realtime,instructions}'), ''),
-    nullif(btrim(t.meta #>> '{voice,instructions}'), ''),
+    nullif(btrim(tp.extra_context #>> '{realtime,instructions}'), ''),
+    nullif(btrim(tp.extra_context #>> '{voice,instructions}'), ''),
     ''
   ),
   true,
   nullif(
     btrim(
       coalesce(
-        t.meta #>> '{operator,phone}',
-        t.meta->>'operator_phone',
+        tp.extra_context #>> '{operator,phone}',
+        tp.extra_context->>'operator_phone',
         ''
       )
     ),
     ''
   ),
   coalesce(
-    nullif(btrim(t.meta #>> '{operator,label}'), ''),
+    nullif(btrim(tp.extra_context #>> '{operator,label}'), ''),
     'operator'
   ),
   case
-    when lower(coalesce(t.meta #>> '{voice,voiceProfile,transferMode}', '')) in ('handoff', 'callback', 'schedule_callback', 'never')
-      then lower(coalesce(t.meta #>> '{voice,voiceProfile,transferMode}', ''))
+    when lower(coalesce(tp.extra_context #>> '{voice,voiceProfile,transferMode}', '')) in ('handoff', 'callback', 'schedule_callback', 'never')
+      then lower(coalesce(tp.extra_context #>> '{voice,voiceProfile,transferMode}', ''))
     else 'handoff'
   end,
   true,
@@ -76,8 +77,9 @@ select
   nullif(
     btrim(
       coalesce(
-        t.meta->>'twilio_phone',
-        t.meta->>'phone',
+        tp.extra_context->>'twilio_phone',
+        tp.extra_context->>'phone',
+        tp.public_phone,
         ''
       )
     ),
@@ -89,9 +91,10 @@ select
       nullif(
         btrim(
           coalesce(
-            t.meta #>> '{operator,callerId}',
-            t.meta->>'twilio_caller_id',
-            t.meta->>'twilio_phone',
+            tp.extra_context #>> '{operator,callerId}',
+            tp.extra_context->>'twilio_caller_id',
+            tp.extra_context->>'twilio_phone',
+            tp.public_phone,
             ''
           )
         ),
@@ -105,8 +108,8 @@ select
       nullif(
         btrim(
           coalesce(
-            t.meta #>> '{realtime,model}',
-            t.meta #>> '{voice,realtimeModel}',
+            tp.extra_context #>> '{realtime,model}',
+            tp.extra_context #>> '{voice,realtimeModel}',
             ''
           )
         ),
@@ -116,8 +119,8 @@ select
       nullif(
         btrim(
           coalesce(
-            t.meta #>> '{realtime,voice}',
-            t.meta #>> '{voice,realtimeVoice}',
+            tp.extra_context #>> '{realtime,voice}',
+            tp.extra_context #>> '{voice,realtimeVoice}',
             ''
           )
         ),
@@ -127,8 +130,8 @@ select
       nullif(
         btrim(
           coalesce(
-            t.meta #>> '{realtime,instructions}',
-            t.meta #>> '{voice,instructions}',
+            tp.extra_context #>> '{realtime,instructions}',
+            tp.extra_context #>> '{voice,instructions}',
             ''
           )
         ),
@@ -137,10 +140,10 @@ select
       'operatorRouting',
       coalesce(
         case
-          when jsonb_typeof(t.meta #> '{operatorRouting}') = 'object'
-            then t.meta #> '{operatorRouting}'
-          when jsonb_typeof(t.meta #> '{operator_routing}') = 'object'
-            then t.meta #> '{operator_routing}'
+          when jsonb_typeof(tp.extra_context #> '{operatorRouting}') = 'object'
+            then tp.extra_context #> '{operatorRouting}'
+          when jsonb_typeof(tp.extra_context #> '{operator_routing}') = 'object'
+            then tp.extra_context #> '{operator_routing}'
           else null
         end,
         '{}'::jsonb
@@ -148,6 +151,7 @@ select
     )
   )
 from tenants t
+left join tenant_profiles tp on tp.tenant_id = t.id
 left join tenant_voice_settings tvs on tvs.tenant_id = t.id
 where tvs.tenant_id is null
   and coalesce(t.active, false) = true;
@@ -167,16 +171,16 @@ set
   end,
   operator_phone = coalesce(
     nullif(btrim(tvs.operator_phone), ''),
-    nullif(btrim(coalesce(t.meta #>> '{operator,phone}', t.meta->>'operator_phone', '')), '')
+    nullif(btrim(coalesce(tp.extra_context #>> '{operator,phone}', tp.extra_context->>'operator_phone', '')), '')
   ),
   operator_label = coalesce(
     nullif(btrim(tvs.operator_label), ''),
-    nullif(btrim(t.meta #>> '{operator,label}'), ''),
+    nullif(btrim(tp.extra_context #>> '{operator,label}'), ''),
     'operator'
   ),
   twilio_phone_number = coalesce(
     nullif(btrim(tvs.twilio_phone_number), ''),
-    nullif(btrim(coalesce(t.meta->>'twilio_phone', t.meta->>'phone', '')), '')
+    nullif(btrim(coalesce(tp.extra_context->>'twilio_phone', tp.extra_context->>'phone', tp.public_phone, '')), '')
   ),
   twilio_config = coalesce(tvs.twilio_config, '{}'::jsonb) || jsonb_strip_nulls(
     jsonb_build_object(
@@ -186,9 +190,10 @@ set
           coalesce(
             tvs.twilio_config->>'callerId',
             tvs.twilio_config->>'caller_id',
-            t.meta #>> '{operator,callerId}',
-            t.meta->>'twilio_caller_id',
-            t.meta->>'twilio_phone',
+            tp.extra_context #>> '{operator,callerId}',
+            tp.extra_context->>'twilio_caller_id',
+            tp.extra_context->>'twilio_phone',
+            tp.public_phone,
             ''
           )
         ),
@@ -204,8 +209,8 @@ set
           coalesce(
             tvs.meta->>'realtimeModel',
             tvs.meta->>'model',
-            t.meta #>> '{realtime,model}',
-            t.meta #>> '{voice,realtimeModel}',
+            tp.extra_context #>> '{realtime,model}',
+            tp.extra_context #>> '{voice,realtimeModel}',
             ''
           )
         ),
@@ -217,8 +222,8 @@ set
           coalesce(
             tvs.meta->>'realtimeVoice',
             tvs.meta->>'voice',
-            t.meta #>> '{realtime,voice}',
-            t.meta #>> '{voice,realtimeVoice}',
+            tp.extra_context #>> '{realtime,voice}',
+            tp.extra_context #>> '{voice,realtimeVoice}',
             ''
           )
         ),
@@ -229,8 +234,8 @@ set
         btrim(
           coalesce(
             tvs.meta->>'instructions',
-            t.meta #>> '{realtime,instructions}',
-            t.meta #>> '{voice,instructions}',
+            tp.extra_context #>> '{realtime,instructions}',
+            tp.extra_context #>> '{voice,instructions}',
             ''
           )
         ),
@@ -243,10 +248,10 @@ set
             then tvs.meta->'operatorRouting'
           when jsonb_typeof(tvs.meta->'operator_routing') = 'object'
             then tvs.meta->'operator_routing'
-          when jsonb_typeof(t.meta #> '{operatorRouting}') = 'object'
-            then t.meta #> '{operatorRouting}'
-          when jsonb_typeof(t.meta #> '{operator_routing}') = 'object'
-            then t.meta #> '{operator_routing}'
+          when jsonb_typeof(tp.extra_context #> '{operatorRouting}') = 'object'
+            then tp.extra_context #> '{operatorRouting}'
+          when jsonb_typeof(tp.extra_context #> '{operator_routing}') = 'object'
+            then tp.extra_context #> '{operator_routing}'
           else null
         end,
         '{}'::jsonb
@@ -255,6 +260,7 @@ set
   ),
   updated_at = now()
 from tenants t
+left join tenant_profiles tp on tp.tenant_id = t.id
 where tvs.tenant_id = t.id
   and (
     btrim(coalesce(tvs.display_name, '')) = ''

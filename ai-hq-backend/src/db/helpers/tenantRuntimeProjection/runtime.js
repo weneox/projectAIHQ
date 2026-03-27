@@ -5,6 +5,7 @@ import {
   obj,
   num,
   pickDb,
+  resolveClientAccess,
   one,
 } from "./shared.js";
 import { resolveTenant, loadTenantCanonicalGraph } from "./graph.js";
@@ -477,8 +478,7 @@ export async function refreshTenantRuntimeProjection(
   } = {},
   dbOrPool = db
 ) {
-  const ownsClient = typeof dbOrPool?.connect === "function";
-  const client = ownsClient ? await dbOrPool.connect() : pickDb(dbOrPool);
+  const { client, ownsClient } = await resolveClientAccess(dbOrPool);
 
   let runId = "";
 
