@@ -16,6 +16,10 @@ function asObj(x) {
   return x && typeof x === "object" && !Array.isArray(x) ? x : {};
 }
 
+function arr(x) {
+  return Array.isArray(x) ? x : [];
+}
+
 function cleanNullableString(v) {
   if (v === null || v === undefined) return null;
   const x = String(v).trim();
@@ -23,6 +27,10 @@ function cleanNullableString(v) {
   const lowered = x.toLowerCase();
   if (lowered === "null" || lowered === "undefined") return null;
   return x;
+}
+
+function uniqStrings(values = []) {
+  return [...new Set(arr(values).map((x) => s(x)).filter(Boolean))];
 }
 
 function pickFirstSecret(secrets = {}, ...keys) {
@@ -38,6 +46,71 @@ function pickFirstSecret(secrets = {}, ...keys) {
 
 function isConnectedStatus(status = "") {
   return ["connected", "active"].includes(lower(status));
+}
+
+async function listActiveTenantSecretRows(db, tenantId, provider) {
+  if (!db?.query || !tenantId || !provider) return [];
+
+  try {
+    const result = await db.query(
+      `
+        select
+          secret_key,
+          secret_value,
+          secret_value_enc,
+          secret_value_iv,
+          secret_value_tag,
+          is_active
+        from tenant_secrets
+        where tenant_id = $1
+          and lower(provider) = lower($2)
+          and coalesce(is_active, true) = true
+      `,
+      [tenantId, provider]
+    );
+
+    return arr(result?.rows);
+  } catch {
+    return [];
+  }
+}
+
+function buildSecretKeySet(secrets = {}, secretRows = []) {
+  return new Set(
+    uniqStrings([
+      ...Object.keys(asObj(secrets)).map((key) => lower(key)),
+      ...arr(secretRows).map((row) => lower(row?.secret_key)),
+    ])
+  );
+}
+
+function hasAnySecretKey(secretKeySet, keys = []) {
+  return arr(keys).some((key) => secretKeySet.has(lower(key)));
+}
+
+function inferPresentSecretValue(secretRows = [], keys = []) {
+  const wanted = new Set(arr(keys).map((key) => lower(key)));
+
+  for (const row of arr(secretRows)) {
+    const secretKey = lower(row?.secret_key);
+    if (!wanted.has(secretKey)) continue;
+
+    const directValue = s(
+      row?.secret_value || row?.value || row?.secretValue || row?.secret_value_plain
+    );
+    if (directValue) return directValue;
+
+    const hasEncryptedPayload =
+      Boolean(s(row?.secret_value_enc)) ||
+      Boolean(s(row?.secret_value_iv)) ||
+      Boolean(s(row?.secret_value_tag));
+
+    if (hasEncryptedPayload) {
+      return "__secret_present__";
+    }
+  }
+
+  return "";
 }
 
 export async function getTenantByKeyOrThrow(db, tenantKey) {
@@ -281,28 +354,59 @@ export async function resolveTenantMetaProviderAccess(
     };
   }
 
+  const provider = lower(
+    matchedChannel.provider || matchedChannel.secrets_ref || "meta"
+  );
+
   const secrets = await dbGetTenantProviderSecrets(
     db,
     matchedChannel.tenant_id,
-    lower(matchedChannel.provider || matchedChannel.secrets_ref || "meta")
+    provider
   );
+
+  const secretRows = await listActiveTenantSecretRows(
+    db,
+    matchedChannel.tenant_id,
+    provider
+  );
+
+  const secretKeySet = buildSecretKeySet(secrets, secretRows);
 
   const pageIdResolved = s(matchedChannel.external_page_id);
   const igUserIdResolved = s(matchedChannel.external_user_id);
-  const pageAccessToken = pickFirstSecret(
-    secrets,
-    "page_access_token",
-    "access_token",
-    "meta_page_access_token"
-  );
-  const appSecret = pickFirstSecret(secrets, "app_secret", "meta_app_secret");
+
+  const pageAccessToken =
+    pickFirstSecret(
+      secrets,
+      "page_access_token",
+      "access_token",
+      "meta_page_access_token"
+    ) ||
+    inferPresentSecretValue(secretRows, [
+      "page_access_token",
+      "access_token",
+      "meta_page_access_token",
+    ]);
+
+  const appSecret =
+    pickFirstSecret(secrets, "app_secret", "meta_app_secret") ||
+    inferPresentSecretValue(secretRows, ["app_secret", "meta_app_secret"]);
+
+  const hasPageAccessTokenSecret =
+    Boolean(pageAccessToken) ||
+    hasAnySecretKey(secretKeySet, [
+      "page_access_token",
+      "access_token",
+      "meta_page_access_token",
+    ]);
+
   let reasonCode = "";
 
   if (!isConnectedStatus(matchedChannel.status)) {
     reasonCode = "channel_not_connected";
   } else if (!pageIdResolved && !igUserIdResolved) {
     reasonCode = "channel_identifiers_missing";
-  } else if (!pageAccessToken) {
+  } else if (!hasPageAccessTokenSecret) {
     reasonCode = "provider_secret_missing";
   }
 
@@ -314,7 +418,7 @@ export async function resolveTenantMetaProviderAccess(
     tenantId: s(matchedChannel.tenant_id),
     matchedChannel,
     providerAccess: {
-      provider: lower(matchedChannel.provider || matchedChannel.secrets_ref || "meta"),
+      provider,
       tenantKey: s(matchedChannel.tenant_key),
       tenantId: s(matchedChannel.tenant_id),
       available,
@@ -323,8 +427,9 @@ export async function resolveTenantMetaProviderAccess(
       igUserId: igUserIdResolved,
       pageAccessToken,
       appSecret,
-      secretKeys: Object.keys(asObj(secrets)).map((key) => lower(key)).filter(Boolean),
+      secretKeys: [...secretKeySet],
       grantedScopes: [],
+      secretBacked: hasPageAccessTokenSecret,
     },
   };
 }
