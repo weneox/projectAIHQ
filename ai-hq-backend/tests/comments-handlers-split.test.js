@@ -179,7 +179,7 @@ test("replyCommentHandler keeps reply orchestration, audit, and gateway semantic
     getOwnedComment: async () => ({
       ok: true,
       comment: {
-        id: "11111111-1111-1111-1111-111111111111",
+        id: "11111111-1111-4111-8111-111111111111",
         tenant_key: "acme",
         tenant_id: "tenant-1",
         channel: "instagram",
@@ -216,7 +216,7 @@ test("replyCommentHandler keeps reply orchestration, audit, and gateway semantic
 
   const req = {
     params: {
-      id: "11111111-1111-1111-1111-111111111111",
+      id: "11111111-1111-4111-8111-111111111111",
     },
     auth: {
       tenantKey: "acme",

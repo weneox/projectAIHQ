@@ -1,6 +1,6 @@
 // src/render/renderSlides.js
 //
-// FINAL v6.1 — premium clean renderer (multi-tenant safe)
+// FINAL v6.2 — premium clean renderer (multi-tenant safe)
 //
 // Goals:
 // ✅ Keep clean source-image handling
@@ -14,11 +14,37 @@
 // ✅ Preserve premium visual balance and render friendliness
 // ✅ Remove NEOX-specific hardcoded fallbacks
 // ✅ Multi-tenant safe defaults
+// ✅ Avoid top-level playwright import crashes in test/runtime module loading
 
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import { chromium } from "playwright";
+
+let playwrightChromiumPromise = null;
+
+async function loadChromium() {
+  if (!playwrightChromiumPromise) {
+    playwrightChromiumPromise = import("playwright")
+      .then((mod) => {
+        const chromium =
+          mod?.chromium || mod?.default?.chromium || null;
+
+        if (!chromium || typeof chromium.launch !== "function") {
+          throw new Error(
+            "Playwright chromium launcher is unavailable from the installed playwright package"
+          );
+        }
+
+        return chromium;
+      })
+      .catch((error) => {
+        playwrightChromiumPromise = null;
+        throw error;
+      });
+  }
+
+  return playwrightChromiumPromise;
+}
 
 function ensureDir(p) {
   fs.mkdirSync(p, { recursive: true });
@@ -906,6 +932,7 @@ export async function renderSlidesToPng({
   ensureDir(outDir);
 
   const html = buildHtml({ slides: normalizedSlides });
+  const chromium = await loadChromium();
   const browser = await chromium.launch({ args: ["--no-sandbox"] });
 
   try {

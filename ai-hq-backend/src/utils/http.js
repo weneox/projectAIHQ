@@ -1,17 +1,66 @@
 // src/utils/http.js
-// FINAL v4.3 — tighter bounded fetch layer for website/source sync
+// FINAL v4.4 — tighter bounded fetch layer for website/source sync
 // goals:
 // - keep exported API shape compatible
 // - fail faster on slow/blocked sites
 // - preserve informative non-2xx status codes like http_403
 // - reduce retry fan-out and total waiting time
 // - keep website entry fetch from burning 30s+ on one source
+// - tolerate lightweight test response mocks that do not implement setHeader()
 
 import { validatePublicFetchUrl } from "./publicFetchSafety.js";
 
+function trySetJsonContentType(res) {
+  if (!res || typeof res !== "object") return;
+
+  const value = "application/json; charset=utf-8";
+
+  try {
+    if (typeof res.setHeader === "function") {
+      res.setHeader("Content-Type", value);
+      return;
+    }
+  } catch {
+    // noop
+  }
+
+  try {
+    if (typeof res.header === "function") {
+      res.header("Content-Type", value);
+      return;
+    }
+  } catch {
+    // noop
+  }
+
+  try {
+    if (typeof res.set === "function") {
+      res.set("Content-Type", value);
+    }
+  } catch {
+    // noop
+  }
+}
+
+function sendJson(res, statusCode, payload) {
+  trySetJsonContentType(res);
+
+  const statusTarget =
+    res && typeof res.status === "function" ? res.status(statusCode) : res;
+
+  if (statusTarget && typeof statusTarget.json === "function") {
+    return statusTarget.json(payload);
+  }
+
+  if (res && typeof res.json === "function") {
+    return res.json(payload);
+  }
+
+  return payload;
+}
+
 export function okJson(res, payload) {
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  return res.status(200).json(payload);
+  return sendJson(res, 200, payload);
 }
 
 export function serviceUnavailableJson(
@@ -19,8 +68,7 @@ export function serviceUnavailableJson(
   error = "database unavailable",
   extra = {}
 ) {
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  return res.status(503).json({
+  return sendJson(res, 503, {
     ok: false,
     error,
     code: "DB_UNAVAILABLE",
