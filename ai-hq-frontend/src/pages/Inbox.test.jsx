@@ -1,6 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const useInboxData = vi.fn();
 const useInboxRealtime = vi.fn();
@@ -8,6 +7,38 @@ const useInboxThreadListSurface = vi.fn();
 const getAppSessionContext = vi.fn();
 const areInternalRoutesEnabled = vi.fn();
 const useInboxComposerSurface = vi.fn();
+const mockNavigate = vi.fn();
+const mockSetSearchParams = vi.fn();
+
+vi.mock("react-router-dom", () => ({
+  MemoryRouter: ({ children }) => children,
+  Link: ({ children, to = "#", ...props }) => (
+    <a href={typeof to === "string" ? to : "#"} {...props}>
+      {children}
+    </a>
+  ),
+  NavLink: ({ children, to = "#", ...props }) => (
+    <a href={typeof to === "string" ? to : "#"} {...props}>
+      {typeof children === "function" ? children({ isActive: false }) : children}
+    </a>
+  ),
+  Navigate: () => null,
+  Outlet: ({ children }) => children ?? null,
+  useNavigate: () => mockNavigate,
+  useLocation: () => ({
+    pathname: "/inbox",
+    search: "",
+    hash: "",
+    state: null,
+    key: "test",
+  }),
+  useParams: () => ({}),
+  useSearchParams: () => [new URLSearchParams(), mockSetSearchParams],
+  useMatch: () => null,
+  useResolvedPath: (to) => ({
+    pathname: typeof to === "string" ? to : "/inbox",
+  }),
+}));
 
 vi.mock("../hooks/useInboxData.js", () => ({
   useInboxData: (...args) => useInboxData(...args),
@@ -36,9 +67,24 @@ vi.mock("../lib/appEntry.js", () => ({
 import Inbox from "./Inbox.jsx";
 
 describe("Inbox", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("renders shared page shell feedback", async () => {
-    getAppSessionContext.mockResolvedValue({ tenantKey: "acme", actorName: "operator" });
+    getAppSessionContext.mockResolvedValue({
+      tenantKey: "acme",
+      actorName: "operator",
+    });
+
     areInternalRoutesEnabled.mockReturnValue(false);
+
+    useInboxRealtime.mockReturnValue({
+      connected: false,
+      reconnecting: false,
+      lastMessageAt: "",
+    });
+
     useInboxThreadListSurface.mockReturnValue({
       filter: "all",
       setFilter: vi.fn(),
@@ -46,8 +92,15 @@ describe("Inbox", () => {
       stats: { open: 0, aiActive: 0, handoff: 0, resolved: 0 },
       filteredThreads: [],
       openThread: vi.fn(),
-      surface: { loading: false, error: "", unavailable: true, ready: false, refresh: vi.fn() },
+      surface: {
+        loading: false,
+        error: "",
+        unavailable: true,
+        ready: false,
+        refresh: vi.fn(),
+      },
     });
+
     useInboxComposerSurface.mockReturnValue({
       replyText: "",
       setReplyText: vi.fn(),
@@ -64,6 +117,7 @@ describe("Inbox", () => {
       handleSend: vi.fn(),
       handleRelease: vi.fn(),
     });
+
     useInboxData.mockReturnValue({
       threads: [],
       setThreads: vi.fn(),
@@ -120,15 +174,16 @@ describe("Inbox", () => {
       openLeadDetail: vi.fn(),
     });
 
-    render(
-      <MemoryRouter>
-        <Inbox />
-      </MemoryRouter>
-    );
+    render(<Inbox />);
 
-    expect(await screen.findByRole("heading", { name: /^inbox$/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /^inbox$/i })
+    ).toBeInTheDocument();
+
     expect(screen.getByText(/operator reply sent/i)).toBeInTheDocument();
-    expect(screen.getByText(/inbox operations are temporarily unavailable/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/inbox operations are temporarily unavailable/i)
+    ).toBeInTheDocument();
     expect(screen.getByText(/db disabled/i)).toBeInTheDocument();
   });
 });

@@ -1,93 +1,93 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="25" failures="0" errors="0" time="4.3922199">
-    <testsuite name="src/pages/AdminTeam.test.jsx" timestamp="2026-03-27T18:41:20.782Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.014333">
-        <testcase classname="src/pages/AdminTeam.test.jsx" name="AdminTeam &gt; renders shared surface banner feedback" time="0.0142443">
+<testsuites name="vitest tests" tests="25" failures="0" errors="0" time="2.7505027">
+    <testsuite name="src/pages/AdminTeam.test.jsx" timestamp="2026-03-27T18:57:39.990Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0132614">
+        <testcase classname="src/pages/AdminTeam.test.jsx" name="AdminTeam &gt; renders shared surface banner feedback" time="0.0131863">
         </testcase>
     </testsuite>
-    <testsuite name="src/pages/AdminTenants.test.jsx" timestamp="2026-03-27T18:41:20.784Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0128495">
-        <testcase classname="src/pages/AdminTenants.test.jsx" name="AdminTenants &gt; renders shared surface banner feedback" time="0.0127081">
+    <testsuite name="src/pages/AdminTenants.test.jsx" timestamp="2026-03-27T18:57:39.992Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0086881">
+        <testcase classname="src/pages/AdminTenants.test.jsx" name="AdminTenants &gt; renders shared surface banner feedback" time="0.0085939">
         </testcase>
     </testsuite>
-    <testsuite name="src/pages/Comments.test.jsx" timestamp="2026-03-27T18:41:20.785Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0173467">
-        <testcase classname="src/pages/Comments.test.jsx" name="Comments &gt; renders shared surface feedback through the page shell" time="0.0172296">
+    <testsuite name="src/pages/Comments.test.jsx" timestamp="2026-03-27T18:57:39.993Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0143061">
+        <testcase classname="src/pages/Comments.test.jsx" name="Comments &gt; renders shared surface feedback through the page shell" time="0.0142336">
         </testcase>
     </testsuite>
-    <testsuite name="src/pages/Executions.smoke.test.jsx" timestamp="2026-03-27T18:41:20.786Z" hostname="Emil" tests="2" failures="0" errors="0" skipped="0" time="0.2980583">
-        <testcase classname="src/pages/Executions.smoke.test.jsx" name="Executions durable surface &gt; renders summary, detail, and manual retry flow" time="0.2602599">
+    <testsuite name="src/pages/Executions.smoke.test.jsx" timestamp="2026-03-27T18:57:39.993Z" hostname="Emil" tests="2" failures="0" errors="0" skipped="0" time="0.1191286">
+        <testcase classname="src/pages/Executions.smoke.test.jsx" name="Executions durable surface &gt; renders summary, detail, and manual retry flow" time="0.0968907">
         </testcase>
-        <testcase classname="src/pages/Executions.smoke.test.jsx" name="Executions durable surface &gt; shows honest loading and error states" time="0.0374369">
-        </testcase>
-    </testsuite>
-    <testsuite name="src/pages/Inbox.test.jsx" timestamp="2026-03-27T18:41:20.787Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.1277392">
-        <testcase classname="src/pages/Inbox.test.jsx" name="Inbox &gt; renders shared page shell feedback" time="0.1273005">
+        <testcase classname="src/pages/Executions.smoke.test.jsx" name="Executions durable surface &gt; shows honest loading and error states" time="0.0220703">
         </testcase>
     </testsuite>
-    <testsuite name="src/pages/Voice.test.jsx" timestamp="2026-03-27T18:41:20.787Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0145168">
-        <testcase classname="src/pages/Voice.test.jsx" name="Voice &gt; renders shared banner state through the admin shell" time="0.0144449">
+    <testsuite name="src/pages/Inbox.test.jsx" timestamp="2026-03-27T18:57:39.994Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0910767">
+        <testcase classname="src/pages/Inbox.test.jsx" name="Inbox &gt; renders shared page shell feedback" time="0.090924">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/admin/AdminPageShell.test.jsx" timestamp="2026-03-27T18:41:20.788Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0185807">
-        <testcase classname="src/components/admin/AdminPageShell.test.jsx" name="AdminPageShell &gt; renders page metadata, shared banners, and header actions" time="0.0184731">
+    <testsuite name="src/pages/Voice.test.jsx" timestamp="2026-03-27T18:57:39.994Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0144407">
+        <testcase classname="src/pages/Voice.test.jsx" name="Voice &gt; renders shared banner state through the admin shell" time="0.0143519">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/inbox/InboxComposer.test.jsx" timestamp="2026-03-27T18:41:20.788Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0090522">
-        <testcase classname="src/components/inbox/InboxComposer.test.jsx" name="InboxComposer &gt; renders explicit composer surface feedback" time="0.0089591">
+    <testsuite name="src/components/admin/AdminPageShell.test.jsx" timestamp="2026-03-27T18:57:39.995Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0154562">
+        <testcase classname="src/components/admin/AdminPageShell.test.jsx" name="AdminPageShell &gt; renders page metadata, shared banners, and header actions" time="0.0153633">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/inbox/InboxDetailPanel.test.jsx" timestamp="2026-03-27T18:41:20.789Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0101502">
-        <testcase classname="src/components/inbox/InboxDetailPanel.test.jsx" name="InboxDetailPanel &gt; renders explicit detail surface feedback" time="0.0100627">
+    <testsuite name="src/components/inbox/InboxComposer.test.jsx" timestamp="2026-03-27T18:57:39.996Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0089046">
+        <testcase classname="src/components/inbox/InboxComposer.test.jsx" name="InboxComposer &gt; renders explicit composer surface feedback" time="0.0088256">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/inbox/InboxLeadPanel.test.jsx" timestamp="2026-03-27T18:41:20.790Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0035219">
-        <testcase classname="src/components/inbox/InboxLeadPanel.test.jsx" name="InboxLeadPanel &gt; renders explicit lead surface feedback" time="0.003448">
+    <testsuite name="src/components/inbox/InboxDetailPanel.test.jsx" timestamp="2026-03-27T18:57:39.997Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0103226">
+        <testcase classname="src/components/inbox/InboxDetailPanel.test.jsx" name="InboxDetailPanel &gt; renders explicit detail surface feedback" time="0.0102496">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/inbox/InboxThreadListPanel.test.jsx" timestamp="2026-03-27T18:41:20.790Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0230036">
-        <testcase classname="src/components/inbox/InboxThreadListPanel.test.jsx" name="InboxThreadListPanel &gt; renders explicit thread list surface data" time="0.0229213">
+    <testsuite name="src/components/inbox/InboxLeadPanel.test.jsx" timestamp="2026-03-27T18:57:39.998Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0033789">
+        <testcase classname="src/components/inbox/InboxLeadPanel.test.jsx" name="InboxLeadPanel &gt; renders explicit lead surface feedback" time="0.0032703">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/inbox/RetryQueuePanel.test.jsx" timestamp="2026-03-27T18:41:20.791Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0070141">
-        <testcase classname="src/components/inbox/RetryQueuePanel.test.jsx" name="RetryQueuePanel &gt; renders shared banner feedback" time="0.006932">
+    <testsuite name="src/components/inbox/InboxThreadListPanel.test.jsx" timestamp="2026-03-27T18:57:39.998Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0245185">
+        <testcase classname="src/components/inbox/InboxThreadListPanel.test.jsx" name="InboxThreadListPanel &gt; renders explicit thread list surface data" time="0.0244482">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/inbox/ThreadOutboundAttemptsPanel.test.jsx" timestamp="2026-03-27T18:41:20.792Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0054717">
-        <testcase classname="src/components/inbox/ThreadOutboundAttemptsPanel.test.jsx" name="ThreadOutboundAttemptsPanel &gt; renders shared banner feedback" time="0.0053826">
+    <testsuite name="src/components/inbox/RetryQueuePanel.test.jsx" timestamp="2026-03-27T18:57:39.999Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0049561">
+        <testcase classname="src/components/inbox/RetryQueuePanel.test.jsx" name="RetryQueuePanel &gt; renders shared banner feedback" time="0.0048895">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/settings/ChannelsPanel.test.jsx" timestamp="2026-03-27T18:41:20.792Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0169065">
-        <testcase classname="src/components/settings/ChannelsPanel.test.jsx" name="ChannelsPanel &gt; renders shared surface banner feedback for channel async state" time="0.0168186">
+    <testsuite name="src/components/inbox/ThreadOutboundAttemptsPanel.test.jsx" timestamp="2026-03-27T18:57:39.999Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0049745">
+        <testcase classname="src/components/inbox/ThreadOutboundAttemptsPanel.test.jsx" name="ThreadOutboundAttemptsPanel &gt; renders shared banner feedback" time="0.0049043">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/settings/SecretsPanel.test.jsx" timestamp="2026-03-27T18:41:20.793Z" hostname="Emil" tests="2" failures="0" errors="0" skipped="0" time="0.0413043">
-        <testcase classname="src/components/settings/SecretsPanel.test.jsx" name="SecretsPanel &gt; renders shared surface banner feedback for admin secret async state" time="0.0114903">
-        </testcase>
-        <testcase classname="src/components/settings/SecretsPanel.test.jsx" name="SecretsPanel &gt; renders provider secret access as read-only for insufficient roles" time="0.0296191">
+    <testsuite name="src/components/settings/ChannelsPanel.test.jsx" timestamp="2026-03-27T18:57:40.000Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0161603">
+        <testcase classname="src/components/settings/ChannelsPanel.test.jsx" name="ChannelsPanel &gt; renders shared surface banner feedback for channel async state" time="0.0160902">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/settings/SettingsSurfaceBanner.test.jsx" timestamp="2026-03-27T18:41:20.793Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0082901">
-        <testcase classname="src/components/settings/SettingsSurfaceBanner.test.jsx" name="SettingsSurfaceBanner &gt; renders save feedback and unavailable refresh affordances consistently" time="0.0082055">
+    <testsuite name="src/components/settings/SecretsPanel.test.jsx" timestamp="2026-03-27T18:57:40.000Z" hostname="Emil" tests="2" failures="0" errors="0" skipped="0" time="0.0409947">
+        <testcase classname="src/components/settings/SecretsPanel.test.jsx" name="SecretsPanel &gt; renders shared surface banner feedback for admin secret async state" time="0.008876">
+        </testcase>
+        <testcase classname="src/components/settings/SecretsPanel.test.jsx" name="SecretsPanel &gt; renders provider secret access as read-only for insufficient roles" time="0.0320003">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/settings/TeamPanel.test.jsx" timestamp="2026-03-27T18:41:20.794Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0380633">
-        <testcase classname="src/components/settings/TeamPanel.test.jsx" name="TeamPanel &gt; renders shared surface banner feedback for team async state" time="0.0379819">
+    <testsuite name="src/components/settings/SettingsSurfaceBanner.test.jsx" timestamp="2026-03-27T18:57:40.001Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0071005">
+        <testcase classname="src/components/settings/SettingsSurfaceBanner.test.jsx" name="SettingsSurfaceBanner &gt; renders save feedback and unavailable refresh affordances consistently" time="0.0070319">
         </testcase>
     </testsuite>
-    <testsuite name="src/pages/Settings/SettingsController.smoke.test.jsx" timestamp="2026-03-27T18:41:20.794Z" hostname="Emil" tests="3" failures="0" errors="0" skipped="0" time="3.5882525">
-        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders workspace and business-brain sections through the shared async surface language" time="1.1271253">
-        </testcase>
-        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders source sync and knowledge review truth-maintenance messaging" time="1.3785983">
-        </testcase>
-        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders operational readiness fail states honestly" time="1.0806604">
+    <testsuite name="src/components/settings/TeamPanel.test.jsx" timestamp="2026-03-27T18:57:40.001Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.027559">
+        <testcase classname="src/components/settings/TeamPanel.test.jsx" name="TeamPanel &gt; renders shared surface banner feedback for team async state" time="0.0274934">
         </testcase>
     </testsuite>
-    <testsuite name="src/pages/Truth/TruthViewerPage.smoke.test.jsx" timestamp="2026-03-27T18:41:20.795Z" hostname="Emil" tests="2" failures="0" errors="0" skipped="0" time="0.0843106">
-        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; renders approved truth metadata, provenance, and history" time="0.0625497">
+    <testsuite name="src/pages/Settings/SettingsController.smoke.test.jsx" timestamp="2026-03-27T18:57:40.001Z" hostname="Emil" tests="3" failures="0" errors="0" skipped="0" time="2.2185862">
+        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders workspace and business-brain sections through the shared async surface language" time="0.9102584">
         </testcase>
-        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; shows an explicit approved truth unavailable state without fallback data" time="0.0215951">
+        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders source sync and knowledge review truth-maintenance messaging" time="0.8708762">
+        </testcase>
+        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders operational readiness fail states honestly" time="0.4350828">
         </testcase>
     </testsuite>
-    <testsuite name="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" timestamp="2026-03-27T18:41:20.796Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0534547">
-        <testcase classname="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" name="TrustMaintenanceSection &gt; renders trust repair state and dispatches route actions from the extracted section" time="0.0533565">
+    <testsuite name="src/pages/Truth/TruthViewerPage.smoke.test.jsx" timestamp="2026-03-27T18:57:40.002Z" hostname="Emil" tests="2" failures="0" errors="0" skipped="0" time="0.0632739">
+        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; renders approved truth metadata, provenance, and history" time="0.0441186">
+        </testcase>
+        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; shows an explicit approved truth unavailable state without fallback data" time="0.0190252">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" timestamp="2026-03-27T18:57:40.002Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0434151">
+        <testcase classname="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" name="TrustMaintenanceSection &gt; renders trust repair state and dispatches route actions from the extracted section" time="0.0432893">
         </testcase>
     </testsuite>
 </testsuites>
