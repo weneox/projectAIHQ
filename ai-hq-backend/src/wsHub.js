@@ -1,4 +1,4 @@
-import wsPkg from "ws";
+import { createRequire } from "node:module";
 import {
   isOperatorRealtimeRole,
   verifyRealtimeTicket,
@@ -9,14 +9,17 @@ import {
 } from "@aihq/shared-contracts/realtime";
 import { recordRealtimeAuthFailure } from "./observability/runtimeSignals.js";
 
-const WebSocketServer =
-  wsPkg?.WebSocketServer ||
-  wsPkg?.Server ||
-  wsPkg?.default?.WebSocketServer ||
-  wsPkg?.default?.Server;
+const require = createRequire(import.meta.url);
+const wsPkg = require("ws");
 
-if (typeof WebSocketServer !== "function") {
-  throw new TypeError("Compatible WebSocketServer export was not found from ws");
+function resolveWebSocketServer() {
+  return (
+    wsPkg?.WebSocketServer ||
+    wsPkg?.Server ||
+    wsPkg?.default?.WebSocketServer ||
+    wsPkg?.default?.Server ||
+    null
+  );
 }
 
 function s(v, d = "") {
@@ -68,6 +71,7 @@ function scanScope(value, depth = 0) {
       value.scope?.tenantKey ||
       value.scope?.tenant_key
   );
+
   const tenantId = s(
     value.tenantId ||
       value.tenant_id ||
@@ -152,6 +156,12 @@ function canReceive(scope = {}, message = {}) {
 }
 
 export function createWsHub({ server, logger = null }) {
+  const WebSocketServer = resolveWebSocketServer();
+
+  if (typeof WebSocketServer !== "function") {
+    throw new TypeError("WebSocketServer constructor could not be resolved from ws");
+  }
+
   const wss = new WebSocketServer({ server, path: "/ws" });
   const clients = new Set();
 
