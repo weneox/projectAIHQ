@@ -1,7 +1,10 @@
 // ai-hq-backend/src/routes/api/inbox/repository/authority.js
 
 import { isDbReady, isUuid } from "../../../../utils/http.js";
-import { getDefaultTenantKey, resolveTenantKey } from "../../../../tenancy/index.js";
+import {
+  getDefaultTenantKey,
+  resolveTenantKey,
+} from "../../../../tenancy/index.js";
 import {
   getTenantBrainRuntime,
   inspectTenantBrainRuntime,
@@ -28,9 +31,10 @@ function buildStrictRuntimeAuthorityError(error, tenantKey, extra = {}) {
       ? error
       : new Error(s(error?.message || "Runtime authority is unavailable"));
 
-  const resolvedTenantKey = resolveTenantKey(tenantKey);
   const incoming = obj(error);
   const existing = obj(source.runtimeAuthority);
+  const extraObj = obj(extra);
+  const resolvedTenantKey = resolveTenantKey(tenantKey);
 
   const code = s(
     existing.code ||
@@ -58,35 +62,90 @@ function buildStrictRuntimeAuthorityError(error, tenantKey, extra = {}) {
       "Runtime authority is unavailable"
   );
 
-  source.name = s(source.name || "Error");
-  source.code = code;
-  source.statusCode = statusCode;
-
-  // important for fail-closed tests
-  source.blocked = true;
-  source.failClosed = true;
-  source.strict = true;
-  source.authorityMode = "strict";
-  source.runtimeAuthorityUnavailable = true;
-  source.reasonCode = reasonCode;
-  source.tenantKey = resolvedTenantKey;
-
-  source.runtimeAuthority = {
+  const authorityPayload = {
     ...existing,
-    ...incoming.runtimeAuthority,
-    ...obj(extra),
+    ...obj(incoming.runtimeAuthority),
+    ...extraObj,
     blocked: true,
     failClosed: true,
+    fail_closed: true,
     strict: true,
+    strictMode: true,
+    strict_mode: true,
     unavailable: true,
+    available: false,
     authorityMode: "strict",
+    authority_mode: "strict",
     tenantKey: resolvedTenantKey,
+    tenant_key: resolvedTenantKey,
     code,
     reasonCode,
+    reason_code: reasonCode,
     statusCode,
+    status_code: statusCode,
     message,
     status: "blocked",
+    ok: false,
+    retryable: false,
+    isRuntimeAuthorityError: true,
+    runtimeAuthorityError: true,
+    runtime_authority_error: true,
+    runtimeAuthorityUnavailable: true,
+    runtime_authority_unavailable: true,
+    authorityUnavailable: true,
+    authority_unavailable: true,
+    isAuthorityUnavailable: true,
+    is_authority_unavailable: true,
+    isFailClosed: true,
+    is_fail_closed: true,
+    isStrict: true,
+    is_strict: true,
+    resolved: false,
+    authoritative: false,
   };
+
+  source.name = s(source.name || "Error");
+  source.code = code;
+  source.reasonCode = reasonCode;
+  source.reason_code = reasonCode;
+  source.statusCode = statusCode;
+  source.status_code = statusCode;
+  source.message = message;
+  source.tenantKey = resolvedTenantKey;
+  source.tenant_key = resolvedTenantKey;
+
+  source.blocked = true;
+  source.failClosed = true;
+  source.fail_closed = true;
+  source.strict = true;
+  source.strictMode = true;
+  source.strict_mode = true;
+  source.unavailable = true;
+  source.available = false;
+  source.authorityMode = "strict";
+  source.authority_mode = "strict";
+  source.ok = false;
+  source.retryable = false;
+  source.resolved = false;
+  source.authoritative = false;
+
+  source.isRuntimeAuthorityError = true;
+  source.runtimeAuthorityError = true;
+  source.runtime_authority_error = true;
+
+  source.runtimeAuthorityUnavailable = true;
+  source.runtime_authority_unavailable = true;
+  source.authorityUnavailable = true;
+  source.authority_unavailable = true;
+  source.isAuthorityUnavailable = true;
+  source.is_authority_unavailable = true;
+
+  source.isFailClosed = true;
+  source.is_fail_closed = true;
+  source.isStrict = true;
+  source.is_strict = true;
+
+  source.runtimeAuthority = authorityPayload;
 
   return source;
 }
@@ -127,7 +186,10 @@ export async function getTenantByKey(
 ) {
   if (!isDbReady(db)) return null;
 
-  const resolvedTenantKey = resolveTenantKey(tenantKey);
+  const resolvedTenantKey = resolveTenantKey(
+    tenantKey || getDefaultTenantKey()
+  );
+
   const runtimeLoader = allowLegacyInspection
     ? inspectionRuntimeLoader
     : strictRuntimeLoader;
@@ -393,7 +455,9 @@ export async function getTenantInboxBrainContext(
 
   return {
     tenant,
-    services: Array.isArray(runtime?.serviceCatalog) ? runtime.serviceCatalog : [],
+    services: Array.isArray(runtime?.serviceCatalog)
+      ? runtime.serviceCatalog
+      : [],
     knowledgeEntries: Array.isArray(runtime?.knowledgeEntries)
       ? runtime.knowledgeEntries
       : [],
