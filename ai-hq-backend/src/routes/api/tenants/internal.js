@@ -108,28 +108,18 @@ function createSafeLogger(baseLogger, childContext = null) {
   };
 }
 
-function inferMatchedMetaIds(matchedChannel = {}, fallback = {}) {
+function inferMatchedMetaIds(matchedChannel = {}) {
   const channel = obj(matchedChannel);
-  const extra = obj(fallback);
 
   const pageId = cleanNullableString(
-    channel.external_page_id ||
-      channel.pageId ||
-      channel.page_id ||
-      extra.external_page_id ||
-      extra.pageId ||
-      extra.page_id
+    channel.external_page_id || channel.pageId || channel.page_id
   );
 
   const igUserId = cleanNullableString(
     channel.external_user_id ||
       channel.igUserId ||
       channel.ig_user_id ||
-      channel.instagram_business_account_id ||
-      extra.external_user_id ||
-      extra.igUserId ||
-      extra.ig_user_id ||
-      extra.instagram_business_account_id
+      channel.instagram_business_account_id
   );
 
   return { pageId, igUserId };
@@ -138,11 +128,10 @@ function inferMatchedMetaIds(matchedChannel = {}, fallback = {}) {
 function normalizeOperationalChannels({
   operationalChannels = {},
   matchedChannel = {},
-  fallback = {},
 } = {}) {
   const base = obj(operationalChannels);
   const meta = obj(base.meta);
-  const inferred = inferMatchedMetaIds(matchedChannel, fallback);
+  const inferred = inferMatchedMetaIds(matchedChannel);
 
   const pageId = cleanNullableString(
     meta.pageId || meta.page_id || inferred.pageId
@@ -154,8 +143,7 @@ function normalizeOperationalChannels({
       inferred.igUserId
   );
 
-  const inferredReady =
-    meta.ready === true || Boolean(pageId || igUserId);
+  const inferredReady = meta.ready === true || Boolean(pageId || igUserId);
 
   const reasonCode = inferredReady
     ? cleanNullableString(meta.reasonCode || meta.reason_code)
@@ -197,15 +185,16 @@ function normalizeProviderAccess(providerAccess = {}, matchedChannel = {}) {
     ...(pageAccessToken ? ["page_access_token"] : []),
   ]);
 
-  const available =
-    explicitAvailable !== null ? explicitAvailable : Boolean(pageAccessToken);
+  const available = Boolean(pageAccessToken) || explicitAvailable === true;
 
   const reasonCode = available
     ? cleanNullableString(source.reasonCode || source.reason_code)
     : s(
         source.reasonCode ||
           source.reason_code ||
-          (secretKeys.length ? "provider_access_incomplete" : "provider_secret_missing")
+          (secretKeys.length
+            ? "provider_access_incomplete"
+            : "provider_secret_missing")
       );
 
   const inferredIds = inferMatchedMetaIds(matched);
@@ -220,8 +209,12 @@ function normalizeProviderAccess(providerAccess = {}, matchedChannel = {}) {
     available,
     reasonCode,
     reason_code: reasonCode,
-    pageId: cleanNullableString(source.pageId || source.page_id || inferredIds.pageId),
-    page_id: cleanNullableString(source.pageId || source.page_id || inferredIds.pageId),
+    pageId: cleanNullableString(
+      source.pageId || source.page_id || inferredIds.pageId
+    ),
+    page_id: cleanNullableString(
+      source.pageId || source.page_id || inferredIds.pageId
+    ),
     igUserId: cleanNullableString(
       source.igUserId ||
         source.ig_user_id ||
@@ -589,7 +582,6 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         const operationalChannels = normalizeOperationalChannels({
           operationalChannels: builtOperationalChannels,
           matchedChannel,
-          fallback: checked.value,
         });
 
         const providerAccess = normalizeProviderAccess(
