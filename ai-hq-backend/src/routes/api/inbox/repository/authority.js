@@ -1,3 +1,5 @@
+// ai-hq-backend/src/routes/api/inbox/repository/authority.js
+
 import { isDbReady, isUuid } from "../../../../utils/http.js";
 import { getDefaultTenantKey, resolveTenantKey } from "../../../../tenancy/index.js";
 import {
@@ -19,6 +21,39 @@ import {
   queryRows,
 } from "./shared.js";
 import { getInboxThreadState } from "./threadState.js";
+
+function buildStrictRuntimeAuthorityError(error, tenantKey, extra = {}) {
+  const err =
+    error instanceof Error ? error : new Error(s(error?.message || "Runtime authority is unavailable"));
+
+  const resolvedTenantKey = resolveTenantKey(tenantKey);
+
+  const existing = obj(err.runtimeAuthority);
+  const code = s(
+    existing.code || err.code || "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE"
+  );
+  const reasonCode = s(
+    existing.reasonCode ||
+      err.reasonCode ||
+      lowerSlug(code || "runtime_authority_unavailable") ||
+      "runtime_authority_unavailable"
+  );
+
+  err.code = code;
+  err.statusCode = Number(err.statusCode || existing.statusCode || 409);
+  err.runtimeAuthority = {
+    ...existing,
+    blocked: true,
+    authorityMode: "strict",
+    tenantKey: resolvedTenantKey,
+    code,
+    reasonCode,
+    message: s(existing.message || err.message),
+    ...obj(extra),
+  };
+
+  return err;
+}
 
 export async function getTenantByKey(
   db,
@@ -252,21 +287,38 @@ export async function getTenantInboxBrainContext(
     threadStateLoader = getInboxThreadState,
   } = {}
 ) {
-  const runtime = await runtimeLoader({
-    db,
-    tenantKey,
-    authorityMode: "strict",
-  });
+  let runtime = null;
+
+  try {
+    runtime = await runtimeLoader({
+      db,
+      tenantKey,
+      authorityMode: "strict",
+    });
+  } catch (error) {
+    if (isRuntimeAuthorityError(error)) {
+      throw buildStrictRuntimeAuthorityError(error, tenantKey, {
+        consumer: "inbox_brain_context",
+      });
+    }
+    throw error;
+  }
+
   const tenant = runtime?.tenant || null;
 
   if (!tenant?.id) {
-    return {
-      tenant: null,
-      services: [],
-      knowledgeEntries: [],
-      responsePlaybooks: [],
-      threadState: null,
-    };
+    throw buildStrictRuntimeAuthorityError(
+      {
+        message:
+          "Tenant runtime authority is unavailable because no authoritative tenant payload was returned.",
+        code: "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE",
+        statusCode: 409,
+      },
+      tenantKey,
+      {
+        consumer: "inbox_brain_context",
+      }
+    );
   }
 
   let threadState = null;
@@ -277,8 +329,12 @@ export async function getTenantInboxBrainContext(
   return {
     tenant,
     services: Array.isArray(runtime?.serviceCatalog) ? runtime.serviceCatalog : [],
-    knowledgeEntries: Array.isArray(runtime?.knowledgeEntries) ? runtime.knowledgeEntries : [],
-    responsePlaybooks: Array.isArray(runtime?.responsePlaybooks) ? runtime.responsePlaybooks : [],
+    knowledgeEntries: Array.isArray(runtime?.knowledgeEntries)
+      ? runtime.knowledgeEntries
+      : [],
+    responsePlaybooks: Array.isArray(runtime?.responsePlaybooks)
+      ? runtime.responsePlaybooks
+      : [],
     threadState,
   };
 }
