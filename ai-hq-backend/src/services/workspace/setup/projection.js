@@ -187,25 +187,24 @@ async function resolvePersistedReviewSessionId(db, actor = {}, session = {}) {
   const tenantId = s(actor?.tenantId);
 
   if (!rawSessionId || !tenantId) return "";
+
+  // Unit/non-DB fallback only
   if (!hasDbQuery(db)) return rawSessionId;
 
-  try {
-    const result = await q(
-      db,
-      `
-        select id
-        from tenant_setup_review_sessions
-        where id = $1
-          and tenant_id = $2
-        limit 1
-      `,
-      [rawSessionId, tenantId]
-    );
+  const result = await q(
+    db,
+    `
+      select id
+      from tenant_setup_review_sessions
+      where id = $1
+        and tenant_id = $2
+      limit 1
+    `,
+    [rawSessionId, tenantId]
+  );
 
-    return s(result.rows?.[0]?.id || rawSessionId);
-  } catch {
-    return rawSessionId;
-  }
+  // DB-backed flow must remain FK-safe
+  return s(result.rows?.[0]?.id);
 }
 
 export function buildCanonicalProfileSourceSummary({
