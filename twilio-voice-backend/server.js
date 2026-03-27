@@ -4,7 +4,7 @@ import cors from "cors";
 import helmet from "helmet";
 import http from "http";
 import twilio from "twilio";
-import ws from "ws";
+import * as ws from "ws";
 import {
   createStructuredLogger,
   requestContextMiddleware,
@@ -39,10 +39,15 @@ const logger = createStructuredLogger({
   service: "twilio-voice-backend",
   env: cfg.APP_ENV,
 });
-const { WebSocketServer } = ws;
+const WebSocketServer =
+  ws.WebSocketServer || ws.Server || ws.default?.WebSocketServer || ws.default?.Server;
 const startupSmoke = ["1", "true", "yes"].includes(
   String(process.env.STARTUP_SMOKE || "").trim().toLowerCase()
 );
+
+if (typeof WebSocketServer !== "function") {
+  throw new TypeError("WebSocketServer constructor unavailable");
+}
 
 if (cfg.TRUST_PROXY) {
   app.set("trust proxy", 1);

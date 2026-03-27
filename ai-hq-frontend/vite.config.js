@@ -12,6 +12,11 @@ export default defineConfig({
     maxWorkers: 1,
     minWorkers: 1,
     isolate: true,
+    server: {
+      deps: {
+        inline: ["react-router", "react-router-dom"],
+      },
+    },
   },
   build: {
     rollupOptions: {
