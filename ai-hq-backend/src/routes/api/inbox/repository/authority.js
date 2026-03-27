@@ -76,8 +76,19 @@ function buildFailClosedInboxBrainContext() {
   };
 }
 
-function shouldThrowOnMissingTenantPayload(runtimeLoader) {
-  return runtimeLoader === getTenantBrainRuntime;
+function runtimeHasAuthorityMarkers(runtime = {}) {
+  return (
+    Object.keys(obj(runtime?.authority)).length > 0 ||
+    Object.keys(obj(runtime?.runtimeAuthority)).length > 0 ||
+    !!s(runtime?.code) ||
+    !!s(runtime?.reasonCode) ||
+    lowerSlug(runtime?.authorityMode) === "strict"
+  );
+}
+
+function shouldThrowOnMissingTenantPayload(runtimeLoader, runtime) {
+  if (runtimeLoader === getTenantBrainRuntime) return true;
+  return runtimeHasAuthorityMarkers(runtime);
 }
 
 export async function getTenantByKey(
@@ -329,7 +340,7 @@ export async function getTenantInboxBrainContext(
   const tenant = runtime?.tenant || null;
 
   if (!tenant?.id) {
-    if (shouldThrowOnMissingTenantPayload(runtimeLoader)) {
+    if (shouldThrowOnMissingTenantPayload(runtimeLoader, runtime)) {
       throw buildStrictRuntimeAuthorityError(
         {
           code: "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE",

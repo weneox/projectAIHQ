@@ -1,3 +1,5 @@
+// ai-hq-backend/src/observability/runtimeSignals.js
+
 import { cfg } from "../config.js";
 
 function s(v, d = "") {
@@ -105,10 +107,7 @@ function recordRecent(name, labels = {}) {
 function countRecent(name, { withinMs = null } = {}) {
   const windowMs = Math.max(
     1_000,
-    n(
-      withinMs,
-      n(cfg?.observability?.recentSignalWindowMs, 5 * 60_000)
-    )
+    n(withinMs, n(cfg?.observability?.recentSignalWindowMs, 5 * 60_000))
   );
   const cutoff = Date.now() - windowMs;
   let total = 0;
@@ -182,7 +181,9 @@ export function getWorkerSnapshot(workerName) {
 }
 
 export function getAllWorkerSnapshots() {
-  return Object.fromEntries([...workerStore.entries()].map(([key, value]) => [key, { ...value }]));
+  return Object.fromEntries(
+    [...workerStore.entries()].map(([key, value]) => [key, { ...value }])
+  );
 }
 
 function ageMs(ts) {
@@ -204,16 +205,24 @@ export function classifyWorkerHealth(state = null) {
     n(cfg?.observability?.staleWorkerHeartbeatMs, 2 * 60_000)
   );
   const heartbeatAgeMs = ageMs(state?.lastHeartbeatAt);
-  const stale = heartbeatAgeMs !== null && heartbeatAgeMs > staleAfterMs;
+
+  const stale =
+    state?.running === true
+      ? false
+      : heartbeatAgeMs !== null && heartbeatAgeMs > staleAfterMs;
 
   return {
-    status: stale ? "stale" : state?.running ? "running" : "idle",
+    status: state?.running ? "running" : stale ? "stale" : "idle",
     stale,
     ageMs: heartbeatAgeMs,
   };
 }
 
-export function recordDurableExecutionCreated({ provider = "", channel = "", actionType = "" } = {}) {
+export function recordDurableExecutionCreated({
+  provider = "",
+  channel = "",
+  actionType = "",
+} = {}) {
   incrementCounter("durable_executions_created_total", {
     provider,
     channel,
