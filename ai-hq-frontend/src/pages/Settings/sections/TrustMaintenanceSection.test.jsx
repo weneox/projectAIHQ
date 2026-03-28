@@ -236,6 +236,7 @@ describe("TrustMaintenanceSection", () => {
                 {
                   id: "decision-1",
                   eventType: "runtime_health_transition",
+                  eventLabel: "Runtime Health Transition",
                   group: "runtime",
                   groupLabel: "Runtime and health",
                   timestamp: "2026-03-25T10:00:00.000Z",
@@ -244,9 +245,33 @@ describe("TrustMaintenanceSection", () => {
                   surface: "tenant",
                   channelType: "unknown",
                   policyOutcome: "blocked_until_repair",
+                  policyOutcomeLabel: "Blocked Until Repair",
                   reasonCodes: ["projection_missing"],
                   runtimeProjectionId: "projection-old",
                   affectedSurfaces: ["voice", "inbox"],
+                  runtimeHealthPosture: {
+                    primaryLabel: "Missing",
+                    detail: "Projection Missing",
+                  },
+                  decisionContextSnapshot: {
+                    objectVersion: "projection-old",
+                    projectionStatus: "missing",
+                    controlScope: "tenant_default",
+                    eventCategory: "runtime",
+                    channelSurface: "tenant",
+                    summary:
+                      "Projection projection-old · Runtime Missing",
+                  },
+                  remediation: {
+                    blocked: true,
+                    repairRequired: true,
+                    headline:
+                      "Repair strict runtime authority before autonomous execution can resume.",
+                    repair:
+                      "Check projection health, repair status, and rebuild runtime authority from approved truth.",
+                    nextActionLabel: "Rebuild runtime projection",
+                    requiredRole: "operator",
+                  },
                   recommendedNextAction: {
                     label: "Rebuild runtime projection",
                   },
@@ -279,8 +304,14 @@ describe("TrustMaintenanceSection", () => {
     expect(screen.getByText(/allowed, reviewed, handed off, or blocked by surface/i)).toBeInTheDocument();
     expect(screen.getByText(/latest approved change footprint/i)).toBeInTheDocument();
     expect(screen.getByText(/decision timeline and incident replay context/i)).toBeInTheDocument();
-    expect(screen.getByText(/runtime health transition/i)).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: /rebuild runtime projection/i })[0]);
+    expect(screen.getAllByText(/runtime health transition/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/repair strict runtime authority before autonomous execution can resume/i)
+    ).toBeInTheDocument();
+    const repairButtons = screen.getAllByRole("button", {
+      name: /rebuild runtime projection/i,
+    });
+    fireEvent.click(repairButtons[repairButtons.length - 1]);
     await waitFor(() => {
       expect(dispatchRepairAction).toHaveBeenCalledWith(
         expect.objectContaining({

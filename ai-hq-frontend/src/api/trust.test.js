@@ -194,6 +194,7 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
           {
             id: "decision-1",
             eventType: "blocked_action_outcome",
+            eventLabel: "Blocked Action Outcome",
             group: "restricted",
             groupLabel: "Restricted outcomes",
             timestamp: "2026-03-26T10:00:00.000Z",
@@ -202,6 +203,7 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
             surface: "inbox",
             channelType: "instagram",
             policyOutcome: "blocked_until_repair",
+            policyOutcomeLabel: "Blocked Until Repair",
             reasonCodes: ["projection_stale"],
             truthVersionId: "truth-v1",
             runtimeProjectionId: "projection-1",
@@ -209,8 +211,47 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
             healthState: {
               status: "stale",
             },
+            runtimeHealthPosture: {
+              label: "runtime health",
+              primary: "stale",
+              primaryLabel: "Stale",
+              detail: "Projection Stale",
+            },
             executionPosture: {
               outcome: "blocked_until_repair",
+            },
+            executionPostureSummary: {
+              label: "execution",
+              primary: "blocked_until_repair",
+              primaryLabel: "Blocked Until Repair",
+            },
+            decisionContextSnapshot: {
+              actor: "system",
+              objectVersion: "truth-v1",
+              projectionStatus: "stale",
+              controlScope: "channel",
+              eventCategory: "restricted",
+              channelSurface: "inbox",
+              channelType: "instagram",
+              summary: "Truth truth-v1 · Projection projection-1 · Runtime Stale",
+            },
+            remediation: {
+              blocked: true,
+              repairRequired: true,
+              headline:
+                "Repair strict runtime authority before autonomous execution can resume.",
+              repair:
+                "Check projection health, repair status, and rebuild runtime authority from approved truth.",
+              nextActionLabel: "Repair runtime",
+              requiredRole: "operator",
+            },
+            links: {
+              truthVersionId: "truth-v1",
+              runtimeProjectionId: "projection-1",
+              surface: "inbox",
+              channelType: "instagram",
+              controlScope: "channel",
+              eventCategory: "restricted",
             },
             recommendedNextAction: {
               label: "Repair runtime",
@@ -254,6 +295,12 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
   expect(normalized.summary.policyControls.items[0].surface).toBe("voice");
   expect(normalized.summary.decisionAudit.availableFilters[0].key).toBe("all");
   expect(normalized.summary.decisionAudit.items[0].group).toBe("restricted");
+  expect(normalized.summary.decisionAudit.items[0].eventLabel).toBe("Blocked Action Outcome");
+  expect(normalized.summary.decisionAudit.items[0].policyOutcomeLabel).toBe("Blocked Until Repair");
+  expect(normalized.summary.decisionAudit.items[0].runtimeHealthPosture.primary).toBe("stale");
+  expect(normalized.summary.decisionAudit.items[0].decisionContextSnapshot.controlScope).toBe("channel");
+  expect(normalized.summary.decisionAudit.items[0].remediation.repairRequired).toBe(true);
+  expect(normalized.summary.decisionAudit.items[0].links.runtimeProjectionId).toBe("projection-1");
   expect(normalized.summary.decisionAudit.items[0].recommendedNextAction.label).toBe(
     "Repair runtime"
   );
@@ -282,5 +329,30 @@ it("normalizeTrustViewResponse keeps unknown policy posture stable when payloads
   expect(normalized.summary.channelAutonomy.items).toEqual([]);
   expect(normalized.summary.policyControls.items).toEqual([]);
   expect(normalized.summary.decisionAudit.items).toEqual([]);
+});
+
+it("normalizeTrustViewResponse keeps sparse event drilldown payloads safe", () => {
+  const normalized = __test__.normalizeTrustViewResponse({
+    summary: {
+      decisionAudit: {
+        items: [
+          {
+            id: "decision-sparse",
+            eventType: "runtime_health_transition",
+            surface: "tenant",
+          },
+        ],
+      },
+    },
+  });
+
+  expect(normalized.summary.decisionAudit.items[0].eventLabel).toBe("Unknown event");
+  expect(normalized.summary.decisionAudit.items[0].runtimeHealthPosture.primaryLabel).toBe(
+    "Unknown runtime health"
+  );
+  expect(normalized.summary.decisionAudit.items[0].remediation.headline).toMatch(
+    /no operator action/i
+  );
+  expect(normalized.summary.decisionAudit.items[0].links.surface).toBe("tenant");
 });
 });

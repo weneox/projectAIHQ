@@ -772,14 +772,20 @@ function buildOperatorPolicyPosture({
 
 function summarizeDecisionEvents(events = []) {
   const items = arr(events);
+  const safeLabel = (value = "", fallback = "Unknown") => {
+    const normalized = s(value);
+    return normalized ? titleize(normalized) : fallback;
+  };
   const compact = (event = {}) => ({
     id: s(event.id),
     eventType: lower(event.eventType),
+    eventLabel: safeLabel(event.eventType),
     timestamp: s(event.timestamp),
     source: s(event.source),
     surface: lower(event.surface),
     channelType: lower(event.channelType),
     policyOutcome: lower(event.policyOutcome),
+    policyOutcomeLabel: safeLabel(event.policyOutcome),
     reasonCodes: arr(event.reasonCodes).map((item) => lower(item)),
     truthVersionId: s(event.truthVersionId),
     runtimeProjectionId: s(event.runtimeProjectionId),
@@ -829,18 +835,202 @@ function summarizeDecisionEvents(events = []) {
       label: "Execution decisions",
     };
   };
+  const buildPostureSummary = ({
+    label = "",
+    posture = {},
+    primaryKeys = [],
+    extraKeys = [],
+    fallback = "",
+  } = {}) => {
+    const source = obj(posture);
+    const primary = primaryKeys.map((key) => s(source[key])).find(Boolean);
+    const extras = uniqStrings(
+      extraKeys
+        .map((key) => source[key])
+        .flatMap((value) => (Array.isArray(value) ? value : [value]))
+    );
+    return {
+      label,
+      primary: lower(primary),
+      primaryLabel: safeLabel(primary, fallback || `Unknown ${label}`),
+      detail: extras.length ? extras.map((item) => safeLabel(item)).join(" · ") : "",
+      raw: source,
+    };
+  };
+  const buildDecisionContextSnapshot = (event = {}, group = {}) => {
+    const context = obj(event.decisionContext);
+    const truthVersionId = s(event.truthVersionId);
+    const runtimeProjectionId = s(event.runtimeProjectionId);
+    const control = obj(event.controlState);
+    const health = obj(event.healthState);
+    const actor = s(event.actor || event.source || "system");
+    const controlScope =
+      lower(context.scopeType) ||
+      (lower(event.surface) === "tenant" ? "tenant_default" : lower(event.surface) ? "channel" : "");
+    const objectVersion =
+      s(context.objectVersion) ||
+      s(context.version) ||
+      truthVersionId ||
+      runtimeProjectionId;
+    const projectionStatus =
+      lower(context.projectionStatus || context.runtimeProjectionStatus || health.status);
+
+    return {
+      actor,
+      objectVersion,
+      projectionStatus,
+      controlScope,
+      eventCategory: group.key,
+      channelSurface: lower(event.surface),
+      channelType: lower(event.channelType),
+      triggerType: lower(context.triggerType),
+      reviewSessionId: s(context.reviewSessionId || context.review_session_id),
+      repairRunId: s(context.repairRunId || context.repair_run_id),
+      summary:
+        s(context.summary) ||
+        uniqStrings([
+          truthVersionId ? `Truth ${truthVersionId}` : "",
+          runtimeProjectionId ? `Projection ${runtimeProjectionId}` : "",
+          control.controlMode ? `Control ${safeLabel(control.controlMode)}` : "",
+          projectionStatus ? `Runtime ${safeLabel(projectionStatus)}` : "",
+        ]).join(" · "),
+      metadata: context,
+    };
+  };
+  const buildRemediation = (event = {}, group = {}) => {
+    const outcome = lower(event.policyOutcome);
+    const health = obj(event.healthState);
+    const approval = obj(event.approvalPosture);
+    const execution = obj(event.executionPosture);
+    const control = obj(event.controlState);
+    const nextAction = obj(event.recommendedNextAction);
+    const reasonCodes = arr(event.reasonCodes).map((item) => lower(item));
+    const blocked =
+      [
+        "blocked",
+        "blocked_until_repair",
+        "handoff_required",
+        "review_required",
+        "allowed_with_human_review",
+      ].includes(outcome) ||
+      lower(execution.outcome) === "blocked_until_repair" ||
+      lower(health.status) === "blocked";
+    const reviewRequired =
+      ["review_required", "allowed_with_human_review"].includes(outcome) ||
+      lower(approval.strictestOutcome || approval.outcome) === "review_required" ||
+      execution.reviewRequired === true;
+    const repairRequired =
+      outcome === "blocked_until_repair" ||
+      lower(health.status) === "stale" ||
+      lower(health.status) === "missing" ||
+      lower(health.status) === "invalid" ||
+      reasonCodes.includes("repair_failed");
+    const handoffRequired =
+      outcome === "handoff_required" ||
+      lower(execution.outcome) === "handoff_required" ||
+      execution.handoffRequired === true;
+    const approvalRequired =
+      lower(approval.strictestOutcome || approval.outcome) === "approval_required" ||
+      outcome === "blocked";
+    const operatorOnly =
+      outcome === "operator_only" ||
+      lower(control.controlMode) === "operator_only_mode";
+
+    let headline = "No operator action is currently required.";
+    if (repairRequired) {
+      headline = "Repair strict runtime authority before autonomous execution can resume.";
+    } else if (reviewRequired) {
+      headline = "Protected review is likely needed before this decision path can clear.";
+    } else if (approvalRequired) {
+      headline = "Truth approval posture needs operator approval before execution can loosen.";
+    } else if (handoffRequired) {
+      headline = "A human handoff is required before the affected channel can proceed.";
+    } else if (operatorOnly) {
+      headline = "This path is intentionally restricted to operator-only execution.";
+    } else if (group.key === "controls") {
+      headline = "Control state changed; confirm the safer mode is the intended operating posture.";
+    }
+
+    return {
+      blocked,
+      reviewRequired,
+      repairRequired,
+      handoffRequired,
+      approvalRequired,
+      operatorOnly,
+      headline,
+      review: reviewRequired
+        ? "Inspect protected review inputs, reason codes, and the latest truth evidence before retrying."
+        : "",
+      repair: repairRequired
+        ? "Check projection health, repair status, and rebuild runtime authority from approved truth."
+        : "",
+      approval: approvalRequired
+        ? "Confirm the latest truth version can be approved or published under current policy."
+        : "",
+      operator: handoffRequired
+        ? "Route the affected action to an operator handoff lane."
+        : operatorOnly
+        ? "Keep this surface in an operator-only lane until controls are deliberately changed."
+        : "",
+      nextActionLabel: s(nextAction.label || "Unavailable"),
+      requiredRole: lower(
+        nextAction.requiredRole ||
+          approval.requiredRole ||
+          execution.requiredRole ||
+          "operator"
+      ),
+    };
+  };
   const detailed = (event = {}) => {
     const group = classify(event);
+    const approvalPosture = buildPostureSummary({
+      label: "approval",
+      posture: event.approvalPosture,
+      primaryKeys: ["strictestOutcome", "outcome", "truthPublicationPosture"],
+      extraKeys: ["reasonCodes", "affectedSurfaces"],
+      fallback: "Unknown approval posture",
+    });
+    const executionPosture = buildPostureSummary({
+      label: "execution",
+      posture: event.executionPosture,
+      primaryKeys: ["outcome", "executionPosture"],
+      extraKeys: ["controlMode", "requiredAction", "reasons"],
+      fallback: "Unknown execution posture",
+    });
+    const runtimeHealthPosture = buildPostureSummary({
+      label: "runtime health",
+      posture: event.healthState,
+      primaryKeys: ["status", "primaryReasonCode", "reasonCode"],
+      extraKeys: ["reasonCodes", "affectedSurfaces"],
+      fallback: "Unknown runtime health",
+    });
+    const decisionContextSnapshot = buildDecisionContextSnapshot(event, group);
+    const remediation = buildRemediation(event, group);
     return {
       ...compact(event),
       group: group.key,
       groupLabel: group.label,
+      eventCategory: group.key,
       healthState: obj(event.healthState),
       approvalPosture: obj(event.approvalPosture),
+      approvalPostureSummary: approvalPosture,
       executionPosture: obj(event.executionPosture),
+      executionPostureSummary: executionPosture,
+      runtimeHealthPosture,
       controlState: obj(event.controlState),
       affectedSurfaces: arr(event.affectedSurfaces).map((item) => lower(item)),
       decisionContext: obj(event.decisionContext),
+      decisionContextSnapshot,
+      remediation,
+      links: {
+        truthVersionId: s(event.truthVersionId),
+        runtimeProjectionId: s(event.runtimeProjectionId),
+        surface: lower(event.surface),
+        channelType: lower(event.channelType),
+        controlScope: s(decisionContextSnapshot.controlScope),
+        eventCategory: group.key,
+      },
     };
   };
   const groupedItems = items.map(detailed);

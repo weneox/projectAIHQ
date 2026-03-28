@@ -11,7 +11,7 @@ describe("GovernanceCockpit", () => {
   it("renders safe defaults when truth and runtime telemetry are sparse", () => {
     render(<GovernanceCockpit truth={{}} trust={{}} />);
 
-    expect(screen.getByText(/governance cockpit/i)).toBeInTheDocument();
+    expect(screen.getByText(/^governance cockpit$/i)).toBeInTheDocument();
     expect(screen.getAllByText(/policy telemetry is unavailable/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/no canonical area summary was returned/i)).toBeInTheDocument();
     expect(screen.getByText(/channel autonomy telemetry is unavailable/i)).toBeInTheDocument();
@@ -158,6 +158,7 @@ describe("GovernanceCockpit", () => {
                 {
                   id: "decision-1",
                   eventType: "blocked_action_outcome",
+                  eventLabel: "Blocked Action Outcome",
                   group: "restricted",
                   groupLabel: "Restricted outcomes",
                   timestamp: "2026-03-25T10:10:00.000Z",
@@ -166,6 +167,7 @@ describe("GovernanceCockpit", () => {
                   surface: "inbox",
                   channelType: "instagram",
                   policyOutcome: "blocked_until_repair",
+                  policyOutcomeLabel: "Blocked Until Repair",
                   reasonCodes: ["projection_stale"],
                   truthVersionId: "truth-v2",
                   runtimeProjectionId: "projection-1",
@@ -177,8 +179,47 @@ describe("GovernanceCockpit", () => {
                   approvalPosture: {
                     strictestOutcome: "review_required",
                   },
+                  approvalPostureSummary: {
+                    primaryLabel: "Review Required",
+                    detail: "Projection Stale",
+                  },
                   executionPosture: {
                     outcome: "blocked_until_repair",
+                  },
+                  executionPostureSummary: {
+                    primaryLabel: "Blocked Until Repair",
+                    detail: "Repair runtime authority",
+                  },
+                  runtimeHealthPosture: {
+                    primaryLabel: "Stale",
+                    detail: "Projection Stale",
+                  },
+                  decisionContextSnapshot: {
+                    objectVersion: "truth-v2",
+                    projectionStatus: "stale",
+                    controlScope: "channel",
+                    eventCategory: "restricted",
+                    channelSurface: "inbox",
+                    channelType: "instagram",
+                    summary: "Truth truth-v2 · Projection projection-1 · Runtime Stale",
+                  },
+                  remediation: {
+                    blocked: true,
+                    repairRequired: true,
+                    headline:
+                      "Repair strict runtime authority before autonomous execution can resume.",
+                    repair:
+                      "Check projection health, repair status, and rebuild runtime authority from approved truth.",
+                    nextActionLabel: "Repair runtime authority",
+                    requiredRole: "operator",
+                  },
+                  links: {
+                    truthVersionId: "truth-v2",
+                    runtimeProjectionId: "projection-1",
+                    surface: "inbox",
+                    channelType: "instagram",
+                    controlScope: "channel",
+                    eventCategory: "restricted",
                   },
                   recommendedNextAction: {
                     label: "Repair runtime authority",
@@ -187,6 +228,7 @@ describe("GovernanceCockpit", () => {
                 {
                   id: "decision-2",
                   eventType: "policy_control_change",
+                  eventLabel: "Policy Control Change",
                   group: "controls",
                   groupLabel: "Control changes",
                   timestamp: "2026-03-25T09:00:00.000Z",
@@ -195,6 +237,7 @@ describe("GovernanceCockpit", () => {
                   surface: "voice",
                   channelType: "unknown",
                   policyOutcome: "operator_only",
+                  policyOutcomeLabel: "Operator Only",
                   reasonCodes: ["operator_only_mode"],
                   truthVersionId: "truth-v2",
                   runtimeProjectionId: "projection-1",
@@ -202,6 +245,36 @@ describe("GovernanceCockpit", () => {
                   controlState: {
                     controlMode: "operator_only_mode",
                     changedBy: "admin@aihq.test",
+                  },
+                  executionPostureSummary: {
+                    primaryLabel: "Operator Only",
+                  },
+                  runtimeHealthPosture: {
+                    primaryLabel: "Unknown runtime health",
+                  },
+                  decisionContextSnapshot: {
+                    objectVersion: "truth-v2",
+                    controlScope: "channel",
+                    eventCategory: "controls",
+                    channelSurface: "voice",
+                    summary: "Truth truth-v2 · Projection projection-1 · Control Operator Only Mode",
+                  },
+                  remediation: {
+                    operatorOnly: true,
+                    headline:
+                      "This path is intentionally restricted to operator-only execution.",
+                    operator:
+                      "Keep this surface in an operator-only lane until controls are deliberately changed.",
+                    nextActionLabel: "Operate in safer mode",
+                    requiredRole: "operator",
+                  },
+                  links: {
+                    truthVersionId: "truth-v2",
+                    runtimeProjectionId: "projection-1",
+                    surface: "voice",
+                    channelType: "unknown",
+                    controlScope: "channel",
+                    eventCategory: "controls",
                   },
                   recommendedNextAction: {
                     label: "Operate in safer mode",
@@ -222,14 +295,32 @@ describe("GovernanceCockpit", () => {
     expect(screen.getByText(/projection authority and repair/i)).toBeInTheDocument();
     expect(screen.getAllByText(/stale/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/voice/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/projection-1/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/projection-1/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/repair runtime authority/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/operator-manageable autonomy controls/i)).toBeInTheDocument();
     expect(screen.getByText(/decision timeline and incident replay context/i)).toBeInTheDocument();
-    expect(screen.getByText(/blocked action outcome/i)).toBeInTheDocument();
-    expect(screen.getByText(/policy control change/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /restricted outcomes/i }));
-    expect(screen.getByText(/repair runtime authority/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/blocked action outcome/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/policy control change/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/guided remediation/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/repair strict runtime authority before autonomous execution can resume/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/check projection health, repair status, and rebuild runtime authority from approved truth/i)
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: /^restricted outcomes \(1\)$/i })
+    );
+    expect(screen.getAllByText(/repair runtime authority/i).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: /^all events \(2\)$/i }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /policy control change.*operate in safer mode/i,
+      })
+    );
+    expect(
+      screen.getByText(/intentionally restricted to operator-only execution/i)
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /open runtime setup/i }));
     expect(onRunAction).toHaveBeenCalledWith(
@@ -237,7 +328,9 @@ describe("GovernanceCockpit", () => {
         id: "open_setup_route",
       })
     );
-    fireEvent.click(screen.getByRole("button", { name: /operator only mode/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^operator only modeapply$/i })
+    );
     expect(onSavePolicyControl).toHaveBeenCalledWith(
       expect.objectContaining({
         surface: "voice",

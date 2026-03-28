@@ -264,6 +264,58 @@ function normalizeAction(input = {}) {
   };
 }
 
+function normalizePostureSummary(input = {}, fallbackLabel = "Unknown posture") {
+  const source = obj(input);
+  return {
+    label: s(source.label),
+    primary: s(source.primary).toLowerCase(),
+    primaryLabel: s(source.primaryLabel || fallbackLabel),
+    detail: s(source.detail),
+    raw: obj(source.raw),
+  };
+}
+
+function normalizeDecisionContextSnapshot(input = {}) {
+  const source = obj(input);
+  return {
+    actor: s(source.actor),
+    objectVersion: s(source.objectVersion || source.object_version),
+    projectionStatus: s(
+      source.projectionStatus || source.projection_status
+    ).toLowerCase(),
+    controlScope: s(source.controlScope || source.control_scope).toLowerCase(),
+    eventCategory: s(source.eventCategory || source.event_category).toLowerCase(),
+    channelSurface: s(
+      source.channelSurface || source.channel_surface
+    ).toLowerCase(),
+    channelType: s(source.channelType || source.channel_type).toLowerCase(),
+    triggerType: s(source.triggerType || source.trigger_type).toLowerCase(),
+    reviewSessionId: s(source.reviewSessionId || source.review_session_id),
+    repairRunId: s(source.repairRunId || source.repair_run_id),
+    summary: s(source.summary),
+    metadata: obj(source.metadata),
+  };
+}
+
+function normalizeEventRemediation(input = {}) {
+  const source = obj(input);
+  return {
+    blocked: bool(source.blocked),
+    reviewRequired: bool(source.reviewRequired || source.review_required),
+    repairRequired: bool(source.repairRequired || source.repair_required),
+    handoffRequired: bool(source.handoffRequired || source.handoff_required),
+    approvalRequired: bool(source.approvalRequired || source.approval_required),
+    operatorOnly: bool(source.operatorOnly || source.operator_only),
+    headline: s(source.headline || "No operator action is currently required."),
+    review: s(source.review),
+    repair: s(source.repair),
+    approval: s(source.approval),
+    operator: s(source.operator),
+    nextActionLabel: s(source.nextActionLabel || source.next_action_label),
+    requiredRole: s(source.requiredRole || source.required_role || "operator").toLowerCase(),
+  };
+}
+
 function normalizeApprovalPolicy(input = {}) {
   const source = obj(input);
   const risk = obj(source.risk);
@@ -394,14 +446,19 @@ function normalizeDecisionAuditEvent(input = {}) {
   return {
     id: s(source.id),
     eventType: s(source.eventType || source.event_type || "unknown").toLowerCase(),
+    eventLabel: s(source.eventLabel || source.event_label || "Unknown event"),
     group: s(source.group || "execution").toLowerCase(),
     groupLabel: s(source.groupLabel || source.group_label || "Execution decisions"),
+    eventCategory: s(source.eventCategory || source.event_category || source.group || "execution").toLowerCase(),
     timestamp: s(source.timestamp || source.createdAt || source.created_at),
     source: s(source.source),
     actor: s(source.actor),
     surface: s(source.surface || "unknown").toLowerCase(),
     channelType: s(source.channelType || source.channel_type || "unknown").toLowerCase(),
     policyOutcome: s(source.policyOutcome || source.policy_outcome || "unknown").toLowerCase(),
+    policyOutcomeLabel: s(
+      source.policyOutcomeLabel || source.policy_outcome_label || "Unknown"
+    ),
     reasonCodes: normalizeStringList(source.reasonCodes || source.reason_codes),
     truthVersionId: s(source.truthVersionId || source.truth_version_id),
     runtimeProjectionId: s(source.runtimeProjectionId || source.runtime_projection_id),
@@ -410,9 +467,44 @@ function normalizeDecisionAuditEvent(input = {}) {
     ),
     healthState: obj(source.healthState || source.health_state),
     approvalPosture: obj(source.approvalPosture || source.approval_posture),
+    approvalPostureSummary: normalizePostureSummary(
+      source.approvalPostureSummary || source.approval_posture_summary,
+      "Unknown approval posture"
+    ),
     executionPosture: obj(source.executionPosture || source.execution_posture),
+    executionPostureSummary: normalizePostureSummary(
+      source.executionPostureSummary || source.execution_posture_summary,
+      "Unknown execution posture"
+    ),
+    runtimeHealthPosture: normalizePostureSummary(
+      source.runtimeHealthPosture || source.runtime_health_posture,
+      "Unknown runtime health"
+    ),
     controlState: obj(source.controlState || source.control_state),
     decisionContext: obj(source.decisionContext || source.decision_context),
+    decisionContextSnapshot: normalizeDecisionContextSnapshot(
+      source.decisionContextSnapshot || source.decision_context_snapshot
+    ),
+    remediation: normalizeEventRemediation(source.remediation),
+    links: {
+      truthVersionId: s(
+        obj(source.links).truthVersionId || obj(source.links).truth_version_id
+      ),
+      runtimeProjectionId: s(
+        obj(source.links).runtimeProjectionId ||
+          obj(source.links).runtime_projection_id
+      ),
+      surface: s(obj(source.links).surface || source.surface || "unknown").toLowerCase(),
+      channelType: s(
+        obj(source.links).channelType || obj(source.links).channel_type || source.channelType || "unknown"
+      ).toLowerCase(),
+      controlScope: s(
+        obj(source.links).controlScope || obj(source.links).control_scope
+      ).toLowerCase(),
+      eventCategory: s(
+        obj(source.links).eventCategory || obj(source.links).event_category || source.group || "execution"
+      ).toLowerCase(),
+    },
     recommendedNextAction: normalizeAction(
       source.recommendedNextAction || source.recommended_next_action
     ),

@@ -170,6 +170,7 @@ vi.mock("../../api/trust.js", () => ({
           {
             id: "decision-1",
             eventType: "execution_policy_decision",
+            eventLabel: "Execution Policy Decision",
             group: "execution",
             groupLabel: "Execution decisions",
             timestamp: "2026-03-25T10:05:00.000Z",
@@ -178,10 +179,22 @@ vi.mock("../../api/trust.js", () => ({
             surface: "inbox",
             channelType: "instagram",
             policyOutcome: "allowed_with_logging",
+            policyOutcomeLabel: "Allowed With Logging",
             reasonCodes: ["runtime_healthy"],
             truthVersionId: "truth-v3",
             runtimeProjectionId: "projection-1",
             affectedSurfaces: ["inbox"],
+            executionPostureSummary: {
+              primaryLabel: "Allowed With Logging",
+            },
+            runtimeHealthPosture: {
+              primaryLabel: "Healthy",
+            },
+            remediation: {
+              headline: "No operator action is currently required.",
+              nextActionLabel: "Monitor audit trail",
+              requiredRole: "operator",
+            },
             recommendedNextAction: {
               label: "Monitor audit trail",
             },
@@ -189,6 +202,7 @@ vi.mock("../../api/trust.js", () => ({
           {
             id: "decision-2",
             eventType: "handoff_required_action_outcome",
+            eventLabel: "Handoff Required Action Outcome",
             group: "restricted",
             groupLabel: "Restricted outcomes",
             timestamp: "2026-03-25T10:06:00.000Z",
@@ -197,10 +211,22 @@ vi.mock("../../api/trust.js", () => ({
             surface: "voice",
             channelType: "voice",
             policyOutcome: "handoff_required",
+            policyOutcomeLabel: "Handoff Required",
             reasonCodes: ["high_risk_action"],
             truthVersionId: "truth-v3",
             runtimeProjectionId: "projection-1",
             affectedSurfaces: ["voice"],
+            executionPostureSummary: {
+              primaryLabel: "Handoff Required",
+            },
+            remediation: {
+              handoffRequired: true,
+              headline:
+                "A human handoff is required before the affected channel can proceed.",
+              operator: "Route the affected action to an operator handoff lane.",
+              nextActionLabel: "Complete operator handoff",
+              requiredRole: "operator",
+            },
             recommendedNextAction: {
               label: "Complete operator handoff",
             },
@@ -246,6 +272,7 @@ describe("Truth viewer smoke", () => {
     expect(screen.getByText(/latest approved change footprint/i)).toBeInTheDocument();
     expect(screen.getByText(/decision timeline and incident replay context/i)).toBeInTheDocument();
     expect(screen.getByText(/handoff required action outcome/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/guided remediation/i).length).toBeGreaterThan(0);
     expect(screen.getByText("2026-03-25T10:00:00.000Z")).toBeInTheDocument();
     expect(screen.getByText("reviewer@aihq.test")).toBeInTheDocument();
     expect(screen.getByText("North Clinic")).toBeInTheDocument();

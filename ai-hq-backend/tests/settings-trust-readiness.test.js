@@ -1030,8 +1030,28 @@ test("settings trust route exposes recent decision audit summaries", async () =>
   assert.equal(res.body?.summary?.decisionAudit?.items?.length, 2);
   assert.equal(res.body?.summary?.decisionAudit?.items?.[0]?.group, "restricted");
   assert.equal(
+    res.body?.summary?.decisionAudit?.items?.[0]?.eventLabel,
+    "Blocked Action Outcome"
+  );
+  assert.equal(
     res.body?.summary?.decisionAudit?.items?.[0]?.healthState?.status,
     "stale"
+  );
+  assert.equal(
+    res.body?.summary?.decisionAudit?.items?.[0]?.runtimeHealthPosture?.primary,
+    "stale"
+  );
+  assert.equal(
+    res.body?.summary?.decisionAudit?.items?.[0]?.remediation?.repairRequired,
+    true
+  );
+  assert.match(
+    res.body?.summary?.decisionAudit?.items?.[0]?.remediation?.headline || "",
+    /repair strict runtime authority/i
+  );
+  assert.equal(
+    res.body?.summary?.decisionAudit?.items?.[0]?.links?.runtimeProjectionId,
+    "projection-1"
   );
   assert.equal(
     res.body?.summary?.decisionAudit?.availableFilters?.find((item) => item.key === "controls")?.count,
@@ -1044,5 +1064,13 @@ test("settings trust route exposes recent decision audit summaries", async () =>
   assert.equal(
     res.body?.summary?.decisionAudit?.recentAutonomyChanges?.[0]?.eventType,
     "policy_control_change"
+  );
+  assert.equal(
+    res.body?.summary?.decisionAudit?.items?.[1]?.remediation?.operatorOnly,
+    true
+  );
+  assert.equal(
+    res.body?.summary?.decisionAudit?.items?.[1]?.decisionContextSnapshot?.controlScope,
+    "channel"
   );
 });
