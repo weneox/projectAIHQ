@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 
 import {
   approveTruthReviewCandidate,
@@ -46,8 +46,85 @@ function initialState() {
   };
 }
 
+function normalizeTruthToken(value = "") {
+  return String(value ?? "").trim();
+}
+
+function resolveRequestedVersionId(location, searchParams) {
+  const hashValue = String(location?.hash || "").replace(/^#/, "");
+  const hashVersionId = hashValue.startsWith("version:")
+    ? hashValue.slice("version:".length)
+    : hashValue.startsWith("truth-version:")
+      ? hashValue.slice("truth-version:".length)
+      : "";
+
+  return normalizeTruthToken(
+    location?.state?.versionId ||
+      location?.state?.truthVersionId ||
+      location?.state?.selectedVersionId ||
+      location?.state?.version ||
+      searchParams.get("versionId") ||
+      searchParams.get("truthVersionId") ||
+      searchParams.get("selectedVersionId") ||
+      searchParams.get("version") ||
+      hashVersionId
+  );
+}
+
+function resolveRequestedFocus(location, searchParams) {
+  return String(
+    location?.state?.focus || searchParams.get("focus") || ""
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function findRequestedHistoryItem({ history, requestedVersionId, approval, truthView }) {
+  const requested = normalizeTruthToken(requestedVersionId);
+  if (!requested) return null;
+
+  if (["latest", "current", "approved"].includes(requested.toLowerCase())) {
+    return history[0] || null;
+  }
+
+  const truthSummary = truthView?.summary?.truth || {};
+  const aliases = new Set(
+    [
+      requested,
+      approval?.version,
+      truthSummary?.latestVersionId,
+      truthSummary?.version,
+      truthSummary?.currentVersionId,
+    ]
+      .map((value) => normalizeTruthToken(value))
+      .filter(Boolean)
+  );
+
+  return (
+    history.find((item) => {
+      const candidates = [
+        item?.id,
+        item?.versionId,
+        item?.truthVersionId,
+        item?.version,
+        item?.versionLabel,
+        item?.slug,
+      ]
+        .map((value) => normalizeTruthToken(value))
+        .filter(Boolean);
+
+      return candidates.some(
+        (candidate) =>
+          candidate === requested || aliases.has(candidate)
+      );
+    }) || null
+  );
+}
+
 export default function TruthViewerPage() {
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+
   const [state, setState] = useState(initialState);
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareState, setCompareState] = useState({
@@ -67,10 +144,21 @@ export default function TruthViewerPage() {
     saveSuccess: "",
     publishReceipt: null,
   });
+
   const historyRef = useRef(null);
+  const deepLinkHandledRef = useRef("");
+
   const truthReadiness = createReadinessViewModel(state.data.readiness);
-  const requestedVersionId = String(searchParams.get("versionId") || "").trim();
-  const requestedFocus = String(searchParams.get("focus") || "").trim().toLowerCase();
+
+  const requestedVersionId = useMemo(
+    () => resolveRequestedVersionId(location, searchParams),
+    [location, searchParams]
+  );
+
+  const requestedFocus = useMemo(
+    () => resolveRequestedFocus(location, searchParams),
+    [location, searchParams]
+  );
 
   useEffect(() => {
     let alive = true;
@@ -82,6 +170,7 @@ export default function TruthViewerPage() {
     ])
       .then((results) => {
         if (!alive) return;
+
         const truthResult = results[0];
         const trustResult = results[1];
         const reviewResult = results[2];
@@ -91,6 +180,7 @@ export default function TruthViewerPage() {
         }
 
         const data = truthResult.value || {};
+
         setState({
           loading: false,
           error: "",
@@ -106,7 +196,10 @@ export default function TruthViewerPage() {
             metadata: data.metadata || {},
             governance: data.governance || {},
             finalizeImpact: data.finalizeImpact || {},
-            trustView: trustResult.status === "fulfilled" ? trustResult.value || null : null,
+            trustView:
+              trustResult.status === "fulfilled"
+                ? trustResult.value || null
+                : null,
             trustUnavailable: trustResult.status !== "fulfilled",
             reviewWorkbench:
               reviewResult.status === "fulfilled"
@@ -117,9 +210,12 @@ export default function TruthViewerPage() {
       })
       .catch((error) => {
         if (!alive) return;
+
         setState({
           loading: false,
-          error: String(error?.message || error || "Truth viewer could not be loaded."),
+          error: String(
+            error?.message || error || "Truth viewer could not be loaded."
+          ),
           data: initialState().data,
         });
       });
@@ -130,8 +226,9 @@ export default function TruthViewerPage() {
   }, []);
 
   async function handleOpenVersion(item = {}) {
-    const versionId = String(item?.id || item?.version || "").trim();
-    const compareTo = String(item?.previousVersionId || "").trim();
+    const versionId = normalizeTruthToken(item?.id || item?.version || "");
+    const compareTo = normalizeTruthToken(item?.previousVersionId || "");
+
     if (!versionId) return;
 
     setCompareOpen(true);
@@ -141,22 +238,26 @@ export default function TruthViewerPage() {
       detail: {
         selectedVersion: {
           id: versionId,
-          version: String(item?.version || "").trim(),
-          versionLabel: String(item?.versionLabel || "").trim(),
-          profileStatus: String(item?.profileStatus || "").trim(),
-          approvedAt: String(item?.approvedAt || "").trim(),
-          approvedBy: String(item?.approvedBy || "").trim(),
-          sourceSummary: String(item?.sourceSummary || "").trim(),
+          version: normalizeTruthToken(item?.version),
+          versionLabel: normalizeTruthToken(item?.versionLabel),
+          profileStatus: normalizeTruthToken(item?.profileStatus),
+          approvedAt: normalizeTruthToken(item?.approvedAt),
+          approvedBy: normalizeTruthToken(item?.approvedBy),
+          sourceSummary: normalizeTruthToken(item?.sourceSummary),
         },
         comparedVersion: {
           id: compareTo,
         },
-        changedFields: Array.isArray(item?.changedFields) ? item.changedFields : [],
-        fieldChanges: Array.isArray(item?.fieldChanges) ? item.fieldChanges : [],
+        changedFields: Array.isArray(item?.changedFields)
+          ? item.changedFields
+          : [],
+        fieldChanges: Array.isArray(item?.fieldChanges)
+          ? item.fieldChanges
+          : [],
         sectionChanges: [],
-        diffSummary: String(item?.diffSummary || "").trim(),
+        diffSummary: normalizeTruthToken(item?.diffSummary),
         hasStructuredDiff:
-          !!String(item?.diffSummary || "").trim() ||
+          !!normalizeTruthToken(item?.diffSummary) ||
           (Array.isArray(item?.changedFields) && item.changedFields.length > 0) ||
           (Array.isArray(item?.fieldChanges) && item.fieldChanges.length > 0),
       },
@@ -170,6 +271,7 @@ export default function TruthViewerPage() {
 
     try {
       const detail = await getTruthVersionDetail(versionId, { compareTo });
+
       setCompareState({
         loading: false,
         error: "",
@@ -194,9 +296,12 @@ export default function TruthViewerPage() {
   }
 
   async function handleRollback(detail = {}) {
-    const versionId = String(
-      detail?.selectedVersion?.id || detail?.rollbackPreview?.targetRollbackVersion?.id || ""
-    ).trim();
+    const versionId = normalizeTruthToken(
+      detail?.selectedVersion?.id ||
+        detail?.rollbackPreview?.targetRollbackVersion?.id ||
+        ""
+    );
+
     if (!versionId) return;
 
     setCompareState((prev) => ({
@@ -213,7 +318,8 @@ export default function TruthViewerPage() {
       const result = await rollbackTruthVersion(versionId, {
         metadataJson: {
           rollbackPreview: {
-            rollbackDisposition: detail?.rollbackPreview?.rollbackDisposition || "",
+            rollbackDisposition:
+              detail?.rollbackPreview?.rollbackDisposition || "",
             canonicalAreasChangedBack:
               detail?.rollbackPreview?.canonicalAreasChangedBack || [],
             runtimeAreasLikelyAffected:
@@ -224,6 +330,7 @@ export default function TruthViewerPage() {
       });
 
       await refreshTruthReviewSurface();
+
       const refreshed = await getTruthVersionDetail(versionId, {
         compareTo: detail?.comparedVersion?.id || "",
       });
@@ -262,7 +369,10 @@ export default function TruthViewerPage() {
     const [truthData, trustData, reviewData] = await Promise.all([
       getCanonicalTruthSnapshot(),
       getSettingsTrustView().catch(() => null),
-      getTruthReviewWorkbench({ limit: 100 }).catch(() => ({ summary: {}, items: [] })),
+      getTruthReviewWorkbench({ limit: 100 }).catch(() => ({
+        summary: {},
+        items: [],
+      })),
     ]);
 
     setState((prev) => ({
@@ -292,17 +402,20 @@ export default function TruthViewerPage() {
   async function handleWorkbenchAction(item, action) {
     const actionType = String(action?.actionType || "").trim().toLowerCase();
     const candidateId = String(item?.id || item?.candidateId || "").trim();
+
     if (!candidateId || !actionType) return;
 
     setReviewSurface({
       saving: true,
       error: "",
       saveSuccess: "",
-      publishReceipt: actionType === "approve" ? reviewSurface.publishReceipt : null,
+      publishReceipt:
+        actionType === "approve" ? reviewSurface.publishReceipt : null,
     });
 
     try {
       let actionResult = null;
+
       if (actionType === "approve") {
         actionResult = await approveTruthReviewCandidate(candidateId, {
           reason: "Approved from Truth Review Workbench",
@@ -352,20 +465,51 @@ export default function TruthViewerPage() {
 
   useEffect(() => {
     if (requestedFocus !== "history" || !historyRef.current) return;
-    historyRef.current.scrollIntoView?.({ behavior: "smooth", block: "start" });
+
+    historyRef.current.scrollIntoView?.({
+      behavior: "smooth",
+      block: "start",
+    });
   }, [requestedFocus, state.loading]);
 
   useEffect(() => {
     if (!requestedVersionId || state.loading || compareOpen) return;
-    const match = (state.data.history || []).find(
-      (item) =>
-        String(item?.id || "").trim() === requestedVersionId ||
-        String(item?.version || "").trim() === requestedVersionId
-    );
-    if (match) {
-      handleOpenVersion(match);
+
+    const marker = [
+      requestedVersionId,
+      state.data.history.length,
+      state.data.approval?.version || "",
+      state.data.trustView?.summary?.truth?.latestVersionId || "",
+    ].join("|");
+
+    if (deepLinkHandledRef.current === marker) return;
+
+    const matchedItem = findRequestedHistoryItem({
+      history: state.data.history || [],
+      requestedVersionId,
+      approval: state.data.approval || {},
+      truthView: state.data.trustView || {},
+    });
+
+    deepLinkHandledRef.current = marker;
+
+    if (matchedItem) {
+      handleOpenVersion(matchedItem);
+      return;
     }
-  }, [compareOpen, requestedVersionId, state.data.history, state.loading]);
+
+    handleOpenVersion({
+      id: requestedVersionId,
+      version: requestedVersionId,
+    });
+  }, [
+    compareOpen,
+    requestedVersionId,
+    state.data.approval,
+    state.data.history,
+    state.data.trustView,
+    state.loading,
+  ]);
 
   if (state.loading) {
     return (
@@ -415,7 +559,9 @@ export default function TruthViewerPage() {
           workbench={state.data.reviewWorkbench}
           surface={reviewSurface}
           canManage={["owner", "admin"].includes(
-            String(state.data.trustView?.viewerRole || "").trim().toLowerCase()
+            String(state.data.trustView?.viewerRole || "")
+              .trim()
+              .toLowerCase()
           )}
           onRunAction={handleWorkbenchAction}
         />
@@ -444,6 +590,8 @@ export default function TruthViewerPage() {
           onOpenVersion={handleOpenVersion}
         />
       </div>
+
+      {compareOpen ? <div className="sr-only">Version detail</div> : null}
 
       <TruthVersionComparePanel
         open={compareOpen}

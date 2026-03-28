@@ -1,9 +1,6 @@
-// src/pages/Settings.jsx
-// PREMIUM v5.4 — final settings assembly + tenant business brain + source intelligence + stable dirty sync
-
 import React from "react";
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import {
   BellRing,
   Bot,
@@ -70,10 +67,111 @@ import { createNewSource } from "./sections/trustSurfaceShared.jsx";
 import { getControlPlanePermissions } from "../../lib/controlPlanePermissions.js";
 import { GovernanceSignalStrip } from "../../components/governance/GovernanceCockpit.jsx";
 
+const SETTINGS_SECTION_ALIASES = Object.freeze({
+  general: "general",
+  brand: "brand",
+  "ai-policy": "ai_policy",
+  ai_policy: "ai_policy",
+  sources: "sources",
+  source: "sources",
+  truth: "sources",
+  "truth-governance": "sources",
+  truth_governance: "sources",
+  "truth-maintenance": "sources",
+  truth_maintenance: "sources",
+  "source-sync": "sources",
+  source_sync: "sources",
+  knowledge: "knowledge_review",
+  "knowledge-review": "knowledge_review",
+  knowledge_review: "knowledge_review",
+  review: "knowledge_review",
+  "review-queue": "knowledge_review",
+  review_queue: "knowledge_review",
+  operational: "operational",
+  "runtime-operations": "operational",
+  runtime_operations: "operational",
+  "change-history": "change_history",
+  change_history: "change_history",
+  channels: "channels",
+  agents: "agents",
+  team: "team",
+  notifications: "notifications",
+  "business-facts": "business_facts",
+  business_facts: "business_facts",
+  "channel-policies": "channel_policies",
+  channel_policies: "channel_policies",
+  locations: "locations",
+  contacts: "contacts",
+});
+
+function normalizeSectionToken(value = "") {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, "-");
+}
+
+function resolveSectionAlias(value = "") {
+  const normalized = normalizeSectionToken(value);
+  if (!normalized) return "";
+  return SETTINGS_SECTION_ALIASES[normalized] || normalized.replace(/-/g, "_");
+}
+
+function resolveRequestedSection({
+  searchParams,
+  locationState,
+  hash,
+  navItems,
+}) {
+  const candidates = [
+    locationState?.settingsSection,
+    locationState?.section,
+    locationState?.initialSection,
+    searchParams.get("settingsSection"),
+    searchParams.get("section"),
+    String(hash || "").replace(/^#/, ""),
+  ];
+
+  const available = new Set(navItems.map((item) => item.key));
+
+  for (const candidate of candidates) {
+    const resolved = resolveSectionAlias(candidate);
+    if (resolved && available.has(resolved)) {
+      return resolved;
+    }
+  }
+
+  return "";
+}
+
+function SectionContractCopy({ activeSection }) {
+  if (activeSection === "sources") {
+    return (
+      <div className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
+        <div>
+          Refresh evidence, review what is weak or conflicting.
+        </div>
+        <div className="mt-1">
+          Source-derived changes do not become governed truth until they are reviewed through the control plane.
+        </div>
+      </div>
+    );
+  }
+
+  if (activeSection === "knowledge_review") {
+    return (
+      <div className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
+        Source-derived truth changes are reviewed, conflicted, quarantined, approved, or rejected here.
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export default function SettingsController() {
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const requestedSection = String(searchParams.get("section") || "").trim().toLowerCase();
-  const [activeSection, setActiveSection] = useState(requestedSection || "general");
   const [perm, setPerm] = useState("default");
   const [pushBusy, setPushBusy] = useState(false);
   const [pushMessage, setPushMessage] = useState("");
@@ -102,6 +200,7 @@ export default function SettingsController() {
     saveAgent,
     setInitialWorkspace,
   } = workspaceState;
+
   const viewerRole = String(workspace?.viewerRole || "member").toLowerCase();
 
   const businessBrain = useBusinessBrain({
@@ -142,14 +241,21 @@ export default function SettingsController() {
   } = useOperationalSettings({
     tenantKey,
   });
+
   const controlPlanePermissions = getControlPlanePermissions({
     viewerRole,
     capabilities: operationalData?.capabilities,
   });
-  const canManageOperational = controlPlanePermissions.operationalSettingsWrite.allowed;
+
+  const canManageOperational =
+    controlPlanePermissions.operationalSettingsWrite.allowed;
 
   const { trust, refreshTrust } = useTrustSurface({ tenantKey });
-  const { auditHistory, surface: auditHistorySurface, refreshAuditHistory } = useAuditHistory();
+  const {
+    auditHistory,
+    surface: auditHistorySurface,
+    refreshAuditHistory,
+  } = useAuditHistory();
 
   const sourceIntelligence = useSourceIntelligence({
     tenantKey,
@@ -183,53 +289,195 @@ export default function SettingsController() {
 
   const navItems = useMemo(
     () => [
-      { key: "general", label: "General", description: "Workspace identity, region, language", dirty: !!dirtyMap.general, icon: Building2 },
-      { key: "brand", label: "Brand", description: "Voice, audience, services, CTA", dirty: !!dirtyMap.brand, icon: Sparkles },
-      { key: "ai_policy", label: "AI Policy", description: "Auto reply, approvals, quiet hours", dirty: !!dirtyMap.ai_policy, icon: ShieldCheck },
-      { key: "sources", label: "Truth Governance", description: "Connected evidence, source trust, runtime repair, finalize impact", dirty: !!dirtyMap.sources, icon: Database },
-      { key: "knowledge_review", label: "Review Queue", description: "Pending, conflicting, and quarantined candidate changes", dirty: !!dirtyMap.knowledge_review, icon: SearchCheck },
-      { key: "operational", label: "Runtime Operations", description: "Projection-backed voice and channel readiness", dirty: false, icon: PhoneCall },
+      {
+        key: "general",
+        label: "General",
+        description: "Workspace identity, region, language",
+        dirty: !!dirtyMap.general,
+        icon: Building2,
+      },
+      {
+        key: "brand",
+        label: "Brand",
+        description: "Voice, audience, services, CTA",
+        dirty: !!dirtyMap.brand,
+        icon: Sparkles,
+      },
+      {
+        key: "ai_policy",
+        label: "AI Policy",
+        description: "Auto reply, approvals, quiet hours",
+        dirty: !!dirtyMap.ai_policy,
+        icon: ShieldCheck,
+      },
+      {
+        key: "sources",
+        label: "Truth Governance",
+        description:
+          "Connected evidence, source trust, runtime repair, finalize impact",
+        dirty: !!dirtyMap.sources,
+        icon: Database,
+      },
+      {
+        key: "knowledge_review",
+        label: "Review Queue",
+        description: "Pending, conflicting, and quarantined candidate changes",
+        dirty: !!dirtyMap.knowledge_review,
+        icon: SearchCheck,
+      },
+      {
+        key: "operational",
+        label: "Runtime Operations",
+        description: "Projection-backed voice and channel readiness",
+        dirty: false,
+        icon: PhoneCall,
+      },
       ...(controlPlanePermissions.auditHistoryRead.allowed
         ? [
             {
               key: "change_history",
               label: "Governance History",
-              description: "Approval, repair, and control-plane mutation timeline",
+              description:
+                "Approval, repair, and control-plane mutation timeline",
               dirty: false,
               icon: ScrollText,
             },
           ]
         : []),
-      { key: "business_facts", label: "Business Facts", description: "Structured company facts for AI", dirty: !!dirtyMap.business_facts, icon: BrainCircuit },
-      { key: "channel_policies", label: "Channel Policies", description: "Per-channel reply behavior rules", dirty: !!dirtyMap.channel_policies, icon: ListTree },
-      { key: "locations", label: "Locations", description: "Branches, address, working hours", dirty: !!dirtyMap.locations, icon: MapPin },
-      { key: "contacts", label: "Contacts", description: "Phone, email, WhatsApp, public lines", dirty: !!dirtyMap.contacts, icon: Contact2 },
-      { key: "channels", label: "Channels", description: "Instagram, WhatsApp, Messenger", dirty: !!dirtyMap.channels, icon: Waypoints },
-      { key: "agents", label: "Agents", description: "Agent status, model, enable/disable", dirty: !!dirtyMap.agents, icon: Bot },
-      { key: "team", label: "Team", description: "Workspace users, roles, access", dirty: !!dirtyMap.team, icon: Users },
-      { key: "notifications", label: "Notifications", description: "Push subscription and browser status", dirty: !!dirtyMap.notifications, icon: BellRing },
+      {
+        key: "business_facts",
+        label: "Business Facts",
+        description: "Structured company facts for AI",
+        dirty: !!dirtyMap.business_facts,
+        icon: BrainCircuit,
+      },
+      {
+        key: "channel_policies",
+        label: "Channel Policies",
+        description: "Per-channel reply behavior rules",
+        dirty: !!dirtyMap.channel_policies,
+        icon: ListTree,
+      },
+      {
+        key: "locations",
+        label: "Locations",
+        description: "Branches, address, working hours",
+        dirty: !!dirtyMap.locations,
+        icon: MapPin,
+      },
+      {
+        key: "contacts",
+        label: "Contacts",
+        description: "Phone, email, WhatsApp, public lines",
+        dirty: !!dirtyMap.contacts,
+        icon: Contact2,
+      },
+      {
+        key: "channels",
+        label: "Channels",
+        description: "Instagram, WhatsApp, Messenger",
+        dirty: !!dirtyMap.channels,
+        icon: Waypoints,
+      },
+      {
+        key: "agents",
+        label: "Agents",
+        description: "Agent status, model, enable/disable",
+        dirty: !!dirtyMap.agents,
+        icon: Bot,
+      },
+      {
+        key: "team",
+        label: "Team",
+        description: "Workspace users, roles, access",
+        dirty: !!dirtyMap.team,
+        icon: Users,
+      },
+      {
+        key: "notifications",
+        label: "Notifications",
+        description: "Push subscription and browser status",
+        dirty: !!dirtyMap.notifications,
+        icon: BellRing,
+      },
     ],
     [controlPlanePermissions.auditHistoryRead.allowed, dirtyMap]
   );
 
+  const requestedSection = useMemo(
+    () =>
+      resolveRequestedSection({
+        searchParams,
+        locationState: location.state,
+        hash: location.hash,
+        navItems,
+      }),
+    [searchParams, location.state, location.hash, navItems]
+  );
+
+  const [activeSection, setActiveSection] = useState(
+    requestedSection || "general"
+  );
+
+  const appliedDeepLinkRef = useRef("");
+
+  useEffect(() => {
+    const available = new Set(navItems.map((item) => item.key));
+
+    if (!available.has(activeSection)) {
+      setActiveSection("general");
+    }
+  }, [activeSection, navItems]);
+
   useEffect(() => {
     if (!requestedSection) return;
-    const available = navItems.some((item) => item.key === requestedSection);
-    if (!available) return;
-    setActiveSection((current) => (current === requestedSection ? current : requestedSection));
-  }, [navItems, requestedSection]);
+
+    const marker = [
+      location.pathname,
+      location.search,
+      location.hash,
+      location.state?.section || "",
+      location.state?.settingsSection || "",
+      location.state?.initialSection || "",
+      requestedSection,
+    ].join("|");
+
+    if (appliedDeepLinkRef.current === marker) return;
+    appliedDeepLinkRef.current = marker;
+
+    setActiveSection((current) =>
+      current === requestedSection ? current : requestedSection
+    );
+  }, [
+    requestedSection,
+    location.pathname,
+    location.search,
+    location.hash,
+    location.state,
+  ]);
 
   useEffect(() => {
     setSearchParams(
       (prev) => {
-        const current = String(prev.get("section") || "").trim().toLowerCase();
-        if (current === activeSection) return prev;
+        const current = String(prev.get("section") || "")
+          .trim()
+          .toLowerCase();
+        const desired = String(activeSection || "")
+          .trim()
+          .toLowerCase();
+
+        if (current === desired || (!current && desired === "general")) {
+          return prev;
+        }
+
         const next = new URLSearchParams(prev);
-        if (activeSection && activeSection !== "general") {
-          next.set("section", activeSection);
+
+        if (desired && desired !== "general") {
+          next.set("section", desired);
         } else {
           next.delete("section");
         }
+
         return next;
       },
       { replace: true }
@@ -247,30 +495,46 @@ export default function SettingsController() {
       try {
         const base = await refreshWorkspace();
         if (!mounted) return;
+
         await Promise.all([
           refreshBusinessBrain(),
-          refreshOperationalSettings(base.tenantKey),
-          refreshSourceIntelligence(base.tenantKey),
-          refreshTrust(base.tenantKey),
+          refreshOperationalSettings(base?.tenantKey),
+          refreshSourceIntelligence(base?.tenantKey),
+          refreshTrust(base?.tenantKey),
           refreshAuditHistory(),
         ]);
       } catch {}
     }
 
     loadAll();
+
     return () => {
       mounted = false;
     };
-  }, [refreshWorkspace, refreshBusinessBrain, refreshOperationalSettings, refreshSourceIntelligence, refreshTrust, refreshAuditHistory]);
+  }, [
+    refreshWorkspace,
+    refreshBusinessBrain,
+    refreshOperationalSettings,
+    refreshSourceIntelligence,
+    refreshTrust,
+    refreshAuditHistory,
+  ]);
 
   function handleResetWorkspace() {
     const reset = onResetWorkspace();
-    setBusinessFacts(Array.isArray(reset?.businessFacts) ? reset.businessFacts : []);
-    setChannelPolicies(Array.isArray(reset?.channelPolicies) ? reset.channelPolicies : []);
+
+    setBusinessFacts(
+      Array.isArray(reset?.businessFacts) ? reset.businessFacts : []
+    );
+    setChannelPolicies(
+      Array.isArray(reset?.channelPolicies) ? reset.channelPolicies : []
+    );
     setLocations(Array.isArray(reset?.locations) ? reset.locations : []);
     setContacts(Array.isArray(reset?.contacts) ? reset.contacts : []);
     setSources(Array.isArray(reset?.sources) ? reset.sources : []);
-    setKnowledgeReview(Array.isArray(reset?.knowledgeReview) ? reset.knowledgeReview : []);
+    setKnowledgeReview(
+      Array.isArray(reset?.knowledgeReview) ? reset.knowledgeReview : []
+    );
   }
 
   async function enableNotifications() {
@@ -282,19 +546,27 @@ export default function SettingsController() {
       setPerm(p);
 
       if (p !== "granted") {
-        setPushMessage("Notification icaz?si verilm?di. Browser settings-d?n icaz? ver.");
+        setPushMessage(
+          "Notification icaz?si verilm?di. Browser settings-d?n icaz? ver."
+        );
         return;
       }
 
       if (!env.VAPID) {
-        setPushMessage("VITE_VAPID_PUBLIC_KEY yoxdur. .env.local yoxla v? Vite restart et.");
+        setPushMessage(
+          "VITE_VAPID_PUBLIC_KEY yoxdur. .env.local yoxla v? Vite restart et."
+        );
         return;
       }
 
-      const res = await subscribePush({ vapidPublicKey: env.VAPID, recipient: "ceo" });
+      const res = await subscribePush({
+        vapidPublicKey: env.VAPID,
+        recipient: "ceo",
+      });
 
       if (!res?.ok) {
-        const err = res?.json?.error || res?.error || res?.status || "unknown";
+        const err =
+          res?.json?.error || res?.error || res?.status || "unknown";
         setPushMessage(`Subscription u?ursuz oldu: ${err}`);
         return;
       }
@@ -319,6 +591,7 @@ export default function SettingsController() {
             surface={workspaceSurface}
           />
         );
+
       case "brand":
         return (
           <BrandSection
@@ -328,6 +601,7 @@ export default function SettingsController() {
             surface={workspaceSurface}
           />
         );
+
       case "ai_policy":
         return (
           <AiPolicySection
@@ -344,6 +618,7 @@ export default function SettingsController() {
             }
           />
         );
+
       case "business_facts":
         return (
           <BusinessFactsSection
@@ -359,6 +634,7 @@ export default function SettingsController() {
             onDelete={handleDeleteBusinessFact}
           />
         );
+
       case "channel_policies":
         return (
           <ChannelPoliciesSection
@@ -374,6 +650,7 @@ export default function SettingsController() {
             onDelete={handleDeleteChannelPolicy}
           />
         );
+
       case "operational":
         return (
           <OperationalSection
@@ -387,6 +664,7 @@ export default function SettingsController() {
             onSaveChannel={saveChannelSettings}
           />
         );
+
       case "locations":
         return (
           <LocationsSection
@@ -402,6 +680,7 @@ export default function SettingsController() {
             onDelete={handleDeleteLocation}
           />
         );
+
       case "contacts":
         return (
           <ContactsSection
@@ -417,6 +696,7 @@ export default function SettingsController() {
             onDelete={handleDeleteContact}
           />
         );
+
       case "sources":
         return (
           <SourcesSection>
@@ -436,6 +716,7 @@ export default function SettingsController() {
             />
           </SourcesSection>
         );
+
       case "knowledge_review":
         return (
           <KnowledgeReviewSection>
@@ -455,6 +736,7 @@ export default function SettingsController() {
             />
           </KnowledgeReviewSection>
         );
+
       case "change_history":
         return (
           <ChangeHistorySection
@@ -463,8 +745,10 @@ export default function SettingsController() {
             viewerRole={viewerRole}
           />
         );
+
       case "channels":
         return <ChannelsPanel canManage={canManageSettings} />;
+
       case "agents":
         return (
           <AgentsPanel
@@ -474,8 +758,10 @@ export default function SettingsController() {
             onSaveAgent={saveAgent}
           />
         );
+
       case "team":
         return <TeamPanel canManage={canManageSettings} />;
+
       case "notifications":
         return (
           <NotificationsSection
@@ -486,6 +772,7 @@ export default function SettingsController() {
             enableNotifications={enableNotifications}
           />
         );
+
       default:
         return null;
     }
@@ -520,28 +807,44 @@ export default function SettingsController() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2">
               <Badge
-                tone={canManageSettings || canManageOperational ? "success" : "warn"}
+                tone={
+                  canManageSettings || canManageOperational ? "success" : "warn"
+                }
                 variant="subtle"
                 dot={canManageSettings || canManageOperational}
               >
                 {canManageSettings
                   ? "Owner / Admin Access"
                   : canManageOperational
-                  ? "Operational Write Access"
-                  : "Read Only Access"}
+                    ? "Operational Write Access"
+                    : "Read Only Access"}
               </Badge>
-              <Badge tone={dirty ? "info" : "neutral"} variant="subtle" dot={dirty}>
+
+              <Badge
+                tone={dirty ? "info" : "neutral"}
+                variant="subtle"
+                dot={dirty}
+              >
                 {dirty ? "Unsaved Workspace Edits" : "Workspace Synced"}
               </Badge>
             </div>
 
             <div className="flex items-center gap-2">
-              <Button variant="secondary" onClick={() => window.location.reload()} leftIcon={<RefreshCw className="h-4 w-4" />}>
+              <Button
+                variant="secondary"
+                onClick={() => window.location.reload()}
+                leftIcon={<RefreshCw className="h-4 w-4" />}
+              >
                 Refresh
               </Button>
+
               <Button
                 onClick={saveWorkspaceWithSlices}
-                disabled={workspaceSurface.loading || workspaceSurface.saving || !canManageSettings}
+                disabled={
+                  workspaceSurface.loading ||
+                  workspaceSurface.saving ||
+                  !canManageSettings
+                }
               >
                 {workspaceSurface.saving ? "Saving..." : "Save Workspace"}
               </Button>
@@ -555,6 +858,8 @@ export default function SettingsController() {
                 : "This workspace is read-only here. Sensitive control-plane changes remain limited to owner/admin."}
             </div>
           ) : null}
+
+          <SectionContractCopy activeSection={activeSection} />
 
           {renderSection()}
 
@@ -578,4 +883,3 @@ export default function SettingsController() {
     </>
   );
 }
-
