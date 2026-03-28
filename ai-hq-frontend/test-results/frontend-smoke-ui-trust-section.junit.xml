@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="1" failures="0" errors="0" time="1.1473422">
-    <testsuite name="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" timestamp="2026-03-28T17:26:21.446Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="1.1473422">
-        <testcase classname="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" name="TrustMaintenanceSection &gt; renders trust repair state and dispatches route actions from the extracted section" time="1.1447564">
+<testsuites name="vitest tests" tests="1" failures="0" errors="0" time="0.9671736">
+    <testsuite name="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" timestamp="2026-03-28T17:40:54.594Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.9671736">
+        <testcase classname="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" name="TrustMaintenanceSection &gt; renders trust repair state and dispatches route actions from the extracted section" time="0.964771">
         </testcase>
     </testsuite>
 </testsuites>
