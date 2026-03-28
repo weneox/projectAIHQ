@@ -98,20 +98,45 @@ function summarizeReadiness(json = {}) {
   };
 }
 
+function getRequiredEnvIssues({ aihqBaseUrl, internalToken }) {
+  const issues = [];
+
+  if (!aihqBaseUrl) {
+    issues.push({
+      name: "aihq_base_url",
+      ok: false,
+      status: 0,
+      details: {
+        env: "AIHQ_BASE_URL",
+        reasonCode: "missing_required_env",
+        message:
+          "AIHQ_BASE_URL is required for post-deploy verification and the verifier fails closed when it is missing.",
+      },
+    });
+  }
+
+  if (!internalToken) {
+    issues.push({
+      name: "aihq_internal_token",
+      ok: false,
+      status: 0,
+      details: {
+        env: "AIHQ_INTERNAL_TOKEN",
+        reasonCode: "missing_required_env",
+        message:
+          "AIHQ_INTERNAL_TOKEN is required for /api/health post-deploy verification and the verifier fails closed when it is missing.",
+      },
+    });
+  }
+
+  return issues;
+}
+
 async function verifyAihq({ baseUrl, internalToken, timeoutMs }) {
   const rootHealthUrl = deriveHealthUrl(baseUrl);
   const apiHealthUrl = deriveApiHealthUrl(baseUrl);
   const headers = internalToken ? { "x-internal-token": internalToken } : {};
   const results = [];
-
-  if (!rootHealthUrl) {
-    results.push({
-      name: "aihq_root_health",
-      skipped: true,
-      reason: "AIHQ_BASE_URL missing",
-    });
-    return results;
-  }
 
   const root = await fetchJson(rootHealthUrl, headers, timeoutMs);
   const rootReadiness = summarizeReadiness(root.json || {});
@@ -129,15 +154,6 @@ async function verifyAihq({ baseUrl, internalToken, timeoutMs }) {
       blockersTotal: rootReadiness.blockersTotal,
     },
   });
-
-  if (!internalToken) {
-    results.push({
-      name: "aihq_api_health",
-      skipped: true,
-      reason: "AIHQ_INTERNAL_TOKEN missing",
-    });
-    return results;
-  }
 
   const api = await fetchJson(apiHealthUrl, headers, timeoutMs);
   const apiReadiness = summarizeReadiness(api.json || {});
@@ -218,6 +234,15 @@ async function main() {
   const strictSidecars = bool(process.env.POSTDEPLOY_STRICT_SIDECARS, false);
 
   const results = [];
+  results.push(...getRequiredEnvIssues({ aihqBaseUrl, internalToken }));
+
+  if (results.length > 0) {
+    printLine("#", "Post-deploy verification summary");
+    const failed = renderSummary(results);
+    printLine("!", "Verification failed", `failures=${failed}`);
+    process.exit(1);
+  }
+
   results.push(...(await verifyAihq({ baseUrl: aihqBaseUrl, internalToken, timeoutMs })));
 
   const meta = await verifySidecar("meta_bot_health", metaBaseUrl, timeoutMs);

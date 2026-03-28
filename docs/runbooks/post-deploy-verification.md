@@ -9,6 +9,8 @@ Run this immediately after a production deploy.
 - optionally `META_BOT_BASE_URL`
 - optionally `TWILIO_VOICE_BASE_URL`
 
+The verifier fails closed if `AIHQ_BASE_URL` or `AIHQ_INTERNAL_TOKEN` is missing.
+
 ## Command
 
 ```powershell
@@ -37,6 +39,7 @@ npm run ops:postdeploy:verify
 - AI HQ is not blocked
 - sidecars are not intentionally unavailable
 - blocker reason codes are empty or expected for the environment
+- missing required verifier env fails the command instead of being reported as a passing skip
 
 ## If verification fails
 

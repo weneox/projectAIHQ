@@ -75,6 +75,15 @@ Required for `ai-hq-backend` build / validate:
 - `VAPID_PUBLIC_KEY`
 - `VAPID_PRIVATE_KEY`
 
+Conditional for workspace-wide `npm run validate:env` / `npm run build:all` when the shared environment also exports Meta channel secrets:
+
+- `META_APP_ID`
+- `META_APP_SECRET`
+- `META_REDIRECT_URI`
+
+Reason:
+If `META_APP_SECRET` is present for `meta-bot-backend`, `ai-hq-backend` also sees that env var and will fail validation unless the backend Meta OAuth trio is complete.
+
 Required for `meta-bot-backend` build / validate:
 
 - `VERIFY_TOKEN`
