@@ -17,6 +17,10 @@ function hasKeys(value = {}) {
   return Object.keys(obj(value)).length > 0;
 }
 
+function normalizeStringList(value = []) {
+  return arr(value).map((item) => s(item)).filter(Boolean);
+}
+
 function pickFirstObject(...values) {
   for (const value of values) {
     const next = obj(value);
@@ -251,6 +255,27 @@ function normalizeHistory(items = []) {
       return {
         ...meta,
         previousVersionId: s(item.previousVersionId || item.previous_version_id),
+        sourceSummaryData: pickFirstObject(
+          item.sourceSummary,
+          item.source_summary,
+          item.sourceSummaryJson,
+          item.source_summary_json
+        ),
+        metadata: pickFirstObject(item.metadata, item.metadata_json),
+        governance: pickFirstObject(
+          item.governance,
+          item.sourceSummary?.governance,
+          item.source_summary?.governance,
+          item.metadata?.governance,
+          item.metadata_json?.governance
+        ),
+        finalizeImpact: pickFirstObject(
+          item.finalizeImpact,
+          item.sourceSummary?.finalizeImpact,
+          item.source_summary?.finalizeImpact,
+          item.metadata?.finalizeImpact,
+          item.metadata_json?.finalizeImpact
+        ),
         changedFields,
         fieldChanges,
         changedFieldCount: changedFields.length || fieldChanges.length,
@@ -380,6 +405,23 @@ function normalizeTruthResponse(payload = {}, source = "") {
     approvedBy: s(truth.approvedBy || root.approvedBy),
     version: s(truth.profileStatus || root.profileStatus),
   };
+  const sourceSummary = pickFirstObject(
+    truth.sourceSummary,
+    truth.source_summary,
+    root.sourceSummary,
+    root.source_summary
+  );
+  const metadata = pickFirstObject(truth.metadata, root.metadata);
+  const governance = pickFirstObject(
+    truth.governance,
+    sourceSummary.governance,
+    metadata.governance
+  );
+  const finalizeImpact = pickFirstObject(
+    truth.finalizeImpact,
+    sourceSummary.finalizeImpact,
+    metadata.finalizeImpact
+  );
 
   const hasApprovalMeta = !!(approval.approvedAt || approval.approvedBy || approval.version);
   const hasTruth = fields.length > 0 || hasKeys(profile);
@@ -393,6 +435,41 @@ function normalizeTruthResponse(payload = {}, source = "") {
     history,
     hasProvenance: fields.some((field) => field.hasProvenance),
     hasTruth,
+    sourceSummary,
+    metadata,
+    governance: {
+      disposition: s(governance.disposition).toLowerCase(),
+      promotable: governance.promotable === true,
+      quarantine: governance.quarantine === true,
+      quarantineReasons: normalizeStringList(
+        governance.quarantineReasons || governance.quarantine_reasons
+      ),
+      quarantinedClaimCount:
+        Number(
+          governance.quarantinedClaimCount || governance.quarantined_claim_count
+        ) || arr(governance.quarantinedClaims || governance.quarantined_claims).length,
+      trust: obj(governance.trust),
+      freshness: obj(governance.freshness),
+      support: obj(governance.support),
+      conflict: obj(governance.conflict),
+    },
+    finalizeImpact: {
+      canonicalAreas: normalizeStringList(
+        finalizeImpact.canonicalAreas || finalizeImpact.canonical_areas
+      ),
+      runtimeAreas: normalizeStringList(
+        finalizeImpact.runtimeAreas || finalizeImpact.runtime_areas
+      ),
+      canonicalPaths: normalizeStringList(
+        finalizeImpact.canonicalPaths || finalizeImpact.canonical_paths
+      ),
+      runtimePaths: normalizeStringList(
+        finalizeImpact.runtimePaths || finalizeImpact.runtime_paths
+      ),
+      affectedSurfaces: normalizeStringList(
+        finalizeImpact.affectedSurfaces || finalizeImpact.affected_surfaces
+      ),
+    },
     readiness,
   };
 }
@@ -413,6 +490,16 @@ function buildApprovedTruthUnavailableSnapshot(
     approvedTruthUnavailable: true,
     unavailableReasonCode: s(reasonCode),
     notices: [s(notice)],
+    sourceSummary: {},
+    metadata: {},
+    governance: {},
+    finalizeImpact: {
+      canonicalAreas: [],
+      runtimeAreas: [],
+      canonicalPaths: [],
+      runtimePaths: [],
+      affectedSurfaces: [],
+    },
     readiness: {
       status: "blocked",
       reasonCode: s(reasonCode),

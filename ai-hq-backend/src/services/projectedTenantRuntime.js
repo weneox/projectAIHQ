@@ -20,7 +20,12 @@ function createProjectedRuntimeAuthorityError(authority = {}, reasonCode = "") {
   );
   error.code = "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE";
   error.statusCode = 409;
-  error.reasonCode = s(reasonCode || authority.reasonCode || authority.reason || "runtime_authority_unavailable");
+  error.reasonCode = s(
+    reasonCode ||
+      authority.reasonCode ||
+      authority.reason ||
+      "runtime_authority_unavailable"
+  );
   error.runtimeAuthority = {
     ...obj(authority),
     available: false,
@@ -47,7 +52,9 @@ function toServiceSummary(service = {}) {
   return {
     serviceKey: s(service.serviceKey || service.service_key || ""),
     title: s(service.title || service.name || ""),
-    summary: s(service.description || service.summaryText || service.summary || ""),
+    summary: s(
+      service.description || service.summaryText || service.summary || ""
+    ),
   };
 }
 
@@ -68,7 +75,9 @@ function normalizeDepartmentMap(input = {}) {
       fallbackDepartment: lower(
         item.fallbackDepartment || item.fallback_department
       ),
-      keywords: arr(item.keywords).map((entry) => s(entry)).filter(Boolean),
+      keywords: arr(item.keywords)
+        .map((entry) => s(entry))
+        .filter(Boolean),
       businessHours: obj(item.businessHours || item.business_hours),
       meta: obj(item.meta),
     };
@@ -77,9 +86,7 @@ function normalizeDepartmentMap(input = {}) {
   return departments;
 }
 
-function buildVoiceOperationalConfig(
-  operationalChannels = {}
-) {
+function buildVoiceOperationalConfig(operationalChannels = {}) {
   const voiceOperational = obj(obj(operationalChannels).voice);
   const telephony = obj(voiceOperational.telephony);
 
@@ -92,7 +99,11 @@ function buildVoiceOperationalConfig(
       website: "",
     },
     operator: obj(voiceOperational.operator),
-    operatorRouting: obj(voiceOperational.operatorRouting),
+    operatorRouting: normalizeDepartmentMap(
+      obj(voiceOperational.operatorRouting?.departments)
+    ).sales
+      ? obj(voiceOperational.operatorRouting)
+      : obj(voiceOperational.operatorRouting),
     realtime: obj(voiceOperational.realtime),
     telephony: obj(voiceOperational.telephony),
     callback: obj(voiceOperational.callback),
@@ -116,7 +127,10 @@ function buildVoiceProfile({
   const companyName = s(identity.companyName || identity.displayName || "");
   const defaultLanguage = lower(identity.mainLanguage || "en");
   const businessSummary = s(
-    profile.summaryShort || profile.summaryLong || profile.valueProposition || ""
+    profile.summaryShort ||
+      profile.summaryLong ||
+      profile.valueProposition ||
+      ""
   );
 
   return {
@@ -155,7 +169,9 @@ function buildMetaChannelRuntime({
   const match = obj(matchedChannel);
   const projected =
     arr(projectionChannels).find((item) =>
-      ["instagram", "facebook", "messenger"].includes(lower(item?.channelType))
+      ["instagram", "facebook", "messenger"].includes(
+        lower(item?.channelType)
+      )
     ) || {};
 
   return {
@@ -179,6 +195,112 @@ function buildMetaChannelRuntime({
   };
 }
 
+function normalizeAffectedSurfaces(health = {}) {
+  const value = obj(health);
+  const merged = [
+    ...arr(value.affectedSurfaces),
+    ...arr(value.affected_surfaces),
+    ...arr(value.surfaces),
+    ...arr(value.surfaceKeys),
+  ];
+
+  return [...new Set(merged.map((item) => lower(item)).filter(Boolean))];
+}
+
+function resolveConsumerSurface({
+  matchedChannel = null,
+  providerSecrets = null,
+  operationalChannels = null,
+} = {}) {
+  const match = obj(matchedChannel);
+  const ops = obj(operationalChannels);
+  const voice = obj(ops.voice);
+
+  if (Object.keys(voice).length > 0) return "voice";
+
+  const provider = lower(match.provider);
+  const channelType = lower(match.channel_type || match.channelType);
+
+  if (
+    provider === "meta" ||
+    ["instagram", "facebook", "messenger"].includes(channelType)
+  ) {
+    return "meta";
+  }
+
+  if (provider === "twilio") return "twilio";
+
+  if (providerSecrets && Object.keys(obj(providerSecrets)).length > 0) {
+    return "meta";
+  }
+
+  return "";
+}
+
+function shouldTreatMissingHealthAsFatal({
+  authority = {},
+  projectionId = "",
+  health = {},
+} = {}) {
+  const reasonCode = lower(
+    health.primaryReasonCode ||
+      health.reasonCode ||
+      authority.reasonCode ||
+      authority.reason
+  );
+
+  if (!projectionId) return true;
+
+  if (
+    reasonCode === "projection_missing" ||
+    reasonCode === "runtime_projection_missing" ||
+    reasonCode === "authority_invalid"
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function shouldBlockForProjectionHealth({
+  authority = {},
+  projectionId = "",
+  health = {},
+  consumerSurface = "",
+} = {}) {
+  const status = lower(health.status);
+
+  if (!["missing", "stale", "blocked", "invalid"].includes(status)) {
+    return false;
+  }
+
+  if (status === "missing") {
+    return shouldTreatMissingHealthAsFatal({
+      authority,
+      projectionId,
+      health,
+    });
+  }
+
+  if (status === "blocked") {
+    const affectedSurfaces = normalizeAffectedSurfaces(health);
+
+    if (consumerSurface && affectedSurfaces.length > 0) {
+      const affectsThisSurface =
+        affectedSurfaces.includes(consumerSurface) ||
+        affectedSurfaces.includes("all") ||
+        affectedSurfaces.includes("global") ||
+        affectedSurfaces.includes("runtime");
+
+      if (!affectsThisSurface) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
 export function buildProjectedTenantRuntime({
   runtime = {},
   tenantRow = null,
@@ -188,9 +310,21 @@ export function buildProjectedTenantRuntime({
 } = {}) {
   const raw = obj(runtime.raw);
   const authority = obj(runtime.authority);
-  const projection = obj(raw.projection);
+  const projection = obj(
+    raw.projection || raw.runtimeProjection || raw.currentProjection
+  );
   const projectionId = s(projection.id || authority.runtimeProjectionId);
-  const health = obj(authority.health);
+  const health = obj(
+    authority.health ||
+      raw.projectionHealth ||
+      projection.health ||
+      projection.health_json
+  );
+  const consumerSurface = resolveConsumerSurface({
+    matchedChannel,
+    providerSecrets,
+    operationalChannels,
+  });
 
   if (authority.mode !== "strict" || authority.required !== true) {
     throw createProjectedRuntimeAuthorityError(
@@ -213,7 +347,9 @@ export function buildProjectedTenantRuntime({
   if (authority.stale === true) {
     throw createProjectedRuntimeAuthorityError(
       authority,
-      s(authority.reasonCode || authority.reason || "runtime_projection_stale")
+      s(
+        authority.reasonCode || authority.reason || "runtime_projection_stale"
+      )
     );
   }
 
@@ -224,10 +360,22 @@ export function buildProjectedTenantRuntime({
     );
   }
 
-  if (["missing", "stale", "blocked", "invalid"].includes(lower(health.status))) {
+  if (
+    shouldBlockForProjectionHealth({
+      authority,
+      projectionId,
+      health,
+      consumerSurface,
+    })
+  ) {
     throw createProjectedRuntimeAuthorityError(
       authority,
-      s(health.primaryReasonCode || authority.reasonCode || "runtime_authority_unavailable")
+      s(
+        health.primaryReasonCode ||
+          health.reasonCode ||
+          authority.reasonCode ||
+          "runtime_authority_unavailable"
+      )
     );
   }
 
@@ -263,15 +411,13 @@ export function buildProjectedTenantRuntime({
       sourceProfileId: s(projection.source_profile_id),
       sourceCapabilitiesId: s(projection.source_capabilities_id),
       readinessLabel: s(projection.readiness_label),
-      readinessScore:
-        Number.isFinite(Number(projection.readiness_score))
-          ? Number(projection.readiness_score)
-          : null,
+      readinessScore: Number.isFinite(Number(projection.readiness_score))
+        ? Number(projection.readiness_score)
+        : null,
       confidenceLabel: s(projection.confidence_label),
-      confidence:
-        Number.isFinite(Number(projection.confidence))
-          ? Number(projection.confidence)
-          : null,
+      confidence: Number.isFinite(Number(projection.confidence))
+        ? Number(projection.confidence)
+        : null,
     },
     projectionHealth: health,
     tenant: {
@@ -328,7 +474,9 @@ export function buildProjectedTenantRuntime({
       matchedChannel: matchedChannel
         ? {
             id: s(matchedChannel.id),
-            channelType: s(matchedChannel.channel_type || matchedChannel.channelType),
+            channelType: s(
+              matchedChannel.channel_type || matchedChannel.channelType
+            ),
             provider: s(matchedChannel.provider),
             pageId: s(matchedChannel.external_page_id),
             igUserId: s(matchedChannel.external_user_id),

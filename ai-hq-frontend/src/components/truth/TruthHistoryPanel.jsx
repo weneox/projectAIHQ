@@ -2,6 +2,10 @@ function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
+function arr(v, d = []) {
+  return Array.isArray(v) ? v : d;
+}
+
 export default function TruthHistoryPanel({ history = [], onOpenVersion }) {
   return (
     <section className="rounded-[24px] border border-slate-200/80 bg-white/80 px-5 py-5">
@@ -59,6 +63,18 @@ export default function TruthHistoryPanel({ history = [], onOpenVersion }) {
               {s(item.diffSummary) ? (
                 <div className="mt-2 rounded-[18px] border border-slate-200/70 bg-slate-50/80 px-3 py-2 text-sm leading-6 text-slate-600">
                   Changed fields: {item.diffSummary}
+                </div>
+              ) : null}
+
+              {arr(item.finalizeImpact?.affectedSurfaces).length ? (
+                <div className="mt-2 text-xs uppercase tracking-[0.14em] text-slate-400">
+                  Affected surfaces: {arr(item.finalizeImpact.affectedSurfaces).join(", ")}
+                </div>
+              ) : null}
+
+              {s(item.governance?.conflict?.classification) ? (
+                <div className="mt-2 text-xs uppercase tracking-[0.14em] text-slate-400">
+                  Conflict outcome: {s(item.governance.conflict.classification).replace(/[_-]+/g, " ")}
                 </div>
               ) : null}
 

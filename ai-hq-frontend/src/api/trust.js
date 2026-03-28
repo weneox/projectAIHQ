@@ -18,6 +18,10 @@ function n(v, d = 0) {
   return Number.isFinite(x) ? x : d;
 }
 
+function bool(v, d = false) {
+  return typeof v === "boolean" ? v : d;
+}
+
 function buildQuery(params = {}) {
   const query = new URLSearchParams();
 
@@ -52,6 +56,89 @@ function normalizeAudit(items = []) {
   }));
 }
 
+function normalizeStringList(items = []) {
+  return arr(items).map((item) => s(item)).filter(Boolean);
+}
+
+function normalizeImpactSummary(input = {}) {
+  const source = obj(input);
+  return {
+    canonicalAreas: normalizeStringList(source.canonicalAreas || source.canonical_areas),
+    runtimeAreas: normalizeStringList(source.runtimeAreas || source.runtime_areas),
+    canonicalPaths: normalizeStringList(source.canonicalPaths || source.canonical_paths),
+    runtimePaths: normalizeStringList(source.runtimePaths || source.runtime_paths),
+    affectedSurfaces: normalizeStringList(source.affectedSurfaces || source.affected_surfaces),
+  };
+}
+
+function normalizeGovernanceSummary(input = {}) {
+  const source = obj(input);
+  const trust = obj(source.trust);
+  const freshness = obj(source.freshness);
+  const support = obj(source.support);
+  const conflict = obj(source.conflict);
+  const quarantinedClaims = arr(source.quarantinedClaims || source.quarantined_claims);
+
+  return {
+    disposition: s(source.disposition).toLowerCase(),
+    promotable: bool(source.promotable),
+    quarantine: bool(source.quarantine),
+    quarantineReasons: normalizeStringList(
+      source.quarantineReasons || source.quarantine_reasons
+    ),
+    quarantinedClaims,
+    quarantinedClaimCount:
+      n(source.quarantinedClaimCount || source.quarantined_claim_count) ||
+      quarantinedClaims.length,
+    trust: {
+      strongestTier: s(trust.strongestTier || trust.strongest_tier).toLowerCase(),
+      strongestSourceType: s(
+        trust.strongestSourceType || trust.strongest_source_type
+      ).toLowerCase(),
+      strongestTrustScore: n(
+        trust.strongestTrustScore || trust.strongest_trust_score
+      ),
+      strongestAuthorityRank: n(
+        trust.strongestAuthorityRank || trust.strongest_authority_rank
+      ),
+      weakOnly: bool(trust.weakOnly || trust.weak_only),
+      sourceTypes: normalizeStringList(trust.sourceTypes || trust.source_types),
+    },
+    freshness: {
+      bucket: s(freshness.bucket).toLowerCase(),
+      stale: bool(freshness.stale),
+      reviewRequired: bool(
+        freshness.reviewRequired || freshness.review_required
+      ),
+      freshestObservedAt: s(
+        freshness.freshestObservedAt || freshness.freshest_observed_at
+      ),
+      stalestObservedAt: s(
+        freshness.stalestObservedAt || freshness.stalest_observed_at
+      ),
+    },
+    support: {
+      evidenceCount: n(support.evidenceCount || support.evidence_count),
+      uniqueSourceCount: n(
+        support.uniqueSourceCount || support.unique_source_count
+      ),
+      strongEvidenceCount: n(
+        support.strongEvidenceCount || support.strong_evidence_count
+      ),
+      staleEvidenceCount: n(
+        support.staleEvidenceCount || support.stale_evidence_count
+      ),
+    },
+    conflict: {
+      classification: s(conflict.classification).toLowerCase(),
+      resolution: s(conflict.resolution).toLowerCase(),
+      reviewRequired: bool(
+        conflict.reviewRequired || conflict.review_required
+      ),
+    },
+  };
+}
+
 function normalizeProjectionRepair(input = {}) {
   const source = obj(input);
   const action = source.action ? obj(source.action) : source.repairAction ? obj(source.repairAction) : {};
@@ -75,18 +162,92 @@ function normalizeProjectionRepair(input = {}) {
 
 function normalizeProjectionHealth(input = {}) {
   const source = obj(input);
+  const lastKnownGood = obj(source.lastKnownGood || source.last_known_good);
+  const lastSuccess = obj(source.lastSuccess || source.last_success);
+  const lastFailure = obj(source.lastFailure || source.last_failure);
+  const nextRecommendedRepair = obj(
+    source.nextRecommendedRepair || source.next_recommended_repair
+  );
   return {
-    present: source.present === true,
-    usable: source.usable === true,
-    stale: source.stale === true,
+    present: bool(source.present),
+    usable: source.usable === true || bool(source.autonomousAllowed),
+    stale: bool(source.stale),
     status: s(source.status).toLowerCase(),
-    reasonCode: s(source.reasonCode || source.reason_code).toLowerCase(),
-    reasons: arr(source.reasons).map((item) => s(item)).filter(Boolean),
-    canRepair: source.canRepair === true,
+    reasonCode: s(
+      source.primaryReasonCode ||
+        source.primary_reason_code ||
+        source.reasonCode ||
+        source.reason_code
+    ).toLowerCase(),
+    reasons: normalizeStringList(
+      source.reasonCodes ||
+        source.reason_codes ||
+        source.reasons
+    ),
+    canRepair:
+      bool(source.canRepair) ||
+      arr(source.repairActions || source.repair_actions).length > 0,
     repairAction: Object.keys(obj(source.repairAction || source.repair_action)).length
       ? obj(source.repairAction || source.repair_action)
-      : null,
-    latestRepair: normalizeProjectionRepair({ latestRun: source.latestRepair || source.latest_repair }).latestRun,
+      : Object.keys(nextRecommendedRepair).length
+        ? nextRecommendedRepair
+        : null,
+    latestRepair: normalizeProjectionRepair({
+      latestRun: source.latestRepair || source.latest_repair,
+    }).latestRun,
+    degraded: bool(source.degraded),
+    blocked: bool(source.blocked),
+    invalid: bool(source.invalid),
+    missing: bool(source.missing),
+    healthy: bool(source.healthy),
+    autonomousAllowed: bool(source.autonomousAllowed || source.autonomous_allowed),
+    autonomousOperation: s(
+      source.autonomousOperation || source.autonomous_operation
+    ).toLowerCase(),
+    affectedSurfaces: normalizeStringList(
+      source.affectedSurfaces || source.affected_surfaces
+    ),
+    repairActions: arr(source.repairActions || source.repair_actions)
+      .map((item) => obj(item))
+      .filter((item) => Object.keys(item).length > 0),
+    nextRecommendedRepair:
+      Object.keys(nextRecommendedRepair).length > 0 ? nextRecommendedRepair : null,
+    lastKnownGood: {
+      runtimeProjectionId: s(
+        lastKnownGood.runtimeProjectionId || lastKnownGood.runtime_projection_id
+      ),
+      projectionHash: s(
+        lastKnownGood.projectionHash || lastKnownGood.projection_hash
+      ),
+      lastGoodAt: s(lastKnownGood.lastGoodAt || lastKnownGood.last_good_at),
+      diagnosticOnly: bool(
+        lastKnownGood.diagnosticOnly || lastKnownGood.diagnostic_only
+      ),
+      usableAsAuthority: bool(
+        lastKnownGood.usableAsAuthority || lastKnownGood.usable_as_authority
+      ),
+    },
+    lastSuccess: {
+      runId: s(lastSuccess.runId || lastSuccess.run_id),
+      finishedAt: s(lastSuccess.finishedAt || lastSuccess.finished_at),
+      runtimeProjectionId: s(
+        lastSuccess.runtimeProjectionId || lastSuccess.runtime_projection_id
+      ),
+    },
+    lastFailure: {
+      runId: s(lastFailure.runId || lastFailure.run_id),
+      finishedAt: s(lastFailure.finishedAt || lastFailure.finished_at),
+      errorCode: s(lastFailure.errorCode || lastFailure.error_code),
+      errorMessage: s(lastFailure.errorMessage || lastFailure.error_message),
+    },
+    reasonHistory: arr(source.reasonHistory || source.reason_history)
+      .map((item) => ({
+        kind: s(item.kind),
+        reasonCode: s(item.reasonCode || item.reason_code).toLowerCase(),
+        observedAt: s(item.observedAt || item.observed_at),
+        details: obj(item.details),
+      }))
+      .filter((item) => item.reasonCode || item.observedAt),
   };
 }
 
@@ -135,6 +296,18 @@ export function normalizeTrustViewResponse(payload = {}) {
         approvedAt: s(truth.approvedAt || truth.approved_at),
         approvedBy: s(truth.approvedBy || truth.approved_by),
         reviewSessionId: s(truth.reviewSessionId || truth.review_session_id),
+        sourceSummary: obj(truth.sourceSummary || truth.source_summary),
+        metadata: obj(truth.metadata),
+        governance: normalizeGovernanceSummary(
+          truth.governance ||
+            obj(truth.sourceSummary || truth.source_summary).governance ||
+            obj(truth.metadata).governance
+        ),
+        finalizeImpact: normalizeImpactSummary(
+          truth.finalizeImpact ||
+            obj(truth.sourceSummary || truth.source_summary).finalizeImpact ||
+            obj(truth.metadata).finalizeImpact
+        ),
         readiness: createReadinessViewModel(truth.readiness),
       },
       setupReview: {

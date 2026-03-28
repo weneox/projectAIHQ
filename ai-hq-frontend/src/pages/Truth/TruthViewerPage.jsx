@@ -4,6 +4,7 @@ import {
   getCanonicalTruthSnapshot,
   getTruthVersionDetail,
 } from "../../api/truth.js";
+import { getSettingsTrustView } from "../../api/trust.js";
 import TruthHeader from "../../components/truth/TruthHeader.jsx";
 import TruthFieldTable from "../../components/truth/TruthFieldTable.jsx";
 import TruthProvenancePanel from "../../components/truth/TruthProvenancePanel.jsx";
@@ -12,6 +13,7 @@ import TruthVersionComparePanel from "../../components/truth/TruthVersionCompare
 import RepairHub from "../../components/readiness/RepairHub.jsx";
 import { dispatchRepairAction } from "../../components/readiness/dispatchRepairAction.js";
 import { createReadinessViewModel } from "../../components/readiness/readinessViewModel.js";
+import GovernanceCockpit from "../../components/governance/GovernanceCockpit.jsx";
 
 function initialState() {
   return {
@@ -25,6 +27,12 @@ function initialState() {
       hasProvenance: false,
       approvedTruthUnavailable: false,
       readiness: {},
+      sourceSummary: {},
+      metadata: {},
+      governance: {},
+      finalizeImpact: {},
+      trustView: null,
+      trustUnavailable: false,
     },
   };
 }
@@ -42,9 +50,17 @@ export default function TruthViewerPage() {
   useEffect(() => {
     let alive = true;
 
-    getCanonicalTruthSnapshot()
-      .then((data) => {
+    Promise.allSettled([getCanonicalTruthSnapshot(), getSettingsTrustView()])
+      .then((results) => {
         if (!alive) return;
+        const truthResult = results[0];
+        const trustResult = results[1];
+
+        if (truthResult.status !== "fulfilled") {
+          throw truthResult.reason;
+        }
+
+        const data = truthResult.value || {};
         setState({
           loading: false,
           error: "",
@@ -56,6 +72,12 @@ export default function TruthViewerPage() {
             hasProvenance: !!data.hasProvenance,
             approvedTruthUnavailable: !!data.approvedTruthUnavailable,
             readiness: data.readiness || {},
+            sourceSummary: data.sourceSummary || {},
+            metadata: data.metadata || {},
+            governance: data.governance || {},
+            finalizeImpact: data.finalizeImpact || {},
+            trustView: trustResult.status === "fulfilled" ? trustResult.value || null : null,
+            trustUnavailable: trustResult.status !== "fulfilled",
           },
         });
       })
@@ -140,6 +162,22 @@ export default function TruthViewerPage() {
         approval={state.data.approval}
         notices={state.data.notices}
       />
+
+      {!state.error ? (
+        <div className="mt-8">
+          <GovernanceCockpit
+            truth={state.data}
+            trust={state.data.trustView || {}}
+            title="Truth Governance Cockpit"
+            subtitle={
+              state.data.trustUnavailable
+                ? "Approved truth is still shown, but live runtime health and repair telemetry are temporarily unavailable."
+                : "Approved truth, runtime projection health, finalize impact, and repairability are shown together so operators can understand the full governed execution path."
+            }
+            onRunAction={(action) => dispatchRepairAction(action)}
+          />
+        </div>
+      ) : null}
 
       {state.error ? (
         <div className="mt-6 rounded-[24px] border border-rose-200 bg-rose-50/90 px-5 py-4 text-sm leading-6 text-rose-700">

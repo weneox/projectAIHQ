@@ -19,14 +19,13 @@ export default function TruthHeader({ approval = {}, notices = [] }) {
   return (
     <div className="border-b border-slate-200/80 pb-6">
       <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-        Approved state
+        Governed Truth
       </div>
       <h1 className="mt-2 text-[34px] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[40px]">
         Business truth
       </h1>
       <p className="mt-3 max-w-[760px] text-[15px] leading-7 text-slate-600">
-        This is the current approved business twin as exposed by the backend. Missing provenance,
-        approval metadata, or history are shown honestly when they are not available.
+        This is the current approved business twin and its governed execution context. Approval, provenance, runtime health, and repair posture are shown honestly when they are available and fail closed when they are not.
       </p>
 
       <div className="mt-6 grid gap-5 sm:grid-cols-3">

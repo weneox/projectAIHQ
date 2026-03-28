@@ -62,7 +62,7 @@ describe("TrustMaintenanceSection", () => {
                   blocked: true,
                   category: "runtime",
                   dependencyType: "runtime_projection",
-                  reasonCode: "runtime_projection_missing",
+                  reasonCode: "projection_missing",
                   title: "Runtime projection blocker",
                   subtitle: "No approved runtime projection is currently available for trust-controlled runtime surfaces.",
                   missing: ["runtime_projection"],
@@ -88,15 +88,29 @@ describe("TrustMaintenanceSection", () => {
             runtimeProjection: {
               status: "blocked",
               health: {
-                present: false,
-                usable: false,
-                stale: false,
-                status: "",
-                reasonCode: "runtime_projection_missing",
-                canRepair: true,
+                status: "missing",
+                primaryReasonCode: "projection_missing",
+                autonomousAllowed: false,
+                affectedSurfaces: ["inbox", "voice"],
+                lastKnownGood: {
+                  runtimeProjectionId: "projection-old",
+                  diagnosticOnly: true,
+                  usableAsAuthority: false,
+                },
               },
               repair: {
                 canRepair: true,
+                action: {
+                  id: "rebuild_runtime_projection",
+                  kind: "api",
+                  label: "Rebuild runtime projection",
+                  allowed: true,
+                  requiredRole: "operator",
+                  target: {
+                    path: "/api/settings/trust/runtime-projection/repair",
+                    method: "POST",
+                  },
+                },
                 latestRun: {
                   status: "failed",
                 },
@@ -158,9 +172,10 @@ describe("TrustMaintenanceSection", () => {
     );
 
     expect(screen.getByText(/trust repair hub/i)).toBeInTheDocument();
+    expect(screen.getByText(/operator governance cockpit/i)).toBeInTheDocument();
     expect(screen.getAllByText(/runtime projection blocker/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/approved truth is present and a rebuild can be triggered here/i)).toBeInTheDocument();
-    expect(screen.getByText(/last repair failed/i)).toBeInTheDocument();
+    expect(screen.getByText(/projection authority and repair/i)).toBeInTheDocument();
+    expect(screen.getByText(/latest approved change footprint/i)).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: /rebuild runtime projection/i })[0]);
     await waitFor(() => {
       expect(dispatchRepairAction).toHaveBeenCalledWith(
@@ -174,6 +189,6 @@ describe("TrustMaintenanceSection", () => {
         })
       );
     });
-    expect(screen.getByText(/recent sync health/i)).toBeInTheDocument();
+    expect(screen.getByText(/recent evidence refreshes/i)).toBeInTheDocument();
   });
 });

@@ -21,7 +21,7 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
             blocked: true,
             category: "runtime",
             dependencyType: "runtime_projection",
-            reasonCode: "runtime_projection_missing",
+            reasonCode: "projection_missing",
             title: "Runtime projection blocker",
             nextAction: {
               id: "open_setup_route",
@@ -46,12 +46,17 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
         status: "ready",
         stale: false,
         health: {
-          present: true,
-          usable: true,
-          stale: false,
-          status: "ready",
-          reasonCode: "",
-          canRepair: true,
+          status: "healthy",
+          primaryReasonCode: "",
+          autonomousAllowed: true,
+          autonomousOperation: "continue",
+          affectedSurfaces: ["inbox", "voice"],
+          lastKnownGood: {
+            runtimeProjectionId: "projection-1",
+            diagnosticOnly: true,
+            usableAsAuthority: false,
+          },
+          repairActions: [{ id: "refresh_projection", action: "refresh_projection" }],
         },
         repair: {
           canRepair: true,
@@ -77,6 +82,18 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
       truth: {
         latestVersionId: "truth-v1",
         approvedAt: "2026-03-25T10:00:00.000Z",
+        sourceSummary: {
+          governance: {
+            disposition: "quarantined",
+            quarantine: true,
+            quarantinedClaimCount: 2,
+          },
+          finalizeImpact: {
+            canonicalAreas: ["profile"],
+            runtimeAreas: ["voice"],
+            affectedSurfaces: ["voice", "inbox"],
+          },
+        },
         readiness: {
           status: "ready",
           blockers: [],
@@ -114,9 +131,12 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
   expect(normalized.viewerRole).toBe("admin");
   expect(normalized.permissions.auditHistoryRead.allowed).toBe(true);
   expect(normalized.summary.readiness.blocked).toBe(true);
-  expect(normalized.summary.readiness.blockedItems[0].reasonCode).toBe("runtime_projection_missing");
+  expect(normalized.summary.readiness.blockedItems[0].reasonCode).toBe("projection_missing");
   expect(normalized.summary.sources.total).toBe(2);
-  expect(normalized.summary.runtimeProjection.health.usable).toBe(true);
+  expect(normalized.summary.runtimeProjection.health.autonomousAllowed).toBe(true);
+  expect(normalized.summary.runtimeProjection.health.affectedSurfaces).toEqual(["inbox", "voice"]);
+  expect(normalized.summary.truth.governance.quarantinedClaimCount).toBe(2);
+  expect(normalized.summary.truth.finalizeImpact.runtimeAreas).toEqual(["voice"]);
   expect(normalized.summary.runtimeProjection.repair.action?.id).toBe(
     "rebuild_runtime_projection"
   );

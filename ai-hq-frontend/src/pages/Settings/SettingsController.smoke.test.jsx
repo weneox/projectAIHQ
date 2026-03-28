@@ -514,6 +514,7 @@ describe("Settings truth-maintenance smoke", () => {
   it("renders workspace and business-brain sections through the shared async surface language", async () => {
     render(<SettingsController />);
 
+    expect(await screen.findByText(/governed operations/i)).toBeTruthy();
     expect((await screen.findAllByText(/workspace settings saved/i)).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: /change history/i })).toBeNull();
 
@@ -524,13 +525,15 @@ describe("Settings truth-maintenance smoke", () => {
   it("renders source sync and knowledge review truth-maintenance messaging", async () => {
     render(<SettingsController />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /sources/i }));
-    expect(
-      await screen.findByText(/refresh source evidence here, then route anything important into review/i)
-    ).toBeTruthy();
-    expect(screen.getByText(/trust repair hub/i)).toBeTruthy();
-    expect(screen.getAllByText(/runtime projection blocker/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: /open runtime setup/i }).length).toBeGreaterThan(0);
+    fireEvent.click(await screen.findByRole("button", { name: /truth governance/i }));
+      expect(
+        await screen.findByText(/refresh evidence, inspect truth and runtime state/i)
+      ).toBeTruthy();
+      expect(screen.getByText(/operator governance cockpit/i)).toBeTruthy();
+      expect(screen.getByText(/latest approved change footprint/i)).toBeTruthy();
+      expect(screen.getByText(/trust repair hub/i)).toBeTruthy();
+      expect(screen.getAllByText(/runtime projection blocker/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByRole("button", { name: /open runtime setup/i }).length).toBeGreaterThan(0);
     expect(
       screen.getByText(/sync refreshes source evidence only/i)
     ).toBeTruthy();

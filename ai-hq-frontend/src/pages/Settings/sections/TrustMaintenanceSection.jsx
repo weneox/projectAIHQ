@@ -8,6 +8,7 @@ import SettingsSurfaceBanner from "../../../components/settings/SettingsSurfaceB
 import { dispatchRepairAction } from "../../../components/readiness/dispatchRepairAction.js";
 import SettingsSection from "../../../components/settings/SettingsSection.jsx";
 import { createReadinessViewModel } from "../../../lib/readinessViewModel.js";
+import GovernanceCockpit from "../../../components/governance/GovernanceCockpit.jsx";
 import {
   EmptyState,
   SourceCard,
@@ -55,22 +56,7 @@ export default function TrustMaintenanceSection({
   const summary = trust?.view?.summary || {};
   const sourceHealth = summary.sources || {};
   const runtimeHealth = summary.runtimeProjection || {};
-  const projectionHealth = runtimeHealth.health || {};
-  const projectionRepair = runtimeHealth.repair || {};
-  const trustCapabilities = trust?.view?.capabilities || trust?.capabilities || {};
-  const viewerRole = trust?.view?.viewerRole || trust?.viewerRole || "";
-  const canRepairProjection =
-    trustCapabilities?.runtimeProjectionRepair?.allowed ??
-    trustCapabilities?.canRepairRuntimeProjection ??
-    false;
-  const repairRestrictionMessage =
-    trustCapabilities?.runtimeProjectionRepair?.message ||
-    (viewerRole && !canRepairProjection
-      ? "Runtime projection rebuild stays behind owner/admin access."
-      : "");
   const truthHealth = summary.truth || {};
-  const reviewHealth = summary.reviewQueue || {};
-  const trustUnavailable = trust?.unavailable === true;
   const trustError = String(trust?.error || "").trim();
   const sourceState = sourceSurface || {};
   const trustReadiness = createReadinessViewModel(summary.readiness);
@@ -91,9 +77,9 @@ export default function TrustMaintenanceSection({
 
   return (
     <SettingsSection
-      eyebrow="Source Intelligence"
-      title="Connected Sources"
-      subtitle="Refresh source evidence here, then route anything important into review before approved truth changes."
+      eyebrow="Truth Governance"
+      title="Source Governance"
+      subtitle="Refresh evidence, review what is weak or conflicting, inspect finalize impact, and keep runtime authority healthy before operations continue."
       tone="default"
     >
       <div className="space-y-6">
@@ -107,140 +93,33 @@ export default function TrustMaintenanceSection({
           onRunAction={(action) => dispatchRepairAction(action)}
         />
 
+        <GovernanceCockpit
+          truth={truthHealth}
+          trust={trust?.view || {}}
+          title="Operator Governance Cockpit"
+          subtitle="This cockpit makes the main operator path explicit: approved truth, review pressure, finalize impact, runtime projection health, affected surfaces, and the next safe repair step."
+          onRunAction={handleRepairAction}
+        />
+
         <div className="grid gap-4 md:grid-cols-3">
           <StatTile
             label="Total Sources"
             value={sourceHealth.total ?? items.length}
-            hint="Tenant üçün qeydiyyatlı source sayı"
+            hint="Registered evidence sources for this tenant"
             tone="info"
           />
           <StatTile
             label="Connected"
             value={sourceHealth.connected ?? connectedCount}
-            hint="Aktiv qoşulmuş source-lar"
+            hint="Sources actively feeding evidence into the governance loop"
             tone="success"
           />
           <StatTile
             label="Enabled"
             value={sourceHealth.enabled ?? enabledCount}
-            hint="Enabled for evidence refresh and future review work"
+            hint="Eligible for refresh and review-backed promotion"
             tone="neutral"
           />
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-3">
-          <Card variant="surface" padded="md" className="rounded-[24px]">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-slate-950 dark:text-white">
-                  Source Health
-                </div>
-                <Badge
-                  tone={
-                    trustUnavailable
-                      ? "warn"
-                      : (sourceHealth.failed || 0) > 0
-                        ? "warn"
-                        : "success"
-                  }
-                  variant="subtle"
-                  dot
-                >
-                  {trustUnavailable
-                    ? "Unavailable"
-                    : (sourceHealth.failed || 0) > 0
-                      ? "Needs attention"
-                      : "Healthy"}
-                </Badge>
-              </div>
-              <div className="text-sm leading-6 text-slate-500 dark:text-slate-400">
-                Running: {sourceHealth.running ?? 0} · Failed: {sourceHealth.failed ?? 0} · Review
-                required: {sourceHealth.reviewRequired ?? 0}
-              </div>
-              <div className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                Last run {formatTimestampLabel(sourceHealth.lastRunAt)}
-              </div>
-            </div>
-          </Card>
-
-          <Card variant="surface" padded="md" className="rounded-[24px]">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-slate-950 dark:text-white">
-                  Runtime Projection
-                </div>
-                <Badge
-                  tone={
-                    trustUnavailable
-                      ? "warn"
-                      : runtimeReadiness.blocked || runtimeHealth.stale
-                        ? "warn"
-                        : "success"
-                  }
-                  variant="subtle"
-                  dot
-                >
-                  {trustUnavailable
-                    ? "Unavailable"
-                    : runtimeReadiness.blocked || runtimeHealth.stale
-                      ? "Blocked"
-                      : "Current"}
-                </Badge>
-              </div>
-              <div className="text-sm leading-6 text-slate-500 dark:text-slate-400">
-                Status: {projectionHealth.reasonCode || runtimeReadiness.reasonCode || runtimeHealth.status || "unknown"}
-              </div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">
-                {projectionHealth.usable
-                  ? "Strict runtime authority is usable."
-                  : projectionRepair.canRepair
-                    ? "Approved truth is present and a rebuild can be triggered here."
-                    : "Projection authority is fail-closed until repair prerequisites are met."}
-              </div>
-              {repairRestrictionMessage ? (
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  {repairRestrictionMessage}
-                </div>
-              ) : null}
-              {projectionRepair.latestRun?.status ? (
-                <div className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                  Last repair {projectionRepair.latestRun.status}
-                </div>
-              ) : null}
-              <div className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                Updated {formatTimestampLabel(runtimeHealth.updatedAt)}
-              </div>
-            </div>
-          </Card>
-
-          <Card variant="surface" padded="md" className="rounded-[24px]">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-sm font-semibold text-slate-950 dark:text-white">
-                  Approved Truth
-                </div>
-                <Badge
-                  tone={trustUnavailable ? "warn" : truthReadiness.blocked ? "warn" : "success"}
-                  variant="subtle"
-                  dot
-                >
-                  {truthReadiness.blocked
-                    ? trustUnavailable
-                      ? "Unavailable"
-                      : "Blocked"
-                    : truthHealth.latestVersionId
-                      ? "Versioned"
-                      : "Pending"}
-                </Badge>
-              </div>
-              <div className="text-sm leading-6 text-slate-500 dark:text-slate-400">
-                Review queue: {reviewHealth.pending ?? 0} pending · Conflicts: {reviewHealth.conflicts ?? 0}
-              </div>
-              <div className="text-xs uppercase tracking-[0.18em] text-slate-400">
-                Last approved {formatTimestampLabel(truthHealth.approvedAt)}
-              </div>
-            </div>
-          </Card>
         </div>
 
         {(runtimeReadiness.blocked || truthReadiness.blocked || reviewReadiness.blocked) ? (
@@ -273,13 +152,13 @@ export default function TrustMaintenanceSection({
         ) : null}
 
         <div className="rounded-[22px] border border-slate-200/80 bg-slate-50/90 px-4 py-4 text-sm leading-6 text-slate-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
-          Sync refreshes source evidence only. If something may change the approved business twin, it should appear in Knowledge Review before truth is updated.
+          Source sync refreshes evidence only. Anything that could change approved truth, runtime behavior, or downstream channels should become explicit review or repair work before it is allowed through.
         </div>
 
         <SettingsSurfaceBanner
           surface={trust?.surface}
           errorMessage={trustError}
-          unavailableMessage="Operator trust summary is temporarily unavailable. Source cards below still reflect the last loaded settings state, but health and audit signals could not be loaded."
+          unavailableMessage="Operator trust summary is temporarily unavailable. Source cards below still reflect the last loaded settings state, but governance and runtime signals could not be refreshed."
           refreshLabel="Refresh Trust"
         />
 
@@ -301,8 +180,8 @@ export default function TrustMaintenanceSection({
 
         {!items.length ? (
           <EmptyState
-            title="Hələ source yoxdur"
-            subtitle="Website, Instagram və digər mənbələri əlavə et ki AI şirkəti özü anlamağa başlasın."
+            title="No governed sources yet"
+            subtitle="Add a website, provider, or imported source so evidence can enter review before approved truth changes."
             actionLabel="Create First Source"
             onAction={() => onCreate(createNewSource())}
             disabled={!canManage}
@@ -326,13 +205,18 @@ export default function TrustMaintenanceSection({
 
         <Card variant="surface" padded="md" className="rounded-[24px]">
           <div className="space-y-4">
-            <div>
-              <div className="text-sm font-semibold text-slate-950 dark:text-white">
-                Recent Sync Health
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-slate-950 dark:text-white">
+                  Recent Evidence Refreshes
+                </div>
+                <div className="text-sm text-slate-500 dark:text-slate-400">
+                  Latest source sync outcomes that may affect review pressure, truth promotion, and operator repair work.
+                </div>
               </div>
-              <div className="text-sm text-slate-500 dark:text-slate-400">
-                Latest source sync outcomes that may affect review and approved truth.
-              </div>
+              <Badge tone="info" variant="subtle" dot>
+                {recentRuns.length} recent
+              </Badge>
             </div>
 
             {!recentRuns.length ? (

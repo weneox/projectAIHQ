@@ -33,6 +33,27 @@ vi.mock("../../api/truth.js", () => ({
     ],
     notices: [],
     hasProvenance: true,
+    governance: {
+      disposition: "promotable",
+      support: {
+        evidenceCount: 3,
+        strongEvidenceCount: 2,
+        uniqueSourceCount: 2,
+        staleEvidenceCount: 0,
+      },
+      trust: {
+        strongestTier: "official_website",
+        strongestSourceType: "website",
+      },
+      freshness: {
+        bucket: "fresh",
+      },
+    },
+    finalizeImpact: {
+      canonicalAreas: ["profile"],
+      runtimeAreas: ["voice"],
+      affectedSurfaces: ["voice", "inbox"],
+    },
     readiness: {
       status: "ready",
       blockers: [],
@@ -69,6 +90,46 @@ vi.mock("../../api/truth.js", () => ({
   }),
 }));
 
+vi.mock("../../api/trust.js", () => ({
+  getSettingsTrustView: vi.fn().mockResolvedValue({
+    summary: {
+      readiness: { status: "ready", blockers: [] },
+      runtimeProjection: {
+        status: "ready",
+        health: {
+          status: "healthy",
+          primaryReasonCode: "",
+          autonomousAllowed: true,
+          autonomousOperation: "continue",
+          affectedSurfaces: ["voice", "inbox"],
+          lastKnownGood: {
+            runtimeProjectionId: "projection-1",
+            diagnosticOnly: true,
+            usableAsAuthority: false,
+          },
+        },
+        repair: {
+          action: {
+            id: "open_setup_route",
+            kind: "route",
+            label: "Open runtime setup",
+            target: { path: "/setup/runtime" },
+          },
+        },
+      },
+      truth: {
+        latestVersionId: "truth-v3",
+        approvedAt: "2026-03-25T10:00:00.000Z",
+        approvedBy: "reviewer@aihq.test",
+      },
+      reviewQueue: {
+        pending: 2,
+        conflicts: 1,
+      },
+    },
+  }),
+}));
+
 vi.mock("../../components/readiness/dispatchRepairAction.js", () => ({
   dispatchRepairAction: (...args) => dispatchRepairAction(...args),
 }));
@@ -96,6 +157,9 @@ describe("Truth viewer smoke", () => {
     ).toBeInTheDocument();
 
     expect(await screen.findByRole("heading", { name: /business truth/i })).toBeInTheDocument();
+    expect(screen.getByText(/truth governance cockpit/i)).toBeInTheDocument();
+    expect(screen.getByText(/projection authority and repair/i)).toBeInTheDocument();
+    expect(screen.getByText(/latest approved change footprint/i)).toBeInTheDocument();
     expect(screen.getByText("2026-03-25T10:00:00.000Z")).toBeInTheDocument();
     expect(screen.getByText("reviewer@aihq.test")).toBeInTheDocument();
     expect(screen.getByText("North Clinic")).toBeInTheDocument();

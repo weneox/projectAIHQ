@@ -482,13 +482,23 @@ export function settingsTrustRoutes({ db }) {
             },
             readiness: readiness.runtimeProjection,
           },
-          truth: {
-            latestVersionId: s(latestTruthVersion?.id),
-            approvedAt: iso(latestTruthVersion?.approved_at || latestTruthVersion?.created_at),
-            approvedBy: s(latestTruthVersion?.approved_by),
-            reviewSessionId: s(latestTruthVersion?.review_session_id),
-            readiness: readiness.truth,
-          },
+            truth: {
+              latestVersionId: s(latestTruthVersion?.id),
+              approvedAt: iso(latestTruthVersion?.approved_at || latestTruthVersion?.created_at),
+              approvedBy: s(latestTruthVersion?.approved_by),
+              reviewSessionId: s(latestTruthVersion?.review_session_id),
+              sourceSummary: obj(latestTruthVersion?.source_summary_json),
+              metadata: obj(latestTruthVersion?.metadata_json),
+              governance: obj(
+                latestTruthVersion?.source_summary_json?.governance ||
+                  latestTruthVersion?.metadata_json?.governance
+              ),
+              finalizeImpact: obj(
+                latestTruthVersion?.source_summary_json?.finalizeImpact ||
+                  latestTruthVersion?.metadata_json?.finalizeImpact
+              ),
+              readiness: readiness.truth,
+            },
           setupReview: {
             active: !!activeReviewSession?.id,
             sessionId: s(activeReviewSession?.id),

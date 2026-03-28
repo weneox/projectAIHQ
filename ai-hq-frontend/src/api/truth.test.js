@@ -21,6 +21,17 @@ it("normalizeTruthResponse maps approved truth metadata, provenance, and history
         approvedAt: "2026-03-25T10:00:00.000Z",
         approvedBy: "reviewer@aihq.test",
         profileStatus: "approved",
+        sourceSummary: {
+          governance: {
+            disposition: "quarantined",
+            quarantinedClaimCount: 2,
+          },
+          finalizeImpact: {
+            canonicalAreas: ["profile"],
+            runtimeAreas: ["voice"],
+            affectedSurfaces: ["voice", "inbox"],
+          },
+        },
         history: [
           {
             id: "approval-1",
@@ -55,6 +66,8 @@ it("normalizeTruthResponse maps approved truth metadata, provenance, and history
   expect(normalized.history[0].sourceSummary).toMatch(/Website/);
   expect(normalized.history[0].diffSummary).toMatch(/companyName/);
   expect(normalized.fields[0].provenance).toMatch(/Website/);
+  expect(normalized.governance.quarantinedClaimCount).toBe(2);
+  expect(normalized.finalizeImpact.runtimeAreas).toEqual(["voice"]);
 });
 
 it("normalizeCompareResponse maps backend truth version compare detail", () => {

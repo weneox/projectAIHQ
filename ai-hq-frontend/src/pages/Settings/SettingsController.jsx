@@ -67,6 +67,7 @@ import {
 } from "./settingsShared.js";
 import { createNewSource } from "./sections/trustSurfaceShared.jsx";
 import { getControlPlanePermissions } from "../../lib/controlPlanePermissions.js";
+import { GovernanceSignalStrip } from "../../components/governance/GovernanceCockpit.jsx";
 
 export default function SettingsController() {
   const [activeSection, setActiveSection] = useState("general");
@@ -179,24 +180,24 @@ export default function SettingsController() {
       { key: "general", label: "General", description: "Workspace identity, region, language", dirty: !!dirtyMap.general, icon: Building2 },
       { key: "brand", label: "Brand", description: "Voice, audience, services, CTA", dirty: !!dirtyMap.brand, icon: Sparkles },
       { key: "ai_policy", label: "AI Policy", description: "Auto reply, approvals, quiet hours", dirty: !!dirtyMap.ai_policy, icon: ShieldCheck },
-      { key: "business_facts", label: "Business Facts", description: "Structured company facts for AI", dirty: !!dirtyMap.business_facts, icon: BrainCircuit },
-      { key: "channel_policies", label: "Channel Policies", description: "Per-channel reply behavior rules", dirty: !!dirtyMap.channel_policies, icon: ListTree },
-      { key: "operational", label: "Operational", description: "Voice runtime, channel readiness, provider state", dirty: false, icon: PhoneCall },
-      { key: "locations", label: "Locations", description: "Branches, address, working hours", dirty: !!dirtyMap.locations, icon: MapPin },
-      { key: "contacts", label: "Contacts", description: "Phone, email, WhatsApp, public lines", dirty: !!dirtyMap.contacts, icon: Contact2 },
-      { key: "sources", label: "Sources", description: "Connected data sources and sync intelligence", dirty: !!dirtyMap.sources, icon: Database },
-      { key: "knowledge_review", label: "Knowledge Review", description: "Approve AI-discovered business knowledge", dirty: !!dirtyMap.knowledge_review, icon: SearchCheck },
+      { key: "sources", label: "Truth Governance", description: "Connected evidence, source trust, runtime repair, finalize impact", dirty: !!dirtyMap.sources, icon: Database },
+      { key: "knowledge_review", label: "Review Queue", description: "Pending, conflicting, and quarantined candidate changes", dirty: !!dirtyMap.knowledge_review, icon: SearchCheck },
+      { key: "operational", label: "Runtime Operations", description: "Projection-backed voice and channel readiness", dirty: false, icon: PhoneCall },
       ...(controlPlanePermissions.auditHistoryRead.allowed
         ? [
             {
               key: "change_history",
-              label: "Change History",
-              description: "Sensitive control-plane mutation timeline",
+              label: "Governance History",
+              description: "Approval, repair, and control-plane mutation timeline",
               dirty: false,
               icon: ScrollText,
             },
           ]
         : []),
+      { key: "business_facts", label: "Business Facts", description: "Structured company facts for AI", dirty: !!dirtyMap.business_facts, icon: BrainCircuit },
+      { key: "channel_policies", label: "Channel Policies", description: "Per-channel reply behavior rules", dirty: !!dirtyMap.channel_policies, icon: ListTree },
+      { key: "locations", label: "Locations", description: "Branches, address, working hours", dirty: !!dirtyMap.locations, icon: MapPin },
+      { key: "contacts", label: "Contacts", description: "Phone, email, WhatsApp, public lines", dirty: !!dirtyMap.contacts, icon: Contact2 },
       { key: "channels", label: "Channels", description: "Instagram, WhatsApp, Messenger", dirty: !!dirtyMap.channels, icon: Waypoints },
       { key: "agents", label: "Agents", description: "Agent status, model, enable/disable", dirty: !!dirtyMap.agents, icon: Bot },
       { key: "team", label: "Team", description: "Workspace users, roles, access", dirty: !!dirtyMap.team, icon: Users },
@@ -467,13 +468,19 @@ export default function SettingsController() {
   return (
     <>
       <SettingsShell
-        title="Settings"
-        subtitle="Workspace, brand, AI policy, business brain, team v? integrations idar?si."
+        title="Governance & Settings"
+        subtitle="Approved truth, runtime health, repairability, and workspace controls in one operator control plane."
         items={navItems}
         activeKey={activeSection}
         onChange={setActiveSection}
       >
         <div className="space-y-5">
+          <GovernanceSignalStrip
+            truth={trust?.view?.summary?.truth || {}}
+            trust={trust?.view || {}}
+            onJump={setActiveSection}
+          />
+
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-2">
               <Badge
