@@ -164,6 +164,20 @@ test("real base schema plan includes execution policy controls migration", async
   );
 });
 
+test("real base schema plan stays portable across non-utf8 database encodings", async () => {
+  const schemaDir = path.resolve(process.cwd(), "src", "db", "schema");
+  const plan = await schemaMigrationTest.buildMigrationPlan({
+    schemaDir,
+    entryFile: "index.base.sql",
+  });
+
+  const nonAsciiMigrations = plan.plan
+    .filter((step) => /[^\x00-\x7F]/.test(step.sql))
+    .map((step) => step.name);
+
+  assert.deepEqual(nonAsciiMigrations, []);
+});
+
 test("migration status surfaces missing required relations even when pending count is zero", async () => {
   await withTempSchemaDir(
     {
