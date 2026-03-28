@@ -5,6 +5,7 @@ import path from "path";
 
 const DEFAULT_LEDGER_TABLE = "schema_migrations";
 const DEFAULT_LOCK_KEY = 2146124091;
+const DEFAULT_REQUIRED_RELATIONS = ["tenant_execution_policy_controls"];
 const LEGACY_MIGRATION_CHECKSUMS = new Map([
   [
     "52_operational_data_backfill.sql",
@@ -253,6 +254,24 @@ async function ledgerExists(db, ledgerTable) {
   return Boolean(result?.rows?.[0]?.regclass);
 }
 
+function normalizeRequiredRelations(requiredRelations = DEFAULT_REQUIRED_RELATIONS) {
+  const values = Array.isArray(requiredRelations) ? requiredRelations : [];
+  return [...new Set(values.map((value) => assertSafeIdentifier(value, "")).filter(Boolean))];
+}
+
+async function getMissingRequiredRelations(db, requiredRelations = []) {
+  const missing = [];
+
+  for (const relation of normalizeRequiredRelations(requiredRelations)) {
+    const result = await db.query("select to_regclass($1) as regclass", [relation]);
+    if (!result?.rows?.[0]?.regclass) {
+      missing.push(relation);
+    }
+  }
+
+  return missing;
+}
+
 async function buildMigrationPlan(options = {}) {
   const schemaDir = path.resolve(
     s(options.schemaDir) || path.resolve(process.cwd(), "src", "db", "schema")
@@ -282,6 +301,7 @@ export async function describeSchemaMigrations(db, options = {}) {
     options.ledgerTable,
     DEFAULT_LEDGER_TABLE
   );
+  const requiredRelations = normalizeRequiredRelations(options.requiredRelations);
   const { schemaDir, entryFile, plan } = await buildMigrationPlan(options);
   const hasLedger = await ledgerExists(db, ledgerTable);
   const appliedRows = hasLedger ? await getLedgerRows(db, ledgerTable) : [];
@@ -309,15 +329,23 @@ export async function describeSchemaMigrations(db, options = {}) {
     }
   }
 
+  const missingRequiredRelations = await getMissingRequiredRelations(
+    db,
+    requiredRelations
+  );
+
   return {
     ok: true,
     schemaDir,
     entryFile,
     ledgerTable,
+    requiredRelations,
     ledgerExists: hasLedger,
     migrationCount: plan.length,
     appliedCount: appliedRows.length,
     pendingCount: pending.length,
+    missingRequiredRelationCount: missingRequiredRelations.length,
+    missingRequiredRelations,
     pending: pending.map((step) => ({
       name: step.name,
       checksum: step.checksum,
@@ -338,6 +366,7 @@ export async function runSchemaMigrations(db, options = {}) {
     options.ledgerTable,
     DEFAULT_LEDGER_TABLE
   );
+  const requiredRelations = normalizeRequiredRelations(options.requiredRelations);
   const lockKey = Number.isFinite(Number(options.lockKey))
     ? Number(options.lockKey)
     : DEFAULT_LOCK_KEY;
@@ -419,6 +448,20 @@ export async function runSchemaMigrations(db, options = {}) {
       statementCount += statements.length;
       appliedMigrations.push(step.name);
     }
+
+    const missingRequiredRelations = await getMissingRequiredRelations(
+      db,
+      requiredRelations
+    );
+
+    if (missingRequiredRelations.length > 0) {
+      const error = new Error(
+        `Schema verification failed: required relations missing after migration: ${missingRequiredRelations.join(", ")}`
+      );
+      error.code = "SCHEMA_REQUIRED_RELATIONS_MISSING";
+      error.missingRequiredRelations = missingRequiredRelations;
+      throw error;
+    }
   } finally {
     if (lockHeld) {
       try {
@@ -437,6 +480,8 @@ export async function runSchemaMigrations(db, options = {}) {
     skippedCount,
     statementCount,
     appliedMigrations,
+    requiredRelations,
+    missingRequiredRelations: [],
   };
 }
 
@@ -444,4 +489,6 @@ export const __test__ = {
   buildMigrationPlan,
   splitSqlStatements,
   acceptsLegacyChecksum,
+  normalizeRequiredRelations,
+  getMissingRequiredRelations,
 };

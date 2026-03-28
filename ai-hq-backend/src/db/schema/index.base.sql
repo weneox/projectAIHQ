@@ -33,6 +33,7 @@
 \i ./51_canonical_truth_versions.sql
 \i ./52_operational_data_backfill.sql
 \i ./60_inbox_brain.sql
+\i ./61_execution_policy_controls.sql
 
 \i ./90_backfill_tenant_ids.sql
 \i ./91_data_repairs.sql

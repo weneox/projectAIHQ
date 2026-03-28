@@ -8,6 +8,7 @@ import { decideStartupMigrationPolicy } from "../src/db/index.js";
 import {
   describeSchemaMigrations,
   runSchemaMigrations,
+  __test__ as schemaMigrationTest,
 } from "../src/db/runSchemaMigrations.js";
 
 class FakeMigrationDb {
@@ -22,8 +23,18 @@ class FakeMigrationDb {
     const text = String(sql || "").trim().toLowerCase();
 
     if (text.startsWith("select to_regclass")) {
+      const relation = String(params[0] || "").trim().toLowerCase();
       return {
-        rows: [{ regclass: this.ledgerExists ? "schema_migrations" : null }],
+        rows: [
+          {
+            regclass:
+              relation === "schema_migrations"
+                ? this.ledgerExists
+                  ? "schema_migrations"
+                  : null
+                : null,
+          },
+        ],
       };
     }
 
@@ -96,6 +107,7 @@ test("migration history is tracked and explicit migrate path is idempotent", asy
       const before = await describeSchemaMigrations(db, {
         schemaDir,
         entryFile: "index.base.sql",
+        requiredRelations: [],
       });
 
       assert.equal(before.ledgerExists, false);
@@ -105,6 +117,7 @@ test("migration history is tracked and explicit migrate path is idempotent", asy
       const firstRun = await runSchemaMigrations(db, {
         schemaDir,
         entryFile: "index.base.sql",
+        requiredRelations: [],
       });
 
       assert.equal(firstRun.ok, true);
@@ -116,6 +129,7 @@ test("migration history is tracked and explicit migrate path is idempotent", asy
       const after = await describeSchemaMigrations(db, {
         schemaDir,
         entryFile: "index.base.sql",
+        requiredRelations: [],
       });
 
       assert.equal(after.ledgerExists, true);
@@ -126,11 +140,56 @@ test("migration history is tracked and explicit migrate path is idempotent", asy
       const secondRun = await runSchemaMigrations(db, {
         schemaDir,
         entryFile: "index.base.sql",
+        requiredRelations: [],
       });
 
       assert.equal(secondRun.appliedCount, 0);
       assert.equal(secondRun.skippedCount, 2);
       assert.equal(db.executedStatements.length, 2);
+    }
+  );
+});
+
+test("real base schema plan includes execution policy controls migration", async () => {
+  const schemaDir = path.resolve(process.cwd(), "src", "db", "schema");
+  const plan = await schemaMigrationTest.buildMigrationPlan({
+    schemaDir,
+    entryFile: "index.base.sql",
+  });
+
+  assert.ok(
+    plan.plan.some(
+      (step) => step.name === "61_execution_policy_controls.sql"
+    )
+  );
+});
+
+test("migration status surfaces missing required relations even when pending count is zero", async () => {
+  await withTempSchemaDir(
+    {
+      "index.base.sql": "\\i ./01_first.sql\n",
+      "01_first.sql": "create table if not exists a (id int);\n",
+    },
+    async (schemaDir) => {
+      const db = new FakeMigrationDb();
+
+      await runSchemaMigrations(db, {
+        schemaDir,
+        entryFile: "index.base.sql",
+        requiredRelations: [],
+      });
+
+      const status = await describeSchemaMigrations(db, {
+        schemaDir,
+        entryFile: "index.base.sql",
+        requiredRelations: ["tenant_execution_policy_controls"],
+      });
+
+      assert.equal(status.pendingCount, 0);
+      assert.equal(status.missingRequiredRelationCount, 1);
+      assert.deepEqual(status.missingRequiredRelations, [
+        "tenant_execution_policy_controls",
+      ]);
     }
   );
 });
@@ -146,6 +205,20 @@ test("startup policy blocks production boot when migrations are pending", () => 
   assert.equal(decision.autoMigrate, false);
   assert.equal(decision.shouldBlock, true);
   assert.equal(decision.reason, "pending_migrations");
+});
+
+test("startup policy blocks when required schema relations are missing", () => {
+  const decision = decideStartupMigrationPolicy({
+    env: "production",
+    autoMigrateOnStartup: false,
+    pendingCount: 0,
+    driftedCount: 0,
+    missingRequiredRelationCount: 1,
+  });
+
+  assert.equal(decision.autoMigrate, false);
+  assert.equal(decision.shouldBlock, true);
+  assert.equal(decision.reason, "required_schema_relations_missing");
 });
 
 test("startup policy can only auto-migrate when explicitly enabled in development", () => {

@@ -136,6 +136,13 @@ test.before(async () => {
 
   if (!migrationsReady) {
     await runSchemaMigrations(pool);
+    const relationCheck = await pool.query(
+      "select to_regclass('tenant_execution_policy_controls') as regclass"
+    );
+    assert.equal(
+      relationCheck.rows[0]?.regclass,
+      "tenant_execution_policy_controls"
+    );
     migrationsReady = true;
   }
 });

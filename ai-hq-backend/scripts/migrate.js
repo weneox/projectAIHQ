@@ -42,6 +42,9 @@ async function main() {
     appliedCount: Number(before?.appliedCount || 0),
     pendingCount: Number(before?.pendingCount || 0),
     driftedCount: Number(before?.drifted?.length || 0),
+    missingRequiredRelationCount: Number(
+      before?.missingRequiredRelationCount || 0
+    ),
   });
 
   const result = await migrate();
@@ -56,6 +59,9 @@ async function main() {
     appliedCount: Number(after?.appliedCount || 0),
     pendingCount: Number(after?.pendingCount || 0),
     driftedCount: Number(after?.drifted?.length || 0),
+    missingRequiredRelationCount: Number(
+      after?.missingRequiredRelationCount || 0
+    ),
   });
 }
 

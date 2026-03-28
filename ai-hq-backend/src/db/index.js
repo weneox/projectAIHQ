@@ -176,20 +176,30 @@ export function decideStartupMigrationPolicy({
   autoMigrateOnStartup = cfg?.db?.autoMigrateOnStartup,
   pendingCount = 0,
   driftedCount = 0,
+  missingRequiredRelationCount = 0,
 } = {}) {
   const normalizedEnv = s(env, "production").toLowerCase();
   const pending = Math.max(0, Number(pendingCount || 0));
   const drifted = Math.max(0, Number(driftedCount || 0));
+  const missingRequiredRelations = Math.max(
+    0,
+    Number(missingRequiredRelationCount || 0)
+  );
   const autoMigrate =
     Boolean(autoMigrateOnStartup) && normalizedEnv === "development";
 
   return {
     env: normalizedEnv,
     autoMigrate,
-    shouldBlock: drifted > 0 || (pending > 0 && !autoMigrate),
+    shouldBlock:
+      drifted > 0 ||
+      missingRequiredRelations > 0 ||
+      (pending > 0 && !autoMigrate),
     reason:
       drifted > 0
         ? "schema_drift_detected"
+        : missingRequiredRelations > 0
+          ? "required_schema_relations_missing"
         : pending > 0 && autoMigrate
           ? "auto_migrate_enabled"
           : pending > 0
