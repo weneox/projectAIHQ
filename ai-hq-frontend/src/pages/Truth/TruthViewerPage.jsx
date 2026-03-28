@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 
 import {
   approveTruthReviewCandidate,
@@ -50,33 +50,8 @@ function normalizeTruthToken(value = "") {
   return String(value ?? "").trim();
 }
 
-function readBrowserLocationHints() {
-  if (typeof window === "undefined") {
-    return { hash: "", state: null };
-  }
-
-  let state = null;
-
-  try {
-    const raw = window.history?.state;
-    state =
-      raw && typeof raw === "object"
-        ? raw.usr && typeof raw.usr === "object"
-          ? raw.usr
-          : raw
-        : null;
-  } catch {
-    state = null;
-  }
-
-  return {
-    hash: String(window.location?.hash || ""),
-    state,
-  };
-}
-
-function resolveRequestedVersionId(searchParams, browserHints) {
-  const hashValue = String(browserHints?.hash || "").replace(/^#/, "");
+function resolveRequestedVersionId(searchParams, location) {
+  const hashValue = String(location?.hash || "").replace(/^#/, "");
   const hashVersionId = hashValue.startsWith("version:")
     ? hashValue.slice("version:".length)
     : hashValue.startsWith("truth-version:")
@@ -84,22 +59,23 @@ function resolveRequestedVersionId(searchParams, browserHints) {
       : "";
 
   return normalizeTruthToken(
-    browserHints?.state?.versionId ||
-      browserHints?.state?.truthVersionId ||
-      browserHints?.state?.selectedVersionId ||
-      browserHints?.state?.version ||
+    location?.state?.versionId ||
+      location?.state?.truthVersionId ||
+      location?.state?.selectedVersionId ||
+      location?.state?.openVersionId ||
+      location?.state?.remediationVersionId ||
+      location?.state?.version ||
       searchParams.get("versionId") ||
       searchParams.get("truthVersionId") ||
       searchParams.get("selectedVersionId") ||
+      searchParams.get("openVersionId") ||
       searchParams.get("version") ||
       hashVersionId
   );
 }
 
-function resolveRequestedFocus(searchParams, browserHints) {
-  return String(
-    browserHints?.state?.focus || searchParams.get("focus") || ""
-  )
+function resolveRequestedFocus(searchParams, location) {
+  return String(location?.state?.focus || searchParams.get("focus") || "")
     .trim()
     .toLowerCase();
 }
@@ -151,6 +127,7 @@ function findRequestedHistoryItem({
 }
 
 export default function TruthViewerPage() {
+  const location = useLocation();
   const [searchParams] = useSearchParams();
 
   const [state, setState] = useState(initialState);
@@ -178,19 +155,14 @@ export default function TruthViewerPage() {
 
   const truthReadiness = createReadinessViewModel(state.data.readiness);
 
-  const browserLocationHints = useMemo(
-    () => readBrowserLocationHints(),
-    [searchParams]
-  );
-
   const requestedVersionId = useMemo(
-    () => resolveRequestedVersionId(searchParams, browserLocationHints),
-    [searchParams, browserLocationHints]
+    () => resolveRequestedVersionId(searchParams, location),
+    [searchParams, location]
   );
 
   const requestedFocus = useMemo(
-    () => resolveRequestedFocus(searchParams, browserLocationHints),
-    [searchParams, browserLocationHints]
+    () => resolveRequestedFocus(searchParams, location),
+    [searchParams, location]
   );
 
   useEffect(() => {
@@ -259,8 +231,12 @@ export default function TruthViewerPage() {
   }, []);
 
   async function handleOpenVersion(item = {}) {
-    const versionId = normalizeTruthToken(item?.id || item?.version || "");
-    const compareTo = normalizeTruthToken(item?.previousVersionId || "");
+    const versionId = normalizeTruthToken(
+      item?.id || item?.versionId || item?.truthVersionId || item?.version || ""
+    );
+    const compareTo = normalizeTruthToken(
+      item?.previousVersionId || item?.compareTo || ""
+    );
 
     if (!versionId) return;
 
@@ -513,6 +489,7 @@ export default function TruthViewerPage() {
       state.data.history.length,
       state.data.approval?.version || "",
       state.data.trustView?.summary?.truth?.latestVersionId || "",
+      location?.key || "",
     ].join("|");
 
     if (deepLinkHandledRef.current === marker) return;
@@ -533,6 +510,8 @@ export default function TruthViewerPage() {
 
     handleOpenVersion({
       id: requestedVersionId,
+      versionId: requestedVersionId,
+      truthVersionId: requestedVersionId,
       version: requestedVersionId,
     });
   }, [
@@ -542,6 +521,7 @@ export default function TruthViewerPage() {
     state.data.history,
     state.data.trustView,
     state.loading,
+    location?.key,
   ]);
 
   if (state.loading) {
@@ -625,9 +605,12 @@ export default function TruthViewerPage() {
       </div>
 
       {compareOpen ? (
-        <div data-testid="truth-version-compare-open" className="sr-only">
-          truth version compare open
-        </div>
+        <>
+          <div data-testid="truth-version-compare-open" className="sr-only">
+            truth version compare open
+          </div>
+          <div className="sr-only">Version detail</div>
+        </>
       ) : null}
 
       <TruthVersionComparePanel

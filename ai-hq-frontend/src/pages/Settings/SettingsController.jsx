@@ -1,6 +1,6 @@
 import React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import {
   BellRing,
   Bot,
@@ -72,6 +72,7 @@ const SETTINGS_SECTION_ALIASES = Object.freeze({
   brand: "brand",
   "ai-policy": "ai_policy",
   ai_policy: "ai_policy",
+
   sources: "sources",
   source: "sources",
   truth: "sources",
@@ -81,21 +82,27 @@ const SETTINGS_SECTION_ALIASES = Object.freeze({
   truth_maintenance: "sources",
   "source-sync": "sources",
   source_sync: "sources",
+
   knowledge: "knowledge_review",
   "knowledge-review": "knowledge_review",
   knowledge_review: "knowledge_review",
   review: "knowledge_review",
   "review-queue": "knowledge_review",
   review_queue: "knowledge_review",
+
   operational: "operational",
   "runtime-operations": "operational",
   runtime_operations: "operational",
+
   "change-history": "change_history",
   change_history: "change_history",
+
   "business-facts": "business_facts",
   business_facts: "business_facts",
+
   "channel-policies": "channel_policies",
   channel_policies: "channel_policies",
+
   locations: "locations",
   contacts: "contacts",
   channels: "channels",
@@ -117,41 +124,18 @@ function resolveSectionAlias(value = "") {
   return SETTINGS_SECTION_ALIASES[normalized] || normalized.replace(/-/g, "_");
 }
 
-function readBrowserLocationHints() {
-  if (typeof window === "undefined") {
-    return { hash: "", state: null };
-  }
-
-  let state = null;
-
-  try {
-    const raw = window.history?.state;
-    state =
-      raw && typeof raw === "object"
-        ? raw.usr && typeof raw.usr === "object"
-          ? raw.usr
-          : raw
-        : null;
-  } catch {
-    state = null;
-  }
-
-  return {
-    hash: String(window.location?.hash || ""),
-    state,
-  };
-}
-
 function resolveRequestedSection({
   searchParams,
-  browserState,
+  locationState,
   hash,
   navItems,
 }) {
   const candidates = [
-    browserState?.settingsSection,
-    browserState?.section,
-    browserState?.initialSection,
+    locationState?.settingsSection,
+    locationState?.section,
+    locationState?.initialSection,
+    locationState?.activeSection,
+    locationState?.openSection,
     searchParams.get("settingsSection"),
     searchParams.get("section"),
     String(hash || "").replace(/^#/, ""),
@@ -177,7 +161,13 @@ function SectionContractCopy({ activeSection }) {
         data-section="sources"
         className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300"
       >
-        <div>Refresh evidence, review what is weak or conflicting.</div>
+        <div>
+          Refresh evidence, review what is weak or conflicting.
+        </div>
+        <div className="mt-1">
+          Source-derived truth changes are reviewed, conflicted, quarantined,
+          approved, or rejected here.
+        </div>
         <div className="mt-1">
           Source-derived changes do not become governed truth until they are
           reviewed through the control plane.
@@ -193,8 +183,13 @@ function SectionContractCopy({ activeSection }) {
         data-section="knowledge_review"
         className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300"
       >
-        Source-derived truth changes are reviewed, conflicted, quarantined,
-        approved, or rejected here.
+        <div>
+          Source-derived truth changes are reviewed, conflicted, quarantined,
+          approved, or rejected here.
+        </div>
+        <div className="mt-1">
+          Refresh evidence, review what is weak or conflicting.
+        </div>
       </div>
     );
   }
@@ -203,6 +198,7 @@ function SectionContractCopy({ activeSection }) {
 }
 
 export default function SettingsController() {
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [perm, setPerm] = useState("default");
   const [pushBusy, setPushBusy] = useState(false);
@@ -436,24 +432,19 @@ export default function SettingsController() {
     [controlPlanePermissions.auditHistoryRead.allowed, dirtyMap]
   );
 
-  const browserLocationHints = useMemo(
-    () => readBrowserLocationHints(),
-    [searchParams]
-  );
-
   const requestedSection = useMemo(
     () =>
       resolveRequestedSection({
         searchParams,
-        browserState: browserLocationHints.state,
-        hash: browserLocationHints.hash,
+        locationState: location?.state,
+        hash: location?.hash,
         navItems,
       }),
-    [searchParams, browserLocationHints, navItems]
+    [searchParams, location?.state, location?.hash, navItems]
   );
 
   const [activeSection, setActiveSection] = useState(
-    requestedSection || "general"
+    () => requestedSection || "general"
   );
 
   const appliedDeepLinkRef = useRef("");
@@ -470,10 +461,12 @@ export default function SettingsController() {
 
     const marker = [
       searchParams.toString(),
-      browserLocationHints.hash,
-      browserLocationHints.state?.section || "",
-      browserLocationHints.state?.settingsSection || "",
-      browserLocationHints.state?.initialSection || "",
+      location?.hash || "",
+      location?.state?.section || "",
+      location?.state?.settingsSection || "",
+      location?.state?.initialSection || "",
+      location?.state?.activeSection || "",
+      location?.state?.openSection || "",
       requestedSection,
     ].join("|");
 
@@ -483,7 +476,7 @@ export default function SettingsController() {
     setActiveSection((current) =>
       current === requestedSection ? current : requestedSection
     );
-  }, [requestedSection, searchParams, browserLocationHints]);
+  }, [requestedSection, searchParams, location]);
 
   useEffect(() => {
     setSearchParams(
@@ -496,11 +489,13 @@ export default function SettingsController() {
         }
 
         const next = new URLSearchParams(prev);
+
         if (desired && desired !== "general") {
           next.set("section", desired);
         } else {
           next.delete("section");
         }
+
         return next;
       },
       { replace: true }
