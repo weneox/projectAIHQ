@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { validateAihqHealthEnvelope } from "@aihq/shared-contracts/health";
 
 import { cfg } from "../src/config.js";
 import { adminAuthRoutes } from "../src/routes/api/adminAuth/index.js";
@@ -256,6 +257,46 @@ test("api router protects user and admin cookie mutations while leaving internal
   } finally {
     cfg.urls.corsOrigin = previousCors;
     cfg.urls.publicBaseUrl = previousPublicBaseUrl;
+    cfg.security.aihqInternalToken = previousInternalToken;
+  }
+});
+
+test("api health uses internal token auth instead of falling through to session cookie auth", async () => {
+  const previousInternalToken = cfg.security.aihqInternalToken;
+
+  try {
+    cfg.security.aihqInternalToken = "internal-secret";
+
+    const router = apiRouter({
+      db: null,
+      wsHub: { broadcast() {} },
+      audit: null,
+      dbDisabled: true,
+    });
+
+    const denied = await invokeRouter(router, "get", "/health", {
+      headers: {
+        host: "api.example.com",
+      },
+      protocol: "https",
+    });
+
+    assert.equal(denied.res.statusCode, 401);
+    assert.equal(denied.res.body?.ok, false);
+    assert.equal(denied.res.body?.error, "Unauthorized");
+    assert.equal(denied.res.body?.reason, "invalid internal token");
+
+    const allowed = await invokeRouter(router, "get", "/health", {
+      headers: {
+        host: "api.example.com",
+        "x-internal-token": "internal-secret",
+      },
+      protocol: "https",
+    });
+
+    assert.equal(allowed.res.statusCode, 200);
+    assert.equal(validateAihqHealthEnvelope(allowed.res.body || {}).ok, true);
+  } finally {
     cfg.security.aihqInternalToken = previousInternalToken;
   }
 });
