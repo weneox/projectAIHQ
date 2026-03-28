@@ -1366,6 +1366,11 @@ test("inbox ingest succeeds when approved projected runtime is available", async
         buildApprovedRuntimePack({
           threadState: null,
         }),
+      buildActions: async () => ({
+        intent: "ack",
+        leadScore: 0,
+        actions: [],
+      }),
     });
 
     const { res } = await invokeRouter(router, "post", "/inbox/ingest", {

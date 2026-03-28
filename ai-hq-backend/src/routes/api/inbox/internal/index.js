@@ -4,13 +4,27 @@ import { getTenantBrainRuntime } from "../../../../services/businessBrain/getTen
 import { createInboxIngestHandler } from "./ingest.js";
 import { createInboxOutboundHandler } from "./outbound.js";
 
-export function inboxInternalRoutes({ db, wsHub, getRuntime = getTenantBrainRuntime }) {
+export function inboxInternalRoutes({
+  db,
+  wsHub,
+  getRuntime = getTenantBrainRuntime,
+  buildActions,
+  persistLead,
+  applyHandoff,
+} = {}) {
   const router = express.Router();
 
   router.post(
     "/inbox/ingest",
     requireInternalToken,
-    createInboxIngestHandler({ db, wsHub, getRuntime })
+    createInboxIngestHandler({
+      db,
+      wsHub,
+      getRuntime,
+      buildActions,
+      persistLead,
+      applyHandoff,
+    })
   );
 
   router.post(

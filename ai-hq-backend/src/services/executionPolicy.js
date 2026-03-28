@@ -574,6 +574,7 @@ export function evaluateExecutionPolicy({
   actorType = "system",
   currentState = {},
 } = {}) {
+  const safeCurrentState = obj(currentState);
   const authority = obj(obj(runtime).authority);
   const health = extractProjectionHealth(runtime);
   const approvalPolicy = extractApprovalPolicy(runtime);
@@ -588,8 +589,8 @@ export function evaluateExecutionPolicy({
       ? policies.capabilities.handoff_enabled
       : true;
   const handoffActive = bool(
-    currentState.handoffActive ??
-      currentState.handoff_active ??
+    safeCurrentState.handoffActive ??
+      safeCurrentState.handoff_active ??
       action?.meta?.handoffActive,
     false
   );
@@ -756,6 +757,7 @@ export function applyExecutionPolicyToActions({
   actorType = "system",
   currentState = {},
 } = {}) {
+  const safeCurrentState = obj(currentState);
   const evaluated = arr(actions).map((action) => {
     const decision = evaluateExecutionPolicy({
       runtime,
@@ -763,7 +765,7 @@ export function applyExecutionPolicyToActions({
       surface,
       channelType,
       actorType,
-      currentState,
+      currentState: safeCurrentState,
     });
 
     return {

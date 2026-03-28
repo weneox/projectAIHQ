@@ -59,7 +59,10 @@ function policyTone(outcome = "") {
 }
 
 function deriveExecutionPolicy(thread = {}) {
-  const meta = obj(thread.last_decision_meta || thread.lastDecisionMeta);
+  const safeThread = obj(thread);
+  const meta = obj(
+    safeThread.last_decision_meta || safeThread.lastDecisionMeta
+  );
   const outcome = s(
     meta.executionPolicyOutcome || meta.execution_policy_outcome || "unknown"
   ).toLowerCase();
