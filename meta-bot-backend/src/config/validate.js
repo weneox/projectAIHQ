@@ -9,6 +9,11 @@ import {
   PUBLIC_BASE_URL,
   VERIFY_TOKEN,
 } from "../config.js";
+import {
+  createValidationIssue,
+  formatValidationFailure,
+  printValidationReport,
+} from "../../../scripts/env-validation-utils.mjs";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -38,8 +43,15 @@ function looksLikeEmail(value = "") {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s(value));
 }
 
-function pushIssue(list, level, key, message) {
-  list.push({ level, key, message });
+function pushIssue(list, level, key, message, meta = {}) {
+  list.push(
+    createValidationIssue({
+      level,
+      key,
+      message,
+      ...meta,
+    })
+  );
 }
 
 export function getConfigIssues() {
@@ -51,7 +63,10 @@ export function getConfigIssues() {
   }
 
   if (!s(VERIFY_TOKEN)) {
-    pushIssue(issues, "error", "VERIFY_TOKEN", "VERIFY_TOKEN is required.");
+    pushIssue(issues, "error", "VERIFY_TOKEN", "VERIFY_TOKEN is required.", {
+      category: "webhook-auth",
+      envKeys: ["VERIFY_TOKEN"],
+    });
   } else if (isProd && s(VERIFY_TOKEN) === "neox_verify_token") {
     pushIssue(
       issues,
@@ -66,7 +81,11 @@ export function getConfigIssues() {
       issues,
       "error",
       "META_APP_SECRET",
-      "META_APP_SECRET is required for webhook signature verification."
+      "META_APP_SECRET is required for webhook signature verification.",
+      {
+        category: "providers",
+        envKeys: ["META_APP_SECRET"],
+      }
     );
   }
 
@@ -75,7 +94,11 @@ export function getConfigIssues() {
       issues,
       "error",
       "PUBLIC_BASE_URL",
-      "PUBLIC_BASE_URL must be a valid http:// or https:// URL."
+      "PUBLIC_BASE_URL must be a valid http:// or https:// URL.",
+      {
+        category: "routing",
+        envKeys: ["PUBLIC_BASE_URL"],
+      }
     );
   }
 
@@ -84,7 +107,11 @@ export function getConfigIssues() {
       issues,
       "error",
       "AIHQ_BASE_URL",
-      "AIHQ_BASE_URL must be a valid http:// or https:// URL."
+      "AIHQ_BASE_URL must be a valid http:// or https:// URL.",
+      {
+        category: "internal-access",
+        envKeys: ["AIHQ_BASE_URL"],
+      }
     );
   }
 
@@ -93,7 +120,11 @@ export function getConfigIssues() {
       issues,
       "error",
       "AIHQ_INTERNAL_TOKEN",
-      "AIHQ_INTERNAL_TOKEN is required for internal AIHQ calls."
+      "AIHQ_INTERNAL_TOKEN is required for internal AIHQ calls.",
+      {
+        category: "internal-access",
+        envKeys: ["AIHQ_INTERNAL_TOKEN"],
+      }
     );
   }
 
@@ -102,7 +133,11 @@ export function getConfigIssues() {
       issues,
       "error",
       "CONTACT_EMAIL",
-      "CONTACT_EMAIL must be a valid contact email address."
+      "CONTACT_EMAIL must be a valid contact email address.",
+      {
+        category: "contact",
+        envKeys: ["CONTACT_EMAIL"],
+      }
     );
   }
 
@@ -128,37 +163,18 @@ export function getConfigIssues() {
 }
 
 export function printConfigReport(logger = console) {
-  const issues = getConfigIssues();
-  const errors = issues.filter((item) => item.level === "error");
-  const warnings = issues.filter((item) => item.level === "warning");
-
-  if (!issues.length) {
-    logger.log("[config] OK: no validation issues found.");
-    return { ok: true, issues, errors, warnings };
-  }
-
-  for (const item of warnings) {
-    logger.warn(`[config][warning] ${item.key}: ${item.message}`);
-  }
-
-  for (const item of errors) {
-    logger.error(`[config][error] ${item.key}: ${item.message}`);
-  }
-
-  return {
-    ok: errors.length === 0,
-    issues,
-    errors,
-    warnings,
-  };
+  return printValidationReport({
+    workspace: "meta-bot-backend",
+    issues: getConfigIssues(),
+    logger,
+    okMessage: "[validate:env] meta-bot-backend OK",
+  });
 }
 
 export function assertConfigValid(logger = console) {
   const report = printConfigReport(logger);
   if (!report.ok) {
-    throw new Error(
-      report.errors.map((item) => `${item.key}: ${item.message}`).join("\n")
-    );
+    throw new Error(formatValidationFailure("meta-bot-backend", report));
   }
   return report;
 }

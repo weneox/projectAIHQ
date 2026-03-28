@@ -4,7 +4,6 @@ import { assertConfigValid } from "../src/config/validate.js";
 
 try {
   assertConfigValid(console);
-  console.log("[validate:env] ai-hq-backend OK");
 } catch (error) {
   console.error("[validate:env] ai-hq-backend failed");
   console.error(String(error?.message || error));

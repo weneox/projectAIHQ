@@ -143,25 +143,42 @@ async function runAihqDbSuite(databaseUrl) {
   };
 
   if (!isTruthyFlag(process.env.AIHQ_DB_HARNESS_SKIP_MIGRATE)) {
-    await run(npmCommand, ["run", "migrate:ai-hq-backend"], {
+    try {
+      await run(npmCommand, ["run", "migrate:ai-hq-backend"], {
+        env,
+        shell: process.platform === "win32",
+      });
+    } catch (error) {
+      throw new Error(
+        `[db-harness][migration_failed] AI HQ migrations failed before the DB-backed suite could run. Check DATABASE_URL, database reachability, and migration safety.\n${String(error?.message || error)}`
+      );
+    }
+  }
+
+  try {
+    await run(npmCommand, ["run", "test:integration:db", "-w", "ai-hq-backend"], {
       env,
       shell: process.platform === "win32",
     });
+  } catch (error) {
+    throw new Error(
+      `[db-harness][test_failed] AI HQ DB-backed tests failed after migrations. This is a code or schema regression unless the backing database became unavailable.\n${String(error?.message || error)}`
+    );
   }
-
-  await run(npmCommand, ["run", "test:integration:db", "-w", "ai-hq-backend"], {
-    env,
-    shell: process.platform === "win32",
-  });
 }
 
-if (s(process.env.DATABASE_URL)) {
-  await runAihqDbSuite(process.env.DATABASE_URL);
-} else if (await canUseDocker()) {
-  await withEphemeralPostgres(runAihqDbSuite);
-} else {
-  console.error(
-    "DATABASE_URL is not set and Docker is unavailable. Set DATABASE_URL or install Docker to run the AI HQ DB integration harness."
-  );
+try {
+  if (s(process.env.DATABASE_URL)) {
+    await runAihqDbSuite(process.env.DATABASE_URL);
+  } else if (await canUseDocker()) {
+    await withEphemeralPostgres(runAihqDbSuite);
+  } else {
+    console.error(
+      "[db-harness][external_infra_unavailable] DATABASE_URL is not set and Docker is unavailable. Set DATABASE_URL or install Docker to run the AI HQ DB integration harness."
+    );
+    process.exitCode = 1;
+  }
+} catch (error) {
+  console.error(String(error?.message || error));
   process.exitCode = 1;
 }

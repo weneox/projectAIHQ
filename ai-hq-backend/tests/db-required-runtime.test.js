@@ -25,6 +25,9 @@ test("config validation rejects missing DATABASE_URL outside test", () => {
 
     const dbIssue = getConfigIssues().find((item) => item.key === "db.url");
     assert.equal(dbIssue?.level, "error");
+    assert.equal(dbIssue?.category, "database");
+    assert.equal(dbIssue?.phase, "runtime");
+    assert.ok(dbIssue?.envKeys?.includes("DATABASE_URL"));
   } finally {
     cfg.app.env = previousEnv;
     cfg.db.url = previousDbUrl;
@@ -41,6 +44,7 @@ test("config validation rejects invalid DATABASE_URL outside test", () => {
 
     const dbIssue = getConfigIssues().find((item) => item.key === "db.url");
     assert.equal(dbIssue?.level, "error");
+    assert.equal(dbIssue?.category, "database");
     assert.match(String(dbIssue?.message || ""), /valid postgres/i);
   } finally {
     cfg.app.env = previousEnv;

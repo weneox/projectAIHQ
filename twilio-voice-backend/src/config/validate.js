@@ -1,4 +1,9 @@
 import { cfg } from "../config.js";
+import {
+  createValidationIssue,
+  formatValidationFailure,
+  printValidationReport,
+} from "../../../scripts/env-validation-utils.mjs";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -36,8 +41,15 @@ function isValidCorsOriginList(value = "") {
     .every((item) => isValidHttpUrl(item));
 }
 
-function pushIssue(list, level, key, message) {
-  list.push({ level, key, message });
+function pushIssue(list, level, key, message, meta = {}) {
+  list.push(
+    createValidationIssue({
+      level,
+      key,
+      message,
+      ...meta,
+    })
+  );
 }
 
 export function getConfigIssues() {
@@ -53,7 +65,11 @@ export function getConfigIssues() {
       issues,
       "error",
       "PUBLIC_BASE_URL",
-      "PUBLIC_BASE_URL must be a valid http:// or https:// URL."
+      "PUBLIC_BASE_URL must be a valid http:// or https:// URL.",
+      {
+        category: "routing",
+        envKeys: ["PUBLIC_BASE_URL"],
+      }
     );
   }
 
@@ -62,7 +78,11 @@ export function getConfigIssues() {
       issues,
       "error",
       "CORS_ORIGIN",
-      "CORS_ORIGIN must be a comma-separated list of valid http:// or https:// origins."
+      "CORS_ORIGIN must be a comma-separated list of valid http:// or https:// origins.",
+      {
+        category: "routing",
+        envKeys: ["CORS_ORIGIN"],
+      }
     );
   } else if (isProd && s(cfg.CORS_ORIGIN) === "*") {
     pushIssue(
@@ -78,7 +98,11 @@ export function getConfigIssues() {
       issues,
       "error",
       "OPENAI_API_KEY",
-      "OPENAI_API_KEY is required for realtime voice sessions."
+      "OPENAI_API_KEY is required for realtime voice sessions.",
+      {
+        category: "providers",
+        envKeys: ["OPENAI_API_KEY"],
+      }
     );
   }
 
@@ -87,7 +111,11 @@ export function getConfigIssues() {
       issues,
       "error",
       "AIHQ_BASE_URL",
-      "AIHQ_BASE_URL must be a valid http:// or https:// URL."
+      "AIHQ_BASE_URL must be a valid http:// or https:// URL.",
+      {
+        category: "internal-access",
+        envKeys: ["AIHQ_BASE_URL"],
+      }
     );
   }
 
@@ -96,7 +124,11 @@ export function getConfigIssues() {
       issues,
       "error",
       "AIHQ_INTERNAL_TOKEN",
-      "AIHQ_INTERNAL_TOKEN is required for internal AIHQ calls."
+      "AIHQ_INTERNAL_TOKEN is required for internal AIHQ calls.",
+      {
+        category: "internal-access",
+        envKeys: ["AIHQ_INTERNAL_TOKEN"],
+      }
     );
   }
 
@@ -108,7 +140,10 @@ export function getConfigIssues() {
     "TWILIO_AUTH_TOKEN",
   ]) {
     if (!s(cfg[key])) {
-      pushIssue(issues, "error", key, `${key} is required.`);
+      pushIssue(issues, "error", key, `${key} is required.`, {
+        category: "providers",
+        envKeys: [key],
+      });
     }
   }
 
@@ -161,37 +196,18 @@ export function getConfigIssues() {
 }
 
 export function printConfigReport(logger = console) {
-  const issues = getConfigIssues();
-  const errors = issues.filter((item) => item.level === "error");
-  const warnings = issues.filter((item) => item.level === "warning");
-
-  if (!issues.length) {
-    logger.log("[config] OK: no validation issues found.");
-    return { ok: true, issues, errors, warnings };
-  }
-
-  for (const item of warnings) {
-    logger.warn(`[config][warning] ${item.key}: ${item.message}`);
-  }
-
-  for (const item of errors) {
-    logger.error(`[config][error] ${item.key}: ${item.message}`);
-  }
-
-  return {
-    ok: errors.length === 0,
-    issues,
-    errors,
-    warnings,
-  };
+  return printValidationReport({
+    workspace: "twilio-voice-backend",
+    issues: getConfigIssues(),
+    logger,
+    okMessage: "[validate:env] twilio-voice-backend OK",
+  });
 }
 
 export function assertConfigValid(logger = console) {
   const report = printConfigReport(logger);
   if (!report.ok) {
-    throw new Error(
-      report.errors.map((item) => `${item.key}: ${item.message}`).join("\n")
-    );
+    throw new Error(formatValidationFailure("twilio-voice-backend", report));
   }
   return report;
 }

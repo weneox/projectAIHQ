@@ -12,6 +12,7 @@ Run this immediately after a production deploy.
 ## Command
 
 ```powershell
+npm run verify:env:status
 npm run ops:postdeploy:verify
 ```
 
@@ -42,5 +43,6 @@ npm run ops:postdeploy:verify
 1. Save the failing output.
 2. Collect the health payloads from each service.
 3. Follow:
+   - [environment-parity-verification.md](C:\Users\bagir\OneDrive\Desktop\projectAIHQ\docs\runbooks\environment-parity-verification.md)
    - [schema-migration-safety.md](C:\Users\bagir\OneDrive\Desktop\projectAIHQ\docs\runbooks\schema-migration-safety.md)
    - [production-rollback.md](C:\Users\bagir\OneDrive\Desktop\projectAIHQ\docs\runbooks\production-rollback.md)

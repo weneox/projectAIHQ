@@ -53,6 +53,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Report current verification status
+        run: npm run verify:env:status
+
       - name: Validate frontend environment
         run: npm run validate:env -w ai-hq-frontend
 
@@ -201,6 +204,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Report current verification status
+        run: npm run verify:env:status
+
       - name: Validate environment
         run: npm run validate:env
 
@@ -333,6 +339,7 @@ jobs:
 
           Runbooks:
 
+          - `docs/runbooks/environment-parity-verification.md`
           - `docs/runbooks/post-deploy-verification.md`
           - `docs/runbooks/schema-migration-safety.md`
           - `docs/runbooks/production-rollback.md`

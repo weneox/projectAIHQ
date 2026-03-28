@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: [
+      "src/env/validation.test.js",
       "src/api/truth.test.js",
       "src/api/trust.test.js",
       "src/lib/appEntry.test.js",
