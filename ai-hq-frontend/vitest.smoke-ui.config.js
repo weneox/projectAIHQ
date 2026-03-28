@@ -1,6 +1,8 @@
 import { defineConfig, mergeConfig } from "vite";
 import baseConfig from "./vite.config.js";
 
+const routerDeps = ["react-router", "react-router-dom", "react-router/dom"];
+
 export default mergeConfig(
   baseConfig,
   defineConfig({
@@ -29,9 +31,19 @@ export default mergeConfig(
       ],
       exclude: ["playwright/**", "dist/**", "node_modules/**"],
       passWithNoTests: false,
+
       server: {
         deps: {
-          inline: [/^react-router$/, /^react-router-dom$/, /^react-router\/.*/],
+          inline: routerDeps,
+        },
+      },
+
+      deps: {
+        optimizer: {
+          client: {
+            enabled: true,
+            include: routerDeps,
+          },
         },
       },
     },
