@@ -1,283 +1,515 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
-const RouterLocationContext = createContext(null);
+const RouterContext = createContext(null);
+const ParamsContext = createContext({});
 
-function normalizeToString(value) {
-  if (typeof value === "string") return value;
-  if (value && typeof value === "object") {
-    return `${value.pathname || "/"}${value.search || ""}${value.hash || ""}`;
-  }
-  return "/";
+function normalizeSearch(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.startsWith("?") ? text : `?${text}`;
 }
 
-function parseLocation(to, state = null) {
-  const raw = normalizeToString(to);
-  const base =
-    typeof window !== "undefined" && window.location?.origin
-      ? window.location.origin
-      : "http://localhost";
-  const url = new URL(raw, base);
-
-  return {
-    pathname: url.pathname || "/",
-    search: url.search || "",
-    hash: url.hash || "",
-    state,
-    key: "mock",
-  };
+function normalizeHash(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  return text.startsWith("#") ? text : `#${text}`;
 }
 
-function readWindowLocation() {
-  if (typeof window === "undefined" || !window.location) {
+function buildKey() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function normalizeEntry(entry = "/") {
+  if (typeof entry === "string") {
+    const url = new URL(entry, "https://smoke-router.test");
     return {
-      pathname: "/",
-      search: "",
-      hash: "",
+      pathname: url.pathname || "/",
+      search: url.search || "",
+      hash: url.hash || "",
       state: null,
-      key: "mock",
+      key: buildKey(),
+    };
+  }
+
+  if (entry && typeof entry === "object") {
+    return {
+      pathname: String(entry.pathname || "/"),
+      search: normalizeSearch(entry.search || ""),
+      hash: normalizeHash(entry.hash || ""),
+      state: entry.state ?? null,
+      key: entry.key || buildKey(),
     };
   }
 
   return {
-    pathname: window.location.pathname || "/",
-    search: window.location.search || "",
-    hash: window.location.hash || "",
-    state: window.history?.state ?? null,
-    key: "mock",
+    pathname: "/",
+    search: "",
+    hash: "",
+    state: null,
+    key: buildKey(),
   };
 }
 
-function buildHref(to) {
-  return normalizeToString(to);
-}
+function resolveToLocation(currentLocation, to, stateOverride) {
+  if (typeof to === "number") return null;
 
-function isActivePath(currentLocation, to) {
-  const target = parseLocation(to);
-  return (
-    currentLocation.pathname === target.pathname &&
-    currentLocation.search === target.search
-  );
-}
+  if (typeof to === "string") {
+    if (to.startsWith("?")) {
+      return {
+        ...currentLocation,
+        search: normalizeSearch(to),
+        key: buildKey(),
+        state: stateOverride ?? currentLocation.state ?? null,
+      };
+    }
 
-function RouterProviderBase({ children, initialLocation }) {
-  const [location, setLocation] = useState(initialLocation || readWindowLocation());
+    if (to.startsWith("#")) {
+      return {
+        ...currentLocation,
+        hash: normalizeHash(to),
+        key: buildKey(),
+        state: stateOverride ?? currentLocation.state ?? null,
+      };
+    }
 
-  const api = useMemo(
-    () => ({
-      location,
-      navigate(to, options = {}) {
-        const nextLocation = parseLocation(to, options.state ?? null);
-        const href = `${nextLocation.pathname}${nextLocation.search}${nextLocation.hash}`;
+    const base = `https://smoke-router.test${currentLocation.pathname}${currentLocation.search}${currentLocation.hash}`;
+    const url = new URL(to, base);
 
-        if (typeof window !== "undefined" && window.history) {
-          if (options.replace) {
-            window.history.replaceState(nextLocation.state, "", href);
-          } else {
-            window.history.pushState(nextLocation.state, "", href);
-          }
-        }
+    return {
+      pathname: url.pathname || "/",
+      search: url.search || "",
+      hash: url.hash || "",
+      state: stateOverride ?? null,
+      key: buildKey(),
+    };
+  }
 
-        setLocation(nextLocation);
-      },
-    }),
-    [location]
-  );
+  if (to && typeof to === "object") {
+    const nextPathname =
+      to.pathname != null ? String(to.pathname || "/") : currentLocation.pathname;
+    const nextSearch =
+      to.search != null
+        ? normalizeSearch(to.search)
+        : to.pathname != null
+        ? ""
+        : currentLocation.search;
+    const nextHash =
+      to.hash != null
+        ? normalizeHash(to.hash)
+        : to.pathname != null
+        ? ""
+        : currentLocation.hash;
 
-  return (
-    <RouterLocationContext.Provider value={api}>
-      {children}
-    </RouterLocationContext.Provider>
-  );
-}
+    return {
+      pathname: nextPathname || "/",
+      search: nextSearch,
+      hash: nextHash,
+      state:
+        stateOverride !== undefined
+          ? stateOverride
+          : to.state !== undefined
+          ? to.state
+          : currentLocation.state ?? null,
+      key: buildKey(),
+    };
+  }
 
-function useRouterApi() {
-  return useContext(RouterLocationContext) || {
-    location: readWindowLocation(),
-    navigate() {},
+  return {
+    ...currentLocation,
+    key: buildKey(),
+    state: stateOverride ?? currentLocation.state ?? null,
   };
+}
+
+function locationToHref(location) {
+  return `${location.pathname || "/"}${location.search || ""}${location.hash || ""}`;
+}
+
+function buildPathRegex(path = "/") {
+  if (!path || path === "/") {
+    return {
+      regex: /^\/$/,
+      paramNames: [],
+    };
+  }
+
+  const parts = String(path)
+    .split("/")
+    .filter(Boolean);
+
+  const paramNames = [];
+  const regexParts = parts.map((part) => {
+    if (part === "*") {
+      paramNames.push("*");
+      return "(.*)";
+    }
+    if (part.startsWith(":")) {
+      paramNames.push(part.slice(1));
+      return "([^/]+)";
+    }
+    return part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  });
+
+  return {
+    regex: new RegExp(`^/${regexParts.join("/")}/?$`),
+    paramNames,
+  };
+}
+
+function matchRoutePath(pathname = "/", path = "/") {
+  if (path == null) return { params: {} };
+  const { regex, paramNames } = buildPathRegex(path);
+  const match = regex.exec(pathname);
+
+  if (!match) return null;
+
+  const params = {};
+  for (let i = 0; i < paramNames.length; i += 1) {
+    params[paramNames[i]] = decodeURIComponent(match[i + 1] || "");
+  }
+
+  return { params };
+}
+
+function resolveChildrenForRoutes(children, pathname) {
+  const childArray = React.Children.toArray(children);
+
+  for (const child of childArray) {
+    if (!React.isValidElement(child)) continue;
+
+    const { path, index, element, children: nestedChildren } = child.props || {};
+
+    if (index) {
+      if (pathname === "/" || pathname === "") {
+        return { node: element ?? nestedChildren ?? null, params: {} };
+      }
+      continue;
+    }
+
+    const matched = matchRoutePath(pathname, path);
+    if (!matched) continue;
+
+    return {
+      node: element ?? nestedChildren ?? null,
+      params: matched.params,
+    };
+  }
+
+  return { node: null, params: {} };
+}
+
+function useRouterContext() {
+  const value = useContext(RouterContext);
+  if (!value) {
+    throw new Error("react-router-dom.smoke-mock: router context is unavailable");
+  }
+  return value;
 }
 
 export function MemoryRouter({
-  children,
   initialEntries = ["/"],
-  initialIndex = 0,
+  initialIndex,
+  children,
 }) {
-  const entry =
-    initialEntries[Math.min(initialIndex, Math.max(initialEntries.length - 1, 0))] ||
-    "/";
+  const normalizedEntries = useMemo(
+    () => initialEntries.map((entry) => normalizeEntry(entry)),
+    [initialEntries]
+  );
+
+  const startIndex = useMemo(() => {
+    const raw =
+      typeof initialIndex === "number"
+        ? initialIndex
+        : normalizedEntries.length - 1;
+    return Math.min(Math.max(raw, 0), Math.max(normalizedEntries.length - 1, 0));
+  }, [initialIndex, normalizedEntries.length]);
+
+  const [history, setHistory] = useState(() => ({
+    entries: normalizedEntries.length
+      ? normalizedEntries
+      : [normalizeEntry("/")],
+    index: startIndex,
+  }));
+
+  const location = history.entries[history.index] || normalizeEntry("/");
+
+  const navigate = useCallback((to, options = {}) => {
+    if (typeof to === "number") {
+      setHistory((current) => {
+        const nextIndex = Math.min(
+          Math.max(current.index + to, 0),
+          current.entries.length - 1
+        );
+        if (nextIndex === current.index) return current;
+        return {
+          ...current,
+          index: nextIndex,
+        };
+      });
+      return;
+    }
+
+    setHistory((current) => {
+      const currentLocation = current.entries[current.index] || normalizeEntry("/");
+      const nextLocation = resolveToLocation(
+        currentLocation,
+        to,
+        options.state
+      );
+
+      if (!nextLocation) return current;
+
+      if (options.replace) {
+        const nextEntries = current.entries.slice();
+        nextEntries[current.index] = nextLocation;
+        return {
+          entries: nextEntries,
+          index: current.index,
+        };
+      }
+
+      const nextEntries = current.entries
+        .slice(0, current.index + 1)
+        .concat(nextLocation);
+
+      return {
+        entries: nextEntries,
+        index: nextEntries.length - 1,
+      };
+    });
+  }, []);
+
+  const value = useMemo(
+    () => ({
+      location,
+      navigate,
+    }),
+    [location, navigate]
+  );
 
   return (
-    <RouterProviderBase initialLocation={parseLocation(entry)}>
-      {children}
-    </RouterProviderBase>
+    <RouterContext.Provider value={value}>
+      <ParamsContext.Provider value={{}}>
+        {children}
+      </ParamsContext.Provider>
+    </RouterContext.Provider>
   );
 }
 
 export function BrowserRouter({ children }) {
-  return <RouterProviderBase initialLocation={readWindowLocation()}>{children}</RouterProviderBase>;
-}
-
-export function HashRouter({ children }) {
-  return <RouterProviderBase initialLocation={readWindowLocation()}>{children}</RouterProviderBase>;
-}
-
-export function Router({ children, location }) {
-  return (
-    <RouterProviderBase initialLocation={location ? parseLocation(location) : readWindowLocation()}>
-      {children}
-    </RouterProviderBase>
-  );
-}
-
-export function RouterProvider({ children }) {
-  return <RouterProviderBase initialLocation={readWindowLocation()}>{children}</RouterProviderBase>;
-}
-
-export function HydratedRouter({ children }) {
-  return <RouterProviderBase initialLocation={readWindowLocation()}>{children}</RouterProviderBase>;
+  return <MemoryRouter>{children}</MemoryRouter>;
 }
 
 export function Routes({ children }) {
-  return <>{children}</>;
+  const { location } = useRouterContext();
+  const resolved = useMemo(
+    () => resolveChildrenForRoutes(children, location.pathname),
+    [children, location.pathname]
+  );
+
+  return (
+    <ParamsContext.Provider value={resolved.params || {}}>
+      {resolved.node}
+    </ParamsContext.Provider>
+  );
 }
 
-export function Route({ element, children }) {
-  return element ?? children ?? null;
+export function Route() {
+  return null;
+}
+
+export function Navigate({ to, replace = false, state = null }) {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    navigate(to, { replace, state });
+  }, [navigate, replace, state, to]);
+
+  return null;
 }
 
 export function Outlet() {
   return null;
 }
 
-export function Navigate({ to, replace = false, state = null }) {
-  const { navigate } = useRouterApi();
-  React.useEffect(() => {
-    navigate(to, { replace, state });
-  }, [navigate, replace, state, to]);
-  return null;
-}
+export function Link({ to = "", onClick, children, ...rest }) {
+  const navigate = useNavigate();
+  const href = useHref(to);
 
-export function Link({ to, children, onClick, ...props }) {
   return (
     <a
-      href={buildHref(to)}
+      {...rest}
+      href={href}
       onClick={(event) => {
         onClick?.(event);
+        if (event.defaultPrevented) return;
+        event.preventDefault();
+        navigate(to);
       }}
-      {...props}
     >
-      {children}
+      {typeof children === "function"
+        ? children({ isActive: false, isPending: false })
+        : children}
     </a>
   );
 }
 
-export function NavLink({ to, children, className, ...props }) {
-  const { location } = useRouterApi();
-  const state = {
-    isActive: isActivePath(location, to),
-    isPending: false,
-    isTransitioning: false,
-  };
+export function NavLink({
+  to = "",
+  className,
+  style,
+  children,
+  ...rest
+}) {
+  const location = useLocation();
+  const href = useHref(to);
+  const target = useResolvedPath(to);
+  const isActive = location.pathname === target.pathname;
 
   const resolvedClassName =
-    typeof className === "function" ? className(state) : className;
-  const resolvedChildren =
-    typeof children === "function" ? children(state) : children;
+    typeof className === "function"
+      ? className({ isActive, isPending: false })
+      : className;
+
+  const resolvedStyle =
+    typeof style === "function"
+      ? style({ isActive, isPending: false })
+      : style;
 
   return (
-    <a href={buildHref(to)} className={resolvedClassName} {...props}>
-      {resolvedChildren}
-    </a>
+    <Link
+      {...rest}
+      to={to}
+      className={resolvedClassName}
+      style={resolvedStyle}
+      href={href}
+    >
+      {typeof children === "function"
+        ? children({ isActive, isPending: false })
+        : children}
+    </Link>
   );
 }
 
 export function useNavigate() {
-  const { navigate } = useRouterApi();
-  return navigate;
+  return useRouterContext().navigate;
 }
 
 export function useLocation() {
-  return useRouterApi().location;
+  return useRouterContext().location;
+}
+
+export function useSearchParams(defaultInit) {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const searchParams = useMemo(() => {
+    const raw = location.search.startsWith("?")
+      ? location.search.slice(1)
+      : location.search;
+    const params = new URLSearchParams(raw);
+
+    if (!raw && defaultInit) {
+      const defaults = new URLSearchParams(defaultInit);
+      defaults.forEach((value, key) => {
+        if (!params.has(key)) params.set(key, value);
+      });
+    }
+
+    return params;
+  }, [defaultInit, location.search]);
+
+  const setSearchParams = useCallback(
+    (nextInit, options = {}) => {
+      const currentParams = new URLSearchParams(
+        location.search.startsWith("?")
+          ? location.search.slice(1)
+          : location.search
+      );
+
+      const resolved =
+        typeof nextInit === "function" ? nextInit(currentParams) : nextInit;
+
+      const nextParams = new URLSearchParams(resolved);
+      const nextSearch = nextParams.toString();
+
+      navigate(
+        {
+          pathname: location.pathname,
+          search: nextSearch ? `?${nextSearch}` : "",
+          hash: location.hash,
+        },
+        options
+      );
+    },
+    [location.hash, location.pathname, location.search, navigate]
+  );
+
+  return [searchParams, setSearchParams];
 }
 
 export function useParams() {
-  return {};
+  return useContext(ParamsContext) || {};
 }
 
-export function useSearchParams() {
-  const { location, navigate } = useRouterApi();
-  const params = useMemo(
-    () => new URLSearchParams(location.search || ""),
-    [location.search]
-  );
+export function useMatch(pattern) {
+  const location = useLocation();
+  return matchPath(pattern, location.pathname);
+}
 
-  function setSearchParams(nextInit, options = {}) {
-    const nextParams = new URLSearchParams(nextInit);
-    navigate(
-      `${location.pathname}?${nextParams.toString()}${location.hash || ""}`,
-      options
-    );
+export function matchPath(pattern, pathname) {
+  if (typeof pattern === "string") {
+    const matched = matchRoutePath(pathname, pattern);
+    if (!matched) return null;
+    return {
+      params: matched.params,
+      pathname,
+      pattern: { path: pattern },
+    };
   }
 
-  return [params, setSearchParams];
-}
+  const path = pattern?.path || "/";
+  const matched = matchRoutePath(pathname, path);
+  if (!matched) return null;
 
-export function useMatch() {
-  return null;
-}
-
-export function useResolvedPath(to) {
-  return parseLocation(to);
-}
-
-export function useHref(to) {
-  return buildHref(to);
-}
-
-export function useInRouterContext() {
-  return true;
-}
-
-export function createSearchParams(init) {
-  return new URLSearchParams(init);
-}
-
-export function createPath({ pathname = "/", search = "", hash = "" } = {}) {
-  return `${pathname}${search}${hash}`;
-}
-
-export function generatePath(path, params = {}) {
-  return String(path).replace(/:([A-Za-z0-9_]+)/g, (_, key) => {
-    return params[key] ?? `:${key}`;
-  });
-}
-
-export function redirect(to, init) {
-  return { to, init: init || null };
-}
-
-export function matchPath() {
-  return null;
-}
-
-export function createMemoryRouter() {
   return {
-    navigate() {},
-    subscribe() {
-      return () => {};
-    },
-    state: {},
+    params: matched.params,
+    pathname,
+    pattern,
   };
 }
 
-export function createRoutesFromElements(children) {
-  return children;
+export function createSearchParams(init = "") {
+  return new URLSearchParams(init);
 }
 
-export const UNSAFE_NavigationContext = React.createContext(null);
-export const UNSAFE_LocationContext = React.createContext(null);
-export const UNSAFE_RouteContext = React.createContext({
-  outlet: null,
-  matches: [],
-  isDataRoute: false,
-});
+export function generatePath(path = "/", params = {}) {
+  return String(path).replace(/:([A-Za-z0-9_]+)/g, (_, key) =>
+    params[key] != null ? encodeURIComponent(String(params[key])) : `:${key}`
+  );
+}
+
+export function useResolvedPath(to = "") {
+  const location = useLocation();
+  return resolveToLocation(location, to, location.state);
+}
+
+export function useHref(to = "") {
+  const resolved = useResolvedPath(to);
+  return locationToHref(resolved);
+}
+
+export function createPath(location = {}) {
+  return locationToHref(normalizeEntry(location));
+}
+
+export function useNavigationType() {
+  return "POP";
+}
