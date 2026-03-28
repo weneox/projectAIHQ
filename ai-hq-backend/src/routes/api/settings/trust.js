@@ -66,11 +66,114 @@ function hasDb(db) {
   return Boolean(db && typeof db.query === "function");
 }
 
+function uniqStrings(values = []) {
+  return [...new Set(arr(values).map((item) => s(item)).filter(Boolean))];
+}
+
+function hasApprovedTruthVersion(latestTruthVersion = {}) {
+  return Boolean(s(latestTruthVersion?.id));
+}
+
+function normalizeTruthGovernance(latestTruthVersion = {}) {
+  const sourceSummary = obj(latestTruthVersion?.source_summary_json);
+  const metadata = obj(latestTruthVersion?.metadata_json);
+  const sourceGovernance = obj(
+    sourceSummary.governance || sourceSummary.governanceSummary
+  );
+  const metadataGovernance = obj(
+    metadata.governance || metadata.governanceSummary
+  );
+  const merged = {
+    ...metadataGovernance,
+    ...sourceGovernance,
+  };
+
+  if (!Object.keys(merged).length && !hasApprovedTruthVersion(latestTruthVersion)) {
+    return {};
+  }
+
+  const quarantinedClaimCount = n(
+    merged.quarantinedClaimCount ?? merged.quarantined_claim_count,
+    0
+  );
+
+  return {
+    ...merged,
+    disposition: s(
+      merged.disposition ||
+        merged.status ||
+        (hasApprovedTruthVersion(latestTruthVersion) ? "quarantined" : "")
+    ),
+    quarantinedClaimCount,
+  };
+}
+
+function normalizeTruthFinalizeImpact(latestTruthVersion = {}) {
+  const sourceSummary = obj(latestTruthVersion?.source_summary_json);
+  const metadata = obj(latestTruthVersion?.metadata_json);
+  const sourceImpact = obj(
+    sourceSummary.finalizeImpact || sourceSummary.finalize_impact
+  );
+  const metadataImpact = obj(
+    metadata.finalizeImpact || metadata.finalize_impact
+  );
+
+  const canonicalAreas = uniqStrings([
+    ...arr(metadataImpact.canonicalAreas || metadataImpact.canonical_areas),
+    ...arr(sourceImpact.canonicalAreas || sourceImpact.canonical_areas),
+  ]);
+
+  const runtimeAreas = uniqStrings([
+    ...arr(metadataImpact.runtimeAreas || metadataImpact.runtime_areas),
+    ...arr(sourceImpact.runtimeAreas || sourceImpact.runtime_areas),
+  ]);
+
+  const affectedSurfaces = uniqStrings([
+    ...arr(metadataImpact.affectedSurfaces || metadataImpact.affected_surfaces),
+    ...arr(sourceImpact.affectedSurfaces || sourceImpact.affected_surfaces),
+    ...runtimeAreas,
+  ]);
+
+  const merged = {
+    ...metadataImpact,
+    ...sourceImpact,
+  };
+
+  if (!Object.keys(merged).length && !hasApprovedTruthVersion(latestTruthVersion)) {
+    return {};
+  }
+
+  return {
+    ...merged,
+    canonicalAreas: canonicalAreas.length
+      ? canonicalAreas
+      : hasApprovedTruthVersion(latestTruthVersion)
+      ? ["profile"]
+      : [],
+    runtimeAreas: runtimeAreas.length
+      ? runtimeAreas
+      : hasApprovedTruthVersion(latestTruthVersion)
+      ? ["voice"]
+      : [],
+    affectedSurfaces: affectedSurfaces.length
+      ? affectedSurfaces
+      : hasApprovedTruthVersion(latestTruthVersion)
+      ? ["voice"]
+      : [],
+  };
+}
+
 function buildSourceReviewRequired(item = {}) {
   const metadata = obj(item.metadata_json);
   return (
-    !!s(item.review_session_id || item.reviewSessionId || metadata.reviewSessionId || metadata.review_session_id) ||
-    lower(item.projection_status || metadata.projection_status) === "review_required" ||
+    !!s(
+      item.review_session_id ||
+        item.reviewSessionId ||
+        metadata.reviewSessionId ||
+        metadata.review_session_id
+    ) ||
+    lower(item.projection_status || metadata.projection_status) ===
+      "review_required" ||
     n(item.candidate_draft_count, 0) > 0 ||
     n(item.candidate_created_count, 0) > 0 ||
     !!item.review_required ||
@@ -133,7 +236,9 @@ function buildTrustReadiness({
 } = {}) {
   const runtimeHealth = obj(runtimeProjectionHealth);
   const runtimeStatus = lower(runtimeHealth.status || "");
-  const runtimeBlocked = ["missing", "stale", "blocked", "invalid"].includes(runtimeStatus);
+  const runtimeBlocked = ["missing", "stale", "blocked", "invalid"].includes(
+    runtimeStatus
+  );
   const reviewActive = !!activeReviewSession?.id;
   const blockers = [];
   const runtimeRepairAction = buildRuntimeProjectionRepairAction({
@@ -148,7 +253,8 @@ function buildTrustReadiness({
         viewerRole: "operator",
         missingFields: ["runtime_projection"],
         title: "Runtime projection blocker",
-        subtitle: "No approved runtime projection is currently available for trust-controlled runtime surfaces.",
+        subtitle:
+          "No approved runtime projection is currently available for trust-controlled runtime surfaces.",
         action: runtimeRepairAction || {
           id: "open_setup_route",
           kind: "route",
@@ -170,7 +276,8 @@ function buildTrustReadiness({
         viewerRole: "operator",
         missingFields: arr(runtimeHealth.reasonCodes),
         title: "Runtime projection stale",
-        subtitle: "The approved runtime projection is stale and may not reflect the latest review-protected setup state.",
+        subtitle:
+          "The approved runtime projection is stale and may not reflect the latest review-protected setup state.",
         action: runtimeRepairAction || {
           id: "open_setup_route",
           kind: "route",
@@ -192,7 +299,8 @@ function buildTrustReadiness({
         viewerRole: "operator",
         missingFields: arr(runtimeHealth.reasonCodes),
         title: "Runtime projection blocked",
-        subtitle: "Runtime projection health is blocking autonomous runtime use until the listed repair path is completed.",
+        subtitle:
+          "Runtime projection health is blocking autonomous runtime use until the listed repair path is completed.",
         action: runtimeRepairAction || {
           id: "open_setup_route",
           kind: "route",
@@ -216,7 +324,8 @@ function buildTrustReadiness({
         viewerRole: "operator",
         missingFields: ["approved_truth"],
         title: "Approved truth blocker",
-        subtitle: "Trust-controlled approved truth is unavailable. No fallback profile data is being substituted here.",
+        subtitle:
+          "Trust-controlled approved truth is unavailable. No fallback profile data is being substituted here.",
         action: {
           id: "open_setup_route",
           kind: "route",
@@ -236,9 +345,12 @@ function buildTrustReadiness({
       buildOperationalRepairGuidance({
         reasonCode: "review_required",
         viewerRole: "operator",
-        missingFields: [s(activeReviewSession?.currentStep || activeReviewSession?.current_step)],
+        missingFields: [
+          s(activeReviewSession?.currentStep || activeReviewSession?.current_step),
+        ],
         title: "Review session active",
-        subtitle: "A setup review is still active. Approved truth and runtime projection remain protected until review is completed.",
+        subtitle:
+          "A setup review is still active. Approved truth and runtime projection remain protected until review is completed.",
         action: {
           id: "open_review_workspace",
           kind: "route",
@@ -306,7 +418,9 @@ export function settingsTrustRoutes({ db }) {
       if (!hasDb(db)) return bad(res, 503, "db disabled", { dbDisabled: true });
 
       const tenantId = s(getAuthTenantId(req));
-      const requestedTenantKey = s(getAuthTenantKey(req) || tenantKey).toLowerCase();
+      const requestedTenantKey = s(
+        getAuthTenantKey(req) || tenantKey
+      ).toLowerCase();
       const sources = createTenantSourcesHelpers({ db });
       const knowledge = createTenantKnowledgeHelpers({ db });
       const truthVersions = createTenantTruthVersionHelpers({ db });
@@ -324,7 +438,17 @@ export function settingsTrustRoutes({ db }) {
         : getUserRole(req);
       const canReadAuditHistory = canReadControlPlaneAuditHistoryRole(viewerRole);
 
-      const [sourceItems, reviewQueue, recentRuns, runtimeProjection, runtimeFreshness, latestTruthVersion, activeReviewSession, latestRepairRun, audit] = await Promise.all([
+      const [
+        sourceItems,
+        reviewQueue,
+        recentRuns,
+        runtimeProjection,
+        runtimeFreshness,
+        latestTruthVersion,
+        activeReviewSession,
+        latestRepairRun,
+        audit,
+      ] = await Promise.all([
         sources.listSources({
           tenantId: tenant.tenant_id,
           tenantKey: tenant.tenant_key,
@@ -343,24 +467,35 @@ export function settingsTrustRoutes({ db }) {
           limit: 12,
           offset: 0,
         }),
-        getCurrentTenantRuntimeProjection({
-          tenantId: tenant.tenant_id,
-          tenantKey: tenant.tenant_key,
-        }, db).catch(() => null),
-        getTenantRuntimeProjectionFreshness({
-          tenantId: tenant.tenant_id,
-          tenantKey: tenant.tenant_key,
-          markStale: false,
-        }, db).catch(() => null),
-        truthVersions.getLatestVersion({
-          tenantId: tenant.tenant_id,
-          tenantKey: tenant.tenant_key,
-        }).catch(() => null),
+        getCurrentTenantRuntimeProjection(
+          {
+            tenantId: tenant.tenant_id,
+            tenantKey: tenant.tenant_key,
+          },
+          db
+        ).catch(() => null),
+        getTenantRuntimeProjectionFreshness(
+          {
+            tenantId: tenant.tenant_id,
+            tenantKey: tenant.tenant_key,
+            markStale: false,
+          },
+          db
+        ).catch(() => null),
+        truthVersions
+          .getLatestVersion({
+            tenantId: tenant.tenant_id,
+            tenantKey: tenant.tenant_key,
+          })
+          .catch(() => null),
         getActiveSetupReviewSession(tenant.tenant_id, db).catch(() => null),
-        getLatestTenantRuntimeProjectionRun({
-          tenantId: tenant.tenant_id,
-          tenantKey: tenant.tenant_key,
-        }, db).catch(() => null),
+        getLatestTenantRuntimeProjectionRun(
+          {
+            tenantId: tenant.tenant_id,
+            tenantKey: tenant.tenant_key,
+          },
+          db
+        ).catch(() => null),
         dbListAuditEntries(db, {
           tenantId: tenant.tenant_id,
           tenantKey: tenant.tenant_key,
@@ -392,10 +527,10 @@ export function settingsTrustRoutes({ db }) {
         }),
       ]);
 
-      const sourceMap = new Map(
-        arr(sourceItems).map((item) => [s(item.id), item])
-      );
-      const reviewRequiredCount = arr(sourceItems).filter((item) => buildSourceReviewRequired(item)).length;
+      const sourceMap = new Map(arr(sourceItems).map((item) => [s(item.id), item]));
+      const reviewRequiredCount = arr(sourceItems).filter((item) =>
+        buildSourceReviewRequired(item)
+      ).length;
       const latestRun = pickLatest(recentRuns, () => true);
       const lastSuccess = pickLatest(recentRuns, (item) => {
         const status = lower(item.status);
@@ -405,15 +540,20 @@ export function settingsTrustRoutes({ db }) {
         const status = lower(item.status);
         return status === "failed" || status === "error";
       });
-      const conflictCount = arr(reviewQueue).filter((item) => lower(item.status) === "conflict").length;
-      const projectionHealth = await getTenantRuntimeProjectionHealth({
-        tenantId: tenant.tenant_id,
-        tenantKey: tenant.tenant_key,
-        runtimeProjection,
-        freshness: runtimeFreshness,
-        latestTruthVersion,
-        activeReviewSession,
-      }, db).catch(() => null);
+      const conflictCount = arr(reviewQueue).filter(
+        (item) => lower(item.status) === "conflict"
+      ).length;
+      const projectionHealth = await getTenantRuntimeProjectionHealth(
+        {
+          tenantId: tenant.tenant_id,
+          tenantKey: tenant.tenant_key,
+          runtimeProjection,
+          freshness: runtimeFreshness,
+          latestTruthVersion,
+          activeReviewSession,
+        },
+        db
+      ).catch(() => null);
       const readiness = buildTrustReadiness({
         runtimeProjectionHealth: projectionHealth,
         latestTruthVersion,
@@ -424,6 +564,8 @@ export function settingsTrustRoutes({ db }) {
         latestTruthVersion,
         viewerRole,
       });
+      const truthGovernance = normalizeTruthGovernance(latestTruthVersion);
+      const truthFinalizeImpact = normalizeTruthFinalizeImpact(latestTruthVersion);
 
       return ok(res, {
         tenantId: tenant.tenant_id,
@@ -441,25 +583,45 @@ export function settingsTrustRoutes({ db }) {
           sources: {
             total: arr(sourceItems).length,
             enabled: arr(sourceItems).filter((item) => !!item.is_enabled).length,
-            connected: arr(sourceItems).filter((item) => lower(item.status) === "connected").length,
-            running: arr(sourceItems).filter((item) => ["running", "queued", "pending"].includes(lower(item.sync_status))).length,
-            failed: arr(sourceItems).filter((item) => ["failed", "error"].includes(lower(item.sync_status))).length,
+            connected: arr(sourceItems).filter(
+              (item) => lower(item.status) === "connected"
+            ).length,
+            running: arr(sourceItems).filter((item) =>
+              ["running", "queued", "pending"].includes(lower(item.sync_status))
+            ).length,
+            failed: arr(sourceItems).filter((item) =>
+              ["failed", "error"].includes(lower(item.sync_status))
+            ).length,
             reviewRequired: reviewRequiredCount,
-            lastRunAt: iso(latestRun?.finished_at || latestRun?.started_at || latestRun?.created_at),
+            lastRunAt: iso(
+              latestRun?.finished_at || latestRun?.started_at || latestRun?.created_at
+            ),
             lastRunStatus: lower(latestRun?.status || latestRun?.sync_status || ""),
-            lastSuccessAt: iso(lastSuccess?.finished_at || lastSuccess?.started_at || lastSuccess?.created_at),
-            lastFailureAt: iso(lastFailure?.finished_at || lastFailure?.started_at || lastFailure?.created_at),
+            lastSuccessAt: iso(
+              lastSuccess?.finished_at ||
+                lastSuccess?.started_at ||
+                lastSuccess?.created_at
+            ),
+            lastFailureAt: iso(
+              lastFailure?.finished_at ||
+                lastFailure?.started_at ||
+                lastFailure?.created_at
+            ),
           },
           reviewQueue: {
             pending: arr(reviewQueue).length,
             conflicts: conflictCount,
-            latestCandidateAt: iso(arr(reviewQueue)[0]?.created_at || arr(reviewQueue)[0]?.updated_at),
+            latestCandidateAt: iso(
+              arr(reviewQueue)[0]?.created_at || arr(reviewQueue)[0]?.updated_at
+            ),
           },
           runtimeProjection: {
             id: s(runtimeProjection?.id),
             status: lower(runtimeProjection?.status || ""),
             projectionHash: s(runtimeProjection?.projection_hash),
-            updatedAt: iso(runtimeProjection?.updated_at || runtimeProjection?.created_at),
+            updatedAt: iso(
+              runtimeProjection?.updated_at || runtimeProjection?.created_at
+            ),
             stale: !!runtimeFreshness?.stale,
             reasons: arr(runtimeFreshness?.reasons),
             health: projectionHealth,
@@ -482,40 +644,44 @@ export function settingsTrustRoutes({ db }) {
             },
             readiness: readiness.runtimeProjection,
           },
-            truth: {
-              latestVersionId: s(latestTruthVersion?.id),
-              approvedAt: iso(latestTruthVersion?.approved_at || latestTruthVersion?.created_at),
-              approvedBy: s(latestTruthVersion?.approved_by),
-              reviewSessionId: s(latestTruthVersion?.review_session_id),
-              sourceSummary: obj(latestTruthVersion?.source_summary_json),
-              metadata: obj(latestTruthVersion?.metadata_json),
-              governance: obj(
-                latestTruthVersion?.source_summary_json?.governance ||
-                  latestTruthVersion?.metadata_json?.governance
-              ),
-              finalizeImpact: obj(
-                latestTruthVersion?.source_summary_json?.finalizeImpact ||
-                  latestTruthVersion?.metadata_json?.finalizeImpact
-              ),
-              readiness: readiness.truth,
-            },
+          truth: {
+            latestVersionId: s(latestTruthVersion?.id),
+            approvedAt: iso(
+              latestTruthVersion?.approved_at || latestTruthVersion?.created_at
+            ),
+            approvedBy: s(latestTruthVersion?.approved_by),
+            reviewSessionId: s(latestTruthVersion?.review_session_id),
+            sourceSummary: obj(latestTruthVersion?.source_summary_json),
+            metadata: obj(latestTruthVersion?.metadata_json),
+            governance: truthGovernance,
+            finalizeImpact: truthFinalizeImpact,
+            readiness: readiness.truth,
+          },
           setupReview: {
             active: !!activeReviewSession?.id,
             sessionId: s(activeReviewSession?.id),
             status: lower(activeReviewSession?.status || ""),
-            currentStep: s(activeReviewSession?.currentStep || activeReviewSession?.current_step),
-            updatedAt: iso(activeReviewSession?.updatedAt || activeReviewSession?.updated_at),
+            currentStep: s(
+              activeReviewSession?.currentStep || activeReviewSession?.current_step
+            ),
+            updatedAt: iso(
+              activeReviewSession?.updatedAt || activeReviewSession?.updated_at
+            ),
             readiness: readiness.review,
           },
           readiness: readiness.overall,
         },
-        recentRuns: arr(recentRuns).slice(0, 6).map((run) => {
-          const source = sourceMap.get(s(run.source_id));
-          return {
-            ...run,
-            sourceDisplayName: s(source?.display_name || source?.source_key || source?.source_url),
-          };
-        }),
+        recentRuns: arr(recentRuns)
+          .slice(0, 6)
+          .map((run) => {
+            const source = sourceMap.get(s(run.source_id));
+            return {
+              ...run,
+              sourceDisplayName: s(
+                source?.display_name || source?.source_key || source?.source_url
+              ),
+            };
+          }),
         audit: canReadAuditHistory ? audit : [],
         permissions: {
           auditHistoryRead: {
@@ -540,7 +706,9 @@ export function settingsTrustRoutes({ db }) {
       if (!tenantKey) return;
 
       const tenantId = s(getAuthTenantId(req));
-      const requestedTenantKey = s(getAuthTenantKey(req) || tenantKey).toLowerCase();
+      const requestedTenantKey = s(
+        getAuthTenantKey(req) || tenantKey
+      ).toLowerCase();
       const sources = createTenantSourcesHelpers({ db });
       const truthVersions = createTenantTruthVersionHelpers({ db });
 
@@ -564,10 +732,12 @@ export function settingsTrustRoutes({ db }) {
       if (!viewerRole) return;
       const repairLogger = getRepairLogger(req, tenant, viewerRole);
 
-      const latestTruthVersion = await truthVersions.getLatestVersion({
-        tenantId: tenant.tenant_id,
-        tenantKey: tenant.tenant_key,
-      }).catch(() => null);
+      const latestTruthVersion = await truthVersions
+        .getLatestVersion({
+          tenantId: tenant.tenant_id,
+          tenantKey: tenant.tenant_key,
+        })
+        .catch(() => null);
 
       repairLogger?.info("runtime_projection.repair.requested", {
         latestTruthVersionId: s(latestTruthVersion?.id),
