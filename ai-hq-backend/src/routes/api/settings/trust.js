@@ -786,8 +786,94 @@ function summarizeDecisionEvents(events = []) {
     actor: s(event.actor),
     recommendedNextAction: obj(event.recommendedNextAction),
   });
+  const classify = (event = {}) => {
+    const eventType = lower(event.eventType);
+    if (
+      ["truth_publication_decision", "approval_policy_decision"].includes(eventType)
+    ) {
+      return {
+        key: "truth",
+        label: "Truth events",
+      };
+    }
+    if (
+      ["runtime_health_transition", "repair_state_change"].includes(eventType)
+    ) {
+      return {
+        key: "runtime",
+        label: "Runtime and health",
+      };
+    }
+    if (
+      ["policy_control_change", "autonomy_posture_change"].includes(eventType)
+    ) {
+      return {
+        key: "controls",
+        label: "Control changes",
+      };
+    }
+    if (
+      [
+        "blocked_action_outcome",
+        "handoff_required_action_outcome",
+        "review_required_action_outcome",
+      ].includes(eventType)
+    ) {
+      return {
+        key: "restricted",
+        label: "Restricted outcomes",
+      };
+    }
+    return {
+      key: "execution",
+      label: "Execution decisions",
+    };
+  };
+  const detailed = (event = {}) => {
+    const group = classify(event);
+    return {
+      ...compact(event),
+      group: group.key,
+      groupLabel: group.label,
+      healthState: obj(event.healthState),
+      approvalPosture: obj(event.approvalPosture),
+      executionPosture: obj(event.executionPosture),
+      controlState: obj(event.controlState),
+      affectedSurfaces: arr(event.affectedSurfaces).map((item) => lower(item)),
+      decisionContext: obj(event.decisionContext),
+    };
+  };
+  const groupedItems = items.map(detailed);
 
   return {
+    items: groupedItems,
+    availableFilters: [
+      {
+        key: "all",
+        label: "All events",
+        count: groupedItems.length,
+      },
+      {
+        key: "truth",
+        label: "Truth events",
+        count: groupedItems.filter((item) => item.group === "truth").length,
+      },
+      {
+        key: "runtime",
+        label: "Runtime/health",
+        count: groupedItems.filter((item) => item.group === "runtime").length,
+      },
+      {
+        key: "controls",
+        label: "Control changes",
+        count: groupedItems.filter((item) => item.group === "controls").length,
+      },
+      {
+        key: "restricted",
+        label: "Restricted outcomes",
+        count: groupedItems.filter((item) => item.group === "restricted").length,
+      },
+    ],
     latestImportant: items.slice(0, 8).map(compact),
     recentAutonomyChanges: items
       .filter((item) =>

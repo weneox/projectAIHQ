@@ -185,6 +185,39 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
           },
         ],
       },
+      decisionAudit: {
+        availableFilters: [
+          { key: "all", label: "All events", count: 2 },
+          { key: "restricted", label: "Restricted outcomes", count: 1 },
+        ],
+        items: [
+          {
+            id: "decision-1",
+            eventType: "blocked_action_outcome",
+            group: "restricted",
+            groupLabel: "Restricted outcomes",
+            timestamp: "2026-03-26T10:00:00.000Z",
+            source: "inbox.ingest",
+            actor: "system",
+            surface: "inbox",
+            channelType: "instagram",
+            policyOutcome: "blocked_until_repair",
+            reasonCodes: ["projection_stale"],
+            truthVersionId: "truth-v1",
+            runtimeProjectionId: "projection-1",
+            affectedSurfaces: ["inbox"],
+            healthState: {
+              status: "stale",
+            },
+            executionPosture: {
+              outcome: "blocked_until_repair",
+            },
+            recommendedNextAction: {
+              label: "Repair runtime",
+            },
+          },
+        ],
+      },
     },
     recentRuns: [
       {
@@ -219,6 +252,11 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
   expect(normalized.summary.policyControls.viewerRole).toBe("admin");
   expect(normalized.summary.policyControls.tenantDefault.controlMode).toBe("human_review_required");
   expect(normalized.summary.policyControls.items[0].surface).toBe("voice");
+  expect(normalized.summary.decisionAudit.availableFilters[0].key).toBe("all");
+  expect(normalized.summary.decisionAudit.items[0].group).toBe("restricted");
+  expect(normalized.summary.decisionAudit.items[0].recommendedNextAction.label).toBe(
+    "Repair runtime"
+  );
   expect(normalized.summary.runtimeProjection.repair.action?.id).toBe(
     "rebuild_runtime_projection"
   );
@@ -243,5 +281,6 @@ it("normalizeTrustViewResponse keeps unknown policy posture stable when payloads
   expect(normalized.summary.policyPosture.executionPosture).toBe("unknown");
   expect(normalized.summary.channelAutonomy.items).toEqual([]);
   expect(normalized.summary.policyControls.items).toEqual([]);
+  expect(normalized.summary.decisionAudit.items).toEqual([]);
 });
 });

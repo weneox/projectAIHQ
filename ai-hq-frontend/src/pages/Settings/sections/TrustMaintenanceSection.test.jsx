@@ -227,6 +227,32 @@ describe("TrustMaintenanceSection", () => {
                 },
               ],
             },
+            decisionAudit: {
+              availableFilters: [
+                { key: "all", label: "All events", count: 1 },
+                { key: "runtime", label: "Runtime/health", count: 1 },
+              ],
+              items: [
+                {
+                  id: "decision-1",
+                  eventType: "runtime_health_transition",
+                  group: "runtime",
+                  groupLabel: "Runtime and health",
+                  timestamp: "2026-03-25T10:00:00.000Z",
+                  actor: "system",
+                  source: "settings.trust.runtime-projection.repair",
+                  surface: "tenant",
+                  channelType: "unknown",
+                  policyOutcome: "blocked_until_repair",
+                  reasonCodes: ["projection_missing"],
+                  runtimeProjectionId: "projection-old",
+                  affectedSurfaces: ["voice", "inbox"],
+                  recommendedNextAction: {
+                    label: "Rebuild runtime projection",
+                  },
+                },
+              ],
+            },
           },
             recentRuns: [],
             audit: [],
@@ -252,6 +278,8 @@ describe("TrustMaintenanceSection", () => {
     expect(screen.getByText(/approval and execution state/i)).toBeInTheDocument();
     expect(screen.getByText(/allowed, reviewed, handed off, or blocked by surface/i)).toBeInTheDocument();
     expect(screen.getByText(/latest approved change footprint/i)).toBeInTheDocument();
+    expect(screen.getByText(/decision timeline and incident replay context/i)).toBeInTheDocument();
+    expect(screen.getByText(/runtime health transition/i)).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: /rebuild runtime projection/i })[0]);
     await waitFor(() => {
       expect(dispatchRepairAction).toHaveBeenCalledWith(

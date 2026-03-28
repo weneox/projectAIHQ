@@ -389,6 +389,62 @@ function normalizePolicyControls(input = {}) {
   };
 }
 
+function normalizeDecisionAuditEvent(input = {}) {
+  const source = obj(input);
+  return {
+    id: s(source.id),
+    eventType: s(source.eventType || source.event_type || "unknown").toLowerCase(),
+    group: s(source.group || "execution").toLowerCase(),
+    groupLabel: s(source.groupLabel || source.group_label || "Execution decisions"),
+    timestamp: s(source.timestamp || source.createdAt || source.created_at),
+    source: s(source.source),
+    actor: s(source.actor),
+    surface: s(source.surface || "unknown").toLowerCase(),
+    channelType: s(source.channelType || source.channel_type || "unknown").toLowerCase(),
+    policyOutcome: s(source.policyOutcome || source.policy_outcome || "unknown").toLowerCase(),
+    reasonCodes: normalizeStringList(source.reasonCodes || source.reason_codes),
+    truthVersionId: s(source.truthVersionId || source.truth_version_id),
+    runtimeProjectionId: s(source.runtimeProjectionId || source.runtime_projection_id),
+    affectedSurfaces: normalizeStringList(
+      source.affectedSurfaces || source.affected_surfaces
+    ),
+    healthState: obj(source.healthState || source.health_state),
+    approvalPosture: obj(source.approvalPosture || source.approval_posture),
+    executionPosture: obj(source.executionPosture || source.execution_posture),
+    controlState: obj(source.controlState || source.control_state),
+    decisionContext: obj(source.decisionContext || source.decision_context),
+    recommendedNextAction: normalizeAction(
+      source.recommendedNextAction || source.recommended_next_action
+    ),
+  };
+}
+
+function normalizeDecisionAudit(input = {}) {
+  const source = obj(input);
+  return {
+    items: arr(source.items).map(normalizeDecisionAuditEvent),
+    availableFilters: arr(source.availableFilters || source.available_filters).map(
+      (item) => ({
+        key: s(item.key || "all").toLowerCase(),
+        label: s(item.label || "All events"),
+        count: n(item.count),
+      })
+    ),
+    latestImportant: arr(source.latestImportant || source.latest_important).map(
+      normalizeDecisionAuditEvent
+    ),
+    recentAutonomyChanges: arr(
+      source.recentAutonomyChanges || source.recent_autonomy_changes
+    ).map(normalizeDecisionAuditEvent),
+    recentRestrictedOutcomes: arr(
+      source.recentRestrictedOutcomes || source.recent_restricted_outcomes
+    ).map(normalizeDecisionAuditEvent),
+    recentRuntimeTransitions: arr(
+      source.recentRuntimeTransitions || source.recent_runtime_transitions
+    ).map(normalizeDecisionAuditEvent),
+  };
+}
+
 export function normalizeTrustViewResponse(payload = {}) {
   const root = obj(payload);
   const summary = obj(root.summary);
@@ -470,6 +526,9 @@ export function normalizeTrustViewResponse(payload = {}) {
       ),
       policyControls: normalizePolicyControls(
         summary.policyControls || summary.policy_controls
+      ),
+      decisionAudit: normalizeDecisionAudit(
+        summary.decisionAudit || summary.decision_audit
       ),
     },
     recentRuns: normalizeRecentRuns(root.recentRuns || root.recent_runs),

@@ -1,6 +1,7 @@
 import Badge from "../ui/Badge.jsx";
 import Button from "../ui/Button.jsx";
 import Card from "../ui/Card.jsx";
+import GovernanceHistoryPanel from "./GovernanceHistoryPanel.jsx";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -141,6 +142,14 @@ function collectPolicyControls(summary = {}) {
     cannotLoosenAutonomy: source.cannotLoosenAutonomy === true,
     tenantDefault: obj(source.tenantDefault),
     items: arr(source.items),
+  };
+}
+
+function collectDecisionAudit(summary = {}) {
+  const source = obj(summary.decisionAudit);
+  return {
+    items: arr(source.items),
+    availableFilters: arr(source.availableFilters),
   };
 }
 
@@ -318,6 +327,7 @@ export default function GovernanceCockpit({
   const policyPosture = collectPolicyPosture(summary, truth);
   const channelAutonomy = collectChannelAutonomy(summary);
   const policyControls = collectPolicyControls(summary);
+  const decisionAudit = collectDecisionAudit(summary);
   const policyTone = toneForPolicyOutcome(policyPosture.executionPosture);
   const autonomyHeadline = hasRuntimeTelemetry
     ? runtimeHealth.autonomousAllowed
@@ -653,6 +663,8 @@ export default function GovernanceCockpit({
             </div>
           </div>
         </Card>
+
+        <GovernanceHistoryPanel decisionAudit={decisionAudit} />
 
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
           <Card variant="surface" className="rounded-[28px]">

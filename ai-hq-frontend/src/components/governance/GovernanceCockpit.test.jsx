@@ -16,6 +16,7 @@ describe("GovernanceCockpit", () => {
     expect(screen.getByText(/no canonical area summary was returned/i)).toBeInTheDocument();
     expect(screen.getByText(/channel autonomy telemetry is unavailable/i)).toBeInTheDocument();
     expect(screen.getByText(/operator-manageable autonomy controls/i)).toBeInTheDocument();
+    expect(screen.getByText(/decision timeline and incident replay context/i)).toBeInTheDocument();
   });
 
   it("renders runtime health details and dispatches the primary repair action", () => {
@@ -148,6 +149,66 @@ describe("GovernanceCockpit", () => {
                 },
               ],
             },
+            decisionAudit: {
+              availableFilters: [
+                { key: "all", label: "All events", count: 2 },
+                { key: "restricted", label: "Restricted outcomes", count: 1 },
+              ],
+              items: [
+                {
+                  id: "decision-1",
+                  eventType: "blocked_action_outcome",
+                  group: "restricted",
+                  groupLabel: "Restricted outcomes",
+                  timestamp: "2026-03-25T10:10:00.000Z",
+                  actor: "system",
+                  source: "inbox.ingest",
+                  surface: "inbox",
+                  channelType: "instagram",
+                  policyOutcome: "blocked_until_repair",
+                  reasonCodes: ["projection_stale"],
+                  truthVersionId: "truth-v2",
+                  runtimeProjectionId: "projection-1",
+                  affectedSurfaces: ["inbox"],
+                  healthState: {
+                    status: "stale",
+                    primaryReasonCode: "projection_stale",
+                  },
+                  approvalPosture: {
+                    strictestOutcome: "review_required",
+                  },
+                  executionPosture: {
+                    outcome: "blocked_until_repair",
+                  },
+                  recommendedNextAction: {
+                    label: "Repair runtime authority",
+                  },
+                },
+                {
+                  id: "decision-2",
+                  eventType: "policy_control_change",
+                  group: "controls",
+                  groupLabel: "Control changes",
+                  timestamp: "2026-03-25T09:00:00.000Z",
+                  actor: "admin@aihq.test",
+                  source: "settings.trust.policy-controls",
+                  surface: "voice",
+                  channelType: "unknown",
+                  policyOutcome: "operator_only",
+                  reasonCodes: ["operator_only_mode"],
+                  truthVersionId: "truth-v2",
+                  runtimeProjectionId: "projection-1",
+                  affectedSurfaces: ["voice"],
+                  controlState: {
+                    controlMode: "operator_only_mode",
+                    changedBy: "admin@aihq.test",
+                  },
+                  recommendedNextAction: {
+                    label: "Operate in safer mode",
+                  },
+                },
+              ],
+            },
           },
         }}
         onRunAction={onRunAction}
@@ -164,6 +225,11 @@ describe("GovernanceCockpit", () => {
     expect(screen.getByText(/projection-1/i)).toBeInTheDocument();
     expect(screen.getAllByText(/repair runtime authority/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/operator-manageable autonomy controls/i)).toBeInTheDocument();
+    expect(screen.getByText(/decision timeline and incident replay context/i)).toBeInTheDocument();
+    expect(screen.getByText(/blocked action outcome/i)).toBeInTheDocument();
+    expect(screen.getByText(/policy control change/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /restricted outcomes/i }));
+    expect(screen.getByText(/repair runtime authority/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /open runtime setup/i }));
     expect(onRunAction).toHaveBeenCalledWith(

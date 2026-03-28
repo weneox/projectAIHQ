@@ -1027,6 +1027,16 @@ test("settings trust route exposes recent decision audit summaries", async () =>
 
   assert.equal(res.statusCode, 200);
   assert.equal(res.body?.summary?.decisionAudit?.latestImportant?.length, 2);
+  assert.equal(res.body?.summary?.decisionAudit?.items?.length, 2);
+  assert.equal(res.body?.summary?.decisionAudit?.items?.[0]?.group, "restricted");
+  assert.equal(
+    res.body?.summary?.decisionAudit?.items?.[0]?.healthState?.status,
+    "stale"
+  );
+  assert.equal(
+    res.body?.summary?.decisionAudit?.availableFilters?.find((item) => item.key === "controls")?.count,
+    1
+  );
   assert.equal(
     res.body?.summary?.decisionAudit?.recentRestrictedOutcomes?.[0]?.eventType,
     "blocked_action_outcome"
