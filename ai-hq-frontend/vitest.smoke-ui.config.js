@@ -16,6 +16,10 @@ export default mergeConfig(
       },
     },
     test: {
+      name: "frontend-smoke-ui",
+      environment: "jsdom",
+      globals: true,
+
       include: [
         "src/components/settings/SettingsSurfaceBanner.test.jsx",
         "src/components/settings/ChannelsPanel.test.jsx",
@@ -38,8 +42,18 @@ export default mergeConfig(
         "src/pages/Settings/SettingsController.smoke.test.jsx",
         "src/pages/Settings/sections/TrustMaintenanceSection.test.jsx",
       ],
+
       exclude: ["playwright/**", "dist/**", "node_modules/**"],
       passWithNoTests: false,
+
+      pool: "forks",
+      maxWorkers: 1,
+      fileParallelism: false,
+      isolate: false,
+
+      testTimeout: 30000,
+      hookTimeout: 30000,
+      teardownTimeout: 10000,
     },
   })
 );
