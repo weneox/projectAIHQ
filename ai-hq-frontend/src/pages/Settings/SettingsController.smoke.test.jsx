@@ -784,10 +784,12 @@ describe("Settings truth-maintenance smoke", () => {
     );
 
     expect(
-      await screen.findByText(
-        /refresh evidence, review what is weak or conflicting/i
-      )
-    ).toBeTruthy();
+      (
+        await screen.findAllByText(
+          /refresh evidence, review what is weak or conflicting/i
+        )
+      ).length
+    ).toBeGreaterThan(0);
     expect(screen.getByText(/operator governance cockpit/i)).toBeTruthy();
     expect(screen.getByText(/latest approved change footprint/i)).toBeTruthy();
     expect(screen.getByText(/trust repair hub/i)).toBeTruthy();
@@ -811,10 +813,12 @@ describe("Settings truth-maintenance smoke", () => {
     renderPage("/settings?section=knowledge_review");
 
     expect(
-      await screen.findByText(
-        /source-derived truth changes are reviewed, conflicted, quarantined, approved, or rejected here/i
-      )
-    ).toBeTruthy();
+      (
+        await screen.findAllByText(
+          /source-derived truth changes are reviewed, conflicted, quarantined, approved, or rejected here/i
+        )
+      ).length
+    ).toBeGreaterThan(0);
     expect(
       screen.getAllByText(/truth review workbench/i).length
     ).toBeGreaterThan(0);
@@ -874,10 +878,12 @@ describe("Settings truth-maintenance smoke", () => {
     renderPage("/settings?section=sources&trustFocus=runtime_health&historyFilter=runtime");
 
     expect(
-      await screen.findByText(
-        /refresh evidence, review what is weak or conflicting/i
-      )
-    ).toBeTruthy();
+      (
+        await screen.findAllByText(
+          /refresh evidence, review what is weak or conflicting/i
+        )
+      ).length
+    ).toBeGreaterThan(0);
     expect(screen.getByText(/operator governance cockpit/i)).toBeTruthy();
     expect(
       screen.getByText(/decision timeline and incident replay context/i)

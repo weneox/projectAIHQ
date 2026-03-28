@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 import {
   approveTruthReviewCandidate,
@@ -50,8 +50,33 @@ function normalizeTruthToken(value = "") {
   return String(value ?? "").trim();
 }
 
-function resolveRequestedVersionId(location, searchParams) {
-  const hashValue = String(location?.hash || "").replace(/^#/, "");
+function readBrowserLocationHints() {
+  if (typeof window === "undefined") {
+    return { hash: "", state: null };
+  }
+
+  let state = null;
+
+  try {
+    const raw = window.history?.state;
+    state =
+      raw && typeof raw === "object"
+        ? raw.usr && typeof raw.usr === "object"
+          ? raw.usr
+          : raw
+        : null;
+  } catch {
+    state = null;
+  }
+
+  return {
+    hash: String(window.location?.hash || ""),
+    state,
+  };
+}
+
+function resolveRequestedVersionId(searchParams, browserHints) {
+  const hashValue = String(browserHints?.hash || "").replace(/^#/, "");
   const hashVersionId = hashValue.startsWith("version:")
     ? hashValue.slice("version:".length)
     : hashValue.startsWith("truth-version:")
@@ -59,10 +84,10 @@ function resolveRequestedVersionId(location, searchParams) {
       : "";
 
   return normalizeTruthToken(
-    location?.state?.versionId ||
-      location?.state?.truthVersionId ||
-      location?.state?.selectedVersionId ||
-      location?.state?.version ||
+    browserHints?.state?.versionId ||
+      browserHints?.state?.truthVersionId ||
+      browserHints?.state?.selectedVersionId ||
+      browserHints?.state?.version ||
       searchParams.get("versionId") ||
       searchParams.get("truthVersionId") ||
       searchParams.get("selectedVersionId") ||
@@ -71,15 +96,20 @@ function resolveRequestedVersionId(location, searchParams) {
   );
 }
 
-function resolveRequestedFocus(location, searchParams) {
+function resolveRequestedFocus(searchParams, browserHints) {
   return String(
-    location?.state?.focus || searchParams.get("focus") || ""
+    browserHints?.state?.focus || searchParams.get("focus") || ""
   )
     .trim()
     .toLowerCase();
 }
 
-function findRequestedHistoryItem({ history, requestedVersionId, approval, truthView }) {
+function findRequestedHistoryItem({
+  history,
+  requestedVersionId,
+  approval,
+  truthView,
+}) {
   const requested = normalizeTruthToken(requestedVersionId);
   if (!requested) return null;
 
@@ -114,15 +144,13 @@ function findRequestedHistoryItem({ history, requestedVersionId, approval, truth
         .filter(Boolean);
 
       return candidates.some(
-        (candidate) =>
-          candidate === requested || aliases.has(candidate)
+        (candidate) => candidate === requested || aliases.has(candidate)
       );
     }) || null
   );
 }
 
 export default function TruthViewerPage() {
-  const location = useLocation();
   const [searchParams] = useSearchParams();
 
   const [state, setState] = useState(initialState);
@@ -150,14 +178,19 @@ export default function TruthViewerPage() {
 
   const truthReadiness = createReadinessViewModel(state.data.readiness);
 
+  const browserLocationHints = useMemo(
+    () => readBrowserLocationHints(),
+    [searchParams]
+  );
+
   const requestedVersionId = useMemo(
-    () => resolveRequestedVersionId(location, searchParams),
-    [location, searchParams]
+    () => resolveRequestedVersionId(searchParams, browserLocationHints),
+    [searchParams, browserLocationHints]
   );
 
   const requestedFocus = useMemo(
-    () => resolveRequestedFocus(location, searchParams),
-    [location, searchParams]
+    () => resolveRequestedFocus(searchParams, browserLocationHints),
+    [searchParams, browserLocationHints]
   );
 
   useEffect(() => {
@@ -590,8 +623,6 @@ export default function TruthViewerPage() {
           onOpenVersion={handleOpenVersion}
         />
       </div>
-
-      {compareOpen ? <div className="sr-only">Version detail</div> : null}
 
       <TruthVersionComparePanel
         open={compareOpen}
