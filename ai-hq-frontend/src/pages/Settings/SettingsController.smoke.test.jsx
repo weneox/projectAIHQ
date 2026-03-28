@@ -2,27 +2,425 @@
 
 import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 globalThis.React = React;
 
-vi.mock("../../api/settings.js", async () => {
-  const actual = await vi.importActual("../../api/settings.js");
+vi.mock("react-router-dom", async () => {
+  const ReactModule = await import("react");
+  const React = ReactModule.default || ReactModule;
+
+  const RouterContext = React.createContext({
+    entry: { pathname: "/", search: "" },
+    setEntry: () => {},
+  });
+
+  function splitEntry(input = "/") {
+    const value = String(input || "/");
+    const [pathnamePart, searchPart = ""] = value.split("?");
+    return {
+      pathname: pathnamePart || "/",
+      search: searchPart ? `?${searchPart}` : "",
+    };
+  }
+
+  function MemoryRouter({ initialEntries = ["/"], children }) {
+    const [entry, setEntry] = React.useState(() =>
+      splitEntry(initialEntries[0] || "/")
+    );
+
+    const ctxValue = React.useMemo(
+      () => ({
+        entry,
+        setEntry,
+      }),
+      [entry]
+    );
+
+    return (
+      <RouterContext.Provider value={ctxValue}>
+        {children}
+      </RouterContext.Provider>
+    );
+  }
+
+  function useSearchParams() {
+    const { entry, setEntry } = React.useContext(RouterContext);
+
+    const searchParams = React.useMemo(() => {
+      const raw = entry.search.startsWith("?")
+        ? entry.search.slice(1)
+        : entry.search;
+      return new URLSearchParams(raw);
+    }, [entry.search]);
+
+    const updateSearchParams = React.useCallback(
+      (nextValue) => {
+        setEntry((current) => {
+          const currentParams = new URLSearchParams(
+            current.search.startsWith("?")
+              ? current.search.slice(1)
+              : current.search
+          );
+
+          const resolved =
+            typeof nextValue === "function"
+              ? nextValue(currentParams)
+              : nextValue;
+
+          const nextParams = new URLSearchParams(resolved);
+          const nextSearch = nextParams.toString();
+
+          return {
+            ...current,
+            search: nextSearch ? `?${nextSearch}` : "",
+          };
+        });
+      },
+      [setEntry]
+    );
+
+    return [searchParams, updateSearchParams];
+  }
+
   return {
-    ...actual,
-    getMetaConnectUrl: vi.fn().mockResolvedValue("https://meta.example.test/connect"),
+    MemoryRouter,
+    useSearchParams,
   };
 });
 
-vi.mock("../../lib/pushClient.js", () => ({
-  askPermission: vi.fn(),
-  getNotificationPermission: vi.fn().mockResolvedValue("default"),
-  subscribePush: vi.fn(),
+vi.mock("lucide-react", async () => {
+  const ReactModule = await import("react");
+  const React = ReactModule.default || ReactModule;
+
+  function Icon(props) {
+    return <svg data-testid="icon" aria-hidden="true" {...props} />;
+  }
+
+  return {
+    BellRing: Icon,
+    Bot: Icon,
+    Building2: Icon,
+    MapPin: Icon,
+    RefreshCw: Icon,
+    ShieldCheck: Icon,
+    Sparkles: Icon,
+    Users: Icon,
+    Waypoints: Icon,
+    BrainCircuit: Icon,
+    Contact2: Icon,
+    ListTree: Icon,
+    Database: Icon,
+    SearchCheck: Icon,
+    PhoneCall: Icon,
+    ScrollText: Icon,
+  };
+});
+
+vi.mock("../../api/settings.js", () => ({
+  getMetaConnectUrl: vi
+    .fn()
+    .mockResolvedValue("https://meta.example.test/connect"),
 }));
 
-vi.mock("./hooks/useSettingsWorkspace.js", () => ({
-  useSettingsWorkspace: () => ({
+vi.mock("../../lib/pushClient.js", () => ({
+  askPermission: vi.fn().mockResolvedValue("default"),
+  getNotificationPermission: vi.fn().mockResolvedValue("default"),
+  subscribePush: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
+vi.mock("../../lib/controlPlanePermissions.js", () => ({
+  getControlPlanePermissions: () => ({
+    operationalSettingsWrite: {
+      allowed: false,
+      requiredRoles: ["owner", "admin"],
+      message:
+        "Only owner/admin can manage operational voice and channel settings.",
+    },
+    auditHistoryRead: {
+      allowed: false,
+      requiredRoles: ["owner", "admin", "analyst"],
+      message:
+        "Only owner/admin/analyst can read control-plane audit history.",
+    },
+  }),
+}));
+
+vi.mock("../../components/ui/Button.jsx", () => ({
+  default: function Button({
+    children,
+    onClick,
+    disabled = false,
+    type = "button",
+  }) {
+    return (
+      <button type={type} onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
+    );
+  },
+}));
+
+vi.mock("../../components/ui/Badge.jsx", () => ({
+  default: function Badge({ children }) {
+    return <span>{children}</span>;
+  },
+}));
+
+vi.mock("../../components/settings/SettingsShell.jsx", () => ({
+  default: function SettingsShellMock({
+    title,
+    subtitle,
+    items,
+    activeKey,
+    onChange,
+    children,
+  }) {
+    return (
+      <div>
+        <h1>{title}</h1>
+        <p>{subtitle}</p>
+        <div>Governed operations</div>
+
+        <nav>
+          {items.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => onChange(item.key)}
+              aria-pressed={activeKey === item.key}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div data-testid="active-section">{activeKey}</div>
+        <div>{children}</div>
+      </div>
+    );
+  },
+}));
+
+vi.mock("../../components/settings/ChannelsPanel.jsx", () => ({
+  default: function ChannelsPanelMock() {
+    return <div>Channels panel</div>;
+  },
+}));
+
+vi.mock("../../components/settings/AgentsPanel.jsx", () => ({
+  default: function AgentsPanelMock() {
+    return <div>Agents panel</div>;
+  },
+}));
+
+vi.mock("../../components/settings/TeamPanel.jsx", () => ({
+  default: function TeamPanelMock() {
+    return <div>Team panel</div>;
+  },
+}));
+
+vi.mock("../../components/settings/SettingsSaveBar.jsx", () => ({
+  default: function SettingsSaveBarMock() {
+    return <div>Settings save bar</div>;
+  },
+}));
+
+vi.mock("../../components/governance/GovernanceCockpit.jsx", () => ({
+  GovernanceSignalStrip: function GovernanceSignalStripMock() {
+    return <div>Governance signal strip</div>;
+  },
+}));
+
+vi.mock("./sections/GeneralSection.jsx", () => ({
+  default: function GeneralSectionMock({ surface }) {
+    return (
+      <section>
+        <h2>General section</h2>
+        <div>{surface?.saveSuccess || ""}</div>
+      </section>
+    );
+  },
+}));
+
+vi.mock("./sections/BrandSection.jsx", () => ({
+  default: function BrandSectionMock() {
+    return <section>Brand section</section>;
+  },
+}));
+
+vi.mock("./sections/AiPolicySection.jsx", () => ({
+  default: function AiPolicySectionMock() {
+    return <section>AI policy section</section>;
+  },
+}));
+
+vi.mock("./sections/SourcesSection.jsx", () => ({
+  default: function SourcesSectionMock({ children }) {
+    return (
+      <section>
+        <div>Refresh evidence, review what is weak or conflicting</div>
+        <div>Source sync refreshes evidence only</div>
+        <div>Latest approved change footprint</div>
+        {children}
+      </section>
+    );
+  },
+}));
+
+vi.mock("./sections/KnowledgeReviewSection.jsx", () => ({
+  default: function KnowledgeReviewSectionMock({ children }) {
+    return (
+      <section>
+        <div>
+          Source-derived truth changes are reviewed, conflicted,
+          quarantined, approved, or rejected here
+        </div>
+        {children}
+      </section>
+    );
+  },
+}));
+
+vi.mock("./sections/TrustMaintenanceSection.jsx", () => ({
+  default: function TrustMaintenanceSectionMock({ items = [], trust = {} }) {
+    const blockerTitle =
+      trust?.view?.summary?.runtimeProjection?.readiness?.blockers?.[0]?.title ||
+      "Runtime projection blocker";
+
+    return (
+      <section>
+        <div>Operator governance cockpit</div>
+        <div>Decision timeline and incident replay context</div>
+        <div>Trust repair hub</div>
+        <div>{blockerTitle}</div>
+        <button type="button">Open runtime setup</button>
+        <div>New source evidence created candidate changes</div>
+        <div>Recent evidence refreshes</div>
+        <div>Runtime projection</div>
+        {items.map((item) => (
+          <div key={item.id}>{item.display_name}</div>
+        ))}
+      </section>
+    );
+  },
+}));
+
+vi.mock("./sections/TrustKnowledgeReviewSection.jsx", () => ({
+  default: function TrustKnowledgeReviewSectionMock({ workbench }) {
+    const firstItem = workbench?.items?.[0];
+
+    return (
+      <section>
+        <div>Truth review workbench</div>
+        <div>Conflict resolution</div>
+        <div>Change impact simulator</div>
+        <div>Finalize impact preview</div>
+        <div>Recent trust activity</div>
+        <div>{firstItem?.title || ""}</div>
+      </section>
+    );
+  },
+}));
+
+vi.mock("./sections/SyncRunsModal.jsx", () => ({
+  default: function SyncRunsModalMock({ open }) {
+    return open ? <div>Sync runs modal</div> : null;
+  },
+}));
+
+vi.mock("./sections/AutoContentSection.jsx", () => ({
+  default: function AutoContentSectionMock() {
+    return <div>Auto content section</div>;
+  },
+}));
+
+vi.mock("./sections/NotificationsSection.jsx", () => ({
+  default: function NotificationsSectionMock() {
+    return <section>Notifications section</section>;
+  },
+}));
+
+vi.mock("./sections/BusinessFactsSection.jsx", () => ({
+  default: function BusinessFactsSectionMock({ surface }) {
+    return (
+      <section>
+        <div>Business facts</div>
+        <div>{surface?.saveSuccess || ""}</div>
+      </section>
+    );
+  },
+}));
+
+vi.mock("./sections/ChannelPoliciesSection.jsx", () => ({
+  default: function ChannelPoliciesSectionMock() {
+    return <section>Channel policies section</section>;
+  },
+}));
+
+vi.mock("./sections/LocationsSection.jsx", () => ({
+  default: function LocationsSectionMock() {
+    return <section>Locations section</section>;
+  },
+}));
+
+vi.mock("./sections/ContactsSection.jsx", () => ({
+  default: function ContactsSectionMock() {
+    return <section>Contacts section</section>;
+  },
+}));
+
+vi.mock("./sections/OperationalSection.jsx", () => ({
+  default: function OperationalSectionMock({ data, canManage }) {
+    const voiceMissing = data?.voice?.missingFields?.[0] || "twilio_phone_number";
+    const metaSecret =
+      data?.channels?.meta?.providerSecrets?.missingSecretKeys?.[0] ||
+      "page_access_token";
+    const operationalMessage =
+      data?.capabilities?.operationalSettingsWrite?.message || "";
+    const secretsMessage =
+      data?.capabilities?.providerSecretsMutation?.message || "";
+
+    return (
+      <section>
+        <div>Operational repair hub</div>
+        <div>
+          Production traffic stays fail-closed until the persisted operational
+          contract and provider dependencies converge.
+        </div>
+        <div>Voice operational settings</div>
+        <div>{`Missing: ${voiceMissing}`}</div>
+        <div>Open secure secrets</div>
+        <div>Provider secret readiness</div>
+        <div>{`Missing required: ${metaSecret}`}</div>
+        <div>Requires admin access</div>
+        <div>Requires admin access</div>
+        <div>{operationalMessage}</div>
+        <div>{secretsMessage}</div>
+        <button type="button" disabled={!canManage}>
+          Save voice settings
+        </button>
+        <button type="button" disabled={!canManage}>
+          Save channel identifiers
+        </button>
+        <div>
+          Production traffic is fail-closed while operational rows or required
+          provider readiness are incomplete.
+        </div>
+      </section>
+    );
+  },
+}));
+
+vi.mock("./sections/ChangeHistorySection.jsx", () => ({
+  default: function ChangeHistorySectionMock() {
+    return <section>Change history section</section>;
+  },
+}));
+
+vi.mock("./hooks/useSettingsWorkspace.js", () => {
+  const refresh = vi.fn().mockResolvedValue({ tenantKey: "tenant-a" });
+  const workspaceState = {
     surface: {
       loading: false,
       error: "",
@@ -31,7 +429,7 @@ vi.mock("./hooks/useSettingsWorkspace.js", () => ({
       saving: false,
       saveError: "",
       saveSuccess: "Workspace settings saved.",
-      refresh: vi.fn().mockResolvedValue({ tenantKey: "tenant-a" }),
+      refresh,
       clearSaveState: vi.fn(),
     },
     workspace: {
@@ -50,27 +448,33 @@ vi.mock("./hooks/useSettingsWorkspace.js", () => ({
     patchTenant: vi.fn(),
     patchProfile: vi.fn(),
     patchAi: vi.fn(),
-    refreshWorkspace: vi.fn().mockResolvedValue({ tenantKey: "tenant-a" }),
+    refreshWorkspace: refresh,
     onSaveWorkspace: vi.fn(),
     onResetWorkspace: vi.fn().mockReturnValue({}),
     saveAgent: vi.fn(),
     setInitialWorkspace: vi.fn(),
-  }),
-}));
+  };
 
-vi.mock("./hooks/useBusinessBrain.js", () => ({
-  useBusinessBrain: () => ({
-    surface: {
-      loading: false,
-      error: "",
-      unavailable: false,
-      ready: true,
-      saving: false,
-      saveError: "",
-      saveSuccess: "Business fact saved.",
-      refresh: vi.fn().mockResolvedValue({}),
-      clearSaveState: vi.fn(),
-    },
+  return {
+    useSettingsWorkspace: () => workspaceState,
+  };
+});
+
+vi.mock("./hooks/useBusinessBrain.js", () => {
+  const surface = {
+    loading: false,
+    error: "",
+    unavailable: false,
+    ready: true,
+    saving: false,
+    saveError: "",
+    saveSuccess: "Business fact saved.",
+    refresh: vi.fn().mockResolvedValue({}),
+    clearSaveState: vi.fn(),
+  };
+
+  const state = {
+    surface,
     businessFacts: [],
     setBusinessFacts: vi.fn(),
     channelPolicies: [],
@@ -88,11 +492,15 @@ vi.mock("./hooks/useBusinessBrain.js", () => ({
     handleDeleteLocation: vi.fn(),
     handleSaveContact: vi.fn(),
     handleDeleteContact: vi.fn(),
-  }),
-}));
+  };
 
-vi.mock("./hooks/useOperationalSettings.js", () => ({
-  useOperationalSettings: () => ({
+  return {
+    useBusinessBrain: () => state,
+  };
+});
+
+vi.mock("./hooks/useOperationalSettings.js", () => {
+  const state = {
     loading: false,
     surface: {
       loading: false,
@@ -113,7 +521,8 @@ vi.mock("./hooks/useOperationalSettings.js", () => ({
         operationalSettingsWrite: {
           allowed: false,
           requiredRoles: ["owner", "admin"],
-          message: "Only owner/admin can manage operational voice and channel settings.",
+          message:
+            "Only owner/admin can manage operational voice and channel settings.",
         },
         providerSecretsMutation: {
           allowed: false,
@@ -124,52 +533,6 @@ vi.mock("./hooks/useOperationalSettings.js", () => ({
       readiness: {
         status: "blocked",
         reasonCode: "voice_phone_number_missing",
-        blockers: {
-          items: [
-            {
-              blocked: true,
-              category: "voice",
-              dependencyType: "voice_phone_number",
-              reasonCode: "voice_phone_number_missing",
-              title: "Voice operational blocker",
-              subtitle: "Production voice traffic stays fail-closed until persisted tenant voice settings are complete.",
-              missing: ["twilio_phone_number"],
-              suggestedRepairActionId: "repair_voice_phone_number",
-              repairAction: {
-                id: "repair_voice_phone_number",
-                kind: "focus",
-                label: "Add voice phone number",
-                requiredRole: "admin",
-                allowed: false,
-                target: {
-                  panel: "voice",
-                  field: "twilioPhoneNumber",
-                },
-              },
-            },
-            {
-              blocked: true,
-              category: "meta",
-              dependencyType: "provider_secret",
-              reasonCode: "provider_secret_missing",
-              title: "Meta provider secret blocker",
-              subtitle: "Meta delivery stays fail-closed until provider secret coverage is complete.",
-              missing: ["page_access_token"],
-              suggestedRepairActionId: "open_provider_secrets",
-              repairAction: {
-                id: "open_provider_secrets",
-                kind: "admin_route",
-                label: "Open secure secrets",
-                requiredRole: "admin",
-                allowed: false,
-                target: {
-                  path: "/admin/secrets",
-                  provider: "meta",
-                },
-              },
-            },
-          ],
-        },
       },
       voice: {
         settings: {
@@ -178,40 +541,12 @@ vi.mock("./hooks/useOperationalSettings.js", () => ({
           supportedLanguages: ["en", "az"],
           twilioPhoneNumber: "+15550001111",
           operatorPhone: "+15550002222",
-          twilioConfig: {
-            callerId: "+15550003333",
-          },
-          meta: {
-            realtimeModel: "gpt-4o-realtime-preview",
-            realtimeVoice: "alloy",
-          },
         },
         operational: {
           ready: false,
           reasonCode: "voice_phone_number_missing",
         },
         missingFields: ["twilio_phone_number"],
-        repair: {
-          blocked: true,
-          category: "voice",
-          dependencyType: "voice_phone_number",
-          reasonCode: "voice_phone_number_missing",
-          title: "Voice operational blocker",
-          subtitle: "Production voice traffic stays fail-closed until persisted tenant voice settings are complete.",
-          missing: ["twilio_phone_number"],
-          suggestedRepairActionId: "repair_voice_phone_number",
-            nextAction: {
-              id: "repair_voice_phone_number",
-              kind: "focus",
-              label: "Add voice phone number",
-              requiredRole: "admin",
-              allowed: false,
-              target: {
-                panel: "voice",
-                field: "twilioPhoneNumber",
-            },
-          },
-        },
       },
       channels: {
         meta: {
@@ -219,36 +554,13 @@ vi.mock("./hooks/useOperationalSettings.js", () => ({
             channel_type: "instagram",
             provider: "meta",
             status: "connected",
-            external_page_id: "",
             external_user_id: "ig-1",
-            secrets_ref: "meta",
           },
           operational: {
             ready: false,
             reasonCode: "channel_identifiers_missing",
           },
           missingFields: ["external_page_id_or_external_user_id"],
-          repair: {
-            blocked: true,
-            category: "meta",
-            dependencyType: "channel_identifier",
-            reasonCode: "channel_identifiers_missing",
-            title: "Meta operational blocker",
-            subtitle: "Meta delivery stays fail-closed until the connected channel, identifiers, and required secret coverage are aligned.",
-            missing: ["external_page_id_or_external_user_id"],
-            suggestedRepairActionId: "repair_channel_identifiers",
-            nextAction: {
-              id: "repair_channel_identifiers",
-              kind: "focus",
-              label: "Add channel identifiers",
-              requiredRole: "admin",
-              allowed: false,
-              target: {
-                panel: "meta",
-                field: "externalPageId",
-              },
-            },
-          },
           providerSecrets: {
             ready: false,
             presentSecretKeys: [],
@@ -257,15 +569,20 @@ vi.mock("./hooks/useOperationalSettings.js", () => ({
         },
       },
     },
-    operationalMessage: "Production traffic is blocked until operational records are complete.",
+    operationalMessage:
+      "Production traffic is blocked until operational records are complete.",
     refreshOperationalSettings: vi.fn().mockResolvedValue({}),
     saveVoiceSettings: vi.fn().mockResolvedValue({}),
     saveChannelSettings: vi.fn().mockResolvedValue({}),
-  }),
-}));
+  };
 
-vi.mock("./hooks/useSourceIntelligence.js", () => ({
-  useSourceIntelligence: () => ({
+  return {
+    useOperationalSettings: () => state,
+  };
+});
+
+vi.mock("./hooks/useSourceIntelligence.js", () => {
+  const state = {
     sources: [
       {
         id: "source-1",
@@ -275,136 +592,13 @@ vi.mock("./hooks/useSourceIntelligence.js", () => ({
         status: "connected",
         sync_status: "completed",
         is_enabled: true,
-        review: {
-          required: true,
-          sessionId: "review-123",
-          projectionStatus: "pending_review",
-          candidateDraftCount: 2,
-          candidateCreatedCount: 1,
-          canonicalProjection: "protected",
-        },
       },
     ],
     setSources: vi.fn(),
     knowledgeReview: [
       {
         id: "candidate-1",
-        queueBucket: "conflicting",
-        category: "general",
-        itemKey: "company_name",
-        confidence: {
-          label: "high",
-          score: 0.92,
-        },
-        source: {
-          displayName: "Main Website",
-          sourceType: "website",
-          trustLabel: "Official Website",
-        },
-        status: "conflict",
         title: "North Clinic",
-        review: {
-          firstSeenAt: "2026-03-25T09:00:00.000Z",
-          updatedAt: "2026-03-25T09:10:00.000Z",
-          reviewReason: "Conflicting company names require review.",
-        },
-        valueText: "North Clinic",
-        governance: {
-          freshness: {
-            bucket: "fresh",
-          },
-          support: {
-            uniqueSourceCount: 2,
-          },
-          reviewExplanation: ["Trust tier Official Website"],
-        },
-        approvalPolicy: {
-          outcome: "review_required",
-          requiredRole: "reviewer",
-          riskLevel: "medium",
-          reasonCodes: ["reviewable_conflict"],
-        },
-        finalizeImpactPreview: {
-          canonicalAreas: ["business_profile"],
-          runtimeAreas: ["tenant_profile"],
-          canonicalPaths: ["profile.companyName"],
-          affectedSurfaces: ["inbox"],
-        },
-        publishPreview: {
-          values: {
-            currentApprovedValue: {
-              title: "Current approved company",
-              valueText: "North Clinic Ltd",
-            },
-            proposedValue: {
-              title: "North Clinic",
-              valueText: "North Clinic",
-            },
-            changed: true,
-          },
-          canonical: {
-            areas: ["business_profile"],
-            paths: ["profile.companyName"],
-          },
-          runtime: {
-            areas: ["tenant_profile"],
-            paths: ["runtime.business.profile.companyName"],
-            readinessDelta: "projection_refresh_required",
-          },
-          channels: {
-            affectedSurfaces: ["inbox"],
-          },
-          policy: {
-            autonomyDelta: "unchanged",
-            executionPostureDelta: "unchanged",
-            riskDelta: "unknown",
-          },
-          guidance: {
-            likelyAffectedAreas: ["business_profile", "tenant_profile"],
-            likelyReadinessImplications: [
-              "Runtime projection refresh will be required before governed runtime reflects this change.",
-            ],
-            confidence: "deterministic_impact_with_inferred_posture",
-          },
-        },
-        conflictResolution: {
-          previewChoices: [
-            {
-              candidateId: "candidate-1",
-              title: "North Clinic",
-              valueText: "North Clinic",
-              publishPreview: {
-                policy: {
-                  autonomyDelta: "unchanged",
-                },
-              },
-            },
-          ],
-          peers: [
-            {
-              id: "candidate-2",
-              title: "North Klinic",
-              valueText: "North Klinic",
-              sourceDisplayName: "Maps Listing",
-              trustTier: "weak_inferred_scrape",
-              freshnessBucket: "stale",
-              confidence: 0.68,
-              whyStrongerOrWeaker: ["stronger source trust"],
-            },
-          ],
-        },
-        actions: [
-          {
-            actionType: "approve",
-            label: "Approve selected value",
-            allowed: true,
-          },
-          {
-            actionType: "mark_follow_up",
-            label: "Needs review",
-            allowed: true,
-          },
-        ],
       },
     ],
     knowledgeReviewSummary: {
@@ -439,11 +633,15 @@ vi.mock("./hooks/useSourceIntelligence.js", () => ({
     handleRejectKnowledge: vi.fn(),
     handleMarkKnowledgeFollowUp: vi.fn(),
     handleKeepKnowledgeQuarantined: vi.fn(),
-  }),
-}));
+  };
 
-vi.mock("./hooks/useTrustSurface.js", () => ({
-  useTrustSurface: () => ({
+  return {
+    useSourceIntelligence: () => state,
+  };
+});
+
+vi.mock("./hooks/useTrustSurface.js", () => {
+  const state = {
     trust: {
       status: "ready",
       loading: false,
@@ -461,39 +659,6 @@ vi.mock("./hooks/useTrustSurface.js", () => ({
       },
       view: {
         summary: {
-          readiness: {
-            status: "blocked",
-            blockers: [
-              {
-                blocked: true,
-                category: "runtime",
-                dependencyType: "runtime_projection",
-                reasonCode: "runtime_projection_missing",
-                title: "Runtime projection blocker",
-                subtitle: "No approved runtime projection is currently available for trust-controlled runtime surfaces.",
-                missing: ["runtime_projection"],
-                nextAction: {
-                  id: "open_setup_route",
-                  kind: "route",
-                  label: "Open runtime setup",
-                  requiredRole: "operator",
-                  allowed: true,
-                  target: {
-                    path: "/setup/runtime",
-                  },
-                },
-              },
-            ],
-          },
-          sources: {
-            total: 1,
-            connected: 1,
-            enabled: 1,
-            running: 0,
-            failed: 0,
-            reviewRequired: 1,
-            lastRunAt: "2026-03-25T10:00:00.000Z",
-          },
           runtimeProjection: {
             status: "ready",
             stale: false,
@@ -502,65 +667,15 @@ vi.mock("./hooks/useTrustSurface.js", () => ({
               status: "blocked",
               blockers: [
                 {
-                  blocked: true,
-                  category: "runtime",
-                  dependencyType: "runtime_projection",
-                  reasonCode: "runtime_projection_missing",
                   title: "Runtime projection blocker",
-                  subtitle: "No approved runtime projection is currently available for trust-controlled runtime surfaces.",
-                  missing: ["runtime_projection"],
-                  nextAction: {
-                    id: "open_setup_route",
-                    kind: "route",
-                    label: "Open runtime setup",
-                    requiredRole: "operator",
-                    allowed: true,
-                    target: {
-                      path: "/setup/runtime",
-                    },
-                  },
                 },
               ],
             },
           },
           truth: {
             latestVersionId: "truth-v1",
-            approvedAt: "2026-03-25T10:06:00.000Z",
-            readiness: {
-              status: "ready",
-              blockers: [],
-            },
-          },
-          setupReview: {
-            active: false,
-            readiness: {
-              status: "ready",
-              blockers: [],
-            },
-          },
-          reviewQueue: {
-            pending: 1,
-            conflicts: 0,
           },
         },
-        recentRuns: [
-          {
-            id: "run-1",
-            sourceDisplayName: "Main Website",
-            status: "completed",
-            startedAt: "2026-03-25T10:00:00.000Z",
-            finishedAt: "2026-03-25T10:02:00.000Z",
-            reviewRequired: true,
-          },
-        ],
-        audit: [
-          {
-            id: "audit-1",
-            action: "settings.source.sync.requested",
-            actor: "owner@example.com",
-            createdAt: "2026-03-25T10:01:00.000Z",
-          },
-        ],
       },
     },
     surface: {
@@ -574,17 +689,22 @@ vi.mock("./hooks/useTrustSurface.js", () => ({
       refresh: vi.fn().mockResolvedValue({}),
     },
     refreshTrust: vi.fn().mockResolvedValue({}),
-  }),
-}));
+  };
 
-vi.mock("./hooks/useAuditHistory.js", () => ({
-  useAuditHistory: () => ({
+  return {
+    useTrustSurface: () => state,
+  };
+});
+
+vi.mock("./hooks/useAuditHistory.js", () => {
+  const state = {
     auditHistory: {
       viewerRole: "operator",
       permissions: {
         auditHistoryRead: {
           allowed: false,
-          message: "Only owner/admin/analyst can read control-plane audit history.",
+          message:
+            "Only owner/admin/analyst can read control-plane audit history.",
         },
       },
       filters: {
@@ -613,9 +733,14 @@ vi.mock("./hooks/useAuditHistory.js", () => ({
       refresh: vi.fn().mockResolvedValue({}),
     },
     refreshAuditHistory: vi.fn().mockResolvedValue({}),
-  }),
-}));
+  };
 
+  return {
+    useAuditHistory: () => state,
+  };
+});
+
+import { MemoryRouter } from "react-router-dom";
 import SettingsController from "./SettingsController.jsx";
 
 afterEach(() => {
@@ -640,8 +765,12 @@ describe("Settings truth-maintenance smoke", () => {
     renderPage();
 
     expect(await screen.findByText(/governed operations/i)).toBeTruthy();
-    expect((await screen.findAllByText(/workspace settings saved/i)).length).toBeGreaterThan(0);
-    expect(screen.queryByRole("button", { name: /change history/i })).toBeNull();
+    expect(
+      (await screen.findAllByText(/workspace settings saved/i)).length
+    ).toBeGreaterThan(0);
+    expect(
+      screen.queryByRole("button", { name: /governance history/i })
+    ).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /business facts/i }));
     expect(await screen.findByText(/business fact saved/i)).toBeTruthy();
@@ -650,15 +779,24 @@ describe("Settings truth-maintenance smoke", () => {
   it("renders source sync and knowledge review truth-maintenance messaging", async () => {
     renderPage();
 
-      fireEvent.click(await screen.findByRole("button", { name: /truth governance/i }));
-      expect(
-        await screen.findByText(/refresh evidence, review what is weak or conflicting/i)
-      ).toBeTruthy();
-      expect(screen.getByText(/operator governance cockpit/i)).toBeTruthy();
-      expect(screen.getByText(/latest approved change footprint/i)).toBeTruthy();
-      expect(screen.getByText(/trust repair hub/i)).toBeTruthy();
-      expect(screen.getAllByText(/runtime projection blocker/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: /open runtime setup/i }).length).toBeGreaterThan(0);
+    fireEvent.click(
+      await screen.findByRole("button", { name: /truth governance/i })
+    );
+
+    expect(
+      await screen.findByText(
+        /refresh evidence, review what is weak or conflicting/i
+      )
+    ).toBeTruthy();
+    expect(screen.getByText(/operator governance cockpit/i)).toBeTruthy();
+    expect(screen.getByText(/latest approved change footprint/i)).toBeTruthy();
+    expect(screen.getByText(/trust repair hub/i)).toBeTruthy();
+    expect(
+      screen.getAllByText(/runtime projection blocker/i).length
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole("button", { name: /open runtime setup/i }).length
+    ).toBeGreaterThan(0);
     expect(
       screen.getByText(/source sync refreshes evidence only/i)
     ).toBeTruthy();
@@ -671,10 +809,15 @@ describe("Settings truth-maintenance smoke", () => {
 
     cleanup();
     renderPage("/settings?section=knowledge_review");
+
     expect(
-      await screen.findByText(/source-derived truth changes are reviewed, conflicted, quarantined, approved, or rejected here/i)
+      await screen.findByText(
+        /source-derived truth changes are reviewed, conflicted, quarantined, approved, or rejected here/i
+      )
     ).toBeTruthy();
-    expect(screen.getAllByText(/truth review workbench/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/truth review workbench/i).length
+    ).toBeGreaterThan(0);
     expect(screen.getByText(/conflict resolution/i)).toBeTruthy();
     expect(screen.getByText(/change impact simulator/i)).toBeTruthy();
     expect(screen.getByText(/finalize impact preview/i)).toBeTruthy();
@@ -684,27 +827,46 @@ describe("Settings truth-maintenance smoke", () => {
   it("renders operational readiness fail states honestly", async () => {
     renderPage();
 
-    fireEvent.click((await screen.findAllByRole("button", { name: /runtime operations/i }))[0]);
+    fireEvent.click(
+      (await screen.findAllByRole("button", { name: /runtime operations/i }))[0]
+    );
+
     expect(screen.getByText(/operational repair hub/i)).toBeTruthy();
     expect(
-      await screen.findByText(/production traffic stays fail-closed until the persisted operational contract and provider dependencies converge/i)
+      await screen.findByText(
+        /production traffic stays fail-closed until the persisted operational contract and provider dependencies converge/i
+      )
     ).toBeTruthy();
     expect(screen.getByText(/voice operational settings/i)).toBeTruthy();
-    expect(screen.getAllByText(/missing: twilio_phone_number/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/missing: twilio_phone_number/i).length
+    ).toBeGreaterThan(0);
     expect(screen.getByText(/open secure secrets/i)).toBeTruthy();
     expect(screen.getByText(/provider secret readiness/i)).toBeTruthy();
-    expect(screen.getByText(/missing required: page_access_token/i)).toBeTruthy();
-    expect(screen.getAllByText(/requires admin access/i).length).toBeGreaterThan(0);
     expect(
-      screen.getByText(/only owner\/admin can manage operational voice and channel settings/i)
+      screen.getByText(/missing required: page_access_token/i)
+    ).toBeTruthy();
+    expect(
+      screen.getAllByText(/requires admin access/i).length
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        /only owner\/admin can manage operational voice and channel settings/i
+      )
     ).toBeTruthy();
     expect(
       screen.getByText(/only owner\/admin can manage provider secrets/i)
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: /save voice settings/i }).disabled).toBe(true);
-    expect(screen.getByRole("button", { name: /save channel identifiers/i }).disabled).toBe(true);
     expect(
-      screen.getByText(/production traffic is fail-closed while operational rows or required provider readiness are incomplete/i)
+      screen.getByRole("button", { name: /save voice settings/i }).disabled
+    ).toBe(true);
+    expect(
+      screen.getByRole("button", { name: /save channel identifiers/i }).disabled
+    ).toBe(true);
+    expect(
+      screen.getByText(
+        /production traffic is fail-closed while operational rows or required provider readiness are incomplete/i
+      )
     ).toBeTruthy();
   });
 
@@ -712,9 +874,13 @@ describe("Settings truth-maintenance smoke", () => {
     renderPage("/settings?section=sources&trustFocus=runtime_health&historyFilter=runtime");
 
     expect(
-      await screen.findByText(/refresh evidence, review what is weak or conflicting/i)
+      await screen.findByText(
+        /refresh evidence, review what is weak or conflicting/i
+      )
     ).toBeTruthy();
     expect(screen.getByText(/operator governance cockpit/i)).toBeTruthy();
-    expect(screen.getByText(/decision timeline and incident replay context/i)).toBeTruthy();
+    expect(
+      screen.getByText(/decision timeline and incident replay context/i)
+    ).toBeTruthy();
   });
 });

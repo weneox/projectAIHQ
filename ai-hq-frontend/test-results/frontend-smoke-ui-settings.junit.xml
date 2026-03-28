@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="5" failures="0" errors="0" time="1.8938061">
+    <testsuite name="src/pages/Settings/SettingsController.smoke.test.jsx" timestamp="2026-03-28T17:23:34.474Z" hostname="Emil" tests="4" failures="0" errors="0" skipped="0" time="0">
+        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders workspace and business-brain sections through the shared async surface language" time="0">
+        </testcase>
+        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders source sync and knowledge review truth-maintenance messaging" time="0">
+        </testcase>
+        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders operational readiness fail states honestly" time="0">
+        </testcase>
+        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; opens the truth-governance section from deep-link state" time="0">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" timestamp="2026-03-28T17:23:34.479Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="1.8938061">
+        <testcase classname="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" name="TrustMaintenanceSection &gt; renders trust repair state and dispatches route actions from the extracted section" time="1.8890702">
+        </testcase>
+    </testsuite>
+</testsuites>

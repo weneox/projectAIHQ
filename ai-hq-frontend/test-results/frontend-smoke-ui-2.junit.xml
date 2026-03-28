@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="19" failures="0" errors="0" time="4.5160557">
+    <testsuite name="src/pages/AdminTeam.test.jsx" timestamp="2026-03-28T17:18:20.564Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0722252">
+        <testcase classname="src/pages/AdminTeam.test.jsx" name="AdminTeam &gt; renders shared surface banner feedback" time="0.069872">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/pages/AdminTenants.test.jsx" timestamp="2026-03-28T17:18:20.569Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0679186">
+        <testcase classname="src/pages/AdminTenants.test.jsx" name="AdminTenants &gt; renders shared surface banner feedback" time="0.0655957">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/pages/Inbox.test.jsx" timestamp="2026-03-28T17:18:20.571Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.2746506">
+        <testcase classname="src/pages/Inbox.test.jsx" name="Inbox &gt; renders shared page shell feedback" time="0.2721247">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/components/inbox/InboxDetailPanel.test.jsx" timestamp="2026-03-28T17:18:20.572Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0681406">
+        <testcase classname="src/components/inbox/InboxDetailPanel.test.jsx" name="InboxDetailPanel &gt; renders explicit detail surface feedback" time="0.0655997">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/components/inbox/InboxLeadPanel.test.jsx" timestamp="2026-03-28T17:18:20.573Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0503104">
+        <testcase classname="src/components/inbox/InboxLeadPanel.test.jsx" name="InboxLeadPanel &gt; renders explicit lead surface feedback" time="0.0479093">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/components/inbox/ThreadOutboundAttemptsPanel.test.jsx" timestamp="2026-03-28T17:18:20.574Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.312981">
+        <testcase classname="src/components/inbox/ThreadOutboundAttemptsPanel.test.jsx" name="ThreadOutboundAttemptsPanel &gt; renders shared banner feedback" time="0.3098271">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/components/settings/SecretsPanel.test.jsx" timestamp="2026-03-28T17:18:20.575Z" hostname="Emil" tests="2" failures="0" errors="0" skipped="0" time="0.2236542">
+        <testcase classname="src/components/settings/SecretsPanel.test.jsx" name="SecretsPanel &gt; renders shared surface banner feedback for admin secret async state" time="0.061081">
+        </testcase>
+        <testcase classname="src/components/settings/SecretsPanel.test.jsx" name="SecretsPanel &gt; renders provider secret access as read-only for insufficient roles" time="0.1590521">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/pages/Settings/SettingsController.smoke.test.jsx" timestamp="2026-03-28T17:18:20.577Z" hostname="Emil" tests="4" failures="0" errors="0" skipped="0" time="0">
+        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders workspace and business-brain sections through the shared async surface language" time="0">
+        </testcase>
+        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders source sync and knowledge review truth-maintenance messaging" time="0">
+        </testcase>
+        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders operational readiness fail states honestly" time="0">
+        </testcase>
+        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; opens the truth-governance section from deep-link state" time="0">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/pages/Truth/TruthViewerPage.smoke.test.jsx" timestamp="2026-03-28T17:18:20.579Z" hostname="Emil" tests="6" failures="0" errors="0" skipped="0" time="1.9119569">
+        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; renders approved truth metadata, provenance, and history" time="0.6702295">
+        </testcase>
+        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; shows an explicit approved truth unavailable state without fallback data" time="0.2011612">
+        </testcase>
+        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; renders safely when governance and runtime telemetry are partial" time="0.0767242">
+        </testcase>
+        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; opens a deep-linked truth version from remediation navigation" time="0.2022153">
+        </testcase>
+        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; shows a publish receipt after approving a reviewed candidate" time="0.274236">
+        </testcase>
+        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; executes governed rollback from truth compare and shows the receipt" time="0.4847832">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" timestamp="2026-03-28T17:18:20.581Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="1.5342182">
+        <testcase classname="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" name="TrustMaintenanceSection &gt; renders trust repair state and dispatches route actions from the extracted section" time="1.5308134">
+        </testcase>
+    </testsuite>
+</testsuites>
