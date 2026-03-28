@@ -2,6 +2,7 @@ import {
   buildRuntimeAuthorityFailurePayload,
   isRuntimeAuthorityError,
 } from "../../../../services/businessBrain/getTenantBrainRuntime.js";
+import { buildExecutionPolicySurfaceSummary } from "../../../../services/executionPolicy.js";
 import { s } from "../shared.js";
 
 export function buildRuntimePayload(runtimePack) {
@@ -34,6 +35,24 @@ export function buildRuntimePayload(runtimePack) {
         .filter(Boolean);
 
   return {
+    executionPolicy: {
+      inbox: buildExecutionPolicySurfaceSummary({
+        runtime: runtimePack,
+        surface: "inbox",
+        channelType: "inbox",
+        currentState: runtimePack?.threadState || runtimePack?.thread_state || null,
+      }),
+      comments: buildExecutionPolicySurfaceSummary({
+        runtime: runtimePack,
+        surface: "comments",
+        channelType: "comments",
+      }),
+      voice: buildExecutionPolicySurfaceSummary({
+        runtime: runtimePack,
+        surface: "voice",
+        channelType: "voice",
+      }),
+    },
     ...runtimePack,
     tenant: runtimePack?.tenant || null,
     serviceCatalog,

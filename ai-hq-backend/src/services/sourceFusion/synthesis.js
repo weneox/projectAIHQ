@@ -15,6 +15,7 @@ import {
 import {
   summarizeEvidenceGovernance,
 } from "./governance.js";
+import { summarizeApprovalPolicies } from "./approvalPolicy.js";
 import {
   claimPolicy,
   getSourceProfile,
@@ -306,6 +307,7 @@ function synthesizeTenantBusinessFromObservations({
       claimType,
       status: s(claim.status),
       governance: obj(claim.governance),
+      approvalPolicy: obj(claim.approvalPolicy || claim.approval_policy),
       impact: obj(claim.impact),
       valueText: s(claim.valueText || claim.value_text),
     }))
@@ -319,6 +321,7 @@ function synthesizeTenantBusinessFromObservations({
       conflict: obj(claim.governance.conflict),
       trust: obj(claim.governance.trust),
       freshness: obj(claim.governance.freshness),
+      approvalPolicy: obj(claim.approvalPolicy),
       impact: obj(claim.impact),
     }));
   const promotableClaims = flattenedClaims
@@ -328,8 +331,17 @@ function synthesizeTenantBusinessFromObservations({
       valueText: claim.valueText,
       trust: obj(claim.governance.trust),
       freshness: obj(claim.governance.freshness),
+      approvalPolicy: obj(claim.approvalPolicy),
       impact: obj(claim.impact),
     }));
+  const approvalPolicySummary = summarizeApprovalPolicies(
+    flattenedClaims.map((claim) => ({
+      title: claim.valueText || claim.claimType,
+      category: claim.claimType,
+      itemKey: claim.claimType,
+      approvalPolicy: claim.approvalPolicy,
+    }))
+  );
 
   const confidence = normalizeConfidence(profile.confidence, 0.56);
 
@@ -360,6 +372,7 @@ function synthesizeTenantBusinessFromObservations({
       sourceFreshness: obj(sourceSummary.freshness),
       quarantinedClaims,
       promotableClaims,
+      approvalPolicySummary,
       reviewableConflicts: arr(conflicts).filter(
         (item) => s(item.classification) === "conflicting_but_reviewable"
       ),

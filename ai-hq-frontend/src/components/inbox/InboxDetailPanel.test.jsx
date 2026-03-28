@@ -7,7 +7,16 @@ describe("InboxDetailPanel", () => {
   it("renders explicit detail surface feedback", () => {
     render(
       <InboxDetailPanel
-        selectedThread={{ id: "thread-1", status: "open", labels: [], unread_count: 1 }}
+        selectedThread={{
+          id: "thread-1",
+          status: "open",
+          labels: [],
+          unread_count: 1,
+          last_decision_meta: {
+            executionPolicyOutcome: "blocked_until_repair",
+            executionPolicyReasonCodes: ["runtime_authority_unavailable", "projection_stale"],
+          },
+        }}
         messages={[]}
         surface={{
           loading: false,
@@ -30,5 +39,8 @@ describe("InboxDetailPanel", () => {
 
     expect(screen.getByText(/thread assigned/i)).toBeInTheDocument();
     expect(screen.getByText(/conversation detail/i)).toBeInTheDocument();
+    expect(screen.getByText(/channel autonomy/i)).toBeInTheDocument();
+    expect(screen.getByText(/blocked until repair/i)).toBeInTheDocument();
+    expect(screen.getByText(/runtime authority unavailable/i)).toBeInTheDocument();
   });
 });

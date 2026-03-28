@@ -23,6 +23,7 @@ import {
   getRowsFromFirstTable,
   listByTenantScope,
 } from "./db.js";
+import { buildExecutionPolicySurfaceSummary } from "../executionPolicy.js";
 
 const SOURCE_TABLES = ["tenant_sources", "sources"];
 const SOURCE_RUN_TABLES = ["tenant_source_sync_runs", "source_sync_runs"];
@@ -305,6 +306,23 @@ async function getRuntimeSnapshot({ db, tenantId, tenantKey }) {
     tone,
     language,
     disabledServicesCount: disabledServices.length,
+    executionPolicy: {
+      inbox: buildExecutionPolicySurfaceSummary({
+        runtime,
+        surface: "inbox",
+        channelType: "inbox",
+      }),
+      comments: buildExecutionPolicySurfaceSummary({
+        runtime,
+        surface: "comments",
+        channelType: "comments",
+      }),
+      voice: buildExecutionPolicySurfaceSummary({
+        runtime,
+        surface: "voice",
+        channelType: "voice",
+      }),
+    },
   };
 }
 
@@ -745,6 +763,7 @@ export async function getWorkspaceReadiness({
       language: runtime.language,
       disabledServicesCount: runtime.disabledServicesCount,
       health: runtime.health,
+      executionPolicy: obj(runtime.executionPolicy),
     },
 
     debug: {

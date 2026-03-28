@@ -22,6 +22,47 @@ function createMockRes() {
   };
 }
 
+function createDecisionEventDb() {
+  const decisionEvents = [];
+  return {
+    decisionEvents,
+    async query(input, values = []) {
+      const text = String(input?.text || input || "").trim().toLowerCase();
+      const params = Array.isArray(input?.values) ? input.values : values;
+
+      if (text.includes("insert into tenant_decision_events")) {
+        const row = {
+          id: `decision-${decisionEvents.length + 1}`,
+          tenant_id: params[0],
+          tenant_key: params[1],
+          event_type: params[2],
+          actor: params[3],
+          source: params[4],
+          surface: params[5],
+          channel_type: params[6],
+          policy_outcome: params[7],
+          reason_codes: JSON.parse(params[8]),
+          health_state_json: JSON.parse(params[9]),
+          approval_posture_json: JSON.parse(params[10]),
+          execution_posture_json: JSON.parse(params[11]),
+          control_state_json: JSON.parse(params[12]),
+          truth_version_id: params[13],
+          runtime_projection_id: params[14],
+          affected_surfaces: JSON.parse(params[15]),
+          recommended_next_action_json: JSON.parse(params[16]),
+          decision_context_json: JSON.parse(params[17]),
+          event_at: params[18],
+          created_at: params[18],
+        };
+        decisionEvents.unshift(row);
+        return { rows: [row] };
+      }
+
+      return { rows: [] };
+    },
+  };
+}
+
 test("comments ingest dedupes existing comments while keeping strict runtime authority explicit", async () => {
   const previousInternalToken = cfg.security.aihqInternalToken;
   const calls = [];
@@ -172,9 +213,10 @@ test("comments ingest persists new comments and keeps audit/realtime hooks intac
 test("replyCommentHandler keeps reply orchestration, audit, and gateway semantics intact", async () => {
   const auditCalls = [];
   const emitted = [];
+  const db = createDecisionEventDb();
 
   const handler = replyCommentHandler({
-    db: { query: async () => ({ rows: [] }) },
+    db,
     wsHub: { name: "hub" },
     getOwnedComment: async () => ({
       ok: true,
@@ -206,6 +248,32 @@ test("replyCommentHandler keeps reply orchestration, audit, and gateway semantic
       classification,
       raw,
     }),
+    getRuntime: async () => ({
+      authority: {
+        mode: "strict",
+        required: true,
+        available: true,
+        source: "approved_runtime_projection",
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+        runtimeProjectionId: "projection-1",
+        health: { status: "ready" },
+      },
+      tenant: {
+        id: "tenant-1",
+        tenant_key: "acme",
+      },
+      raw: {
+        projection: {
+          metadata_json: {
+            approvalPolicy: {
+              strictestOutcome: "auto_approvable",
+              risk: { level: "low" },
+            },
+          },
+        },
+      },
+    }),
     auditWriter: async (_db, payload) => {
       auditCalls.push(payload);
     },
@@ -235,8 +303,91 @@ test("replyCommentHandler keeps reply orchestration, audit, and gateway semantic
   assert.equal(res.body?.ok, true);
   assert.equal(res.body?.replySent, true);
   assert.equal(res.body?.gateway?.status, 200);
+  assert.equal(res.body?.executionPolicy?.outcome, "allowed_with_logging");
   assert.equal(auditCalls.length, 1);
   assert.equal(auditCalls[0].action, "comment.reply_sent");
+  assert.equal(
+    auditCalls[0].meta?.executionPolicy?.outcome,
+    "allowed_with_logging"
+  );
+  assert.equal(db.decisionEvents.length, 1);
+  assert.equal(db.decisionEvents[0].event_type, "execution_policy_decision");
+  assert.equal(db.decisionEvents[0].runtime_projection_id, "projection-1");
   assert.equal(emitted.length, 1);
   assert.equal(emitted[0].type, "comment.updated");
+});
+
+test("replyCommentHandler blocks execution when policy requires repair", async () => {
+  const db = createDecisionEventDb();
+  const handler = replyCommentHandler({
+    db,
+    wsHub: { name: "hub" },
+    getOwnedComment: async () => ({
+      ok: true,
+      comment: {
+        id: "11111111-1111-4111-8111-111111111111",
+        tenant_key: "acme",
+        tenant_id: "tenant-1",
+        channel: "instagram",
+        external_comment_id: "external-3",
+        external_post_id: "post-3",
+        classification: { category: "support" },
+        raw: {},
+      },
+    }),
+    getRuntime: async () => ({
+      authority: {
+        mode: "strict",
+        required: true,
+        available: true,
+        source: "approved_runtime_projection",
+        tenantId: "tenant-1",
+        tenantKey: "acme",
+        runtimeProjectionId: "projection-1",
+        health: {
+          status: "stale",
+          primaryReasonCode: "projection_stale",
+        },
+      },
+      tenant: {
+        id: "tenant-1",
+        tenant_key: "acme",
+      },
+      raw: {
+        projection: {
+          metadata_json: {
+            approvalPolicy: {
+              strictestOutcome: "auto_approvable",
+              risk: { level: "low" },
+            },
+          },
+        },
+      },
+    }),
+  });
+
+  const req = {
+    params: {
+      id: "11111111-1111-4111-8111-111111111111",
+    },
+    auth: {
+      tenantKey: "acme",
+    },
+    body: {
+      replyText: "Thanks, we can help.",
+      actor: "operator",
+      approved: true,
+      executeNow: true,
+    },
+  };
+  const res = createMockRes();
+
+  await handler(req, res);
+
+  assert.equal(res.body?.ok, false);
+  assert.equal(res.body?.error, "execution_policy_blocked");
+  assert.equal(res.body?.executionPolicy?.outcome, "blocked_until_repair");
+  assert.equal(db.decisionEvents.length, 2);
+  assert.equal(db.decisionEvents[0].event_type, "blocked_action_outcome");
+  assert.equal(db.decisionEvents[1].event_type, "blocked_action_outcome");
 });

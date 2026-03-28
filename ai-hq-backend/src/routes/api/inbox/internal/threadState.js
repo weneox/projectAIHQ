@@ -115,6 +115,12 @@ export function buildThreadStateForDecision({
         .map((item) => s(item?.attempt?.id || ""))
         .filter(Boolean),
       noReplyReason: s(noReplyAction?.reason || ""),
+      executionPolicyOutcome: s(
+        brain?.executionPolicy?.strictestOutcome || ""
+      ),
+      executionPolicyReasonCodes: normalizeArr(
+        brain?.executionPolicy?.reasonCodes
+      ),
     },
   };
 }

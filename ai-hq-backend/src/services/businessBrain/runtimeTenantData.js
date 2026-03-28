@@ -6,6 +6,7 @@ import {
   dbListTenantContacts,
   dbListTenantLocations,
 } from "../../db/helpers/tenantBusinessBrain.js";
+import { createTenantExecutionPolicyControlHelpers } from "../../db/helpers/tenantExecutionPolicyControls.js";
 import {
   getCurrentTenantRuntimeProjection,
   getTenantRuntimeProjectionFreshness,
@@ -497,6 +498,34 @@ async function loadTenantResponsePlaybooks({ db, tenantId }) {
   return [];
 }
 
+async function loadTenantPolicyControls({ db, tenant }) {
+  if (!hasDb(db) || !tenant?.id) {
+    return {
+      tenantDefault: {},
+      items: [],
+    };
+  }
+
+  const controls = createTenantExecutionPolicyControlHelpers({ db });
+  const rows = await runOptionalDbStep(
+    "loadTenantPolicyControls",
+    tenant,
+    db,
+    () =>
+      controls.listControls({
+        tenantId: tenant.id,
+        tenantKey: tenant.tenant_key,
+      }),
+    []
+  );
+
+  return {
+    tenantDefault:
+      arr(rows).find((item) => String(item.surface).toLowerCase() === "tenant") || {},
+    items: arr(rows).filter((item) => String(item.surface).toLowerCase() !== "tenant"),
+  };
+}
+
 async function loadDbBrainData({ db, tenant }) {
   if (!hasDb(db) || !tenant?.id) {
     return {
@@ -716,4 +745,5 @@ export {
   loadCurrentProjection,
   loadDbBrainData,
   loadLegacyTenant,
+  loadTenantPolicyControls,
 };

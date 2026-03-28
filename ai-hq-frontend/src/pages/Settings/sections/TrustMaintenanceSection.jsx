@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { saveSettingsTrustPolicyControl } from "../../../api/trust.js";
 
 import Card from "../../../components/ui/Card.jsx";
 import Button from "../../../components/ui/Button.jsx";
@@ -33,6 +34,10 @@ export default function TrustMaintenanceSection({
 }) {
   const [savingId, setSavingId] = useState("");
   const [syncingId, setSyncingId] = useState("");
+  const [policyControlState, setPolicyControlState] = useState({
+    savingSurface: "",
+    error: "",
+  });
 
   async function handleSave(item) {
     setSavingId(String(item.id || item.source_key || "new"));
@@ -75,6 +80,30 @@ export default function TrustMaintenanceSection({
     return result;
   }
 
+  async function handleSavePolicyControl(payload = {}) {
+    const surface = String(payload?.surface || "tenant").trim().toLowerCase();
+    setPolicyControlState({
+      savingSurface: surface,
+      error: "",
+    });
+    try {
+      await saveSettingsTrustPolicyControl(payload);
+      if (typeof trust?.surface?.refresh === "function") {
+        await trust.surface.refresh();
+      }
+    } catch (error) {
+      setPolicyControlState({
+        savingSurface: "",
+        error: String(error?.message || error || "Failed to save policy control."),
+      });
+      return;
+    }
+    setPolicyControlState({
+      savingSurface: "",
+      error: "",
+    });
+  }
+
   return (
     <SettingsSection
       eyebrow="Truth Governance"
@@ -99,6 +128,8 @@ export default function TrustMaintenanceSection({
           title="Operator Governance Cockpit"
           subtitle="This cockpit makes the main operator path explicit: approved truth, review pressure, finalize impact, runtime projection health, affected surfaces, and the next safe repair step."
           onRunAction={handleRepairAction}
+          onSavePolicyControl={handleSavePolicyControl}
+          policyControlState={policyControlState}
         />
 
         <div className="grid gap-4 md:grid-cols-3">

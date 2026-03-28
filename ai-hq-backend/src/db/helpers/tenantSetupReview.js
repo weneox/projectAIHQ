@@ -1540,6 +1540,7 @@ export async function finalizeSetupReviewSession(
           runtimeProjectionFresh: !runtimeProjectionFreshness.stale,
           runtimeProjectionFreshnessReasons: arr(runtimeProjectionFreshness.reasons),
           finalizeImpact: obj(projectionResult?.impactSummary),
+          approvalPolicy: obj(projectionResult?.approvalPolicy),
           ...obj(metadata),
         },
       });
@@ -1551,6 +1552,7 @@ export async function finalizeSetupReviewSession(
         runtimeProjection: runtimeProjection || null,
         runtimeProjectionFreshness: runtimeProjectionFreshness || null,
         impactSummary: obj(projectionResult?.impactSummary),
+        approvalPolicy: obj(projectionResult?.approvalPolicy),
       };
   };
 

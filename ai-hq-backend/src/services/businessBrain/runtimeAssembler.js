@@ -66,6 +66,7 @@ function buildProjectionFirstRuntime({
     knowledgeEntries,
     responsePlaybooks,
     threadState: input?.threadState || null,
+    policyControls: input?.policyControls || {},
     authority: buildRuntimeAuthority({
       mode: input?.authorityMode,
       available: true,
@@ -129,6 +130,7 @@ function buildInspectionFallbackRuntime({ legacyTenant, input, dbData, authority
     knowledgeEntries,
     responsePlaybooks,
     threadState: input?.threadState || null,
+    policyControls: input?.policyControls || {},
     authority: buildRuntimeAuthority({
       mode: authorityMode,
       available: false,

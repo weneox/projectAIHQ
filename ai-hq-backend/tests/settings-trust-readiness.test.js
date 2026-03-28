@@ -114,6 +114,8 @@ class FakeTrustDb {
     this.projectionRow = null;
     this.projectionRunRow = null;
     this.auditEntries = [];
+    this.controlRows = [];
+    this.decisionEvents = [];
   }
 
   async query(input, values = []) {
@@ -143,6 +145,14 @@ class FakeTrustDb {
 
     if (text.includes("from tenant_sources")) {
       return { rows: [] };
+    }
+
+    if (text.includes("from tenant_execution_policy_controls")) {
+      return { rows: this.controlRows };
+    }
+
+    if (text.includes("from tenant_decision_events")) {
+      return { rows: this.decisionEvents };
     }
 
     if (text.includes("from v_tenant_knowledge_review_queue")) {
@@ -424,6 +434,70 @@ class FakeTrustDb {
       return { rows: [] };
     }
 
+    if (text.includes("insert into tenant_execution_policy_controls")) {
+      const existingIndex = this.controlRows.findIndex(
+        (item) =>
+          String(item.tenant_id) === String(params[0]) &&
+          String(item.scope_type) === String(params[2]) &&
+          String(item.surface_key) === String(params[3])
+      );
+      const row = {
+        id: existingIndex >= 0 ? this.controlRows[existingIndex].id : `control-${this.controlRows.length + 1}`,
+        tenant_id: params[0],
+        tenant_key: params[1],
+        scope_type: params[2],
+        surface_key: params[3],
+        autonomy_enabled: params[4],
+        operator_only_mode: params[5],
+        human_review_required: params[6],
+        handoff_preferred: params[7],
+        handoff_required: params[8],
+        blocked_until_repair: params[9],
+        emergency_stop: params[10],
+        policy_reason: params[11],
+        operator_note: params[12],
+        changed_by: params[13],
+        changed_at: "2026-03-27T00:03:00.000Z",
+        metadata_json: JSON.parse(params[14]),
+        created_at:
+          existingIndex >= 0
+            ? this.controlRows[existingIndex].created_at
+            : "2026-03-27T00:03:00.000Z",
+        updated_at: "2026-03-27T00:03:00.000Z",
+      };
+      if (existingIndex >= 0) this.controlRows[existingIndex] = row;
+      else this.controlRows.push(row);
+      return { rows: [row] };
+    }
+
+    if (text.includes("insert into tenant_decision_events")) {
+      const row = {
+        id: `decision-${this.decisionEvents.length + 1}`,
+        tenant_id: params[0],
+        tenant_key: params[1],
+        event_type: params[2],
+        actor: params[3],
+        source: params[4],
+        surface: params[5],
+        channel_type: params[6],
+        policy_outcome: params[7],
+        reason_codes: JSON.parse(params[8]),
+        health_state_json: JSON.parse(params[9]),
+        approval_posture_json: JSON.parse(params[10]),
+        execution_posture_json: JSON.parse(params[11]),
+        control_state_json: JSON.parse(params[12]),
+        truth_version_id: params[13],
+        runtime_projection_id: params[14],
+        affected_surfaces: JSON.parse(params[15]),
+        recommended_next_action_json: JSON.parse(params[16]),
+        decision_context_json: JSON.parse(params[17]),
+        event_at: params[18],
+        created_at: params[18],
+      };
+      this.decisionEvents.unshift(row);
+      return { rows: [row] };
+    }
+
     throw new Error(`Unhandled trust query: ${text}`);
   }
 }
@@ -459,6 +533,25 @@ test("settings trust route exposes normalized trust readiness blockers", async (
     res.body?.summary?.runtimeProjection?.health?.affectedSurfaces?.includes("inbox")
   );
   assert.equal(res.body?.summary?.runtimeProjection?.repair?.canRepair, false);
+  assert.equal(
+    res.body?.summary?.policyPosture?.executionPosture,
+    "blocked_until_repair"
+  );
+  assert.equal(
+    res.body?.summary?.channelAutonomy?.items?.find((item) => item.surface === "inbox")
+      ?.policyOutcome,
+    "blocked_until_repair"
+  );
+  assert.equal(
+    res.body?.summary?.channelAutonomy?.items?.find((item) => item.surface === "meta")
+      ?.policyOutcome,
+    "unknown"
+  );
+  assert.equal(
+    res.body?.summary?.policyControls?.tenantDefault?.controlMode,
+    "autonomy_enabled"
+  );
+  assert.deepEqual(res.body?.summary?.decisionAudit?.latestImportant || [], []);
 });
 
 test("settings trust route hides projection repair action from non-admin operators", async () => {
@@ -562,6 +655,182 @@ test("settings trust route surfaces projection repairability for owner/admin whe
     res.body?.summary?.runtimeProjection?.repair?.action?.id,
     "rebuild_runtime_projection"
   );
+});
+
+test("settings trust route exposes review-protected truth posture in operator policy payloads", async () => {
+  const db = new FakeTrustDb();
+  db.projectionRow = {
+    id: "projection-1",
+    tenant_id: "tenant-1",
+    tenant_key: "acme",
+    status: "ready",
+    projection_hash: "hash-1",
+    metadata_json: {
+      approvalPolicy: {
+        strictestOutcome: "review_required",
+        reasonCodes: ["review_required"],
+        affectedSurfaces: ["inbox", "comments", "voice"],
+        risk: {
+          level: "medium",
+          operational: true,
+        },
+      },
+    },
+    capabilities_json: {
+      handoff_enabled: true,
+    },
+    policies_json: {
+      auto_reply_enabled: true,
+      create_lead_enabled: true,
+    },
+    inbox_json: {
+      enabled: true,
+    },
+    comments_json: {
+      enabled: true,
+    },
+    voice_json: {
+      enabled: true,
+    },
+    updated_at: "2026-03-27T00:00:30.000Z",
+    created_at: "2026-03-27T00:00:30.000Z",
+  };
+  db.query = async function (input, values = []) {
+    const text = String(input?.text || input || "").trim().toLowerCase();
+    const params = Array.isArray(input?.values) ? input.values : values;
+
+    if (text.includes("from tenant_business_profile_versions")) {
+      return {
+        rows: [
+          {
+            id: "truth-v1",
+            tenant_id: "tenant-1",
+            tenant_key: "acme",
+            approved_at: "2026-03-27T00:00:00.000Z",
+            approved_by: "owner@aihq.test",
+            source_summary_json: {
+              approvalPolicy: db.projectionRow.metadata_json.approvalPolicy,
+              governance: {
+                disposition: "promotable",
+              },
+              finalizeImpact: {
+                affectedSurfaces: ["inbox", "comments", "voice"],
+              },
+            },
+            metadata_json: {
+              approvalPolicy: db.projectionRow.metadata_json.approvalPolicy,
+            },
+          },
+        ],
+      };
+    }
+
+    return FakeTrustDb.prototype.query.call(this, input, params);
+  };
+
+  const router = settingsTrustRoutes({ db });
+  const { res } = await invokeRoute(router, "get", "/settings/trust", {
+    auth: {
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+      role: "owner",
+    },
+  });
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(
+    res.body?.summary?.truth?.approvalPolicy?.strictestOutcome,
+    "review_required"
+  );
+  assert.equal(
+    res.body?.summary?.policyPosture?.truthPublicationPosture,
+    "review_required"
+  );
+  assert.equal(
+    res.body?.summary?.policyPosture?.executionPosture,
+    "blocked_until_repair"
+  );
+  assert.ok(
+    res.body?.summary?.policyPosture?.reasons?.includes("truth:review_required")
+  );
+  assert.equal(
+    res.body?.summary?.channelAutonomy?.items?.find((item) => item.surface === "inbox")
+      ?.policyOutcome,
+    "blocked_until_repair"
+  );
+  assert.ok(
+    res.body?.summary?.channelAutonomy?.items
+      ?.find((item) => item.surface === "inbox")
+      ?.reasonCodes?.includes("review_required")
+  );
+});
+
+test("policy control mutations enforce role restrictions and persist scoped controls", async () => {
+  const db = new FakeTrustDb();
+  const router = settingsTrustRoutes({ db });
+
+  const blocked = await invokeRoute(router, "post", "/settings/trust/policy-controls", {
+    auth: {
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+      role: "operator",
+    },
+    body: {
+      surface: "voice",
+      controlMode: "operator_only_mode",
+      policyReason: "manual guardrail",
+    },
+  });
+
+  assert.equal(blocked.res.statusCode, 403);
+  assert.equal(blocked.res.body?.reasonCode, "insufficient_role");
+
+  const allowed = await invokeRoute(router, "post", "/settings/trust/policy-controls", {
+    auth: {
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+      role: "admin",
+    },
+    body: {
+      surface: "voice",
+      controlMode: "operator_only_mode",
+      policyReason: "manual guardrail",
+      operatorNote: "Pause voice autonomy",
+    },
+  });
+
+  assert.equal(allowed.res.statusCode, 200);
+  assert.equal(allowed.res.body?.control?.surface, "voice");
+  assert.equal(allowed.res.body?.control?.controlMode, "operator_only_mode");
+  assert.equal(db.controlRows.length, 1);
+  assert.equal(db.controlRows[0].surface_key, "voice");
+  assert.equal(db.decisionEvents.length, 2);
+  assert.equal(db.decisionEvents[0].event_type, "autonomy_posture_change");
+  assert.equal(db.decisionEvents[1].event_type, "policy_control_change");
+  assert.equal(db.decisionEvents[1].control_state_json?.controlMode, "operator_only_mode");
+});
+
+test("policy controls cannot loosen autonomy when core safety invariants still block execution", async () => {
+  const db = new FakeTrustDb();
+  const router = settingsTrustRoutes({ db });
+  const { res } = await invokeRoute(router, "post", "/settings/trust/policy-controls", {
+    auth: {
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+      role: "owner",
+    },
+    body: {
+      surface: "tenant",
+      controlMode: "autonomy_enabled",
+      policyReason: "resume",
+    },
+  });
+
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body?.reasonCode, "core_safety_invariant");
+  assert.equal(db.decisionEvents.length, 1);
+  assert.equal(db.decisionEvents[0].event_type, "policy_control_change");
+  assert.equal(db.decisionEvents[0].policy_outcome, "blocked_until_repair");
 });
 
 test("runtime projection repair blocks non-admin operators with audited permission semantics", async () => {
@@ -671,6 +940,10 @@ test("runtime projection repair succeeds for owner/admin when approved truth exi
   assert.equal(db.auditEntries[0]?.meta?.outcome, "succeeded");
   assert.equal(db.auditEntries[0]?.meta?.requestId, "req-repair-1");
   assert.equal(db.auditEntries[0]?.meta?.correlationId, "corr-repair-1");
+  assert.equal(db.decisionEvents.length, 2);
+  assert.equal(db.decisionEvents[0]?.event_type, "runtime_health_transition");
+  assert.equal(db.decisionEvents[0]?.runtime_projection_id, "projection-1");
+  assert.equal(db.decisionEvents[1]?.event_type, "repair_state_change");
   assert.equal(
     entries.some(
       (entry) =>
@@ -689,5 +962,77 @@ test("runtime projection repair succeeds for owner/admin when approved truth exi
         entry.runtimeProjectionId === "projection-1"
     ),
     true
+  );
+});
+
+test("settings trust route exposes recent decision audit summaries", async () => {
+  const db = new FakeTrustDb();
+  db.decisionEvents = [
+    {
+      id: "decision-1",
+      tenant_id: "tenant-1",
+      tenant_key: "acme",
+      event_type: "blocked_action_outcome",
+      actor: "system",
+      source: "inbox.ingest",
+      surface: "inbox",
+      channel_type: "instagram",
+      policy_outcome: "blocked_until_repair",
+      reason_codes: ["projection_stale"],
+      health_state_json: { status: "stale" },
+      approval_posture_json: {},
+      execution_posture_json: { outcome: "blocked_until_repair" },
+      control_state_json: {},
+      truth_version_id: "truth-v1",
+      runtime_projection_id: "projection-1",
+      affected_surfaces: ["inbox"],
+      recommended_next_action_json: { label: "Repair runtime" },
+      decision_context_json: {},
+      event_at: "2026-03-27T00:10:00.000Z",
+      created_at: "2026-03-27T00:10:00.000Z",
+    },
+    {
+      id: "decision-2",
+      tenant_id: "tenant-1",
+      tenant_key: "acme",
+      event_type: "policy_control_change",
+      actor: "owner@aihq.test",
+      source: "settings.trust.policy-controls",
+      surface: "voice",
+      channel_type: "",
+      policy_outcome: "operator_only",
+      reason_codes: ["operator_only_mode"],
+      health_state_json: {},
+      approval_posture_json: {},
+      execution_posture_json: { outcome: "operator_only" },
+      control_state_json: { controlMode: "operator_only_mode" },
+      truth_version_id: "truth-v1",
+      runtime_projection_id: "projection-1",
+      affected_surfaces: ["voice"],
+      recommended_next_action_json: { label: "Operate in safer mode" },
+      decision_context_json: {},
+      event_at: "2026-03-27T00:09:00.000Z",
+      created_at: "2026-03-27T00:09:00.000Z",
+    },
+  ];
+
+  const router = settingsTrustRoutes({ db });
+  const { res } = await invokeRoute(router, "get", "/settings/trust", {
+    auth: {
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+      role: "owner",
+    },
+  });
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.summary?.decisionAudit?.latestImportant?.length, 2);
+  assert.equal(
+    res.body?.summary?.decisionAudit?.recentRestrictedOutcomes?.[0]?.eventType,
+    "blocked_action_outcome"
+  );
+  assert.equal(
+    res.body?.summary?.decisionAudit?.recentAutonomyChanges?.[0]?.eventType,
+    "policy_control_change"
   );
 });

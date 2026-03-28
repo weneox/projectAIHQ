@@ -8,6 +8,7 @@ import {
 import { resolveTenantKeyFromReq } from "../../../../tenancy/index.js";
 import { emitRealtimeEvent } from "../../../../realtime/events.js";
 import { writeAudit } from "../../../../utils/auditLog.js";
+import { buildExecutionPolicySurfaceSummary } from "../../../../services/executionPolicy.js";
 import {
   s,
   safeJson,
@@ -42,6 +43,23 @@ export function buildCommentRuntimePayload(runtimePack) {
         .filter(Boolean);
 
   return {
+    executionPolicy: {
+      comments: buildExecutionPolicySurfaceSummary({
+        runtime: runtimePack,
+        surface: "comments",
+        channelType: "comments",
+      }),
+      inbox: buildExecutionPolicySurfaceSummary({
+        runtime: runtimePack,
+        surface: "inbox",
+        channelType: "inbox",
+      }),
+      voice: buildExecutionPolicySurfaceSummary({
+        runtime: runtimePack,
+        surface: "voice",
+        channelType: "voice",
+      }),
+    },
     ...runtimePack,
     tenant: runtimePack?.tenant || null,
     serviceCatalog,

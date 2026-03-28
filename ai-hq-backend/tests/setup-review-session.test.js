@@ -1246,11 +1246,13 @@ test("Case Z: finalize projection writes a truth version snapshot from canonical
   );
 
   assert.equal(projected.projectedProfile, true);
-  assert.equal(projected.projectedCapabilities, true);
-  assert.equal(projected.truthVersion.id, "version-1");
-  assert.ok(projected.impactSummary.canonicalAreas.includes("business_profile"));
-  assert.ok(projected.impactSummary.runtimeAreas.includes("tenant_profile"));
-  assert.equal(versionInput.reviewSessionId, "session-1");
+    assert.equal(projected.projectedCapabilities, true);
+    assert.equal(projected.truthVersion.id, "version-1");
+    assert.ok(projected.impactSummary.canonicalAreas.includes("business_profile"));
+    assert.ok(projected.impactSummary.runtimeAreas.includes("tenant_profile"));
+    assert.equal(projected.approvalPolicy.strictestOutcome, "dual_approval_required");
+    assert.ok(projected.approvalPolicy.requiredRoles.includes("admin_and_owner"));
+    assert.equal(versionInput.reviewSessionId, "session-1");
   assert.equal(versionInput.businessProfileId, "profile-1");
   assert.equal(versionInput.businessCapabilitiesId, "capabilities-1");
   assert.equal(versionInput.profile.profile_json.companyName, "Alpha Studio");
@@ -1259,15 +1261,23 @@ test("Case Z: finalize projection writes a truth version snapshot from canonical
     versionInput.profile.source_summary_json.primarySourceUrl,
     "https://alpha.example"
   );
-  assert.ok(
-    versionInput.profile.source_summary_json.finalizeImpact.canonicalAreas.includes(
-      "business_profile"
-    )
-  );
-  assert.ok(
-    versionInput.metadataJson.finalizeImpact.runtimeAreas.includes("tenant_profile")
-  );
-});
+    assert.ok(
+      versionInput.profile.source_summary_json.finalizeImpact.canonicalAreas.includes(
+        "business_profile"
+      )
+    );
+    assert.equal(
+      versionInput.profile.source_summary_json.approvalPolicy.strictestOutcome,
+      "dual_approval_required"
+    );
+    assert.ok(
+      versionInput.metadataJson.finalizeImpact.runtimeAreas.includes("tenant_profile")
+    );
+    assert.equal(
+      versionInput.metadataJson.approvalPolicy.strictestOutcome,
+      "dual_approval_required"
+    );
+  });
 
 test("Case AA: truth version change detection ignores approval-event metadata-only churn", () => {
   const unchanged = truthVersionTest.hasTruthVersionChanged(

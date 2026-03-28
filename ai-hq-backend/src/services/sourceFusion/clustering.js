@@ -23,6 +23,7 @@ import {
   classifyConflictOutcome,
   getSourceTrustProfile,
 } from "./governance.js";
+import { classifyApprovalPolicy } from "./approvalPolicy.js";
 import {
   claimPolicy,
   isListClaim,
@@ -905,6 +906,55 @@ function buildSelectedClaims(clusterMap = {}) {
               : null,
           })
         : null;
+      const impact = buildCandidateImpact({
+        category:
+          safeType === "company_name" || safeType === "website_url"
+            ? "company"
+            : safeType.startsWith("summary")
+              ? "summary"
+              : safeType.startsWith("primary_")
+                ? safeType === "primary_address"
+                  ? "location"
+                  : "contact"
+                : safeType === "pricing_policy"
+                  ? "pricing_policy"
+                  : safeType === "support_mode"
+                    ? "support"
+                    : "knowledge",
+        itemKey:
+          safeType === "company_name"
+            ? "canonical_company_name"
+            : safeType === "website_url"
+              ? "canonical_website_url"
+              : safeType,
+      });
+      const approvalPolicy = winner
+        ? classifyApprovalPolicy({
+            title: safeType,
+            category:
+              safeType === "company_name" || safeType === "website_url"
+                ? "company"
+                : safeType.startsWith("summary")
+                  ? "summary"
+                  : safeType.startsWith("primary_")
+                    ? safeType === "primary_address"
+                      ? "location"
+                      : "contact"
+                    : safeType === "pricing_policy"
+                      ? "pricing_policy"
+                      : safeType === "support_mode"
+                        ? "support"
+                        : "knowledge",
+            itemKey:
+              safeType === "company_name"
+                ? "canonical_company_name"
+                : safeType === "website_url"
+                  ? "canonical_website_url"
+                  : safeType,
+            impact,
+            governance,
+          })
+        : null;
       out[safeType] = winner
         ? [
             {
@@ -921,29 +971,9 @@ function buildSelectedClaims(clusterMap = {}) {
               sourceTypes: winner.sourceTypes,
               bestSourceType: winner.bestSourceType,
               governance,
+              approvalPolicy,
               status: governance?.quarantine ? "quarantined" : "promotable",
-              impact: buildCandidateImpact({
-                category:
-                  safeType === "company_name" || safeType === "website_url"
-                    ? "company"
-                    : safeType.startsWith("summary")
-                      ? "summary"
-                      : safeType.startsWith("primary_")
-                        ? safeType === "primary_address"
-                          ? "location"
-                          : "contact"
-                        : safeType === "pricing_policy"
-                          ? "pricing_policy"
-                          : safeType === "support_mode"
-                            ? "support"
-                            : "knowledge",
-                itemKey:
-                  safeType === "company_name"
-                    ? "canonical_company_name"
-                    : safeType === "website_url"
-                      ? "canonical_website_url"
-                      : safeType,
-              }),
+              impact,
             },
           ]
         : [];
@@ -971,6 +1001,31 @@ function buildSelectedClaims(clusterMap = {}) {
             score: cluster.score,
             evidence: cluster.evidence,
             onlyWeakSources: cluster.onlyWeakSources,
+          });
+          const category =
+            safeType === "service"
+              ? "service"
+              : safeType === "product"
+                ? "product"
+                : safeType === "pricing_hint"
+                  ? "pricing"
+                  : safeType === "working_hours"
+                    ? "hours"
+                    : safeType === "social_link"
+                      ? "social_link"
+                      : safeType === "booking_link" || safeType === "whatsapp_link"
+                        ? "booking"
+                        : "faq";
+          const impact = buildCandidateImpact({
+            category,
+            itemKey: safeType,
+          });
+          const approvalPolicy = classifyApprovalPolicy({
+            title: safeType,
+            category,
+            itemKey: safeType,
+            impact,
+            governance,
           });
           const cleaned = cleanClaimTextForType(
             safeType,
@@ -1001,24 +1056,9 @@ function buildSelectedClaims(clusterMap = {}) {
             sourceTypes: cluster.sourceTypes,
             bestSourceType: cluster.bestSourceType,
             governance,
+            approvalPolicy,
             status: governance.quarantine ? "quarantined" : "promotable",
-            impact: buildCandidateImpact({
-              category:
-                safeType === "service"
-                  ? "service"
-                  : safeType === "product"
-                    ? "product"
-                    : safeType === "pricing_hint"
-                      ? "pricing"
-                      : safeType === "working_hours"
-                        ? "hours"
-                        : safeType === "social_link"
-                          ? "social_link"
-                          : safeType === "booking_link" || safeType === "whatsapp_link"
-                            ? "booking"
-                            : "faq",
-              itemKey: safeType,
-            }),
+            impact,
           };
         })
         .filter(Boolean);

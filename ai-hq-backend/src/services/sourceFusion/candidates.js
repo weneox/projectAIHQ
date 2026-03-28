@@ -15,6 +15,7 @@ import {
   safeKeyPart,
 } from "./shared.js";
 import { buildCandidateImpact } from "./governance.js";
+import { classifyApprovalPolicy } from "./approvalPolicy.js";
 
 function makeCandidate({
   tenantId,
@@ -130,6 +131,17 @@ function buildCandidateMetadata(claim = null, { category = "", itemKey = "" } = 
     impact: Object.keys(obj(safeClaim.impact)).length
       ? obj(safeClaim.impact)
       : buildCandidateImpact({ category, itemKey }),
+    approvalPolicy: Object.keys(obj(safeClaim.approvalPolicy || safeClaim.approval_policy)).length
+      ? obj(safeClaim.approvalPolicy || safeClaim.approval_policy)
+      : classifyApprovalPolicy({
+          title: s(safeClaim.valueText || safeClaim.value_text || itemKey || category),
+          category,
+          itemKey,
+          impact: Object.keys(obj(safeClaim.impact)).length
+            ? obj(safeClaim.impact)
+            : buildCandidateImpact({ category, itemKey }),
+          governance: obj(safeClaim.governance),
+        }),
     selectedClaimStatus: s(safeClaim.status),
     sourceTypes: arr(safeClaim.sourceTypes || safeClaim.source_types),
     bestSourceType: s(safeClaim.bestSourceType || safeClaim.best_source_type),

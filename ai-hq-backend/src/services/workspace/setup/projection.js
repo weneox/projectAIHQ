@@ -19,6 +19,7 @@ import {
   toFiniteNumber,
 } from "./utils.js";
 import { buildFinalizeImpactSummary } from "../../sourceFusion/governance.js";
+import { buildFinalizeApprovalPolicySummary } from "../../sourceFusion/approvalPolicy.js";
 
 function hasDbQuery(db) {
   return Boolean(db && typeof db.query === "function");
@@ -220,6 +221,7 @@ export function buildCanonicalProfileSourceSummary({
   approvedAt = "",
 } = {}) {
   const impactSummary = buildFinalizeImpactSummary({ draft });
+  const approvalPolicy = buildFinalizeApprovalPolicySummary({ draft });
   return compactObject({
     reviewSessionId: s(session?.id),
     primarySourceType: s(sourceInfo.primarySourceType),
@@ -230,6 +232,7 @@ export function buildCanonicalProfileSourceSummary({
     approvedAt: s(approvedAt),
     governance: obj(draft?.sourceSummary?.governance),
     finalizeImpact: impactSummary,
+    approvalPolicy,
     sources: arr(sources)
       .map((item) =>
         compactObject({
@@ -488,6 +491,7 @@ export async function projectSetupReviewDraftToCanonical(
 
   const sourceInfo = extractPrimarySourceInfo(session, draft, sources);
   const impactSummary = buildFinalizeImpactSummary({ draft });
+  const approvalPolicy = buildFinalizeApprovalPolicySummary({ draft });
   const persistedReviewSessionId = await resolvePersistedReviewSessionId(
     db,
     actor,
@@ -556,6 +560,7 @@ export async function projectSetupReviewDraftToCanonical(
           persistedReviewSessionId: persistedReviewSessionId || undefined,
           draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
           finalizeImpact: impactSummary,
+          approvalPolicy,
         },
         generatedBy: requestedBy,
       approvedBy: requestedBy,
@@ -583,6 +588,7 @@ export async function projectSetupReviewDraftToCanonical(
         reviewSessionId: s(session?.id),
         persistedReviewSessionId: persistedReviewSessionId || undefined,
         finalizeImpact: impactSummary,
+        approvalPolicy,
       },
       approvedBy: requestedBy,
       runtimeRefreshMode: "defer",
@@ -630,6 +636,7 @@ export async function projectSetupReviewDraftToCanonical(
         sourceId: sourceInfo.primarySourceId || undefined,
         sourceRunId: sourceInfo.latestRunId || undefined,
         finalizeImpact: impactSummary,
+        approvalPolicy,
       }),
     });
   }
@@ -703,5 +710,6 @@ export async function projectSetupReviewDraftToCanonical(
     knowledgeProjection,
     sourceInfo,
     impactSummary,
+    approvalPolicy,
   };
 }

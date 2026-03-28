@@ -2,6 +2,12 @@ import { okJson, isUuid } from "../../../../utils/http.js";
 import { getAuthTenantKey } from "../../../../utils/auth.js";
 import { deepFix } from "../../../../utils/textFix.js";
 import { forwardCommentReplyToMetaGateway } from "../gateway.js";
+import {
+  buildExecutionPolicyDecisionAuditShape,
+  evaluateExecutionPolicy,
+  mapExecutionOutcomeToDecisionEventType,
+} from "../../../../services/executionPolicy.js";
+import { safeAppendDecisionEvent } from "../../../../db/helpers/decisionEvents.js";
 import { getCommentById, updateCommentState } from "../repository.js";
 import {
   mergeClassificationForReview,
@@ -16,6 +22,7 @@ import {
   buildReviewRaw,
   emitCommentUpdatedRealtime,
   ensureCommentsDb,
+  loadStrictCommentRuntime,
   writeCommentAudit,
 } from "./shared.js";
 
@@ -95,6 +102,7 @@ export function replyCommentHandler({
   forwardReply = forwardCommentReplyToMetaGateway,
   updateState = updateCommentState,
   getOwnedComment = loadOwnedComment,
+  getRuntime,
   auditWriter,
   emitEvent,
 }) {
@@ -121,6 +129,104 @@ export function replyCommentHandler({
       }
 
       const existing = ownedComment.comment;
+      let runtimeState = null;
+      let executionPolicy = null;
+
+      if (executeNow) {
+        runtimeState = await loadStrictCommentRuntime({
+          db,
+          req,
+          service: "comments.reply",
+          getRuntime,
+        });
+
+        if (!runtimeState.ok) {
+          return okJson(res, {
+            ...runtimeState.response,
+            executionPolicy: {
+              outcome: "blocked_until_repair",
+              requiredExecutionLevel: "blocked_until_repair",
+              blockedUntilRepair: true,
+              reasonCodes: ["runtime_authority_unavailable"],
+            },
+          });
+        }
+
+        executionPolicy = evaluateExecutionPolicy({
+          runtime: runtimeState.runtime,
+          action: {
+            type: "reply_comment",
+            text: replyText,
+            meta: {
+              intent: "comment_reply",
+              category: s(existing?.classification?.category || ""),
+            },
+          },
+          surface: "comments",
+          channelType: s(existing.channel || "instagram").toLowerCase() || "instagram",
+          actorType: actor || "operator",
+        });
+
+        await safeAppendDecisionEvent(db, {
+          ...buildExecutionPolicyDecisionAuditShape({
+            tenantId: s(existing?.tenant_id || runtimeState?.tenant?.id),
+            tenantKey: s(existing?.tenant_key || tenantKey),
+            source: "comments.reply",
+            actor: actor || "operator",
+            surface: "comments",
+            channelType: s(existing.channel || "instagram").toLowerCase() || "instagram",
+            runtime: runtimeState.runtime,
+            decision: executionPolicy,
+            action: {
+              type: "reply_comment",
+              meta: {
+                intent: "comment_reply",
+              },
+            },
+          }),
+          decisionContext: {
+            commentId: s(existing?.id),
+            externalCommentId: s(existing?.external_comment_id),
+            executeNow: Boolean(executeNow),
+            approved: Boolean(approved),
+          },
+        });
+
+        if (executionPolicy.blocked || executionPolicy.blockedUntilRepair) {
+          await safeAppendDecisionEvent(db, {
+            ...buildExecutionPolicyDecisionAuditShape({
+              tenantId: s(existing?.tenant_id || runtimeState?.tenant?.id),
+              tenantKey: s(existing?.tenant_key || tenantKey),
+              source: "comments.reply",
+              actor: actor || "operator",
+              surface: "comments",
+              channelType:
+                s(existing.channel || "instagram").toLowerCase() || "instagram",
+              runtime: runtimeState.runtime,
+              decision: executionPolicy,
+              action: {
+                type: "reply_comment",
+                meta: {
+                  intent: "comment_reply",
+                },
+              },
+            }),
+            eventType: mapExecutionOutcomeToDecisionEventType(executionPolicy.outcome),
+            decisionContext: {
+              commentId: s(existing?.id),
+              externalCommentId: s(existing?.external_comment_id),
+              executeNow: Boolean(executeNow),
+              approved: Boolean(approved),
+            },
+          });
+          return okJson(res, {
+            ok: false,
+            error: "execution_policy_blocked",
+            executionPolicy,
+          });
+        }
+      }
+
       let sendResult = null;
       let sent = false;
       let sendError = "";
@@ -184,6 +290,7 @@ export function replyCommentHandler({
             sent: Boolean(sent),
             sendError,
             gatewayStatus: Number(sendResult?.status || 0),
+            executionPolicy,
           },
         },
         auditWriter
@@ -196,6 +303,7 @@ export function replyCommentHandler({
         replySaved: true,
         replySent: Boolean(sent),
         replyError: sendError || null,
+        executionPolicy,
         gateway: sendResult
           ? {
               ok: Boolean(sendResult.ok),

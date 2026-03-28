@@ -82,6 +82,16 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
       truth: {
         latestVersionId: "truth-v1",
         approvedAt: "2026-03-25T10:00:00.000Z",
+        approvalPolicy: {
+          strictestOutcome: "review_required",
+          requiredRole: "operator",
+          reasonCodes: ["review_required"],
+          affectedSurfaces: ["inbox", "voice"],
+          risk: {
+            level: "medium",
+            operational: true,
+          },
+        },
         sourceSummary: {
           governance: {
             disposition: "quarantined",
@@ -110,6 +120,71 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
         pending: 1,
         conflicts: 0,
       },
+      policyPosture: {
+        truthPublicationPosture: "review_required",
+        executionPosture: "handoff_required",
+        reviewRequired: true,
+        handoffRequired: true,
+        requiredRole: "operator",
+        requiredAction: "Complete protected review",
+        reasons: ["truth:review_required", "runtime:healthy"],
+        affectedSurfaces: ["inbox", "comments", "voice"],
+        explanation: "Sensitive execution paths require human handoff before the channel can continue autonomously.",
+      },
+      channelAutonomy: {
+        items: [
+          {
+            surface: "inbox",
+            channelType: "inbox",
+            autonomyStatus: "handoff_required",
+            policyOutcome: "handoff_required",
+            explanation: "Inbox autonomy requires a human handoff before sensitive actions can continue.",
+            why: ["truth:review_required", "runtime:healthy"],
+            reviewRequired: true,
+            handoffRequired: true,
+            reasonCodes: ["review_required"],
+            requiredRole: "operator",
+            requiredAction: "Complete protected review",
+          },
+          {
+            surface: "meta",
+            channelType: "meta",
+            autonomyStatus: "unknown",
+            policyOutcome: "unknown",
+            explanation: "Telemetry unavailable.",
+          },
+        ],
+      },
+      policyControls: {
+        viewerRole: "admin",
+        cannotLoosenAutonomy: true,
+        tenantDefault: {
+          scopeType: "tenant_default",
+          surface: "tenant",
+          controlMode: "human_review_required",
+          policyReason: "manual review",
+          changedBy: "admin@aihq.test",
+          availableModes: [
+            {
+              mode: "autonomy_enabled",
+              label: "Autonomy Enabled",
+              requiredRole: "admin",
+              allowed: false,
+              unavailableReason: "Truth or runtime safety posture currently forbids loosening autonomy.",
+            },
+          ],
+        },
+        items: [
+          {
+            scopeType: "channel",
+            surface: "voice",
+            controlMode: "operator_only_mode",
+            changedBy: "admin@aihq.test",
+            isOverride: true,
+            availableModes: [],
+          },
+        ],
+      },
     },
     recentRuns: [
       {
@@ -135,12 +210,38 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
   expect(normalized.summary.sources.total).toBe(2);
   expect(normalized.summary.runtimeProjection.health.autonomousAllowed).toBe(true);
   expect(normalized.summary.runtimeProjection.health.affectedSurfaces).toEqual(["inbox", "voice"]);
+  expect(normalized.summary.truth.approvalPolicy.strictestOutcome).toBe("review_required");
   expect(normalized.summary.truth.governance.quarantinedClaimCount).toBe(2);
   expect(normalized.summary.truth.finalizeImpact.runtimeAreas).toEqual(["voice"]);
+  expect(normalized.summary.policyPosture.executionPosture).toBe("handoff_required");
+  expect(normalized.summary.channelAutonomy.items[0].surface).toBe("inbox");
+  expect(normalized.summary.channelAutonomy.items[1].policyOutcome).toBe("unknown");
+  expect(normalized.summary.policyControls.viewerRole).toBe("admin");
+  expect(normalized.summary.policyControls.tenantDefault.controlMode).toBe("human_review_required");
+  expect(normalized.summary.policyControls.items[0].surface).toBe("voice");
   expect(normalized.summary.runtimeProjection.repair.action?.id).toBe(
     "rebuild_runtime_projection"
   );
   expect(normalized.recentRuns[0].sourceDisplayName).toBe("Main Website");
   expect(normalized.audit[0].action).toBe("settings.source.sync.requested");
+});
+
+it("normalizeTrustViewResponse keeps unknown policy posture stable when payloads are sparse", () => {
+  const normalized = __test__.normalizeTrustViewResponse({
+    summary: {
+      truth: {},
+      runtimeProjection: {},
+      reviewQueue: {},
+      readiness: {
+        status: "ready",
+        blockers: [],
+      },
+    },
+  });
+
+  expect(normalized.summary.truth.approvalPolicy.strictestOutcome).toBe("unknown");
+  expect(normalized.summary.policyPosture.executionPosture).toBe("unknown");
+  expect(normalized.summary.channelAutonomy.items).toEqual([]);
+  expect(normalized.summary.policyControls.items).toEqual([]);
 });
 });

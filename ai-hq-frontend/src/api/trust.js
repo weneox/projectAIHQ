@@ -1,4 +1,4 @@
-import { apiGet } from "./client.js";
+import { apiGet, apiPost } from "./client.js";
 import { createReadinessViewModel } from "../lib/readinessViewModel.js";
 
 function s(v, d = "") {
@@ -251,6 +251,144 @@ function normalizeProjectionHealth(input = {}) {
   };
 }
 
+function normalizeAction(input = {}) {
+  const source = obj(input);
+  if (!Object.keys(source).length) return null;
+  return {
+    id: s(source.id),
+    kind: s(source.kind).toLowerCase(),
+    label: s(source.label),
+    requiredRole: s(source.requiredRole || source.required_role).toLowerCase(),
+    allowed: source.allowed === true,
+    target: obj(source.target),
+  };
+}
+
+function normalizeApprovalPolicy(input = {}) {
+  const source = obj(input);
+  const risk = obj(source.risk);
+  return {
+    strictestOutcome: s(
+      source.strictestOutcome || source.strictest_outcome || source.outcome || "unknown"
+    ).toLowerCase(),
+    requiredRole: s(source.requiredRole || source.required_role || "operator").toLowerCase(),
+    reasonCodes: normalizeStringList(source.reasonCodes || source.reason_codes),
+    affectedSurfaces: normalizeStringList(
+      source.affectedSurfaces || source.affected_surfaces
+    ),
+    risk: {
+      level: s(risk.level || source.riskLevel || "unknown").toLowerCase(),
+      operational: bool(risk.operational),
+    },
+  };
+}
+
+function normalizePolicyPosture(input = {}) {
+  const source = obj(input);
+  return {
+    truthPublicationPosture: s(
+      source.truthPublicationPosture || source.truth_publication_posture || "unknown"
+    ).toLowerCase(),
+    executionPosture: s(
+      source.executionPosture || source.execution_posture || "unknown"
+    ).toLowerCase(),
+    reviewRequired: bool(source.reviewRequired || source.review_required),
+    handoffRequired: bool(source.handoffRequired || source.handoff_required),
+    blocked: bool(source.blocked),
+    blockedUntilRepair: bool(
+      source.blockedUntilRepair || source.blocked_until_repair
+    ),
+    requiredRole: s(source.requiredRole || source.required_role || "operator").toLowerCase(),
+    requiredAction: s(source.requiredAction || source.required_action),
+    requiredActionKind: s(
+      source.requiredActionKind || source.required_action_kind || "unknown"
+    ).toLowerCase(),
+    nextAction: normalizeAction(source.nextAction || source.next_action),
+    reasons: normalizeStringList(source.reasons),
+    affectedSurfaces: normalizeStringList(
+      source.affectedSurfaces || source.affected_surfaces
+    ),
+    explanation: s(source.explanation || "Policy telemetry is unavailable."),
+  };
+}
+
+function normalizeChannelAutonomyItem(input = {}) {
+  const source = obj(input);
+  return {
+    surface: s(source.surface || "unknown").toLowerCase(),
+    channelType: s(source.channelType || source.channel_type || "unknown").toLowerCase(),
+    autonomyStatus: s(source.autonomyStatus || source.autonomy_status || "unknown").toLowerCase(),
+    policyOutcome: s(source.policyOutcome || source.policy_outcome || "unknown").toLowerCase(),
+    explanation: s(source.explanation || "Telemetry unavailable."),
+    why: normalizeStringList(source.why),
+    reasonCodes: normalizeStringList(source.reasonCodes || source.reason_codes),
+    reviewRequired: bool(source.reviewRequired || source.review_required),
+    handoffRequired: bool(source.handoffRequired || source.handoff_required),
+    repairRequired: bool(source.repairRequired || source.repair_required),
+    approvalRequired: bool(source.approvalRequired || source.approval_required),
+    requiredRole: s(source.requiredRole || source.required_role || "operator").toLowerCase(),
+    requiredAction: s(source.requiredAction || source.required_action),
+    requiredActionKind: s(
+      source.requiredActionKind || source.required_action_kind || "unknown"
+    ).toLowerCase(),
+    nextAction: normalizeAction(source.nextAction || source.next_action),
+    affectedSurfaces: normalizeStringList(
+      source.affectedSurfaces || source.affected_surfaces
+    ),
+    telemetryAvailable: bool(
+      source.telemetryAvailable || source.telemetry_available,
+      true
+    ),
+    lowRiskOutcome: s(source.lowRiskOutcome || source.low_risk_outcome).toLowerCase(),
+    mediumRiskOutcome: s(
+      source.mediumRiskOutcome || source.medium_risk_outcome
+    ).toLowerCase(),
+    highRiskOutcome: s(source.highRiskOutcome || source.high_risk_outcome).toLowerCase(),
+  };
+}
+
+function normalizeChannelAutonomy(input = {}) {
+  const source = obj(input);
+  return {
+    items: arr(source.items).map(normalizeChannelAutonomyItem),
+  };
+}
+
+function normalizePolicyControlScope(input = {}) {
+  const source = obj(input);
+  return {
+    scopeType: s(source.scopeType || source.scope_type || "channel").toLowerCase(),
+    surface: s(source.surface || "tenant").toLowerCase(),
+    controlMode: s(source.controlMode || source.control_mode || "autonomy_enabled").toLowerCase(),
+    policyReason: s(source.policyReason || source.policy_reason),
+    operatorNote: s(source.operatorNote || source.operator_note),
+    changedBy: s(source.changedBy || source.changed_by),
+    changedAt: s(source.changedAt || source.changed_at),
+    isOverride: bool(source.isOverride || source.is_override),
+    availableModes: arr(source.availableModes || source.available_modes).map((item) => ({
+      mode: s(item.mode || "autonomy_enabled").toLowerCase(),
+      label: s(item.label || "Autonomy Enabled"),
+      requiredRole: s(item.requiredRole || item.required_role || "operator").toLowerCase(),
+      allowed: item.allowed === true,
+      unavailableReason: s(item.unavailableReason || item.unavailable_reason),
+    })),
+  };
+}
+
+function normalizePolicyControls(input = {}) {
+  const source = obj(input);
+  return {
+    viewerRole: s(source.viewerRole || source.viewer_role || "member").toLowerCase(),
+    cannotLoosenAutonomy: bool(
+      source.cannotLoosenAutonomy || source.cannot_loosen_autonomy
+    ),
+    tenantDefault: normalizePolicyControlScope(
+      source.tenantDefault || source.tenant_default
+    ),
+    items: arr(source.items).map(normalizePolicyControlScope),
+  };
+}
+
 export function normalizeTrustViewResponse(payload = {}) {
   const root = obj(payload);
   const summary = obj(root.summary);
@@ -298,6 +436,9 @@ export function normalizeTrustViewResponse(payload = {}) {
         reviewSessionId: s(truth.reviewSessionId || truth.review_session_id),
         sourceSummary: obj(truth.sourceSummary || truth.source_summary),
         metadata: obj(truth.metadata),
+        approvalPolicy: normalizeApprovalPolicy(
+          truth.approvalPolicy || truth.approval_policy
+        ),
         governance: normalizeGovernanceSummary(
           truth.governance ||
             obj(truth.sourceSummary || truth.source_summary).governance ||
@@ -323,6 +464,13 @@ export function normalizeTrustViewResponse(payload = {}) {
         conflicts: n(reviewQueue.conflicts),
         latestCandidateAt: s(reviewQueue.latestCandidateAt || reviewQueue.latest_candidate_at),
       },
+      policyPosture: normalizePolicyPosture(summary.policyPosture || summary.policy_posture),
+      channelAutonomy: normalizeChannelAutonomy(
+        summary.channelAutonomy || summary.channel_autonomy
+      ),
+      policyControls: normalizePolicyControls(
+        summary.policyControls || summary.policy_controls
+      ),
     },
     recentRuns: normalizeRecentRuns(root.recentRuns || root.recent_runs),
     audit: normalizeAudit(root.audit),
@@ -345,4 +493,12 @@ export async function getSettingsTrustView(params = {}) {
     throw new Error(payload?.error || "Failed to load settings trust summary");
   }
   return normalizeTrustViewResponse(payload);
+}
+
+export async function saveSettingsTrustPolicyControl(payload = {}) {
+  const response = await apiPost("/api/settings/trust/policy-controls", payload);
+  if (!response?.ok) {
+    throw new Error(response?.error || "Failed to save policy control");
+  }
+  return response;
 }

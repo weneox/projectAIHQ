@@ -103,8 +103,8 @@ test("inbox ingest duplicate handling short-circuits before runtime and brain or
   let brainCalls = 0;
 
   const client = {
-    async query(text) {
-      const sql = String(text || "").toLowerCase();
+    async query(text, values = []) {
+      const sql = String(text?.text || text || "").toLowerCase();
 
       if (sql === "begin" || sql === "commit") return { rows: [] };
       if (sql.includes("from tenants")) {
@@ -286,4 +286,163 @@ test("decision thread-state shaping keeps queued execution and handoff semantics
   assert.deepEqual(nextState.last_decision_meta.queuedExecutionActionTypes, ["send_message"]);
   assert.deepEqual(nextState.last_decision_meta.queuedExecutionMessageIds, ["msg-1"]);
   assert.deepEqual(nextState.last_decision_meta.queuedExecutionAttemptIds, ["attempt-1"]);
+});
+
+test("inbox ingest blocks autonomous reply execution when runtime health is stale", async () => {
+  const decisionEvents = [];
+  const thread = {
+    id: "11111111-1111-4111-8111-111111111111",
+    tenant_id: "22222222-2222-4222-8222-222222222222",
+    tenant_key: "acme",
+    channel: "instagram",
+    external_thread_id: "thread-ext-1",
+    external_user_id: "user-ext-1",
+    status: "open",
+    handoff_active: false,
+    handoff_reason: "",
+    handoff_priority: "normal",
+    meta: {},
+  };
+
+  const client = {
+    async query(text) {
+      const sql = String(text || "").toLowerCase();
+      if (sql === "begin" || sql === "commit") return { rows: [] };
+      if (sql.includes("from tenants")) {
+        return {
+          rows: [{ id: thread.tenant_id, tenant_key: "acme" }],
+        };
+      }
+      if (sql.includes("from inbox_threads") && sql.includes("external_thread_id")) {
+        return { rows: [] };
+      }
+      if (sql.includes("insert into inbox_threads")) {
+        return { rows: [thread] };
+      }
+      if (sql.includes("insert into inbox_messages")) {
+        return {
+          rows: [
+            {
+              id: "33333333-3333-4333-8333-333333333333",
+              thread_id: thread.id,
+              tenant_key: "acme",
+              direction: "inbound",
+              sender_type: "customer",
+              external_message_id: "msg-ext-1",
+              message_type: "text",
+              text: "hello",
+              attachments: [],
+              meta: {},
+              sent_at: "2026-03-27T00:00:00.000Z",
+              created_at: "2026-03-27T00:00:00.000Z",
+            },
+          ],
+        };
+      }
+      if (sql.includes("from inbox_messages") && sql.includes("order by")) {
+        return { rows: [] };
+      }
+      if (sql.includes("from inbox_thread_state")) {
+        return { rows: [] };
+      }
+      if (sql.includes("update inbox_threads")) {
+        return { rows: [] };
+      }
+      if (sql.includes("insert into inbox_thread_state")) {
+        return { rows: [{}] };
+      }
+      if (sql.includes("insert into tenant_decision_events")) {
+        const row = {
+          id: `decision-${decisionEvents.length + 1}`,
+          tenant_id: values?.[0],
+          tenant_key: values?.[1],
+          event_type: values?.[2],
+          policy_outcome: values?.[7],
+          runtime_projection_id: values?.[14],
+        };
+        decisionEvents.unshift(row);
+        return { rows: [row] };
+      }
+
+      throw new Error(`Unexpected query: ${text}`);
+    },
+    release() {},
+  };
+
+  const handler = createInboxIngestHandler({
+    db: {
+      connect: async () => client,
+      query: async () => ({ rows: [] }),
+    },
+    wsHub: null,
+    getRuntime: async () => ({
+      authority: {
+        mode: "strict",
+        required: true,
+        available: true,
+        source: "approved_runtime_projection",
+        tenantId: thread.tenant_id,
+        tenantKey: "acme",
+        runtimeProjectionId: "projection-1",
+        health: {
+          status: "stale",
+          primaryReasonCode: "projection_stale",
+        },
+      },
+      tenant: {
+        id: thread.tenant_id,
+        tenant_key: "acme",
+      },
+      raw: {
+        projection: {
+          metadata_json: {
+            approvalPolicy: {
+              strictestOutcome: "auto_approvable",
+              risk: { level: "low" },
+            },
+          },
+        },
+      },
+      threadState: {},
+      serviceCatalog: [],
+      knowledgeEntries: [],
+      responsePlaybooks: [],
+    }),
+    buildActions: async () => ({
+      intent: "knowledge_answer",
+      leadScore: 24,
+      actions: [
+        {
+          type: "send_message",
+          recipientId: "user-ext-1",
+          text: "We can help.",
+          meta: { intent: "knowledge_answer" },
+        },
+      ],
+    }),
+  });
+
+  const req = {
+    headers: {
+      "x-tenant-key": "acme",
+      "x-internal-token": "secret",
+    },
+    body: {
+      externalThreadId: "thread-ext-1",
+      externalUserId: "user-ext-1",
+      externalMessageId: "msg-ext-1",
+      text: "hello",
+      channel: "instagram",
+    },
+  };
+  const res = createMockRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.ok, true);
+  assert.equal(res.body?.executionPolicy?.strictestOutcome, "blocked_until_repair");
+  assert.equal(res.body?.actions?.[0]?.type, "no_reply");
+  assert.equal(res.body?.executionResults?.length, 0);
+  assert.equal(Array.isArray(decisionEvents), true);
 });

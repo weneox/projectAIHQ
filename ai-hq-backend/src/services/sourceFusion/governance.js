@@ -7,6 +7,7 @@ import {
   uniqStrings,
 } from "./shared.js";
 import { claimPolicy, getSourceProfile, sourceRank } from "./policies.js";
+import { mapRuntimeAreasToAffectedSurfaces } from "./approvalPolicy.js";
 
 const DEFAULT_FRESHNESS_POLICY = {
   freshDays: 21,
@@ -442,6 +443,7 @@ export function buildCandidateImpact({
     runtimeAreas: [...runtimeAreas],
     canonicalPaths: uniqStrings(canonicalPaths),
     runtimePaths: uniqStrings(runtimePaths),
+    affectedSurfaces: mapRuntimeAreasToAffectedSurfaces([...runtimeAreas]),
   };
 }
 
@@ -489,6 +491,7 @@ export function buildFinalizeImpactSummary({
     runtimeAreas: [...runtimeAreas],
     canonicalPaths: uniqStrings(canonicalPaths),
     runtimePaths: uniqStrings(runtimePaths),
+    affectedSurfaces: mapRuntimeAreasToAffectedSurfaces([...runtimeAreas]),
     counts: {
       businessProfileFields: Object.keys(businessProfile).filter((key) => key !== "fieldSources").length,
       capabilityFields: Object.keys(capabilities).length,

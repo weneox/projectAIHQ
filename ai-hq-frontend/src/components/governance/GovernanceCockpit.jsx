@@ -45,6 +45,27 @@ function toneForHealth(status = "") {
   }
 }
 
+function toneForPolicyOutcome(outcome = "") {
+  switch (s(outcome).toLowerCase()) {
+    case "allowed":
+      return "success";
+    case "allowed_with_logging":
+      return "info";
+    case "review_required":
+    case "approval_required":
+    case "quarantined":
+    case "allowed_with_human_review":
+    case "handoff_required":
+    case "operator_only":
+      return "warn";
+    case "blocked":
+    case "blocked_until_repair":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
+
 function collectRuntimeRepair(runtime = {}, readiness = {}) {
   const runtimeRepair = obj(runtime.repair);
   if (Object.keys(obj(runtimeRepair.action)).length) return runtimeRepair.action;
@@ -70,6 +91,56 @@ function collectLatestFinalize(truth = {}) {
   return {
     finalizeImpact: obj(latestHistory?.finalizeImpact),
     governance: obj(latestHistory?.governance),
+  };
+}
+
+function collectPolicyPosture(summary = {}, truth = {}) {
+  const source = obj(summary.policyPosture);
+  const approvalPolicy = obj(obj(summary.truth).approvalPolicy);
+  return {
+    truthPublicationPosture: s(
+      source.truthPublicationPosture || approvalPolicy.strictestOutcome || "unknown"
+    ).toLowerCase(),
+    executionPosture: s(source.executionPosture || "unknown").toLowerCase(),
+    reviewRequired: source.reviewRequired === true,
+    handoffRequired: source.handoffRequired === true,
+    blockedUntilRepair: source.blockedUntilRepair === true,
+    blocked: source.blocked === true,
+    requiredRole: s(source.requiredRole || "operator"),
+    requiredAction: s(source.requiredAction),
+    explanation: s(
+      source.explanation ||
+        "Policy telemetry is unavailable. The cockpit stays explicit instead of inferring authority."
+    ),
+    nextAction: obj(source.nextAction),
+    affectedSurfaces: arr(source.affectedSurfaces),
+    reasons: arr(source.reasons),
+  };
+}
+
+function collectChannelAutonomy(summary = {}) {
+  return arr(obj(summary.channelAutonomy).items).map((item) => ({
+    surface: s(item.surface || "unknown").toLowerCase(),
+    autonomyStatus: s(item.autonomyStatus || "unknown").toLowerCase(),
+    policyOutcome: s(item.policyOutcome || "unknown").toLowerCase(),
+    explanation: s(item.explanation || "Telemetry unavailable."),
+    why: arr(item.why),
+    repairRequired: item.repairRequired === true,
+    reviewRequired: item.reviewRequired === true,
+    handoffRequired: item.handoffRequired === true,
+    requiredAction: s(item.requiredAction),
+    requiredRole: s(item.requiredRole || "operator"),
+    nextAction: obj(item.nextAction),
+  }));
+}
+
+function collectPolicyControls(summary = {}) {
+  const source = obj(summary.policyControls);
+  return {
+    viewerRole: s(source.viewerRole || "member").toLowerCase(),
+    cannotLoosenAutonomy: source.cannotLoosenAutonomy === true,
+    tenantDefault: obj(source.tenantDefault),
+    items: arr(source.items),
   };
 }
 
@@ -221,6 +292,8 @@ export default function GovernanceCockpit({
   truth = {},
   trust = {},
   onRunAction,
+  onSavePolicyControl,
+  policyControlState = {},
 }) {
   const summary = resolveSummary(trust);
   const readiness = obj(summary.readiness);
@@ -242,6 +315,10 @@ export default function GovernanceCockpit({
   const governance = obj(latestFinalize.governance);
   const primaryRepair = collectRuntimeRepair(runtime, readiness);
   const affectedSurfaces = arr(runtimeHealth.affectedSurfaces);
+  const policyPosture = collectPolicyPosture(summary, truth);
+  const channelAutonomy = collectChannelAutonomy(summary);
+  const policyControls = collectPolicyControls(summary);
+  const policyTone = toneForPolicyOutcome(policyPosture.executionPosture);
   const autonomyHeadline = hasRuntimeTelemetry
     ? runtimeHealth.autonomousAllowed
       ? `Autonomous operation is allowed in ${titleize(
@@ -275,21 +352,11 @@ export default function GovernanceCockpit({
               Runtime {titleize(runtimeStatus || "unknown")}
             </Badge>
             <Badge
-              tone={
-                hasRuntimeTelemetry
-                  ? runtimeHealth.autonomousAllowed
-                    ? "success"
-                    : "danger"
-                  : "neutral"
-              }
+              tone={policyTone}
               variant="subtle"
               dot
             >
-              {hasRuntimeTelemetry
-                ? runtimeHealth.autonomousAllowed
-                  ? "Autonomy allowed"
-                  : "Autonomy stopped"
-                : "Autonomy unknown"}
+              {titleize(policyPosture.executionPosture || "unknown")}
             </Badge>
           </div>
         </div>
@@ -324,16 +391,268 @@ export default function GovernanceCockpit({
             tone={Number(governance.quarantinedClaimCount || 0) > 0 ? "warn" : "neutral"}
           />
           <MetricCard
-            label="Runtime Health"
-            value={titleize(runtimeStatus || "unknown")}
+            label="Execution Posture"
+            value={titleize(policyPosture.executionPosture || "unknown")}
             hint={
-              hasRuntimeTelemetry
-                ? titleize(runtimeHealth.reasonCode || "no active reason")
-                : "Runtime telemetry unavailable"
+              policyPosture.requiredAction
+                ? `${policyPosture.requiredAction}${policyPosture.requiredRole ? ` · ${titleize(policyPosture.requiredRole)}` : ""}`
+                : policyPosture.explanation
             }
-            tone={hasRuntimeTelemetry ? toneForHealth(runtimeStatus) : "neutral"}
+            tone={policyTone}
           />
         </div>
+
+        <div className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
+          <Card variant="surface" className="rounded-[28px]" tone={policyTone}>
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                    Policy Posture
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">
+                    Approval and execution state
+                  </div>
+                </div>
+                <Badge tone={policyTone} variant="subtle" dot>
+                  {titleize(policyPosture.executionPosture || "unknown")}
+                </Badge>
+              </div>
+
+              <div className="text-sm leading-6 text-slate-600 dark:text-slate-400">
+                {policyPosture.explanation}
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <MetricCard
+                  label="Truth Publication"
+                  value={titleize(policyPosture.truthPublicationPosture || "unknown")}
+                  hint="Approval posture for the latest truth publication path."
+                  tone={toneForPolicyOutcome(policyPosture.truthPublicationPosture)}
+                />
+                <MetricCard
+                  label="Required Next Step"
+                  value={policyPosture.requiredAction || "Telemetry unavailable"}
+                  hint={
+                    policyPosture.requiredRole
+                      ? `Required role: ${titleize(policyPosture.requiredRole)}`
+                      : "No explicit role requirement returned."
+                  }
+                  tone={policyTone}
+                />
+              </div>
+
+              <ImpactList
+                title="Affected Channels"
+                items={policyPosture.affectedSurfaces}
+                empty="No affected channel summary was returned."
+              />
+              <ImpactList
+                title="Policy Drivers"
+                items={policyPosture.reasons}
+                empty="No policy driver telemetry was returned."
+              />
+
+              {(policyPosture.reviewRequired || policyPosture.handoffRequired || policyPosture.blockedUntilRepair) ? (
+                <div className="flex flex-wrap gap-2">
+                  {policyPosture.reviewRequired ? (
+                    <Badge tone="warn" variant="subtle">
+                      Human review required
+                    </Badge>
+                  ) : null}
+                  {policyPosture.handoffRequired ? (
+                    <Badge tone="warn" variant="subtle">
+                      Handoff required
+                    </Badge>
+                  ) : null}
+                  {policyPosture.blockedUntilRepair ? (
+                    <Badge tone="danger" variant="subtle">
+                      Repair required
+                    </Badge>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </Card>
+
+          <Card variant="surface" className="rounded-[28px]">
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                    Channel Autonomy
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">
+                    Allowed, reviewed, handed off, or blocked by surface
+                  </div>
+                </div>
+                <Badge tone="info" variant="subtle" dot>
+                  {channelAutonomy.length} surface{channelAutonomy.length === 1 ? "" : "s"}
+                </Badge>
+              </div>
+
+              {!channelAutonomy.length ? (
+                <div className="text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  Channel autonomy telemetry is unavailable. The control plane shows an explicit unknown posture instead of assuming autonomy is safe.
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {channelAutonomy.map((item) => (
+                    <div
+                      key={item.surface}
+                      className="rounded-[22px] border border-slate-200/80 bg-white/70 px-4 py-4 dark:border-white/10 dark:bg-white/[0.03]"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-slate-950 dark:text-white">
+                          {titleize(item.surface)}
+                        </div>
+                        <Badge tone={toneForPolicyOutcome(item.policyOutcome)} variant="subtle" dot>
+                          {titleize(item.policyOutcome || "unknown")}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
+                        {item.explanation}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Badge tone="neutral" variant="subtle">
+                          {titleize(item.autonomyStatus || "unknown")}
+                        </Badge>
+                        {item.reviewRequired ? (
+                          <Badge tone="warn" variant="subtle">
+                            Review
+                          </Badge>
+                        ) : null}
+                        {item.handoffRequired ? (
+                          <Badge tone="warn" variant="subtle">
+                            Handoff
+                          </Badge>
+                        ) : null}
+                        {item.repairRequired ? (
+                          <Badge tone="danger" variant="subtle">
+                            Repair
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <div className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                        {item.requiredAction
+                          ? `Next step: ${item.requiredAction}${item.requiredRole ? ` · ${titleize(item.requiredRole)}` : ""}`
+                          : "No explicit next step was returned."}
+                      </div>
+                      {item.why.length ? (
+                        <div className="mt-3">
+                          <TagList items={item.why} empty="No policy drivers returned." />
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        <Card variant="surface" className="rounded-[28px]">
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                  Policy Controls
+                </div>
+                <div className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">
+                  Operator-manageable autonomy controls
+                </div>
+              </div>
+              <Badge tone="info" variant="subtle" dot>
+                {titleize(policyControls.viewerRole || "member")}
+              </Badge>
+            </div>
+
+            <div className="text-sm leading-6 text-slate-600 dark:text-slate-400">
+              Controls can tighten autonomy by channel, but they never bypass strict runtime authority, repair-required posture, or blocked truth governance.
+            </div>
+
+            {policyControlState.error ? (
+              <div className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">
+                {policyControlState.error}
+              </div>
+            ) : null}
+
+            {policyControls.cannotLoosenAutonomy ? (
+              <div className="rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-100">
+                Runtime or truth safety posture currently forbids loosening autonomy. Safer control modes remain available.
+              </div>
+            ) : null}
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {[policyControls.tenantDefault, ...policyControls.items]
+                .filter((item) => Object.keys(obj(item)).length > 0)
+                .map((item) => {
+                  const savingKey = s(item.surface || "tenant");
+                  const saving =
+                    policyControlState.savingSurface &&
+                    policyControlState.savingSurface === savingKey;
+                  return (
+                    <div
+                      key={savingKey}
+                      className="rounded-[22px] border border-slate-200/80 bg-white/70 px-4 py-4 dark:border-white/10 dark:bg-white/[0.03]"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-semibold text-slate-950 dark:text-white">
+                          {savingKey === "tenant" ? "Tenant Default" : titleize(savingKey)}
+                        </div>
+                        <Badge tone={toneForPolicyOutcome(item.controlMode)} variant="subtle" dot>
+                          {titleize(item.controlMode || "autonomy_enabled")}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                        {item.changedAt
+                          ? `Updated ${formatWhen(item.changedAt)}${item.changedBy ? ` by ${item.changedBy}` : ""}`
+                          : "No explicit override recorded."}
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {arr(item.availableModes).map((mode) => (
+                          <button
+                            key={mode.mode}
+                            type="button"
+                            disabled={!mode.allowed || !onSavePolicyControl || saving}
+                            onClick={() =>
+                              onSavePolicyControl?.({
+                                surface: item.surface || "tenant",
+                                controlMode: mode.mode,
+                              })
+                            }
+                            className={[
+                              "flex w-full items-center justify-between rounded-[14px] border px-3 py-2 text-left text-sm transition",
+                              mode.mode === item.controlMode
+                                ? "border-slate-900 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950"
+                                : "border-slate-200 bg-white text-slate-700 dark:border-white/10 dark:bg-black/20 dark:text-slate-200",
+                              !mode.allowed || !onSavePolicyControl || saving
+                                ? "cursor-not-allowed opacity-60"
+                                : "hover:border-slate-400 dark:hover:border-white/30",
+                            ].join(" ")}
+                          >
+                            <span>{mode.label}</span>
+                            <span className="text-[11px] uppercase tracking-[0.14em] opacity-70">
+                              {mode.allowed ? "Apply" : titleize(mode.requiredRole)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                      {arr(item.availableModes).some((mode) => !mode.allowed && mode.unavailableReason) ? (
+                        <div className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                          {
+                            arr(item.availableModes).find(
+                              (mode) => !mode.allowed && mode.unavailableReason
+                            )?.unavailableReason
+                          }
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </Card>
 
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
           <Card variant="surface" className="rounded-[28px]">

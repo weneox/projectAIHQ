@@ -471,6 +471,11 @@ function buildDisabledOperationalReadinessSummary({ enforced = false, error = ""
     enforced: Boolean(enforced),
     status: error ? "attention" : "unavailable",
     error: s(error),
+    executionPolicy: {
+      posture: "blocked_until_repair",
+      strictestOutcome: "blocked_until_repair",
+      reasonCodes: error ? ["operational_readiness_unavailable"] : [],
+    },
     blockerReasonCodes: [],
     repairActions: [],
     blockers: {
@@ -519,6 +524,12 @@ function finalizeOperationalReadinessSummary(summary = {}, { enforced = false, v
         : total > 0
         ? "blocked"
         : "ready",
+    executionPolicy: {
+      posture: total > 0 ? "blocked_until_repair" : "allowed",
+      strictestOutcome: total > 0 ? "blocked_until_repair" : "allowed",
+      reasonCodes: derived.reasonCodes,
+      repairRequired: total > 0,
+    },
     blockerReasonCodes: derived.reasonCodes,
     repairActions: derived.repairActions,
     blockers: {

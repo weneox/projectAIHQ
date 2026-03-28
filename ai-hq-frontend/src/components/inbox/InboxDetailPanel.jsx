@@ -22,6 +22,77 @@ import SettingsSurfaceBanner from "../settings/SettingsSurfaceBanner.jsx";
 import InboxMessageBubble from "./InboxMessageBubble.jsx";
 import InboxMiniInfo from "./InboxMiniInfo.jsx";
 
+function s(v, d = "") {
+  return String(v ?? d).trim();
+}
+
+function arr(v, d = []) {
+  return Array.isArray(v) ? v : d;
+}
+
+function obj(v, d = {}) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : d;
+}
+
+function titleize(value = "") {
+  return s(value)
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (x) => x.toUpperCase());
+}
+
+function policyTone(outcome = "") {
+  switch (s(outcome).toLowerCase()) {
+    case "allowed":
+      return "border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-100";
+    case "allowed_with_logging":
+      return "border-cyan-400/20 bg-cyan-400/[0.08] text-cyan-100";
+    case "allowed_with_human_review":
+    case "handoff_required":
+    case "operator_only":
+      return "border-amber-300/20 bg-amber-300/[0.08] text-amber-100";
+    case "blocked":
+    case "blocked_until_repair":
+      return "border-rose-400/20 bg-rose-400/[0.08] text-rose-100";
+    default:
+      return "border-white/10 bg-white/[0.04] text-white/70";
+  }
+}
+
+function deriveExecutionPolicy(thread = {}) {
+  const meta = obj(thread.last_decision_meta || thread.lastDecisionMeta);
+  const outcome = s(
+    meta.executionPolicyOutcome || meta.execution_policy_outcome || "unknown"
+  ).toLowerCase();
+  const reasonCodes = arr(
+    meta.executionPolicyReasonCodes || meta.execution_policy_reason_codes
+  )
+    .map((item) => s(item).toLowerCase())
+    .filter(Boolean);
+
+  let explanation = "No thread-level execution policy telemetry has been recorded yet.";
+  if (outcome === "blocked_until_repair") {
+    explanation = "Inbox autonomy is fail-closed for this thread until runtime repair restores valid authority.";
+  } else if (outcome === "blocked") {
+    explanation = "Inbox autonomy is blocked for this thread by governed policy posture.";
+  } else if (outcome === "handoff_required") {
+    explanation = "This thread requires operator handoff before the channel can continue autonomously.";
+  } else if (outcome === "allowed_with_human_review") {
+    explanation = "Autonomy is constrained here and requires human review before risky execution continues.";
+  } else if (outcome === "operator_only") {
+    explanation = "This thread is currently restricted to operator-controlled execution.";
+  } else if (outcome === "allowed_with_logging") {
+    explanation = "Autonomy is available here, with logging expected for the governed action path.";
+  } else if (outcome === "allowed") {
+    explanation = "Healthy low-risk autonomous execution was allowed for the last decision on this thread.";
+  }
+
+  return {
+    outcome,
+    reasonCodes,
+    explanation,
+  };
+}
+
 function Button({ children, onClick, tone = "default", disabled = false, icon: Icon }) {
   const toneMap = {
     default:
@@ -79,6 +150,7 @@ export default function InboxDetailPanel({
   const handoffActive = Boolean(selectedThread?.handoff_active);
   const assignedTo = selectedThread?.assigned_to || "—";
 
+  const executionPolicy = deriveExecutionPolicy(selectedThread);
   const canAssign = hasThread && !actionState?.isActionPending?.("assign");
   const canActivateHandoff = hasThread && !handoffActive && !actionState?.isActionPending?.("handoff");
   const canReleaseHandoff = hasThread && handoffActive && !actionState?.isActionPending?.("release");
@@ -167,6 +239,36 @@ export default function InboxDetailPanel({
               ))
             ) : (
               <span className="text-sm text-white/50">—</span>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-white/32">
+              Channel Autonomy
+            </div>
+            <div
+              className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] ${policyTone(executionPolicy.outcome)}`}
+            >
+              {titleize(executionPolicy.outcome || "unknown")}
+            </div>
+          </div>
+          <div className="mt-2 text-sm leading-6 text-white/66">
+            {executionPolicy.explanation}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {executionPolicy.reasonCodes.length ? (
+              executionPolicy.reasonCodes.map((code) => (
+                <span
+                  key={code}
+                  className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-white/70"
+                >
+                  {titleize(code)}
+                </span>
+              ))
+            ) : (
+              <span className="text-sm text-white/50">Telemetry unavailable</span>
             )}
           </div>
         </div>

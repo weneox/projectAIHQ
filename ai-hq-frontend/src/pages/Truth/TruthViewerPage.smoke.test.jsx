@@ -121,10 +121,45 @@ vi.mock("../../api/trust.js", () => ({
         latestVersionId: "truth-v3",
         approvedAt: "2026-03-25T10:00:00.000Z",
         approvedBy: "reviewer@aihq.test",
+        approvalPolicy: {
+          strictestOutcome: "approved",
+        },
       },
       reviewQueue: {
         pending: 2,
         conflicts: 1,
+      },
+      policyPosture: {
+        truthPublicationPosture: "approved",
+        executionPosture: "allowed_with_logging",
+        requiredRole: "operator",
+        requiredAction: "Monitor audit trail",
+        explanation:
+          "Autonomy is available, but medium-risk work stays in the logged execution lane.",
+        affectedSurfaces: ["voice", "inbox"],
+      },
+      channelAutonomy: {
+        items: [
+          {
+            surface: "inbox",
+            policyOutcome: "allowed_with_logging",
+            autonomyStatus: "autonomous_with_logging",
+            explanation:
+              "Inbox is allowed for low or medium risk work, but the action path stays audit-visible.",
+            requiredAction: "Monitor audit trail",
+            requiredRole: "operator",
+          },
+          {
+            surface: "voice",
+            policyOutcome: "handoff_required",
+            autonomyStatus: "handoff_required",
+            handoffRequired: true,
+            explanation:
+              "Voice autonomy requires a human handoff before sensitive actions can continue.",
+            requiredAction: "Complete operator handoff",
+            requiredRole: "operator",
+          },
+        ],
       },
     },
   }),
@@ -159,6 +194,8 @@ describe("Truth viewer smoke", () => {
 
     expect(await screen.findByRole("heading", { name: /business truth/i })).toBeInTheDocument();
     expect(screen.getByText(/truth governance cockpit/i)).toBeInTheDocument();
+    expect(screen.getByText(/approval and execution state/i)).toBeInTheDocument();
+    expect(screen.getByText(/allowed, reviewed, handed off, or blocked by surface/i)).toBeInTheDocument();
     expect(screen.getByText(/projection authority and repair/i)).toBeInTheDocument();
     expect(screen.getByText(/latest approved change footprint/i)).toBeInTheDocument();
     expect(screen.getByText("2026-03-25T10:00:00.000Z")).toBeInTheDocument();
@@ -282,8 +319,7 @@ describe("Truth viewer smoke", () => {
     render(<TruthViewerPage />);
 
     expect(await screen.findByText(/truth governance cockpit/i)).toBeInTheDocument();
-    expect(screen.getByText(/runtime telemetry unavailable/i)).toBeInTheDocument();
-    expect(screen.getByText(/autonomy unknown/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/policy telemetry is unavailable/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/north clinic/i)).toBeInTheDocument();
   });
 });

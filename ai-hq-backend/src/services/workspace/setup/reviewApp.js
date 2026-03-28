@@ -8,6 +8,7 @@ import {
 import { compactDraftObject, safeUuidOrNull } from "./draftShared.js";
 import { arr, obj, s } from "./utils.js";
 import { can, normalizeRole } from "../../../utils/roles.js";
+import { safeAppendDecisionEvent } from "../../../db/helpers/decisionEvents.js";
 
 async function defaultGetCurrentSetupReview(tenantId) {
   const reviewHelper = await import("../../../db/helpers/tenantSetupReview.js");
@@ -362,6 +363,72 @@ export async function finalizeSetupReviewComposition(
         }
       );
     }
+
+    await safeAppendDecisionEvent(db, {
+      tenantId: actor.tenantId,
+      tenantKey: actor.tenantKey,
+      eventType: "truth_publication_decision",
+      actor: reviewer.reviewerEmail || reviewer.reviewerName || "system",
+      source: "workspace.setup.review.finalize",
+      surface: "tenant",
+      policyOutcome: "approved",
+      reasonCodes: ["setup_review_finalized", "truth_version_created"],
+      approvalPosture: {
+        outcome: s(projectionSummary?.approvalPolicy?.strictestOutcome || "approved").toLowerCase(),
+        requiredRole: s(
+          projectionSummary?.approvalPolicy?.requiredRole ||
+            projectionSummary?.approvalPolicy?.required_role
+        ).toLowerCase(),
+        reasonCodes:
+          projectionSummary?.approvalPolicy?.reasonCodes ||
+          projectionSummary?.approvalPolicy?.reason_codes ||
+          [],
+      },
+      executionPosture: {
+        outcome: "approved",
+      },
+      truthVersionId: s(projectionSummary?.truthVersion?.id),
+      runtimeProjectionId: s(projectionSummary?.runtimeProjection?.id),
+      affectedSurfaces:
+        projectionSummary?.impactSummary?.affectedSurfaces ||
+        projectionSummary?.impactSummary?.affected_surfaces ||
+        [],
+      recommendedNextAction: {
+        label: "Runtime refresh completed",
+        kind: "observe",
+      },
+      decisionContext: {
+        reviewSessionId: s(finalized?.session?.id || finalized?.reviewSessionId),
+        finalizeReason: s(body?.reason),
+      },
+    });
+
+    await safeAppendDecisionEvent(db, {
+      tenantId: actor.tenantId,
+      tenantKey: actor.tenantKey,
+      eventType: "approval_policy_decision",
+      actor: reviewer.reviewerEmail || reviewer.reviewerName || "system",
+      source: "workspace.setup.review.finalize",
+      surface: "tenant",
+      policyOutcome: s(
+        projectionSummary?.approvalPolicy?.strictestOutcome || "approved"
+      ).toLowerCase(),
+      reasonCodes:
+        projectionSummary?.approvalPolicy?.reasonCodes ||
+        projectionSummary?.approvalPolicy?.reason_codes ||
+        ["approval_policy_evaluated"],
+      approvalPosture: projectionSummary?.approvalPolicy || {},
+      truthVersionId: s(projectionSummary?.truthVersion?.id),
+      runtimeProjectionId: s(projectionSummary?.runtimeProjection?.id),
+      affectedSurfaces:
+        projectionSummary?.impactSummary?.affectedSurfaces ||
+        projectionSummary?.impactSummary?.affected_surfaces ||
+        [],
+      decisionContext: {
+        reviewSessionId: s(finalized?.session?.id || finalized?.reviewSessionId),
+        finalizeReason: s(body?.reason),
+      },
+    });
 
     log?.info?.("setup.review.finalize.succeeded", {
       tenantKey: actor.tenantKey,

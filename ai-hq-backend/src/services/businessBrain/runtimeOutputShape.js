@@ -24,12 +24,16 @@ function buildRuntimeOutput({
   responsePlaybooks,
   threadState = null,
   authority = null,
+  policyControls = {},
   raw = {},
 }) {
   const profile = obj(tenant?.profile);
   const aiPolicy = obj(tenant?.ai_policy);
   const inboxPolicy = obj(tenant?.inbox_policy);
   const commentPolicy = obj(tenant?.comment_policy);
+  const normalizedPolicyControls = obj(
+    policyControls || tenant?.policy_controls || tenant?.policyControls
+  );
   const meta = obj(tenant?.meta);
   const normalizedServices = (Array.isArray(services) ? services : [])
     .map((item, idx) => normalizeServiceEntry(item, idx))
@@ -156,6 +160,7 @@ function buildRuntimeOutput({
     aiPolicy,
     inboxPolicy,
     commentPolicy,
+    policyControls: normalizedPolicyControls,
     profile,
     tenant,
     authority: authority && typeof authority === "object" ? authority : null,
@@ -163,6 +168,7 @@ function buildRuntimeOutput({
     raw: {
       ...obj(raw),
       authority: authority && typeof authority === "object" ? authority : null,
+      policyControls: normalizedPolicyControls,
       services,
       knowledgeEntries,
       responsePlaybooks,

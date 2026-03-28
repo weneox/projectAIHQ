@@ -1,5 +1,11 @@
 import { okJson, isDbReady } from "../../../../utils/http.js";
 import { buildInboxActions } from "../../../../services/inboxBrain.js";
+import {
+  applyExecutionPolicyToActions,
+  buildExecutionPolicyDecisionAuditShape,
+  mapExecutionOutcomeToDecisionEventType,
+} from "../../../../services/executionPolicy.js";
+import { safeAppendDecisionEvent } from "../../../../db/helpers/decisionEvents.js";
 import { applyHandoffActions, persistLeadActions } from "../mutations.js";
 import {
   findExistingInboundMessage,
@@ -156,13 +162,117 @@ export function createInboxIngestHandler({
         runtime,
       });
 
-      const actions = Array.isArray(brain?.actions) ? brain.actions : [];
+      const proposedActions = Array.isArray(brain?.actions) ? brain.actions : [];
+      const executionPolicy = applyExecutionPolicyToActions({
+        runtime,
+        actions: proposedActions,
+        surface: "inbox",
+        channelType: input.channel,
+        currentState: {
+          handoffActive:
+            runtime?.threadState?.handoffActive ??
+            runtime?.threadState?.handoff_active ??
+            thread?.handoff_active,
+        },
+      });
+      const actions = executionPolicy.actions.length
+        ? executionPolicy.actions
+        : executionPolicy.summary.strictestOutcome === "allowed_with_human_review" ||
+          executionPolicy.summary.strictestOutcome === "handoff_required" ||
+          executionPolicy.summary.strictestOutcome === "operator_only" ||
+          executionPolicy.summary.strictestOutcome === "blocked" ||
+          executionPolicy.summary.strictestOutcome === "blocked_until_repair"
+        ? [
+            {
+              type: "no_reply",
+              reason: `execution_policy_${executionPolicy.summary.strictestOutcome}`,
+              meta: {
+                executionPolicy: executionPolicy.summary,
+              },
+            },
+          ]
+        : [];
+      const brainWithPolicy = {
+        ...brain,
+        proposedActions,
+        executionPolicy: executionPolicy.summary,
+      };
+
+      await safeAppendDecisionEvent(client, {
+        ...buildExecutionPolicyDecisionAuditShape({
+          tenantId: String(tenant?.id || tenantId),
+          tenantKey: input.tenantKey,
+          source: "inbox.ingest",
+          actor: "system",
+          surface: "inbox",
+          channelType: input.channel,
+          runtime,
+          summary: executionPolicy.summary,
+          actions: proposedActions,
+          currentState: {
+            handoffActive:
+              runtime?.threadState?.handoffActive ??
+              runtime?.threadState?.handoff_active ??
+              thread?.handoff_active,
+          },
+        }),
+        decisionContext: {
+          threadId: String(thread?.id || ""),
+          messageId: String(message?.id || ""),
+          proposedActionCount: proposedActions.length,
+          allowedActionCount: executionPolicy.summary.allowedActionCount,
+          filteredActionCount: executionPolicy.summary.filteredActionCount,
+          proposedActionTypes: proposedActions.map((item) => item?.type).filter(Boolean),
+          allowedActionTypes: executionPolicy.actions.map((item) => item?.type).filter(Boolean),
+          filteredActionTypes: executionPolicy.filteredActions
+            .map((item) => item?.type)
+            .filter(Boolean),
+        },
+      });
+
+      if (
+        executionPolicy.summary.strictestOutcome &&
+        mapExecutionOutcomeToDecisionEventType(
+          executionPolicy.summary.strictestOutcome
+        ) !== "execution_policy_decision"
+      ) {
+        await safeAppendDecisionEvent(client, {
+          ...buildExecutionPolicyDecisionAuditShape({
+            tenantId: String(tenant?.id || tenantId),
+            tenantKey: input.tenantKey,
+            source: "inbox.ingest",
+            actor: "system",
+            surface: "inbox",
+            channelType: input.channel,
+            runtime,
+            summary: executionPolicy.summary,
+            actions: proposedActions,
+            currentState: {
+              handoffActive:
+                runtime?.threadState?.handoffActive ??
+                runtime?.threadState?.handoff_active ??
+                thread?.handoff_active,
+            },
+          }),
+          eventType: mapExecutionOutcomeToDecisionEventType(
+            executionPolicy.summary.strictestOutcome
+          ),
+          decisionContext: {
+            threadId: String(thread?.id || ""),
+            messageId: String(message?.id || ""),
+            blockedActionTypes: executionPolicy.filteredActions
+              .map((item) => item?.type)
+              .filter(Boolean),
+          },
+        });
+      }
 
       logInfo("inbox brain result", {
         tenantKey: input.tenantKey,
-        intent: brain?.intent || "",
-        leadScore: Number(brain?.leadScore || 0),
+        intent: brainWithPolicy?.intent || "",
+        leadScore: Number(brainWithPolicy?.leadScore || 0),
         actionsCount: actions.length,
+        executionPolicyOutcome: executionPolicy.summary.strictestOutcome,
       });
 
       const leadResults = await persistLead({
@@ -198,7 +308,7 @@ export function createInboxIngestHandler({
           tenant,
           tenantKey: input.tenantKey,
           priorState: priorThreadState,
-          brain,
+          brain: brainWithPolicy,
           actions,
           leadResults,
           handoffResults,
@@ -227,7 +337,7 @@ export function createInboxIngestHandler({
           threadState: nextThreadState,
           message,
           tenant,
-          brain,
+          brain: brainWithPolicy,
           actions,
           leadResults,
           handoffResults,

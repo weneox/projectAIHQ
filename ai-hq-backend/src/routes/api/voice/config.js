@@ -1,3 +1,5 @@
+import { buildExecutionPolicySurfaceSummary } from "../../../services/executionPolicy.js";
+
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
@@ -40,6 +42,18 @@ export function buildVoiceConfigFromProjectedRuntime(
     companyName,
     defaultLanguage,
     authority,
+    executionPolicy: {
+      voice: buildExecutionPolicySurfaceSummary({
+        runtime,
+        surface: "voice",
+        channelType: "voice",
+      }),
+      inbox: buildExecutionPolicySurfaceSummary({
+        runtime,
+        surface: "inbox",
+        channelType: "inbox",
+      }),
+    },
     projectedRuntime: runtime,
     match: {
       tenantKey: s(tenantKey),

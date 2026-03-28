@@ -2,9 +2,13 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const dispatchRepairAction = vi.fn();
+const saveSettingsTrustPolicyControl = vi.fn();
 
 vi.mock("../../../components/readiness/dispatchRepairAction.js", () => ({
   dispatchRepairAction: (...args) => dispatchRepairAction(...args),
+}));
+vi.mock("../../../api/trust.js", () => ({
+  saveSettingsTrustPolicyControl: (...args) => saveSettingsTrustPolicyControl(...args),
 }));
 
 let TrustMaintenanceSection;
@@ -17,6 +21,8 @@ beforeEach(() => {
   HTMLElement.prototype.scrollIntoView = vi.fn();
   dispatchRepairAction.mockReset();
   dispatchRepairAction.mockResolvedValue({ ok: true });
+  saveSettingsTrustPolicyControl.mockReset();
+  saveSettingsTrustPolicyControl.mockResolvedValue({ ok: true });
 });
 
 beforeEach(async () => {
@@ -143,6 +149,9 @@ describe("TrustMaintenanceSection", () => {
             },
             truth: {
               latestVersionId: "",
+              approvalPolicy: {
+                strictestOutcome: "approval_required",
+              },
               readiness: { status: "ready", blockers: [] },
             },
             setupReview: {
@@ -152,6 +161,71 @@ describe("TrustMaintenanceSection", () => {
             reviewQueue: {
               pending: 0,
               conflicts: 0,
+            },
+            policyPosture: {
+              truthPublicationPosture: "approval_required",
+              executionPosture: "blocked_until_repair",
+              blockedUntilRepair: true,
+              requiredRole: "operator",
+              requiredAction: "Rebuild runtime projection",
+              explanation:
+                "Autonomous execution is fail-closed until runtime projection or strict authority is repaired.",
+              reasons: ["truth:approval_required", "runtime:missing"],
+              affectedSurfaces: ["inbox", "voice"],
+            },
+            channelAutonomy: {
+              items: [
+                {
+                  surface: "inbox",
+                  policyOutcome: "blocked_until_repair",
+                  autonomyStatus: "blocked_until_repair",
+                  repairRequired: true,
+                  explanation:
+                    "Inbox autonomy is blocked until runtime authority or projection health is repaired.",
+                  requiredAction: "Rebuild runtime projection",
+                  requiredRole: "operator",
+                },
+                {
+                  surface: "voice",
+                  policyOutcome: "blocked_until_repair",
+                  autonomyStatus: "blocked_until_repair",
+                  repairRequired: true,
+                  explanation:
+                    "Voice autonomy is blocked until runtime authority or projection health is repaired.",
+                  requiredAction: "Rebuild runtime projection",
+                  requiredRole: "operator",
+                },
+              ],
+            },
+            policyControls: {
+              viewerRole: "admin",
+              cannotLoosenAutonomy: true,
+              tenantDefault: {
+                surface: "tenant",
+                controlMode: "human_review_required",
+                availableModes: [
+                  {
+                    mode: "human_review_required",
+                    label: "Human Review Required",
+                    requiredRole: "operator",
+                    allowed: true,
+                  },
+                ],
+              },
+              items: [
+                {
+                  surface: "voice",
+                  controlMode: "operator_only_mode",
+                  availableModes: [
+                    {
+                      mode: "operator_only_mode",
+                      label: "Operator Only Mode",
+                      requiredRole: "admin",
+                      allowed: true,
+                    },
+                  ],
+                },
+              ],
             },
           },
             recentRuns: [],
@@ -175,6 +249,8 @@ describe("TrustMaintenanceSection", () => {
     expect(screen.getByText(/operator governance cockpit/i)).toBeInTheDocument();
     expect(screen.getAllByText(/runtime projection blocker/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/projection authority and repair/i)).toBeInTheDocument();
+    expect(screen.getByText(/approval and execution state/i)).toBeInTheDocument();
+    expect(screen.getByText(/allowed, reviewed, handed off, or blocked by surface/i)).toBeInTheDocument();
     expect(screen.getByText(/latest approved change footprint/i)).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: /rebuild runtime projection/i })[0]);
     await waitFor(() => {
@@ -186,6 +262,15 @@ describe("TrustMaintenanceSection", () => {
             path: "/api/settings/trust/runtime-projection/repair",
             method: "POST",
           },
+        })
+      );
+    });
+    fireEvent.click(screen.getByRole("button", { name: /operator only mode/i }));
+    await waitFor(() => {
+      expect(saveSettingsTrustPolicyControl).toHaveBeenCalledWith(
+        expect.objectContaining({
+          surface: "voice",
+          controlMode: "operator_only_mode",
         })
       );
     });

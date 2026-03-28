@@ -14,6 +14,7 @@ import {
   loadCurrentProjection,
   loadDbBrainData,
   loadLegacyTenant,
+  loadTenantPolicyControls,
 } from "./runtimeTenantData.js";
 import { s } from "./runtimeShared.js";
 
@@ -79,6 +80,11 @@ async function loadTenantBusinessRuntime(input = {}) {
     });
   }
 
+  const policyControls = await loadTenantPolicyControls({
+    db,
+    tenant: legacyTenant,
+  });
+
   const projectionResult = await loadCurrentProjection({
     db,
     tenantId: legacyTenant.id,
@@ -95,7 +101,10 @@ async function loadTenantBusinessRuntime(input = {}) {
     });
     return buildProjectionFirstRuntime({
       legacyTenant,
-      input,
+      input: {
+        ...input,
+        policyControls,
+      },
       projection,
       freshness: projectionFreshness,
     });
@@ -127,7 +136,10 @@ async function loadTenantBusinessRuntime(input = {}) {
   const dbData = await loadDbBrainData({ db, tenant: legacyTenant });
   return buildInspectionFallbackRuntime({
     legacyTenant,
-    input,
+    input: {
+      ...input,
+      policyControls,
+    },
     dbData,
     authorityMode,
   });
