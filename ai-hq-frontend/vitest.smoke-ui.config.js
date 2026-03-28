@@ -1,9 +1,20 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig, mergeConfig } from "vitest/config";
 import baseConfig from "./vite.config.js";
+
+const routerMockPath = fileURLToPath(
+  new URL("./src/test/react-router-dom.smoke-mock.jsx", import.meta.url)
+);
 
 export default mergeConfig(
   baseConfig,
   defineConfig({
+    resolve: {
+      alias: {
+        "react-router-dom": routerMockPath,
+        "react-router": routerMockPath,
+      },
+    },
     test: {
       include: [
         "src/components/settings/SettingsSurfaceBanner.test.jsx",

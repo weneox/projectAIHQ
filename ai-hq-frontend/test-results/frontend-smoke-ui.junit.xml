@@ -1,93 +1,1561 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="25" failures="0" errors="0" time="2.7505027">
-    <testsuite name="src/pages/AdminTeam.test.jsx" timestamp="2026-03-27T18:57:39.990Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0132614">
-        <testcase classname="src/pages/AdminTeam.test.jsx" name="AdminTeam &gt; renders shared surface banner feedback" time="0.0131863">
+<testsuites name="vitest tests" tests="30" failures="3" errors="0" time="6.5617379">
+    <testsuite name="src/pages/AdminTeam.test.jsx" timestamp="2026-03-28T16:13:51.256Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.014192">
+        <testcase classname="src/pages/AdminTeam.test.jsx" name="AdminTeam &gt; renders shared surface banner feedback" time="0.0141197">
         </testcase>
     </testsuite>
-    <testsuite name="src/pages/AdminTenants.test.jsx" timestamp="2026-03-27T18:57:39.992Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0086881">
-        <testcase classname="src/pages/AdminTenants.test.jsx" name="AdminTenants &gt; renders shared surface banner feedback" time="0.0085939">
+    <testsuite name="src/pages/AdminTenants.test.jsx" timestamp="2026-03-28T16:13:51.260Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0111738">
+        <testcase classname="src/pages/AdminTenants.test.jsx" name="AdminTenants &gt; renders shared surface banner feedback" time="0.0110717">
         </testcase>
     </testsuite>
-    <testsuite name="src/pages/Comments.test.jsx" timestamp="2026-03-27T18:57:39.993Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0143061">
-        <testcase classname="src/pages/Comments.test.jsx" name="Comments &gt; renders shared surface feedback through the page shell" time="0.0142336">
+    <testsuite name="src/pages/Comments.test.jsx" timestamp="2026-03-28T16:13:51.261Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.016363">
+        <testcase classname="src/pages/Comments.test.jsx" name="Comments &gt; renders shared surface feedback through the page shell" time="0.0162864">
         </testcase>
     </testsuite>
-    <testsuite name="src/pages/Executions.smoke.test.jsx" timestamp="2026-03-27T18:57:39.993Z" hostname="Emil" tests="2" failures="0" errors="0" skipped="0" time="0.1191286">
-        <testcase classname="src/pages/Executions.smoke.test.jsx" name="Executions durable surface &gt; renders summary, detail, and manual retry flow" time="0.0968907">
+    <testsuite name="src/pages/Executions.smoke.test.jsx" timestamp="2026-03-28T16:13:51.263Z" hostname="Emil" tests="2" failures="0" errors="0" skipped="0" time="0.1041316">
+        <testcase classname="src/pages/Executions.smoke.test.jsx" name="Executions durable surface &gt; renders summary, detail, and manual retry flow" time="0.0805397">
         </testcase>
-        <testcase classname="src/pages/Executions.smoke.test.jsx" name="Executions durable surface &gt; shows honest loading and error states" time="0.0220703">
-        </testcase>
-    </testsuite>
-    <testsuite name="src/pages/Inbox.test.jsx" timestamp="2026-03-27T18:57:39.994Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0910767">
-        <testcase classname="src/pages/Inbox.test.jsx" name="Inbox &gt; renders shared page shell feedback" time="0.090924">
+        <testcase classname="src/pages/Executions.smoke.test.jsx" name="Executions durable surface &gt; shows honest loading and error states" time="0.023424">
         </testcase>
     </testsuite>
-    <testsuite name="src/pages/Voice.test.jsx" timestamp="2026-03-27T18:57:39.994Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0144407">
-        <testcase classname="src/pages/Voice.test.jsx" name="Voice &gt; renders shared banner state through the admin shell" time="0.0143519">
+    <testsuite name="src/pages/Inbox.test.jsx" timestamp="2026-03-28T16:13:51.264Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0909477">
+        <testcase classname="src/pages/Inbox.test.jsx" name="Inbox &gt; renders shared page shell feedback" time="0.0906976">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/admin/AdminPageShell.test.jsx" timestamp="2026-03-27T18:57:39.995Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0154562">
-        <testcase classname="src/components/admin/AdminPageShell.test.jsx" name="AdminPageShell &gt; renders page metadata, shared banners, and header actions" time="0.0153633">
+    <testsuite name="src/pages/Voice.test.jsx" timestamp="2026-03-28T16:13:51.265Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.013394">
+        <testcase classname="src/pages/Voice.test.jsx" name="Voice &gt; renders shared banner state through the admin shell" time="0.0133072">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/inbox/InboxComposer.test.jsx" timestamp="2026-03-27T18:57:39.996Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0089046">
-        <testcase classname="src/components/inbox/InboxComposer.test.jsx" name="InboxComposer &gt; renders explicit composer surface feedback" time="0.0088256">
+    <testsuite name="src/components/admin/AdminPageShell.test.jsx" timestamp="2026-03-28T16:13:51.266Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0182762">
+        <testcase classname="src/components/admin/AdminPageShell.test.jsx" name="AdminPageShell &gt; renders page metadata, shared banners, and header actions" time="0.0181921">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/inbox/InboxDetailPanel.test.jsx" timestamp="2026-03-27T18:57:39.997Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0103226">
-        <testcase classname="src/components/inbox/InboxDetailPanel.test.jsx" name="InboxDetailPanel &gt; renders explicit detail surface feedback" time="0.0102496">
+    <testsuite name="src/components/inbox/InboxComposer.test.jsx" timestamp="2026-03-28T16:13:51.267Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0097424">
+        <testcase classname="src/components/inbox/InboxComposer.test.jsx" name="InboxComposer &gt; renders explicit composer surface feedback" time="0.0096612">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/inbox/InboxLeadPanel.test.jsx" timestamp="2026-03-27T18:57:39.998Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0033789">
-        <testcase classname="src/components/inbox/InboxLeadPanel.test.jsx" name="InboxLeadPanel &gt; renders explicit lead surface feedback" time="0.0032703">
+    <testsuite name="src/components/inbox/InboxDetailPanel.test.jsx" timestamp="2026-03-28T16:13:51.267Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0144469">
+        <testcase classname="src/components/inbox/InboxDetailPanel.test.jsx" name="InboxDetailPanel &gt; renders explicit detail surface feedback" time="0.0143571">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/inbox/InboxThreadListPanel.test.jsx" timestamp="2026-03-27T18:57:39.998Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0245185">
-        <testcase classname="src/components/inbox/InboxThreadListPanel.test.jsx" name="InboxThreadListPanel &gt; renders explicit thread list surface data" time="0.0244482">
+    <testsuite name="src/components/inbox/InboxLeadPanel.test.jsx" timestamp="2026-03-28T16:13:51.270Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0169671">
+        <testcase classname="src/components/inbox/InboxLeadPanel.test.jsx" name="InboxLeadPanel &gt; renders explicit lead surface feedback" time="0.0167689">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/inbox/RetryQueuePanel.test.jsx" timestamp="2026-03-27T18:57:39.999Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0049561">
-        <testcase classname="src/components/inbox/RetryQueuePanel.test.jsx" name="RetryQueuePanel &gt; renders shared banner feedback" time="0.0048895">
+    <testsuite name="src/components/inbox/InboxThreadListPanel.test.jsx" timestamp="2026-03-28T16:13:51.271Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0210564">
+        <testcase classname="src/components/inbox/InboxThreadListPanel.test.jsx" name="InboxThreadListPanel &gt; renders explicit thread list surface data" time="0.0209803">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/inbox/ThreadOutboundAttemptsPanel.test.jsx" timestamp="2026-03-27T18:57:39.999Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0049745">
-        <testcase classname="src/components/inbox/ThreadOutboundAttemptsPanel.test.jsx" name="ThreadOutboundAttemptsPanel &gt; renders shared banner feedback" time="0.0049043">
+    <testsuite name="src/components/inbox/RetryQueuePanel.test.jsx" timestamp="2026-03-28T16:13:51.272Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0060628">
+        <testcase classname="src/components/inbox/RetryQueuePanel.test.jsx" name="RetryQueuePanel &gt; renders shared banner feedback" time="0.0059936">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/settings/ChannelsPanel.test.jsx" timestamp="2026-03-27T18:57:40.000Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0161603">
-        <testcase classname="src/components/settings/ChannelsPanel.test.jsx" name="ChannelsPanel &gt; renders shared surface banner feedback for channel async state" time="0.0160902">
+    <testsuite name="src/components/inbox/ThreadOutboundAttemptsPanel.test.jsx" timestamp="2026-03-28T16:13:51.272Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0058752">
+        <testcase classname="src/components/inbox/ThreadOutboundAttemptsPanel.test.jsx" name="ThreadOutboundAttemptsPanel &gt; renders shared banner feedback" time="0.0057956">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/settings/SecretsPanel.test.jsx" timestamp="2026-03-27T18:57:40.000Z" hostname="Emil" tests="2" failures="0" errors="0" skipped="0" time="0.0409947">
-        <testcase classname="src/components/settings/SecretsPanel.test.jsx" name="SecretsPanel &gt; renders shared surface banner feedback for admin secret async state" time="0.008876">
-        </testcase>
-        <testcase classname="src/components/settings/SecretsPanel.test.jsx" name="SecretsPanel &gt; renders provider secret access as read-only for insufficient roles" time="0.0320003">
+    <testsuite name="src/components/settings/ChannelsPanel.test.jsx" timestamp="2026-03-28T16:13:51.273Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0182013">
+        <testcase classname="src/components/settings/ChannelsPanel.test.jsx" name="ChannelsPanel &gt; renders shared surface banner feedback for channel async state" time="0.0181053">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/settings/SettingsSurfaceBanner.test.jsx" timestamp="2026-03-27T18:57:40.001Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0071005">
-        <testcase classname="src/components/settings/SettingsSurfaceBanner.test.jsx" name="SettingsSurfaceBanner &gt; renders save feedback and unavailable refresh affordances consistently" time="0.0070319">
+    <testsuite name="src/components/settings/SecretsPanel.test.jsx" timestamp="2026-03-28T16:13:51.274Z" hostname="Emil" tests="2" failures="0" errors="0" skipped="0" time="0.0409984">
+        <testcase classname="src/components/settings/SecretsPanel.test.jsx" name="SecretsPanel &gt; renders shared surface banner feedback for admin secret async state" time="0.0108065">
+        </testcase>
+        <testcase classname="src/components/settings/SecretsPanel.test.jsx" name="SecretsPanel &gt; renders provider secret access as read-only for insufficient roles" time="0.0300783">
         </testcase>
     </testsuite>
-    <testsuite name="src/components/settings/TeamPanel.test.jsx" timestamp="2026-03-27T18:57:40.001Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.027559">
-        <testcase classname="src/components/settings/TeamPanel.test.jsx" name="TeamPanel &gt; renders shared surface banner feedback for team async state" time="0.0274934">
+    <testsuite name="src/components/settings/SettingsSurfaceBanner.test.jsx" timestamp="2026-03-28T16:13:51.274Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0075624">
+        <testcase classname="src/components/settings/SettingsSurfaceBanner.test.jsx" name="SettingsSurfaceBanner &gt; renders save feedback and unavailable refresh affordances consistently" time="0.0074704">
         </testcase>
     </testsuite>
-    <testsuite name="src/pages/Settings/SettingsController.smoke.test.jsx" timestamp="2026-03-27T18:57:40.001Z" hostname="Emil" tests="3" failures="0" errors="0" skipped="0" time="2.2185862">
-        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders workspace and business-brain sections through the shared async surface language" time="0.9102584">
-        </testcase>
-        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders source sync and knowledge review truth-maintenance messaging" time="0.8708762">
-        </testcase>
-        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders operational readiness fail states honestly" time="0.4350828">
+    <testsuite name="src/components/settings/TeamPanel.test.jsx" timestamp="2026-03-28T16:13:51.275Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0285611">
+        <testcase classname="src/components/settings/TeamPanel.test.jsx" name="TeamPanel &gt; renders shared surface banner feedback for team async state" time="0.0284947">
         </testcase>
     </testsuite>
-    <testsuite name="src/pages/Truth/TruthViewerPage.smoke.test.jsx" timestamp="2026-03-27T18:57:40.002Z" hostname="Emil" tests="2" failures="0" errors="0" skipped="0" time="0.0632739">
-        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; renders approved truth metadata, provenance, and history" time="0.0441186">
+    <testsuite name="src/pages/Settings/SettingsController.smoke.test.jsx" timestamp="2026-03-28T16:13:51.276Z" hostname="Emil" tests="4" failures="2" errors="0" skipped="0" time="3.6901263">
+        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders workspace and business-brain sections through the shared async surface language" time="0.5248281">
         </testcase>
-        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; shows an explicit approved truth unavailable state without fallback data" time="0.0190252">
+        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders source sync and knowledge review truth-maintenance messaging" time="1.586767">
+            <failure message="Unable to find an element with the text: /source-derived truth changes are reviewed, conflicted, quarantined, approved, or rejected here/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m&lt;body&gt;[39m
+  [36m&lt;div&gt;[39m
+    [36m&lt;div[39m
+      [33mclass[39m=[32m&quot;space-y-6&quot;[39m
+    [36m&gt;[39m
+      [36m&lt;header[39m
+        [33mclass[39m=[32m&quot;relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] px-6 py-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.78),rgba(2,6,23,0.88))] dark:shadow-[0_24px_80px_rgba(0,0,0,0.34)] sm:px-7 sm:py-7&quot;[39m
+      [36m&gt;[39m
+        [36m&lt;div[39m
+          [33mclass[39m=[32m&quot;pointer-events-none absolute inset-0&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-300/80 to-transparent dark:via-sky-400/30&quot;[39m
+          [36m/&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;absolute -right-16 top-0 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl dark:bg-sky-400/10&quot;[39m
+          [36m/&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-indigo-500/8 blur-3xl dark:bg-indigo-400/10&quot;[39m
+          [36m/&gt;[39m
+        [36m&lt;/div&gt;[39m
+        [36m&lt;div[39m
+          [33mclass[39m=[32m&quot;relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;min-w-0 space-y-2&quot;[39m
+          [36m&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-slate-500 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400&quot;[39m
+            [36m&gt;[39m
+              [0mControl Center[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;space-y-1.5&quot;[39m
+            [36m&gt;[39m
+              [36m&lt;h1[39m
+                [33mclass[39m=[32m&quot;text-[28px] font-semibold tracking-[-0.03em] text-slate-950 dark:text-white sm:text-[32px]&quot;[39m
+              [36m&gt;[39m
+                [0mGovernance &amp; Settings[0m
+              [36m&lt;/h1&gt;[39m
+              [36m&lt;p[39m
+                [33mclass[39m=[32m&quot;max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400&quot;[39m
+              [36m&gt;[39m
+                [0mApproved truth, runtime health, repairability, and workspace controls in one operator control plane.[0m
+              [36m&lt;/p&gt;[39m
+            [36m&lt;/div&gt;[39m
+          [36m&lt;/div&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;relative max-w-full rounded-[24px] border border-slate-200/80 bg-white/75 p-4 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] lg:min-w-[260px]&quot;[39m
+          [36m&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500&quot;[39m
+            [36m&gt;[39m
+              [0mActive Section[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;mt-2 text-sm font-semibold text-slate-900 dark:text-white&quot;[39m
+            [36m&gt;[39m
+              [0mGeneral[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400&quot;[39m
+            [36m&gt;[39m
+              [0mWorkspace identity, region, language[0m
+            [36m&lt;/div&gt;[39m
+          [36m&lt;/div&gt;[39m
+        [36m&lt;/div&gt;[39m
+      [36m&lt;/header&gt;[39m
+      [36m&lt;div[39m
+        [33mclass[39m=[32m&quot;grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]&quot;[39m
+      [36m&gt;[39m
+        [36m&lt;aside[39m
+          [33mclass[39m=[32m&quot;min-w-0 self-start xl:sticky xl:top-6&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;relative min-w-0 transition-[transform,box-shadow,border-color,background-color] duration-250 focus-within:outline-none md:p-5 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(2,6,23,0.78))] overflow-hidden rounded-[28px] border border-slate-200/75 bg-white/82 p-0 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-white/[0.035] dark:shadow-[0_24px_80px_rgba(0,0,0,0.28)]&quot;[39m
+          [36m&gt;[39m
+            [36m&lt;div[39m
+              [33maria-hidden[39m=[32m&quot;true&quot;[39m
+              [33mclass[39m=[32m&quot;pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[28px] bg-gradient-to-r from-white/0 via-white/50 to-transparent dark:via-white/12&quot;[39m
+            [36m/&gt;[39m
+            [36m&lt;div[39m
+              [33maria-hidden[39m=[32m&quot;true&quot;[39m
+              [33mclass[39m=[32m&quot;pointer-events-none absolute inset-0 rounded-[28px] bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.10),transparent_46%)] dark:bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.045),transparent_44%)]&quot;[39m
+            [36m/&gt;[39m
+            [36m&lt;div[39m
+              [33maria-hidden[39m=[32m&quot;true&quot;[39m
+              [33mclass[39m=[32m&quot;pointer-events-none absolute -right-10 top-0 h-24 w-24 rounded-full blur-3xl bg-white/0&quot;[39m
+            [36m/&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;relative z-10 min-w-0&quot;[39m
+            [36m&gt;[39m
+              [36m&lt;div[39m
+                [33mclass[39m=[32m&quot;border-b border-slate-200/70 px-5 py-4 dark:border-white/10&quot;[39m
+              [36m&gt;[39m
+                [36m&lt;div[39m
+                  [33mclass[39m=[32m&quot;text-[11px] font-medium uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500&quot;[39m
+                [36m&gt;[39m
+                  [0mNavigation[0m
+                [36m&lt;/div&gt;[39m
+                [36m&lt;div[39m
+                  [33mclass[39m=[32m&quot;mt-2 text-sm font-medium text-slate-600 dark:text-slate-300&quot;[39m
+                [36m&gt;[39m
+                  [0mSettings sections[0m
+                [36m&lt;/div&gt;[39m
+              [36m&lt;/div&gt;[39m
+              [36m&lt;div[39m
+                [33mclass[39m=[32m&quot;max-h-[calc(100vh-12rem)] overflow-y-auto p-3&quot;[39m
+              [36m&gt;[39m
+                [36m&lt;nav[39m
+                  [33maria-label[39m=[32m&quot;Settings navigation&quot;[39m
+                  [33mclass[39m=[32m&quot;space-y-1.5&quot;[39m
+                [36m&gt;[39m
+                  [36m&lt;button[39m
+                    [33maria-current[39m=[32m&quot;page&quot;[39m
+                    [33mclass[39m=[32m&quot;group relative flex w-full items-center gap-3 overflow-hidden rounded-[22px] px-3.5 py-3.5 text-left transition-all duration-200 bg-[linear-gradient(180deg,rgba(59,130,246,0.10),rgba(59,130,246,0.04))] shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_10px_30px_rgba(37,99,235,0.10)] dark:bg-[linear-gradient(180deg,rgba(59,130,246,0.16),rgba(59,130,246,0.06))] dark:sh...
+
+Ignored nodes: comments, script, style
+[36m&lt;body&gt;[39m
+  [36m&lt;div&gt;[39m
+    [36m&lt;div[39m
+      [33mclass[39m=[32m&quot;space-y-6&quot;[39m
+    [36m&gt;[39m
+      [36m&lt;header[39m
+        [33mclass[39m=[32m&quot;relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] px-6 py-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.78),rgba(2,6,23,0.88))] dark:shadow-[0_24px_80px_rgba(0,0,0,0.34)] sm:px-7 sm:py-7&quot;[39m
+      [36m&gt;[39m
+        [36m&lt;div[39m
+          [33mclass[39m=[32m&quot;pointer-events-none absolute inset-0&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-300/80 to-transparent dark:via-sky-400/30&quot;[39m
+          [36m/&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;absolute -right-16 top-0 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl dark:bg-sky-400/10&quot;[39m
+          [36m/&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-indigo-500/8 blur-3xl dark:bg-indigo-400/10&quot;[39m
+          [36m/&gt;[39m
+        [36m&lt;/div&gt;[39m
+        [36m&lt;div[39m
+          [33mclass[39m=[32m&quot;relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;min-w-0 space-y-2&quot;[39m
+          [36m&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-slate-500 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400&quot;[39m
+            [36m&gt;[39m
+              [0mControl Center[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;space-y-1.5&quot;[39m
+            [36m&gt;[39m
+              [36m&lt;h1[39m
+                [33mclass[39m=[32m&quot;text-[28px] font-semibold tracking-[-0.03em] text-slate-950 dark:text-white sm:text-[32px]&quot;[39m
+              [36m&gt;[39m
+                [0mGovernance &amp; Settings[0m
+              [36m&lt;/h1&gt;[39m
+              [36m&lt;p[39m
+                [33mclass[39m=[32m&quot;max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400&quot;[39m
+              [36m&gt;[39m
+                [0mApproved truth, runtime health, repairability, and workspace controls in one operator control plane.[0m
+              [36m&lt;/p&gt;[39m
+            [36m&lt;/div&gt;[39m
+          [36m&lt;/div&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;relative max-w-full rounded-[24px] border border-slate-200/80 bg-white/75 p-4 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] lg:min-w-[260px]&quot;[39m
+          [36m&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500&quot;[39m
+            [36m&gt;[39m
+              [0mActive Section[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;mt-2 text-sm font-semibold text-slate-900 dark:text-white&quot;[39m
+            [36m&gt;[39m
+              [0mGeneral[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400&quot;[39m
+            [36m&gt;[39m
+              [0mWorkspace identity, region, language[0m
+            [36m&lt;/div&gt;[39m
+          [36m&lt;/div&gt;[39m
+        [36m&lt;/div&gt;[39m
+      [36m&lt;/header&gt;[39m
+      [36m&lt;div[39m
+        [33mclass[39m=[32m&quot;grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]&quot;[39m
+      [36m&gt;[39m
+        [36m&lt;aside[39m
+          [33mclass[39m=[32m&quot;min-w-0 self-start xl:sticky xl:top-6&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;relative min-w-0 transition-[transform,box-shadow,border-color,background-color] duration-250 focus-within:outline-none md:p-5 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(2,6,23,0.78))] overflow-hidden rounded-[28px] border border-slate-200/75 bg-white/82 p-0 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-white/[0.035] dark:shadow-[0_24px_80px_rgba(0,0,0,0.28)]&quot;[39m
+          [36m&gt;[39m
+            [36m&lt;div[39m
+              [33maria-hidden[39m=[32m&quot;true&quot;[39m
+              [33mclass[39m=[32m&quot;pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[28px] bg-gradient-to-r from-white/0 via-white/50 to-transparent dark:via-white/12&quot;[39m
+            [36m/&gt;[39m
+            [36m&lt;div[39m
+              [33maria-hidden[39m=[32m&quot;true&quot;[39m
+              [33mclass[39m=[32m&quot;pointer-events-none absolute inset-0 rounded-[28px] bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.10),transparent_46%)] dark:bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.045),transparent_44%)]&quot;[39m
+            [36m/&gt;[39m
+            [36m&lt;div[39m
+              [33maria-hidden[39m=[32m&quot;true&quot;[39m
+              [33mclass[39m=[32m&quot;pointer-events-none absolute -right-10 top-0 h-24 w-24 rounded-full blur-3xl bg-white/0&quot;[39m
+            [36m/&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;relative z-10 min-w-0&quot;[39m
+            [36m&gt;[39m
+              [36m&lt;div[39m
+                [33mclass[39m=[32m&quot;border-b border-slate-200/70 px-5 py-4 dark:border-white/10&quot;[39m
+              [36m&gt;[39m
+                [36m&lt;div[39m
+                  [33mclass[39m=[32m&quot;text-[11px] font-medium uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500&quot;[39m
+                [36m&gt;[39m
+                  [0mNavigation[0m
+                [36m&lt;/div&gt;[39m
+                [36m&lt;div[39m
+                  [33mclass[39m=[32m&quot;mt-2 text-sm font-medium text-slate-600 dark:text-slate-300&quot;[39m
+                [36m&gt;[39m
+                  [0mSettings sections[0m
+                [36m&lt;/div&gt;[39m
+              [36m&lt;/div&gt;[39m
+              [36m&lt;div[39m
+                [33mclass[39m=[32m&quot;max-h-[calc(100vh-12rem)] overflow-y-auto p-3&quot;[39m
+              [36m&gt;[39m
+                [36m&lt;nav[39m
+                  [33maria-label[39m=[32m&quot;Settings navigation&quot;[39m
+                  [33mclass[39m=[32m&quot;space-y-1.5&quot;[39m
+                [36m&gt;[39m
+                  [36m&lt;button[39m
+                    [33maria-current[39m=[32m&quot;page&quot;[39m
+                    [33mclass[39m=[32m&quot;group relative flex w-full items-center gap-3 overflow-hidden rounded-[22px] px-3.5 py-3.5 text-left transition-all duration-200 bg-[linear-gradient(180deg,rgba(59,130,246,0.10),rgba(59,130,246,0.04))] shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_10px_30px_rgba(37,99,235,0.10)] dark:bg-[linear-gradient(180deg,rgba(59,130,246,0.16),rgba(59,130,246,0.06))] dark:sh..." type="TestingLibraryElementError">
+TestingLibraryElementError: Unable to find an element with the text: /source-derived truth changes are reviewed, conflicted, quarantined, approved, or rejected here/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+&lt;body&gt;
+  &lt;div&gt;
+    &lt;div
+      class=&quot;space-y-6&quot;
+    &gt;
+      &lt;header
+        class=&quot;relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] px-6 py-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.78),rgba(2,6,23,0.88))] dark:shadow-[0_24px_80px_rgba(0,0,0,0.34)] sm:px-7 sm:py-7&quot;
+      &gt;
+        &lt;div
+          class=&quot;pointer-events-none absolute inset-0&quot;
+        &gt;
+          &lt;div
+            class=&quot;absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-300/80 to-transparent dark:via-sky-400/30&quot;
+          /&gt;
+          &lt;div
+            class=&quot;absolute -right-16 top-0 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl dark:bg-sky-400/10&quot;
+          /&gt;
+          &lt;div
+            class=&quot;absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-indigo-500/8 blur-3xl dark:bg-indigo-400/10&quot;
+          /&gt;
+        &lt;/div&gt;
+        &lt;div
+          class=&quot;relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between&quot;
+        &gt;
+          &lt;div
+            class=&quot;min-w-0 space-y-2&quot;
+          &gt;
+            &lt;div
+              class=&quot;inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-slate-500 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400&quot;
+            &gt;
+              Control Center
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;space-y-1.5&quot;
+            &gt;
+              &lt;h1
+                class=&quot;text-[28px] font-semibold tracking-[-0.03em] text-slate-950 dark:text-white sm:text-[32px]&quot;
+              &gt;
+                Governance &amp; Settings
+              &lt;/h1&gt;
+              &lt;p
+                class=&quot;max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400&quot;
+              &gt;
+                Approved truth, runtime health, repairability, and workspace controls in one operator control plane.
+              &lt;/p&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div
+            class=&quot;relative max-w-full rounded-[24px] border border-slate-200/80 bg-white/75 p-4 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] lg:min-w-[260px]&quot;
+          &gt;
+            &lt;div
+              class=&quot;text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500&quot;
+            &gt;
+              Active Section
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;mt-2 text-sm font-semibold text-slate-900 dark:text-white&quot;
+            &gt;
+              General
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400&quot;
+            &gt;
+              Workspace identity, region, language
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/header&gt;
+      &lt;div
+        class=&quot;grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]&quot;
+      &gt;
+        &lt;aside
+          class=&quot;min-w-0 self-start xl:sticky xl:top-6&quot;
+        &gt;
+          &lt;div
+            class=&quot;relative min-w-0 transition-[transform,box-shadow,border-color,background-color] duration-250 focus-within:outline-none md:p-5 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(2,6,23,0.78))] overflow-hidden rounded-[28px] border border-slate-200/75 bg-white/82 p-0 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-white/[0.035] dark:shadow-[0_24px_80px_rgba(0,0,0,0.28)]&quot;
+          &gt;
+            &lt;div
+              aria-hidden=&quot;true&quot;
+              class=&quot;pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[28px] bg-gradient-to-r from-white/0 via-white/50 to-transparent dark:via-white/12&quot;
+            /&gt;
+            &lt;div
+              aria-hidden=&quot;true&quot;
+              class=&quot;pointer-events-none absolute inset-0 rounded-[28px] bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.10),transparent_46%)] dark:bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.045),transparent_44%)]&quot;
+            /&gt;
+            &lt;div
+              aria-hidden=&quot;true&quot;
+              class=&quot;pointer-events-none absolute -right-10 top-0 h-24 w-24 rounded-full blur-3xl bg-white/0&quot;
+            /&gt;
+            &lt;div
+              class=&quot;relative z-10 min-w-0&quot;
+            &gt;
+              &lt;div
+                class=&quot;border-b border-slate-200/70 px-5 py-4 dark:border-white/10&quot;
+              &gt;
+                &lt;div
+                  class=&quot;text-[11px] font-medium uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500&quot;
+                &gt;
+                  Navigation
+                &lt;/div&gt;
+                &lt;div
+                  class=&quot;mt-2 text-sm font-medium text-slate-600 dark:text-slate-300&quot;
+                &gt;
+                  Settings sections
+                &lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div
+                class=&quot;max-h-[calc(100vh-12rem)] overflow-y-auto p-3&quot;
+              &gt;
+                &lt;nav
+                  aria-label=&quot;Settings navigation&quot;
+                  class=&quot;space-y-1.5&quot;
+                &gt;
+                  &lt;button
+                    aria-current=&quot;page&quot;
+                    class=&quot;group relative flex w-full items-center gap-3 overflow-hidden rounded-[22px] px-3.5 py-3.5 text-left transition-all duration-200 bg-[linear-gradient(180deg,rgba(59,130,246,0.10),rgba(59,130,246,0.04))] shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_10px_30px_rgba(37,99,235,0.10)] dark:bg-[linear-gradient(180deg,rgba(59,130,246,0.16),rgba(59,130,246,0.06))] dark:sh...
+
+Ignored nodes: comments, script, style
+&lt;body&gt;
+  &lt;div&gt;
+    &lt;div
+      class=&quot;space-y-6&quot;
+    &gt;
+      &lt;header
+        class=&quot;relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] px-6 py-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.78),rgba(2,6,23,0.88))] dark:shadow-[0_24px_80px_rgba(0,0,0,0.34)] sm:px-7 sm:py-7&quot;
+      &gt;
+        &lt;div
+          class=&quot;pointer-events-none absolute inset-0&quot;
+        &gt;
+          &lt;div
+            class=&quot;absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-300/80 to-transparent dark:via-sky-400/30&quot;
+          /&gt;
+          &lt;div
+            class=&quot;absolute -right-16 top-0 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl dark:bg-sky-400/10&quot;
+          /&gt;
+          &lt;div
+            class=&quot;absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-indigo-500/8 blur-3xl dark:bg-indigo-400/10&quot;
+          /&gt;
+        &lt;/div&gt;
+        &lt;div
+          class=&quot;relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between&quot;
+        &gt;
+          &lt;div
+            class=&quot;min-w-0 space-y-2&quot;
+          &gt;
+            &lt;div
+              class=&quot;inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-slate-500 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400&quot;
+            &gt;
+              Control Center
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;space-y-1.5&quot;
+            &gt;
+              &lt;h1
+                class=&quot;text-[28px] font-semibold tracking-[-0.03em] text-slate-950 dark:text-white sm:text-[32px]&quot;
+              &gt;
+                Governance &amp; Settings
+              &lt;/h1&gt;
+              &lt;p
+                class=&quot;max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400&quot;
+              &gt;
+                Approved truth, runtime health, repairability, and workspace controls in one operator control plane.
+              &lt;/p&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div
+            class=&quot;relative max-w-full rounded-[24px] border border-slate-200/80 bg-white/75 p-4 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] lg:min-w-[260px]&quot;
+          &gt;
+            &lt;div
+              class=&quot;text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500&quot;
+            &gt;
+              Active Section
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;mt-2 text-sm font-semibold text-slate-900 dark:text-white&quot;
+            &gt;
+              General
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400&quot;
+            &gt;
+              Workspace identity, region, language
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/header&gt;
+      &lt;div
+        class=&quot;grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]&quot;
+      &gt;
+        &lt;aside
+          class=&quot;min-w-0 self-start xl:sticky xl:top-6&quot;
+        &gt;
+          &lt;div
+            class=&quot;relative min-w-0 transition-[transform,box-shadow,border-color,background-color] duration-250 focus-within:outline-none md:p-5 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(2,6,23,0.78))] overflow-hidden rounded-[28px] border border-slate-200/75 bg-white/82 p-0 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-white/[0.035] dark:shadow-[0_24px_80px_rgba(0,0,0,0.28)]&quot;
+          &gt;
+            &lt;div
+              aria-hidden=&quot;true&quot;
+              class=&quot;pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[28px] bg-gradient-to-r from-white/0 via-white/50 to-transparent dark:via-white/12&quot;
+            /&gt;
+            &lt;div
+              aria-hidden=&quot;true&quot;
+              class=&quot;pointer-events-none absolute inset-0 rounded-[28px] bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.10),transparent_46%)] dark:bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.045),transparent_44%)]&quot;
+            /&gt;
+            &lt;div
+              aria-hidden=&quot;true&quot;
+              class=&quot;pointer-events-none absolute -right-10 top-0 h-24 w-24 rounded-full blur-3xl bg-white/0&quot;
+            /&gt;
+            &lt;div
+              class=&quot;relative z-10 min-w-0&quot;
+            &gt;
+              &lt;div
+                class=&quot;border-b border-slate-200/70 px-5 py-4 dark:border-white/10&quot;
+              &gt;
+                &lt;div
+                  class=&quot;text-[11px] font-medium uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500&quot;
+                &gt;
+                  Navigation
+                &lt;/div&gt;
+                &lt;div
+                  class=&quot;mt-2 text-sm font-medium text-slate-600 dark:text-slate-300&quot;
+                &gt;
+                  Settings sections
+                &lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div
+                class=&quot;max-h-[calc(100vh-12rem)] overflow-y-auto p-3&quot;
+              &gt;
+                &lt;nav
+                  aria-label=&quot;Settings navigation&quot;
+                  class=&quot;space-y-1.5&quot;
+                &gt;
+                  &lt;button
+                    aria-current=&quot;page&quot;
+                    class=&quot;group relative flex w-full items-center gap-3 overflow-hidden rounded-[22px] px-3.5 py-3.5 text-left transition-all duration-200 bg-[linear-gradient(180deg,rgba(59,130,246,0.10),rgba(59,130,246,0.04))] shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_10px_30px_rgba(37,99,235,0.10)] dark:bg-[linear-gradient(180deg,rgba(59,130,246,0.16),rgba(59,130,246,0.06))] dark:sh...
+ ❯ waitForWrapper ../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/Settings/SettingsController.smoke.test.jsx:675:20
+            </failure>
+        </testcase>
+        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; renders operational readiness fail states honestly" time="0.5104544">
+        </testcase>
+        <testcase classname="src/pages/Settings/SettingsController.smoke.test.jsx" name="Settings truth-maintenance smoke &gt; opens the truth-governance section from deep-link state" time="1.0665676">
+            <failure message="Unable to find an element with the text: /refresh evidence, review what is weak or conflicting/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m&lt;body&gt;[39m
+  [36m&lt;div&gt;[39m
+    [36m&lt;div[39m
+      [33mclass[39m=[32m&quot;space-y-6&quot;[39m
+    [36m&gt;[39m
+      [36m&lt;header[39m
+        [33mclass[39m=[32m&quot;relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] px-6 py-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.78),rgba(2,6,23,0.88))] dark:shadow-[0_24px_80px_rgba(0,0,0,0.34)] sm:px-7 sm:py-7&quot;[39m
+      [36m&gt;[39m
+        [36m&lt;div[39m
+          [33mclass[39m=[32m&quot;pointer-events-none absolute inset-0&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-300/80 to-transparent dark:via-sky-400/30&quot;[39m
+          [36m/&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;absolute -right-16 top-0 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl dark:bg-sky-400/10&quot;[39m
+          [36m/&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-indigo-500/8 blur-3xl dark:bg-indigo-400/10&quot;[39m
+          [36m/&gt;[39m
+        [36m&lt;/div&gt;[39m
+        [36m&lt;div[39m
+          [33mclass[39m=[32m&quot;relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;min-w-0 space-y-2&quot;[39m
+          [36m&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-slate-500 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400&quot;[39m
+            [36m&gt;[39m
+              [0mControl Center[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;space-y-1.5&quot;[39m
+            [36m&gt;[39m
+              [36m&lt;h1[39m
+                [33mclass[39m=[32m&quot;text-[28px] font-semibold tracking-[-0.03em] text-slate-950 dark:text-white sm:text-[32px]&quot;[39m
+              [36m&gt;[39m
+                [0mGovernance &amp; Settings[0m
+              [36m&lt;/h1&gt;[39m
+              [36m&lt;p[39m
+                [33mclass[39m=[32m&quot;max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400&quot;[39m
+              [36m&gt;[39m
+                [0mApproved truth, runtime health, repairability, and workspace controls in one operator control plane.[0m
+              [36m&lt;/p&gt;[39m
+            [36m&lt;/div&gt;[39m
+          [36m&lt;/div&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;relative max-w-full rounded-[24px] border border-slate-200/80 bg-white/75 p-4 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] lg:min-w-[260px]&quot;[39m
+          [36m&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500&quot;[39m
+            [36m&gt;[39m
+              [0mActive Section[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;mt-2 text-sm font-semibold text-slate-900 dark:text-white&quot;[39m
+            [36m&gt;[39m
+              [0mGeneral[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400&quot;[39m
+            [36m&gt;[39m
+              [0mWorkspace identity, region, language[0m
+            [36m&lt;/div&gt;[39m
+          [36m&lt;/div&gt;[39m
+        [36m&lt;/div&gt;[39m
+      [36m&lt;/header&gt;[39m
+      [36m&lt;div[39m
+        [33mclass[39m=[32m&quot;grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]&quot;[39m
+      [36m&gt;[39m
+        [36m&lt;aside[39m
+          [33mclass[39m=[32m&quot;min-w-0 self-start xl:sticky xl:top-6&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;relative min-w-0 transition-[transform,box-shadow,border-color,background-color] duration-250 focus-within:outline-none md:p-5 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(2,6,23,0.78))] overflow-hidden rounded-[28px] border border-slate-200/75 bg-white/82 p-0 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-white/[0.035] dark:shadow-[0_24px_80px_rgba(0,0,0,0.28)]&quot;[39m
+          [36m&gt;[39m
+            [36m&lt;div[39m
+              [33maria-hidden[39m=[32m&quot;true&quot;[39m
+              [33mclass[39m=[32m&quot;pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[28px] bg-gradient-to-r from-white/0 via-white/50 to-transparent dark:via-white/12&quot;[39m
+            [36m/&gt;[39m
+            [36m&lt;div[39m
+              [33maria-hidden[39m=[32m&quot;true&quot;[39m
+              [33mclass[39m=[32m&quot;pointer-events-none absolute inset-0 rounded-[28px] bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.10),transparent_46%)] dark:bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.045),transparent_44%)]&quot;[39m
+            [36m/&gt;[39m
+            [36m&lt;div[39m
+              [33maria-hidden[39m=[32m&quot;true&quot;[39m
+              [33mclass[39m=[32m&quot;pointer-events-none absolute -right-10 top-0 h-24 w-24 rounded-full blur-3xl bg-white/0&quot;[39m
+            [36m/&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;relative z-10 min-w-0&quot;[39m
+            [36m&gt;[39m
+              [36m&lt;div[39m
+                [33mclass[39m=[32m&quot;border-b border-slate-200/70 px-5 py-4 dark:border-white/10&quot;[39m
+              [36m&gt;[39m
+                [36m&lt;div[39m
+                  [33mclass[39m=[32m&quot;text-[11px] font-medium uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500&quot;[39m
+                [36m&gt;[39m
+                  [0mNavigation[0m
+                [36m&lt;/div&gt;[39m
+                [36m&lt;div[39m
+                  [33mclass[39m=[32m&quot;mt-2 text-sm font-medium text-slate-600 dark:text-slate-300&quot;[39m
+                [36m&gt;[39m
+                  [0mSettings sections[0m
+                [36m&lt;/div&gt;[39m
+              [36m&lt;/div&gt;[39m
+              [36m&lt;div[39m
+                [33mclass[39m=[32m&quot;max-h-[calc(100vh-12rem)] overflow-y-auto p-3&quot;[39m
+              [36m&gt;[39m
+                [36m&lt;nav[39m
+                  [33maria-label[39m=[32m&quot;Settings navigation&quot;[39m
+                  [33mclass[39m=[32m&quot;space-y-1.5&quot;[39m
+                [36m&gt;[39m
+                  [36m&lt;button[39m
+                    [33maria-current[39m=[32m&quot;page&quot;[39m
+                    [33mclass[39m=[32m&quot;group relative flex w-full items-center gap-3 overflow-hidden rounded-[22px] px-3.5 py-3.5 text-left transition-all duration-200 bg-[linear-gradient(180deg,rgba(59,130,246,0.10),rgba(59,130,246,0.04))] shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_10px_30px_rgba(37,99,235,0.10)] dark:bg-[linear-gradient(180deg,rgba(59,130,246,0.16),rgba(59,130,246,0.06))] dark:sh...
+
+Ignored nodes: comments, script, style
+[36m&lt;body&gt;[39m
+  [36m&lt;div&gt;[39m
+    [36m&lt;div[39m
+      [33mclass[39m=[32m&quot;space-y-6&quot;[39m
+    [36m&gt;[39m
+      [36m&lt;header[39m
+        [33mclass[39m=[32m&quot;relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] px-6 py-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.78),rgba(2,6,23,0.88))] dark:shadow-[0_24px_80px_rgba(0,0,0,0.34)] sm:px-7 sm:py-7&quot;[39m
+      [36m&gt;[39m
+        [36m&lt;div[39m
+          [33mclass[39m=[32m&quot;pointer-events-none absolute inset-0&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-300/80 to-transparent dark:via-sky-400/30&quot;[39m
+          [36m/&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;absolute -right-16 top-0 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl dark:bg-sky-400/10&quot;[39m
+          [36m/&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-indigo-500/8 blur-3xl dark:bg-indigo-400/10&quot;[39m
+          [36m/&gt;[39m
+        [36m&lt;/div&gt;[39m
+        [36m&lt;div[39m
+          [33mclass[39m=[32m&quot;relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;min-w-0 space-y-2&quot;[39m
+          [36m&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-slate-500 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400&quot;[39m
+            [36m&gt;[39m
+              [0mControl Center[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;space-y-1.5&quot;[39m
+            [36m&gt;[39m
+              [36m&lt;h1[39m
+                [33mclass[39m=[32m&quot;text-[28px] font-semibold tracking-[-0.03em] text-slate-950 dark:text-white sm:text-[32px]&quot;[39m
+              [36m&gt;[39m
+                [0mGovernance &amp; Settings[0m
+              [36m&lt;/h1&gt;[39m
+              [36m&lt;p[39m
+                [33mclass[39m=[32m&quot;max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400&quot;[39m
+              [36m&gt;[39m
+                [0mApproved truth, runtime health, repairability, and workspace controls in one operator control plane.[0m
+              [36m&lt;/p&gt;[39m
+            [36m&lt;/div&gt;[39m
+          [36m&lt;/div&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;relative max-w-full rounded-[24px] border border-slate-200/80 bg-white/75 p-4 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] lg:min-w-[260px]&quot;[39m
+          [36m&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500&quot;[39m
+            [36m&gt;[39m
+              [0mActive Section[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;mt-2 text-sm font-semibold text-slate-900 dark:text-white&quot;[39m
+            [36m&gt;[39m
+              [0mGeneral[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400&quot;[39m
+            [36m&gt;[39m
+              [0mWorkspace identity, region, language[0m
+            [36m&lt;/div&gt;[39m
+          [36m&lt;/div&gt;[39m
+        [36m&lt;/div&gt;[39m
+      [36m&lt;/header&gt;[39m
+      [36m&lt;div[39m
+        [33mclass[39m=[32m&quot;grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]&quot;[39m
+      [36m&gt;[39m
+        [36m&lt;aside[39m
+          [33mclass[39m=[32m&quot;min-w-0 self-start xl:sticky xl:top-6&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;relative min-w-0 transition-[transform,box-shadow,border-color,background-color] duration-250 focus-within:outline-none md:p-5 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(2,6,23,0.78))] overflow-hidden rounded-[28px] border border-slate-200/75 bg-white/82 p-0 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-white/[0.035] dark:shadow-[0_24px_80px_rgba(0,0,0,0.28)]&quot;[39m
+          [36m&gt;[39m
+            [36m&lt;div[39m
+              [33maria-hidden[39m=[32m&quot;true&quot;[39m
+              [33mclass[39m=[32m&quot;pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[28px] bg-gradient-to-r from-white/0 via-white/50 to-transparent dark:via-white/12&quot;[39m
+            [36m/&gt;[39m
+            [36m&lt;div[39m
+              [33maria-hidden[39m=[32m&quot;true&quot;[39m
+              [33mclass[39m=[32m&quot;pointer-events-none absolute inset-0 rounded-[28px] bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.10),transparent_46%)] dark:bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.045),transparent_44%)]&quot;[39m
+            [36m/&gt;[39m
+            [36m&lt;div[39m
+              [33maria-hidden[39m=[32m&quot;true&quot;[39m
+              [33mclass[39m=[32m&quot;pointer-events-none absolute -right-10 top-0 h-24 w-24 rounded-full blur-3xl bg-white/0&quot;[39m
+            [36m/&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;relative z-10 min-w-0&quot;[39m
+            [36m&gt;[39m
+              [36m&lt;div[39m
+                [33mclass[39m=[32m&quot;border-b border-slate-200/70 px-5 py-4 dark:border-white/10&quot;[39m
+              [36m&gt;[39m
+                [36m&lt;div[39m
+                  [33mclass[39m=[32m&quot;text-[11px] font-medium uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500&quot;[39m
+                [36m&gt;[39m
+                  [0mNavigation[0m
+                [36m&lt;/div&gt;[39m
+                [36m&lt;div[39m
+                  [33mclass[39m=[32m&quot;mt-2 text-sm font-medium text-slate-600 dark:text-slate-300&quot;[39m
+                [36m&gt;[39m
+                  [0mSettings sections[0m
+                [36m&lt;/div&gt;[39m
+              [36m&lt;/div&gt;[39m
+              [36m&lt;div[39m
+                [33mclass[39m=[32m&quot;max-h-[calc(100vh-12rem)] overflow-y-auto p-3&quot;[39m
+              [36m&gt;[39m
+                [36m&lt;nav[39m
+                  [33maria-label[39m=[32m&quot;Settings navigation&quot;[39m
+                  [33mclass[39m=[32m&quot;space-y-1.5&quot;[39m
+                [36m&gt;[39m
+                  [36m&lt;button[39m
+                    [33maria-current[39m=[32m&quot;page&quot;[39m
+                    [33mclass[39m=[32m&quot;group relative flex w-full items-center gap-3 overflow-hidden rounded-[22px] px-3.5 py-3.5 text-left transition-all duration-200 bg-[linear-gradient(180deg,rgba(59,130,246,0.10),rgba(59,130,246,0.04))] shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_10px_30px_rgba(37,99,235,0.10)] dark:bg-[linear-gradient(180deg,rgba(59,130,246,0.16),rgba(59,130,246,0.06))] dark:sh..." type="TestingLibraryElementError">
+TestingLibraryElementError: Unable to find an element with the text: /refresh evidence, review what is weak or conflicting/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+&lt;body&gt;
+  &lt;div&gt;
+    &lt;div
+      class=&quot;space-y-6&quot;
+    &gt;
+      &lt;header
+        class=&quot;relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] px-6 py-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.78),rgba(2,6,23,0.88))] dark:shadow-[0_24px_80px_rgba(0,0,0,0.34)] sm:px-7 sm:py-7&quot;
+      &gt;
+        &lt;div
+          class=&quot;pointer-events-none absolute inset-0&quot;
+        &gt;
+          &lt;div
+            class=&quot;absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-300/80 to-transparent dark:via-sky-400/30&quot;
+          /&gt;
+          &lt;div
+            class=&quot;absolute -right-16 top-0 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl dark:bg-sky-400/10&quot;
+          /&gt;
+          &lt;div
+            class=&quot;absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-indigo-500/8 blur-3xl dark:bg-indigo-400/10&quot;
+          /&gt;
+        &lt;/div&gt;
+        &lt;div
+          class=&quot;relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between&quot;
+        &gt;
+          &lt;div
+            class=&quot;min-w-0 space-y-2&quot;
+          &gt;
+            &lt;div
+              class=&quot;inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-slate-500 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400&quot;
+            &gt;
+              Control Center
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;space-y-1.5&quot;
+            &gt;
+              &lt;h1
+                class=&quot;text-[28px] font-semibold tracking-[-0.03em] text-slate-950 dark:text-white sm:text-[32px]&quot;
+              &gt;
+                Governance &amp; Settings
+              &lt;/h1&gt;
+              &lt;p
+                class=&quot;max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400&quot;
+              &gt;
+                Approved truth, runtime health, repairability, and workspace controls in one operator control plane.
+              &lt;/p&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div
+            class=&quot;relative max-w-full rounded-[24px] border border-slate-200/80 bg-white/75 p-4 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] lg:min-w-[260px]&quot;
+          &gt;
+            &lt;div
+              class=&quot;text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500&quot;
+            &gt;
+              Active Section
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;mt-2 text-sm font-semibold text-slate-900 dark:text-white&quot;
+            &gt;
+              General
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400&quot;
+            &gt;
+              Workspace identity, region, language
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/header&gt;
+      &lt;div
+        class=&quot;grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]&quot;
+      &gt;
+        &lt;aside
+          class=&quot;min-w-0 self-start xl:sticky xl:top-6&quot;
+        &gt;
+          &lt;div
+            class=&quot;relative min-w-0 transition-[transform,box-shadow,border-color,background-color] duration-250 focus-within:outline-none md:p-5 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(2,6,23,0.78))] overflow-hidden rounded-[28px] border border-slate-200/75 bg-white/82 p-0 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-white/[0.035] dark:shadow-[0_24px_80px_rgba(0,0,0,0.28)]&quot;
+          &gt;
+            &lt;div
+              aria-hidden=&quot;true&quot;
+              class=&quot;pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[28px] bg-gradient-to-r from-white/0 via-white/50 to-transparent dark:via-white/12&quot;
+            /&gt;
+            &lt;div
+              aria-hidden=&quot;true&quot;
+              class=&quot;pointer-events-none absolute inset-0 rounded-[28px] bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.10),transparent_46%)] dark:bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.045),transparent_44%)]&quot;
+            /&gt;
+            &lt;div
+              aria-hidden=&quot;true&quot;
+              class=&quot;pointer-events-none absolute -right-10 top-0 h-24 w-24 rounded-full blur-3xl bg-white/0&quot;
+            /&gt;
+            &lt;div
+              class=&quot;relative z-10 min-w-0&quot;
+            &gt;
+              &lt;div
+                class=&quot;border-b border-slate-200/70 px-5 py-4 dark:border-white/10&quot;
+              &gt;
+                &lt;div
+                  class=&quot;text-[11px] font-medium uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500&quot;
+                &gt;
+                  Navigation
+                &lt;/div&gt;
+                &lt;div
+                  class=&quot;mt-2 text-sm font-medium text-slate-600 dark:text-slate-300&quot;
+                &gt;
+                  Settings sections
+                &lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div
+                class=&quot;max-h-[calc(100vh-12rem)] overflow-y-auto p-3&quot;
+              &gt;
+                &lt;nav
+                  aria-label=&quot;Settings navigation&quot;
+                  class=&quot;space-y-1.5&quot;
+                &gt;
+                  &lt;button
+                    aria-current=&quot;page&quot;
+                    class=&quot;group relative flex w-full items-center gap-3 overflow-hidden rounded-[22px] px-3.5 py-3.5 text-left transition-all duration-200 bg-[linear-gradient(180deg,rgba(59,130,246,0.10),rgba(59,130,246,0.04))] shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_10px_30px_rgba(37,99,235,0.10)] dark:bg-[linear-gradient(180deg,rgba(59,130,246,0.16),rgba(59,130,246,0.06))] dark:sh...
+
+Ignored nodes: comments, script, style
+&lt;body&gt;
+  &lt;div&gt;
+    &lt;div
+      class=&quot;space-y-6&quot;
+    &gt;
+      &lt;header
+        class=&quot;relative overflow-hidden rounded-[30px] border border-slate-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] px-6 py-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.78),rgba(2,6,23,0.88))] dark:shadow-[0_24px_80px_rgba(0,0,0,0.34)] sm:px-7 sm:py-7&quot;
+      &gt;
+        &lt;div
+          class=&quot;pointer-events-none absolute inset-0&quot;
+        &gt;
+          &lt;div
+            class=&quot;absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-300/80 to-transparent dark:via-sky-400/30&quot;
+          /&gt;
+          &lt;div
+            class=&quot;absolute -right-16 top-0 h-40 w-40 rounded-full bg-sky-500/10 blur-3xl dark:bg-sky-400/10&quot;
+          /&gt;
+          &lt;div
+            class=&quot;absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-indigo-500/8 blur-3xl dark:bg-indigo-400/10&quot;
+          /&gt;
+        &lt;/div&gt;
+        &lt;div
+          class=&quot;relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between&quot;
+        &gt;
+          &lt;div
+            class=&quot;min-w-0 space-y-2&quot;
+          &gt;
+            &lt;div
+              class=&quot;inline-flex items-center rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-slate-500 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-400&quot;
+            &gt;
+              Control Center
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;space-y-1.5&quot;
+            &gt;
+              &lt;h1
+                class=&quot;text-[28px] font-semibold tracking-[-0.03em] text-slate-950 dark:text-white sm:text-[32px]&quot;
+              &gt;
+                Governance &amp; Settings
+              &lt;/h1&gt;
+              &lt;p
+                class=&quot;max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-400&quot;
+              &gt;
+                Approved truth, runtime health, repairability, and workspace controls in one operator control plane.
+              &lt;/p&gt;
+            &lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div
+            class=&quot;relative max-w-full rounded-[24px] border border-slate-200/80 bg-white/75 p-4 backdrop-blur dark:border-white/10 dark:bg-white/[0.04] lg:min-w-[260px]&quot;
+          &gt;
+            &lt;div
+              class=&quot;text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500&quot;
+            &gt;
+              Active Section
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;mt-2 text-sm font-semibold text-slate-900 dark:text-white&quot;
+            &gt;
+              General
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;mt-1 text-sm leading-5 text-slate-500 dark:text-slate-400&quot;
+            &gt;
+              Workspace identity, region, language
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/header&gt;
+      &lt;div
+        class=&quot;grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]&quot;
+      &gt;
+        &lt;aside
+          class=&quot;min-w-0 self-start xl:sticky xl:top-6&quot;
+        &gt;
+          &lt;div
+            class=&quot;relative min-w-0 transition-[transform,box-shadow,border-color,background-color] duration-250 focus-within:outline-none md:p-5 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(2,6,23,0.78))] overflow-hidden rounded-[28px] border border-slate-200/75 bg-white/82 p-0 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-white/[0.035] dark:shadow-[0_24px_80px_rgba(0,0,0,0.28)]&quot;
+          &gt;
+            &lt;div
+              aria-hidden=&quot;true&quot;
+              class=&quot;pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[28px] bg-gradient-to-r from-white/0 via-white/50 to-transparent dark:via-white/12&quot;
+            /&gt;
+            &lt;div
+              aria-hidden=&quot;true&quot;
+              class=&quot;pointer-events-none absolute inset-0 rounded-[28px] bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.10),transparent_46%)] dark:bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.045),transparent_44%)]&quot;
+            /&gt;
+            &lt;div
+              aria-hidden=&quot;true&quot;
+              class=&quot;pointer-events-none absolute -right-10 top-0 h-24 w-24 rounded-full blur-3xl bg-white/0&quot;
+            /&gt;
+            &lt;div
+              class=&quot;relative z-10 min-w-0&quot;
+            &gt;
+              &lt;div
+                class=&quot;border-b border-slate-200/70 px-5 py-4 dark:border-white/10&quot;
+              &gt;
+                &lt;div
+                  class=&quot;text-[11px] font-medium uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500&quot;
+                &gt;
+                  Navigation
+                &lt;/div&gt;
+                &lt;div
+                  class=&quot;mt-2 text-sm font-medium text-slate-600 dark:text-slate-300&quot;
+                &gt;
+                  Settings sections
+                &lt;/div&gt;
+              &lt;/div&gt;
+              &lt;div
+                class=&quot;max-h-[calc(100vh-12rem)] overflow-y-auto p-3&quot;
+              &gt;
+                &lt;nav
+                  aria-label=&quot;Settings navigation&quot;
+                  class=&quot;space-y-1.5&quot;
+                &gt;
+                  &lt;button
+                    aria-current=&quot;page&quot;
+                    class=&quot;group relative flex w-full items-center gap-3 overflow-hidden rounded-[22px] px-3.5 py-3.5 text-left transition-all duration-200 bg-[linear-gradient(180deg,rgba(59,130,246,0.10),rgba(59,130,246,0.04))] shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_10px_30px_rgba(37,99,235,0.10)] dark:bg-[linear-gradient(180deg,rgba(59,130,246,0.16),rgba(59,130,246,0.06))] dark:sh...
+ ❯ waitForWrapper ../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/Settings/SettingsController.smoke.test.jsx:715:20
+            </failure>
         </testcase>
     </testsuite>
-    <testsuite name="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" timestamp="2026-03-27T18:57:40.002Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.0434151">
-        <testcase classname="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" name="TrustMaintenanceSection &gt; renders trust repair state and dispatches route actions from the extracted section" time="0.0432893">
+    <testsuite name="src/pages/Truth/TruthViewerPage.smoke.test.jsx" timestamp="2026-03-28T16:13:51.281Z" hostname="Emil" tests="6" failures="1" errors="0" skipped="0" time="2.2663585">
+        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; renders approved truth metadata, provenance, and history" time="0.4019233">
+        </testcase>
+        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; shows an explicit approved truth unavailable state without fallback data" time="0.1453158">
+        </testcase>
+        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; renders safely when governance and runtime telemetry are partial" time="0.0593466">
+        </testcase>
+        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; opens a deep-linked truth version from remediation navigation" time="1.0361532">
+            <failure message="Unable to find an element with the text: /version detail/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m&lt;body&gt;[39m
+  [36m&lt;div&gt;[39m
+    [36m&lt;div[39m
+      [33mclass[39m=[32m&quot;mx-auto max-w-[1120px] px-4 py-10 sm:px-6 lg:px-8&quot;[39m
+    [36m&gt;[39m
+      [36m&lt;div[39m
+        [33mclass[39m=[32m&quot;border-b border-slate-200/80 pb-6&quot;[39m
+      [36m&gt;[39m
+        [36m&lt;div[39m
+          [33mclass[39m=[32m&quot;text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400&quot;[39m
+        [36m&gt;[39m
+          [0mGoverned Truth[0m
+        [36m&lt;/div&gt;[39m
+        [36m&lt;h1[39m
+          [33mclass[39m=[32m&quot;mt-2 text-[34px] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[40px]&quot;[39m
+        [36m&gt;[39m
+          [0mBusiness truth[0m
+        [36m&lt;/h1&gt;[39m
+        [36m&lt;p[39m
+          [33mclass[39m=[32m&quot;mt-3 max-w-[760px] text-[15px] leading-7 text-slate-600&quot;[39m
+        [36m&gt;[39m
+          [0mThis is the current approved business twin and its governed execution context. Approval, provenance, runtime health, and repair posture are shown honestly when they are available and fail closed when they are not.[0m
+        [36m&lt;/p&gt;[39m
+        [36m&lt;div[39m
+          [33mclass[39m=[32m&quot;mt-6 grid gap-5 sm:grid-cols-3&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400&quot;[39m
+            [36m&gt;[39m
+              [0mApproved at[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;mt-1 text-sm leading-6 text-slate-700&quot;[39m
+            [36m&gt;[39m
+              [0m2026-03-25T10:00:00.000Z[0m
+            [36m&lt;/div&gt;[39m
+          [36m&lt;/div&gt;[39m
+          [36m&lt;div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400&quot;[39m
+            [36m&gt;[39m
+              [0mApproved by[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;mt-1 text-sm leading-6 text-slate-700&quot;[39m
+            [36m&gt;[39m
+              [0mreviewer@aihq.test[0m
+            [36m&lt;/div&gt;[39m
+          [36m&lt;/div&gt;[39m
+          [36m&lt;div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400&quot;[39m
+            [36m&gt;[39m
+              [0mVersion[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;mt-1 text-sm leading-6 text-slate-700&quot;[39m
+            [36m&gt;[39m
+              [0mapproved[0m
+            [36m&lt;/div&gt;[39m
+          [36m&lt;/div&gt;[39m
+        [36m&lt;/div&gt;[39m
+      [36m&lt;/div&gt;[39m
+      [36m&lt;div[39m
+        [33mclass[39m=[32m&quot;mt-8&quot;[39m
+      [36m&gt;[39m
+        [36m&lt;div[39m
+          [33mclass[39m=[32m&quot;relative min-w-0 border transition-[transform,box-shadow,border-color,background-color] duration-250 focus-within:outline-none p-4 md:p-5 border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] shadow-[inset_0_1px_0_rgba(255,255,255,0.80),0_28px_90px_rgba(15,23,42,0.14)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(2,6,23,0.88))] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_36px_96px_rgba(0,0,0,0.70)] overflow-hidden rounded-[32px]&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div[39m
+            [33maria-hidden[39m=[32m&quot;true&quot;[39m
+            [33mclass[39m=[32m&quot;pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[28px] bg-gradient-to-r from-white/0 via-white/50 to-transparent dark:via-white/12&quot;[39m
+          [36m/&gt;[39m
+          [36m&lt;div[39m
+            [33maria-hidden[39m=[32m&quot;true&quot;[39m
+            [33mclass[39m=[32m&quot;pointer-events-none absolute inset-0 rounded-[28px] bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.10),transparent_46%)] dark:bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.045),transparent_44%)]&quot;[39m
+          [36m/&gt;[39m
+          [36m&lt;div[39m
+            [33maria-hidden[39m=[32m&quot;true&quot;[39m
+            [33mclass[39m=[32m&quot;pointer-events-none absolute -right-10 top-0 h-24 w-24 rounded-full blur-3xl bg-white/0&quot;[39m
+          [36m/&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;relative z-10 min-w-0&quot;[39m
+          [36m&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;pointer-events-none absolute inset-0 bg-[radial-gradient(120%_120%_at_100%_0%,rgba(14,165,233,0.12),transparent_42%),radial-gradient(120%_120%_at_0%_100%,rgba(15,23,42,0.08),transparent_44%)] dark:bg-[radial-gradient(120%_120%_at_100%_0%,rgba(56,189,248,0.12),transparent_40%),radial-gradient(120%_120%_at_0%_100%,rgba(148,163,184,0.10),transparent_42%)]&quot;[39m
+            [36m/&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;relative z-10 space-y-6&quot;[39m
+            [36m&gt;[39m
+              [36m&lt;div[39m
+                [33mclass[39m=[32m&quot;flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between&quot;[39m
+              [36m&gt;[39m
+                [36m&lt;div[39m
+                  [33mclass[39m=[32m&quot;space-y-2&quot;[39m
+                [36m&gt;[39m
+                  [36m&lt;div[39m
+                    [33mclass[39m=[32m&quot;text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500&quot;[39m
+                  [36m&gt;[39m
+                    [0mGoverned Control Plane[0m
+                  [36m&lt;/div&gt;[39m
+                  [36m&lt;div[39m
+                    [33mclass[39m=[32m&quot;text-[30px] font-semibold tracking-[-0.05em] text-slate-950 dark:text-white&quot;[39m
+                  [36m&gt;[39m
+                    [0mTruth Governance Cockpit[0m
+                  [36m&lt;/div&gt;[39m
+                  [36m&lt;div[39m
+                    [33mclass[39m=[32m&quot;max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400&quot;[39m
+                  [36m&gt;[39m
+                    [0mApproved truth, runtime projection health, finalize impact, and repairability are shown together so operators can understand the full governed execution path.[0m
+                  [36m&lt;/div&gt;[39m
+                [36m&lt;/div&gt;[39m
+                [36m&lt;div[39m
+                  [33mclass[39m=[32m&quot;flex flex-wrap items-center gap-2&quot;[39m
+                [36m&gt;[39m
+                  [36m&lt;span[39m
+                    [33mclass[39m=[32m&quot;relative inline-flex items-center gap-2 border select-none whitespace-nowrap font-semibold tracking-[-0.01em] transition-[background-color,border-color,color,box-shadow] duration-200 h-6 rounded-[12px] px-2.25 text-[11px] border-emerald-200/90 bg-emerald-50/90 text-emerald-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-emerald-400/18 dark:bg-emerald-400/10 dark:text-emerald-200 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]&quot;[39m
+                  [36m&gt;[39m
+                    [36m&lt;span[39m
+                      [33maria-hidden[39m=[32m&quot;true&quot;[39m
+                      [33mclass[39m=[32m&quot;h-1.5...
+
+Ignored nodes: comments, script, style
+[36m&lt;body&gt;[39m
+  [36m&lt;div&gt;[39m
+    [36m&lt;div[39m
+      [33mclass[39m=[32m&quot;mx-auto max-w-[1120px] px-4 py-10 sm:px-6 lg:px-8&quot;[39m
+    [36m&gt;[39m
+      [36m&lt;div[39m
+        [33mclass[39m=[32m&quot;border-b border-slate-200/80 pb-6&quot;[39m
+      [36m&gt;[39m
+        [36m&lt;div[39m
+          [33mclass[39m=[32m&quot;text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400&quot;[39m
+        [36m&gt;[39m
+          [0mGoverned Truth[0m
+        [36m&lt;/div&gt;[39m
+        [36m&lt;h1[39m
+          [33mclass[39m=[32m&quot;mt-2 text-[34px] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[40px]&quot;[39m
+        [36m&gt;[39m
+          [0mBusiness truth[0m
+        [36m&lt;/h1&gt;[39m
+        [36m&lt;p[39m
+          [33mclass[39m=[32m&quot;mt-3 max-w-[760px] text-[15px] leading-7 text-slate-600&quot;[39m
+        [36m&gt;[39m
+          [0mThis is the current approved business twin and its governed execution context. Approval, provenance, runtime health, and repair posture are shown honestly when they are available and fail closed when they are not.[0m
+        [36m&lt;/p&gt;[39m
+        [36m&lt;div[39m
+          [33mclass[39m=[32m&quot;mt-6 grid gap-5 sm:grid-cols-3&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400&quot;[39m
+            [36m&gt;[39m
+              [0mApproved at[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;mt-1 text-sm leading-6 text-slate-700&quot;[39m
+            [36m&gt;[39m
+              [0m2026-03-25T10:00:00.000Z[0m
+            [36m&lt;/div&gt;[39m
+          [36m&lt;/div&gt;[39m
+          [36m&lt;div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400&quot;[39m
+            [36m&gt;[39m
+              [0mApproved by[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;mt-1 text-sm leading-6 text-slate-700&quot;[39m
+            [36m&gt;[39m
+              [0mreviewer@aihq.test[0m
+            [36m&lt;/div&gt;[39m
+          [36m&lt;/div&gt;[39m
+          [36m&lt;div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400&quot;[39m
+            [36m&gt;[39m
+              [0mVersion[0m
+            [36m&lt;/div&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;mt-1 text-sm leading-6 text-slate-700&quot;[39m
+            [36m&gt;[39m
+              [0mapproved[0m
+            [36m&lt;/div&gt;[39m
+          [36m&lt;/div&gt;[39m
+        [36m&lt;/div&gt;[39m
+      [36m&lt;/div&gt;[39m
+      [36m&lt;div[39m
+        [33mclass[39m=[32m&quot;mt-8&quot;[39m
+      [36m&gt;[39m
+        [36m&lt;div[39m
+          [33mclass[39m=[32m&quot;relative min-w-0 border transition-[transform,box-shadow,border-color,background-color] duration-250 focus-within:outline-none p-4 md:p-5 border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] shadow-[inset_0_1px_0_rgba(255,255,255,0.80),0_28px_90px_rgba(15,23,42,0.14)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(2,6,23,0.88))] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_36px_96px_rgba(0,0,0,0.70)] overflow-hidden rounded-[32px]&quot;[39m
+        [36m&gt;[39m
+          [36m&lt;div[39m
+            [33maria-hidden[39m=[32m&quot;true&quot;[39m
+            [33mclass[39m=[32m&quot;pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[28px] bg-gradient-to-r from-white/0 via-white/50 to-transparent dark:via-white/12&quot;[39m
+          [36m/&gt;[39m
+          [36m&lt;div[39m
+            [33maria-hidden[39m=[32m&quot;true&quot;[39m
+            [33mclass[39m=[32m&quot;pointer-events-none absolute inset-0 rounded-[28px] bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.10),transparent_46%)] dark:bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.045),transparent_44%)]&quot;[39m
+          [36m/&gt;[39m
+          [36m&lt;div[39m
+            [33maria-hidden[39m=[32m&quot;true&quot;[39m
+            [33mclass[39m=[32m&quot;pointer-events-none absolute -right-10 top-0 h-24 w-24 rounded-full blur-3xl bg-white/0&quot;[39m
+          [36m/&gt;[39m
+          [36m&lt;div[39m
+            [33mclass[39m=[32m&quot;relative z-10 min-w-0&quot;[39m
+          [36m&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;pointer-events-none absolute inset-0 bg-[radial-gradient(120%_120%_at_100%_0%,rgba(14,165,233,0.12),transparent_42%),radial-gradient(120%_120%_at_0%_100%,rgba(15,23,42,0.08),transparent_44%)] dark:bg-[radial-gradient(120%_120%_at_100%_0%,rgba(56,189,248,0.12),transparent_40%),radial-gradient(120%_120%_at_0%_100%,rgba(148,163,184,0.10),transparent_42%)]&quot;[39m
+            [36m/&gt;[39m
+            [36m&lt;div[39m
+              [33mclass[39m=[32m&quot;relative z-10 space-y-6&quot;[39m
+            [36m&gt;[39m
+              [36m&lt;div[39m
+                [33mclass[39m=[32m&quot;flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between&quot;[39m
+              [36m&gt;[39m
+                [36m&lt;div[39m
+                  [33mclass[39m=[32m&quot;space-y-2&quot;[39m
+                [36m&gt;[39m
+                  [36m&lt;div[39m
+                    [33mclass[39m=[32m&quot;text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500&quot;[39m
+                  [36m&gt;[39m
+                    [0mGoverned Control Plane[0m
+                  [36m&lt;/div&gt;[39m
+                  [36m&lt;div[39m
+                    [33mclass[39m=[32m&quot;text-[30px] font-semibold tracking-[-0.05em] text-slate-950 dark:text-white&quot;[39m
+                  [36m&gt;[39m
+                    [0mTruth Governance Cockpit[0m
+                  [36m&lt;/div&gt;[39m
+                  [36m&lt;div[39m
+                    [33mclass[39m=[32m&quot;max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400&quot;[39m
+                  [36m&gt;[39m
+                    [0mApproved truth, runtime projection health, finalize impact, and repairability are shown together so operators can understand the full governed execution path.[0m
+                  [36m&lt;/div&gt;[39m
+                [36m&lt;/div&gt;[39m
+                [36m&lt;div[39m
+                  [33mclass[39m=[32m&quot;flex flex-wrap items-center gap-2&quot;[39m
+                [36m&gt;[39m
+                  [36m&lt;span[39m
+                    [33mclass[39m=[32m&quot;relative inline-flex items-center gap-2 border select-none whitespace-nowrap font-semibold tracking-[-0.01em] transition-[background-color,border-color,color,box-shadow] duration-200 h-6 rounded-[12px] px-2.25 text-[11px] border-emerald-200/90 bg-emerald-50/90 text-emerald-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-emerald-400/18 dark:bg-emerald-400/10 dark:text-emerald-200 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]&quot;[39m
+                  [36m&gt;[39m
+                    [36m&lt;span[39m
+                      [33maria-hidden[39m=[32m&quot;true&quot;[39m
+                      [33mclass[39m=[32m&quot;h-1.5..." type="TestingLibraryElementError">
+TestingLibraryElementError: Unable to find an element with the text: /version detail/i. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+&lt;body&gt;
+  &lt;div&gt;
+    &lt;div
+      class=&quot;mx-auto max-w-[1120px] px-4 py-10 sm:px-6 lg:px-8&quot;
+    &gt;
+      &lt;div
+        class=&quot;border-b border-slate-200/80 pb-6&quot;
+      &gt;
+        &lt;div
+          class=&quot;text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400&quot;
+        &gt;
+          Governed Truth
+        &lt;/div&gt;
+        &lt;h1
+          class=&quot;mt-2 text-[34px] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[40px]&quot;
+        &gt;
+          Business truth
+        &lt;/h1&gt;
+        &lt;p
+          class=&quot;mt-3 max-w-[760px] text-[15px] leading-7 text-slate-600&quot;
+        &gt;
+          This is the current approved business twin and its governed execution context. Approval, provenance, runtime health, and repair posture are shown honestly when they are available and fail closed when they are not.
+        &lt;/p&gt;
+        &lt;div
+          class=&quot;mt-6 grid gap-5 sm:grid-cols-3&quot;
+        &gt;
+          &lt;div&gt;
+            &lt;div
+              class=&quot;text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400&quot;
+            &gt;
+              Approved at
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;mt-1 text-sm leading-6 text-slate-700&quot;
+            &gt;
+              2026-03-25T10:00:00.000Z
+            &lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div&gt;
+            &lt;div
+              class=&quot;text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400&quot;
+            &gt;
+              Approved by
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;mt-1 text-sm leading-6 text-slate-700&quot;
+            &gt;
+              reviewer@aihq.test
+            &lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div&gt;
+            &lt;div
+              class=&quot;text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400&quot;
+            &gt;
+              Version
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;mt-1 text-sm leading-6 text-slate-700&quot;
+            &gt;
+              approved
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div
+        class=&quot;mt-8&quot;
+      &gt;
+        &lt;div
+          class=&quot;relative min-w-0 border transition-[transform,box-shadow,border-color,background-color] duration-250 focus-within:outline-none p-4 md:p-5 border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] shadow-[inset_0_1px_0_rgba(255,255,255,0.80),0_28px_90px_rgba(15,23,42,0.14)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(2,6,23,0.88))] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_36px_96px_rgba(0,0,0,0.70)] overflow-hidden rounded-[32px]&quot;
+        &gt;
+          &lt;div
+            aria-hidden=&quot;true&quot;
+            class=&quot;pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[28px] bg-gradient-to-r from-white/0 via-white/50 to-transparent dark:via-white/12&quot;
+          /&gt;
+          &lt;div
+            aria-hidden=&quot;true&quot;
+            class=&quot;pointer-events-none absolute inset-0 rounded-[28px] bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.10),transparent_46%)] dark:bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.045),transparent_44%)]&quot;
+          /&gt;
+          &lt;div
+            aria-hidden=&quot;true&quot;
+            class=&quot;pointer-events-none absolute -right-10 top-0 h-24 w-24 rounded-full blur-3xl bg-white/0&quot;
+          /&gt;
+          &lt;div
+            class=&quot;relative z-10 min-w-0&quot;
+          &gt;
+            &lt;div
+              class=&quot;pointer-events-none absolute inset-0 bg-[radial-gradient(120%_120%_at_100%_0%,rgba(14,165,233,0.12),transparent_42%),radial-gradient(120%_120%_at_0%_100%,rgba(15,23,42,0.08),transparent_44%)] dark:bg-[radial-gradient(120%_120%_at_100%_0%,rgba(56,189,248,0.12),transparent_40%),radial-gradient(120%_120%_at_0%_100%,rgba(148,163,184,0.10),transparent_42%)]&quot;
+            /&gt;
+            &lt;div
+              class=&quot;relative z-10 space-y-6&quot;
+            &gt;
+              &lt;div
+                class=&quot;flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between&quot;
+              &gt;
+                &lt;div
+                  class=&quot;space-y-2&quot;
+                &gt;
+                  &lt;div
+                    class=&quot;text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500&quot;
+                  &gt;
+                    Governed Control Plane
+                  &lt;/div&gt;
+                  &lt;div
+                    class=&quot;text-[30px] font-semibold tracking-[-0.05em] text-slate-950 dark:text-white&quot;
+                  &gt;
+                    Truth Governance Cockpit
+                  &lt;/div&gt;
+                  &lt;div
+                    class=&quot;max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400&quot;
+                  &gt;
+                    Approved truth, runtime projection health, finalize impact, and repairability are shown together so operators can understand the full governed execution path.
+                  &lt;/div&gt;
+                &lt;/div&gt;
+                &lt;div
+                  class=&quot;flex flex-wrap items-center gap-2&quot;
+                &gt;
+                  &lt;span
+                    class=&quot;relative inline-flex items-center gap-2 border select-none whitespace-nowrap font-semibold tracking-[-0.01em] transition-[background-color,border-color,color,box-shadow] duration-200 h-6 rounded-[12px] px-2.25 text-[11px] border-emerald-200/90 bg-emerald-50/90 text-emerald-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-emerald-400/18 dark:bg-emerald-400/10 dark:text-emerald-200 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]&quot;
+                  &gt;
+                    &lt;span
+                      aria-hidden=&quot;true&quot;
+                      class=&quot;h-1.5...
+
+Ignored nodes: comments, script, style
+&lt;body&gt;
+  &lt;div&gt;
+    &lt;div
+      class=&quot;mx-auto max-w-[1120px] px-4 py-10 sm:px-6 lg:px-8&quot;
+    &gt;
+      &lt;div
+        class=&quot;border-b border-slate-200/80 pb-6&quot;
+      &gt;
+        &lt;div
+          class=&quot;text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400&quot;
+        &gt;
+          Governed Truth
+        &lt;/div&gt;
+        &lt;h1
+          class=&quot;mt-2 text-[34px] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[40px]&quot;
+        &gt;
+          Business truth
+        &lt;/h1&gt;
+        &lt;p
+          class=&quot;mt-3 max-w-[760px] text-[15px] leading-7 text-slate-600&quot;
+        &gt;
+          This is the current approved business twin and its governed execution context. Approval, provenance, runtime health, and repair posture are shown honestly when they are available and fail closed when they are not.
+        &lt;/p&gt;
+        &lt;div
+          class=&quot;mt-6 grid gap-5 sm:grid-cols-3&quot;
+        &gt;
+          &lt;div&gt;
+            &lt;div
+              class=&quot;text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400&quot;
+            &gt;
+              Approved at
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;mt-1 text-sm leading-6 text-slate-700&quot;
+            &gt;
+              2026-03-25T10:00:00.000Z
+            &lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div&gt;
+            &lt;div
+              class=&quot;text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400&quot;
+            &gt;
+              Approved by
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;mt-1 text-sm leading-6 text-slate-700&quot;
+            &gt;
+              reviewer@aihq.test
+            &lt;/div&gt;
+          &lt;/div&gt;
+          &lt;div&gt;
+            &lt;div
+              class=&quot;text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400&quot;
+            &gt;
+              Version
+            &lt;/div&gt;
+            &lt;div
+              class=&quot;mt-1 text-sm leading-6 text-slate-700&quot;
+            &gt;
+              approved
+            &lt;/div&gt;
+          &lt;/div&gt;
+        &lt;/div&gt;
+      &lt;/div&gt;
+      &lt;div
+        class=&quot;mt-8&quot;
+      &gt;
+        &lt;div
+          class=&quot;relative min-w-0 border transition-[transform,box-shadow,border-color,background-color] duration-250 focus-within:outline-none p-4 md:p-5 border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.94))] shadow-[inset_0_1px_0_rgba(255,255,255,0.80),0_28px_90px_rgba(15,23,42,0.14)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.82),rgba(2,6,23,0.88))] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.07),0_36px_96px_rgba(0,0,0,0.70)] overflow-hidden rounded-[32px]&quot;
+        &gt;
+          &lt;div
+            aria-hidden=&quot;true&quot;
+            class=&quot;pointer-events-none absolute inset-x-0 top-0 h-px rounded-t-[28px] bg-gradient-to-r from-white/0 via-white/50 to-transparent dark:via-white/12&quot;
+          /&gt;
+          &lt;div
+            aria-hidden=&quot;true&quot;
+            class=&quot;pointer-events-none absolute inset-0 rounded-[28px] bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.10),transparent_46%)] dark:bg-[radial-gradient(120%_100%_at_50%_0%,rgba(255,255,255,0.045),transparent_44%)]&quot;
+          /&gt;
+          &lt;div
+            aria-hidden=&quot;true&quot;
+            class=&quot;pointer-events-none absolute -right-10 top-0 h-24 w-24 rounded-full blur-3xl bg-white/0&quot;
+          /&gt;
+          &lt;div
+            class=&quot;relative z-10 min-w-0&quot;
+          &gt;
+            &lt;div
+              class=&quot;pointer-events-none absolute inset-0 bg-[radial-gradient(120%_120%_at_100%_0%,rgba(14,165,233,0.12),transparent_42%),radial-gradient(120%_120%_at_0%_100%,rgba(15,23,42,0.08),transparent_44%)] dark:bg-[radial-gradient(120%_120%_at_100%_0%,rgba(56,189,248,0.12),transparent_40%),radial-gradient(120%_120%_at_0%_100%,rgba(148,163,184,0.10),transparent_42%)]&quot;
+            /&gt;
+            &lt;div
+              class=&quot;relative z-10 space-y-6&quot;
+            &gt;
+              &lt;div
+                class=&quot;flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between&quot;
+              &gt;
+                &lt;div
+                  class=&quot;space-y-2&quot;
+                &gt;
+                  &lt;div
+                    class=&quot;text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500&quot;
+                  &gt;
+                    Governed Control Plane
+                  &lt;/div&gt;
+                  &lt;div
+                    class=&quot;text-[30px] font-semibold tracking-[-0.05em] text-slate-950 dark:text-white&quot;
+                  &gt;
+                    Truth Governance Cockpit
+                  &lt;/div&gt;
+                  &lt;div
+                    class=&quot;max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400&quot;
+                  &gt;
+                    Approved truth, runtime projection health, finalize impact, and repairability are shown together so operators can understand the full governed execution path.
+                  &lt;/div&gt;
+                &lt;/div&gt;
+                &lt;div
+                  class=&quot;flex flex-wrap items-center gap-2&quot;
+                &gt;
+                  &lt;span
+                    class=&quot;relative inline-flex items-center gap-2 border select-none whitespace-nowrap font-semibold tracking-[-0.01em] transition-[background-color,border-color,color,box-shadow] duration-200 h-6 rounded-[12px] px-2.25 text-[11px] border-emerald-200/90 bg-emerald-50/90 text-emerald-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-emerald-400/18 dark:bg-emerald-400/10 dark:text-emerald-200 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]&quot;
+                  &gt;
+                    &lt;span
+                      aria-hidden=&quot;true&quot;
+                      class=&quot;h-1.5...
+ ❯ waitForWrapper ../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/pages/Truth/TruthViewerPage.smoke.test.jsx:692:25
+            </failure>
+        </testcase>
+        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; shows a publish receipt after approving a reviewed candidate" time="0.2376195">
+        </testcase>
+        <testcase classname="src/pages/Truth/TruthViewerPage.smoke.test.jsx" name="Truth viewer smoke &gt; executes governed rollback from truth compare and shows the receipt" time="0.3857468">
+        </testcase>
+    </testsuite>
+    <testsuite name="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" timestamp="2026-03-28T16:13:51.289Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="0.1673008">
+        <testcase classname="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" name="TrustMaintenanceSection &gt; renders trust repair state and dispatches route actions from the extracted section" time="0.1671127">
         </testcase>
     </testsuite>
 </testsuites>

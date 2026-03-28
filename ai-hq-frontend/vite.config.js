@@ -1,18 +1,8 @@
-/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-const routerInlineDeps = ["react-router", "react-router-dom", "react-router/dom"];
-
 export default defineConfig({
   plugins: [react()],
-
-  resolve: {
-    alias: {
-      "react-router/dom": "react-router/dist/development/dom-export.mjs",
-    },
-  },
-
   test: {
     environment: "jsdom",
     setupFiles: "./src/test/vitest.setup.js",
@@ -24,11 +14,10 @@ export default defineConfig({
     isolate: true,
     server: {
       deps: {
-        inline: routerInlineDeps,
+        inline: ["react-router", "react-router-dom"],
       },
     },
   },
-
   build: {
     rollupOptions: {
       output: {
@@ -56,7 +45,6 @@ export default defineConfig({
       },
     },
   },
-
   server: {
     port: 5173,
     strictPort: true,
