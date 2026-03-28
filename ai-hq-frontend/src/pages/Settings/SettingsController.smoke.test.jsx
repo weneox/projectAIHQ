@@ -2,6 +2,7 @@
 
 import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 globalThis.React = React;
@@ -288,19 +289,133 @@ vi.mock("./hooks/useSourceIntelligence.js", () => ({
     knowledgeReview: [
       {
         id: "candidate-1",
+        queueBucket: "conflicting",
         category: "general",
-        item_key: "company_name",
-        confidence_label: "high",
-        confidence: 0.92,
-        source_type: "website",
-        status: "pending",
+        itemKey: "company_name",
+        confidence: {
+          label: "high",
+          score: 0.92,
+        },
+        source: {
+          displayName: "Main Website",
+          sourceType: "website",
+          trustLabel: "Official Website",
+        },
+        status: "conflict",
         title: "North Clinic",
-        source_display_name: "Main Website",
-        first_seen_at: "2026-03-25T09:00:00.000Z",
-        value_text: "North Clinic",
-        source_evidence_json: [],
+        review: {
+          firstSeenAt: "2026-03-25T09:00:00.000Z",
+          updatedAt: "2026-03-25T09:10:00.000Z",
+          reviewReason: "Conflicting company names require review.",
+        },
+        valueText: "North Clinic",
+        governance: {
+          freshness: {
+            bucket: "fresh",
+          },
+          support: {
+            uniqueSourceCount: 2,
+          },
+          reviewExplanation: ["Trust tier Official Website"],
+        },
+        approvalPolicy: {
+          outcome: "review_required",
+          requiredRole: "reviewer",
+          riskLevel: "medium",
+          reasonCodes: ["reviewable_conflict"],
+        },
+        finalizeImpactPreview: {
+          canonicalAreas: ["business_profile"],
+          runtimeAreas: ["tenant_profile"],
+          canonicalPaths: ["profile.companyName"],
+          affectedSurfaces: ["inbox"],
+        },
+        publishPreview: {
+          values: {
+            currentApprovedValue: {
+              title: "Current approved company",
+              valueText: "North Clinic Ltd",
+            },
+            proposedValue: {
+              title: "North Clinic",
+              valueText: "North Clinic",
+            },
+            changed: true,
+          },
+          canonical: {
+            areas: ["business_profile"],
+            paths: ["profile.companyName"],
+          },
+          runtime: {
+            areas: ["tenant_profile"],
+            paths: ["runtime.business.profile.companyName"],
+            readinessDelta: "projection_refresh_required",
+          },
+          channels: {
+            affectedSurfaces: ["inbox"],
+          },
+          policy: {
+            autonomyDelta: "unchanged",
+            executionPostureDelta: "unchanged",
+            riskDelta: "unknown",
+          },
+          guidance: {
+            likelyAffectedAreas: ["business_profile", "tenant_profile"],
+            likelyReadinessImplications: [
+              "Runtime projection refresh will be required before governed runtime reflects this change.",
+            ],
+            confidence: "deterministic_impact_with_inferred_posture",
+          },
+        },
+        conflictResolution: {
+          previewChoices: [
+            {
+              candidateId: "candidate-1",
+              title: "North Clinic",
+              valueText: "North Clinic",
+              publishPreview: {
+                policy: {
+                  autonomyDelta: "unchanged",
+                },
+              },
+            },
+          ],
+          peers: [
+            {
+              id: "candidate-2",
+              title: "North Klinic",
+              valueText: "North Klinic",
+              sourceDisplayName: "Maps Listing",
+              trustTier: "weak_inferred_scrape",
+              freshnessBucket: "stale",
+              confidence: 0.68,
+              whyStrongerOrWeaker: ["stronger source trust"],
+            },
+          ],
+        },
+        actions: [
+          {
+            actionType: "approve",
+            label: "Approve selected value",
+            allowed: true,
+          },
+          {
+            actionType: "mark_follow_up",
+            label: "Needs review",
+            allowed: true,
+          },
+        ],
       },
     ],
+    knowledgeReviewSummary: {
+      total: 1,
+      pending: 0,
+      quarantined: 0,
+      conflicting: 1,
+      autoApprovable: 0,
+      blockedHighRisk: 0,
+      highRisk: 0,
+    },
     setKnowledgeReview: vi.fn(),
     syncRunsOpen: false,
     setSyncRunsOpen: vi.fn(),
@@ -322,6 +437,8 @@ vi.mock("./hooks/useSourceIntelligence.js", () => ({
     handleViewSourceSyncRuns: vi.fn(),
     handleApproveKnowledge: vi.fn(),
     handleRejectKnowledge: vi.fn(),
+    handleMarkKnowledgeFollowUp: vi.fn(),
+    handleKeepKnowledgeQuarantined: vi.fn(),
   }),
 }));
 
@@ -511,8 +628,16 @@ beforeEach(() => {
 });
 
 describe("Settings truth-maintenance smoke", () => {
+  function renderPage(entry = "/settings") {
+    return render(
+      <MemoryRouter initialEntries={[entry]}>
+        <SettingsController />
+      </MemoryRouter>
+    );
+  }
+
   it("renders workspace and business-brain sections through the shared async surface language", async () => {
-    render(<SettingsController />);
+    renderPage();
 
     expect(await screen.findByText(/governed operations/i)).toBeTruthy();
     expect((await screen.findAllByText(/workspace settings saved/i)).length).toBeGreaterThan(0);
@@ -523,7 +648,7 @@ describe("Settings truth-maintenance smoke", () => {
   });
 
   it("renders source sync and knowledge review truth-maintenance messaging", async () => {
-    render(<SettingsController />);
+    renderPage();
 
       fireEvent.click(await screen.findByRole("button", { name: /truth governance/i }));
       expect(
@@ -544,18 +669,20 @@ describe("Settings truth-maintenance smoke", () => {
     expect(screen.getByText(/recent evidence refreshes/i)).toBeTruthy();
     expect(screen.getAllByText(/runtime projection/i).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getAllByRole("button", { name: /review queue/i })[0]);
+    cleanup();
+    renderPage("/settings?section=knowledge_review");
     expect(
-      await screen.findByText(/candidates from source sync and source evidence land here/i)
+      await screen.findByText(/source-derived truth changes are reviewed, conflicted, quarantined, approved, or rejected here/i)
     ).toBeTruthy();
-    expect(
-      screen.getByText(/this is source evidence under review, not approved truth yet/i)
-    ).toBeTruthy();
+    expect(screen.getAllByText(/truth review workbench/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/conflict resolution/i)).toBeTruthy();
+    expect(screen.getByText(/change impact simulator/i)).toBeTruthy();
+    expect(screen.getByText(/finalize impact preview/i)).toBeTruthy();
     expect(screen.getByText(/recent trust activity/i)).toBeTruthy();
   });
 
   it("renders operational readiness fail states honestly", async () => {
-    render(<SettingsController />);
+    renderPage();
 
     fireEvent.click((await screen.findAllByRole("button", { name: /runtime operations/i }))[0]);
     expect(screen.getByText(/operational repair hub/i)).toBeTruthy();
@@ -579,5 +706,15 @@ describe("Settings truth-maintenance smoke", () => {
     expect(
       screen.getByText(/production traffic is fail-closed while operational rows or required provider readiness are incomplete/i)
     ).toBeTruthy();
+  });
+
+  it("opens the truth-governance section from deep-link state", async () => {
+    renderPage("/settings?section=sources&trustFocus=runtime_health&historyFilter=runtime");
+
+    expect(
+      await screen.findByText(/refresh evidence, review what is weak or conflicting/i)
+    ).toBeTruthy();
+    expect(screen.getByText(/operator governance cockpit/i)).toBeTruthy();
+    expect(screen.getByText(/decision timeline and incident replay context/i)).toBeTruthy();
   });
 });

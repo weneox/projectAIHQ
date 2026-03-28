@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { saveSettingsTrustPolicyControl } from "../../../api/trust.js";
 
 import Card from "../../../components/ui/Card.jsx";
@@ -71,6 +71,16 @@ export default function TrustMaintenanceSection({
   const connectedCount = items.filter((x) => String(x.status).toLowerCase() === "connected").length;
   const enabledCount = items.filter((x) => !!x.is_enabled).length;
   const recentRuns = Array.isArray(trust?.view?.recentRuns) ? trust.view.recentRuns : [];
+  const trustFocus = useMemo(() => {
+    if (typeof window === "undefined") return {};
+    const params = new URLSearchParams(window.location.search);
+    return {
+      trustFocus: String(params.get("trustFocus") || "").trim().toLowerCase(),
+      historyFilter: String(params.get("historyFilter") || "").trim().toLowerCase(),
+      eventId: String(params.get("eventId") || "").trim(),
+    };
+  }, []);
+  const repairHubRef = useRef(null);
 
   async function handleRepairAction(action) {
     const result = await dispatchRepairAction(action);
@@ -104,6 +114,11 @@ export default function TrustMaintenanceSection({
     });
   }
 
+  useEffect(() => {
+    if (trustFocus.trustFocus !== "repair_hub") return;
+    repairHubRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [trustFocus.trustFocus]);
+
   return (
     <SettingsSection
       eyebrow="Truth Governance"
@@ -112,15 +127,17 @@ export default function TrustMaintenanceSection({
       tone="default"
     >
       <div className="space-y-6">
-        <RepairHub
-          title="Trust Repair Hub"
-          readiness={trustReadiness}
-          blockers={trustReadiness.blockers}
-          canManage={canManage}
-          emptyMessage="Trust maintenance prerequisites are aligned. Approved truth and runtime projection are ready for controlled operations."
-          unavailableMessage="Trust maintenance is degraded. Approved truth and runtime projection stay protected until the listed blockers are repaired."
-          onRunAction={(action) => dispatchRepairAction(action)}
-        />
+        <div ref={repairHubRef}>
+          <RepairHub
+            title="Trust Repair Hub"
+            readiness={trustReadiness}
+            blockers={trustReadiness.blockers}
+            canManage={canManage}
+            emptyMessage="Trust maintenance prerequisites are aligned. Approved truth and runtime projection are ready for controlled operations."
+            unavailableMessage="Trust maintenance is degraded. Approved truth and runtime projection stay protected until the listed blockers are repaired."
+            onRunAction={(action) => dispatchRepairAction(action)}
+          />
+        </div>
 
         <GovernanceCockpit
           truth={truthHealth}
@@ -130,6 +147,7 @@ export default function TrustMaintenanceSection({
           onRunAction={handleRepairAction}
           onSavePolicyControl={handleSavePolicyControl}
           policyControlState={policyControlState}
+          navigationState={trustFocus}
         />
 
         <div className="grid gap-4 md:grid-cols-3">

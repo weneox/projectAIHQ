@@ -6,10 +6,14 @@ import {
   updateSettingsSource,
   getSettingsSourceSyncRuns,
   startSettingsSourceSync,
-  listKnowledgeReviewQueue,
-  approveKnowledgeCandidate,
-  rejectKnowledgeCandidate,
 } from "../../../api/settings.js";
+import {
+  approveTruthReviewCandidate,
+  getTruthReviewWorkbench,
+  keepTruthReviewCandidateQuarantined,
+  markTruthReviewCandidateForFollowUp,
+  rejectTruthReviewCandidate,
+} from "../../../api/truth.js";
 import { syncWorkspaceAndInitial } from "../settingsShared.js";
 import { useSettingsSurfaceState } from "./useSettingsSurfaceState.js";
 
@@ -89,11 +93,13 @@ export function useSourceIntelligence({
     initialData: () => ({
       sources: [],
       knowledgeReview: [],
+      knowledgeReviewSummary: {},
     }),
     initialLoading: true,
   });
   const sources = data.sources || [];
   const knowledgeReview = data.knowledgeReview || [];
+  const knowledgeReviewSummary = data.knowledgeReviewSummary || {};
   const setSources = useCallback(
     (nextValue) => {
       setData((prev) => ({
@@ -119,12 +125,16 @@ export function useSourceIntelligence({
     try {
       const [srcs, review] = await Promise.all([
         listSettingsSources({ tenantKey: overrideTenantKey }).then((x) => x.items),
-        listKnowledgeReviewQueue({ tenantKey: overrideTenantKey }).then((x) => x.items),
+        getTruthReviewWorkbench({ limit: 100 }),
       ]);
 
       const nextData = {
         sources: Array.isArray(srcs) ? srcs : [],
-        knowledgeReview: Array.isArray(review) ? review : [],
+        knowledgeReview: Array.isArray(review?.items) ? review.items : [],
+        knowledgeReviewSummary:
+          review && typeof review.summary === "object" && !Array.isArray(review.summary)
+            ? review.summary
+            : {},
       };
 
       syncWorkspaceAndInitial({
@@ -139,6 +149,7 @@ export function useSourceIntelligence({
         fallbackData: {
           sources: [],
           knowledgeReview: [],
+          knowledgeReviewSummary: {},
         },
       });
     }
@@ -241,9 +252,12 @@ export function useSourceIntelligence({
   async function handleApproveKnowledge(item) {
     if (!canManageSettings || !item?.id) return;
 
-    await approveKnowledgeCandidate(item.id, {
+    await approveTruthReviewCandidate(item.id, {
       tenantKey,
       reason: "Approved from Settings knowledge review",
+      metadataJson: {
+        publishPreview: item?.publishPreview?.auditSummary || {},
+      },
     });
 
     beginSave();
@@ -264,7 +278,7 @@ export function useSourceIntelligence({
   async function handleRejectKnowledge(item) {
     if (!canManageSettings || !item?.id) return;
 
-    await rejectKnowledgeCandidate(item.id, {
+    await rejectTruthReviewCandidate(item.id, {
       tenantKey,
       reason: "Rejected from Settings knowledge review",
     });
@@ -282,6 +296,48 @@ export function useSourceIntelligence({
     }
   }
 
+  async function handleMarkKnowledgeFollowUp(item) {
+    if (!canManageSettings || !item?.id) return;
+
+    await markTruthReviewCandidateForFollowUp(item.id, {
+      tenantKey,
+      reason: "Marked for follow-up from Settings truth review workbench",
+    });
+
+    beginSave();
+    try {
+      await refreshSourceIntelligence();
+      await onRefreshTrust?.();
+      succeedSave({
+        message: "Candidate marked for follow-up review. Approved truth remains unchanged.",
+      });
+    } catch (error) {
+      failSave(error);
+      throw error;
+    }
+  }
+
+  async function handleKeepKnowledgeQuarantined(item) {
+    if (!canManageSettings || !item?.id) return;
+
+    await keepTruthReviewCandidateQuarantined(item.id, {
+      tenantKey,
+      reason: "Kept quarantined from Settings truth review workbench",
+    });
+
+    beginSave();
+    try {
+      await refreshSourceIntelligence();
+      await onRefreshTrust?.();
+      succeedSave({
+        message: "Candidate remains quarantined pending stronger evidence or operator review.",
+      });
+    } catch (error) {
+      failSave(error);
+      throw error;
+    }
+  }
+
   return {
     surface: {
       ...surface,
@@ -291,6 +347,7 @@ export function useSourceIntelligence({
     sources,
     setSources,
     knowledgeReview,
+    knowledgeReviewSummary,
     setKnowledgeReview,
     syncRunsOpen,
     setSyncRunsOpen,
@@ -302,5 +359,7 @@ export function useSourceIntelligence({
     handleViewSourceSyncRuns,
     handleApproveKnowledge,
     handleRejectKnowledge,
+    handleMarkKnowledgeFollowUp,
+    handleKeepKnowledgeQuarantined,
   };
 }

@@ -256,10 +256,12 @@ function normalizeAction(input = {}) {
   if (!Object.keys(source).length) return null;
   return {
     id: s(source.id),
+    actionType: s(source.actionType || source.action_type).toLowerCase(),
     kind: s(source.kind).toLowerCase(),
     label: s(source.label),
     requiredRole: s(source.requiredRole || source.required_role).toLowerCase(),
     allowed: source.allowed === true,
+    reason: s(source.reason),
     target: obj(source.target),
   };
 }
@@ -313,6 +315,7 @@ function normalizeEventRemediation(input = {}) {
     operator: s(source.operator),
     nextActionLabel: s(source.nextActionLabel || source.next_action_label),
     requiredRole: s(source.requiredRole || source.required_role || "operator").toLowerCase(),
+    actions: arr(source.actions).map(normalizeAction).filter(Boolean),
   };
 }
 
@@ -486,6 +489,13 @@ function normalizeDecisionAuditEvent(input = {}) {
       source.decisionContextSnapshot || source.decision_context_snapshot
     ),
     remediation: normalizeEventRemediation(source.remediation),
+    remediationActions: arr(
+      source.remediationActions ||
+        source.remediation_actions ||
+        obj(source.remediation).actions
+    )
+      .map(normalizeAction)
+      .filter(Boolean),
     links: {
       truthVersionId: s(
         obj(source.links).truthVersionId || obj(source.links).truth_version_id
@@ -504,6 +514,7 @@ function normalizeDecisionAuditEvent(input = {}) {
       eventCategory: s(
         obj(source.links).eventCategory || obj(source.links).event_category || source.group || "execution"
       ).toLowerCase(),
+      threadId: s(obj(source.links).threadId || obj(source.links).thread_id),
     },
     recommendedNextAction: normalizeAction(
       source.recommendedNextAction || source.recommended_next_action

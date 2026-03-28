@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import Badge from "../ui/Badge.jsx";
+import Button from "../ui/Button.jsx";
 import Card from "../ui/Card.jsx";
 
 function s(v, d = "") {
@@ -119,11 +120,14 @@ function RemediationCard({ title, body, tone = "neutral" }) {
   );
 }
 
-function EventDetailPanel({ event = {} }) {
+function EventDetailPanel({ event = {}, onRunAction }) {
   const links = obj(event.links);
   const remediation = obj(event.remediation);
   const snapshot = obj(event.decisionContextSnapshot);
   const nextAction = obj(event.recommendedNextAction);
+  const remediationActions = arr(remediation.actions).filter(
+    (action) => action && action.allowed !== false && s(action.label)
+  );
 
   return (
     <div className="space-y-4">
@@ -274,16 +278,48 @@ function EventDetailPanel({ event = {} }) {
         <div className="mt-4 rounded-[18px] border border-slate-200/80 bg-slate-50/70 px-4 py-3 text-sm text-slate-600 dark:border-white/10 dark:bg-black/20 dark:text-slate-400">
           Next action: {s(nextAction.label || remediation.nextActionLabel || "Unavailable")}
         </div>
+
+        {remediationActions.length ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {remediationActions.map((action) => (
+              <Button
+                key={`${event.id}-${action.id || action.actionType || action.label}`}
+                variant="secondary"
+                size="sm"
+                onClick={() => onRunAction?.(action)}
+              >
+                {action.label}
+              </Button>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );
 }
 
-export default function GovernanceHistoryPanel({ decisionAudit = {} }) {
+export default function GovernanceHistoryPanel({
+  decisionAudit = {},
+  onRunAction,
+  preferredFilter = "",
+  preferredEventId = "",
+}) {
   const filters = arr(decisionAudit.availableFilters);
-  const [activeFilter, setActiveFilter] = useState("all");
-  const [selectedEventId, setSelectedEventId] = useState("");
+  const [activeFilter, setActiveFilter] = useState(s(preferredFilter || "all").toLowerCase());
+  const [selectedEventId, setSelectedEventId] = useState(s(preferredEventId));
   const items = arr(decisionAudit.items);
+
+  useEffect(() => {
+    const nextFilter = s(preferredFilter || "all").toLowerCase();
+    if (!nextFilter) return;
+    setActiveFilter(nextFilter);
+  }, [preferredFilter]);
+
+  useEffect(() => {
+    const nextEventId = s(preferredEventId);
+    if (!nextEventId) return;
+    setSelectedEventId(nextEventId);
+  }, [preferredEventId]);
 
   const visibleItems = useMemo(() => {
     if (activeFilter === "all") return items;
@@ -414,7 +450,7 @@ export default function GovernanceHistoryPanel({ decisionAudit = {} }) {
             </div>
 
             <div>
-              <EventDetailPanel event={selectedEvent || {}} />
+              <EventDetailPanel event={selectedEvent || {}} onRunAction={onRunAction} />
             </div>
           </div>
         )}

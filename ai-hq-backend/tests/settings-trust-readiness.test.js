@@ -1054,6 +1054,16 @@ test("settings trust route exposes recent decision audit summaries", async () =>
     "projection-1"
   );
   assert.equal(
+    res.body?.summary?.decisionAudit?.items?.[0]?.remediation?.actions?.[0]?.actionType,
+    "open_truth_version"
+  );
+  assert.match(
+    res.body?.summary?.decisionAudit?.items?.[0]?.remediation?.actions?.find(
+      (item) => item.actionType === "open_repair_flow"
+    )?.target?.path || "",
+    /section=sources/i
+  );
+  assert.equal(
     res.body?.summary?.decisionAudit?.availableFilters?.find((item) => item.key === "controls")?.count,
     1
   );
@@ -1072,5 +1082,11 @@ test("settings trust route exposes recent decision audit summaries", async () =>
   assert.equal(
     res.body?.summary?.decisionAudit?.items?.[1]?.decisionContextSnapshot?.controlScope,
     "channel"
+  );
+  assert.equal(
+    res.body?.summary?.decisionAudit?.items?.[1]?.remediation?.actions?.some(
+      (item) => item.actionType === "open_control_settings"
+    ),
+    true
   );
 });

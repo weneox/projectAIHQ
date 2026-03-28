@@ -1,4 +1,9 @@
 import { dbUpsertTenantBusinessFact } from "../../../../db/helpers/tenantBusinessBrain.js";
+import {
+  buildCandidateImpact,
+  summarizeEvidenceGovernance,
+} from "../../../../services/sourceFusion/governance.js";
+import { classifyApprovalPolicy } from "../../../../services/sourceFusion/approvalPolicy.js";
 import { auditSafe } from "../utils.js";
 import {
   bad,
@@ -12,6 +17,20 @@ import {
   s,
   hasDb,
 } from "./shared.js";
+
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+function uniqStrings(items = []) {
+  return [...new Set(arr(items).map((item) => s(item)).filter(Boolean))];
+}
+
+function titleize(value = "") {
+  return s(value)
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (item) => item.toUpperCase());
+}
 
 function pickApprovedCategory(result = {}) {
   const knowledge = result?.knowledge || {};
@@ -574,6 +593,678 @@ async function maybePromoteApprovedKnowledgeToBusinessFact(db, tenant, result = 
   });
 }
 
+function canWriteKnowledgeReview(viewerRole = "") {
+  return ["owner", "admin"].includes(lower(viewerRole));
+}
+
+function canSatisfyRequiredRole(viewerRole = "", requiredRole = "") {
+  const role = lower(viewerRole);
+  const requirement = lower(requiredRole);
+
+  if (!requirement || requirement === "system") return canWriteKnowledgeReview(role);
+  if (requirement === "reviewer") return canWriteKnowledgeReview(role);
+  if (requirement === "admin") return role === "admin" || role === "owner";
+  if (requirement === "owner") return role === "owner";
+  if (requirement === "admin_and_owner") return false;
+  return canWriteKnowledgeReview(role);
+}
+
+function buildWorkbenchBucket(candidate = {}, approvalPolicy = {}, conflictPeers = []) {
+  if (arr(conflictPeers).length > 0 || lower(candidate.status) === "conflict") {
+    return "conflicting";
+  }
+  if (approvalPolicy.autoApprovable === true) {
+    return "auto_approvable";
+  }
+  if (
+    approvalPolicy.outcome === "quarantined" ||
+    lower(candidate.status) === "needs_review"
+  ) {
+    return "quarantined";
+  }
+  if (
+    approvalPolicy.blocked === true ||
+    approvalPolicy.risk?.operational === true ||
+    ["admin_approval_required", "owner_approval_required", "dual_approval_required"].includes(
+      lower(approvalPolicy.outcome)
+    )
+  ) {
+    return "blocked_high_risk";
+  }
+  return "pending";
+}
+
+function buildConflictPeerExplanation(selected = {}, peer = {}) {
+  const reasons = [];
+  const selectedTrust = Number(selected?.governance?.trust?.strongestTrustScore || 0);
+  const peerTrust = Number(peer?.governance?.trust?.strongestTrustScore || 0);
+  const selectedFreshness = lower(selected?.governance?.freshness?.bucket);
+  const peerFreshness = lower(peer?.governance?.freshness?.bucket);
+  const selectedConfidence = Number(selected?.confidence || 0);
+  const peerConfidence = Number(peer?.confidence || 0);
+
+  if (selectedTrust > peerTrust + 0.03) {
+    reasons.push("stronger source trust");
+  }
+  if (["fresh", "review"].includes(selectedFreshness) && ["aging", "stale", "unknown"].includes(peerFreshness)) {
+    reasons.push("fresher evidence");
+  }
+  if (selectedConfidence > peerConfidence + 0.05) {
+    reasons.push("higher candidate confidence");
+  }
+
+  return reasons.length ? reasons : ["operator judgment still required"];
+}
+
+function buildImpactPreview(impact = {}, currentTruth = null) {
+  return {
+    canonicalAreas: uniqStrings(impact.canonicalAreas || impact.canonical_areas),
+    runtimeAreas: uniqStrings(impact.runtimeAreas || impact.runtime_areas),
+    canonicalPaths: uniqStrings(impact.canonicalPaths || impact.canonical_paths),
+    runtimePaths: uniqStrings(impact.runtimePaths || impact.runtime_paths),
+    affectedSurfaces: uniqStrings(impact.affectedSurfaces || impact.affected_surfaces),
+    currentTruth: currentTruth
+      ? {
+          id: s(currentTruth.id),
+          title: s(currentTruth.title),
+          valueText: s(currentTruth.value_text),
+          approvedAt: s(currentTruth.approved_at),
+        }
+      : null,
+  };
+}
+
+const POLICY_OUTCOME_RANK = {
+  auto_approvable: 0,
+  review_required: 1,
+  admin_approval_required: 2,
+  owner_approval_required: 3,
+  dual_approval_required: 4,
+  blocked: 5,
+  quarantined: 6,
+};
+
+const RISK_LEVEL_RANK = {
+  low: 0,
+  medium: 1,
+  high: 2,
+};
+
+function compareRank(left = "", right = "", rankMap = {}) {
+  const a = rankMap[lower(left)];
+  const b = rankMap[lower(right)];
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return "unknown";
+  if (a > b) return "higher";
+  if (a < b) return "lower";
+  return "unchanged";
+}
+
+function normalizePreviewValue(value = {}) {
+  const item = obj(value);
+  return {
+    title: s(item.title),
+    valueText: s(item.valueText || item.value_text),
+    approvedAt: s(item.approvedAt || item.approved_at),
+  };
+}
+
+function resolveCurrentTruthPolicy(currentTruth = null) {
+  const metadata = obj(currentTruth?.metadata_json);
+  const policy = obj(metadata.approvalPolicy || metadata.approval_policy);
+  return {
+    outcome: s(policy.outcome),
+    requiredRole: s(policy.requiredRole || policy.required_role),
+    riskLevel: s(policy.risk?.level || policy.riskLevel || policy.risk_level),
+  };
+}
+
+function inferAutonomyDelta({ impact = {}, candidatePolicy = {}, currentPolicy = {} } = {}) {
+  const runtimeAreas = uniqStrings(impact.runtimeAreas || impact.runtime_areas);
+  const affectedSurfaces = uniqStrings(
+    impact.affectedSurfaces || impact.affected_surfaces
+  );
+  const postureDelta = compareRank(
+    candidatePolicy.outcome,
+    currentPolicy.outcome,
+    POLICY_OUTCOME_RANK
+  );
+
+  if (!runtimeAreas.length && !affectedSurfaces.length) return "unchanged";
+  if (!["behavioral_policy", "channels", "contact_channels"].some((area) => runtimeAreas.includes(area))) {
+    if (postureDelta === "unknown") return "unknown";
+    return postureDelta === "higher"
+      ? "tightens"
+      : postureDelta === "lower"
+        ? "loosens"
+        : "unchanged";
+  }
+
+  if (postureDelta === "unknown") return "unknown";
+  if (postureDelta === "higher") return "tightens";
+  if (postureDelta === "lower") return "loosens";
+  return "unchanged";
+}
+
+function inferExecutionPostureDelta(candidatePolicy = {}, currentPolicy = {}) {
+  const delta = compareRank(
+    candidatePolicy.outcome,
+    currentPolicy.outcome,
+    POLICY_OUTCOME_RANK
+  );
+  if (delta === "higher") return "stricter";
+  if (delta === "lower") return "looser";
+  return delta;
+}
+
+function inferReadinessDelta({ impact = {}, candidatePolicy = {} } = {}) {
+  const runtimeAreas = uniqStrings(impact.runtimeAreas || impact.runtime_areas);
+  if (!runtimeAreas.length) return "unknown";
+  if (candidatePolicy.blocked === true) return "repair_or_review_gate";
+  if (runtimeAreas.length > 0) return "projection_refresh_required";
+  return "unknown";
+}
+
+function buildPreviewGuidance({
+  impact = {},
+  candidatePolicy = {},
+  currentPolicy = {},
+  autonomyDelta = "unknown",
+  executionDelta = "unknown",
+  readinessDelta = "unknown",
+} = {}) {
+  const affectedAreas = uniqStrings([
+    ...arr(impact.canonicalAreas || impact.canonical_areas),
+    ...arr(impact.runtimeAreas || impact.runtime_areas),
+    ...arr(impact.affectedSurfaces || impact.affected_surfaces),
+  ]);
+  const riskDelta = compareRank(
+    candidatePolicy.riskLevel,
+    currentPolicy.riskLevel,
+    RISK_LEVEL_RANK
+  );
+  const readinessImplications = [];
+
+  if (readinessDelta === "projection_refresh_required") {
+    readinessImplications.push(
+      "Runtime projection refresh will be required before governed runtime reflects this change."
+    );
+  }
+  if (arr(impact.runtimeAreas || impact.runtime_areas).includes("behavioral_policy")) {
+    readinessImplications.push(
+      "Behavioral policy surfaces may receive a stricter runtime posture after approval."
+    );
+  }
+  if (candidatePolicy.blocked === true) {
+    readinessImplications.push(
+      "The proposed truth remains governance-sensitive and may still require stronger review before runtime authority can change."
+    );
+  }
+
+  return {
+    likelyAffectedAreas: affectedAreas,
+    likelyRiskDelta: riskDelta === "higher" ? "higher" : riskDelta === "lower" ? "lower" : riskDelta,
+    likelyAutonomyDelta: autonomyDelta,
+    likelyExecutionPostureDelta: executionDelta,
+    likelyReadinessImplications: readinessImplications,
+    confidence:
+      affectedAreas.length > 0
+        ? "deterministic_impact_with_inferred_posture"
+        : "partial_preview",
+  };
+}
+
+function buildPublishPreview({
+  candidate = {},
+  currentTruth = null,
+  impact = {},
+  candidatePolicy = {},
+} = {}) {
+  const currentPolicy = resolveCurrentTruthPolicy(currentTruth);
+  const currentValue = normalizePreviewValue({
+    title: s(currentTruth?.title),
+    valueText: s(currentTruth?.value_text),
+    approvedAt: s(currentTruth?.approved_at),
+  });
+  const proposedValue = normalizePreviewValue({
+    title: s(candidate.title),
+    valueText: s(candidate.value_text),
+  });
+  const autonomyDelta = inferAutonomyDelta({
+    impact,
+    candidatePolicy,
+    currentPolicy,
+  });
+  const executionPostureDelta = inferExecutionPostureDelta(
+    candidatePolicy,
+    currentPolicy
+  );
+  const readinessDelta = inferReadinessDelta({
+    impact,
+    candidatePolicy,
+  });
+  const guidance = buildPreviewGuidance({
+    impact,
+    candidatePolicy,
+    currentPolicy,
+    autonomyDelta,
+    executionDelta: executionPostureDelta,
+    readinessDelta,
+  });
+  const riskDelta = compareRank(
+    candidatePolicy.riskLevel,
+    currentPolicy.riskLevel,
+    RISK_LEVEL_RANK
+  );
+
+  return {
+    values: {
+      currentApprovedValue: currentValue,
+      proposedValue,
+      changed:
+        s(currentValue.valueText) !== s(proposedValue.valueText) ||
+        s(currentValue.title) !== s(proposedValue.title),
+    },
+    canonical: {
+      areas: uniqStrings(impact.canonicalAreas || impact.canonical_areas),
+      paths: uniqStrings(impact.canonicalPaths || impact.canonical_paths),
+    },
+    runtime: {
+      areas: uniqStrings(impact.runtimeAreas || impact.runtime_areas),
+      paths: uniqStrings(impact.runtimePaths || impact.runtime_paths),
+      readinessDelta,
+    },
+    channels: {
+      affectedSurfaces: uniqStrings(
+        impact.affectedSurfaces || impact.affected_surfaces
+      ),
+    },
+    policy: {
+      currentOutcome: s(currentPolicy.outcome),
+      proposedOutcome: s(candidatePolicy.outcome),
+      currentRequiredRole: s(currentPolicy.requiredRole),
+      proposedRequiredRole: s(candidatePolicy.requiredRole),
+      executionPostureDelta,
+      autonomyDelta,
+      riskDelta,
+    },
+    guidance,
+    auditSummary: {
+      currentValue: s(currentValue.valueText),
+      proposedValue: s(proposedValue.valueText),
+      canonicalPaths: uniqStrings(impact.canonicalPaths || impact.canonical_paths),
+      runtimePaths: uniqStrings(impact.runtimePaths || impact.runtime_paths),
+      affectedSurfaces: uniqStrings(
+        impact.affectedSurfaces || impact.affected_surfaces
+      ),
+      proposedOutcome: s(candidatePolicy.outcome),
+      autonomyDelta,
+      riskDelta,
+      readinessDelta,
+    },
+  };
+}
+
+async function buildKnowledgeReviewWorkbench({
+  knowledge,
+  tenant,
+  viewerRole = "",
+  category = "",
+  status = "",
+  limit = 100,
+  offset = 0,
+} = {}) {
+  const queueRows = await knowledge.listReviewQueue({
+    tenantId: tenant.tenant_id,
+    tenantKey: tenant.tenant_key,
+    category,
+    status,
+    limit,
+    offset,
+  });
+
+  const queueItems = (
+    await Promise.all(
+      queueRows.map(async (item) => {
+        const full = await knowledge.getCandidateById(item.id);
+        return {
+          ...obj(full),
+          source_type: s(item.source_type || full?.source_type),
+          source_display_name: s(item.source_display_name),
+        };
+      })
+    )
+  ).filter(Boolean);
+
+  const activeKnowledge = await knowledge.listActiveKnowledge({
+    tenantId: tenant.tenant_id,
+    tenantKey: tenant.tenant_key,
+  });
+
+  const activeTruthMap = new Map(
+    activeKnowledge.map((item) => [
+      `${lower(item.category)}|${lower(item.item_key)}`,
+      item,
+    ])
+  );
+
+  const conflictGroups = new Map();
+  for (const item of queueItems) {
+    if (!s(item.conflict_hash)) continue;
+    const key = s(item.conflict_hash);
+    const existing = conflictGroups.get(key) || [];
+    existing.push(item);
+    conflictGroups.set(key, existing);
+  }
+
+  const items = await Promise.all(
+    queueItems.map(async (candidate) => {
+      const evidenceGovernance = summarizeEvidenceGovernance(candidate.source_evidence_json);
+      const peerCandidates = arr(conflictGroups.get(s(candidate.conflict_hash))).filter(
+        (item) => s(item.id) !== s(candidate.id)
+      );
+      const governance = {
+        trust: obj(evidenceGovernance.trust),
+        freshness: obj(evidenceGovernance.freshness),
+        support: obj(evidenceGovernance.support),
+        conflict: peerCandidates.length
+          ? {
+              classification: "conflicting_but_reviewable",
+              reviewRequired: true,
+              conflictHash: s(candidate.conflict_hash),
+              peerCount: peerCandidates.length + 1,
+            }
+          : {},
+      };
+      const impact = buildCandidateImpact({
+        category: candidate.category,
+        itemKey: candidate.item_key,
+      });
+      const approvalPolicy = classifyApprovalPolicy({
+        title: s(candidate.title || candidate.value_text || candidate.item_key),
+        category: candidate.category,
+        itemKey: candidate.item_key,
+        impact,
+        governance,
+      });
+      const currentTruth = activeTruthMap.get(
+        `${lower(candidate.category)}|${lower(candidate.item_key)}`
+      );
+      const queueBucket = buildWorkbenchBucket(candidate, approvalPolicy, peerCandidates);
+      const publishPreview = buildPublishPreview({
+        candidate,
+        currentTruth,
+        impact,
+        candidatePolicy: {
+          outcome: approvalPolicy.outcome,
+          requiredRole: approvalPolicy.requiredRole,
+          riskLevel: approvalPolicy.risk?.level,
+          blocked: approvalPolicy.blocked === true,
+        },
+      });
+      const latestApproval = arr(
+        await knowledge.listApprovals({
+          tenantId: tenant.tenant_id,
+          tenantKey: tenant.tenant_key,
+          candidateId: candidate.id,
+          limit: 1,
+          offset: 0,
+        })
+      )[0];
+
+      return {
+        id: s(candidate.id),
+        candidateId: s(candidate.id),
+        queueBucket,
+        category: lower(candidate.category),
+        itemKey: s(candidate.item_key),
+        title: s(candidate.title || candidate.value_text || candidate.item_key || "Candidate"),
+        valueText: s(candidate.value_text),
+        valueJson: obj(candidate.value_json),
+        normalizedText: s(candidate.normalized_text),
+        status: lower(candidate.status),
+        source: {
+          displayName: s(candidate.source_display_name || "Unknown source"),
+          sourceType: lower(candidate.source_type),
+          trustTier: s(governance.trust.strongestTier),
+          trustLabel: titleize(governance.trust.strongestTier || governance.trust.strongestSourceType || "unknown"),
+        },
+        confidence: {
+          score: Number(candidate.confidence || 0),
+          label: s(candidate.confidence_label),
+        },
+        governance: {
+          trust: obj(governance.trust),
+          freshness: obj(governance.freshness),
+          support: obj(governance.support),
+          conflict: obj(governance.conflict),
+          quarantine: approvalPolicy.outcome === "quarantined",
+          quarantineReasons: uniqStrings(approvalPolicy.reasonCodes),
+          reviewExplanation: uniqStrings([
+            governance.trust.strongestTier
+              ? `Trust tier ${titleize(governance.trust.strongestTier)}`
+              : "",
+            governance.freshness.bucket
+              ? `Freshness ${titleize(governance.freshness.bucket)}`
+              : "",
+            Number(governance.support.uniqueSourceCount || 0) > 0
+              ? `${Number(governance.support.uniqueSourceCount || 0)} supporting source${Number(governance.support.uniqueSourceCount || 0) === 1 ? "" : "s"}`
+              : "",
+          ]),
+        },
+        approvalPolicy: {
+          outcome: lower(approvalPolicy.outcome),
+          requiredRole: s(approvalPolicy.requiredRole),
+          reasonCodes: uniqStrings(approvalPolicy.reasonCodes),
+          autoApprovalAllowed: approvalPolicy.autoApprovable === true,
+          autoApprovalForbidden: approvalPolicy.autoApprovalForbidden === true,
+          blocked: approvalPolicy.blocked === true,
+          highRiskOperationalTruth: approvalPolicy.risk?.operational === true,
+          riskLevel: s(approvalPolicy.risk?.level),
+          riskLabel: s(approvalPolicy.risk?.label),
+        },
+        impactPreview: buildImpactPreview(impact, currentTruth),
+        finalizeImpactPreview: buildImpactPreview(impact, currentTruth),
+        publishPreview,
+        currentTruth: currentTruth
+          ? {
+              title: s(currentTruth.title),
+              valueText: s(currentTruth.value_text),
+              approvedAt: s(currentTruth.approved_at),
+            }
+          : null,
+        conflictResolution: peerCandidates.length
+          ? {
+              conflictHash: s(candidate.conflict_hash),
+              classification: "conflicting_but_reviewable",
+              reviewRequired: true,
+              peerCount: peerCandidates.length + 1,
+              peers: peerCandidates.map((peer) => {
+                const peerGovernance = summarizeEvidenceGovernance(peer.source_evidence_json);
+                return {
+                  id: s(peer.id),
+                  title: s(peer.title || peer.value_text || peer.item_key || "Candidate"),
+                  valueText: s(peer.value_text),
+                  sourceDisplayName: s(peer.source_display_name || "Unknown source"),
+                  sourceType: lower(peer.source_type),
+                  trustTier: s(peerGovernance.trust?.strongestTier),
+                  freshnessBucket: s(peerGovernance.freshness?.bucket),
+                  confidence: Number(peer.confidence || 0),
+                  publishPreview: buildPublishPreview({
+                    candidate: peer,
+                    currentTruth,
+                    impact: buildCandidateImpact({
+                      category: peer.category,
+                      itemKey: peer.item_key,
+                    }),
+                    candidatePolicy: (() => {
+                      const peerImpact = buildCandidateImpact({
+                        category: peer.category,
+                        itemKey: peer.item_key,
+                      });
+                      const peerPolicy = classifyApprovalPolicy({
+                        title: s(peer.title || peer.value_text || peer.item_key),
+                        category: peer.category,
+                        itemKey: peer.item_key,
+                        impact: peerImpact,
+                        governance: peerGovernance,
+                      });
+                      return {
+                        outcome: peerPolicy.outcome,
+                        requiredRole: peerPolicy.requiredRole,
+                        riskLevel: peerPolicy.risk?.level,
+                        blocked: peerPolicy.blocked === true,
+                      };
+                    })(),
+                  }),
+                  whyStrongerOrWeaker: buildConflictPeerExplanation(
+                    {
+                      confidence: candidate.confidence,
+                      governance,
+                    },
+                    {
+                      confidence: peer.confidence,
+                      governance: peerGovernance,
+                    }
+                  ),
+                };
+              }),
+              previewChoices: [
+                {
+                  candidateId: s(candidate.id),
+                  title: s(candidate.title || candidate.value_text || candidate.item_key),
+                  valueText: s(candidate.value_text),
+                  publishPreview,
+                  riskLevel: s(approvalPolicy.risk?.level),
+                  outcome: s(approvalPolicy.outcome),
+                  affectedSurfaces: uniqStrings(impact.affectedSurfaces || impact.affected_surfaces),
+                },
+                ...peerCandidates.map((peer) => {
+                  const peerGovernance = summarizeEvidenceGovernance(peer.source_evidence_json);
+                  const peerImpact = buildCandidateImpact({
+                    category: peer.category,
+                    itemKey: peer.item_key,
+                  });
+                  const peerPolicy = classifyApprovalPolicy({
+                    title: s(peer.title || peer.value_text || peer.item_key),
+                    category: peer.category,
+                    itemKey: peer.item_key,
+                    impact: peerImpact,
+                    governance: peerGovernance,
+                  });
+                  return {
+                    candidateId: s(peer.id),
+                    title: s(peer.title || peer.value_text || peer.item_key),
+                    valueText: s(peer.value_text),
+                    publishPreview: buildPublishPreview({
+                      candidate: peer,
+                      currentTruth,
+                      impact: peerImpact,
+                      candidatePolicy: {
+                        outcome: peerPolicy.outcome,
+                        requiredRole: peerPolicy.requiredRole,
+                        riskLevel: peerPolicy.risk?.level,
+                        blocked: peerPolicy.blocked === true,
+                      },
+                    }),
+                    riskLevel: s(peerPolicy.risk?.level),
+                    outcome: s(peerPolicy.outcome),
+                    affectedSurfaces: uniqStrings(
+                      peerImpact.affectedSurfaces || peerImpact.affected_surfaces
+                    ),
+                  };
+                }),
+              ],
+            }
+          : null,
+        sourceEvidence: arr(candidate.source_evidence_json).slice(0, 6),
+        review: {
+          reviewReason: s(candidate.review_reason),
+          firstSeenAt: s(candidate.first_seen_at),
+          updatedAt: s(candidate.updated_at),
+          reviewedAt: s(candidate.reviewed_at),
+          reviewedBy: s(candidate.reviewed_by),
+        },
+        auditContext: {
+          latestAction: s(latestApproval?.action),
+          latestDecision: s(latestApproval?.decision),
+          latestBy: s(latestApproval?.reviewer_name || latestApproval?.reviewer_id || candidate.reviewed_by),
+          latestAt: s(latestApproval?.created_at || candidate.reviewed_at),
+        },
+        actions: [
+          {
+            actionType: "approve",
+            label: peerCandidates.length ? "Approve selected value" : "Approve candidate",
+            allowed: canSatisfyRequiredRole(viewerRole, approvalPolicy.requiredRole),
+            requiredRole: s(approvalPolicy.requiredRole),
+            unavailableReason:
+              canSatisfyRequiredRole(viewerRole, approvalPolicy.requiredRole)
+                ? ""
+                : `Requires ${titleize(approvalPolicy.requiredRole || "reviewer")} approval authority.`,
+          },
+          {
+            actionType: "reject",
+            label: "Reject",
+            allowed: canWriteKnowledgeReview(viewerRole),
+            requiredRole: "admin",
+            unavailableReason: canWriteKnowledgeReview(viewerRole)
+              ? ""
+              : "Requires admin or owner write access.",
+          },
+          {
+            actionType: "mark_follow_up",
+            label: "Needs review",
+            allowed: canWriteKnowledgeReview(viewerRole),
+            requiredRole: "admin",
+            unavailableReason: canWriteKnowledgeReview(viewerRole)
+              ? ""
+              : "Requires admin or owner write access.",
+          },
+          {
+            actionType: "keep_quarantined",
+            label: "Keep quarantined",
+            allowed:
+              canWriteKnowledgeReview(viewerRole) &&
+              (queueBucket === "quarantined" || approvalPolicy.blocked === true),
+            requiredRole: "admin",
+            unavailableReason:
+              queueBucket === "quarantined" || approvalPolicy.blocked === true
+                ? canWriteKnowledgeReview(viewerRole)
+                  ? ""
+                  : "Requires admin or owner write access."
+                : "Candidate is not currently in a quarantined posture.",
+          },
+        ],
+      };
+    })
+  );
+
+  const summary = items.reduce(
+    (acc, item) => {
+      acc.total += 1;
+      acc[item.queueBucket] = (acc[item.queueBucket] || 0) + 1;
+      if (item.approvalPolicy.highRiskOperationalTruth) acc.highRisk += 1;
+      if (item.approvalPolicy.autoApprovalAllowed) acc.autoApprovable += 1;
+      return acc;
+    },
+    {
+      total: 0,
+      pending: 0,
+      quarantined: 0,
+      conflicting: 0,
+      auto_approvable: 0,
+      blocked_high_risk: 0,
+      highRisk: 0,
+      autoApprovable: 0,
+    }
+  );
+
+  return {
+    viewerRole: lower(viewerRole),
+    summary,
+    items,
+  };
+}
+
 export function registerSettingsSourceKnowledgeRoutes(router, context) {
   const {
     db,
@@ -589,20 +1280,28 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
 
       const knowledge = getKnowledge();
       if (!knowledge) return bad(res, 503, "db disabled", { dbDisabled: true });
-
-      const items = await knowledge.listReviewQueue({
-        tenantId: tenant.tenant_id,
-        tenantKey: tenant.tenant_key,
-        category: s(req.query?.category),
-        limit: n(req.query?.limit, 100),
-        offset: n(req.query?.offset, 0),
+      const viewerRole = lower(req.auth?.role || "member");
+      const category = s(req.query?.category);
+      const status = s(req.query?.status);
+      const limit = n(req.query?.limit, 100);
+      const offset = n(req.query?.offset, 0);
+      const workbench = await buildKnowledgeReviewWorkbench({
+        knowledge,
+        tenant,
+        viewerRole,
+        category,
+        status,
+        limit,
+        offset,
       });
 
       return ok(res, {
         tenantId: tenant.tenant_id,
         tenantKey: tenant.tenant_key,
-        items,
-        count: items.length,
+        viewerRole,
+        summary: workbench.summary,
+        items: workbench.items,
+        count: workbench.items.length,
       });
     } catch (err) {
       return bad(res, 500, err.message || "failed to load review queue");
@@ -640,6 +1339,15 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
         createdBy: by,
         approvedBy: by,
         updatedBy: by,
+        metadataJson: {
+          ...obj(payload.metadataJson, {}),
+          publishPreview: obj(
+            payload.metadataJson?.publishPreview ||
+              payload.metadataJson?.previewSummary ||
+              {},
+            {}
+          ),
+        },
       });
 
       const promotedBusinessFact = await maybePromoteApprovedKnowledgeToBusinessFact(
@@ -661,6 +1369,12 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
         approvalId: s(result?.approval?.id),
         promotedBusinessFactId: s(promotedBusinessFact?.id),
         reviewerName,
+        publishPreview: obj(
+          payload.metadataJson?.publishPreview ||
+            payload.metadataJson?.previewSummary ||
+            {},
+          {}
+        ),
       });
 
       return ok(res, {
@@ -714,6 +1428,106 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
       return ok(res, result);
     } catch (err) {
       return bad(res, 500, err.message || "failed to reject candidate");
+    }
+  });
+
+  router.post("/knowledge/:candidateId/needs-review", async (req, res) => {
+    try {
+      const role = requireSettingsWriteRole(req, res);
+      if (!role) return;
+
+      const tenant = await resolveTenantOr400(req, res);
+      if (!tenant) return;
+
+      const knowledge = getKnowledge();
+      if (!knowledge) return bad(res, 503, "db disabled", { dbDisabled: true });
+
+      const candidateId = s(req.params.candidateId);
+      if (!candidateId) return bad(res, 400, "candidate id is required");
+
+      const candidate = await knowledge.getCandidateById(candidateId);
+      if (!candidate || candidate.tenant_id !== tenant.tenant_id) {
+        return bad(res, 404, "candidate not found");
+      }
+
+      const by = pickUserId(req);
+      const reviewerName = pickUserName(req);
+      const reason =
+        s(req.body?.reason) || "Marked for follow-up review from Truth Review Workbench";
+      const result = await knowledge.markCandidateNeedsReview(candidateId, {
+        reviewerId: by,
+        reviewedAt: new Date().toISOString(),
+        reason,
+      });
+
+      await auditSafe(
+        db,
+        req,
+        tenant,
+        "settings.knowledge.needs_review_marked",
+        "tenant_knowledge_candidate",
+        candidateId,
+        {
+          category: s(candidate?.category),
+          itemKey: s(candidate?.item_key),
+          reviewerName,
+          reason,
+        }
+      );
+
+      return ok(res, result);
+    } catch (err) {
+      return bad(res, 500, err.message || "failed to mark candidate for review");
+    }
+  });
+
+  router.post("/knowledge/:candidateId/quarantine", async (req, res) => {
+    try {
+      const role = requireSettingsWriteRole(req, res);
+      if (!role) return;
+
+      const tenant = await resolveTenantOr400(req, res);
+      if (!tenant) return;
+
+      const knowledge = getKnowledge();
+      if (!knowledge) return bad(res, 503, "db disabled", { dbDisabled: true });
+
+      const candidateId = s(req.params.candidateId);
+      if (!candidateId) return bad(res, 400, "candidate id is required");
+
+      const candidate = await knowledge.getCandidateById(candidateId);
+      if (!candidate || candidate.tenant_id !== tenant.tenant_id) {
+        return bad(res, 404, "candidate not found");
+      }
+
+      const by = pickUserId(req);
+      const reviewerName = pickUserName(req);
+      const reason =
+        s(req.body?.reason) || "Candidate remains quarantined pending stronger evidence";
+      const result = await knowledge.markCandidateNeedsReview(candidateId, {
+        reviewerId: by,
+        reviewedAt: new Date().toISOString(),
+        reason,
+      });
+
+      await auditSafe(
+        db,
+        req,
+        tenant,
+        "settings.knowledge.quarantine_retained",
+        "tenant_knowledge_candidate",
+        candidateId,
+        {
+          category: s(candidate?.category),
+          itemKey: s(candidate?.item_key),
+          reviewerName,
+          reason,
+        }
+      );
+
+      return ok(res, result);
+    } catch (err) {
+      return bad(res, 500, err.message || "failed to keep candidate quarantined");
     }
   });
 }

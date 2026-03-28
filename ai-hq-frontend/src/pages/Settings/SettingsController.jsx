@@ -3,6 +3,7 @@
 
 import React from "react";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   BellRing,
   Bot,
@@ -70,7 +71,9 @@ import { getControlPlanePermissions } from "../../lib/controlPlanePermissions.js
 import { GovernanceSignalStrip } from "../../components/governance/GovernanceCockpit.jsx";
 
 export default function SettingsController() {
-  const [activeSection, setActiveSection] = useState("general");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedSection = String(searchParams.get("section") || "").trim().toLowerCase();
+  const [activeSection, setActiveSection] = useState(requestedSection || "general");
   const [perm, setPerm] = useState("default");
   const [pushBusy, setPushBusy] = useState(false);
   const [pushMessage, setPushMessage] = useState("");
@@ -161,6 +164,7 @@ export default function SettingsController() {
     sources,
     setSources,
     knowledgeReview,
+    knowledgeReviewSummary,
     setKnowledgeReview,
     syncRunsOpen,
     setSyncRunsOpen,
@@ -173,6 +177,8 @@ export default function SettingsController() {
     handleViewSourceSyncRuns,
     handleApproveKnowledge,
     handleRejectKnowledge,
+    handleMarkKnowledgeFollowUp,
+    handleKeepKnowledgeQuarantined,
   } = sourceIntelligence;
 
   const navItems = useMemo(
@@ -205,6 +211,30 @@ export default function SettingsController() {
     ],
     [controlPlanePermissions.auditHistoryRead.allowed, dirtyMap]
   );
+
+  useEffect(() => {
+    if (!requestedSection) return;
+    const available = navItems.some((item) => item.key === requestedSection);
+    if (!available) return;
+    setActiveSection((current) => (current === requestedSection ? current : requestedSection));
+  }, [navItems, requestedSection]);
+
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const current = String(prev.get("section") || "").trim().toLowerCase();
+        if (current === activeSection) return prev;
+        const next = new URLSearchParams(prev);
+        if (activeSection && activeSection !== "general") {
+          next.set("section", activeSection);
+        } else {
+          next.delete("section");
+        }
+        return next;
+      },
+      { replace: true }
+    );
+  }, [activeSection, setSearchParams]);
 
   useEffect(() => {
     getNotificationPermission().then(setPerm).catch(() => setPerm("default"));
@@ -410,10 +440,16 @@ export default function SettingsController() {
         return (
           <KnowledgeReviewSection>
             <TrustKnowledgeReviewSection
-              items={knowledgeReview}
+              workbench={{
+                viewerRole,
+                summary: knowledgeReviewSummary,
+                items: knowledgeReview,
+              }}
               canManage={canManageSettings}
               onApprove={handleApproveKnowledge}
               onReject={handleRejectKnowledge}
+              onMarkForFollowUp={handleMarkKnowledgeFollowUp}
+              onKeepQuarantined={handleKeepKnowledgeQuarantined}
               trust={trust}
               sourceSurface={sourceSurface}
             />

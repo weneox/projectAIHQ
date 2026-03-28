@@ -835,6 +835,39 @@ function summarizeDecisionEvents(events = []) {
       label: "Execution decisions",
     };
   };
+  const buildQueryPath = (path = "", params = {}) => {
+    const base = s(path);
+    if (!base) return "";
+    const query = new URLSearchParams();
+    Object.entries(obj(params)).forEach(([key, value]) => {
+      const next = s(value);
+      if (!next) return;
+      query.set(key, next);
+    });
+    const text = query.toString();
+    return text ? `${base}?${text}` : base;
+  };
+  const createRouteAction = ({
+    actionType = "",
+    label = "",
+    path = "",
+    params = {},
+    reason = "",
+  } = {}) => {
+    const resolvedPath = buildQueryPath(path, params);
+    if (!resolvedPath) return null;
+    return {
+      id: lower(actionType),
+      actionType: lower(actionType),
+      kind: "route",
+      label: s(label || safeLabel(actionType)),
+      allowed: true,
+      reason: s(reason),
+      target: {
+        path: resolvedPath,
+      },
+    };
+  };
   const buildPostureSummary = ({
     label = "",
     posture = {},
@@ -982,6 +1015,179 @@ function summarizeDecisionEvents(events = []) {
       ),
     };
   };
+  const buildRemediationActions = ({
+    event = {},
+    group = {},
+    remediation = {},
+    decisionContextSnapshot = {},
+  } = {}) => {
+    const context = obj(event.decisionContext);
+    const actionCandidates = [];
+    const eventId = s(event.id);
+    const surface = lower(event.surface);
+    const historyFilter = lower(group.key || "all");
+    const truthVersionId = s(event.truthVersionId);
+    const runtimeProjectionId = s(event.runtimeProjectionId);
+    const threadId = s(
+      context.threadId || context.thread_id || context.inboxThreadId || context.inbox_thread_id
+    );
+
+    if (remediation.reviewRequired || remediation.approvalRequired) {
+      actionCandidates.push(
+        createRouteAction({
+          actionType: "open_truth_review",
+          label: remediation.reviewRequired ? "Review truth now" : "Open truth review",
+          path: "/settings",
+          params: {
+            section: "knowledge_review",
+            reviewSessionId: s(decisionContextSnapshot.reviewSessionId),
+            historyFilter,
+            eventId,
+          },
+          reason: "Protected review and approval workflow",
+        })
+      );
+    }
+
+    if (truthVersionId) {
+      actionCandidates.push(
+        createRouteAction({
+          actionType: "open_truth_version",
+          label: "Open truth version",
+          path: "/truth",
+          params: {
+            versionId: truthVersionId,
+            focus: "history",
+            eventId,
+          },
+          reason: "Inspect approved truth context",
+        })
+      );
+    }
+
+    if (remediation.repairRequired) {
+      actionCandidates.push(
+        createRouteAction({
+          actionType: "open_repair_flow",
+          label: "Open repair controls",
+          path: "/settings",
+          params: {
+            section: "sources",
+            trustFocus: "repair_hub",
+            historyFilter: "runtime",
+            runtimeProjectionId,
+            eventId,
+          },
+          reason: "Open repair workflow without executing it directly",
+        })
+      );
+      actionCandidates.push(
+        createRouteAction({
+          actionType: "open_runtime_health",
+          label: "Inspect runtime health",
+          path: "/settings",
+          params: {
+            section: "sources",
+            trustFocus: "runtime_health",
+            historyFilter: "runtime",
+            runtimeProjectionId,
+            eventId,
+          },
+          reason: "Review projection health posture",
+        })
+      );
+    }
+
+    if (runtimeProjectionId) {
+      actionCandidates.push(
+        createRouteAction({
+          actionType: "open_projection_reference",
+          label: "Open projection reference",
+          path: "/settings",
+          params: {
+            section: "sources",
+            trustFocus: "runtime_projection",
+            runtimeProjectionId,
+            eventId,
+          },
+          reason: "Inspect runtime projection reference",
+        })
+      );
+    }
+
+    if (remediation.operatorOnly || group.key === "controls") {
+      actionCandidates.push(
+        createRouteAction({
+          actionType: "open_control_settings",
+          label: "Open control settings",
+          path: "/settings",
+          params: {
+            section: "sources",
+            trustFocus: "policy_controls",
+            surface,
+            historyFilter: "controls",
+            eventId,
+          },
+          reason: "Inspect channel or tenant control state",
+        })
+      );
+    }
+
+    if (surface && surface !== "tenant") {
+      actionCandidates.push(
+        threadId && surface === "inbox"
+          ? createRouteAction({
+              actionType: "open_channel_surface",
+              label: "Open affected thread",
+              path: "/inbox",
+              params: {
+                threadId,
+                eventId,
+              },
+              reason: "Open affected inbox thread context",
+            })
+          : createRouteAction({
+              actionType: "open_channel_surface",
+              label: "View channel restrictions",
+              path: "/settings",
+              params: {
+                section: ["voice", "inbox", "comments"].includes(surface)
+                  ? "operational"
+                  : "sources",
+                channel: surface,
+                trustFocus: "channel_surface",
+                eventId,
+              },
+              reason: "Inspect affected channel surface",
+            })
+      );
+    }
+
+    if (historyFilter && historyFilter !== "all") {
+      actionCandidates.push(
+        createRouteAction({
+          actionType: "open_history_filter",
+          label: "Filter similar events",
+          path: "/settings",
+          params: {
+            section: "sources",
+            historyFilter,
+            eventId,
+          },
+          reason: "Reopen governance history with the relevant filter applied",
+        })
+      );
+    }
+
+    const seen = new Set();
+    return actionCandidates.filter((item) => {
+      if (!item?.target?.path) return false;
+      const key = `${item.actionType}:${item.target.path}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
   const detailed = (event = {}) => {
     const group = classify(event);
     const approvalPosture = buildPostureSummary({
@@ -1007,6 +1213,12 @@ function summarizeDecisionEvents(events = []) {
     });
     const decisionContextSnapshot = buildDecisionContextSnapshot(event, group);
     const remediation = buildRemediation(event, group);
+    const remediationActions = buildRemediationActions({
+      event,
+      group,
+      remediation,
+      decisionContextSnapshot,
+    });
     return {
       ...compact(event),
       group: group.key,
@@ -1022,7 +1234,11 @@ function summarizeDecisionEvents(events = []) {
       affectedSurfaces: arr(event.affectedSurfaces).map((item) => lower(item)),
       decisionContext: obj(event.decisionContext),
       decisionContextSnapshot,
-      remediation,
+      remediation: {
+        ...remediation,
+        actions: remediationActions,
+      },
+      remediationActions,
       links: {
         truthVersionId: s(event.truthVersionId),
         runtimeProjectionId: s(event.runtimeProjectionId),
@@ -1030,6 +1246,12 @@ function summarizeDecisionEvents(events = []) {
         channelType: lower(event.channelType),
         controlScope: s(decisionContextSnapshot.controlScope),
         eventCategory: group.key,
+        threadId: s(
+          obj(event.decisionContext).threadId ||
+            obj(event.decisionContext).thread_id ||
+            obj(event.decisionContext).inboxThreadId ||
+            obj(event.decisionContext).inbox_thread_id
+        ),
       },
     };
   };

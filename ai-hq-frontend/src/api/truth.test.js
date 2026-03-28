@@ -132,4 +132,147 @@ it("approved truth unavailable snapshot refuses non-approved fallback data", () 
   expect(snapshot.unavailableReasonCode).toBe("approved_truth_unavailable");
   expect(snapshot.notices[0]).toMatch(/no non-approved fallback data is being shown/i);
 });
+
+it("normalizeTruthReviewWorkbench preserves policy, conflict, and impact detail safely", () => {
+  const normalized = __test__.normalizeTruthReviewWorkbench({
+    summary: {
+      total: 2,
+      conflicting: 1,
+      quarantined: 1,
+      highRisk: 1,
+      blocked_high_risk: 1,
+    },
+    items: [
+      {
+        id: "candidate-1",
+        queueBucket: "conflicting",
+        category: "contact",
+        itemKey: "phone_primary",
+        title: "Primary phone",
+        valueText: "+15551112222",
+        source: {
+          displayName: "Main Website",
+          sourceType: "website",
+          trustTier: "official_website",
+          trustLabel: "Official Website",
+        },
+        confidence: {
+          score: 0.91,
+          label: "high",
+        },
+        governance: {
+          quarantine: false,
+          reviewExplanation: ["Trust tier Official Website"],
+        },
+        approvalPolicy: {
+          outcome: "review_required",
+          requiredRole: "reviewer",
+          reasonCodes: ["reviewable_conflict"],
+          highRiskOperationalTruth: false,
+          riskLevel: "medium",
+        },
+        finalizeImpactPreview: {
+          canonicalAreas: ["business_profile"],
+          runtimeAreas: ["contact_channels"],
+          affectedSurfaces: ["voice"],
+        },
+        publishPreview: {
+          values: {
+            currentApprovedValue: {
+              title: "Current approved phone",
+              valueText: "+15550000000",
+            },
+            proposedValue: {
+              title: "Primary phone",
+              valueText: "+15551112222",
+            },
+            changed: true,
+          },
+          canonical: {
+            areas: ["business_profile"],
+            paths: ["profile.primaryPhone"],
+          },
+          runtime: {
+            areas: ["contact_channels"],
+            paths: ["runtime.business.contacts.primaryPhone"],
+            readinessDelta: "projection_refresh_required",
+          },
+          channels: {
+            affectedSurfaces: ["voice", "inbox"],
+          },
+          policy: {
+            currentOutcome: "review_required",
+            proposedOutcome: "review_required",
+            autonomyDelta: "unchanged",
+            executionPostureDelta: "unchanged",
+            riskDelta: "unknown",
+          },
+          guidance: {
+            likelyAffectedAreas: ["business_profile", "contact_channels", "voice"],
+            likelyReadinessImplications: ["Runtime projection refresh will be required before governed runtime reflects this change."],
+            confidence: "deterministic_impact_with_inferred_posture",
+          },
+          auditSummary: {
+            proposedOutcome: "review_required",
+          },
+        },
+        conflictResolution: {
+          classification: "conflicting_but_reviewable",
+          reviewRequired: true,
+          peerCount: 2,
+          previewChoices: [
+            {
+              candidateId: "candidate-1",
+              title: "Primary phone",
+              valueText: "+15551112222",
+              outcome: "review_required",
+              riskLevel: "medium",
+              affectedSurfaces: ["voice"],
+              publishPreview: {
+                values: {
+                  proposedValue: { valueText: "+15551112222" },
+                },
+              },
+            },
+          ],
+          peers: [
+            {
+              id: "candidate-2",
+              valueText: "+15553334444",
+              trustTier: "weak_inferred_scrape",
+              freshnessBucket: "stale",
+              publishPreview: {
+                values: {
+                  proposedValue: { valueText: "+15553334444" },
+                },
+              },
+              whyStrongerOrWeaker: ["stronger source trust"],
+            },
+          ],
+        },
+        actions: [
+          {
+            actionType: "approve",
+            label: "Approve selected value",
+            allowed: true,
+          },
+        ],
+      },
+      {
+        id: "candidate-3",
+        actions: [],
+      },
+    ],
+  });
+
+  expect(normalized.summary.conflicting).toBe(1);
+  expect(normalized.items[0].source.trustTier).toBe("official_website");
+  expect(normalized.items[0].approvalPolicy.reasonCodes).toEqual(["reviewable_conflict"]);
+  expect(normalized.items[0].conflictResolution.peers[0].freshnessBucket).toBe("stale");
+  expect(normalized.items[0].finalizeImpactPreview.runtimeAreas).toEqual(["contact_channels"]);
+  expect(normalized.items[0].publishPreview.values.currentApprovedValue.valueText).toBe("+15550000000");
+  expect(normalized.items[0].publishPreview.runtime.readinessDelta).toBe("projection_refresh_required");
+  expect(normalized.items[0].conflictResolution.previewChoices[0].publishPreview.values.proposedValue.valueText).toBe("+15551112222");
+  expect(normalized.items[1].actions).toEqual([]);
+});
 });

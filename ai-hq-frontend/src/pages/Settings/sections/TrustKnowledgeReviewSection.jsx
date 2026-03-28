@@ -1,92 +1,93 @@
 import { useState } from "react";
 
-import Card from "../../../components/ui/Card.jsx";
 import Badge from "../../../components/ui/Badge.jsx";
+import Card from "../../../components/ui/Card.jsx";
+import TruthReviewWorkbench from "../../../components/governance/TruthReviewWorkbench.jsx";
 import SettingsSection from "../../../components/settings/SettingsSection.jsx";
 import SettingsSurfaceBanner from "../../../components/settings/SettingsSurfaceBanner.jsx";
 import {
   EmptyState,
-  KnowledgeCandidateCard,
-  StatTile,
   formatTimestampLabel,
   titleizeTrustAction,
 } from "./trustSurfaceShared.jsx";
 
 export default function TrustKnowledgeReviewSection({
-  items,
+  workbench,
   canManage,
   onApprove,
   onReject,
+  onMarkForFollowUp,
+  onKeepQuarantined,
   trust,
   sourceSurface,
 }) {
-  const [busyId, setBusyId] = useState("");
   const [busyAction, setBusyAction] = useState("");
-
-  async function handleApprove(item) {
-    setBusyId(String(item.id || ""));
-    setBusyAction("approve");
-    try {
-      await onApprove(item);
-    } finally {
-      setBusyId("");
-      setBusyAction("");
-    }
-  }
-
-  async function handleReject(item) {
-    setBusyId(String(item.id || ""));
-    setBusyAction("reject");
-    try {
-      await onReject(item);
-    } finally {
-      setBusyId("");
-      setBusyAction("");
-    }
-  }
-
-  const conflictCount = items.filter((x) => String(x.status).toLowerCase() === "conflict").length;
+  const [busyId, setBusyId] = useState("");
   const trustUnavailable = trust?.unavailable === true;
   const sourceState = sourceSurface || {};
   const auditItems = Array.isArray(trust?.view?.audit) ? trust.view.audit : [];
 
+  async function handleRunAction(item, action) {
+    const actionType = String(action?.actionType || "").trim().toLowerCase();
+    if (!item?.id || !actionType) return;
+
+    setBusyId(String(item.id));
+    setBusyAction(actionType);
+    try {
+      if (actionType === "approve") {
+        await onApprove?.(item);
+      } else if (actionType === "reject") {
+        await onReject?.(item);
+      } else if (actionType === "mark_follow_up") {
+        await onMarkForFollowUp?.(item);
+      } else if (actionType === "keep_quarantined") {
+        await onKeepQuarantined?.(item);
+      }
+    } finally {
+      setBusyId("");
+      setBusyAction("");
+    }
+  }
+
   return (
     <SettingsSection
       eyebrow="Source Intelligence"
-      title="Knowledge Review"
-      subtitle="Candidates from source sync and source evidence land here before they can influence approved truth."
+      title="Truth Review Workbench"
+      subtitle="Source-derived truth changes are reviewed, conflicted, quarantined, approved, or rejected here before they can converge into approved truth."
       tone="default"
     >
       <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-3">
-          <StatTile
-            label="Pending Items"
-            value={items.length}
-            hint="Evidence-backed candidates waiting for review"
-            tone="info"
-          />
-          <StatTile
-            label="Conflicts"
-            value={conflictCount}
-            hint="Candidates that need closer human judgment"
-            tone={conflictCount > 0 ? "warn" : "neutral"}
-          />
-          <StatTile
-            label="Truth Protection"
-            value="Review Required"
-            hint="Sync never auto-promotes evidence into approved truth"
-            tone="success"
-          />
-        </div>
-
         <div className="rounded-[22px] border border-slate-200/80 bg-slate-50/90 px-4 py-4 text-sm leading-6 text-slate-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
-          Approve a candidate only when the source evidence is strong enough to move it forward in the truth-maintenance workflow. Rejecting leaves approved truth unchanged.
+          This is the governed operator workbench for candidate truth changes. Policy outcome, required role, source trust, freshness, conflict strength, and finalize impact stay visible while you decide.
         </div>
 
         <SettingsSurfaceBanner
           surface={sourceState}
-          unavailableMessage="Knowledge review source intelligence is temporarily unavailable."
-          refreshLabel="Refresh Review"
+          unavailableMessage="Truth review telemetry is temporarily unavailable."
+          refreshLabel="Refresh Workbench"
+        />
+
+        <TruthReviewWorkbench
+          workbench={{
+            ...(workbench || {}),
+            items: Array.isArray(workbench?.items)
+              ? workbench.items.map((item) => ({
+                  ...item,
+                  id: item.id,
+                  actions: Array.isArray(item.actions)
+                    ? item.actions.map((action) => ({
+                        ...action,
+                        allowed:
+                          action.allowed !== false &&
+                          !(busyId === String(item.id) && busyAction === action.actionType),
+                      }))
+                    : [],
+                }))
+              : [],
+          }}
+          surface={sourceState}
+          canManage={canManage}
+          onRunAction={handleRunAction}
         />
 
         <Card variant="surface" padded="md" className="rounded-[24px]">
@@ -97,7 +98,7 @@ export default function TrustKnowledgeReviewSection({
                   Recent Trust Activity
                 </div>
                 <div className="text-sm text-slate-500 dark:text-slate-400">
-                  Minimal audit trail for source, review, and truth-governance actions.
+                  Review actions stay tied to the same audit trail and governance surfaces.
                 </div>
               </div>
               {trustUnavailable ? (
@@ -140,27 +141,6 @@ export default function TrustKnowledgeReviewSection({
             )}
           </div>
         </Card>
-
-        {!items.length ? (
-          <EmptyState
-            title="No review items waiting"
-            subtitle="When source sync surfaces candidate changes that may affect approved truth, they will appear here for review."
-          />
-        ) : (
-          <div className="space-y-4">
-            {items.map((item) => (
-              <KnowledgeCandidateCard
-                key={item.id}
-                item={item}
-                canManage={canManage}
-                busyApprove={busyId === String(item.id) && busyAction === "approve"}
-                busyReject={busyId === String(item.id) && busyAction === "reject"}
-                onApprove={handleApprove}
-                onReject={handleReject}
-              />
-            ))}
-          </div>
-        )}
       </div>
     </SettingsSection>
   );

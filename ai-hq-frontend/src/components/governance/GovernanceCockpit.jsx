@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import Badge from "../ui/Badge.jsx";
 import Button from "../ui/Button.jsx";
 import Card from "../ui/Card.jsx";
@@ -303,6 +305,7 @@ export default function GovernanceCockpit({
   onRunAction,
   onSavePolicyControl,
   policyControlState = {},
+  navigationState = {},
 }) {
   const summary = resolveSummary(trust);
   const readiness = obj(summary.readiness);
@@ -328,7 +331,14 @@ export default function GovernanceCockpit({
   const channelAutonomy = collectChannelAutonomy(summary);
   const policyControls = collectPolicyControls(summary);
   const decisionAudit = collectDecisionAudit(summary);
+  const policyPostureAction = obj(policyPosture.nextAction);
   const policyTone = toneForPolicyOutcome(policyPosture.executionPosture);
+  const historyRef = useRef(null);
+  const policyControlsRef = useRef(null);
+  const runtimeHealthRef = useRef(null);
+  const navigationFocus = s(navigationState.trustFocus).toLowerCase();
+  const preferredHistoryFilter = s(navigationState.historyFilter).toLowerCase();
+  const preferredHistoryEventId = s(navigationState.eventId);
   const autonomyHeadline = hasRuntimeTelemetry
     ? runtimeHealth.autonomousAllowed
       ? `Autonomous operation is allowed in ${titleize(
@@ -336,6 +346,21 @@ export default function GovernanceCockpit({
         )} mode.`
       : "Autonomous operation is fail-closed until projection health is repaired."
     : "Runtime health telemetry is temporarily unavailable. The cockpit is showing safe diagnostic defaults instead of inferring execution authority.";
+
+  useEffect(() => {
+    const refMap = {
+      repair_hub: runtimeHealthRef,
+      runtime_health: runtimeHealthRef,
+      runtime_projection: runtimeHealthRef,
+      policy_controls: policyControlsRef,
+      governance_history: historyRef,
+      channel_surface: policyControlsRef,
+    };
+    const ref = refMap[navigationFocus];
+    const node = ref?.current;
+    if (!node) return;
+    node.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [navigationFocus]);
 
   return (
     <Card variant="elevated" className="overflow-hidden rounded-[32px]">
@@ -482,6 +507,18 @@ export default function GovernanceCockpit({
                   ) : null}
                 </div>
               ) : null}
+
+              {policyPostureAction?.label && policyPostureAction.allowed !== false ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => onRunAction?.(policyPostureAction)}
+                  >
+                    {policyPostureAction.label}
+                  </Button>
+                </div>
+              ) : null}
             </div>
           </Card>
 
@@ -548,6 +585,17 @@ export default function GovernanceCockpit({
                           ? `Next step: ${item.requiredAction}${item.requiredRole ? ` · ${titleize(item.requiredRole)}` : ""}`
                           : "No explicit next step was returned."}
                       </div>
+                      {item.nextAction?.label && item.nextAction.allowed !== false ? (
+                        <div className="mt-3">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => onRunAction?.(item.nextAction)}
+                          >
+                            {item.nextAction.label}
+                          </Button>
+                        </div>
+                      ) : null}
                       {item.why.length ? (
                         <div className="mt-3">
                           <TagList items={item.why} empty="No policy drivers returned." />
@@ -561,6 +609,7 @@ export default function GovernanceCockpit({
           </Card>
         </div>
 
+        <div ref={policyControlsRef}>
         <Card variant="surface" className="rounded-[28px]">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -663,8 +712,16 @@ export default function GovernanceCockpit({
             </div>
           </div>
         </Card>
+        </div>
 
-        <GovernanceHistoryPanel decisionAudit={decisionAudit} />
+        <div ref={historyRef}>
+          <GovernanceHistoryPanel
+            decisionAudit={decisionAudit}
+            onRunAction={onRunAction}
+            preferredFilter={preferredHistoryFilter}
+            preferredEventId={preferredHistoryEventId}
+          />
+        </div>
 
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
           <Card variant="surface" className="rounded-[28px]">
@@ -732,6 +789,7 @@ export default function GovernanceCockpit({
             </div>
           </Card>
 
+          <div ref={runtimeHealthRef}>
           <Card variant="surface" className="rounded-[28px]" tone={hasRuntimeTelemetry ? toneForHealth(runtimeStatus) : "neutral"}>
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -804,6 +862,7 @@ export default function GovernanceCockpit({
               ) : null}
             </div>
           </Card>
+          </div>
         </div>
 
         <Card variant="surface" className="rounded-[28px]">

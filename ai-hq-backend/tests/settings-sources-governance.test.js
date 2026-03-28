@@ -93,6 +93,111 @@ function createHarness() {
     updatePayload: null,
     syncPayload: null,
     refreshPayloads: [],
+    approvalsByCandidateId: {
+      "candidate-1": [
+        {
+          id: "approval-1",
+          action: "approve",
+          decision: "approved",
+          reviewer_name: "owner@acme.test",
+          reviewer_id: "user-1",
+          created_at: "2026-03-28T10:00:00.000Z",
+        },
+      ],
+    },
+    activeKnowledge: [
+      {
+        id: "knowledge-1",
+        category: "contact",
+        item_key: "phone_primary",
+        title: "Primary phone",
+        value_text: "+15550000000",
+        approved_at: "2026-03-27T10:00:00.000Z",
+        metadata_json: {
+          approvalPolicy: {
+            outcome: "review_required",
+            requiredRole: "reviewer",
+            risk: {
+              level: "medium",
+            },
+          },
+        },
+      },
+    ],
+    candidatesById: {
+      "candidate-1": {
+        id: "candidate-1",
+        tenant_id: "tenant-1",
+        tenant_key: "acme",
+        source_id: "source-1",
+        source_run_id: "run-1",
+        category: "contact",
+        item_key: "phone_primary",
+        title: "Primary phone",
+        value_text: "+15551112222",
+        value_json: { phone: "+15551112222" },
+        normalized_text: "+15551112222",
+        normalized_json: { phone: "+15551112222" },
+        confidence: 0.93,
+        confidence_label: "high",
+        status: "conflict",
+        review_reason: "Competing phone values require operator review.",
+        conflict_hash: "conflict-phone-1",
+        source_evidence_json: [
+          {
+            source_type: "website",
+            source_id: "source-1",
+            source_run_id: "run-1",
+            last_seen_at: "2026-03-28T09:00:00.000Z",
+          },
+          {
+            source_type: "instagram",
+            source_id: "source-ig",
+            source_run_id: "run-ig",
+            last_seen_at: "2026-03-27T09:00:00.000Z",
+          },
+        ],
+        first_seen_at: "2026-03-28T09:00:00.000Z",
+        last_seen_at: "2026-03-28T09:00:00.000Z",
+        created_at: "2026-03-28T09:00:00.000Z",
+        updated_at: "2026-03-28T09:05:00.000Z",
+        reviewed_by: "",
+        reviewed_at: "",
+      },
+      "candidate-2": {
+        id: "candidate-2",
+        tenant_id: "tenant-1",
+        tenant_key: "acme",
+        source_id: "source-1",
+        source_run_id: "run-1",
+        category: "contact",
+        item_key: "phone_primary",
+        title: "Primary phone",
+        value_text: "+15553334444",
+        value_json: { phone: "+15553334444" },
+        normalized_text: "+15553334444",
+        normalized_json: { phone: "+15553334444" },
+        confidence: 0.81,
+        confidence_label: "medium",
+        status: "conflict",
+        review_reason: "Competing phone values require operator review.",
+        conflict_hash: "conflict-phone-1",
+        source_evidence_json: [
+          {
+            source_type: "google_maps",
+            source_id: "source-gmaps",
+            source_run_id: "run-gmaps",
+            last_seen_at: "2026-01-01T09:00:00.000Z",
+          },
+        ],
+        first_seen_at: "2026-03-28T09:00:00.000Z",
+        last_seen_at: "2026-03-28T09:00:00.000Z",
+        created_at: "2026-03-28T09:00:00.000Z",
+        updated_at: "2026-03-28T09:05:00.000Z",
+        reviewed_by: "",
+        reviewed_at: "",
+      },
+    },
     sourcesById: {
       "source-1": {
         id: "source-1",
@@ -223,10 +328,39 @@ function createHarness() {
         state.refreshPayloads.push(payload);
       },
       async listReviewQueue() {
-        return [];
+        return [
+          {
+            ...state.candidatesById["candidate-1"],
+            source_type: "website",
+            source_display_name: "Main Website",
+          },
+          {
+            ...state.candidatesById["candidate-2"],
+            source_type: "google_maps",
+            source_display_name: "Maps Listing",
+          },
+        ];
       },
-      async getCandidateById() {
-        return null;
+      async getCandidateById(candidateId) {
+        return state.candidatesById[candidateId] || null;
+      },
+      async listActiveKnowledge() {
+        return state.activeKnowledge;
+      },
+      async listApprovals({ candidateId }) {
+        return state.approvalsByCandidateId[candidateId] || [];
+      },
+      async markCandidateNeedsReview(candidateId, payload) {
+        state.candidatesById[candidateId] = {
+          ...state.candidatesById[candidateId],
+          status: "needs_review",
+          review_reason: payload.reason,
+          reviewed_by: payload.reviewerId,
+          reviewed_at: payload.reviewedAt,
+        };
+        return {
+          candidate: state.candidatesById[candidateId],
+        };
       },
     };
   }
@@ -328,4 +462,69 @@ test("source update and sync actions keep their existing response semantics afte
   assert.equal(sync.res.body?.review?.sessionId, "session-1");
   assert.equal(state.syncPayload?.metadataJson?.requestId, "req-1");
   assert.equal(auditActions.at(-1)?.action, "settings.source.sync.requested");
+});
+
+test("knowledge review queue returns a shaped workbench payload with conflict, policy, and impact context", async () => {
+  const { router } = createHarness();
+
+  const result = await invokeRouter(router, "get", "/knowledge/review-queue", {
+    auth: buildTenantAuth("admin"),
+  });
+
+  assert.equal(result.res.statusCode, 200);
+  assert.equal(result.res.body?.summary?.total, 2);
+  assert.equal(result.res.body?.summary?.conflicting, 2);
+  assert.equal(result.res.body?.items?.[0]?.approvalPolicy?.requiredRole, "reviewer");
+  assert.equal(result.res.body?.items?.[0]?.conflictResolution?.peerCount, 2);
+  assert.ok(
+    result.res.body?.items?.[0]?.impactPreview?.canonicalAreas?.includes("business_profile")
+  );
+  assert.equal(
+    result.res.body?.items?.[0]?.publishPreview?.values?.currentApprovedValue?.valueText,
+    "+15550000000"
+  );
+  assert.equal(
+    result.res.body?.items?.[0]?.publishPreview?.runtime?.readinessDelta,
+    "projection_refresh_required"
+  );
+  assert.equal(
+    result.res.body?.items?.[0]?.conflictResolution?.previewChoices?.length,
+    2
+  );
+  assert.equal(result.res.body?.items?.[0]?.currentTruth?.valueText, "+15550000000");
+  assert.equal(result.res.body?.items?.[0]?.auditContext?.latestAction, "approve");
+});
+
+test("knowledge workbench follow-up and quarantine actions stay safe and auditable", async () => {
+  const { router, state, auditActions } = createHarness();
+
+  const followUp = await invokeRouter(router, "post", "/knowledge/candidate-1/needs-review", {
+    auth: buildTenantAuth("admin"),
+    params: {
+      candidateId: "candidate-1",
+    },
+    body: {
+      reason: "Needs stronger evidence before approval",
+    },
+  });
+
+  assert.equal(followUp.res.statusCode, 200);
+  assert.equal(state.candidatesById["candidate-1"]?.status, "needs_review");
+  assert.match(state.candidatesById["candidate-1"]?.review_reason, /stronger evidence/i);
+  assert.equal(auditActions.at(-1)?.action, "settings.knowledge.needs_review_marked");
+
+  const quarantine = await invokeRouter(router, "post", "/knowledge/candidate-2/quarantine", {
+    auth: buildTenantAuth("owner"),
+    params: {
+      candidateId: "candidate-2",
+    },
+    body: {
+      reason: "Keep quarantined until operator validates the source",
+    },
+  });
+
+  assert.equal(quarantine.res.statusCode, 200);
+  assert.equal(state.candidatesById["candidate-2"]?.status, "needs_review");
+  assert.match(state.candidatesById["candidate-2"]?.review_reason, /keep quarantined/i);
+  assert.equal(auditActions.at(-1)?.action, "settings.knowledge.quarantine_retained");
 });

@@ -244,6 +244,28 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
                 "Check projection health, repair status, and rebuild runtime authority from approved truth.",
               nextActionLabel: "Repair runtime",
               requiredRole: "operator",
+              actions: [
+                {
+                  id: "open_truth_version",
+                  actionType: "open_truth_version",
+                  kind: "route",
+                  label: "Open truth version",
+                  allowed: true,
+                  target: {
+                    path: "/truth?versionId=truth-v1&focus=history&eventId=decision-1",
+                  },
+                },
+                {
+                  id: "open_repair_flow",
+                  actionType: "open_repair_flow",
+                  kind: "route",
+                  label: "Open repair controls",
+                  allowed: true,
+                  target: {
+                    path: "/settings?section=sources&trustFocus=repair_hub&historyFilter=runtime&runtimeProjectionId=projection-1&eventId=decision-1",
+                  },
+                },
+              ],
             },
             links: {
               truthVersionId: "truth-v1",
@@ -300,6 +322,15 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
   expect(normalized.summary.decisionAudit.items[0].runtimeHealthPosture.primary).toBe("stale");
   expect(normalized.summary.decisionAudit.items[0].decisionContextSnapshot.controlScope).toBe("channel");
   expect(normalized.summary.decisionAudit.items[0].remediation.repairRequired).toBe(true);
+  expect(normalized.summary.decisionAudit.items[0].remediation.actions[0].actionType).toBe(
+    "open_truth_version"
+  );
+  expect(normalized.summary.decisionAudit.items[0].remediation.actions[1].target.path).toMatch(
+    /trustFocus=repair_hub/i
+  );
+  expect(normalized.summary.decisionAudit.items[0].remediationActions[0].actionType).toBe(
+    "open_truth_version"
+  );
   expect(normalized.summary.decisionAudit.items[0].links.runtimeProjectionId).toBe("projection-1");
   expect(normalized.summary.decisionAudit.items[0].recommendedNextAction.label).toBe(
     "Repair runtime"
@@ -354,5 +385,6 @@ it("normalizeTrustViewResponse keeps sparse event drilldown payloads safe", () =
     /no operator action/i
   );
   expect(normalized.summary.decisionAudit.items[0].links.surface).toBe("tenant");
+  expect(normalized.summary.decisionAudit.items[0].remediation.actions).toEqual([]);
 });
 });

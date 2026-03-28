@@ -7,16 +7,21 @@ vi.mock("../../../api/settings.js", () => ({
   updateSettingsSource: vi.fn(),
   getSettingsSourceSyncRuns: vi.fn(),
   startSettingsSourceSync: vi.fn(),
-  listKnowledgeReviewQueue: vi.fn(),
-  approveKnowledgeCandidate: vi.fn(),
-  rejectKnowledgeCandidate: vi.fn(),
+}));
+
+vi.mock("../../../api/truth.js", () => ({
+  getTruthReviewWorkbench: vi.fn(),
+  approveTruthReviewCandidate: vi.fn(),
+  rejectTruthReviewCandidate: vi.fn(),
+  markTruthReviewCandidateForFollowUp: vi.fn(),
+  keepTruthReviewCandidateQuarantined: vi.fn(),
 }));
 
 import {
   createSettingsSource,
-  listKnowledgeReviewQueue,
   listSettingsSources,
 } from "../../../api/settings.js";
+import { getTruthReviewWorkbench } from "../../../api/truth.js";
 import { useSourceIntelligence } from "./useSourceIntelligence.js";
 
 describe("useSourceIntelligence", () => {
@@ -26,7 +31,12 @@ describe("useSourceIntelligence", () => {
 
   it("exposes the unified surface contract on refresh", async () => {
     listSettingsSources.mockResolvedValue({ items: [{ id: "source-1" }] });
-    listKnowledgeReviewQueue.mockResolvedValue({ items: [{ id: "candidate-1" }] });
+    getTruthReviewWorkbench.mockResolvedValue({
+      summary: {
+        total: 1,
+      },
+      items: [{ id: "candidate-1" }],
+    });
 
     const { result } = renderHook(() =>
       useSourceIntelligence({
@@ -47,12 +57,13 @@ describe("useSourceIntelligence", () => {
 
     expect(result.current.sources).toHaveLength(1);
     expect(result.current.knowledgeReview).toHaveLength(1);
+    expect(result.current.knowledgeReviewSummary.total).toBe(1);
     expect(typeof result.current.surface.refresh).toBe("function");
   });
 
   it("uses the shared save-state vocabulary for source saves", async () => {
     listSettingsSources.mockResolvedValue({ items: [] });
-    listKnowledgeReviewQueue.mockResolvedValue({ items: [] });
+    getTruthReviewWorkbench.mockResolvedValue({ summary: {}, items: [] });
     createSettingsSource.mockResolvedValue({ ok: true });
 
     const { result } = renderHook(() =>

@@ -1,8 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import {
+  approveTruthReviewCandidate,
   getCanonicalTruthSnapshot,
+  getTruthReviewWorkbench,
   getTruthVersionDetail,
+  keepTruthReviewCandidateQuarantined,
+  markTruthReviewCandidateForFollowUp,
+  rejectTruthReviewCandidate,
 } from "../../api/truth.js";
 import { getSettingsTrustView } from "../../api/trust.js";
 import TruthHeader from "../../components/truth/TruthHeader.jsx";
@@ -14,6 +20,7 @@ import RepairHub from "../../components/readiness/RepairHub.jsx";
 import { dispatchRepairAction } from "../../components/readiness/dispatchRepairAction.js";
 import { createReadinessViewModel } from "../../components/readiness/readinessViewModel.js";
 import GovernanceCockpit from "../../components/governance/GovernanceCockpit.jsx";
+import TruthReviewWorkbench from "../../components/governance/TruthReviewWorkbench.jsx";
 
 function initialState() {
   return {
@@ -33,11 +40,13 @@ function initialState() {
       finalizeImpact: {},
       trustView: null,
       trustUnavailable: false,
+      reviewWorkbench: { summary: {}, items: [] },
     },
   };
 }
 
 export default function TruthViewerPage() {
+  const [searchParams] = useSearchParams();
   const [state, setState] = useState(initialState);
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareState, setCompareState] = useState({
@@ -45,16 +54,29 @@ export default function TruthViewerPage() {
     error: "",
     detail: null,
   });
+  const [reviewSurface, setReviewSurface] = useState({
+    saving: false,
+    error: "",
+    saveSuccess: "",
+  });
+  const historyRef = useRef(null);
   const truthReadiness = createReadinessViewModel(state.data.readiness);
+  const requestedVersionId = String(searchParams.get("versionId") || "").trim();
+  const requestedFocus = String(searchParams.get("focus") || "").trim().toLowerCase();
 
   useEffect(() => {
     let alive = true;
 
-    Promise.allSettled([getCanonicalTruthSnapshot(), getSettingsTrustView()])
+    Promise.allSettled([
+      getCanonicalTruthSnapshot(),
+      getSettingsTrustView(),
+      getTruthReviewWorkbench({ limit: 100 }),
+    ])
       .then((results) => {
         if (!alive) return;
         const truthResult = results[0];
         const trustResult = results[1];
+        const reviewResult = results[2];
 
         if (truthResult.status !== "fulfilled") {
           throw truthResult.reason;
@@ -78,6 +100,10 @@ export default function TruthViewerPage() {
             finalizeImpact: data.finalizeImpact || {},
             trustView: trustResult.status === "fulfilled" ? trustResult.value || null : null,
             trustUnavailable: trustResult.status !== "fulfilled",
+            reviewWorkbench:
+              reviewResult.status === "fulfilled"
+                ? reviewResult.value || { summary: {}, items: [] }
+                : { summary: {}, items: [] },
           },
         });
       })
@@ -146,6 +172,110 @@ export default function TruthViewerPage() {
     }
   }
 
+  async function refreshTruthReviewSurface() {
+    const [truthData, trustData, reviewData] = await Promise.all([
+      getCanonicalTruthSnapshot(),
+      getSettingsTrustView().catch(() => null),
+      getTruthReviewWorkbench({ limit: 100 }).catch(() => ({ summary: {}, items: [] })),
+    ]);
+
+    setState((prev) => ({
+      ...prev,
+      loading: false,
+      error: "",
+      data: {
+        ...prev.data,
+        fields: truthData.fields || [],
+        approval: truthData.approval || {},
+        history: truthData.history || [],
+        notices: truthData.notices || [],
+        hasProvenance: !!truthData.hasProvenance,
+        approvedTruthUnavailable: !!truthData.approvedTruthUnavailable,
+        readiness: truthData.readiness || {},
+        sourceSummary: truthData.sourceSummary || {},
+        metadata: truthData.metadata || {},
+        governance: truthData.governance || {},
+        finalizeImpact: truthData.finalizeImpact || {},
+        trustView: trustData || null,
+        trustUnavailable: !trustData,
+        reviewWorkbench: reviewData || { summary: {}, items: [] },
+      },
+    }));
+  }
+
+  async function handleWorkbenchAction(item, action) {
+    const actionType = String(action?.actionType || "").trim().toLowerCase();
+    const candidateId = String(item?.id || item?.candidateId || "").trim();
+    if (!candidateId || !actionType) return;
+
+    setReviewSurface({
+      saving: true,
+      error: "",
+      saveSuccess: "",
+    });
+
+    try {
+      if (actionType === "approve") {
+        await approveTruthReviewCandidate(candidateId, {
+          reason: "Approved from Truth Review Workbench",
+          metadataJson: {
+            publishPreview: item?.publishPreview?.auditSummary || {},
+          },
+        });
+      } else if (actionType === "reject") {
+        await rejectTruthReviewCandidate(candidateId, {
+          reason: "Rejected from Truth Review Workbench",
+        });
+      } else if (actionType === "mark_follow_up") {
+        await markTruthReviewCandidateForFollowUp(candidateId, {
+          reason: "Marked for follow-up from Truth Review Workbench",
+        });
+      } else if (actionType === "keep_quarantined") {
+        await keepTruthReviewCandidateQuarantined(candidateId, {
+          reason: "Kept quarantined from Truth Review Workbench",
+        });
+      }
+
+      await refreshTruthReviewSurface();
+
+      setReviewSurface({
+        saving: false,
+        error: "",
+        saveSuccess:
+          actionType === "approve"
+            ? "Candidate approved and truth/runtime surfaces refreshed."
+            : actionType === "reject"
+              ? "Candidate rejected. Approved truth remains unchanged."
+              : actionType === "keep_quarantined"
+                ? "Candidate remains quarantined pending stronger evidence."
+                : "Candidate marked for follow-up review.",
+      });
+    } catch (error) {
+      setReviewSurface({
+        saving: false,
+        error: String(error?.message || error || "Truth review action failed."),
+        saveSuccess: "",
+      });
+    }
+  }
+
+  useEffect(() => {
+    if (requestedFocus !== "history" || !historyRef.current) return;
+    historyRef.current.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [requestedFocus, state.loading]);
+
+  useEffect(() => {
+    if (!requestedVersionId || state.loading || compareOpen) return;
+    const match = (state.data.history || []).find(
+      (item) =>
+        String(item?.id || "").trim() === requestedVersionId ||
+        String(item?.version || "").trim() === requestedVersionId
+    );
+    if (match) {
+      handleOpenVersion(match);
+    }
+  }, [compareOpen, requestedVersionId, state.data.history, state.loading]);
+
   if (state.loading) {
     return (
       <div className="mx-auto max-w-[1120px] px-4 py-10 sm:px-6 lg:px-8">
@@ -189,6 +319,17 @@ export default function TruthViewerPage() {
         <TruthFieldTable fields={state.data.fields} />
       </div>
 
+      <div className="mt-8">
+        <TruthReviewWorkbench
+          workbench={state.data.reviewWorkbench}
+          surface={reviewSurface}
+          canManage={["owner", "admin"].includes(
+            String(state.data.trustView?.viewerRole || "").trim().toLowerCase()
+          )}
+          onRunAction={handleWorkbenchAction}
+        />
+      </div>
+
       <div className="mt-6">
         <RepairHub
           title="Truth Readiness"
@@ -205,7 +346,7 @@ export default function TruthViewerPage() {
         />
       </div>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+      <div ref={historyRef} className="mt-8 grid gap-6 lg:grid-cols-2">
         <TruthProvenancePanel hasProvenance={state.data.hasProvenance} />
         <TruthHistoryPanel
           history={state.data.history}

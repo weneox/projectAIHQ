@@ -17,6 +17,7 @@ describe("GovernanceCockpit", () => {
     expect(screen.getByText(/channel autonomy telemetry is unavailable/i)).toBeInTheDocument();
     expect(screen.getByText(/operator-manageable autonomy controls/i)).toBeInTheDocument();
     expect(screen.getByText(/decision timeline and incident replay context/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /open repair controls/i })).not.toBeInTheDocument();
   });
 
   it("renders runtime health details and dispatches the primary repair action", () => {
@@ -84,6 +85,14 @@ describe("GovernanceCockpit", () => {
               blockedUntilRepair: true,
               requiredRole: "operator",
               requiredAction: "Repair runtime authority",
+              nextAction: {
+                id: "open_runtime_health",
+                actionType: "open_runtime_health",
+                kind: "route",
+                label: "Inspect runtime health",
+                allowed: true,
+                target: { path: "/settings?section=sources&trustFocus=runtime_health" },
+              },
               affectedSurfaces: ["voice", "meta"],
               reasons: ["runtime:stale", "truth:review_required"],
               explanation:
@@ -101,6 +110,14 @@ describe("GovernanceCockpit", () => {
                   repairRequired: true,
                   requiredAction: "Repair runtime authority",
                   requiredRole: "operator",
+                  nextAction: {
+                    id: "open_channel_surface",
+                    actionType: "open_channel_surface",
+                    kind: "route",
+                    label: "View channel restrictions",
+                    allowed: true,
+                    target: { path: "/settings?section=operational&channel=inbox" },
+                  },
                 },
                 {
                   surface: "voice",
@@ -212,6 +229,18 @@ describe("GovernanceCockpit", () => {
                       "Check projection health, repair status, and rebuild runtime authority from approved truth.",
                     nextActionLabel: "Repair runtime authority",
                     requiredRole: "operator",
+                    actions: [
+                      {
+                        id: "open_repair_flow",
+                        actionType: "open_repair_flow",
+                        kind: "route",
+                        label: "Open repair controls",
+                        allowed: true,
+                        target: {
+                          path: "/settings?section=sources&trustFocus=repair_hub&historyFilter=runtime&eventId=decision-1",
+                        },
+                      },
+                    ],
                   },
                   links: {
                     truthVersionId: "truth-v2",
@@ -302,6 +331,9 @@ describe("GovernanceCockpit", () => {
     expect(screen.getAllByText(/blocked action outcome/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/policy control change/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/guided remediation/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /inspect runtime health/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /view channel restrictions/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open repair controls/i })).toBeInTheDocument();
     expect(
       screen.getByText(/repair strict runtime authority before autonomous execution can resume/i)
     ).toBeInTheDocument();
@@ -312,6 +344,21 @@ describe("GovernanceCockpit", () => {
       screen.getByRole("button", { name: /^restricted outcomes \(1\)$/i })
     );
     expect(screen.getAllByText(/repair runtime authority/i).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: /open runtime setup/i }));
+    expect(onRunAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "open_setup_route",
+      })
+    );
+    fireEvent.click(screen.getByRole("button", { name: /inspect runtime health/i }));
+    fireEvent.click(screen.getByRole("button", { name: /view channel restrictions/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open repair controls/i }));
+    expect(onRunAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actionType: "open_repair_flow",
+      })
+    );
     fireEvent.click(screen.getByRole("button", { name: /^all events \(2\)$/i }));
     fireEvent.click(
       screen.getByRole("button", {
@@ -321,13 +368,7 @@ describe("GovernanceCockpit", () => {
     expect(
       screen.getByText(/intentionally restricted to operator-only execution/i)
     ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /open runtime setup/i }));
-    expect(onRunAction).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: "open_setup_route",
-      })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /^all events \(2\)$/i }));
     fireEvent.click(
       screen.getByRole("button", { name: /^operator only modeapply$/i })
     );

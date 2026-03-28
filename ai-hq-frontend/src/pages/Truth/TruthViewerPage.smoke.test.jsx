@@ -1,9 +1,11 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 
 const dispatchRepairAction = vi.fn();
 
 vi.mock("../../api/truth.js", () => ({
+  approveTruthReviewCandidate: vi.fn().mockResolvedValue({ ok: true }),
   getCanonicalTruthSnapshot: vi.fn().mockResolvedValue({
     fields: [
       {
@@ -59,6 +61,144 @@ vi.mock("../../api/truth.js", () => ({
       blockers: [],
     },
   }),
+  getTruthReviewWorkbench: vi.fn().mockResolvedValue({
+    summary: {
+      total: 2,
+      pending: 0,
+      quarantined: 1,
+      conflicting: 1,
+      autoApprovable: 0,
+      blockedHighRisk: 1,
+      highRisk: 1,
+    },
+    items: [
+      {
+        id: "candidate-1",
+        queueBucket: "conflicting",
+        category: "contact",
+        title: "Primary phone",
+        valueText: "+15551112222",
+        source: {
+          displayName: "Main Website",
+          sourceType: "website",
+          trustLabel: "Official Website",
+        },
+        confidence: {
+          score: 0.92,
+          label: "high",
+        },
+        governance: {
+          freshness: {
+            bucket: "fresh",
+          },
+          support: {
+            uniqueSourceCount: 2,
+          },
+          reviewExplanation: ["Trust tier Official Website"],
+        },
+        approvalPolicy: {
+          outcome: "review_required",
+          requiredRole: "reviewer",
+          reasonCodes: ["reviewable_conflict"],
+          riskLevel: "medium",
+        },
+        finalizeImpactPreview: {
+          canonicalAreas: ["business_profile"],
+          runtimeAreas: ["contact_channels"],
+          canonicalPaths: ["profile.primaryPhone"],
+          affectedSurfaces: ["voice", "inbox"],
+        },
+        publishPreview: {
+          values: {
+            currentApprovedValue: {
+              title: "Current approved phone",
+              valueText: "+15550000000",
+            },
+            proposedValue: {
+              title: "Primary phone",
+              valueText: "+15551112222",
+            },
+            changed: true,
+          },
+          canonical: {
+            areas: ["business_profile"],
+            paths: ["profile.primaryPhone"],
+          },
+          runtime: {
+            areas: ["contact_channels"],
+            paths: ["runtime.business.contacts.primaryPhone"],
+            readinessDelta: "projection_refresh_required",
+          },
+          channels: {
+            affectedSurfaces: ["voice", "inbox"],
+          },
+          policy: {
+            autonomyDelta: "unchanged",
+            executionPostureDelta: "unchanged",
+            riskDelta: "unknown",
+          },
+          guidance: {
+            likelyAffectedAreas: ["business_profile", "contact_channels", "voice"],
+            likelyReadinessImplications: [
+              "Runtime projection refresh will be required before governed runtime reflects this change.",
+            ],
+            confidence: "deterministic_impact_with_inferred_posture",
+          },
+          auditSummary: {
+            proposedOutcome: "review_required",
+          },
+        },
+        currentTruth: {
+          title: "Current approved phone",
+          valueText: "+15550000000",
+        },
+        conflictResolution: {
+          previewChoices: [
+            {
+              candidateId: "candidate-1",
+              title: "Primary phone",
+              valueText: "+15551112222",
+              publishPreview: {
+                policy: {
+                  autonomyDelta: "unchanged",
+                },
+              },
+            },
+          ],
+          peers: [
+            {
+              id: "candidate-2",
+              title: "Primary phone",
+              valueText: "+15553334444",
+              sourceDisplayName: "Maps Listing",
+              trustTier: "weak_inferred_scrape",
+              freshnessBucket: "stale",
+              confidence: 0.61,
+              whyStrongerOrWeaker: ["stronger source trust"],
+            },
+          ],
+        },
+        review: {
+          reviewReason: "Competing phone values require operator review.",
+          firstSeenAt: "2026-03-28T09:00:00.000Z",
+          updatedAt: "2026-03-28T09:05:00.000Z",
+        },
+        auditContext: {
+          latestAction: "approve",
+          latestDecision: "approved",
+          latestBy: "owner@aihq.test",
+          latestAt: "2026-03-28T09:06:00.000Z",
+        },
+        actions: [
+          {
+            actionType: "approve",
+            label: "Approve selected value",
+            allowed: true,
+          },
+        ],
+      },
+    ],
+  }),
   getTruthVersionDetail: vi.fn().mockResolvedValue({
     selectedVersion: {
       id: "v3",
@@ -88,6 +228,9 @@ vi.mock("../../api/truth.js", () => ({
     diffSummary: "companyName changed",
     hasStructuredDiff: true,
   }),
+  keepTruthReviewCandidateQuarantined: vi.fn().mockResolvedValue({ ok: true }),
+  markTruthReviewCandidateForFollowUp: vi.fn().mockResolvedValue({ ok: true }),
+  rejectTruthReviewCandidate: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
 vi.mock("../../api/trust.js", () => ({
@@ -257,8 +400,16 @@ beforeEach(() => {
 });
 
 describe("Truth viewer smoke", () => {
+  function renderPage(entry = "/truth") {
+    return render(
+      <MemoryRouter initialEntries={[entry]}>
+        <TruthViewerPage />
+      </MemoryRouter>
+    );
+  }
+
   it("renders approved truth metadata, provenance, and history", async () => {
-    render(<TruthViewerPage />);
+    renderPage();
 
     expect(
       screen.getByText(/loading approved business truth/i)
@@ -267,6 +418,11 @@ describe("Truth viewer smoke", () => {
     expect(await screen.findByRole("heading", { name: /business truth/i })).toBeInTheDocument();
     expect(screen.getByText(/truth governance cockpit/i)).toBeInTheDocument();
     expect(screen.getByText(/approval and execution state/i)).toBeInTheDocument();
+    expect(screen.getByText(/truth review workbench/i)).toBeInTheDocument();
+    expect(screen.getByText(/conflict resolution/i)).toBeInTheDocument();
+    expect(screen.getByText(/current approved phone/i)).toBeInTheDocument();
+    expect(screen.getByText(/change impact simulator/i)).toBeInTheDocument();
+    expect(screen.getByText(/runtime projection refresh will be required/i)).toBeInTheDocument();
     expect(screen.getByText(/allowed, reviewed, handed off, or blocked by surface/i)).toBeInTheDocument();
     expect(screen.getByText(/projection authority and repair/i)).toBeInTheDocument();
     expect(screen.getByText(/latest approved change footprint/i)).toBeInTheDocument();
@@ -285,9 +441,7 @@ describe("Truth viewer smoke", () => {
     expect(screen.getByText(/truth version v3/i)).toBeInTheDocument();
     expect(screen.getByText(/source context:/i)).toBeInTheDocument();
     expect(screen.getByText(/changed fields:/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/owner@aihq\.test/i)
-    ).toBeInTheDocument();
+    expect(screen.getAllByText(/owner@aihq\.test/i).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: /view compare/i }));
     expect(await screen.findByText(/version detail/i)).toBeInTheDocument();
@@ -334,7 +488,7 @@ describe("Truth viewer smoke", () => {
       },
     });
 
-    render(<TruthViewerPage />);
+    renderPage();
 
     expect(
       await screen.findByText(/approved truth is currently unavailable/i)
@@ -391,11 +545,18 @@ describe("Truth viewer smoke", () => {
       },
     });
 
-    render(<TruthViewerPage />);
+    renderPage();
 
     expect(await screen.findByText(/truth governance cockpit/i)).toBeInTheDocument();
     expect(screen.getAllByText(/policy telemetry is unavailable/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/governance history is unavailable/i)).toBeInTheDocument();
     expect(screen.getByText(/north clinic/i)).toBeInTheDocument();
+  });
+
+  it("opens a deep-linked truth version from remediation navigation", async () => {
+    renderPage("/truth?versionId=v3&focus=history");
+
+    expect(await screen.findByText(/version detail/i)).toBeInTheDocument();
+    expect(screen.getByText(/old clinic/i)).toBeInTheDocument();
   });
 });

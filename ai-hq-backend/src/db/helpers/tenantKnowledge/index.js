@@ -794,6 +794,39 @@ export function createTenantKnowledgeHelpers({ db }) {
           reviewReason: options.reason || "",
         });
 
+        let supersededConflictPeers = [];
+        if (s(candidate.conflict_hash)) {
+          const peerRows = await q(
+            tx,
+            `
+            select id
+            from tenant_knowledge_candidates
+            where tenant_id = $1
+              and conflict_hash = $2
+              and id <> $3
+              and status in ('pending','needs_review','conflict')
+            `,
+            [candidate.tenant_id, candidate.conflict_hash, candidate.id]
+          );
+
+          supersededConflictPeers = (
+            await Promise.all(
+              arr(peerRows?.rows).map((row) =>
+                updateCandidateInternal(tx, s(row.id), {
+                  status: "superseded",
+                  supersededByCandidateId: candidate.id,
+                  reviewedBy: options.reviewerId || "",
+                  reviewedAt: options.reviewedAt || new Date().toISOString(),
+                  reviewReason:
+                    options.conflictResolutionReason ||
+                    options.reason ||
+                    "Superseded by approved conflict resolution",
+                })
+              )
+            )
+          ).filter(Boolean);
+        }
+
         const projection =
           options.projectToCanonical === false
             ? { profile: null, capabilities: null, runtimeProjection: null }
@@ -821,6 +854,7 @@ export function createTenantKnowledgeHelpers({ db }) {
             candidate: updatedCandidate,
             knowledge,
             projection,
+            supersededConflictPeers,
           },
           metadataJson: obj(options.metadataJson, {}),
         });
@@ -846,6 +880,7 @@ export function createTenantKnowledgeHelpers({ db }) {
           candidate: updatedCandidate,
           knowledge,
           approval,
+          supersededConflictPeers,
           projection: {
             ...obj(projection),
             runtimeProjection,
@@ -884,6 +919,25 @@ export function createTenantKnowledgeHelpers({ db }) {
       return {
         candidate: updatedCandidate,
         approval,
+      };
+    },
+
+    async markCandidateNeedsReview(candidateId, options = {}) {
+      const candidate = await getCandidateByIdInternal(db, candidateId);
+      if (!candidate) return null;
+
+      const updatedCandidate = await updateCandidateInternal(db, candidate.id, {
+        status: "needs_review",
+        reviewedBy: options.reviewerId || "",
+        reviewedAt: options.reviewedAt || new Date().toISOString(),
+        reviewReason:
+          options.reason ||
+          candidate.review_reason ||
+          "Marked for operator follow-up review",
+      });
+
+      return {
+        candidate: updatedCandidate,
       };
     },
 
