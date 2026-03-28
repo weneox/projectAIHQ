@@ -4,14 +4,14 @@
 -- Tenant Sources + Knowledge Intelligence Layer
 -- =========================================================
 -- Goals:
--- connect external/public/private business sources
--- track sync runs and extraction pipeline
--- store AI-discovered candidate knowledge
--- store approved/final knowledge items
--- keep provenance / evidence / confidence
--- support manual approval + conflict review
--- work alongside existing tenant_business_* tables
--- production-safe / additive migration
+-- ✅ connect external/public/private business sources
+-- ✅ track sync runs and extraction pipeline
+-- ✅ store AI-discovered candidate knowledge
+-- ✅ store approved/final knowledge items
+-- ✅ keep provenance / evidence / confidence
+-- ✅ support manual approval + conflict review
+-- ✅ work alongside existing tenant_business_* tables
+-- ✅ production-safe / additive migration
 -- =========================================================
 
 create extension if not exists pgcrypto;
