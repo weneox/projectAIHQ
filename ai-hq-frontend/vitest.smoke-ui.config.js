@@ -49,7 +49,7 @@ export default mergeConfig(
       pool: "forks",
       maxWorkers: 1,
       fileParallelism: false,
-      isolate: false,
+      isolate: true,
 
       testTimeout: 30000,
       hookTimeout: 30000,
