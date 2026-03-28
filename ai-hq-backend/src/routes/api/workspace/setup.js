@@ -24,6 +24,7 @@ import {
   buildCanonicalTruthProfile,
   buildCanonicalTruthFieldProvenance,
   buildTruthVersionHistoryEntry,
+  createTenantTruthVersionHelpers,
 } from "../../../db/helpers/tenantTruthVersions.js";
 import { buildFrontendReviewShape as buildFrontendReviewShapeService } from "../../../services/workspace/setup/reviewShape.js";
 import {
@@ -253,6 +254,47 @@ async function finalizeSetupReviewRequest(args = {}) {
   });
 }
 
+async function executeTruthRollbackRequest({ db, actor, versionId = "", body = {} } = {}) {
+  const truthVersionHelper = createTenantTruthVersionHelpers({ db });
+  const result = await truthVersionHelper.executeRollback({
+    tenantId: actor.tenantId,
+    tenantKey: actor.tenantKey,
+    actor,
+    actorRole: actor.role,
+    versionId,
+    targetVersionId: versionId,
+    metadataJson: obj(body?.metadataJson || body?.metadata || {}),
+  });
+
+  if (result?.blocked) {
+    return {
+      status:
+        lower(result?.rollbackReceipt?.reasonCode) === "rollback_review_required"
+          ? 403
+          : 409,
+      body: {
+        ok: false,
+        blocked: true,
+        rollbackPreview: result.rollbackPreview || {},
+        rollbackAction: result.rollbackAction || {},
+        rollbackReceipt: result.rollbackReceipt || {},
+      },
+    };
+  }
+
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      rollbackPreview: result.rollbackPreview || {},
+      rollbackAction: result.rollbackAction || {},
+      rollbackReceipt: result.rollbackReceipt || {},
+      resultingTruthVersion: result.resultingTruthVersion || null,
+      runtimeProjection: result.runtimeProjection || null,
+    },
+  };
+}
+
 async function discardSetupReviewRequest(args = {}) {
   return discardSetupReviewComposition(args, {
     auditSetupAction,
@@ -313,6 +355,7 @@ export function workspaceSetupRoutes({ db }) {
     requireSetupActor,
     handleSetupAnalyze,
     applySetupReviewPatch: applySetupReviewPatchRequest,
+    executeTruthRollback: executeTruthRollbackRequest,
     finalizeSetupReview: finalizeSetupReviewRequest,
     discardSetupReview: discardSetupReviewRequest,
     s,

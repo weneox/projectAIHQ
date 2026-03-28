@@ -78,6 +78,7 @@ export function useSourceIntelligence({
   const [syncRunsOpen, setSyncRunsOpen] = useState(false);
   const [syncRunsSource, setSyncRunsSource] = useState(null);
   const [syncRunsItems, setSyncRunsItems] = useState([]);
+  const [publishReceipt, setPublishReceipt] = useState(null);
   const {
     data,
     setData,
@@ -252,7 +253,7 @@ export function useSourceIntelligence({
   async function handleApproveKnowledge(item) {
     if (!canManageSettings || !item?.id) return;
 
-    await approveTruthReviewCandidate(item.id, {
+    const result = await approveTruthReviewCandidate(item.id, {
       tenantKey,
       reason: "Approved from Settings knowledge review",
       metadataJson: {
@@ -265,6 +266,7 @@ export function useSourceIntelligence({
       await refreshSourceIntelligence();
       await onRefreshTrust?.();
       await onRefreshBusinessBrain?.();
+      setPublishReceipt(result?.publishReceipt || null);
       succeedSave({
         message:
           "Knowledge candidate approved for truth maintenance review. Approved truth remains explicit and protected.",
@@ -278,6 +280,7 @@ export function useSourceIntelligence({
   async function handleRejectKnowledge(item) {
     if (!canManageSettings || !item?.id) return;
 
+    setPublishReceipt(null);
     await rejectTruthReviewCandidate(item.id, {
       tenantKey,
       reason: "Rejected from Settings knowledge review",
@@ -299,6 +302,7 @@ export function useSourceIntelligence({
   async function handleMarkKnowledgeFollowUp(item) {
     if (!canManageSettings || !item?.id) return;
 
+    setPublishReceipt(null);
     await markTruthReviewCandidateForFollowUp(item.id, {
       tenantKey,
       reason: "Marked for follow-up from Settings truth review workbench",
@@ -320,6 +324,7 @@ export function useSourceIntelligence({
   async function handleKeepKnowledgeQuarantined(item) {
     if (!canManageSettings || !item?.id) return;
 
+    setPublishReceipt(null);
     await keepTruthReviewCandidateQuarantined(item.id, {
       tenantKey,
       reason: "Kept quarantined from Settings truth review workbench",
@@ -341,6 +346,7 @@ export function useSourceIntelligence({
   return {
     surface: {
       ...surface,
+      publishReceipt,
       refresh: refreshSourceIntelligence,
       clearSaveState,
     },

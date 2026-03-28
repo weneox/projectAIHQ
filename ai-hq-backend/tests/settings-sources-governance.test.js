@@ -350,6 +350,55 @@ function createHarness() {
       async listApprovals({ candidateId }) {
         return state.approvalsByCandidateId[candidateId] || [];
       },
+      async approveCandidate(candidateId, payload) {
+        state.approvePayload = { candidateId, payload };
+        const candidate = {
+          ...state.candidatesById[candidateId],
+          status: "approved",
+          reviewed_by: payload.reviewerId,
+          reviewed_at: payload.reviewedAt || "2026-03-28T10:10:00.000Z",
+        };
+        state.candidatesById[candidateId] = candidate;
+        return {
+          candidate,
+          knowledge: {
+            id: "knowledge-approved-1",
+            category: "signal_only",
+            item_key: candidate.item_key,
+            title: candidate.title,
+            value_text: candidate.value_text,
+          },
+          approval: {
+            id: "approval-2",
+            action: "approve",
+            decision: "approved",
+            created_at: "2026-03-28T10:10:00.000Z",
+            reviewer_name: payload.reviewerName,
+          },
+          supersededConflictPeers: [
+            {
+              id: "candidate-2",
+              status: "superseded",
+            },
+          ],
+          projection: {
+            profile: {
+              id: "truth-version-7",
+              version_id: "truth-version-7",
+            },
+            capabilities: null,
+            runtimeProjection: {
+              id: "runtime-projection-9",
+              status: "refreshed",
+              affected_surfaces: ["voice", "inbox"],
+              health: {
+                status: "healthy",
+                warnings: [],
+              },
+            },
+          },
+        };
+      },
       async markCandidateNeedsReview(candidateId, payload) {
         state.candidatesById[candidateId] = {
           ...state.candidatesById[candidateId],
@@ -527,4 +576,55 @@ test("knowledge workbench follow-up and quarantine actions stay safe and auditab
   assert.equal(state.candidatesById["candidate-2"]?.status, "needs_review");
   assert.match(state.candidatesById["candidate-2"]?.review_reason, /keep quarantined/i);
   assert.equal(auditActions.at(-1)?.action, "settings.knowledge.quarantine_retained");
+});
+
+test("knowledge approval returns a publish receipt with preview-vs-actual verification", async () => {
+  const { router, state, auditActions } = createHarness();
+
+  const approval = await invokeRouter(router, "post", "/knowledge/candidate-1/approve", {
+    auth: buildTenantAuth("admin"),
+    params: {
+      candidateId: "candidate-1",
+    },
+    body: {
+      reason: "Approve reviewed contact change",
+      metadataJson: {
+        publishPreview: {
+          canonical: {
+            areas: ["business_profile"],
+          },
+          runtime: {
+            areas: ["contact_channels"],
+          },
+          channels: {
+            affectedSurfaces: ["voice", "inbox"],
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(approval.res.statusCode, 200);
+  assert.equal(state.approvePayload?.candidateId, "candidate-1");
+  assert.equal(
+    approval.res.body?.publishReceipt?.truthVersionId,
+    "truth-version-7"
+  );
+  assert.equal(
+    approval.res.body?.publishReceipt?.runtimeProjectionId,
+    "runtime-projection-9"
+  );
+  assert.equal(approval.res.body?.publishReceipt?.publishStatus, "success");
+  assert.equal(
+    approval.res.body?.publishReceipt?.previewComparison?.status,
+    "matched"
+  );
+  assert.deepEqual(
+    approval.res.body?.publishReceipt?.actual?.channels?.affectedSurfaces,
+    ["voice", "inbox"]
+  );
+  assert.equal(
+    auditActions.at(-1)?.meta?.publishReceipt?.runtimeProjectionId,
+    "runtime-projection-9"
+  );
 });

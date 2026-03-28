@@ -137,6 +137,152 @@ function normalizePublishPreview(value = {}) {
   };
 }
 
+function normalizePublishReceipt(value = {}) {
+  const item = obj(value);
+  const actual = obj(item.actual);
+  const previewComparison = obj(item.previewComparison || item.preview_comparison);
+  const verification = obj(item.verification);
+
+  return {
+    approvalActionResult: s(
+      item.approvalActionResult || item.approval_action_result
+    ).toLowerCase(),
+    publishStatus: s(item.publishStatus || item.publish_status).toLowerCase(),
+    truthVersionId: s(item.truthVersionId || item.truth_version_id),
+    knowledgeItemId: s(item.knowledgeItemId || item.knowledge_item_id),
+    runtimeProjectionId: s(
+      item.runtimeProjectionId || item.runtime_projection_id
+    ),
+    runtimeRefreshResult: s(
+      item.runtimeRefreshResult || item.runtime_refresh_result
+    ).toLowerCase(),
+    projectionHealthStatus: s(
+      item.projectionHealthStatus || item.projection_health_status
+    ).toLowerCase(),
+    projectionHealthLabel: s(
+      item.projectionHealthLabel || item.projection_health_label
+    ),
+    actual: {
+      canonical: {
+        areas: normalizeStringList(actual.canonical?.areas),
+        paths: normalizeStringList(actual.canonical?.paths),
+      },
+      runtime: {
+        areas: normalizeStringList(actual.runtime?.areas),
+        paths: normalizeStringList(actual.runtime?.paths),
+      },
+      channels: {
+        affectedSurfaces: normalizeStringList(
+          actual.channels?.affectedSurfaces || actual.channels?.affected_surfaces
+        ),
+      },
+      policy: {
+        autonomyDelta: s(
+          actual.policy?.autonomyDelta || actual.policy?.autonomy_delta
+        ).toLowerCase(),
+        executionPostureDelta: s(
+          actual.policy?.executionPostureDelta || actual.policy?.execution_posture_delta
+        ).toLowerCase(),
+        riskDelta: s(actual.policy?.riskDelta || actual.policy?.risk_delta).toLowerCase(),
+      },
+    },
+    previewComparison: {
+      status: s(previewComparison.status).toLowerCase(),
+      previewHadUnknowns: b(
+        previewComparison.previewHadUnknowns || previewComparison.preview_had_unknowns
+      ),
+      canonical: {
+        status: s(previewComparison.canonical?.status).toLowerCase(),
+        matched:
+          typeof previewComparison.canonical?.matched === "boolean"
+            ? previewComparison.canonical.matched
+            : null,
+        previewUnknown: b(
+          previewComparison.canonical?.previewUnknown ||
+            previewComparison.canonical?.preview_unknown
+        ),
+        missingFromActual: normalizeStringList(
+          previewComparison.canonical?.missingFromActual ||
+            previewComparison.canonical?.missing_from_actual
+        ),
+        addedInActual: normalizeStringList(
+          previewComparison.canonical?.addedInActual ||
+            previewComparison.canonical?.added_in_actual
+        ),
+      },
+      runtime: {
+        status: s(previewComparison.runtime?.status).toLowerCase(),
+        matched:
+          typeof previewComparison.runtime?.matched === "boolean"
+            ? previewComparison.runtime.matched
+            : null,
+        previewUnknown: b(
+          previewComparison.runtime?.previewUnknown ||
+            previewComparison.runtime?.preview_unknown
+        ),
+        missingFromActual: normalizeStringList(
+          previewComparison.runtime?.missingFromActual ||
+            previewComparison.runtime?.missing_from_actual
+        ),
+        addedInActual: normalizeStringList(
+          previewComparison.runtime?.addedInActual ||
+            previewComparison.runtime?.added_in_actual
+        ),
+      },
+      channels: {
+        status: s(previewComparison.channels?.status).toLowerCase(),
+        matched:
+          typeof previewComparison.channels?.matched === "boolean"
+            ? previewComparison.channels.matched
+            : null,
+        previewUnknown: b(
+          previewComparison.channels?.previewUnknown ||
+            previewComparison.channels?.preview_unknown
+        ),
+        missingFromActual: normalizeStringList(
+          previewComparison.channels?.missingFromActual ||
+            previewComparison.channels?.missing_from_actual
+        ),
+        addedInActual: normalizeStringList(
+          previewComparison.channels?.addedInActual ||
+            previewComparison.channels?.added_in_actual
+        ),
+      },
+    },
+    verification: {
+      truthVersionCreated: b(
+        verification.truthVersionCreated || verification.truth_version_created
+      ),
+      runtimeProjectionRefreshed: b(
+        verification.runtimeProjectionRefreshed ||
+          verification.runtime_projection_refreshed
+      ),
+      runtimeControlWarnings: normalizeStringList(
+        verification.runtimeControlWarnings ||
+          verification.runtime_control_warnings
+      ),
+      repairRecommendation: s(
+        verification.repairRecommendation || verification.repair_recommendation
+      ),
+    },
+    actor: s(item.actor),
+    timestamp: s(item.timestamp),
+    summaryExplanation: s(
+      item.summaryExplanation || item.summary_explanation
+    ),
+  };
+}
+
+function normalizeTruthReviewActionResult(value = {}) {
+  const item = obj(value);
+  return {
+    ...item,
+    publishReceipt: normalizePublishReceipt(
+      item.publishReceipt || item.publish_receipt
+    ),
+  };
+}
+
 function normalizeReviewWorkbenchItem(value = {}) {
   const item = obj(value);
   const impactPreview = obj(item.impactPreview || item.impact_preview);
@@ -588,6 +734,238 @@ function normalizeHistory(items = []) {
     .filter(Boolean);
 }
 
+function normalizeVersionDiff(value = {}) {
+  const item = obj(value);
+  const fromVersion = obj(item.fromVersion || item.from_version);
+  const toVersion = obj(item.toVersion || item.to_version);
+  const valueSummary = obj(item.valueSummary || item.value_summary);
+
+  return {
+    fromVersion: normalizeVersionMeta(fromVersion),
+    toVersion: normalizeVersionMeta(toVersion),
+    canonicalAreasChanged: normalizeStringList(
+      item.canonicalAreasChanged || item.canonical_areas_changed
+    ),
+    canonicalPathsChanged: normalizeStringList(
+      item.canonicalPathsChanged || item.canonical_paths_changed
+    ),
+    runtimeAreasLikelyAffected: normalizeStringList(
+      item.runtimeAreasLikelyAffected || item.runtime_areas_likely_affected
+    ),
+    affectedSurfaces: normalizeStringList(
+      item.affectedSurfaces || item.affected_surfaces
+    ),
+    autonomyImpact: s(item.autonomyImpact || item.autonomy_impact).toLowerCase(),
+    valueSummary: {
+      added: n(valueSummary.added),
+      removed: n(valueSummary.removed),
+      changed: n(valueSummary.changed),
+      changedFields: normalizeStringList(
+        valueSummary.changedFields || valueSummary.changed_fields
+      ),
+    },
+    summaryExplanation: s(item.summaryExplanation || item.summary_explanation),
+  };
+}
+
+function normalizeRollbackPreview(value = {}) {
+  const item = obj(value);
+  const currentApprovedVersion = obj(
+    item.currentApprovedVersion || item.current_approved_version
+  );
+  const targetRollbackVersion = obj(
+    item.targetRollbackVersion || item.target_rollback_version
+  );
+  const postureImpact = obj(item.postureImpact || item.posture_impact);
+  const action = obj(item.action);
+
+  return {
+    currentApprovedVersion: normalizeVersionMeta(currentApprovedVersion),
+    targetRollbackVersion: normalizeVersionMeta(targetRollbackVersion),
+    canonicalAreasChangedBack: normalizeStringList(
+      item.canonicalAreasChangedBack || item.canonical_areas_changed_back
+    ),
+    canonicalPathsChangedBack: normalizeStringList(
+      item.canonicalPathsChangedBack || item.canonical_paths_changed_back
+    ),
+    runtimeAreasLikelyAffected: normalizeStringList(
+      item.runtimeAreasLikelyAffected || item.runtime_areas_likely_affected
+    ),
+    affectedSurfaces: normalizeStringList(
+      item.affectedSurfaces || item.affected_surfaces
+    ),
+    postureImpact: {
+      autonomyDelta: s(
+        postureImpact.autonomyDelta || postureImpact.autonomy_delta
+      ).toLowerCase(),
+    },
+    readinessImplications: normalizeStringList(
+      item.readinessImplications || item.readiness_implications
+    ),
+    rollbackDisposition: s(
+      item.rollbackDisposition || item.rollback_disposition
+    ).toLowerCase(),
+    summaryExplanation: s(item.summaryExplanation || item.summary_explanation),
+    action: {
+      actionType: s(action.actionType || action.type).toLowerCase(),
+      label: s(action.label),
+      allowed: action.allowed === true,
+      reason: s(action.reason || action.unavailableReason || action.unavailable_reason),
+    },
+  };
+}
+
+function normalizeRollbackReceipt(value = {}) {
+  const item = obj(value);
+  const actual = obj(item.actual);
+  const previewComparison = obj(item.previewComparison || item.preview_comparison);
+  const verification = obj(item.verification);
+
+  return {
+    rollbackActionResult: s(
+      item.rollbackActionResult || item.rollback_action_result
+    ).toLowerCase(),
+    rollbackStatus: s(item.rollbackStatus || item.rollback_status).toLowerCase(),
+    sourceCurrentVersion: normalizeVersionMeta(
+      item.sourceCurrentVersion || item.source_current_version
+    ),
+    targetRollbackVersion: normalizeVersionMeta(
+      item.targetRollbackVersion || item.target_rollback_version
+    ),
+    resultingTruthVersion: normalizeVersionMeta(
+      item.resultingTruthVersion || item.resulting_truth_version
+    ),
+    sourceCurrentVersionId: s(
+      item.sourceCurrentVersionId || item.source_current_version_id
+    ),
+    targetRollbackVersionId: s(
+      item.targetRollbackVersionId || item.target_rollback_version_id
+    ),
+    resultingTruthVersionId: s(
+      item.resultingTruthVersionId || item.resulting_truth_version_id
+    ),
+    runtimeProjectionId: s(
+      item.runtimeProjectionId || item.runtime_projection_id
+    ),
+    runtimeRefreshResult: s(
+      item.runtimeRefreshResult || item.runtime_refresh_result
+    ).toLowerCase(),
+    actual: {
+      canonical: {
+        areas: normalizeStringList(actual.canonical?.areas),
+        paths: normalizeStringList(actual.canonical?.paths),
+      },
+      runtime: {
+        areas: normalizeStringList(actual.runtime?.areas),
+        paths: normalizeStringList(actual.runtime?.paths),
+      },
+      channels: {
+        affectedSurfaces: normalizeStringList(
+          actual.channels?.affectedSurfaces || actual.channels?.affected_surfaces
+        ),
+      },
+      policy: {
+        autonomyDelta: s(
+          actual.policy?.autonomyDelta || actual.policy?.autonomy_delta
+        ).toLowerCase(),
+        executionPostureDelta: s(
+          actual.policy?.executionPostureDelta ||
+            actual.policy?.execution_posture_delta
+        ).toLowerCase(),
+        riskDelta: s(actual.policy?.riskDelta || actual.policy?.risk_delta).toLowerCase(),
+      },
+    },
+    previewComparison: {
+      status: s(previewComparison.status).toLowerCase(),
+      previewHadUnknowns: b(
+        previewComparison.previewHadUnknowns || previewComparison.preview_had_unknowns
+      ),
+      canonical: {
+        status: s(previewComparison.canonical?.status).toLowerCase(),
+        matched:
+          typeof previewComparison.canonical?.matched === "boolean"
+            ? previewComparison.canonical.matched
+            : null,
+        previewUnknown: b(
+          previewComparison.canonical?.previewUnknown ||
+            previewComparison.canonical?.preview_unknown
+        ),
+        missingFromActual: normalizeStringList(
+          previewComparison.canonical?.missingFromActual ||
+            previewComparison.canonical?.missing_from_actual
+        ),
+        addedInActual: normalizeStringList(
+          previewComparison.canonical?.addedInActual ||
+            previewComparison.canonical?.added_in_actual
+        ),
+      },
+      runtime: {
+        status: s(previewComparison.runtime?.status).toLowerCase(),
+        matched:
+          typeof previewComparison.runtime?.matched === "boolean"
+            ? previewComparison.runtime.matched
+            : null,
+        previewUnknown: b(
+          previewComparison.runtime?.previewUnknown ||
+            previewComparison.runtime?.preview_unknown
+        ),
+        missingFromActual: normalizeStringList(
+          previewComparison.runtime?.missingFromActual ||
+            previewComparison.runtime?.missing_from_actual
+        ),
+        addedInActual: normalizeStringList(
+          previewComparison.runtime?.addedInActual ||
+            previewComparison.runtime?.added_in_actual
+        ),
+      },
+      channels: {
+        status: s(previewComparison.channels?.status).toLowerCase(),
+        matched:
+          typeof previewComparison.channels?.matched === "boolean"
+            ? previewComparison.channels.matched
+            : null,
+        previewUnknown: b(
+          previewComparison.channels?.previewUnknown ||
+            previewComparison.channels?.preview_unknown
+        ),
+        missingFromActual: normalizeStringList(
+          previewComparison.channels?.missingFromActual ||
+            previewComparison.channels?.missing_from_actual
+        ),
+        addedInActual: normalizeStringList(
+          previewComparison.channels?.addedInActual ||
+            previewComparison.channels?.added_in_actual
+        ),
+      },
+    },
+    verification: {
+      truthVersionCreated: b(
+        verification.truthVersionCreated || verification.truth_version_created
+      ),
+      runtimeProjectionRefreshed: b(
+        verification.runtimeProjectionRefreshed ||
+          verification.runtime_projection_refreshed
+      ),
+      projectionHealthStatus: s(
+        verification.projectionHealthStatus || verification.projection_health_status
+      ).toLowerCase(),
+      runtimeControlWarnings: normalizeStringList(
+        verification.runtimeControlWarnings ||
+          verification.runtime_control_warnings
+      ),
+      repairRecommendation: s(
+        verification.repairRecommendation || verification.repair_recommendation
+      ),
+    },
+    actor: s(item.actor),
+    timestamp: s(item.timestamp),
+    summaryExplanation: s(
+      item.summaryExplanation || item.summary_explanation
+    ),
+    reasonCode: s(item.reasonCode || item.reason_code).toLowerCase(),
+  };
+}
+
 function normalizeCompareResponse(payload = {}, versionId = "", compareTo = "") {
   const root = obj(payload);
   const detail = pickFirstObject(
@@ -640,9 +1018,38 @@ function normalizeCompareResponse(payload = {}, versionId = "", compareTo = "") 
   return {
     selectedVersion: normalizeVersionMeta(detail, versionId),
     comparedVersion: normalizeVersionMeta(compare, compareTo),
+    currentVersion: normalizeVersionMeta(
+      pickFirstObject(root.currentVersion, root.current_version, detail.currentVersion)
+    ),
     changedFields,
     fieldChanges,
     sectionChanges,
+    versionDiff: normalizeVersionDiff(
+      root.versionDiff || root.version_diff || detail.versionDiff || detail.version_diff
+    ),
+    rollbackPreview: normalizeRollbackPreview(
+      root.rollbackPreview ||
+        root.rollback_preview ||
+        detail.rollbackPreview ||
+        detail.rollback_preview
+    ),
+    rollbackAction: normalizeRollbackPreview({
+      action:
+        root.rollbackAction ||
+        root.rollback_action ||
+        detail.rollbackAction ||
+        detail.rollback_action ||
+        root.rollbackPreview?.action ||
+        root.rollback_preview?.action ||
+        detail.rollbackPreview?.action ||
+        detail.rollback_preview?.action,
+    }).action,
+    rollbackReceipt: normalizeRollbackReceipt(
+      root.rollbackReceipt ||
+        root.rollback_receipt ||
+        detail.rollbackReceipt ||
+        detail.rollback_receipt
+    ),
     diffSummary: summarizeVersionDiff({
       ...detail,
       ...diff,
@@ -840,6 +1247,10 @@ export const __test__ = {
   normalizeCompareResponse,
   buildApprovedTruthUnavailableSnapshot,
   normalizeTruthReviewWorkbench,
+  normalizePublishReceipt,
+  normalizeVersionDiff,
+  normalizeRollbackPreview,
+  normalizeRollbackReceipt,
 };
 
 export async function getTruthVersionDetail(versionId, options = {}) {
@@ -849,6 +1260,27 @@ export async function getTruthVersionDetail(versionId, options = {}) {
   });
   const payload = await apiGet(`/api/setup/truth/history/${id}${query}`);
   return normalizeCompareResponse(payload, s(versionId), s(options.compareTo));
+}
+
+export async function rollbackTruthVersion(versionId, payload = {}) {
+  const id = encodeURIComponent(s(versionId));
+  const response = await apiPost(`/api/setup/truth/history/${id}/rollback`, payload);
+  return {
+    ok: response?.ok !== false,
+    blocked: response?.blocked === true,
+    rollbackPreview: normalizeRollbackPreview(
+      response?.rollbackPreview || response?.rollback_preview
+    ),
+    rollbackAction: normalizeRollbackPreview({
+      action: response?.rollbackAction || response?.rollback_action,
+    }).action,
+    rollbackReceipt: normalizeRollbackReceipt(
+      response?.rollbackReceipt || response?.rollback_receipt
+    ),
+    resultingTruthVersion: normalizeVersionMeta(
+      response?.resultingTruthVersion || response?.resulting_truth_version
+    ),
+  };
 }
 
 export async function getCanonicalTruthSnapshot() {
@@ -913,7 +1345,8 @@ async function mutateTruthReviewCandidate(candidateId, actionType, payload = {})
 }
 
 export async function approveTruthReviewCandidate(candidateId, payload = {}) {
-  return mutateTruthReviewCandidate(candidateId, "approve", payload);
+  const response = await mutateTruthReviewCandidate(candidateId, "approve", payload);
+  return normalizeTruthReviewActionResult(response);
 }
 
 export async function rejectTruthReviewCandidate(candidateId, payload = {}) {

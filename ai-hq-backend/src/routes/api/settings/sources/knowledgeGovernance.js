@@ -904,6 +904,228 @@ function buildPublishPreview({
   };
 }
 
+function normalizeComparisonList(items = []) {
+  return uniqStrings(items).sort((a, b) => a.localeCompare(b));
+}
+
+function comparePreviewToActualDimension(previewItems = [], actualItems = []) {
+  const preview = normalizeComparisonList(previewItems);
+  const actual = normalizeComparisonList(actualItems);
+
+  if (!preview.length && !actual.length) {
+    return {
+      status: "unknown",
+      matched: null,
+      previewUnknown: true,
+      missingFromActual: [],
+      addedInActual: [],
+    };
+  }
+
+  const missingFromActual = preview.filter((item) => !actual.includes(item));
+  const addedInActual = actual.filter((item) => !preview.includes(item));
+  const matched = missingFromActual.length === 0 && addedInActual.length === 0;
+
+  return {
+    status: matched ? "matched" : "differs",
+    matched,
+    previewUnknown: !preview.length,
+    missingFromActual,
+    addedInActual,
+  };
+}
+
+function summarizeComparison(dimensions = []) {
+  const usable = arr(dimensions).filter(Boolean);
+  if (!usable.length) return "unknown";
+  if (usable.some((item) => item.status === "differs")) return "partial_match";
+  if (usable.every((item) => item.status === "unknown")) return "unknown";
+  if (usable.some((item) => item.previewUnknown)) return "partial_match";
+  return "matched";
+}
+
+function buildPublishReceipt({
+  result = {},
+  impact = {},
+  publishPreview = {},
+  reviewerName = "",
+} = {}) {
+  const projection = obj(result.projection, {});
+  const runtimeProjection = obj(projection.runtimeProjection, {});
+  const runtimeHealth = obj(runtimeProjection.health, {});
+  const actualCanonicalAreas = uniqStrings([
+    ...(projection.profile ? ["business_profile"] : []),
+    ...(projection.capabilities ? ["business_capabilities"] : []),
+  ]);
+  const fallbackCanonicalPaths = actualCanonicalAreas.length
+    ? uniqStrings(impact.canonicalPaths || impact.canonical_paths)
+    : [];
+  const actualRuntimeAreas = runtimeProjection.id
+    ? uniqStrings(impact.runtimeAreas || impact.runtime_areas)
+    : [];
+  const actualRuntimePaths = runtimeProjection.id
+    ? uniqStrings(impact.runtimePaths || impact.runtime_paths)
+    : [];
+  const actualAffectedSurfaces = runtimeProjection.id
+    ? uniqStrings(
+        runtimeProjection.affectedSurfaces ||
+          runtimeProjection.affected_surfaces ||
+          impact.affectedSurfaces ||
+          impact.affected_surfaces
+      )
+    : [];
+  const actualAutonomyDelta =
+    lower(runtimeHealth.autonomousAllowed) === "false"
+      ? "tightens"
+      : s(runtimeProjection.autonomyDelta || runtimeProjection.autonomy_delta);
+  const actualExecutionPostureDelta = s(
+    runtimeProjection.executionPostureDelta || runtimeProjection.execution_posture_delta
+  );
+  const actualRiskDelta = s(runtimeProjection.riskDelta || runtimeProjection.risk_delta);
+  const projectionHealthStatus = s(
+    runtimeHealth.status ||
+      runtimeProjection.healthStatus ||
+      runtimeProjection.health_status ||
+      runtimeProjection.status
+  );
+  const runtimeRefreshResult = s(
+    runtimeProjection.refreshResult ||
+      runtimeProjection.refresh_result ||
+      runtimeProjection.status
+  );
+  const warnings = uniqStrings([
+    ...arr(runtimeHealth.warnings),
+    ...arr(runtimeProjection.warnings),
+  ]);
+  const repairRecommendation = s(
+    runtimeProjection.repairRecommendation ||
+      runtimeProjection.repair_recommendation ||
+      runtimeHealth.repairRecommendation ||
+      runtimeHealth.repair_recommendation
+  );
+
+  const canonicalComparison = comparePreviewToActualDimension(
+    publishPreview?.canonical?.areas,
+    actualCanonicalAreas
+  );
+  const runtimeComparison = comparePreviewToActualDimension(
+    publishPreview?.runtime?.areas,
+    actualRuntimeAreas
+  );
+  const surfaceComparison = comparePreviewToActualDimension(
+    publishPreview?.channels?.affectedSurfaces,
+    actualAffectedSurfaces
+  );
+  const comparisonStatus = summarizeComparison([
+    canonicalComparison,
+    runtimeComparison,
+    surfaceComparison,
+  ]);
+
+  let publishStatus = "success";
+  if (
+    ["degraded", "repair_required", "failed", "error"].includes(
+      lower(projectionHealthStatus || runtimeRefreshResult)
+    )
+  ) {
+    publishStatus = "repair_required";
+  } else if (
+    warnings.length > 0 ||
+    repairRecommendation ||
+    ["queued", "pending", "refresh_required"].includes(lower(runtimeRefreshResult))
+  ) {
+    publishStatus = "follow_up_required";
+  } else if (
+    !actualCanonicalAreas.length ||
+    !runtimeProjection.id ||
+    comparisonStatus === "partial_match"
+  ) {
+    publishStatus = "partial_success";
+  }
+
+  const truthVersionId = s(
+    projection.profile?.version_id ||
+      projection.capabilities?.version_id ||
+      result.truthVersion?.id ||
+      ""
+  );
+  const summaryBits = [];
+  summaryBits.push(
+    publishStatus === "success"
+      ? "Approval completed and verification matched the governed publish path."
+      : publishStatus === "repair_required"
+        ? "Approval committed, but runtime verification indicates repair is required."
+        : publishStatus === "follow_up_required"
+          ? "Approval committed, but follow-up is required before the publish path is fully clean."
+          : "Approval committed with partial verification detail."
+  );
+  if (actualCanonicalAreas.length) {
+    summaryBits.push(`Canonical impact: ${actualCanonicalAreas.join(", ")}.`);
+  } else {
+    summaryBits.push("Canonical impact could not be verified precisely.");
+  }
+  if (runtimeProjection.id) {
+    summaryBits.push(`Runtime projection ${runtimeProjection.id} recorded ${runtimeRefreshResult || "an update"}.`);
+  } else {
+    summaryBits.push("Runtime projection verification was unavailable.");
+  }
+  if (comparisonStatus === "matched") {
+    summaryBits.push("Preview matched the verified outcome.");
+  } else if (comparisonStatus === "partial_match") {
+    summaryBits.push("Preview comparison stayed partial because some impact dimensions were unknown.");
+  } else if (comparisonStatus === "unknown") {
+    summaryBits.push("Preview comparison was unavailable.");
+  }
+
+  return {
+    approvalActionResult: s(result.approval?.decision || result.approval?.action || "approved"),
+    publishStatus,
+    truthVersionId,
+    knowledgeItemId: s(result.knowledge?.id),
+    runtimeProjectionId: s(runtimeProjection.id),
+    runtimeRefreshResult,
+    projectionHealthStatus,
+    projectionHealthLabel: titleize(projectionHealthStatus || "unknown"),
+    actual: {
+      canonical: {
+        areas: actualCanonicalAreas,
+        paths: fallbackCanonicalPaths,
+      },
+      runtime: {
+        areas: actualRuntimeAreas,
+        paths: actualRuntimePaths,
+      },
+      channels: {
+        affectedSurfaces: actualAffectedSurfaces,
+      },
+      policy: {
+        autonomyDelta: actualAutonomyDelta || "unknown",
+        executionPostureDelta: actualExecutionPostureDelta || "unknown",
+        riskDelta: actualRiskDelta || "unknown",
+      },
+    },
+    previewComparison: {
+      status: comparisonStatus,
+      canonical: canonicalComparison,
+      runtime: runtimeComparison,
+      channels: surfaceComparison,
+      previewHadUnknowns:
+        canonicalComparison.previewUnknown ||
+        runtimeComparison.previewUnknown ||
+        surfaceComparison.previewUnknown,
+    },
+    verification: {
+      truthVersionCreated: Boolean(truthVersionId),
+      runtimeProjectionRefreshed: Boolean(runtimeProjection.id),
+      runtimeControlWarnings: warnings,
+      repairRecommendation,
+    },
+    actor: s(reviewerName || result.approval?.reviewer_name || result.approval?.reviewerName),
+    timestamp: s(result.approval?.created_at || result.approval?.createdAt || new Date().toISOString()),
+    summaryExplanation: summaryBits.join(" "),
+  };
+}
+
 async function buildKnowledgeReviewWorkbench({
   knowledge,
   tenant,
@@ -1330,6 +1552,16 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
       const by = pickUserId(req);
       const reviewerName = pickUserName(req);
       const payload = normalizeApprovePayload(req.body);
+      const previewSummary = obj(
+        payload.metadataJson?.publishPreview ||
+          payload.metadataJson?.previewSummary ||
+          {},
+        {}
+      );
+      const impact = buildCandidateImpact({
+        category: candidate.category,
+        itemKey: candidate.item_key,
+      });
 
       const result = await knowledge.approveCandidate(candidateId, {
         ...payload,
@@ -1341,13 +1573,14 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
         updatedBy: by,
         metadataJson: {
           ...obj(payload.metadataJson, {}),
-          publishPreview: obj(
-            payload.metadataJson?.publishPreview ||
-              payload.metadataJson?.previewSummary ||
-              {},
-            {}
-          ),
+          publishPreview: previewSummary,
         },
+      });
+      const publishReceipt = buildPublishReceipt({
+        result,
+        impact,
+        publishPreview: previewSummary,
+        reviewerName,
       });
 
       const promotedBusinessFact = await maybePromoteApprovedKnowledgeToBusinessFact(
@@ -1369,16 +1602,13 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
         approvalId: s(result?.approval?.id),
         promotedBusinessFactId: s(promotedBusinessFact?.id),
         reviewerName,
-        publishPreview: obj(
-          payload.metadataJson?.publishPreview ||
-            payload.metadataJson?.previewSummary ||
-            {},
-          {}
-        ),
+        publishPreview: previewSummary,
+        publishReceipt,
       });
 
       return ok(res, {
         ...result,
+        publishReceipt,
         promoted: Boolean(promotedBusinessFact),
         promotedBusinessFact: promotedBusinessFact || null,
       });

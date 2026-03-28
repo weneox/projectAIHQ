@@ -1,11 +1,56 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 const dispatchRepairAction = vi.fn();
 
 vi.mock("../../api/truth.js", () => ({
-  approveTruthReviewCandidate: vi.fn().mockResolvedValue({ ok: true }),
+  approveTruthReviewCandidate: vi.fn().mockResolvedValue({
+    ok: true,
+    publishReceipt: {
+      approvalActionResult: "approved",
+      publishStatus: "success",
+      truthVersionId: "truth-version-7",
+      runtimeProjectionId: "runtime-projection-9",
+      runtimeRefreshResult: "refreshed",
+      projectionHealthStatus: "healthy",
+      projectionHealthLabel: "Healthy",
+      actual: {
+        canonical: {
+          areas: ["business_profile"],
+          paths: ["profile.primaryPhone"],
+        },
+        runtime: {
+          areas: ["contact_channels"],
+          paths: ["runtime.business.contacts.primaryPhone"],
+        },
+        channels: {
+          affectedSurfaces: ["voice", "inbox"],
+        },
+        policy: {
+          autonomyDelta: "unchanged",
+          executionPostureDelta: "unchanged",
+          riskDelta: "unknown",
+        },
+      },
+      previewComparison: {
+        status: "matched",
+        canonical: { status: "matched", matched: true },
+        runtime: { status: "matched", matched: true },
+        channels: { status: "matched", matched: true },
+      },
+      verification: {
+        truthVersionCreated: true,
+        runtimeProjectionRefreshed: true,
+        runtimeControlWarnings: [],
+        repairRecommendation: "",
+      },
+      actor: "reviewer@aihq.test",
+      timestamp: "2026-03-28T10:10:00.000Z",
+      summaryExplanation:
+        "Approval completed and verification matched the governed publish path.",
+    },
+  }),
   getCanonicalTruthSnapshot: vi.fn().mockResolvedValue({
     fields: [
       {
@@ -215,6 +260,13 @@ vi.mock("../../api/truth.js", () => ({
       approvedAt: "2026-03-24T09:00:00.000Z",
       approvedBy: "owner@aihq.test",
     },
+    currentVersion: {
+      id: "v4",
+      version: "v4",
+      versionLabel: "Truth version v4",
+      approvedAt: "2026-03-26T11:00:00.000Z",
+      approvedBy: "reviewer@aihq.test",
+    },
     changedFields: [{ key: "companyName", label: "companyName" }],
     fieldChanges: [
       {
@@ -225,16 +277,92 @@ vi.mock("../../api/truth.js", () => ({
       },
     ],
     sectionChanges: [],
+    versionDiff: {
+      canonicalAreasChanged: ["business_profile"],
+      canonicalPathsChanged: ["profile.companyName"],
+      runtimeAreasLikelyAffected: ["tenant_profile"],
+      affectedSurfaces: ["inbox"],
+      autonomyImpact: "follow_up_required",
+      valueSummary: {
+        changed: 1,
+      },
+      summaryExplanation: "1 canonical field change spans 1 governed area.",
+    },
+    rollbackPreview: {
+      currentApprovedVersion: {
+        id: "v4",
+        version: "v4",
+        versionLabel: "Truth version v4",
+      },
+      targetRollbackVersion: {
+        id: "v3",
+        version: "v3",
+        versionLabel: "Truth version v3",
+      },
+      canonicalAreasChangedBack: ["business_profile"],
+      canonicalPathsChangedBack: ["profile.companyName"],
+      runtimeAreasLikelyAffected: ["tenant_profile"],
+      affectedSurfaces: ["inbox"],
+      postureImpact: {
+        autonomyDelta: "reviewable",
+      },
+      readinessImplications: [
+        "Runtime projection refresh will be required before governed runtime reflects the rollback.",
+      ],
+      rollbackDisposition: "follow_up_required",
+      summaryExplanation: "Rolling back to v3 would revert 1 canonical field and trigger runtime follow-up.",
+      action: {
+        actionType: "execute_safe_rollback",
+        label: "Execute governed rollback",
+        allowed: true,
+        reason: "Rollback is allowed, but runtime verification and follow-up will still be required.",
+      },
+    },
     diffSummary: "companyName changed",
     hasStructuredDiff: true,
   }),
   keepTruthReviewCandidateQuarantined: vi.fn().mockResolvedValue({ ok: true }),
   markTruthReviewCandidateForFollowUp: vi.fn().mockResolvedValue({ ok: true }),
   rejectTruthReviewCandidate: vi.fn().mockResolvedValue({ ok: true }),
+  rollbackTruthVersion: vi.fn().mockResolvedValue({
+    ok: true,
+    rollbackReceipt: {
+      rollbackActionResult: "executed",
+      rollbackStatus: "follow_up_required",
+      sourceCurrentVersion: { id: "v4", version: "v4", versionLabel: "Truth version v4" },
+      targetRollbackVersion: { id: "v3", version: "v3", versionLabel: "Truth version v3" },
+      resultingTruthVersion: { id: "v5", version: "v5", versionLabel: "Truth version v5" },
+      resultingTruthVersionId: "v5",
+      runtimeProjectionId: "runtime-projection-rollback",
+      runtimeRefreshResult: "refreshed",
+      actual: {
+        canonical: { areas: ["business_profile"], paths: ["profile.companyName"] },
+        runtime: { areas: ["tenant_profile"], paths: ["profile.companyName"] },
+        channels: { affectedSurfaces: ["inbox"] },
+        policy: {
+          autonomyDelta: "reviewable",
+          executionPostureDelta: "unknown",
+          riskDelta: "unknown",
+        },
+      },
+      previewComparison: { status: "matched" },
+      verification: {
+        truthVersionCreated: true,
+        runtimeProjectionRefreshed: true,
+        runtimeControlWarnings: [],
+        repairRecommendation: "",
+      },
+      actor: "owner@aihq.test",
+      timestamp: "2026-03-28T10:20:00.000Z",
+      summaryExplanation:
+        "Rollback committed, but follow-up is required before the governed revert path is fully clean.",
+    },
+  }),
 }));
 
 vi.mock("../../api/trust.js", () => ({
   getSettingsTrustView: vi.fn().mockResolvedValue({
+    viewerRole: "owner",
     summary: {
       readiness: { status: "ready", blockers: [] },
       runtimeProjection: {
@@ -386,7 +514,9 @@ vi.mock("../../components/readiness/dispatchRepairAction.js", () => ({
 
 import TruthViewerPage from "./TruthViewerPage.jsx";
 import {
+  approveTruthReviewCandidate,
   getCanonicalTruthSnapshot,
+  rollbackTruthVersion,
 } from "../../api/truth.js";
 import { getSettingsTrustView } from "../../api/trust.js";
 
@@ -445,6 +575,8 @@ describe("Truth viewer smoke", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /view compare/i }));
     expect(await screen.findByText(/version detail/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/rollback preview/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/rolling back to v3 would revert 1 canonical field/i)).toBeInTheDocument();
     expect(screen.getByText(/old clinic/i)).toBeInTheDocument();
     expect(screen.getAllByText(/north clinic/i).length).toBeGreaterThan(1);
   });
@@ -534,6 +666,7 @@ describe("Truth viewer smoke", () => {
       },
     });
     getSettingsTrustView.mockResolvedValueOnce({
+      viewerRole: "owner",
       summary: {
         runtimeProjection: {},
         truth: {},
@@ -558,5 +691,58 @@ describe("Truth viewer smoke", () => {
 
     expect(await screen.findByText(/version detail/i)).toBeInTheDocument();
     expect(screen.getByText(/old clinic/i)).toBeInTheDocument();
+  });
+
+  it("shows a publish receipt after approving a reviewed candidate", async () => {
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: /business truth/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /approve selected value/i }));
+
+    await waitFor(() =>
+      expect(approveTruthReviewCandidate).toHaveBeenCalledWith(
+        "candidate-1",
+        expect.objectContaining({
+          metadataJson: {
+            publishPreview: {
+              proposedOutcome: "review_required",
+            },
+          },
+        })
+      )
+    );
+
+    expect(await screen.findByText(/change receipt/i)).toBeInTheDocument();
+    expect(screen.getByText(/approval completed and verification matched/i)).toBeInTheDocument();
+    expect(screen.getByText(/truth-version-7/i)).toBeInTheDocument();
+    expect(screen.getByText(/runtime-projection-9/i)).toBeInTheDocument();
+    expect(screen.getByText(/preview vs actual/i)).toBeInTheDocument();
+  });
+
+  it("executes governed rollback from truth compare and shows the receipt", async () => {
+    renderPage();
+
+    expect(await screen.findByRole("heading", { name: /business truth/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /view compare/i }));
+    expect(await screen.findByText(/version detail/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /execute governed rollback/i }));
+
+    await waitFor(() =>
+      expect(rollbackTruthVersion).toHaveBeenCalledWith(
+        "v3",
+        expect.objectContaining({
+          metadataJson: {
+            rollbackPreview: expect.objectContaining({
+              rollbackDisposition: "follow_up_required",
+            }),
+          },
+        })
+      )
+    );
+
+    expect((await screen.findAllByText(/rollback receipt/i)).length).toBeGreaterThan(0);
+    expect(screen.getByText(/rollback committed, but follow-up is required/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/truth version v5/i).length).toBeGreaterThan(0);
   });
 });

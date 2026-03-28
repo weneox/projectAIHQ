@@ -9,6 +9,7 @@ import {
   keepTruthReviewCandidateQuarantined,
   markTruthReviewCandidateForFollowUp,
   rejectTruthReviewCandidate,
+  rollbackTruthVersion,
 } from "../../api/truth.js";
 import { getSettingsTrustView } from "../../api/trust.js";
 import TruthHeader from "../../components/truth/TruthHeader.jsx";
@@ -53,11 +54,18 @@ export default function TruthViewerPage() {
     loading: false,
     error: "",
     detail: null,
+    rollbackSurface: {
+      saving: false,
+      error: "",
+      saveSuccess: "",
+      rollbackReceipt: null,
+    },
   });
   const [reviewSurface, setReviewSurface] = useState({
     saving: false,
     error: "",
     saveSuccess: "",
+    publishReceipt: null,
   });
   const historyRef = useRef(null);
   const truthReadiness = createReadinessViewModel(state.data.readiness);
@@ -152,6 +160,12 @@ export default function TruthViewerPage() {
           (Array.isArray(item?.changedFields) && item.changedFields.length > 0) ||
           (Array.isArray(item?.fieldChanges) && item.fieldChanges.length > 0),
       },
+      rollbackSurface: {
+        saving: false,
+        error: "",
+        saveSuccess: "",
+        rollbackReceipt: null,
+      },
     });
 
     try {
@@ -160,6 +174,12 @@ export default function TruthViewerPage() {
         loading: false,
         error: "",
         detail,
+        rollbackSurface: {
+          saving: false,
+          error: "",
+          saveSuccess: "",
+          rollbackReceipt: null,
+        },
       });
     } catch (error) {
       setCompareState((prev) => ({
@@ -168,6 +188,72 @@ export default function TruthViewerPage() {
           error?.message || error || "Truth version detail could not be loaded."
         ),
         detail: prev.detail,
+        rollbackSurface: prev.rollbackSurface,
+      }));
+    }
+  }
+
+  async function handleRollback(detail = {}) {
+    const versionId = String(
+      detail?.selectedVersion?.id || detail?.rollbackPreview?.targetRollbackVersion?.id || ""
+    ).trim();
+    if (!versionId) return;
+
+    setCompareState((prev) => ({
+      ...prev,
+      rollbackSurface: {
+        saving: true,
+        error: "",
+        saveSuccess: "",
+        rollbackReceipt: prev.rollbackSurface?.rollbackReceipt || null,
+      },
+    }));
+
+    try {
+      const result = await rollbackTruthVersion(versionId, {
+        metadataJson: {
+          rollbackPreview: {
+            rollbackDisposition: detail?.rollbackPreview?.rollbackDisposition || "",
+            canonicalAreasChangedBack:
+              detail?.rollbackPreview?.canonicalAreasChangedBack || [],
+            runtimeAreasLikelyAffected:
+              detail?.rollbackPreview?.runtimeAreasLikelyAffected || [],
+            affectedSurfaces: detail?.rollbackPreview?.affectedSurfaces || [],
+          },
+        },
+      });
+
+      await refreshTruthReviewSurface();
+      const refreshed = await getTruthVersionDetail(versionId, {
+        compareTo: detail?.comparedVersion?.id || "",
+      });
+
+      setCompareState({
+        loading: false,
+        error: "",
+        detail: {
+          ...refreshed,
+          rollbackReceipt: result.rollbackReceipt || null,
+        },
+        rollbackSurface: {
+          saving: false,
+          error: "",
+          saveSuccess:
+            result?.rollbackReceipt?.rollbackStatus === "success"
+              ? "Governed rollback completed and verification is now available."
+              : "Governed rollback completed with follow-up telemetry attached.",
+          rollbackReceipt: result.rollbackReceipt || null,
+        },
+      });
+    } catch (error) {
+      setCompareState((prev) => ({
+        ...prev,
+        rollbackSurface: {
+          saving: false,
+          error: String(error?.message || error || "Governed rollback failed."),
+          saveSuccess: "",
+          rollbackReceipt: prev.rollbackSurface?.rollbackReceipt || null,
+        },
       }));
     }
   }
@@ -212,11 +298,13 @@ export default function TruthViewerPage() {
       saving: true,
       error: "",
       saveSuccess: "",
+      publishReceipt: actionType === "approve" ? reviewSurface.publishReceipt : null,
     });
 
     try {
+      let actionResult = null;
       if (actionType === "approve") {
-        await approveTruthReviewCandidate(candidateId, {
+        actionResult = await approveTruthReviewCandidate(candidateId, {
           reason: "Approved from Truth Review Workbench",
           metadataJson: {
             publishPreview: item?.publishPreview?.auditSummary || {},
@@ -249,12 +337,15 @@ export default function TruthViewerPage() {
               : actionType === "keep_quarantined"
                 ? "Candidate remains quarantined pending stronger evidence."
                 : "Candidate marked for follow-up review.",
+        publishReceipt:
+          actionType === "approve" ? actionResult?.publishReceipt || null : null,
       });
     } catch (error) {
       setReviewSurface({
         saving: false,
         error: String(error?.message || error || "Truth review action failed."),
         saveSuccess: "",
+        publishReceipt: null,
       });
     }
   }
@@ -360,6 +451,10 @@ export default function TruthViewerPage() {
         loading={compareState.loading}
         error={compareState.error}
         detail={compareState.detail}
+        versions={state.data.history}
+        onSelectVersion={handleOpenVersion}
+        rollbackSurface={compareState.rollbackSurface}
+        onRollback={handleRollback}
       />
     </div>
   );

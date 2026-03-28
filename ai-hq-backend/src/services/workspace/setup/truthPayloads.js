@@ -347,6 +347,7 @@ export async function loadSetupTruthVersionPayload(
       tenantKey: actor.tenantKey,
       versionId,
       compareToVersionId,
+      viewerRole: actor.role,
     }),
     setupBuilder({
       db,
@@ -369,7 +370,13 @@ export async function loadSetupTruthVersionPayload(
     previousTruthVersion: comparison?.previousVersion
       ? buildSafeHistoryEntry(comparison.previousVersion)
       : null,
+    currentTruthVersion: comparison?.currentVersion
+      ? buildSafeHistoryEntry(comparison.currentVersion)
+      : null,
     compare: Object.keys(normalizedDiff).length ? normalizedDiff : null,
+    versionDiff: obj(comparison?.versionDiff),
+    rollbackPreview: obj(comparison?.rollbackPreview),
+    rollbackAction: obj(comparison?.rollbackAction),
     setup,
   };
 }

@@ -5,6 +5,7 @@ export function registerSetupReviewRoutes(
     requireSetupActor,
     handleSetupAnalyze,
     applySetupReviewPatch,
+    executeTruthRollback,
     finalizeSetupReview,
     discardSetupReview,
     s,
@@ -57,6 +58,27 @@ export function registerSetupReviewRoutes(
         ok: false,
         error: "SetupReviewDiscardFailed",
         reason: err?.message || "failed to discard setup review session",
+      });
+    }
+  });
+
+  router.post("/setup/truth/history/:versionId/rollback", async (req, res) => {
+    const actor = requireSetupActor(req, res);
+    if (!actor) return;
+
+    try {
+      const result = await executeTruthRollback({
+        db,
+        actor,
+        versionId: s(req.params?.versionId),
+        body: req.body || {},
+      });
+      return res.status(result.status).json(result.body);
+    } catch (err) {
+      return res.status(400).json({
+        ok: false,
+        error: "SetupTruthRollbackFailed",
+        reason: err?.message || "failed to execute governed rollback",
       });
     }
   });

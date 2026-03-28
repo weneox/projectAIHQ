@@ -91,6 +91,13 @@ it("normalizeCompareResponse maps backend truth version compare detail", () => {
         approvedAt: "2026-03-24T09:00:00.000Z",
         approvedBy: "owner@aihq.test",
       },
+      currentVersion: {
+        id: "v4",
+        version: "v4",
+        versionLabel: "Truth version v4",
+        approvedAt: "2026-03-26T11:00:00.000Z",
+        approvedBy: "reviewer@aihq.test",
+      },
       diff: {
         changedFields: ["companyName", "websiteUrl"],
         fieldChanges: [
@@ -109,6 +116,56 @@ it("normalizeCompareResponse maps backend truth version compare detail", () => {
           },
         ],
       },
+      versionDiff: {
+        fromVersion: {
+          id: "v2",
+          version: "v2",
+        },
+        toVersion: {
+          id: "v3",
+          version: "v3",
+        },
+        canonicalAreasChanged: ["business_profile"],
+        canonicalPathsChanged: ["profile.companyName", "profile.websiteUrl"],
+        runtimeAreasLikelyAffected: ["tenant_profile", "contact_channels"],
+        affectedSurfaces: ["inbox", "voice"],
+        autonomyImpact: "follow_up_required",
+        valueSummary: {
+          added: 0,
+          removed: 0,
+          changed: 2,
+          changedFields: ["profile.companyName", "profile.websiteUrl"],
+        },
+        summaryExplanation: "2 canonical field changes span 1 governed area.",
+      },
+      rollbackPreview: {
+        currentApprovedVersion: {
+          id: "v4",
+          version: "v4",
+        },
+        targetRollbackVersion: {
+          id: "v3",
+          version: "v3",
+        },
+        canonicalAreasChangedBack: ["business_profile"],
+        canonicalPathsChangedBack: ["profile.companyName"],
+        runtimeAreasLikelyAffected: ["tenant_profile"],
+        affectedSurfaces: ["inbox"],
+        postureImpact: {
+          autonomyDelta: "reviewable",
+        },
+        readinessImplications: [
+          "Runtime projection refresh will be required before governed runtime reflects the rollback.",
+        ],
+        rollbackDisposition: "follow_up_required",
+        summaryExplanation: "Rolling back to v3 would revert 1 canonical field and trigger runtime follow-up.",
+        action: {
+          actionType: "execute_safe_rollback",
+          label: "Execute governed rollback",
+          allowed: true,
+          reason: "Rollback is allowed, but runtime verification and follow-up will still be required.",
+        },
+      },
     },
     "v3",
     "v2"
@@ -116,11 +173,18 @@ it("normalizeCompareResponse maps backend truth version compare detail", () => {
 
   expect(normalized.selectedVersion.version).toBe("v3");
   expect(normalized.comparedVersion.version).toBe("v2");
+  expect(normalized.currentVersion.version).toBe("v4");
   expect(normalized.changedFields).toHaveLength(2);
   expect(normalized.fieldChanges).toHaveLength(1);
   expect(normalized.fieldChanges[0].beforeSummary).toBe("Old Clinic");
   expect(normalized.fieldChanges[0].afterSummary).toBe("North Clinic");
   expect(normalized.sectionChanges).toHaveLength(1);
+  expect(normalized.versionDiff.runtimeAreasLikelyAffected).toEqual([
+    "tenant_profile",
+    "contact_channels",
+  ]);
+  expect(normalized.rollbackPreview.rollbackDisposition).toBe("follow_up_required");
+  expect(normalized.rollbackAction.actionType).toBe("execute_safe_rollback");
   expect(normalized.hasStructuredDiff).toBe(true);
 });
 
@@ -274,5 +338,126 @@ it("normalizeTruthReviewWorkbench preserves policy, conflict, and impact detail 
   expect(normalized.items[0].publishPreview.runtime.readinessDelta).toBe("projection_refresh_required");
   expect(normalized.items[0].conflictResolution.previewChoices[0].publishPreview.values.proposedValue.valueText).toBe("+15551112222");
   expect(normalized.items[1].actions).toEqual([]);
+});
+
+it("normalizePublishReceipt preserves verified publish outcome and sparse comparison detail safely", () => {
+  const normalized = __test__.normalizePublishReceipt({
+    approvalActionResult: "approved",
+    publishStatus: "partial_success",
+    truthVersionId: "truth-version-7",
+    runtimeProjectionId: "runtime-projection-9",
+    runtimeRefreshResult: "refreshed",
+    projectionHealthStatus: "healthy",
+    actual: {
+      canonical: {
+        areas: ["business_profile"],
+        paths: ["profile.primaryPhone"],
+      },
+      runtime: {
+        areas: ["contact_channels"],
+        paths: ["runtime.business.contacts.primaryPhone"],
+      },
+      channels: {
+        affectedSurfaces: ["voice", "inbox"],
+      },
+      policy: {
+        autonomyDelta: "unchanged",
+      },
+    },
+    previewComparison: {
+      status: "partial_match",
+      previewHadUnknowns: true,
+      canonical: {
+        status: "matched",
+        matched: true,
+      },
+      runtime: {
+        status: "unknown",
+        previewUnknown: true,
+      },
+      channels: {
+        status: "differs",
+        matched: false,
+        addedInActual: ["inbox"],
+      },
+    },
+    verification: {
+      truthVersionCreated: true,
+      runtimeProjectionRefreshed: true,
+      runtimeControlWarnings: ["projection refreshed without surface diff telemetry"],
+      repairRecommendation: "",
+    },
+    actor: "owner@aihq.test",
+    timestamp: "2026-03-28T10:10:00.000Z",
+    summaryExplanation: "Approval committed with partial verification detail.",
+  });
+
+  expect(normalized.publishStatus).toBe("partial_success");
+  expect(normalized.truthVersionId).toBe("truth-version-7");
+  expect(normalized.actual.runtime.areas).toEqual(["contact_channels"]);
+  expect(normalized.previewComparison.previewHadUnknowns).toBe(true);
+  expect(normalized.previewComparison.channels.addedInActual).toEqual(["inbox"]);
+  expect(normalized.verification.runtimeControlWarnings[0]).toMatch(/surface diff telemetry/i);
+});
+
+it("normalizeRollbackReceipt preserves verified rollback outcome safely", () => {
+  const normalized = __test__.normalizeRollbackReceipt({
+    rollbackActionResult: "executed",
+    rollbackStatus: "repair_required",
+    sourceCurrentVersion: { id: "v4", version: "v4" },
+    targetRollbackVersion: { id: "v3", version: "v3" },
+    resultingTruthVersion: { id: "v5", version: "v5" },
+    resultingTruthVersionId: "v5",
+    runtimeProjectionId: "projection-rollback-1",
+    runtimeRefreshResult: "failed",
+    actual: {
+      canonical: {
+        areas: ["business_profile"],
+        paths: ["profile.companyName"],
+      },
+      runtime: {
+        areas: [],
+        paths: [],
+      },
+      channels: {
+        affectedSurfaces: [],
+      },
+      policy: {
+        autonomyDelta: "tightens",
+      },
+    },
+    previewComparison: {
+      status: "partial_match",
+      previewHadUnknowns: true,
+      canonical: {
+        status: "matched",
+        matched: true,
+      },
+      runtime: {
+        status: "unknown",
+        previewUnknown: true,
+      },
+      channels: {
+        status: "unknown",
+        previewUnknown: true,
+      },
+    },
+    verification: {
+      truthVersionCreated: true,
+      runtimeProjectionRefreshed: false,
+      projectionHealthStatus: "degraded",
+      runtimeControlWarnings: ["Repair runtime projection before trusting rollback in governed runtime."],
+      repairRecommendation: "Open repair controls",
+    },
+    actor: "owner@aihq.test",
+    timestamp: "2026-03-28T10:20:00.000Z",
+    summaryExplanation: "Rollback committed, but runtime verification requires repair.",
+  });
+
+  expect(normalized.rollbackStatus).toBe("repair_required");
+  expect(normalized.resultingTruthVersionId).toBe("v5");
+  expect(normalized.previewComparison.previewHadUnknowns).toBe(true);
+  expect(normalized.verification.projectionHealthStatus).toBe("degraded");
+  expect(normalized.verification.repairRecommendation).toBe("Open repair controls");
 });
 });

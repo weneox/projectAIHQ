@@ -343,6 +343,50 @@ const baseWorkbench = {
 };
 
 describe("TruthReviewWorkbench", () => {
+  const publishReceipt = {
+    approvalActionResult: "approved",
+    publishStatus: "success",
+    truthVersionId: "truth-version-7",
+    runtimeProjectionId: "runtime-projection-9",
+    runtimeRefreshResult: "refreshed",
+    projectionHealthStatus: "healthy",
+    projectionHealthLabel: "Healthy",
+    actual: {
+      canonical: {
+        areas: ["business_profile"],
+        paths: ["profile.primaryPhone"],
+      },
+      runtime: {
+        areas: ["contact_channels"],
+        paths: ["runtime.business.contacts.primaryPhone"],
+      },
+      channels: {
+        affectedSurfaces: ["voice", "inbox"],
+      },
+      policy: {
+        autonomyDelta: "unchanged",
+        executionPostureDelta: "unchanged",
+        riskDelta: "unknown",
+      },
+    },
+    previewComparison: {
+      status: "matched",
+      canonical: { status: "matched", matched: true },
+      runtime: { status: "matched", matched: true },
+      channels: { status: "matched", matched: true },
+    },
+    verification: {
+      truthVersionCreated: true,
+      runtimeProjectionRefreshed: true,
+      runtimeControlWarnings: [],
+      repairRecommendation: "",
+    },
+    actor: "owner@aihq.test",
+    timestamp: "2026-03-28T10:10:00.000Z",
+    summaryExplanation:
+      "Approval completed and verification matched the governed publish path.",
+  };
+
   it("renders pending, quarantined, conflicting, and high-risk review context", () => {
     render(<TruthReviewWorkbench workbench={baseWorkbench} canManage />);
 
@@ -436,5 +480,53 @@ describe("TruthReviewWorkbench", () => {
     expect(screen.getByText(/no approved value was available for comparison/i)).toBeInTheDocument();
     expect(screen.getByText(/likely affected areas are unavailable/i)).toBeInTheDocument();
     expect(screen.getByText(/no readiness implication could be inferred safely/i)).toBeInTheDocument();
+  });
+
+  it("renders a successful publish receipt with preview-vs-actual verification", () => {
+    render(
+      <TruthReviewWorkbench
+        workbench={baseWorkbench}
+        canManage
+        surface={{ publishReceipt }}
+      />
+    );
+
+    expect(screen.getByText(/change receipt/i)).toBeInTheDocument();
+    expect(screen.getByText(/approval completed and verification matched/i)).toBeInTheDocument();
+    expect(screen.getByText(/truth-version-7/i)).toBeInTheDocument();
+    expect(screen.getByText(/runtime-projection-9/i)).toBeInTheDocument();
+    expect(screen.getByText(/preview vs actual/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/matched/i).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("renders partial verification data safely when receipt fields are missing", () => {
+    render(
+      <TruthReviewWorkbench
+        workbench={baseWorkbench}
+        canManage
+        surface={{
+          publishReceipt: {
+            publishStatus: "partial_success",
+            previewComparison: {
+              status: "partial_match",
+              canonical: {
+                status: "unknown",
+                previewUnknown: true,
+              },
+            },
+            verification: {
+              runtimeControlWarnings: ["projection refreshed without surface diff telemetry"],
+            },
+            summaryExplanation: "Approval committed with partial verification detail.",
+          },
+        }}
+      />
+    );
+
+    expect(screen.getByText(/approval committed with partial verification detail/i)).toBeInTheDocument();
+    expect(screen.getByText(/preview had unknowns/i)).toBeInTheDocument();
+    expect(screen.queryByText(/publish completed without runtime control warnings/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/projection refreshed without surface diff telemetry/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/unavailable/i).length).toBeGreaterThanOrEqual(1);
   });
 });

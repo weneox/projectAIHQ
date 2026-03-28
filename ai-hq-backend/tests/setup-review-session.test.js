@@ -15,7 +15,10 @@ import {
   hasCanonicalBaselineDrift,
   createCanonicalBaselineDriftError,
 } from "../src/db/helpers/tenantSetupReview.js";
-import { __test__ as truthVersionTest } from "../src/db/helpers/tenantTruthVersions.js";
+import {
+  __test__ as truthVersionTest,
+  executeTruthVersionRollbackInternal,
+} from "../src/db/helpers/tenantTruthVersions.js";
 import {
   buildInstagramSignals,
   synthesizeInstagramBusinessProfile,
@@ -1372,6 +1375,43 @@ test("Case AB: truth version compare exposes structured changed fields and safe 
   assert.deepEqual(diff.summary.profileChangedFields, ["profile.companyName"]);
   assert.equal(diff.fieldChanges[0].beforeSummary.kind, "string");
   assert.equal(diff.fieldChanges[0].afterSummary.value, "Alpha Studio");
+
+  const versionDiff = truthVersionTest.buildTruthVersionDiffModel(
+    {
+      id: "version-2",
+      previous_version_id: "version-1",
+      approved_at: "2026-03-25T03:00:00.000Z",
+      profile_snapshot_json: {
+        companyName: "Alpha Studio",
+        primaryPhone: "+15551112222",
+      },
+      capabilities_snapshot_json: {
+        supportsWhatsapp: true,
+      },
+    },
+    {
+      id: "version-1",
+      approved_at: "2026-03-25T02:00:00.000Z",
+      profile_snapshot_json: {
+        companyName: "Alpha Labs",
+        primaryPhone: "+15550000000",
+      },
+      capabilities_snapshot_json: {
+        supportsWhatsapp: false,
+      },
+    }
+  );
+
+  assert.deepEqual([...versionDiff.canonicalAreasChanged].sort(), [
+    "business_capabilities",
+    "business_profile",
+  ]);
+  assert.deepEqual([...versionDiff.runtimeAreasLikelyAffected].sort(), [
+    "channel_capabilities",
+    "contact_channels",
+    "tenant_profile",
+  ]);
+  assert.ok(versionDiff.affectedSurfaces.includes("voice"));
 });
 
 test("Case AC: truth payload history carries version linkage and diff metadata", async () => {
@@ -1512,6 +1552,19 @@ test("Case AD: truth version detail payload exposes compare data for a selected 
               field_provenance_json: {},
               source_summary_json: {},
             },
+            currentVersion: {
+              id: "version-3",
+              approved_at: "2026-03-25T04:00:00.000Z",
+              approved_by: "Reviewer",
+              profile_snapshot_json: {
+                companyName: "Alpha Studio HQ",
+              },
+              capabilities_snapshot_json: {
+                supportsWhatsapp: true,
+              },
+              field_provenance_json: {},
+              source_summary_json: {},
+            },
             diff: {
               versionId: "version-2",
               previousVersionId: "version-1",
@@ -1525,6 +1578,18 @@ test("Case AD: truth version detail payload exposes compare data for a selected 
                 totalChangedFields: 1,
               },
             },
+            versionDiff: {
+              canonicalAreasChanged: ["business_profile"],
+              runtimeAreasLikelyAffected: ["tenant_profile"],
+            },
+            rollbackPreview: {
+              rollbackDisposition: "follow_up_required",
+              canonicalPathsChangedBack: ["profile.companyName"],
+            },
+            rollbackAction: {
+              actionType: "execute_safe_rollback",
+              allowed: false,
+            },
           };
         },
       },
@@ -1534,5 +1599,221 @@ test("Case AD: truth version detail payload exposes compare data for a selected 
 
   assert.equal(payload.truthVersion.id, "version-2");
   assert.equal(payload.previousTruthVersion.id, "version-1");
+  assert.equal(payload.currentTruthVersion.id, "version-3");
   assert.deepEqual(payload.compare.changedFields, ["profile.companyName"]);
+  assert.deepEqual(payload.versionDiff.canonicalAreasChanged, ["business_profile"]);
+  assert.equal(payload.rollbackPreview.rollbackDisposition, "follow_up_required");
+  assert.equal(payload.rollbackAction.actionType, "execute_safe_rollback");
+});
+
+test("Case AE: governed rollback is blocked for operator follow-up cases and emits audit context", async () => {
+  const decisionEvents = [];
+  const audits = [];
+
+  const result = await executeTruthVersionRollbackInternal(
+    {},
+    {
+      tenantId: "tenant-1",
+      tenantKey: "alpha",
+      targetVersionId: "version-3",
+      actor: {
+        role: "operator",
+        user: {
+          email: "operator@aihq.test",
+        },
+      },
+    },
+    {
+      async resolveTenantIdentity() {
+        return { tenant_id: "tenant-1", tenant_key: "alpha" };
+      },
+      async getTruthVersionByIdInternal() {
+        return {
+          id: "version-3",
+          approved_at: "2026-03-25T03:00:00.000Z",
+          approved_by: "Reviewer",
+          profile_snapshot_json: {
+            companyName: "North Clinic",
+            primaryPhone: "+15551112222",
+          },
+          capabilities_snapshot_json: {
+            supportsWhatsapp: true,
+          },
+        };
+      },
+      async getLatestTruthVersionInternal() {
+        return {
+          id: "version-4",
+          approved_at: "2026-03-26T03:00:00.000Z",
+          approved_by: "Reviewer",
+          profile_snapshot_json: {
+            companyName: "North Clinic HQ",
+            primaryPhone: "+15550000000",
+          },
+          capabilities_snapshot_json: {
+            supportsWhatsapp: true,
+          },
+        };
+      },
+      async safeAppendDecisionEvent(_db, event) {
+        decisionEvents.push(event);
+        return event;
+      },
+      async dbAudit(_db, actor, action, objectType, objectId, meta) {
+        audits.push({ actor, action, objectType, objectId, meta });
+      },
+    }
+  );
+
+  assert.equal(result.blocked, true);
+  assert.equal(result.rollbackReceipt.rollbackStatus, "blocked");
+  assert.equal(result.rollbackAction.requiredRole, "admin");
+  assert.match(result.rollbackAction.reason, /operator execution is not permitted/i);
+  assert.equal(decisionEvents[0].eventType, "blocked_action_outcome");
+  assert.equal(audits[0].action, "truth.rollback.blocked");
+});
+
+test("Case AF: owner governed rollback creates a new version, verifies runtime, and records rollback events", async () => {
+  const decisionEvents = [];
+  const audits = [];
+
+  const result = await executeTruthVersionRollbackInternal(
+    {},
+    {
+      tenantId: "tenant-1",
+      tenantKey: "alpha",
+      targetVersionId: "version-3",
+      actor: {
+        role: "owner",
+        user: {
+          email: "owner@aihq.test",
+        },
+      },
+    },
+    {
+      async resolveTenantIdentity() {
+        return { tenant_id: "tenant-1", tenant_key: "alpha" };
+      },
+      async getTruthVersionByIdInternal() {
+        return {
+          id: "version-3",
+          approved_at: "2026-03-25T03:00:00.000Z",
+          approved_by: "Reviewer",
+          source_summary_json: {
+            primarySourceType: "website",
+          },
+          profile_snapshot_json: {
+            companyName: "North Clinic",
+            primaryPhone: "+15551112222",
+          },
+          capabilities_snapshot_json: {
+            supportsWhatsapp: true,
+            handoffEnabled: true,
+          },
+          field_provenance_json: {
+            companyName: {
+              sourceType: "website",
+            },
+          },
+          metadata_json: {},
+        };
+      },
+      async getLatestTruthVersionInternal() {
+        return {
+          id: "version-4",
+          approved_at: "2026-03-26T03:00:00.000Z",
+          approved_by: "Reviewer",
+          profile_snapshot_json: {
+            companyName: "North Clinic HQ",
+            primaryPhone: "+15550000000",
+          },
+          capabilities_snapshot_json: {
+            supportsWhatsapp: false,
+            handoffEnabled: false,
+          },
+          field_provenance_json: {},
+          source_summary_json: {},
+          metadata_json: {},
+        };
+      },
+      async withTx(_db, fn) {
+        return fn({});
+      },
+      async getBusinessProfileInternal() {
+        return { id: "profile-current" };
+      },
+      async getBusinessCapabilitiesInternal() {
+        return { id: "cap-current" };
+      },
+      async upsertBusinessProfileInternal(_db, input) {
+        return {
+          id: "profile-rollback",
+          approved_at: "2026-03-28T10:20:00.000Z",
+          approved_by: "owner@aihq.test",
+          source_summary_json: input.sourceSummaryJson,
+          profile_json: input.profileJson,
+          company_name: input.companyName,
+          primary_phone: input.primaryPhone,
+        };
+      },
+      async upsertBusinessCapabilitiesInternal(_db, input) {
+        return {
+          id: "cap-rollback",
+          approved_by: "owner@aihq.test",
+          supports_whatsapp: input.supportsWhatsapp,
+        };
+      },
+      async createTruthVersionInternal() {
+        return {
+          id: "version-5",
+          approved_at: "2026-03-28T10:20:00.000Z",
+          approved_by: "owner@aihq.test",
+          profile_snapshot_json: {
+            companyName: "North Clinic",
+            primaryPhone: "+15551112222",
+          },
+          capabilities_snapshot_json: {
+            supportsWhatsapp: true,
+            handoffEnabled: true,
+          },
+          field_provenance_json: {
+            companyName: {
+              sourceType: "website",
+            },
+          },
+          source_summary_json: {},
+          metadata_json: {},
+        };
+      },
+      async refreshRuntimeProjectionRequired() {
+        return {
+          id: "projection-rollback-1",
+          status: "refreshed",
+          affectedSurfaces: ["inbox", "voice"],
+          health: {
+            status: "healthy",
+            warnings: [],
+          },
+        };
+      },
+      async safeAppendDecisionEvent(_db, event) {
+        decisionEvents.push(event);
+        return event;
+      },
+      async dbAudit(_db, actor, action, objectType, objectId, meta) {
+        audits.push({ actor, action, objectType, objectId, meta });
+      },
+    }
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.blocked, false);
+  assert.equal(result.rollbackReceipt.rollbackStatus, "partial_success");
+  assert.equal(result.rollbackReceipt.resultingTruthVersionId, "version-5");
+  assert.equal(result.rollbackReceipt.runtimeProjectionId, "projection-rollback-1");
+  assert.equal(result.rollbackReceipt.previewComparison.status, "partial_match");
+  assert.equal(decisionEvents[0].reasonCodes[0], "rollback_requested");
+  assert.equal(decisionEvents[1].reasonCodes[0], "rollback_executed");
+  assert.equal(decisionEvents[2].eventType, "runtime_health_transition");
+  assert.equal(audits[0].action, "truth.rollback.executed");
 });

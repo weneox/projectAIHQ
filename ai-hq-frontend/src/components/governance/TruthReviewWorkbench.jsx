@@ -72,6 +72,21 @@ function toneForDelta(value = "") {
   }
 }
 
+function toneForPublishStatus(value = "") {
+  switch (s(value).toLowerCase()) {
+    case "success":
+      return "success";
+    case "partial_success":
+      return "warn";
+    case "follow_up_required":
+      return "warn";
+    case "repair_required":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
+
 function formatWhen(value = "") {
   const raw = s(value);
   if (!raw) return "Unavailable";
@@ -176,6 +191,162 @@ function PreviewDeltaStrip({ preview = {} }) {
         Readiness {titleize(current.runtime?.readinessDelta || "unknown")}
       </Badge>
     </div>
+  );
+}
+
+function ComparisonDelta({ label, value = {} }) {
+  const current = obj(value);
+  return (
+    <Card variant="subtle" className="rounded-[20px]">
+      <div className="space-y-2">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+          {label}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge tone={current.matched === false ? "warn" : "success"} variant="subtle" dot>
+            {titleize(current.status || "unknown")}
+          </Badge>
+          {current.previewUnknown ? (
+            <Badge tone="neutral" variant="subtle">
+              Preview had unknowns
+            </Badge>
+          ) : null}
+        </div>
+        <ChipList
+          items={[
+            ...arr(current.missingFromActual).map((item) => `missing ${item}`),
+            ...arr(current.addedInActual).map((item) => `added ${item}`),
+          ]}
+          empty="No preview-to-actual drift was recorded."
+        />
+      </div>
+    </Card>
+  );
+}
+
+function PublishReceiptPanel({ receipt = {} }) {
+  const current = obj(receipt);
+  if (!Object.keys(current).length) return null;
+
+  return (
+    <Card
+      variant="surface"
+      tone={toneForPublishStatus(current.publishStatus)}
+      className="rounded-[28px]"
+    >
+      <div className="space-y-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="space-y-2">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+              Publish Verification
+            </div>
+            <div className="text-[22px] font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">
+              Change Receipt
+            </div>
+            <div className="text-sm leading-6 text-slate-600 dark:text-slate-400">
+              {current.summaryExplanation || "Post-publish verification detail is unavailable."}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge tone={toneForPublishStatus(current.publishStatus)} variant="subtle" dot>
+              {titleize(current.publishStatus || "unknown")}
+            </Badge>
+            <Badge tone="neutral" variant="subtle">
+              {titleize(current.previewComparison?.status || "unknown")} preview match
+            </Badge>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Truth Version"
+            value={current.truthVersionId || "Unavailable"}
+            hint={current.verification?.truthVersionCreated ? "Verified" : "No truth version identifier was exposed."}
+            tone={current.verification?.truthVersionCreated ? "success" : "neutral"}
+          />
+          <StatCard
+            label="Runtime Projection"
+            value={current.runtimeProjectionId || "Unavailable"}
+            hint={titleize(current.runtimeRefreshResult || "unknown")}
+            tone={current.verification?.runtimeProjectionRefreshed ? "success" : "warn"}
+          />
+          <StatCard
+            label="Projection Health"
+            value={titleize(current.projectionHealthLabel || current.projectionHealthStatus || "unknown")}
+            hint={current.verification?.repairRecommendation || "No repair recommendation returned."}
+            tone={toneForPublishStatus(
+              current.publishStatus === "repair_required"
+                ? "repair_required"
+                : current.publishStatus === "follow_up_required"
+                  ? "follow_up_required"
+                  : "success"
+            )}
+          />
+          <StatCard
+            label="Recorded By"
+            value={current.actor || "Unavailable"}
+            hint={formatWhen(current.timestamp)}
+            tone="neutral"
+          />
+        </div>
+
+        <PreviewDeltaStrip
+          preview={{
+            policy: current.actual?.policy,
+            runtime: { readinessDelta: current.runtimeRefreshResult },
+          }}
+        />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Card variant="subtle" className="rounded-[24px]">
+            <div className="space-y-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                Verified Impact
+              </div>
+              <ImpactGrid
+                preview={{
+                  canonicalAreas: current.actual?.canonical?.areas,
+                  runtimeAreas: current.actual?.runtime?.areas,
+                  canonicalPaths: current.actual?.canonical?.paths,
+                  affectedSurfaces: current.actual?.channels?.affectedSurfaces,
+                }}
+              />
+            </div>
+          </Card>
+          <Card variant="subtle" className="rounded-[24px]">
+            <div className="space-y-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                Verification Warnings
+              </div>
+              <ChipList
+                items={current.verification?.runtimeControlWarnings}
+                empty="Publish completed without runtime control warnings."
+              />
+              <div className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+                {current.verification?.repairRecommendation ||
+                  "No repair follow-up was recommended."}
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        <div className="space-y-3">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+              Preview vs Actual
+            </div>
+            <div className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
+              Verified publish impact is compared against the preview the operator saw before approval. Unknown preview dimensions stay explicit instead of being treated as a match.
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <ComparisonDelta label="Canonical" value={current.previewComparison?.canonical} />
+            <ComparisonDelta label="Runtime" value={current.previewComparison?.runtime} />
+            <ComparisonDelta label="Surfaces" value={current.previewComparison?.channels} />
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -286,6 +457,8 @@ export default function TruthReviewWorkbench({
             {surface.saveSuccess}
           </div>
         ) : null}
+
+        {surface.publishReceipt ? <PublishReceiptPanel receipt={surface.publishReceipt} /> : null}
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
