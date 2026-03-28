@@ -624,6 +624,12 @@ export default function TruthViewerPage() {
         />
       </div>
 
+      {compareOpen ? (
+        <div data-testid="truth-version-compare-open" className="sr-only">
+          truth version compare open
+        </div>
+      ) : null}
+
       <TruthVersionComparePanel
         open={compareOpen}
         onClose={() => setCompareOpen(false)}

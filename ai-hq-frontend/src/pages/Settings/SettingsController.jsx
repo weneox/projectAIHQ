@@ -172,7 +172,11 @@ function resolveRequestedSection({
 function SectionContractCopy({ activeSection }) {
   if (activeSection === "sources") {
     return (
-      <div className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
+      <div
+        data-testid="settings-section-contract-copy"
+        data-section="sources"
+        className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300"
+      >
         <div>Refresh evidence, review what is weak or conflicting.</div>
         <div className="mt-1">
           Source-derived changes do not become governed truth until they are
@@ -184,7 +188,11 @@ function SectionContractCopy({ activeSection }) {
 
   if (activeSection === "knowledge_review") {
     return (
-      <div className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
+      <div
+        data-testid="settings-section-contract-copy"
+        data-section="knowledge_review"
+        className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300"
+      >
         Source-derived truth changes are reviewed, conflicted, quarantined,
         approved, or rejected here.
       </div>

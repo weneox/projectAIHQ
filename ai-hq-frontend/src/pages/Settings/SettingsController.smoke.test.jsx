@@ -6,21 +6,40 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 globalThis.React = React;
 
+function normalizeText(value = "") {
+  return String(value).replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function hasTextIncluding(expected) {
+  const normalizedExpected = normalizeText(expected);
+
+  return (_content, node) => {
+    if (!node) return false;
+    return normalizeText(node.textContent || "").includes(normalizedExpected);
+  };
+}
+
 vi.mock("react-router-dom", async () => {
   const ReactModule = await import("react");
   const React = ReactModule.default || ReactModule;
 
   const RouterContext = React.createContext({
-    entry: { pathname: "/", search: "" },
+    entry: { pathname: "/", search: "", hash: "", state: null },
     setEntry: () => {},
   });
 
   function splitEntry(input = "/") {
     const value = String(input || "/");
-    const [pathnamePart, searchPart = ""] = value.split("?");
+    const hashIndex = value.indexOf("#");
+    const pathWithSearch = hashIndex >= 0 ? value.slice(0, hashIndex) : value;
+    const hash = hashIndex >= 0 ? value.slice(hashIndex) : "";
+    const [pathnamePart, searchPart = ""] = pathWithSearch.split("?");
+
     return {
       pathname: pathnamePart || "/",
       search: searchPart ? `?${searchPart}` : "",
+      hash,
+      state: null,
     };
   }
 
@@ -83,9 +102,20 @@ vi.mock("react-router-dom", async () => {
     return [searchParams, updateSearchParams];
   }
 
+  function useLocation() {
+    const { entry } = React.useContext(RouterContext);
+    return {
+      pathname: entry.pathname,
+      search: entry.search,
+      hash: entry.hash || "",
+      state: entry.state || null,
+    };
+  }
+
   return {
     MemoryRouter,
     useSearchParams,
+    useLocation,
   };
 });
 
@@ -273,8 +303,8 @@ vi.mock("./sections/KnowledgeReviewSection.jsx", () => ({
     return (
       <section>
         <div>
-          Source-derived truth changes are reviewed, conflicted,
-          quarantined, approved, or rejected here
+          Source-derived truth changes are reviewed, conflicted, quarantined,
+          approved, or rejected here
         </div>
         {children}
       </section>
@@ -786,10 +816,11 @@ describe("Settings truth-maintenance smoke", () => {
     expect(
       (
         await screen.findAllByText(
-          /refresh evidence, review what is weak or conflicting/i
+          hasTextIncluding("Refresh evidence, review what is weak or conflicting")
         )
       ).length
     ).toBeGreaterThan(0);
+
     expect(screen.getByText(/operator governance cockpit/i)).toBeTruthy();
     expect(screen.getByText(/latest approved change footprint/i)).toBeTruthy();
     expect(screen.getByText(/trust repair hub/i)).toBeTruthy();
@@ -815,10 +846,13 @@ describe("Settings truth-maintenance smoke", () => {
     expect(
       (
         await screen.findAllByText(
-          /source-derived truth changes are reviewed, conflicted, quarantined, approved, or rejected here/i
+          hasTextIncluding(
+            "Source-derived truth changes are reviewed, conflicted, quarantined, approved, or rejected here"
+          )
         )
       ).length
     ).toBeGreaterThan(0);
+
     expect(
       screen.getAllByText(/truth review workbench/i).length
     ).toBeGreaterThan(0);
@@ -880,10 +914,11 @@ describe("Settings truth-maintenance smoke", () => {
     expect(
       (
         await screen.findAllByText(
-          /refresh evidence, review what is weak or conflicting/i
+          hasTextIncluding("Refresh evidence, review what is weak or conflicting")
         )
       ).length
     ).toBeGreaterThan(0);
+
     expect(screen.getByText(/operator governance cockpit/i)).toBeTruthy();
     expect(
       screen.getByText(/decision timeline and incident replay context/i)

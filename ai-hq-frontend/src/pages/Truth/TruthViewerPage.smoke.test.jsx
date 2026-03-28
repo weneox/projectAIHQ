@@ -1,3 +1,5 @@
+/* @vitest-environment jsdom */
+
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
@@ -545,19 +547,33 @@ describe("Truth viewer smoke", () => {
       screen.getByText(/loading approved business truth/i)
     ).toBeInTheDocument();
 
-    expect(await screen.findByRole("heading", { name: /business truth/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /business truth/i })
+    ).toBeInTheDocument();
     expect(screen.getByText(/truth governance cockpit/i)).toBeInTheDocument();
     expect(screen.getByText(/approval and execution state/i)).toBeInTheDocument();
     expect(screen.getByText(/truth review workbench/i)).toBeInTheDocument();
     expect(screen.getByText(/conflict resolution/i)).toBeInTheDocument();
     expect(screen.getByText(/current approved phone/i)).toBeInTheDocument();
     expect(screen.getByText(/change impact simulator/i)).toBeInTheDocument();
-    expect(screen.getByText(/runtime projection refresh will be required/i)).toBeInTheDocument();
-    expect(screen.getByText(/allowed, reviewed, handed off, or blocked by surface/i)).toBeInTheDocument();
-    expect(screen.getByText(/projection authority and repair/i)).toBeInTheDocument();
-    expect(screen.getByText(/latest approved change footprint/i)).toBeInTheDocument();
-    expect(screen.getByText(/decision timeline and incident replay context/i)).toBeInTheDocument();
-    expect(screen.getByText(/handoff required action outcome/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/runtime projection refresh will be required/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/allowed, reviewed, handed off, or blocked by surface/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/projection authority and repair/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/latest approved change footprint/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/decision timeline and incident replay context/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/handoff required action outcome/i)
+    ).toBeInTheDocument();
     expect(screen.getAllByText(/guided remediation/i).length).toBeGreaterThan(0);
     expect(screen.getByText("2026-03-25T10:00:00.000Z")).toBeInTheDocument();
     expect(screen.getByText("reviewer@aihq.test")).toBeInTheDocument();
@@ -574,9 +590,17 @@ describe("Truth viewer smoke", () => {
     expect(screen.getAllByText(/owner@aihq\.test/i).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: /view compare/i }));
-    expect(await screen.findByText(/version detail/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/rollback preview/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/rolling back to v3 would revert 1 canonical field/i)).toBeInTheDocument();
+
+    expect(
+      await screen.findByTestId("truth-version-compare-open")
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getAllByText(/rollback preview/i).length
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getByText(/rolling back to v3 would revert 1 canonical field/i)
+    ).toBeInTheDocument();
     expect(screen.getByText(/old clinic/i)).toBeInTheDocument();
     expect(screen.getAllByText(/north clinic/i).length).toBeGreaterThan(1);
   });
@@ -626,8 +650,12 @@ describe("Truth viewer smoke", () => {
       await screen.findByText(/approved truth is currently unavailable/i)
     ).toBeInTheDocument();
     expect(screen.getByText(/approved truth blocker/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /open setup/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /open setup/i })
+    ).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: /open setup/i }));
+
     expect(dispatchRepairAction).toHaveBeenCalledWith(
       expect.objectContaining({
         id: "open_setup_route",
@@ -635,6 +663,7 @@ describe("Truth viewer smoke", () => {
         target: { path: "/setup/studio" },
       })
     );
+
     expect(
       screen.getByText(/no non-approved fallback data is being shown/i)
     ).toBeInTheDocument();
@@ -665,6 +694,7 @@ describe("Truth viewer smoke", () => {
         blockers: [],
       },
     });
+
     getSettingsTrustView.mockResolvedValueOnce({
       viewerRole: "owner",
       summary: {
@@ -680,23 +710,35 @@ describe("Truth viewer smoke", () => {
 
     renderPage();
 
-    expect(await screen.findByText(/truth governance cockpit/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/policy telemetry is unavailable/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/governance history is unavailable/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/truth governance cockpit/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/policy telemetry is unavailable/i).length
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/governance history is unavailable/i)
+    ).toBeInTheDocument();
     expect(screen.getByText(/north clinic/i)).toBeInTheDocument();
   });
 
   it("opens a deep-linked truth version from remediation navigation", async () => {
     renderPage("/truth?versionId=v3&focus=history");
 
-    expect(await screen.findByText(/version detail/i)).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("truth-version-compare-open")
+    ).toBeInTheDocument();
+
     expect(screen.getByText(/old clinic/i)).toBeInTheDocument();
   });
 
   it("shows a publish receipt after approving a reviewed candidate", async () => {
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: /business truth/i })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /business truth/i })
+    ).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: /approve selected value/i }));
 
     await waitFor(() =>
@@ -713,7 +755,9 @@ describe("Truth viewer smoke", () => {
     );
 
     expect(await screen.findByText(/change receipt/i)).toBeInTheDocument();
-    expect(screen.getByText(/approval completed and verification matched/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/approval completed and verification matched/i)
+    ).toBeInTheDocument();
     expect(screen.getByText(/truth-version-7/i)).toBeInTheDocument();
     expect(screen.getByText(/runtime-projection-9/i)).toBeInTheDocument();
     expect(screen.getByText(/preview vs actual/i)).toBeInTheDocument();
@@ -722,11 +766,19 @@ describe("Truth viewer smoke", () => {
   it("executes governed rollback from truth compare and shows the receipt", async () => {
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: /business truth/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /view compare/i }));
-    expect(await screen.findByText(/version detail/i)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /business truth/i })
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /execute governed rollback/i }));
+    fireEvent.click(screen.getByRole("button", { name: /view compare/i }));
+
+    expect(
+      await screen.findByTestId("truth-version-compare-open")
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /execute governed rollback/i })
+    );
 
     await waitFor(() =>
       expect(rollbackTruthVersion).toHaveBeenCalledWith(
@@ -742,7 +794,9 @@ describe("Truth viewer smoke", () => {
     );
 
     expect((await screen.findAllByText(/rollback receipt/i)).length).toBeGreaterThan(0);
-    expect(screen.getByText(/rollback committed, but follow-up is required/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/rollback committed, but follow-up is required/i)
+    ).toBeInTheDocument();
     expect(screen.getAllByText(/truth version v5/i).length).toBeGreaterThan(0);
   });
 });
