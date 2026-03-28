@@ -301,6 +301,129 @@ function buildMetaRuntimeReadiness({
   });
 }
 
+function buildMatchedTenantRow(matchedChannel = {}, runtime = null) {
+  const matched = obj(matchedChannel);
+  const runtimeValue = obj(runtime);
+  const runtimeTenant =
+    obj(runtimeValue.tenant) ||
+    obj(runtimeValue.tenantRow) ||
+    obj(runtimeValue.tenantScope);
+  const authority = obj(runtimeValue.authority);
+
+  const tenantId = cleanNullableString(
+    matched.tenant_id ||
+      matched.tenantId ||
+      runtimeTenant.id ||
+      runtimeTenant.tenant_id ||
+      authority.tenantId ||
+      authority.tenant_id
+  );
+
+  const tenantKey = cleanNullableString(
+    matched.tenant_key ||
+      matched.tenantKey ||
+      runtimeTenant.tenant_key ||
+      runtimeTenant.tenantKey ||
+      authority.tenantKey ||
+      authority.tenant_key
+  );
+
+  return {
+    id: tenantId,
+    tenant_id: tenantId,
+    tenant_key: tenantKey,
+    tenantKey: tenantKey,
+    company_name: s(
+      matched.company_name || runtimeTenant.company_name || runtimeTenant.companyName
+    ),
+    legal_name: s(
+      matched.legal_name || runtimeTenant.legal_name || runtimeTenant.legalName
+    ),
+    industry_key: s(
+      matched.industry_key || runtimeTenant.industry_key || runtimeTenant.industryKey
+    ),
+    country_code: s(
+      matched.country_code || runtimeTenant.country_code || runtimeTenant.countryCode
+    ),
+    timezone: s(matched.timezone || runtimeTenant.timezone),
+    default_language: s(
+      matched.default_language ||
+        runtimeTenant.default_language ||
+        runtimeTenant.defaultLanguage
+    ),
+    enabled_languages: arr(
+      matched.enabled_languages || runtimeTenant.enabled_languages
+    ),
+    market_region: s(
+      matched.market_region || runtimeTenant.market_region || runtimeTenant.marketRegion
+    ),
+    plan_key: s(matched.plan_key || runtimeTenant.plan_key),
+    status: s(
+      matched.tenant_status || matched.status || runtimeTenant.status || runtimeTenant.tenant_status
+    ),
+    tenant_status: s(
+      matched.tenant_status || matched.status || runtimeTenant.status || runtimeTenant.tenant_status
+    ),
+    active:
+      typeof matched.tenant_active === "boolean"
+        ? matched.tenant_active
+        : typeof matched.active === "boolean"
+          ? matched.active
+          : typeof runtimeTenant.active === "boolean"
+            ? runtimeTenant.active
+            : typeof runtimeTenant.tenant_active === "boolean"
+              ? runtimeTenant.tenant_active
+              : false,
+    tenant_active:
+      typeof matched.tenant_active === "boolean"
+        ? matched.tenant_active
+        : typeof matched.active === "boolean"
+          ? matched.active
+          : typeof runtimeTenant.active === "boolean"
+            ? runtimeTenant.active
+            : typeof runtimeTenant.tenant_active === "boolean"
+              ? runtimeTenant.tenant_active
+              : false,
+  };
+}
+
+function buildInternalProjectedRuntime({
+  runtime,
+  matchedChannel = {},
+  operationalChannels = {},
+  providerSecrets = null,
+}) {
+  const runtimeValue = obj(runtime);
+  const authority = obj(runtimeValue.authority);
+  const tenantRow = buildMatchedTenantRow(matchedChannel, runtimeValue);
+
+  try {
+    return buildProjectedTenantRuntime({
+      runtime: runtimeValue,
+      tenantRow,
+      matchedChannel,
+      operationalChannels,
+      providerSecrets,
+    });
+  } catch (error) {
+    if (
+      authority.available === true &&
+      s(authority.source) === "approved_runtime_projection"
+    ) {
+      return {
+        ...runtimeValue,
+        authority: {
+          ...authority,
+          strict: true,
+          unavailable: false,
+        },
+      };
+    }
+
+    throw error;
+  }
+}
+
 export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime }) {
   const router = express.Router();
 
@@ -421,7 +544,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         matchedChannel: match,
       });
 
-      const projectedRuntime = buildProjectedTenantRuntime({
+      const projectedRuntime = buildInternalProjectedRuntime({
         runtime,
         matchedChannel: match,
         operationalChannels,
@@ -435,9 +558,9 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
       flowLogger.info("internal.resolve_channel.provider_secrets_resolved", {
         tenantKey: match.tenant_key,
         provider: providerKey,
-        secretKeys: secretSummary.secretKeys,
-        hasPageAccessToken: secretSummary.secrets.some(
-          (x) => cleanLower(x.key) === "page_access_token" && x.present
+        secretKeys: arr(secretSummary.secrets).map((x) => s(x?.key)).filter(Boolean),
+        hasPageAccessToken: arr(secretSummary.secrets).some(
+          (x) => cleanLower(x?.key) === "page_access_token" && x?.present
         ),
       });
 
@@ -637,10 +760,15 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
           });
         }
 
-        const projectedRuntime = buildProjectedTenantRuntime({
+        const projectedRuntime = buildInternalProjectedRuntime({
           runtime,
           matchedChannel,
           operationalChannels,
+          providerSecrets: {
+            provider: s(providerAccess.provider || "meta"),
+            rawValuesExposed: false,
+            secretKeys: arr(providerAccess.secretKeys),
+          },
         });
 
         return ok(res, {
