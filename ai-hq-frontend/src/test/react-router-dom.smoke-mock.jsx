@@ -1,41 +1,184 @@
-import React from "react";
+import React, { createContext, useContext, useMemo, useState } from "react";
 
-function passthrough({ children }) {
-  return <>{children}</>;
-}
+const RouterLocationContext = createContext(null);
 
-function buildHref(to) {
-  if (typeof to === "string") return to || "/";
-  if (to && typeof to === "object") {
-    return `${to.pathname || "/"}${to.search || ""}${to.hash || ""}`;
+function normalizeToString(value) {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object") {
+    return `${value.pathname || "/"}${value.search || ""}${value.hash || ""}`;
   }
   return "/";
 }
 
-export const MemoryRouter = passthrough;
-export const BrowserRouter = passthrough;
-export const HashRouter = passthrough;
-export const Router = passthrough;
-export const RouterProvider = passthrough;
-export const HydratedRouter = passthrough;
-export const Routes = passthrough;
-export const Route = passthrough;
-export const Outlet = () => null;
+function parseLocation(to, state = null) {
+  const raw = normalizeToString(to);
+  const base =
+    typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : "http://localhost";
+  const url = new URL(raw, base);
 
-export function Navigate() {
+  return {
+    pathname: url.pathname || "/",
+    search: url.search || "",
+    hash: url.hash || "",
+    state,
+    key: "mock",
+  };
+}
+
+function readWindowLocation() {
+  if (typeof window === "undefined" || !window.location) {
+    return {
+      pathname: "/",
+      search: "",
+      hash: "",
+      state: null,
+      key: "mock",
+    };
+  }
+
+  return {
+    pathname: window.location.pathname || "/",
+    search: window.location.search || "",
+    hash: window.location.hash || "",
+    state: window.history?.state ?? null,
+    key: "mock",
+  };
+}
+
+function buildHref(to) {
+  return normalizeToString(to);
+}
+
+function isActivePath(currentLocation, to) {
+  const target = parseLocation(to);
+  return (
+    currentLocation.pathname === target.pathname &&
+    currentLocation.search === target.search
+  );
+}
+
+function RouterProviderBase({ children, initialLocation }) {
+  const [location, setLocation] = useState(initialLocation || readWindowLocation());
+
+  const api = useMemo(
+    () => ({
+      location,
+      navigate(to, options = {}) {
+        const nextLocation = parseLocation(to, options.state ?? null);
+        const href = `${nextLocation.pathname}${nextLocation.search}${nextLocation.hash}`;
+
+        if (typeof window !== "undefined" && window.history) {
+          if (options.replace) {
+            window.history.replaceState(nextLocation.state, "", href);
+          } else {
+            window.history.pushState(nextLocation.state, "", href);
+          }
+        }
+
+        setLocation(nextLocation);
+      },
+    }),
+    [location]
+  );
+
+  return (
+    <RouterLocationContext.Provider value={api}>
+      {children}
+    </RouterLocationContext.Provider>
+  );
+}
+
+function useRouterApi() {
+  return useContext(RouterLocationContext) || {
+    location: readWindowLocation(),
+    navigate() {},
+  };
+}
+
+export function MemoryRouter({
+  children,
+  initialEntries = ["/"],
+  initialIndex = 0,
+}) {
+  const entry =
+    initialEntries[Math.min(initialIndex, Math.max(initialEntries.length - 1, 0))] ||
+    "/";
+
+  return (
+    <RouterProviderBase initialLocation={parseLocation(entry)}>
+      {children}
+    </RouterProviderBase>
+  );
+}
+
+export function BrowserRouter({ children }) {
+  return <RouterProviderBase initialLocation={readWindowLocation()}>{children}</RouterProviderBase>;
+}
+
+export function HashRouter({ children }) {
+  return <RouterProviderBase initialLocation={readWindowLocation()}>{children}</RouterProviderBase>;
+}
+
+export function Router({ children, location }) {
+  return (
+    <RouterProviderBase initialLocation={location ? parseLocation(location) : readWindowLocation()}>
+      {children}
+    </RouterProviderBase>
+  );
+}
+
+export function RouterProvider({ children }) {
+  return <RouterProviderBase initialLocation={readWindowLocation()}>{children}</RouterProviderBase>;
+}
+
+export function HydratedRouter({ children }) {
+  return <RouterProviderBase initialLocation={readWindowLocation()}>{children}</RouterProviderBase>;
+}
+
+export function Routes({ children }) {
+  return <>{children}</>;
+}
+
+export function Route({ element, children }) {
+  return element ?? children ?? null;
+}
+
+export function Outlet() {
   return null;
 }
 
-export function Link({ to, children, ...props }) {
+export function Navigate({ to, replace = false, state = null }) {
+  const { navigate } = useRouterApi();
+  React.useEffect(() => {
+    navigate(to, { replace, state });
+  }, [navigate, replace, state, to]);
+  return null;
+}
+
+export function Link({ to, children, onClick, ...props }) {
   return (
-    <a href={buildHref(to)} {...props}>
+    <a
+      href={buildHref(to)}
+      onClick={(event) => {
+        onClick?.(event);
+      }}
+      {...props}
+    >
       {children}
     </a>
   );
 }
 
 export function NavLink({ to, children, className, ...props }) {
-  const state = { isActive: false, isPending: false, isTransitioning: false };
+  const { location } = useRouterApi();
+  const state = {
+    isActive: isActivePath(location, to),
+    isPending: false,
+    isTransitioning: false,
+  };
+
   const resolvedClassName =
     typeof className === "function" ? className(state) : className;
   const resolvedChildren =
@@ -49,17 +192,12 @@ export function NavLink({ to, children, className, ...props }) {
 }
 
 export function useNavigate() {
-  return () => {};
+  const { navigate } = useRouterApi();
+  return navigate;
 }
 
 export function useLocation() {
-  return {
-    pathname: "/",
-    search: "",
-    hash: "",
-    state: null,
-    key: "default",
-  };
+  return useRouterApi().location;
 }
 
 export function useParams() {
@@ -67,7 +205,21 @@ export function useParams() {
 }
 
 export function useSearchParams() {
-  return [new URLSearchParams(), () => {}];
+  const { location, navigate } = useRouterApi();
+  const params = useMemo(
+    () => new URLSearchParams(location.search || ""),
+    [location.search]
+  );
+
+  function setSearchParams(nextInit, options = {}) {
+    const nextParams = new URLSearchParams(nextInit);
+    navigate(
+      `${location.pathname}?${nextParams.toString()}${location.hash || ""}`,
+      options
+    );
+  }
+
+  return [params, setSearchParams];
 }
 
 export function useMatch() {
@@ -75,11 +227,7 @@ export function useMatch() {
 }
 
 export function useResolvedPath(to) {
-  return {
-    pathname: buildHref(to),
-    search: "",
-    hash: "",
-  };
+  return parseLocation(to);
 }
 
 export function useHref(to) {
@@ -105,14 +253,25 @@ export function generatePath(path, params = {}) {
 }
 
 export function redirect(to, init) {
-  return {
-    to,
-    init: init || null,
-  };
+  return { to, init: init || null };
 }
 
 export function matchPath() {
   return null;
+}
+
+export function createMemoryRouter() {
+  return {
+    navigate() {},
+    subscribe() {
+      return () => {};
+    },
+    state: {},
+  };
+}
+
+export function createRoutesFromElements(children) {
+  return children;
 }
 
 export const UNSAFE_NavigationContext = React.createContext(null);
