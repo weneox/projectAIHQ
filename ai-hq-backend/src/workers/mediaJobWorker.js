@@ -27,9 +27,9 @@ export function createMediaJobWorker({ db }) {
 
   function getState() {
     return {
-      enabled: Boolean(cfg.MEDIA_JOB_WORKER_ENABLED),
-      intervalMs: Number(cfg.MEDIA_JOB_WORKER_INTERVAL_MS || 15000),
-      batchSize: Number(cfg.MEDIA_JOB_WORKER_BATCH_SIZE || 10),
+      enabled: Boolean(cfg?.workers?.mediaJobWorkerEnabled),
+      intervalMs: Number(cfg?.workers?.mediaJobWorkerIntervalMs || 15000),
+      batchSize: Number(cfg?.workers?.mediaJobWorkerBatchSize || 10),
       running,
       stopped: !timer,
       startedAt,
@@ -53,7 +53,7 @@ export function createMediaJobWorker({ db }) {
            and type in ('video.generate','assembly.render')
          order by created_at asc
          limit $1`,
-        [Number(cfg.MEDIA_JOB_WORKER_BATCH_SIZE || 10)]
+        [Number(cfg?.workers?.mediaJobWorkerBatchSize || 10)]
       );
 
       for (const row of q.rows || []) {
@@ -106,19 +106,19 @@ export function createMediaJobWorker({ db }) {
 
   return {
     start() {
-      if (!cfg.MEDIA_JOB_WORKER_ENABLED || timer) return;
+      if (!cfg?.workers?.mediaJobWorkerEnabled || timer) return;
       startedAt = new Date().toISOString();
       lastHeartbeatAt = startedAt;
       timer = setInterval(
         tick,
-        Number(cfg.MEDIA_JOB_WORKER_INTERVAL_MS || 15000)
+        Number(cfg?.workers?.mediaJobWorkerIntervalMs || 15000)
       );
       timer.unref?.();
       tick().catch(() => {});
       markWorkerStarted("media-job-worker", getState());
       logger.info("media.worker.started", {
-        intervalMs: Number(cfg.MEDIA_JOB_WORKER_INTERVAL_MS || 15000),
-        batchSize: Number(cfg.MEDIA_JOB_WORKER_BATCH_SIZE || 10),
+        intervalMs: Number(cfg?.workers?.mediaJobWorkerIntervalMs || 15000),
+        batchSize: Number(cfg?.workers?.mediaJobWorkerBatchSize || 10),
       });
     },
     stop() {

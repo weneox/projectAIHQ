@@ -7,11 +7,10 @@ import {
   ok,
   requireDb,
   requireTenant,
-  requireOwnerOrAdmin,
+  requireSettingsWriteMutation,
   serverErr,
   safeJsonObj,
-  isInternalServiceRequest,
-  getUserRole,
+  getViewerRole,
   resolveTenantKey,
   hasDb,
   auditSafe,
@@ -35,8 +34,8 @@ export function workspaceSettingsRoutes({ db }) {
       auth: req.auth || null,
       user: req.user || null,
       tenantKeyResolved: resolveTenantKey(req),
-      roleResolved: getUserRole(req),
-      isInternal: isInternalServiceRequest(req),
+      roleResolved: getViewerRole(req),
+      isInternal: getViewerRole(req) === "internal",
       hasDb: hasDb(db),
     });
   });
@@ -55,7 +54,7 @@ export function workspaceSettingsRoutes({ db }) {
 
       return ok(res, {
         ...settings,
-        viewerRole: isInternalServiceRequest(req) ? "internal" : getUserRole(req),
+        viewerRole: getViewerRole(req),
       });
     } catch (err) {
       return serverErr(res, err?.message || "Failed to load workspace settings");
@@ -69,18 +68,25 @@ export function workspaceSettingsRoutes({ db }) {
       const tenantKey = requireTenant(req, res);
       if (!tenantKey) return;
 
-      const role = requireOwnerOrAdmin(req, res);
+      const tenant = await dbGetTenantByKey(db, tenantKey);
+      if (!tenant?.id) {
+        return res.status(404).json({ ok: false, error: "Tenant not found" });
+      }
+
+      const role = await requireSettingsWriteMutation(req, res, {
+        db,
+        tenant,
+        auditAction: "settings.workspace.updated",
+        objectType: "tenant",
+        objectId: tenant.id,
+        targetArea: "workspace",
+      });
       if (!role) return;
 
       const body = safeJsonObj(req.body, {});
       const tenantInput = safeJsonObj(body.tenant, {});
       const profileInput = safeJsonObj(body.profile, {});
       const aiPolicyInput = safeJsonObj(body.aiPolicy, {});
-
-      const tenant = await dbGetTenantByKey(db, tenantKey);
-      if (!tenant?.id) {
-        return res.status(404).json({ ok: false, error: "Tenant not found" });
-      }
 
       const tenantCoreInput = buildTenantCoreSaveInput(tenantInput, role);
       const profileSaveInput = buildProfileSaveInput(profileInput);

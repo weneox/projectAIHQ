@@ -458,6 +458,9 @@ test("source creation stays owner-admin gated and refreshes capabilities with au
     body: { sourceType: "website" },
   });
   assert.equal(forbidden.res.statusCode, 403);
+  assert.equal(auditActions.at(-1)?.action, "settings.source.created");
+  assert.equal(auditActions.at(-1)?.meta?.outcome, "blocked");
+  assert.equal(auditActions.at(-1)?.meta?.attemptedRole, "member");
 
   const created = await invokeRouter(router, "post", "/sources", {
     auth: buildTenantAuth("owner"),
@@ -627,4 +630,20 @@ test("knowledge approval returns a publish receipt with preview-vs-actual verifi
     auditActions.at(-1)?.meta?.publishReceipt?.runtimeProjectionId,
     "runtime-projection-9"
   );
+});
+
+test("knowledge approval denial is centrally audited before candidate lookup", async () => {
+  const { router, auditActions } = createHarness();
+
+  const denied = await invokeRouter(router, "post", "/knowledge/candidate-1/approve", {
+    auth: buildTenantAuth("member"),
+    params: {
+      candidateId: "candidate-1",
+    },
+  });
+
+  assert.equal(denied.res.statusCode, 403);
+  assert.equal(auditActions.at(-1)?.action, "settings.knowledge.approved");
+  assert.equal(auditActions.at(-1)?.meta?.outcome, "blocked");
+  assert.equal(auditActions.at(-1)?.meta?.attemptedRole, "member");
 });

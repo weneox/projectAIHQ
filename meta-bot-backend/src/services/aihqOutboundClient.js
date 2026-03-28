@@ -1,4 +1,9 @@
-import { AIHQ_BASE_URL, AIHQ_INTERNAL_TOKEN, AIHQ_TIMEOUT_MS } from "../config.js";
+import {
+  AIHQ_BASE_URL,
+  AIHQ_INTERNAL_SERVICE,
+  AIHQ_INTERNAL_TOKEN,
+  AIHQ_TIMEOUT_MS,
+} from "../config.js";
 import {
   validateAihqOutboundAckRequest,
   validateAihqOutboundAckResponse,
@@ -61,6 +66,10 @@ export async function notifyAiHqOutbound(payload) {
         "Content-Type": "application/json; charset=utf-8",
         Accept: "application/json",
         ...(AIHQ_INTERNAL_TOKEN ? { "x-internal-token": AIHQ_INTERNAL_TOKEN } : {}),
+        ...(AIHQ_INTERNAL_SERVICE
+          ? { "x-internal-service": AIHQ_INTERNAL_SERVICE }
+          : {}),
+        "x-internal-audience": "aihq-backend.inbox.outbound",
       },
       body: JSON.stringify(checked.value),
       signal: controller.signal,

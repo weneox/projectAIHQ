@@ -230,6 +230,15 @@ export default function SettingsController() {
   } = workspaceState;
 
   const viewerRole = String(workspace?.viewerRole || "member").toLowerCase();
+  const workspaceEntitlements =
+    workspace?.entitlements && typeof workspace.entitlements === "object"
+      ? workspace.entitlements
+      : {};
+  const planCapabilities =
+    workspaceEntitlements?.capabilities &&
+    typeof workspaceEntitlements.capabilities === "object"
+      ? workspaceEntitlements.capabilities
+      : {};
 
   const businessBrain = useBusinessBrain({
     canManageSettings,
@@ -277,6 +286,10 @@ export default function SettingsController() {
 
   const canManageOperational =
     controlPlanePermissions.operationalSettingsWrite.allowed;
+  const canManageChannels =
+    canManageSettings && planCapabilities?.metaChannelConnect?.allowed !== false;
+  const canManageAgents =
+    canManageSettings && planCapabilities?.agentConfigMutation?.allowed !== false;
 
   const { trust, refreshTrust } = useTrustSurface({ tenantKey });
   const {
@@ -604,6 +617,7 @@ export default function SettingsController() {
           <GeneralSection
             tenantKey={workspace.tenantKey}
             tenant={workspace.tenant}
+            entitlements={workspaceEntitlements}
             patchTenant={patchTenant}
             canManage={canManageSettings}
             surface={workspaceSurface}
@@ -765,14 +779,14 @@ export default function SettingsController() {
         );
 
       case "channels":
-        return <ChannelsPanel canManage={canManageSettings} />;
+        return <ChannelsPanel canManage={canManageChannels} />;
 
       case "agents":
         return (
           <AgentsPanel
             agents={agents}
             surface={workspaceSurface}
-            canManage={canManageSettings}
+            canManage={canManageAgents}
             onSaveAgent={saveAgent}
           />
         );

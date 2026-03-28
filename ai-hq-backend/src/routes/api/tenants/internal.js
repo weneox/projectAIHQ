@@ -1,7 +1,7 @@
 // src/routes/api/tenants/internal.js
 
 import express from "express";
-import { requireInternalToken } from "../../../utils/auth.js";
+import { createInternalTokenGuard } from "../../../utils/auth.js";
 import { dbGetTenantProviderSecrets } from "../../../db/helpers/tenantSecrets.js";
 import { sanitizeProviderSecrets } from "../../../utils/securitySurface.js";
 import { validateResolveChannelQuery } from "@aihq/shared-contracts/critical";
@@ -426,8 +426,16 @@ function buildInternalProjectedRuntime({
 
 export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime }) {
   const router = express.Router();
+  const requireMetaTenantResolve = createInternalTokenGuard({
+    allowedServices: ["meta-bot-backend"],
+    allowedAudiences: ["aihq-backend.tenants.resolve-channel"],
+  });
+  const requireMetaProviderAccess = createInternalTokenGuard({
+    allowedServices: ["meta-bot-backend"],
+    allowedAudiences: ["aihq-backend.providers.meta-channel-access"],
+  });
 
-  router.get("/tenants/resolve-channel", requireInternalToken, async (req, res) => {
+  router.get("/tenants/resolve-channel", requireMetaTenantResolve, async (req, res) => {
     const log = createSafeLogger(req.log);
 
     try {
@@ -636,7 +644,7 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
 
   router.get(
     "/internal/providers/meta-channel-access",
-    requireInternalToken,
+    requireMetaProviderAccess,
     async (req, res) => {
       const log = createSafeLogger(req.log);
 

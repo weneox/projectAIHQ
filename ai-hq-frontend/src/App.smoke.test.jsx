@@ -1,11 +1,8 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { Outlet } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const areInternalRoutesEnabled = vi.fn();
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./lib/appEntry.js", () => ({
-  areInternalRoutesEnabled: (...args) => areInternalRoutesEnabled(...args),
   INTERNAL_ONLY_APP_ROUTES: ["/command-demo", "/analytics", "/agents", "/threads"],
 }));
 
@@ -57,23 +54,11 @@ vi.mock("./components/auth/AppEntryRedirect.jsx", () => ({
   default: () => <div>App Entry Redirect</div>,
 }));
 
-vi.mock("./pages/CommandPage.jsx", () => ({
-  default: () => <div>Command Page</div>,
-}));
 vi.mock("./pages/Proposals.jsx", () => ({
   default: () => <div>Proposals Page</div>,
 }));
 vi.mock("./pages/Executions.jsx", () => ({
   default: () => <div>Executions Page</div>,
-}));
-vi.mock("./pages/Agents.jsx", () => ({
-  default: () => <div>Agents Page</div>,
-}));
-vi.mock("./pages/Threads.jsx", () => ({
-  default: () => <div>Threads Page</div>,
-}));
-vi.mock("./pages/Analytics.jsx", () => ({
-  default: () => <div>Analytics Page</div>,
 }));
 vi.mock("./pages/Settings.jsx", () => ({
   default: () => <div>Settings Page</div>,
@@ -119,11 +104,6 @@ import App from "./App.jsx";
 
 afterEach(() => {
   cleanup();
-  areInternalRoutesEnabled.mockReset();
-});
-
-beforeEach(() => {
-  areInternalRoutesEnabled.mockReturnValue(false);
 });
 
 describe("App critical route smoke", () => {
@@ -151,12 +131,5 @@ describe("App critical route smoke", () => {
     window.history.pushState({}, "", path);
     render(<App />);
     expect(await screen.findByText("Truth Page")).toBeInTheDocument();
-  });
-
-  it("keeps internal-only routes explicitly reachable when internal routing is enabled", async () => {
-    areInternalRoutesEnabled.mockReturnValue(true);
-    window.history.pushState({}, "", "/analytics");
-    render(<App />);
-    expect(await screen.findByText("Analytics Page")).toBeInTheDocument();
   });
 });

@@ -117,12 +117,22 @@ function planTone(plan) {
 export default function WorkspaceGeneralForm({
   tenantKey,
   tenant = {},
+  entitlements = {},
   patchTenant,
   canManage = true,
 }) {
   const companyName = tenant.company_name || "Untitled Workspace";
   const enabledLanguages = tenant.enabled_languages || [];
   const activeText = tenant.active ? "Enabled" : "Disabled";
+  const restrictedCapabilities = Array.isArray(entitlements?.summary?.restricted)
+    ? entitlements.summary.restricted
+    : [];
+  const restrictedLabels = restrictedCapabilities.map((item) =>
+    String(item || "")
+      .replace(/([A-Z])/g, " $1")
+      .replace(/[_-]+/g, " ")
+      .trim()
+  );
 
   return (
     <SettingsSection
@@ -225,6 +235,29 @@ export default function WorkspaceGeneralForm({
         </div>
 
         <div className="grid gap-6 xl:grid-cols-2">
+          <Card variant="subtle" padded="lg" className="rounded-[28px] xl:col-span-2">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] border border-slate-200/80 bg-white/80 text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200">
+                <Sparkles className="h-[18px] w-[18px]" strokeWidth={1.9} />
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-lg font-semibold tracking-[-0.02em] text-slate-950 dark:text-white">
+                  Managed Plan Boundary
+                </div>
+                <div className="text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  {entitlements?.billing?.message ||
+                    "Plan assignment is managed internally. Self-serve billing is not enabled."}
+                </div>
+                <div className="text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  {restrictedLabels.length
+                    ? `Restricted on this workspace plan: ${restrictedLabels.join(", ")}.`
+                    : "No additional plan-restricted workspace capabilities are currently flagged here."}
+                </div>
+              </div>
+            </div>
+          </Card>
+
           <Card variant="surface" padded="lg" className="rounded-[28px]">
             <div className="space-y-5">
               <div className="flex items-start gap-3">

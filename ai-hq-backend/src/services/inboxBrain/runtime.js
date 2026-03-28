@@ -1,5 +1,9 @@
 import * as businessRuntimeApi from "../businessBrain/getTenantBrainRuntime.js";
 import {
+  createRuntimeAuthorityError,
+  isRuntimeAuthorityError,
+} from "../businessBrain/runtimeAuthority.js";
+import {
   arr,
   getResolvedTenantKey,
   lower,
@@ -601,6 +605,7 @@ export async function resolveInboxRuntime({
   conversationContext = {},
   runtime = null,
 }) {
+  const resolvedTenantKey = getResolvedTenantKey(tenantKey);
   const fallbackProfile = getTenantBusinessProfile(tenant, tenantKey, services);
 
   const fallback = {
@@ -618,11 +623,20 @@ export async function resolveInboxRuntime({
   }
 
   const runtimeFactory = getRuntimeFactory();
-  if (!runtimeFactory) return fallback;
+  if (!runtimeFactory) {
+    throw createRuntimeAuthorityError({
+      mode: "strict",
+      tenantKey: resolvedTenantKey,
+      reasonCode: "runtime_resolver_missing",
+      reason: "runtime_resolver_missing",
+      message:
+        "Approved runtime authority is unavailable because no strict runtime resolver is configured.",
+    });
+  }
 
   try {
     const produced = await runtimeFactory({
-      tenantKey: getResolvedTenantKey(tenantKey),
+      tenantKey: resolvedTenantKey,
       tenant,
       services,
       knowledgeEntries,
@@ -639,8 +653,19 @@ export async function resolveInboxRuntime({
     });
 
     return normalizeRuntimeResult(produced, fallback);
-  } catch {
-    return fallback;
+  } catch (error) {
+    if (isRuntimeAuthorityError(error)) {
+      throw error;
+    }
+
+    throw createRuntimeAuthorityError({
+      mode: "strict",
+      tenantKey: resolvedTenantKey,
+      reasonCode: "runtime_resolution_failed",
+      reason: "runtime_resolution_failed",
+      message:
+        "Approved runtime authority is unavailable because runtime resolution failed for this execution path.",
+    });
   }
 }
 

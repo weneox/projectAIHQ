@@ -29,6 +29,7 @@ import {
   markInstagramDisconnected,
   auditSafe,
 } from "./repository.js";
+import { getTenantCapability } from "../../../services/tenantEntitlements.js";
 
 function buildInstagramSourcePayload(selected = {}) {
   const igUsername = s(selected?.igUsername);
@@ -187,19 +188,43 @@ export async function buildMetaOAuthUrl({ db, req }) {
     throw err;
   }
 
+  const tenant = await getTenantByKey(db, tenantKey);
+  if (!tenant?.id) {
+    const err = new Error("Tenant not found");
+    err.status = 400;
+    throw err;
+  }
+
+  const capability = getTenantCapability(tenant, "metaChannelConnect");
+  if (capability?.allowed === false) {
+    await auditSafe(
+      db,
+      getReqActor(req),
+      tenant,
+      "settings.channel.meta.connected",
+      "tenant_channel",
+      "instagram",
+      {
+        outcome: "blocked",
+        reasonCode: "plan_capability_restricted",
+        capabilityKey: capability.key,
+        planKey: capability.planKey,
+        normalizedPlanKey: capability.normalizedPlanKey,
+        requiredPlans: capability.requiredPlans,
+      }
+    );
+
+    const err = new Error(capability.message);
+    err.status = 403;
+    throw err;
+  }
+
   if (
     !s(cfg.meta.appId) ||
     !s(cfg.meta.appSecret) ||
     !s(cfg.meta.redirectUri)
   ) {
     const err = new Error("Meta OAuth env missing");
-    err.status = 400;
-    throw err;
-  }
-
-  const tenant = await getTenantByKey(db, tenantKey);
-  if (!tenant?.id) {
-    const err = new Error("Tenant not found");
     err.status = 400;
     throw err;
   }
@@ -263,6 +288,30 @@ export async function handleMetaCallback({ db, req }) {
   if (!tenant?.id) {
     const err = new Error("Tenant not found");
     err.status = 400;
+    throw err;
+  }
+
+  const capability = getTenantCapability(tenant, "metaChannelConnect");
+  if (capability?.allowed === false) {
+    await auditSafe(
+      db,
+      state.actor || "system",
+      tenant,
+      "settings.channel.meta.connected",
+      "tenant_channel",
+      "instagram",
+      {
+        outcome: "blocked",
+        reasonCode: "plan_capability_restricted",
+        capabilityKey: capability.key,
+        planKey: capability.planKey,
+        normalizedPlanKey: capability.normalizedPlanKey,
+        requiredPlans: capability.requiredPlans,
+      }
+    );
+
+    const err = new Error(capability.message);
+    err.status = 403;
     throw err;
   }
 

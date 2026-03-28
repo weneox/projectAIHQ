@@ -26,6 +26,7 @@ export function useAdminIncidentsSurface() {
   } = useSettingsSurfaceState({
     initialData: () => ({
       incidents: [],
+      summary: null,
       retentionPolicy: null,
       filters: DEFAULT_FILTERS,
     }),
@@ -45,6 +46,7 @@ export function useAdminIncidentsSurface() {
 
       return succeedRefresh({
         incidents: Array.isArray(response?.incidents) ? response.incidents : [],
+        summary: response?.summary || null,
         retentionPolicy: response?.retentionPolicy || null,
         filters: response?.filters || nextFilters,
       });
@@ -52,6 +54,7 @@ export function useAdminIncidentsSurface() {
       return failRefresh(error, {
         fallbackData: {
           incidents: [],
+          summary: null,
           retentionPolicy: null,
           filters: nextFilters,
         },
@@ -90,6 +93,7 @@ export function useAdminIncidentsSurface() {
     patchFilter,
     applyFilters,
     clearFilters,
+    summary: data?.summary || null,
     retentionPolicy: data?.retentionPolicy || null,
     surface: {
       ...surface,

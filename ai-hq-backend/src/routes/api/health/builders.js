@@ -112,6 +112,7 @@ export async function buildRootHealthResponse({
   startupOperationalReadiness = null,
   providers = {},
   workers = {},
+  process = {},
   operational = {},
 } = {}) {
   const core = await buildHealthCore({
@@ -124,6 +125,7 @@ export async function buildRootHealthResponse({
     marker: "HEALTH_BUILD_V4_FEATURES",
     providers,
     workers,
+    process,
     operational,
     startupOperationalReadiness:
       startupOperationalReadiness && typeof startupOperationalReadiness === "object"

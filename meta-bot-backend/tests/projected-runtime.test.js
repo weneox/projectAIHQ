@@ -75,42 +75,52 @@ test.beforeEach(() => {
 });
 
 test("meta tenant resolution returns projected runtime contract from AI HQ", async () => {
-  mockFetchJson({
-    ok: true,
-    tenantKey: "acme",
-    tenantId: "tenant-1",
-    resolvedChannel: "instagram",
-    tenant: {
-      id: "tenant-1",
-      tenant_key: "acme",
-    },
-    channelConfig: {
-      channelType: "instagram",
-    },
-    projectedRuntime: {
-      authority: {
-        mode: "strict",
-        required: true,
-        available: true,
-        source: "approved_runtime_projection",
-        tenantId: "tenant-1",
-        tenantKey: "acme",
-        runtimeProjectionId: "projection-1",
+  let seenHeaders = null;
+  global.fetch = async (_url, options = {}) => {
+    seenHeaders = options.headers || {};
+    return {
+      ok: true,
+      status: 200,
+      async text() {
+        return JSON.stringify({
+          ok: true,
+          tenantKey: "acme",
+          tenantId: "tenant-1",
+          resolvedChannel: "instagram",
+          tenant: {
+            id: "tenant-1",
+            tenant_key: "acme",
+          },
+          channelConfig: {
+            channelType: "instagram",
+          },
+          projectedRuntime: {
+            authority: {
+              mode: "strict",
+              required: true,
+              available: true,
+              source: "approved_runtime_projection",
+              tenantId: "tenant-1",
+              tenantKey: "acme",
+              runtimeProjectionId: "projection-1",
+            },
+            tenant: {
+              tenantId: "tenant-1",
+              tenantKey: "acme",
+              companyName: "Acme",
+            },
+            channels: {
+              meta: {
+                channelType: "instagram",
+                pageId: "page-1",
+                igUserId: "ig-1",
+              },
+            },
+          },
+        });
       },
-      tenant: {
-        tenantId: "tenant-1",
-        tenantKey: "acme",
-        companyName: "Acme",
-      },
-      channels: {
-        meta: {
-          channelType: "instagram",
-          pageId: "page-1",
-          igUserId: "ig-1",
-        },
-      },
-    },
-  });
+    };
+  };
 
   const resolved = await resolveTenantContextFromMetaEvent({
     channel: "instagram",
@@ -120,6 +130,11 @@ test("meta tenant resolution returns projected runtime contract from AI HQ", asy
   assert.equal(resolved.ok, true);
   assert.equal(resolved.projectedRuntime?.tenant?.tenantKey, "acme");
   assert.equal(resolved.projectedRuntime?.channels?.meta?.pageId, "page-1");
+  assert.equal(seenHeaders["x-internal-service"], "meta-bot-backend");
+  assert.equal(
+    seenHeaders["x-internal-audience"],
+    "aihq-backend.tenants.resolve-channel"
+  );
 });
 
 test("meta tenant resolution fails closed when projected runtime authority is unavailable", async () => {
@@ -800,6 +815,8 @@ test("meta durable incident client posts sanitized incident payload to AI HQ", a
   assert.equal(seenUrl, "https://aihq.example.test/api/internal/runtime-signals/incidents");
   assert.equal(seenHeaders["x-request-id"], "req-meta-3");
   assert.equal(seenHeaders["x-correlation-id"], "corr-meta-3");
+  assert.equal(seenHeaders["x-internal-service"], "meta-bot-backend");
+  assert.equal(seenHeaders["x-internal-audience"], "aihq-backend.runtime-signals.incidents");
   assert.equal(seenBody.tenantKey, "acme");
   assert.equal(seenBody.code, "meta_execution_failure");
 });
@@ -848,4 +865,6 @@ test("meta AI HQ client forwards correlation headers", async () => {
   assert.equal(out.ok, true);
   assert.equal(seenHeaders["x-request-id"], "req-meta-1");
   assert.equal(seenHeaders["x-correlation-id"], "corr-meta-1");
+  assert.equal(seenHeaders["x-internal-service"], "meta-bot-backend");
+  assert.equal(seenHeaders["x-internal-audience"], "aihq-backend.inbox.ingest");
 });

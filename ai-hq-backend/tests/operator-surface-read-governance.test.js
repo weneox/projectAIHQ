@@ -179,6 +179,8 @@ test("internal-only server-to-server flows remain available", async () => {
     const result = await invokeRouter(router, "post", "/internal/voice/report", {
       headers: {
         "x-internal-token": "internal-secret",
+        "x-internal-service": "twilio-voice-backend",
+        "x-internal-audience": "aihq-backend.voice.internal",
       },
     });
 

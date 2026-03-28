@@ -28,6 +28,24 @@ function bool(v, fallback = false) {
   return typeof v === "boolean" ? v : fallback;
 }
 
+function statusLabel(value = "") {
+  const normalized = s(value).toLowerCase();
+  if (normalized === "bounded") return "Bounded";
+  if (normalized === "unbounded_in_repo") return "No Repo TTL";
+  if (normalized === "runbook_only") return "Runbook Only";
+  if (normalized) return normalized.replace(/[_-]+/g, " ");
+  return "Unknown";
+}
+
+function statusTone(value = "") {
+  const normalized = s(value).toLowerCase();
+  if (normalized === "bounded") return "success";
+  if (normalized === "runbook_only" || normalized === "unbounded_in_repo") {
+    return "warn";
+  }
+  return "neutral";
+}
+
 function reasonLabel(value = "") {
   const raw = s(value);
   if (!raw) return "ready";
@@ -193,6 +211,9 @@ export default function OperationalSection({
   const readinessSurface = createReadinessViewModel(data.readiness);
   const operationalPermissionMessage = s(permissionState?.operationalSettingsWrite?.message);
   const providerSecretsPermissionMessage = s(permissionState?.providerSecretsMutation?.message);
+  const dataGovernance = obj(data.dataGovernance);
+  const retentionItems = arr(dataGovernance?.retention?.items);
+  const backupRestore = obj(dataGovernance?.backupRestore);
 
   const operationalSummary = useMemo(
     () => ({
@@ -334,6 +355,67 @@ export default function OperationalSection({
             </div>
           </Card>
         </div>
+
+        <Card variant="surface" padded="lg" className="rounded-[28px]">
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-lg font-semibold text-slate-950 dark:text-white">
+                  Data Retention & Restore Posture
+                </div>
+                <div className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  This is the current repo-enforced baseline, not a full compliance program.
+                </div>
+              </div>
+              <Badge tone={statusTone(backupRestore.status)} variant="subtle" dot>
+                {statusLabel(backupRestore.status)}
+              </Badge>
+            </div>
+
+            {retentionItems.length ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {retentionItems.map((item) => (
+                  <div
+                    key={item.key || item.label}
+                    className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-4 text-sm text-slate-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="font-semibold text-slate-900 dark:text-white">
+                        {item.label || item.key}
+                      </div>
+                      <Badge tone={statusTone(item.status)} variant="subtle">
+                        {statusLabel(item.status)}
+                      </Badge>
+                    </div>
+                    <div className="mt-2 leading-6">{item.message}</div>
+                    {item.retainDays || item.maxRows || item.pruneIntervalHours ? (
+                      <div className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                        {item.retainDays ? `Retain ${item.retainDays} days` : ""}
+                        {item.retainDays && item.maxRows ? " · " : ""}
+                        {item.maxRows ? `Max ${item.maxRows} rows` : ""}
+                        {(item.retainDays || item.maxRows) && item.pruneIntervalHours ? " · " : ""}
+                        {item.pruneIntervalHours ? `Prune every ${item.pruneIntervalHours}h` : ""}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="rounded-[20px] border border-amber-200/80 bg-amber-50/90 px-4 py-4 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+              <div className="font-semibold">Backup and restore honesty</div>
+              <div className="mt-2 leading-6">
+                {backupRestore.message ||
+                  "No explicit backup or restore posture has been returned."}
+              </div>
+              {arr(backupRestore.runbooks).length ? (
+                <div className="mt-2 text-xs leading-5">
+                  Runbooks: {arr(backupRestore.runbooks).join(", ")}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </Card>
 
         <ReadinessCard
           icon={PhoneCall}

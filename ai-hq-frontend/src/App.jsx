@@ -6,7 +6,7 @@ import AdminRouteGuard from "./components/admin/AdminRouteGuard.jsx";
 import OperatorRouteGuard from "./components/auth/OperatorRouteGuard.jsx";
 import UserRouteGuard from "./components/auth/UserRouteGuard.jsx";
 import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
-import { areInternalRoutesEnabled, INTERNAL_ONLY_APP_ROUTES } from "./lib/appEntry.js";
+import { INTERNAL_ONLY_APP_ROUTES } from "./lib/appEntry.js";
 
 const Proposals = lazy(() => import("./pages/Proposals.jsx"));
 const Executions = lazy(() => import("./pages/Executions.jsx"));
@@ -23,10 +23,6 @@ const AdminTenants = lazy(() => import("./pages/AdminTenants.jsx"));
 const AdminTeam = lazy(() => import("./pages/AdminTeam.jsx"));
 const AdminSecrets = lazy(() => import("./pages/AdminSecrets.jsx"));
 const SetupStudioRoute = lazy(() => import("./pages/SetupStudio/index.jsx"));
-const CommandPage = lazy(() => import("./pages/CommandPage.jsx"));
-const Agents = lazy(() => import("./pages/Agents.jsx"));
-const Threads = lazy(() => import("./pages/Threads.jsx"));
-const Analytics = lazy(() => import("./pages/Analytics.jsx"));
 
 function RouteFallback() {
   return (
@@ -42,18 +38,7 @@ function withSuspense(element) {
   return <Suspense fallback={<RouteFallback />}>{element}</Suspense>;
 }
 
-function renderInternalRouteSet(enabled) {
-  if (enabled) {
-    return (
-      <>
-        <Route path="command-demo" element={withSuspense(<CommandPage />)} />
-        <Route path="analytics" element={withSuspense(<Analytics />)} />
-        <Route path="agents" element={withSuspense(<Agents />)} />
-        <Route path="threads" element={withSuspense(<Threads />)} />
-      </>
-    );
-  }
-
+function renderInternalRouteRedirects() {
   return (
     <>
       {INTERNAL_ONLY_APP_ROUTES.map((path) => (
@@ -68,8 +53,6 @@ function renderInternalRouteSet(enabled) {
 }
 
 export default function App() {
-  const internalRoutesEnabled = areInternalRoutesEnabled();
-
   return (
     <BrowserRouter>
       <Routes>
@@ -252,7 +235,7 @@ export default function App() {
             }
           />
           <Route path="settings" element={withSuspense(<Settings />)} />
-          {renderInternalRouteSet(internalRoutesEnabled)}
+          {renderInternalRouteRedirects()}
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

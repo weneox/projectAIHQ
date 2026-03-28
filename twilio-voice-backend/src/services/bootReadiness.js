@@ -79,6 +79,7 @@ export async function checkAihqOperationalBootReadiness({
   fetchFn = globalThis.fetch?.bind(globalThis),
   baseUrl = "",
   internalToken = "",
+  internalService = "twilio-voice-backend",
   appEnv = "",
   requireOnBoot = false,
   throwOnBlocked = true,
@@ -110,6 +111,10 @@ export async function checkAihqOperationalBootReadiness({
       ...(s(internalToken)
         ? { "x-internal-token": s(internalToken) }
         : {}),
+      ...(s(internalService)
+        ? { "x-internal-service": s(internalService) }
+        : {}),
+      "x-internal-audience": "aihq-backend.health",
     },
   });
 

@@ -1,4 +1,8 @@
-import { getInternalTokenAuthResult, internalTokenExpected } from "../../../utils/auth.js";
+import {
+  createInternalTokenGuard,
+  getInternalTokenAuthResult,
+  internalTokenExpected,
+} from "../../../utils/auth.js";
 import { s } from "./shared.js";
 
 export function readInternalToken(req) {
@@ -14,17 +18,31 @@ export function getExpectedInternalToken() {
   return internalTokenExpected();
 }
 
-export function requireInternalToken(req, res, next) {
-  const result = getInternalTokenAuthResult(req);
+export function createVoiceInternalTokenGuard(options = {}) {
+  return createInternalTokenGuard(options);
+}
+
+export const requireInternalToken = createInternalTokenGuard();
+
+export function requireVoiceInternalToken(req, res, next, options = {}) {
+  const result = getInternalTokenAuthResult(req, options);
   if (!result.ok) {
     return res.status(
-      result.code === "internal_token_not_configured" ? 500 : 401
+      result.code === "internal_token_not_configured"
+        ? 500
+        : result.code === "invalid_internal_service" ||
+            result.code === "invalid_internal_audience"
+          ? 403
+          : 401
     ).json({
       ok: false,
       error:
         result.code === "internal_token_not_configured"
           ? "internal_token_not_configured"
-          : "unauthorized_internal",
+          : result.code === "invalid_internal_service" ||
+              result.code === "invalid_internal_audience"
+            ? "forbidden_internal"
+            : "unauthorized_internal",
     });
   }
 

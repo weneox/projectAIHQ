@@ -49,6 +49,65 @@ function arr(v) {
   return Array.isArray(v) ? v : [];
 }
 
+function buildDataGovernancePosture() {
+  return {
+    retention: {
+      items: [
+        {
+          key: "runtime_incidents",
+          label: "Runtime incident trail",
+          status: "bounded",
+          classification: "operator_incident_history",
+          retainDays: 14,
+          maxRows: 5000,
+          pruneIntervalHours: 6,
+          automatedPrune: true,
+          message:
+            "Recent runtime incidents are pruned automatically from the repo-managed trail.",
+        },
+        {
+          key: "audit_log",
+          label: "Control-plane audit history",
+          status: "unbounded_in_repo",
+          classification: "governance_mutation_history",
+          automatedPrune: false,
+          message:
+            "No repo-enforced retention window is currently defined for audit_log rows.",
+        },
+        {
+          key: "interaction_history",
+          label: "Inbox, comments, and voice interaction records",
+          status: "unbounded_in_repo",
+          classification: "customer_and_operator_interaction_history",
+          automatedPrune: false,
+          message:
+            "No repo-enforced retention TTL is currently defined for conversation, comment, or voice-linked history in this workspace.",
+        },
+        {
+          key: "truth_history",
+          label: "Truth, review, and synthesis history",
+          status: "unbounded_in_repo",
+          classification: "governed_business_truth_history",
+          automatedPrune: false,
+          message:
+            "Approved truth versions, review sessions, and synthesis snapshots remain durable until database retention is managed outside this repo.",
+        },
+      ],
+    },
+    backupRestore: {
+      status: "runbook_only",
+      selfServeRestore: false,
+      automatedBackupOrRestoreVerification: false,
+      message:
+        "This repo does not create backups or provide self-serve restore. Recovery depends on provider-managed backups or snapshots captured outside the app and the documented rollback runbooks.",
+      runbooks: [
+        "docs/runbooks/schema-migration-safety.md",
+        "docs/runbooks/production-rollback.md",
+      ],
+    },
+  };
+}
+
 function pickPrimaryMetaChannel(channels = []) {
   const metaChannels = arr(channels).filter((item) =>
     ["instagram", "facebook", "messenger"].includes(
@@ -256,6 +315,7 @@ function buildOperationalSettingsPayload({
           : "Operational dependencies are ready for production traffic.",
       blockers: [voiceRepair, metaRepair].filter((item) => item.blocked),
     }),
+    dataGovernance: buildDataGovernancePosture(),
   };
 }
 

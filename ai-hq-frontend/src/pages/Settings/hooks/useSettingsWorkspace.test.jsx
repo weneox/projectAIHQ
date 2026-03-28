@@ -28,6 +28,12 @@ describe("useSettingsWorkspace", () => {
       tenant: { tenant_key: "tenant-a" },
       profile: {},
       aiPolicy: {},
+      entitlements: {
+        plan: { key: "starter", normalizedKey: "starter", managed: true },
+        capabilities: {
+          metaChannelConnect: { allowed: false },
+        },
+      },
     });
     getWorkspaceAgents.mockResolvedValue([{ agent_key: "closer", enabled: true }]);
 
@@ -40,6 +46,10 @@ describe("useSettingsWorkspace", () => {
     });
 
     expect(result.current.workspace.tenantKey).toBe("tenant-a");
+    expect(result.current.workspace.entitlements.plan.managed).toBe(true);
+    expect(result.current.workspace.entitlements.capabilities.metaChannelConnect.allowed).toBe(
+      false
+    );
     expect(result.current.agents).toHaveLength(1);
     expect(typeof result.current.surface.refresh).toBe("function");
   });

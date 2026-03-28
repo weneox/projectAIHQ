@@ -16,12 +16,21 @@ import {
   incrementRuntimeMetric,
   recordRuntimeSignal,
 } from "./runtimeObservability.js";
+import { cfg } from "../config.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
-async function postJson(fetchFn, url, token, payload, timeoutMs = 8000, requestContext = {}) {
+async function postJson(
+  fetchFn,
+  url,
+  token,
+  payload,
+  timeoutMs = 8000,
+  requestContext = {},
+  audience = ""
+) {
   if (!url) {
     return { ok: false, status: 0, data: null, text: "missing_url" };
   }
@@ -36,8 +45,12 @@ async function postJson(fetchFn, url, token, payload, timeoutMs = 8000, requestC
         requestId: s(requestContext?.requestId),
         correlationId: s(requestContext?.correlationId),
         headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "x-internal-token": s(token),
+          "Content-Type": "application/json; charset=utf-8",
+          "x-internal-token": s(token),
+          ...(s(cfg.AIHQ_INTERNAL_SERVICE)
+            ? { "x-internal-service": s(cfg.AIHQ_INTERNAL_SERVICE) }
+            : {}),
+          ...(s(audience) ? { "x-internal-audience": s(audience) } : {}),
         },
       }),
       body: JSON.stringify(payload || {}),
@@ -118,7 +131,20 @@ export function createAihqVoiceClient({
     }
 
     const url = `${root}${path.startsWith("/") ? path : `/${path}`}`;
-    const result = await postJson(fetchFn, url, token, payload, timeoutMs, requestContext);
+    const audience = path === "/api/internal/voice/tenant-config"
+      ? "aihq-backend.voice.internal"
+      : path === "/api/internal/executions/voice-sync"
+        ? "aihq-backend.executions.voice-sync"
+        : "aihq-backend.internal";
+    const result = await postJson(
+      fetchFn,
+      url,
+      token,
+      payload,
+      timeoutMs,
+      requestContext,
+      audience
+    );
     const checked = result.ok
       ? validateResponse(result.data || { ok: false })
       : { ok: false, error: result.text || "request_failed" };

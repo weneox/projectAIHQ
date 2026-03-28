@@ -196,6 +196,8 @@ test("internal voice routes are not forced through execution callback rate limit
     const { res } = await invokeRoute(router, "post", "/internal/voice/report", {
       headers: {
         "x-internal-token": "internal-secret",
+        "x-internal-service": "twilio-voice-backend",
+        "x-internal-audience": "aihq-backend.voice.internal",
         "x-forwarded-for": "203.0.113.10",
       },
     });

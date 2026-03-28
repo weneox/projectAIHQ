@@ -6,7 +6,7 @@ import {
   validateVoiceTenantConfigRequest,
   validateVoiceTranscriptRequest,
 } from "@aihq/shared-contracts/critical";
-import { requireInternalToken } from "./internalAuth.js";
+import { createVoiceInternalTokenGuard } from "./internalAuth.js";
 import {
   processVoiceOperatorJoin,
   processVoiceReportPing,
@@ -33,8 +33,12 @@ function writeResult(res, result) {
 
 export function voiceInternalRoutes({ db }) {
   const r = express.Router();
+  const requireTwilioVoiceInternal = createVoiceInternalTokenGuard({
+    allowedServices: ["twilio-voice-backend"],
+    allowedAudiences: ["aihq-backend.voice.internal"],
+  });
 
-  r.post("/internal/voice/tenant-config", requireInternalToken, async (req, res) => {
+  r.post("/internal/voice/tenant-config", requireTwilioVoiceInternal, async (req, res) => {
     const logger = req.log?.child?.({
       component: "voice-internal-routes",
       route: "tenant-config",
@@ -59,7 +63,7 @@ export function voiceInternalRoutes({ db }) {
     }
   });
 
-  r.post("/internal/voice/session/upsert", requireInternalToken, async (req, res) => {
+  r.post("/internal/voice/session/upsert", requireTwilioVoiceInternal, async (req, res) => {
     const logger = req.log?.child?.({
       component: "voice-internal-routes",
       route: "session-upsert",
@@ -87,7 +91,7 @@ export function voiceInternalRoutes({ db }) {
     }
   });
 
-  r.post("/internal/voice/session/transcript", requireInternalToken, async (req, res) => {
+  r.post("/internal/voice/session/transcript", requireTwilioVoiceInternal, async (req, res) => {
     const logger = req.log?.child?.({
       component: "voice-internal-routes",
       route: "session-transcript",
@@ -118,7 +122,7 @@ export function voiceInternalRoutes({ db }) {
     }
   });
 
-  r.post("/internal/voice/session/state", requireInternalToken, async (req, res) => {
+  r.post("/internal/voice/session/state", requireTwilioVoiceInternal, async (req, res) => {
     const logger = req.log?.child?.({
       component: "voice-internal-routes",
       route: "session-state",
@@ -147,7 +151,7 @@ export function voiceInternalRoutes({ db }) {
     }
   });
 
-  r.post("/internal/voice/session/operator-join", requireInternalToken, async (req, res) => {
+  r.post("/internal/voice/session/operator-join", requireTwilioVoiceInternal, async (req, res) => {
     const logger = req.log?.child?.({
       component: "voice-internal-routes",
       route: "operator-join",
@@ -176,7 +180,7 @@ export function voiceInternalRoutes({ db }) {
     }
   });
 
-  r.post("/internal/voice/report", requireInternalToken, async (req, res) => {
+  r.post("/internal/voice/report", requireTwilioVoiceInternal, async (req, res) => {
     const logger = req.log?.child?.({
       component: "voice-internal-routes",
       route: "report",

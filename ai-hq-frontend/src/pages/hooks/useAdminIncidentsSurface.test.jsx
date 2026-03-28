@@ -24,6 +24,16 @@ describe("useAdminIncidentsSurface", () => {
           reasonCode: "voice_test_failed",
         },
       ],
+      summary: {
+        status: "degraded",
+        total: 1,
+        errorCount: 1,
+        warnCount: 0,
+        latestOccurredAt: "2026-03-26T10:00:00.000Z",
+        sinceHours: 24,
+        services: ["ai-hq-backend"],
+        reasonCodes: ["voice_test_failed"],
+      },
       retentionPolicy: {
         retainDays: 14,
         maxRows: 5000,
@@ -44,6 +54,7 @@ describe("useAdminIncidentsSurface", () => {
     });
 
     expect(result.current.incidents).toHaveLength(1);
+    expect(result.current.summary?.status).toBe("degraded");
     expect(result.current.retentionPolicy?.retainDays).toBe(14);
   });
 
@@ -51,6 +62,7 @@ describe("useAdminIncidentsSurface", () => {
     listRuntimeIncidents
       .mockResolvedValueOnce({
         incidents: [],
+        summary: null,
         retentionPolicy: null,
         filters: {},
       })
@@ -64,6 +76,16 @@ describe("useAdminIncidentsSurface", () => {
             reasonCode: "request_failed",
           },
         ],
+        summary: {
+          status: "attention",
+          total: 1,
+          errorCount: 0,
+          warnCount: 1,
+          latestOccurredAt: "2026-03-26T10:00:00.000Z",
+          sinceHours: 24,
+          services: ["twilio-voice-backend"],
+          reasonCodes: ["request_failed"],
+        },
         retentionPolicy: {
           retainDays: 14,
           maxRows: 5000,
@@ -101,5 +123,6 @@ describe("useAdminIncidentsSurface", () => {
       })
     );
     expect(result.current.incidents[0]?.service).toBe("twilio-voice-backend");
+    expect(result.current.summary?.status).toBe("attention");
   });
 });

@@ -173,6 +173,88 @@ test("internal auth is fail-closed outside test and explicit in test", () => {
   }
 });
 
+test("internal auth can require caller identity and audience for scoped routes", () => {
+  const previousInternalToken = cfg.security.aihqInternalToken;
+  const previousMetaToken = cfg.security.aihqInternalMetaBotToken;
+
+  try {
+    cfg.security.aihqInternalToken = "internal-secret";
+    cfg.security.aihqInternalMetaBotToken = "";
+
+    const allowed = getInternalTokenAuthResult(
+      {
+        headers: {
+          "x-internal-token": "internal-secret",
+          "x-internal-service": "meta-bot-backend",
+          "x-internal-audience": "aihq-backend.tenants.resolve-channel",
+        },
+        body: {},
+      },
+      {
+        allowedServices: ["meta-bot-backend"],
+        allowedAudiences: ["aihq-backend.tenants.resolve-channel"],
+      }
+    );
+
+    const deniedAudience = getInternalTokenAuthResult(
+      {
+        headers: {
+          "x-internal-token": "internal-secret",
+          "x-internal-service": "meta-bot-backend",
+          "x-internal-audience": "aihq-backend.executions.voice-sync",
+        },
+        body: {},
+      },
+      {
+        allowedServices: ["meta-bot-backend"],
+        allowedAudiences: ["aihq-backend.tenants.resolve-channel"],
+      }
+    );
+
+    assert.equal(allowed.ok, true);
+    assert.equal(allowed.service, "meta-bot-backend");
+    assert.equal(allowed.audience, "aihq-backend.tenants.resolve-channel");
+    assert.equal(allowed.tokenScope, "global");
+    assert.equal(deniedAudience.ok, false);
+    assert.equal(deniedAudience.code, "invalid_internal_audience");
+  } finally {
+    cfg.security.aihqInternalToken = previousInternalToken;
+    cfg.security.aihqInternalMetaBotToken = previousMetaToken;
+  }
+});
+
+test("internal auth prefers service-scoped tokens when configured for a caller", () => {
+  const previousInternalToken = cfg.security.aihqInternalToken;
+  const previousMetaToken = cfg.security.aihqInternalMetaBotToken;
+
+  try {
+    cfg.security.aihqInternalToken = "shared-secret";
+    cfg.security.aihqInternalMetaBotToken = "meta-secret";
+
+    const scoped = getInternalTokenAuthResult(
+      {
+        headers: {
+          "x-internal-token": "meta-secret",
+          "x-internal-service": "meta-bot-backend",
+          "x-internal-audience": "aihq-backend.tenants.resolve-channel",
+        },
+        body: {},
+      },
+      {
+        allowedServices: ["meta-bot-backend"],
+        allowedAudiences: ["aihq-backend.tenants.resolve-channel"],
+      }
+    );
+
+    assert.equal(scoped.ok, true);
+    assert.equal(scoped.mode, "service_token");
+    assert.equal(scoped.tokenScope, "scoped");
+  } finally {
+    cfg.security.aihqInternalToken = previousInternalToken;
+    cfg.security.aihqInternalMetaBotToken = previousMetaToken;
+  }
+});
+
 test("callback and debug auth are fail-closed outside test and explicit in test", () => {
   const previousEnv = cfg.app.env;
   const previousCallbackToken = cfg.n8n.callbackToken;

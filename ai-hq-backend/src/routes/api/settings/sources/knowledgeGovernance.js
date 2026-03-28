@@ -4,7 +4,7 @@ import {
   summarizeEvidenceGovernance,
 } from "../../../../services/sourceFusion/governance.js";
 import { classifyApprovalPolicy } from "../../../../services/sourceFusion/approvalPolicy.js";
-import { auditSafe } from "../utils.js";
+import { auditSafe, getViewerRole } from "../utils.js";
 import {
   bad,
   lower,
@@ -1502,7 +1502,7 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
 
       const knowledge = getKnowledge();
       if (!knowledge) return bad(res, 503, "db disabled", { dbDisabled: true });
-      const viewerRole = lower(req.auth?.role || "member");
+      const viewerRole = lower(getViewerRole(req) || "member");
       const category = s(req.query?.category);
       const status = s(req.query?.status);
       const limit = n(req.query?.limit, 100);
@@ -1532,16 +1532,24 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
 
   router.post("/knowledge/:candidateId/approve", async (req, res) => {
     try {
-      const role = requireSettingsWriteRole(req, res);
+      const candidateId = s(req.params.candidateId);
+      const role = await requireSettingsWriteRole(req, res, null, {
+        auditAction: "settings.knowledge.approved",
+        objectType: "tenant_knowledge_candidate",
+        objectId: candidateId || "unknown_candidate",
+        targetArea: "knowledge_governance",
+        auditMeta: {
+          candidateId,
+          actionType: "approve",
+        },
+      });
       if (!role) return;
-
       const tenant = await resolveTenantOr400(req, res);
       if (!tenant) return;
 
       const knowledge = getKnowledge();
       if (!knowledge) return bad(res, 503, "db disabled", { dbDisabled: true });
 
-      const candidateId = s(req.params.candidateId);
       if (!candidateId) return bad(res, 400, "candidate id is required");
 
       const candidate = await knowledge.getCandidateById(candidateId);
@@ -1619,16 +1627,24 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
 
   router.post("/knowledge/:candidateId/reject", async (req, res) => {
     try {
-      const role = requireSettingsWriteRole(req, res);
+      const candidateId = s(req.params.candidateId);
+      const role = await requireSettingsWriteRole(req, res, null, {
+        auditAction: "settings.knowledge.rejected",
+        objectType: "tenant_knowledge_candidate",
+        objectId: candidateId || "unknown_candidate",
+        targetArea: "knowledge_governance",
+        auditMeta: {
+          candidateId,
+          actionType: "reject",
+        },
+      });
       if (!role) return;
-
       const tenant = await resolveTenantOr400(req, res);
       if (!tenant) return;
 
       const knowledge = getKnowledge();
       if (!knowledge) return bad(res, 503, "db disabled", { dbDisabled: true });
 
-      const candidateId = s(req.params.candidateId);
       if (!candidateId) return bad(res, 400, "candidate id is required");
 
       const candidate = await knowledge.getCandidateById(candidateId);
@@ -1663,16 +1679,24 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
 
   router.post("/knowledge/:candidateId/needs-review", async (req, res) => {
     try {
-      const role = requireSettingsWriteRole(req, res);
+      const candidateId = s(req.params.candidateId);
+      const role = await requireSettingsWriteRole(req, res, null, {
+        auditAction: "settings.knowledge.needs_review_marked",
+        objectType: "tenant_knowledge_candidate",
+        objectId: candidateId || "unknown_candidate",
+        targetArea: "knowledge_governance",
+        auditMeta: {
+          candidateId,
+          actionType: "needs_review",
+        },
+      });
       if (!role) return;
-
       const tenant = await resolveTenantOr400(req, res);
       if (!tenant) return;
 
       const knowledge = getKnowledge();
       if (!knowledge) return bad(res, 503, "db disabled", { dbDisabled: true });
 
-      const candidateId = s(req.params.candidateId);
       if (!candidateId) return bad(res, 400, "candidate id is required");
 
       const candidate = await knowledge.getCandidateById(candidateId);
@@ -1713,16 +1737,24 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
 
   router.post("/knowledge/:candidateId/quarantine", async (req, res) => {
     try {
-      const role = requireSettingsWriteRole(req, res);
+      const candidateId = s(req.params.candidateId);
+      const role = await requireSettingsWriteRole(req, res, null, {
+        auditAction: "settings.knowledge.quarantine_retained",
+        objectType: "tenant_knowledge_candidate",
+        objectId: candidateId || "unknown_candidate",
+        targetArea: "knowledge_governance",
+        auditMeta: {
+          candidateId,
+          actionType: "quarantine",
+        },
+      });
       if (!role) return;
-
       const tenant = await resolveTenantOr400(req, res);
       if (!tenant) return;
 
       const knowledge = getKnowledge();
       if (!knowledge) return bad(res, 503, "db disabled", { dbDisabled: true });
 
-      const candidateId = s(req.params.candidateId);
       if (!candidateId) return bad(res, 400, "candidate id is required");
 
       const candidate = await knowledge.getCandidateById(candidateId);

@@ -4,7 +4,10 @@ import express from "express";
 
 import { requireOperatorSurfaceAccess } from "../../../utils/auth.js";
 import { clamp, isDbReady, serviceUnavailableJson } from "../../../utils/http.js";
-import { listRecentRuntimeIncidents } from "../../../services/runtimeIncidentTrail.js";
+import {
+  listRecentRuntimeIncidents,
+  summarizeRuntimeIncidents,
+} from "../../../services/runtimeIncidentTrail.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -66,6 +69,7 @@ export function incidentsRoutes({ db }) {
         return writeJsonAndFinish(res, next, 200, {
           ok: true,
           incidents,
+          summary: summarizeRuntimeIncidents(incidents, { sinceHours }),
           filters: {
             service: service || "",
             severity: severity || "",

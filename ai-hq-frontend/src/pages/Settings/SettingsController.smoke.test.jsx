@@ -233,14 +233,14 @@ vi.mock("../../components/settings/SettingsShell.jsx", () => ({
 }));
 
 vi.mock("../../components/settings/ChannelsPanel.jsx", () => ({
-  default: function ChannelsPanelMock() {
-    return <div>Channels panel</div>;
+  default: function ChannelsPanelMock({ canManage = true }) {
+    return <div>{`Channels panel ${canManage ? "write" : "read"}`}</div>;
   },
 }));
 
 vi.mock("../../components/settings/AgentsPanel.jsx", () => ({
-  default: function AgentsPanelMock() {
-    return <div>Agents panel</div>;
+  default: function AgentsPanelMock({ canManage = true }) {
+    return <div>{`Agents panel ${canManage ? "write" : "read"}`}</div>;
   },
 }));
 
@@ -468,6 +468,13 @@ vi.mock("./hooks/useSettingsWorkspace.js", () => {
       tenant: {},
       profile: {},
       aiPolicy: {},
+      entitlements: {
+        plan: { key: "starter", normalizedKey: "starter", managed: true },
+        capabilities: {
+          metaChannelConnect: { allowed: false },
+          agentConfigMutation: { allowed: false },
+        },
+      },
     },
     setWorkspace: vi.fn(),
     agents: [],
@@ -923,5 +930,14 @@ describe("Settings truth-maintenance smoke", () => {
     expect(
       screen.getByText(/decision timeline and incident replay context/i)
     ).toBeTruthy();
+  });
+
+  it("keeps plan-restricted channel and agent sections read-only even for settings managers", async () => {
+    renderPage("/settings?section=channels");
+    expect(await screen.findByText(/channels panel read/i)).toBeTruthy();
+
+    cleanup();
+    renderPage("/settings?section=agents");
+    expect(await screen.findByText(/agents panel read/i)).toBeTruthy();
   });
 });

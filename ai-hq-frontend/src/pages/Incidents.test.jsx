@@ -31,6 +31,16 @@ vi.mock("./hooks/useAdminIncidentsSurface.js", () => ({
       retainDays: 14,
       maxRows: 5000,
     },
+    summary: {
+      status: "degraded",
+      total: 1,
+      errorCount: 1,
+      warnCount: 0,
+      latestOccurredAt: "2026-03-26T10:00:00.000Z",
+      sinceHours: 24,
+      services: ["ai-hq-backend"],
+      reasonCodes: ["voice_test_failed"],
+    },
     surface: {
       loading: false,
       error: "",
@@ -57,8 +67,10 @@ describe("Incidents", () => {
     expect(screen.getByRole("heading", { name: "Incident Trail" })).toBeInTheDocument();
     expect(screen.getByText(/retain 14 days/i)).toBeInTheDocument();
     expect(screen.getByText(/max 5000 incidents/i)).toBeInTheDocument();
+    expect(screen.getByText(/current incident posture/i)).toBeInTheDocument();
+    expect(screen.getByText(/degraded over the last 24h/i)).toBeInTheDocument();
     expect(screen.getByText(/voice test route failed/i)).toBeInTheDocument();
-    expect(screen.getByText(/voice_test_failed/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/voice_test_failed/i).length).toBeGreaterThan(0);
   });
 
   it("renders filter actions", () => {

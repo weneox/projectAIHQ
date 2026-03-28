@@ -4,6 +4,10 @@ function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
+function lower(v, d = "") {
+  return s(v, d).toLowerCase();
+}
+
 export async function persistRuntimeIncident({ db, incident = {} } = {}) {
   if (!db?.query) return null;
   const helpers = createRuntimeIncidentHelpers({ db });
@@ -61,4 +65,30 @@ export async function pruneRuntimeIncidentTrail({
     retainDays,
     maxRows,
   });
+}
+
+export function summarizeRuntimeIncidents(incidents = [], { sinceHours = 0 } = {}) {
+  const list = Array.isArray(incidents)
+    ? incidents.filter((item) => item && typeof item === "object")
+    : [];
+  const errorCount = list.filter(
+    (item) => lower(item.severity) === "error"
+  ).length;
+  const warnCount = list.filter((item) => lower(item.severity) === "warn").length;
+  const latestOccurredAt = list[0]?.occurredAt || "";
+
+  return {
+    status: errorCount > 0 ? "degraded" : warnCount > 0 ? "attention" : "clear",
+    total: list.length,
+    errorCount,
+    warnCount,
+    latestOccurredAt: s(latestOccurredAt),
+    sinceHours: Number(sinceHours || 0),
+    services: Array.from(
+      new Set(list.map((item) => s(item.service)).filter(Boolean))
+    ).slice(0, 6),
+    reasonCodes: Array.from(
+      new Set(list.map((item) => s(item.reasonCode)).filter(Boolean))
+    ).slice(0, 10),
+  };
 }

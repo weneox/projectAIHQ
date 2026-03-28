@@ -85,6 +85,14 @@ test("root and api health derive operational readiness from the same blocker log
     db,
     providers: {},
     workers: {},
+    process: {
+      role: "web",
+      roleLabel: "web_only",
+      workerCapable: false,
+      status: "missing_required_worker_role",
+      readinessImpact: "unavailable",
+      reasonCode: "required_worker_role_absent",
+    },
     operational: {},
   });
 
@@ -102,6 +110,8 @@ test("root and api health derive operational readiness from the same blocker log
   assert.ok(
     rootHealth.operationalReadiness.blockerReasonCodes.includes("projection_missing")
   );
+  assert.equal(rootHealth.process.role, "web");
+  assert.equal(rootHealth.process.reasonCode, "required_worker_role_absent");
   assert.equal(validateAihqHealthEnvelope(apiHealth).ok, true);
   assert.equal(validateAihqHealthEnvelope(rootHealth).ok, true);
 });

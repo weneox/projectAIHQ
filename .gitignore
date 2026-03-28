@@ -12,6 +12,9 @@ coverage/
 .DS_Store
 Thumbs.db
 *.log
+.tmp-pg-*/
+.tmp-aihq-health-server.pid
+ai-hq-frontend/test-results/
 **/.git_backup/
 **/.git/
 **/.git_backup/

@@ -1,7 +1,12 @@
 import { validateRuntimeIncidentResponse } from "@aihq/shared-contracts/critical";
 import { buildCorrelationHeaders, createStructuredLogger } from "@aihq/shared-contracts/logger";
 
-import { AIHQ_BASE_URL, AIHQ_INTERNAL_TOKEN, AIHQ_TIMEOUT_MS } from "../config.js";
+import {
+  AIHQ_BASE_URL,
+  AIHQ_INTERNAL_SERVICE,
+  AIHQ_INTERNAL_TOKEN,
+  AIHQ_TIMEOUT_MS,
+} from "../config.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -87,6 +92,10 @@ export function createAihqRuntimeIncidentClient({
             "Content-Type": "application/json; charset=utf-8",
             Accept: "application/json",
             "x-internal-token": token,
+            ...(s(AIHQ_INTERNAL_SERVICE)
+              ? { "x-internal-service": s(AIHQ_INTERNAL_SERVICE) }
+              : {}),
+            "x-internal-audience": "aihq-backend.runtime-signals.incidents",
           },
         }),
         body: JSON.stringify(payload),

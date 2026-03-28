@@ -1,6 +1,8 @@
 // src/db/helpers/settings.js
 // FINAL v2.0.0 — tenant settings helpers (workspace-safe + frontend-compatible)
 
+import { buildTenantEntitlements } from "../../services/tenantEntitlements.js";
+
 function rowOrNull(r) {
   return r?.rows?.[0] || null;
 }
@@ -278,6 +280,7 @@ export async function dbGetWorkspaceSettings(db, tenantKey) {
 
   return {
     tenant,
+    entitlements: buildTenantEntitlements(tenant),
     profile: normalizeProfileRow(rowOrNull(profileQ)),
     aiPolicy: normalizeAiPolicyRow(rowOrNull(policyQ)),
     channels: rows(channelsQ).map(normalizeChannelRow),

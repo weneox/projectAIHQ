@@ -1,7 +1,9 @@
 import express from "express";
-import { requireOperatorSurfaceAccess } from "../../../utils/auth.js";
+import {
+  createInternalTokenGuard,
+  requireOperatorSurfaceAccess,
+} from "../../../utils/auth.js";
 import { requireExecutionCallbackRateLimit } from "../../../utils/rateLimit.js";
-import { requireInternalToken } from "../../../utils/auth.js";
 import {
   enqueueVoiceSyncExecutionRequest,
   recordRuntimeIncidentRequest,
@@ -16,12 +18,20 @@ import {
 
 export function executionsRoutes({ db, wsHub }) {
   const r = express.Router();
+  const requireTwilioVoiceSync = createInternalTokenGuard({
+    allowedServices: ["twilio-voice-backend"],
+    allowedAudiences: ["aihq-backend.executions.voice-sync"],
+  });
+  const requireRuntimeIncidentSignal = createInternalTokenGuard({
+    allowedServices: ["meta-bot-backend", "twilio-voice-backend"],
+    allowedAudiences: ["aihq-backend.runtime-signals.incidents"],
+  });
 
-  r.post("/internal/executions/voice-sync", requireInternalToken, (req, res) => {
+  r.post("/internal/executions/voice-sync", requireTwilioVoiceSync, (req, res) => {
     return enqueueVoiceSyncExecutionRequest(req, res, { db, wsHub });
   });
 
-  r.post("/internal/runtime-signals/incidents", requireInternalToken, (req, res) => {
+  r.post("/internal/runtime-signals/incidents", requireRuntimeIncidentSignal, (req, res) => {
     return recordRuntimeIncidentRequest(req, res, { db, wsHub });
   });
 

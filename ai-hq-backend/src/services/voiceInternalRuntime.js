@@ -19,6 +19,7 @@ import {
   getTenantBrainRuntime,
   isRuntimeAuthorityError,
 } from "./businessBrain/getTenantBrainRuntime.js";
+import { createRuntimeAuthorityError } from "./businessBrain/runtimeAuthority.js";
 import { buildOperationalChannels } from "./operationalChannels.js";
 import { buildProjectedTenantRuntime } from "./projectedTenantRuntime.js";
 
@@ -692,12 +693,15 @@ function buildVoiceProjectedRuntime({
       throw error;
     }
 
-    return buildManualProjectedRuntime({
-      runtime,
-      tenant,
-      operationalChannels,
-      tenantKey,
-      toNumber,
+    throw createRuntimeAuthorityError({
+      mode: "strict",
+      tenantId: firstNonEmpty(authority.tenantId, tenant?.id, tenant?.tenant_id),
+      tenantKey: firstNonEmpty(authority.tenantKey, tenant?.tenant_key, tenantKey),
+      runtimeProjection: obj(runtime?.raw?.projection),
+      reasonCode: "runtime_projection_invalid",
+      reason: "runtime_projection_invalid",
+      message:
+        "Approved runtime authority is unavailable because the approved runtime projection could not be materialized for voice execution.",
     });
   }
 }
@@ -831,13 +835,28 @@ export async function processVoiceTenantConfig({
     tenantRow: tenant,
   });
 
-  const projectedRuntime = buildVoiceProjectedRuntime({
-    runtime,
-    tenant,
-    operationalChannels,
-    tenantKey: resolvedTenantKey,
-    toNumber,
-  });
+  let projectedRuntime = null;
+  try {
+    projectedRuntime = buildVoiceProjectedRuntime({
+      runtime,
+      tenant,
+      operationalChannels,
+      tenantKey: resolvedTenantKey,
+      toNumber,
+    });
+  } catch (error) {
+    if (isRuntimeAuthorityError(error)) {
+      return {
+        ok: false,
+        statusCode: Number(error?.statusCode || 409),
+        error: "runtime_authority_unavailable",
+        tenantKey: resolvedTenantKey,
+        toNumber,
+        details: buildVoiceAuthorityDetails(error, runtime),
+      };
+    }
+    throw error;
+  }
 
   if (operationalChannels?.voice?.ready !== true) {
     return {

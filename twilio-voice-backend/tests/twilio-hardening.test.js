@@ -450,6 +450,8 @@ test("voice AI HQ client forwards request and correlation headers", async () => 
   assert.equal(out.ok, true);
   assert.equal(seenHeaders["x-request-id"], "req-voice-1");
   assert.equal(seenHeaders["x-correlation-id"], "corr-voice-1");
+  assert.equal(seenHeaders["x-internal-service"], "twilio-voice-backend");
+  assert.equal(seenHeaders["x-internal-audience"], "aihq-backend.executions.voice-sync");
 });
 
 test("voice runtime signals response exposes readiness and runtime counters", () => {
@@ -529,6 +531,8 @@ test("voice durable incident client posts sanitized incident payload to AI HQ", 
   assert.equal(seenUrl, "https://aihq.example.test/api/internal/runtime-signals/incidents");
   assert.equal(seenHeaders["x-request-id"], "req-voice-3");
   assert.equal(seenHeaders["x-correlation-id"], "corr-voice-3");
+  assert.equal(seenHeaders["x-internal-service"], "twilio-voice-backend");
+  assert.equal(seenHeaders["x-internal-audience"], "aihq-backend.runtime-signals.incidents");
   assert.equal(seenBody.tenantKey, "acme");
   assert.equal(seenBody.code, "voice_sync_request_failed");
 });

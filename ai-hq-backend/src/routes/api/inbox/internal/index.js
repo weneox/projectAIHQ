@@ -1,5 +1,5 @@
 import express from "express";
-import { requireInternalToken } from "../../../../utils/auth.js";
+import { createInternalTokenGuard } from "../../../../utils/auth.js";
 import { getTenantBrainRuntime } from "../../../../services/businessBrain/getTenantBrainRuntime.js";
 import { createInboxIngestHandler } from "./ingest.js";
 import { createInboxOutboundHandler } from "./outbound.js";
@@ -13,10 +13,18 @@ export function inboxInternalRoutes({
   applyHandoff,
 } = {}) {
   const router = express.Router();
+  const requireMetaInboxIngest = createInternalTokenGuard({
+    allowedServices: ["meta-bot-backend"],
+    allowedAudiences: ["aihq-backend.inbox.ingest"],
+  });
+  const requireMetaInboxOutbound = createInternalTokenGuard({
+    allowedServices: ["meta-bot-backend"],
+    allowedAudiences: ["aihq-backend.inbox.outbound"],
+  });
 
   router.post(
     "/inbox/ingest",
-    requireInternalToken,
+    requireMetaInboxIngest,
     createInboxIngestHandler({
       db,
       wsHub,
@@ -29,7 +37,7 @@ export function inboxInternalRoutes({
 
   router.post(
     "/inbox/outbound",
-    requireInternalToken,
+    requireMetaInboxOutbound,
     createInboxOutboundHandler({ db, wsHub })
   );
 

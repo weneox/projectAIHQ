@@ -287,6 +287,17 @@ test("operational settings route returns sanitized readiness metadata", async ()
   assert.deepEqual(res.body?.channels?.meta?.providerSecrets?.missingSecretKeys, []);
   assert.equal(res.body?.readiness?.status, "ready");
   assert.equal(res.body?.readiness?.blockers?.length, 0);
+  assert.equal(res.body?.dataGovernance?.retention?.items?.[0]?.key, "runtime_incidents");
+  assert.equal(res.body?.dataGovernance?.retention?.items?.[0]?.retainDays, 14);
+  assert.equal(
+    res.body?.dataGovernance?.retention?.items?.find((item) => item.key === "audit_log")?.status,
+    "unbounded_in_repo"
+  );
+  assert.equal(res.body?.dataGovernance?.backupRestore?.status, "runbook_only");
+  assert.match(
+    res.body?.dataGovernance?.backupRestore?.message || "",
+    /does not create backups or provide self-serve restore/i
+  );
 });
 
 test("operational voice settings route blocks non-admin operators with audited permission semantics", async () => {

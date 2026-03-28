@@ -33,15 +33,19 @@ import { createDraftScheduleWorker } from "./src/workers/draftScheduleWorker.js"
 import { createMediaJobWorker } from "./src/workers/mediaJobWorker.js";
 import { createSourceSyncWorker } from "./src/workers/sourceSyncWorker.js";
 import {
+  buildProcessRoleOperationalState,
+  buildWorkerOperationalState,
   buildRuntimeSignalsSummary,
   buildDurableOperationalStatus,
   classifyWorkerHealth,
   configureRuntimeSignalPersistence,
+  summarizeWorkerFleet,
 } from "./src/observability/runtimeSignals.js";
 import {
   listRecentRuntimeIncidents,
   pruneRuntimeIncidentTrail,
   persistRuntimeIncident,
+  summarizeRuntimeIncidents,
 } from "./src/services/runtimeIncidentTrail.js";
 import { createDurableExecutionHelpers } from "./src/db/helpers/durableExecutions.js";
 import {
@@ -53,6 +57,13 @@ import {
 
 function s(v, d = "") {
   return String(v ?? d).trim();
+}
+
+function pushUnique(target = [], value = "") {
+  const item = s(value);
+  if (!item || target.includes(item)) return target;
+  target.push(item);
+  return target;
 }
 
 function createAuditLogger(db) {
@@ -105,6 +116,7 @@ function createAuditLogger(db) {
 async function main() {
   assertConfigValid(console);
   printFeatureReport(console);
+  const processWorkerCapable = cfg.app.processRole !== "web";
   const logger = createLogger({ service: "ai-hq-backend", env: cfg.app.env });
   const runtimeIncidentRetentionPolicy = {
     retainDays: 14,
@@ -238,6 +250,28 @@ async function main() {
   app.get("/health", async (_req, res) => {
     const hasDbUrl = Boolean(s(cfg.db.url));
     const db = getDb();
+    const workerConfigured = {
+      "source-sync-worker": {
+        enabled: !!cfg.workers.sourceSyncWorkerEnabled,
+        required: true,
+      },
+      "durable-execution-worker": {
+        enabled: !!cfg.workers.durableExecutionWorkerEnabled,
+        required: true,
+      },
+      "draft-schedule-worker": {
+        enabled: !!cfg.workers.draftScheduleWorkerEnabled,
+        required: false,
+      },
+      "media-job-worker": {
+        enabled: !!cfg.workers.mediaJobWorkerEnabled,
+        required: false,
+      },
+    };
+    const processRole = buildProcessRoleOperationalState({
+      processRole: cfg.app.processRole,
+      workerConfigured,
+    });
     const out = await buildRootHealthResponse({
       db,
       startupOperationalReadiness,
@@ -253,6 +287,7 @@ async function main() {
         draftScheduleEnabled: !!cfg.workers.draftScheduleWorkerEnabled,
         mediaJobWorkerEnabled: !!cfg.workers.mediaJobWorkerEnabled,
       },
+      process: processRole,
       operational: {
         status: "ok",
         durableExecution: null,
@@ -260,8 +295,33 @@ async function main() {
       },
     });
     out.db.ok = false;
+    out.status = out.ok ? "ready" : "unavailable";
+    out.degraded = false;
+    out.unavailable = out.status === "unavailable";
+    out.reasonCodes = Array.isArray(out?.operationalReadiness?.blockerReasonCodes)
+      ? [...out.operationalReadiness.blockerReasonCodes]
+      : [];
+    out.summary = {
+      message: "",
+    };
+    out.incidents = {
+      status: "clear",
+      total: 0,
+      errorCount: 0,
+      warnCount: 0,
+      latestOccurredAt: "",
+      sinceHours: 6,
+      services: [],
+      reasonCodes: [],
+    };
 
     if (!hasDbUrl || !db) {
+      pushUnique(out.reasonCodes, "database_unavailable");
+      out.status = "unavailable";
+      out.unavailable = true;
+      out.ok = false;
+      out.summary.message =
+        "Database-backed readiness is unavailable, so this runtime is not healthy enough to advertise as ready.";
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       return res.status(200).json(out);
     }
@@ -273,7 +333,13 @@ async function main() {
       out.db.ok = false;
     }
 
+    if (!out.db.ok) {
+      pushUnique(out.reasonCodes, "database_unreachable");
+    }
+
     try {
+      const draftScheduleWorkerState = app.locals?.draftScheduleWorker?.getState?.() || null;
+      const mediaJobWorkerState = app.locals?.mediaJobWorker?.getState?.() || null;
       const durableWorkerState = app.locals?.durableExecutionWorker?.getState?.() || null;
       const sourceSyncWorkerState = app.locals?.sourceSyncWorker?.getState?.() || null;
       const helpers = createDurableExecutionHelpers({ db });
@@ -282,6 +348,45 @@ async function main() {
         summary: durableSummary,
         durableWorker: durableWorkerState,
         sourceSyncWorker: sourceSyncWorkerState,
+      });
+      const workerStates = {
+        "source-sync-worker": buildWorkerOperationalState({
+          workerName: "source-sync-worker",
+          configuredEnabled: workerConfigured["source-sync-worker"].enabled,
+          required: workerConfigured["source-sync-worker"].required,
+          state: sourceSyncWorkerState,
+          processWorkerCapable,
+        }),
+        "durable-execution-worker": buildWorkerOperationalState({
+          workerName: "durable-execution-worker",
+          configuredEnabled: workerConfigured["durable-execution-worker"].enabled,
+          required: workerConfigured["durable-execution-worker"].required,
+          state: durableWorkerState,
+          processWorkerCapable,
+        }),
+        "draft-schedule-worker": buildWorkerOperationalState({
+          workerName: "draft-schedule-worker",
+          configuredEnabled: workerConfigured["draft-schedule-worker"].enabled,
+          required: workerConfigured["draft-schedule-worker"].required,
+          state: draftScheduleWorkerState,
+          processWorkerCapable,
+        }),
+        "media-job-worker": buildWorkerOperationalState({
+          workerName: "media-job-worker",
+          configuredEnabled: workerConfigured["media-job-worker"].enabled,
+          required: workerConfigured["media-job-worker"].required,
+          state: mediaJobWorkerState,
+          processWorkerCapable,
+        }),
+      };
+      const workerSummary = summarizeWorkerFleet(Object.values(workerStates));
+      const recentIncidents = await listRecentRuntimeIncidents({
+        db,
+        limit: 10,
+        sinceHours: 6,
+      });
+      const incidentSummary = summarizeRuntimeIncidents(recentIncidents, {
+        sinceHours: 6,
       });
 
       out.operational = {
@@ -297,10 +402,79 @@ async function main() {
             operational?.recentSignals?.sourceSyncAttentionEvents || 0
           ),
         },
+        alerts: Array.isArray(operational?.alerts) ? operational.alerts : [],
+        workers: workerStates,
+        workerSummary,
+        incidents: incidentSummary,
       };
+      out.workers = {
+        ...out.workers,
+        summary: workerSummary,
+        states: workerStates,
+      };
+      out.process = processRole;
+      out.incidents = incidentSummary;
     } catch {
       out.operational.status = "attention";
+      pushUnique(out.reasonCodes, "operational_surface_unavailable");
     }
+
+    if (out?.operationalReadiness?.status === "blocked") {
+      out.status = "unavailable";
+    } else if (out?.operationalReadiness?.status === "attention" && out.status !== "unavailable") {
+      out.status = "degraded";
+    }
+
+    const workerSummary = out?.workers?.summary || {};
+    if (workerSummary.status === "unavailable") {
+      out.status = "unavailable";
+    } else if (workerSummary.status === "degraded" && out.status === "ready") {
+      out.status = "degraded";
+    }
+
+    if (out?.operational?.status === "attention" && out.status === "ready") {
+      out.status = "degraded";
+    }
+
+    if (processRole.readinessImpact === "unavailable") {
+      out.status = "unavailable";
+    } else if (processRole.readinessImpact === "degraded" && out.status === "ready") {
+      out.status = "degraded";
+    }
+
+    if (out?.incidents?.status === "degraded" && out.status === "ready") {
+      out.status = "degraded";
+    } else if (out?.incidents?.status === "attention" && out.status === "ready") {
+      out.status = "degraded";
+    }
+
+    if (!out.db.ok) {
+      out.status = "unavailable";
+    }
+
+    for (const entry of Object.values(out?.workers?.states || {})) {
+      if (!entry?.reasonCode) continue;
+      pushUnique(out.reasonCodes, entry.reasonCode);
+    }
+    for (const code of out?.incidents?.reasonCodes || []) {
+      pushUnique(out.reasonCodes, code);
+    }
+    if (out?.operational?.status === "attention") {
+      pushUnique(out.reasonCodes, "operational_attention");
+    }
+    if (processRole.reasonCode) {
+      pushUnique(out.reasonCodes, processRole.reasonCode);
+    }
+
+    out.unavailable = out.status === "unavailable";
+    out.degraded = out.status === "degraded";
+    out.ok = out.status === "ready";
+    out.summary.message =
+      out.status === "ready"
+        ? "Readiness, worker fleet, and recent incident signals are currently healthy."
+        : out.status === "unavailable"
+        ? "The control plane is not ready to advertise healthy availability because required runtime dependencies are blocked or unavailable."
+        : "The control plane is reachable but degraded. Operators should review worker or recent incident signals before trusting normal runtime behavior.";
 
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     return res.status(200).json(out);
@@ -560,19 +734,19 @@ async function main() {
   });
   app.locals.mediaJobWorker = mediaJobWorker;
 
-  if (cfg.workers.sourceSyncWorkerEnabled) {
+  if (processWorkerCapable && cfg.workers.sourceSyncWorkerEnabled) {
     sourceSyncWorker?.start?.();
   }
 
-  if (cfg.workers.durableExecutionWorkerEnabled) {
+  if (processWorkerCapable && cfg.workers.durableExecutionWorkerEnabled) {
     durableExecutionWorker?.start?.();
   }
 
-  if (cfg.workers.draftScheduleWorkerEnabled) {
+  if (processWorkerCapable && cfg.workers.draftScheduleWorkerEnabled) {
     draftScheduleWorker?.start?.();
   }
 
-  if (cfg.workers.mediaJobWorkerEnabled) {
+  if (processWorkerCapable && cfg.workers.mediaJobWorkerEnabled) {
     mediaJobWorker?.start?.();
   }
 
@@ -614,6 +788,8 @@ async function main() {
     logger.info("app.started", {
       port: cfg.app.port,
       hasDb,
+      processRole: cfg.app.processRole,
+      processWorkerCapable,
       corsOrigin: cfg.urls.corsOrigin,
       allowedOrigins,
       sourceSyncWorkerEnabled: !!cfg.workers.sourceSyncWorkerEnabled,

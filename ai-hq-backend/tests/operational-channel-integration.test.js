@@ -411,6 +411,8 @@ test(
         {
           headers: {
             "x-internal-token": "integration-internal-token",
+            "x-internal-service": "meta-bot-backend",
+            "x-internal-audience": "aihq-backend.providers.meta-channel-access",
           },
           query: {
             channel: "instagram",

@@ -4,6 +4,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildProcessRoleOperationalState,
+  buildWorkerOperationalState,
   buildRuntimeSignalsSummary,
   buildDurableOperationalStatus,
   classifyWorkerHealth,
@@ -17,6 +19,7 @@ import {
   recordRealtimeAuthFailure,
   recordSourceSyncOutcome,
   resetRuntimeSignals,
+  summarizeWorkerFleet,
 } from "../src/observability/runtimeSignals.js";
 import { cfg } from "../src/config.js";
 
@@ -169,4 +172,81 @@ test("runtime signals retain recent critical event history", () => {
   assert.equal(history[0].code, "voice_test_failed");
   assert.equal(history[0].reasonCode, "voice_test_failed");
   assert.equal(history[0].context?.tenantKey, "acme");
+});
+
+test("worker fleet summary marks missing required workers unavailable and stale workers degraded", () => {
+  resetRuntimeSignals();
+
+  const requiredMissing = buildWorkerOperationalState({
+    workerName: "durable-execution-worker",
+    configuredEnabled: true,
+    required: true,
+    state: null,
+  });
+  const optionalDisabled = buildWorkerOperationalState({
+    workerName: "media-job-worker",
+    configuredEnabled: false,
+    required: false,
+    state: null,
+  });
+  const staleWorker = buildWorkerOperationalState({
+    workerName: "source-sync-worker",
+    configuredEnabled: true,
+    required: true,
+    state: {
+      enabled: true,
+      running: false,
+      stopped: false,
+      lastHeartbeatAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+    },
+  });
+
+  const summary = summarizeWorkerFleet([requiredMissing, optionalDisabled, staleWorker]);
+
+  assert.equal(requiredMissing.status, "unstarted");
+  assert.equal(requiredMissing.availability, "unavailable");
+  assert.equal(optionalDisabled.status, "disabled");
+  assert.equal(staleWorker.availability, "degraded");
+  assert.equal(summary.status, "unavailable");
+  assert.ok(summary.reasonCodes.includes("worker_not_started"));
+  assert.ok(summary.reasonCodes.includes("worker_heartbeat_stale"));
+});
+
+test("web-only process role reports missing required worker responsibilities explicitly", () => {
+  const processState = buildProcessRoleOperationalState({
+    processRole: "web",
+    workerConfigured: {
+      "source-sync-worker": { enabled: true, required: true },
+      "durable-execution-worker": { enabled: true, required: true },
+      "media-job-worker": { enabled: true, required: false },
+    },
+  });
+
+  const requiredWorker = buildWorkerOperationalState({
+    workerName: "durable-execution-worker",
+    configuredEnabled: true,
+    required: true,
+    processWorkerCapable: false,
+    state: null,
+  });
+  const optionalWorker = buildWorkerOperationalState({
+    workerName: "media-job-worker",
+    configuredEnabled: true,
+    required: false,
+    processWorkerCapable: false,
+    state: null,
+  });
+
+  assert.equal(processState.role, "web");
+  assert.equal(processState.status, "missing_required_worker_role");
+  assert.equal(processState.readinessImpact, "unavailable");
+  assert.equal(processState.reasonCode, "required_worker_role_absent");
+  assert.deepEqual(processState.enabledWorkers.required, [
+    "source-sync-worker",
+    "durable-execution-worker",
+  ]);
+  assert.equal(requiredWorker.status, "role_absent");
+  assert.equal(requiredWorker.availability, "unavailable");
+  assert.equal(requiredWorker.reasonCode, "worker_role_absent");
+  assert.equal(optionalWorker.availability, "degraded");
 });

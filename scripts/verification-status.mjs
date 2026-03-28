@@ -1,4 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import "./workspace-module-loader.mjs";
 
@@ -36,6 +39,82 @@ function summarizeIssues(issues = []) {
 
 function formatEnvKeys(keys = []) {
   return keys.length ? `env=${keys.join(",")}` : "";
+}
+
+function resolveRepoRoot() {
+  return fileURLToPath(new URL("../", import.meta.url));
+}
+
+function dockerBuildCommandFor(workspaceName) {
+  return `docker build -f ${workspaceName}/Dockerfile .`;
+}
+
+function dockerRunCommandFor(workspaceName) {
+  return `docker run --rm -p 8080:8080 ${workspaceName}`;
+}
+
+export function getContainerRuntimeParity({ repoRoot = resolveRepoRoot() } = {}) {
+  const workspaces = [
+    {
+      name: "ai-hq-backend",
+      dockerfilePath: join(repoRoot, "ai-hq-backend", "Dockerfile"),
+      requiredMarkers: [
+        "COPY shared-contracts ./shared-contracts",
+        "COPY scripts ./scripts",
+        "COPY ai-hq-backend/package*.json ./ai-hq-backend/",
+        "WORKDIR /app/ai-hq-backend",
+        "RUN npm ci",
+        'CMD ["npm", "start"]',
+      ],
+    },
+    {
+      name: "meta-bot-backend",
+      dockerfilePath: join(repoRoot, "meta-bot-backend", "Dockerfile"),
+      requiredMarkers: [
+        "COPY shared-contracts ./shared-contracts",
+        "COPY scripts ./scripts",
+        "COPY meta-bot-backend/package*.json ./meta-bot-backend/",
+        "WORKDIR /app/meta-bot-backend",
+        "RUN npm ci",
+        'CMD ["npm", "start"]',
+      ],
+    },
+    {
+      name: "twilio-voice-backend",
+      dockerfilePath: join(repoRoot, "twilio-voice-backend", "Dockerfile"),
+      requiredMarkers: [],
+    },
+  ];
+
+  return workspaces.map((workspace) => {
+    if (!existsSync(workspace.dockerfilePath)) {
+      return {
+        name: workspace.name,
+        status: "no_repo_docker_asset",
+        detail: "no Dockerfile is present in-repo; use workspace startup scripts instead",
+      };
+    }
+
+    const dockerfile = readFileSync(workspace.dockerfilePath, "utf8");
+    const missingMarkers = workspace.requiredMarkers.filter(
+      (marker) => !dockerfile.includes(marker)
+    );
+
+    if (missingMarkers.length > 0) {
+      return {
+        name: workspace.name,
+        status: "drifted_from_workspace_contract",
+        detail:
+          "docker asset no longer reflects the workspace loader/shared-contracts startup contract",
+      };
+    }
+
+    return {
+      name: workspace.name,
+      status: "ready",
+      detail: `${dockerBuildCommandFor(workspace.name)} -> ${dockerRunCommandFor(workspace.name)} (build from repo root)`,
+    };
+  });
 }
 
 function renderWorkspaceValidation(name, issues = []) {
@@ -87,7 +166,7 @@ async function loadValidationData() {
   };
 }
 
-async function main() {
+export async function main() {
   const dockerAvailable = canUseDocker();
   const hasDatabaseUrl = Boolean(String(process.env.DATABASE_URL || "").trim());
   const {
@@ -145,6 +224,11 @@ async function main() {
     "AIHQ_BASE_URL required; AIHQ_INTERNAL_TOKEN required for /api/health; sidecar base URLs optional unless strict"
   );
 
+  printSection("Container Runtime Parity");
+  for (const workspace of getContainerRuntimeParity()) {
+    printStatus(workspace.name, workspace.status, workspace.detail);
+  }
+
   printSection("Classification");
   printStatus(
     "blocked_by_environment",
@@ -161,6 +245,23 @@ async function main() {
     "means",
     "the command is code-only under the current machine/env"
   );
+  printStatus(
+    "ready",
+    "means",
+    "the repo ships a Dockerfile that matches the current workspace startup contract"
+  );
+  printStatus(
+    "drifted_from_workspace_contract",
+    "means",
+    "the Dockerfile exists but no longer matches the workspace loader/shared-contracts startup contract"
+  );
+  printStatus(
+    "no_repo_docker_asset",
+    "means",
+    "the repo does not currently ship a Dockerfile for that service"
+  );
 }
 
-await main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  await main();
+}

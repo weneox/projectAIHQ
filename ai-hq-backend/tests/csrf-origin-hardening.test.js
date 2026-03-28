@@ -247,6 +247,8 @@ test("api router protects user and admin cookie mutations while leaving internal
       headers: {
         host: "api.example.com",
         "x-internal-token": "internal-secret",
+        "x-internal-service": "twilio-voice-backend",
+        "x-internal-audience": "aihq-backend.voice.internal",
       },
       protocol: "https",
     });
@@ -290,6 +292,8 @@ test("api health uses internal token auth instead of falling through to session 
       headers: {
         host: "api.example.com",
         "x-internal-token": "internal-secret",
+        "x-internal-service": "meta-bot-backend",
+        "x-internal-audience": "aihq-backend.health",
       },
       protocol: "https",
     });

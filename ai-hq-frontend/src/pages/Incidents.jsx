@@ -20,6 +20,20 @@ function prettyService(service = "") {
   return normalized;
 }
 
+function postureTone(status = "") {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "degraded") return "border-rose-400/18 bg-rose-500/12 text-rose-100";
+  if (normalized === "attention") return "border-amber-400/18 bg-amber-500/12 text-amber-100";
+  return "border-emerald-400/18 bg-emerald-500/12 text-emerald-100";
+}
+
+function postureLabel(status = "") {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "degraded") return "Degraded";
+  if (normalized === "attention") return "Attention";
+  return "Clear";
+}
+
 function FilterField({ label, children }) {
   return (
     <label className="space-y-2">
@@ -59,6 +73,7 @@ export default function Incidents() {
     applyFilters,
     clearFilters,
     retentionPolicy,
+    summary,
     surface,
   } = useAdminIncidentsSurface();
 
@@ -88,6 +103,32 @@ export default function Incidents() {
       }
     >
       <section className="rounded-[28px] border border-white/10 bg-[#07111d] px-5 py-5">
+        {summary ? (
+          <div className={cx("mb-5 rounded-[22px] border px-4 py-4", postureTone(summary.status))}>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.18em] text-white/58">
+                  Current incident posture
+                </div>
+                <div className="mt-2 text-sm font-semibold text-white">
+                  {postureLabel(summary.status)} over the last {summary.sinceHours || filters.sinceHours}h
+                </div>
+                <div className="mt-2 text-sm text-white/72">
+                  {summary.total || 0} recent incident{Number(summary.total || 0) === 1 ? "" : "s"}.
+                  {" "}
+                  {summary.errorCount || 0} error, {summary.warnCount || 0} warn.
+                </div>
+              </div>
+
+              <div className="grid gap-2 text-xs text-white/64">
+                <div>Latest: {summary.latestOccurredAt ? new Date(summary.latestOccurredAt).toLocaleString() : "-"}</div>
+                <div>Services: {summary.services?.length ? summary.services.join(", ") : "-"}</div>
+                <div>Reasons: {summary.reasonCodes?.length ? summary.reasonCodes.join(", ") : "-"}</div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <div className="mb-5 flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.05] text-cyan-300">
             <Filter className="h-5 w-5" />

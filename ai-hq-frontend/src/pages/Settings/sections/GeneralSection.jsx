@@ -4,6 +4,7 @@ import WorkspaceGeneralForm from "../../../components/settings/WorkspaceGeneralF
 export default function GeneralSection({
   tenantKey,
   tenant,
+  entitlements,
   patchTenant,
   canManage,
   surface,
@@ -17,6 +18,7 @@ export default function GeneralSection({
       <WorkspaceGeneralForm
         tenantKey={tenantKey}
         tenant={tenant}
+        entitlements={entitlements}
         patchTenant={patchTenant}
         canManage={canManage}
       />

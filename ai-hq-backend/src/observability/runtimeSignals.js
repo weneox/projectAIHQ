@@ -218,6 +218,188 @@ export function classifyWorkerHealth(state = null) {
   };
 }
 
+export function buildWorkerOperationalState({
+  workerName = "",
+  configuredEnabled = false,
+  required = false,
+  state = null,
+  processWorkerCapable = true,
+} = {}) {
+  const name = s(workerName || state?.workerName || "worker");
+
+  if (!configuredEnabled) {
+    return {
+      workerName: name,
+      required: Boolean(required),
+      configuredEnabled: false,
+      registered: Boolean(state),
+      status: "disabled",
+      availability: "disabled",
+      reasonCode: "worker_disabled",
+      health: classifyWorkerHealth({
+        ...(state || {}),
+        enabled: false,
+      }),
+      state: state ? { ...state } : null,
+    };
+  }
+
+  if (!processWorkerCapable) {
+    return {
+      workerName: name,
+      required: Boolean(required),
+      configuredEnabled: true,
+      registered: Boolean(state),
+      status: "role_absent",
+      availability: required ? "unavailable" : "degraded",
+      reasonCode: "worker_role_absent",
+      health: {
+        status: "role_absent",
+        stale: false,
+        ageMs: null,
+      },
+      state: state ? { ...state } : null,
+    };
+  }
+
+  if (!state) {
+    return {
+      workerName: name,
+      required: Boolean(required),
+      configuredEnabled: true,
+      registered: false,
+      status: "unstarted",
+      availability: "unavailable",
+      reasonCode: "worker_not_started",
+      health: {
+        status: "unknown",
+        stale: false,
+        ageMs: null,
+      },
+      state: null,
+    };
+  }
+
+  const normalizedState = {
+    ...state,
+    enabled: true,
+  };
+  const health = classifyWorkerHealth(normalizedState);
+
+  let status = health.status;
+  let availability = "available";
+  let reasonCode = "";
+
+  if (normalizedState.stopped === true) {
+    status = "stopped";
+    availability = "unavailable";
+    reasonCode = "worker_stopped";
+  } else if (health.status === "stale") {
+    availability = "degraded";
+    reasonCode = "worker_heartbeat_stale";
+  }
+
+  return {
+    workerName: name,
+    required: Boolean(required),
+    configuredEnabled: true,
+    registered: true,
+    status,
+    availability,
+    reasonCode,
+    health,
+    state: { ...state },
+  };
+}
+
+export function buildProcessRoleOperationalState({
+  processRole = "all",
+  workerConfigured = {},
+} = {}) {
+  const normalizedRole = lower(processRole || "all") === "web" ? "web" : "all";
+  const configuredEntries = Object.entries(workerConfigured || {}).filter(
+    ([, value]) => value && typeof value === "object" && value.enabled === true
+  );
+  const requiredWorkers = configuredEntries
+    .filter(([, value]) => value.required === true)
+    .map(([key]) => s(key));
+  const optionalWorkers = configuredEntries
+    .filter(([, value]) => value.required !== true)
+    .map(([key]) => s(key));
+  const workerCapable = normalizedRole === "all";
+
+  let status = workerCapable ? "worker_capable" : "web_only";
+  let readinessImpact = "none";
+  let reasonCode = "";
+  let message =
+    "This runtime serves web traffic and can execute configured background workers locally.";
+
+  if (!workerCapable && requiredWorkers.length) {
+    status = "missing_required_worker_role";
+    readinessImpact = "unavailable";
+    reasonCode = "required_worker_role_absent";
+    message =
+      "This runtime is web-only, so required background worker responsibilities are not running locally.";
+  } else if (!workerCapable && optionalWorkers.length) {
+    readinessImpact = "degraded";
+    reasonCode = "optional_worker_role_absent";
+    message =
+      "This runtime is web-only. Optional background worker responsibilities are not running locally.";
+  } else if (!workerCapable) {
+    message =
+      "This runtime is explicitly web-only and is not expected to execute background workers locally.";
+  }
+
+  return {
+    role: normalizedRole,
+    roleLabel: workerCapable ? "worker_capable" : "web_only",
+    servesWebTraffic: true,
+    workerCapable,
+    status,
+    readinessImpact,
+    reasonCode,
+    message,
+    enabledWorkers: {
+      required: requiredWorkers,
+      optional: optionalWorkers,
+    },
+  };
+}
+
+export function summarizeWorkerFleet(workerEntries = []) {
+  const entries = Array.isArray(workerEntries)
+    ? workerEntries.filter((item) => item && typeof item === "object")
+    : [];
+  const requiredEntries = entries.filter((item) => item.required);
+  const unavailableRequired = requiredEntries.filter(
+    (item) => item.availability === "unavailable"
+  );
+  const degradedEntries = entries.filter((item) => item.availability === "degraded");
+  const disabledEntries = entries.filter((item) => item.availability === "disabled");
+
+  const status = unavailableRequired.length
+    ? "unavailable"
+    : degradedEntries.length
+    ? "degraded"
+    : "ready";
+
+  const reasonCodes = Array.from(
+    new Set(entries.map((item) => s(item.reasonCode)).filter(Boolean))
+  );
+
+  return {
+    status,
+    totals: {
+      total: entries.length,
+      required: requiredEntries.length,
+      disabled: disabledEntries.length,
+      degraded: degradedEntries.length,
+      unavailable: entries.filter((item) => item.availability === "unavailable").length,
+    },
+    reasonCodes,
+  };
+}
+
 export function recordDurableExecutionCreated({
   provider = "",
   channel = "",
@@ -557,6 +739,9 @@ export const __test__ = {
   countRecent,
   ageMs,
   parseMetricKey,
+  buildWorkerOperationalState,
+  buildProcessRoleOperationalState,
+  summarizeWorkerFleet,
   counterStore,
   recentStore,
   workerStore,

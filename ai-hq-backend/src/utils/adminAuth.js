@@ -1131,6 +1131,33 @@ export async function requireAdminSession(req, res, next) {
 }
 
 export async function requireUserSession(req, res, next) {
+  const existingAuth = req?.auth;
+  if (
+    existingAuth &&
+    s(existingAuth.userId) &&
+    s(existingAuth.tenantId) &&
+    s(existingAuth.tenantKey) &&
+    s(existingAuth.email)
+  ) {
+    if (!req.user) {
+      req.user = {
+        id: s(existingAuth.userId),
+        tenantId: s(existingAuth.tenantId),
+        tenantKey: s(existingAuth.tenantKey),
+        tenant_id: s(existingAuth.tenantId),
+        tenant_key: s(existingAuth.tenantKey),
+        email: s(existingAuth.email),
+        fullName: s(existingAuth.fullName || ""),
+        full_name: s(existingAuth.fullName || ""),
+        role: s(existingAuth.role || "member").toLowerCase(),
+        sessionVersion: Number(existingAuth.sessionVersion || 1),
+        session_version: Number(existingAuth.sessionVersion || 1),
+      };
+    }
+
+    return next();
+  }
+
   const session = await loadUserSessionFromRequest(req, {
     db: req.app?.locals?.db || null,
   });

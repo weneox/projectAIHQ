@@ -3,10 +3,12 @@ import {
   getAuthTenantKey,
   getRequestedTenantKey,
   getAuthRole,
+  getNormalizedAuthRole,
   getAuthActor,
 } from "../../../utils/auth.js";
 import { dbAudit } from "../../../db/helpers/audit.js";
-import { canReadAudit } from "../../../utils/roles.js";
+import { canManageSettings, canReadAudit } from "../../../utils/roles.js";
+import { getTenantCapability } from "../../../services/tenantEntitlements.js";
 
 export function ok(res, data = {}) {
   return res.status(200).json({ ok: true, ...data });
@@ -93,7 +95,11 @@ export function isInternalServiceRequest(req) {
 }
 
 export function getUserRole(req) {
-  return cleanLower(getAuthRole(req), "member");
+  return cleanLower(getNormalizedAuthRole(req), "member");
+}
+
+export function getViewerRole(req) {
+  return isInternalServiceRequest(req) ? "internal" : getUserRole(req);
 }
 
 export function getActor(req) {
@@ -104,7 +110,7 @@ export function buildMutationAuditMeta(req, meta = {}) {
   return {
     actorType: isInternalServiceRequest(req) ? "internal_service" : "user",
     actorId: getActor(req),
-    actorRole: isInternalServiceRequest(req) ? "internal" : getUserRole(req),
+    actorRole: getViewerRole(req),
     requestId: cleanNullableString(req?.requestId),
     correlationId: cleanNullableString(req?.correlationId),
     outcome: cleanLower(meta?.outcome || "succeeded"),
@@ -137,7 +143,7 @@ export function requireOwnerOrAdmin(req, res) {
   }
 
   const role = getUserRole(req);
-  if (role !== "owner" && role !== "admin") {
+  if (!canManageSettings(role)) {
     forbidden(res, "Only owner/admin can manage settings");
     return null;
   }
@@ -245,6 +251,73 @@ export async function requireOwnerOrAdminMutation(
     allowedRoles: ["owner", "admin"],
     ...options,
   });
+}
+
+export async function requireSettingsWriteMutation(
+  req,
+  res,
+  options = {}
+) {
+  return requireMutationRole(req, res, {
+    allowedRoles: ["owner", "admin"],
+    message: "Only owner/admin can manage settings",
+    reasonCode: "insufficient_role",
+    auditAction: "settings.mutation.blocked",
+    objectType: "tenant_setting",
+    targetArea: "settings",
+    ...options,
+  });
+}
+
+export async function requireTenantCapabilityMutation(
+  req,
+  res,
+  {
+    db,
+    tenant = null,
+    capabilityKey = "",
+    message = "This action is not available for the current workspace plan",
+    reasonCode = "plan_capability_restricted",
+    auditAction = "settings.mutation.blocked",
+    objectType = "tenant_setting",
+    objectId = "",
+    targetArea = "settings",
+    auditMeta = {},
+  } = {}
+) {
+  const capability = getTenantCapability(tenant, capabilityKey);
+
+  if (!capability || capability.allowed !== false) {
+    return capability || { allowed: true };
+  }
+
+  await auditSafe(
+    db,
+    req,
+    tenant || { tenant_key: resolveTenantKey(req) || null },
+    auditAction,
+    objectType,
+    objectId || tenant?.id || tenant?.tenant_key || resolveTenantKey(req) || "unknown",
+    {
+      outcome: "blocked",
+      reasonCode,
+      targetArea,
+      capabilityKey,
+      planKey: capability.planKey,
+      normalizedPlanKey: capability.normalizedPlanKey,
+      requiredPlans: capability.requiredPlans,
+      ...auditMeta,
+    }
+  );
+
+  forbidden(res, capability.message || message, {
+    reasonCode,
+    capabilityKey,
+    planKey: capability.planKey,
+    normalizedPlanKey: capability.normalizedPlanKey,
+    requiredPlans: capability.requiredPlans,
+  });
+  return null;
 }
 
 export async function auditSafe(db, req, tenant, action, objectType, objectId, meta = {}) {

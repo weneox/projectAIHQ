@@ -30,6 +30,10 @@ export function normalizeWorkspace(raw) {
   const tenant = raw?.tenant || {};
   const profile = raw?.profile || {};
   const ai = raw?.aiPolicy || {};
+  const entitlements =
+    raw?.entitlements && typeof raw.entitlements === "object" && !Array.isArray(raw.entitlements)
+      ? raw.entitlements
+      : {};
   const publishPolicy =
     ai && typeof ai.publish_policy === "object" && !Array.isArray(ai.publish_policy)
       ? ai.publish_policy
@@ -86,6 +90,59 @@ export function normalizeWorkspace(raw) {
       plan_key: tenant?.plan_key || "starter",
       status: tenant?.status || "active",
       active: typeof tenant?.active === "boolean" ? tenant.active : true,
+    },
+    entitlements: {
+      source: entitlements?.source || "managed_plan_key",
+      billing:
+        entitlements?.billing &&
+        typeof entitlements.billing === "object" &&
+        !Array.isArray(entitlements.billing)
+          ? {
+              selfServeAvailable:
+                typeof entitlements.billing.selfServeAvailable === "boolean"
+                  ? entitlements.billing.selfServeAvailable
+                  : false,
+              message:
+                entitlements.billing.message ||
+                "Plan assignment is managed internally. Self-serve billing is not enabled.",
+            }
+          : {
+              selfServeAvailable: false,
+              message:
+                "Plan assignment is managed internally. Self-serve billing is not enabled.",
+            },
+      plan:
+        entitlements?.plan &&
+        typeof entitlements.plan === "object" &&
+        !Array.isArray(entitlements.plan)
+          ? {
+              key: entitlements.plan.key || tenant?.plan_key || "starter",
+              normalizedKey:
+                entitlements.plan.normalizedKey || tenant?.plan_key || "starter",
+              label: entitlements.plan.label || tenant?.plan_key || "starter",
+              managed:
+                typeof entitlements.plan.managed === "boolean"
+                  ? entitlements.plan.managed
+                  : true,
+            }
+          : {
+              key: tenant?.plan_key || "starter",
+              normalizedKey: tenant?.plan_key || "starter",
+              label: tenant?.plan_key || "starter",
+              managed: true,
+            },
+      capabilities:
+        entitlements?.capabilities &&
+        typeof entitlements.capabilities === "object" &&
+        !Array.isArray(entitlements.capabilities)
+          ? entitlements.capabilities
+          : {},
+      summary:
+        entitlements?.summary &&
+        typeof entitlements.summary === "object" &&
+        !Array.isArray(entitlements.summary)
+          ? entitlements.summary
+          : { included: [], restricted: [], restrictedCount: 0 },
     },
     profile: {
       brand_name: profile?.brand_name || "",

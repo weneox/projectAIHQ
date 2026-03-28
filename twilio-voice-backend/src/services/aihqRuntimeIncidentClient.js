@@ -87,6 +87,10 @@ export function createAihqRuntimeIncidentClient({
             "Content-Type": "application/json; charset=utf-8",
             Accept: "application/json",
             "x-internal-token": token,
+            ...(s(cfg.AIHQ_INTERNAL_SERVICE)
+              ? { "x-internal-service": s(cfg.AIHQ_INTERNAL_SERVICE) }
+              : {}),
+            "x-internal-audience": "aihq-backend.runtime-signals.incidents",
           },
         }),
         body: JSON.stringify(payload),

@@ -61,6 +61,10 @@ export const cfg = {
 
   AIHQ_BASE_URL: s(process.env.AIHQ_BASE_URL).replace(/\/+$/, ""),
   AIHQ_INTERNAL_TOKEN: s(process.env.AIHQ_INTERNAL_TOKEN),
+  AIHQ_INTERNAL_SERVICE: s(
+    process.env.AIHQ_INTERNAL_SERVICE,
+    "twilio-voice-backend"
+  ),
   REQUIRE_OPERATIONAL_READINESS_ON_BOOT: prodDefaultBool(
     process.env.REQUIRE_OPERATIONAL_READINESS_ON_BOOT,
     true

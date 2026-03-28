@@ -23,6 +23,12 @@ function mode(v, d = "manual") {
   return d;
 }
 
+function processRole(v, d = "all") {
+  const x = String(v ?? "").trim().toLowerCase();
+  if (x === "web") return "web";
+  return d;
+}
+
 function prodDefaultBool(v, fallbackProd = true) {
   const raw = String(v ?? "").trim().toLowerCase();
   if (raw) {
@@ -43,6 +49,7 @@ export const cfg = {
     logLevel: s(process.env.LOG_LEVEL, "info"),
     defaultTimezone: s(process.env.DEFAULT_TIMEZONE, "Asia/Baku"),
     defaultMode: mode(process.env.DEFAULT_MODE, "manual"),
+    processRole: processRole(process.env.AIHQ_PROCESS_ROLE, "all"),
   },
 
   urls: {
@@ -76,6 +83,11 @@ export const cfg = {
     debugApiToken: s(process.env.DEBUG_API_TOKEN, ""),
     debugRoutesEnabled: b(process.env.DEBUG_ROUTES_ENABLED, false),
     aihqInternalToken: s(process.env.AIHQ_INTERNAL_TOKEN, ""),
+    aihqInternalMetaBotToken: s(process.env.AIHQ_INTERNAL_TOKEN_META_BOT, ""),
+    aihqInternalTwilioVoiceToken: s(
+      process.env.AIHQ_INTERNAL_TOKEN_TWILIO_VOICE,
+      ""
+    ),
     cronSecret: s(process.env.CRON_SECRET, ""),
     tenantSecretMasterKey: s(process.env.TENANT_SECRET_MASTER_KEY, ""),
   },

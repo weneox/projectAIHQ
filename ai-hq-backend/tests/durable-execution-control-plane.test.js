@@ -744,6 +744,8 @@ test("voice sync internal enqueue accepts work into the durable ledger instead o
     const result = await invokeRouter(router, "post", "/internal/executions/voice-sync", {
       headers: {
         "x-internal-token": "internal-secret",
+        "x-internal-service": "twilio-voice-backend",
+        "x-internal-audience": "aihq-backend.executions.voice-sync",
       },
       body: {
         actionType: "voice.sync.state",

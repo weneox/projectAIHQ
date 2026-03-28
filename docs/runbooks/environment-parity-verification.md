@@ -41,6 +41,15 @@ npm run check:workspace-startup-compat
 npm run test:aihq:db
 ```
 
+Container packaging expectations:
+
+- `ai-hq-backend` must be built from the repo root: `docker build -f ai-hq-backend/Dockerfile .`
+- `meta-bot-backend` must be built from the repo root: `docker build -f meta-bot-backend/Dockerfile .`
+- `twilio-voice-backend` currently has no in-repo Dockerfile and should be treated as workspace-start-only unless a deploy asset is added deliberately.
+
+Reason:
+Both shipped Dockerfiles depend on the shared workspace loader in [`scripts/workspace-module-loader.mjs`](/C:/Users/bagir/OneDrive/Desktop/projectAIHQ/scripts/workspace-module-loader.mjs) and the local [`shared-contracts`](/C:/Users/bagir/OneDrive/Desktop/projectAIHQ/shared-contracts/package.json) package, so building from a workspace directory alone is not a supported parity path.
+
 If production-like env is also present:
 
 ```powershell

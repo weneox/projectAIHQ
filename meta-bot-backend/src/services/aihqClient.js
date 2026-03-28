@@ -1,4 +1,9 @@
-import { AIHQ_BASE_URL, AIHQ_INTERNAL_TOKEN, AIHQ_TIMEOUT_MS } from "../config.js";
+import {
+  AIHQ_BASE_URL,
+  AIHQ_INTERNAL_SERVICE,
+  AIHQ_INTERNAL_TOKEN,
+  AIHQ_TIMEOUT_MS,
+} from "../config.js";
 import {
   buildCorrelationHeaders,
   createStructuredLogger,
@@ -36,14 +41,18 @@ const logger = createStructuredLogger({
   component: "aihq-client",
 });
 
-function buildHeaders(requestContext = {}) {
+function buildHeaders(requestContext = {}, audience = "") {
   return buildCorrelationHeaders({
     requestId: s(requestContext?.requestId),
     correlationId: s(requestContext?.correlationId),
     headers: {
-    "Content-Type": "application/json; charset=utf-8",
-    Accept: "application/json",
-    ...(s(AIHQ_INTERNAL_TOKEN) ? { "x-internal-token": s(AIHQ_INTERNAL_TOKEN) } : {}),
+      "Content-Type": "application/json; charset=utf-8",
+      Accept: "application/json",
+      ...(s(AIHQ_INTERNAL_TOKEN) ? { "x-internal-token": s(AIHQ_INTERNAL_TOKEN) } : {}),
+      ...(s(AIHQ_INTERNAL_SERVICE)
+        ? { "x-internal-service": s(AIHQ_INTERNAL_SERVICE) }
+        : {}),
+      ...(s(audience) ? { "x-internal-audience": s(audience) } : {}),
     },
   });
 }
@@ -220,7 +229,7 @@ function normalizePayload(payload) {
   };
 }
 
-async function postToAiHq(path, payload, requestContext = {}) {
+async function postToAiHq(path, payload, requestContext = {}, audience = "") {
   const base = trimSlash(AIHQ_BASE_URL);
 
   if (!base) {
@@ -244,7 +253,7 @@ async function postToAiHq(path, payload, requestContext = {}) {
 
     const res = await fetch(`${base}${path}`, {
       method: "POST",
-      headers: buildHeaders(requestContext),
+      headers: buildHeaders(requestContext, audience),
       body: JSON.stringify(safePayload),
       signal: controller.signal,
     });
@@ -304,9 +313,19 @@ async function postToAiHq(path, payload, requestContext = {}) {
 }
 
 export async function forwardToAiHq(payload, requestContext = {}) {
-  return postToAiHq("/api/inbox/ingest", payload, requestContext);
+  return postToAiHq(
+    "/api/inbox/ingest",
+    payload,
+    requestContext,
+    "aihq-backend.inbox.ingest"
+  );
 }
 
 export async function forwardCommentToAiHq(payload, requestContext = {}) {
-  return postToAiHq("/api/comments/ingest", payload, requestContext);
+  return postToAiHq(
+    "/api/comments/ingest",
+    payload,
+    requestContext,
+    "aihq-backend.comments.ingest"
+  );
 }

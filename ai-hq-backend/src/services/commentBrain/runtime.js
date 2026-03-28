@@ -1,5 +1,9 @@
 import { getDefaultTenantKey, resolveTenantKey } from "../../tenancy/index.js";
 import {
+  createRuntimeAuthorityError,
+  isRuntimeAuthorityError,
+} from "../businessBrain/runtimeAuthority.js";
+import {
   arr,
   flattenStringList,
   lower,
@@ -387,32 +391,58 @@ export async function resolveCommentRuntime({
   tenant = null,
   runtime = null,
 }) {
+  const resolvedTenantKey = getResolvedTenantKey(tenantKey);
+
   if (runtime && typeof runtime === "object") {
     return normalizeResolvedRuntime(runtime, { tenantKey, tenant });
   }
 
   const loaded = await loadRuntimeResolver();
+  if (!loaded?.resolve) {
+    throw createRuntimeAuthorityError({
+      mode: "strict",
+      tenantKey: resolvedTenantKey,
+      reasonCode: "runtime_resolver_missing",
+      reason: "runtime_resolver_missing",
+      message:
+        "Approved runtime authority is unavailable because no strict runtime resolver is configured.",
+    });
+  }
 
-  if (loaded?.resolve) {
-    const attempts = [
-      () => loaded.resolve({ tenantKey, tenant, channel: "comments" }),
-      () => loaded.resolve({ tenantKey, tenant }),
-      () => loaded.resolve(tenantKey, tenant, "comments"),
-      () => loaded.resolve(tenantKey, tenant),
-      () => loaded.resolve(tenant),
-    ];
+  const attempts = [
+    () => loaded.resolve({ tenantKey, tenant, channel: "comments" }),
+    () => loaded.resolve({ tenantKey, tenant }),
+    () => loaded.resolve(tenantKey, tenant, "comments"),
+    () => loaded.resolve(tenantKey, tenant),
+    () => loaded.resolve(tenant),
+  ];
 
-    for (const tryResolve of attempts) {
-      try {
-        const resolved = await tryResolve();
-        if (resolved && typeof resolved === "object") {
-          return normalizeResolvedRuntime(resolved, { tenantKey, tenant });
-        }
-      } catch {}
+  let lastError = null;
+
+  for (const tryResolve of attempts) {
+    try {
+      const resolved = await tryResolve();
+      if (resolved && typeof resolved === "object") {
+        return normalizeResolvedRuntime(resolved, { tenantKey, tenant });
+      }
+    } catch (error) {
+      lastError = error;
+      if (isRuntimeAuthorityError(error)) {
+        throw error;
+      }
     }
   }
 
-  return buildLocalRuntimeFallback({ tenantKey, tenant, runtime });
+  throw createRuntimeAuthorityError({
+    mode: "strict",
+    tenantKey: resolvedTenantKey,
+    reasonCode: "runtime_resolution_failed",
+    reason: "runtime_resolution_failed",
+    message:
+      lastError instanceof Error && s(lastError.message)
+        ? lastError.message
+        : "Approved runtime authority is unavailable because runtime resolution failed for this execution path.",
+  });
 }
 
 export function getCommentPolicy(runtime) {

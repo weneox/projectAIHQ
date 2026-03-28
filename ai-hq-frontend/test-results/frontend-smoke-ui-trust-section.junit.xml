@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8" ?>
-<testsuites name="vitest tests" tests="1" failures="0" errors="0" time="1.0731288">
-    <testsuite name="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" timestamp="2026-03-28T18:27:10.017Z" hostname="Emil" tests="1" failures="0" errors="0" skipped="0" time="1.0731288">
-        <testcase classname="src/pages/Settings/sections/TrustMaintenanceSection.test.jsx" name="TrustMaintenanceSection &gt; renders trust repair state and dispatches route actions from the extracted section" time="1.0703797">
-        </testcase>
-    </testsuite>
-</testsuites>

@@ -6,6 +6,7 @@ Use this before every production AI HQ backend deploy that includes schema chang
 
 - Confirm the release gate is green.
 - Confirm the current production database has a recent backup or provider snapshot.
+- Confirm that backup creation and restore testing are being handled outside this repo. The app and these runbooks do not perform automated backup orchestration or self-serve restore verification.
 - Confirm `npm run migrate:ai-hq-backend` was tested against a production-like database.
 - Confirm no pending hotfixes are waiting to ship on top of the same schema area.
 

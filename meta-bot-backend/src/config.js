@@ -44,6 +44,10 @@ export const PUBLIC_BASE_URL = s(process.env.PUBLIC_BASE_URL, "").replace(/\/+$/
 // --------------------------------------------------
 export const AIHQ_BASE_URL = s(process.env.AIHQ_BASE_URL, "").replace(/\/+$/, "");
 export const AIHQ_INTERNAL_TOKEN = s(process.env.AIHQ_INTERNAL_TOKEN, "");
+export const AIHQ_INTERNAL_SERVICE = s(
+  process.env.AIHQ_INTERNAL_SERVICE,
+  "meta-bot-backend"
+);
 export const AIHQ_TIMEOUT_MS = n(process.env.AIHQ_TIMEOUT_MS, 20000);
 export const REQUIRE_OPERATIONAL_READINESS_ON_BOOT = prodDefaultBool(
   process.env.REQUIRE_OPERATIONAL_READINESS_ON_BOOT,

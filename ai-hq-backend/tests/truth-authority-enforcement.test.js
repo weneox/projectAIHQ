@@ -10,6 +10,8 @@ import {
 import { buildProjectedTenantRuntime } from "../src/services/projectedTenantRuntime.js";
 import { buildVoiceConfigFromProjectedRuntime } from "../src/routes/api/voice/config.js";
 import { processVoiceTenantConfig } from "../src/services/voiceInternalRuntime.js";
+import { resolveInboxRuntime } from "../src/services/inboxBrain/runtime.js";
+import { resolveCommentRuntime } from "../src/services/commentBrain/runtime.js";
 import { ingestCommentHandler } from "../src/routes/api/comments/handlers.js";
 import { inboxInternalRoutes } from "../src/routes/api/inbox/internal.js";
 import {
@@ -1198,6 +1200,8 @@ test("inbox ingest fails closed when strict runtime authority is unavailable", a
     const { res } = await invokeRouter(router, "post", "/inbox/ingest", {
       headers: {
         "x-internal-token": "internal-secret",
+        "x-internal-service": "meta-bot-backend",
+        "x-internal-audience": "aihq-backend.inbox.ingest",
         "x-tenant-key": "acme",
       },
       body: {
@@ -1376,6 +1380,8 @@ test("inbox ingest succeeds when approved projected runtime is available", async
     const { res } = await invokeRouter(router, "post", "/inbox/ingest", {
       headers: {
         "x-internal-token": "internal-secret",
+        "x-internal-service": "meta-bot-backend",
+        "x-internal-audience": "aihq-backend.inbox.ingest",
         "x-tenant-key": "acme",
       },
       body: {
@@ -1536,6 +1542,113 @@ test("strict inbox brain context fails closed when approved projection is unavai
       return true;
     }
   );
+});
+
+test("direct inbox runtime resolution fails closed without approved runtime authority", async () => {
+  await assert.rejects(
+    () =>
+      resolveInboxRuntime({
+        tenantKey: "acme",
+        tenant: {
+          id: "tenant-1",
+          tenant_key: "acme",
+          company_name: "Acme Clinic",
+          default_language: "en",
+          enabled_languages: ["en", "az"],
+          profile: {
+            brand_name: "Acme Clinic",
+            services_summary: "Consultation",
+          },
+          ai_policy: {},
+          inbox_policy: {},
+        },
+      }),
+    (error) => {
+      assert.equal(error?.code, "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE");
+      assert.equal(error?.runtimeAuthority?.required, true);
+      assert.equal(error?.runtimeAuthority?.reasonCode, "runtime_projection_missing");
+      return true;
+    }
+  );
+});
+
+test("direct comment runtime resolution fails closed without approved runtime authority", async () => {
+  await assert.rejects(
+    () =>
+      resolveCommentRuntime({
+        tenantKey: "acme",
+        tenant: {
+          id: "tenant-1",
+          tenant_key: "acme",
+          company_name: "Acme Clinic",
+          default_language: "en",
+          enabled_languages: ["en", "az"],
+          profile: {
+            brand_name: "Acme Clinic",
+            services_summary: "Consultation",
+          },
+          ai_policy: {},
+          comment_policy: {},
+        },
+      }),
+    (error) => {
+      assert.equal(error?.code, "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE");
+      assert.equal(error?.runtimeAuthority?.required, true);
+      assert.equal(error?.runtimeAuthority?.reasonCode, "runtime_projection_missing");
+      return true;
+    }
+  );
+});
+
+test("voice tenant config fails closed when approved projection cannot be materialized", async () => {
+  const db = {
+    async query() {
+      return { rows: [] };
+    },
+  };
+
+  const result = await processVoiceTenantConfig({
+    db,
+    tenantKey: "acme",
+    toNumber: "+15550001111",
+    getRuntime: async () =>
+      buildApprovedRuntimePack({
+        authority: {
+          mode: "strict",
+          required: true,
+          available: true,
+          source: "approved_runtime_projection",
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+          runtimeProjectionId: "projection-1",
+          health: {
+            status: "blocked",
+            reasonCode: "runtime_projection_invalid",
+            affectedSurfaces: ["voice"],
+          },
+        },
+        raw: {
+          projection: {
+            id: "projection-1",
+            projection_hash: "hash-1",
+            health_json: {
+              status: "blocked",
+              reasonCode: "runtime_projection_invalid",
+              affectedSurfaces: ["voice"],
+            },
+          },
+        },
+      }),
+  });
+
+  assert.equal(result?.ok, false);
+  assert.equal(result?.statusCode, 409);
+  assert.equal(result?.error, "runtime_authority_unavailable");
+  assert.equal(
+    result?.details?.authority?.reasonCode,
+    "runtime_projection_invalid"
+  );
+  assert.equal(result?.details?.authority?.strict, true);
 });
 
 test("authoritative tenant lookups and inbox context succeed when an approved projection exists", async () => {

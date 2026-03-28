@@ -39,6 +39,18 @@ function emptyOperationalData() {
     operationalChannels: {},
     viewerRole: "member",
     capabilities: {},
+    dataGovernance: {
+      retention: {
+        items: [],
+      },
+      backupRestore: {
+        status: "unknown",
+        selfServeRestore: false,
+        automatedBackupOrRestoreVerification: false,
+        message: "",
+        runbooks: [],
+      },
+    },
   };
 }
 

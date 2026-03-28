@@ -336,6 +336,8 @@ test("route-level internal tenant resolve keeps secret metadata but strips raw v
     const { res } = await invokeRoute(router, "get", "/tenants/resolve-channel", {
       headers: {
         "x-internal-token": "internal-secret",
+        "x-internal-service": "meta-bot-backend",
+        "x-internal-audience": "aihq-backend.tenants.resolve-channel",
       },
       query: {
         channel: "instagram",
@@ -393,6 +395,10 @@ test("route-level internal tenant resolve rejects missing internal token", async
     });
 
     const { res } = await invokeRoute(router, "get", "/tenants/resolve-channel", {
+      headers: {
+        "x-internal-service": "meta-bot-backend",
+        "x-internal-audience": "aihq-backend.tenants.resolve-channel",
+      },
       query: {
         channel: "instagram",
         pageId: "page-1",
@@ -439,6 +445,10 @@ test("route-level internal tenant resolve fails closed when internal auth is mis
     });
 
     const { res } = await invokeRoute(router, "get", "/tenants/resolve-channel", {
+      headers: {
+        "x-internal-service": "meta-bot-backend",
+        "x-internal-audience": "aihq-backend.tenants.resolve-channel",
+      },
       query: {
         channel: "instagram",
         pageId: "page-1",
@@ -451,6 +461,56 @@ test("route-level internal tenant resolve fails closed when internal auth is mis
     assert.equal(res.body?.reason, "internal auth token is not configured");
   } finally {
     cfg.app.env = previousEnv;
+    cfg.security.aihqInternalToken = previousInternalToken;
+  }
+});
+
+test("route-level internal tenant resolve rejects callers outside the allowed service scope", async () => {
+  const previousInternalToken = cfg.security.aihqInternalToken;
+
+  try {
+    cfg.security.aihqInternalToken = "internal-secret";
+
+    const router = tenantInternalRoutes({
+      db: new FakeTenantInternalDb(),
+      getRuntime: async () => ({
+        authority: {
+          mode: "strict",
+          required: true,
+          available: true,
+          source: "approved_runtime_projection",
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+        },
+        raw: {
+          projection: {
+            identity_json: {
+              tenantId: "tenant-1",
+              tenantKey: "acme",
+              companyName: "Acme",
+            },
+          },
+        },
+      }),
+    });
+
+    const { res } = await invokeRoute(router, "get", "/tenants/resolve-channel", {
+      headers: {
+        "x-internal-token": "internal-secret",
+        "x-internal-service": "twilio-voice-backend",
+        "x-internal-audience": "aihq-backend.tenants.resolve-channel",
+      },
+      query: {
+        channel: "instagram",
+        pageId: "page-1",
+      },
+    });
+
+    assert.equal(res.statusCode, 403);
+    assert.equal(res.body?.ok, false);
+    assert.equal(res.body?.error, "Forbidden");
+    assert.equal(res.body?.reason, "invalid internal service");
+  } finally {
     cfg.security.aihqInternalToken = previousInternalToken;
   }
 });
@@ -501,13 +561,15 @@ test("route-level internal meta provider access returns secret-backed internal a
       router,
       "get",
       "/internal/providers/meta-channel-access",
-      {
-        headers: {
-          "x-internal-token": "internal-secret",
-        },
-        query: {
-          channel: "instagram",
-          pageId: "page-1",
+        {
+          headers: {
+            "x-internal-token": "internal-secret",
+            "x-internal-service": "meta-bot-backend",
+            "x-internal-audience": "aihq-backend.providers.meta-channel-access",
+          },
+          query: {
+            channel: "instagram",
+            pageId: "page-1",
         },
       }
     );
@@ -570,13 +632,15 @@ test("route-level internal meta provider access fails closed when channel ids ar
       router,
       "get",
       "/internal/providers/meta-channel-access",
-      {
-        headers: {
-          "x-internal-token": "internal-secret",
-        },
-        query: {
-          channel: "instagram",
-          pageId: "page-1",
+        {
+          headers: {
+            "x-internal-token": "internal-secret",
+            "x-internal-service": "meta-bot-backend",
+            "x-internal-audience": "aihq-backend.providers.meta-channel-access",
+          },
+          query: {
+            channel: "instagram",
+            pageId: "page-1",
         },
       }
     );
@@ -637,13 +701,15 @@ test("route-level internal meta provider access fails closed when provider secre
       router,
       "get",
       "/internal/providers/meta-channel-access",
-      {
-        headers: {
-          "x-internal-token": "internal-secret",
-        },
-        query: {
-          channel: "instagram",
-          pageId: "page-1",
+        {
+          headers: {
+            "x-internal-token": "internal-secret",
+            "x-internal-service": "meta-bot-backend",
+            "x-internal-audience": "aihq-backend.providers.meta-channel-access",
+          },
+          query: {
+            channel: "instagram",
+            pageId: "page-1",
         },
       }
     );

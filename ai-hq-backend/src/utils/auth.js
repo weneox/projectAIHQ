@@ -138,6 +138,17 @@ export function internalTokenExpected() {
   return cleanString(cfg?.security?.aihqInternalToken || "");
 }
 
+export function internalServiceTokenExpected(service = "") {
+  const key = cleanLower(service);
+  if (key === "meta-bot-backend") {
+    return cleanString(cfg?.security?.aihqInternalMetaBotToken || "");
+  }
+  if (key === "twilio-voice-backend") {
+    return cleanString(cfg?.security?.aihqInternalTwilioVoiceToken || "");
+  }
+  return "";
+}
+
 function readProvidedInternalToken(req) {
   return stripBearer(
     readHeader(req, "x-internal-token") ||
@@ -147,9 +158,77 @@ function readProvidedInternalToken(req) {
   );
 }
 
-export function getInternalTokenAuthResult(req) {
-  const expected = internalTokenExpected();
-  if (!expected) {
+export function readProvidedInternalService(req) {
+  return cleanLower(
+    readHeader(req, "x-internal-service") ||
+      req?.body?.internalService ||
+      req?.body?.internal_service ||
+      req?.query?.internalService ||
+      req?.query?.internal_service ||
+      ""
+  );
+}
+
+export function readProvidedInternalAudience(req) {
+  return cleanLower(
+    readHeader(req, "x-internal-audience") ||
+      req?.body?.internalAudience ||
+      req?.body?.internal_audience ||
+      req?.query?.internalAudience ||
+      req?.query?.internal_audience ||
+      ""
+  );
+}
+
+function normalizeAllowedInternalValues(values = []) {
+  return [
+    ...new Set(
+      (Array.isArray(values) ? values : [values])
+        .map((value) => cleanLower(value))
+        .filter(Boolean)
+    ),
+  ];
+}
+
+function listExpectedInternalTokens(service = "") {
+  const expected = [];
+  const serviceToken = internalServiceTokenExpected(service);
+  const globalToken = internalTokenExpected();
+
+  if (serviceToken) {
+    expected.push({
+      token: serviceToken,
+      mode: "service_token",
+      service: cleanLower(service),
+    });
+  }
+
+  if (globalToken) {
+    expected.push({
+      token: globalToken,
+      mode: "token",
+      service: "",
+    });
+  }
+
+  return expected;
+}
+
+function hasConfiguredInternalAuth() {
+  return Boolean(
+    internalTokenExpected() ||
+      internalServiceTokenExpected("meta-bot-backend") ||
+      internalServiceTokenExpected("twilio-voice-backend")
+  );
+}
+
+export function getInternalTokenAuthResult(req, options = {}) {
+  const allowedServices = normalizeAllowedInternalValues(options.allowedServices);
+  const allowedAudiences = normalizeAllowedInternalValues(
+    options.allowedAudiences || options.audiences || []
+  );
+
+  if (!hasConfiguredInternalAuth()) {
     if (isTestEnv()) {
       return {
         ok: true,
@@ -164,9 +243,15 @@ export function getInternalTokenAuthResult(req) {
     };
   }
 
+  const providedService = readProvidedInternalService(req);
+  const providedAudience = readProvidedInternalAudience(req);
   const got = readProvidedInternalToken(req);
+  const expectedTokens = listExpectedInternalTokens(providedService);
+  const matched = got
+    ? expectedTokens.find((item) => safeEq(got, item.token))
+    : null;
 
-  if (!got || !safeEq(got, expected)) {
+  if (!matched) {
     return {
       ok: false,
       code: "invalid_internal_token",
@@ -174,27 +259,69 @@ export function getInternalTokenAuthResult(req) {
     };
   }
 
+  if (allowedServices.length > 0 && !allowedServices.includes(providedService)) {
+    return {
+      ok: false,
+      code: "invalid_internal_service",
+      reason: "invalid internal service",
+    };
+  }
+
+  if (
+    allowedAudiences.length > 0 &&
+    !allowedAudiences.includes(providedAudience)
+  ) {
+    return {
+      ok: false,
+      code: "invalid_internal_audience",
+      reason: "invalid internal audience",
+    };
+  }
+
   return {
     ok: true,
-    mode: "token",
+    mode: matched.mode,
+    service: providedService,
+    audience: providedAudience,
+    tokenScope: matched.mode === "service_token" ? "scoped" : "global",
   };
 }
 
-export function requireInternalToken(req, res, next) {
-  const result = getInternalTokenAuthResult(req);
+export function createInternalTokenGuard(options = {}) {
+  return function guardInternalToken(req, res, next) {
+    return requireInternalToken(req, res, next, options);
+  };
+}
+
+export function requireInternalToken(req, res, next, options = {}) {
+  const result = getInternalTokenAuthResult(req, options);
 
   if (typeof next === "function") {
-    if (result.ok) return next();
+    if (result.ok) {
+      req.internalAuth = {
+        mode: result.mode,
+        service: cleanLower(result.service),
+        audience: cleanLower(result.audience),
+        tokenScope: cleanLower(result.tokenScope),
+      };
+      return next();
+    }
 
-    const status =
-      result.code === "internal_token_not_configured" ? 500 : 401;
+    const status = result.code === "internal_token_not_configured"
+      ? 500
+      : result.code === "invalid_internal_service" ||
+          result.code === "invalid_internal_audience"
+        ? 403
+        : 401;
 
     return res.status(status).json({
       ok: false,
       error:
         result.code === "internal_token_not_configured"
           ? "InternalAuthMisconfigured"
-          : "Unauthorized",
+          : status === 403
+            ? "Forbidden"
+            : "Unauthorized",
       reason: result.reason || "invalid internal token",
     });
   }

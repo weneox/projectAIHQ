@@ -53,9 +53,15 @@ export function registerSettingsSourceGovernanceRoutes(router, context) {
 
   router.post("/sources", async (req, res) => {
     try {
-      const role = requireSettingsWriteRole(req, res);
+      const role = await requireSettingsWriteRole(req, res, null, {
+        auditAction: "settings.source.created",
+        objectType: "tenant_source",
+        objectId: "pending_source",
+        auditMeta: {
+          attemptedSourceType: s(req.body?.sourceType || req.body?.source_type),
+        },
+      });
       if (!role) return;
-
       const tenant = await resolveTenantOr400(req, res);
       if (!tenant) return;
 
@@ -102,9 +108,16 @@ export function registerSettingsSourceGovernanceRoutes(router, context) {
 
   router.patch("/sources/:id", async (req, res) => {
     try {
-      const role = requireSettingsWriteRole(req, res);
+      const sourceId = s(req.params.id);
+      const role = await requireSettingsWriteRole(req, res, null, {
+        auditAction: "settings.source.updated",
+        objectType: "tenant_source",
+        objectId: sourceId || "unknown_source",
+        auditMeta: {
+          sourceId,
+        },
+      });
       if (!role) return;
-
       const tenant = await resolveTenantOr400(req, res);
       if (!tenant) return;
 
@@ -112,7 +125,6 @@ export function registerSettingsSourceGovernanceRoutes(router, context) {
       const knowledge = getKnowledge();
       if (!sources || !knowledge) return bad(res, 503, "db disabled", { dbDisabled: true });
 
-      const sourceId = s(req.params.id);
       if (!sourceId) return bad(res, 400, "source id is required");
 
       const current = await sources.getSourceById(sourceId);
@@ -240,16 +252,23 @@ export function registerSettingsSourceGovernanceRoutes(router, context) {
 
   router.post("/sources/:id/sync", async (req, res) => {
     try {
-      const role = requireSettingsWriteRole(req, res);
+      const sourceId = s(req.params.id);
+      const role = await requireSettingsWriteRole(req, res, null, {
+        auditAction: "settings.source.sync.requested",
+        objectType: "tenant_source_sync_run",
+        objectId: sourceId || "unknown_source",
+        targetArea: "source_sync",
+        auditMeta: {
+          sourceId,
+        },
+      });
       if (!role) return;
-
       const tenant = await resolveTenantOr400(req, res);
       if (!tenant) return;
 
       const sources = getSources();
       if (!sources) return bad(res, 503, "db disabled", { dbDisabled: true });
 
-      const sourceId = s(req.params.id);
       if (!sourceId) return bad(res, 400, "source id is required");
 
       const source = await sources.getSourceById(sourceId);

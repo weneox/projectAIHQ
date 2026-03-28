@@ -1,6 +1,6 @@
 import { createTenantSourcesHelpers } from "../../../../db/helpers/tenantSources.js";
 import { createTenantKnowledgeHelpers } from "../../../../db/helpers/tenantKnowledge.js";
-import { requireOwnerOrAdmin } from "../utils.js";
+import { requireSettingsWriteMutation, resolveTenantKey } from "../utils.js";
 import {
   bad,
   hasDb,
@@ -13,8 +13,14 @@ export function createSettingsSourcesRouteContext({
   createSourcesHelpers = createTenantSourcesHelpers,
   createKnowledgeHelpers = createTenantKnowledgeHelpers,
 } = {}) {
-  function requireSettingsWriteRole(req, res) {
-    return requireOwnerOrAdmin(req, res);
+  async function requireSettingsWriteRole(req, res, tenant = null, options = {}) {
+    return requireSettingsWriteMutation(req, res, {
+      db,
+      tenant: tenant || { tenant_key: resolveTenantKey(req) || null },
+      message: "Only owner/admin can manage source governance settings",
+      targetArea: "source_governance",
+      ...options,
+    });
   }
 
   function requireDbOr503(res) {

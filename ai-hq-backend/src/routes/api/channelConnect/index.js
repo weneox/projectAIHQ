@@ -26,6 +26,9 @@ export function channelConnectRoutes({ db }) {
     } catch (err) {
       const status = Number(err?.status || 500);
       if (status === 401) return unauth(res, err?.message || "Unauthorized");
+      if (status === 403) {
+        return res.status(403).json({ ok: false, error: err?.message || "Forbidden" });
+      }
       if (status === 400) return bad(res, err?.message || "Bad request");
       return serverErr(
         res,
@@ -41,6 +44,9 @@ export function channelConnectRoutes({ db }) {
     } catch (err) {
       const status = Number(err?.status || 500);
       if (status === 401) return unauth(res, err?.message || "Unauthorized");
+      if (status === 403) {
+        return res.status(403).json({ ok: false, error: err?.message || "Forbidden" });
+      }
       if (status === 400) return bad(res, err?.message || "Bad request");
       return serverErr(res, err?.message || "Failed to start Meta connect");
     }
