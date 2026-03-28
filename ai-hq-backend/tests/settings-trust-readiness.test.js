@@ -476,6 +476,22 @@ test("settings trust route hides projection repair action from non-admin operato
             tenant_key: "acme",
             approved_at: "2026-03-27T00:00:00.000Z",
             approved_by: "owner@aihq.test",
+            source_summary_json: {
+              governance: {
+                disposition: "quarantined",
+                quarantinedClaimCount: 2,
+              },
+              finalizeImpact: {
+                canonicalAreas: ["profile"],
+                runtimeAreas: ["voice"],
+                affectedSurfaces: ["voice", "inbox"],
+              },
+            },
+            metadata_json: {
+              finalizeImpact: {
+                canonicalAreas: ["profile"],
+              },
+            },
           },
         ],
       };
@@ -534,6 +550,14 @@ test("settings trust route surfaces projection repairability for owner/admin whe
 
   assert.equal(res.statusCode, 200);
   assert.equal(res.body?.capabilities?.canRepairRuntimeProjection, true);
+  assert.equal(
+    res.body?.summary?.truth?.governance?.disposition,
+    "quarantined"
+  );
+  assert.deepEqual(
+    res.body?.summary?.truth?.finalizeImpact?.runtimeAreas,
+    ["voice"]
+  );
   assert.equal(
     res.body?.summary?.runtimeProjection?.repair?.action?.id,
     "rebuild_runtime_projection"

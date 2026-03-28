@@ -51,6 +51,12 @@ function collectRuntimeRepair(runtime = {}, readiness = {}) {
   return obj(arr(readiness.blockedItems)[0]?.action);
 }
 
+function resolveSummary(input = {}) {
+  const root = obj(input);
+  const nestedSummary = obj(root.summary);
+  return Object.keys(nestedSummary).length ? nestedSummary : root;
+}
+
 function collectLatestFinalize(truth = {}) {
   const current = obj(truth);
   if (Object.keys(obj(current.finalizeImpact)).length) {
@@ -118,11 +124,30 @@ export function GovernanceSignalStrip({
   trust = {},
   onJump,
 }) {
-  const summary = obj(trust.summary);
+  const summary = resolveSummary(trust);
   const runtime = obj(summary.runtimeProjection);
   const runtimeHealth = obj(runtime.health);
   const truthSummary = obj(summary.truth);
   const reviewQueue = obj(summary.reviewQueue);
+  const runtimeStatus = s(runtimeHealth.status || runtime.status).toLowerCase();
+  const hasRuntimeTelemetry = Boolean(
+    runtimeStatus || s(runtimeHealth.reasonCode || runtimeHealth.primaryReasonCode)
+  );
+  const autonomyValue = hasRuntimeTelemetry
+    ? runtimeHealth.autonomousAllowed
+      ? "Allowed"
+      : "Stopped"
+    : "Unknown";
+  const autonomyHint = hasRuntimeTelemetry
+    ? runtimeHealth.autonomousAllowed
+      ? `Mode: ${titleize(runtimeHealth.autonomousOperation || "continue")}`
+      : "Fail-closed authority is active until runtime health recovers."
+    : "Runtime health telemetry is not currently available.";
+  const autonomyTone = hasRuntimeTelemetry
+    ? runtimeHealth.autonomousAllowed
+      ? "success"
+      : "danger"
+    : "neutral";
 
   return (
     <Card variant="surface" className="rounded-[28px]">
@@ -155,13 +180,13 @@ export function GovernanceSignalStrip({
       <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Approved Truth"
-          value={s(truth.approval?.version || truthSummary.latestVersionId || "Pending")}
+          value={s(truth.approval?.version || truth.latestVersionId || truthSummary.latestVersionId || "Pending")}
           hint={
-            s(truth.approval?.approvedAt || truthSummary.approvedAt)
-              ? `Latest approval ${formatWhen(truth.approval?.approvedAt || truthSummary.approvedAt)}`
+            s(truth.approval?.approvedAt || truth.approvedAt || truthSummary.approvedAt)
+              ? `Latest approval ${formatWhen(truth.approval?.approvedAt || truth.approvedAt || truthSummary.approvedAt)}`
               : "No approved truth version is available."
           }
-          tone={s(truthSummary.latestVersionId || truth.approval?.version) ? "success" : "warn"}
+          tone={s(truthSummary.latestVersionId || truth.latestVersionId || truth.approval?.version) ? "success" : "warn"}
         />
         <MetricCard
           label="Review Pressure"
@@ -171,19 +196,19 @@ export function GovernanceSignalStrip({
         />
         <MetricCard
           label="Runtime Health"
-          value={titleize(runtimeHealth.status || runtime.status || "unknown")}
-          hint={titleize(runtimeHealth.reasonCode || "no active reason")}
-          tone={toneForHealth(runtimeHealth.status)}
+          value={titleize(runtimeStatus || "unknown")}
+          hint={
+            hasRuntimeTelemetry
+              ? titleize(runtimeHealth.reasonCode || "no active reason")
+              : "Runtime telemetry unavailable"
+          }
+          tone={hasRuntimeTelemetry ? toneForHealth(runtimeHealth.status) : "neutral"}
         />
         <MetricCard
           label="Autonomous Operation"
-          value={runtimeHealth.autonomousAllowed ? "Allowed" : "Stopped"}
-          hint={
-            runtimeHealth.autonomousAllowed
-              ? `Mode: ${titleize(runtimeHealth.autonomousOperation || "continue")}`
-              : "Fail-closed authority is active until runtime health recovers."
-          }
-          tone={runtimeHealth.autonomousAllowed ? "success" : "danger"}
+          value={autonomyValue}
+          hint={autonomyHint}
+          tone={autonomyTone}
         />
       </div>
     </Card>
@@ -197,13 +222,17 @@ export default function GovernanceCockpit({
   trust = {},
   onRunAction,
 }) {
-  const summary = obj(trust.summary);
+  const summary = resolveSummary(trust);
   const readiness = obj(summary.readiness);
   const truthSummary = obj(summary.truth);
   const runtime = obj(summary.runtimeProjection);
   const runtimeHealth = obj(runtime.health);
   const runtimeReasonCodes = arr(runtimeHealth.reasons);
   const reviewQueue = obj(summary.reviewQueue);
+  const runtimeStatus = s(runtimeHealth.status || runtime.status).toLowerCase();
+  const hasRuntimeTelemetry = Boolean(
+    runtimeStatus || s(runtimeHealth.reasonCode || runtimeHealth.primaryReasonCode)
+  );
   const latestFinalize = collectLatestFinalize({
     ...obj(truth),
     finalizeImpact: obj(truth.finalizeImpact || truthSummary.finalizeImpact),
@@ -213,6 +242,13 @@ export default function GovernanceCockpit({
   const governance = obj(latestFinalize.governance);
   const primaryRepair = collectRuntimeRepair(runtime, readiness);
   const affectedSurfaces = arr(runtimeHealth.affectedSurfaces);
+  const autonomyHeadline = hasRuntimeTelemetry
+    ? runtimeHealth.autonomousAllowed
+      ? `Autonomous operation is allowed in ${titleize(
+          runtimeHealth.autonomousOperation || "continue"
+        )} mode.`
+      : "Autonomous operation is fail-closed until projection health is repaired."
+    : "Runtime health telemetry is temporarily unavailable. The cockpit is showing safe diagnostic defaults instead of inferring execution authority.";
 
   return (
     <Card variant="elevated" className="overflow-hidden rounded-[32px]">
@@ -235,11 +271,25 @@ export default function GovernanceCockpit({
             <Badge tone={s(truthSummary.latestVersionId || truth.approval?.version) ? "success" : "warn"} variant="subtle" dot>
               {s(truthSummary.latestVersionId || truth.approval?.version) ? "Approved truth present" : "Truth approval required"}
             </Badge>
-            <Badge tone={toneForHealth(runtimeHealth.status)} variant="subtle" dot>
-              Runtime {titleize(runtimeHealth.status || runtime.status || "unknown")}
+            <Badge tone={hasRuntimeTelemetry ? toneForHealth(runtimeStatus) : "neutral"} variant="subtle" dot>
+              Runtime {titleize(runtimeStatus || "unknown")}
             </Badge>
-            <Badge tone={runtimeHealth.autonomousAllowed ? "success" : "danger"} variant="subtle" dot>
-              {runtimeHealth.autonomousAllowed ? "Autonomy allowed" : "Autonomy stopped"}
+            <Badge
+              tone={
+                hasRuntimeTelemetry
+                  ? runtimeHealth.autonomousAllowed
+                    ? "success"
+                    : "danger"
+                  : "neutral"
+              }
+              variant="subtle"
+              dot
+            >
+              {hasRuntimeTelemetry
+                ? runtimeHealth.autonomousAllowed
+                  ? "Autonomy allowed"
+                  : "Autonomy stopped"
+                : "Autonomy unknown"}
             </Badge>
           </div>
         </div>
@@ -275,9 +325,13 @@ export default function GovernanceCockpit({
           />
           <MetricCard
             label="Runtime Health"
-            value={titleize(runtimeHealth.status || runtime.status || "unknown")}
-            hint={titleize(runtimeHealth.reasonCode || "no active reason")}
-            tone={toneForHealth(runtimeHealth.status)}
+            value={titleize(runtimeStatus || "unknown")}
+            hint={
+              hasRuntimeTelemetry
+                ? titleize(runtimeHealth.reasonCode || "no active reason")
+                : "Runtime telemetry unavailable"
+            }
+            tone={hasRuntimeTelemetry ? toneForHealth(runtimeStatus) : "neutral"}
           />
         </div>
 
@@ -347,7 +401,7 @@ export default function GovernanceCockpit({
             </div>
           </Card>
 
-          <Card variant="surface" className="rounded-[28px]" tone={toneForHealth(runtimeHealth.status)}>
+          <Card variant="surface" className="rounded-[28px]" tone={hasRuntimeTelemetry ? toneForHealth(runtimeStatus) : "neutral"}>
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -358,15 +412,13 @@ export default function GovernanceCockpit({
                     Projection authority and repair
                   </div>
                 </div>
-                <Badge tone={toneForHealth(runtimeHealth.status)} variant="subtle" dot>
-                  {titleize(runtimeHealth.status || "unknown")}
+                <Badge tone={hasRuntimeTelemetry ? toneForHealth(runtimeStatus) : "neutral"} variant="subtle" dot>
+                  {titleize(runtimeStatus || "unknown")}
                 </Badge>
               </div>
 
               <div className="text-sm leading-6 text-slate-600 dark:text-slate-400">
-                {runtimeHealth.autonomousAllowed
-                  ? `Autonomous operation is allowed in ${titleize(runtimeHealth.autonomousOperation || "continue")} mode.`
-                  : "Autonomous operation is fail-closed until projection health is repaired."}
+                {autonomyHeadline}
               </div>
 
               <ImpactList

@@ -138,6 +138,7 @@ import TruthViewerPage from "./TruthViewerPage.jsx";
 import {
   getCanonicalTruthSnapshot,
 } from "../../api/truth.js";
+import { getSettingsTrustView } from "../../api/trust.js";
 
 afterEach(() => {
   cleanup();
@@ -239,5 +240,50 @@ describe("Truth viewer smoke", () => {
     expect(
       screen.getByText(/no non-approved fallback data is being shown/i)
     ).toBeInTheDocument();
+  });
+
+  it("renders safely when governance and runtime telemetry are partial", async () => {
+    getCanonicalTruthSnapshot.mockResolvedValueOnce({
+      fields: [
+        {
+          key: "companyName",
+          label: "Company name",
+          value: "North Clinic",
+          provenance: "",
+        },
+      ],
+      approval: {
+        approvedAt: "",
+        approvedBy: "",
+        version: "approved",
+      },
+      history: [],
+      notices: [],
+      hasProvenance: false,
+      governance: {},
+      finalizeImpact: {},
+      readiness: {
+        status: "ready",
+        blockers: [],
+      },
+    });
+    getSettingsTrustView.mockResolvedValueOnce({
+      summary: {
+        runtimeProjection: {},
+        truth: {},
+        reviewQueue: {},
+        readiness: {
+          status: "ready",
+          blockers: [],
+        },
+      },
+    });
+
+    render(<TruthViewerPage />);
+
+    expect(await screen.findByText(/truth governance cockpit/i)).toBeInTheDocument();
+    expect(screen.getByText(/runtime telemetry unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/autonomy unknown/i)).toBeInTheDocument();
+    expect(screen.getByText(/north clinic/i)).toBeInTheDocument();
   });
 });

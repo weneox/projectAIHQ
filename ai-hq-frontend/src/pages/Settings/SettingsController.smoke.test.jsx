@@ -525,28 +525,26 @@ describe("Settings truth-maintenance smoke", () => {
   it("renders source sync and knowledge review truth-maintenance messaging", async () => {
     render(<SettingsController />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /truth governance/i }));
+      fireEvent.click(await screen.findByRole("button", { name: /truth governance/i }));
       expect(
-        await screen.findByText(/refresh evidence, inspect truth and runtime state/i)
+        await screen.findByText(/refresh evidence, review what is weak or conflicting/i)
       ).toBeTruthy();
       expect(screen.getByText(/operator governance cockpit/i)).toBeTruthy();
       expect(screen.getByText(/latest approved change footprint/i)).toBeTruthy();
       expect(screen.getByText(/trust repair hub/i)).toBeTruthy();
       expect(screen.getAllByText(/runtime projection blocker/i).length).toBeGreaterThan(0);
-      expect(screen.getAllByRole("button", { name: /open runtime setup/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: /open runtime setup/i }).length).toBeGreaterThan(0);
     expect(
-      screen.getByText(/sync refreshes source evidence only/i)
-    ).toBeTruthy();
-    expect(
-      screen.getByText(/2 review items waiting/i)
+      screen.getByText(/source sync refreshes evidence only/i)
     ).toBeTruthy();
     expect(
       screen.getByText(/new source evidence created candidate changes/i)
     ).toBeTruthy();
-    expect(screen.getByText(/recent sync health/i)).toBeTruthy();
+    expect(screen.getAllByText(/main website/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/recent evidence refreshes/i)).toBeTruthy();
     expect(screen.getAllByText(/runtime projection/i).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: /knowledge review/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /review queue/i })[0]);
     expect(
       await screen.findByText(/candidates from source sync and source evidence land here/i)
     ).toBeTruthy();
@@ -559,7 +557,7 @@ describe("Settings truth-maintenance smoke", () => {
   it("renders operational readiness fail states honestly", async () => {
     render(<SettingsController />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /operational/i }));
+    fireEvent.click((await screen.findAllByRole("button", { name: /runtime operations/i }))[0]);
     expect(screen.getByText(/operational repair hub/i)).toBeTruthy();
     expect(
       await screen.findByText(/production traffic stays fail-closed until the persisted operational contract and provider dependencies converge/i)
