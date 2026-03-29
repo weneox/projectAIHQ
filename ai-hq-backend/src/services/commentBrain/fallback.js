@@ -1,22 +1,65 @@
 import { cleanText, lower, pickFirstBoolean } from "./shared.js";
 import {
+  getCommentChannelBehavior,
   findDisabledServiceMatch,
   getCommentPolicy,
+  getTenantConversionGoal,
+  getTenantDisallowedClaims,
+  getTenantHandoffTriggers,
   getResolvedTenantKey,
   getRuntimeServiceKeywords,
   getTenantBrandName,
 } from "./runtime.js";
 import {
+  makeBehaviorSafePublicReply,
   makePrivateReply,
   makePublicReply,
   makeUnsupportedServicePublicReply,
 } from "./replies.js";
+
+function getBehaviorKeywords(trigger) {
+  switch (lower(trigger)) {
+    case "human_request":
+      return ["human", "person", "operator", "manager", "agent", "someone"];
+    case "pricing_complexity":
+      return ["custom", "package", "quote", "pricing", "price", "cost"];
+    case "medical_risk":
+      return ["safe", "risk", "side effect", "complication"];
+    default:
+      return [safelyHumanize(trigger)];
+  }
+}
+
+function getDisallowedClaimKeywords(claim) {
+  switch (lower(claim)) {
+    case "instant_result_guarantees":
+      return ["guarantee", "guaranteed", "instant", "100%", "definitely"];
+    case "unverified_outcome_promises":
+      return ["promise", "promised", "guarantee", "results", "certain result"];
+    case "medical_claims":
+      return ["cure", "heal", "treat", "medical result"];
+    default:
+      return [safelyHumanize(claim)];
+  }
+}
+
+function safelyHumanize(value) {
+  return lower(value).replace(/_/g, " ").trim();
+}
+
+function includesAny(text, patterns = []) {
+  return patterns.some((pattern) => pattern && text.includes(lower(pattern)));
+}
 
 export function fallbackClassification(text, { tenantKey, runtime } = {}) {
   const incoming = lower(text);
   const resolvedTenantKey = getResolvedTenantKey(tenantKey);
   const brandName = getTenantBrandName(runtime, resolvedTenantKey);
   const commentPolicy = getCommentPolicy(runtime);
+  const commentsBehavior = getCommentChannelBehavior(runtime);
+  const handoffTriggers = getTenantHandoffTriggers(runtime);
+  const disallowedClaims = getTenantDisallowedClaims(runtime);
+  const conversionGoal = lower(getTenantConversionGoal(runtime));
 
   const autoReplyEnabled =
     pickFirstBoolean(runtime?.autoReplyEnabled) ?? true;
@@ -29,6 +72,20 @@ export function fallbackClassification(text, { tenantKey, runtime } = {}) {
 
   const runtimeServiceKeywords = getRuntimeServiceKeywords(runtime);
   const disabledMatch = findDisabledServiceMatch(incoming, runtime);
+  const matchedHandoffTrigger = handoffTriggers.find((trigger) =>
+    includesAny(incoming, getBehaviorKeywords(trigger))
+  );
+  const matchedDisallowedClaim = disallowedClaims.find((claim) =>
+    includesAny(incoming, getDisallowedClaimKeywords(claim))
+  );
+  const handoffBias = lower(commentsBehavior?.handoffBias);
+  const shouldBiasToHandoff =
+    handoffBias === "conditional" || handoffBias === "manual";
+  const shouldBiasToDm =
+    lower(commentsBehavior?.primaryAction).includes("move_to_dm") ||
+    lower(commentsBehavior?.primaryAction).includes("dm");
+  const guidedQualification =
+    lower(commentsBehavior?.qualificationDepth) === "guided";
 
   let category = "normal";
   let priority = "low";
@@ -185,7 +242,24 @@ export function fallbackClassification(text, { tenantKey, runtime } = {}) {
 
   const hasAny = (patterns) => patterns.some((p) => p && incoming.includes(lower(p)));
 
-  if (hasAny(spamPatterns)) {
+  if (matchedDisallowedClaim) {
+    category = "unknown";
+    priority = "high";
+    sentiment = "neutral";
+    requiresHuman = shouldBiasToHandoff;
+    shouldCreateLead = false;
+    shouldReply = autoReplyEnabled;
+    shouldPrivateReply = false;
+    replySuggestion = shouldReply
+      ? makeBehaviorSafePublicReply({
+          runtime,
+          matchedDisallowedClaim,
+        })
+      : "";
+    privateReplySuggestion = "";
+    shouldHandoff = shouldBiasToHandoff;
+    reason = "disallowed_claim_request";
+  } else if (hasAny(spamPatterns)) {
     category = "spam";
     priority = "low";
     sentiment = "negative";
@@ -204,12 +278,31 @@ export function fallbackClassification(text, { tenantKey, runtime } = {}) {
     requiresHuman = true;
     shouldHandoff = true;
     shouldReply = autoReplyEnabled;
-    shouldPrivateReply = autoReplyEnabled;
+    shouldPrivateReply = autoReplyEnabled && shouldBiasToDm;
     replySuggestion = shouldReply ? makePublicReply({ kind: "support", runtime }) : "";
     privateReplySuggestion = shouldPrivateReply
       ? makePrivateReply({ kind: "support", runtime })
       : "";
     reason = "support_request";
+  } else if (matchedHandoffTrigger) {
+    category = conversionGoal.includes("book") ? "sales" : "support";
+    priority = "high";
+    sentiment = "neutral";
+    requiresHuman = true;
+    shouldCreateLead = category === "sales" && Boolean(createLeadEnabled);
+    shouldReply = autoReplyEnabled;
+    shouldPrivateReply = autoReplyEnabled && shouldBiasToDm;
+    replySuggestion = shouldReply
+      ? makeBehaviorSafePublicReply({
+          runtime,
+          matchedHandoffTrigger,
+        })
+      : "";
+    privateReplySuggestion = shouldPrivateReply
+      ? makePrivateReply({ kind: category === "sales" ? "sales" : "support", runtime })
+      : "";
+    shouldHandoff = true;
+    reason = "behavior_handoff_trigger";
   } else if (disabledMatch) {
     category = "unknown";
     priority = "low";
@@ -237,11 +330,12 @@ export function fallbackClassification(text, { tenantKey, runtime } = {}) {
         : "medium";
     shouldCreateLead = Boolean(createLeadEnabled);
     shouldReply = autoReplyEnabled;
-    shouldPrivateReply = autoReplyEnabled;
+    shouldPrivateReply = autoReplyEnabled && shouldBiasToDm;
     replySuggestion = shouldReply ? makePublicReply({ kind: "sales", runtime }) : "";
     privateReplySuggestion = shouldPrivateReply
       ? makePrivateReply({ kind: "sales", runtime })
       : "";
+    shouldHandoff = shouldBiasToHandoff && guidedQualification;
     reason =
       priority === "high" ? "pricing_or_contact_interest" : "service_interest";
   } else if (hasAny(positivePatterns)) {
@@ -273,6 +367,10 @@ export function fallbackClassification(text, { tenantKey, runtime } = {}) {
     meta: {
       tenantKey: resolvedTenantKey,
       brandName,
+      conversionGoal: getTenantConversionGoal(runtime),
+      channelBehaviorComments: commentsBehavior,
+      matchedHandoffTrigger: matchedHandoffTrigger || "",
+      matchedDisallowedClaim: matchedDisallowedClaim || "",
     },
   };
 }

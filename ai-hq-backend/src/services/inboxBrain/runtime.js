@@ -421,6 +421,9 @@ export function getTenantBusinessProfile(tenant, tenantKey, services = []) {
     tenantKey: resolvedTenantKey,
     displayName,
     industry,
+    businessType: "",
+    niche: "",
+    subNiche: "",
     businessSummary,
     services: serviceNames,
     disabledServices: disabledServiceNames,
@@ -429,9 +432,19 @@ export function getTenantBusinessProfile(tenant, tenantKey, services = []) {
     responsePlaybooks: [],
     languages,
     tone,
+    toneProfile: "",
     maxSentences,
     leadPrompts,
     forbiddenClaims,
+    conversionGoal: "",
+    primaryCta: "",
+    leadQualificationMode: "",
+    qualificationQuestions: [],
+    bookingFlowType: "",
+    handoffTriggers: [],
+    disallowedClaims: [],
+    behavior: {},
+    channelBehavior: {},
     urgentKeywords,
     pricingKeywords,
     humanKeywords,
@@ -483,6 +496,13 @@ export function normalizeRuntimeResult(rawRuntime, fallback) {
   const rawProfile = obj(container.profile);
   const rawAiPolicy = obj(container.aiPolicy || container.ai_policy);
   const rawThreadState = obj(container.threadState || container.thread_state || container.state);
+  const rawBehavior = obj(container.behavior || container.behavior_json);
+  const rawChannelBehavior = obj(
+    container.channelBehavior ||
+      container.channel_behavior ||
+      rawBehavior.channelBehavior ||
+      rawBehavior.channel_behavior
+  );
 
   const rawServiceCatalog = arr(container.serviceCatalog).length
     ? arr(container.serviceCatalog)
@@ -531,6 +551,21 @@ export function normalizeRuntimeResult(rawRuntime, fallback) {
       : disabledVisibleServices.map((x) => x.name)
   );
 
+  const disallowedClaims = uniqStrings(
+    arr(container.disallowedClaims).length
+      ? container.disallowedClaims
+      : arr(rawBehavior.disallowedClaims).length
+        ? rawBehavior.disallowedClaims
+        : arr(rawBehavior.disallowed_claims)
+  );
+
+  const forbiddenClaims = uniqStrings([
+    ...(arr(container.forbiddenClaims).length
+      ? container.forbiddenClaims
+      : arr(fallback.forbiddenClaims)),
+    ...disallowedClaims,
+  ]);
+
   return {
     ...fallback,
     ...container,
@@ -558,6 +593,20 @@ export function normalizeRuntimeResult(rawRuntime, fallback) {
       s(container.summaryShort) ||
       s(container.valueProposition) ||
       s(fallback.businessSummary),
+    businessType: s(
+      container.businessType ||
+        rawBehavior.businessType ||
+        rawBehavior.business_type ||
+        fallback.businessType
+    ),
+    niche: s(container.niche || rawBehavior.niche || fallback.niche),
+    subNiche: s(
+      container.subNiche ||
+        container.sub_niche ||
+        rawBehavior.subNiche ||
+        rawBehavior.sub_niche ||
+        fallback.subNiche
+    ),
     serviceCatalog: normalizedCatalog,
     knowledgeEntries: normalizedKnowledge,
     responsePlaybooks: normalizedPlaybooks,
@@ -565,14 +614,74 @@ export function normalizeRuntimeResult(rawRuntime, fallback) {
     disabledServices: disabledServices.length ? disabledServices : arr(fallback.disabledServices),
     languages: uniqStrings(arr(container.languages).length ? container.languages : arr(fallback.languages)),
     tone: s(container.tone || container.toneText || fallback.tone),
+    toneProfile: s(
+      container.toneProfile ||
+        container.tone_profile ||
+        rawBehavior.toneProfile ||
+        rawBehavior.tone_profile ||
+        fallback.toneProfile
+    ),
     maxSentences: Math.max(
       1,
       Math.min(4, Number(container.maxSentences || fallback.maxSentences || 2))
     ),
     leadPrompts: uniqStrings(arr(container.leadPrompts).length ? container.leadPrompts : arr(fallback.leadPrompts)),
-    forbiddenClaims: uniqStrings(
-      arr(container.forbiddenClaims).length ? container.forbiddenClaims : arr(fallback.forbiddenClaims)
+    forbiddenClaims,
+    conversionGoal: s(
+      container.conversionGoal ||
+        container.conversion_goal ||
+        rawBehavior.conversionGoal ||
+        rawBehavior.conversion_goal ||
+        fallback.conversionGoal
     ),
+    primaryCta: s(
+      container.primaryCta ||
+        container.primary_cta ||
+        rawBehavior.primaryCta ||
+        rawBehavior.primary_cta ||
+        fallback.primaryCta
+    ),
+    leadQualificationMode: s(
+      container.leadQualificationMode ||
+        container.lead_qualification_mode ||
+        rawBehavior.leadQualificationMode ||
+        rawBehavior.lead_qualification_mode ||
+        fallback.leadQualificationMode
+    ),
+    qualificationQuestions: uniqStrings(
+      arr(container.qualificationQuestions).length
+        ? container.qualificationQuestions
+        : arr(container.qualification_questions).length
+          ? container.qualification_questions
+          : arr(rawBehavior.qualificationQuestions).length
+            ? rawBehavior.qualificationQuestions
+            : arr(rawBehavior.qualification_questions).length
+              ? rawBehavior.qualification_questions
+              : arr(fallback.qualificationQuestions)
+    ),
+    bookingFlowType: s(
+      container.bookingFlowType ||
+        container.booking_flow_type ||
+        rawBehavior.bookingFlowType ||
+        rawBehavior.booking_flow_type ||
+        fallback.bookingFlowType
+    ),
+    handoffTriggers: uniqStrings(
+      arr(container.handoffTriggers).length
+        ? container.handoffTriggers
+        : arr(container.handoff_triggers).length
+          ? container.handoff_triggers
+          : arr(rawBehavior.handoffTriggers).length
+            ? rawBehavior.handoffTriggers
+            : arr(rawBehavior.handoff_triggers).length
+              ? rawBehavior.handoff_triggers
+              : arr(fallback.handoffTriggers)
+    ),
+    disallowedClaims,
+    behavior: Object.keys(rawBehavior).length ? rawBehavior : obj(fallback.behavior),
+    channelBehavior: Object.keys(rawChannelBehavior).length
+      ? rawChannelBehavior
+      : obj(fallback.channelBehavior),
     urgentKeywords: uniqStrings(
       arr(container.urgentKeywords).length ? container.urgentKeywords : arr(fallback.urgentKeywords)
     ),
@@ -684,6 +793,38 @@ export function buildDisabledServiceLine(profile) {
 export function pickLeadPrompt(profile) {
   const list = arr(profile?.leadPrompts);
   return s(list[0] || "Qısa olaraq ehtiyacınızı yazın.");
+}
+
+export function pickBehaviorLeadPrompt(profile) {
+  const qualificationQuestions = arr(profile?.qualificationQuestions)
+    .map((x) => s(x))
+    .filter(Boolean);
+  const inboxBehavior = obj(profile?.channelBehavior?.inbox);
+  const primaryCta = s(profile?.primaryCta).replace(/_/g, " ");
+  const qualificationDepth = lower(inboxBehavior?.qualificationDepth || "");
+  const toneProfile = lower(profile?.toneProfile || "");
+  const firstQuestion = s(qualificationQuestions[0]);
+
+  let prompt = pickLeadPrompt(profile);
+
+  if (toneProfile.includes("calm") || toneProfile.includes("reassuring")) {
+    prompt = "Daha deqiq komek ucun bir suali cavablandirin.";
+  } else if (toneProfile.includes("warm") || toneProfile.includes("hospitable")) {
+    prompt = "Sizi duzgun yonlendirmek ucun bunu yazin.";
+  } else if (toneProfile.includes("formal") || toneProfile.includes("confident")) {
+    prompt = "Duzgun yonlendirme ucun bunu qeyd edin.";
+  }
+
+  if (firstQuestion && qualificationDepth === "guided") {
+    const ctaLead = primaryCta ? `${primaryCta} ucun ` : "";
+    return `${ctaLead}${prompt} ${firstQuestion}`;
+  }
+
+  if (primaryCta) {
+    return `${primaryCta} ucun ${prompt}`;
+  }
+
+  return prompt;
 }
 
 export function getIndustryHints(industry) {

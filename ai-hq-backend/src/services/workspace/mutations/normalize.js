@@ -8,6 +8,136 @@ import {
   normalizeApprovalMode,
 } from "./shared.js";
 
+function buildNormalizedBehaviorInput(body = {}) {
+  const nested = obj(
+    body.nicheBehavior ??
+      body.niche_behavior ??
+      body.behavior ??
+      body.behaviorProfile ??
+      body.behavior_profile
+  );
+
+  const provided = {
+    businessType: hasAny(body, ["businessType", "business_type"]) || hasAny(nested, ["businessType", "business_type"]),
+    niche: hasAny(body, ["niche"]) || hasAny(nested, ["niche"]),
+    subNiche: hasAny(body, ["subNiche", "sub_niche"]) || hasAny(nested, ["subNiche", "sub_niche"]),
+    conversionGoal:
+      hasAny(body, ["conversionGoal", "conversion_goal"]) ||
+      hasAny(nested, ["conversionGoal", "conversion_goal"]),
+    primaryCta:
+      hasAny(body, ["primaryCta", "primary_cta"]) ||
+      hasAny(nested, ["primaryCta", "primary_cta"]),
+    leadQualificationMode:
+      hasAny(body, ["leadQualificationMode", "lead_qualification_mode"]) ||
+      hasAny(nested, ["leadQualificationMode", "lead_qualification_mode"]),
+    qualificationQuestions:
+      hasAny(body, ["qualificationQuestions", "qualification_questions"]) ||
+      hasAny(nested, ["qualificationQuestions", "qualification_questions"]),
+    bookingFlowType:
+      hasAny(body, ["bookingFlowType", "booking_flow_type"]) ||
+      hasAny(nested, ["bookingFlowType", "booking_flow_type"]),
+    handoffTriggers:
+      hasAny(body, ["handoffTriggers", "handoff_triggers"]) ||
+      hasAny(nested, ["handoffTriggers", "handoff_triggers"]),
+    disallowedClaims:
+      hasAny(body, ["disallowedClaims", "disallowed_claims"]) ||
+      hasAny(nested, ["disallowedClaims", "disallowed_claims"]),
+    toneProfile:
+      hasAny(body, ["toneProfile", "tone_profile"]) ||
+      hasAny(nested, ["toneProfile", "tone_profile"]),
+    channelBehavior:
+      hasAny(body, ["channelBehavior", "channel_behavior"]) ||
+      hasAny(nested, ["channelBehavior", "channel_behavior"]),
+  };
+
+  const normalized = {};
+
+  if (provided.businessType) {
+    normalized.businessType = s(body.businessType ?? body.business_type ?? nested.businessType ?? nested.business_type);
+  }
+  if (provided.niche) {
+    normalized.niche = s(body.niche ?? nested.niche);
+  }
+  if (provided.subNiche) {
+    normalized.subNiche = s(body.subNiche ?? body.sub_niche ?? nested.subNiche ?? nested.sub_niche);
+  }
+  if (provided.conversionGoal) {
+    normalized.conversionGoal = s(
+      body.conversionGoal ?? body.conversion_goal ?? nested.conversionGoal ?? nested.conversion_goal
+    );
+  }
+  if (provided.primaryCta) {
+    normalized.primaryCta = s(
+      body.primaryCta ?? body.primary_cta ?? nested.primaryCta ?? nested.primary_cta
+    );
+  }
+  if (provided.leadQualificationMode) {
+    normalized.leadQualificationMode = s(
+      body.leadQualificationMode ??
+        body.lead_qualification_mode ??
+        nested.leadQualificationMode ??
+        nested.lead_qualification_mode
+    );
+  }
+  if (provided.qualificationQuestions) {
+    normalized.qualificationQuestions = normalizeStringArray(
+      body.qualificationQuestions ??
+        body.qualification_questions ??
+        nested.qualificationQuestions ??
+        nested.qualification_questions
+    );
+  }
+  if (provided.bookingFlowType) {
+    normalized.bookingFlowType = s(
+      body.bookingFlowType ?? body.booking_flow_type ?? nested.bookingFlowType ?? nested.booking_flow_type
+    );
+  }
+  if (provided.handoffTriggers) {
+    normalized.handoffTriggers = normalizeStringArray(
+      body.handoffTriggers ??
+        body.handoff_triggers ??
+        nested.handoffTriggers ??
+        nested.handoff_triggers
+    );
+  }
+  if (provided.disallowedClaims) {
+    normalized.disallowedClaims = normalizeStringArray(
+      body.disallowedClaims ??
+        body.disallowed_claims ??
+        nested.disallowedClaims ??
+        nested.disallowed_claims
+    );
+  }
+  if (provided.toneProfile) {
+    normalized.toneProfile = s(
+      body.toneProfile ?? body.tone_profile ?? nested.toneProfile ?? nested.tone_profile
+    );
+  }
+  if (provided.channelBehavior) {
+    normalized.channelBehavior = obj(
+      body.channelBehavior ?? body.channel_behavior ?? nested.channelBehavior ?? nested.channel_behavior
+    );
+  }
+
+  const providedKeys = Object.entries(provided)
+    .filter(([, value]) => value)
+    .map(([key]) => key);
+
+  return {
+    normalized: Object.fromEntries(
+      Object.entries(normalized).filter(([, value]) =>
+        Array.isArray(value)
+          ? value.length > 0
+          : value && typeof value === "object"
+            ? Object.keys(value).length > 0
+            : s(value)
+      )
+    ),
+    provided,
+    providedKeys,
+  };
+}
+
 export function normalizeBusinessProfileInput(input = {}) {
   const body = obj(input);
 
@@ -92,6 +222,7 @@ export function normalizeBusinessProfileInput(input = {}) {
 
 export function normalizeRuntimePreferencesInput(input = {}) {
   const body = obj(input);
+  const behavior = buildNormalizedBehaviorInput(body);
 
   const provided = {
     defaultLanguage: hasAny(body, [
@@ -127,6 +258,7 @@ export function normalizeRuntimePreferencesInput(input = {}) {
     emojiLevel: hasAny(body, ["emojiLevel", "emoji_level"]),
     ctaStyle: hasAny(body, ["ctaStyle", "cta_style"]),
     policies: hasAny(body, ["policies", "runtimePolicies", "runtime_policies"]),
+    behavior: behavior.providedKeys.length > 0,
   };
 
   const normalized = {};
@@ -199,6 +331,10 @@ export function normalizeRuntimePreferencesInput(input = {}) {
     );
   }
 
+  if (provided.behavior) {
+    normalized.behavior = behavior.normalized;
+  }
+
   const providedKeys = Object.entries(provided)
     .filter(([, value]) => value)
     .map(([key]) => key);
@@ -235,6 +371,7 @@ export function buildSavedRuntimePayload(normalized = {}, tenant = {}) {
     emojiLevel: normalized.emojiLevel,
     ctaStyle: normalized.ctaStyle,
     policies: normalized.policies,
+    behavior: obj(normalized.behavior),
   };
 }
 

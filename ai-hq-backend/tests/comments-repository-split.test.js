@@ -8,6 +8,7 @@ import {
   listComments,
   insertLeadFromComment,
 } from "../src/routes/api/comments/repository.js";
+import { createRuntimeAuthorityError } from "../src/services/businessBrain/runtimeAuthority.js";
 
 function createDb(handler) {
   return {
@@ -22,7 +23,7 @@ test("getTenantByKey uses strict runtime authority loader and returns tenant", a
   });
 
   const tenant = await getTenantByKey(db, " acme ", {
-    strictRuntimeLoader: async (input) => {
+    runtimeLoader: async (input) => {
       calls.push(input);
       return {
         tenant: {
@@ -36,6 +37,7 @@ test("getTenantByKey uses strict runtime authority loader and returns tenant", a
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].tenantKey, "acme");
+  assert.equal(calls[0].authorityMode, "strict");
   assert.equal(tenant.id, "tenant-1");
   assert.equal(tenant.tenant_key, "acme");
 });
@@ -46,10 +48,36 @@ test("getTenantByKey fails closed when strict runtime authority returns no tenan
   });
 
   const tenant = await getTenantByKey(db, "acme", {
-    strictRuntimeLoader: async () => ({ tenant: null }),
+    runtimeLoader: async () => ({ tenant: null }),
   });
 
   assert.equal(tenant, null);
+});
+
+test("getTenantByKey fails closed when strict runtime authority is unavailable", async () => {
+  const tenant = await getTenantByKey(createDb(async () => ({ rows: [] })), "acme", {
+    runtimeLoader: async () => {
+      throw createRuntimeAuthorityError({
+        tenantKey: "acme",
+        reasonCode: "runtime_projection_stale",
+        message: "Approved runtime authority is stale.",
+      });
+    },
+  });
+
+  assert.equal(tenant, null);
+});
+
+test("getTenantByKey rethrows unexpected runtime loader errors", async () => {
+  await assert.rejects(
+    () =>
+      getTenantByKey(createDb(async () => ({ rows: [] })), "acme", {
+        runtimeLoader: async () => {
+          throw new Error("unexpected loader failure");
+        },
+      }),
+    /unexpected loader failure/
+  );
 });
 
 test("insertComment normalizes inserted comment payload", async () => {

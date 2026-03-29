@@ -58,6 +58,13 @@ describe("loaderFlowReview", () => {
               summaryShort:
                 "Neighborhood bakery serving breads, cakes, and coffee every day.",
               websiteUrl: "https://acme.example",
+              nicheBehavior: {
+                businessType: "restaurant",
+                niche: "bakery",
+                conversionGoal: "order_now",
+                toneProfile: "warm_reassuring",
+                qualificationQuestions: ["What would you like to order?"],
+              },
             },
             sourceSummary: {
               latestImport: {
@@ -100,6 +107,11 @@ describe("loaderFlowReview", () => {
     expect(reviewUi.manualSections.faqsText).toContain("Do you deliver?");
     expect(businessForm.companyName).toBe("Acme Bakery");
     expect(businessForm.websiteUrl).toBe("https://acme.example");
+    expect(businessForm.behavior.businessType).toBe("restaurant");
+    expect(businessForm.behavior.toneProfile).toBe("warm_reassuring");
+    expect(businessForm.behavior.qualificationQuestions).toEqual([
+      "What would you like to order?",
+    ]);
   });
 
   it("shapes a review-load failure issue conservatively", () => {

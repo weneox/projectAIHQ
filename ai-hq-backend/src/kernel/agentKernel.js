@@ -165,14 +165,26 @@ function buildSystem({
     extra,
   });
 
+  const usecaseDef = getUsecase(usecase || "general.chat");
+
   const bundle = buildPromptBundle(usecase || "", {
     tenant: normalized.tenant,
     today: normalized.today,
     format: normalized.format,
-    extra: normalized.extra,
+    extra: {
+      ...normalized.extra,
+      outputContract: {
+        mode: s(getUsecaseOutputMode(usecase || "general.chat")),
+        schemaKey: s(getUsecaseSchemaKey(usecase || "general.chat")),
+        strictJson:
+          s(getUsecaseOutputMode(usecase || "general.chat")) === "json",
+        hint:
+          s(getUsecaseOutputMode(usecase || "general.chat")) === "json"
+            ? "Output must stay parseable and schema-aligned."
+            : "",
+      },
+    },
   });
-
-  const usecaseDef = getUsecase(usecase || "general.chat");
 
   const parts = [
     buildAgentSystemBlock(agentId),

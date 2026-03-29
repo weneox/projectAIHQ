@@ -10,6 +10,7 @@ export const DEFAULT_BUSINESS_FORM = {
   primaryPhone: "",
   primaryEmail: "",
   primaryAddress: "",
+  behavior: {},
 };
 
 export const DEFAULT_MANUAL_SECTIONS = {

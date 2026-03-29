@@ -81,6 +81,35 @@ describe("useBusinessBrain", () => {
     });
   });
 
+  it("uses a staged-review success message for governed business-fact changes", async () => {
+    getTenantBusinessFacts.mockResolvedValue([]);
+    getTenantChannelPolicies.mockResolvedValue([]);
+    getTenantLocations.mockResolvedValue([]);
+    getTenantContacts.mockResolvedValue([]);
+    saveTenantBusinessFact.mockResolvedValue({
+      ok: true,
+      publishStatus: "review_required",
+      reviewRequired: true,
+    });
+
+    const { result } = renderHook(() =>
+      useBusinessBrain({
+        canManageSettings: true,
+        setWorkspace: vi.fn(),
+        setInitialWorkspace: vi.fn(),
+      })
+    );
+
+    await result.current.handleSaveBusinessFact({
+      fact_key: "company_summary",
+      title: "Company Summary",
+    });
+
+    await waitFor(() => {
+      expect(result.current.surface.saveSuccess).toMatch(/staged for maintenance review/i);
+    });
+  });
+
   it("uses a staged-review success message for governed contact changes", async () => {
     getTenantBusinessFacts.mockResolvedValue([]);
     getTenantChannelPolicies.mockResolvedValue([]);

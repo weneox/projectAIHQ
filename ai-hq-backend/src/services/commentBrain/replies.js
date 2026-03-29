@@ -1,8 +1,12 @@
 import { lower, normalizeLang, s } from "./shared.js";
 import {
+  getCommentChannelBehavior,
   getTenantBannedPhrases,
+  getTenantConversionGoal,
+  getTenantPrimaryCta,
   getTenantPreferredCta,
   getTenantTone,
+  getTenantToneProfile,
 } from "./runtime.js";
 
 export function applyBannedPhraseGuard(text, runtime) {
@@ -20,6 +24,39 @@ export function applyBannedPhraseGuard(text, runtime) {
   }
 
   return out.slice(0, 500);
+}
+
+function getReplyBehavior(runtime) {
+  const preferredCta = getTenantPreferredCta(runtime);
+  const primaryCta = getTenantPrimaryCta(runtime);
+  const conversionGoal = getTenantConversionGoal(runtime).replace(/_/g, " ");
+  const tone = lower(getTenantTone(runtime));
+  const toneProfile = lower(getTenantToneProfile(runtime));
+  const commentsBehavior = getCommentChannelBehavior(runtime);
+  const primaryAction = lower(commentsBehavior?.primaryAction);
+  const qualificationDepth = lower(commentsBehavior?.qualificationDepth);
+
+  return {
+    ctaText: primaryCta || preferredCta || conversionGoal,
+    wantsDmMove:
+      primaryAction.includes("move_to_dm") || primaryAction.includes("dm"),
+    guidedQualification: qualificationDepth === "guided",
+    confidentTone:
+      tone.includes("premium") ||
+      tone.includes("modern") ||
+      tone.includes("confident") ||
+      toneProfile.includes("premium") ||
+      toneProfile.includes("confident"),
+    warmTone:
+      toneProfile.includes("warm") ||
+      toneProfile.includes("friendly") ||
+      toneProfile.includes("welcoming") ||
+      toneProfile.includes("hospitable"),
+    calmTone:
+      toneProfile.includes("calm") ||
+      toneProfile.includes("reassuring") ||
+      toneProfile.includes("supportive"),
+  };
 }
 
 export function makeUnsupportedServicePublicReply({ runtime, service = null }) {
@@ -43,8 +80,8 @@ export function makeUnsupportedServicePublicReply({ runtime, service = null }) {
   if (lang === "tr") {
     return applyBannedPhraseGuard(
       serviceName
-        ? `Teşekkür ederiz. ${serviceName} şu anda aktif değil. Mevcut hizmetlerde yardımcı olabiliriz.`
-        : "Teşekkür ederiz. Bu hizmet şu anda aktif değil. Mevcut hizmetlerde yardımcı olabiliriz.",
+        ? `Tesekkur ederiz. ${serviceName} su anda aktif degil. Mevcut hizmetlerde yardimci olabiliriz.`
+        : "Tesekkur ederiz. Bu hizmet su anda aktif degil. Mevcut hizmetlerde yardimci olabiliriz.",
       runtime
     );
   }
@@ -52,52 +89,100 @@ export function makeUnsupportedServicePublicReply({ runtime, service = null }) {
   if (lang === "ru") {
     return applyBannedPhraseGuard(
       serviceName
-        ? `Спасибо. ${serviceName} сейчас неактивна. Мы можем помочь по доступным услугам.`
-        : "Спасибо. Эта услуга сейчас неактивна. Мы можем помочь по доступным услугам.",
+        ? `Spasibo. ${serviceName} seychas neaktivna. My mozhem pomoch po dostupnym uslugam.`
+        : "Spasibo. Eta usluga seychas neaktivna. My mozhem pomoch po dostupnym uslugam.",
       runtime
     );
   }
 
   return applyBannedPhraseGuard(
     serviceName
-      ? `Təşəkkür edirik. ${serviceName} hazırda aktiv deyil. Mövcud xidmətlər üzrə kömək edə bilərik.`
-      : "Təşəkkür edirik. Bu xidmət hazırda aktiv deyil. Mövcud xidmətlər üzrə kömək edə bilərik.",
+      ? `Tesekkur edirik. ${serviceName} hazirda aktiv deyil. Movcud xidmetler uzre komek ede bilerik.`
+      : "Tesekkur edirik. Bu xidmet hazirda aktiv deyil. Movcud xidmetler uzre komek ede bilerik.",
+    runtime
+  );
+}
+
+export function makeBehaviorSafePublicReply({
+  runtime,
+  matchedDisallowedClaim = "",
+  matchedHandoffTrigger = "",
+} = {}) {
+  const lang = normalizeLang(runtime?.language, "az");
+  const { ctaText, wantsDmMove, calmTone } = getReplyBehavior(runtime);
+  const safeCta = ctaText || "accurate details";
+  const routedCta = wantsDmMove ? "in DM" : "briefly";
+
+  if (lang === "en") {
+    if (matchedDisallowedClaim) {
+      return applyBannedPhraseGuard(
+        `Thanks for asking. We do not make unverified claims here. We can share ${safeCta} ${routedCta}.`,
+        runtime
+      );
+    }
+
+    if (matchedHandoffTrigger) {
+      return applyBannedPhraseGuard(
+        calmTone
+          ? `Thank you. We can continue ${routedCta} so the right person can help with ${safeCta}.`
+          : `Thank you. We can continue ${routedCta} with the right next step for ${safeCta}.`,
+        runtime
+      );
+    }
+  }
+
+  return applyBannedPhraseGuard(
+    matchedDisallowedClaim
+      ? `Tesekkur edirik. Burada tesdiqlenmemis iddia vermirik. ${safeCta} ile bagli duzgun melumati ${wantsDmMove ? "DM-de" : "qisa sekilde"} paylasaq.`
+      : `Tesekkur edirik. ${safeCta} ile bagli size ${wantsDmMove ? "DM-de" : "qisa sekilde"} duzgun yonlendirme verik.`,
     runtime
   );
 }
 
 export function makePublicReply({ kind, runtime }) {
-  const preferredCta = getTenantPreferredCta(runtime);
-  const tone = lower(getTenantTone(runtime));
   const lang = normalizeLang(runtime?.language, "az");
+  const {
+    ctaText,
+    wantsDmMove,
+    confidentTone,
+    calmTone,
+  } = getReplyBehavior(runtime);
 
   if (lang === "en") {
     if (kind === "sales") {
-      if (tone.includes("premium") || tone.includes("modern") || tone.includes("confident")) {
+      if (confidentTone) {
         return applyBannedPhraseGuard(
-          "Thank you. If you’d like, we can share the details with you briefly in DM.",
+          wantsDmMove
+            ? `Thank you. We can continue in DM about ${ctaText || "the next step"}.`
+            : `Thank you. We can share the next step about ${ctaText || "this"} briefly.`,
           runtime
         );
       }
 
       return applyBannedPhraseGuard(
-        preferredCta
-          ? `Thank you. We can message you in DM for ${preferredCta}.`
-          : "Thank you. We can share the details with you in DM.",
+        wantsDmMove
+          ? ctaText
+            ? `Thank you. We can message you in DM about ${ctaText}.`
+            : "Thank you. We can share the details with you in DM."
+          : ctaText
+            ? `Thank you. We can share brief details about ${ctaText}.`
+            : "Thank you. We can share brief details.",
         runtime
       );
     }
 
     if (kind === "support") {
       return applyBannedPhraseGuard(
-        "Thank you for writing. We can continue in DM so we can check it more comfortably.",
+        calmTone
+          ? "Thank you for writing. We can continue in DM so we can check this carefully."
+          : "Thank you for writing. We can continue in DM so we can check it more comfortably.",
         runtime
       );
     }
 
     if (kind === "positive") {
       return applyBannedPhraseGuard(
-        "Thank you. We’re glad you liked it.",
+        "Thank you. We are glad you liked it.",
         runtime
       );
     }
@@ -108,23 +193,27 @@ export function makePublicReply({ kind, runtime }) {
   if (lang === "tr") {
     if (kind === "sales") {
       return applyBannedPhraseGuard(
-        preferredCta
-          ? `Teşekkür ederiz. ${preferredCta} için size DM üzerinden yazabiliriz.`
-          : "Teşekkür ederiz. Detayları size DM üzerinden paylaşabiliriz.",
+        wantsDmMove
+          ? ctaText
+            ? `Tesekkur ederiz. ${ctaText} icin size DM uzerinden yazabiliriz.`
+            : "Tesekkur ederiz. Detaylari size DM uzerinden paylasabiliriz."
+          : ctaText
+            ? `Tesekkur ederiz. ${ctaText} ile ilgili kisa bilgi paylasabiliriz.`
+            : "Tesekkur ederiz. Kisa bilgi paylasabiliriz.",
         runtime
       );
     }
 
     if (kind === "support") {
       return applyBannedPhraseGuard(
-        "Yazdığınız için teşekkür ederiz. Konuyu daha rahat kontrol etmek için size DM üzerinden yazalım.",
+        "Yazdiginiz icin tesekkur ederiz. Konuyu kontrol etmek icin size DM uzerinden yazalim.",
         runtime
       );
     }
 
     if (kind === "positive") {
       return applyBannedPhraseGuard(
-        "Teşekkür ederiz. Beğenmenize sevindik.",
+        "Tesekkur ederiz. Begenmenize sevindik.",
         runtime
       );
     }
@@ -135,23 +224,27 @@ export function makePublicReply({ kind, runtime }) {
   if (lang === "ru") {
     if (kind === "sales") {
       return applyBannedPhraseGuard(
-        preferredCta
-          ? `Спасибо. Мы можем написать вам в личные сообщения по поводу ${preferredCta}.`
-          : "Спасибо. Мы можем кратко написать вам детали в личные сообщения.",
+        wantsDmMove
+          ? ctaText
+            ? `Spasibo. My mozhem napisat vam v lichnye soobshcheniya po povodu ${ctaText}.`
+            : "Spasibo. My mozhem kratko napisat vam detali v lichnye soobshcheniya."
+          : ctaText
+            ? `Spasibo. My mozhem kratko podelitsya detalami po ${ctaText}.`
+            : "Spasibo. My mozhem kratko podelitsya detalyami.",
         runtime
       );
     }
 
     if (kind === "support") {
       return applyBannedPhraseGuard(
-        "Спасибо за сообщение. Мы можем написать вам в личные сообщения, чтобы удобнее проверить вопрос.",
+        "Spasibo za soobshchenie. My mozhem napisat vam v lichnye soobshcheniya, chtoby proverit vopros.",
         runtime
       );
     }
 
     if (kind === "positive") {
       return applyBannedPhraseGuard(
-        "Спасибо. Нам очень приятно.",
+        "Spasibo. Nam ochen priyatno.",
         runtime
       );
     }
@@ -160,31 +253,39 @@ export function makePublicReply({ kind, runtime }) {
   }
 
   if (kind === "sales") {
-    if (tone.includes("premium") || tone.includes("modern") || tone.includes("confident")) {
+    if (confidentTone) {
       return applyBannedPhraseGuard(
-        "Təşəkkür edirik. İstəsəniz detalları sizə DM-də qısa şəkildə paylaşaq.",
+        wantsDmMove
+          ? `Tesekkur edirik. ${ctaText || "Novbeti addim"} ucun size DM-de yazaq.`
+          : `Tesekkur edirik. ${ctaText || "Novbeti addim"} ile bagli qisa melumat paylasaq.`,
         runtime
       );
     }
 
     return applyBannedPhraseGuard(
-      preferredCta
-        ? `Təşəkkür edirik. ${preferredCta} üçün sizə DM-də yazaq.`
-        : "Təşəkkür edirik. Detalları sizə DM-də paylaşaq.",
+      wantsDmMove
+        ? ctaText
+          ? `Tesekkur edirik. ${ctaText} ucun size DM-de yazaq.`
+          : "Tesekkur edirik. Detallari size DM-de paylasaq."
+        : ctaText
+          ? `Tesekkur edirik. ${ctaText} ile bagli qisa melumat paylasaq.`
+          : "Tesekkur edirik. Qisa melumat paylasaq.",
       runtime
     );
   }
 
   if (kind === "support") {
     return applyBannedPhraseGuard(
-      "Yazdığınız üçün təşəkkür edirik. Məsələni daha rahat yoxlamaq üçün sizə DM-də yazaq.",
+      calmTone
+        ? "Yazdiginiz ucun tesekkur edirik. Meseleye diqqetle baxmaq ucun size DM-de yazaq."
+        : "Yazdiginiz ucun tesekkur edirik. Meseleyni daha rahat yoxlamaq ucun size DM-de yazaq.",
       runtime
     );
   }
 
   if (kind === "positive") {
     return applyBannedPhraseGuard(
-      "Təşəkkür edirik. Bəyənməyiniz bizi sevindirdi.",
+      "Tesekkur edirik. Beyenmeyiniz bizi sevindirdi.",
       runtime
     );
   }
@@ -193,22 +294,22 @@ export function makePublicReply({ kind, runtime }) {
 }
 
 export function makePrivateReply({ kind, runtime }) {
-  const preferredCta = getTenantPreferredCta(runtime);
   const lang = normalizeLang(runtime?.language, "az");
+  const { ctaText, guidedQualification, warmTone } = getReplyBehavior(runtime);
 
   if (lang === "en") {
     if (kind === "sales") {
       return applyBannedPhraseGuard(
-        preferredCta
-          ? `Hello. We’re writing regarding your comment. We can share a suitable option for ${preferredCta}. Which service are you interested in?`
-          : "Hello. We’re writing regarding your comment. We can briefly share a suitable option for you. Which service are you interested in?",
+        ctaText
+          ? `${warmTone ? "Hi" : "Hello"}. We are writing regarding your comment. We can share a suitable option for ${ctaText}. ${guidedQualification ? "What would you like help with first?" : "Which service are you interested in?"}`
+          : `${warmTone ? "Hi" : "Hello"}. We are writing regarding your comment. We can briefly share a suitable option for you. ${guidedQualification ? "What would you like help with first?" : "Which service are you interested in?"}`,
         runtime
       );
     }
 
     if (kind === "support") {
       return applyBannedPhraseGuard(
-        "Hello. We’re writing regarding your comment. You can briefly share the details with us so we can check the issue.",
+        "Hello. We are writing regarding your comment. You can briefly share the details with us so we can check the issue.",
         runtime
       );
     }
@@ -219,16 +320,16 @@ export function makePrivateReply({ kind, runtime }) {
   if (lang === "tr") {
     if (kind === "sales") {
       return applyBannedPhraseGuard(
-        preferredCta
-          ? `Merhaba. Yorumunuz üzerine yazıyoruz. ${preferredCta} ile ilgili size uygun seçeneği paylaşabiliriz. Hangi hizmetle ilgileniyorsunuz?`
-          : "Merhaba. Yorumunuz üzerine yazıyoruz. Size uygun seçeneği kısaca paylaşabiliriz. Hangi hizmetle ilgileniyorsunuz?",
+        ctaText
+          ? `Merhaba. Yorumunuz uzerine yaziyoruz. ${ctaText} ile ilgili size uygun secenegi paylasabiliriz. ${guidedQualification ? "Ilk olarak hangi konuda yardim istersiniz?" : "Hangi hizmetle ilgileniyorsunuz?"}`
+          : `Merhaba. Yorumunuz uzerine yaziyoruz. Size uygun secenegi kisaca paylasabiliriz. ${guidedQualification ? "Ilk olarak hangi konuda yardim istersiniz?" : "Hangi hizmetle ilgileniyorsunuz?"}`,
         runtime
       );
     }
 
     if (kind === "support") {
       return applyBannedPhraseGuard(
-        "Merhaba. Yorumunuz üzerine yazıyoruz. Konuyu kontrol edebilmemiz için detayları bizimle kısaca paylaşabilirsiniz.",
+        "Merhaba. Yorumunuz uzerine yaziyoruz. Konuyu kontrol edebilmemiz icin detaylari bizimle kisaca paylasabilirsiniz.",
         runtime
       );
     }
@@ -239,16 +340,16 @@ export function makePrivateReply({ kind, runtime }) {
   if (lang === "ru") {
     if (kind === "sales") {
       return applyBannedPhraseGuard(
-        preferredCta
-          ? `Здравствуйте. Пишем вам по вашему комментарию. Мы можем предложить подходящий вариант по ${preferredCta}. Какая услуга вас интересует?`
-          : "Здравствуйте. Пишем вам по вашему комментарию. Мы можем кратко предложить подходящий вариант. Какая услуга вас интересует?",
+        ctaText
+          ? `Zdravstvuyte. Pishem vam po vashemu kommentariyu. My mozhem predlozhit podkhodyashchiy variant po ${ctaText}. ${guidedQualification ? "S chem pomoch v pervuyu ochered?" : "Kakaya usluga vas interesuet?"}`
+          : `Zdravstvuyte. Pishem vam po vashemu kommentariyu. My mozhem kratko predlozhit podkhodyashchiy variant. ${guidedQualification ? "S chem pomoch v pervuyu ochered?" : "Kakaya usluga vas interesuet?"}`,
         runtime
       );
     }
 
     if (kind === "support") {
       return applyBannedPhraseGuard(
-        "Здравствуйте. Пишем вам по вашему комментарию. Вы можете кратко отправить детали, чтобы мы проверили вопрос.",
+        "Zdravstvuyte. Pishem vam po vashemu kommentariyu. Vy mozhete kratko otpravit detali, chtoby my proverili vopros.",
         runtime
       );
     }
@@ -258,16 +359,16 @@ export function makePrivateReply({ kind, runtime }) {
 
   if (kind === "sales") {
     return applyBannedPhraseGuard(
-      preferredCta
-        ? `Salam. Şərhinizə görə yazırıq. ${preferredCta} ilə bağlı sizə uyğun variantı paylaşa bilərik. Hansı xidmətlə maraqlanırsınız?`
-        : "Salam. Şərhinizə görə yazırıq. Sizə uyğun variantı qısa şəkildə paylaşa bilərik. Hansı xidmətlə maraqlanırsınız?",
+      ctaText
+        ? `Salam. Serhinize gore yaziriq. ${ctaText} ile bagli size uygun varianti paylasa bilerik. ${guidedQualification ? "En cox ne ile komek isteyirsiniz?" : "Hansi xidmetle maraqlanirsiniz?"}`
+        : `Salam. Serhinize gore yaziriq. Size uygun varianti qisa sekilde paylasa bilerik. ${guidedQualification ? "En cox ne ile komek isteyirsiniz?" : "Hansi xidmetle maraqlanirsiniz?"}`,
       runtime
     );
   }
 
   if (kind === "support") {
     return applyBannedPhraseGuard(
-      "Salam. Şərhinizə görə yazırıq. Problemi yoxlamaq üçün qısa şəkildə detalları bizimlə paylaşa bilərsiniz.",
+      "Salam. Serhinize gore yaziriq. Problemi yoxlamaq ucun qisa sekilde detallari bizimle paylasa bilersiniz.",
       runtime
     );
   }

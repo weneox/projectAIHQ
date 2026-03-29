@@ -6,9 +6,11 @@ import { StageSection, TinyChip, TinyLabel } from "../SetupStudioUi.jsx";
 import SetupStudioEvidenceNotice from "../SetupStudioEvidenceNotice.jsx";
 import FieldReviewCard from "./FieldReviewCard.jsx";
 import FinalizeFooter from "./FinalizeFooter.jsx";
+import BehaviorReviewPanel from "./BehaviorReviewPanel.jsx";
 import { humanizeStudioIssue } from "../../logic/helpers.js";
 import { deriveCanonicalReviewProjection } from "../../state/reviewState.js";
 import { getControlPlanePermissions } from "../../../../lib/controlPlanePermissions.js";
+import { extractBehaviorProfile } from "../../logic/behaviorProfile.js";
 import {
   describeSetupStudioFieldHonesty,
   summarizeSetupStudioHonesty,
@@ -296,6 +298,9 @@ export default function ReviewWorkspace({
 }) {
   const draft = deriveCanonicalReviewProjection(currentReview);
   const overview = obj(draft.overview);
+  const observedBehavior = extractBehaviorProfile(
+    draft.behavior || overview.nicheBehavior || overview.behavior
+  );
   const quickSummary = s(
     draft.quickSummary ||
       overview.summaryShort ||
@@ -428,6 +433,12 @@ export default function ReviewWorkspace({
               ))}
             </div>
           </StageSection>
+
+          <BehaviorReviewPanel
+            value={businessForm?.behavior}
+            observedValue={observedBehavior}
+            onChange={(nextValue) => onSetBusinessField?.("behavior", nextValue)}
+          />
         </div>
       </div>
 

@@ -136,30 +136,18 @@ function normalizeFactKeyFromKnowledge(result = {}) {
   return `${category}_${itemKey}`.slice(0, 120);
 }
 
-function shouldPromoteKnowledgeToBusinessFact(result = {}) {
+function shouldPromoteKnowledgeToOperationalFact(result = {}) {
   const category = pickApprovedCategory(result);
 
   return [
-    "company",
-    "summary",
-    "service",
-    "product",
     "pricing",
     "pricing_policy",
     "faq",
-    "contact",
-    "location",
-    "hours",
-    "tone",
-    "brand",
-    "policy",
     "cta",
-    "social_link",
     "support",
     "booking",
     "handoff",
-    "website_title",
-    "website_summary",
+    "objection",
   ].includes(category);
 }
 
@@ -516,10 +504,10 @@ function shouldBlockPromotion(result = {}) {
   return false;
 }
 
-async function maybePromoteApprovedKnowledgeToBusinessFact(db, tenant, result = {}) {
+async function maybePromoteApprovedKnowledgeToOperationalFact(db, tenant, result = {}) {
   if (!hasDb(db)) return null;
   if (!tenant?.tenant_id) return null;
-  if (!shouldPromoteKnowledgeToBusinessFact(result)) return null;
+  if (!shouldPromoteKnowledgeToOperationalFact(result)) return null;
   if (shouldBlockPromotion(result)) return null;
 
   const knowledge = result?.knowledge || {};
@@ -590,6 +578,8 @@ async function maybePromoteApprovedKnowledgeToBusinessFact(db, tenant, result = 
       knowledgeItemKey: s(knowledge.item_key || candidate.item_key),
       canonicalKey: s(knowledge.canonical_key || candidate.canonical_key),
       promotedFrom: "settings.sources.approve",
+      factSurface: "runtime_retrieval",
+      runtimeRole: "retrieval_assistance",
       originalCategory: pickApprovedCategory(result),
     },
   });
@@ -1669,7 +1659,7 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
         reviewerName,
       });
 
-      const promotedBusinessFact = await maybePromoteApprovedKnowledgeToBusinessFact(
+      const promotedBusinessFact = await maybePromoteApprovedKnowledgeToOperationalFact(
         db,
         tenant,
         result
@@ -1686,7 +1676,7 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
           itemKey: s(result?.knowledge?.item_key || result?.candidate?.item_key),
           knowledgeItemId: s(result?.knowledge?.id),
           approvalId: s(result?.approval?.id),
-          promotedBusinessFactId: s(promotedBusinessFact?.id),
+        promotedBusinessFactId: s(promotedBusinessFact?.id),
           reviewerName,
           publishPreview: previewSummary,
           publishReceipt,
@@ -1702,6 +1692,7 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
         publishReceipt,
         promoted: Boolean(promotedBusinessFact),
         promotedBusinessFact: promotedBusinessFact || null,
+        promotedOperationalFact: promotedBusinessFact || null,
       });
     } catch (err) {
       return bad(res, 500, err.message || "failed to approve candidate");
@@ -1876,3 +1867,8 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
     }
   });
 }
+
+export const __test__ = {
+  shouldPromoteKnowledgeToOperationalFact,
+  maybePromoteApprovedKnowledgeToOperationalFact,
+};

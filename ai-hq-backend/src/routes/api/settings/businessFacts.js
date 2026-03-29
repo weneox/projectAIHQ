@@ -2,9 +2,11 @@ import express from "express";
 import { dbGetTenantByKey } from "../../../db/helpers/tenants.js";
 import {
   dbListTenantBusinessFacts,
-  dbUpsertTenantBusinessFact,
-  dbDeleteTenantBusinessFact,
 } from "../../../db/helpers/tenantBusinessBrain.js";
+import {
+  listSetupBusinessTruthFactsFromDraftOrPublished,
+  stageBusinessTruthFactMutationInMaintenanceSession,
+} from "../../../services/workspace/setup/draftBusinessFacts.js";
 import {
   ok,
   bad,
@@ -42,14 +44,27 @@ export function businessFactsSettingsRoutes({ db }) {
       const language = cleanLower(req.query.language || "");
       const factGroup = cleanLower(req.query.factGroup || req.query.fact_group || "");
 
-      const facts = await dbListTenantBusinessFacts(db, tenant.id, {
+      const truthFacts = await listSetupBusinessTruthFactsFromDraftOrPublished({
+        db,
+        actor: {
+          tenantId: tenant.id,
+          tenantKey,
+        },
+      });
+      const operationalFacts = await dbListTenantBusinessFacts(db, tenant.id, {
         language,
         factGroup,
         enabledOnly: false,
+        factSurface: "runtime_retrieval",
       });
 
       return ok(res, {
-        facts,
+        facts: truthFacts.facts,
+        operationalFacts,
+        factSurface: "published_truth",
+        source: truthFacts.source,
+        staged: truthFacts.staged,
+        canonicalWriteDeferred: truthFacts.canonicalWriteDeferred,
         viewerRole: isInternalServiceRequest(req) ? "internal" : getUserRole(req),
       });
     } catch (err) {
@@ -73,7 +88,14 @@ export function businessFactsSettingsRoutes({ db }) {
       }
 
       const body = safeJsonObj(req.body, {});
-      const saved = await dbUpsertTenantBusinessFact(db, tenant.id, {
+      const staged = await stageBusinessTruthFactMutationInMaintenanceSession({
+        db,
+        actor: {
+          tenantId: tenant.id,
+          tenantKey,
+        },
+        mode: "upsert",
+        body: {
         fact_key: cleanLower(body.fact_key || body.factKey),
         fact_group: cleanLower(body.fact_group || body.factGroup || "general"),
         title: cleanString(body.title),
@@ -87,9 +109,10 @@ export function businessFactsSettingsRoutes({ db }) {
         source_type: cleanLower(body.source_type || body.sourceType || "manual"),
         source_ref: cleanNullableString(body.source_ref || body.sourceRef),
         meta: safeJsonObj(body.meta, {}),
+        },
       });
 
-      if (!saved?.id) {
+      if (!staged?.stagedItem?.factKey) {
         return bad(res, "Failed to save business fact");
       }
 
@@ -97,16 +120,26 @@ export function businessFactsSettingsRoutes({ db }) {
         db,
         req,
         tenant,
-        "settings.business_fact.updated",
-        "tenant_business_fact",
-        saved.id,
+        "settings.business_fact.staged_for_review",
+        "tenant_setup_review_draft",
+        staged.maintenanceSession?.id,
         {
-          factKey: saved.fact_key,
-          factGroup: saved.fact_group,
+          factKey: staged.stagedItem?.factKey,
+          factGroup: staged.stagedItem?.factGroup,
+          publishStatus: staged.publishStatus,
         }
       );
 
-      return ok(res, { fact: saved, viewerRole: role });
+      return ok(res, {
+        fact: staged.stagedItem,
+        publishStatus: staged.publishStatus,
+        reviewRequired: staged.reviewRequired,
+        maintenanceSession: staged.maintenanceSession,
+        maintenanceDraft: staged.maintenanceDraft,
+        liveMutationDeferred: staged.liveMutationDeferred,
+        runtimeProjectionRefreshed: staged.runtimeProjectionRefreshed,
+        viewerRole: role,
+      });
     } catch (err) {
       return serverErr(res, err?.message || "Failed to save business fact");
     }
@@ -130,21 +163,55 @@ export function businessFactsSettingsRoutes({ db }) {
         return res.status(404).json({ ok: false, error: "Tenant not found" });
       }
 
-      const deleted = await dbDeleteTenantBusinessFact(db, tenant.id, factId);
-      if (!deleted) {
+      const currentFacts = await listSetupBusinessTruthFactsFromDraftOrPublished({
+        db,
+        actor: {
+          tenantId: tenant.id,
+          tenantKey,
+        },
+      });
+      const target = (currentFacts.facts || []).find(
+        (item) => cleanString(item.id) === factId || cleanLower(item.factKey || item.fact_key) === cleanLower(factId)
+      );
+      if (!target) {
         return res.status(404).json({ ok: false, error: "Business fact not found" });
       }
+
+      const staged = await stageBusinessTruthFactMutationInMaintenanceSession({
+        db,
+        actor: {
+          tenantId: tenant.id,
+          tenantKey,
+        },
+        mode: "delete",
+        factId: target.factKey || target.fact_key || target.id,
+      });
 
       await auditSafe(
         db,
         req,
         tenant,
-        "settings.business_fact.deleted",
-        "tenant_business_fact",
-        factId
+        "settings.business_fact.delete_staged_for_review",
+        "tenant_setup_review_draft",
+        staged.maintenanceSession?.id,
+        {
+          factKey: target.factKey || target.fact_key,
+          publishStatus: staged.publishStatus,
+        }
       );
 
-      return ok(res, { deleted: true, id: factId, viewerRole: role });
+      return ok(res, {
+        deleted: true,
+        id: factId,
+        stagedDeletion: true,
+        publishStatus: staged.publishStatus,
+        reviewRequired: staged.reviewRequired,
+        maintenanceSession: staged.maintenanceSession,
+        maintenanceDraft: staged.maintenanceDraft,
+        liveMutationDeferred: staged.liveMutationDeferred,
+        runtimeProjectionRefreshed: staged.runtimeProjectionRefreshed,
+        viewerRole: role,
+      });
     } catch (err) {
       return serverErr(res, err?.message || "Failed to delete business fact");
     }

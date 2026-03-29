@@ -460,6 +460,11 @@ export function buildFinalizeImpactSummary({
     if (field === "fieldSources") continue;
     canonicalAreas.add("business_profile");
     canonicalPaths.push(`profile.${field}`);
+    if (field === "nicheBehavior" || field === "niche_behavior") {
+      runtimeAreas.add("behavioral_policy");
+      runtimePaths.push("runtime.business.behavior");
+      continue;
+    }
     runtimeAreas.add("tenant_profile");
     runtimePaths.push(`runtime.business.profile.${field}`);
   }

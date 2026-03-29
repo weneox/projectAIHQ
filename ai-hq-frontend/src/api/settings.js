@@ -139,7 +139,7 @@ export async function getTenantBusinessFacts(params = {}) {
 export async function saveTenantBusinessFact(payload) {
   const j = await apiPost(`/api/settings/business-facts`, payload);
   ensureOk(j, "Failed to save business fact");
-  return j?.fact || j;
+  return j;
 }
 
 export async function deleteTenantBusinessFact(id) {

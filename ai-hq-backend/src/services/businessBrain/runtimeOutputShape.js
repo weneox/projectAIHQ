@@ -40,6 +40,7 @@ function buildRuntimeOutput({
     .filter((x) => x.title);
   const normalizedKnowledgeEntries = dedupeKnowledgeEntries(knowledgeEntries, tenant);
   const normalizedResponsePlaybooks = dedupePlaybooks(responsePlaybooks, tenant);
+  const behavior = obj(raw?.behavior || raw?.behavior_json || raw?.projection?.behavior_json);
   const activeVisibleServices = normalizedServices.filter((x) => x.enabled && x.visibleInAi);
   const disabledVisibleServices = normalizedServices.filter((x) => !x.enabled || !x.visibleInAi);
   const displayName =
@@ -129,6 +130,9 @@ function buildRuntimeOutput({
       500
     ),
     companySummaryLong: compactText(businessSummary || s(profile.brand_summary), 1800),
+    businessType: s(behavior.businessType || behavior.niche || tenant?.industry_key),
+    niche: s(behavior.niche || behavior.businessType || tenant?.industry_key),
+    subNiche: s(behavior.subNiche || behavior.sub_niche),
     industry: normalizeIndustry(tenant?.industry_key),
     industryKey: normalizeIndustry(tenant?.industry_key),
     businessSummary,
@@ -145,6 +149,26 @@ function buildRuntimeOutput({
     tone,
     toneText: tone,
     preferredCta,
+    conversionGoal: s(behavior.conversionGoal || behavior.conversion_goal),
+    primaryCta: s(behavior.primaryCta || behavior.primary_cta || preferredCta),
+    leadQualificationMode: s(
+      behavior.leadQualificationMode || behavior.lead_qualification_mode
+    ),
+    qualificationQuestions: flattenStringList(
+      behavior.qualificationQuestions,
+      behavior.qualification_questions
+    ),
+    bookingFlowType: s(behavior.bookingFlowType || behavior.booking_flow_type),
+    handoffTriggers: flattenStringList(
+      behavior.handoffTriggers,
+      behavior.handoff_triggers
+    ),
+    disallowedClaims: flattenStringList(
+      behavior.disallowedClaims,
+      behavior.disallowed_claims
+    ),
+    behavior,
+    channelBehavior: obj(behavior.channelBehavior || behavior.channel_behavior),
     maxSentences,
     leadPrompts,
     bannedPhrases,
@@ -168,6 +192,7 @@ function buildRuntimeOutput({
     raw: {
       ...obj(raw),
       authority: authority && typeof authority === "object" ? authority : null,
+      behavior,
       policyControls: normalizedPolicyControls,
       services,
       knowledgeEntries,

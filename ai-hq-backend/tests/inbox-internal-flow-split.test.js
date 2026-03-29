@@ -7,6 +7,7 @@ import {
   loadStrictInboxRuntime,
   persistOutboundMessage,
 } from "../src/routes/api/inbox/internal.js";
+import { buildInboxActions } from "../src/services/inboxBrain.js";
 
 function createMockRes() {
   return {
@@ -445,4 +446,121 @@ test("inbox ingest blocks autonomous reply execution when runtime health is stal
   assert.equal(res.body?.actions?.[0]?.type, "no_reply");
   assert.equal(res.body?.executionResults?.length, 0);
   assert.equal(Array.isArray(decisionEvents), true);
+});
+
+test("inbox behavior runtime uses niche qualification CTA guidance for fallback replies", async () => {
+  const result = await buildInboxActions({
+    text: "Salam",
+    channel: "instagram",
+    externalUserId: "user-ext-1",
+    tenantKey: "acme-clinic",
+    thread: {
+      id: "thread-1",
+      status: "open",
+      handoff_active: false,
+    },
+    message: {
+      id: "msg-1",
+    },
+    tenant: {
+      tenant_key: "acme-clinic",
+      company_name: "Acme Clinic",
+    },
+    runtime: {
+      tenant: {
+        id: "tenant-1",
+        tenant_key: "acme-clinic",
+      },
+      displayName: "Acme Clinic",
+      industry: "clinic",
+      services: ["Consultation"],
+      serviceCatalog: [],
+      knowledgeEntries: [],
+      responsePlaybooks: [],
+      behavior: {
+        businessType: "clinic",
+        niche: "clinic",
+        conversionGoal: "book_appointment",
+        primaryCta: "book_now",
+        leadQualificationMode: "service_booking_triage",
+        qualificationQuestions: ["What day works best for your visit?"],
+        handoffTriggers: ["human_request"],
+        disallowedClaims: ["diagnosis_or_treatment_guarantees"],
+        toneProfile: "calm_professional_reassuring",
+        channelBehavior: {
+          inbox: {
+            qualificationDepth: "guided",
+            handoffBias: "conditional",
+          },
+        },
+      },
+    },
+  });
+
+  const send = result.actions.find((action) => action.type === "send_message");
+
+  assert.equal(result.intent, "greeting");
+  assert.equal(send?.meta?.primaryCta, "book_now");
+  assert.equal(send?.meta?.leadQualificationMode, "service_booking_triage");
+  assert.equal(send?.meta?.toneProfile, "calm_professional_reassuring");
+  assert.equal(send?.text.includes("What day works best for your visit?"), true);
+  assert.equal(send?.text.toLowerCase().includes("book now"), true);
+});
+
+test("inbox behavior runtime blocks disallowed-claim requests and forces handoff", async () => {
+  const result = await buildInboxActions({
+    text: "Tecili diaqnoz qoyun ve zemanet verin",
+    channel: "instagram",
+    externalUserId: "user-ext-2",
+    tenantKey: "acme-clinic",
+    thread: {
+      id: "thread-2",
+      status: "open",
+      handoff_active: false,
+    },
+    message: {
+      id: "msg-2",
+    },
+    tenant: {
+      tenant_key: "acme-clinic",
+      company_name: "Acme Clinic",
+    },
+    runtime: {
+      tenant: {
+        id: "tenant-1",
+        tenant_key: "acme-clinic",
+      },
+      displayName: "Acme Clinic",
+      industry: "clinic",
+      serviceCatalog: [],
+      knowledgeEntries: [],
+      responsePlaybooks: [],
+      behavior: {
+        businessType: "clinic",
+        niche: "clinic",
+        conversionGoal: "book_appointment",
+        primaryCta: "book_now",
+        leadQualificationMode: "service_booking_triage",
+        qualificationQuestions: ["What service or concern do you need help with?"],
+        handoffTriggers: ["urgent_health_claim"],
+        disallowedClaims: ["diagnosis_or_treatment_guarantees"],
+        toneProfile: "calm_professional_reassuring",
+        channelBehavior: {
+          inbox: {
+            qualificationDepth: "guided",
+            handoffBias: "conditional",
+          },
+        },
+      },
+    },
+  });
+
+  const handoff = result.actions.find((action) => action.type === "handoff");
+  const send = result.actions.find((action) => action.type === "send_message");
+
+  assert.equal(result.intent, "handoff_request");
+  assert.equal(handoff?.reason, "diagnosis_or_treatment_guarantees");
+  assert.equal(handoff?.priority, "high");
+  assert.equal(send?.meta?.matchedBehaviorDisallowedClaim, "diagnosis_or_treatment_guarantees");
+  assert.equal(send?.text.includes("tesdiqlenmemis iddia vermirik"), true);
 });

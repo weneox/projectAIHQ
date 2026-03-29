@@ -447,6 +447,10 @@ export async function upsertTenantRuntimeProjection(
   dbOrClient = db
 ) {
   const client = pickDb(dbOrClient);
+  const projectionMetadata = {
+    ...obj(projection?.metadata_json),
+    ...obj(metadata),
+  };
 
   if (!s(tenantId)) throw new Error("tenantId is required");
   if (!projection || typeof projection !== "object") {
@@ -601,7 +605,7 @@ export async function upsertTenantRuntimeProjection(
       s(projection.confidence_label || "low"),
       s(generatedBy || "system"),
       s(approvedBy),
-      JSON.stringify(obj(metadata)),
+      JSON.stringify(projectionMetadata),
     ]
   );
 
@@ -818,7 +822,10 @@ export async function getTenantRuntimeProjectionFreshness(
 }
 
 function normalizePublishedTruthVersionId(input = {}) {
-  const metadata = obj(input.metadata_json);
+  const metadata = {
+    ...obj(input.metadata_json),
+    ...obj(input.metadata),
+  };
   return s(
     input.publishedTruthVersionId ||
       input.published_truth_version_id ||

@@ -72,6 +72,9 @@ export function buildRuntimePreferencesDraftPatch(body = {}, currentDraft = {}) 
   const existingProfile = obj(currentDraft.businessProfile);
   const existingCapabilities = obj(currentDraft.capabilities);
   const existingPayload = obj(currentDraft.draftPayload);
+  const existingBehavior = obj(
+    existingProfile.nicheBehavior || existingProfile.niche_behavior
+  );
 
   const nextBusinessProfile = { ...existingProfile };
   const nextCapabilities = { ...existingCapabilities };
@@ -93,6 +96,12 @@ export function buildRuntimePreferencesDraftPatch(body = {}, currentDraft = {}) 
   if (provided.replyLength) nextCapabilities.replyLength = normalized.replyLength;
   if (provided.emojiLevel) nextCapabilities.emojiLevel = normalized.emojiLevel;
   if (provided.ctaStyle) nextCapabilities.ctaStyle = normalized.ctaStyle;
+  if (provided.behavior) {
+    nextBusinessProfile.nicheBehavior = compactDraftObject({
+      ...existingBehavior,
+      ...obj(normalized.behavior),
+    });
+  }
 
   return {
     saved: buildSavedRuntimePayload(normalized, {
@@ -124,6 +133,7 @@ export function buildRuntimePreferencesDraftPatch(body = {}, currentDraft = {}) 
             emojiLevel: provided.emojiLevel ? normalized.emojiLevel : undefined,
             ctaStyle: provided.ctaStyle ? normalized.ctaStyle : undefined,
             policies: provided.policies ? obj(normalized.policies) : undefined,
+            nicheBehavior: provided.behavior ? obj(normalized.behavior) : undefined,
           }),
         },
       }),

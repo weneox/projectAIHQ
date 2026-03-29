@@ -10,6 +10,7 @@ import {
   resolveMainLanguageValue,
   normalizeIncomingSourceType,
 } from "./shared.js";
+import { extractBehaviorProfile, normalizeBehaviorProfile } from "../logic/behaviorProfile.js";
 
 const GENERIC_BUSINESS_NAME_VALUES = new Set([
   "google maps",
@@ -234,6 +235,7 @@ export function deriveSuggestedServicePayload({
 
 export function formFromProfile(profile = {}, prev = {}) {
   const x = obj(profile);
+  const behavior = extractBehaviorProfile(x, prev.behavior);
   const rawCompanyName = s(
     x.companyName ||
       x.company_name ||
@@ -290,6 +292,7 @@ export function formFromProfile(profile = {}, prev = {}) {
     primaryPhone: s(safePhone || prev.primaryPhone),
     primaryEmail: s(safeEmail || prev.primaryEmail),
     primaryAddress: s(safeAddress || prev.primaryAddress),
+    behavior,
   };
 }
 
@@ -468,6 +471,11 @@ export function hydrateBusinessFormFromProfile(
     next.language = s(candidate.language || prev.language || "en");
   }
 
+  next.behavior = normalizeBehaviorProfile(
+    extractBehaviorProfile(profile, prev.behavior),
+    prev.behavior
+  );
+
   return next;
 }
 
@@ -484,6 +492,8 @@ export function buildBusinessProfilePatch({
   discoveryState = {},
 }) {
   const existing = obj(currentReview?.draft?.businessProfile);
+  const existingBehavior = extractBehaviorProfile(existing);
+  const nextBehavior = normalizeBehaviorProfile(businessForm.behavior, existingBehavior);
 
   const resolvedLanguage =
     resolveMainLanguageValue(
@@ -534,6 +544,7 @@ export function buildBusinessProfilePatch({
     fieldConfidence: Object.keys(obj(existing.fieldConfidence)).length
       ? obj(existing.fieldConfidence)
       : obj(discoveryState.fieldConfidence),
+    nicheBehavior: nextBehavior,
   };
 }
 

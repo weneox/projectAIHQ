@@ -324,6 +324,18 @@ export function summarizeApprovalPolicies(items = []) {
 function mapBusinessProfileField(field = "") {
   const safeField = lower(field);
 
+  if (["nichebehavior", "niche_behavior"].includes(safeField)) {
+    return {
+      category: "capability",
+      itemKey: "niche_behavior",
+      impact: {
+        canonicalAreas: ["business_profile"],
+        runtimeAreas: ["behavioral_policy"],
+        affectedSurfaces: [...ALL_AFFECTED_SURFACES],
+      },
+    };
+  }
+
   if (["companyname", "displayname", "legalname"].includes(safeField)) {
     return {
       category: "company",

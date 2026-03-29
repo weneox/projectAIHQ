@@ -274,8 +274,36 @@ export async function loadTenantCanonicalGraph(
           : Array.isArray(publishedTruthMetadata?.locations_snapshot_json)
             ? publishedTruthMetadata.locations_snapshot_json
             : [],
+        has_truth_facts_snapshot:
+          Object.prototype.hasOwnProperty.call(publishedTruthMetadata || {}, "truthFactsSnapshot") ||
+          Object.prototype.hasOwnProperty.call(
+            publishedTruthMetadata || {},
+            "truth_facts_snapshot_json"
+          ),
+        truth_facts_snapshot_json: Array.isArray(publishedTruthMetadata?.truthFactsSnapshot)
+          ? publishedTruthMetadata.truthFactsSnapshot
+          : Array.isArray(publishedTruthMetadata?.truth_facts_snapshot_json)
+            ? publishedTruthMetadata.truth_facts_snapshot_json
+            : [],
       }
     : null;
+
+  const operationalFacts = normalizeFacts(
+    factsRows.filter((row) => {
+      const meta = parseObject(row.meta);
+      return s(meta.factSurface || meta.fact_surface).toLowerCase() === "runtime_retrieval";
+    })
+  );
+  const legacyFacts = normalizeFacts(
+    factsRows.filter((row) => {
+      const meta = parseObject(row.meta);
+      return s(meta.factSurface || meta.fact_surface).toLowerCase() !== "runtime_retrieval";
+    })
+  );
+  const publishedTruthFacts =
+    publishedTruthVersion?.has_truth_facts_snapshot
+      ? normalizeFacts(publishedTruthVersion.truth_facts_snapshot_json)
+      : legacyFacts;
 
   return {
     tenant,
@@ -302,8 +330,11 @@ export async function loadTenantCanonicalGraph(
     channels: normalizeChannels(channelRows),
     mediaAssets: normalizeMediaAssets(mediaRows),
     knowledge: normalizeKnowledge(knowledgeRows),
-    facts: normalizeFacts(factsRows),
+    facts: [...publishedTruthFacts, ...operationalFacts],
+    publishedTruthFacts,
+    operationalFacts,
     channelPolicies: normalizeChannelPolicies(channelPolicyRows),
+    operationalChannelPolicies: normalizeChannelPolicies(channelPolicyRows),
     publishedTruthVersion,
   };
 }

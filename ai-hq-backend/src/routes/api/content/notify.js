@@ -22,6 +22,7 @@ export function buildAssetNotifyExtra({
   row,
   jobId,
   contentPack,
+  runtimeBehavior = null,
 }) {
   return deepFix({
     tenantKey: s(tenantKey),
@@ -39,6 +40,7 @@ export function buildAssetNotifyExtra({
     voiceoverText: pickVoiceoverText(contentPack),
     neededAssets: pickNeededAssets(contentPack),
     reelMeta: pickReelMeta(contentPack),
+    runtimeBehavior,
     contentPack,
     callback: { url: "/api/executions/callback", tokenHeader: "x-webhook-token" },
   });
@@ -53,6 +55,7 @@ export function buildPublishNotifyExtra({
   contentPack,
   assetUrl,
   caption,
+  runtimeBehavior = null,
 }) {
   const thumbnailUrl = pickThumbnailUrl(contentPack, row);
   const kind = packType(contentPack);
@@ -74,6 +77,7 @@ export function buildPublishNotifyExtra({
     thumbnailUrl,
     coverUrl: thumbnailUrl || assetUrl,
     caption,
+    runtimeBehavior,
     contentPack,
     callback: { url: "/api/executions/callback", tokenHeader: "x-webhook-token" },
   });

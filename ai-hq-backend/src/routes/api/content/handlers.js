@@ -2,6 +2,12 @@ import { okJson, isDbReady, isUuid, nowIso } from "../../../utils/http.js";
 
 import { pushBroadcastToCeo } from "../../../services/pushBroadcast.js";
 import { notifyN8n } from "../../../services/n8nNotify.js";
+import {
+  buildRuntimeAuthorityFailurePayload,
+  getTenantBrainRuntime,
+  isRuntimeAuthorityError,
+} from "../../../services/businessBrain/getTenantBrainRuntime.js";
+import { buildContentBehaviorProfile } from "../../../services/contentBehaviorRuntime.js";
 import { kernelHandle } from "../../../kernel/agentKernel.js";
 
 import {
@@ -59,6 +65,41 @@ import {
   buildAnalyzeBody,
   buildAnalyzeTitle,
 } from "./analysis.js";
+
+async function resolveContentRuntimeBehavior({
+  db,
+  tenantKey,
+  tenantId,
+  service,
+  getRuntime = getTenantBrainRuntime,
+}) {
+  try {
+    const runtime = await getRuntime({
+      db,
+      tenantId,
+      tenantKey,
+      authorityMode: "strict",
+    });
+
+    return {
+      ok: true,
+      runtime,
+      runtimeBehavior: buildContentBehaviorProfile(runtime),
+    };
+  } catch (error) {
+    if (isRuntimeAuthorityError(error)) {
+      return {
+        ok: false,
+        response: buildRuntimeAuthorityFailurePayload(error, {
+          service,
+          tenantKey,
+          tenantId,
+        }),
+      };
+    }
+    throw error;
+  }
+}
 
 export async function getContentHandler(req, res, { db }) {
   const proposalId = String(req.query.proposalId || "").trim();
@@ -130,6 +171,15 @@ export async function feedbackHandler(req, res, { db, wsHub }) {
     });
 
     const tenantId = pickRuntimeTenantId(updated, current, proposal);
+    const runtimeResolved = await resolveContentRuntimeBehavior({
+      db,
+      tenantKey,
+      tenantId,
+      service: "content.revise",
+    });
+    if (!runtimeResolved.ok) {
+      return okJson(res, runtimeResolved.response);
+    }
 
     const job = await createJob({
       db,
@@ -172,6 +222,7 @@ export async function feedbackHandler(req, res, { db, wsHub }) {
         automationMode: automation.mode,
         autoPublish: automation.autoPublish,
         contentPack: normalizeContentPack(updated?.content_pack || current.content_pack) || {},
+        runtimeBehavior: runtimeResolved.runtimeBehavior,
         callback: { url: "/api/executions/callback", tokenHeader: "x-webhook-token" },
       });
     }
@@ -311,6 +362,15 @@ export async function approveHandler(req, res, { db, wsHub }) {
     const eventName = pickAssetGenerationEvent(contentPack);
     const jobType = pickAssetGenerationJobType(contentPack);
     const tenantId = pickRuntimeTenantId(row, proposal);
+    const runtimeResolved = await resolveContentRuntimeBehavior({
+      db,
+      tenantKey,
+      tenantId,
+      service: "content.asset_generate",
+    });
+    if (!runtimeResolved.ok) {
+      return okJson(res, runtimeResolved.response);
+    }
 
     const job = await createJob({
       db,
@@ -334,6 +394,7 @@ export async function approveHandler(req, res, { db, wsHub }) {
           reelMeta: pickReelMeta(contentPack),
           tenantKey,
           tenantId,
+          runtimeBehavior: runtimeResolved.runtimeBehavior,
           automationMode: automation.mode,
           autoPublish: automation.autoPublish,
         },
@@ -361,6 +422,7 @@ export async function approveHandler(req, res, { db, wsHub }) {
           row: updated || row,
           jobId: job?.id || null,
           contentPack,
+          runtimeBehavior: runtimeResolved.runtimeBehavior,
           automationMode: automation.mode,
           autoPublish: automation.autoPublish,
         })
@@ -481,13 +543,27 @@ export async function analyzeHandler(req, res, { db, wsHub }) {
     const contentPack = normalizeContentPack(row.content_pack) || {};
     const assetUrls = collectAssetUrls(contentPack, row);
     const tenantId = pickRuntimeTenantId(row, proposal);
-    const tenant = buildAnalyzeTenant({ tenantKey, tenantId, contentPack });
+    const runtimeResolved = await resolveContentRuntimeBehavior({
+      db,
+      tenantKey,
+      tenantId,
+      service: "content.analyze",
+    });
+    if (!runtimeResolved.ok) {
+      return okJson(res, runtimeResolved.response);
+    }
+    const tenant = buildAnalyzeTenant({
+      tenantKey,
+      tenantId,
+      contentPack,
+      runtimeBehavior: runtimeResolved.runtimeBehavior,
+    });
 
     const analysisRun = await kernelHandle({
       agentHint: "critic",
       usecase: "content.analyze",
       message:
-        "Analyze this approved content for premium quality, business usefulness, and publish readiness. Return strict JSON only.",
+        "Analyze this approved content for niche fit, conversion usefulness, claim safety, and publish readiness. Return strict JSON only.",
       tenant,
       today: String(nowIso()).slice(0, 10),
       format: packType(contentPack),
@@ -496,6 +572,7 @@ export async function analyzeHandler(req, res, { db, wsHub }) {
         proposal,
         contentPack,
         assetUrls,
+        runtimeBehavior: runtimeResolved.runtimeBehavior,
       }),
     });
 
@@ -665,6 +742,15 @@ export async function publishHandler(req, res, { db, wsHub }) {
     const assetUrl = pickFirstAssetUrl(contentPack, row);
     const caption = buildCaption(contentPack);
     const tenantId = pickRuntimeTenantId(row, proposal);
+    const runtimeResolved = await resolveContentRuntimeBehavior({
+      db,
+      tenantKey,
+      tenantId,
+      service: "content.publish",
+    });
+    if (!runtimeResolved.ok) {
+      return okJson(res, runtimeResolved.response);
+    }
 
     if (!assetUrl) {
       return okJson(res, {
@@ -692,6 +778,7 @@ export async function publishHandler(req, res, { db, wsHub }) {
           aspectRatio: pickAspectRatio(contentPack),
           tenantKey,
           tenantId,
+          runtimeBehavior: runtimeResolved.runtimeBehavior,
           automationMode: automation.mode,
           autoPublish: automation.autoPublish,
         },
@@ -721,6 +808,7 @@ export async function publishHandler(req, res, { db, wsHub }) {
           contentPack,
           assetUrl,
           caption,
+          runtimeBehavior: runtimeResolved.runtimeBehavior,
           automationMode: automation.mode,
           autoPublish: automation.autoPublish,
         })

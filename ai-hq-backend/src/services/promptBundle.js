@@ -21,6 +21,7 @@ import {
   getIndustryPrompt,
   normalizeIndustryKey,
 } from "../prompts/industries/index.js";
+import { composePromptLayers } from "./promptComposer.js";
 
 function s(v) {
   return String(v ?? "").trim();
@@ -205,6 +206,8 @@ function finalizeTenantDerivedFields(raw = {}) {
 
   return {
     ...t,
+    behavior: obj(t.behavior),
+    ai_policy: obj(t.ai_policy || t.aiPolicy),
     tone,
     services,
     audiences,
@@ -392,6 +395,13 @@ function normalizeTenantRuntime(raw = {}) {
         aiPolicy.businessContext,
         meta.businessContext
       ) || "",
+    behavior: obj(
+      tenant.behavior ||
+        profile.behavior ||
+        brand.behavior ||
+        meta.behavior
+    ),
+    ai_policy: aiPolicy,
 
     tone,
     services,
@@ -595,6 +605,7 @@ export function buildPromptBundle(
   let industryPrompt = "";
   let usecaseKey = "";
   let usecasePrompt = "";
+  let composed = { channelKey: "general", layers: [], fullPrompt: "" };
 
   const normalizedEvent = s(event).toLowerCase();
 
@@ -638,9 +649,22 @@ export function buildPromptBundle(
     }
   }
 
+  composed = composePromptLayers({
+    foundation: globalPolicy,
+    tenantContext: tenantPrompt,
+    industry: industryPrompt,
+    usecase: usecasePrompt,
+    tenant: vars.tenant,
+    extra: vars.extra,
+    outputContract: obj(vars.extra.outputContract),
+    event: normalizedEvent,
+    usecaseKey,
+  });
+
   return deepFix({
     event: normalizedEvent,
     usecaseKey,
+    channelKey: s(composed.channelKey || "general"),
     industryKey: s(vars?.tenant?.industryKey || "generic_business"),
     tenant: vars.tenant,
     vars,
@@ -648,13 +672,8 @@ export function buildPromptBundle(
     tenantPrompt,
     industryPrompt,
     usecasePrompt,
-    fullPrompt: [
-      globalPolicy,
-      tenantPrompt,
-      industryPrompt,
-      usecasePrompt,
-    ]
-      .filter(Boolean)
-      .join("\n\n"),
+    layers: composed.layers,
+    layeredPrompt: composed.fullPrompt,
+    fullPrompt: composed.fullPrompt,
   });
 }

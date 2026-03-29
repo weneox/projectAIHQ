@@ -3,6 +3,7 @@ import {
   packType,
   statusLc,
 } from "./utils.js";
+import { buildContentBehaviorProfile } from "../../../services/contentBehaviorRuntime.js";
 
 export function canAnalyzeRow(row) {
   const st = statusLc(row?.status);
@@ -18,11 +19,22 @@ export function canAnalyzeRow(row) {
   );
 }
 
-export function buildAnalyzeTenant({ tenantKey, tenantId, contentPack }) {
+export function buildAnalyzeTenant({
+  tenantKey,
+  tenantId,
+  contentPack,
+  runtimeBehavior,
+}) {
   const language =
     clean(contentPack?.language) ||
     clean(contentPack?.outputLanguage) ||
     "az";
+  const behavior = buildContentBehaviorProfile(runtimeBehavior);
+  const tone = Array.isArray(contentPack?.tone) && contentPack.tone.length
+    ? contentPack.tone
+    : behavior.toneProfile
+      ? [behavior.toneProfile]
+      : [];
 
   return {
     tenantKey: tenantKey || "default",
@@ -32,17 +44,30 @@ export function buildAnalyzeTenant({ tenantKey, tenantId, contentPack }) {
       name: tenantKey || "This company",
       defaultLanguage: language,
       outputLanguage: language,
-      industryKey: clean(contentPack?.industryKey) || "generic_business",
+      industryKey:
+        clean(contentPack?.industryKey) ||
+        clean(behavior.niche) ||
+        "generic_business",
       visualTheme: clean(contentPack?.visualTheme) || "premium_modern",
-      tone: Array.isArray(contentPack?.tone) ? contentPack.tone : [],
+      tone,
+      ctaStyle: clean(contentPack?.cta) || clean(behavior.primaryCta) || "",
       services: Array.isArray(contentPack?.services) ? contentPack.services : [],
       audiences: Array.isArray(contentPack?.audiences) ? contentPack.audiences : [],
       requiredHashtags: Array.isArray(contentPack?.hashtags) ? contentPack.hashtags : [],
     },
+    behavior,
   };
 }
 
-export function buildAnalyzeExtra({ row, proposal, contentPack, assetUrls }) {
+export function buildAnalyzeExtra({
+  row,
+  proposal,
+  contentPack,
+  assetUrls,
+  runtimeBehavior,
+}) {
+  const behavior = buildContentBehaviorProfile(runtimeBehavior);
+
   return {
     approvedDraft: contentPack,
     contentPack,
@@ -54,7 +79,7 @@ export function buildAnalyzeExtra({ row, proposal, contentPack, assetUrls }) {
       clean(contentPack?.caption) ||
       clean(contentPack?.copy?.caption) ||
       "",
-    cta: clean(contentPack?.cta) || "",
+    cta: clean(contentPack?.cta) || clean(behavior.primaryCta) || "",
     hook: clean(contentPack?.hook) || "",
     slides: Array.isArray(contentPack?.slides) ? contentPack.slides : [],
     visualPlan:
@@ -66,6 +91,23 @@ export function buildAnalyzeExtra({ row, proposal, contentPack, assetUrls }) {
       clean(contentPack?.assetBrief?.voiceoverText) ||
       "",
     format: packType(contentPack),
+    behavior: {
+      niche: behavior.niche,
+      conversionGoal: behavior.conversionGoal,
+      primaryCta: behavior.primaryCta,
+      toneProfile: behavior.toneProfile,
+      disallowedClaims: behavior.disallowedClaims,
+      handoffTriggers: behavior.handoffTriggers,
+      contentAngle: behavior.contentAngle,
+      reviewBias: behavior.reviewBias,
+    },
+    contentBehavior: behavior.contentBehavior,
+    mediaBehavior: behavior.mediaBehavior,
+    guardrails: {
+      disallowedClaims: behavior.disallowedClaims,
+      handoffTriggers: behavior.handoffTriggers,
+    },
+    reviewBias: behavior.reviewBias,
   };
 }
 

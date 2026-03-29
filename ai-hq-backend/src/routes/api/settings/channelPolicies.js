@@ -43,6 +43,10 @@ export function channelPoliciesSettingsRoutes({ db }) {
 
       return ok(res, {
         policies,
+        configSurface: "operational_runtime_config",
+        publishGovernance: "not_applicable",
+        truthPublicationRequired: false,
+        publishedTruthChanged: false,
         viewerRole: isInternalServiceRequest(req) ? "internal" : getUserRole(req),
       });
     } catch (err) {
@@ -91,7 +95,7 @@ export function channelPoliciesSettingsRoutes({ db }) {
         db,
         req,
         tenant,
-        "settings.channel_policy.updated",
+        "settings.channel_policy.operational_config.updated",
         "tenant_channel_policy",
         saved.id,
         {
@@ -100,7 +104,17 @@ export function channelPoliciesSettingsRoutes({ db }) {
         }
       );
 
-      return ok(res, { policy: saved, viewerRole: role });
+      return ok(res, {
+        policy: saved,
+        configSurface: "operational_runtime_config",
+        publishGovernance: "not_applicable",
+        truthPublicationRequired: false,
+        publishedTruthChanged: false,
+        truthVersionCreated: false,
+        savedAsOperationalConfig: true,
+        runtimeConsumption: "operational_config_projection_input",
+        viewerRole: role,
+      });
     } catch (err) {
       return serverErr(res, err?.message || "Failed to save channel policy");
     }
@@ -133,12 +147,23 @@ export function channelPoliciesSettingsRoutes({ db }) {
         db,
         req,
         tenant,
-        "settings.channel_policy.deleted",
+        "settings.channel_policy.operational_config.deleted",
         "tenant_channel_policy",
         policyId
       );
 
-      return ok(res, { deleted: true, id: policyId, viewerRole: role });
+      return ok(res, {
+        deleted: true,
+        id: policyId,
+        configSurface: "operational_runtime_config",
+        publishGovernance: "not_applicable",
+        truthPublicationRequired: false,
+        publishedTruthChanged: false,
+        truthVersionCreated: false,
+        savedAsOperationalConfig: true,
+        runtimeConsumption: "operational_config_projection_input",
+        viewerRole: role,
+      });
     } catch (err) {
       return serverErr(res, err?.message || "Failed to delete channel policy");
     }

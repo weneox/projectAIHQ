@@ -80,6 +80,22 @@ function getTenantBrandNameFallback(tenant, tenantKey) {
   return s(brandName || "Brand");
 }
 
+function pickBehaviorObject(runtimeLike) {
+  return obj(
+    runtimeLike?.behavior ||
+      runtimeLike?.behavior_json
+  );
+}
+
+function pickChannelBehaviorObject(runtimeLike, rawBehavior = {}) {
+  return obj(
+    runtimeLike?.channelBehavior ||
+      runtimeLike?.channel_behavior ||
+      rawBehavior.channelBehavior ||
+      rawBehavior.channel_behavior
+  );
+}
+
 export function buildLocalRuntimeFallback({
   tenantKey,
   tenant = null,
@@ -89,6 +105,8 @@ export function buildLocalRuntimeFallback({
   const profile = obj(tenant?.profile);
   const aiPolicy = obj(tenant?.ai_policy);
   const runtimeLike = obj(runtime?.runtime || runtime?.businessRuntime || runtime);
+  const rawBehavior = pickBehaviorObject(runtimeLike);
+  const rawChannelBehavior = pickChannelBehaviorObject(runtimeLike, rawBehavior);
 
   const runtimeCatalog = arr(runtimeLike.serviceCatalog).length
     ? arr(runtimeLike.serviceCatalog)
@@ -127,10 +145,49 @@ export function buildLocalRuntimeFallback({
       profile.tone_of_voice,
       "professional"
     ),
+    toneProfile: pickFirstString(
+      runtimeLike.toneProfile,
+      runtimeLike.tone_profile,
+      rawBehavior.toneProfile,
+      rawBehavior.tone_profile,
+      profile.toneProfile,
+      profile.tone_profile
+    ),
     preferredCta: pickFirstString(
       runtimeLike.preferredCta,
       runtimeLike.cta,
       profile.preferred_cta
+    ),
+    conversionGoal: pickFirstString(
+      runtimeLike.conversionGoal,
+      runtimeLike.conversion_goal,
+      rawBehavior.conversionGoal,
+      rawBehavior.conversion_goal
+    ),
+    primaryCta: pickFirstString(
+      runtimeLike.primaryCta,
+      runtimeLike.primary_cta,
+      rawBehavior.primaryCta,
+      rawBehavior.primary_cta,
+      runtimeLike.preferredCta,
+      runtimeLike.cta,
+      profile.preferred_cta
+    ),
+    handoffTriggers: uniqStrings(
+      flattenStringList(
+        runtimeLike.handoffTriggers,
+        runtimeLike.handoff_triggers,
+        rawBehavior.handoffTriggers,
+        rawBehavior.handoff_triggers
+      )
+    ),
+    disallowedClaims: uniqStrings(
+      flattenStringList(
+        runtimeLike.disallowedClaims,
+        runtimeLike.disallowed_claims,
+        rawBehavior.disallowedClaims,
+        rawBehavior.disallowed_claims
+      )
     ),
     bannedPhrases: uniqStrings(
       flattenStringList(
@@ -139,6 +196,8 @@ export function buildLocalRuntimeFallback({
         profile.banned_phrases
       )
     ),
+    behavior: Object.keys(rawBehavior).length ? rawBehavior : {},
+    channelBehavior: Object.keys(rawChannelBehavior).length ? rawChannelBehavior : {},
     commentPolicy: {
       ...obj(aiPolicy.comment_policy),
       ...obj(tenant?.comment_policy),
@@ -239,6 +298,8 @@ function pickRuntimeObject(runtime) {
 function normalizeResolvedRuntime(runtime, { tenantKey, tenant = null } = {}) {
   const raw = pickRuntimeObject(runtime);
   const fallback = buildLocalRuntimeFallback({ tenantKey, tenant, runtime });
+  const rawBehavior = pickBehaviorObject(raw);
+  const rawChannelBehavior = pickChannelBehaviorObject(raw, rawBehavior);
 
   const rawServiceCatalog =
     arr(raw.serviceCatalog).length
@@ -314,6 +375,13 @@ function normalizeResolvedRuntime(runtime, { tenantKey, tenant = null } = {}) {
       raw.tenant?.profile?.tone_of_voice,
       fallback.tone
     ),
+    toneProfile: pickFirstString(
+      raw.toneProfile,
+      raw.tone_profile,
+      rawBehavior.toneProfile,
+      rawBehavior.tone_profile,
+      fallback.toneProfile
+    ),
     preferredCta: pickFirstString(
       raw.preferredCta,
       raw.cta,
@@ -322,6 +390,39 @@ function normalizeResolvedRuntime(runtime, { tenantKey, tenant = null } = {}) {
       raw.profile?.preferred_cta,
       raw.tenant?.profile?.preferred_cta,
       fallback.preferredCta
+    ),
+    conversionGoal: pickFirstString(
+      raw.conversionGoal,
+      raw.conversion_goal,
+      rawBehavior.conversionGoal,
+      rawBehavior.conversion_goal,
+      fallback.conversionGoal
+    ),
+    primaryCta: pickFirstString(
+      raw.primaryCta,
+      raw.primary_cta,
+      rawBehavior.primaryCta,
+      rawBehavior.primary_cta,
+      fallback.primaryCta,
+      fallback.preferredCta
+    ),
+    handoffTriggers: uniqStrings(
+      flattenStringList(
+        raw.handoffTriggers,
+        raw.handoff_triggers,
+        rawBehavior.handoffTriggers,
+        rawBehavior.handoff_triggers,
+        fallback.handoffTriggers
+      )
+    ),
+    disallowedClaims: uniqStrings(
+      flattenStringList(
+        raw.disallowedClaims,
+        raw.disallowed_claims,
+        rawBehavior.disallowedClaims,
+        rawBehavior.disallowed_claims,
+        fallback.disallowedClaims
+      )
     ),
     bannedPhrases: uniqStrings(
       flattenStringList(
@@ -333,6 +434,10 @@ function normalizeResolvedRuntime(runtime, { tenantKey, tenant = null } = {}) {
         fallback.bannedPhrases
       )
     ),
+    behavior: Object.keys(rawBehavior).length ? rawBehavior : obj(fallback.behavior),
+    channelBehavior: Object.keys(rawChannelBehavior).length
+      ? rawChannelBehavior
+      : obj(fallback.channelBehavior),
     commentPolicy: {
       ...obj(fallback.commentPolicy),
       ...obj(rawCommentPolicy),
@@ -461,8 +566,77 @@ export function getTenantTone(runtime) {
   return s(runtime?.tone || "professional");
 }
 
+export function getTenantToneProfile(runtime) {
+  const behavior = pickBehaviorObject(obj(runtime));
+  return s(
+    runtime?.toneProfile ||
+      runtime?.tone_profile ||
+      behavior.toneProfile ||
+      behavior.tone_profile ||
+      runtime?.tone ||
+      "professional"
+  );
+}
+
 export function getTenantPreferredCta(runtime) {
   return s(runtime?.preferredCta || "");
+}
+
+export function getTenantPrimaryCta(runtime) {
+  const behavior = pickBehaviorObject(obj(runtime));
+  return s(
+    runtime?.primaryCta ||
+      runtime?.primary_cta ||
+      behavior.primaryCta ||
+      behavior.primary_cta ||
+      runtime?.preferredCta ||
+      runtime?.cta ||
+      ""
+  );
+}
+
+export function getTenantConversionGoal(runtime) {
+  const behavior = pickBehaviorObject(obj(runtime));
+  return s(
+    runtime?.conversionGoal ||
+      runtime?.conversion_goal ||
+      behavior.conversionGoal ||
+      behavior.conversion_goal ||
+      ""
+  );
+}
+
+export function getTenantHandoffTriggers(runtime) {
+  const behavior = pickBehaviorObject(obj(runtime));
+  return uniqStrings(
+    flattenStringList(
+      runtime?.handoffTriggers,
+      runtime?.handoff_triggers,
+      behavior.handoffTriggers,
+      behavior.handoff_triggers
+    )
+  );
+}
+
+export function getTenantDisallowedClaims(runtime) {
+  const behavior = pickBehaviorObject(obj(runtime));
+  return uniqStrings(
+    flattenStringList(
+      runtime?.disallowedClaims,
+      runtime?.disallowed_claims,
+      behavior.disallowedClaims,
+      behavior.disallowed_claims
+    )
+  );
+}
+
+export function getCommentChannelBehavior(runtime) {
+  const container = obj(runtime);
+  const channelBehavior = pickChannelBehaviorObject(
+    container,
+    pickBehaviorObject(container)
+  );
+  return obj(channelBehavior?.comments);
 }
 
 export function getTenantBannedPhrases(runtime) {

@@ -38,6 +38,7 @@ export function normalizeProfile(tenant, profile) {
     valueProposition: s(
       profile?.value_proposition || profile?.valueProposition
     ),
+    preferredCta: s(profile?.preferred_cta || profile?.preferredCta),
     targetAudience: s(profile?.target_audience || profile?.targetAudience),
     toneProfile: s(profile?.tone_profile || profile?.toneProfile || profile?.tone),
     mainLanguage: s(
@@ -369,18 +370,18 @@ export function normalizeKnowledge(rows = []) {
 export function normalizeFacts(rows = []) {
   return rows.map((r) => ({
     id: s(r.id),
-    factKey: s(r.fact_key),
-    factGroup: s(r.fact_group),
+    factKey: s(r.fact_key || r.factKey),
+    factGroup: s(r.fact_group || r.factGroup),
     title: s(r.title),
-    valueText: s(r.value_text),
-    valueJson: parseObject(r.value_json),
+    valueText: s(r.value_text || r.valueText),
+    valueJson: parseObject(r.value_json || r.valueJson),
     language: s(r.language || "en"),
-    channelScope: parseArray(r.channel_scope),
-    usecaseScope: parseArray(r.usecase_scope),
+    channelScope: parseArray(r.channel_scope || r.channelScope),
+    usecaseScope: parseArray(r.usecase_scope || r.usecaseScope),
     priority: num(r.priority, 100),
     enabled: bool(r.enabled, true),
-    sourceType: s(r.source_type || "manual"),
-    sourceRef: s(r.source_ref),
+    sourceType: s(r.source_type || r.sourceType || "manual"),
+    sourceRef: s(r.source_ref || r.sourceRef),
     meta: parseObject(r.meta),
   }));
 }

@@ -7,6 +7,7 @@ import {
   buildBusinessProfilePatch,
   buildCapabilitiesPatch,
 } from "../state/profile.js";
+import { normalizeBehaviorProfile } from "./behaviorProfile.js";
 import { compactObject } from "./helpers.js";
 import {
   buildReviewConcurrencyPayload,
@@ -100,11 +101,26 @@ export function buildSetupStudioFinalizePatch({
     existing: arr(currentReview?.draft?.knowledgeItems),
   });
 
+  const existingDraftPayload = currentReview?.draft?.draftPayload || {};
+  const existingStagedInputs = existingDraftPayload?.stagedInputs || {};
+  const existingRuntimePreferences = existingStagedInputs?.runtimePreferences || {};
+  const nicheBehavior = normalizeBehaviorProfile(businessProfile.nicheBehavior);
+
   return {
     businessProfile,
     capabilities,
     services,
     knowledgeItems,
+    draftPayload: {
+      ...existingDraftPayload,
+      stagedInputs: {
+        ...existingStagedInputs,
+        runtimePreferences: {
+          ...existingRuntimePreferences,
+          nicheBehavior,
+        },
+      },
+    },
   };
 }
 

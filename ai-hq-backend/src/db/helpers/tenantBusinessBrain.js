@@ -25,6 +25,19 @@ function arr(v) {
   return Array.isArray(v) ? v : [];
 }
 
+function shapeOperationalChannelPolicy(row = {}) {
+  const meta = obj(row.meta);
+  return {
+    ...row,
+    meta: {
+      ...meta,
+      configSurface: "operational_runtime_config",
+      governanceModel: "operational_runtime_config",
+      runtimeConfig: true,
+    },
+  };
+}
+
 function bool(v, fallback = false) {
   if (typeof v === "boolean") return v;
   const x = String(v ?? "").trim().toLowerCase();
@@ -76,6 +89,7 @@ export async function dbListTenantBusinessFacts(db, tenantId, opts = {}) {
   const language = lower(opts.language);
   const factGroup = lower(opts.factGroup);
   const enabledOnly = opts.enabledOnly !== false;
+  const factSurface = lower(opts.factSurface);
 
   const params = [tenantId];
   const where = [`tenant_id = $1`];
@@ -99,6 +113,12 @@ export async function dbListTenantBusinessFacts(db, tenantId, opts = {}) {
   if (factGroup) {
     params.push(factGroup);
     where.push(`lower(fact_group) = $${params.length}`);
+  }
+
+  if (factSurface === "runtime_retrieval") {
+    where.push(`lower(coalesce(meta->>'factSurface', meta->>'fact_surface', '')) = 'runtime_retrieval'`);
+  } else if (factSurface === "legacy_truth") {
+    where.push(`lower(coalesce(meta->>'factSurface', meta->>'fact_surface', '')) <> 'runtime_retrieval'`);
   }
 
   const q = await db.query(
@@ -278,7 +298,7 @@ export async function dbListTenantChannelPolicies(db, tenantId) {
     [tenantId]
   );
 
-  return rows(q);
+  return rows(q).map((row) => shapeOperationalChannelPolicy(row));
 }
 
 export async function dbUpsertTenantChannelPolicy(db, tenantId, input = {}) {
@@ -360,7 +380,7 @@ export async function dbUpsertTenantChannelPolicy(db, tenantId, input = {}) {
     ]
   );
 
-  return rowOrNull(q);
+  return shapeOperationalChannelPolicy(rowOrNull(q));
 }
 
 export async function dbDeleteTenantChannelPolicy(db, tenantId, policyId) {

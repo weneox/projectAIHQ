@@ -11,6 +11,7 @@ import {
   buildVoiceJson,
   buildLeadCaptureJson,
   buildHandoffJson,
+  buildBehaviorJson,
 } from "./builders.js";
 
 export function buildTenantRuntimeProjection(graph) {
@@ -43,6 +44,13 @@ export function buildTenantRuntimeProjection(graph) {
     supportedLanguages: arr(profile.supportedLanguages),
   };
 
+  const publishedTruthFacts = arr(graph.publishedTruthFacts);
+  const operationalFacts = arr(graph.operationalFacts ?? graph.facts);
+  const combinedFacts = [...publishedTruthFacts, ...operationalFacts];
+  const operationalChannelPolicies = arr(
+    graph.operationalChannelPolicies ?? graph.channelPolicies
+  );
+
   const retrievalCorpus = buildRetrievalCorpus({
     profile,
     services: graph.services,
@@ -50,7 +58,7 @@ export function buildTenantRuntimeProjection(graph) {
     faq: graph.faq,
     policies: graph.policies,
     knowledge: graph.knowledge,
-    facts: graph.facts,
+    facts: combinedFacts,
   });
 
   const runtimeContextText = buildRuntimeContextText({
@@ -63,7 +71,7 @@ export function buildTenantRuntimeProjection(graph) {
     faq: graph.faq,
     policies: graph.policies,
     knowledge: graph.knowledge,
-    facts: graph.facts,
+    facts: combinedFacts,
   });
 
   const readiness = buildReadiness({
@@ -76,7 +84,7 @@ export function buildTenantRuntimeProjection(graph) {
     policies: graph.policies,
     channels: graph.channels,
     knowledge: graph.knowledge,
-    facts: graph.facts,
+    facts: combinedFacts,
   });
 
   const confidence = buildConfidence({
@@ -93,13 +101,13 @@ export function buildTenantRuntimeProjection(graph) {
     capabilities,
     graph.services,
     graph.contacts,
-    graph.channelPolicies
+    operationalChannelPolicies
   );
 
   const commentsJson = buildCommentsJson(
     capabilities,
     graph.faq,
-    graph.channelPolicies
+    operationalChannelPolicies
   );
 
   const contentJson = buildContentJson(
@@ -118,13 +126,18 @@ export function buildTenantRuntimeProjection(graph) {
 
   const leadCaptureJson = buildLeadCaptureJson(
     capabilities,
-    graph.channelPolicies,
+    operationalChannelPolicies,
     graph.contacts
   );
 
   const handoffJson = buildHandoffJson(
     capabilities,
-    graph.channelPolicies
+    operationalChannelPolicies
+  );
+  const behaviorJson = buildBehaviorJson(
+    profile,
+    capabilities,
+    operationalChannelPolicies
   );
 
   const projectionPayload = {
@@ -144,8 +157,8 @@ export function buildTenantRuntimeProjection(graph) {
     media_assets_json: graph.mediaAssets,
 
     approved_knowledge_json: graph.knowledge,
-    active_facts_json: graph.facts,
-    channel_policies_json: graph.channelPolicies,
+    active_facts_json: operationalFacts,
+    channel_policies_json: operationalChannelPolicies,
 
     inbox_json: inboxJson,
     comments_json: commentsJson,
@@ -153,6 +166,7 @@ export function buildTenantRuntimeProjection(graph) {
     voice_json: voiceJson,
     lead_capture_json: leadCaptureJson,
     handoff_json: handoffJson,
+    behavior_json: behaviorJson,
 
     retrieval_corpus_json: retrievalCorpus,
     runtime_context_text: runtimeContextText,
@@ -161,6 +175,18 @@ export function buildTenantRuntimeProjection(graph) {
     readiness_label: readiness.label,
     confidence: confidence.score,
     confidence_label: confidence.label,
+    metadata_json: {
+      publishedTruthFacts,
+      operationalFactsCount: operationalFacts.length,
+      operationalConfig: {
+        channelPolicies: {
+          source: "tenant_channel_policies",
+          governanceModel: "operational_runtime_config",
+          count: operationalChannelPolicies.length,
+        },
+      },
+      behaviorContractVersion: 1,
+    },
   };
 
   return {

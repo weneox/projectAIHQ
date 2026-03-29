@@ -5,6 +5,7 @@ import { absoluteCallbackUrl } from "../utils/url.js";
 import { buildPromptBundle } from "./promptBundle.js";
 import { normalizePromptInput } from "./promptInput.js";
 import { postToN8n } from "../utils/n8n.js";
+import { buildContentBehaviorProfile } from "./contentBehaviorRuntime.js";
 
 function clean(x) {
   return String(x || "").trim();
@@ -49,6 +50,44 @@ function normalizeAutomationMode(v, fallback = "manual") {
   const x = clean(v || fallback).toLowerCase();
   if (x === "full_auto") return "full_auto";
   return "manual";
+}
+
+function buildPromptOutputContract(mappedEvent = "", workflowHint = "") {
+  const event = clean(mappedEvent).toLowerCase();
+  const workflow = clean(workflowHint).toLowerCase();
+
+  if (event === "content.publish") {
+    return {
+      mode: "json",
+      schemaKey: "content_publish_pack",
+      strictJson: true,
+      hint: "Keep publish payloads schema-aligned and platform-ready.",
+    };
+  }
+
+  if (workflow === "runway_reel" || workflow === "asset_generate") {
+    return {
+      mode: "json",
+      schemaKey: "content_draft",
+      strictJson: true,
+      hint: "Keep media generation payloads render-ready and schema-aligned.",
+    };
+  }
+
+  if (event === "proposal.approved" || event === "content.revise") {
+    return {
+      mode: "json",
+      schemaKey: "content_draft",
+      strictJson: true,
+      hint: "Keep draft-generation payloads schema-aligned and commercially usable.",
+    };
+  }
+
+  return {
+    mode: "text",
+    strictJson: false,
+    hint: "",
+  };
 }
 
 function normalizeEventForTransport(event, extra = {}) {
@@ -217,9 +256,12 @@ function pickLanguage(extra = {}, proposal = null) {
   );
 }
 
-function buildTenantRuntime(proposal, extra = {}) {
+export function buildTenantRuntime(proposal, extra = {}) {
   const tenantKey = pickTenantKey(extra, proposal);
   const tenantId = pickTenantId(extra, proposal);
+  const behavior = buildContentBehaviorProfile(
+    extra.runtimeBehavior || extra.behavior || extra.runtime || {}
+  );
 
   const brand = isObject(extra.brand) ? extra.brand : {};
   const tenant = isObject(extra.tenant) ? extra.tenant : {};
@@ -249,7 +291,7 @@ function buildTenantRuntime(proposal, extra = {}) {
           extra.industry ||
           proposalObj.industryKey ||
           proposalMeta.industryKey
-      ) || "generic_business",
+      ) || behavior.niche || "generic_business",
     defaultLanguage:
       clean(
         tenant.defaultLanguage ||
@@ -271,7 +313,7 @@ function buildTenantRuntime(proposal, extra = {}) {
         tenant.ctaStyle ||
           brand.ctaStyle ||
           extra.ctaStyle
-      ) || "contact",
+      ) || behavior.primaryCta || "contact",
     visualTheme:
       clean(
         tenant.visualTheme ||
@@ -294,7 +336,14 @@ function buildTenantRuntime(proposal, extra = {}) {
         clean(brand.ctaStyle || tenant.ctaStyle || extra.ctaStyle) || undefined,
       visualTheme:
         clean(brand.visualTheme || tenant.visualTheme || extra.visualTheme) || undefined,
-      tone: Array.isArray(brand.tone) ? brand.tone : Array.isArray(tenant.tone) ? tenant.tone : [],
+      tone:
+        Array.isArray(brand.tone) && brand.tone.length
+          ? brand.tone
+          : Array.isArray(tenant.tone) && tenant.tone.length
+            ? tenant.tone
+            : behavior.toneProfile
+              ? [behavior.toneProfile]
+              : [],
       services: Array.isArray(brand.services)
         ? brand.services
         : Array.isArray(tenant.services)
@@ -323,6 +372,7 @@ function buildTenantRuntime(proposal, extra = {}) {
         ? tenant.visualStyle
         : {},
     },
+    behavior,
     meta: {
       companyName:
         clean(extra.companyName || proposalObj.companyName || proposalMeta.companyName) || undefined,
@@ -332,7 +382,9 @@ function buildTenantRuntime(proposal, extra = {}) {
       defaultLanguage:
         clean(extra.language || proposalObj.language) || undefined,
       ctaStyle:
-        clean(extra.ctaStyle) || undefined,
+        clean(extra.ctaStyle) || behavior.primaryCta || undefined,
+      toneProfile: behavior.toneProfile || undefined,
+      reviewBias: behavior.reviewBias || undefined,
     },
   });
 }
@@ -406,13 +458,21 @@ function buildMediaPayload(proposal, extra = {}) {
   });
 }
 
-function buildPromptExtra({
+export function buildPromptExtra({
   proposal,
   extra,
   media,
   workflowHint,
   mappedEvent,
 }) {
+  const behavior = buildContentBehaviorProfile(
+    extra.runtimeBehavior || extra.behavior || extra.runtime || {}
+  );
+  const outputContract = buildPromptOutputContract(mappedEvent, workflowHint);
+  const promptChannel =
+    workflowHint === "runway_reel" || workflowHint === "asset_generate"
+      ? "media"
+      : "content";
   const format =
     normalizeFormat(
       extra.format ||
@@ -459,6 +519,27 @@ function buildPromptExtra({
       extra.generatedAssetUrls ||
       extra.assets ||
       [],
+    behavior: {
+      niche: behavior.niche,
+      conversionGoal: behavior.conversionGoal,
+      primaryCta: behavior.primaryCta,
+      toneProfile: behavior.toneProfile,
+      disallowedClaims: behavior.disallowedClaims,
+      handoffTriggers: behavior.handoffTriggers,
+      channelBehavior: behavior.channelBehavior,
+      contentAngle: behavior.contentAngle,
+      mediaDirection: behavior.mediaDirection,
+      reviewBias: behavior.reviewBias,
+    },
+    channel: promptChannel,
+    surface: promptChannel,
+    outputContract,
+    contentBehavior: behavior.contentBehavior,
+    mediaBehavior: behavior.mediaBehavior,
+    guardrails: {
+      disallowedClaims: behavior.disallowedClaims,
+      handoffTriggers: behavior.handoffTriggers,
+    },
   });
 
   if (mappedEvent === "content.publish") {
@@ -604,7 +685,13 @@ export function notifyN8n(event, proposal, extra = {}) {
       language: normalizedPromptInput?.language || null,
       automationMode,
       autoPublish: automationMode === "full_auto",
+      niche: tenantRuntime?.behavior?.niche || null,
+      conversionGoal: tenantRuntime?.behavior?.conversionGoal || null,
+      primaryCta: tenantRuntime?.behavior?.primaryCta || null,
+      toneProfile: tenantRuntime?.behavior?.toneProfile || null,
+      reviewBias: tenantRuntime?.behavior?.reviewBias || null,
     }),
+    behavior: tenantRuntime?.behavior || null,
 
     ...extra,
   });

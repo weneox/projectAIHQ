@@ -7,12 +7,19 @@ import {
   pickFirstBoolean,
 } from "./shared.js";
 import {
+  getCommentChannelBehavior,
   getCommentPolicy,
+  getTenantConversionGoal,
+  getTenantDisallowedClaims,
   getResolvedTenantKey,
   getTenantBrandName,
+  getTenantHandoffTriggers,
+  getTenantPrimaryCta,
+  getTenantToneProfile,
 } from "./runtime.js";
 import {
   applyBannedPhraseGuard,
+  makeBehaviorSafePublicReply,
   makePrivateReply,
   makePublicReply,
   makeUnsupportedServicePublicReply,
@@ -41,16 +48,28 @@ export function normalizeOutput(parsed, { tenantKey, runtime } = {}) {
     pickFirstBoolean(runtime?.createLeadEnabled) ?? true;
 
   const commentPolicy = getCommentPolicy(runtime);
+  const commentsBehavior = getCommentChannelBehavior(runtime);
   const escalateToxic =
     commentPolicy?.escalateToxic !== false;
+  const prefersDm =
+    String(commentsBehavior?.primaryAction || "").toLowerCase().includes("dm");
+  const behaviorHandoffBias = String(commentsBehavior?.handoffBias || "").toLowerCase();
 
   const disabledServiceReason = reason.startsWith("disabled_service");
+  const disallowedClaimReason =
+    reason.includes("disallowed_claim") || reason.includes("restricted_claim");
+  const handoffTriggerReason = reason.includes("handoff_trigger");
 
   if ((category === "sales" || category === "support") && autoReplyEnabled && !shouldReply) {
     shouldReply = true;
   }
 
-  if ((category === "sales" || category === "support") && autoReplyEnabled && !shouldPrivateReply) {
+  if (
+    (category === "sales" || category === "support") &&
+    autoReplyEnabled &&
+    prefersDm &&
+    !shouldPrivateReply
+  ) {
     shouldPrivateReply = true;
   }
 
@@ -91,6 +110,35 @@ export function normalizeOutput(parsed, { tenantKey, runtime } = {}) {
     }
   }
 
+  if (disallowedClaimReason) {
+    category = "unknown";
+    shouldCreateLead = false;
+    shouldPrivateReply = false;
+    privateReplySuggestion = "";
+    shouldHandoff =
+      shouldHandoff ||
+      behaviorHandoffBias === "conditional" ||
+      behaviorHandoffBias === "manual";
+    shouldReply = autoReplyEnabled;
+    if (!replySuggestion) {
+      replySuggestion = makeBehaviorSafePublicReply({
+        runtime,
+        matchedDisallowedClaim: "policy_guardrail",
+      });
+    }
+  }
+
+  if (handoffTriggerReason) {
+    requiresHuman = true;
+    shouldHandoff = true;
+    if (!replySuggestion) {
+      replySuggestion = makeBehaviorSafePublicReply({
+        runtime,
+        matchedHandoffTrigger: "policy_trigger",
+      });
+    }
+  }
+
   if (category === "toxic") {
     requiresHuman = true;
     shouldReply = false;
@@ -128,6 +176,12 @@ export function normalizeOutput(parsed, { tenantKey, runtime } = {}) {
     meta: {
       tenantKey: resolvedTenantKey,
       brandName,
+      conversionGoal: getTenantConversionGoal(runtime),
+      primaryCta: getTenantPrimaryCta(runtime),
+      toneProfile: getTenantToneProfile(runtime),
+      handoffTriggers: getTenantHandoffTriggers(runtime),
+      disallowedClaims: getTenantDisallowedClaims(runtime),
+      channelBehaviorComments: commentsBehavior,
     },
   };
 }

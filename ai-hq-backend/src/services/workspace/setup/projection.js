@@ -7,6 +7,7 @@ import {
 import {
   dbDeleteTenantContact,
   dbDeleteTenantLocation,
+  dbListTenantBusinessFacts,
   dbListTenantContacts,
   dbListTenantLocations,
   dbUpsertTenantContact,
@@ -269,6 +270,12 @@ function buildBusinessProfileProjection(draft = {}, sourceInfo = {}) {
 
 function buildCapabilitiesProjection(draft = {}) {
   return compactObject(draft?.capabilities);
+}
+
+function extractBehaviorProjection(draft = {}) {
+  return compactObject(
+    obj(draft?.businessProfile?.nicheBehavior || draft?.businessProfile?.niche_behavior)
+  );
 }
 
 async function resolvePersistedReviewSessionId(db, actor = {}, session = {}) {
@@ -737,6 +744,7 @@ export async function projectSetupReviewDraftToCanonical(
 
   const businessProfile = buildBusinessProfileProjection(draft, sourceInfo);
   const capabilities = buildCapabilitiesProjection(draft);
+  const behavior = extractBehaviorProjection(draft);
 
   let projectedProfile = false;
   let projectedCapabilities = false;
@@ -746,6 +754,7 @@ export async function projectSetupReviewDraftToCanonical(
   let publishedServices = [];
   let publishedContacts = [];
   let publishedLocations = [];
+  let publishedTruthFacts = [];
 
   if (
     Object.keys(businessProfile).length &&
@@ -775,6 +784,7 @@ export async function projectSetupReviewDraftToCanonical(
           reviewSessionId: s(session?.id),
           persistedReviewSessionId: persistedReviewSessionId || undefined,
           draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
+          nicheBehavior: Object.keys(behavior).length ? behavior : undefined,
           finalizeImpact: impactSummary,
           approvalPolicy,
         },
@@ -803,6 +813,7 @@ export async function projectSetupReviewDraftToCanonical(
         reviewSessionProjection: true,
         reviewSessionId: s(session?.id),
         persistedReviewSessionId: persistedReviewSessionId || undefined,
+        nicheBehavior: Object.keys(behavior).length ? behavior : undefined,
         finalizeImpact: impactSummary,
         approvalPolicy,
       },
@@ -848,6 +859,26 @@ export async function projectSetupReviewDraftToCanonical(
   );
   publishedContacts = arr(await dbListTenantContacts(db, actor.tenantId));
   publishedLocations = arr(await dbListTenantLocations(db, actor.tenantId));
+  if (Array.isArray(draft?.businessFacts)) {
+    publishedTruthFacts = arr(draft.businessFacts);
+  } else if (typeof truthVersionHelper?.getLatestVersion === "function") {
+    const latestTruthVersion = await truthVersionHelper.getLatestVersion({
+      tenantId: actor.tenantId,
+      tenantKey: actor.tenantKey,
+    });
+    publishedTruthFacts = arr(
+      latestTruthVersion?.truth_facts_snapshot_json ||
+        latestTruthVersion?.metadata_json?.truthFactsSnapshot ||
+        latestTruthVersion?.metadata_json?.truth_facts_snapshot_json
+    );
+  } else {
+    publishedTruthFacts = arr(
+      await dbListTenantBusinessFacts(db, actor.tenantId, {
+        enabledOnly: false,
+        factSurface: "legacy_truth",
+      })
+    );
+  }
 
   if (
     typeof truthVersionHelper?.createVersion === "function" &&
@@ -878,6 +909,7 @@ export async function projectSetupReviewDraftToCanonical(
       services: publishedServices,
       contacts: publishedContacts,
       locations: publishedLocations,
+      truthFacts: publishedTruthFacts,
       sourceSummaryJson: obj(savedProfile?.source_summary_json),
       metadataJson: compactObject({
         reviewSessionProjection: true,

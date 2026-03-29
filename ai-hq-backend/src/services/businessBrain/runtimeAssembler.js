@@ -18,13 +18,16 @@ function buildProjectionFirstRuntime({
 }) {
   const projectionServices = arr(projection?.services_json);
   const projectionKnowledge = arr(projection?.approved_knowledge_json);
-  const projectionFacts = normalizeProjectionFacts(projection?.active_facts_json);
+  const projectionOperationalFacts = normalizeProjectionFacts(projection?.active_facts_json);
+  const projectionTruthFacts = normalizeProjectionFacts(
+    projection?.metadata_json?.publishedTruthFacts
+  );
   const projectionContacts = arr(projection?.contacts_json);
   const projectionLocations = arr(projection?.locations_json);
-  const projectionChannelPolicies = normalizeProjectionChannelsPolicies(
+  const projectionOperationalChannelPolicies = normalizeProjectionChannelsPolicies(
     projection?.channel_policies_json
   );
-  const selectedFacts = projectionFacts;
+  const selectedFacts = [...projectionTruthFacts, ...projectionOperationalFacts];
   const selectedKnowledge = projectionKnowledge;
 
   const services = buildServices({
@@ -56,7 +59,7 @@ function buildProjectionFirstRuntime({
     facts: selectedFacts,
     contacts: projectionContacts,
     locations: projectionLocations,
-    channelPolicies: projectionChannelPolicies,
+    channelPolicies: projectionOperationalChannelPolicies,
     activeKnowledge: selectedKnowledge,
   });
 
@@ -79,9 +82,13 @@ function buildProjectionFirstRuntime({
       mode: "projection_first",
       projection,
       facts: selectedFacts,
+      publishedTruthFacts: projectionTruthFacts,
+      operationalFacts: projectionOperationalFacts,
+      operationalConfig: obj(projection?.metadata_json?.operationalConfig),
       contacts: projectionContacts,
       locations: projectionLocations,
-      channelPolicies: projectionChannelPolicies,
+      channelPolicies: projectionOperationalChannelPolicies,
+      operationalChannelPolicies: projectionOperationalChannelPolicies,
       activeKnowledge: selectedKnowledge,
       tenantServices: projectionServices,
       storedResponsePlaybooks: [],

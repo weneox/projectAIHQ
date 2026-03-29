@@ -15,6 +15,7 @@ import {
   hasCanonicalBaselineDrift,
   createCanonicalBaselineDriftError,
 } from "../src/db/helpers/tenantSetupReview.js";
+import { buildTenantRuntimeProjection } from "../src/db/helpers/tenantRuntimeProjection.js";
 import {
   __test__ as truthVersionTest,
   executeTruthVersionRollbackInternal,
@@ -287,6 +288,60 @@ test("Case E: setup runtime preferences input is staged without canonical writes
         quietHoursEnabled: true,
       },
     }
+  );
+});
+
+test("Case E2: setup runtime preferences stages niche-aware behavior into the review draft", () => {
+  const staged = setupTest.buildRuntimePreferencesDraftPatch(
+    {
+      businessType: "clinic",
+      niche: "clinic",
+      subNiche: "cosmetic_dentistry",
+      conversionGoal: "book_consultation",
+      primaryCta: "book your consultation",
+      leadQualificationMode: "service_booking_triage",
+      qualificationQuestions: [
+        "What treatment are you interested in?",
+        "What day works best for you?",
+      ],
+      bookingFlowType: "appointment_request",
+      handoffTriggers: ["human_request", "medical_urgency"],
+      disallowedClaims: ["diagnosis_or_treatment_guarantees"],
+      toneProfile: "warm_reassuring",
+      channelBehavior: {
+        voice: {
+          primaryAction: "book_or_route_call",
+        },
+        content: {
+          reviewBias: "strict",
+        },
+      },
+    },
+    {
+      businessProfile: {
+        nicheBehavior: {
+          primaryCta: "contact us",
+        },
+      },
+      capabilities: {},
+      draftPayload: {},
+    }
+  );
+
+  assert.equal(staged.patch.businessProfile.nicheBehavior.businessType, "clinic");
+  assert.equal(staged.patch.businessProfile.nicheBehavior.subNiche, "cosmetic_dentistry");
+  assert.equal(staged.patch.businessProfile.nicheBehavior.primaryCta, "book your consultation");
+  assert.deepEqual(staged.patch.businessProfile.nicheBehavior.handoffTriggers, [
+    "human_request",
+    "medical_urgency",
+  ]);
+  assert.equal(
+    staged.patch.businessProfile.nicheBehavior.channelBehavior.voice.primaryAction,
+    "book_or_route_call"
+  );
+  assert.equal(
+    staged.patch.draftPayload.stagedInputs.runtimePreferences.nicheBehavior.toneProfile,
+    "warm_reassuring"
   );
 });
 
@@ -1313,6 +1368,203 @@ test("Case Z: finalize projection writes a truth version snapshot from canonical
       );
     assert.deepEqual(versionInput.services, []);
     });
+
+test("Case Z2: finalize preserves niche-aware behavior into approved truth and runtime", async () => {
+  let versionInput = null;
+  let savedProfile = null;
+  let savedCapabilities = null;
+
+  const projected = await setupTest.projectSetupReviewDraftToCanonical(
+    {
+      db: {
+        async query(sql) {
+          if (sql.includes("from tenant_setup_review_sessions")) {
+            return {
+              rows: [{ id: "session-1" }],
+            };
+          }
+          if (sql.includes("from tenants")) {
+            return {
+              rows: [
+                {
+                  id: "tenant-1",
+                  tenant_key: "alpha",
+                  company_name: "North Clinic",
+                },
+              ],
+            };
+          }
+          if (sql.includes("from tenant_services")) {
+            return {
+              rows: [],
+            };
+          }
+          return { rows: [] };
+        },
+      },
+      actor: {
+        tenantId: "tenant-1",
+        tenantKey: "alpha",
+        user: {
+          name: "Reviewer",
+        },
+      },
+      session: {
+        id: "session-1",
+        primarySourceType: "website",
+      },
+      draft: {
+        version: 5,
+        businessProfile: {
+          companyName: "North Clinic",
+          nicheBehavior: {
+            businessType: "clinic",
+            niche: "clinic",
+            subNiche: "cosmetic_dentistry",
+            conversionGoal: "book_consultation",
+            primaryCta: "book your consultation",
+            leadQualificationMode: "service_booking_triage",
+            qualificationQuestions: [
+              "What treatment are you interested in?",
+              "What day works best for you?",
+            ],
+            bookingFlowType: "appointment_request",
+            handoffTriggers: ["human_request", "medical_urgency"],
+            disallowedClaims: ["diagnosis_or_treatment_guarantees"],
+            toneProfile: "warm_reassuring",
+            channelBehavior: {
+              voice: {
+                primaryAction: "book_or_route_call",
+                qualificationDepth: "guided",
+              },
+              content: {
+                reviewBias: "strict",
+              },
+            },
+          },
+        },
+        capabilities: {
+          supportsVoice: true,
+          canOfferBooking: true,
+          primaryLanguage: "en",
+        },
+        sourceSummary: {
+          primarySourceType: "website",
+          primarySourceUrl: "https://north.example",
+        },
+        services: [],
+        knowledgeItems: [],
+      },
+      sources: [
+        {
+          sourceId: "source-1",
+          sourceType: "website",
+          role: "primary",
+          sourceUrl: "https://north.example",
+        },
+      ],
+    },
+    {
+      knowledgeHelper: {
+        async getBusinessProfile() {
+          return null;
+        },
+        async getBusinessCapabilities() {
+          return null;
+        },
+        async upsertBusinessProfile(input) {
+          savedProfile = {
+            id: "profile-2",
+            tenant_key: "alpha",
+            company_name: "North Clinic",
+            profile_status: "approved",
+            approved_by: "Reviewer",
+            approved_at: "2026-03-29T12:00:00.000Z",
+            profile_json: input.profileJson,
+            metadata_json: input.metadataJson,
+            source_summary_json: input.sourceSummaryJson,
+          };
+          return savedProfile;
+        },
+        async upsertBusinessCapabilities(input) {
+          savedCapabilities = {
+            id: "capabilities-2",
+            approved_by: "Reviewer",
+            supports_voice: true,
+            can_offer_booking: true,
+            primary_language: "en",
+            supported_languages: ["en"],
+            capabilities_json: input.capabilitiesJson,
+            metadata_json: input.metadataJson,
+          };
+          return savedCapabilities;
+        },
+      },
+      truthVersionHelper: {
+        async createVersion(input) {
+          versionInput = input;
+          return {
+            id: "version-2",
+          };
+        },
+      },
+    }
+  );
+
+  assert.equal(
+    versionInput.profile.profile_json.nicheBehavior.conversionGoal,
+    "book_consultation"
+  );
+  assert.equal(
+    versionInput.profile.profile_json.nicheBehavior.channelBehavior.voice.primaryAction,
+    "book_or_route_call"
+  );
+  assert.equal(
+    versionInput.capabilities.metadata_json.nicheBehavior.bookingFlowType,
+    "appointment_request"
+  );
+  assert.ok(projected.impactSummary.runtimeAreas.includes("behavioral_policy"));
+  assert.ok(projected.approvalPolicy.runtimeAreas.includes("behavioral_policy"));
+
+  const runtimeProjection = buildTenantRuntimeProjection({
+    tenant: {
+      id: "tenant-1",
+      tenant_key: "alpha",
+      company_name: "North Clinic",
+      default_language: "en",
+    },
+    profile: savedProfile,
+    capabilities: savedCapabilities,
+    contacts: [],
+    locations: [],
+    hours: [],
+    services: [],
+    products: [],
+    faq: [],
+    policies: [],
+    socialAccounts: [],
+    channels: [],
+    mediaAssets: [],
+    knowledge: [],
+    facts: [],
+    operationalFacts: [],
+    publishedTruthFacts: [],
+    channelPolicies: [],
+    operationalChannelPolicies: [],
+    synthesis: {},
+  });
+
+  assert.equal(runtimeProjection.behavior_json.businessType, "clinic");
+  assert.equal(runtimeProjection.behavior_json.primaryCta, "book your consultation");
+  assert.deepEqual(runtimeProjection.behavior_json.qualificationQuestions, [
+    "What treatment are you interested in?",
+    "What day works best for you?",
+  ]);
+  assert.equal(
+    runtimeProjection.behavior_json.channelBehavior.voice.primaryAction,
+    "book_or_route_call"
+  );
+});
 
 test("Case AA: truth version change detection ignores approval-event metadata-only churn", () => {
   const unchanged = truthVersionTest.hasTruthVersionChanged(

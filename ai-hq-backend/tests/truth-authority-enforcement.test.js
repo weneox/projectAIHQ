@@ -26,6 +26,7 @@ import {
   refreshTenantRuntimeProjectionStrict,
 } from "../src/db/helpers/tenantRuntimeProjection.js";
 import { loadTenantCanonicalGraph } from "../src/db/helpers/tenantRuntimeProjection/graph.js";
+import { createRuntimeAuthorityError } from "../src/services/businessBrain/runtimeAuthority.js";
 
 function createMockRes(onFinish) {
   return {
@@ -290,6 +291,21 @@ function buildProjectionRows() {
             },
           },
         ],
+        truthFactsSnapshot: [
+          {
+            id: "truth-fact-1",
+            factKey: "company_summary",
+            factGroup: "general",
+            title: "Company Summary",
+            valueText: "Published company summary.",
+            language: "en",
+            priority: 10,
+            enabled: true,
+            meta: {
+              factSurface: "published_truth",
+            },
+          },
+        ],
       },
     },
     profile: {
@@ -396,7 +412,9 @@ function buildProjectionRows() {
         value_text: "Call or message us to get started.",
         priority: 1,
         enabled: true,
-        metadata_json: {},
+        meta: {
+          factSurface: "runtime_retrieval",
+        },
       },
     ],
     channelPolicies: [
@@ -785,6 +803,26 @@ test("projected runtime unifies voice and tenant profile from approved projectio
             enabled: true,
             escalationMode: "manual",
           },
+          behavior_json: {
+            niche: "beauty",
+            conversionGoal: "book_consultation",
+            primaryCta: "book your consultation",
+            leadQualificationMode: "service_booking_triage",
+            qualificationQuestions: [
+              "Which treatment are you interested in?",
+              "What day works best for you?",
+            ],
+            handoffTriggers: ["human_request", "pricing_dispute"],
+            toneProfile: "warm_reassuring",
+            disallowedClaims: ["instant_result_guarantees"],
+            channelBehavior: {
+              voice: {
+                primaryAction: "qualify_then_book",
+                qualificationDepth: "extended",
+                handoffBias: "expedited",
+              },
+            },
+          },
           channels_json: [
             {
               channelType: "instagram",
@@ -805,8 +843,34 @@ test("projected runtime unifies voice and tenant profile from approved projectio
 
   assert.equal(projectedRuntime.tenant.companyName, "Acme Clinic");
   assert.equal(projectedRuntime.channels.voice.primaryPhone, "+15550001111");
+  assert.equal(projectedRuntime.behavior?.niche, "beauty");
+  assert.equal(
+    projectedRuntime.behavior?.channelBehavior?.voice?.primaryAction,
+    "qualify_then_book"
+  );
   assert.equal(voiceConfig.authority.runtimeProjectionId, "projection-1");
   assert.equal(voiceConfig.voiceProfile.businessSummary, "Premium care");
+  assert.equal(voiceConfig.voiceBehavior?.conversionGoal, "book_consultation");
+  assert.equal(voiceConfig.voiceBehavior?.primaryCta, "book your consultation");
+  assert.equal(
+    voiceConfig.voiceProfile?.texts?.greetingStyle,
+    "warm_intro"
+  );
+  assert.equal(voiceConfig.voiceProfile?.askStyle, "guided_sequence");
+  assert.equal(
+    voiceConfig.operatorRouting?.escalationTriggers?.includes("human_request"),
+    true
+  );
+  assert.equal(
+    voiceConfig.voiceProfile?.forbiddenTopics?.includes(
+      "instant_result_guarantees"
+    ),
+    true
+  );
+  assert.equal(
+    voiceConfig.realtime?.instructions?.includes("book your consultation"),
+    true
+  );
   assert.equal(voiceConfig.operator.phone, "+15550002222");
 });
 
@@ -922,6 +986,25 @@ test("voice tenant config consumes unified projected runtime from strict authori
             enabled: true,
             escalationMode: "manual",
           },
+          behavior_json: {
+            conversionGoal: "capture_qualified_lead",
+            primaryCta: "schedule a callback",
+            leadQualificationMode: "high_intent_screen",
+            qualificationQuestions: [
+              "What are you calling about today?",
+              "What time should we call you back?",
+            ],
+            handoffTriggers: ["human_request", "medical_urgency"],
+            toneProfile: "calm_professional_reassuring",
+            disallowedClaims: ["diagnosis_or_treatment_guarantees"],
+            channelBehavior: {
+              voice: {
+                primaryAction: "capture_then_route",
+                qualificationDepth: "concise",
+                handoffBias: "expedited",
+              },
+            },
+          },
           inbox_json: {},
           comments_json: {},
           channels_json: [],
@@ -933,6 +1016,29 @@ test("voice tenant config consumes unified projected runtime from strict authori
   assert.equal(result.ok, true);
   assert.equal(result.payload?.authority?.runtimeProjectionId, "projection-1");
   assert.equal(result.payload?.projectedRuntime?.tenant?.tenantKey, "acme");
+  assert.equal(result.payload?.voiceBehavior?.primaryAction, "capture_then_route");
+  assert.equal(result.payload?.voiceBehavior?.primaryCta, "schedule a callback");
+  assert.equal(result.payload?.voiceProfile?.leadCaptureMode, "high_intent_screen");
+  assert.equal(result.payload?.voiceProfile?.askStyle, "single_question");
+  assert.equal(result.payload?.voiceProfile?.tone, "calm_professional_reassuring");
+  assert.equal(
+    result.payload?.voiceProfile?.texts?.qualificationQuestions?.length,
+    2
+  );
+  assert.equal(
+    result.payload?.operatorRouting?.handoffBias,
+    "expedited"
+  );
+  assert.equal(
+    result.payload?.voiceProfile?.forbiddenTopics?.includes(
+      "diagnosis_or_treatment_guarantees"
+    ),
+    true
+  );
+  assert.equal(
+    result.payload?.realtime?.instructions?.includes("schedule a callback"),
+    true
+  );
   assert.equal(result.payload?.operator?.phone, "+15550002222");
 });
 
@@ -1593,6 +1699,225 @@ test("comments tenant lookup returns no authoritative tenant when approved runti
   assert.equal(legacyTenantQueryCount, 1);
 });
 
+test("live-ops runtime consumers request strict authority consistently across inbox comments and voice", async () => {
+  const inboxCalls = [];
+  const commentCalls = [];
+  const voiceCalls = [];
+
+  const inboxTenant = await getInboxTenantByKey(
+    { query: async () => ({ rows: [] }) },
+    " acme ",
+    {
+      runtimeLoader: async (input) => {
+        inboxCalls.push(input);
+        return {
+          tenant: {
+            id: "tenant-1",
+            tenant_key: "acme",
+          },
+        };
+      },
+    }
+  );
+
+  const commentTenant = await getCommentTenantByKey(
+    { query: async () => ({ rows: [] }) },
+    " acme ",
+    {
+      runtimeLoader: async (input) => {
+        commentCalls.push(input);
+        return {
+          tenant: {
+            id: "tenant-1",
+            tenant_key: "acme",
+          },
+        };
+      },
+    }
+  );
+
+  const voiceResult = await processVoiceTenantConfig({
+    db: {
+      async query(sql) {
+        const text = String(sql || "").toLowerCase();
+        if (text.includes("from tenant_voice_settings")) {
+          return {
+            rows: [
+              {
+                tenant_id: "tenant-1",
+                enabled: true,
+                provider: "twilio",
+                mode: "assistant",
+                display_name: "Acme Voice",
+                default_language: "en",
+                supported_languages: ["en", "az"],
+                operator_enabled: true,
+                callback_enabled: true,
+                twilio_phone_number: "+15550001111",
+                twilio_phone_sid: "PN123",
+                twilio_config: { callerId: "+15550001111" },
+                meta: {
+                  realtimeModel: "gpt-4o-realtime-preview",
+                  realtimeVoice: "alloy",
+                },
+                updated_at: "2026-03-29T00:00:00.000Z",
+              },
+            ],
+          };
+        }
+        return { rows: [] };
+      },
+    },
+    tenantKey: " acme ",
+    toNumber: "+15550001111",
+    getRuntime: async (input) => {
+      voiceCalls.push(input);
+      return buildApprovedRuntimePack();
+    },
+  });
+
+  assert.equal(inboxTenant?.tenant_key, "acme");
+  assert.equal(commentTenant?.tenant_key, "acme");
+  assert.equal(voiceResult?.ok, true);
+  assert.equal(inboxCalls[0]?.authorityMode, "strict");
+  assert.equal(commentCalls[0]?.authorityMode, "strict");
+  assert.equal(voiceCalls[0]?.authorityMode, "strict");
+  assert.equal(inboxCalls[0]?.tenantKey, "acme");
+  assert.equal(commentCalls[0]?.tenantKey, "acme");
+  assert.equal(voiceCalls[0]?.tenantKey, "acme");
+});
+
+test("live-ops runtime consumers fail closed consistently when strict authority is unavailable or invalid", async () => {
+  const authorityError = createRuntimeAuthorityError({
+    tenantKey: "acme",
+    reasonCode: "runtime_projection_stale",
+    message: "Approved runtime authority is stale.",
+  });
+
+  const inboxTenant = await getInboxTenantByKey(
+    { query: async () => ({ rows: [] }) },
+    "acme",
+    {
+      runtimeLoader: async () => {
+        throw authorityError;
+      },
+    }
+  );
+
+  const commentTenant = await getCommentTenantByKey(
+    { query: async () => ({ rows: [] }) },
+    "acme",
+    {
+      runtimeLoader: async () => {
+        throw authorityError;
+      },
+    }
+  );
+
+  const voiceResult = await processVoiceTenantConfig({
+    db: {
+      async query(sql) {
+        const text = String(sql || "").toLowerCase();
+        if (text.includes("from tenant_voice_settings")) {
+          return {
+            rows: [
+              {
+                tenant_id: "tenant-1",
+                enabled: true,
+                provider: "twilio",
+                mode: "assistant",
+                display_name: "Acme Voice",
+                twilio_phone_number: "+15550001111",
+                twilio_phone_sid: "PN123",
+                updated_at: "2026-03-29T00:00:00.000Z",
+              },
+            ],
+          };
+        }
+        return { rows: [] };
+      },
+    },
+    tenantKey: "acme",
+    toNumber: "+15550001111",
+    getRuntime: async () =>
+      buildApprovedRuntimePack({
+        authority: {
+          mode: "strict",
+          required: true,
+          available: true,
+          source: "approved_runtime_projection",
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+          runtimeProjectionId: "projection-1",
+          health: {
+            status: "blocked",
+            reasonCode: "runtime_projection_invalid",
+            affectedSurfaces: ["voice"],
+          },
+        },
+        raw: {
+          projection: {
+            id: "projection-1",
+            projection_hash: "hash-1",
+            health_json: {
+              status: "blocked",
+              reasonCode: "runtime_projection_invalid",
+              affectedSurfaces: ["voice"],
+            },
+          },
+        },
+      }),
+  });
+
+  assert.equal(inboxTenant, null);
+  assert.equal(commentTenant, null);
+  assert.equal(voiceResult?.ok, false);
+  assert.equal(voiceResult?.error, "runtime_authority_unavailable");
+  assert.equal(
+    voiceResult?.details?.authority?.reasonCode,
+    "runtime_projection_invalid"
+  );
+});
+
+test("live-ops runtime consumers do not swallow unexpected runtime errors", async () => {
+  await assert.rejects(
+    () =>
+      getInboxTenantByKey({ query: async () => ({ rows: [] }) }, "acme", {
+        runtimeLoader: async () => {
+          throw new Error("unexpected inbox runtime failure");
+        },
+      }),
+    /unexpected inbox runtime failure/
+  );
+
+  await assert.rejects(
+    () =>
+      getCommentTenantByKey({ query: async () => ({ rows: [] }) }, "acme", {
+        runtimeLoader: async () => {
+          throw new Error("unexpected comment runtime failure");
+        },
+      }),
+    /unexpected comment runtime failure/
+  );
+
+  await assert.rejects(
+    () =>
+      processVoiceTenantConfig({
+        db: {
+          async query() {
+            return { rows: [] };
+          },
+        },
+        tenantKey: "acme",
+        toNumber: "+15550001111",
+        getRuntime: async () => {
+          throw new Error("unexpected voice runtime failure");
+        },
+      }),
+    /unexpected voice runtime failure/
+  );
+});
+
 test("strict inbox brain context fails closed when approved projection is unavailable", async () => {
   const db = {
     async query(text) {
@@ -1699,7 +2024,37 @@ test("direct comment runtime resolution fails closed without approved runtime au
 
 test("voice tenant config fails closed when approved projection cannot be materialized", async () => {
   const db = {
-    async query() {
+    async query(sql) {
+      const text = String(sql || "").toLowerCase();
+
+      if (text.includes("from tenant_voice_settings")) {
+        return {
+          rows: [
+            {
+              tenant_id: "tenant-1",
+              enabled: true,
+              provider: "twilio",
+              mode: "assistant",
+              display_name: "Acme Voice",
+              default_language: "en",
+              supported_languages: ["en", "az"],
+              operator_enabled: true,
+              callback_enabled: true,
+              twilio_phone_number: "+15550001111",
+              twilio_phone_sid: "PN123",
+              twilio_config: {
+                callerId: "+15550001111",
+              },
+              meta: {
+                realtimeModel: "gpt-4o-realtime-preview",
+                realtimeVoice: "alloy",
+              },
+              updated_at: "2026-03-29T00:00:00.000Z",
+            },
+          ],
+        };
+      }
+
       return { rows: [] };
     },
   };
@@ -1746,6 +2101,25 @@ test("voice tenant config fails closed when approved projection cannot be materi
     "runtime_projection_invalid"
   );
   assert.equal(result?.details?.authority?.strict, true);
+});
+
+test("voice tenant config rethrows unexpected runtime loader errors", async () => {
+  await assert.rejects(
+    () =>
+      processVoiceTenantConfig({
+        db: {
+          async query() {
+            return { rows: [] };
+          },
+        },
+        tenantKey: "acme",
+        toNumber: "+15550001111",
+        getRuntime: async () => {
+          throw new Error("unexpected voice runtime failure");
+        },
+      }),
+    /unexpected voice runtime failure/
+  );
 });
 
 test("voice tenant config accepts live operational voice state when approved authority exists and projection health is only stale", async () => {
@@ -1879,10 +2253,11 @@ test("authoritative tenant lookups and inbox context succeed when an approved pr
     source_snapshot_id: graph.synthesis.id,
     source_profile_id: graph.publishedTruthVersion.business_profile_id,
     source_capabilities_id: graph.publishedTruthVersion.business_capabilities_id,
+    ...projection,
     metadata_json: {
+      ...(projection.metadata_json || {}),
       publishedTruthVersionId: graph.publishedTruthVersion.id,
     },
-    ...projection,
   };
 
   const inboxTenant = await getInboxTenantByKey(db, "acme");
@@ -2098,6 +2473,53 @@ test("runtime refresh uses the published contact and location snapshots instead 
   assert.equal(refreshed.projection?.locations_json?.[0]?.locationKey, "hq");
   assert.equal(refreshed.projection?.locations_json?.[0]?.title, "Head Office");
   assert.equal(refreshed.projection?.locations_json?.[0]?.meta?.source, "published_truth");
+});
+
+test("runtime refresh splits published truth facts from operational runtime facts", async () => {
+  const rows = buildProjectionRows();
+  rows.facts = [
+    {
+      id: "runtime-fact-1",
+      fact_key: "booking_cta",
+      fact_group: "booking",
+      title: "Booking CTA",
+      value_text: "Send your preferred day and we will confirm.",
+      value_json: {},
+      language: "en",
+      channel_scope: [],
+      usecase_scope: [],
+      priority: 20,
+      enabled: true,
+      source_type: "manual",
+      source_ref: "knowledge-1",
+      meta: {
+        factSurface: "runtime_retrieval",
+      },
+    },
+  ];
+
+  const db = createProjectionDb(rows);
+
+  const refreshed = await refreshTenantRuntimeProjectionStrict(
+    {
+      tenantId: rows.tenant.id,
+      tenantKey: rows.tenant.tenant_key,
+      triggerType: "manual_repair",
+      requestedBy: "operator@aihq.test",
+      runnerKey: "tests.truth_operational_fact_split",
+      generatedBy: "operator@aihq.test",
+      approvedBy: "operator@aihq.test",
+    },
+    db
+  );
+
+  assert.equal(refreshed.ok, true);
+  assert.equal(refreshed.projection?.active_facts_json?.length, 1);
+  assert.equal(refreshed.projection?.active_facts_json?.[0]?.factKey, "booking_cta");
+  assert.equal(
+    refreshed.projection?.metadata_json?.publishedTruthFacts?.[0]?.factKey,
+    "company_summary"
+  );
 });
 
 test("strict runtime reads do not auto-rebuild a missing projection from live rows", async () => {

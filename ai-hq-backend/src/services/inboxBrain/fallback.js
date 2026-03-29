@@ -1,8 +1,8 @@
 import { arr, sanitizeReplyText } from "./shared.js";
 import {
+  pickBehaviorLeadPrompt,
   buildServiceLine,
   getIndustryHints,
-  pickLeadPrompt,
 } from "./runtime.js";
 
 export function buildUnsupportedServiceReply(profile) {
@@ -44,7 +44,7 @@ export function buildPlaybookReply(playbook, fallbackProfile) {
 }
 
 export function buildFallbackReply({ intent, profile, knowledgeEntries = [], playbook = null }) {
-  const leadPrompt = pickLeadPrompt(profile);
+  const leadPrompt = pickBehaviorLeadPrompt(profile);
   const serviceLine = buildServiceLine(profile);
   const industryHints = getIndustryHints(profile?.industry);
 

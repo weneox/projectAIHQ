@@ -85,6 +85,9 @@ describe("finalizeFlow", () => {
         draft: {
           businessProfile: {
             companyName: "Acme Bakery",
+            nicheBehavior: {
+              primaryCta: "Contact us",
+            },
           },
           capabilities: {},
           services: [],
@@ -100,6 +103,27 @@ describe("finalizeFlow", () => {
         timezone: "Asia/Baku",
         language: "en",
         websiteUrl: "https://acme.example",
+        behavior: {
+          businessType: "bakery",
+          niche: "bakery",
+          subNiche: "custom_cakes",
+          conversionGoal: "order_now",
+          primaryCta: "Book your cake tasting",
+          leadQualificationMode: "service_booking_triage",
+          qualificationQuestions: ["What date do you need the order for?"],
+          bookingFlowType: "appointment_request",
+          handoffTriggers: ["human_request"],
+          disallowedClaims: ["instant_result_guarantees"],
+          toneProfile: "warm_reassuring",
+          channelBehavior: {
+            inbox: {
+              primaryAction: "qualify_and_capture",
+            },
+            voice: {
+              primaryAction: "book_or_route_call",
+            },
+          },
+        },
       },
       manualSections: {
         servicesText: "Custom Cakes | Made to order",
@@ -110,6 +134,15 @@ describe("finalizeFlow", () => {
 
     expect(patch.businessProfile.companyName).toBe("Acme Bakery");
     expect(patch.capabilities.primaryLanguage).toBe("en");
+    expect(patch.businessProfile.nicheBehavior.primaryCta).toBe(
+      "Book your cake tasting"
+    );
+    expect(patch.businessProfile.nicheBehavior.channelBehavior.voice.primaryAction).toBe(
+      "book_or_route_call"
+    );
+    expect(
+      patch.draftPayload.stagedInputs.runtimePreferences.nicheBehavior.qualificationQuestions
+    ).toEqual(["What date do you need the order for?"]);
     expect(patch.services[0].title).toBe("Custom Cakes");
     expect(patch.knowledgeItems).toHaveLength(2);
   });

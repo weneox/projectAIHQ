@@ -3,10 +3,75 @@ import assert from "node:assert/strict";
 
 import {
   createOutboundAttempt,
+  getTenantByKey,
   getInboxThreadState,
   getTenantInboxBrainContext,
   upsertInboxThreadState,
 } from "../src/routes/api/inbox/repository.js";
+import { createRuntimeAuthorityError } from "../src/services/businessBrain/runtimeAuthority.js";
+
+test("inbox tenant resolution requests strict runtime authority and returns authoritative tenant only", async () => {
+  let captured = null;
+  const db = { query: async () => ({ rows: [] }) };
+
+  const tenant = await getTenantByKey(db, " acme ", {
+    runtimeLoader: async (input) => {
+      captured = input;
+      return {
+        tenant: {
+          id: "11111111-1111-4111-8111-111111111111",
+          tenant_key: "acme",
+        },
+      };
+    },
+  });
+
+  assert.equal(captured?.authorityMode, "strict");
+  assert.equal(captured?.tenantKey, "acme");
+  assert.equal(tenant?.id, "11111111-1111-4111-8111-111111111111");
+  assert.equal(tenant?.tenant_key, "acme");
+});
+
+test("inbox tenant resolution fails closed when strict runtime authority returns no tenant payload", async () => {
+  const tenant = await getTenantByKey({ query: async () => ({ rows: [] }) }, "acme", {
+    runtimeLoader: async (input) => ({
+      authority: {
+        mode: input?.authorityMode || "strict",
+        required: true,
+        reasonCode: "runtime_projection_missing",
+      },
+      tenant: null,
+    }),
+  });
+
+  assert.equal(tenant, null);
+});
+
+test("inbox tenant resolution fails closed when strict runtime authority is unavailable", async () => {
+  const tenant = await getTenantByKey({ query: async () => ({ rows: [] }) }, "acme", {
+    runtimeLoader: async () => {
+      throw createRuntimeAuthorityError({
+        tenantKey: "acme",
+        reasonCode: "runtime_projection_stale",
+        message: "Approved runtime authority is stale.",
+      });
+    },
+  });
+
+  assert.equal(tenant, null);
+});
+
+test("inbox tenant resolution rethrows unexpected runtime loader errors", async () => {
+  await assert.rejects(
+    () =>
+      getTenantByKey({ query: async () => ({ rows: [] }) }, "acme", {
+        runtimeLoader: async () => {
+          throw new Error("unexpected loader failure");
+        },
+      }),
+    /unexpected loader failure/
+  );
+});
 
 test("inbox brain context requests strict runtime authority and stays fail-closed without tenant payload", async () => {
   let captured = null;

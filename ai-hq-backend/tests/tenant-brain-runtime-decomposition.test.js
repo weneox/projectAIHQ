@@ -466,5 +466,19 @@ test("projection-first runtime stays authoritative and preserves output shaping"
   assert.deepEqual(runtime.languages, ["en", "az"]);
   assert.deepEqual(runtime.services, ["Consultation"]);
   assert.equal(runtime.preferredCta, "soft");
+  assert.equal(runtime.businessType, "clinic");
+  assert.equal(runtime.niche, "clinic");
+  assert.equal(runtime.conversionGoal, "capture_qualified_lead");
+  assert.equal(runtime.primaryCta, "contact_us");
+  assert.equal(runtime.leadQualificationMode, "service_booking_triage");
+  assert.equal(runtime.bookingFlowType, "manual");
+  assert.equal(Array.isArray(runtime.qualificationQuestions), true);
+  assert.equal(runtime.qualificationQuestions.length > 0, true);
+  assert.equal(Array.isArray(runtime.handoffTriggers), true);
+  assert.equal(Array.isArray(runtime.disallowedClaims), true);
+  assert.equal(
+    runtime.behavior?.channelBehavior?.voice?.primaryAction,
+    "route_or_capture_callback"
+  );
   assert.equal(runtime.raw.projection.id, "projection-1");
 });

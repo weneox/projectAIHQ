@@ -24,14 +24,101 @@ import {
   matchPlaybook,
   shouldAllowHandoffByText,
 } from "./matchers.js";
-import { resolveInboxRuntime, getTenantBusinessProfile } from "./runtime.js";
-import { getResolvedTenantKey, includesAny, lower, s, sanitizeReplyText } from "./shared.js";
+import {
+  getTenantBusinessProfile,
+  pickBehaviorLeadPrompt,
+  resolveInboxRuntime,
+} from "./runtime.js";
+import {
+  arr,
+  getResolvedTenantKey,
+  includesAny,
+  lower,
+  obj,
+  s,
+  sanitizeReplyText,
+} from "./shared.js";
 import {
   buildSuppressedReplyReason,
   getReliabilityFlags,
   getThreadHandoffState,
   isDuplicateReplyCandidate,
 } from "./threadState.js";
+
+function getBehaviorKeywords(trigger) {
+  switch (lower(trigger)) {
+    case "urgent_health_claim":
+      return ["urgent", "tecili", "pain", "bleeding", "emergency", "diaqnoz", "diagnosis"];
+    case "legal_risk_claim":
+      return ["court", "mahkeme", "məhkəmə", "legal advice", "qanuni", "muqavile", "müqavilə"];
+    case "financing_or_document_review":
+      return ["mortgage", "credit", "loan", "approval", "document", "contract", "sened", "sənəd"];
+    case "human_request":
+      return [];
+    default:
+      return [];
+  }
+}
+
+function getDisallowedClaimKeywords(claim) {
+  switch (lower(claim)) {
+    case "diagnosis_or_treatment_guarantees":
+      return ["diaqnoz", "diagnosis", "treatment guarantee", "guarantee", "zemanet", "zəmanət"];
+    case "legal_advice_or_guarantees":
+      return ["legal advice", "court win", "guarantee", "zemanet", "zəmanət"];
+    case "guaranteed_roi_or_approval":
+      return ["roi", "approval", "approved", "guarantee", "zemanet", "zəmanət"];
+    case "instant_result_guarantees":
+      return ["instant result", "guarantee", "zemanet", "zəmanət"];
+    case "unverified_outcome_promises":
+      return ["guarantee", "promise", "100%", "definitely"];
+    default:
+      return [];
+  }
+}
+
+function detectBehaviorSignals(text, profile) {
+  const incoming = lower(text);
+  const handoffTriggers = arr(profile?.handoffTriggers);
+  const disallowedClaims = arr(profile?.disallowedClaims);
+  const urgent = includesAny(incoming, profile?.urgentKeywords);
+
+  const matchedHandoffTrigger = handoffTriggers.find((trigger) => {
+    const normalizedTrigger = lower(trigger);
+    if (!normalizedTrigger) return false;
+    if (normalizedTrigger === "human_request") {
+      return includesAny(incoming, profile?.humanKeywords);
+    }
+    return includesAny(incoming, getBehaviorKeywords(normalizedTrigger));
+  });
+
+  const matchedDisallowedClaim = disallowedClaims.find((claim) =>
+    includesAny(incoming, getDisallowedClaimKeywords(claim))
+  );
+
+  return {
+    matchedHandoffTrigger: s(matchedHandoffTrigger),
+    matchedDisallowedClaim: s(matchedDisallowedClaim),
+    urgent,
+  };
+}
+
+function buildBehaviorSafeReply(profile, signals) {
+  const leadPrompt = pickBehaviorLeadPrompt(profile);
+  if (signals?.matchedDisallowedClaim) {
+    return sanitizeReplyText(
+      `Bu movzuda tesdiqlenmemis iddia vermirik. ${leadPrompt}`
+    );
+  }
+
+  if (signals?.matchedHandoffTrigger) {
+    return sanitizeReplyText(
+      `Sizi daha duzgun yonlendirmek ucun komanda uzvu ile davam ede bilerik. ${leadPrompt}`
+    );
+  }
+
+  return sanitizeReplyText(leadPrompt);
+}
 
 function buildInboxActionsFallback({
   text,
@@ -55,6 +142,7 @@ function buildInboxActionsFallback({
   const profile =
     runtime ||
     getTenantBusinessProfile(tenant, tenantKey, services);
+  const behaviorSignals = detectBehaviorSignals(text, profile);
 
   const runtimeKnowledge = Array.isArray(runtime?.knowledgeEntries)
     ? runtime.knowledgeEntries
@@ -116,6 +204,22 @@ function buildInboxActionsFallback({
     leadScore = Math.max(leadScore, 92);
   }
 
+  if (behaviorSignals.matchedDisallowedClaim) {
+    intent = "handoff_request";
+    shouldCreateLead = Boolean(policy.createLeadEnabled);
+    shouldHandoff = Boolean(policy.handoffEnabled);
+    replyText = buildBehaviorSafeReply(profile, behaviorSignals);
+    handoffReason = handoffReason || lower(behaviorSignals.matchedDisallowedClaim);
+    handoffPriority = behaviorSignals.urgent ? "high" : "normal";
+    leadScore = Math.max(leadScore, behaviorSignals.urgent ? 90 : 68);
+  } else if (behaviorSignals.matchedHandoffTrigger) {
+    shouldHandoff = Boolean(policy.handoffEnabled);
+    shouldCreateLead = Boolean(policy.createLeadEnabled);
+    handoffReason = handoffReason || lower(behaviorSignals.matchedHandoffTrigger);
+    handoffPriority = behaviorSignals.urgent ? "high" : handoffPriority || "normal";
+    leadScore = Math.max(leadScore, behaviorSignals.urgent ? 88 : 58);
+  }
+
   if (quietHoursApplied) {
     shouldReply = false;
     shouldTyping = false;
@@ -158,8 +262,16 @@ function buildInboxActionsFallback({
       engine: matchedPlaybook ? "playbook" : matchedKnowledge.length ? "knowledge" : "fallback",
       brandName: profile.displayName,
       industry: profile.industry,
+      niche: s(profile.niche || profile.businessType),
       services: profile.services,
       disabledServices: profile.disabledServices,
+      conversionGoal: s(profile.conversionGoal),
+      primaryCta: s(profile.primaryCta),
+      leadQualificationMode: s(profile.leadQualificationMode),
+      toneProfile: s(profile.toneProfile),
+      handoffTriggers: arr(profile.handoffTriggers),
+      disallowedClaims: arr(profile.disallowedClaims),
+      channelBehaviorInbox: obj(profile.channelBehavior?.inbox),
       operatorRecentlyReplied: Boolean(reliability?.operatorRecentlyReplied),
       duplicateOfLastAiReply: Boolean(reliability?.duplicateOfLastAiReply),
       duplicateReplyCandidate: duplicateReply,
@@ -304,6 +416,7 @@ export async function buildInboxActions({
   });
 
   const profile = resolvedRuntime;
+  const behaviorSignals = detectBehaviorSignals(text, profile);
   const matchedKnowledge = matchKnowledgeEntries(text, resolvedRuntime.knowledgeEntries, 5);
   const matchedPlaybook = matchPlaybook(text, resolvedRuntime.responsePlaybooks);
 
@@ -319,8 +432,18 @@ export async function buildInboxActions({
     recentMessageCount: normalizeRecentMessages(recentMessages).length,
     brandName: profile.displayName,
     industry: profile.industry,
+    niche: s(profile.niche || profile.businessType),
     services: profile.services,
     disabledServices: profile.disabledServices,
+    conversionGoal: s(profile.conversionGoal),
+    primaryCta: s(profile.primaryCta),
+    leadQualificationMode: s(profile.leadQualificationMode),
+    toneProfile: s(profile.toneProfile),
+    handoffTriggers: arr(profile.handoffTriggers),
+    disallowedClaims: arr(profile.disallowedClaims),
+    channelBehaviorInbox: obj(profile.channelBehavior?.inbox),
+    matchedBehaviorHandoffTrigger: behaviorSignals.matchedHandoffTrigger,
+    matchedBehaviorDisallowedClaim: behaviorSignals.matchedDisallowedClaim,
     threadState: effectiveThreadState || {},
     matchedKnowledgeTitles: matchedKnowledge.map((x) => x.title).filter(Boolean),
     matchedPlaybookName: s(matchedPlaybook?.name),
@@ -498,6 +621,99 @@ export async function buildInboxActions({
     return {
       intent: "operator_recently_replied",
       leadScore: 0,
+      policy,
+      actions,
+    };
+  }
+
+  if (behaviorSignals.matchedDisallowedClaim) {
+    const intent = "handoff_request";
+    const leadScore = behaviorSignals.urgent ? 90 : 68;
+    const shouldReply = Boolean(policy.autoReplyEnabled) && !quietHoursApplied;
+    const shouldTyping = Boolean(policy.typingIndicatorEnabled) && shouldReply;
+    const shouldMarkSeen = Boolean(policy.markSeenEnabled);
+    const shouldCreateLead = Boolean(policy.createLeadEnabled) && !reliability?.leadAlreadyCreated;
+    const shouldHandoff = Boolean(policy.handoffEnabled);
+    const replyText = buildBehaviorSafeReply(profile, behaviorSignals);
+
+    const commonMeta = buildMeta({
+      tenantKey: resolvedTenantKey,
+      thread,
+      message,
+      intent,
+      score: leadScore,
+      extra: {
+        ...metaBase,
+        engine: "behavior_guardrail",
+      },
+    });
+
+    if (shouldMarkSeen) {
+      actions.push(markSeenAction({ channel, recipientId: externalUserId, meta: commonMeta }));
+    }
+
+    if (shouldCreateLead) {
+      actions.push(
+        createLeadAction({
+          channel,
+          externalUserId,
+          thread,
+          text,
+          intent,
+          meta: commonMeta,
+        })
+      );
+    }
+
+    if (shouldHandoff) {
+      actions.push(
+        handoffAction({
+          channel,
+          externalUserId,
+          thread,
+          reason: lower(behaviorSignals.matchedDisallowedClaim) || "restricted_claim",
+          priority: behaviorSignals.urgent ? "high" : "normal",
+          meta: commonMeta,
+        })
+      );
+    }
+
+    const duplicateReply = isDuplicateReplyCandidate(replyText, reliability);
+
+    if (shouldReply && shouldTyping && replyText && !duplicateReply) {
+      actions.push(typingOnAction({ channel, recipientId: externalUserId, meta: commonMeta }));
+    }
+
+    if (shouldReply && replyText && !duplicateReply) {
+      actions.push(
+        sendMessageAction({
+          channel,
+          recipientId: externalUserId,
+          text: replyText,
+          meta: commonMeta,
+        })
+      );
+    } else {
+      actions.push(
+        noReplyAction({
+          reason: buildSuppressedReplyReason({
+            quietHoursApplied,
+            reliability,
+            handoffActive: handoff.active,
+            duplicateReply,
+          }),
+          meta: commonMeta,
+        })
+      );
+    }
+
+    if (shouldReply && shouldTyping && replyText && !duplicateReply) {
+      actions.push(typingOffAction({ channel, recipientId: externalUserId, meta: commonMeta }));
+    }
+
+    return {
+      intent,
+      leadScore,
       policy,
       actions,
     };
@@ -712,6 +928,14 @@ export async function buildInboxActions({
     let shouldTyping = Boolean(policy.typingIndicatorEnabled);
     let handoffReason = s(ai.handoffReason || "");
     let handoffPriority = s(ai.handoffPriority || "normal").toLowerCase() || "normal";
+
+    if (behaviorSignals.matchedHandoffTrigger) {
+      shouldHandoff = Boolean(policy.handoffEnabled);
+      shouldCreateLead = Boolean(policy.createLeadEnabled) && !reliability?.leadAlreadyCreated;
+      handoffReason = handoffReason || lower(behaviorSignals.matchedHandoffTrigger);
+      handoffPriority = behaviorSignals.urgent ? "high" : handoffPriority;
+      leadScore = Math.max(leadScore, behaviorSignals.urgent ? 88 : 58);
+    }
 
     if (intent === "unsupported_service") {
       replyText = sanitizeReplyText(buildUnsupportedServiceReply(aiProfile));

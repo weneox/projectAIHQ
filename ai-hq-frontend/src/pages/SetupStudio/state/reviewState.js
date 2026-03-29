@@ -16,6 +16,7 @@ import {
   firstNonEmpty,
 } from "./shared.js";
 import { safeDraftKey } from "./profile.js";
+import { extractBehaviorProfile } from "../logic/behaviorProfile.js";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -285,6 +286,7 @@ export function deriveCanonicalReviewProjection(review = {}) {
     ...businessProfile,
     ...payloadProfile,
   };
+  const behavior = extractBehaviorProfile(mergedProfile);
 
   const profileMeta = extractReviewMetadata(mergedProfile);
   const draftMeta = extractReviewMetadata(draft);
@@ -332,6 +334,7 @@ export function deriveCanonicalReviewProjection(review = {}) {
         mergedProfile?.summaryLong
     ),
     overview: mergedProfile,
+    behavior,
     capabilities,
     sections: {
       services,

@@ -6,6 +6,14 @@ import {
   uniqueBy,
 } from "./shared.js";
 
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+
+function uniqStrings(values = []) {
+  return [...new Set(arr(values).map((item) => s(item)).filter(Boolean))];
+}
+
 export function buildReadiness({
   profile,
   contacts,
@@ -303,5 +311,205 @@ export function buildHandoffJson(capabilities, channelPolicies) {
     autoOnHumanRequest: capabilities.autoHandoffOnHumanRequest,
     autoOnLowConfidence: capabilities.autoHandoffOnLowConfidence,
     escalationMode: strongestPolicy?.escalationMode || "inherit",
+  };
+}
+
+export function buildBehaviorJson(profile, capabilities, channelPolicies) {
+  const profileMeta = obj(profile?.metadataJson);
+  const profileJsonBehavior = obj(profile?.profileJson?.nicheBehavior);
+  const capabilitiesMeta = obj(capabilities?.metadataJson);
+  const overrides = obj(
+    profileMeta.nicheBehavior ||
+      profileMeta.niche_behavior ||
+      profileJsonBehavior ||
+      capabilitiesMeta.nicheBehavior ||
+      capabilitiesMeta.niche_behavior
+  );
+
+  const industryKey = s(
+    overrides.businessType || overrides.niche || profile?.industryKey
+  ).toLowerCase();
+  const subNiche = s(
+    overrides.subNiche || overrides.sub_niche || profile?.subindustryKey
+  ).toLowerCase();
+  const conversionGoal = s(
+    overrides.conversionGoal ||
+      overrides.conversion_goal ||
+      (capabilities?.canOfferBooking
+        ? "book_appointment"
+        : capabilities?.canOfferConsultation
+          ? "book_consultation"
+          : capabilities?.canCaptureLeads
+            ? "capture_qualified_lead"
+            : "answer_and_route")
+  ).toLowerCase();
+  const primaryCta = s(
+    overrides.primaryCta ||
+      overrides.primary_cta ||
+      profile?.preferredCta ||
+      (conversionGoal === "book_appointment"
+        ? "book_now"
+        : conversionGoal === "book_consultation"
+          ? "request_consultation"
+          : "contact_us")
+  ).toLowerCase();
+
+  const defaultQualificationQuestionsByNiche = {
+    clinic: [
+      "What service or concern do you need help with?",
+      "What day or time works best for you?",
+      "Should we confirm by call or message?",
+    ],
+    restaurant: [
+      "For which day and time do you need a table?",
+      "How many guests will be joining?",
+      "What is the best contact number for confirmation?",
+    ],
+    beauty: [
+      "Which treatment are you interested in?",
+      "What day or time works best for you?",
+      "Should we confirm by call or message?",
+    ],
+    law: [
+      "What type of legal matter is this about?",
+      "Is there any urgent deadline or hearing date?",
+      "What is the best callback number?",
+    ],
+    course: [
+      "Which course or program are you interested in?",
+      "What is your current level or goal?",
+      "What is the best way to contact you?",
+    ],
+    real_estate: [
+      "Are you buying, renting, or selling?",
+      "Which area or budget range are you targeting?",
+      "What is the best callback number?",
+    ],
+  };
+
+  const leadQualificationMode = s(
+    overrides.leadQualificationMode ||
+      overrides.lead_qualification_mode ||
+      (industryKey === "clinic"
+        ? "service_booking_triage"
+        : industryKey === "restaurant"
+          ? "reservation_capture"
+          : industryKey === "beauty"
+            ? "service_booking_triage"
+            : industryKey === "law"
+              ? "matter_intake"
+              : industryKey === "course"
+                ? "program_fit_intake"
+                : industryKey === "real_estate"
+                  ? "buyer_seller_intake"
+                  : "basic_contact_capture")
+  ).toLowerCase();
+
+  const qualificationQuestions = uniqStrings(
+    arr(
+      overrides.qualificationQuestions ||
+        overrides.qualification_questions ||
+        defaultQualificationQuestionsByNiche[industryKey] ||
+        [
+          "What are you looking for help with?",
+          "What outcome are you trying to achieve?",
+          "What is the best way to contact you?",
+        ]
+    )
+  );
+
+  const bookingFlowType = s(
+    overrides.bookingFlowType ||
+      overrides.booking_flow_type ||
+      capabilities?.bookingMode ||
+      (conversionGoal.includes("book")
+        ? "appointment_request"
+        : "manual_follow_up")
+  ).toLowerCase();
+
+  const handoffTriggers = uniqStrings(
+    arr(
+      overrides.handoffTriggers ||
+        overrides.handoff_triggers ||
+        [
+          capabilities?.autoHandoffOnHumanRequest ? "human_request" : "",
+          capabilities?.autoHandoffOnLowConfidence ? "low_confidence" : "",
+          industryKey === "clinic" ? "urgent_health_claim" : "",
+          industryKey === "law" ? "legal_risk_claim" : "",
+          industryKey === "real_estate"
+            ? "financing_or_document_review"
+            : "",
+        ]
+    )
+  );
+
+  const disallowedClaims = uniqStrings(
+    arr(
+      overrides.disallowedClaims ||
+        overrides.disallowed_claims ||
+        [
+          capabilities?.shouldAvoidLegalClaims
+            ? "legal_advice_or_guarantees"
+            : "",
+          capabilities?.shouldAvoidUnverifiedPromises
+            ? "unverified_outcome_promises"
+            : "",
+          industryKey === "clinic"
+            ? "diagnosis_or_treatment_guarantees"
+            : "",
+          industryKey === "beauty" ? "instant_result_guarantees" : "",
+          industryKey === "real_estate"
+            ? "guaranteed_roi_or_approval"
+            : "",
+        ]
+    )
+  );
+
+  const toneProfile = s(
+    overrides.toneProfile ||
+      overrides.tone_profile ||
+      profile?.toneProfile ||
+      (industryKey === "clinic"
+        ? "calm_professional_reassuring"
+        : industryKey === "restaurant"
+          ? "warm_fast_hospitable"
+          : industryKey === "law"
+            ? "formal_clear_confident"
+            : "professional")
+  ).toLowerCase();
+
+  return {
+    businessType: industryKey || "general_business",
+    niche: industryKey || "general_business",
+    subNiche: subNiche || "",
+    conversionGoal,
+    primaryCta,
+    leadQualificationMode,
+    qualificationQuestions,
+    bookingFlowType,
+    handoffTriggers,
+    disallowedClaims,
+    toneProfile,
+    channelBehavior: {
+      inbox: {
+        primaryAction: conversionGoal,
+        qualificationDepth:
+          leadQualificationMode === "basic_contact_capture" ? "light" : "guided",
+        handoffBias: handoffTriggers.length > 0 ? "conditional" : "minimal",
+      },
+      comments: {
+        primaryAction: "qualify_then_move_to_dm",
+        qualificationDepth: "light",
+        handoffBias: "minimal",
+      },
+      voice: {
+        primaryAction:
+          bookingFlowType === "appointment_request"
+            ? "book_or_route_call"
+            : "route_or_capture_callback",
+        qualificationDepth: "guided",
+        handoffBias: handoffTriggers.length > 0 ? "conditional" : "manual",
+      },
+    },
   };
 }

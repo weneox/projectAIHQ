@@ -82,6 +82,10 @@ function compactObject(input = {}) {
 export function buildCanonicalTruthProfile(profile = {}) {
   const current = obj(profile);
   const profileJson = obj(current.profile_json);
+  const metadataJson = obj(current.metadata_json);
+  const nicheBehavior = compactObject(
+    obj(profileJson.nicheBehavior || profileJson.niche_behavior || metadataJson.nicheBehavior)
+  );
 
   return compactObject({
     companyName: s(current.company_name || current.display_name || profileJson.companyName || profileJson.displayName),
@@ -110,6 +114,7 @@ export function buildCanonicalTruthProfile(profile = {}) {
     products: arr(profileJson.products),
     pricingHints: arr(profileJson.pricingHints),
     socialLinks: arr(profileJson.socialLinks),
+    nicheBehavior,
     confidence: toFiniteNumber(current.confidence, 0),
     confidenceLabel: s(current.confidence_label),
     profileStatus: s(current.profile_status),
@@ -281,12 +286,39 @@ export function buildCanonicalTruthLocations(locations = []) {
     .filter((item) => Object.keys(item).length);
 }
 
+export function buildCanonicalTruthFacts(facts = []) {
+  return arr(facts)
+    .map((item) =>
+      compactObject({
+        id: s(item?.id || item?.factId || item?.fact_id),
+        factKey: s(item?.factKey || item?.fact_key || item?.key),
+        factGroup: s(item?.factGroup || item?.fact_group),
+        title: s(item?.title),
+        valueText: s(item?.valueText || item?.value_text),
+        valueJson: obj(item?.valueJson || item?.value_json),
+        language: s(item?.language || "en").toLowerCase() || "en",
+        channelScope: arr(item?.channelScope || item?.channel_scope),
+        usecaseScope: arr(item?.usecaseScope || item?.usecase_scope),
+        priority: toFiniteNumber(item?.priority, 100),
+        enabled:
+          typeof item?.enabled === "boolean"
+            ? item.enabled
+            : true,
+        meta: mergeObjects(obj(item?.meta), {
+          factSurface: "published_truth",
+        }),
+      })
+    )
+    .filter((item) => Object.keys(item).length);
+}
+
 export function buildCanonicalTruthVersionSnapshot({
   profile = null,
   capabilities = null,
   services = [],
   contacts = [],
   locations = [],
+  truthFacts = [],
   sourceSummary = null,
   metadata = null,
 } = {}) {
@@ -295,6 +327,7 @@ export function buildCanonicalTruthVersionSnapshot({
   const servicesSnapshot = buildCanonicalTruthServices(services);
   const contactsSnapshot = buildCanonicalTruthContacts(contacts);
   const locationsSnapshot = buildCanonicalTruthLocations(locations);
+  const truthFactsSnapshot = buildCanonicalTruthFacts(truthFacts);
   const fieldProvenance = buildCanonicalTruthFieldProvenance(profile);
 
   return {
@@ -303,6 +336,7 @@ export function buildCanonicalTruthVersionSnapshot({
     servicesSnapshot,
     contactsSnapshot,
     locationsSnapshot,
+    truthFactsSnapshot,
     fieldProvenance,
     sourceSummary: compactObject(sourceSummary || obj(profile?.source_summary_json)),
     metadata: compactObject({
@@ -310,6 +344,7 @@ export function buildCanonicalTruthVersionSnapshot({
       servicesSnapshot,
       contactsSnapshot,
       locationsSnapshot,
+      truthFactsSnapshot,
     }),
   };
 }
@@ -331,6 +366,11 @@ function normalizeVersionRow(row = {}) {
     : Array.isArray(metadataJson.locations_snapshot_json)
       ? metadataJson.locations_snapshot_json
       : [];
+  const truthFactsSnapshot = Array.isArray(metadataJson.truthFactsSnapshot)
+    ? metadataJson.truthFactsSnapshot
+    : Array.isArray(metadataJson.truth_facts_snapshot_json)
+      ? metadataJson.truth_facts_snapshot_json
+      : [];
 
   return {
     id: s(row.id),
@@ -348,6 +388,7 @@ function normalizeVersionRow(row = {}) {
     services_snapshot_json: servicesSnapshot,
     contacts_snapshot_json: contactsSnapshot,
     locations_snapshot_json: locationsSnapshot,
+    truth_facts_snapshot_json: truthFactsSnapshot,
     field_provenance_json: obj(row.field_provenance_json),
     metadata_json: metadataJson,
     created_at: iso(row.created_at),
@@ -539,6 +580,11 @@ export function buildTruthVersionCompare(currentVersion = {}, previousVersion = 
       current.locations_snapshot_json
     ),
     ...buildDiffSectionChanges(
+      "truthFacts",
+      previous?.truth_facts_snapshot_json,
+      current.truth_facts_snapshot_json
+    ),
+    ...buildDiffSectionChanges(
       "fieldProvenance",
       previous?.field_provenance_json,
       current.field_provenance_json
@@ -566,6 +612,9 @@ export function buildTruthVersionCompare(currentVersion = {}, previousVersion = 
     locationsChangedFields: changes
       .filter((item) => item.section === "locations")
       .map((item) => item.path),
+    truthFactsChangedFields: changes
+      .filter((item) => item.section === "truthFacts")
+      .map((item) => item.path),
     fieldProvenanceChangedFields: changes
       .filter((item) => item.section === "fieldProvenance")
       .map((item) => item.path),
@@ -589,6 +638,15 @@ function inferRuntimeImpactFromPaths(paths = []) {
 
   for (const path of arr(paths).map((item) => s(item))) {
     const lowerPath = path.toLowerCase();
+
+    if (lowerPath.includes("profile.nichebehavior")) {
+      runtimeAreas.add("behavioral_policy");
+      surfaces.add("inbox");
+      surfaces.add("comments");
+      surfaces.add("voice");
+      surfaces.add("automation_executions");
+      continue;
+    }
 
     if (
       lowerPath.includes("profile.primaryphone") ||
@@ -704,6 +762,7 @@ export function buildTruthVersionDiffModel(currentVersion = {}, previousVersion 
       if (path.startsWith("services.")) return "service_catalog";
       if (path.startsWith("contacts.")) return "business_contacts";
       if (path.startsWith("locations.")) return "business_locations";
+      if (path.startsWith("truthFacts.")) return "business_truth_facts";
       if (path.startsWith("fieldProvenance.")) return "truth_provenance";
       if (path.startsWith("sourceSummary.")) return "truth_source_summary";
       return "";
@@ -1295,6 +1354,7 @@ export function buildTruthVersionHistoryEntry(version = {}, compare = null) {
     services: arr(version.services_snapshot_json),
     contacts: arr(version.contacts_snapshot_json),
     locations: arr(version.locations_snapshot_json),
+    truthFacts: arr(version.truth_facts_snapshot_json),
     diff: compare || undefined,
   });
 }
@@ -1310,6 +1370,7 @@ export function hasTruthVersionChanged(previous = null, next = null) {
     services: arr(previous.services_snapshot_json),
     contacts: arr(previous.contacts_snapshot_json),
     locations: arr(previous.locations_snapshot_json),
+    truthFacts: arr(previous.truth_facts_snapshot_json),
     fieldProvenance: obj(previous.field_provenance_json),
   }) !==
     JSON.stringify({
@@ -1319,6 +1380,7 @@ export function hasTruthVersionChanged(previous = null, next = null) {
       services: arr(next.services_snapshot_json),
       contacts: arr(next.contacts_snapshot_json),
       locations: arr(next.locations_snapshot_json),
+      truthFacts: arr(next.truth_facts_snapshot_json),
       fieldProvenance: obj(next.field_provenance_json),
     });
 }
@@ -1420,6 +1482,7 @@ export async function createTruthVersionInternal(db, input = {}) {
     services: input.services,
     contacts: input.contacts,
     locations: input.locations,
+    truthFacts: input.truthFacts,
     sourceSummary: input.sourceSummaryJson ?? input.source_summary_json,
     metadata: input.metadataJson ?? input.metadata_json,
   });
@@ -1443,6 +1506,7 @@ export async function createTruthVersionInternal(db, input = {}) {
     services_snapshot_json: snapshot.servicesSnapshot,
     contacts_snapshot_json: snapshot.contactsSnapshot,
     locations_snapshot_json: snapshot.locationsSnapshot,
+    truth_facts_snapshot_json: snapshot.truthFactsSnapshot,
     field_provenance_json: snapshot.fieldProvenance,
   };
 

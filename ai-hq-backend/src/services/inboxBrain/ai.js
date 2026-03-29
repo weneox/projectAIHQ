@@ -95,6 +95,15 @@ export async function aiDecideInbox({
         ...obj(tenant?.ai_policy),
         ...obj(profile.aiPolicy),
       },
+      behavior: {
+        niche: s(profile.industry),
+        conversionGoal: s(profile.conversionGoal),
+        primaryCta: s(profile.primaryCta),
+        toneProfile: s(profile.toneProfile),
+        disallowedClaims: arr(profile.disallowedClaims),
+        handoffTriggers: arr(profile.handoffTriggers),
+        channelBehavior: obj(profile.channelBehavior),
+      },
       profile: {
         ...obj(tenant?.profile),
         ...obj(profile.profile),

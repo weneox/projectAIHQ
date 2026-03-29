@@ -121,6 +121,7 @@ function buildVoiceProfile({
   voice = {},
   leadCapture = {},
   handoff = {},
+  behavior = {},
 } = {}) {
   const companyName = s(identity.companyName || identity.displayName || "");
   const defaultLanguage = lower(identity.mainLanguage || "en");
@@ -136,8 +137,8 @@ function buildVoiceProfile({
     assistantName: s(identity.displayName || companyName || "Virtual Assistant"),
     roleLabel: "virtual assistant",
     defaultLanguage,
-    purpose: "general",
-    tone: s(profile.toneProfile || "professional"),
+    purpose: s(behavior.conversionGoal || behavior.bookingFlowType || "general"),
+    tone: s(behavior.toneProfile || profile.toneProfile || "professional"),
     answerStyle: "short_clear",
     askStyle: "single_question",
     businessSummary,
@@ -146,10 +147,18 @@ function buildVoiceProfile({
       .filter(Boolean),
     forbiddenTopics: [],
     leadCaptureMode: leadCapture.enabled
-      ? s(leadCapture.contactCaptureMode || "guided")
+      ? s(
+          behavior.leadQualificationMode ||
+            leadCapture.contactCaptureMode ||
+            "guided"
+        )
       : "none",
     transferMode: handoff.enabled
-      ? s(handoff.escalationMode || "manual")
+      ? s(
+          obj(behavior.channelBehavior).voice?.handoffBias ||
+            handoff.escalationMode ||
+            "manual"
+        )
       : "manual",
     contactPolicy: {
       sharePhone: Boolean(s(voice.primaryPhone)),
@@ -157,6 +166,58 @@ function buildVoiceProfile({
       shareWebsite: Boolean(s(identity.websiteUrl || profile.websiteUrl)),
     },
     texts: {},
+  };
+}
+
+function buildProjectedBehavior({
+  identity = {},
+  profile = {},
+  voice = {},
+  leadCapture = {},
+  handoff = {},
+  behavior = {},
+} = {}) {
+  const provided = obj(behavior);
+  if (Object.keys(provided).length > 0) {
+    return provided;
+  }
+
+  const niche = lower(identity.industryKey || "general_business");
+  const conversionGoal = voice.supportsCalls === true
+    ? "capture_qualified_lead"
+    : "answer_and_route";
+
+  return {
+    businessType: niche,
+    niche,
+    subNiche: "",
+    conversionGoal,
+    primaryCta: conversionGoal === "capture_qualified_lead" ? "contact_us" : "",
+    leadQualificationMode: leadCapture.enabled
+      ? "guided_contact_capture"
+      : "basic_contact_capture",
+    qualificationQuestions: [],
+    bookingFlowType: "manual",
+    handoffTriggers: handoff.enabled ? ["human_request", "low_confidence"] : [],
+    disallowedClaims: [],
+    toneProfile: s(profile.toneProfile || "professional"),
+    channelBehavior: {
+      inbox: {
+        primaryAction: conversionGoal,
+        qualificationDepth: "guided",
+        handoffBias: handoff.enabled ? "conditional" : "minimal",
+      },
+      comments: {
+        primaryAction: "qualify_then_move_to_dm",
+        qualificationDepth: "light",
+        handoffBias: "minimal",
+      },
+      voice: {
+        primaryAction: "route_or_capture_callback",
+        qualificationDepth: "guided",
+        handoffBias: handoff.enabled ? "conditional" : "manual",
+      },
+    },
   };
 }
 
@@ -469,6 +530,14 @@ export function buildProjectedTenantRuntime({
   const comments = obj(projection.comments_json);
   const leadCapture = obj(projection.lead_capture_json);
   const handoff = obj(projection.handoff_json);
+  const behavior = buildProjectedBehavior({
+    identity,
+    profile,
+    voice,
+    leadCapture,
+    handoff,
+    behavior: projection.behavior_json,
+  });
   const projectionChannels = arr(projection.channels_json);
   const primaryPhone = pickPrimaryContact(contacts, "phone");
   const primaryEmail = pickPrimaryContact(contacts, "email");
@@ -480,6 +549,7 @@ export function buildProjectedTenantRuntime({
     voice,
     leadCapture,
     handoff,
+    behavior,
   });
 
   const projectedRuntime = {
@@ -561,6 +631,7 @@ export function buildProjectedTenantRuntime({
         matchedChannel,
       }),
     },
+    behavior,
     operational: {
       voice: operationalVoice,
       matchedChannel: matchedChannel

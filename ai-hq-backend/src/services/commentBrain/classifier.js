@@ -11,84 +11,103 @@ import {
 import { fallbackClassification } from "./fallback.js";
 import { normalizeOutput } from "./normalize.js";
 import { ensureOpenAI } from "./openai.js";
+import { buildPromptBundle } from "../promptBundle.js";
 import {
+  getCommentChannelBehavior,
   getCommentPolicy,
+  getTenantConversionGoal,
+  getTenantDisallowedClaims,
+  getTenantHandoffTriggers,
   getResolvedTenantKey,
   getTenantBannedPhrases,
   getTenantBrandName,
   getTenantBusinessContext,
+  getTenantPrimaryCta,
   getTenantPreferredCta,
   getTenantTone,
+  getTenantToneProfile,
   resolveCommentRuntime,
 } from "./runtime.js";
 
-export async function classifyComment({
+export function buildCommentClassifierPrompt({
   tenantKey,
-  tenant = null,
-  runtime = null,
+  resolvedRuntime,
   channel,
   externalUserId,
   externalUsername,
   customerName,
-  text,
+  commentText,
 }) {
-  const commentText = fixMojibake(s(text || ""));
   const resolvedTenantKey = getResolvedTenantKey(tenantKey);
-
-  const resolvedRuntime = await resolveCommentRuntime({
-    tenantKey: resolvedTenantKey,
-    tenant,
-    runtime,
-  });
-
   const brandName = getTenantBrandName(resolvedRuntime, resolvedTenantKey);
   const businessContext = getTenantBusinessContext(resolvedRuntime);
   const tone = getTenantTone(resolvedRuntime);
+  const toneProfile = getTenantToneProfile(resolvedRuntime);
   const preferredCta = getTenantPreferredCta(resolvedRuntime);
+  const primaryCta = getTenantPrimaryCta(resolvedRuntime);
+  const conversionGoal = getTenantConversionGoal(resolvedRuntime);
   const bannedPhrases = getTenantBannedPhrases(resolvedRuntime);
   const commentPolicy = getCommentPolicy(resolvedRuntime);
+  const commentsBehavior = getCommentChannelBehavior(resolvedRuntime);
+  const handoffTriggers = getTenantHandoffTriggers(resolvedRuntime);
+  const disallowedClaims = getTenantDisallowedClaims(resolvedRuntime);
   const services = uniqStrings(arr(resolvedRuntime?.services));
   const disabledServices = uniqStrings(arr(resolvedRuntime?.disabledServices));
   const serviceCatalog = arr(resolvedRuntime?.serviceCatalog);
 
-  if (!commentText) {
-    return {
-      category: "unknown",
-      priority: "low",
-      sentiment: "neutral",
-      requiresHuman: false,
-      shouldCreateLead: false,
-      shouldReply: false,
-      replySuggestion: "",
-      shouldPrivateReply: false,
-      privateReplySuggestion: "",
-      shouldHandoff: false,
-      reason: "empty_text",
-      engine: "rule",
-      meta: {
-        tenantKey: resolvedTenantKey,
-        brandName,
-      },
-    };
-  }
-
-  const openai = ensureOpenAI();
-  if (!openai) {
-    return fallbackClassification(commentText, {
+  const promptBundle = buildPromptBundle("comment.classify", {
+    tenant: {
       tenantKey: resolvedTenantKey,
-      runtime: resolvedRuntime,
-    });
-  }
+      tenantId: resolvedTenantKey,
+      companyName: brandName,
+      brandName,
+      industryKey: s(
+        resolvedRuntime?.industry ||
+          resolvedRuntime?.profile?.industryKey ||
+          "generic_business"
+      ),
+      outputLanguage: normalizeLang(resolvedRuntime?.language, "az"),
+      toneText: tone,
+      services,
+      servicesText: services.join(", "),
+      businessContext,
+      behavior: {
+        niche: s(
+          resolvedRuntime?.industry ||
+            resolvedRuntime?.profile?.industryKey ||
+            "generic_business"
+        ),
+        conversionGoal,
+        primaryCta,
+        toneProfile,
+        disallowedClaims,
+        handoffTriggers,
+        channelBehavior: {
+          comments: commentsBehavior,
+        },
+      },
+      ai_policy: {
+        commentPolicy,
+      },
+    },
+    extra: {
+      channel: "comments",
+      surface: "comments",
+      policy: {
+        humanReviewRequired: commentPolicy?.humanReviewRequired === true,
+      },
+      outputContract: {
+        mode: "json",
+        strictJson: true,
+        hint: "Return the exact classification JSON shape only.",
+      },
+    },
+  });
 
-  const model = s(cfg?.ai?.openaiModel || "gpt-5") || "gpt-5";
-  const max_output_tokens = Number(cfg?.ai?.openaiMaxOutputTokens || 700);
+  return `${promptBundle.fullPrompt}
 
-  const prompt = `
-You are a strict JSON classifier for PUBLIC social media comments for a tenant brand.
-
-Important:
+COMMENT CLASSIFICATION RULES:
 - This is PUBLIC COMMENT classification, not ongoing DM conversation classification.
-- Use the runtime business context as the source of truth.
 - Only assume services that exist in enabledServices.
 - Do not imply unavailable services from disabledServices.
 - If the comment is about a disabled or unavailable service, do not create a lead.
@@ -131,14 +150,6 @@ Allowed priority:
 Allowed sentiment:
 ["positive","neutral","negative","mixed"]
 
-Classification rules:
-- sales => clear commercial intent, asks about service, pricing, package, demo, contact, availability, quote, proposal
-- support => issue or help request needing follow-up or human support
-- spam => irrelevant promotion, scam, garbage, obvious bot-like promotion
-- toxic => abusive, insulting, profane, hostile
-- normal => praise, reaction, generic engagement, non-actionable comment
-- unknown => not enough signal or disabled or unavailable service interest
-
 Action rules:
 - shouldCreateLead=true only when there is reasonably clear commercial intent for an available service
 - shouldReply=true mainly for sales or support when a short public reply is appropriate
@@ -162,9 +173,15 @@ brandName=${JSON.stringify(brandName)}
 tenantKey=${JSON.stringify(resolvedTenantKey)}
 businessContext=${JSON.stringify(businessContext)}
 tone=${JSON.stringify(tone)}
+toneProfile=${JSON.stringify(toneProfile)}
 preferredCta=${JSON.stringify(preferredCta)}
+primaryCta=${JSON.stringify(primaryCta)}
+conversionGoal=${JSON.stringify(conversionGoal)}
 bannedPhrases=${JSON.stringify(bannedPhrases)}
 commentPolicy=${JSON.stringify(commentPolicy)}
+commentsBehavior=${JSON.stringify(commentsBehavior)}
+handoffTriggers=${JSON.stringify(handoffTriggers)}
+disallowedClaims=${JSON.stringify(disallowedClaims)}
 language=${JSON.stringify(normalizeLang(resolvedRuntime?.language, "az"))}
 enabledServices=${JSON.stringify(services)}
 disabledServices=${JSON.stringify(disabledServices)}
@@ -182,8 +199,83 @@ externalUsername=${JSON.stringify(s(externalUsername || ""))}
 customerName=${JSON.stringify(s(customerName || ""))}
 
 Comment:
-${JSON.stringify(commentText)}
-  `.trim();
+${JSON.stringify(commentText)}`.trim();
+}
+
+export async function classifyComment({
+  tenantKey,
+  tenant = null,
+  runtime = null,
+  channel,
+  externalUserId,
+  externalUsername,
+  customerName,
+  text,
+}) {
+  const commentText = fixMojibake(s(text || ""));
+  const resolvedTenantKey = getResolvedTenantKey(tenantKey);
+
+  const resolvedRuntime = await resolveCommentRuntime({
+    tenantKey: resolvedTenantKey,
+    tenant,
+    runtime,
+  });
+
+  const commentsBehavior = getCommentChannelBehavior(resolvedRuntime);
+  const handoffTriggers = getTenantHandoffTriggers(resolvedRuntime);
+  const disallowedClaims = getTenantDisallowedClaims(resolvedRuntime);
+  const brandName = getTenantBrandName(resolvedRuntime, resolvedTenantKey);
+  const toneProfile = getTenantToneProfile(resolvedRuntime);
+  const primaryCta = getTenantPrimaryCta(resolvedRuntime);
+  const conversionGoal = getTenantConversionGoal(resolvedRuntime);
+
+  if (!commentText) {
+    return {
+      category: "unknown",
+      priority: "low",
+      sentiment: "neutral",
+      requiresHuman: false,
+      shouldCreateLead: false,
+      shouldReply: false,
+      replySuggestion: "",
+      shouldPrivateReply: false,
+      privateReplySuggestion: "",
+      shouldHandoff: false,
+      reason: "empty_text",
+      engine: "rule",
+      meta: {
+        tenantKey: resolvedTenantKey,
+        brandName,
+        conversionGoal,
+        primaryCta,
+        toneProfile,
+        handoffTriggers,
+        disallowedClaims,
+        channelBehaviorComments: commentsBehavior,
+      },
+    };
+  }
+
+  const openai = ensureOpenAI();
+  if (!openai) {
+    return fallbackClassification(commentText, {
+      tenantKey: resolvedTenantKey,
+      runtime: resolvedRuntime,
+    });
+  }
+
+  const model = s(cfg?.ai?.openaiModel || "gpt-5") || "gpt-5";
+  const max_output_tokens = Number(cfg?.ai?.openaiMaxOutputTokens || 700);
+
+  const prompt = buildCommentClassifierPrompt({
+    tenantKey: resolvedTenantKey,
+    resolvedRuntime,
+    channel,
+    externalUserId,
+    externalUsername,
+    customerName,
+    commentText,
+  });
 
   try {
     const resp = await openai.responses.create({
