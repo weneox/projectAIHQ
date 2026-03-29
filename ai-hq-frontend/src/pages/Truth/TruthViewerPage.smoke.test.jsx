@@ -747,7 +747,44 @@ describe("Truth viewer smoke", () => {
         expect.objectContaining({
           metadataJson: {
             publishPreview: {
-              proposedOutcome: "review_required",
+              values: {
+                currentApprovedValue: {
+                  title: "Current approved phone",
+                  valueText: "+15550000000",
+                },
+                proposedValue: {
+                  title: "Primary phone",
+                  valueText: "+15551112222",
+                },
+                changed: true,
+              },
+              canonical: {
+                areas: ["business_profile"],
+                paths: ["profile.primaryPhone"],
+              },
+              runtime: {
+                areas: ["contact_channels"],
+                paths: ["runtime.business.contacts.primaryPhone"],
+                readinessDelta: "projection_refresh_required",
+              },
+              channels: {
+                affectedSurfaces: ["voice", "inbox"],
+              },
+              policy: {
+                autonomyDelta: "unchanged",
+                executionPostureDelta: "unchanged",
+                riskDelta: "unknown",
+              },
+              guidance: {
+                likelyAffectedAreas: ["business_profile", "contact_channels", "voice"],
+                likelyReadinessImplications: [
+                  "Runtime projection refresh will be required before governed runtime reflects this change.",
+                ],
+                confidence: "deterministic_impact_with_inferred_posture",
+              },
+              auditSummary: {
+                proposedOutcome: "review_required",
+              },
             },
           },
         })

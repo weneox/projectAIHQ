@@ -257,7 +257,7 @@ export function useSourceIntelligence({
       tenantKey,
       reason: "Approved from Settings knowledge review",
       metadataJson: {
-        publishPreview: item?.publishPreview?.auditSummary || {},
+        publishPreview: item?.publishPreview || {},
       },
     });
 
@@ -269,7 +269,10 @@ export function useSourceIntelligence({
       setPublishReceipt(result?.publishReceipt || null);
       succeedSave({
         message:
-          "Knowledge candidate approved for truth maintenance review. Approved truth remains explicit and protected.",
+          String(result?.publishReceipt?.publishStatus || "").trim().toLowerCase() ===
+          "review_required"
+            ? "Knowledge candidate was approved into a governed maintenance draft. Approved truth remains explicit and protected until publish."
+            : "Knowledge candidate approved for truth maintenance review. Approved truth remains explicit and protected.",
       });
     } catch (error) {
       failSave(error);

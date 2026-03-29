@@ -101,13 +101,16 @@ async function syncInstagramSourceLayer({ db, tenant, actor, selected }) {
     updatedBy: actor || "system",
   });
 
-  await knowledge.refreshChannelCapabilitiesFromSources({
+  const capabilityGovernance = await knowledge.refreshChannelCapabilitiesFromSources({
     tenantId: tenant.id,
     tenantKey: tenant.tenant_key,
     approvedBy: actor || "system",
   });
 
-  return source;
+  return {
+    source,
+    capabilityGovernance,
+  };
 }
 
 async function markInstagramSourceDisconnected({ db, tenant, actor }) {
@@ -131,7 +134,7 @@ async function markInstagramSourceDisconnected({ db, tenant, actor }) {
     });
   }
 
-  await knowledge.refreshChannelCapabilitiesFromSources({
+  return await knowledge.refreshChannelCapabilitiesFromSources({
     tenantId: tenant.id,
     tenantKey: tenant.tenant_key,
     approvedBy: actor || "system",
@@ -361,12 +364,14 @@ export async function handleMetaCallback({ db, req }) {
     last_sync_at: new Date().toISOString(),
   });
 
-  const source = await syncInstagramSourceLayer({
+  const syncResult = await syncInstagramSourceLayer({
     db,
     tenant,
     actor: state.actor || "system",
     selected,
   });
+  const source = syncResult?.source || null;
+  const capabilityGovernance = syncResult?.capabilityGovernance || null;
 
   await auditSafe(
     db,
@@ -381,6 +386,12 @@ export async function handleMetaCallback({ db, req }) {
       igUsername: selected.igUsername || null,
       sourceId: source?.id || null,
       sourceKey: source?.source_key || null,
+      capabilityGovernance: {
+        publishStatus: s(capabilityGovernance?.publishStatus),
+        reviewRequired: !!capabilityGovernance?.reviewRequired,
+        maintenanceSessionId: s(capabilityGovernance?.maintenanceSession?.id),
+        blockedReason: s(capabilityGovernance?.blockedReason),
+      },
     }
   );
 
@@ -399,6 +410,7 @@ export async function handleMetaCallback({ db, req }) {
       igUsername: selected.igUsername || null,
       sourceId: source?.id || null,
       sourceKey: source?.source_key || null,
+      capabilityGovernance,
     },
   };
 }
@@ -508,7 +520,7 @@ export async function disconnectMeta({ db, req }) {
   await deleteMetaPageAccessToken(db, tenant.id);
   await markInstagramDisconnected(db, tenant.id);
 
-  await markInstagramSourceDisconnected({
+  const capabilityGovernance = await markInstagramSourceDisconnected({
     db,
     tenant,
     actor,
@@ -520,11 +532,20 @@ export async function disconnectMeta({ db, req }) {
     tenant,
     "settings.channel.meta.disconnected",
     "tenant_channel",
-    "instagram"
+    "instagram",
+    {
+      capabilityGovernance: {
+        publishStatus: s(capabilityGovernance?.publishStatus),
+        reviewRequired: !!capabilityGovernance?.reviewRequired,
+        maintenanceSessionId: s(capabilityGovernance?.maintenanceSession?.id),
+        blockedReason: s(capabilityGovernance?.blockedReason),
+      },
+    }
   );
 
   return {
     disconnected: true,
     channel: "instagram",
+    capabilityGovernance,
   };
 }

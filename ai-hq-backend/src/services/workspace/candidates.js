@@ -3,6 +3,7 @@
 
 import { buildSetupStatus } from "./setup.js";
 import { createTenantKnowledgeHelpers } from "../../db/helpers/tenantKnowledge.js";
+import { stageApprovedServiceCandidateInMaintenanceSession } from "./setup/draftServices.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -39,16 +40,6 @@ function uniqStrings(list = []) {
   }
 
   return out;
-}
-
-function slugify(value = "") {
-  const out = s(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-
-  return out || "service";
 }
 
 function normalizeStringArray(input) {
@@ -122,219 +113,6 @@ function assertCandidateScope(candidate, scope) {
   throw new Error("Knowledge candidate not found");
 }
 
-function buildCanonicalServicePayload(candidate = {}) {
-  const meta = obj(candidate.value_json);
-
-  const title =
-    s(candidate.title) ||
-    s(meta.title) ||
-    s(meta.name) ||
-    s(candidate.value_text);
-
-  if (!title) {
-    throw new Error("Approved service candidate is missing a title");
-  }
-
-  const serviceKey =
-    s(meta.service_key) ||
-    s(candidate.item_key) ||
-    slugify(title);
-
-  const rawPrice =
-    meta.priceFrom ??
-    meta.price_from ??
-    meta.startingPrice ??
-    meta.starting_price;
-
-  const rawDuration =
-    meta.durationMinutes ??
-    meta.duration_minutes;
-
-  const priceFrom =
-    rawPrice === "" || rawPrice == null ? null : num(rawPrice, null);
-
-  const durationMinutes =
-    rawDuration === "" || rawDuration == null ? null : num(rawDuration, null);
-
-  return {
-    serviceKey,
-    title,
-    description:
-      s(meta.description) ||
-      s(meta.summary) ||
-      s(candidate.value_text),
-    category: lower(candidate.category || "general") || "general",
-    priceFrom: priceFrom == null ? null : priceFrom,
-    currency: s(meta.currency || "AZN").toUpperCase() || "AZN",
-    pricingModel:
-      s(meta.pricingModel || meta.pricing_model || "custom_quote").toLowerCase() ||
-      "custom_quote",
-    durationMinutes: durationMinutes == null ? null : durationMinutes,
-    isActive:
-      typeof meta.isActive === "boolean"
-        ? meta.isActive
-        : typeof meta.is_active === "boolean"
-          ? meta.is_active
-          : true,
-    sortOrder: num(meta.sortOrder ?? meta.sort_order, 0),
-    highlights: normalizeStringArray(
-      meta.highlights ??
-        meta.highlightsText ??
-        meta.highlights_text ??
-        meta.highlights_json
-    ),
-  };
-}
-
-async function upsertTenantServiceFromCandidate({
-  db,
-  scope,
-  candidate,
-  reviewedBy = "",
-}) {
-  const payload = buildCanonicalServicePayload(candidate);
-
-  const existingRes = await q(
-    db,
-    `
-      select *
-      from tenant_services
-      where tenant_id = $1::uuid
-        and (
-          service_key = $2
-          or lower(title) = lower($3)
-        )
-      limit 1
-    `,
-    [scope.tenantId, payload.serviceKey, payload.title]
-  );
-
-  const existing = existingRes?.rows?.[0] || null;
-
-  const metadataJson = {
-    source: "knowledge_candidate_approval",
-    approvedCandidateId: s(candidate.id),
-    sourceId: s(candidate.source_id),
-    sourceRunId: s(candidate.source_run_id),
-    reviewedBy: s(reviewedBy),
-    category: s(candidate.category),
-    itemKey: s(candidate.item_key),
-  };
-
-  if (existing?.id) {
-    const resolvedServiceKey = s(existing.service_key || payload.serviceKey);
-
-    const updatedRes = await q(
-      db,
-      `
-        update tenant_services
-        set
-          tenant_key = $3,
-          service_key = $4,
-          title = $5,
-          description = $6,
-          category = $7,
-          price_from = $8,
-          currency = $9,
-          pricing_model = $10,
-          duration_minutes = $11,
-          is_active = $12,
-          sort_order = $13,
-          highlights_json = $14::jsonb,
-          metadata_json = coalesce(metadata_json, '{}'::jsonb) || $15::jsonb,
-          updated_at = now()
-        where id = $1::uuid
-          and tenant_id = $2::uuid
-        returning *
-      `,
-      [
-        s(existing.id),
-        scope.tenantId,
-        scope.tenantKey,
-        resolvedServiceKey,
-        payload.title,
-        payload.description,
-        payload.category,
-        payload.priceFrom,
-        payload.currency,
-        payload.pricingModel,
-        payload.durationMinutes,
-        payload.isActive,
-        payload.sortOrder,
-        JSON.stringify(payload.highlights),
-        JSON.stringify(metadataJson),
-      ]
-    );
-
-    return {
-      action: "update",
-      table: "tenant_services",
-      row: updatedRes?.rows?.[0] || existing,
-    };
-  }
-
-  const insertedRes = await q(
-    db,
-    `
-      insert into tenant_services (
-        tenant_id,
-        tenant_key,
-        service_key,
-        title,
-        description,
-        category,
-        price_from,
-        currency,
-        pricing_model,
-        duration_minutes,
-        is_active,
-        sort_order,
-        highlights_json,
-        metadata_json
-      )
-      values (
-        $1::uuid,
-        $2,
-        $3,
-        $4,
-        $5,
-        $6,
-        $7,
-        $8,
-        $9,
-        $10,
-        $11,
-        $12,
-        $13::jsonb,
-        $14::jsonb
-      )
-      returning *
-    `,
-    [
-      scope.tenantId,
-      scope.tenantKey,
-      payload.serviceKey,
-      payload.title,
-      payload.description,
-      payload.category,
-      payload.priceFrom,
-      payload.currency,
-      payload.pricingModel,
-      payload.durationMinutes,
-      payload.isActive,
-      payload.sortOrder,
-      JSON.stringify(payload.highlights),
-      JSON.stringify(metadataJson),
-    ]
-  );
-
-  return {
-    action: "insert",
-    table: "tenant_services",
-    row: insertedRes?.rows?.[0] || null,
-  };
-}
-
 export async function listKnowledgeCandidates({
   db,
   tenantId,
@@ -342,8 +120,8 @@ export async function listKnowledgeCandidates({
   status = "",
   category = "",
   limit = 100,
-}) {
-  const knowledge = createTenantKnowledgeHelpers({ db });
+}, deps = {}) {
+  const knowledge = deps.knowledgeHelper || createTenantKnowledgeHelpers({ db });
   const scope = await resolveTenantScope(knowledge, { tenantId, tenantKey });
 
   const items = await knowledge.listCandidates({
@@ -379,8 +157,13 @@ export async function approveKnowledgeCandidate({
   tenant = null,
   candidateId,
   reviewedBy = "",
-}) {
-  const knowledge = createTenantKnowledgeHelpers({ db });
+}, deps = {}) {
+  const knowledge = deps.knowledgeHelper || createTenantKnowledgeHelpers({ db });
+  const buildSetup =
+    deps.buildSetupStatus || buildSetupStatus;
+  const stageServiceCandidate =
+    deps.stageApprovedServiceCandidateInMaintenanceSession ||
+    stageApprovedServiceCandidateInMaintenanceSession;
   const scope = await resolveTenantScope(knowledge, { tenantId, tenantKey });
 
   const normalizedCandidateId = normalizeCandidateId(candidateId);
@@ -396,18 +179,32 @@ export async function approveKnowledgeCandidate({
   let destination;
   let approval;
   let updatedCandidate;
+  let publishStatus = "success";
+  let reviewRequired = false;
+  let maintenanceSession = null;
+  let maintenanceDraft = null;
 
   if (isCatalogCategory(candidate.category)) {
-    destination = await upsertTenantServiceFromCandidate({
+    destination = await stageServiceCandidate({
       db,
-      scope,
+      actor: {
+        tenantId: scope.tenantId,
+        tenantKey: scope.tenantKey,
+        role,
+        tenant,
+      },
       candidate,
       reviewedBy: reviewer,
     });
 
+    publishStatus = s(destination?.publishStatus || "review_required");
+    reviewRequired = destination?.reviewRequired === true;
+    maintenanceSession = obj(destination?.maintenanceSession);
+    maintenanceDraft = obj(destination?.maintenanceDraft);
+
     updatedCandidate = await knowledge.updateCandidate(candidate.id, {
       status: "approved",
-      approvedItemId: s(destination?.row?.id),
+      approvedItemId: "",
       reviewedBy: reviewer,
       reviewedAt: new Date().toISOString(),
       reviewReason: "",
@@ -427,13 +224,24 @@ export async function approveKnowledgeCandidate({
       beforeJson: { candidate },
       afterJson: {
         candidate: updatedCandidate,
-        service: destination?.row || null,
+        maintenanceSession,
+        maintenanceDraft,
       },
       metadataJson: {
-        destinationTable: "tenant_services",
-        destinationAction: s(destination?.action),
+        destinationTable: "tenant_setup_review_drafts",
+        destinationAction: "stage_service_maintenance_review",
+        publishStatus,
       },
     });
+
+    destination = {
+      action: "stage_service_maintenance_review",
+      table: "tenant_setup_review_drafts",
+      reviewSessionId: s(maintenanceSession?.id),
+      draftVersion: Number(maintenanceDraft?.version || 0) || 0,
+      publishStatus,
+      reviewRequired,
+    };
   } else {
     const result = await knowledge.approveCandidate(candidate.id, {
       reviewerType: "human",
@@ -456,7 +264,7 @@ export async function approveKnowledgeCandidate({
     };
   }
 
-  const setup = await buildSetupStatus({
+  const setup = await buildSetup({
     db,
     tenantId: scope.tenantId,
     tenantKey: scope.tenantKey,
@@ -468,6 +276,10 @@ export async function approveKnowledgeCandidate({
     candidate: updatedCandidate,
     destination,
     approval,
+    publishStatus,
+    reviewRequired,
+    maintenanceSession,
+    maintenanceDraft,
     setup,
   };
 }
@@ -481,8 +293,10 @@ export async function rejectKnowledgeCandidate({
   candidateId,
   reviewedBy = "",
   reason = "",
-}) {
-  const knowledge = createTenantKnowledgeHelpers({ db });
+}, deps = {}) {
+  const knowledge = deps.knowledgeHelper || createTenantKnowledgeHelpers({ db });
+  const buildSetup =
+    deps.buildSetupStatus || buildSetupStatus;
   const scope = await resolveTenantScope(knowledge, { tenantId, tenantKey });
 
   const normalizedCandidateId = normalizeCandidateId(candidateId);
@@ -505,7 +319,7 @@ export async function rejectKnowledgeCandidate({
     reviewedAt: new Date().toISOString(),
   });
 
-  const setup = await buildSetupStatus({
+  const setup = await buildSetup({
     db,
     tenantId: scope.tenantId,
     tenantKey: scope.tenantKey,

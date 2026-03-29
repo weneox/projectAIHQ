@@ -97,10 +97,65 @@ test("service extraction: current review payload keeps shaped review and setup",
 
 test("service extraction: projection still creates truth version and projection summaries", async () => {
   let versionInput = null;
+  let serviceRows = [];
 
   const projected = await projectSetupReviewDraftToCanonical(
     {
-      db: {},
+      db: {
+        async query(text, params = []) {
+          const sql = String(text || "").toLowerCase();
+          if (sql.includes("from tenant_setup_review_sessions")) {
+            return {
+              rows: [
+                {
+                  id: params[0],
+                },
+              ],
+            };
+          }
+          if (sql.includes("from tenants") && (sql.includes("where id = $1::uuid") || sql.includes("where tenant_key = $1"))) {
+            return {
+              rows: [
+                {
+                  id: "tenant-1",
+                  tenant_key: "alpha",
+                  company_name: "Alpha Studio",
+                },
+              ],
+            };
+          }
+          if (sql.includes("from tenant_services")) {
+            return {
+              rows: serviceRows,
+            };
+          }
+          if (sql.includes("insert into tenant_services")) {
+            serviceRows = [
+              {
+                id: "service-1",
+                tenant_key: "alpha",
+                service_key: "branding",
+                title: "Branding",
+                description: "Brand work",
+                category: "service",
+                price_from: null,
+                currency: "AZN",
+                pricing_model: "custom_quote",
+                duration_minutes: null,
+                is_active: true,
+                sort_order: 0,
+                highlights_json: [],
+                created_at: "2026-03-29T00:00:00.000Z",
+                updated_at: "2026-03-29T00:00:00.000Z",
+              },
+            ];
+            return {
+              rows: serviceRows,
+            };
+          }
+          return { rows: [] };
+        },
+      },
       actor: {
         tenantId: "tenant-1",
         tenantKey: "alpha",
@@ -124,7 +179,7 @@ test("service extraction: projection still creates truth version and projection 
           primarySourceType: "website",
           primarySourceUrl: "https://alpha.example",
         },
-        services: [],
+        services: [{ key: "branding", title: "Branding", description: "Brand work" }],
         knowledgeItems: [],
       },
       sources: [
@@ -171,8 +226,11 @@ test("service extraction: projection still creates truth version and projection 
   assert.equal(projected.projectedProfile, true);
   assert.equal(projected.projectedCapabilities, true);
   assert.equal(projected.truthVersion.id, "version-1");
+  assert.equal(projected.serviceProjection.total, 1);
   assert.equal(versionInput.reviewSessionId, "session-1");
   assert.equal(versionInput.metadataJson.reviewSessionProjection, true);
+  assert.equal(versionInput.services.length, 1);
+  assert.equal(versionInput.services[0].serviceKey, "branding");
 });
 
 test("service extraction: truth payload keeps approved-truth blocker semantics", async () => {

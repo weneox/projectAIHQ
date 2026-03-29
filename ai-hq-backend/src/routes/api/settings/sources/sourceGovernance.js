@@ -85,7 +85,7 @@ export function registerSettingsSourceGovernanceRoutes(router, context) {
         updatedBy: by,
       });
 
-      await knowledge.refreshChannelCapabilitiesFromSources({
+      const capabilityGovernance = await knowledge.refreshChannelCapabilitiesFromSources({
         tenantId: tenant.tenant_id,
         tenantKey: tenant.tenant_key,
         approvedBy: by,
@@ -98,9 +98,15 @@ export function registerSettingsSourceGovernanceRoutes(router, context) {
         isPrimary: !!item?.is_primary,
         isEnabled: !!item?.is_enabled,
         syncStatus: s(item?.sync_status),
+        capabilityGovernance: {
+          publishStatus: s(capabilityGovernance?.publishStatus),
+          reviewRequired: !!capabilityGovernance?.reviewRequired,
+          maintenanceSessionId: s(capabilityGovernance?.maintenanceSession?.id),
+          blockedReason: s(capabilityGovernance?.blockedReason),
+        },
       });
 
-      return ok(res, { item });
+      return ok(res, { item, capabilityGovernance });
     } catch (err) {
       return bad(res, 500, err.message || "failed to create source");
     }
@@ -197,7 +203,7 @@ export function registerSettingsSourceGovernanceRoutes(router, context) {
         updatedBy: by,
       });
 
-      await knowledge.refreshChannelCapabilitiesFromSources({
+      const capabilityGovernance = await knowledge.refreshChannelCapabilitiesFromSources({
         tenantId: tenant.tenant_id,
         tenantKey: tenant.tenant_key,
         approvedBy: by,
@@ -211,9 +217,15 @@ export function registerSettingsSourceGovernanceRoutes(router, context) {
         isEnabled: !!item?.is_enabled,
         syncStatus: s(item?.sync_status),
         status: s(item?.status),
+        capabilityGovernance: {
+          publishStatus: s(capabilityGovernance?.publishStatus),
+          reviewRequired: !!capabilityGovernance?.reviewRequired,
+          maintenanceSessionId: s(capabilityGovernance?.maintenanceSession?.id),
+          blockedReason: s(capabilityGovernance?.blockedReason),
+        },
       });
 
-      return ok(res, { item });
+      return ok(res, { item, capabilityGovernance });
     } catch (err) {
       return bad(res, 500, err.message || "failed to update source");
     }

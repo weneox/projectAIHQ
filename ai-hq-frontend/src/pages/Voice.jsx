@@ -1,14 +1,16 @@
 import {
+  Activity,
+  ArrowRightLeft,
+  BadgeCheck,
+  Ban,
+  Clock3,
+  Languages,
+  Mic,
   Phone,
   PhoneCall,
   PhoneOff,
-  Mic,
   Settings2,
-  Clock3,
-  Languages,
-  Activity,
   UserRound,
-  BadgeCheck,
 } from "lucide-react";
 
 import AdminPageShell from "../components/admin/AdminPageShell.jsx";
@@ -45,6 +47,10 @@ function pickSessionId(x) {
   return s(x?.id || x?.sessionId || x?.session_id);
 }
 
+function pickSessionCallId(x) {
+  return s(x?.callId || x?.call_id || x?.voiceCallId || x?.voice_call_id);
+}
+
 function pickStatus(x) {
   return s(x?.status || x?.callStatus || x?.call_status || "unknown").toLowerCase();
 }
@@ -71,6 +77,10 @@ function pickStartedAt(x) {
 
 function pickEndedAt(x) {
   return x?.endedAt || x?.ended_at || null;
+}
+
+function pickOperatorName(x) {
+  return s(x?.operatorName || x?.operator_name || x?.operatorLabel || "—");
 }
 
 function statCard(icon, label, value, hint) {
@@ -223,24 +233,62 @@ function InfoRow({ label, value }) {
   );
 }
 
+function ControlButton({
+  icon: Icon,
+  label,
+  onClick,
+  disabled = false,
+  pending = false,
+  tone = "neutral",
+}) {
+  const toneClass =
+    tone === "danger"
+      ? "border-rose-400/20 bg-rose-400/12 text-rose-100 hover:bg-rose-400/18"
+      : tone === "accent"
+        ? "border-cyan-400/20 bg-cyan-400/15 text-cyan-100 hover:bg-cyan-400/20"
+        : "border-white/10 bg-white/[0.05] text-white/82 hover:bg-white/[0.08]";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || pending}
+      className={`inline-flex items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm transition disabled:cursor-not-allowed disabled:opacity-45 ${toneClass}`}
+    >
+      <Icon className="h-4 w-4" />
+      {pending ? `${label}...` : label}
+    </button>
+  );
+}
+
 export default function Voice() {
   const {
     overviewData,
     calls,
+    liveSessions,
     liveCount,
     totalCount,
     totalMinutes,
     selectedId,
     setSelectedId,
     selectedCall,
+    selectedLiveSession,
     selectedStatus,
     selectedLive,
+    selectedLiveSessionStatus,
     events,
     sessions,
     surface,
     detailSurface,
     actionState,
     joinSelectedCall,
+    requestSelectedLiveHandoff,
+    takeoverSelectedLiveSession,
+    endSelectedLiveSession,
+    canControlSelectedLiveSession,
+    canRequestHandoff,
+    canTakeover,
+    canEnd,
   } = useVoiceSurface();
 
   return (
@@ -249,7 +297,7 @@ export default function Voice() {
         <AdminPageShell
           eyebrow="Voice ops"
           title="Voice Center"
-          description="Active calls, live events, session timeline, and operator join controls."
+          description="Active calls, live events, session timeline, and operator live controls."
           surface={surface}
           refreshLabel="Refresh voice surface"
           unavailableMessage="Voice operations are temporarily unavailable."
@@ -271,6 +319,79 @@ export default function Voice() {
             {statCard(Clock3, "Talk minutes", surface.loading ? "..." : String(overviewData?.totalMinutes ?? totalMinutes), "Total tracked duration")}
             {statCard(Languages, "Default language", s(overviewData?.defaultLanguage || overviewData?.language || "—"), "Tenant voice overview")}
           </div>
+
+          <section className="mb-6 rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <div className="text-lg font-semibold text-white">Live session controls</div>
+                <div className="mt-1 text-sm text-white/45">
+                  Canonical live-session state and operator interventions.
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/50">
+                {surface.loading ? "Loading..." : `${liveSessions.length} live session${liveSessions.length === 1 ? "" : "s"}`}
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+              <div className="grid gap-3 md:grid-cols-2">
+                <InfoTile label="Selected live session" value={pickSessionId(selectedLiveSession) || "No live session selected"} />
+                <InfoTile label="Live session state" value={selectedLiveSessionStatus || "—"} />
+                <InfoTile label="Operator" value={pickOperatorName(selectedLiveSession)} />
+                <InfoTile label="Call link" value={pickSessionCallId(selectedLiveSession) || selectedId || "—"} />
+              </div>
+
+              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(34,211,238,0.08),rgba(255,255,255,0.02))] p-4">
+                {surface.saveError ? (
+                  <div className="mb-3 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-3 py-3 text-sm text-rose-100">
+                    {surface.saveError}
+                  </div>
+                ) : null}
+                {surface.saveSuccess ? (
+                  <div className="mb-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-3 text-sm text-emerald-100">
+                    {surface.saveSuccess}
+                  </div>
+                ) : null}
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <ControlButton
+                    icon={ArrowRightLeft}
+                    label="Request handoff"
+                    onClick={requestSelectedLiveHandoff}
+                    disabled={!canRequestHandoff}
+                    pending={actionState.isActionPending("handoff")}
+                  />
+                  <ControlButton
+                    icon={PhoneCall}
+                    label="Takeover"
+                    onClick={takeoverSelectedLiveSession}
+                    disabled={!canTakeover}
+                    pending={actionState.isActionPending("takeover")}
+                    tone="accent"
+                  />
+                  <ControlButton
+                    icon={Ban}
+                    label="End"
+                    onClick={endSelectedLiveSession}
+                    disabled={!canEnd}
+                    pending={actionState.isActionPending("end")}
+                    tone="danger"
+                  />
+                </div>
+
+                {!canControlSelectedLiveSession ? (
+                  <div className="mt-3 text-xs text-white/42">
+                    No canonical live session is selected for the current call, so live controls are unavailable.
+                  </div>
+                ) : (
+                  <div className="mt-3 text-xs text-white/42">
+                    Voice live-session state refreshes automatically while active sessions exist.
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
 
           <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
             <section className="rounded-[30px] border border-white/10 bg-white/[0.03] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">

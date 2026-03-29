@@ -491,6 +491,8 @@ function isMeaningfulPromotionPayload({ title = "", valueText = "", valueJson = 
 }
 
 function shouldBlockPromotion(result = {}) {
+  if (s(obj(result.projection).maintenanceSession?.id)) return true;
+
   const category = normalizePromotionCategory(result);
   const text = deriveBetterValueText(result);
   const title = deriveBetterFactTitle(result);
@@ -951,6 +953,82 @@ function buildPublishReceipt({
   reviewerName = "",
 } = {}) {
   const projection = obj(result.projection, {});
+  const maintenanceSession = obj(projection.maintenanceSession);
+  const maintenanceDraft = obj(projection.maintenanceDraft);
+
+  if (maintenanceSession.id) {
+    return {
+      approvalActionResult: s(
+        result.approval?.decision || result.approval?.action || "approved"
+      ),
+      publishStatus: "review_required",
+      truthVersionId: "",
+      knowledgeItemId: s(result.knowledge?.id),
+      runtimeProjectionId: "",
+      runtimeRefreshResult: "deferred_to_review",
+      projectionHealthStatus: "deferred",
+      projectionHealthLabel: "Deferred",
+      actual: {
+        canonical: {
+          areas: [],
+          paths: uniqStrings(impact.canonicalPaths || impact.canonical_paths),
+        },
+        runtime: {
+          areas: [],
+          paths: uniqStrings(impact.runtimePaths || impact.runtime_paths),
+        },
+        channels: {
+          affectedSurfaces: [],
+        },
+        policy: {
+          autonomyDelta: "unknown",
+          executionPostureDelta: "unknown",
+          riskDelta: "unknown",
+        },
+      },
+      previewComparison: {
+        status: "unknown",
+        canonical: comparePreviewToActualDimension(
+          publishPreview?.canonical?.areas,
+          []
+        ),
+        runtime: comparePreviewToActualDimension(publishPreview?.runtime?.areas, []),
+        channels: comparePreviewToActualDimension(
+          publishPreview?.channels?.affectedSurfaces,
+          []
+        ),
+        previewHadUnknowns: true,
+      },
+      verification: {
+        truthVersionCreated: false,
+        runtimeProjectionRefreshed: false,
+        runtimeControlWarnings: [
+          "Approved candidate was staged into a governed maintenance review session.",
+        ],
+        repairRecommendation: "",
+      },
+      actor: s(
+        reviewerName || result.approval?.reviewer_name || result.approval?.reviewerName
+      ),
+      timestamp: s(
+        result.approval?.created_at ||
+          result.approval?.createdAt ||
+          new Date().toISOString()
+      ),
+      summaryExplanation: `Approved candidate was staged in maintenance review session ${maintenanceSession.id} at draft version ${Number(maintenanceDraft.version || 0) || 1}. Publish a governed truth update before canonical truth and runtime projection change.`,
+      maintenanceSession: {
+        id: s(maintenanceSession.id),
+        mode: s(maintenanceSession.mode || "refresh"),
+        status: s(maintenanceSession.status || "ready"),
+        currentStep: s(maintenanceSession.currentStep || "maintenance_review"),
+        sourceCurrentTruthVersionId: s(
+          maintenanceSession.sourceCurrentTruthVersionId
+        ),
+        draftVersion: Number(maintenanceDraft.version || 0) || 1,
+      },
+    };
+  }
+
   const runtimeProjection = obj(projection.runtimeProjection, {});
   const runtimeHealth = obj(runtimeProjection.health, {});
   const actualCanonicalAreas = uniqStrings([
@@ -1603,16 +1681,21 @@ export function registerSettingsSourceKnowledgeRoutes(router, context) {
         approvedBy: by,
       });
 
-      await auditSafe(db, req, tenant, "settings.knowledge.approved", "tenant_knowledge_candidate", candidateId, {
-        category: s(result?.knowledge?.category || result?.candidate?.category),
-        itemKey: s(result?.knowledge?.item_key || result?.candidate?.item_key),
-        knowledgeItemId: s(result?.knowledge?.id),
-        approvalId: s(result?.approval?.id),
-        promotedBusinessFactId: s(promotedBusinessFact?.id),
-        reviewerName,
-        publishPreview: previewSummary,
-        publishReceipt,
-      });
+        await auditSafe(db, req, tenant, "settings.knowledge.approved", "tenant_knowledge_candidate", candidateId, {
+          category: s(result?.knowledge?.category || result?.candidate?.category),
+          itemKey: s(result?.knowledge?.item_key || result?.candidate?.item_key),
+          knowledgeItemId: s(result?.knowledge?.id),
+          approvalId: s(result?.approval?.id),
+          promotedBusinessFactId: s(promotedBusinessFact?.id),
+          reviewerName,
+          publishPreview: previewSummary,
+          publishReceipt,
+          maintenanceReviewId: s(publishReceipt?.maintenanceSession?.id),
+          maintenanceDraftVersion: n(
+            publishReceipt?.maintenanceSession?.draftVersion,
+            0
+          ),
+        });
 
       return ok(res, {
         ...result,

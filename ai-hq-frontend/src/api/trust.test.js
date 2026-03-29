@@ -304,6 +304,10 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
   expect(normalized.summary.readiness.blocked).toBe(true);
   expect(normalized.summary.readiness.blockedItems[0].reasonCode).toBe("projection_missing");
   expect(normalized.summary.sources.total).toBe(2);
+  expect(normalized.summary.runtimeProjection.authority?.source).toBe(
+    "approved_runtime_projection"
+  );
+  expect(normalized.summary.runtimeProjection.authority?.availableForApprovedRuntime).toBe(true);
   expect(normalized.summary.runtimeProjection.health.autonomousAllowed).toBe(true);
   expect(normalized.summary.runtimeProjection.health.affectedSurfaces).toEqual(["inbox", "voice"]);
   expect(normalized.summary.truth.approvalPolicy.strictestOutcome).toBe("review_required");
@@ -360,6 +364,7 @@ it("normalizeTrustViewResponse keeps unknown policy posture stable when payloads
   expect(normalized.summary.channelAutonomy.items).toEqual([]);
   expect(normalized.summary.policyControls.items).toEqual([]);
   expect(normalized.summary.decisionAudit.items).toEqual([]);
+  expect(normalized.summary.runtimeProjection.authority).toBeNull();
 });
 
 it("normalizeTrustViewResponse keeps sparse event drilldown payloads safe", () => {

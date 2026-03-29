@@ -429,7 +429,7 @@ export default function TruthViewerPage() {
         actionResult = await approveTruthReviewCandidate(candidateId, {
           reason: "Approved from Truth Review Workbench",
           metadataJson: {
-            publishPreview: item?.publishPreview?.auditSummary || {},
+            publishPreview: item?.publishPreview || {},
           },
         });
       } else if (actionType === "reject") {
@@ -453,7 +453,10 @@ export default function TruthViewerPage() {
         error: "",
         saveSuccess:
           actionType === "approve"
-            ? "Candidate approved and truth/runtime surfaces refreshed."
+            ? String(actionResult?.publishReceipt?.publishStatus || "").trim().toLowerCase() ===
+              "review_required"
+              ? "Candidate approved into a governed maintenance draft. Published truth and runtime remain unchanged until that review is finalized."
+              : "Candidate approved and truth/runtime surfaces refreshed."
             : actionType === "reject"
               ? "Candidate rejected. Approved truth remains unchanged."
               : actionType === "keep_quarantined"

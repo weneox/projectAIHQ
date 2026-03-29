@@ -185,7 +185,7 @@ export async function getTenantLocations() {
 export async function saveTenantLocation(payload) {
   const j = await apiPost(`/api/settings/locations`, payload);
   ensureOk(j, "Failed to save location");
-  return j?.location || j;
+  return j;
 }
 
 export async function deleteTenantLocation(id) {
@@ -208,7 +208,7 @@ export async function getTenantContacts() {
 export async function saveTenantContact(payload) {
   const j = await apiPost(`/api/settings/contacts`, payload);
   ensureOk(j, "Failed to save contact");
-  return j?.contact || j;
+  return j;
 }
 
 export async function deleteTenantContact(id) {

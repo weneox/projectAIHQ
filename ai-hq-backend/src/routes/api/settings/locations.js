@@ -4,9 +4,11 @@ import express from "express";
 import { dbGetTenantByKey } from "../../../db/helpers/tenants.js";
 import {
   dbListTenantLocations,
-  dbUpsertTenantLocation,
-  dbDeleteTenantLocation,
 } from "../../../db/helpers/tenantBusinessBrain.js";
+import {
+  listSetupLocationsFromDraftOrCanonical,
+  stageLocationMutationInMaintenanceSession,
+} from "../../../services/workspace/setup/draftBusinessIdentity.js";
 import {
   ok,
   bad,
@@ -41,10 +43,19 @@ export function locationsSettingsRoutes({ db }) {
         return res.status(404).json({ ok: false, error: "Tenant not found" });
       }
 
-      const locations = await dbListTenantLocations(db, tenant.id);
+      const data = await listSetupLocationsFromDraftOrCanonical({
+        db,
+        actor: {
+          tenantId: tenant.id,
+          tenantKey,
+        },
+      });
 
       return ok(res, {
-        locations,
+        locations: data.locations,
+        source: data.source,
+        staged: data.staged,
+        canonicalWriteDeferred: data.canonicalWriteDeferred,
         viewerRole: isInternalServiceRequest(req) ? "internal" : getUserRole(req),
       });
     } catch (err) {
@@ -68,7 +79,14 @@ export function locationsSettingsRoutes({ db }) {
       }
 
       const body = safeJsonObj(req.body, {});
-      const saved = await dbUpsertTenantLocation(db, tenant.id, {
+      const staged = await stageLocationMutationInMaintenanceSession({
+        db,
+        actor: {
+          tenantId: tenant.id,
+          tenantKey,
+        },
+        mode: "upsert",
+        body: {
         location_key: cleanLower(body.location_key || body.locationKey),
         title: cleanString(body.title),
         country_code: cleanNullableString(body.country_code || body.countryCode),
@@ -83,9 +101,10 @@ export function locationsSettingsRoutes({ db }) {
         enabled: normalizeBool(body.enabled, true),
         sort_order: normalizeNumber(body.sort_order, 0),
         meta: safeJsonObj(body.meta, {}),
+        },
       });
 
-      if (!saved?.id) {
+      if (!staged?.stagedItem?.id && !staged?.stagedItem?.locationKey) {
         return bad(res, "Failed to save location");
       }
 
@@ -93,15 +112,25 @@ export function locationsSettingsRoutes({ db }) {
         db,
         req,
         tenant,
-        "settings.location.updated",
-        "tenant_location",
-        saved.id,
+        "settings.location.staged_for_review",
+        "tenant_setup_review_draft",
+        staged.maintenanceSession?.id,
         {
-          locationKey: saved.location_key,
+          locationKey: staged.stagedItem?.locationKey,
+          publishStatus: staged.publishStatus,
         }
       );
 
-      return ok(res, { location: saved, viewerRole: role });
+      return ok(res, {
+        location: staged.stagedItem,
+        publishStatus: staged.publishStatus,
+        reviewRequired: staged.reviewRequired,
+        maintenanceSession: staged.maintenanceSession,
+        maintenanceDraft: staged.maintenanceDraft,
+        liveMutationDeferred: staged.liveMutationDeferred,
+        runtimeProjectionRefreshed: staged.runtimeProjectionRefreshed,
+        viewerRole: role,
+      });
     } catch (err) {
       return serverErr(res, err?.message || "Failed to save location");
     }
@@ -125,21 +154,49 @@ export function locationsSettingsRoutes({ db }) {
         return res.status(404).json({ ok: false, error: "Tenant not found" });
       }
 
-      const deleted = await dbDeleteTenantLocation(db, tenant.id, locationId);
-      if (!deleted) {
+      const existingLocations = await dbListTenantLocations(db, tenant.id);
+      const target = existingLocations.find(
+        (item) => cleanString(item.id) === locationId
+      );
+      if (!target?.id) {
         return res.status(404).json({ ok: false, error: "Location not found" });
       }
+
+      const staged = await stageLocationMutationInMaintenanceSession({
+        db,
+        actor: {
+          tenantId: tenant.id,
+          tenantKey,
+        },
+        mode: "delete",
+        locationId: target.location_key || target.id,
+      });
 
       await auditSafe(
         db,
         req,
         tenant,
-        "settings.location.deleted",
-        "tenant_location",
-        locationId
+        "settings.location.delete_staged_for_review",
+        "tenant_setup_review_draft",
+        staged.maintenanceSession?.id,
+        {
+          locationKey: target.location_key,
+          publishStatus: staged.publishStatus,
+        }
       );
 
-      return ok(res, { deleted: true, id: locationId, viewerRole: role });
+      return ok(res, {
+        deleted: true,
+        id: locationId,
+        stagedDeletion: true,
+        publishStatus: staged.publishStatus,
+        reviewRequired: staged.reviewRequired,
+        maintenanceSession: staged.maintenanceSession,
+        maintenanceDraft: staged.maintenanceDraft,
+        liveMutationDeferred: staged.liveMutationDeferred,
+        runtimeProjectionRefreshed: staged.runtimeProjectionRefreshed,
+        viewerRole: role,
+      });
     } catch (err) {
       return serverErr(res, err?.message || "Failed to delete location");
     }

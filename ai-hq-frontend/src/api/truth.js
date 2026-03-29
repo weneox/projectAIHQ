@@ -1,5 +1,6 @@
 import { apiGet, apiPost } from "./client.js";
 import { getSetupTruth } from "./setup.js";
+import { validateSetupTruthPayload } from "@aihq/shared-contracts/setup";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -453,18 +454,18 @@ function normalizeTruthReviewWorkbench(payload = {}) {
   const root = obj(payload);
   const summary = obj(root.summary);
   return {
-    tenantId: s(root.tenantId || root.tenant_id),
-    tenantKey: s(root.tenantKey || root.tenant_key),
-    viewerRole: s(root.viewerRole || root.viewer_role).toLowerCase(),
+    tenantId: s(root.tenantId),
+    tenantKey: s(root.tenantKey),
+    viewerRole: s(root.viewerRole).toLowerCase(),
     count: n(root.count),
     summary: {
       total: n(summary.total),
       pending: n(summary.pending),
       quarantined: n(summary.quarantined),
       conflicting: n(summary.conflicting),
-      autoApprovable: n(summary.autoApprovable || summary.auto_approvable),
-      blockedHighRisk: n(summary.blockedHighRisk || summary.blocked_high_risk),
-      highRisk: n(summary.highRisk || summary.high_risk),
+      autoApprovable: n(summary.autoApprovable),
+      blockedHighRisk: n(summary.blockedHighRisk),
+      highRisk: n(summary.highRisk),
     },
     items: arr(root.items).map(normalizeReviewWorkbenchItem),
   };
@@ -641,14 +642,11 @@ function normalizeFieldChanges(value = []) {
 
 function normalizeVersionMeta(value = {}, fallbackId = "") {
   const item = obj(value);
-  const version = s(item.version || item.revision || item.id || fallbackId);
-  const profileStatus = s(item.profileStatus || item.status);
+  const version = s(item.versionId || item.version || item.id || fallbackId);
+  const profileStatus = s(item.profileStatus);
   const versionLabel = s(
     item.versionLabel ||
-      item.version_label ||
-      item.label ||
-      (version ? `Truth version ${version}` : "") ||
-      (profileStatus ? `Truth version (${profileStatus})` : "")
+      (version ? `Truth version ${version}` : "")
   );
 
   return {
@@ -656,20 +654,9 @@ function normalizeVersionMeta(value = {}, fallbackId = "") {
     version,
     versionLabel: versionLabel || "Truth version",
     profileStatus,
-    approvedAt: s(item.approvedAt || item.createdAt || item.updatedAt),
-    approvedBy: s(
-      item.approvedBy ||
-        item.actor ||
-        item.createdBy ||
-        item.updatedBy ||
-        item.user
-    ),
-    sourceSummary: summarizeSourceSummary(
-      item.sourceSummary ||
-        item.source_summary ||
-        item.sourceSummaryJson ||
-        item.source_summary_json
-    ),
+    approvedAt: s(item.approvedAt),
+    approvedBy: s(item.approvedBy),
+    sourceSummary: summarizeSourceSummary(item.sourceSummary),
   };
 }
 
@@ -703,27 +690,18 @@ function normalizeHistory(items = []) {
 
       return {
         ...meta,
-        previousVersionId: s(item.previousVersionId || item.previous_version_id),
-        sourceSummaryData: pickFirstObject(
-          item.sourceSummary,
-          item.source_summary,
-          item.sourceSummaryJson,
-          item.source_summary_json
-        ),
-        metadata: pickFirstObject(item.metadata, item.metadata_json),
+        previousVersionId: s(item.previousVersionId),
+        sourceSummaryData: obj(item.sourceSummary),
+        metadata: obj(item.metadata),
         governance: pickFirstObject(
           item.governance,
           item.sourceSummary?.governance,
-          item.source_summary?.governance,
-          item.metadata?.governance,
-          item.metadata_json?.governance
+          item.metadata?.governance
         ),
         finalizeImpact: pickFirstObject(
           item.finalizeImpact,
           item.sourceSummary?.finalizeImpact,
-          item.source_summary?.finalizeImpact,
-          item.metadata?.finalizeImpact,
-          item.metadata_json?.finalizeImpact
+          item.metadata?.finalizeImpact
         ),
         changedFields,
         fieldChanges,
@@ -968,43 +946,18 @@ function normalizeRollbackReceipt(value = {}) {
 
 function normalizeCompareResponse(payload = {}, versionId = "", compareTo = "") {
   const root = obj(payload);
-  const detail = pickFirstObject(
-    root.detail,
-    root.version,
-    root.truthVersion,
-    root.item,
-    root
-  );
-  const compare = pickFirstObject(
-    root.compare,
-    root.comparedVersion,
-    root.compared_version,
-    root.previousVersion,
-    root.previous_version
-  );
-  const diff = pickFirstObject(root.diff, detail.diff);
+  const detail = obj(root.truthVersion);
+  const comparedVersion = obj(root.previousTruthVersion);
+  const currentVersion = obj(root.currentTruthVersion);
+  const compare = obj(root.compare);
+  const diff = obj(detail.diff);
   const changedFields = normalizeChangedFields(
-    root.changedFields ||
-      root.changed_fields ||
-      detail.changedFields ||
-      detail.changed_fields ||
-      diff.changedFields ||
-      diff.changed_fields
+    compare.changedFields || detail.changedFields || diff.changedFields
   );
   const fieldChanges = normalizeFieldChanges(
-    root.fieldChanges ||
-      root.field_changes ||
-      detail.fieldChanges ||
-      detail.field_changes ||
-      diff.fieldChanges ||
-      diff.field_changes
+    compare.fieldChanges || detail.fieldChanges || diff.fieldChanges
   );
-  const sectionChanges = arr(
-    root.sectionChanges ||
-      root.section_changes ||
-      diff.sectionChanges ||
-      diff.section_changes
-  )
+  const sectionChanges = arr(root.sectionChanges || compare.sectionChanges)
     .map((entry) => {
       const item = obj(entry);
       return {
@@ -1017,42 +970,25 @@ function normalizeCompareResponse(payload = {}, versionId = "", compareTo = "") 
 
   return {
     selectedVersion: normalizeVersionMeta(detail, versionId),
-    comparedVersion: normalizeVersionMeta(compare, compareTo),
-    currentVersion: normalizeVersionMeta(
-      pickFirstObject(root.currentVersion, root.current_version, detail.currentVersion)
+    comparedVersion: normalizeVersionMeta(
+      Object.keys(comparedVersion).length
+        ? comparedVersion
+        : { id: s(compare.previousVersionId || compareTo) },
+      compareTo
     ),
+    currentVersion: normalizeVersionMeta(currentVersion),
     changedFields,
     fieldChanges,
     sectionChanges,
-    versionDiff: normalizeVersionDiff(
-      root.versionDiff || root.version_diff || detail.versionDiff || detail.version_diff
-    ),
-    rollbackPreview: normalizeRollbackPreview(
-      root.rollbackPreview ||
-        root.rollback_preview ||
-        detail.rollbackPreview ||
-        detail.rollback_preview
-    ),
+    versionDiff: normalizeVersionDiff(root.versionDiff),
+    rollbackPreview: normalizeRollbackPreview(root.rollbackPreview),
     rollbackAction: normalizeRollbackPreview({
-      action:
-        root.rollbackAction ||
-        root.rollback_action ||
-        detail.rollbackAction ||
-        detail.rollback_action ||
-        root.rollbackPreview?.action ||
-        root.rollback_preview?.action ||
-        detail.rollbackPreview?.action ||
-        detail.rollback_preview?.action,
+      action: root.rollbackAction || root.rollbackPreview?.action,
     }).action,
-    rollbackReceipt: normalizeRollbackReceipt(
-      root.rollbackReceipt ||
-        root.rollback_receipt ||
-        detail.rollbackReceipt ||
-        detail.rollback_receipt
-    ),
+    rollbackReceipt: normalizeRollbackReceipt(root.rollbackReceipt),
     diffSummary: summarizeVersionDiff({
       ...detail,
-      ...diff,
+      ...compare,
       changedFields,
     }),
     hasStructuredDiff:
@@ -1064,38 +1000,25 @@ function normalizeCompareResponse(payload = {}, versionId = "", compareTo = "") 
 }
 
 function normalizeTruthResponse(payload = {}, source = "") {
-  const root = obj(payload);
-  const truth = pickFirstObject(root.truth, root.snapshot);
-  const readiness = pickFirstObject(truth.readiness, root.readiness);
+  const checked = validateSetupTruthPayload(payload);
+  if (!checked.ok) {
+    throw new Error(`Canonical setup truth payload invalid: ${checked.error}`);
+  }
 
-  const profile = pickFirstObject(
-    truth.profile,
-    root.profile
-  );
-
-  const fieldProvenance = pickFirstObject(
-    truth.fieldProvenance,
-    truth.field_provenance,
-    root.fieldProvenance,
-    root.field_provenance
-  );
-
-  const history = normalizeHistory(
-    pickFirstArray(
-      truth.history,
-      root.history,
-      truth.versions
-    )
-  );
+  const truth = checked.value.truth;
+  const readiness = obj(truth.readiness);
+  const profile = obj(truth.profile);
+  const fieldProvenance = obj(truth.fieldProvenance);
+  const history = normalizeHistory(truth.history);
 
   const fields = [
-    ["Company name", normalizeFieldValue(profile.companyName || profile.name), "companyName"],
-    ["Short business summary", normalizeFieldValue(profile.description || profile.summaryShort || profile.companySummaryShort), "description"],
+    ["Company name", normalizeFieldValue(profile.companyName), "companyName"],
+    ["Short business summary", normalizeFieldValue(profile.description || profile.summaryShort), "description"],
     ["Website URL", normalizeFieldValue(profile.websiteUrl), "websiteUrl"],
     ["Primary phone", normalizeFieldValue(profile.primaryPhone), "primaryPhone"],
     ["Primary email", normalizeFieldValue(profile.primaryEmail), "primaryEmail"],
     ["Primary address", normalizeFieldValue(profile.primaryAddress), "primaryAddress"],
-    ["Primary language", normalizeFieldValue(profile.mainLanguage || profile.language || profile.primaryLanguage), "mainLanguage"],
+    ["Primary language", normalizeFieldValue(profile.mainLanguage), "mainLanguage"],
     ["Services", normalizeFieldValue(profile.services), "services"],
     ["Products", normalizeFieldValue(profile.products), "products"],
     ["Pricing", normalizeFieldValue(profile.pricingHints), "pricingHints"],
@@ -1111,24 +1034,17 @@ function normalizeTruthResponse(payload = {}, source = "") {
     .filter((field) => field.value);
 
   const approval = {
-    approvedAt: s(truth.approvedAt || root.approvedAt),
-    approvedBy: s(truth.approvedBy || root.approvedBy),
-    version: s(truth.profileStatus || root.profileStatus),
+    approvedAt: s(truth.approvedAt),
+    approvedBy: s(truth.approvedBy),
+    version: s(truth.profileStatus),
   };
-  const sourceSummary = pickFirstObject(
-    truth.sourceSummary,
-    truth.source_summary,
-    root.sourceSummary,
-    root.source_summary
-  );
-  const metadata = pickFirstObject(truth.metadata, root.metadata);
+  const sourceSummary = obj(truth.sourceSummary);
+  const metadata = obj(truth.metadata);
   const governance = pickFirstObject(
-    truth.governance,
     sourceSummary.governance,
     metadata.governance
   );
   const finalizeImpact = pickFirstObject(
-    truth.finalizeImpact,
     sourceSummary.finalizeImpact,
     metadata.finalizeImpact
   );
@@ -1151,34 +1067,21 @@ function normalizeTruthResponse(payload = {}, source = "") {
       disposition: s(governance.disposition).toLowerCase(),
       promotable: governance.promotable === true,
       quarantine: governance.quarantine === true,
-      quarantineReasons: normalizeStringList(
-        governance.quarantineReasons || governance.quarantine_reasons
-      ),
+      quarantineReasons: normalizeStringList(governance.quarantineReasons),
       quarantinedClaimCount:
-        Number(
-          governance.quarantinedClaimCount || governance.quarantined_claim_count
-        ) || arr(governance.quarantinedClaims || governance.quarantined_claims).length,
+        Number(governance.quarantinedClaimCount) ||
+        arr(governance.quarantinedClaims).length,
       trust: obj(governance.trust),
       freshness: obj(governance.freshness),
       support: obj(governance.support),
       conflict: obj(governance.conflict),
     },
     finalizeImpact: {
-      canonicalAreas: normalizeStringList(
-        finalizeImpact.canonicalAreas || finalizeImpact.canonical_areas
-      ),
-      runtimeAreas: normalizeStringList(
-        finalizeImpact.runtimeAreas || finalizeImpact.runtime_areas
-      ),
-      canonicalPaths: normalizeStringList(
-        finalizeImpact.canonicalPaths || finalizeImpact.canonical_paths
-      ),
-      runtimePaths: normalizeStringList(
-        finalizeImpact.runtimePaths || finalizeImpact.runtime_paths
-      ),
-      affectedSurfaces: normalizeStringList(
-        finalizeImpact.affectedSurfaces || finalizeImpact.affected_surfaces
-      ),
+      canonicalAreas: normalizeStringList(finalizeImpact.canonicalAreas),
+      runtimeAreas: normalizeStringList(finalizeImpact.runtimeAreas),
+      canonicalPaths: normalizeStringList(finalizeImpact.canonicalPaths),
+      runtimePaths: normalizeStringList(finalizeImpact.runtimePaths),
+      affectedSurfaces: normalizeStringList(finalizeImpact.affectedSurfaces),
     },
     readiness,
   };
@@ -1287,21 +1190,31 @@ export async function getCanonicalTruthSnapshot() {
   const truth = await getSetupTruth().catch(() => null);
   if (truth) {
     const normalized = normalizeTruthResponse(truth, "/api/setup/truth/current");
-    const approvedTruthUnavailable = !(
-      normalized.hasTruth || normalized.hasApprovalMeta || normalized.hasHistory
-    );
-    const unavailableReasonCode = approvedTruthUnavailable ? "approved_truth_empty" : "";
+    const readiness = obj(normalized.readiness);
+    const approvedTruthUnavailable =
+      s(readiness.status).toLowerCase() === "blocked" &&
+      s(readiness.reasonCode).toLowerCase() === "approved_truth_unavailable";
+    const emptyApprovedTruth =
+      !approvedTruthUnavailable &&
+      !(normalized.hasTruth || normalized.hasApprovalMeta || normalized.hasHistory);
+    const unavailableReasonCode = approvedTruthUnavailable
+      ? s(readiness.reasonCode)
+      : emptyApprovedTruth
+        ? "approved_truth_empty"
+        : "";
     const notices = approvedTruthUnavailable
-      ? ["Approved truth is unavailable. The backend returned no approved truth fields."]
-      : [];
+      ? [s(readiness.message) || "Approved truth is unavailable. No non-approved fallback data is being shown."]
+      : emptyApprovedTruth
+        ? ["Approved truth is unavailable. The backend returned no approved truth fields."]
+        : [];
     return {
       ...normalized,
-      approvedTruthUnavailable,
+      approvedTruthUnavailable: approvedTruthUnavailable || emptyApprovedTruth,
       unavailableReasonCode,
       notices,
-      readiness: Object.keys(obj(normalized.readiness)).length > 0
-        ? normalized.readiness
-        : approvedTruthUnavailable
+      readiness: Object.keys(readiness).length > 0
+        ? readiness
+        : approvedTruthUnavailable || emptyApprovedTruth
         ? buildApprovedTruthUnavailableSnapshot(
             unavailableReasonCode || "approved_truth_empty",
             notices[0] || "Approved truth is unavailable. The backend returned no approved truth fields."

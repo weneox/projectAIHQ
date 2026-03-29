@@ -1,3 +1,8 @@
+import {
+  validateOperationalRepairAction,
+  validateReadinessSurface,
+} from "@aihq/shared-contracts/operations";
+
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
@@ -12,6 +17,22 @@ function obj(v) {
 
 function normalizeAction(value = {}) {
   const action = obj(value);
+  if (!Object.keys(action).length) {
+    return {
+      id: "",
+      kind: "focus",
+      label: "Review blocker",
+      requiredRole: "operator",
+      allowed: false,
+      target: {},
+    };
+  }
+
+  const checked = validateOperationalRepairAction(action);
+  if (checked.ok) {
+    return checked.value;
+  }
+
   return {
     id: s(action.id),
     kind: s(action.kind || "focus").toLowerCase(),
@@ -24,7 +45,7 @@ function normalizeAction(value = {}) {
 
 function normalizeBlocker(value = {}) {
   const item = obj(value);
-  const action = normalizeAction(item.action || item.nextAction || item.repairAction);
+  const action = normalizeAction(item.nextAction || item.action || item.repairAction);
 
   return {
     blocked:
@@ -42,30 +63,44 @@ function normalizeBlocker(value = {}) {
     suggestedRepairActionId: s(
       item.suggestedRepairActionId || item.suggested_repair_action_id || action.id
     ),
+    nextAction: action,
     action,
   };
 }
 
 export function createReadinessViewModel(readiness = {}, blockersOverride) {
   const source = obj(readiness);
-  const incomingBlockers =
-    blockersOverride !== undefined
-      ? arr(blockersOverride)
-      : Array.isArray(source.blockers)
-      ? source.blockers
-      : arr(source.blockers?.items);
-  const blockers = incomingBlockers.map((item) => normalizeBlocker(item));
+  const contractInput =
+    blockersOverride === undefined
+      ? source
+      : {
+          ...source,
+          blockers: arr(blockersOverride),
+        };
+  const checked = validateReadinessSurface(contractInput);
+  const safeValue = checked.ok
+    ? checked.value
+    : {
+        status: s(source.status || "ready").toLowerCase(),
+        intentionallyUnavailable: source.intentionallyUnavailable === true,
+        reasonCode: s(source.reasonCode || source.reason_code).toLowerCase(),
+        message: s(source.message),
+        blockers: [],
+      };
+  const blockers = arr(safeValue.blockers).map((item) => normalizeBlocker(item));
   const blockedItems = blockers.filter((item) => item.blocked);
-  const status = s(source.status || (blockedItems.length ? "blocked" : "ready")).toLowerCase();
+  const status = s(safeValue.status || (blockedItems.length ? "blocked" : "ready")).toLowerCase();
 
   return {
     status,
     blocked: source.blocked === true || status === "blocked" || blockedItems.length > 0,
-    intentionallyUnavailable: source.intentionallyUnavailable === true,
-    reasonCode: s(source.reasonCode || source.reason_code).toLowerCase(),
-    message: s(source.message),
+    intentionallyUnavailable: safeValue.intentionallyUnavailable === true,
+    reasonCode: s(safeValue.reasonCode).toLowerCase(),
+    message: s(safeValue.message),
     blockers,
     blockedItems,
-    repairActions: arr(source.repairActions).map((item) => normalizeAction(item)),
+    repairActions: arr(source.repairActions)
+      .map((item) => normalizeAction(item))
+      .filter((item) => item.id || item.label),
   };
 }

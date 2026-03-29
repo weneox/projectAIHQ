@@ -55,6 +55,17 @@ export async function listVoiceCallSessions(callId, params = {}) {
   return normalizeList(j, "sessions");
 }
 
+export async function listLiveVoiceSessions(params = {}) {
+  const j = await apiGet(`/api/voice/live${qs(params)}`);
+  return normalizeList(j, "sessions");
+}
+
+export async function getLiveVoiceSession(sessionId) {
+  if (!sessionId) throw new Error("sessionId is required");
+  const j = await apiGet(`/api/voice/live/${encodeURIComponent(sessionId)}`);
+  return unwrapObject(j, "session");
+}
+
 export async function getVoiceSettings(params = {}) {
   const j = await apiGet(`/api/voice/settings${qs(params)}`);
   return unwrapObject(j, "settings");
@@ -68,6 +79,21 @@ export async function updateVoiceSettings(body = {}) {
 export async function joinVoiceCall(callId, body = {}) {
   if (!callId) throw new Error("callId is required");
   return apiPost(`/api/voice/calls/${encodeURIComponent(callId)}/join`, body);
+}
+
+export async function requestVoiceHandoff(sessionId, body = {}) {
+  if (!sessionId) throw new Error("sessionId is required");
+  return apiPost(`/api/voice/live/${encodeURIComponent(sessionId)}/request-handoff`, body);
+}
+
+export async function takeoverVoiceSession(sessionId, body = {}) {
+  if (!sessionId) throw new Error("sessionId is required");
+  return apiPost(`/api/voice/live/${encodeURIComponent(sessionId)}/takeover`, body);
+}
+
+export async function endLiveVoiceSession(sessionId, body = {}) {
+  if (!sessionId) throw new Error("sessionId is required");
+  return apiPost(`/api/voice/live/${encodeURIComponent(sessionId)}/end`, body);
 }
 
 export async function endVoiceCall(callId, body = {}) {

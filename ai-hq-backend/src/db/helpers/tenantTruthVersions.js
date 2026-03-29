@@ -181,26 +181,157 @@ export function buildCanonicalTruthCapabilities(capabilities = {}) {
   });
 }
 
+export function buildCanonicalTruthServices(services = []) {
+  return arr(services)
+    .map((item) =>
+      compactObject({
+        id: s(item?.id || item?.serviceId || item?.service_id),
+        serviceKey: s(item?.serviceKey || item?.service_key || item?.key),
+        title: s(item?.title || item?.name),
+        description: s(item?.description || item?.summary),
+        category: s(item?.category),
+        priceFrom:
+          item?.priceFrom ?? item?.price_from ?? item?.startingPrice ?? item?.starting_price,
+        currency: s(item?.currency || "AZN").toUpperCase() || "AZN",
+        pricingModel:
+          s(item?.pricingModel || item?.pricing_model || "custom_quote").toLowerCase() ||
+          "custom_quote",
+        durationMinutes: item?.durationMinutes ?? item?.duration_minutes,
+        isActive:
+          typeof item?.isActive === "boolean"
+            ? item.isActive
+            : typeof item?.is_active === "boolean"
+              ? item.is_active
+              : true,
+        sortOrder: toFiniteNumber(item?.sortOrder ?? item?.sort_order, 0),
+        highlights: arr(item?.highlights ?? item?.highlights_json),
+        metadata: obj(item?.metadata || item?.metadataJson || item?.metadata_json),
+      })
+    )
+    .filter((item) => Object.keys(item).length);
+}
+
+export function buildCanonicalTruthContacts(contacts = []) {
+  return arr(contacts)
+    .map((item) =>
+      compactObject({
+        id: s(item?.id || item?.contactId || item?.contact_id),
+        contactKey: s(item?.contactKey || item?.contact_key || item?.key),
+        channel: s(item?.channel),
+        label: s(item?.label),
+        value: s(item?.value),
+        isPrimary:
+          typeof item?.isPrimary === "boolean"
+            ? item.isPrimary
+            : typeof item?.is_primary === "boolean"
+              ? item.is_primary
+              : false,
+        enabled:
+          typeof item?.enabled === "boolean"
+            ? item.enabled
+            : true,
+        visiblePublic:
+          typeof item?.visiblePublic === "boolean"
+            ? item.visiblePublic
+            : typeof item?.visible_public === "boolean"
+              ? item.visible_public
+              : true,
+        visibleInAi:
+          typeof item?.visibleInAi === "boolean"
+            ? item.visibleInAi
+            : typeof item?.visible_in_ai === "boolean"
+              ? item.visible_in_ai
+              : true,
+        sortOrder: toFiniteNumber(item?.sortOrder ?? item?.sort_order, 0),
+        meta: obj(item?.meta),
+      })
+    )
+    .filter((item) => Object.keys(item).length);
+}
+
+export function buildCanonicalTruthLocations(locations = []) {
+  return arr(locations)
+    .map((item) =>
+      compactObject({
+        id: s(item?.id || item?.locationId || item?.location_id),
+        locationKey: s(item?.locationKey || item?.location_key || item?.key),
+        title: s(item?.title),
+        countryCode: s(item?.countryCode || item?.country_code),
+        city: s(item?.city),
+        addressLine: s(item?.addressLine || item?.address_line),
+        mapUrl: s(item?.mapUrl || item?.map_url),
+        phone: s(item?.phone),
+        email: s(item?.email),
+        workingHours: obj(item?.workingHours || item?.working_hours),
+        deliveryAreas: arr(item?.deliveryAreas || item?.delivery_areas),
+        isPrimary:
+          typeof item?.isPrimary === "boolean"
+            ? item.isPrimary
+            : typeof item?.is_primary === "boolean"
+              ? item.is_primary
+              : false,
+        enabled:
+          typeof item?.enabled === "boolean"
+            ? item.enabled
+            : true,
+        sortOrder: toFiniteNumber(item?.sortOrder ?? item?.sort_order, 0),
+        meta: obj(item?.meta),
+      })
+    )
+    .filter((item) => Object.keys(item).length);
+}
+
 export function buildCanonicalTruthVersionSnapshot({
   profile = null,
   capabilities = null,
+  services = [],
+  contacts = [],
+  locations = [],
   sourceSummary = null,
   metadata = null,
 } = {}) {
   const profileSnapshot = buildCanonicalTruthProfile(profile);
   const capabilitiesSnapshot = buildCanonicalTruthCapabilities(capabilities);
+  const servicesSnapshot = buildCanonicalTruthServices(services);
+  const contactsSnapshot = buildCanonicalTruthContacts(contacts);
+  const locationsSnapshot = buildCanonicalTruthLocations(locations);
   const fieldProvenance = buildCanonicalTruthFieldProvenance(profile);
 
   return {
     profileSnapshot,
     capabilitiesSnapshot,
+    servicesSnapshot,
+    contactsSnapshot,
+    locationsSnapshot,
     fieldProvenance,
     sourceSummary: compactObject(sourceSummary || obj(profile?.source_summary_json)),
-    metadata: compactObject(metadata),
+    metadata: compactObject({
+      ...obj(metadata),
+      servicesSnapshot,
+      contactsSnapshot,
+      locationsSnapshot,
+    }),
   };
 }
 
 function normalizeVersionRow(row = {}) {
+  const metadataJson = obj(row.metadata_json);
+  const servicesSnapshot = Array.isArray(metadataJson.servicesSnapshot)
+    ? metadataJson.servicesSnapshot
+    : Array.isArray(metadataJson.services_snapshot_json)
+      ? metadataJson.services_snapshot_json
+      : [];
+  const contactsSnapshot = Array.isArray(metadataJson.contactsSnapshot)
+    ? metadataJson.contactsSnapshot
+    : Array.isArray(metadataJson.contacts_snapshot_json)
+      ? metadataJson.contacts_snapshot_json
+      : [];
+  const locationsSnapshot = Array.isArray(metadataJson.locationsSnapshot)
+    ? metadataJson.locationsSnapshot
+    : Array.isArray(metadataJson.locations_snapshot_json)
+      ? metadataJson.locations_snapshot_json
+      : [];
+
   return {
     id: s(row.id),
     tenant_id: s(row.tenant_id),
@@ -214,8 +345,11 @@ function normalizeVersionRow(row = {}) {
     source_summary_json: obj(row.source_summary_json),
     profile_snapshot_json: obj(row.profile_snapshot_json),
     capabilities_snapshot_json: obj(row.capabilities_snapshot_json),
+    services_snapshot_json: servicesSnapshot,
+    contacts_snapshot_json: contactsSnapshot,
+    locations_snapshot_json: locationsSnapshot,
     field_provenance_json: obj(row.field_provenance_json),
-    metadata_json: obj(row.metadata_json),
+    metadata_json: metadataJson,
     created_at: iso(row.created_at),
   };
 }
@@ -390,6 +524,21 @@ export function buildTruthVersionCompare(currentVersion = {}, previousVersion = 
       current.capabilities_snapshot_json
     ),
     ...buildDiffSectionChanges(
+      "services",
+      previous?.services_snapshot_json,
+      current.services_snapshot_json
+    ),
+    ...buildDiffSectionChanges(
+      "contacts",
+      previous?.contacts_snapshot_json,
+      current.contacts_snapshot_json
+    ),
+    ...buildDiffSectionChanges(
+      "locations",
+      previous?.locations_snapshot_json,
+      current.locations_snapshot_json
+    ),
+    ...buildDiffSectionChanges(
       "fieldProvenance",
       previous?.field_provenance_json,
       current.field_provenance_json
@@ -407,6 +556,15 @@ export function buildTruthVersionCompare(currentVersion = {}, previousVersion = 
     profileChangedFields: changes.filter((item) => item.section === "profile").map((item) => item.path),
     capabilitiesChangedFields: changes
       .filter((item) => item.section === "capabilities")
+      .map((item) => item.path),
+    servicesChangedFields: changes
+      .filter((item) => item.section === "services")
+      .map((item) => item.path),
+    contactsChangedFields: changes
+      .filter((item) => item.section === "contacts")
+      .map((item) => item.path),
+    locationsChangedFields: changes
+      .filter((item) => item.section === "locations")
       .map((item) => item.path),
     fieldProvenanceChangedFields: changes
       .filter((item) => item.section === "fieldProvenance")
@@ -543,6 +701,9 @@ export function buildTruthVersionDiffModel(currentVersion = {}, previousVersion 
     canonicalPathsChanged.map((path) => {
       if (path.startsWith("profile.")) return "business_profile";
       if (path.startsWith("capabilities.")) return "business_capabilities";
+      if (path.startsWith("services.")) return "service_catalog";
+      if (path.startsWith("contacts.")) return "business_contacts";
+      if (path.startsWith("locations.")) return "business_locations";
       if (path.startsWith("fieldProvenance.")) return "truth_provenance";
       if (path.startsWith("sourceSummary.")) return "truth_source_summary";
       return "";
@@ -1131,6 +1292,9 @@ export function buildTruthVersionHistoryEntry(version = {}, compare = null) {
     capabilities: obj(version.capabilities_snapshot_json),
     fieldProvenance: obj(version.field_provenance_json),
     metadata: obj(version.metadata_json),
+    services: arr(version.services_snapshot_json),
+    contacts: arr(version.contacts_snapshot_json),
+    locations: arr(version.locations_snapshot_json),
     diff: compare || undefined,
   });
 }
@@ -1143,12 +1307,18 @@ export function hasTruthVersionChanged(previous = null, next = null) {
     sourceSummary: obj(previous.source_summary_json),
     profile: obj(previous.profile_snapshot_json),
     capabilities: obj(previous.capabilities_snapshot_json),
+    services: arr(previous.services_snapshot_json),
+    contacts: arr(previous.contacts_snapshot_json),
+    locations: arr(previous.locations_snapshot_json),
     fieldProvenance: obj(previous.field_provenance_json),
   }) !==
     JSON.stringify({
       sourceSummary: obj(next.source_summary_json),
       profile: obj(next.profile_snapshot_json),
       capabilities: obj(next.capabilities_snapshot_json),
+      services: arr(next.services_snapshot_json),
+      contacts: arr(next.contacts_snapshot_json),
+      locations: arr(next.locations_snapshot_json),
       fieldProvenance: obj(next.field_provenance_json),
     });
 }
@@ -1247,6 +1417,9 @@ export async function createTruthVersionInternal(db, input = {}) {
   const snapshot = buildCanonicalTruthVersionSnapshot({
     profile: input.profile,
     capabilities: input.capabilities,
+    services: input.services,
+    contacts: input.contacts,
+    locations: input.locations,
     sourceSummary: input.sourceSummaryJson ?? input.source_summary_json,
     metadata: input.metadataJson ?? input.metadata_json,
   });
@@ -1267,6 +1440,9 @@ export async function createTruthVersionInternal(db, input = {}) {
     source_summary_json: snapshot.sourceSummary,
     profile_snapshot_json: snapshot.profileSnapshot,
     capabilities_snapshot_json: snapshot.capabilitiesSnapshot,
+    services_snapshot_json: snapshot.servicesSnapshot,
+    contacts_snapshot_json: snapshot.contactsSnapshot,
+    locations_snapshot_json: snapshot.locationsSnapshot,
     field_provenance_json: snapshot.fieldProvenance,
   };
 

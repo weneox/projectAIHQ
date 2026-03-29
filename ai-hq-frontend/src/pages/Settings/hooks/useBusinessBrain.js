@@ -26,6 +26,13 @@ function emptyBusinessBrainData() {
   };
 }
 
+function pickGovernedSaveMessage(result, fallback = "") {
+  if (result?.publishStatus === "review_required" || result?.reviewRequired === true) {
+    return "Staged for maintenance review.";
+  }
+  return fallback;
+}
+
 export function useBusinessBrain({
   canManageSettings,
   setWorkspace,
@@ -136,9 +143,12 @@ export function useBusinessBrain({
       beginSave();
 
       try {
-        await action();
+        const actionResult = await action();
         await refreshBusinessBrain();
-        succeedSave({ message: successMessage });
+        succeedSave({
+          message:
+            pickGovernedSaveMessage(actionResult, successMessage) || successMessage,
+        });
         return true;
       } catch (error) {
         failSave(error);

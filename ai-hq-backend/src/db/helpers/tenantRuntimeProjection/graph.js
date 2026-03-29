@@ -1,5 +1,5 @@
 import { db } from "../../index.js";
-import { s, pickDb, one, many } from "./shared.js";
+import { s, pickDb, one, many, parseObject } from "./shared.js";
 import {
   normalizeContacts,
   normalizeLocations,
@@ -67,6 +67,7 @@ export async function loadTenantCanonicalGraph(
     knowledgeRows,
     factsRows,
     channelPolicyRows,
+    latestTruthVersion,
   ] = await Promise.all([
     one(client, `select * from tenant_business_profile where tenant_id = $1 limit 1`, [tenant.id]),
     one(client, `select * from tenant_business_capabilities where tenant_id = $1 limit 1`, [tenant.id]),
@@ -214,17 +215,86 @@ export async function loadTenantCanonicalGraph(
       `,
       [tenant.id]
     ),
+    one(
+      client,
+      `
+      select *
+      from tenant_business_profile_versions
+      where tenant_id = $1
+      order by approved_at desc, created_at desc
+      limit 1
+      `,
+      [tenant.id]
+    ),
   ]);
+
+  const publishedTruthMetadata = latestTruthVersion
+    ? parseObject(latestTruthVersion.metadata_json)
+    : null;
+  const publishedTruthVersion = latestTruthVersion
+    ? {
+        ...latestTruthVersion,
+        profile_snapshot_json: parseObject(latestTruthVersion.profile_snapshot_json),
+        capabilities_snapshot_json: parseObject(
+          latestTruthVersion.capabilities_snapshot_json
+        ),
+        source_summary_json: parseObject(latestTruthVersion.source_summary_json),
+        field_provenance_json: parseObject(latestTruthVersion.field_provenance_json),
+        metadata_json: publishedTruthMetadata,
+        has_services_snapshot:
+          Object.prototype.hasOwnProperty.call(publishedTruthMetadata || {}, "servicesSnapshot") ||
+          Object.prototype.hasOwnProperty.call(
+            publishedTruthMetadata || {},
+            "services_snapshot_json"
+          ),
+        services_snapshot_json: Array.isArray(publishedTruthMetadata?.servicesSnapshot)
+          ? publishedTruthMetadata.servicesSnapshot
+          : Array.isArray(publishedTruthMetadata?.services_snapshot_json)
+            ? publishedTruthMetadata.services_snapshot_json
+            : [],
+        has_contacts_snapshot:
+          Object.prototype.hasOwnProperty.call(publishedTruthMetadata || {}, "contactsSnapshot") ||
+          Object.prototype.hasOwnProperty.call(
+            publishedTruthMetadata || {},
+            "contacts_snapshot_json"
+          ),
+        contacts_snapshot_json: Array.isArray(publishedTruthMetadata?.contactsSnapshot)
+          ? publishedTruthMetadata.contactsSnapshot
+          : Array.isArray(publishedTruthMetadata?.contacts_snapshot_json)
+            ? publishedTruthMetadata.contacts_snapshot_json
+            : [],
+        has_locations_snapshot:
+          Object.prototype.hasOwnProperty.call(publishedTruthMetadata || {}, "locationsSnapshot") ||
+          Object.prototype.hasOwnProperty.call(
+            publishedTruthMetadata || {},
+            "locations_snapshot_json"
+          ),
+        locations_snapshot_json: Array.isArray(publishedTruthMetadata?.locationsSnapshot)
+          ? publishedTruthMetadata.locationsSnapshot
+          : Array.isArray(publishedTruthMetadata?.locations_snapshot_json)
+            ? publishedTruthMetadata.locations_snapshot_json
+            : [],
+      }
+    : null;
 
   return {
     tenant,
     profile,
     capabilities,
     synthesis,
-    contacts: normalizeContacts(contactsRows),
-    locations: normalizeLocations(locationsRows),
+    contacts:
+      publishedTruthVersion?.has_contacts_snapshot
+        ? normalizeContacts(publishedTruthVersion.contacts_snapshot_json)
+        : normalizeContacts(contactsRows),
+    locations:
+      publishedTruthVersion?.has_locations_snapshot
+        ? normalizeLocations(publishedTruthVersion.locations_snapshot_json)
+        : normalizeLocations(locationsRows),
     hours: normalizeHours(hoursRows),
-    services: normalizeServices(servicesRows),
+    services:
+      publishedTruthVersion?.has_services_snapshot
+        ? normalizeServices(publishedTruthVersion.services_snapshot_json)
+        : normalizeServices(servicesRows),
     products: normalizeProducts(productsRows),
     faq: normalizeFaq(faqRows),
     policies: normalizePolicies(policiesRows),
@@ -234,5 +304,6 @@ export async function loadTenantCanonicalGraph(
     knowledge: normalizeKnowledge(knowledgeRows),
     facts: normalizeFacts(factsRows),
     channelPolicies: normalizeChannelPolicies(channelPolicyRows),
+    publishedTruthVersion,
   };
 }

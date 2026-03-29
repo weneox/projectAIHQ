@@ -14,8 +14,21 @@ import {
 } from "./builders.js";
 
 export function buildTenantRuntimeProjection(graph) {
-  const profile = normalizeProfile(graph.tenant, graph.profile);
-  const capabilities = normalizeCapabilities(graph.capabilities, profile);
+  const publishedTruthVersion = graph?.publishedTruthVersion || null;
+  const publishedProfile =
+    publishedTruthVersion?.profile_snapshot_json || null;
+  const publishedCapabilities =
+    publishedTruthVersion?.capabilities_snapshot_json || null;
+  const profileSource = publishedProfile || graph.profile;
+  const capabilitiesSource = publishedCapabilities || graph.capabilities;
+  const profile = normalizeProfile(
+    graph.tenant,
+    profileSource
+  );
+  const capabilities = normalizeCapabilities(
+    capabilitiesSource,
+    publishedProfile || profile
+  );
 
   const identity = {
     tenantId: s(graph.tenant?.id),
@@ -68,8 +81,8 @@ export function buildTenantRuntimeProjection(graph) {
 
   const confidence = buildConfidence({
     synthesis: graph.synthesis,
-    profile: graph.profile,
-    capabilities: graph.capabilities,
+    profile: profileSource,
+    capabilities: capabilitiesSource,
     services: graph.services,
     contacts: graph.contacts,
     faq: graph.faq,

@@ -55,6 +55,26 @@ function buildCanonicalGraph(overrides = {}) {
     knowledge: [],
     facts: [],
     channelPolicies: [],
+    publishedTruthVersion: {
+      id: "truth-version-1",
+      business_profile_id: "profile-1",
+      business_capabilities_id: "capabilities-1",
+      profile_snapshot_json: {
+        companyName: "Alpha Studio",
+        displayName: "Alpha Studio",
+        mainLanguage: "en",
+        supportedLanguages: ["en"],
+        summaryShort: "Brand strategy studio",
+      },
+      capabilities_snapshot_json: {
+        primaryLanguage: "en",
+        supportedLanguages: ["en"],
+        replyStyle: "professional",
+        replyLength: "medium",
+        emojiLevel: "low",
+        ctaStyle: "soft",
+      },
+    },
     ...overrides,
   };
 }
@@ -73,6 +93,9 @@ test("stale runtime projection is detected when canonical source refs drift", ()
       source_profile_id: "profile-old",
       source_capabilities_id: "capabilities-old",
       projection_hash: "old-hash",
+      metadata_json: {
+        publishedTruthVersionId: "truth-version-old",
+      },
     },
     graph,
     expectedProjection,
@@ -80,10 +103,10 @@ test("stale runtime projection is detected when canonical source refs drift", ()
 
   assert.equal(freshness.stale, true);
   assert.deepEqual(freshness.reasons, [
-    "source_snapshot_mismatch",
     "source_profile_mismatch",
     "source_capabilities_mismatch",
     "projection_hash_mismatch",
+    "published_truth_version_mismatch",
   ]);
   assert.equal(
     createRuntimeProjectionStaleError(freshness).code,
@@ -105,6 +128,9 @@ test("runtime projection is fresh when canonical refs and projection hash match"
       source_profile_id: "profile-1",
       source_capabilities_id: "capabilities-1",
       projection_hash: expectedProjection.projection_hash,
+      metadata_json: {
+        publishedTruthVersionId: "truth-version-1",
+      },
     },
     graph,
     expectedProjection,
@@ -113,6 +139,31 @@ test("runtime projection is fresh when canonical refs and projection hash match"
   assert.equal(freshness.stale, false);
   assert.equal(freshness.ok, true);
   assert.deepEqual(freshness.reasons, []);
+});
+
+test("freshness fails when runtime projection points at a different published truth version", () => {
+  const graph = buildCanonicalGraph();
+  const expectedProjection = buildTenantRuntimeProjection(graph);
+
+  const freshness = assessTenantRuntimeProjectionFreshness({
+    runtimeProjection: {
+      id: "runtime-1",
+      tenant_id: "tenant-1",
+      tenant_key: "alpha",
+      status: "ready",
+      source_profile_id: "profile-1",
+      source_capabilities_id: "capabilities-1",
+      projection_hash: expectedProjection.projection_hash,
+      metadata_json: {
+        publishedTruthVersionId: "truth-version-old",
+      },
+    },
+    graph,
+    expectedProjection,
+  });
+
+  assert.equal(freshness.stale, true);
+  assert.deepEqual(freshness.reasons, ["published_truth_version_mismatch"]);
 });
 
 test("non-ready runtime projection is treated as stale even when hashes match", () => {
@@ -129,6 +180,9 @@ test("non-ready runtime projection is treated as stale even when hashes match", 
       source_profile_id: "profile-1",
       source_capabilities_id: "capabilities-1",
       projection_hash: expectedProjection.projection_hash,
+      metadata_json: {
+        publishedTruthVersionId: "truth-version-1",
+      },
     },
     graph,
     expectedProjection,

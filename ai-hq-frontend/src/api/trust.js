@@ -1,5 +1,7 @@
 import { apiGet, apiPost } from "./client.js";
 import { createReadinessViewModel } from "../lib/readinessViewModel.js";
+import { validateOperationalRepairAction, validateReadinessSurface } from "@aihq/shared-contracts/operations";
+import { getApprovedRuntimeAuthorityFailure, validateProjectedRuntime } from "@aihq/shared-contracts/runtime";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -20,6 +22,22 @@ function n(v, d = 0) {
 
 function bool(v, d = false) {
   return typeof v === "boolean" ? v : d;
+}
+
+function normalizeCanonicalReadiness(input = {}) {
+  const checked = validateReadinessSurface(input);
+  if (checked.ok) return checked.value;
+
+  const source = obj(input);
+  return {
+    status: s(source.status || "ready").toLowerCase(),
+    reasonCode: s(source.reasonCode || source.reason_code).toLowerCase(),
+    intentionallyUnavailable: bool(
+      source.intentionallyUnavailable ?? source.intentionally_unavailable
+    ),
+    message: s(source.message),
+    blockers: [],
+  };
 }
 
 function buildQuery(params = {}) {
@@ -141,11 +159,13 @@ function normalizeGovernanceSummary(input = {}) {
 
 function normalizeProjectionRepair(input = {}) {
   const source = obj(input);
-  const action = source.action ? obj(source.action) : source.repairAction ? obj(source.repairAction) : {};
+  const action = normalizeContractAction(
+    source.action ? obj(source.action) : source.repairAction ? obj(source.repairAction) : {}
+  );
   const latestRun = obj(source.latestRun || source.lastRun);
   return {
     canRepair: source.canRepair === true,
-    action: Object.keys(action).length ? action : null,
+    action: action?.id || action?.label ? action : null,
     latestRun: {
       id: s(latestRun.id),
       status: s(latestRun.status).toLowerCase(),
@@ -187,11 +207,13 @@ function normalizeProjectionHealth(input = {}) {
     canRepair:
       bool(source.canRepair) ||
       arr(source.repairActions || source.repair_actions).length > 0,
-    repairAction: Object.keys(obj(source.repairAction || source.repair_action)).length
-      ? obj(source.repairAction || source.repair_action)
-      : Object.keys(nextRecommendedRepair).length
-        ? nextRecommendedRepair
-        : null,
+    repairAction: normalizeContractAction(
+      Object.keys(obj(source.repairAction || source.repair_action)).length
+        ? obj(source.repairAction || source.repair_action)
+        : Object.keys(nextRecommendedRepair).length
+          ? nextRecommendedRepair
+          : null
+    ),
     latestRepair: normalizeProjectionRepair({
       latestRun: source.latestRepair || source.latest_repair,
     }).latestRun,
@@ -208,10 +230,9 @@ function normalizeProjectionHealth(input = {}) {
       source.affectedSurfaces || source.affected_surfaces
     ),
     repairActions: arr(source.repairActions || source.repair_actions)
-      .map((item) => obj(item))
-      .filter((item) => Object.keys(item).length > 0),
-    nextRecommendedRepair:
-      Object.keys(nextRecommendedRepair).length > 0 ? nextRecommendedRepair : null,
+      .map((item) => normalizeContractAction(item))
+      .filter((item) => item?.id || item?.label),
+    nextRecommendedRepair: normalizeContractAction(nextRecommendedRepair),
     lastKnownGood: {
       runtimeProjectionId: s(
         lastKnownGood.runtimeProjectionId || lastKnownGood.runtime_projection_id
@@ -251,18 +272,24 @@ function normalizeProjectionHealth(input = {}) {
   };
 }
 
-function normalizeAction(input = {}) {
+function normalizeContractAction(input = {}) {
   const source = obj(input);
   if (!Object.keys(source).length) return null;
+  const checked = validateOperationalRepairAction(source);
+  const base = checked.ok
+    ? checked.value
+    : {
+        id: s(source.id),
+        kind: s(source.kind).toLowerCase(),
+        label: s(source.label),
+        requiredRole: s(source.requiredRole || source.required_role || "operator").toLowerCase(),
+        allowed: source.allowed === true,
+        target: obj(source.target),
+      };
   return {
-    id: s(source.id),
+    ...base,
     actionType: s(source.actionType || source.action_type).toLowerCase(),
-    kind: s(source.kind).toLowerCase(),
-    label: s(source.label),
-    requiredRole: s(source.requiredRole || source.required_role).toLowerCase(),
-    allowed: source.allowed === true,
     reason: s(source.reason),
-    target: obj(source.target),
   };
 }
 
@@ -315,7 +342,7 @@ function normalizeEventRemediation(input = {}) {
     operator: s(source.operator),
     nextActionLabel: s(source.nextActionLabel || source.next_action_label),
     requiredRole: s(source.requiredRole || source.required_role || "operator").toLowerCase(),
-    actions: arr(source.actions).map(normalizeAction).filter(Boolean),
+    actions: arr(source.actions).map(normalizeContractAction).filter(Boolean),
   };
 }
 
@@ -358,7 +385,7 @@ function normalizePolicyPosture(input = {}) {
     requiredActionKind: s(
       source.requiredActionKind || source.required_action_kind || "unknown"
     ).toLowerCase(),
-    nextAction: normalizeAction(source.nextAction || source.next_action),
+    nextAction: normalizeContractAction(source.nextAction || source.next_action),
     reasons: normalizeStringList(source.reasons),
     affectedSurfaces: normalizeStringList(
       source.affectedSurfaces || source.affected_surfaces
@@ -386,7 +413,7 @@ function normalizeChannelAutonomyItem(input = {}) {
     requiredActionKind: s(
       source.requiredActionKind || source.required_action_kind || "unknown"
     ).toLowerCase(),
-    nextAction: normalizeAction(source.nextAction || source.next_action),
+    nextAction: normalizeContractAction(source.nextAction || source.next_action),
     affectedSurfaces: normalizeStringList(
       source.affectedSurfaces || source.affected_surfaces
     ),
@@ -494,7 +521,7 @@ function normalizeDecisionAuditEvent(input = {}) {
         source.remediation_actions ||
         obj(source.remediation).actions
     )
-      .map(normalizeAction)
+      .map(normalizeContractAction)
       .filter(Boolean),
     links: {
       truthVersionId: s(
@@ -516,7 +543,7 @@ function normalizeDecisionAuditEvent(input = {}) {
       ).toLowerCase(),
       threadId: s(obj(source.links).threadId || obj(source.links).thread_id),
     },
-    recommendedNextAction: normalizeAction(
+    recommendedNextAction: normalizeContractAction(
       source.recommendedNextAction || source.recommended_next_action
     ),
   };
@@ -548,6 +575,65 @@ function normalizeDecisionAudit(input = {}) {
   };
 }
 
+function normalizeRuntimeAuthoritySummary(runtimeProjection = {}, scope = {}) {
+  const projection = obj(runtimeProjection);
+  const health = obj(projection.health);
+  const tenantId = s(scope.tenantId || scope.tenant_id);
+  const tenantKey = s(scope.tenantKey || scope.tenant_key).toLowerCase();
+
+  if (!tenantId || !tenantKey) return null;
+
+  const checked = validateProjectedRuntime({
+    authority: {
+      required: true,
+      mode: "strict",
+      available: s(projection.status).toLowerCase() === "ready",
+      source: "approved_runtime_projection",
+      tenantId,
+      tenantKey,
+      runtimeProjectionId: s(projection.id),
+      runtimeProjectionStatus: s(projection.status).toLowerCase(),
+      projectionHash: s(projection.projectionHash || projection.projection_hash),
+      stale: projection.stale === true || health.stale === true,
+      reasonCode: s(
+        health.primaryReasonCode || health.primary_reason_code || health.reasonCode || health.reason_code
+      ).toLowerCase(),
+      health,
+    },
+    tenant: {
+      tenantId,
+      tenantKey,
+    },
+  });
+
+  if (!checked.ok) {
+    return {
+      required: true,
+      mode: "strict",
+      available: false,
+      source: "approved_runtime_projection",
+      tenantId,
+      tenantKey,
+      runtimeProjectionId: s(projection.id),
+      runtimeProjectionStatus: s(projection.status).toLowerCase(),
+      projectionHash: s(projection.projectionHash || projection.projection_hash),
+      stale: projection.stale === true || health.stale === true,
+      health,
+      availableForApprovedRuntime: false,
+      failureReasonCode: checked.error,
+    };
+  }
+
+  const authority = checked.value.authority;
+  const failure = getApprovedRuntimeAuthorityFailure(checked.value);
+
+  return {
+    ...authority,
+    availableForApprovedRuntime: !failure,
+    failureReasonCode: s(failure?.reasonCode).toLowerCase(),
+  };
+}
+
 export function normalizeTrustViewResponse(payload = {}) {
   const root = obj(payload);
   const summary = obj(root.summary);
@@ -556,6 +642,11 @@ export function normalizeTrustViewResponse(payload = {}) {
   const setupReview = obj(summary.setupReview);
   const sources = obj(summary.sources);
   const reviewQueue = obj(summary.reviewQueue);
+  const canonicalSummaryReadiness = normalizeCanonicalReadiness(summary.readiness);
+  const canonicalRuntimeReadiness = normalizeCanonicalReadiness(runtimeProjection.readiness);
+  const canonicalTruthReadiness = normalizeCanonicalReadiness(truth.readiness);
+  const canonicalReviewReadiness = normalizeCanonicalReadiness(setupReview.readiness);
+  const runtimeAuthority = normalizeRuntimeAuthoritySummary(runtimeProjection, root);
 
   return {
     tenantId: s(root.tenantId || root.tenant_id),
@@ -564,7 +655,7 @@ export function normalizeTrustViewResponse(payload = {}) {
     permissions: obj(root.permissions),
     status: root ? "ready" : "unavailable",
     summary: {
-      readiness: createReadinessViewModel(summary.readiness),
+      readiness: createReadinessViewModel(canonicalSummaryReadiness),
       sources: {
         total: n(sources.total),
         enabled: n(sources.enabled),
@@ -584,9 +675,10 @@ export function normalizeTrustViewResponse(payload = {}) {
         updatedAt: s(runtimeProjection.updatedAt || runtimeProjection.updated_at),
         stale: runtimeProjection.stale === true,
         reasons: arr(runtimeProjection.reasons).map((item) => s(item)).filter(Boolean),
+        authority: runtimeAuthority,
         health: normalizeProjectionHealth(runtimeProjection.health),
         repair: normalizeProjectionRepair(runtimeProjection.repair),
-        readiness: createReadinessViewModel(runtimeProjection.readiness),
+        readiness: createReadinessViewModel(canonicalRuntimeReadiness),
       },
       truth: {
         latestVersionId: s(truth.latestVersionId || truth.latest_version_id),
@@ -608,7 +700,7 @@ export function normalizeTrustViewResponse(payload = {}) {
             obj(truth.sourceSummary || truth.source_summary).finalizeImpact ||
             obj(truth.metadata).finalizeImpact
         ),
-        readiness: createReadinessViewModel(truth.readiness),
+        readiness: createReadinessViewModel(canonicalTruthReadiness),
       },
       setupReview: {
         active: setupReview.active === true,
@@ -616,7 +708,7 @@ export function normalizeTrustViewResponse(payload = {}) {
         status: s(setupReview.status).toLowerCase(),
         currentStep: s(setupReview.currentStep || setupReview.current_step),
         updatedAt: s(setupReview.updatedAt || setupReview.updated_at),
-        readiness: createReadinessViewModel(setupReview.readiness),
+        readiness: createReadinessViewModel(canonicalReviewReadiness),
       },
       reviewQueue: {
         pending: n(reviewQueue.pending),

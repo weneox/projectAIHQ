@@ -118,7 +118,10 @@ export function workspaceKnowledgeRoutes({ db }) {
 
       return res.json({
         ok: true,
-        message: "Knowledge candidate approved",
+        message:
+          data?.publishStatus === "review_required"
+            ? "Knowledge candidate approved for maintenance review"
+            : "Knowledge candidate approved",
         ...data,
       });
     } catch (err) {

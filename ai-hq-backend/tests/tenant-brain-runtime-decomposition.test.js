@@ -193,6 +193,35 @@ function buildProjectionRows() {
     synthesis: {
       id: "snapshot-1",
     },
+    publishedTruthVersion: {
+      id: "truth-v1",
+      tenant_id: tenant.id,
+      tenant_key: tenant.tenant_key,
+      business_profile_id: "profile-1",
+      business_capabilities_id: "capabilities-1",
+      profile_snapshot_json: {
+        companyName: "Acme Clinic",
+        displayName: "Acme Clinic",
+        mainLanguage: "en",
+        supportedLanguages: ["en", "az"],
+        summaryShort: "Premium clinic care",
+        summaryLong: "Same-day consultations and follow-up support.",
+        toneProfile: "professional",
+        targetAudience: "Families",
+        valueProposition: "Fast, careful treatment",
+        websiteUrl: "https://acme.example",
+        primaryEmail: "hello@acme.example",
+        primaryPhone: "+15550001111",
+        industryKey: "clinic",
+      },
+      capabilities_snapshot_json: {
+        primaryLanguage: "en",
+        supportedLanguages: ["en", "az"],
+        replyStyle: "professional",
+        replyLength: "medium",
+        ctaStyle: "soft",
+      },
+    },
     contacts: [
       {
         id: "contact-1",
@@ -359,6 +388,10 @@ function createProjectionDb(rows) {
         return { rows: state.projectionRow ? [state.projectionRow] : [] };
       }
 
+      if (sql.includes("from tenant_business_profile_versions")) {
+        return { rows: [rows.publishedTruthVersion] };
+      }
+
       if (sql.includes("from tenant_business_profile")) {
         return { rows: [rows.profile] };
       }
@@ -405,14 +438,17 @@ test("projection-first runtime stays authoritative and preserves output shaping"
   );
   const projection = buildTenantRuntimeProjection(graph);
   db.state.projectionRow = {
+    ...projection,
     id: "projection-1",
     tenant_id: rows.tenant.id,
     tenant_key: rows.tenant.tenant_key,
     status: "ready",
     source_snapshot_id: graph.synthesis.id,
-    source_profile_id: graph.profile.id,
-    source_capabilities_id: graph.capabilities.id,
-    ...projection,
+    source_profile_id: graph.publishedTruthVersion.business_profile_id,
+    source_capabilities_id: graph.publishedTruthVersion.business_capabilities_id,
+    metadata_json: {
+      publishedTruthVersionId: graph.publishedTruthVersion.id,
+    },
   };
 
   const runtime = await getTenantBrainRuntime({

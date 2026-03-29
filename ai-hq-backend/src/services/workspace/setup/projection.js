@@ -5,6 +5,14 @@ import {
   q,
 } from "../../../db/helpers/tenantKnowledge/core.js";
 import {
+  dbDeleteTenantContact,
+  dbDeleteTenantLocation,
+  dbListTenantContacts,
+  dbListTenantLocations,
+  dbUpsertTenantContact,
+  dbUpsertTenantLocation,
+} from "../../../db/helpers/tenantBusinessBrain.js";
+import {
   createSetupService,
   listSetupServices,
   updateSetupService,
@@ -164,6 +172,81 @@ function normalizeKnowledgeForProjection(item = {}) {
       governance: obj(value.governance),
       impact: obj(value.impact),
     }),
+  };
+}
+
+function normalizeContactForProjection(item = {}) {
+  const value = obj(item);
+  const contactKey = s(value.contactKey || value.contact_key || value.key);
+  const label = s(value.label);
+  const contactValue = s(value.value);
+
+  if (!contactKey) return null;
+
+  return {
+    id: s(value.id || value.contactId || value.contact_id),
+    contactKey,
+    channel: s(value.channel || "other").toLowerCase() || "other",
+    label,
+    value: contactValue,
+    isPrimary:
+      typeof value.isPrimary === "boolean"
+        ? value.isPrimary
+        : typeof value.is_primary === "boolean"
+          ? value.is_primary
+          : false,
+    enabled:
+      typeof value.enabled === "boolean"
+        ? value.enabled
+        : true,
+    visiblePublic:
+      typeof value.visiblePublic === "boolean"
+        ? value.visiblePublic
+        : typeof value.visible_public === "boolean"
+          ? value.visible_public
+          : true,
+    visibleInAi:
+      typeof value.visibleInAi === "boolean"
+        ? value.visibleInAi
+        : typeof value.visible_in_ai === "boolean"
+          ? value.visible_in_ai
+          : true,
+    sortOrder: Number(value.sortOrder ?? value.sort_order ?? 0) || 0,
+    meta: obj(value.meta),
+  };
+}
+
+function normalizeLocationForProjection(item = {}) {
+  const value = obj(item);
+  const locationKey = s(value.locationKey || value.location_key || value.key);
+  const title = s(value.title);
+
+  if (!locationKey) return null;
+
+  return {
+    id: s(value.id || value.locationId || value.location_id),
+    locationKey,
+    title,
+    countryCode: s(value.countryCode || value.country_code),
+    city: s(value.city),
+    addressLine: s(value.addressLine || value.address_line),
+    mapUrl: s(value.mapUrl || value.map_url),
+    phone: s(value.phone),
+    email: s(value.email),
+    workingHours: obj(value.workingHours || value.working_hours),
+    deliveryAreas: arr(value.deliveryAreas || value.delivery_areas),
+    isPrimary:
+      typeof value.isPrimary === "boolean"
+        ? value.isPrimary
+        : typeof value.is_primary === "boolean"
+          ? value.is_primary
+          : false,
+    enabled:
+      typeof value.enabled === "boolean"
+        ? value.enabled
+        : true,
+    sortOrder: Number(value.sortOrder ?? value.sort_order ?? 0) || 0,
+    meta: obj(value.meta),
   };
 }
 
@@ -360,6 +443,136 @@ async function projectDraftServicesToCanonical({
   };
 }
 
+async function projectDraftContactsToCanonical({ db, actor, draft }) {
+  if (!Array.isArray(draft?.contacts)) {
+    return {
+      created: 0,
+      updated: 0,
+      deleted: 0,
+      total: 0,
+    };
+  }
+
+  const contacts = arr(draft?.contacts)
+    .map((item) => normalizeContactForProjection(item))
+    .filter(Boolean);
+  const existingContacts = arr(await dbListTenantContacts(db, actor.tenantId));
+  const desiredKeys = new Set(
+    contacts.map((item) => lower(item.contactKey)).filter(Boolean)
+  );
+
+  let created = 0;
+  let updated = 0;
+  let deleted = 0;
+
+  for (const existing of existingContacts) {
+    const existingKey = lower(existing.contact_key || existing.contactKey);
+    if (existingKey && !desiredKeys.has(existingKey)) {
+      await dbDeleteTenantContact(db, actor.tenantId, existing.id);
+      deleted += 1;
+    }
+  }
+
+  for (const contact of contacts) {
+    const existing = existingContacts.find(
+      (item) => lower(item.contact_key || item.contactKey) === lower(contact.contactKey)
+    );
+
+    await dbUpsertTenantContact(db, actor.tenantId, {
+      contact_key: contact.contactKey,
+      channel: contact.channel,
+      label: contact.label,
+      value: contact.value,
+      is_primary: contact.isPrimary,
+      enabled: contact.enabled,
+      visible_public: contact.visiblePublic,
+      visible_in_ai: contact.visibleInAi,
+      sort_order: contact.sortOrder,
+      meta: contact.meta,
+    });
+
+    if (existing?.id) {
+      updated += 1;
+    } else {
+      created += 1;
+    }
+  }
+
+  return {
+    created,
+    updated,
+    deleted,
+    total: contacts.length,
+  };
+}
+
+async function projectDraftLocationsToCanonical({ db, actor, draft }) {
+  if (!Array.isArray(draft?.locations)) {
+    return {
+      created: 0,
+      updated: 0,
+      deleted: 0,
+      total: 0,
+    };
+  }
+
+  const locations = arr(draft?.locations)
+    .map((item) => normalizeLocationForProjection(item))
+    .filter(Boolean);
+  const existingLocations = arr(await dbListTenantLocations(db, actor.tenantId));
+  const desiredKeys = new Set(
+    locations.map((item) => lower(item.locationKey)).filter(Boolean)
+  );
+
+  let created = 0;
+  let updated = 0;
+  let deleted = 0;
+
+  for (const existing of existingLocations) {
+    const existingKey = lower(existing.location_key || existing.locationKey);
+    if (existingKey && !desiredKeys.has(existingKey)) {
+      await dbDeleteTenantLocation(db, actor.tenantId, existing.id);
+      deleted += 1;
+    }
+  }
+
+  for (const location of locations) {
+    const existing = existingLocations.find(
+      (item) => lower(item.location_key || item.locationKey) === lower(location.locationKey)
+    );
+
+    await dbUpsertTenantLocation(db, actor.tenantId, {
+      location_key: location.locationKey,
+      title: location.title,
+      country_code: location.countryCode,
+      city: location.city,
+      address_line: location.addressLine,
+      map_url: location.mapUrl,
+      phone: location.phone,
+      email: location.email,
+      working_hours: location.workingHours,
+      delivery_areas: location.deliveryAreas,
+      is_primary: location.isPrimary,
+      enabled: location.enabled,
+      sort_order: location.sortOrder,
+      meta: location.meta,
+    });
+
+    if (existing?.id) {
+      updated += 1;
+    } else {
+      created += 1;
+    }
+  }
+
+  return {
+    created,
+    updated,
+    deleted,
+    total: locations.length,
+  };
+}
+
 async function projectDraftKnowledgeToCanonical({
   db,
   actor,
@@ -530,6 +743,9 @@ export async function projectSetupReviewDraftToCanonical(
   let savedProfile = currentProfile;
   let savedCapabilities = currentCapabilities;
   let truthVersion = null;
+  let publishedServices = [];
+  let publishedContacts = [];
+  let publishedLocations = [];
 
   if (
     Object.keys(businessProfile).length &&
@@ -601,6 +817,38 @@ export async function projectSetupReviewDraftToCanonical(
     savedCapabilities?.id || currentCapabilities?.id
   );
 
+  const serviceProjection = await projectDraftServicesToCanonical({
+    db,
+    actor,
+    draft,
+    sourceInfo,
+  });
+
+  const contactProjection = await projectDraftContactsToCanonical({
+    db,
+    actor,
+    draft,
+  });
+
+  const locationProjection = await projectDraftLocationsToCanonical({
+    db,
+    actor,
+    draft,
+  });
+
+  publishedServices = extractServiceRows(
+    await listSetupServices({
+      db,
+      tenantId: actor.tenantId,
+      tenantKey: actor.tenantKey,
+      role: actor.role,
+      tenant: actor.tenant,
+      includeSetup: false,
+    })
+  );
+  publishedContacts = arr(await dbListTenantContacts(db, actor.tenantId));
+  publishedLocations = arr(await dbListTenantLocations(db, actor.tenantId));
+
   if (
     typeof truthVersionHelper?.createVersion === "function" &&
     businessProfileId &&
@@ -627,6 +875,9 @@ export async function projectSetupReviewDraftToCanonical(
       approvedBy,
       profile: savedProfile,
       capabilities: savedCapabilities,
+      services: publishedServices,
+      contacts: publishedContacts,
+      locations: publishedLocations,
       sourceSummaryJson: obj(savedProfile?.source_summary_json),
       metadataJson: compactObject({
         reviewSessionProjection: true,
@@ -640,13 +891,6 @@ export async function projectSetupReviewDraftToCanonical(
       }),
     });
   }
-
-  const serviceProjection = await projectDraftServicesToCanonical({
-    db,
-    actor,
-    draft,
-    sourceInfo,
-  });
 
   const knowledgeProjection = await projectDraftKnowledgeToCanonical({
     db,
@@ -662,6 +906,8 @@ export async function projectSetupReviewDraftToCanonical(
     projectedCapabilities ||
     Boolean(truthVersion?.id) ||
     serviceProjection.total > 0 ||
+    contactProjection.total > 0 ||
+    locationProjection.total > 0 ||
     knowledgeProjection.total > 0;
 
   let runtimeRefresh = null;
@@ -707,6 +953,8 @@ export async function projectSetupReviewDraftToCanonical(
     truthVersion,
     runtimeProjection: Object.keys(runtimeProjection).length ? runtimeProjection : null,
     serviceProjection,
+    contactProjection,
+    locationProjection,
     knowledgeProjection,
     sourceInfo,
     impactSummary,

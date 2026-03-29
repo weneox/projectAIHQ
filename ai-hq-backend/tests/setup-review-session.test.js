@@ -1157,10 +1157,41 @@ test("Case Y: canonical truth helpers expose approved truth fields, provenance, 
 
 test("Case Z: finalize projection writes a truth version snapshot from canonical rows", async () => {
   let versionInput = null;
+  let serviceRows = [];
 
   const projected = await setupTest.projectSetupReviewDraftToCanonical(
     {
-      db: {},
+      db: {
+        async query(text, params = []) {
+          const sql = String(text || "").toLowerCase();
+          if (sql.includes("from tenant_setup_review_sessions")) {
+            return {
+              rows: [
+                {
+                  id: params[0],
+                },
+              ],
+            };
+          }
+          if (sql.includes("from tenants") && (sql.includes("where id = $1::uuid") || sql.includes("where tenant_key = $1"))) {
+            return {
+              rows: [
+                {
+                  id: "tenant-1",
+                  tenant_key: "alpha",
+                  company_name: "Alpha Studio",
+                },
+              ],
+            };
+          }
+          if (sql.includes("from tenant_services")) {
+            return {
+              rows: serviceRows,
+            };
+          }
+          return { rows: [] };
+        },
+      },
       actor: {
         tenantId: "tenant-1",
         tenantKey: "alpha",
@@ -1273,14 +1304,15 @@ test("Case Z: finalize projection writes a truth version snapshot from canonical
       versionInput.profile.source_summary_json.approvalPolicy.strictestOutcome,
       "dual_approval_required"
     );
-    assert.ok(
-      versionInput.metadataJson.finalizeImpact.runtimeAreas.includes("tenant_profile")
-    );
-    assert.equal(
-      versionInput.metadataJson.approvalPolicy.strictestOutcome,
-      "dual_approval_required"
-    );
-  });
+      assert.ok(
+        versionInput.metadataJson.finalizeImpact.runtimeAreas.includes("tenant_profile")
+      );
+      assert.equal(
+        versionInput.metadataJson.approvalPolicy.strictestOutcome,
+        "dual_approval_required"
+      );
+    assert.deepEqual(versionInput.services, []);
+    });
 
 test("Case AA: truth version change detection ignores approval-event metadata-only churn", () => {
   const unchanged = truthVersionTest.hasTruthVersionChanged(

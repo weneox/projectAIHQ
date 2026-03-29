@@ -21,6 +21,13 @@ it("normalizeTruthResponse maps approved truth metadata, provenance, and history
         approvedAt: "2026-03-25T10:00:00.000Z",
         approvedBy: "reviewer@aihq.test",
         profileStatus: "approved",
+        readiness: {
+          status: "ready",
+          reasonCode: "",
+          intentionallyUnavailable: false,
+          message: "Approved truth is available.",
+          blockers: [],
+        },
         sourceSummary: {
           governance: {
             disposition: "quarantined",
@@ -70,10 +77,23 @@ it("normalizeTruthResponse maps approved truth metadata, provenance, and history
   expect(normalized.finalizeImpact.runtimeAreas).toEqual(["voice"]);
 });
 
+it("normalizeTruthResponse no longer treats legacy snapshot roots as approved truth", () => {
+  const normalized = __test__.normalizeTruthResponse({
+    snapshot: {
+      profile: {
+        companyName: "North Clinic",
+      },
+    },
+  });
+
+  expect(normalized.hasTruth).toBe(false);
+  expect(normalized.fields).toEqual([]);
+});
+
 it("normalizeCompareResponse maps backend truth version compare detail", () => {
   const normalized = __test__.normalizeCompareResponse(
     {
-      version: {
+      truthVersion: {
         id: "v3",
         version: "v3",
         versionLabel: "Truth version v3",
@@ -84,21 +104,22 @@ it("normalizeCompareResponse maps backend truth version compare detail", () => {
           primaryUrl: "https://north.example/about",
         },
       },
-      previousVersion: {
+      previousTruthVersion: {
         id: "v2",
         version: "v2",
         versionLabel: "Truth version v2",
         approvedAt: "2026-03-24T09:00:00.000Z",
         approvedBy: "owner@aihq.test",
       },
-      currentVersion: {
+      currentTruthVersion: {
         id: "v4",
         version: "v4",
         versionLabel: "Truth version v4",
         approvedAt: "2026-03-26T11:00:00.000Z",
         approvedBy: "reviewer@aihq.test",
       },
-      diff: {
+      compare: {
+        previousVersionId: "v2",
         changedFields: ["companyName", "websiteUrl"],
         fieldChanges: [
           {
@@ -186,6 +207,35 @@ it("normalizeCompareResponse maps backend truth version compare detail", () => {
   expect(normalized.rollbackPreview.rollbackDisposition).toBe("follow_up_required");
   expect(normalized.rollbackAction.actionType).toBe("execute_safe_rollback");
   expect(normalized.hasStructuredDiff).toBe(true);
+});
+
+it("normalizeCompareResponse keeps approval metadata strict", () => {
+  const normalized = __test__.normalizeCompareResponse(
+    {
+      truthVersion: {
+        id: "v3",
+        createdAt: "2026-03-25T10:00:00.000Z",
+        actor: "reviewer@aihq.test",
+      },
+      previousTruthVersion: {
+        id: "v2",
+      },
+      currentTruthVersion: {
+        id: "v4",
+      },
+      compare: {
+        previousVersionId: "v2",
+      },
+      versionDiff: {},
+      rollbackPreview: {},
+    },
+    "v3",
+    "v2"
+  );
+
+  expect(normalized.selectedVersion.approvedAt).toBe("");
+  expect(normalized.selectedVersion.approvedBy).toBe("");
+  expect(normalized.selectedVersion.version).toBe("v3");
 });
 
 it("approved truth unavailable snapshot refuses non-approved fallback data", () => {

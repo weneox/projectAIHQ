@@ -21,6 +21,7 @@ import {
   getTenantChannelPolicies,
   getTenantContacts,
   getTenantLocations,
+  saveTenantContact,
   saveTenantBusinessFact,
 } from "../../../api/settings.js";
 import { useBusinessBrain } from "./useBusinessBrain.js";
@@ -77,6 +78,36 @@ describe("useBusinessBrain", () => {
 
     await waitFor(() => {
       expect(result.current.surface.saveSuccess).toMatch(/business fact saved/i);
+    });
+  });
+
+  it("uses a staged-review success message for governed contact changes", async () => {
+    getTenantBusinessFacts.mockResolvedValue([]);
+    getTenantChannelPolicies.mockResolvedValue([]);
+    getTenantLocations.mockResolvedValue([]);
+    getTenantContacts.mockResolvedValue([]);
+    saveTenantContact.mockResolvedValue({
+      ok: true,
+      publishStatus: "review_required",
+      reviewRequired: true,
+    });
+
+    const { result } = renderHook(() =>
+      useBusinessBrain({
+        canManageSettings: true,
+        setWorkspace: vi.fn(),
+        setInitialWorkspace: vi.fn(),
+      })
+    );
+
+    await result.current.handleSaveContact({
+      contact_key: "main-phone",
+      channel: "phone",
+      value: "+15550001111",
+    });
+
+    await waitFor(() => {
+      expect(result.current.surface.saveSuccess).toMatch(/staged for maintenance review/i);
     });
   });
 });

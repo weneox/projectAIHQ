@@ -21,7 +21,10 @@ import {
   createSettingsSource,
   listSettingsSources,
 } from "../../../api/settings.js";
-import { getTruthReviewWorkbench } from "../../../api/truth.js";
+import {
+  getTruthReviewWorkbench,
+  approveTruthReviewCandidate as approveTruthReviewCandidateFromTruthApi,
+} from "../../../api/truth.js";
 import { useSourceIntelligence } from "./useSourceIntelligence.js";
 
 describe("useSourceIntelligence", () => {
@@ -85,5 +88,101 @@ describe("useSourceIntelligence", () => {
     await waitFor(() => {
       expect(result.current.surface.saveSuccess).toMatch(/source added/i);
     });
+  });
+
+  it("passes the full canonical publish preview through approval flows", async () => {
+    listSettingsSources.mockResolvedValue({ items: [] });
+    getTruthReviewWorkbench.mockResolvedValue({ summary: {}, items: [] });
+    approveTruthReviewCandidateFromTruthApi.mockResolvedValue({
+      publishReceipt: {
+        publishStatus: "success",
+      },
+    });
+
+    const onRefreshTrust = vi.fn();
+    const onRefreshBusinessBrain = vi.fn();
+
+    const { result } = renderHook(() =>
+      useSourceIntelligence({
+        tenantKey: "tenant-a",
+        canManageSettings: true,
+        setWorkspace: vi.fn(),
+        setInitialWorkspace: vi.fn(),
+        onRefreshBusinessBrain,
+        onRefreshTrust,
+      })
+    );
+
+    await result.current.handleApproveKnowledge({
+      id: "candidate-1",
+      publishPreview: {
+        values: {
+          currentApprovedValue: {
+            title: "Current approved phone",
+            valueText: "+15550000000",
+          },
+          proposedValue: {
+            title: "Primary phone",
+            valueText: "+15551112222",
+          },
+          changed: true,
+        },
+        canonical: {
+          areas: ["business_profile"],
+          paths: ["profile.primaryPhone"],
+        },
+        runtime: {
+          areas: ["contact_channels"],
+          paths: ["runtime.business.contacts.primaryPhone"],
+          readinessDelta: "projection_refresh_required",
+        },
+        channels: {
+          affectedSurfaces: ["voice", "inbox"],
+        },
+        policy: {
+          autonomyDelta: "unchanged",
+          executionPostureDelta: "unchanged",
+          riskDelta: "unknown",
+        },
+      },
+    });
+
+    expect(approveTruthReviewCandidateFromTruthApi).toHaveBeenCalledWith(
+      "candidate-1",
+      expect.objectContaining({
+        metadataJson: {
+          publishPreview: {
+            values: {
+              currentApprovedValue: {
+                title: "Current approved phone",
+                valueText: "+15550000000",
+              },
+              proposedValue: {
+                title: "Primary phone",
+                valueText: "+15551112222",
+              },
+              changed: true,
+            },
+            canonical: {
+              areas: ["business_profile"],
+              paths: ["profile.primaryPhone"],
+            },
+            runtime: {
+              areas: ["contact_channels"],
+              paths: ["runtime.business.contacts.primaryPhone"],
+              readinessDelta: "projection_refresh_required",
+            },
+            channels: {
+              affectedSurfaces: ["voice", "inbox"],
+            },
+            policy: {
+              autonomyDelta: "unchanged",
+              executionPostureDelta: "unchanged",
+              riskDelta: "unknown",
+            },
+          },
+        },
+      })
+    );
   });
 });

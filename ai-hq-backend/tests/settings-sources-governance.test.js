@@ -93,6 +93,7 @@ function createHarness() {
     updatePayload: null,
     syncPayload: null,
     refreshPayloads: [],
+    refreshResults: [],
     approvalsByCandidateId: {
       "candidate-1": [
         {
@@ -326,6 +327,28 @@ function createHarness() {
     return {
       async refreshChannelCapabilitiesFromSources(payload) {
         state.refreshPayloads.push(payload);
+        const result = {
+          publishStatus: "review_required",
+          reviewRequired: true,
+          canonicalCapabilitiesMutated: false,
+          runtimeProjectionRefreshed: false,
+          maintenanceSession: {
+            id: "session-maintenance-capabilities-1",
+            mode: "refresh",
+            status: "ready",
+            currentStep: "maintenance_review",
+            sourceCurrentTruthVersionId: "truth-version-6",
+          },
+          maintenanceDraft: {
+            version: 4,
+          },
+          projectionGuard: {
+            maintenanceStaged: true,
+            stagedCapabilityFields: ["supportsInstagramDm", "supportsComments"],
+          },
+        };
+        state.refreshResults.push(result);
+        return result;
       },
       async listReviewQueue() {
         return [
@@ -361,13 +384,7 @@ function createHarness() {
         state.candidatesById[candidateId] = candidate;
         return {
           candidate,
-          knowledge: {
-            id: "knowledge-approved-1",
-            category: "signal_only",
-            item_key: candidate.item_key,
-            title: candidate.title,
-            value_text: candidate.value_text,
-          },
+          knowledge: null,
           approval: {
             id: "approval-2",
             action: "approve",
@@ -382,18 +399,20 @@ function createHarness() {
             },
           ],
           projection: {
-            profile: {
-              id: "truth-version-7",
-              version_id: "truth-version-7",
-            },
+            profile: null,
             capabilities: null,
-            runtimeProjection: {
-              id: "runtime-projection-9",
-              status: "refreshed",
-              affected_surfaces: ["voice", "inbox"],
-              health: {
-                status: "healthy",
-                warnings: [],
+            runtimeProjection: null,
+            maintenanceSession: {
+              id: "session-maintenance-7",
+              mode: "refresh",
+              status: "ready",
+              currentStep: "maintenance_review",
+              sourceCurrentTruthVersionId: "truth-version-6",
+            },
+            maintenanceDraft: {
+              version: 3,
+              businessProfile: {
+                primaryPhone: "+15551112222",
               },
             },
           },
@@ -450,7 +469,7 @@ test("source governance read path stays available and preserves filters after ro
   });
 });
 
-test("source creation stays owner-admin gated and refreshes capabilities with audit metadata", async () => {
+test("source creation stays owner-admin gated and stages capability changes for governed review", async () => {
   const { router, state, auditActions } = createHarness();
 
   const forbidden = await invokeRouter(router, "post", "/sources", {
@@ -476,6 +495,18 @@ test("source creation stays owner-admin gated and refreshes capabilities with au
   assert.equal(state.createPayload?.tenantId, "tenant-1");
   assert.equal(state.createPayload?.sourceType, "website");
   assert.equal(state.refreshPayloads.length, 1);
+  assert.equal(
+    created.res.body?.capabilityGovernance?.publishStatus,
+    "review_required"
+  );
+  assert.equal(
+    created.res.body?.capabilityGovernance?.runtimeProjectionRefreshed,
+    false
+  );
+  assert.equal(
+    created.res.body?.capabilityGovernance?.maintenanceSession?.id,
+    "session-maintenance-capabilities-1"
+  );
   assert.equal(auditActions.at(-1)?.action, "settings.source.created");
 });
 
@@ -495,6 +526,14 @@ test("source update and sync actions keep their existing response semantics afte
   assert.equal(updated.res.statusCode, 200);
   assert.equal(state.updatePayload?.sourceId, "source-1");
   assert.equal(state.updatePayload?.payload.displayName, "Primary Website");
+  assert.equal(
+    updated.res.body?.capabilityGovernance?.publishStatus,
+    "review_required"
+  );
+  assert.equal(
+    updated.res.body?.capabilityGovernance?.canonicalCapabilitiesMutated,
+    false
+  );
   assert.equal(auditActions.at(-1)?.action, "settings.source.updated");
 
   const sync = await invokeRouter(router, "post", "/sources/source-1/sync", {
@@ -581,7 +620,7 @@ test("knowledge workbench follow-up and quarantine actions stay safe and auditab
   assert.equal(auditActions.at(-1)?.action, "settings.knowledge.quarantine_retained");
 });
 
-test("knowledge approval returns a publish receipt with preview-vs-actual verification", async () => {
+test("knowledge approval stages a governed maintenance draft instead of mutating live truth", async () => {
   const { router, state, auditActions } = createHarness();
 
   const approval = await invokeRouter(router, "post", "/knowledge/candidate-1/approve", {
@@ -611,24 +650,29 @@ test("knowledge approval returns a publish receipt with preview-vs-actual verifi
   assert.equal(state.approvePayload?.candidateId, "candidate-1");
   assert.equal(
     approval.res.body?.publishReceipt?.truthVersionId,
-    "truth-version-7"
+    ""
   );
   assert.equal(
     approval.res.body?.publishReceipt?.runtimeProjectionId,
-    "runtime-projection-9"
+    ""
   );
-  assert.equal(approval.res.body?.publishReceipt?.publishStatus, "success");
+  assert.equal(approval.res.body?.publishReceipt?.publishStatus, "review_required");
   assert.equal(
-    approval.res.body?.publishReceipt?.previewComparison?.status,
-    "matched"
-  );
-  assert.deepEqual(
-    approval.res.body?.publishReceipt?.actual?.channels?.affectedSurfaces,
-    ["voice", "inbox"]
+    approval.res.body?.publishReceipt?.maintenanceSession?.id,
+    "session-maintenance-7"
   );
   assert.equal(
-    auditActions.at(-1)?.meta?.publishReceipt?.runtimeProjectionId,
-    "runtime-projection-9"
+    approval.res.body?.publishReceipt?.verification?.truthVersionCreated,
+    false
+  );
+  assert.equal(
+    approval.res.body?.publishReceipt?.verification?.runtimeProjectionRefreshed,
+    false
+  );
+  assert.equal(
+    auditActions.at(-1)?.meta?.publishReceipt?.maintenanceSession?.id ||
+      auditActions.at(-1)?.meta?.maintenanceReviewId,
+    "session-maintenance-7"
   );
 });
 

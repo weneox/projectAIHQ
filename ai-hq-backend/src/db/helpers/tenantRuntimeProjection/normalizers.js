@@ -12,29 +12,45 @@ export function normalizeProfile(tenant, profile) {
   const profileJson = parseObject(profile?.profile_json);
   const sourceSummaryJson = parseObject(profile?.source_summary_json);
   const metadataJson = parseObject(profile?.metadata_json);
+  const fallbackSupportedLanguages =
+    supportedLanguages.length > 0
+      ? supportedLanguages
+      : parseArray(profile?.supportedLanguages);
 
   return {
     tenantId: s(tenant?.id),
     tenantKey: s(profile?.tenant_key || tenant?.tenant_key),
-    companyName: s(profile?.company_name || tenant?.company_name),
-    displayName: s(profile?.display_name || profile?.company_name || tenant?.company_name),
-    legalName: s(profile?.legal_name),
-    industryKey: s(profile?.industry_key),
-    subindustryKey: s(profile?.subindustry_key),
-    summaryShort: s(profile?.summary_short),
-    summaryLong: s(profile?.summary_long),
-    valueProposition: s(profile?.value_proposition),
-    targetAudience: s(profile?.target_audience),
-    toneProfile: s(profile?.tone_profile),
-    mainLanguage: s(profile?.main_language || tenant?.default_language || "az"),
-    supportedLanguages,
-    websiteUrl: s(profile?.website_url),
-    primaryPhone: s(profile?.primary_phone),
-    primaryEmail: s(profile?.primary_email),
-    primaryAddress: s(profile?.primary_address),
-    profileStatus: s(profile?.profile_status || "draft"),
+    companyName: s(
+      profile?.company_name || profile?.companyName || tenant?.company_name
+    ),
+    displayName: s(
+      profile?.display_name ||
+        profile?.displayName ||
+        profile?.company_name ||
+        profile?.companyName ||
+        tenant?.company_name
+    ),
+    legalName: s(profile?.legal_name || profile?.legalName),
+    industryKey: s(profile?.industry_key || profile?.industryKey),
+    subindustryKey: s(profile?.subindustry_key || profile?.subindustryKey),
+    summaryShort: s(profile?.summary_short || profile?.summaryShort),
+    summaryLong: s(profile?.summary_long || profile?.summaryLong),
+    valueProposition: s(
+      profile?.value_proposition || profile?.valueProposition
+    ),
+    targetAudience: s(profile?.target_audience || profile?.targetAudience),
+    toneProfile: s(profile?.tone_profile || profile?.toneProfile || profile?.tone),
+    mainLanguage: s(
+      profile?.main_language || profile?.mainLanguage || tenant?.default_language || "az"
+    ),
+    supportedLanguages: fallbackSupportedLanguages,
+    websiteUrl: s(profile?.website_url || profile?.websiteUrl),
+    primaryPhone: s(profile?.primary_phone || profile?.primaryPhone),
+    primaryEmail: s(profile?.primary_email || profile?.primaryEmail),
+    primaryAddress: s(profile?.primary_address || profile?.primaryAddress),
+    profileStatus: s(profile?.profile_status || profile?.profileStatus || "draft"),
     confidence: num(profile?.confidence, 0),
-    confidenceLabel: s(profile?.confidence_label || "low"),
+    confidenceLabel: s(profile?.confidence_label || profile?.confidenceLabel || "low"),
     profileJson,
     sourceSummaryJson,
     metadataJson,
@@ -45,48 +61,95 @@ export function normalizeCapabilities(capabilities, profile) {
   const supportedLanguages =
     parseArray(capabilities?.supported_languages).length > 0
       ? parseArray(capabilities?.supported_languages)
+      : parseArray(capabilities?.supportedLanguages).length > 0
+      ? parseArray(capabilities?.supportedLanguages)
       : parseArray(profile?.supported_languages);
 
   return {
-    canSharePrices: bool(capabilities?.can_share_prices, false),
-    canShareStartingPrices: bool(capabilities?.can_share_starting_prices, false),
-    requiresHumanForCustomQuote: bool(capabilities?.requires_human_for_custom_quote, true),
+    canSharePrices: bool(capabilities?.can_share_prices ?? capabilities?.canSharePrices, false),
+    canShareStartingPrices: bool(
+      capabilities?.can_share_starting_prices ?? capabilities?.canShareStartingPrices,
+      false
+    ),
+    requiresHumanForCustomQuote: bool(
+      capabilities?.requires_human_for_custom_quote ??
+        capabilities?.requiresHumanForCustomQuote,
+      true
+    ),
 
-    canCaptureLeads: bool(capabilities?.can_capture_leads, true),
-    canCapturePhone: bool(capabilities?.can_capture_phone, true),
-    canCaptureEmail: bool(capabilities?.can_capture_email, true),
+    canCaptureLeads: bool(capabilities?.can_capture_leads ?? capabilities?.canCaptureLeads, true),
+    canCapturePhone: bool(capabilities?.can_capture_phone ?? capabilities?.canCapturePhone, true),
+    canCaptureEmail: bool(capabilities?.can_capture_email ?? capabilities?.canCaptureEmail, true),
 
-    canOfferBooking: bool(capabilities?.can_offer_booking, false),
-    canOfferConsultation: bool(capabilities?.can_offer_consultation, false),
-    canOfferCallback: bool(capabilities?.can_offer_callback, true),
+    canOfferBooking: bool(capabilities?.can_offer_booking ?? capabilities?.canOfferBooking, false),
+    canOfferConsultation: bool(
+      capabilities?.can_offer_consultation ?? capabilities?.canOfferConsultation,
+      false
+    ),
+    canOfferCallback: bool(capabilities?.can_offer_callback ?? capabilities?.canOfferCallback, true),
 
-    supportsInstagramDm: bool(capabilities?.supports_instagram_dm, false),
-    supportsFacebookMessenger: bool(capabilities?.supports_facebook_messenger, false),
-    supportsWhatsapp: bool(capabilities?.supports_whatsapp, false),
-    supportsComments: bool(capabilities?.supports_comments, false),
-    supportsVoice: bool(capabilities?.supports_voice, false),
-    supportsEmail: bool(capabilities?.supports_email, false),
+    supportsInstagramDm: bool(
+      capabilities?.supports_instagram_dm ?? capabilities?.supportsInstagramDm,
+      false
+    ),
+    supportsFacebookMessenger: bool(
+      capabilities?.supports_facebook_messenger ??
+        capabilities?.supportsFacebookMessenger,
+      false
+    ),
+    supportsWhatsapp: bool(capabilities?.supports_whatsapp ?? capabilities?.supportsWhatsapp, false),
+    supportsComments: bool(capabilities?.supports_comments ?? capabilities?.supportsComments, false),
+    supportsVoice: bool(capabilities?.supports_voice ?? capabilities?.supportsVoice, false),
+    supportsEmail: bool(capabilities?.supports_email ?? capabilities?.supportsEmail, false),
 
-    supportsMultilanguage: bool(capabilities?.supports_multilanguage, supportedLanguages.length > 1),
-    primaryLanguage: s(capabilities?.primary_language || profile?.main_language || "az"),
+    supportsMultilanguage: bool(
+      capabilities?.supports_multilanguage ?? capabilities?.supportsMultilanguage,
+      supportedLanguages.length > 1
+    ),
+    primaryLanguage: s(
+      capabilities?.primary_language ||
+        capabilities?.primaryLanguage ||
+        profile?.main_language ||
+        profile?.mainLanguage ||
+        "az"
+    ),
     supportedLanguages,
 
-    handoffEnabled: bool(capabilities?.handoff_enabled, true),
-    autoHandoffOnHumanRequest: bool(capabilities?.auto_handoff_on_human_request, true),
-    autoHandoffOnLowConfidence: bool(capabilities?.auto_handoff_on_low_confidence, true),
+    handoffEnabled: bool(capabilities?.handoff_enabled ?? capabilities?.handoffEnabled, true),
+    autoHandoffOnHumanRequest: bool(
+      capabilities?.auto_handoff_on_human_request ??
+        capabilities?.autoHandoffOnHumanRequest,
+      true
+    ),
+    autoHandoffOnLowConfidence: bool(
+      capabilities?.auto_handoff_on_low_confidence ??
+        capabilities?.autoHandoffOnLowConfidence,
+      true
+    ),
 
-    shouldAvoidCompetitorComparisons: bool(capabilities?.should_avoid_competitor_comparisons, true),
-    shouldAvoidLegalClaims: bool(capabilities?.should_avoid_legal_claims, true),
-    shouldAvoidUnverifiedPromises: bool(capabilities?.should_avoid_unverified_promises, true),
+    shouldAvoidCompetitorComparisons: bool(
+      capabilities?.should_avoid_competitor_comparisons ??
+        capabilities?.shouldAvoidCompetitorComparisons,
+      true
+    ),
+    shouldAvoidLegalClaims: bool(
+      capabilities?.should_avoid_legal_claims ?? capabilities?.shouldAvoidLegalClaims,
+      true
+    ),
+    shouldAvoidUnverifiedPromises: bool(
+      capabilities?.should_avoid_unverified_promises ??
+        capabilities?.shouldAvoidUnverifiedPromises,
+      true
+    ),
 
-    replyStyle: s(capabilities?.reply_style || "professional"),
-    replyLength: s(capabilities?.reply_length || "medium"),
-    emojiLevel: s(capabilities?.emoji_level || "low"),
-    ctaStyle: s(capabilities?.cta_style || "soft"),
+    replyStyle: s(capabilities?.reply_style || capabilities?.replyStyle || "professional"),
+    replyLength: s(capabilities?.reply_length || capabilities?.replyLength || "medium"),
+    emojiLevel: s(capabilities?.emoji_level || capabilities?.emojiLevel || "low"),
+    ctaStyle: s(capabilities?.cta_style || capabilities?.ctaStyle || "soft"),
 
-    pricingMode: s(capabilities?.pricing_mode || "custom_quote"),
-    bookingMode: s(capabilities?.booking_mode || "manual"),
-    salesMode: s(capabilities?.sales_mode || "consultative"),
+    pricingMode: s(capabilities?.pricing_mode || capabilities?.pricingMode || "custom_quote"),
+    bookingMode: s(capabilities?.booking_mode || capabilities?.bookingMode || "manual"),
+    salesMode: s(capabilities?.sales_mode || capabilities?.salesMode || "consultative"),
 
     capabilitiesJson: parseObject(capabilities?.capabilities_json),
     metadataJson: parseObject(capabilities?.metadata_json),
@@ -95,36 +158,36 @@ export function normalizeCapabilities(capabilities, profile) {
 
 export function normalizeContacts(rows = []) {
   return rows.map((r) => ({
-    id: s(r.id),
-    contactKey: s(r.contact_key),
+    id: s(r.id || r.contactId || r.contact_id),
+    contactKey: s(r.contact_key || r.contactKey || r.key),
     channel: s(r.channel),
     label: s(r.label),
     value: s(r.value),
-    isPrimary: bool(r.is_primary, false),
+    isPrimary: bool(r.is_primary ?? r.isPrimary, false),
     enabled: bool(r.enabled, true),
-    visiblePublic: bool(r.visible_public, true),
-    visibleInAi: bool(r.visible_in_ai, true),
-    sortOrder: num(r.sort_order, 0),
+    visiblePublic: bool(r.visible_public ?? r.visiblePublic, true),
+    visibleInAi: bool(r.visible_in_ai ?? r.visibleInAi, true),
+    sortOrder: num(r.sort_order ?? r.sortOrder, 0),
     meta: parseObject(r.meta),
   }));
 }
 
 export function normalizeLocations(rows = []) {
   return rows.map((r) => ({
-    id: s(r.id),
-    locationKey: s(r.location_key),
+    id: s(r.id || r.locationId || r.location_id),
+    locationKey: s(r.location_key || r.locationKey || r.key),
     title: s(r.title),
-    countryCode: s(r.country_code),
+    countryCode: s(r.country_code || r.countryCode),
     city: s(r.city),
-    addressLine: s(r.address_line),
-    mapUrl: s(r.map_url),
+    addressLine: s(r.address_line || r.addressLine),
+    mapUrl: s(r.map_url || r.mapUrl),
     phone: s(r.phone),
     email: s(r.email),
-    workingHours: parseObject(r.working_hours),
-    deliveryAreas: parseArray(r.delivery_areas),
-    isPrimary: bool(r.is_primary, false),
+    workingHours: parseObject(r.working_hours ?? r.workingHours),
+    deliveryAreas: parseArray(r.delivery_areas ?? r.deliveryAreas),
+    isPrimary: bool(r.is_primary ?? r.isPrimary, false),
     enabled: bool(r.enabled, true),
-    sortOrder: num(r.sort_order, 0),
+    sortOrder: num(r.sort_order ?? r.sortOrder, 0),
     meta: parseObject(r.meta),
   }));
 }
@@ -150,19 +213,23 @@ export function normalizeHours(rows = []) {
 
 export function normalizeServices(rows = []) {
   return rows.map((r) => ({
-    id: s(r.id),
-    serviceKey: s(r.service_key),
-    title: s(r.title),
-    description: s(r.description),
+    id: s(r.id || r.serviceId || r.service_id),
+    serviceKey: s(r.service_key || r.serviceKey || r.key),
+    title: s(r.title || r.name),
+    description: s(r.description || r.summary),
     category: s(r.category),
-    priceFrom: r.price_from == null ? null : Number(r.price_from),
+    priceFrom:
+      r.price_from == null && r.priceFrom == null ? null : Number(r.price_from ?? r.priceFrom),
     currency: s(r.currency || "AZN"),
-    pricingModel: s(r.pricing_model || "custom_quote"),
-    durationMinutes: r.duration_minutes == null ? null : num(r.duration_minutes, 0),
-    isActive: bool(r.is_active, true),
-    sortOrder: num(r.sort_order, 0),
-    highlights: parseArray(r.highlights_json),
-    metadata: parseObject(r.metadata_json),
+    pricingModel: s(r.pricing_model || r.pricingModel || "custom_quote"),
+    durationMinutes:
+      r.duration_minutes == null && r.durationMinutes == null
+        ? null
+        : num(r.duration_minutes ?? r.durationMinutes, 0),
+    isActive: bool(r.is_active ?? r.isActive, true),
+    sortOrder: num(r.sort_order ?? r.sortOrder, 0),
+    highlights: parseArray(r.highlights_json ?? r.highlights),
+    metadata: parseObject(r.metadata_json ?? r.metadata),
   }));
 }
 

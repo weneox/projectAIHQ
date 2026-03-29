@@ -4,9 +4,11 @@ import express from "express";
 import { dbGetTenantByKey } from "../../../db/helpers/tenants.js";
 import {
   dbListTenantContacts,
-  dbUpsertTenantContact,
-  dbDeleteTenantContact,
 } from "../../../db/helpers/tenantBusinessBrain.js";
+import {
+  listSetupContactsFromDraftOrCanonical,
+  stageContactMutationInMaintenanceSession,
+} from "../../../services/workspace/setup/draftBusinessIdentity.js";
 import {
   ok,
   bad,
@@ -39,10 +41,19 @@ export function contactsSettingsRoutes({ db }) {
         return res.status(404).json({ ok: false, error: "Tenant not found" });
       }
 
-      const contacts = await dbListTenantContacts(db, tenant.id);
+      const data = await listSetupContactsFromDraftOrCanonical({
+        db,
+        actor: {
+          tenantId: tenant.id,
+          tenantKey,
+        },
+      });
 
       return ok(res, {
-        contacts,
+        contacts: data.contacts,
+        source: data.source,
+        staged: data.staged,
+        canonicalWriteDeferred: data.canonicalWriteDeferred,
         viewerRole: isInternalServiceRequest(req) ? "internal" : getUserRole(req),
       });
     } catch (err) {
@@ -66,7 +77,14 @@ export function contactsSettingsRoutes({ db }) {
       }
 
       const body = safeJsonObj(req.body, {});
-      const saved = await dbUpsertTenantContact(db, tenant.id, {
+      const staged = await stageContactMutationInMaintenanceSession({
+        db,
+        actor: {
+          tenantId: tenant.id,
+          tenantKey,
+        },
+        mode: "upsert",
+        body: {
         contact_key: cleanLower(body.contact_key || body.contactKey),
         channel: cleanLower(body.channel || "other"),
         label: cleanString(body.label),
@@ -77,9 +95,10 @@ export function contactsSettingsRoutes({ db }) {
         visible_in_ai: normalizeBool(body.visible_in_ai, true),
         sort_order: normalizeNumber(body.sort_order, 0),
         meta: safeJsonObj(body.meta, {}),
+        },
       });
 
-      if (!saved?.id) {
+      if (!staged?.stagedItem?.id && !staged?.stagedItem?.contactKey) {
         return bad(res, "Failed to save contact");
       }
 
@@ -87,16 +106,26 @@ export function contactsSettingsRoutes({ db }) {
         db,
         req,
         tenant,
-        "settings.contact.updated",
-        "tenant_contact",
-        saved.id,
+        "settings.contact.staged_for_review",
+        "tenant_setup_review_draft",
+        staged.maintenanceSession?.id,
         {
-          contactKey: saved.contact_key,
-          channel: saved.channel,
+          contactKey: staged.stagedItem?.contactKey,
+          channel: staged.stagedItem?.channel,
+          publishStatus: staged.publishStatus,
         }
       );
 
-      return ok(res, { contact: saved, viewerRole: role });
+      return ok(res, {
+        contact: staged.stagedItem,
+        publishStatus: staged.publishStatus,
+        reviewRequired: staged.reviewRequired,
+        maintenanceSession: staged.maintenanceSession,
+        maintenanceDraft: staged.maintenanceDraft,
+        liveMutationDeferred: staged.liveMutationDeferred,
+        runtimeProjectionRefreshed: staged.runtimeProjectionRefreshed,
+        viewerRole: role,
+      });
     } catch (err) {
       return serverErr(res, err?.message || "Failed to save contact");
     }
@@ -120,21 +149,49 @@ export function contactsSettingsRoutes({ db }) {
         return res.status(404).json({ ok: false, error: "Tenant not found" });
       }
 
-      const deleted = await dbDeleteTenantContact(db, tenant.id, contactId);
-      if (!deleted) {
+      const existingContacts = await dbListTenantContacts(db, tenant.id);
+      const target = existingContacts.find(
+        (item) => cleanString(item.id) === contactId
+      );
+      if (!target?.id) {
         return res.status(404).json({ ok: false, error: "Contact not found" });
       }
+
+      const staged = await stageContactMutationInMaintenanceSession({
+        db,
+        actor: {
+          tenantId: tenant.id,
+          tenantKey,
+        },
+        mode: "delete",
+        contactId: target.contact_key || target.id,
+      });
 
       await auditSafe(
         db,
         req,
         tenant,
-        "settings.contact.deleted",
-        "tenant_contact",
-        contactId
+        "settings.contact.delete_staged_for_review",
+        "tenant_setup_review_draft",
+        staged.maintenanceSession?.id,
+        {
+          contactKey: target.contact_key,
+          publishStatus: staged.publishStatus,
+        }
       );
 
-      return ok(res, { deleted: true, id: contactId, viewerRole: role });
+      return ok(res, {
+        deleted: true,
+        id: contactId,
+        stagedDeletion: true,
+        publishStatus: staged.publishStatus,
+        reviewRequired: staged.reviewRequired,
+        maintenanceSession: staged.maintenanceSession,
+        maintenanceDraft: staged.maintenanceDraft,
+        liveMutationDeferred: staged.liveMutationDeferred,
+        runtimeProjectionRefreshed: staged.runtimeProjectionRefreshed,
+        viewerRole: role,
+      });
     } catch (err) {
       return serverErr(res, err?.message || "Failed to delete contact");
     }

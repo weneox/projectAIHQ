@@ -288,11 +288,18 @@ export function assessTenantRuntimeProjectionFreshness(
       : hasCanonicalTenant
       ? buildTenantRuntimeProjection(graphValue)
       : null;
+  const expectedPublishedTruthVersionId = s(graphValue?.publishedTruthVersion?.id);
+  const currentPublishedTruthVersionId =
+    normalizePublishedTruthVersionId(current);
 
   const expectedSources = normalizeProjectionSources({
     sourceSnapshotId: graphValue?.synthesis?.id,
-    sourceProfileId: graphValue?.profile?.id,
-    sourceCapabilitiesId: graphValue?.capabilities?.id,
+    sourceProfileId:
+      graphValue?.publishedTruthVersion?.business_profile_id ||
+      graphValue?.profile?.id,
+    sourceCapabilitiesId:
+      graphValue?.publishedTruthVersion?.business_capabilities_id ||
+      graphValue?.capabilities?.id,
   });
 
   const currentSources = normalizeProjectionSources(current);
@@ -310,6 +317,7 @@ export function assessTenantRuntimeProjectionFreshness(
     }
 
     if (
+      !expectedPublishedTruthVersionId &&
       !refsMatch(currentSources.sourceSnapshotId, expectedSources.sourceSnapshotId)
     ) {
       reasons.push("source_snapshot_mismatch");
@@ -336,6 +344,13 @@ export function assessTenantRuntimeProjectionFreshness(
     ) {
       reasons.push("projection_hash_mismatch");
     }
+
+    if (
+      expectedPublishedTruthVersionId &&
+      !refsMatch(currentPublishedTruthVersionId, expectedPublishedTruthVersionId)
+    ) {
+      reasons.push("published_truth_version_mismatch");
+    }
   }
 
   return {
@@ -348,6 +363,8 @@ export function assessTenantRuntimeProjectionFreshness(
     runtimeStatus: s(current.status),
     currentProjectionHash: s(current.projection_hash),
     expectedProjectionHash: s(normalizedExpectedProjection?.projection_hash),
+    currentPublishedTruthVersionId,
+    expectedPublishedTruthVersionId,
     currentSources,
     expectedSources,
     runtimeProjection: runtimeProjectionId ? current : null,
@@ -369,6 +386,8 @@ export function createRuntimeProjectionStaleError(freshness = {}) {
     runtimeStatus: s(normalized.runtimeStatus),
     currentProjectionHash: s(normalized.currentProjectionHash),
     expectedProjectionHash: s(normalized.expectedProjectionHash),
+    currentPublishedTruthVersionId: s(normalized.currentPublishedTruthVersionId),
+    expectedPublishedTruthVersionId: s(normalized.expectedPublishedTruthVersionId),
     currentSources: obj(normalized.currentSources),
     expectedSources: obj(normalized.expectedSources),
   };
@@ -400,6 +419,12 @@ async function markTenantRuntimeProjectionStale(
         staleReasons: arr(obj(freshness).reasons),
         expectedProjectionHash: s(obj(freshness).expectedProjectionHash),
         currentProjectionHash: s(obj(freshness).currentProjectionHash),
+        expectedPublishedTruthVersionId: s(
+          obj(freshness).expectedPublishedTruthVersionId
+        ),
+        currentPublishedTruthVersionId: s(
+          obj(freshness).currentPublishedTruthVersionId
+        ),
         expectedSources: obj(obj(freshness).expectedSources),
         currentSources: obj(obj(freshness).currentSources),
       }),
@@ -792,6 +817,16 @@ export async function getTenantRuntimeProjectionFreshness(
   };
 }
 
+function normalizePublishedTruthVersionId(input = {}) {
+  const metadata = obj(input.metadata_json);
+  return s(
+    input.publishedTruthVersionId ||
+      input.published_truth_version_id ||
+      metadata.publishedTruthVersionId ||
+      metadata.published_truth_version_id
+  );
+}
+
 export async function ensureTenantRuntimeProjectionFresh(
   {
     tenantId = "",
@@ -886,6 +921,18 @@ export async function refreshTenantRuntimeProjection(
       tenant,
       graph: rawGraph,
     });
+    const publishedTruthVersionId = s(graph?.publishedTruthVersion?.id);
+
+    if (!publishedTruthVersionId) {
+      throw createTenantRuntimeAuthorityUnavailableError({
+        tenant,
+        graph,
+        reason: "approved_truth_unavailable",
+        missing: ["published_truth_version"],
+        message:
+          "Tenant runtime authority is unavailable because no published truth version exists for runtime refresh.",
+      });
+    }
 
     const run = await one(
       client,
@@ -915,8 +962,13 @@ export async function refreshTenantRuntimeProjection(
         s(runnerKey || "runtime_projection"),
         JSON.stringify({
           sourceSnapshotId: s(graph.synthesis?.id),
-          profileId: s(graph.profile?.id),
-          capabilitiesId: s(graph.capabilities?.id),
+          profileId:
+            s(graph.publishedTruthVersion?.business_profile_id) ||
+            s(graph.profile?.id),
+          capabilitiesId:
+            s(graph.publishedTruthVersion?.business_capabilities_id) ||
+            s(graph.capabilities?.id),
+          publishedTruthVersionId,
         }),
         JSON.stringify(obj(metadata)),
       ]
@@ -937,8 +989,14 @@ export async function refreshTenantRuntimeProjection(
           tenantId: graph.tenant.id,
           tenantKey: s(graph.tenant.tenant_key),
           sourceSnapshotId: graph.synthesis?.id || null,
-          sourceProfileId: graph.profile?.id || null,
-          sourceCapabilitiesId: graph.capabilities?.id || null,
+          sourceProfileId:
+            graph.publishedTruthVersion?.business_profile_id ||
+            graph.profile?.id ||
+            null,
+          sourceCapabilitiesId:
+            graph.publishedTruthVersion?.business_capabilities_id ||
+            graph.capabilities?.id ||
+            null,
           projection,
           generatedBy,
           approvedBy: s(approvedBy || generatedBy || "system"),
@@ -946,6 +1004,7 @@ export async function refreshTenantRuntimeProjection(
             ...obj(metadata),
             source: "refreshTenantRuntimeProjection",
             refreshedByRuntimeProjection: true,
+            publishedTruthVersionId,
           },
         },
         client

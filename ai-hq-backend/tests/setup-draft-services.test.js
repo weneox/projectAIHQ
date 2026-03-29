@@ -7,6 +7,7 @@ import {
 } from "../src/services/workspace/setup/draftProfile.js";
 import {
   listSetupServicesFromDraftOrCanonical,
+  stageApprovedServiceCandidateInMaintenanceSession,
   stageSetupServiceMutation,
 } from "../src/services/workspace/setup/draftServices.js";
 import {
@@ -156,6 +157,95 @@ test("service draft mutation edits only review draft services and preserves stag
   assert.equal(patchCalls[0].patch.services[0].title, "Brand Strategy");
   assert.equal(patchCalls[0].patch.services[0].metadataJson.stagedInSetupReview, true);
   assert.equal(patchCalls[0].patch.draftPayload.stagedInputs.services.count, 1);
+});
+
+test("approved service candidate stages into a maintenance review instead of mutating live services", async () => {
+  const captured = {
+    sessionInput: null,
+    patchInput: null,
+    sessionPatch: null,
+  };
+
+  const staged = await stageApprovedServiceCandidateInMaintenanceSession({
+    db: {},
+    actor: {
+      tenantId: "tenant-1",
+      tenantKey: "alpha",
+      role: "owner",
+    },
+    candidate: {
+      id: "candidate-1",
+      category: "service",
+      item_key: "branding",
+      title: "Brand Strategy",
+      value_json: {
+        description: "Positioning and identity design.",
+        pricingModel: "custom_quote",
+      },
+    },
+    reviewedBy: "reviewer@example.com",
+    async getCurrentSetupReview() {
+      return {
+        session: null,
+        draft: null,
+      };
+    },
+    async getOrCreateActiveSetupReviewSession(input) {
+      captured.sessionInput = input;
+      return {
+        id: "session-maint-1",
+        mode: "refresh",
+        status: "draft",
+        currentStep: "maintenance_review",
+        metadata: {},
+      };
+    },
+    async patchSetupReviewDraft(input) {
+      captured.patchInput = input;
+      return {
+        version: 3,
+        services: input.patch.services,
+        sourceSummary: input.patch.sourceSummary,
+      };
+    },
+    async updateSetupReviewSession(sessionId, patch) {
+      captured.sessionPatch = { sessionId, patch };
+      return {
+        id: sessionId,
+        ...patch,
+      };
+    },
+    truthVersionHelper: {
+      async getLatestVersion() {
+        return {
+          id: "truth-version-2",
+          services_snapshot_json: [
+            {
+              id: "service-1",
+              serviceKey: "consultation",
+              title: "Consultation",
+            },
+          ],
+        };
+      },
+    },
+  });
+
+  assert.equal(captured.sessionInput?.mode, "refresh");
+  assert.equal(captured.patchInput?.patch?.services.length, 2);
+  assert.equal(captured.patchInput?.patch?.services[1]?.title, "Brand Strategy");
+  assert.equal(
+    captured.patchInput?.patch?.sourceSummary?.maintenance?.sourceCurrentTruthVersionId,
+    "truth-version-2"
+  );
+  assert.equal(captured.sessionPatch?.patch?.currentStep, "maintenance_review");
+  assert.equal(staged.publishStatus, "review_required");
+  assert.equal(staged.reviewRequired, true);
+  assert.equal(staged.liveMutationDeferred, true);
+  assert.equal(staged.runtimeProjectionRefreshed, false);
+  assert.equal(staged.truthVersionCreated, false);
+  assert.equal(staged.maintenanceSession?.id, "session-maint-1");
+  assert.equal(staged.maintenanceDraft?.version, 3);
 });
 
 test("service listing prefers staged review draft over canonical catalog when session exists", async () => {

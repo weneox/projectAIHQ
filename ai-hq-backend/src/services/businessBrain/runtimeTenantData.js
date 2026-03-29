@@ -10,7 +10,6 @@ import { createTenantExecutionPolicyControlHelpers } from "../../db/helpers/tena
 import {
   getCurrentTenantRuntimeProjection,
   getTenantRuntimeProjectionFreshness,
-  refreshTenantRuntimeProjectionStrict,
 } from "../../db/helpers/tenantRuntimeProjection.js";
 import { createRuntimeAuthorityError } from "./runtimeAuthority.js";
 import {
@@ -669,35 +668,6 @@ async function loadCurrentProjection({ db, tenantId = "", tenantKey = "" }) {
       return { projection: current, freshness };
     }
 
-    const refreshed = await runDbStep(
-      "refreshTenantRuntimeProjectionStrict:stale",
-      tenantRef,
-      () =>
-        refreshTenantRuntimeProjectionStrict(
-          {
-            tenantId,
-            tenantKey,
-            triggerType: "system",
-            requestedBy: "getTenantBusinessRuntime",
-            runnerKey: "getTenantBusinessRuntime",
-            generatedBy: "system",
-            metadata: {
-              source: "getTenantBusinessRuntime",
-              staleProjectionRecovery: true,
-              staleReasons: arr(freshness?.reasons),
-            },
-          },
-          db
-        )
-    );
-
-    if (obj(refreshed?.projection).id) {
-      return {
-        projection: refreshed.projection,
-        freshness: refreshed.freshness || freshness,
-      };
-    }
-
     throw createRuntimeAuthorityError({
       mode: "strict",
       tenantId,
@@ -707,32 +677,8 @@ async function loadCurrentProjection({ db, tenantId = "", tenantKey = "" }) {
       reasonCode: "runtime_projection_stale",
       reason: "runtime_projection_stale",
       message:
-        "Approved runtime projection is stale and could not be refreshed.",
+        "Approved runtime projection is stale and automatic rebuild is disabled until a governed runtime refresh occurs.",
     });
-  }
-
-  const refreshed = await runDbStep(
-    "refreshTenantRuntimeProjectionStrict:missing",
-    tenantRef,
-    () =>
-      refreshTenantRuntimeProjectionStrict(
-        {
-          tenantId,
-          tenantKey,
-          triggerType: "system",
-          requestedBy: "getTenantBusinessRuntime",
-          runnerKey: "getTenantBusinessRuntime",
-          generatedBy: "system",
-        },
-        db
-      )
-  );
-
-  if (obj(refreshed?.projection).id) {
-    return {
-      projection: refreshed.projection,
-      freshness: refreshed.freshness || null,
-    };
   }
 
   return {

@@ -37,7 +37,11 @@ import {
   createApprovalInternal,
 } from "./writers.js";
 import { mergeKnowledgeItem, resolveWriteIntent } from "./merge.js";
-import { projectApprovedCandidateToCanonicalInternal } from "./projection.js";
+import {
+  projectApprovedCandidateToCanonicalInternal,
+  stageApprovedCandidateInMaintenanceSessionInternal,
+  stageSourceChannelCapabilitiesInMaintenanceSessionInternal,
+} from "./projection.js";
 import { rowToApproval } from "./mappers.js";
 
 const PLAYBOOK_TABLE_CANDIDATES = [
@@ -743,52 +747,69 @@ export function createTenantKnowledgeHelpers({ db }) {
 
       return withTx(db, async (tx) => {
         const beforeCandidate = candidate;
+        const maintenanceProjectionPreview =
+          options.projectToCanonical === false
+            ? null
+            : await stageApprovedCandidateInMaintenanceSessionInternal(tx, candidate, {
+                reviewerId: options.reviewerId || "",
+                reviewerName: options.reviewerName || "",
+              });
+        const useMaintenanceSession =
+          maintenanceProjectionPreview?.maintenanceSession?.id &&
+          maintenanceProjectionPreview?.projectionGuard?.maintenanceStaged === true;
 
-        const knowledge = await upsertKnowledgeItemInternal(tx, {
-          tenantId: tenant.tenantId,
-          tenantKey: tenant.tenantKey,
-          canonicalKey:
-            s(options.canonicalKey) ||
-            buildCanonicalKey(
-              candidate.category,
-              options.itemKey || candidate.item_key,
-              candidate.value_text || candidate.title
-            ),
-          category: options.category || candidate.category,
-          itemKey: options.itemKey || candidate.item_key,
-          title: options.title || candidate.title,
-          valueText: options.valueText || candidate.value_text,
-          valueJson: options.valueJson !== undefined ? options.valueJson : candidate.value_json,
-          normalizedText:
-            options.normalizedText !== undefined ? options.normalizedText : candidate.normalized_text,
-          normalizedJson:
-            options.normalizedJson !== undefined ? options.normalizedJson : candidate.normalized_json,
-          status: options.knowledgeStatus || "approved",
-          priority: options.priority ?? 100,
-          confidence: options.confidence ?? candidate.confidence,
-          sourceCount: options.sourceCount ?? 1,
-          primarySourceId: options.primarySourceId || candidate.source_id || null,
-          sourceEvidenceJson:
-            options.sourceEvidenceJson !== undefined
-              ? options.sourceEvidenceJson
-              : candidate.source_evidence_json,
-          approvalMode: options.approvalMode || "promoted",
-          approvedFromCandidateId: candidate.id,
-          tagsJson: options.tagsJson || [],
-          metadataJson: {
-            ...obj(options.metadataJson, {}),
-            projection_source: "candidate_approval",
-          },
-          createdBy: options.createdBy || options.reviewerId || "",
-          approvedBy: options.approvedBy || options.reviewerId || "",
-          updatedBy: options.updatedBy || options.reviewerId || "",
-          approvedAt: options.approvedAt || new Date().toISOString(),
-          writeIntent: "approved_projection",
-        });
+        const knowledge = useMaintenanceSession
+          ? null
+          : await upsertKnowledgeItemInternal(tx, {
+              tenantId: tenant.tenantId,
+              tenantKey: tenant.tenantKey,
+              canonicalKey:
+                s(options.canonicalKey) ||
+                buildCanonicalKey(
+                  candidate.category,
+                  options.itemKey || candidate.item_key,
+                  candidate.value_text || candidate.title
+                ),
+              category: options.category || candidate.category,
+              itemKey: options.itemKey || candidate.item_key,
+              title: options.title || candidate.title,
+              valueText: options.valueText || candidate.value_text,
+              valueJson:
+                options.valueJson !== undefined ? options.valueJson : candidate.value_json,
+              normalizedText:
+                options.normalizedText !== undefined
+                  ? options.normalizedText
+                  : candidate.normalized_text,
+              normalizedJson:
+                options.normalizedJson !== undefined
+                  ? options.normalizedJson
+                  : candidate.normalized_json,
+              status: options.knowledgeStatus || "approved",
+              priority: options.priority ?? 100,
+              confidence: options.confidence ?? candidate.confidence,
+              sourceCount: options.sourceCount ?? 1,
+              primarySourceId: options.primarySourceId || candidate.source_id || null,
+              sourceEvidenceJson:
+                options.sourceEvidenceJson !== undefined
+                  ? options.sourceEvidenceJson
+                  : candidate.source_evidence_json,
+              approvalMode: options.approvalMode || "promoted",
+              approvedFromCandidateId: candidate.id,
+              tagsJson: options.tagsJson || [],
+              metadataJson: {
+                ...obj(options.metadataJson, {}),
+                projection_source: "candidate_approval",
+              },
+              createdBy: options.createdBy || options.reviewerId || "",
+              approvedBy: options.approvedBy || options.reviewerId || "",
+              updatedBy: options.updatedBy || options.reviewerId || "",
+              approvedAt: options.approvedAt || new Date().toISOString(),
+              writeIntent: "approved_projection",
+            });
 
         const updatedCandidate = await updateCandidateInternal(tx, candidate.id, {
           status: options.candidateStatus || "approved",
-          approvedItemId: knowledge.id,
+          approvedItemId: knowledge?.id || null,
           reviewedBy: options.reviewerId || "",
           reviewedAt: options.reviewedAt || new Date().toISOString(),
           reviewReason: options.reason || "",
@@ -830,16 +851,18 @@ export function createTenantKnowledgeHelpers({ db }) {
         const projection =
           options.projectToCanonical === false
             ? { profile: null, capabilities: null, runtimeProjection: null }
-            : await projectApprovedCandidateToCanonicalInternal(tx, updatedCandidate, {
-                reviewerId: options.reviewerId || "",
-                reviewerName: options.reviewerName || "",
-              });
+            : useMaintenanceSession
+              ? maintenanceProjectionPreview
+              : await projectApprovedCandidateToCanonicalInternal(tx, updatedCandidate, {
+                  reviewerId: options.reviewerId || "",
+                  reviewerName: options.reviewerName || "",
+                });
 
         const approval = await createApprovalInternal(tx, {
           tenantId: tenant.tenantId,
           tenantKey: tenant.tenantKey,
           candidateId: candidate.id,
-          knowledgeItemId: knowledge.id,
+          knowledgeItemId: knowledge?.id || null,
           sourceId: candidate.source_id,
           action: options.action || "approve",
           decision: options.decision || "approved",
@@ -874,7 +897,9 @@ export function createTenantKnowledgeHelpers({ db }) {
                   knowledgeItemId: knowledge.id,
                 },
               })
-            : projection?.runtimeProjection || null;
+            : useMaintenanceSession
+              ? null
+              : projection?.runtimeProjection || null;
 
         return {
           candidate: updatedCandidate,
@@ -977,76 +1002,19 @@ export function createTenantKnowledgeHelpers({ db }) {
           .filter(Boolean)
       );
 
-      const current = (await getBusinessCapabilitiesInternal(db, tenant)) || {};
-
-      const row = await upsertBusinessCapabilitiesInternal(db, {
-        tenantId: tenant.tenant_id,
-        tenantKey: tenant.tenant_key,
-        writeIntent: "approved_projection",
-        canSharePrices: current.can_share_prices,
-        canShareStartingPrices: current.can_share_starting_prices,
-        requiresHumanForCustomQuote: current.requires_human_for_custom_quote ?? true,
-        canCaptureLeads: current.can_capture_leads ?? true,
-        canCapturePhone: current.can_capture_phone ?? true,
-        canCaptureEmail: current.can_capture_email ?? true,
-        canOfferBooking: current.can_offer_booking ?? false,
-        canOfferConsultation: current.can_offer_consultation ?? false,
-        canOfferCallback: current.can_offer_callback ?? true,
-        supportsInstagramDm: types.has("instagram"),
-        supportsFacebookMessenger:
-          types.has("messenger") ||
-          types.has("facebook_page") ||
-          types.has("facebook"),
-        supportsWhatsapp: types.has("whatsapp_business"),
-        supportsComments:
-          types.has("facebook_comments") ||
-          types.has("instagram") ||
-          types.has("facebook"),
-        supportsVoice: false,
-        supportsEmail: types.has("email") || current.supports_email,
-        supportsMultilanguage: current.supports_multilanguage ?? false,
-        primaryLanguage: current.primary_language || "az",
-        supportedLanguages: current.supported_languages || [],
-        handoffEnabled: current.handoff_enabled ?? true,
-        autoHandoffOnHumanRequest: current.auto_handoff_on_human_request ?? true,
-        autoHandoffOnLowConfidence: current.auto_handoff_on_low_confidence ?? true,
-        shouldAvoidCompetitorComparisons:
-          current.should_avoid_competitor_comparisons ?? true,
-        shouldAvoidLegalClaims: current.should_avoid_legal_claims ?? true,
-        shouldAvoidUnverifiedPromises:
-          current.should_avoid_unverified_promises ?? true,
-        replyStyle: current.reply_style || "professional",
-        replyLength: current.reply_length || "medium",
-        emojiLevel: current.emoji_level || "low",
-        ctaStyle: current.cta_style || "soft",
-        pricingMode: current.pricing_mode || "custom_quote",
-        bookingMode: current.booking_mode || "manual",
-        salesMode: current.sales_mode || "consultative",
-        capabilitiesJson: current.capabilities_json || {},
-        metadataJson: {
-          ...(current.metadata_json || {}),
-          channel_refresh: true,
-        },
-        derivedFromProfile: true,
-        approvedBy,
+      return withTx(db, async (tx) => {
+        return stageSourceChannelCapabilitiesInMaintenanceSessionInternal(
+          tx,
+          {
+            tenantId: tenant.tenant_id,
+            tenantKey: tenant.tenant_key,
+            sourceTypes: Array.from(types),
+            reviewerId: s(approvedBy),
+            reviewerName: s(approvedBy),
+            source: "refreshChannelCapabilitiesFromSources",
+          }
+        );
       });
-
-      await refreshRuntimeProjectionRequired(db, {
-        tenantId: tenant.tenant_id,
-        tenantKey: tenant.tenant_key,
-        triggerType: "source_change",
-        requestedBy: s(
-          approvedBy || "tenantKnowledge.refreshChannelCapabilitiesFromSources"
-        ),
-        runnerKey: "tenantKnowledge.refreshChannelCapabilitiesFromSources",
-        generatedBy: s(approvedBy || "system"),
-        metadata: {
-          source: "refreshChannelCapabilitiesFromSources",
-          capabilitiesId: row?.id || "",
-        },
-      });
-
-      return row;
     },
   };
 

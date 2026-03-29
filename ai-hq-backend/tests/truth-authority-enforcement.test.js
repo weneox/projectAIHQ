@@ -200,6 +200,98 @@ function buildProjectionRows() {
 
   return {
     tenant,
+    publishedTruthVersion: {
+      id: "truth-version-1",
+      tenant_id: tenant.id,
+      tenant_key: tenant.tenant_key,
+      business_profile_id: "profile-1",
+      business_capabilities_id: "capabilities-1",
+      approved_at: "2026-03-29T00:00:00.000Z",
+      approved_by: "operator@aihq.test",
+      source_summary_json: {},
+      profile_snapshot_json: {
+        companyName: "Acme Clinic",
+        displayName: "Acme Clinic",
+        legalName: "Acme Clinic LLC",
+        industryKey: "clinic",
+        summaryShort: "Premium clinic care",
+        summaryLong: "Same-day consultations and follow-up support.",
+        valueProposition: "Fast, careful treatment",
+        targetAudience: "Families",
+        toneProfile: "professional",
+        mainLanguage: "en",
+        supportedLanguages: ["en", "az"],
+        websiteUrl: "https://acme.example",
+        primaryEmail: "hello@acme.example",
+        primaryPhone: "+15550001111",
+      },
+      capabilities_snapshot_json: {
+        primaryLanguage: "en",
+        supportedLanguages: ["en", "az"],
+        replyStyle: "professional",
+        replyLength: "medium",
+        ctaStyle: "soft",
+      },
+      field_provenance_json: {},
+      metadata_json: {
+        servicesSnapshot: [
+          {
+            id: "service-published-1",
+            serviceKey: "consultation",
+            title: "Consultation",
+            description: "Published consultation service",
+            category: "general",
+            pricingModel: "custom_quote",
+            currency: "AZN",
+            durationMinutes: 30,
+            isActive: true,
+            sortOrder: 0,
+            highlights: [],
+            metadata: {
+              source: "published_truth",
+            },
+          },
+        ],
+        contactsSnapshot: [
+          {
+            id: "contact-published-1",
+            contactKey: "main-phone",
+            channel: "phone",
+            label: "Main line",
+            value: "+15550001111",
+            isPrimary: true,
+            enabled: true,
+            visiblePublic: true,
+            visibleInAi: true,
+            sortOrder: 0,
+            meta: {
+              source: "published_truth",
+            },
+          },
+        ],
+        locationsSnapshot: [
+          {
+            id: "location-published-1",
+            locationKey: "hq",
+            title: "Head Office",
+            city: "Baku",
+            addressLine: "1 Governance Ave",
+            phone: "+15550001111",
+            email: "hello@acme.example",
+            workingHours: {
+              mon: "09:00-18:00",
+            },
+            deliveryAreas: ["Baku"],
+            isPrimary: true,
+            enabled: true,
+            sortOrder: 0,
+            meta: {
+              source: "published_truth",
+            },
+          },
+        ],
+      },
+    },
     profile: {
       id: "profile-1",
       tenant_id: tenant.id,
@@ -475,6 +567,7 @@ function createProjectionDb(rows) {
           readiness_label: values[32] || "ready",
           confidence: values[33] || 1,
           confidence_label: values[34] || "high",
+          metadata_json: JSON.parse(values[37] || "{}"),
         };
         return { rows: [state.projectionRow] };
       }
@@ -507,6 +600,10 @@ function createProjectionDb(rows) {
           finished_at: new Date().toISOString(),
         };
         return { rows: [] };
+      }
+
+      if (sql.includes("from tenant_business_profile_versions")) {
+        return { rows: rows.publishedTruthVersion ? [rows.publishedTruthVersion] : [] };
       }
 
       if (sql.includes("from tenant_business_profile")) {
@@ -1780,8 +1877,11 @@ test("authoritative tenant lookups and inbox context succeed when an approved pr
     tenant_key: rows.tenant.tenant_key,
     status: "ready",
     source_snapshot_id: graph.synthesis.id,
-    source_profile_id: graph.profile.id,
-    source_capabilities_id: graph.capabilities.id,
+    source_profile_id: graph.publishedTruthVersion.business_profile_id,
+    source_capabilities_id: graph.publishedTruthVersion.business_capabilities_id,
+    metadata_json: {
+      publishedTruthVersionId: graph.publishedTruthVersion.id,
+    },
     ...projection,
   };
 
@@ -1856,4 +1956,179 @@ test("runtime projection repair restores strict consumer usability without legac
   assert.equal(Array.isArray(inboxContext?.services), true);
   assert.equal(inboxContext.services.length > 0, true);
   assert.equal(db.state.legacyTenantQueryCount >= 1, true);
+});
+
+test("runtime refresh uses the published truth version snapshot instead of live profile drift", async () => {
+  const rows = buildProjectionRows();
+  rows.profile.company_name = "Drifted Live Name";
+  rows.profile.summary_short = "Live drift should not become authority.";
+  rows.profile.profile_json = {
+    ...rows.profile.profile_json,
+    companyName: "Drifted Live Name",
+    displayName: "Drifted Live Name",
+    summaryShort: "Live drift should not become authority.",
+  };
+
+  const db = createProjectionDb(rows);
+
+  const refreshed = await refreshTenantRuntimeProjectionStrict(
+    {
+      tenantId: rows.tenant.id,
+      tenantKey: rows.tenant.tenant_key,
+      triggerType: "manual_repair",
+      requestedBy: "operator@aihq.test",
+      runnerKey: "tests.truth_backed_refresh",
+      generatedBy: "operator@aihq.test",
+      approvedBy: "operator@aihq.test",
+    },
+    db
+  );
+
+  assert.equal(refreshed.ok, true);
+  assert.equal(refreshed.projection?.profile_json?.companyName, "Acme Clinic");
+  assert.equal(
+    refreshed.projection?.profile_json?.summaryShort,
+    "Premium clinic care"
+  );
+  assert.equal(
+    refreshed.projection?.metadata_json?.publishedTruthVersionId,
+    "truth-version-1"
+  );
+  assert.equal(refreshed.freshness?.expectedPublishedTruthVersionId, "truth-version-1");
+});
+
+test("runtime refresh uses the published service snapshot instead of live service drift", async () => {
+  const rows = buildProjectionRows();
+  rows.services = [
+    {
+      id: "service-live-2",
+      service_key: "vip-retainer",
+      title: "Live Drift Service",
+      description: "This should not become runtime authority.",
+      category: "drift",
+      currency: "AZN",
+      pricing_model: "flat",
+      duration_minutes: 45,
+      is_active: true,
+      sort_order: 0,
+      highlights_json: ["drift"],
+      metadata_json: {},
+    },
+  ];
+
+  const db = createProjectionDb(rows);
+
+  const refreshed = await refreshTenantRuntimeProjectionStrict(
+    {
+      tenantId: rows.tenant.id,
+      tenantKey: rows.tenant.tenant_key,
+      triggerType: "manual_repair",
+      requestedBy: "operator@aihq.test",
+      runnerKey: "tests.truth_backed_service_refresh",
+      generatedBy: "operator@aihq.test",
+      approvedBy: "operator@aihq.test",
+    },
+    db
+  );
+
+  assert.equal(refreshed.ok, true);
+  assert.equal(refreshed.projection?.services_json?.length, 1);
+  assert.equal(refreshed.projection?.services_json?.[0]?.serviceKey, "consultation");
+  assert.equal(refreshed.projection?.services_json?.[0]?.title, "Consultation");
+  assert.equal(
+    refreshed.projection?.services_json?.[0]?.description,
+    "Published consultation service"
+  );
+  assert.equal(refreshed.projection?.services_json?.[0]?.metadata?.source, "published_truth");
+});
+
+test("runtime refresh uses the published contact and location snapshots instead of live drift", async () => {
+  const rows = buildProjectionRows();
+  rows.contacts = [
+    {
+      id: "contact-live-2",
+      contact_key: "alt-phone",
+      channel: "phone",
+      label: "Live Drift Line",
+      value: "+15559999999",
+      is_primary: true,
+      enabled: true,
+      visible_public: true,
+      visible_in_ai: true,
+      sort_order: 0,
+      meta: {},
+    },
+  ];
+  rows.locations = [
+    {
+      id: "location-live-2",
+      location_key: "drift-office",
+      title: "Live Drift Office",
+      city: "Drift City",
+      address_line: "99 Drift Street",
+      phone: "+15558888888",
+      email: "drift@acme.example",
+      working_hours: {},
+      delivery_areas: [],
+      is_primary: true,
+      enabled: true,
+      sort_order: 0,
+      meta: {},
+    },
+  ];
+
+  const db = createProjectionDb(rows);
+
+  const refreshed = await refreshTenantRuntimeProjectionStrict(
+    {
+      tenantId: rows.tenant.id,
+      tenantKey: rows.tenant.tenant_key,
+      triggerType: "manual_repair",
+      requestedBy: "operator@aihq.test",
+      runnerKey: "tests.truth_backed_contact_location_refresh",
+      generatedBy: "operator@aihq.test",
+      approvedBy: "operator@aihq.test",
+    },
+    db
+  );
+
+  assert.equal(refreshed.ok, true);
+  assert.equal(refreshed.projection?.contacts_json?.[0]?.contactKey, "main-phone");
+  assert.equal(refreshed.projection?.contacts_json?.[0]?.value, "+15550001111");
+  assert.equal(refreshed.projection?.locations_json?.[0]?.locationKey, "hq");
+  assert.equal(refreshed.projection?.locations_json?.[0]?.title, "Head Office");
+  assert.equal(refreshed.projection?.locations_json?.[0]?.meta?.source, "published_truth");
+});
+
+test("strict runtime reads do not auto-rebuild a missing projection from live rows", async () => {
+  const rows = buildProjectionRows();
+  let projectionInsertCount = 0;
+  const baseDb = createProjectionDb(rows);
+  const db = {
+    state: baseDb.state,
+    async query(text, values = []) {
+      const sql = String(text || "").toLowerCase();
+      if (sql.includes("insert into tenant_business_runtime_projection")) {
+        projectionInsertCount += 1;
+      }
+      return baseDb.query(text, values);
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      getTenantBrainRuntime({
+        db,
+        tenantKey: "acme",
+        authorityMode: "strict",
+      }),
+    (error) => {
+      assert.equal(error?.code, "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE");
+      assert.equal(error?.runtimeAuthority?.reasonCode, "runtime_projection_missing");
+      return true;
+    }
+  );
+
+  assert.equal(projectionInsertCount, 0);
+  assert.equal(baseDb.state.projectionRow, null);
 });
