@@ -708,7 +708,7 @@ function buildVoiceProjectedRuntime({
         tenantRow: tenant,
         operationalChannels,
       });
-    } catch (compatError) {
+    } catch {
       throw createRuntimeAuthorityError({
         mode: "strict",
         tenantId: firstNonEmpty(
@@ -837,7 +837,10 @@ export async function processVoiceTenantConfig({
   }
 
   if (!runtime) {
-    if (runtimeAuthorityError && isRuntimeAuthorityError(runtimeAuthorityError)) {
+    if (
+      runtimeAuthorityError &&
+      isRuntimeAuthorityError(runtimeAuthorityError)
+    ) {
       return {
         ok: false,
         statusCode: Number(runtimeAuthorityError?.statusCode || 409),
@@ -875,16 +878,43 @@ export async function processVoiceTenantConfig({
     });
   } catch (error) {
     if (isRuntimeAuthorityError(error)) {
-      return {
-        ok: false,
-        statusCode: Number(error?.statusCode || 409),
-        error: "runtime_authority_unavailable",
-        tenantKey: resolvedTenantKey,
-        toNumber,
-        details: buildVoiceAuthorityDetails(error, runtime),
-      };
+      const authority = obj(runtime?.authority);
+      const approvedAuthorityAvailable =
+        authority.available === true &&
+        s(authority.source) === "approved_runtime_projection";
+
+      if (approvedAuthorityAvailable && operationalChannels?.voice?.ready === true) {
+        try {
+          projectedRuntime = buildManualProjectedRuntime({
+            runtime,
+            tenant,
+            operationalChannels,
+            tenantKey: resolvedTenantKey,
+            toNumber,
+          });
+        } catch {
+          return {
+            ok: false,
+            statusCode: Number(error?.statusCode || 409),
+            error: "runtime_authority_unavailable",
+            tenantKey: resolvedTenantKey,
+            toNumber,
+            details: buildVoiceAuthorityDetails(error, runtime),
+          };
+        }
+      } else {
+        return {
+          ok: false,
+          statusCode: Number(error?.statusCode || 409),
+          error: "runtime_authority_unavailable",
+          tenantKey: resolvedTenantKey,
+          toNumber,
+          details: buildVoiceAuthorityDetails(error, runtime),
+        };
+      }
+    } else {
+      throw error;
     }
-    throw error;
   }
 
   if (operationalChannels?.voice?.ready !== true) {
@@ -977,7 +1007,10 @@ export async function processVoiceTranscript({
   role,
   ts,
 }) {
-  const session = await getVoiceCallSessionByProviderCallSid(db, providerCallSid);
+  const session = await getVoiceCallSessionByProviderCallSid(
+    db,
+    providerCallSid
+  );
   if (!session) {
     return {
       ok: false,
@@ -1036,7 +1069,10 @@ export async function processVoiceSessionState({
   providerCallSid,
   body = {},
 }) {
-  const session = await getVoiceCallSessionByProviderCallSid(db, providerCallSid);
+  const session = await getVoiceCallSessionByProviderCallSid(
+    db,
+    providerCallSid
+  );
   if (!session) {
     return {
       ok: false,
@@ -1137,7 +1173,10 @@ export async function processVoiceOperatorJoin({
   providerCallSid,
   body = {},
 }) {
-  const session = await getVoiceCallSessionByProviderCallSid(db, providerCallSid);
+  const session = await getVoiceCallSessionByProviderCallSid(
+    db,
+    providerCallSid
+  );
   if (!session) {
     return {
       ok: false,
@@ -1158,7 +1197,8 @@ export async function processVoiceOperatorJoin({
     operatorJoinRequested: true,
     operatorJoined: true,
     whisperActive: joinMode === "whisper",
-    takeoverActive: joinMode === "live" ? b(body?.takeoverActive, false) : false,
+    takeoverActive:
+      joinMode === "live" ? b(body?.takeoverActive, false) : false,
     botActive: b(body?.botActive, joinMode !== "live" ? true : false),
     operatorJoinedAt: body?.operatorJoinedAt || new Date().toISOString(),
   });
