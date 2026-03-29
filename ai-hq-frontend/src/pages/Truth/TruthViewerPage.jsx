@@ -14,6 +14,7 @@ import {
 import { getSettingsTrustView } from "../../api/trust.js";
 import TruthHeader from "../../components/truth/TruthHeader.jsx";
 import TruthFieldTable from "../../components/truth/TruthFieldTable.jsx";
+import TruthBehaviorCard from "../../components/truth/TruthBehaviorCard.jsx";
 import TruthProvenancePanel from "../../components/truth/TruthProvenancePanel.jsx";
 import TruthHistoryPanel from "../../components/truth/TruthHistoryPanel.jsx";
 import TruthVersionComparePanel from "../../components/truth/TruthVersionComparePanel.jsx";
@@ -30,6 +31,7 @@ function initialState() {
     data: {
       fields: [],
       approval: { approvedAt: "", approvedBy: "", version: "" },
+      behavior: { rows: [], summary: "", hasBehavior: false },
       history: [],
       notices: [],
       hasProvenance: false,
@@ -192,6 +194,7 @@ export default function TruthViewerPage() {
           data: {
             fields: data.fields || [],
             approval: data.approval || {},
+            behavior: data.behavior || { rows: [], summary: "", hasBehavior: false },
             history: data.history || [],
             notices: data.notices || [],
             hasProvenance: !!data.hasProvenance,
@@ -392,6 +395,8 @@ export default function TruthViewerPage() {
         ...prev.data,
         fields: truthData.fields || [],
         approval: truthData.approval || {},
+        behavior:
+          truthData.behavior || { rows: [], summary: "", hasBehavior: false },
         history: truthData.history || [],
         notices: truthData.notices || [],
         hasProvenance: !!truthData.hasProvenance,
@@ -568,6 +573,14 @@ export default function TruthViewerPage() {
 
       <div className="mt-8">
         <TruthFieldTable fields={state.data.fields} />
+      </div>
+
+      <div className="mt-6">
+        <TruthBehaviorCard
+          title="Approved behavior profile"
+          subtitle="This is the operator-facing behavior layer the approved truth carries into governed runtime."
+          rows={state.data.behavior?.rows || []}
+        />
       </div>
 
       <div className="mt-8">

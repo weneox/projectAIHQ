@@ -21,7 +21,10 @@ import {
   getIndustryPrompt,
   normalizeIndustryKey,
 } from "../prompts/industries/index.js";
+import { buildAgentReplayTrace } from "./agentReplayTrace.js";
 import { composePromptLayers } from "./promptComposer.js";
+
+const PROMPT_COMPOSER_VERSION = "prompt_bundle.v1";
 
 function s(v) {
   return String(v ?? "").trim();
@@ -591,6 +594,36 @@ function eventFromExtra(x = {}) {
   return s(x.event || x.mode || "");
 }
 
+function buildPromptRef({
+  event = "",
+  usecaseKey = "",
+  channelKey = "",
+  industryKey = "",
+  extra = {},
+} = {}) {
+  const variant = s(obj(extra).promptVariant || "default");
+  const normalizedUsecase = s(usecaseKey || event || "general");
+  const normalizedChannel = s(channelKey || "general");
+  const normalizedIndustry = s(industryKey || "generic_business");
+
+  return deepFix({
+    schema: "prompt_ref.v1",
+    version: PROMPT_COMPOSER_VERSION,
+    id: [
+      PROMPT_COMPOSER_VERSION,
+      normalizedChannel,
+      normalizedUsecase,
+      normalizedIndustry,
+      variant,
+    ].join(":"),
+    channel: normalizedChannel,
+    usecase: normalizedUsecase,
+    event: s(event),
+    industryKey: normalizedIndustry,
+    variant,
+  });
+}
+
 export function buildPromptBundle(
   event,
   {
@@ -661,11 +694,20 @@ export function buildPromptBundle(
     usecaseKey,
   });
 
+  const promptRef = buildPromptRef({
+    event: normalizedEvent,
+    usecaseKey,
+    channelKey: s(composed.channelKey || "general"),
+    industryKey: s(vars?.tenant?.industryKey || "generic_business"),
+    extra: vars.extra,
+  });
+
   return deepFix({
     event: normalizedEvent,
     usecaseKey,
     channelKey: s(composed.channelKey || "general"),
     industryKey: s(vars?.tenant?.industryKey || "generic_business"),
+    promptRef,
     tenant: vars.tenant,
     vars,
     globalPolicy,
@@ -675,5 +717,18 @@ export function buildPromptBundle(
     layers: composed.layers,
     layeredPrompt: composed.fullPrompt,
     fullPrompt: composed.fullPrompt,
+    trace: buildAgentReplayTrace({
+      runtime: vars.tenant,
+      behavior: vars.tenant?.behavior,
+      promptBundle: {
+        event: normalizedEvent,
+        usecaseKey,
+        channelKey: s(composed.channelKey || "general"),
+        promptRef,
+        layers: composed.layers,
+      },
+      channel: s(composed.channelKey || "general"),
+      usecase: usecaseKey || normalizedEvent,
+    }),
   });
 }

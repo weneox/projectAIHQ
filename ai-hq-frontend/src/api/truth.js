@@ -1,6 +1,14 @@
 import { apiGet, apiPost } from "./client.js";
 import { getSetupTruth } from "./setup.js";
 import { validateSetupTruthPayload } from "@aihq/shared-contracts/setup";
+import {
+  extractTruthBehavior,
+  formatTruthBehaviorFieldLabel,
+  getTruthBehaviorChanges,
+  getTruthBehaviorRows,
+  getTruthBehaviorSummary,
+  isTruthBehaviorFieldKey,
+} from "../lib/truthBehavior.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -595,11 +603,19 @@ function normalizeChangedFields(value = []) {
       typeof field === "string"
         ? {
             key: s(field),
-            label: s(field),
+            label: isTruthBehaviorFieldKey(field)
+              ? formatTruthBehaviorFieldLabel(field)
+              : s(field),
           }
         : {
             key: s(field?.key || field?.field || field?.name || field?.label),
-            label: s(field?.label || field?.key || field?.field || field?.name),
+            label: isTruthBehaviorFieldKey(
+              field?.key || field?.field || field?.name || field?.label
+            )
+              ? formatTruthBehaviorFieldLabel(
+                  field?.key || field?.field || field?.name || field?.label
+                )
+              : s(field?.label || field?.key || field?.field || field?.name),
           }
     )
     .filter((field) => field.key || field.label);
@@ -628,11 +644,17 @@ function normalizeFieldChanges(value = []) {
           item.afterSummary ?? item.after ?? item.current ?? item.to;
 
       return {
-        key: s(item.key || item.field || item.name || item.label),
-        label: s(item.label || item.key || item.field || item.name),
-        beforeSummary: summarizeFieldChangeValue(beforeValue),
-        afterSummary: summarizeFieldChangeValue(afterValue),
-        summary: s(
+          key: s(item.key || item.field || item.name || item.label),
+          label: isTruthBehaviorFieldKey(
+            item.key || item.field || item.name || item.label
+          )
+            ? formatTruthBehaviorFieldLabel(
+                item.key || item.field || item.name || item.label
+              )
+            : s(item.label || item.key || item.field || item.name),
+          beforeSummary: summarizeFieldChangeValue(beforeValue),
+          afterSummary: summarizeFieldChangeValue(afterValue),
+          summary: s(
           item.summary || item.changeSummary || item.change_summary
         ),
       };
@@ -649,16 +671,17 @@ function normalizeVersionMeta(value = {}, fallbackId = "") {
       (version ? `Truth version ${version}` : "")
   );
 
-  return {
-    id: s(item.id || version || fallbackId),
-    version,
-    versionLabel: versionLabel || "Truth version",
-    profileStatus,
-    approvedAt: s(item.approvedAt),
-    approvedBy: s(item.approvedBy),
-    sourceSummary: summarizeSourceSummary(item.sourceSummary),
-  };
-}
+    return {
+      id: s(item.id || version || fallbackId),
+      version,
+      versionLabel: versionLabel || "Truth version",
+      profileStatus,
+      approvedAt: s(item.approvedAt),
+      approvedBy: s(item.approvedBy),
+      sourceSummary: summarizeSourceSummary(item.sourceSummary),
+      behavior: extractTruthBehavior(item),
+    };
+  }
 
 function normalizeHistory(items = []) {
   return arr(items)
@@ -671,13 +694,29 @@ function normalizeHistory(items = []) {
           item.diff?.changedFields ||
           item.diff?.changed_fields
       );
-      const fieldChanges = normalizeFieldChanges(
-        item.fieldChanges ||
-          item.field_changes ||
-          item.diff?.fieldChanges ||
-          item.diff?.field_changes
-      );
-      const diffSummary = summarizeVersionDiff(item);
+        const fieldChanges = normalizeFieldChanges(
+          item.fieldChanges ||
+            item.field_changes ||
+            item.diff?.fieldChanges ||
+            item.diff?.field_changes
+        );
+        const behavior = extractTruthBehavior(item);
+        const behaviorChanges = [
+          ...fieldChanges.filter((change) => isTruthBehaviorFieldKey(change.key)),
+          ...changedFields
+            .filter((field) => isTruthBehaviorFieldKey(field.key))
+            .map((field) => ({
+              key: field.key,
+              label: field.label,
+              beforeSummary: "",
+              afterSummary: "",
+              summary: `${field.label} changed in this version.`,
+            })),
+        ].filter(
+          (change, index, list) =>
+            list.findIndex((entry) => s(entry.key) === s(change.key)) === index
+        );
+        const diffSummary = summarizeVersionDiff(item);
 
       if (
         !meta.approvedAt &&
@@ -698,14 +737,17 @@ function normalizeHistory(items = []) {
           item.sourceSummary?.governance,
           item.metadata?.governance
         ),
-        finalizeImpact: pickFirstObject(
-          item.finalizeImpact,
-          item.sourceSummary?.finalizeImpact,
-          item.metadata?.finalizeImpact
-        ),
-        changedFields,
-        fieldChanges,
-        changedFieldCount: changedFields.length || fieldChanges.length,
+          finalizeImpact: pickFirstObject(
+            item.finalizeImpact,
+            item.sourceSummary?.finalizeImpact,
+            item.metadata?.finalizeImpact
+          ),
+          behavior,
+          behaviorSummary: getTruthBehaviorSummary(behavior),
+          behaviorChanges,
+          changedFields,
+          fieldChanges,
+          changedFieldCount: changedFields.length || fieldChanges.length,
         diffSummary,
       };
     })
@@ -954,9 +996,23 @@ function normalizeCompareResponse(payload = {}, versionId = "", compareTo = "") 
   const changedFields = normalizeChangedFields(
     compare.changedFields || detail.changedFields || diff.changedFields
   );
-  const fieldChanges = normalizeFieldChanges(
+  const rawFieldChanges = normalizeFieldChanges(
     compare.fieldChanges || detail.fieldChanges || diff.fieldChanges
   );
+  const selectedBehavior = extractTruthBehavior(detail);
+  const comparedBehavior = extractTruthBehavior(
+    Object.keys(comparedVersion).length
+      ? comparedVersion
+      : root.previousTruthVersion || {}
+  );
+  const behaviorChanges = getTruthBehaviorChanges(comparedBehavior, selectedBehavior);
+  const fieldChanges = [
+    ...rawFieldChanges,
+    ...behaviorChanges.filter(
+      (change) =>
+        !rawFieldChanges.some((entry) => s(entry.key) === s(change.key))
+    ),
+  ];
   const sectionChanges = arr(root.sectionChanges || compare.sectionChanges)
     .map((entry) => {
       const item = obj(entry);
@@ -977,6 +1033,24 @@ function normalizeCompareResponse(payload = {}, versionId = "", compareTo = "") 
       compareTo
     ),
     currentVersion: normalizeVersionMeta(currentVersion),
+    behavior: {
+      selected: {
+        raw: selectedBehavior,
+        rows: getTruthBehaviorRows(selectedBehavior),
+        summary: getTruthBehaviorSummary(selectedBehavior),
+      },
+      compared: {
+        raw: comparedBehavior,
+        rows: getTruthBehaviorRows(comparedBehavior),
+        summary: getTruthBehaviorSummary(comparedBehavior),
+      },
+      current: {
+        raw: extractTruthBehavior(currentVersion),
+        rows: getTruthBehaviorRows(currentVersion),
+        summary: getTruthBehaviorSummary(currentVersion),
+      },
+      changes: behaviorChanges,
+    },
     changedFields,
     fieldChanges,
     sectionChanges,
@@ -1008,6 +1082,7 @@ function normalizeTruthResponse(payload = {}, source = "") {
   const truth = checked.value.truth;
   const readiness = obj(truth.readiness);
   const profile = obj(truth.profile);
+  const behavior = extractTruthBehavior(truth);
   const fieldProvenance = obj(truth.fieldProvenance);
   const history = normalizeHistory(truth.history);
 
@@ -1055,6 +1130,12 @@ function normalizeTruthResponse(payload = {}, source = "") {
   return {
     source,
     fields,
+    behavior: {
+      raw: behavior,
+      rows: getTruthBehaviorRows(behavior),
+      summary: getTruthBehaviorSummary(behavior),
+      hasBehavior: getTruthBehaviorRows(behavior).length > 0,
+    },
     approval,
     hasApprovalMeta,
     hasHistory: history.length > 0,

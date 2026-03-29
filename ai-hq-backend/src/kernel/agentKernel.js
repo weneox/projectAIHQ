@@ -217,6 +217,8 @@ function buildEmptyResult({
   warnings = [],
   usage = null,
   raw = null,
+  meta = null,
+  promptBundle = null,
 } = {}) {
   return {
     ok,
@@ -230,6 +232,8 @@ function buildEmptyResult({
     warnings: Array.isArray(warnings) ? warnings : [],
     usage: usage || null,
     raw: raw ?? null,
+    meta: meta && typeof meta === "object" ? meta : null,
+    promptBundle: promptBundle || null,
     proposal: null,
   };
 }
@@ -493,6 +497,9 @@ export async function kernelHandle({
 
     const replyText = fixMojibake(extractText(resp));
     const usage = usageFromResp(resp);
+    const meta = {
+      replayTrace: built.bundle?.trace || null,
+    };
 
     if (!s(replyText)) {
       return buildEmptyResult({
@@ -506,6 +513,8 @@ export async function kernelHandle({
         structured: null,
         usage,
         raw: null,
+        meta,
+        promptBundle: built.bundle,
       });
     }
 
@@ -529,6 +538,8 @@ export async function kernelHandle({
           warnings: parsed.warnings,
           usage,
           raw: s(cfg.DEBUG_DEBATE_RAW) === "true" ? resp : null,
+          meta,
+          promptBundle: built.bundle,
         });
       }
 
@@ -544,6 +555,8 @@ export async function kernelHandle({
         warnings: parsed.warnings,
         usage,
         raw: null,
+        meta,
+        promptBundle: built.bundle,
       });
     }
 
@@ -559,6 +572,8 @@ export async function kernelHandle({
       warnings: [],
       usage,
       raw: null,
+      meta,
+      promptBundle: built.bundle,
     });
   } catch (e) {
     const msg = fixMojibake(s(e?.message || e));

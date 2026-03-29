@@ -1,4 +1,5 @@
 import { deepFix } from "../../../utils/textFix.js";
+import { buildAgentReplayTrace } from "../../../services/agentReplayTrace.js";
 import {
   packType,
   pickAspectRatio,
@@ -22,6 +23,7 @@ export function buildAssetNotifyExtra({
   row,
   jobId,
   contentPack,
+  runtime = null,
   runtimeBehavior = null,
 }) {
   return deepFix({
@@ -41,6 +43,17 @@ export function buildAssetNotifyExtra({
     neededAssets: pickNeededAssets(contentPack),
     reelMeta: pickReelMeta(contentPack),
     runtimeBehavior,
+    replayTrace: buildAgentReplayTrace({
+      runtime: runtime || runtimeBehavior,
+      behavior: runtimeBehavior,
+      channel: "media",
+      usecase: "content.asset_generate",
+      decisions: {
+        cta: {
+          reason: "approved_runtime_behavior",
+        },
+      },
+    }),
     contentPack,
     callback: { url: "/api/executions/callback", tokenHeader: "x-webhook-token" },
   });
@@ -55,6 +68,7 @@ export function buildPublishNotifyExtra({
   contentPack,
   assetUrl,
   caption,
+  runtime = null,
   runtimeBehavior = null,
 }) {
   const thumbnailUrl = pickThumbnailUrl(contentPack, row);
@@ -78,6 +92,17 @@ export function buildPublishNotifyExtra({
     coverUrl: thumbnailUrl || assetUrl,
     caption,
     runtimeBehavior,
+    replayTrace: buildAgentReplayTrace({
+      runtime: runtime || runtimeBehavior,
+      behavior: runtimeBehavior,
+      channel: "content",
+      usecase: "content.publish",
+      decisions: {
+        cta: {
+          reason: "approved_runtime_behavior",
+        },
+      },
+    }),
     contentPack,
     callback: { url: "/api/executions/callback", tokenHeader: "x-webhook-token" },
   });

@@ -10,6 +10,24 @@ it("normalizeTruthResponse maps approved truth metadata, provenance, and history
         profile: {
           companyName: "North Clinic",
           websiteUrl: "https://north.example",
+          nicheBehavior: {
+            businessType: "clinic",
+            niche: "dental_clinic",
+            subNiche: "cosmetic_dentistry",
+            conversionGoal: "book_consultation",
+            primaryCta: "Book your consultation",
+            leadQualificationMode: "service_booking_triage",
+            qualificationQuestions: ["What treatment are you interested in?"],
+            bookingFlowType: "appointment_request",
+            handoffTriggers: ["human_request"],
+            disallowedClaims: ["diagnosis_or_treatment_guarantees"],
+            toneProfile: "warm_reassuring",
+            channelBehavior: {
+              voice: {
+                primaryAction: "book_or_route_call",
+              },
+            },
+          },
         },
         fieldProvenance: {
           companyName: {
@@ -72,6 +90,9 @@ it("normalizeTruthResponse maps approved truth metadata, provenance, and history
   expect(normalized.history[0].versionLabel).toBe("Truth version v3");
   expect(normalized.history[0].sourceSummary).toMatch(/Website/);
   expect(normalized.history[0].diffSummary).toMatch(/companyName/);
+  expect(normalized.behavior.hasBehavior).toBe(true);
+  expect(normalized.behavior.rows.some((row) => row.label === "Business type")).toBe(true);
+  expect(normalized.behavior.rows.some((row) => row.label === "Channel behavior")).toBe(true);
   expect(normalized.fields[0].provenance).toMatch(/Website/);
   expect(normalized.governance.quarantinedClaimCount).toBe(2);
   expect(normalized.finalizeImpact.runtimeAreas).toEqual(["voice"]);
@@ -103,6 +124,19 @@ it("normalizeCompareResponse maps backend truth version compare detail", () => {
           primaryLabel: "Website",
           primaryUrl: "https://north.example/about",
         },
+        profileJson: {
+          nicheBehavior: {
+            businessType: "clinic",
+            primaryCta: "Book your consultation",
+            toneProfile: "warm_reassuring",
+            qualificationQuestions: ["What treatment are you interested in?"],
+            channelBehavior: {
+              voice: {
+                primaryAction: "book_or_route_call",
+              },
+            },
+          },
+        },
       },
       previousTruthVersion: {
         id: "v2",
@@ -110,6 +144,19 @@ it("normalizeCompareResponse maps backend truth version compare detail", () => {
         versionLabel: "Truth version v2",
         approvedAt: "2026-03-24T09:00:00.000Z",
         approvedBy: "owner@aihq.test",
+        profileJson: {
+          nicheBehavior: {
+            businessType: "clinic",
+            primaryCta: "Contact the team",
+            toneProfile: "professional",
+            qualificationQuestions: [],
+            channelBehavior: {
+              voice: {
+                primaryAction: "route_or_capture_callback",
+              },
+            },
+          },
+        },
       },
       currentTruthVersion: {
         id: "v4",
@@ -120,7 +167,7 @@ it("normalizeCompareResponse maps backend truth version compare detail", () => {
       },
       compare: {
         previousVersionId: "v2",
-        changedFields: ["companyName", "websiteUrl"],
+        changedFields: ["companyName", "websiteUrl", "profile.nicheBehavior.primaryCta"],
         fieldChanges: [
           {
             key: "companyName",
@@ -195,10 +242,13 @@ it("normalizeCompareResponse maps backend truth version compare detail", () => {
   expect(normalized.selectedVersion.version).toBe("v3");
   expect(normalized.comparedVersion.version).toBe("v2");
   expect(normalized.currentVersion.version).toBe("v4");
-  expect(normalized.changedFields).toHaveLength(2);
-  expect(normalized.fieldChanges).toHaveLength(1);
+  expect(normalized.changedFields).toHaveLength(3);
+  expect(normalized.fieldChanges.length).toBeGreaterThanOrEqual(2);
   expect(normalized.fieldChanges[0].beforeSummary).toBe("Old Clinic");
   expect(normalized.fieldChanges[0].afterSummary).toBe("North Clinic");
+  expect(normalized.behavior.selected.rows.some((row) => row.label === "Primary CTA")).toBe(true);
+  expect(normalized.behavior.changes.some((change) => change.label === "Primary CTA")).toBe(true);
+  expect(normalized.changedFields.some((field) => field.label === "Primary CTA")).toBe(true);
   expect(normalized.sectionChanges).toHaveLength(1);
   expect(normalized.versionDiff.runtimeAreasLikelyAffected).toEqual([
     "tenant_profile",

@@ -10,6 +10,7 @@ import {
   typingOnAction,
 } from "./actions.js";
 import { aiDecideInbox } from "./ai.js";
+import { buildAgentReplayTrace } from "../agentReplayTrace.js";
 import {
   buildFallbackReply,
   buildKnowledgeReply,
@@ -118,6 +119,90 @@ function buildBehaviorSafeReply(profile, signals) {
   }
 
   return sanitizeReplyText(leadPrompt);
+}
+
+function buildInboxReplayTrace({
+  profile,
+  channel,
+  intent,
+  promptBundle = null,
+  matchedHandoffTrigger = "",
+  matchedDisallowedClaim = "",
+  handoffReason = "",
+  handoffPriority = "",
+  shouldReply = null,
+  shouldHandoff = null,
+  qualificationStatus = "",
+}) {
+  return buildAgentReplayTrace({
+    runtime: profile,
+    behavior: profile?.behavior || profile,
+    promptBundle,
+    channel: channel || "inbox",
+    usecase: "inbox.reply",
+    decisions: {
+      cta: {
+        selected: s(profile?.primaryCta),
+        reason: s(profile?.primaryCta) ? "approved_runtime_behavior" : "",
+      },
+      qualification: {
+        mode: obj(profile?.channelBehavior?.inbox).qualificationDepth,
+        questionCount: arr(profile?.qualificationQuestions).length,
+        reason:
+          arr(profile?.qualificationQuestions).length > 0
+            ? "approved_runtime_behavior"
+            : "",
+      },
+      handoff: {
+        trigger: s(matchedHandoffTrigger),
+        reason: s(handoffReason || (intent === "handoff_request" ? "handoff_request" : "")),
+        priority: s(handoffPriority),
+      },
+      claimBlock: {
+        blocked: Boolean(matchedDisallowedClaim),
+        claim: s(matchedDisallowedClaim),
+        reason: matchedDisallowedClaim ? "behavior_guardrail" : "",
+      },
+    },
+    evaluation: {
+      outcome: s(
+        shouldHandoff === true
+          ? "handoff_recommended"
+          : shouldReply === true
+            ? "reply_recommended"
+            : shouldReply === false
+              ? "no_reply_recommended"
+              : intent
+      ),
+      ctaDirection: s(
+        shouldHandoff === true
+          ? "handoff"
+          : shouldReply === true
+            ? "reply_with_cta"
+            : shouldReply === false
+              ? "none"
+              : ""
+      ),
+      qualification: {
+        status:
+          s(qualificationStatus) ||
+          (arr(profile?.qualificationQuestions).length > 0 ? "guided" : "none"),
+        questionCount: arr(profile?.qualificationQuestions).length,
+      },
+      handoff: {
+        status: shouldHandoff === true ? "recommended" : "clear",
+        trigger: s(matchedHandoffTrigger),
+        reason: s(handoffReason || (intent === "handoff_request" ? "handoff_request" : "")),
+        priority: s(handoffPriority),
+      },
+      claimBlock: {
+        status: matchedDisallowedClaim ? "blocked" : "clear",
+        blocked: Boolean(matchedDisallowedClaim),
+        claim: s(matchedDisallowedClaim),
+        reason: matchedDisallowedClaim ? "behavior_guardrail" : "",
+      },
+    },
+  });
 }
 
 function buildInboxActionsFallback({
@@ -351,6 +436,17 @@ function buildInboxActionsFallback({
     leadScore,
     policy,
     actions,
+    trace: buildInboxReplayTrace({
+      profile,
+      channel,
+      intent,
+      matchedHandoffTrigger: behaviorSignals.matchedHandoffTrigger,
+      matchedDisallowedClaim: behaviorSignals.matchedDisallowedClaim,
+      handoffReason,
+      handoffPriority,
+      shouldReply,
+      shouldHandoff,
+    }),
   };
 }
 
@@ -464,6 +560,12 @@ export async function buildInboxActions({
           meta: metaBase,
         }),
       ],
+      trace: buildInboxReplayTrace({
+        profile,
+        channel,
+        intent: "channel_blocked",
+        shouldReply: false,
+      }),
     };
   }
 
@@ -478,6 +580,12 @@ export async function buildInboxActions({
           meta: metaBase,
         }),
       ],
+      trace: buildInboxReplayTrace({
+        profile,
+        channel,
+        intent: "empty",
+        shouldReply: false,
+      }),
     };
   }
 
@@ -495,6 +603,12 @@ export async function buildInboxActions({
           },
         }),
       ],
+      trace: buildInboxReplayTrace({
+        profile,
+        channel,
+        intent: "thread_blocked",
+        shouldReply: false,
+      }),
     };
   }
 
@@ -543,6 +657,15 @@ export async function buildInboxActions({
       leadScore: 0,
       policy,
       actions,
+      trace: buildInboxReplayTrace({
+        profile,
+        channel,
+        intent: "handoff_active",
+        handoffReason: handoff.reason,
+        handoffPriority: handoff.priority,
+        shouldReply: false,
+        shouldHandoff: true,
+      }),
     };
   }
 
@@ -583,6 +706,12 @@ export async function buildInboxActions({
       leadScore: 0,
       policy,
       actions,
+      trace: buildInboxReplayTrace({
+        profile,
+        channel,
+        intent: "ack",
+        shouldReply: false,
+      }),
     };
   }
 
@@ -623,6 +752,12 @@ export async function buildInboxActions({
       leadScore: 0,
       policy,
       actions,
+      trace: buildInboxReplayTrace({
+        profile,
+        channel,
+        intent: "operator_recently_replied",
+        shouldReply: false,
+      }),
     };
   }
 
@@ -716,6 +851,16 @@ export async function buildInboxActions({
       leadScore,
       policy,
       actions,
+      trace: buildInboxReplayTrace({
+        profile,
+        channel,
+        intent,
+        matchedDisallowedClaim: behaviorSignals.matchedDisallowedClaim,
+        handoffReason: lower(behaviorSignals.matchedDisallowedClaim) || "restricted_claim",
+        handoffPriority: behaviorSignals.urgent ? "high" : "normal",
+        shouldReply,
+        shouldHandoff,
+      }),
     };
   }
 
@@ -811,6 +956,15 @@ export async function buildInboxActions({
       leadScore,
       policy,
       actions,
+      trace: buildInboxReplayTrace({
+        profile,
+        channel,
+        intent,
+        handoffReason: matchedPlaybook.handoffReason || "manual_review",
+        handoffPriority: matchedPlaybook.handoffPriority || "normal",
+        shouldReply,
+        shouldHandoff,
+      }),
     };
   }
 
@@ -881,6 +1035,12 @@ export async function buildInboxActions({
         leadScore,
         policy,
         actions,
+        trace: buildInboxReplayTrace({
+          profile,
+          channel,
+          intent,
+          shouldReply,
+        }),
       };
     }
   }
@@ -1085,6 +1245,17 @@ export async function buildInboxActions({
       leadScore,
       policy,
       actions,
+      trace: ai.trace || buildInboxReplayTrace({
+        profile: aiProfile,
+        channel,
+        intent,
+        promptBundle: null,
+        matchedHandoffTrigger: behaviorSignals.matchedHandoffTrigger,
+        handoffReason,
+        handoffPriority,
+        shouldReply,
+        shouldHandoff,
+      }),
     };
   }
 

@@ -20,10 +20,18 @@ describe("BehaviorReviewPanel", () => {
       <BehaviorReviewPanel
         value={{
           businessType: "clinic",
+          conversionGoal: "book_consultation",
+          primaryCta: "Book your consultation",
+          leadQualificationMode: "service_booking_triage",
+          qualificationQuestions: ["What treatment are you interested in?"],
+          handoffTriggers: ["human_request"],
+          disallowedClaims: ["diagnosis_or_treatment_guarantees"],
           toneProfile: "professional",
           channelBehavior: {
             inbox: {
               primaryAction: "qualify_and_capture",
+              qualificationDepth: "guided",
+              handoffBias: "conditional",
             },
           },
         }}
@@ -62,5 +70,15 @@ describe("BehaviorReviewPanel", () => {
 
     expect(screen.getByText(/observed suggestion/i)).toBeTruthy();
     expect(screen.getByText(/review-session behavior evidence/i)).toBeTruthy();
+    expect(screen.getAllByText(/cta direction/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/tone and style/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/qualification behavior/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/handoff bias/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/safety posture/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/book your consultation/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText(/starts by asking "what treatment are you interested in\?"/i).length
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText(/avoids diagnosis or treatment guarantees claims/i).length).toBeGreaterThan(0);
   });
 });

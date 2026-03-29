@@ -11,6 +11,9 @@ const detail = {
     approvedAt: "2026-03-25T10:00:00.000Z",
     approvedBy: "reviewer@aihq.test",
     sourceSummary: "Website - https://north.example/about",
+    behavior: {
+      businessType: "clinic",
+    },
   },
   comparedVersion: {
     id: "v2",
@@ -18,6 +21,9 @@ const detail = {
     versionLabel: "Truth version v2",
     approvedAt: "2026-03-24T09:00:00.000Z",
     approvedBy: "owner@aihq.test",
+    behavior: {
+      businessType: "clinic",
+    },
   },
   currentVersion: {
     id: "v4",
@@ -25,6 +31,32 @@ const detail = {
     versionLabel: "Truth version v4",
     approvedAt: "2026-03-26T12:00:00.000Z",
     approvedBy: "reviewer@aihq.test",
+  },
+  behavior: {
+    selected: {
+      summary: "Clinic · Book your consultation · Warm Reassuring",
+      rows: [
+        { key: "businessType", label: "Business type", value: "Clinic" },
+        { key: "primaryCta", label: "Primary CTA", value: "Book your consultation" },
+        { key: "toneProfile", label: "Tone profile", value: "Warm Reassuring" },
+      ],
+    },
+    compared: {
+      summary: "Clinic · Contact the team · Professional",
+      rows: [
+        { key: "businessType", label: "Business type", value: "Clinic" },
+        { key: "primaryCta", label: "Primary CTA", value: "Contact the team" },
+        { key: "toneProfile", label: "Tone profile", value: "Professional" },
+      ],
+    },
+    changes: [
+      {
+        key: "behavior.primaryCta",
+        label: "Primary CTA",
+        beforeSummary: "Contact the team",
+        afterSummary: "Book your consultation",
+      },
+    ],
   },
   changedFields: [{ key: "profile.companyName", label: "profile.companyName" }],
   fieldChanges: [
@@ -99,6 +131,10 @@ describe("TruthVersionComparePanel", () => {
     );
 
     expect(screen.getByText(/version detail and rollback preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/selected version behavior/i)).toBeInTheDocument();
+    expect(screen.getByText(/compared version behavior/i)).toBeInTheDocument();
+    expect(screen.getByText(/behavior changes/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/book your consultation/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/version diff/i)).toBeInTheDocument();
     expect(screen.getAllByText(/rollback preview/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/2 canonical field changes span 1 governed area/i)).toBeInTheDocument();
@@ -151,6 +187,7 @@ describe("TruthVersionComparePanel", () => {
     );
 
     expect(screen.getByText(/structured version-diff guidance is unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/no explicit behavior delta was returned/i)).toBeInTheDocument();
     expect(screen.getByText(/rollback preview telemetry is unavailable/i)).toBeInTheDocument();
     expect(screen.getByText(/no rollback field changes were exposed/i)).toBeInTheDocument();
     expect(screen.getByText(/the backend did not return structured diff detail/i)).toBeInTheDocument();

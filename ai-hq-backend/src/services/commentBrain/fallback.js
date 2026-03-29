@@ -1,4 +1,5 @@
 import { cleanText, lower, pickFirstBoolean } from "./shared.js";
+import { buildAgentReplayTrace } from "../agentReplayTrace.js";
 import {
   getCommentChannelBehavior,
   findDisabledServiceMatch,
@@ -371,6 +372,56 @@ export function fallbackClassification(text, { tenantKey, runtime } = {}) {
       channelBehaviorComments: commentsBehavior,
       matchedHandoffTrigger: matchedHandoffTrigger || "",
       matchedDisallowedClaim: matchedDisallowedClaim || "",
+      replayTrace: buildAgentReplayTrace({
+        runtime,
+        channel: "comments",
+        usecase: "meta.comment_reply",
+        decisions: {
+          cta: {
+            reason: "approved_runtime_behavior",
+          },
+          qualification: {
+            mode: commentsBehavior?.qualificationDepth,
+          },
+          handoff: {
+            trigger: matchedHandoffTrigger || "",
+            reason: matchedHandoffTrigger ? "behavior_handoff_trigger" : "",
+          },
+          claimBlock: {
+            blocked: Boolean(matchedDisallowedClaim),
+            claim: matchedDisallowedClaim || "",
+            reason: matchedDisallowedClaim ? "disallowed_claim_request" : "",
+          },
+        },
+        evaluation: {
+          outcome: shouldHandoff
+            ? "handoff_recommended"
+            : shouldPrivateReply
+              ? "private_reply_recommended"
+              : shouldReply
+                ? "public_reply_recommended"
+                : "no_reply_recommended",
+          ctaDirection: shouldPrivateReply
+            ? "private_reply"
+            : shouldReply
+              ? "public_reply"
+              : "none",
+          qualification: {
+            status: guidedQualification ? "guided" : "none",
+          },
+          handoff: {
+            status: shouldHandoff ? "recommended" : "clear",
+            trigger: matchedHandoffTrigger || "",
+            reason: matchedHandoffTrigger ? "behavior_handoff_trigger" : "",
+          },
+          claimBlock: {
+            status: matchedDisallowedClaim ? "blocked" : "clear",
+            blocked: Boolean(matchedDisallowedClaim),
+            claim: matchedDisallowedClaim || "",
+            reason: matchedDisallowedClaim ? "disallowed_claim_request" : "",
+          },
+        },
+      }),
     },
   };
 }

@@ -60,6 +60,11 @@ test("fallback classification blocks disallowed claims and keeps comments behavi
   assert.equal(result.reason, "disallowed_claim_request");
   assert.match(result.replySuggestion, /do not make unverified claims/i);
   assert.equal(result.meta.matchedDisallowedClaim, "instant_result_guarantees");
+  assert.equal(result.meta.replayTrace?.channel, "comments");
+  assert.equal(result.meta.replayTrace?.usecase, "meta.comment_reply");
+  assert.equal(result.meta.replayTrace?.evaluation?.outcome, "handoff_recommended");
+  assert.equal(result.meta.replayTrace?.evaluation?.claimBlock?.status, "blocked");
+  assert.equal(result.meta.replayTrace?.decisions?.claimBlock?.blocked, true);
 });
 
 test("comments sales follow-up changes when channel behavior stops favoring DM", () => {

@@ -38,6 +38,88 @@ function titleCase(value = "") {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
+function firstQuestion(value = []) {
+  return s(arr(value)[0]);
+}
+
+function toneSummary(value = "") {
+  const tone = s(value).toLowerCase();
+  if (!tone) return "No tone profile set yet.";
+  if (tone.includes("premium")) return "Premium, polished, and confidence-forward.";
+  if (tone.includes("calm") || tone.includes("reassuring")) {
+    return "Calm, reassuring, and trust-building.";
+  }
+  if (tone.includes("warm")) return "Warm, human, and welcoming.";
+  if (tone.includes("professional")) return "Professional, clear, and operationally safe.";
+  return `${titleCase(value)} tone will shape reply style.`;
+}
+
+function ctaSummary(value = "", conversionGoal = "") {
+  const cta = s(value);
+  const goal = s(conversionGoal);
+  if (cta) return `Push toward "${cta}" as the main next step.`;
+  if (goal) return `Bias replies toward ${titleCase(goal)} outcomes.`;
+  return "No CTA direction has been set yet.";
+}
+
+function qualificationSummary({
+  mode = "",
+  questions = [],
+  channel = {},
+}) {
+  const depth = s(channel.qualificationDepth);
+  const question = firstQuestion(questions);
+  const modeLabel = s(mode) ? titleCase(mode) : "No qualification mode";
+
+  if (question) {
+    return `${modeLabel} with ${depth || "default"} depth. Starts by asking "${question}".`;
+  }
+
+  if (s(mode) || depth) {
+    return `${modeLabel} with ${depth || "default"} depth.`;
+  }
+
+  return "No explicit qualification behavior set.";
+}
+
+function handoffSummary(channel = {}, triggers = []) {
+  const bias = s(channel.handoffBias);
+  const triggerList = arr(triggers).map((item) => titleCase(item)).join(", ");
+
+  if (bias && triggerList) {
+    return `${titleCase(bias)} handoff bias. Escalates when ${triggerList} appears.`;
+  }
+
+  if (bias) return `${titleCase(bias)} handoff bias is configured.`;
+  if (triggerList) return `Escalates when ${triggerList} appears.`;
+  return "No special handoff bias or trigger is set.";
+}
+
+function safetySummary(value = []) {
+  const claims = arr(value).map((item) => titleCase(item));
+  if (!claims.length) return "No disallowed-claim safety rules set yet.";
+  if (claims.length === 1) return `Avoids ${claims[0]} claims.`;
+  return `Avoids ${claims[0]} and ${claims.length - 1} more claim types.`;
+}
+
+function channelSpecificSummary(channelKey = "", channel = {}) {
+  const key = s(channelKey).toLowerCase();
+
+  if (key === "inbox") {
+    return `Inbox will ${titleCase(channel.primaryAction || "respond")}, then use ${titleCase(channel.qualificationDepth || "default")} qualification before the CTA.`;
+  }
+
+  if (key === "comments") {
+    return `Comments will ${titleCase(channel.primaryAction || "reply publicly")} with ${titleCase(channel.reviewBias || "standard")} review sensitivity.`;
+  }
+
+  if (key === "voice") {
+    return `Voice will ${titleCase(channel.primaryAction || "handle calls")} and keep ${titleCase(channel.handoffBias || "manual")} escalation posture.`;
+  }
+
+  return `Content/media will lean ${titleCase(channel.contentAngle || "general")} with ${titleCase(channel.visualDirection || "default")} direction and a ${titleCase(channel.ctaMode || "default")} CTA style.`;
+}
+
 function SegmentControl({ label, value, options = [], onChange }) {
   return (
     <div>
@@ -122,10 +204,14 @@ function ChannelCard({
   subtitle,
   channelKey,
   channelValue = {},
+  behavior = {},
   onChange,
   controls = [],
 }) {
   const channel = obj(channelValue);
+  const handoffTriggers = arr(behavior.handoffTriggers);
+  const disallowedClaims = arr(behavior.disallowedClaims);
+  const qualificationQuestions = arr(behavior.qualificationQuestions);
 
   return (
     <div className="rounded-[24px] border border-slate-200/80 bg-[rgba(255,255,255,.78)] p-4 shadow-[0_18px_40px_-32px_rgba(15,23,42,.3)]">
@@ -138,6 +224,61 @@ function ChannelCard({
       </div>
 
       <div className="mt-4 grid gap-4">
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="rounded-[18px] border border-slate-200/80 bg-slate-50/80 px-3 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+              CTA direction
+            </div>
+            <div className="mt-2 text-sm leading-6 text-slate-700">
+              {ctaSummary(behavior.primaryCta, behavior.conversionGoal)}
+            </div>
+          </div>
+          <div className="rounded-[18px] border border-slate-200/80 bg-slate-50/80 px-3 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+              Tone and style
+            </div>
+            <div className="mt-2 text-sm leading-6 text-slate-700">
+              {toneSummary(behavior.toneProfile)}
+            </div>
+          </div>
+          <div className="rounded-[18px] border border-slate-200/80 bg-slate-50/80 px-3 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+              Qualification behavior
+            </div>
+            <div className="mt-2 text-sm leading-6 text-slate-700">
+              {qualificationSummary({
+                mode: behavior.leadQualificationMode,
+                questions: qualificationQuestions,
+                channel,
+              })}
+            </div>
+          </div>
+          <div className="rounded-[18px] border border-slate-200/80 bg-slate-50/80 px-3 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+              Handoff bias
+            </div>
+            <div className="mt-2 text-sm leading-6 text-slate-700">
+              {handoffSummary(channel, handoffTriggers)}
+            </div>
+          </div>
+          <div className="rounded-[18px] border border-slate-200/80 bg-slate-50/80 px-3 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+              Safety posture
+            </div>
+            <div className="mt-2 text-sm leading-6 text-slate-700">
+              {safetySummary(disallowedClaims)}
+            </div>
+          </div>
+          <div className="rounded-[18px] border border-slate-200/80 bg-slate-50/80 px-3 py-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+              Channel-specific behavior
+            </div>
+            <div className="mt-2 text-sm leading-6 text-slate-700">
+              {channelSpecificSummary(channelKey, channel)}
+            </div>
+          </div>
+        </div>
+
         {controls.map((control) => (
           <SegmentControl
             key={`${channelKey}-${control.key}`}
@@ -533,6 +674,7 @@ export default function BehaviorReviewPanel({
 
                 setChannel(card.key, nextChannel);
               }}
+              behavior={behavior}
               controls={card.controls}
             />
           ))}

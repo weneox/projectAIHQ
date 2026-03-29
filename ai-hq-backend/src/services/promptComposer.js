@@ -37,6 +37,9 @@ export function inferPromptChannel({ event = "", usecase = "", extra = {} } = {}
   if (explicit) return explicit;
 
   const normalizedUsecase = lower(usecase || event);
+  if (normalizedUsecase === "chat" || normalizedUsecase.endsWith(".chat")) {
+    return "chat";
+  }
   if (normalizedUsecase.startsWith("inbox.")) return "inbox";
   if (normalizedUsecase.includes("comment")) return "comments";
   if (normalizedUsecase.includes("voice")) return "voice";
@@ -92,6 +95,9 @@ export function composePromptLayers({
         : "",
       behavior.primaryCta ? `- primaryCta: ${behavior.primaryCta}` : "",
       behavior.toneProfile ? `- toneProfile: ${behavior.toneProfile}` : "",
+      uniqStrings(behavior.qualificationQuestions).length
+        ? `- qualificationQuestions: ${uniqStrings(behavior.qualificationQuestions).join(" | ")}`
+        : "",
       handoffTriggers.length
         ? `- handoffTriggers: ${handoffTriggers.join(", ")}`
         : "",

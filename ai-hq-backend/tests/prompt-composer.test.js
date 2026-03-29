@@ -66,6 +66,36 @@ test("prompt composer builds different channel layers for inbox and content", ()
   assert.doesNotMatch(inbox.fullPrompt, /expert_reassurance/);
 });
 
+test("prompt composer treats chatbot as a first-class channel and includes qualification questions", () => {
+  const tenant = buildTenantBehavior();
+  tenant.behavior.qualificationQuestions = [
+    "What outcome are you trying to achieve?",
+    "What timeline are you working with?",
+  ];
+  tenant.behavior.channelBehavior.chat = {
+    primaryAction: "qualify_then_route",
+    qualificationDepth: "guided",
+    ctaMode: "consultation_booking",
+  };
+
+  const chat = composePromptLayers({
+    foundation: "Foundation prompt",
+    industry: "Beauty prompt",
+    usecase: "General chat prompt",
+    tenantContext: "Tenant context",
+    tenant,
+    event: "general.chat",
+    usecaseKey: "general.chat",
+    extra: {
+      channel: "chat",
+    },
+  });
+
+  assert.equal(chat.channelKey, "chat");
+  assert.match(chat.fullPrompt, /qualify_then_route/);
+  assert.match(chat.fullPrompt, /What outcome are you trying to achieve\?/);
+});
+
 test("prompt bundle exposes layered runtime, policy, and output-contract hints", () => {
   const bundle = buildPromptBundle("content.analyze", {
     tenant: buildTenantBehavior(),
@@ -95,4 +125,24 @@ test("prompt bundle exposes layered runtime, policy, and output-contract hints",
   assert.match(bundle.fullPrompt, /book_consultation/);
   assert.match(bundle.fullPrompt, /instant_result_guarantees/);
   assert.match(bundle.fullPrompt, /schemaKey: content_analysis/);
+  assert.equal(bundle.trace?.channel, "content");
+  assert.equal(bundle.trace?.usecase, "content.analyze");
+  assert.equal(bundle.promptRef?.schema, "prompt_ref.v1");
+  assert.equal(bundle.promptRef?.version, "prompt_bundle.v1");
+  assert.equal(
+    bundle.trace?.prompt?.promptId,
+    "prompt_bundle.v1:content:content.analyze:beauty:default"
+  );
+  assert.equal(bundle.trace?.evaluation?.schema, "agent_evaluation.v1");
+  assert.equal(bundle.trace?.evaluation?.ctaDirection, "");
+  assert.deepEqual(bundle.trace?.prompt?.layerKeys, [
+    "foundation",
+    "runtime_context",
+    "industry",
+    "usecase",
+    "runtime_behavior",
+    "channel_behavior",
+    "policy",
+    "output_contract",
+  ]);
 });

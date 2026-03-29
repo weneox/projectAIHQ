@@ -21,6 +21,7 @@ import {
 import SettingsSurfaceBanner from "../settings/SettingsSurfaceBanner.jsx";
 import InboxMessageBubble from "./InboxMessageBubble.jsx";
 import InboxMiniInfo from "./InboxMiniInfo.jsx";
+import InboxReplayTraceCard from "./InboxReplayTraceCard.jsx";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -274,6 +275,14 @@ export default function InboxDetailPanel({
               <span className="text-sm text-white/50">Telemetry unavailable</span>
             )}
           </div>
+        </div>
+
+        <div className="mt-4">
+          <InboxReplayTraceCard
+            traceSource={selectedThread}
+            title="Latest execution inspect"
+            subtitle="Runtime and reasoning breadcrumbs for the latest governed action on this thread."
+          />
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">

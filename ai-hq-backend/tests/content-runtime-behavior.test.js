@@ -46,6 +46,12 @@ function buildApprovedRuntime() {
 
 test("content analyze builders consume niche-aware runtime behavior", () => {
   const runtime = buildApprovedRuntime();
+  runtime.authority = {
+    source: "approved_runtime_projection",
+    tenantKey: "acme",
+    runtimeProjectionId: "projection-1",
+    projectionHash: "hash-1",
+  };
   const tenant = buildAnalyzeTenant({
     tenantKey: "acme",
     tenantId: "tenant-1",
@@ -70,6 +76,9 @@ test("content analyze builders consume niche-aware runtime behavior", () => {
   assert.equal(extra.cta, "book your consultation");
   assert.equal(extra.behavior.contentAngle, "expert_reassurance");
   assert.equal(extra.reviewBias, "human_review_required");
+  assert.equal(extra.replayTrace?.channel, "content");
+  assert.equal(extra.replayTrace?.usecase, "content.analyze");
+  assert.equal(extra.replayTrace?.runtimeVersion, "projection-1:hash-1");
   assert.deepEqual(extra.guardrails.disallowedClaims, [
     "instant_result_guarantees",
   ]);

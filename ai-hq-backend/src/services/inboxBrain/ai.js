@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { cfg } from "../../config.js";
+import { buildAgentReplayTrace } from "../agentReplayTrace.js";
 import { buildPromptBundle } from "../promptBundle.js";
 import { arr, getResolvedTenantKey, obj, s, sanitizeReplyText } from "./shared.js";
 import { buildHistorySnippet, extractText, parseJsonLoose } from "./messages.js";
@@ -216,6 +217,53 @@ STRICT BUSINESS RULES:
       matchedKnowledge,
       matchedPlaybook,
       runtime: resolvedRuntime,
+      trace: buildAgentReplayTrace({
+        runtime: resolvedRuntime,
+        behavior: resolvedRuntime.behavior,
+        promptBundle,
+        channel: channel || "inbox",
+        usecase: "inbox.reply",
+        decisions: {
+          cta: {
+            selected: profile.primaryCta,
+            reason: "approved_runtime_behavior",
+          },
+          qualification: {
+            mode: obj(profile.channelBehavior?.inbox).qualificationDepth,
+            questionCount: arr(profile.qualificationQuestions).length,
+            reason:
+              arr(profile.qualificationQuestions).length > 0
+                ? "approved_runtime_behavior"
+                : "",
+          },
+          handoff: {
+            reason: s(parsed.handoffReason || ""),
+            priority: s(parsed.handoffPriority || "normal").toLowerCase(),
+          },
+        },
+        evaluation: {
+          outcome: Boolean(parsed.handoff)
+            ? "handoff_recommended"
+            : Boolean(parsed.noReply)
+              ? "no_reply_recommended"
+              : "reply_recommended",
+          ctaDirection: Boolean(parsed.handoff)
+            ? "handoff"
+            : Boolean(parsed.noReply)
+              ? "none"
+              : "reply_with_cta",
+          qualification: {
+            status:
+              arr(profile.qualificationQuestions).length > 0 ? "guided" : "none",
+            questionCount: arr(profile.qualificationQuestions).length,
+          },
+          handoff: {
+            status: Boolean(parsed.handoff) ? "recommended" : "clear",
+            reason: s(parsed.handoffReason || ""),
+            priority: s(parsed.handoffPriority || "normal").toLowerCase(),
+          },
+        },
+      }),
     };
   } catch {
     return null;

@@ -24,6 +24,7 @@ import {
   makePublicReply,
   makeUnsupportedServicePublicReply,
 } from "./replies.js";
+import { buildAgentReplayTrace } from "../agentReplayTrace.js";
 
 export function normalizeOutput(parsed, { tenantKey, runtime } = {}) {
   const resolvedTenantKey = getResolvedTenantKey(tenantKey);
@@ -182,6 +183,60 @@ export function normalizeOutput(parsed, { tenantKey, runtime } = {}) {
       handoffTriggers: getTenantHandoffTriggers(runtime),
       disallowedClaims: getTenantDisallowedClaims(runtime),
       channelBehaviorComments: commentsBehavior,
+      replayTrace: buildAgentReplayTrace({
+        runtime,
+        channel: "comments",
+        usecase: "meta.comment_reply",
+        decisions: {
+          cta: {
+            selected: getTenantPrimaryCta(runtime),
+            reason: "approved_runtime_behavior",
+          },
+          qualification: {
+            mode: commentsBehavior?.qualificationDepth,
+          },
+          handoff: {
+            reason: shouldHandoff ? reason : "",
+          },
+          claimBlock: {
+            blocked: disallowedClaimReason,
+            claim: disallowedClaimReason ? reason : "",
+            reason: disallowedClaimReason ? reason : "",
+          },
+        },
+        evaluation: {
+          outcome: shouldHandoff
+            ? "handoff_recommended"
+            : shouldPrivateReply
+              ? "private_reply_recommended"
+              : shouldReply
+                ? "public_reply_recommended"
+                : "no_reply_recommended",
+          ctaDirection: shouldPrivateReply
+            ? "private_reply"
+            : shouldReply
+              ? "public_reply"
+              : "none",
+          qualification: {
+            status:
+              commentsBehavior?.qualificationDepth === "guided"
+                ? "guided"
+                : commentsBehavior?.qualificationDepth
+                  ? "present"
+                  : "none",
+          },
+          handoff: {
+            status: shouldHandoff ? "recommended" : "clear",
+            reason: shouldHandoff ? reason : "",
+          },
+          claimBlock: {
+            status: disallowedClaimReason ? "blocked" : "clear",
+            blocked: disallowedClaimReason,
+            claim: disallowedClaimReason ? reason : "",
+            reason: disallowedClaimReason ? reason : "",
+          },
+        },
+      }),
     },
   };
 }

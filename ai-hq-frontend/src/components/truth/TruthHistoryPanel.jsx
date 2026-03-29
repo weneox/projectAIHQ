@@ -66,6 +66,22 @@ export default function TruthHistoryPanel({ history = [], onOpenVersion }) {
                 </div>
               ) : null}
 
+              {s(item.behaviorSummary) ? (
+                <div className="mt-2 rounded-[18px] border border-cyan-200/70 bg-cyan-50/70 px-3 py-2 text-sm leading-6 text-cyan-900">
+                  Behavior snapshot: {item.behaviorSummary}
+                </div>
+              ) : null}
+
+              {arr(item.behaviorChanges).length ? (
+                <div className="mt-2 text-sm leading-6 text-slate-600">
+                  Behavior changes:{" "}
+                  {arr(item.behaviorChanges)
+                    .map((change) => s(change.label))
+                    .filter(Boolean)
+                    .join(", ")}
+                </div>
+              ) : null}
+
               {arr(item.finalizeImpact?.affectedSurfaces).length ? (
                 <div className="mt-2 text-xs uppercase tracking-[0.14em] text-slate-400">
                   Affected surfaces: {arr(item.finalizeImpact.affectedSurfaces).join(", ")}

@@ -394,6 +394,7 @@ export async function approveHandler(req, res, { db, wsHub }) {
           reelMeta: pickReelMeta(contentPack),
           tenantKey,
           tenantId,
+          runtime: runtimeResolved.runtime,
           runtimeBehavior: runtimeResolved.runtimeBehavior,
           automationMode: automation.mode,
           autoPublish: automation.autoPublish,
@@ -422,6 +423,7 @@ export async function approveHandler(req, res, { db, wsHub }) {
           row: updated || row,
           jobId: job?.id || null,
           contentPack,
+          runtime: runtimeResolved.runtime,
           runtimeBehavior: runtimeResolved.runtimeBehavior,
           automationMode: automation.mode,
           autoPublish: automation.autoPublish,
@@ -572,6 +574,7 @@ export async function analyzeHandler(req, res, { db, wsHub }) {
         proposal,
         contentPack,
         assetUrls,
+        runtime: runtimeResolved.runtime,
         runtimeBehavior: runtimeResolved.runtimeBehavior,
       }),
     });
@@ -601,6 +604,17 @@ export async function analyzeHandler(req, res, { db, wsHub }) {
         usecase: analysisRun.usecase || "content.analyze",
         model: analysisRun.model || "",
         warnings: Array.isArray(analysisRun.warnings) ? analysisRun.warnings : [],
+        replayTrace:
+          analysisRun?.meta?.replayTrace ||
+          buildAnalyzeExtra({
+            row,
+            proposal,
+            contentPack,
+            assetUrls,
+            runtime: runtimeResolved.runtime,
+            runtimeBehavior: runtimeResolved.runtimeBehavior,
+          }).replayTrace ||
+          null,
       },
     };
 
@@ -778,6 +792,7 @@ export async function publishHandler(req, res, { db, wsHub }) {
           aspectRatio: pickAspectRatio(contentPack),
           tenantKey,
           tenantId,
+          runtime: runtimeResolved.runtime,
           runtimeBehavior: runtimeResolved.runtimeBehavior,
           automationMode: automation.mode,
           autoPublish: automation.autoPublish,
@@ -808,6 +823,7 @@ export async function publishHandler(req, res, { db, wsHub }) {
           contentPack,
           assetUrl,
           caption,
+          runtime: runtimeResolved.runtime,
           runtimeBehavior: runtimeResolved.runtimeBehavior,
           automationMode: automation.mode,
           autoPublish: automation.autoPublish,

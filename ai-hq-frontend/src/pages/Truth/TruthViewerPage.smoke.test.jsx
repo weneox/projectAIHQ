@@ -62,6 +62,24 @@ vi.mock("../../api/truth.js", () => ({
         provenance: "Website, https://north.example/about - Authority 1",
       },
     ],
+    behavior: {
+      hasBehavior: true,
+      summary: "Clinic · Cosmetic Dentistry · Book your consultation",
+      rows: [
+        { key: "businessType", label: "Business type", value: "Clinic" },
+        { key: "niche", label: "Niche", value: "Dental Clinic" },
+        { key: "subNiche", label: "Sub-niche", value: "Cosmetic Dentistry" },
+        { key: "conversionGoal", label: "Conversion goal", value: "Book Consultation" },
+        { key: "primaryCta", label: "Primary CTA", value: "Book your consultation" },
+        { key: "leadQualificationMode", label: "Lead qualification mode", value: "Service Booking Triage" },
+        { key: "qualificationQuestions", label: "Qualification questions", value: "What treatment are you interested in?" },
+        { key: "bookingFlowType", label: "Booking flow", value: "Appointment Request" },
+        { key: "handoffTriggers", label: "Handoff triggers", value: "Human Request" },
+        { key: "disallowedClaims", label: "Disallowed claims", value: "Diagnosis Or Treatment Guarantees" },
+        { key: "toneProfile", label: "Tone profile", value: "Warm Reassuring" },
+        { key: "channelBehavior", label: "Channel behavior", value: "Voice: book_or_route_call" },
+      ],
+    },
     approval: {
       approvedAt: "2026-03-25T10:00:00.000Z",
       approvedBy: "reviewer@aihq.test",
@@ -78,6 +96,13 @@ vi.mock("../../api/truth.js", () => ({
         approvedBy: "owner@aihq.test",
         sourceSummary: "Website - https://north.example/about - 2 supporting sources",
         diffSummary: "companyName, websiteUrl, services",
+        behaviorSummary: "Clinic · Cosmetic Dentistry · Book your consultation",
+        behaviorChanges: [
+          {
+            key: "behavior.primaryCta",
+            label: "Primary CTA",
+          },
+        ],
       },
     ],
     notices: [],
@@ -268,6 +293,32 @@ vi.mock("../../api/truth.js", () => ({
       versionLabel: "Truth version v4",
       approvedAt: "2026-03-26T11:00:00.000Z",
       approvedBy: "reviewer@aihq.test",
+    },
+    behavior: {
+      selected: {
+        summary: "Clinic · Book your consultation · Warm Reassuring",
+        rows: [
+          { key: "businessType", label: "Business type", value: "Clinic" },
+          { key: "primaryCta", label: "Primary CTA", value: "Book your consultation" },
+          { key: "toneProfile", label: "Tone profile", value: "Warm Reassuring" },
+        ],
+      },
+      compared: {
+        summary: "Clinic · Contact the team · Professional",
+        rows: [
+          { key: "businessType", label: "Business type", value: "Clinic" },
+          { key: "primaryCta", label: "Primary CTA", value: "Contact the team" },
+          { key: "toneProfile", label: "Tone profile", value: "Professional" },
+        ],
+      },
+      changes: [
+        {
+          key: "behavior.primaryCta",
+          label: "Primary CTA",
+          beforeSummary: "Contact the team",
+          afterSummary: "Book your consultation",
+        },
+      ],
     },
     changedFields: [{ key: "companyName", label: "companyName" }],
     fieldChanges: [
@@ -578,6 +629,7 @@ describe("Truth viewer smoke", () => {
     expect(screen.getByText("2026-03-25T10:00:00.000Z")).toBeInTheDocument();
     expect(screen.getByText("reviewer@aihq.test")).toBeInTheDocument();
     expect(screen.getByText("North Clinic")).toBeInTheDocument();
+    expect(screen.getByText(/approved behavior profile/i)).toBeInTheDocument();
     expect(
       screen.getByText(/field-level provenance is available/i)
     ).toBeInTheDocument();
@@ -587,6 +639,8 @@ describe("Truth viewer smoke", () => {
     expect(screen.getByText(/truth version v3/i)).toBeInTheDocument();
     expect(screen.getByText(/source context:/i)).toBeInTheDocument();
     expect(screen.getByText(/changed fields:/i)).toBeInTheDocument();
+    expect(screen.getByText(/behavior snapshot:/i)).toBeInTheDocument();
+    expect(screen.getByText(/behavior changes:/i)).toBeInTheDocument();
     expect(screen.getAllByText(/owner@aihq\.test/i).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: /view compare/i }));
@@ -601,6 +655,9 @@ describe("Truth viewer smoke", () => {
     expect(
       screen.getByText(/rolling back to v3 would revert 1 canonical field/i)
     ).toBeInTheDocument();
+    expect(screen.getByText(/selected version behavior/i)).toBeInTheDocument();
+    expect(screen.getByText(/compared version behavior/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/primary cta/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/old clinic/i)).toBeInTheDocument();
     expect(screen.getAllByText(/north clinic/i).length).toBeGreaterThan(1);
   });

@@ -121,6 +121,7 @@ export function buildThreadStateForDecision({
       executionPolicyReasonCodes: normalizeArr(
         brain?.executionPolicy?.reasonCodes
       ),
+      replayTrace: normalizeObj(brain?.trace),
     },
   };
 }

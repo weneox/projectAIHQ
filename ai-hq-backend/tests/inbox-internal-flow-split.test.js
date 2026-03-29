@@ -268,6 +268,10 @@ test("decision thread-state shaping keeps queued execution and handoff semantics
     },
     brain: {
       intent: "pricing",
+      trace: {
+        channel: "instagram",
+        usecase: "inbox.reply",
+      },
     },
     actions: [{ type: "handoff", reason: "operator_needed", priority: "high" }],
     leadResults: [{ id: "lead-1" }],
@@ -287,6 +291,7 @@ test("decision thread-state shaping keeps queued execution and handoff semantics
   assert.deepEqual(nextState.last_decision_meta.queuedExecutionActionTypes, ["send_message"]);
   assert.deepEqual(nextState.last_decision_meta.queuedExecutionMessageIds, ["msg-1"]);
   assert.deepEqual(nextState.last_decision_meta.queuedExecutionAttemptIds, ["attempt-1"]);
+  assert.equal(nextState.last_decision_meta.replayTrace?.usecase, "inbox.reply");
 });
 
 test("inbox ingest blocks autonomous reply execution when runtime health is stale", async () => {
@@ -503,6 +508,11 @@ test("inbox behavior runtime uses niche qualification CTA guidance for fallback 
   assert.equal(send?.meta?.primaryCta, "book_now");
   assert.equal(send?.meta?.leadQualificationMode, "service_booking_triage");
   assert.equal(send?.meta?.toneProfile, "calm_professional_reassuring");
+  assert.equal(result.trace?.channel, "instagram");
+  assert.equal(result.trace?.usecase, "inbox.reply");
+  assert.equal(result.trace?.behavior?.primaryCta, "book_now");
+  assert.equal(result.trace?.evaluation?.outcome, "reply_recommended");
+  assert.equal(result.trace?.evaluation?.ctaDirection, "reply_with_cta");
   assert.equal(send?.text.includes("What day works best for your visit?"), true);
   assert.equal(send?.text.toLowerCase().includes("book now"), true);
 });
@@ -562,5 +572,12 @@ test("inbox behavior runtime blocks disallowed-claim requests and forces handoff
   assert.equal(handoff?.reason, "diagnosis_or_treatment_guarantees");
   assert.equal(handoff?.priority, "high");
   assert.equal(send?.meta?.matchedBehaviorDisallowedClaim, "diagnosis_or_treatment_guarantees");
+  assert.equal(result.trace?.decisions?.claimBlock?.blocked, true);
+  assert.equal(result.trace?.evaluation?.handoff?.status, "recommended");
+  assert.equal(result.trace?.evaluation?.claimBlock?.status, "blocked");
+  assert.equal(
+    result.trace?.decisions?.handoff?.reason,
+    "diagnosis_or_treatment_guarantees"
+  );
   assert.equal(send?.text.includes("tesdiqlenmemis iddia vermirik"), true);
 });

@@ -11,6 +11,7 @@ import {
 import { fallbackClassification } from "./fallback.js";
 import { normalizeOutput } from "./normalize.js";
 import { ensureOpenAI } from "./openai.js";
+import { buildAgentReplayTrace } from "../agentReplayTrace.js";
 import { buildPromptBundle } from "../promptBundle.js";
 import {
   getCommentChannelBehavior,
@@ -29,7 +30,7 @@ import {
   resolveCommentRuntime,
 } from "./runtime.js";
 
-export function buildCommentClassifierPrompt({
+function buildCommentClassifierContext({
   tenantKey,
   resolvedRuntime,
   channel,
@@ -104,7 +105,9 @@ export function buildCommentClassifierPrompt({
     },
   });
 
-  return `${promptBundle.fullPrompt}
+  return {
+    promptBundle,
+    prompt: `${promptBundle.fullPrompt}
 
 COMMENT CLASSIFICATION RULES:
 - This is PUBLIC COMMENT classification, not ongoing DM conversation classification.
@@ -199,7 +202,12 @@ externalUsername=${JSON.stringify(s(externalUsername || ""))}
 customerName=${JSON.stringify(s(customerName || ""))}
 
 Comment:
-${JSON.stringify(commentText)}`.trim();
+${JSON.stringify(commentText)}`.trim(),
+  };
+}
+
+export function buildCommentClassifierPrompt(input) {
+  return buildCommentClassifierContext(input).prompt;
 }
 
 export async function classifyComment({
@@ -267,7 +275,7 @@ export async function classifyComment({
   const model = s(cfg?.ai?.openaiModel || "gpt-5") || "gpt-5";
   const max_output_tokens = Number(cfg?.ai?.openaiMaxOutputTokens || 700);
 
-  const prompt = buildCommentClassifierPrompt({
+  const { prompt, promptBundle } = buildCommentClassifierContext({
     tenantKey: resolvedTenantKey,
     resolvedRuntime,
     channel,
@@ -299,20 +307,47 @@ export async function classifyComment({
     const parsed = parseJsonLoose(raw);
 
     if (!parsed || typeof parsed !== "object") {
-      return fallbackClassification(commentText, {
+      const fallback = fallbackClassification(commentText, {
         tenantKey: resolvedTenantKey,
         runtime: resolvedRuntime,
       });
+      fallback.meta.replayTrace = buildAgentReplayTrace({
+        runtime: resolvedRuntime,
+        promptBundle,
+        channel: "comments",
+        usecase: "meta.comment_reply",
+        decisions: fallback.meta.replayTrace?.decisions,
+        evaluation: fallback.meta.replayTrace?.evaluation,
+      });
+      return fallback;
     }
 
-    return normalizeOutput(parsed, {
+    const normalized = normalizeOutput(parsed, {
       tenantKey: resolvedTenantKey,
       runtime: resolvedRuntime,
     });
+    normalized.meta.replayTrace = buildAgentReplayTrace({
+      runtime: resolvedRuntime,
+      promptBundle,
+      channel: "comments",
+      usecase: "meta.comment_reply",
+      decisions: normalized.meta.replayTrace?.decisions,
+      evaluation: normalized.meta.replayTrace?.evaluation,
+    });
+    return normalized;
   } catch {
-    return fallbackClassification(commentText, {
+    const fallback = fallbackClassification(commentText, {
       tenantKey: resolvedTenantKey,
       runtime: resolvedRuntime,
     });
+    fallback.meta.replayTrace = buildAgentReplayTrace({
+      runtime: resolvedRuntime,
+      promptBundle,
+      channel: "comments",
+      usecase: "meta.comment_reply",
+      decisions: fallback.meta.replayTrace?.decisions,
+      evaluation: fallback.meta.replayTrace?.evaluation,
+    });
+    return fallback;
   }
 }

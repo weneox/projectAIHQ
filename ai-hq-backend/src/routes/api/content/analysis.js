@@ -3,6 +3,7 @@ import {
   packType,
   statusLc,
 } from "./utils.js";
+import { buildAgentReplayTrace } from "../../../services/agentReplayTrace.js";
 import { buildContentBehaviorProfile } from "../../../services/contentBehaviorRuntime.js";
 
 export function canAnalyzeRow(row) {
@@ -64,6 +65,7 @@ export function buildAnalyzeExtra({
   proposal,
   contentPack,
   assetUrls,
+  runtime = null,
   runtimeBehavior,
 }) {
   const behavior = buildContentBehaviorProfile(runtimeBehavior);
@@ -108,6 +110,21 @@ export function buildAnalyzeExtra({
       handoffTriggers: behavior.handoffTriggers,
     },
     reviewBias: behavior.reviewBias,
+    replayTrace: buildAgentReplayTrace({
+      runtime: runtime || runtimeBehavior,
+      behavior,
+      channel: "content",
+      usecase: "content.analyze",
+      decisions: {
+        cta: {
+          selected: clean(contentPack?.cta) || clean(behavior.primaryCta) || "",
+          reason: clean(contentPack?.cta) ? "content_pack" : "approved_runtime_behavior",
+        },
+        qualification: {
+          reason: "not_applicable",
+        },
+      },
+    }),
   };
 }
 

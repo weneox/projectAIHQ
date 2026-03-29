@@ -1,6 +1,7 @@
 import FocusDialog from "../ui/FocusDialog.jsx";
 import Badge from "../ui/Badge.jsx";
 import Button from "../ui/Button.jsx";
+import TruthBehaviorCard, { TruthBehaviorChangesCard } from "./TruthBehaviorCard.jsx";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -168,6 +169,34 @@ export default function TruthVersionComparePanel({
                 <VersionSummary title="Compared against" version={detail?.comparedVersion || {}} />
                 <VersionSummary title="Current approved" version={detail?.currentVersion || {}} />
               </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <TruthBehaviorCard
+                  title="Selected version behavior"
+                  subtitle={
+                    s(detail?.behavior?.selected?.summary) ||
+                    "Behavior details were not returned for the selected version."
+                  }
+                  rows={detail?.behavior?.selected?.rows || []}
+                  compact
+                  emptyMessage="Selected-version behavior is unavailable."
+                />
+                <TruthBehaviorCard
+                  title="Compared version behavior"
+                  subtitle={
+                    s(detail?.behavior?.compared?.summary) ||
+                    "Behavior details were not returned for the compared version."
+                  }
+                  rows={detail?.behavior?.compared?.rows || []}
+                  compact
+                  emptyMessage="Compared-version behavior is unavailable."
+                />
+              </div>
+
+              <TruthBehaviorChangesCard
+                changes={detail?.behavior?.changes || []}
+                emptyMessage="No explicit behavior delta was returned for this comparison."
+              />
 
               {s(detail?.diffSummary) ? (
                 <div className="rounded-[20px] border border-slate-200/80 bg-slate-50/90 px-4 py-4 text-sm leading-6 text-slate-700">
