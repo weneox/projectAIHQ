@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { UserRound } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
-import AdminPageShell from "../components/admin/AdminPageShell.jsx";
 import InboxComposer from "../components/inbox/InboxComposer.jsx";
 import { useInboxComposerSurface } from "../components/inbox/hooks/useInboxComposerSurface.js";
 import { useInboxThreadListSurface } from "../components/inbox/hooks/useInboxThreadListSurface.js";
@@ -15,6 +14,26 @@ import { useInboxData } from "../hooks/useInboxData.js";
 import { useInboxRealtime } from "../hooks/useInboxRealtime.js";
 import { areInternalRoutesEnabled } from "../lib/appEntry.js";
 import { getAppSessionContext } from "../lib/appSession.js";
+import SettingsSurfaceBanner from "../components/settings/SettingsSurfaceBanner.jsx";
+
+function shellSection() {
+  return "rounded-[32px] border border-[#ece2d3] bg-[#fffdf9]/92 shadow-[0_18px_44px_rgba(120,102,73,0.08),inset_0_1px_0_rgba(255,255,255,0.78)]";
+}
+
+function QuietMetric({ label, value, tone = "neutral" }) {
+  const toneMap = {
+    neutral: "border-[#ece2d3] bg-[#fffdfa] text-stone-900",
+    warm: "border-[#e7d7ba] bg-[#faf3e6] text-stone-900",
+    soft: "border-[#e4eadf] bg-[#f6faf4] text-stone-900",
+  };
+
+  return (
+    <div className={`rounded-[22px] border px-4 py-4 ${toneMap[tone] || toneMap.neutral}`}>
+      <div className="text-[11px] uppercase tracking-[0.2em] text-stone-400">{label}</div>
+      <div className="mt-2 text-[28px] font-semibold tracking-[-0.04em]">{value}</div>
+    </div>
+  );
+}
 
 export default function Inbox() {
   const location = useLocation();
@@ -130,43 +149,104 @@ export default function Inbox() {
     }
   }, [selectedThread?.id, loadMessages, loadRelatedLead]);
 
+  const pageSummary = useMemo(() => {
+    const openCount = threads.filter((thread) => {
+      const status = String(thread?.status || "open").toLowerCase();
+      return status !== "resolved" && status !== "closed";
+    }).length;
+    const handoffCount = threads.filter((thread) => Boolean(thread?.handoff_active)).length;
+    const unreadCount = threads.reduce(
+      (sum, thread) => sum + Number(thread?.unread_count || 0),
+      0
+    );
+
+    return {
+      openCount,
+      handoffCount,
+      unreadCount,
+    };
+  }, [threads]);
+
   return (
-    <AdminPageShell
-      eyebrow="Operator inbox"
-      title="Inbox"
-      description="DM triage, operator handoff, and AI reply workflow."
-      surface={surface}
-      refreshLabel="Refresh inbox"
-      unavailableMessage="Inbox operations are temporarily unavailable."
-      actions={
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] text-white/72">
-            Operator:
-            <input
-              value={operatorName}
-              onChange={(e) => setOperatorName(e.target.value)}
-              className="ml-2 w-[100px] bg-transparent text-white outline-none placeholder:text-white/25"
-              placeholder="Name"
-            />
-          </div>
-
-          <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-white/60">
-            WS: {wsState}
-          </div>
-
-          {dbDisabled ? (
-            <div className="rounded-full border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-amber-100">
-              DB disabled
+    <div className="mx-auto max-w-[1240px] space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+      <section className={`${shellSection()} overflow-hidden px-6 py-6 sm:px-7 sm:py-7`}>
+        <div className="pointer-events-none absolute" />
+        <div className="space-y-6">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+            <div className="max-w-3xl">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-400">
+                Conversation Work
+              </div>
+              <h1 className="mt-2 text-[34px] font-semibold tracking-[-0.05em] text-stone-950">
+                Inbox
+              </h1>
+              <p className="mt-3 text-[15px] leading-7 text-stone-600">
+                See what needs attention, which threads need human review, and what the system is already handling.
+              </p>
             </div>
-          ) : null}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="rounded-full border border-[#e7dece] bg-[#fffaf4] px-3 py-2 text-[12px] text-stone-600">
+                Operator:
+                <input
+                  value={operatorName}
+                  onChange={(e) => setOperatorName(e.target.value)}
+                  className="ml-2 w-[100px] bg-transparent text-stone-900 outline-none placeholder:text-stone-400"
+                  placeholder="Name"
+                />
+              </div>
+
+              <div className="rounded-full border border-[#e7dece] bg-[#fffaf4] px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-stone-500">
+                WS: {wsState}
+              </div>
+
+              {dbDisabled ? (
+                <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-amber-800">
+                  DB disabled
+                </div>
+              ) : null}
+
+              {surface?.refresh ? (
+                <button
+                  type="button"
+                  onClick={surface.refresh}
+                  disabled={surface.loading || surface.saving}
+                  className="rounded-full border border-[#dfcfb2] bg-[#efe0c0] px-4 py-2 text-sm font-medium text-stone-900 transition hover:border-[#d4bf99] hover:bg-[#ead7b2] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Refresh inbox
+                </button>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <QuietMetric label="Open conversations" value={pageSummary.openCount} />
+            <QuietMetric label="Waiting for handoff" value={pageSummary.handoffCount} tone="warm" />
+            <QuietMetric label="Unread pressure" value={pageSummary.unreadCount} tone="soft" />
+          </div>
+
+          <div className="rounded-[22px] border border-[#ece2d3] bg-[#fffdfa] px-4 py-4">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-400">
+              What this surface is for
+            </div>
+            <div className="mt-2 text-sm leading-6 text-stone-600">
+              Start with the thread list, review handoff and unread pressure, then move into conversation detail to understand why a thread matters and what to do next.
+            </div>
+          </div>
+
+          <SettingsSurfaceBanner
+            surface={surface}
+            unavailableMessage="Inbox operations are temporarily unavailable."
+            refreshLabel="Refresh inbox"
+          />
         </div>
-      }
-    >
+      </section>
+
       <InboxThreadListPanel threadList={threadList} selectedThreadId={selectedThread?.id || ""} />
 
-      <RetryQueuePanel tenantKey={tenantKey} actor={operatorName || "operator"} className="mt-6" />
+      <RetryQueuePanel tenantKey={tenantKey} actor={operatorName || "operator"} />
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+      <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
         <div className="space-y-6">
           <InboxDetailPanel
             selectedThread={selectedThread}
@@ -179,8 +259,6 @@ export default function Inbox() {
             releaseHandoff={releaseHandoff}
             setThreadStatus={setThreadStatus}
           />
-
-          <InboxLeadPanel selectedThread={selectedThread} surface={leadSurface} relatedLead={relatedLead} openLeadDetail={openLeadDetail} />
 
           <InboxComposer
             selectedThread={selectedThread}
@@ -195,28 +273,37 @@ export default function Inbox() {
           <ThreadOutboundAttemptsPanel selectedThread={selectedThread} actor={operatorName || "operator"} />
 
           {showInternalDebug ? (
-            <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+            <div className={`${shellSection()} px-5 py-5`}>
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
-                  <UserRound className="h-4 w-4 text-white/72" />
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#e8decf] bg-[#fffaf4]">
+                  <UserRound className="h-4 w-4 text-stone-600" />
                 </div>
                 <div>
-                  <div className="text-[16px] font-semibold tracking-[-0.03em] text-white">Thread Meta</div>
-                  <div className="mt-1 text-sm text-white/46">Raw visibility data for internal operator debugging.</div>
+                  <div className="text-[16px] font-semibold tracking-[-0.03em] text-stone-900">Thread Meta</div>
+                  <div className="mt-1 text-sm text-stone-500">Raw visibility data for internal operator debugging.</div>
                 </div>
               </div>
 
-              <div className="mt-5 rounded-[22px] border border-dashed border-white/10 bg-black/20 px-4 py-4">
+              <div className="mt-5 rounded-[22px] border border-dashed border-[#ece2d3] bg-[#fffdfa] px-4 py-4">
                 {selectedThread ? (
-                  <pre className="overflow-auto text-xs leading-6 text-white/58">{JSON.stringify(selectedThread, null, 2)}</pre>
+                  <pre className="overflow-auto text-xs leading-6 text-stone-600">{JSON.stringify(selectedThread, null, 2)}</pre>
                 ) : (
-                  <div className="text-sm text-white/46">No thread selected.</div>
+                  <div className="text-sm text-stone-500">No thread selected.</div>
                 )}
               </div>
             </div>
           ) : null}
         </div>
+
+        <div className="space-y-6">
+          <InboxLeadPanel
+            selectedThread={selectedThread}
+            surface={leadSurface}
+            relatedLead={relatedLead}
+            openLeadDetail={openLeadDetail}
+          />
+        </div>
       </div>
-    </AdminPageShell>
+    </div>
   );
 }

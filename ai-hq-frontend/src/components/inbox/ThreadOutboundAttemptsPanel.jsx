@@ -16,18 +16,12 @@ function StatusBadge({ status }) {
   const x = s(status).toLowerCase();
 
   const map = {
-    queued:
-      "bg-slate-100 text-slate-700 border-slate-200 dark:bg-white/10 dark:text-slate-200 dark:border-white/10",
-    sending:
-      "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/20",
-    sent:
-      "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20",
-    failed:
-      "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/20",
-    retrying:
-      "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-300 dark:border-violet-500/20",
-    dead:
-      "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-500/20",
+    queued: "bg-stone-100 text-stone-700 border-stone-200",
+    sending: "bg-blue-50 text-blue-700 border-blue-200",
+    sent: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    failed: "bg-amber-50 text-amber-700 border-amber-200",
+    retrying: "bg-violet-50 text-violet-700 border-violet-200",
+    dead: "bg-rose-50 text-rose-700 border-rose-200",
   };
 
   return (
@@ -48,14 +42,14 @@ export default function ThreadOutboundAttemptsPanel({
     useThreadOutboundAttemptsSurface({ threadId, actor });
 
   return (
-    <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+    <div className="rounded-[30px] border border-[#ece2d3] bg-[#fffdf9]/92 p-5 shadow-[0_18px_44px_rgba(120,102,73,0.08)]">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-[16px] font-semibold tracking-[-0.03em] text-white">
+          <div className="text-[16px] font-semibold tracking-[-0.03em] text-stone-900">
             Thread Delivery Attempts
           </div>
-          <div className="mt-1 text-sm text-white/46">
-            Seçilmiş thread üçün outbound send vəziyyəti.
+          <div className="mt-1 text-sm text-stone-500">
+            Outbound delivery status for the selected conversation.
           </div>
         </div>
 
@@ -63,7 +57,7 @@ export default function ThreadOutboundAttemptsPanel({
           type="button"
           onClick={surface.refresh}
           disabled={surface.loading || surface.saving || !threadId}
-          className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-medium text-white/78 transition hover:bg-white/[0.08]"
+          className="rounded-xl border border-[#e8decf] bg-[#fffaf4] px-3 py-2 text-sm font-medium text-stone-700 transition hover:border-[#d9c8ac] hover:bg-white disabled:opacity-50"
         >
           Refresh
         </button>
@@ -77,15 +71,15 @@ export default function ThreadOutboundAttemptsPanel({
         />
       </div>
 
-      <div className="mt-5 rounded-[22px] border border-white/10 bg-black/20">
+      <div className="mt-5 rounded-[22px] border border-[#ece2d3] bg-[#fffdfa]">
         {!threadId ? (
-          <div className="px-4 py-5 text-sm text-white/46">No thread selected.</div>
+          <div className="px-4 py-5 text-sm text-stone-500">No thread selected.</div>
         ) : surface.loading ? (
-          <div className="px-4 py-5 text-sm text-white/52">Loading attempts...</div>
+          <div className="px-4 py-5 text-sm text-stone-500">Loading attempts...</div>
         ) : attempts.length === 0 ? (
-          <div className="px-4 py-5 text-sm text-white/46">No delivery attempts for this thread.</div>
+          <div className="px-4 py-5 text-sm text-stone-500">No delivery attempts for this thread.</div>
         ) : (
-          <div className="divide-y divide-white/10">
+          <div className="divide-y divide-[#ece2d3]">
             {attempts.map((item) => {
               const id = s(item?.id);
               const retryBusy = actionState.isActionPending(`retry:${id}`);
@@ -96,16 +90,16 @@ export default function ThreadOutboundAttemptsPanel({
                 <div key={id} className="p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge status={item?.status} />
-                    <span className="text-xs text-white/42">
+                    <span className="text-xs text-stone-400">
                       attempts: {Number(item?.attempt_count || 0)} / {Number(item?.max_attempts || 0)}
                     </span>
                   </div>
 
-                  <div className="mt-2 text-sm text-white/80">
+                  <div className="mt-2 text-sm text-stone-700">
                     {s(item?.message_text) || "—"}
                   </div>
 
-                  <div className="mt-2 grid gap-2 text-xs text-white/46 md:grid-cols-2">
+                  <div className="mt-2 grid gap-2 text-xs text-stone-500 md:grid-cols-2">
                     <div>Updated: {fmtDate(item?.updated_at)}</div>
                     <div>Next retry: {fmtDate(item?.next_retry_at)}</div>
                     <div>Provider: {s(item?.provider) || "—"}</div>
@@ -113,7 +107,7 @@ export default function ThreadOutboundAttemptsPanel({
                   </div>
 
                   {s(item?.last_error) ? (
-                    <div className="mt-2 text-xs text-rose-300">{s(item?.last_error)}</div>
+                    <div className="mt-2 text-xs text-rose-600">{s(item?.last_error)}</div>
                   ) : null}
 
                   <div className="mt-3 flex gap-2">
@@ -121,7 +115,7 @@ export default function ThreadOutboundAttemptsPanel({
                       type="button"
                       disabled={isBusy || s(item?.status) === "sent"}
                       onClick={() => handleResend(id)}
-                      className="rounded-xl bg-white px-3 py-2 text-sm font-medium text-slate-900 transition disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-xl border border-[#dfcfb2] bg-[#efe0c0] px-3 py-2 text-sm font-medium text-stone-900 transition disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {retryBusy ? "..." : "Retry"}
                     </button>
@@ -130,7 +124,7 @@ export default function ThreadOutboundAttemptsPanel({
                       type="button"
                       disabled={isBusy || s(item?.status) === "dead"}
                       onClick={() => handleMarkDead(id)}
-                      className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-medium text-white/78 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-xl border border-[#e8decf] bg-[#fffaf4] px-3 py-2 text-sm font-medium text-stone-700 transition hover:border-[#d9c8ac] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {deadBusy ? "..." : "Dead"}
                     </button>

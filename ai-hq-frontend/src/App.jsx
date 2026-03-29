@@ -9,9 +9,12 @@ import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
 import { INTERNAL_ONLY_APP_ROUTES } from "./lib/appEntry.js";
 
 const Proposals = lazy(() => import("./pages/Proposals.jsx"));
+const Publish = lazy(() => import("./pages/Publish.jsx"));
 const Executions = lazy(() => import("./pages/Executions.jsx"));
+const Expert = lazy(() => import("./pages/Expert.jsx"));
 const Settings = lazy(() => import("./pages/Settings.jsx"));
 const Inbox = lazy(() => import("./pages/Inbox.jsx"));
+const WorkspacePage = lazy(() => import("./surfaces/workspace/WorkspacePage.jsx"));
 const Leads = lazy(() => import("./pages/Leads.jsx"));
 const Comments = lazy(() => import("./pages/Comments.jsx"));
 const Incidents = lazy(() => import("./pages/Incidents.jsx"));
@@ -45,7 +48,7 @@ function renderInternalRouteRedirects() {
         <Route
           key={path}
           path={path.slice(1)}
-          element={<Navigate to="/truth" replace />}
+          element={<Navigate to="/workspace" replace />}
         />
       ))}
     </>
@@ -166,12 +169,24 @@ export default function App() {
             </UserRouteGuard>
           }
         >
+          <Route path="workspace" element={withSuspense(<WorkspacePage />)} />
+          <Route
+            path="publish"
+            element={
+              <OperatorRouteGuard
+                title="Operator access required"
+                description="Publish brings together outgoing content, moderation pressure, approvals, and recent publishing outcomes for operational roles."
+              >
+                {withSuspense(<Publish />)}
+              </OperatorRouteGuard>
+            }
+          />
           <Route
             path="proposals"
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Proposals are still an operational workspace. Launch-core product users can continue in Business Truth, Setup Studio, Inbox, and Settings."
+                description="Proposals remains a detailed operational workspace. The primary product surfaces stay centered on Workspace, Inbox, Publish, and Expert."
               >
                 {withSuspense(<Proposals />)}
               </OperatorRouteGuard>
@@ -194,7 +209,7 @@ export default function App() {
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Comments is a moderation and response workspace. It stays gated to operational roles for this launch slice."
+                description="Comments remains the detailed moderation workspace. The primary product surfaces stay centered on Workspace, Inbox, Publish, and Expert."
               >
                 {withSuspense(<Comments />)}
               </OperatorRouteGuard>
@@ -205,7 +220,7 @@ export default function App() {
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Incident history is an operational triage surface. It stays available only to owner, admin, and operator roles."
+                description="Incident history remains an advanced operational triage surface and stays limited to owner, admin, and operator roles."
               >
                 {withSuspense(<Incidents />)}
               </OperatorRouteGuard>
@@ -216,19 +231,20 @@ export default function App() {
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Voice sessions and live call controls are operational surfaces. They remain available only to owner, admin, and operator roles."
+                description="Voice sessions and live call controls remain detailed operational surfaces for owner, admin, and operator roles."
               >
                 {withSuspense(<Voice />)}
               </OperatorRouteGuard>
             }
           />
           <Route path="truth" element={withSuspense(<TruthViewerPage />)} />
+          <Route path="expert" element={withSuspense(<Expert />)} />
           <Route
             path="executions"
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Execution traces are still an operator inspection surface. Normal launch-core users are redirected toward the core product instead."
+                description="Execution traces remain an advanced operator inspection surface. The primary product surfaces stay centered on Workspace, Inbox, Publish, and Expert."
               >
                 {withSuspense(<Executions />)}
               </OperatorRouteGuard>

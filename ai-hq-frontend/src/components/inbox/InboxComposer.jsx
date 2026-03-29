@@ -10,9 +10,9 @@ function Button({
 }) {
   const toneMap = {
     cyan:
-      "border-cyan-400/20 bg-cyan-400/[0.08] text-cyan-100 hover:border-cyan-400/30 hover:bg-cyan-400/[0.12]",
+      "border-[#dfe9ea] bg-[#f2fbfb] text-cyan-900 hover:border-[#cde0e2] hover:bg-[#ebf8f8]",
     violet:
-      "border-violet-400/20 bg-violet-400/[0.08] text-violet-100 hover:border-violet-400/30 hover:bg-violet-400/[0.12]",
+      "border-[#e6def1] bg-[#f7f3fc] text-violet-900 hover:border-[#d9cdea] hover:bg-[#f1ebfa]",
   };
 
   return (
@@ -47,17 +47,17 @@ export default function InboxComposer({
   const releasing = actionState?.isActionPending?.("release");
 
   return (
-    <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+    <div className="rounded-[30px] border border-[#ece2d3] bg-[#fffdf9]/92 p-5 shadow-[0_18px_44px_rgba(120,102,73,0.08)]">
       <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
-          <Send className="h-4 w-4 text-white/72" />
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#e8decf] bg-[#fffaf4]">
+          <Send className="h-4 w-4 text-stone-600" />
         </div>
         <div>
-          <div className="text-[16px] font-semibold tracking-[-0.03em] text-white">
+          <div className="text-[16px] font-semibold tracking-[-0.03em] text-stone-900">
             Operator Reply
           </div>
-          <div className="mt-1 text-sm text-white/46">
-            Manual cavab, escalation və operator workflow üçün.
+          <div className="mt-1 text-sm text-stone-500">
+            Use this when a human response is needed or handoff should stay operator-controlled.
           </div>
         </div>
       </div>
@@ -72,7 +72,7 @@ export default function InboxComposer({
         </div>
       ) : null}
 
-      <div className="mt-5 rounded-[22px] border border-white/10 bg-black/20 p-4">
+      <div className="mt-5 rounded-[22px] border border-[#ece2d3] bg-[#fffdfa] p-4">
         <textarea
           value={replyText}
           onChange={(e) => setReplyText(e.target.value)}
@@ -80,7 +80,7 @@ export default function InboxComposer({
           placeholder={
             hasThread ? "Reply as operator..." : "Select a thread first..."
           }
-          className="min-h-[120px] w-full resize-none rounded-[20px] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none placeholder:text-white/28 disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-[120px] w-full resize-none rounded-[20px] border border-[#ece2d3] bg-white px-4 py-3 text-sm text-stone-900 outline-none placeholder:text-stone-400 disabled:cursor-not-allowed disabled:opacity-50"
         />
 
         <div className="mt-4 flex flex-wrap gap-2">

@@ -32,10 +32,10 @@ describe("resolveAuthenticatedLanding", () => {
       },
     });
 
-    expect(target).toBe("/settings");
+    expect(target).toBe("/expert");
   });
 
-  it("falls back to truth when completed workspace points at non-product root", () => {
+  it("falls back to workspace when completed workspace points at non-product root", () => {
     const target = resolveAuthenticatedLanding({
       workspace: {
         progress: {
@@ -45,7 +45,7 @@ describe("resolveAuthenticatedLanding", () => {
       },
     });
 
-    expect(target).toBe("/truth");
+    expect(target).toBe("/workspace");
   });
 
   it("refuses internal-only routes as authenticated landing targets", () => {
@@ -58,12 +58,15 @@ describe("resolveAuthenticatedLanding", () => {
       },
     });
 
-    expect(target).toBe("/truth");
+    expect(target).toBe("/workspace");
   });
 
   it("defines a bounded production route list and a separate internal-only route list", () => {
     expect(CORE_APP_ROUTES).toEqual([
+      "/workspace",
       "/truth",
+      "/publish",
+      "/expert",
       "/settings",
       "/inbox",
     ]);
@@ -93,6 +96,31 @@ describe("resolveAuthenticatedLanding", () => {
       },
     });
 
-    expect(target).toBe("/truth");
+    expect(target).toBe("/workspace");
+  });
+
+  it("promotes workspace as the default completed landing when no better core route is provided", () => {
+    const target = resolveAuthenticatedLanding({
+      workspace: {
+        progress: {
+          setupCompleted: true,
+        },
+      },
+    });
+
+    expect(target).toBe("/workspace");
+  });
+
+  it("accepts expert as a first-class authenticated route", () => {
+    const target = resolveAuthenticatedLanding({
+      workspace: {
+        progress: {
+          setupCompleted: true,
+          nextRoute: "/expert",
+        },
+      },
+    });
+
+    expect(target).toBe("/expert");
   });
 });

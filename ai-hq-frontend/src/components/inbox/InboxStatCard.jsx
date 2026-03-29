@@ -1,31 +1,31 @@
 export default function InboxStatCard({ label, value, icon: Icon, tone = "neutral" }) {
   const toneMap = {
     neutral:
-      "border-white/10 bg-white/[0.03] text-white shadow-[0_18px_40px_rgba(0,0,0,0.18)]",
+      "border-[#ece2d3] bg-[#fffdfa] text-stone-900 shadow-[0_14px_36px_rgba(120,102,73,0.06)]",
     cyan:
-      "border-cyan-400/20 bg-cyan-400/[0.06] text-white shadow-[0_18px_40px_rgba(34,211,238,0.08)]",
+      "border-[#dfe9ea] bg-[#f5fbfb] text-stone-900 shadow-[0_14px_36px_rgba(120,102,73,0.06)]",
     amber:
-      "border-amber-300/20 bg-amber-300/[0.06] text-white shadow-[0_18px_40px_rgba(251,191,36,0.08)]",
+      "border-[#eadfca] bg-[#fdf8ef] text-stone-900 shadow-[0_14px_36px_rgba(120,102,73,0.06)]",
     emerald:
-      "border-emerald-400/20 bg-emerald-400/[0.06] text-white shadow-[0_18px_40px_rgba(16,185,129,0.08)]",
+      "border-[#dde8df] bg-[#f5faf5] text-stone-900 shadow-[0_14px_36px_rgba(120,102,73,0.06)]",
   };
 
   return (
     <div
-      className={`rounded-[24px] border p-5 backdrop-blur-xl ${toneMap[tone] || toneMap.neutral}`}
+      className={`rounded-[24px] border p-5 ${toneMap[tone] || toneMap.neutral}`}
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.2em] text-white/40">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-stone-400">
             {label}
           </div>
-          <div className="mt-3 text-[30px] font-semibold tracking-[-0.04em] text-white">
+          <div className="mt-3 text-[30px] font-semibold tracking-[-0.04em] text-stone-900">
             {value}
           </div>
         </div>
 
-        <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
-          <Icon className="h-4 w-4 text-white/72" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#ece2d3] bg-white">
+          <Icon className="h-4 w-4 text-stone-500" />
         </div>
       </div>
     </div>

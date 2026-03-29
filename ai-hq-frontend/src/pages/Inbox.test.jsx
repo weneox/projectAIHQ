@@ -71,7 +71,7 @@ describe("Inbox", () => {
     vi.clearAllMocks();
   });
 
-  it("renders shared page shell feedback", async () => {
+  it("renders the primary conversation-work surface feedback", async () => {
     getAppSessionContext.mockResolvedValue({
       tenantKey: "acme",
       actorName: "operator",
@@ -183,6 +183,9 @@ describe("Inbox", () => {
     expect(screen.getByText(/operator reply sent/i)).toBeInTheDocument();
     expect(
       screen.getByText(/inbox operations are temporarily unavailable/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/see what needs attention, which threads need human review/i)
     ).toBeInTheDocument();
     expect(screen.getByText(/db disabled/i)).toBeInTheDocument();
   });

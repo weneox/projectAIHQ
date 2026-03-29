@@ -172,16 +172,16 @@ export default function Shell() {
 
   return (
     <div
-      className="relative min-h-screen overflow-x-clip bg-[#02050c] text-white selection:bg-cyan-300/20 selection:text-white"
+      className="relative min-h-screen overflow-x-clip bg-[#f6f1e7] text-stone-900 selection:bg-[#e6d5b6] selection:text-stone-900"
       style={{
         "--sidebar-rail-w": `${SIDEBAR_RAIL_W}px`,
       }}
     >
-      <div className="pointer-events-none fixed inset-0 -z-[100] bg-[linear-gradient(180deg,#02050c_0%,#040814_34%,#030611_72%,#02050c_100%)]" />
-      <div className="pointer-events-none fixed inset-0 -z-[90] bg-[radial-gradient(1100px_circle_at_0%_0%,rgba(44,212,255,0.10),transparent_24%),radial-gradient(920px_circle_at_100%_0%,rgba(99,102,241,0.10),transparent_24%),radial-gradient(1100px_circle_at_50%_100%,rgba(109,40,217,0.08),transparent_28%)]" />
-      <div className="pointer-events-none fixed inset-0 -z-[80] opacity-[0.05] [background-image:linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] [background-size:44px_44px] [mask-image:radial-gradient(circle_at_center,black,transparent_88%)]" />
-      <div className="pointer-events-none fixed left-[var(--sidebar-rail-w)] top-0 -z-[50] h-[260px] w-[440px] bg-[radial-gradient(circle_at_0%_0%,rgba(64,220,255,0.08),transparent_70%)] blur-3xl" />
-      <div className="pointer-events-none fixed right-0 top-0 -z-[50] h-[320px] w-[560px] bg-[radial-gradient(circle_at_100%_0%,rgba(129,92,255,0.10),transparent_68%)] blur-3xl" />
+      <div className="pointer-events-none fixed inset-0 -z-[100] bg-[linear-gradient(180deg,#f8f3ea_0%,#f5efe4_38%,#f3ecdf_100%)]" />
+      <div className="pointer-events-none fixed inset-0 -z-[90] bg-[radial-gradient(1100px_circle_at_0%_0%,rgba(227,207,171,0.20),transparent_24%),radial-gradient(920px_circle_at_100%_0%,rgba(255,255,255,0.65),transparent_26%),radial-gradient(1100px_circle_at_50%_100%,rgba(222,210,189,0.16),transparent_30%)]" />
+      <div className="pointer-events-none fixed inset-0 -z-[80] opacity-[0.08] [background-image:linear-gradient(rgba(149,129,99,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(149,129,99,0.06)_1px,transparent_1px)] [background-size:44px_44px] [mask-image:radial-gradient(circle_at_center,black,transparent_88%)]" />
+      <div className="pointer-events-none fixed left-[var(--sidebar-rail-w)] top-0 -z-[50] h-[260px] w-[440px] bg-[radial-gradient(circle_at_0%_0%,rgba(227,207,171,0.18),transparent_70%)] blur-3xl" />
+      <div className="pointer-events-none fixed right-0 top-0 -z-[50] h-[320px] w-[560px] bg-[radial-gradient(circle_at_100%_0%,rgba(255,255,255,0.72),transparent_68%)] blur-3xl" />
 
       <Sidebar
         expanded={expanded}
@@ -194,8 +194,8 @@ export default function Shell() {
       <div className="relative z-10 md:pl-[var(--sidebar-rail-w)]">
         <div className="relative min-h-screen">
           <div className="pointer-events-none absolute inset-0">
-            <div className="absolute inset-y-0 left-0 w-px bg-[linear-gradient(180deg,transparent,rgba(255,255,255,0.06),transparent)]" />
-            <div className="absolute inset-0 bg-[radial-gradient(900px_circle_at_0%_0%,rgba(34,211,238,0.028),transparent_22%),radial-gradient(900px_circle_at_100%_0%,rgba(99,102,241,0.042),transparent_24%),radial-gradient(900px_circle_at_50%_100%,rgba(91,33,182,0.038),transparent_30%)]" />
+            <div className="absolute inset-y-0 left-0 w-px bg-[linear-gradient(180deg,transparent,rgba(187,168,138,0.30),transparent)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(900px_circle_at_0%_0%,rgba(227,207,171,0.10),transparent_22%),radial-gradient(900px_circle_at_100%_0%,rgba(255,255,255,0.40),transparent_24%),radial-gradient(900px_circle_at_50%_100%,rgba(221,209,190,0.18),transparent_30%)]" />
           </div>
 
           <div className="relative flex min-h-screen flex-col">
@@ -207,7 +207,7 @@ export default function Shell() {
               />
             </div>
 
-            <main className="relative flex-1 px-3 pb-4 pt-4 md:px-4 md:pb-5 lg:px-5 lg:pb-6">
+            <main className="relative flex-1 px-3 pb-6 pt-5 md:px-4 md:pb-7 md:pt-6 lg:px-5 lg:pb-8 lg:pt-7">
               <Outlet />
             </main>
           </div>

@@ -9,7 +9,7 @@ export default function InboxThreadListPanel({ threadList, selectedThreadId = ""
   return (
     <>
       {threadList?.deepLinkNotice ? (
-        <div className="rounded-[22px] border border-amber-300/20 bg-amber-300/[0.08] px-4 py-3 text-sm text-amber-100">
+        <div className="rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           {threadList.deepLinkNotice}
         </div>
       ) : null}
@@ -21,11 +21,11 @@ export default function InboxThreadListPanel({ threadList, selectedThreadId = ""
         <InboxStatCard label="Resolved" value={threadList?.stats?.resolved || 0} icon={CheckCircle2} tone="emerald" />
       </div>
 
-      <div className="mt-6 rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-        <div className="flex flex-col gap-4 border-b border-white/8 pb-4 md:flex-row md:items-center md:justify-between">
+      <div className="rounded-[32px] border border-[#ece2d3] bg-[#fffdf9]/92 p-6 shadow-[0_18px_44px_rgba(120,102,73,0.08)]">
+        <div className="flex flex-col gap-4 border-b border-[#eee4d5] pb-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="text-[18px] font-semibold tracking-[-0.03em] text-white">Active Threads</div>
-            <div className="mt-1 text-sm text-white/46">Real inbox flow and operator handoff state.</div>
+            <div className="text-[20px] font-semibold tracking-[-0.03em] text-stone-900">Active Threads</div>
+            <div className="mt-1 text-sm text-stone-500">Start here to see priority conversations, handoff pressure, and live operator workload.</div>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -37,9 +37,9 @@ export default function InboxThreadListPanel({ threadList, selectedThreadId = ""
                 className={`rounded-full border px-3.5 py-2 text-[12px] font-medium capitalize transition ${
                   threadList?.filter === value
                     ? value === "handoff"
-                      ? "border-amber-300/20 bg-amber-300/[0.08] text-amber-100"
-                      : "border-white/10 bg-white/[0.04] text-white/78"
-                    : "border-white/10 bg-white/[0.02] text-white/44 hover:border-white/16 hover:bg-white/[0.04] hover:text-white/70"
+                      ? "border-[#e7d7ba] bg-[#faf3e6] text-stone-900"
+                      : "border-[#d9c8ac] bg-[#f8f1e4] text-stone-900"
+                    : "border-[#ece2d3] bg-[#fffaf4] text-stone-500 hover:border-[#dfcfb2] hover:bg-white hover:text-stone-900"
                 }`}
               >
                 {value}
@@ -50,13 +50,13 @@ export default function InboxThreadListPanel({ threadList, selectedThreadId = ""
 
         <div className="mt-5 grid gap-4">
           {threadList?.surface?.loading ? (
-            <div className="rounded-[24px] border border-white/10 bg-black/20 px-4 py-10 text-center text-sm text-white/52">
+            <div className="rounded-[24px] border border-[#ece2d3] bg-[#fffdfa] px-4 py-10 text-center text-sm text-stone-500">
               Loading threads...
             </div>
           ) : !threadList?.filteredThreads?.length ? (
-            <div className="rounded-[24px] border border-dashed border-white/10 bg-black/20 px-4 py-10 text-center">
-              <div className="text-sm font-medium text-white/68">No threads yet</div>
-              <div className="mt-2 text-sm leading-6 text-white/40">Threads will appear here with status and handoff state.</div>
+            <div className="rounded-[24px] border border-dashed border-[#ece2d3] bg-[#fffdfa] px-4 py-10 text-center">
+              <div className="text-sm font-medium text-stone-700">No threads yet</div>
+              <div className="mt-2 text-sm leading-6 text-stone-500">Threads will appear here with status and handoff state.</div>
             </div>
           ) : (
             threadList.filteredThreads.map((thread) => (

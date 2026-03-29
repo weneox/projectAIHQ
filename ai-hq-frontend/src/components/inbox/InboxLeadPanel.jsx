@@ -23,7 +23,7 @@ import InboxMiniInfo from "./InboxMiniInfo.jsx";
 function Button({ children, onClick, tone = "default", disabled = false, icon: Icon }) {
   const toneMap = {
     violet:
-      "border-violet-400/20 bg-violet-400/[0.08] text-violet-100 hover:border-violet-400/30 hover:bg-violet-400/[0.12]",
+      "border-[#e6def1] bg-[#f7f3fc] text-violet-900 hover:border-[#d9cdea] hover:bg-[#f1ebfa]",
   };
 
   return (
@@ -50,14 +50,14 @@ export default function InboxLeadPanel({ selectedThread, surface, relatedLead, o
   const relatedLeadScore = Number(relatedLead?.score || 0);
 
   return (
-    <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+    <div className="rounded-[30px] border border-[#ece2d3] bg-[#fffdf9]/92 p-5 shadow-[0_18px_44px_rgba(120,102,73,0.08)]">
       <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
-          <BriefcaseBusiness className="h-4 w-4 text-white/72" />
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#e8decf] bg-[#fffaf4]">
+          <BriefcaseBusiness className="h-4 w-4 text-stone-600" />
         </div>
         <div>
-          <div className="text-[16px] font-semibold tracking-[-0.03em] text-white">Related Lead</div>
-          <div className="mt-1 text-sm text-white/46">Lead data linked to the selected thread appears here.</div>
+          <div className="text-[16px] font-semibold tracking-[-0.03em] text-stone-900">Related Lead</div>
+          <div className="mt-1 text-sm text-stone-500">Lead context linked to the selected conversation appears here.</div>
         </div>
       </div>
 
@@ -71,22 +71,22 @@ export default function InboxLeadPanel({ selectedThread, surface, relatedLead, o
         </div>
       ) : null}
 
-      <div className="mt-5 rounded-[22px] border border-white/10 bg-black/20 p-4">
+      <div className="mt-5 rounded-[22px] border border-[#ece2d3] bg-[#fffdfa] p-4">
         {!hasThread ? (
-          <div className="text-sm text-white/46">No thread selected.</div>
+          <div className="text-sm text-stone-500">No thread selected.</div>
         ) : surface?.loading ? (
-          <div className="text-sm text-white/52">Loading related lead...</div>
+          <div className="text-sm text-stone-500">Loading related lead...</div>
         ) : !hasLead ? (
-          <div className="rounded-[18px] border border-dashed border-white/10 px-4 py-8 text-center">
-            <div className="text-sm font-medium text-white/66">No related lead</div>
-            <div className="mt-2 text-sm leading-6 text-white/40">No lead is linked to this thread yet.</div>
+          <div className="rounded-[18px] border border-dashed border-[#ece2d3] px-4 py-8 text-center">
+            <div className="text-sm font-medium text-stone-700">No related lead</div>
+            <div className="mt-2 text-sm leading-6 text-stone-500">No lead is linked to this thread yet.</div>
           </div>
         ) : (
           <>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <div className="truncate text-[17px] font-semibold tracking-[-0.03em] text-white">{leadName(relatedLead)}</div>
-                <div className="mt-1 text-sm text-white/44">{leadHandle(relatedLead)}</div>
+                <div className="truncate text-[17px] font-semibold tracking-[-0.03em] text-stone-900">{leadName(relatedLead)}</div>
+                <div className="mt-1 text-sm text-stone-500">{leadHandle(relatedLead)}</div>
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -106,8 +106,8 @@ export default function InboxLeadPanel({ selectedThread, surface, relatedLead, o
               <InboxMiniInfo label="Pipeline value" value={relatedLeadValue} icon={BadgeDollarSign} />
             </div>
 
-            <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-white/32">Score band</div>
+            <div className="mt-4 rounded-2xl border border-[#ece2d3] bg-white px-4 py-3">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Score band</div>
               <div className="mt-2">
                 <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${scoreTone(relatedLeadScore)}`}>
                   {scoreBand(relatedLeadScore)}

@@ -7,9 +7,9 @@ function s(value, fallback = "") {
 }
 
 function badgeTone(kind = "neutral") {
-  if (kind === "runtime") return "border-cyan-400/20 bg-cyan-400/[0.08] text-cyan-100";
-  if (kind === "usecase") return "border-white/10 bg-white/[0.05] text-white/72";
-  return "border-violet-400/20 bg-violet-400/[0.08] text-violet-100";
+  if (kind === "runtime") return "border-[#dfe9ea] bg-[#f2fbfb] text-cyan-800";
+  if (kind === "usecase") return "border-[#ece2d3] bg-[#fffaf4] text-stone-700";
+  return "border-[#e6def1] bg-[#f7f3fc] text-violet-800";
 }
 
 export default function InboxReplayTraceCard({
@@ -25,18 +25,18 @@ export default function InboxReplayTraceCard({
   return (
     <div
       className={[
-        "rounded-2xl border border-white/10 bg-white/[0.03]",
+        "rounded-2xl border border-[#ece2d3] bg-[#fffdfa]",
         compact ? "px-3.5 py-3" : "px-4 py-3.5",
       ].join(" ")}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-white/34">
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-stone-400">
             <Search className="h-3.5 w-3.5" />
             Inspect
           </div>
-          <div className="mt-1 text-sm font-semibold text-white">{title}</div>
-          <div className="mt-1 text-xs leading-5 text-white/48">{subtitle}</div>
+          <div className="mt-1 text-sm font-semibold text-stone-900">{title}</div>
+          <div className="mt-1 text-xs leading-5 text-stone-500">{subtitle}</div>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -55,7 +55,7 @@ export default function InboxReplayTraceCard({
 
       {trace.promptLayers.length ? (
         <div className="mt-3">
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-white/34">
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-stone-400">
             <Layers3 className="h-3.5 w-3.5" />
             Prompt layers used
           </div>
@@ -63,7 +63,7 @@ export default function InboxReplayTraceCard({
             {trace.promptLayers.map((layer) => (
               <span
                 key={layer}
-                className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-white/72"
+                className="rounded-full border border-[#ece2d3] bg-[#fffaf4] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-stone-700"
               >
                 {layer}
               </span>
@@ -78,18 +78,18 @@ export default function InboxReplayTraceCard({
           .map((row) => (
             <div
               key={`${title}-${row.label}`}
-              className="rounded-xl border border-white/8 bg-black/20 px-3 py-2.5"
+              className="rounded-xl border border-[#ece2d3] bg-white px-3 py-2.5"
             >
-              <div className="text-[10px] uppercase tracking-[0.16em] text-white/34">
+              <div className="text-[10px] uppercase tracking-[0.16em] text-stone-400">
                 {row.label}
               </div>
-              <div className="mt-1 text-sm leading-5 text-white/76">{row.value}</div>
+              <div className="mt-1 text-sm leading-5 text-stone-700">{row.value}</div>
             </div>
           ))}
       </div>
 
       {s(trace.disallowedClaimReason) ? (
-        <div className="mt-3 flex items-start gap-2 rounded-xl border border-rose-400/20 bg-rose-400/[0.07] px-3 py-2.5 text-sm text-rose-100">
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">
           <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{trace.disallowedClaimReason}</span>
         </div>

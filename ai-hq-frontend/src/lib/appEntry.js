@@ -7,7 +7,10 @@ function obj(value) {
 }
 
 export const CORE_APP_ROUTES = Object.freeze([
+  "/workspace",
   "/truth",
+  "/publish",
+  "/expert",
   "/settings",
   "/inbox",
 ]);
@@ -62,9 +65,21 @@ export function resolveAuthenticatedLanding(bootstrap = {}) {
     return isSetupPath(nextSetupRoute) ? nextSetupRoute : "/setup/studio";
   }
 
+  if (nextRoute === "/settings") {
+    return "/expert";
+  }
+
+  if (nextRoute === "/expert") {
+    return "/expert";
+  }
+
+  if (nextRoute === "/workspace") {
+    return "/workspace";
+  }
+
   if (isCoreAppPath(nextRoute) && !isInternalOnlyPath(nextRoute)) {
     return nextRoute;
   }
 
-  return "/truth";
+  return "/workspace";
 }

@@ -197,7 +197,14 @@ function SectionContractCopy({ activeSection }) {
   return null;
 }
 
-export default function SettingsController() {
+export default function SettingsController({
+  shellEyebrow = "Control Center",
+  shellTitle = "Governance & Settings",
+  shellSubtitle = "Approved truth, runtime health, repairability, and workspace controls in one operator control plane.",
+  navTitle = "Navigation",
+  navSubtitle = "Settings sections",
+  showSectionContractCopy = true,
+} = {}) {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [perm, setPerm] = useState("default");
@@ -823,8 +830,11 @@ export default function SettingsController() {
   return (
     <>
       <SettingsShell
-        title="Governance & Settings"
-        subtitle="Approved truth, runtime health, repairability, and workspace controls in one operator control plane."
+        eyebrow={shellEyebrow}
+        title={shellTitle}
+        subtitle={shellSubtitle}
+        navTitle={navTitle}
+        navSubtitle={navSubtitle}
         items={navItems}
         activeKey={activeSection}
         onChange={setActiveSection}
@@ -891,7 +901,9 @@ export default function SettingsController() {
             </div>
           ) : null}
 
-          <SectionContractCopy activeSection={activeSection} />
+          {showSectionContractCopy ? (
+            <SectionContractCopy activeSection={activeSection} />
+          ) : null}
 
           {renderSection()}
 

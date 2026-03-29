@@ -57,14 +57,23 @@ vi.mock("./components/auth/AppEntryRedirect.jsx", () => ({
 vi.mock("./pages/Proposals.jsx", () => ({
   default: () => <div>Proposals Page</div>,
 }));
+vi.mock("./pages/Publish.jsx", () => ({
+  default: () => <div>Publish Page</div>,
+}));
 vi.mock("./pages/Executions.jsx", () => ({
   default: () => <div>Executions Page</div>,
+}));
+vi.mock("./pages/Expert.jsx", () => ({
+  default: () => <div>Expert Page</div>,
 }));
 vi.mock("./pages/Settings.jsx", () => ({
   default: () => <div>Settings Page</div>,
 }));
 vi.mock("./pages/Inbox.jsx", () => ({
   default: () => <div>Inbox Page</div>,
+}));
+vi.mock("./surfaces/workspace/WorkspacePage.jsx", () => ({
+  default: () => <div>Workspace Page</div>,
 }));
 vi.mock("./pages/Leads.jsx", () => ({
   default: () => <div>Leads Page</div>,
@@ -106,17 +115,26 @@ afterEach(() => {
   cleanup();
 });
 
-describe("App critical route smoke", () => {
+describe("App primary product route smoke", () => {
   it.each([
     ["/", "App Entry Redirect"],
-    ["/setup/studio", "Setup Studio Route"],
+    ["/workspace", "Workspace Page"],
+    ["/inbox", "Inbox Page"],
+    ["/publish", "Publish Page"],
+    ["/expert", "Expert Page"],
+  ])("loads %s through the authenticated shell", async (path, text) => {
+    window.history.pushState({}, "", path);
+    render(<App />);
+    expect(await screen.findByText(text)).toBeInTheDocument();
+  });
+
+  it.each([
     ["/truth", "Truth Page"],
     ["/settings", "Settings Page"],
-    ["/inbox", "Inbox Page"],
-    ["/incidents", "Incidents Page"],
-    ["/leads", "Leads Page"],
+    ["/comments", "Comments Page"],
     ["/proposals", "Proposals Page"],
-  ])("loads %s without a blank screen", async (path, text) => {
+    ["/setup/studio", "Setup Studio Route"],
+  ])("keeps legacy route %s available", async (path, text) => {
     window.history.pushState({}, "", path);
     render(<App />);
     expect(await screen.findByText(text)).toBeInTheDocument();
@@ -127,9 +145,9 @@ describe("App critical route smoke", () => {
     ["/analytics"],
     ["/agents"],
     ["/threads"],
-  ])("redirects %s back to the production product surface by default", async (path) => {
+  ])("redirects internal-only route %s back to workspace", async (path) => {
     window.history.pushState({}, "", path);
     render(<App />);
-    expect(await screen.findByText("Truth Page")).toBeInTheDocument();
+    expect(await screen.findByText("Workspace Page")).toBeInTheDocument();
   });
 });

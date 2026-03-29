@@ -44,18 +44,18 @@ function titleize(value = "") {
 function policyTone(outcome = "") {
   switch (s(outcome).toLowerCase()) {
     case "allowed":
-      return "border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-100";
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "allowed_with_logging":
-      return "border-cyan-400/20 bg-cyan-400/[0.08] text-cyan-100";
+      return "border-cyan-200 bg-cyan-50 text-cyan-700";
     case "allowed_with_human_review":
     case "handoff_required":
     case "operator_only":
-      return "border-amber-300/20 bg-amber-300/[0.08] text-amber-100";
+      return "border-amber-200 bg-amber-50 text-amber-700";
     case "blocked":
     case "blocked_until_repair":
-      return "border-rose-400/20 bg-rose-400/[0.08] text-rose-100";
+      return "border-rose-200 bg-rose-50 text-rose-700";
     default:
-      return "border-white/10 bg-white/[0.04] text-white/70";
+      return "border-stone-200 bg-stone-100 text-stone-700";
   }
 }
 
@@ -100,17 +100,17 @@ function deriveExecutionPolicy(thread = {}) {
 function Button({ children, onClick, tone = "default", disabled = false, icon: Icon }) {
   const toneMap = {
     default:
-      "border-white/10 bg-white/[0.04] text-white/76 hover:border-white/16 hover:bg-white/[0.06] hover:text-white",
+      "border-[#e8decf] bg-[#fffaf4] text-stone-700 hover:border-[#d9c8ac] hover:bg-white hover:text-stone-900",
     cyan:
-      "border-cyan-400/20 bg-cyan-400/[0.08] text-cyan-100 hover:border-cyan-400/30 hover:bg-cyan-400/[0.12]",
+      "border-[#dfe9ea] bg-[#f2fbfb] text-cyan-900 hover:border-[#cde0e2] hover:bg-[#ebf8f8]",
     amber:
-      "border-amber-300/20 bg-amber-300/[0.08] text-amber-100 hover:border-amber-300/30 hover:bg-amber-300/[0.12]",
+      "border-[#eadfca] bg-[#fdf8ef] text-amber-900 hover:border-[#ddcfb2] hover:bg-[#fbf2e1]",
     emerald:
-      "border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-100 hover:border-emerald-400/30 hover:bg-emerald-400/[0.12]",
+      "border-[#dde8df] bg-[#f5faf5] text-emerald-900 hover:border-[#cadcca] hover:bg-[#eef8ee]",
     rose:
-      "border-rose-400/20 bg-rose-400/[0.08] text-rose-100 hover:border-rose-400/30 hover:bg-rose-400/[0.12]",
+      "border-[#f0dada] bg-[#fdf4f4] text-rose-900 hover:border-[#e6c7c7] hover:bg-[#fbefef]",
     violet:
-      "border-violet-400/20 bg-violet-400/[0.08] text-violet-100 hover:border-violet-400/30 hover:bg-violet-400/[0.12]",
+      "border-[#e6def1] bg-[#f7f3fc] text-violet-900 hover:border-[#d9cdea] hover:bg-[#f1ebfa]",
   };
 
   return (
@@ -167,11 +167,11 @@ export default function InboxDetailPanel({
   const canMarkRead = hasThread && unreadCount > 0 && !actionState?.isActionPending?.("read");
 
   return (
-    <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+    <div className="rounded-[30px] border border-[#ece2d3] bg-[#fffdf9]/92 p-5 shadow-[0_18px_44px_rgba(120,102,73,0.08)]">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-[17px] font-semibold tracking-[-0.03em] text-white">Conversation Detail</div>
-          <div className="mt-1 text-sm text-white/46">Selected thread status, timeline, and control panel.</div>
+          <div className="text-[18px] font-semibold tracking-[-0.03em] text-stone-900">Conversation Detail</div>
+          <div className="mt-1 text-sm text-stone-500">Selected thread status, reasoning context, and action controls.</div>
         </div>
 
         {hasThread ? (
@@ -191,11 +191,11 @@ export default function InboxDetailPanel({
         </div>
       ) : null}
 
-      <div className="mt-5 rounded-[24px] border border-white/8 bg-black/20 p-4">
+      <div className="mt-5 rounded-[24px] border border-[#ece2d3] bg-[#fffdfa] p-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="truncate text-[16px] font-semibold tracking-[-0.03em] text-white">{selectedName}</div>
-            <div className="mt-1 truncate text-sm text-white/42">
+            <div className="truncate text-[16px] font-semibold tracking-[-0.03em] text-stone-900">{selectedName}</div>
+            <div className="mt-1 truncate text-sm text-stone-500">
               {selectedThread?.external_username
                 ? `@${String(selectedThread.external_username).replace(/^@+/, "")}`
                 : selectedThread?.external_user_id || "—"}
@@ -232,25 +232,25 @@ export default function InboxDetailPanel({
           <InboxMiniInfo label="Thread status" value={prettyState(selectedState)} icon={CheckCircle2} />
         </div>
 
-        <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-white/32">Labels</div>
+        <div className="mt-4 rounded-2xl border border-[#ece2d3] bg-white px-4 py-3">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Labels</div>
           <div className="mt-2 flex flex-wrap gap-2">
             {selectedLabels.length ? (
               selectedLabels.map((label) => (
-                <span key={label} className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-white/70">
+                <span key={label} className="rounded-full border border-[#ece2d3] bg-[#fffaf4] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-stone-600">
                   {label}
                 </span>
               ))
             ) : (
-              <span className="text-sm text-white/50">—</span>
+              <span className="text-sm text-stone-500">—</span>
             )}
           </div>
         </div>
 
-        <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
+        <div className="mt-4 rounded-2xl border border-[#ece2d3] bg-white px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-white/32">
-              Channel Autonomy
+            <div className="text-[10px] uppercase tracking-[0.18em] text-stone-400">
+              Channel autonomy
             </div>
             <div
               className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] ${policyTone(executionPolicy.outcome)}`}
@@ -258,7 +258,7 @@ export default function InboxDetailPanel({
               {titleize(executionPolicy.outcome || "unknown")}
             </div>
           </div>
-          <div className="mt-2 text-sm leading-6 text-white/66">
+          <div className="mt-2 text-sm leading-6 text-stone-600">
             {executionPolicy.explanation}
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -266,13 +266,13 @@ export default function InboxDetailPanel({
               executionPolicy.reasonCodes.map((code) => (
                 <span
                   key={code}
-                  className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-white/70"
+                  className="rounded-full border border-[#ece2d3] bg-[#fffaf4] px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-stone-600"
                 >
                   {titleize(code)}
                 </span>
               ))
             ) : (
-              <span className="text-sm text-white/50">Telemetry unavailable</span>
+              <span className="text-sm text-stone-500">Telemetry unavailable</span>
             )}
           </div>
         </div>
@@ -307,18 +307,18 @@ export default function InboxDetailPanel({
           </Button>
         </div>
 
-        <div className="mt-5 max-h-[360px] space-y-4 overflow-y-auto pr-1">
+        <div className="mt-5 max-h-[420px] space-y-4 overflow-y-auto pr-1">
           {!hasThread ? (
-            <div className="rounded-[22px] border border-dashed border-white/10 px-4 py-10 text-center">
-              <div className="text-sm font-medium text-white/66">Select a thread</div>
-              <div className="mt-2 text-sm leading-6 text-white/40">Select a thread to view messages here.</div>
+            <div className="rounded-[22px] border border-dashed border-[#ece2d3] px-4 py-10 text-center">
+              <div className="text-sm font-medium text-stone-700">Select a thread</div>
+              <div className="mt-2 text-sm leading-6 text-stone-500">Select a thread to view messages here.</div>
             </div>
           ) : surface?.loading ? (
-            <div className="rounded-[22px] border border-white/10 px-4 py-10 text-center text-sm text-white/52">Loading messages...</div>
+            <div className="rounded-[22px] border border-[#ece2d3] px-4 py-10 text-center text-sm text-stone-500">Loading messages...</div>
           ) : messages.length === 0 ? (
-            <div className="rounded-[22px] border border-dashed border-white/10 px-4 py-10 text-center">
-              <div className="text-sm font-medium text-white/66">No messages yet</div>
-              <div className="mt-2 text-sm leading-6 text-white/40">No messages are available for this thread yet.</div>
+            <div className="rounded-[22px] border border-dashed border-[#ece2d3] px-4 py-10 text-center">
+              <div className="text-sm font-medium text-stone-700">No messages yet</div>
+              <div className="mt-2 text-sm leading-6 text-stone-500">No messages are available for this thread yet.</div>
             </div>
           ) : (
             messages.map((message) => <InboxMessageBubble key={message.id} m={message} />)
