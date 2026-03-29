@@ -60,8 +60,7 @@ function buildProjectionContact(channel = "", value = "", extra = {}) {
   return {
     channel: s(channel),
     value: normalizedValue,
-    isPrimary:
-      typeof extra.isPrimary === "boolean" ? extra.isPrimary : true,
+    isPrimary: typeof extra.isPrimary === "boolean" ? extra.isPrimary : true,
     ...extra,
   };
 }
@@ -97,8 +96,7 @@ function buildServiceProjectionEntry(item, index = 0) {
     title,
     description,
     category: firstNonEmpty(value.category, value.type),
-    enabled:
-      typeof value.enabled === "boolean" ? value.enabled : true,
+    enabled: typeof value.enabled === "boolean" ? value.enabled : true,
   };
 }
 
@@ -306,9 +304,7 @@ function buildCompatibleProjectionRuntime({
     runtimeValue.commentPolicy || runtimeValue.comment_policy
   );
   const handoff = obj(runtimeValue.handoff || runtimeValue.handoffPolicy);
-  const leadCapture = obj(
-    runtimeValue.leadCapture || runtimeValue.lead_capture
-  );
+  const leadCapture = obj(runtimeValue.leadCapture || runtimeValue.lead_capture);
 
   const resolvedTenantId = firstNonEmpty(
     existingIdentity.tenantId,
@@ -441,10 +437,7 @@ function buildCompatibleProjectionRuntime({
         firstNonEmpty(voiceOperational?.telephony?.phoneNumber, primaryPhone)
           ? {
               channelType: "voice",
-              label: firstNonEmpty(
-                voiceOperational.displayName,
-                "Voice"
-              ),
+              label: firstNonEmpty(voiceOperational.displayName, "Voice"),
               endpoint: "voice",
               phoneNumber: firstNonEmpty(
                 voiceOperational?.telephony?.phoneNumber,
@@ -526,11 +519,13 @@ function buildCompatibleProjectionRuntime({
       enabled:
         typeof existingVoice.enabled === "boolean"
           ? existingVoice.enabled
-          : voiceOperational.ready === true || voiceOperational.available === true,
+          : voiceOperational.ready === true ||
+            voiceOperational.available === true,
       supportsCalls:
         typeof existingVoice.supportsCalls === "boolean"
           ? existingVoice.supportsCalls
-          : voiceOperational.ready === true || voiceOperational.available === true,
+          : voiceOperational.ready === true ||
+            voiceOperational.available === true,
       primaryPhone: firstNonEmpty(
         existingVoice.primaryPhone,
         voiceOperational?.telephony?.phoneNumber,
@@ -628,8 +623,14 @@ function buildManualProjectedRuntime({
       tenantId: firstNonEmpty(identityJson.tenantId, authority.tenantId),
       tenant_key: firstNonEmpty(identityJson.tenantKey, authority.tenantKey),
       tenantKey: firstNonEmpty(identityJson.tenantKey, authority.tenantKey),
-      company_name: firstNonEmpty(identityJson.companyName, profileJson.companyName),
-      companyName: firstNonEmpty(identityJson.companyName, profileJson.companyName),
+      company_name: firstNonEmpty(
+        identityJson.companyName,
+        profileJson.companyName
+      ),
+      companyName: firstNonEmpty(
+        identityJson.companyName,
+        profileJson.companyName
+      ),
       displayName: firstNonEmpty(
         identityJson.displayName,
         identityJson.companyName,
@@ -683,26 +684,54 @@ function buildVoiceProjectedRuntime({
       tenantRow: tenant,
       operationalChannels,
     });
-  } catch (error) {
+  } catch (primaryError) {
     const authority = obj(runtime?.authority);
+    const approvedAuthorityAvailable =
+      authority.available === true &&
+      s(authority.source) === "approved_runtime_projection";
 
-    if (
-      authority.available !== true ||
-      s(authority.source) !== "approved_runtime_projection"
-    ) {
-      throw error;
+    if (!approvedAuthorityAvailable) {
+      throw primaryError;
     }
 
-    throw createRuntimeAuthorityError({
-      mode: "strict",
-      tenantId: firstNonEmpty(authority.tenantId, tenant?.id, tenant?.tenant_id),
-      tenantKey: firstNonEmpty(authority.tenantKey, tenant?.tenant_key, tenantKey),
-      runtimeProjection: obj(runtime?.raw?.projection),
-      reasonCode: "runtime_projection_invalid",
-      reason: "runtime_projection_invalid",
-      message:
-        "Approved runtime authority is unavailable because the approved runtime projection could not be materialized for voice execution.",
-    });
+    try {
+      const compatibleRuntime = buildCompatibleProjectionRuntime({
+        runtime,
+        tenant,
+        operationalChannels,
+        tenantKey,
+        toNumber,
+      });
+
+      return buildProjectedTenantRuntime({
+        runtime: compatibleRuntime,
+        tenantRow: tenant,
+        operationalChannels,
+      });
+    } catch (compatError) {
+      throw createRuntimeAuthorityError({
+        mode: "strict",
+        tenantId: firstNonEmpty(
+          authority.tenantId,
+          tenant?.id,
+          tenant?.tenant_id
+        ),
+        tenantKey: firstNonEmpty(
+          authority.tenantKey,
+          tenant?.tenant_key,
+          tenantKey
+        ),
+        runtimeProjection: obj(
+          runtime?.raw?.projection ||
+            runtime?.raw?.runtimeProjection ||
+            runtime?.raw?.currentProjection
+        ),
+        reasonCode: "runtime_projection_invalid",
+        reason: "runtime_projection_invalid",
+        message:
+          "Approved runtime authority is unavailable because the approved runtime projection could not be materialized for voice execution.",
+      });
+    }
   }
 }
 
@@ -892,10 +921,9 @@ export async function processVoiceTenantConfig({
     tenantKey: s(builtPayload.tenantKey || resolvedTenantKey),
     tenantId: firstNonEmpty(builtPayload.tenantId, tenant.id),
     toNumber: s(builtPayload.toNumber || toNumber),
-    projectedRuntime:
-      obj(builtPayload.projectedRuntime).authority
-        ? builtPayload.projectedRuntime
-        : projectedRuntime,
+    projectedRuntime: obj(builtPayload.projectedRuntime).authority
+      ? builtPayload.projectedRuntime
+      : projectedRuntime,
     operationalChannels,
     authority: {
       ...obj(

@@ -1,84 +1,133 @@
 -- ============================================================
--- Mojibake repair (best effort)
+-- Mojibake repair (best effort, encoding-portable)
 -- ============================================================
+
+create or replace function pg_temp.repair_mojibake_text(input_value text)
+returns text
+language plpgsql
+as $$
+declare
+  repaired text;
+begin
+  if input_value is null or btrim(input_value) = '' then
+    return input_value;
+  end if;
+
+  begin
+    repaired := convert_from(convert_to(input_value, 'LATIN1'), 'UTF8');
+  exception when others then
+    return input_value;
+  end;
+
+  if repaired is null or repaired = input_value then
+    return input_value;
+  end if;
+
+  return repaired;
+end;
+$$;
 
 do $$
 begin
   begin
     update messages
-      set content = convert_from(convert_to(content, 'LATIN1'), 'UTF8')
-    where content is not null and content ~ 'Ã.|Â.|â€|â€™|â€œ|â€�|â€“|â€”|â€¦';
-  exception when others then null;
+       set content = pg_temp.repair_mojibake_text(content)
+     where content is not null
+       and pg_temp.repair_mojibake_text(content) is distinct from content;
+  exception when others then
+    null;
   end;
 
   begin
     update proposals
-      set title = convert_from(convert_to(title, 'LATIN1'), 'UTF8')
-    where title is not null and title ~ 'Ã.|Â.|â€|â€™|â€œ|â€�|â€“|â€”|â€¦';
-  exception when others then null;
+       set title = pg_temp.repair_mojibake_text(title)
+     where title is not null
+       and pg_temp.repair_mojibake_text(title) is distinct from title;
+  exception when others then
+    null;
   end;
 
   begin
     update notifications
-      set title = convert_from(convert_to(title, 'LATIN1'), 'UTF8')
-    where title is not null and title ~ 'Ã.|Â.|â€|â€™|â€œ|â€�|â€“|â€”|â€¦';
-  exception when others then null;
+       set title = pg_temp.repair_mojibake_text(title)
+     where title is not null
+       and pg_temp.repair_mojibake_text(title) is distinct from title;
+  exception when others then
+    null;
   end;
 
   begin
     update notifications
-      set body = convert_from(convert_to(body, 'LATIN1'), 'UTF8')
-    where body is not null and body ~ 'Ã.|Â.|â€|â€™|â€œ|â€�|â€“|â€”|â€¦';
-  exception when others then null;
+       set body = pg_temp.repair_mojibake_text(body)
+     where body is not null
+       and pg_temp.repair_mojibake_text(body) is distinct from body;
+  exception when others then
+    null;
   end;
 
   begin
     update inbox_messages
-      set text = convert_from(convert_to(text, 'LATIN1'), 'UTF8')
-    where text is not null and text ~ 'Ã.|Â.|â€|â€™|â€œ|â€�|â€“|â€”|â€¦';
-  exception when others then null;
+       set text = pg_temp.repair_mojibake_text(text)
+     where text is not null
+       and pg_temp.repair_mojibake_text(text) is distinct from text;
+  exception when others then
+    null;
   end;
 
   begin
     update leads
-      set full_name = convert_from(convert_to(full_name, 'LATIN1'), 'UTF8')
-    where full_name is not null and full_name ~ 'Ã.|Â.|â€|â€™|â€œ|â€�|â€“|â€”|â€¦';
-  exception when others then null;
+       set full_name = pg_temp.repair_mojibake_text(full_name)
+     where full_name is not null
+       and pg_temp.repair_mojibake_text(full_name) is distinct from full_name;
+  exception when others then
+    null;
   end;
 
   begin
     update comments
-      set text = convert_from(convert_to(text, 'LATIN1'), 'UTF8')
-    where text is not null and text ~ 'Ã.|Â.|â€|â€™|â€œ|â€�|â€“|â€”|â€¦';
-  exception when others then null;
+       set text = pg_temp.repair_mojibake_text(text)
+     where text is not null
+       and pg_temp.repair_mojibake_text(text) is distinct from text;
+  exception when others then
+    null;
   end;
 
   begin
     update content_items
-      set title = convert_from(convert_to(title, 'LATIN1'), 'UTF8')
-    where title is not null and title ~ 'Ã.|Â.|â€|â€™|â€œ|â€�|â€“|â€”|â€¦';
-  exception when others then null;
+       set title = pg_temp.repair_mojibake_text(title)
+     where title is not null
+       and pg_temp.repair_mojibake_text(title) is distinct from title;
+  exception when others then
+    null;
   end;
 
   begin
     update content_items
-      set caption = convert_from(convert_to(caption, 'LATIN1'), 'UTF8')
-    where caption is not null and caption ~ 'Ã.|Â.|â€|â€™|â€œ|â€�|â€“|â€”|â€¦';
-  exception when others then null;
+       set caption = pg_temp.repair_mojibake_text(caption)
+     where caption is not null
+       and pg_temp.repair_mojibake_text(caption) is distinct from caption;
+  exception when others then
+    null;
   end;
 
   begin
     update voice_calls
-      set transcript = convert_from(convert_to(transcript, 'LATIN1'), 'UTF8')
-    where transcript is not null and transcript ~ 'Ã.|Â.|â€|â€™|â€œ|â€�|â€“|â€”|â€¦';
-  exception when others then null;
+       set transcript = pg_temp.repair_mojibake_text(transcript)
+     where transcript is not null
+       and pg_temp.repair_mojibake_text(transcript) is distinct from transcript;
+  exception when others then
+    null;
   end;
 
   begin
     update voice_calls
-      set summary = convert_from(convert_to(summary, 'LATIN1'), 'UTF8')
-    where summary is not null and summary ~ 'Ã.|Â.|â€|â€™|â€œ|â€�|â€“|â€”|â€¦';
-  exception when others then null;
+       set summary = pg_temp.repair_mojibake_text(summary)
+     where summary is not null
+       and pg_temp.repair_mojibake_text(summary) is distinct from summary;
+  exception when others then
+    null;
   end;
-exception when others then null;
-end$$;
+exception when others then
+  null;
+end
+$$;

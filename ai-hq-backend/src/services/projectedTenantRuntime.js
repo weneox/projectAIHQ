@@ -99,11 +99,7 @@ function buildVoiceOperationalConfig(operationalChannels = {}) {
       website: "",
     },
     operator: obj(voiceOperational.operator),
-    operatorRouting: normalizeDepartmentMap(
-      obj(voiceOperational.operatorRouting?.departments)
-    ).sales
-      ? obj(voiceOperational.operatorRouting)
-      : obj(voiceOperational.operatorRouting),
+    operatorRouting: obj(voiceOperational.operatorRouting),
     realtime: obj(voiceOperational.realtime),
     telephony: obj(voiceOperational.telephony),
     callback: obj(voiceOperational.callback),
@@ -113,6 +109,8 @@ function buildVoiceOperationalConfig(operationalChannels = {}) {
     source: s(voiceOperational.source),
     updatedAt: s(voiceOperational.updatedAt),
     contractHash: s(voiceOperational.contractHash),
+    ready: voiceOperational.ready === true,
+    available: voiceOperational.available === true,
   };
 }
 
@@ -262,13 +260,43 @@ function shouldTreatMissingHealthAsFatal({
   return false;
 }
 
+function shouldAllowVoiceDespiteAuthorityStale({
+  authority = {},
+  health = {},
+  consumerSurface = "",
+  operationalChannels = null,
+} = {}) {
+  const normalizedReasonCode = lower(
+    authority.reasonCode ||
+      authority.reason_code ||
+      health.primaryReasonCode ||
+      health.reasonCode
+  );
+  const voiceOperational = obj(obj(operationalChannels).voice);
+
+  return (
+    consumerSurface === "voice" &&
+    authority.available === true &&
+    s(authority.source) === "approved_runtime_projection" &&
+    voiceOperational.ready === true &&
+    ["projection_stale", "truth_version_drift"].includes(
+      normalizedReasonCode
+    )
+  );
+}
+
 function shouldBlockForProjectionHealth({
   authority = {},
   projectionId = "",
   health = {},
   consumerSurface = "",
+  operationalChannels = null,
 } = {}) {
   const status = lower(health.status);
+  const normalizedReasonCode = lower(
+    health.primaryReasonCode || health.reasonCode || authority.reasonCode
+  );
+  const voiceOperational = obj(obj(operationalChannels).voice);
 
   if (!["missing", "stale", "blocked", "invalid"].includes(status)) {
     return false;
@@ -298,6 +326,15 @@ function shouldBlockForProjectionHealth({
     }
   }
 
+  if (
+    consumerSurface === "voice" &&
+    status === "stale" &&
+    voiceOperational.ready === true &&
+    ["projection_stale", "truth_version_drift"].includes(normalizedReasonCode)
+  ) {
+    return false;
+  }
+
   return true;
 }
 
@@ -322,16 +359,18 @@ function buildProjectionExecutionPolicy(projection = {}, runtime = {}) {
       truthRiskLevel: s(
         obj(approvalPolicy.risk).level || approvalPolicy.riskLevel
       ),
-        affectedSurfaces: arr(
-          approvalPolicy.affectedSurfaces ||
-            approvalPolicy.affected_surfaces ||
-            obj(approvalPolicy.signals).affectedSurfaces
-        ),
-        policyControlMode: s(
-          obj(policyControls.tenantDefault || policyControls.tenant_default).controlMode
-        ),
-      },
-    };
+      affectedSurfaces: arr(
+        approvalPolicy.affectedSurfaces ||
+          approvalPolicy.affected_surfaces ||
+          obj(approvalPolicy.signals).affectedSurfaces
+      ),
+      policyControlMode: s(
+        obj(
+          policyControls.tenantDefault || policyControls.tenant_default
+        ).controlMode
+      ),
+    },
+  };
 }
 
 export function buildProjectedTenantRuntime({
@@ -359,6 +398,14 @@ export function buildProjectedTenantRuntime({
     operationalChannels,
   });
 
+  const allowVoiceDespiteAuthorityStale =
+    shouldAllowVoiceDespiteAuthorityStale({
+      authority,
+      health,
+      consumerSurface,
+      operationalChannels,
+    });
+
   if (authority.mode !== "strict" || authority.required !== true) {
     throw createProjectedRuntimeAuthorityError(
       authority,
@@ -377,7 +424,7 @@ export function buildProjectedTenantRuntime({
     );
   }
 
-  if (authority.stale === true) {
+  if (authority.stale === true && !allowVoiceDespiteAuthorityStale) {
     throw createProjectedRuntimeAuthorityError(
       authority,
       s(
@@ -399,6 +446,7 @@ export function buildProjectedTenantRuntime({
       projectionId,
       health,
       consumerSurface,
+      operationalChannels,
     })
   ) {
     throw createProjectedRuntimeAuthorityError(
@@ -454,8 +502,19 @@ export function buildProjectedTenantRuntime({
     },
     projectionHealth: health,
     tenant: {
-      tenantId: s(identity.tenantId || authority.tenantId),
-      tenantKey: lower(identity.tenantKey || authority.tenantKey),
+      tenantId: s(
+        identity.tenantId ||
+          identity.tenant_id ||
+          tenantRow?.tenant_id ||
+          tenantRow?.id ||
+          authority.tenantId
+      ),
+      tenantKey: lower(
+        identity.tenantKey ||
+          identity.tenant_key ||
+          tenantRow?.tenant_key ||
+          authority.tenantKey
+      ),
       companyName: s(identity.companyName),
       displayName: s(identity.displayName || identity.companyName),
       legalName: s(identity.legalName),

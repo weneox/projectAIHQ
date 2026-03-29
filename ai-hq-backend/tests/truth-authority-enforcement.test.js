@@ -1651,6 +1651,120 @@ test("voice tenant config fails closed when approved projection cannot be materi
   assert.equal(result?.details?.authority?.strict, true);
 });
 
+test("voice tenant config accepts live operational voice state when approved authority exists and projection health is only stale", async () => {
+  const db = {
+    async query(sql) {
+      const text = String(sql || "").toLowerCase();
+
+      if (text.includes("from tenant_voice_settings")) {
+        return {
+          rows: [
+            {
+              tenant_id: "tenant-1",
+              enabled: true,
+              provider: "twilio",
+              mode: "assistant",
+              display_name: "Acme Voice",
+              default_language: "en",
+              supported_languages: ["en", "az"],
+              instructions: "Route callers carefully.",
+              operator_enabled: true,
+              operator_phone: "+15550001112",
+              operator_label: "front desk",
+              transfer_strategy: "handoff",
+              callback_enabled: true,
+              callback_mode: "lead_only",
+              max_call_seconds: 180,
+              silence_hangup_seconds: 12,
+              twilio_phone_number: "+15550001111",
+              twilio_phone_sid: "PN123",
+              twilio_config: {
+                callerId: "+15550001111",
+              },
+              meta: {
+                realtimeModel: "gpt-4o-realtime-preview",
+                realtimeVoice: "alloy",
+              },
+              updated_at: "2026-03-29T00:00:00.000Z",
+            },
+          ],
+        };
+      }
+
+      return { rows: [] };
+    },
+  };
+
+  const result = await processVoiceTenantConfig({
+    db,
+    tenantKey: "acme",
+    toNumber: "+15550001111",
+    getRuntime: async () =>
+      buildApprovedRuntimePack({
+        authority: {
+          mode: "strict",
+          required: true,
+          available: true,
+          source: "approved_runtime_projection",
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+          runtimeProjectionId: "projection-1",
+          health: {
+            status: "stale",
+            primaryReasonCode: "projection_stale",
+            affectedSurfaces: ["voice"],
+          },
+        },
+        raw: {
+          projection: {
+            id: "projection-1",
+            projection_hash: "hash-1",
+            status: "ready",
+            identity_json: {
+              tenantId: "tenant-1",
+              tenantKey: "acme",
+              companyName: "Acme Clinic",
+              displayName: "Acme Clinic",
+              mainLanguage: "en",
+              supportedLanguages: ["en", "az"],
+              websiteUrl: "https://acme.example",
+            },
+            profile_json: {
+              companyName: "Acme Clinic",
+              displayName: "Acme Clinic",
+              mainLanguage: "en",
+              supportedLanguages: ["en", "az"],
+              websiteUrl: "https://acme.example",
+              primaryPhone: "+15550001111",
+            },
+            voice_json: {
+              enabled: false,
+              supportsCalls: false,
+            },
+            channels_json: [],
+            health_json: {
+              status: "stale",
+              primaryReasonCode: "projection_stale",
+              affectedSurfaces: ["voice"],
+            },
+          },
+        },
+      }),
+  });
+
+  assert.equal(result?.ok, true);
+  assert.equal(result?.payload?.authority?.strict, true);
+  assert.equal(result?.payload?.authority?.source, "approved_runtime_projection");
+  assert.equal(
+    result?.payload?.operationalChannels?.voice?.source,
+    "tenant_voice_settings"
+  );
+  assert.equal(
+    result?.payload?.contact?.phoneIntl,
+    "+15550001111"
+  );
+});
+
 test("authoritative tenant lookups and inbox context succeed when an approved projection exists", async () => {
   const rows = buildProjectionRows();
   const db = createProjectionDb(rows);

@@ -32,6 +32,36 @@ function sha256Json(value) {
     .digest("hex");
 }
 
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    const normalized = s(value);
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+function pickBoolean(...values) {
+  for (const value of values) {
+    if (typeof value === "boolean") return value;
+  }
+  return false;
+}
+
+function pickArray(...values) {
+  for (const value of values) {
+    if (Array.isArray(value)) return value;
+  }
+  return [];
+}
+
+function pickNumber(...values) {
+  for (const value of values) {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
+}
+
 function normalizeDepartmentMap(input = {}) {
   const source = obj(input);
   const out = {};
@@ -56,6 +86,63 @@ function normalizeDepartmentMap(input = {}) {
   }
 
   return out;
+}
+
+function normalizeVoiceSettingsRow(settings = null) {
+  const value = obj(settings);
+  const meta = obj(value.meta || value.meta_json);
+  const twilioConfig = obj(value.twilioConfig || value.twilio_config);
+  const routing = obj(
+    meta.operatorRouting ||
+      meta.operator_routing ||
+      value.operatorRouting ||
+      value.operator_routing
+  );
+
+  return {
+    enabled: pickBoolean(value.enabled, value.is_enabled),
+    provider: firstNonEmpty(value.provider, value.voice_provider, "twilio"),
+    mode: firstNonEmpty(value.mode, value.voice_mode, "assistant"),
+    displayName: firstNonEmpty(value.displayName, value.display_name),
+    defaultLanguage: firstNonEmpty(
+      value.defaultLanguage,
+      value.default_language
+    ),
+    supportedLanguages: pickArray(
+      value.supportedLanguages,
+      value.supported_languages
+    ),
+    instructions: firstNonEmpty(value.instructions),
+    operatorEnabled: pickBoolean(
+      value.operatorEnabled,
+      value.operator_enabled
+    ),
+    operatorPhone: firstNonEmpty(value.operatorPhone, value.operator_phone),
+    operatorLabel: firstNonEmpty(value.operatorLabel, value.operator_label),
+    transferStrategy: firstNonEmpty(
+      value.transferStrategy,
+      value.transfer_strategy
+    ),
+    callbackEnabled: pickBoolean(
+      value.callbackEnabled,
+      value.callback_enabled
+    ),
+    callbackMode: firstNonEmpty(value.callbackMode, value.callback_mode),
+    maxCallSeconds: pickNumber(value.maxCallSeconds, value.max_call_seconds),
+    silenceHangupSeconds: pickNumber(
+      value.silenceHangupSeconds,
+      value.silence_hangup_seconds
+    ),
+    twilioPhoneNumber: firstNonEmpty(
+      value.twilioPhoneNumber,
+      value.twilio_phone_number
+    ),
+    twilioPhoneSid: firstNonEmpty(value.twilioPhoneSid, value.twilio_phone_sid),
+    twilioConfig,
+    meta,
+    routing,
+    updatedAt: firstNonEmpty(value.updatedAt, value.updated_at),
+  };
 }
 
 function buildMissingVoiceOperational(reasonCode = "voice_settings_missing") {
@@ -107,13 +194,14 @@ function buildVoiceOperationalFromSettings(settings = null, tenantRow = {}) {
     return buildMissingVoiceOperational("voice_settings_missing");
   }
 
-  const meta = obj(settings.meta);
-  const routing = obj(meta.operatorRouting || meta.operator_routing);
-  const twilioConfig = obj(settings.twilioConfig);
+  const normalized = normalizeVoiceSettingsRow(settings);
+  const meta = obj(normalized.meta);
+  const routing = obj(normalized.routing);
+  const twilioConfig = obj(normalized.twilioConfig);
 
-  const enabled = bool(settings.enabled, false);
-  const phoneNumber = s(settings.twilioPhoneNumber);
-  const provider = lower(settings.provider || "twilio");
+  const enabled = bool(normalized.enabled, false);
+  const phoneNumber = s(normalized.twilioPhoneNumber);
+  const provider = lower(normalized.provider || "twilio");
   let reasonCode = "";
 
   if (!enabled) {
@@ -129,26 +217,32 @@ function buildVoiceOperationalFromSettings(settings = null, tenantRow = {}) {
     ready: !reasonCode,
     reasonCode,
     provider,
-    mode: lower(settings.mode || "assistant"),
-    displayName: s(settings.displayName || tenantRow.company_name),
-    defaultLanguage: lower(settings.defaultLanguage || tenantRow.default_language || "en"),
-    supportedLanguages: arr(settings.supportedLanguages)
+    mode: lower(normalized.mode || "assistant"),
+    displayName: s(normalized.displayName || tenantRow.company_name),
+    defaultLanguage: lower(
+      normalized.defaultLanguage || tenantRow.default_language || "en"
+    ),
+    supportedLanguages: arr(normalized.supportedLanguages)
       .map((entry) => lower(entry))
       .filter(Boolean),
     operator: {
-      enabled: bool(settings.operatorEnabled, true),
-      phone: s(settings.operatorPhone),
+      enabled: bool(normalized.operatorEnabled, true),
+      phone: s(normalized.operatorPhone),
       callerId: s(
-        twilioConfig.callerId || twilioConfig.caller_id || meta.callerId || meta.caller_id
+        twilioConfig.callerId ||
+          twilioConfig.caller_id ||
+          meta.callerId ||
+          meta.caller_id
       ),
-      label: s(settings.operatorLabel || "operator"),
-      mode: lower(meta.operatorMode || "manual"),
+      label: s(normalized.operatorLabel || "operator"),
+      mode: lower(meta.operatorMode || meta.operator_mode || "manual"),
     },
     operatorRouting: {
       mode: lower(
         routing.mode ||
           meta.transferMode ||
-          settings.transferStrategy ||
+          meta.transfer_mode ||
+          normalized.transferStrategy ||
           "handoff"
       ),
       defaultDepartment: lower(
@@ -159,25 +253,25 @@ function buildVoiceOperationalFromSettings(settings = null, tenantRow = {}) {
     realtime: {
       model: s(meta.realtimeModel || meta.model || "gpt-4o-realtime-preview"),
       voice: s(meta.realtimeVoice || meta.voice || "alloy"),
-      instructions: s(settings.instructions || meta.instructions || ""),
+      instructions: s(normalized.instructions || meta.instructions || ""),
     },
     telephony: {
       phoneNumber,
-      phoneSid: s(settings.twilioPhoneSid),
+      phoneSid: s(normalized.twilioPhoneSid),
     },
     callback: {
-      enabled: bool(settings.callbackEnabled, true),
-      mode: s(settings.callbackMode || "lead_only"),
+      enabled: bool(normalized.callbackEnabled, true),
+      mode: s(normalized.callbackMode || "lead_only"),
     },
     transfer: {
-      strategy: lower(settings.transferStrategy || "handoff"),
+      strategy: lower(normalized.transferStrategy || "handoff"),
     },
     limits: {
-      maxCallSeconds: Number(settings.maxCallSeconds || 0) || 0,
-      silenceHangupSeconds: Number(settings.silenceHangupSeconds || 0) || 0,
+      maxCallSeconds: pickNumber(normalized.maxCallSeconds, 0),
+      silenceHangupSeconds: pickNumber(normalized.silenceHangupSeconds, 0),
     },
     source: "tenant_voice_settings",
-    updatedAt: s(settings.updatedAt),
+    updatedAt: s(normalized.updatedAt),
   };
 }
 
@@ -208,7 +302,7 @@ function buildMetaOperational({ matchedChannel = null } = {}) {
     username: s(channel.external_username),
     status: s(channel.status),
     isPrimary: channel.is_primary === true || channel.isPrimary === true,
-    isConnected: s(channel.status).toLowerCase() === "active",
+    isConnected: connected,
     source: channel.id ? "tenant_channels" : "",
     updatedAt: s(channel.updated_at),
   };
@@ -231,7 +325,8 @@ export async function buildOperationalChannels({
   matchedChannel = null,
 } = {}) {
   const resolvedVoiceSettings =
-    voiceSettings || (await loadVoiceOperationalSettings({ db, tenantId, tenantRow }));
+    voiceSettings ||
+    (await loadVoiceOperationalSettings({ db, tenantId, tenantRow }));
 
   const voice = buildVoiceOperationalFromSettings(
     resolvedVoiceSettings,
