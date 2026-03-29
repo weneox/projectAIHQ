@@ -357,7 +357,6 @@ function resolveConsumerSurface({
   }
 
   if (provider === "twilio") return "twilio";
-
   if (Object.keys(voice).length > 0) return "voice";
 
   return "";
@@ -392,6 +391,9 @@ function shouldAllowGovernanceReviewBlockedHealth({
   authority = {},
   projectionId = "",
   health = {},
+  consumerSurface = "",
+  operationalChannels = null,
+  providerSecrets = null,
 } = {}) {
   const status = lower(health.status);
   const reasonCodes = collectReasonCodes(authority, health);
@@ -402,9 +404,27 @@ function shouldAllowGovernanceReviewBlockedHealth({
   if (s(authority.source) !== "approved_runtime_projection") return false;
   if (reasonCodes.length === 0) return false;
 
-  return reasonCodes.every((code) =>
+  const governanceOnly = reasonCodes.every((code) =>
     NON_FATAL_GOVERNANCE_REVIEW_REASON_CODES.has(code)
   );
+
+  if (!governanceOnly) return false;
+
+  if (consumerSurface === "voice" || consumerSurface === "twilio") {
+    const voiceOperational = obj(obj(operationalChannels).voice);
+    return voiceOperational.ready === true;
+  }
+
+  if (consumerSurface === "meta") {
+    const metaOperational = obj(obj(operationalChannels).meta);
+    const metaReady =
+      metaOperational.ready === true ||
+      Boolean(s(metaOperational.pageId) || s(metaOperational.igUserId));
+
+    return metaReady && hasMetaProviderAccess(providerSecrets);
+  }
+
+  return false;
 }
 
 function shouldAllowVoiceDespiteAuthorityStale({
@@ -422,7 +442,7 @@ function shouldAllowVoiceDespiteAuthorityStale({
   const voiceOperational = obj(obj(operationalChannels).voice);
 
   return (
-    consumerSurface === "voice" &&
+    (consumerSurface === "voice" || consumerSurface === "twilio") &&
     authority.available === true &&
     s(authority.source) === "approved_runtime_projection" &&
     voiceOperational.ready === true &&
@@ -442,7 +462,7 @@ function shouldAllowConsumerDespiteBlockedHealth({
   const reasonCodes = collectReasonCodes(authority, health);
   if (reasonCodes.length === 0) return false;
 
-  if (consumerSurface === "voice") {
+  if (consumerSurface === "voice" || consumerSurface === "twilio") {
     const voiceOperational = obj(obj(operationalChannels).voice);
     if (voiceOperational.ready !== true) return false;
     return reasonCodes.every((code) => VOICE_OPERATIONAL_REASON_CODES.has(code));
@@ -495,6 +515,9 @@ function shouldBlockForProjectionHealth({
         authority,
         projectionId,
         health,
+        consumerSurface,
+        operationalChannels,
+        providerSecrets,
       })
     ) {
       return false;
@@ -528,7 +551,7 @@ function shouldBlockForProjectionHealth({
   }
 
   if (
-    consumerSurface === "voice" &&
+    (consumerSurface === "voice" || consumerSurface === "twilio") &&
     status === "stale" &&
     voiceOperational.ready === true &&
     ["projection_stale", "truth_version_drift"].includes(normalizedReasonCode)

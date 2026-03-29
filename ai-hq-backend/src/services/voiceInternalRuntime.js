@@ -425,6 +425,10 @@ function buildVoiceProjectedRuntime({
       operationalChannels,
     });
   } catch (primaryError) {
+    if (isRuntimeAuthorityError(primaryError)) {
+      throw primaryError;
+    }
+
     const authority = obj(runtime?.authority);
     const approvedAuthorityAvailable =
       authority.available === true &&
@@ -618,12 +622,15 @@ async function resolveVoiceTenantContext({
 
   const runtimeTenantKey = normalizedRuntimeTenantKey(runtime);
   const shouldResolveTenantFromDb =
-    !tenant || needsTenantHydration(buildStableTenantScope({
-      tenant,
-      runtime,
-      tenantKey: normalizedTenantKey,
-      toNumber: normalizedToNumber,
-    }));
+    !tenant ||
+    needsTenantHydration(
+      buildStableTenantScope({
+        tenant,
+        runtime,
+        tenantKey: normalizedTenantKey,
+        toNumber: normalizedToNumber,
+      })
+    );
 
   if (shouldResolveTenantFromDb) {
     const resolvedTenant = await findTenantByKeyOrPhone(db, {
@@ -813,7 +820,10 @@ export async function processVoiceTenantConfig({
     toNumber: s(builtPayload.toNumber || toNumber),
     tenant: stableTenant,
     projectedRuntime: obj(builtPayload.projectedRuntime).authority
-      ? normalizeProjectedRuntimeForVoice(builtPayload.projectedRuntime, stableTenant)
+      ? normalizeProjectedRuntimeForVoice(
+          builtPayload.projectedRuntime,
+          stableTenant
+        )
       : stableProjectedRuntime,
     operationalChannels,
     authority: {
