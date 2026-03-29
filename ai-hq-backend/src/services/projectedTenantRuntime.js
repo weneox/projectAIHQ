@@ -267,32 +267,98 @@ function normalizeAffectedSurfaces(health = {}) {
   return [...new Set(merged.map((item) => lower(item)).filter(Boolean))];
 }
 
+function collectReasonCodes(authority = {}, health = {}) {
+  const merged = [
+    s(health.primaryReasonCode),
+    s(health.reasonCode),
+    s(health.primary_reason_code),
+    s(health.reason_code),
+    s(authority.reasonCode),
+    s(authority.reason),
+    ...arr(health.reasonCodes),
+    ...arr(health.reason_codes),
+    ...arr(health.blockerReasonCodes),
+    ...arr(health.blocker_reason_codes),
+  ];
+
+  return [...new Set(merged.map((item) => lower(item)).filter(Boolean))];
+}
+
+function getProviderSecretKeySet(providerSecrets = {}) {
+  const value = obj(providerSecrets);
+  return new Set(
+    [
+      ...arr(value.secretKeys),
+      ...arr(value.secret_keys),
+      ...Object.keys(obj(value)),
+    ]
+      .map((item) => lower(item))
+      .filter(Boolean)
+  );
+}
+
+function hasMetaProviderAccess(providerSecrets = {}) {
+  const value = obj(providerSecrets);
+  const secretKeySet = getProviderSecretKeySet(value);
+
+  return (
+    Boolean(s(value.pageAccessToken || value.page_access_token)) ||
+    secretKeySet.has("page_access_token") ||
+    secretKeySet.has("access_token") ||
+    secretKeySet.has("meta_page_access_token")
+  );
+}
+
+const VOICE_OPERATIONAL_REASON_CODES = new Set([
+  "voice_settings_missing",
+  "voice_disabled",
+  "voice_phone_number_missing",
+  "voice_provider_unsupported",
+]);
+
+const META_OPERATIONAL_REASON_CODES = new Set([
+  "channel_not_connected",
+  "channel_identifiers_missing",
+  "provider_secret_missing",
+]);
+
+const NON_FATAL_GOVERNANCE_REVIEW_REASON_CODES = new Set([
+  "approval_required",
+  "review_required",
+  "candidate_review_required",
+  "maintenance_review_required",
+  "governance_review_required",
+]);
+
 function resolveConsumerSurface({
   matchedChannel = null,
   providerSecrets = null,
   operationalChannels = null,
 } = {}) {
   const match = obj(matchedChannel);
+  const providerSecretValue = obj(providerSecrets);
   const ops = obj(operationalChannels);
+  const meta = obj(ops.meta);
   const voice = obj(ops.voice);
 
-  if (Object.keys(voice).length > 0) return "voice";
-
-  const provider = lower(match.provider);
-  const channelType = lower(match.channel_type || match.channelType);
+  const provider = lower(
+    match.provider || providerSecretValue.provider || meta.provider
+  );
+  const channelType = lower(
+    match.channel_type || match.channelType || meta.channelType
+  );
 
   if (
     provider === "meta" ||
-    ["instagram", "facebook", "messenger"].includes(channelType)
+    ["instagram", "facebook", "messenger"].includes(channelType) ||
+    hasMetaProviderAccess(providerSecretValue)
   ) {
     return "meta";
   }
 
   if (provider === "twilio") return "twilio";
 
-  if (providerSecrets && Object.keys(obj(providerSecrets)).length > 0) {
-    return "meta";
-  }
+  if (Object.keys(voice).length > 0) return "voice";
 
   return "";
 }
@@ -322,6 +388,25 @@ function shouldTreatMissingHealthAsFatal({
   return false;
 }
 
+function shouldAllowGovernanceReviewBlockedHealth({
+  authority = {},
+  projectionId = "",
+  health = {},
+} = {}) {
+  const status = lower(health.status);
+  const reasonCodes = collectReasonCodes(authority, health);
+
+  if (status !== "blocked") return false;
+  if (!projectionId) return false;
+  if (authority.available !== true) return false;
+  if (s(authority.source) !== "approved_runtime_projection") return false;
+  if (reasonCodes.length === 0) return false;
+
+  return reasonCodes.every((code) =>
+    NON_FATAL_GOVERNANCE_REVIEW_REASON_CODES.has(code)
+  );
+}
+
 function shouldAllowVoiceDespiteAuthorityStale({
   authority = {},
   health = {},
@@ -347,12 +432,44 @@ function shouldAllowVoiceDespiteAuthorityStale({
   );
 }
 
+function shouldAllowConsumerDespiteBlockedHealth({
+  authority = {},
+  health = {},
+  consumerSurface = "",
+  operationalChannels = null,
+  providerSecrets = null,
+} = {}) {
+  const reasonCodes = collectReasonCodes(authority, health);
+  if (reasonCodes.length === 0) return false;
+
+  if (consumerSurface === "voice") {
+    const voiceOperational = obj(obj(operationalChannels).voice);
+    if (voiceOperational.ready !== true) return false;
+    return reasonCodes.every((code) => VOICE_OPERATIONAL_REASON_CODES.has(code));
+  }
+
+  if (consumerSurface === "meta") {
+    const metaOperational = obj(obj(operationalChannels).meta);
+    const metaReady =
+      metaOperational.ready === true ||
+      Boolean(s(metaOperational.pageId) || s(metaOperational.igUserId));
+
+    if (!metaReady) return false;
+    if (!hasMetaProviderAccess(providerSecrets)) return false;
+
+    return reasonCodes.every((code) => META_OPERATIONAL_REASON_CODES.has(code));
+  }
+
+  return false;
+}
+
 function shouldBlockForProjectionHealth({
   authority = {},
   projectionId = "",
   health = {},
   consumerSurface = "",
   operationalChannels = null,
+  providerSecrets = null,
 } = {}) {
   const status = lower(health.status);
   const normalizedReasonCode = lower(
@@ -373,6 +490,16 @@ function shouldBlockForProjectionHealth({
   }
 
   if (status === "blocked") {
+    if (
+      shouldAllowGovernanceReviewBlockedHealth({
+        authority,
+        projectionId,
+        health,
+      })
+    ) {
+      return false;
+    }
+
     const affectedSurfaces = normalizeAffectedSurfaces(health);
 
     if (consumerSurface && affectedSurfaces.length > 0) {
@@ -385,6 +512,18 @@ function shouldBlockForProjectionHealth({
       if (!affectsThisSurface) {
         return false;
       }
+    }
+
+    if (
+      shouldAllowConsumerDespiteBlockedHealth({
+        authority,
+        health,
+        consumerSurface,
+        operationalChannels,
+        providerSecrets,
+      })
+    ) {
+      return false;
     }
   }
 
@@ -526,6 +665,7 @@ export function buildProjectedTenantRuntime({
       health,
       consumerSurface,
       operationalChannels,
+      providerSecrets,
     })
   ) {
     throw createProjectedRuntimeAuthorityError(

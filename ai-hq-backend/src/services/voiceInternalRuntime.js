@@ -242,6 +242,25 @@ function normalizedRuntimeTenantKey(runtime = null) {
   );
 }
 
+function normalizedRuntimeTenantId(runtime = null) {
+  const value = obj(runtime);
+  const authority = obj(value.authority);
+  const tenant = obj(value.tenant);
+  const rawProjection = obj(obj(value.raw).projection);
+  const identityJson = obj(rawProjection.identity_json);
+
+  return firstNonEmpty(
+    authority.tenantId,
+    authority.tenant_id,
+    value.tenantId,
+    value.tenant_id,
+    tenant.id,
+    tenant.tenant_id,
+    identityJson.tenantId,
+    identityJson.tenant_id
+  );
+}
+
 function buildVoiceAuthorityDetails(error = null, runtime = null) {
   const runtimeValue = obj(runtime);
   const authority = obj(runtimeValue.authority);
@@ -271,6 +290,127 @@ function buildVoiceAuthorityDetails(error = null, runtime = null) {
   };
 }
 
+function buildStableTenantScope({
+  tenant = null,
+  runtime = null,
+  tenantKey = "",
+  toNumber = "",
+} = {}) {
+  const normalized = normalizeRuntimeTenantRow({
+    tenant,
+    runtime,
+    tenantKey,
+    toNumber,
+  });
+
+  const resolvedTenantId = firstNonEmpty(
+    normalized.id,
+    normalized.tenant_id,
+    normalizedRuntimeTenantId(runtime)
+  );
+
+  const resolvedTenantKey = firstNonEmpty(
+    normalized.tenant_key,
+    normalized.tenantKey,
+    normalizedRuntimeTenantKey(runtime),
+    tenantKey
+  );
+
+  return {
+    ...normalized,
+    id: resolvedTenantId || null,
+    tenant_id: resolvedTenantId || null,
+    tenant_key: resolvedTenantKey,
+    tenantKey: resolvedTenantKey,
+  };
+}
+
+function normalizeProjectedRuntimeForVoice(projectedRuntime = null, tenant = null) {
+  const value = obj(projectedRuntime);
+  const tenantScope = obj(tenant);
+  const authority = obj(value.authority);
+  const existingTenant =
+    obj(value.tenant) || obj(value.tenantRow) || obj(value.tenantScope);
+
+  const resolvedTenantId = firstNonEmpty(
+    tenantScope.id,
+    tenantScope.tenant_id,
+    existingTenant.id,
+    existingTenant.tenant_id,
+    authority.tenantId,
+    authority.tenant_id
+  );
+
+  const resolvedTenantKey = firstNonEmpty(
+    tenantScope.tenant_key,
+    tenantScope.tenantKey,
+    existingTenant.tenant_key,
+    existingTenant.tenantKey,
+    authority.tenantKey,
+    authority.tenant_key
+  );
+
+  const stableTenant = {
+    ...existingTenant,
+    ...tenantScope,
+    id: resolvedTenantId || null,
+    tenant_id: resolvedTenantId || null,
+    tenant_key: resolvedTenantKey,
+    tenantKey: resolvedTenantKey,
+    company_name: firstNonEmpty(
+      tenantScope.company_name,
+      existingTenant.company_name
+    ),
+    legal_name: firstNonEmpty(tenantScope.legal_name, existingTenant.legal_name),
+    industry_key: firstNonEmpty(
+      tenantScope.industry_key,
+      existingTenant.industry_key
+    ),
+    country_code: firstNonEmpty(
+      tenantScope.country_code,
+      existingTenant.country_code
+    ),
+    timezone: firstNonEmpty(tenantScope.timezone, existingTenant.timezone),
+    default_language: firstNonEmpty(
+      tenantScope.default_language,
+      existingTenant.default_language
+    ),
+    enabled_languages: pickArray(
+      tenantScope.enabled_languages,
+      existingTenant.enabled_languages
+    ),
+    market_region: firstNonEmpty(
+      tenantScope.market_region,
+      existingTenant.market_region
+    ),
+    plan_key: firstNonEmpty(tenantScope.plan_key, existingTenant.plan_key),
+    tenant_status: firstNonEmpty(
+      tenantScope.tenant_status,
+      existingTenant.tenant_status
+    ),
+    tenant_active: pickBoolean(
+      tenantScope.tenant_active,
+      existingTenant.tenant_active
+    ),
+  };
+
+  return {
+    ...value,
+    tenant: stableTenant,
+    tenantRow: stableTenant,
+    tenantScope: stableTenant,
+    authority: {
+      ...authority,
+      strict: true,
+      unavailable: false,
+      tenantId: resolvedTenantId || null,
+      tenant_id: resolvedTenantId || null,
+      tenantKey: resolvedTenantKey,
+      tenant_key: resolvedTenantKey,
+    },
+  };
+}
+
 function buildVoiceProjectedRuntime({
   runtime = null,
   tenant = null,
@@ -293,6 +433,7 @@ function buildVoiceProjectedRuntime({
     if (!approvedAuthorityAvailable) {
       throw primaryError;
     }
+
     throw createRuntimeAuthorityError({
       mode: "strict",
       tenantId: firstNonEmpty(
@@ -316,6 +457,134 @@ function buildVoiceProjectedRuntime({
         "Approved runtime authority is unavailable because the approved runtime projection could not be materialized for voice execution.",
     });
   }
+}
+
+async function loadTenantRowDirect(db, { tenantId = "", tenantKey = "" } = {}) {
+  if (!db?.query) return null;
+
+  const resolvedTenantId = s(tenantId);
+  const resolvedTenantKey = s(tenantKey);
+
+  if (resolvedTenantId) {
+    const byId = await db.query(
+      `
+        select
+          t.id,
+          t.tenant_key,
+          t.company_name,
+          t.legal_name,
+          t.industry_key,
+          t.country_code,
+          t.timezone,
+          t.default_language,
+          t.enabled_languages,
+          t.market_region,
+          t.plan_key,
+          t.status as tenant_status,
+          t.active as tenant_active
+        from tenants t
+        where t.id = $1
+        limit 1
+      `,
+      [resolvedTenantId]
+    );
+
+    if (byId?.rows?.[0]) {
+      return byId.rows[0];
+    }
+  }
+
+  if (resolvedTenantKey) {
+    const byKey = await db.query(
+      `
+        select
+          t.id,
+          t.tenant_key,
+          t.company_name,
+          t.legal_name,
+          t.industry_key,
+          t.country_code,
+          t.timezone,
+          t.default_language,
+          t.enabled_languages,
+          t.market_region,
+          t.plan_key,
+          t.status as tenant_status,
+          t.active as tenant_active
+        from tenants t
+        where lower(t.tenant_key) = lower($1)
+        limit 1
+      `,
+      [resolvedTenantKey]
+    );
+
+    if (byKey?.rows?.[0]) {
+      return byKey.rows[0];
+    }
+  }
+
+  return null;
+}
+
+function needsTenantHydration(tenant = null) {
+  const value = obj(tenant);
+  return !s(value.id || value.tenant_id) || !s(value.tenant_key || value.tenantKey);
+}
+
+async function hydrateTenantRowIfNeeded({
+  db,
+  tenant = null,
+  runtime = null,
+  tenantKey = "",
+  toNumber = "",
+} = {}) {
+  const normalized = buildStableTenantScope({
+    tenant,
+    runtime,
+    tenantKey,
+    toNumber,
+  });
+
+  if (!needsTenantHydration(normalized)) {
+    return normalized;
+  }
+
+  const lookupTenantId = firstNonEmpty(
+    normalized.id,
+    normalized.tenant_id,
+    normalizedRuntimeTenantId(runtime)
+  );
+
+  const lookupTenantKey = firstNonEmpty(
+    normalized.tenant_key,
+    normalized.tenantKey,
+    normalizedRuntimeTenantKey(runtime),
+    tenantKey
+  );
+
+  let resolvedTenant = await loadTenantRowDirect(db, {
+    tenantId: lookupTenantId,
+    tenantKey: lookupTenantKey,
+  });
+
+  if (!resolvedTenant && (lookupTenantKey || s(toNumber))) {
+    resolvedTenant = await findTenantByKeyOrPhone(db, {
+      tenantKey: lookupTenantKey,
+      toNumber: s(toNumber),
+      normalizePhone,
+    });
+  }
+
+  if (!resolvedTenant) {
+    return normalized;
+  }
+
+  return buildStableTenantScope({
+    tenant: resolvedTenant,
+    runtime,
+    tenantKey: lookupTenantKey,
+    toNumber,
+  });
 }
 
 async function resolveVoiceTenantContext({
@@ -347,9 +616,18 @@ async function resolveVoiceTenantContext({
     }
   }
 
-  if (!runtime || !s(normalizedRuntimeTenantKey(runtime))) {
-    const resolvedTenant = await findTenantByKeyOrPhone(db, {
+  const runtimeTenantKey = normalizedRuntimeTenantKey(runtime);
+  const shouldResolveTenantFromDb =
+    !tenant || needsTenantHydration(buildStableTenantScope({
+      tenant,
+      runtime,
       tenantKey: normalizedTenantKey,
+      toNumber: normalizedToNumber,
+    }));
+
+  if (shouldResolveTenantFromDb) {
+    const resolvedTenant = await findTenantByKeyOrPhone(db, {
+      tenantKey: firstNonEmpty(normalizedTenantKey, runtimeTenantKey),
       toNumber: normalizedToNumber,
       normalizePhone,
     });
@@ -377,7 +655,8 @@ async function resolveVoiceTenantContext({
     }
   }
 
-  const normalizedTenant = normalizeRuntimeTenantRow({
+  const normalizedTenant = await hydrateTenantRowIfNeeded({
+    db,
     tenant,
     runtime,
     tenantKey: normalizedTenantKey,
@@ -404,12 +683,26 @@ export async function processVoiceTenantConfig({
     getRuntime,
   });
 
-  const tenant = obj(context.tenant);
   const runtime = context.runtime;
   const runtimeAuthorityError = context.runtimeAuthorityError;
-  const resolvedTenantKey = s(tenant?.tenant_key || tenantKey);
 
-  if (!s(tenant.id) && !s(tenant.tenant_key)) {
+  const tenant = buildStableTenantScope({
+    tenant: context.tenant,
+    runtime,
+    tenantKey,
+    toNumber,
+  });
+
+  const resolvedTenantKey = s(
+    tenant?.tenant_key || tenant?.tenantKey || tenantKey
+  );
+  const resolvedTenantId = firstNonEmpty(
+    tenant?.id,
+    tenant?.tenant_id,
+    normalizedRuntimeTenantId(runtime)
+  );
+
+  if (!resolvedTenantId && !resolvedTenantKey) {
     return {
       ok: false,
       statusCode: 404,
@@ -420,10 +713,7 @@ export async function processVoiceTenantConfig({
   }
 
   if (!runtime) {
-    if (
-      runtimeAuthorityError &&
-      isRuntimeAuthorityError(runtimeAuthorityError)
-    ) {
+    if (runtimeAuthorityError && isRuntimeAuthorityError(runtimeAuthorityError)) {
       return {
         ok: false,
         statusCode: Number(runtimeAuthorityError?.statusCode || 409),
@@ -444,17 +734,25 @@ export async function processVoiceTenantConfig({
     };
   }
 
+  const stableTenant = {
+    ...tenant,
+    id: resolvedTenantId,
+    tenant_id: resolvedTenantId,
+    tenant_key: resolvedTenantKey,
+    tenantKey: resolvedTenantKey,
+  };
+
   const operationalChannels = await buildOperationalChannels({
     db,
-    tenantId: tenant.id,
-    tenantRow: tenant,
+    tenantId: resolvedTenantId,
+    tenantRow: stableTenant,
   });
 
   let projectedRuntime = null;
   try {
     projectedRuntime = buildVoiceProjectedRuntime({
       runtime,
-      tenant,
+      tenant: stableTenant,
       operationalChannels,
       tenantKey: resolvedTenantKey,
       toNumber,
@@ -469,10 +767,14 @@ export async function processVoiceTenantConfig({
         toNumber,
         details: buildVoiceAuthorityDetails(error, runtime),
       };
-    } else {
-      throw error;
     }
+    throw error;
   }
+
+  const stableProjectedRuntime = normalizeProjectedRuntimeForVoice(
+    projectedRuntime,
+    stableTenant
+  );
 
   if (operationalChannels?.voice?.ready !== true) {
     return {
@@ -484,7 +786,8 @@ export async function processVoiceTenantConfig({
       details: {
         unavailable: true,
         strict: true,
-        authority: obj(projectedRuntime?.authority || runtime?.authority),
+        authority: obj(stableProjectedRuntime?.authority || runtime?.authority),
+        tenant: stableTenant,
         operationalChannels,
         reasonCode: s(
           operationalChannels?.voice?.reasonCode || "voice_settings_missing"
@@ -497,7 +800,7 @@ export async function processVoiceTenantConfig({
   }
 
   const builtPayload = obj(
-    buildVoiceConfigFromProjectedRuntime(projectedRuntime, {
+    buildVoiceConfigFromProjectedRuntime(stableProjectedRuntime, {
       tenantKey: resolvedTenantKey,
       toNumber,
     })
@@ -506,20 +809,25 @@ export async function processVoiceTenantConfig({
   const payload = {
     ...builtPayload,
     tenantKey: s(builtPayload.tenantKey || resolvedTenantKey),
-    tenantId: firstNonEmpty(builtPayload.tenantId, tenant.id),
+    tenantId: firstNonEmpty(builtPayload.tenantId, resolvedTenantId),
     toNumber: s(builtPayload.toNumber || toNumber),
+    tenant: stableTenant,
     projectedRuntime: obj(builtPayload.projectedRuntime).authority
-      ? builtPayload.projectedRuntime
-      : projectedRuntime,
+      ? normalizeProjectedRuntimeForVoice(builtPayload.projectedRuntime, stableTenant)
+      : stableProjectedRuntime,
     operationalChannels,
     authority: {
       ...obj(
         builtPayload.authority ||
-          projectedRuntime?.authority ||
+          stableProjectedRuntime?.authority ||
           runtime?.authority
       ),
       strict: true,
       unavailable: false,
+      tenantId: resolvedTenantId,
+      tenant_id: resolvedTenantId,
+      tenantKey: resolvedTenantKey,
+      tenant_key: resolvedTenantKey,
     },
   };
 

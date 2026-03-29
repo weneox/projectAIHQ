@@ -121,6 +121,11 @@ async function invokeRoute(router, method, path, req = {}) {
   return { req: fullReq, res };
 }
 
+function printDebug(label, value) {
+  console.log(`\n===== ${label} =====`);
+  console.dir(value, { depth: null });
+}
+
 let pool = null;
 let migrationsReady = false;
 
@@ -364,9 +369,32 @@ test(
       assert.equal(runtime?.authority?.source, "approved_runtime_projection");
       assert.ok(s(runtime?.authority?.runtimeProjectionId));
 
+      const rawVoiceSettingsRow = await client.query(
+        `
+          select *
+          from tenant_voice_settings
+          where tenant_id = $1
+          limit 1
+        `,
+        [tenant.id]
+      );
+
+      printDebug("runtime.authority", runtime?.authority);
+      printDebug("tenant_voice_settings.row", rawVoiceSettingsRow.rows?.[0] || null);
+
       const voiceConfig = await processVoiceTenantConfig({
         db: client,
         tenantKey,
+      });
+
+      printDebug("voiceConfig", {
+        ok: voiceConfig?.ok,
+        statusCode: voiceConfig?.statusCode,
+        error: voiceConfig?.error,
+        tenantKey: voiceConfig?.tenantKey,
+        toNumber: voiceConfig?.toNumber,
+        details: voiceConfig?.details,
+        payload: voiceConfig?.payload,
       });
 
       assert.equal(voiceConfig?.ok, true);
@@ -396,6 +424,16 @@ test(
         toNumber: "+1 (555) 555-0100",
       });
 
+      printDebug("voiceConfigByNumber", {
+        ok: voiceConfigByNumber?.ok,
+        statusCode: voiceConfigByNumber?.statusCode,
+        error: voiceConfigByNumber?.error,
+        tenantKey: voiceConfigByNumber?.tenantKey,
+        toNumber: voiceConfigByNumber?.toNumber,
+        details: voiceConfigByNumber?.details,
+        payload: voiceConfigByNumber?.payload,
+      });
+
       assert.equal(voiceConfigByNumber?.ok, true);
       assert.equal(voiceConfigByNumber?.payload?.tenantKey, tenantKey);
       assert.equal(
@@ -420,6 +458,11 @@ test(
           },
         }
       );
+
+      printDebug("meta-channel-access.response", {
+        statusCode: res.statusCode,
+        body: res.body,
+      });
 
       assert.equal(res.statusCode, 200);
       assert.equal(validateProviderAccessResponse(res.body || {}).ok, true);
