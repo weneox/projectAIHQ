@@ -10,11 +10,6 @@ export const CORE_APP_ROUTES = Object.freeze([
   "/truth",
   "/settings",
   "/inbox",
-  "/leads",
-  "/comments",
-  "/voice",
-  "/proposals",
-  "/executions",
 ]);
 
 export const INTERNAL_ONLY_APP_ROUTES = Object.freeze([

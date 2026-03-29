@@ -9,6 +9,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { logoutUser } from "../../api/auth.js";
+import NotificationsPanel from "./NotificationsPanel.jsx";
 
 const fade = {
   initial: { opacity: 0, y: 10 },
@@ -91,19 +92,26 @@ function StatusPill({
   );
 }
 
-function NotificationButton({ unread = null, unavailable = false }) {
+function NotificationButton({
+  unread = null,
+  unavailable = false,
+  active = false,
+  onClick,
+}) {
   const hasUnread = typeof unread === "number" && unread > 0;
 
   return (
     <button
       type="button"
+      onClick={onClick}
       aria-label={unavailable ? "Notifications unavailable" : "Open notifications"}
       className={cn(
         "group relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full",
         "border border-white/[0.09] bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))]",
         "shadow-[0_12px_40px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.06)]",
         "backdrop-blur-xl transition-all duration-300",
-        "hover:-translate-y-[1px] hover:border-cyan-300/20 hover:bg-white/[0.06]"
+        "hover:-translate-y-[1px] hover:border-cyan-300/20 hover:bg-white/[0.06]",
+        active ? "border-cyan-300/30 bg-white/[0.08]" : ""
       )}
     >
       <div className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle_at_30%_25%,rgba(125,211,252,0.16),transparent_34%),radial-gradient(circle_at_72%_78%,rgba(255,255,255,0.06),transparent_38%)] opacity-80 transition duration-300 group-hover:opacity-100" />
@@ -189,7 +197,7 @@ function LogoutButton() {
   );
 }
 
-export default function Header({ shellStats = {} }) {
+export default function Header({ shellStats = {}, notifications }) {
   const unavailable = shellStats?.availability === "unavailable";
   const live = !unavailable;
   const pending =
@@ -197,52 +205,73 @@ export default function Header({ shellStats = {} }) {
   const scheduled =
     typeof shellStats?.inboxOpen === "number" ? shellStats.inboxOpen : null;
   const unread =
-    typeof shellStats?.notificationsUnread === "number"
-      ? shellStats.notificationsUnread
+    typeof notifications?.unreadCount === "number"
+      ? notifications.unreadCount
       : null;
 
   return (
-    <header className="sticky top-0 z-40 px-3 pt-3 md:px-5 md:pt-4">
-      <motion.div
-        {...fade}
-        className={cn(
-          "relative overflow-hidden rounded-[28px]",
-          "border border-white/[0.07]",
-          "bg-[linear-gradient(180deg,rgba(4,8,16,0.94),rgba(3,7,14,0.90))]",
-          "shadow-[0_20px_80px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.04)]",
-          "backdrop-blur-2xl"
-        )}
-      >
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(720px_circle_at_0%_0%,rgba(34,211,238,0.06),transparent_34%),radial-gradient(540px_circle_at_100%_0%,rgba(59,130,246,0.06),transparent_30%),linear-gradient(90deg,transparent,rgba(255,255,255,0.02),transparent)]" />
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-32 bg-[radial-gradient(260px_circle_at_100%_50%,rgba(34,211,238,0.08),transparent_60%)]" />
+    <>
+      <header className="sticky top-0 z-40 px-3 pt-3 md:px-5 md:pt-4">
+        <motion.div
+          {...fade}
+          className={cn(
+            "relative overflow-hidden rounded-[28px]",
+            "border border-white/[0.07]",
+            "bg-[linear-gradient(180deg,rgba(4,8,16,0.94),rgba(3,7,14,0.90))]",
+            "shadow-[0_20px_80px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.04)]",
+            "backdrop-blur-2xl"
+          )}
+        >
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(720px_circle_at_0%_0%,rgba(34,211,238,0.06),transparent_34%),radial-gradient(540px_circle_at_100%_0%,rgba(59,130,246,0.06),transparent_30%),linear-gradient(90deg,transparent,rgba(255,255,255,0.02),transparent)]" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-32 bg-[radial-gradient(260px_circle_at_100%_50%,rgba(34,211,238,0.08),transparent_60%)]" />
 
-        <div className="relative flex min-h-[84px] items-center justify-between gap-3 px-4 py-3 md:px-5 lg:px-6">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.34em] text-white/78">
-              <Sparkles className="h-3.5 w-3.5 text-cyan-300/80" strokeWidth={1.8} />
-              <span>Executive Workspace</span>
+          <div className="relative flex min-h-[84px] items-center justify-between gap-3 px-4 py-3 md:px-5 lg:px-6">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.34em] text-white/78">
+                <Sparkles className="h-3.5 w-3.5 text-cyan-300/80" strokeWidth={1.8} />
+                <span>Executive Workspace</span>
+              </div>
+
+              <div className="mt-1.5 flex min-w-0 items-center gap-2">
+                <p className="truncate text-[13px] text-white/42 md:text-[14px]">
+                  Review, approval, and release flow in one surface
+                </p>
+              </div>
             </div>
 
-            <div className="mt-1.5 flex min-w-0 items-center gap-2">
-              <p className="truncate text-[13px] text-white/42 md:text-[14px]">
-                Review, approval, and release flow in one surface
-              </p>
+            <div className="flex items-center gap-2 md:gap-3">
+              <StatusPill
+                live={live}
+                pending={pending}
+                scheduled={scheduled}
+                unavailable={unavailable}
+              />
+              <NotificationButton
+                unread={unread}
+                unavailable={notifications?.unavailable}
+                active={notifications?.open}
+                onClick={() => notifications?.setOpen?.(!notifications?.open)}
+              />
+              <LogoutButton />
             </div>
           </div>
+        </motion.div>
+      </header>
 
-          <div className="flex items-center gap-2 md:gap-3">
-            <StatusPill
-              live={live}
-              pending={pending}
-              scheduled={scheduled}
-              unavailable={unavailable}
-            />
-            <NotificationButton unread={unread} unavailable={unavailable} />
-            <LogoutButton />
-          </div>
-        </div>
-      </motion.div>
-    </header>
+      <NotificationsPanel
+        open={notifications?.open}
+        onClose={() => notifications?.setOpen?.(false)}
+        notifications={notifications?.notifications}
+        unreadCount={notifications?.unreadCount}
+        loading={notifications?.loading}
+        refreshing={notifications?.refreshing}
+        error={notifications?.error}
+        unavailable={notifications?.unavailable}
+        savingId={notifications?.savingId}
+        onRefresh={notifications?.refresh}
+        onMarkRead={notifications?.markRead}
+      />
+    </>
   );
 }

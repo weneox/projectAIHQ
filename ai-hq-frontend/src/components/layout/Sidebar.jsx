@@ -2,22 +2,24 @@ import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { NavLink } from "react-router-dom";
 import {
-  AlertTriangle,
+  ArrowUpRight,
   BriefcaseBusiness,
   ChevronRight,
+  FolderCog,
   ShieldCheck,
   SlidersHorizontal,
   X,
   MessageSquareText,
   ScrollText,
 } from "lucide-react";
+import OperationsPanel from "./OperationsPanel.jsx";
+
 const ExecutiveMark3D = lazy(() => import("./ExecutiveMark3D.jsx"));
 
 const NAV_ITEMS = [
   { label: "Setup Studio", icon: BriefcaseBusiness, to: "/setup/studio" },
-  { label: "Inbox", icon: MessageSquareText, to: "/inbox", badgeKey: "inboxUnread" },
-  { label: "Incidents", icon: AlertTriangle, to: "/incidents" },
   { label: "Business Truth", icon: ScrollText, to: "/truth" },
+  { label: "Inbox", icon: MessageSquareText, to: "/inbox", badgeKey: "inboxUnread" },
   { label: "Settings", icon: SlidersHorizontal, to: "/settings" },
 ];
 
@@ -330,7 +332,7 @@ function NavItem({ item, expanded, onNavigate, shellStats = {} }) {
               </span>
 
               <div className="flex items-center gap-2">
-                <CountBadge count={shellCount(item, expanded)} active={isActive} />
+                <CountBadge count={shellCount(item, shellStats)} active={isActive} />
                 <ChevronRight
                   className={cn(
                     "h-[12px] w-[12px] shrink-0 transition-all duration-300",
@@ -347,13 +349,68 @@ function NavItem({ item, expanded, onNavigate, shellStats = {} }) {
     </NavLink>
   );
 }
+
 function shellCount(item, shellStats = {}) {
   if (!item.badgeKey) return null;
   const rawBadgeCount = shellStats?.[item.badgeKey];
   return typeof rawBadgeCount === "number" ? rawBadgeCount : null;
 }
 
-function RailNav({ expanded, onNavigate, shellStats = {} }) {
+function OperationsLauncher({ expanded, onOpen, leadCount = null }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group relative block w-full text-left"
+    >
+      <div className="relative flex items-center overflow-hidden" style={{ height: ITEM_H }}>
+        <ItemGlow isActive={false} />
+
+        <div
+          className="relative z-[2] flex h-full shrink-0 items-center justify-center"
+          style={{ width: ICON_COL_W }}
+        >
+          <FolderCog
+            className="h-[16px] w-[16px] text-white/54 transition-all duration-300 group-hover:text-white/82"
+            strokeWidth={1.9}
+          />
+        </div>
+
+        <div
+          className={cn(
+            "relative z-[2] min-w-0 flex-1 pr-3 transition-all duration-300",
+            expanded
+              ? "pointer-events-auto translate-x-0 opacity-100"
+              : "pointer-events-none -translate-x-2 opacity-0"
+          )}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="truncate text-[13px] font-medium tracking-[-0.015em] text-white/68 group-hover:text-white/86">
+                Operations
+              </div>
+              <div className="truncate pt-1 text-[11px] text-white/36">
+                Secondary operator tools
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <CountBadge count={leadCount} />
+              <ArrowUpRight className="h-[12px] w-[12px] text-white/12 transition-all duration-300 group-hover:translate-x-0.5 group-hover:text-white/20" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function RailNav({
+  expanded,
+  onNavigate,
+  onOpenOperations,
+  shellStats = {},
+}) {
   return (
     <nav className="px-0 pt-4">
       <div className="space-y-1.5">
@@ -366,6 +423,18 @@ function RailNav({ expanded, onNavigate, shellStats = {} }) {
             shellStats={shellStats}
           />
         ))}
+      </div>
+
+      <div className="mx-[14px] pt-2">
+        <div className="h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.05),transparent)]" />
+      </div>
+
+      <div className="pt-2">
+        <OperationsLauncher
+          expanded={expanded}
+          onOpen={onOpenOperations}
+          leadCount={shellStats?.leadsOpen}
+        />
       </div>
     </nav>
   );
@@ -411,7 +480,12 @@ function RailFooter({ expanded }) {
   );
 }
 
-function DesktopSidebar({ expanded, setExpanded, shellStats = {} }) {
+function DesktopSidebar({
+  expanded,
+  setExpanded,
+  shellStats = {},
+  onOpenOperations,
+}) {
   const shouldReduceMotion = useReducedMotion();
   const openTimer = useRef(null);
   const closeTimer = useRef(null);
@@ -461,7 +535,12 @@ function DesktopSidebar({ expanded, setExpanded, shellStats = {} }) {
 
         <div className="relative flex h-full flex-col">
           <BrandDock expanded={expanded} />
-          <RailNav expanded={expanded} onNavigate={() => {}} shellStats={shellStats} />
+          <RailNav
+            expanded={expanded}
+            onNavigate={() => {}}
+            onOpenOperations={onOpenOperations}
+            shellStats={shellStats}
+          />
           <div className="mt-auto">
             <RailFooter expanded={expanded} />
           </div>
@@ -532,7 +611,11 @@ function MobileNavItem({ item, onNavigate, shellStats = {} }) {
   );
 }
 
-function MobileSidebar({ setMobileOpen, shellStats = {} }) {
+function MobileSidebar({
+  setMobileOpen,
+  shellStats = {},
+  onOpenOperations,
+}) {
   return (
     <motion.aside
       initial={{ x: -300 }}
@@ -559,16 +642,25 @@ function MobileSidebar({ setMobileOpen, shellStats = {} }) {
           <BrandDock expanded />
           <nav className="px-0 pt-3">
             <div className="space-y-1.5">
-              {NAV_ITEMS.map((item) => {
-                return (
-                  <MobileNavItem
-                    key={item.to}
-                    item={item}
-                    onNavigate={() => setMobileOpen(false)}
-                    shellStats={shellStats}
-                  />
-                );
-              })}
+              {NAV_ITEMS.map((item) => (
+                <MobileNavItem
+                  key={item.to}
+                  item={item}
+                  onNavigate={() => setMobileOpen(false)}
+                  shellStats={shellStats}
+                />
+              ))}
+              <div className="mx-[14px] pt-2">
+                <div className="h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.05),transparent)]" />
+              </div>
+              <OperationsLauncher
+                expanded
+                onOpen={() => {
+                  setMobileOpen(false);
+                  onOpenOperations();
+                }}
+                leadCount={shellStats?.leadsOpen}
+              />
             </div>
           </nav>
           <div className="mt-auto">
@@ -587,12 +679,15 @@ export default function Sidebar({
   setMobileOpen,
   shellStats = {},
 }) {
+  const [operationsOpen, setOperationsOpen] = useState(false);
+
   return (
     <>
       <DesktopSidebar
         expanded={expanded}
         setExpanded={setExpanded}
         shellStats={shellStats}
+        onOpenOperations={() => setOperationsOpen(true)}
       />
 
       <AnimatePresence>
@@ -608,10 +703,17 @@ export default function Sidebar({
             <MobileSidebar
               setMobileOpen={setMobileOpen}
               shellStats={shellStats}
+              onOpenOperations={() => setOperationsOpen(true)}
             />
           </>
         )}
       </AnimatePresence>
+
+      <OperationsPanel
+        open={operationsOpen}
+        onClose={() => setOperationsOpen(false)}
+        onNavigate={() => setOperationsOpen(false)}
+      />
     </>
   );
 }

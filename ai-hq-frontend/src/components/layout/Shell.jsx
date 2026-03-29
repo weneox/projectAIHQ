@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar.jsx";
 import Header from "./Header.jsx";
+import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
 import { apiGet } from "../../api/client.js";
 
@@ -22,31 +23,11 @@ async function fetchShellResource(path) {
   }
 }
 
-function normalizeArray(j, key) {
-  if (Array.isArray(j)) return j;
-  if (Array.isArray(j?.[key])) return j[key];
-  if (Array.isArray(j?.items)) return j.items;
-  if (Array.isArray(j?.rows)) return j.rows;
-  return [];
-}
-
-function isLiveVoiceStatus(v) {
-  const s = String(v || "").trim().toLowerCase();
-  return [
-    "live",
-    "active",
-    "in_progress",
-    "ongoing",
-    "ringing",
-    "queued",
-    "bridged",
-  ].includes(s);
-}
-
 export default function Shell() {
   const [expanded, setExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const notifications = useNotificationsSurface();
 
   const refreshTimerRef = useRef(0);
 
@@ -54,9 +35,6 @@ export default function Shell() {
     inboxUnread: null,
     inboxOpen: null,
     leadsOpen: null,
-    commentsCount: null,
-    voiceLive: null,
-    notificationsUnread: null,
     dbDisabled: false,
     wsState: "idle",
     availability: "loading",
@@ -64,14 +42,12 @@ export default function Shell() {
   });
 
   async function loadShellStats() {
-    const [inboxRes, leadsRes, commentsRes, voiceRes] = await Promise.all([
+    const [inboxRes, leadsRes] = await Promise.all([
       fetchShellResource("/api/inbox/threads"),
       fetchShellResource("/api/leads"),
-      fetchShellResource("/api/comments?limit=200"),
-      fetchShellResource("/api/voice/calls?limit=100"),
     ]);
 
-    const responses = [inboxRes, leadsRes, commentsRes, voiceRes];
+    const responses = [inboxRes, leadsRes];
     const failedResponse = responses.find((entry) => !entry?.ok);
 
     if (failedResponse) {
@@ -80,9 +56,6 @@ export default function Shell() {
         inboxUnread: null,
         inboxOpen: null,
         leadsOpen: null,
-        commentsCount: null,
-        voiceLive: null,
-        notificationsUnread: null,
         dbDisabled: false,
         availability: "unavailable",
         message:
@@ -93,13 +66,9 @@ export default function Shell() {
 
     const inboxData = inboxRes.data;
     const leadsData = leadsRes.data;
-    const commentsData = commentsRes.data;
-    const voiceData = voiceRes.data;
 
     const threads = Array.isArray(inboxData?.threads) ? inboxData.threads : [];
     const leads = Array.isArray(leadsData?.leads) ? leadsData.leads : [];
-    const comments = Array.isArray(commentsData?.comments) ? commentsData.comments : [];
-    const voiceCalls = normalizeArray(voiceData, "calls");
 
     const inboxUnread = threads.reduce(
       (sum, t) => sum + Number(t?.unread_count || 0),
@@ -115,25 +84,14 @@ export default function Shell() {
       (l) => String(l?.status || "open").toLowerCase() === "open"
     ).length;
 
-    const commentsCount = comments.length;
-
-    const voiceLive = voiceCalls.filter((c) =>
-      isLiveVoiceStatus(c?.status || c?.callStatus || c?.call_status)
-    ).length;
-
     setShellStats((prev) => ({
       ...prev,
       inboxUnread,
       inboxOpen,
       leadsOpen,
-      commentsCount,
-      voiceLive,
-      notificationsUnread: inboxUnread + leadsOpen + commentsCount + voiceLive,
       dbDisabled: Boolean(
         inboxData?.dbDisabled ||
-          leadsData?.dbDisabled ||
-          commentsData?.dbDisabled ||
-          voiceData?.dbDisabled
+          leadsData?.dbDisabled
       ),
       availability: "ready",
       message: "",
@@ -193,14 +151,7 @@ export default function Shell() {
           type === "inbox.thread.read" ||
           type === "inbox.thread.created" ||
           type === "lead.created" ||
-          type === "lead.updated" ||
-          type === "comment.created" ||
-          type === "comment.updated" ||
-          type === "voice.call.created" ||
-          type === "voice.call.updated" ||
-          type === "voice.call.ended" ||
-          type === "voice.session.created" ||
-          type === "voice.session.updated"
+          type === "lead.updated"
         ) {
           scheduleShellRefresh(120);
         }
@@ -252,6 +203,7 @@ export default function Shell() {
               <Header
                 onMenuClick={() => setMobileOpen(true)}
                 shellStats={shellStats}
+                notifications={notifications}
               />
             </div>
 

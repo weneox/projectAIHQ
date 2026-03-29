@@ -66,11 +66,6 @@ describe("resolveAuthenticatedLanding", () => {
       "/truth",
       "/settings",
       "/inbox",
-      "/leads",
-      "/comments",
-      "/voice",
-      "/proposals",
-      "/executions",
     ]);
 
     expect(INTERNAL_ONLY_APP_ROUTES).toEqual([
@@ -86,5 +81,18 @@ describe("resolveAuthenticatedLanding", () => {
 
   it("keeps internal routes disabled by default", () => {
     expect(areInternalRoutesEnabled()).toBe(false);
+  });
+
+  it("falls back to truth when backend points a completed workspace at operator-only surfaces", () => {
+    const target = resolveAuthenticatedLanding({
+      workspace: {
+        progress: {
+          setupCompleted: true,
+          nextRoute: "/incidents",
+        },
+      },
+    });
+
+    expect(target).toBe("/truth");
   });
 });
