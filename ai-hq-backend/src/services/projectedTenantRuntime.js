@@ -183,9 +183,10 @@ function buildProjectedBehavior({
   }
 
   const niche = lower(identity.industryKey || "general_business");
-  const conversionGoal = voice.supportsCalls === true
-    ? "capture_qualified_lead"
-    : "answer_and_route";
+  const conversionGoal =
+    voice.supportsCalls === true
+      ? "capture_qualified_lead"
+      : "answer_and_route";
 
   return {
     businessType: niche,
@@ -443,12 +444,27 @@ export function buildProjectedTenantRuntime({
 } = {}) {
   const raw = obj(runtime.raw);
   const authority = obj(runtime.authority);
+  const authorityMode = lower(authority.mode || "strict") || "strict";
+  const authorityRequired =
+    typeof authority.required === "boolean" ? authority.required : true;
+  const authorityAvailable = authority.available === true;
+  const authoritySource = s(authority.source || "");
+  const normalizedAuthority = {
+    ...authority,
+    mode: authorityMode,
+    required: authorityRequired,
+    available: authorityAvailable,
+    source: authoritySource,
+  };
+
   const projection = obj(
     raw.projection || raw.runtimeProjection || raw.currentProjection
   );
-  const projectionId = s(projection.id || authority.runtimeProjectionId);
+  const projectionId = s(
+    projection.id || normalizedAuthority.runtimeProjectionId
+  );
   const health = obj(
-    authority.health ||
+    normalizedAuthority.health ||
       raw.projectionHealth ||
       projection.health ||
       projection.health_json
@@ -461,49 +477,51 @@ export function buildProjectedTenantRuntime({
 
   const allowVoiceDespiteAuthorityStale =
     shouldAllowVoiceDespiteAuthorityStale({
-      authority,
+      authority: normalizedAuthority,
       health,
       consumerSurface,
       operationalChannels,
     });
 
-  if (authority.mode !== "strict" || authority.required !== true) {
+  if (authorityMode !== "strict" || authorityRequired !== true) {
     throw createProjectedRuntimeAuthorityError(
-      authority,
+      normalizedAuthority,
       "runtime_authority_mode_invalid"
     );
   }
 
-  if (authority.available !== true) {
-    throw createProjectedRuntimeAuthorityError(authority);
+  if (!authorityAvailable) {
+    throw createProjectedRuntimeAuthorityError(normalizedAuthority);
   }
 
-  if (s(authority.source) !== "approved_runtime_projection") {
+  if (authoritySource !== "approved_runtime_projection") {
     throw createProjectedRuntimeAuthorityError(
-      authority,
+      normalizedAuthority,
       "runtime_authority_source_invalid"
     );
   }
 
-  if (authority.stale === true && !allowVoiceDespiteAuthorityStale) {
+  if (normalizedAuthority.stale === true && !allowVoiceDespiteAuthorityStale) {
     throw createProjectedRuntimeAuthorityError(
-      authority,
+      normalizedAuthority,
       s(
-        authority.reasonCode || authority.reason || "runtime_projection_stale"
+        normalizedAuthority.reasonCode ||
+          normalizedAuthority.reason ||
+          "runtime_projection_stale"
       )
     );
   }
 
   if (!projectionId) {
     throw createProjectedRuntimeAuthorityError(
-      authority,
+      normalizedAuthority,
       "runtime_projection_missing"
     );
   }
 
   if (
     shouldBlockForProjectionHealth({
-      authority,
+      authority: normalizedAuthority,
       projectionId,
       health,
       consumerSurface,
@@ -511,11 +529,11 @@ export function buildProjectedTenantRuntime({
     })
   ) {
     throw createProjectedRuntimeAuthorityError(
-      authority,
+      normalizedAuthority,
       s(
         health.primaryReasonCode ||
           health.reasonCode ||
-          authority.reasonCode ||
+          normalizedAuthority.reasonCode ||
           "runtime_authority_unavailable"
       )
     );
@@ -554,7 +572,7 @@ export function buildProjectedTenantRuntime({
 
   const projectedRuntime = {
     authority: {
-      ...authority,
+      ...normalizedAuthority,
       health,
       runtimeProjectionId: projectionId,
       projectionHash: s(projection.projection_hash),
@@ -577,13 +595,13 @@ export function buildProjectedTenantRuntime({
           identity.tenant_id ||
           tenantRow?.tenant_id ||
           tenantRow?.id ||
-          authority.tenantId
+          normalizedAuthority.tenantId
       ),
       tenantKey: lower(
         identity.tenantKey ||
           identity.tenant_key ||
           tenantRow?.tenant_key ||
-          authority.tenantKey
+          normalizedAuthority.tenantKey
       ),
       companyName: s(identity.companyName),
       displayName: s(identity.displayName || identity.companyName),
