@@ -340,24 +340,64 @@ function resolveConsumerSurface({
   const ops = obj(operationalChannels);
   const meta = obj(ops.meta);
   const voice = obj(ops.voice);
+  const voiceTelephony = obj(voice.telephony);
+  const voiceOperator = obj(voice.operator);
 
-  const provider = lower(
-    match.provider || providerSecretValue.provider || meta.provider
-  );
-  const channelType = lower(
-    match.channel_type || match.channelType || meta.channelType
-  );
+  const explicitProvider = lower(match.provider || providerSecretValue.provider);
+  const explicitChannelType = lower(match.channel_type || match.channelType);
 
-  if (
-    provider === "meta" ||
-    ["instagram", "facebook", "messenger"].includes(channelType) ||
-    hasMetaProviderAccess(providerSecretValue)
-  ) {
+  const metaHasOperationalIdentity =
+    meta.available === true ||
+    meta.ready === true ||
+    Boolean(
+      s(match.id) ||
+        s(match.external_page_id || match.pageId) ||
+        s(match.external_user_id || match.igUserId) ||
+        s(match.external_account_id || match.accountId) ||
+        s(meta.pageId) ||
+        s(meta.igUserId) ||
+        s(meta.accountId) ||
+        explicitChannelType
+    );
+
+  const metaRequested =
+    explicitProvider === "meta" ||
+    ["instagram", "facebook", "messenger"].includes(explicitChannelType) ||
+    hasMetaProviderAccess(providerSecrets) ||
+    metaHasOperationalIdentity;
+
+  const voiceHasOperationalIdentity =
+    voice.available === true ||
+    voice.ready === true ||
+    Boolean(
+      s(voice.provider) ||
+        s(voiceTelephony.phoneNumber || voiceTelephony.phone_number) ||
+        s(
+          voice.twilioPhoneNumber ||
+            voice.twilio_phone_number ||
+            voice.phoneNumber
+        ) ||
+        s(voiceOperator.phone) ||
+        s(voiceOperator.callerId || voiceOperator.caller_id)
+    );
+
+  const voiceProvider = lower(voice.provider);
+
+  if (explicitProvider === "twilio") {
+    return "twilio";
+  }
+
+  if (voiceHasOperationalIdentity && !metaRequested) {
+    return voiceProvider === "twilio" ? "twilio" : "voice";
+  }
+
+  if (metaRequested) {
     return "meta";
   }
 
-  if (provider === "twilio") return "twilio";
-  if (Object.keys(voice).length > 0) return "voice";
+  if (voiceHasOperationalIdentity) {
+    return voiceProvider === "twilio" ? "twilio" : "voice";
+  }
 
   return "";
 }
