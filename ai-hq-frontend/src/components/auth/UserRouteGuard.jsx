@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { getAuthMe } from "../../api/auth.js";
 import { getAppBootstrap } from "../../api/app.js";
-import { isForcedWorkspaceEntryEnabled } from "../../lib/appEntry.js";
+import { isLocalWorkspaceEntryEnabled } from "../../lib/appEntry.js";
 
 function isSetupPath(pathname = "") {
   return pathname === "/setup" || pathname.startsWith("/setup/");
@@ -20,7 +20,7 @@ function normalizeSetupRoute(target = "") {
 
 export default function UserRouteGuard({ children }) {
   const location = useLocation();
-  const forcedWorkspaceEntry = isForcedWorkspaceEntryEnabled();
+  const localWorkspaceEntry = isLocalWorkspaceEntryEnabled();
 
   const [state, setState] = useState({
     loading: true,
@@ -32,7 +32,7 @@ export default function UserRouteGuard({ children }) {
     let alive = true;
 
     async function run() {
-      if (forcedWorkspaceEntry) {
+      if (localWorkspaceEntry) {
         setState({
           loading: false,
           ok: true,
@@ -106,7 +106,7 @@ export default function UserRouteGuard({ children }) {
     return () => {
       alive = false;
     };
-  }, [forcedWorkspaceEntry, location.pathname]);
+  }, [localWorkspaceEntry, location.pathname]);
 
   if (state.loading) return null;
 

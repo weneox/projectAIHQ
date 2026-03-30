@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAppBootstrap } from "../../api/app.js";
 import {
-  isForcedWorkspaceEntryEnabled,
+  isLocalWorkspaceEntryEnabled,
   resolveAuthenticatedLanding,
 } from "../../lib/appEntry.js";
 
@@ -12,7 +12,7 @@ export default function AppEntryRedirect() {
   useEffect(() => {
     let alive = true;
 
-    if (isForcedWorkspaceEntryEnabled()) {
+    if (isLocalWorkspaceEntryEnabled()) {
       navigate("/workspace", { replace: true });
       return () => {
         alive = false;
@@ -27,7 +27,7 @@ export default function AppEntryRedirect() {
       .catch(() => {
         if (!alive) return;
         navigate(
-          isForcedWorkspaceEntryEnabled() ? "/workspace" : "/setup/studio",
+          isLocalWorkspaceEntryEnabled() ? "/workspace" : "/setup/studio",
           { replace: true }
         );
       });

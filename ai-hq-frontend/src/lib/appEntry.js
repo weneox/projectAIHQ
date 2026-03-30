@@ -29,8 +29,15 @@ export function areInternalRoutesEnabled() {
   return s(import.meta.env?.VITE_ENABLE_INTERNAL_ROUTES) === "1";
 }
 
+export function isLocalWorkspaceEntryEnabled() {
+  return (
+    !!import.meta.env?.DEV &&
+    s(import.meta.env?.VITE_FORCE_WORKSPACE_ENTRY) === "1"
+  );
+}
+
 export function isForcedWorkspaceEntryEnabled() {
-  return s(import.meta.env?.VITE_FORCE_WORKSPACE_ENTRY) === "1";
+  return isLocalWorkspaceEntryEnabled();
 }
 
 export function isSetupPath(path = "") {
@@ -49,7 +56,7 @@ export function isInternalOnlyPath(path = "") {
 }
 
 export function resolveAuthenticatedLanding(bootstrap = {}) {
-  if (isForcedWorkspaceEntryEnabled()) {
+  if (isLocalWorkspaceEntryEnabled()) {
     return "/workspace";
   }
 

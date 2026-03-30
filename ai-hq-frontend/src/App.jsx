@@ -8,7 +8,7 @@ import UserRouteGuard from "./components/auth/UserRouteGuard.jsx";
 import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
 import {
   INTERNAL_ONLY_APP_ROUTES,
-  isForcedWorkspaceEntryEnabled,
+  isLocalWorkspaceEntryEnabled,
 } from "./lib/appEntry.js";
 
 const Proposals = lazy(() => import("./pages/Proposals.jsx"));
@@ -59,8 +59,8 @@ function renderInternalRouteRedirects() {
 }
 
 export default function App() {
-  const forcedWorkspaceEntry = isForcedWorkspaceEntryEnabled();
-  const setupEntryElement = forcedWorkspaceEntry ? (
+  const localWorkspaceEntry = isLocalWorkspaceEntryEnabled();
+  const setupEntryElement = localWorkspaceEntry ? (
     <Navigate to="/workspace" replace />
   ) : (
     <UserRouteGuard>
@@ -68,7 +68,7 @@ export default function App() {
     </UserRouteGuard>
   );
 
-  const setupRedirectElement = forcedWorkspaceEntry ? (
+  const setupRedirectElement = localWorkspaceEntry ? (
     <Navigate to="/workspace" replace />
   ) : (
     <UserRouteGuard>
@@ -76,7 +76,7 @@ export default function App() {
     </UserRouteGuard>
   );
 
-  const rootEntryElement = forcedWorkspaceEntry ? (
+  const rootEntryElement = localWorkspaceEntry ? (
     <Navigate to="/workspace" replace />
   ) : (
     <UserRouteGuard>
