@@ -131,6 +131,8 @@ export function buildOutboundAttemptCorrelation({
   messageId,
   attemptIds = [],
   latestAttemptId = null,
+  durableExecutionIds = [],
+  referencedAttemptIds = [],
 } = {}) {
   const normalizedMessageId = s(messageId);
   if (!normalizedMessageId) return null;
@@ -140,11 +142,39 @@ export function buildOutboundAttemptCorrelation({
     : [];
   const normalizedLatestAttemptId =
     s(latestAttemptId || normalizedAttemptIds[0] || "") || null;
+  const normalizedDurableExecutionIds = Array.isArray(durableExecutionIds)
+    ? durableExecutionIds.map((id) => s(id)).filter(Boolean)
+    : [];
+  const normalizedReferencedAttemptIds = Array.isArray(referencedAttemptIds)
+    ? referencedAttemptIds.map((id) => s(id)).filter(Boolean)
+    : [];
+
+  let correlationState = "historical_missing_attempt";
+  let reasonCode = "legacy_message_without_attempt_records";
+  let historicalException = true;
+
+  if (normalizedAttemptIds.length) {
+    correlationState = "correlated";
+    reasonCode = "attempt_records_present";
+    historicalException = false;
+  } else if (
+    normalizedDurableExecutionIds.length ||
+    normalizedReferencedAttemptIds.length
+  ) {
+    correlationState = "missing_attempt";
+    reasonCode = "durable_execution_without_attempt_record";
+    historicalException = false;
+  }
 
   return {
     message_id: normalizedMessageId,
     latest_attempt_id: normalizedLatestAttemptId,
     attempt_ids: normalizedAttemptIds,
+    durable_execution_ids: normalizedDurableExecutionIds,
+    referenced_attempt_ids: normalizedReferencedAttemptIds,
+    correlation_state: correlationState,
+    reason_code: reasonCode,
+    historical_exception: historicalException,
   };
 }
 

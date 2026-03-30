@@ -3,6 +3,10 @@ import { isDbReady, isUuid } from "../../../../utils/http.js";
 import { toAttempt } from "./shared.js";
 import { buildOutboundAttemptCorrelation, s } from "../shared.js";
 
+function normalizeCorrelationIdArray(values = []) {
+  return Array.isArray(values) ? values.map((value) => s(value)).filter(Boolean) : [];
+}
+
 export async function createOutboundAttempt({
   db,
   messageId,
@@ -116,7 +120,7 @@ export async function listOutboundAttemptCorrelationsByMessageIds(
     where += ` and thread_id = $2::uuid`;
   }
 
-  const result = await db.query(
+  const attemptResult = await db.query(
     `
     select
       message_id,
@@ -128,15 +132,60 @@ export async function listOutboundAttemptCorrelationsByMessageIds(
     values
   );
 
-  const correlations = new Map();
+  const executionResult = await db.query(
+    `
+    select
+      message_id,
+      array_agg(id order by created_at desc, id desc) as execution_ids,
+      array_remove(
+        array_agg(
+          distinct nullif(
+            coalesce(
+              correlation_ids->>'outboundAttemptId',
+              safe_metadata->>'inboxOutboundAttemptId'
+            ),
+            ''
+          )
+        ),
+        null
+      ) as referenced_attempt_ids
+    from durable_executions
+    ${where}
+      and action_type = 'meta.outbound.send'
+    group by message_id
+    `,
+    values
+  );
 
-  for (const row of result.rows || []) {
+  const correlations = new Map(
+    normalizedMessageIds.map((messageId) => [
+      messageId,
+      buildOutboundAttemptCorrelation({ messageId }),
+    ])
+  );
+
+  for (const row of attemptResult.rows || []) {
     const messageId = s(row.message_id);
     correlations.set(
       messageId,
       buildOutboundAttemptCorrelation({
         messageId,
-        attemptIds: Array.isArray(row.attempt_ids) ? row.attempt_ids : [],
+        attemptIds: normalizeCorrelationIdArray(row.attempt_ids),
+      })
+    );
+  }
+
+  for (const row of executionResult.rows || []) {
+    const messageId = s(row.message_id);
+    const existing = correlations.get(messageId);
+    correlations.set(
+      messageId,
+      buildOutboundAttemptCorrelation({
+        messageId,
+        attemptIds: existing?.attempt_ids || [],
+        latestAttemptId: existing?.latest_attempt_id || null,
+        durableExecutionIds: normalizeCorrelationIdArray(row.execution_ids),
+        referencedAttemptIds: normalizeCorrelationIdArray(row.referenced_attempt_ids),
       })
     );
   }

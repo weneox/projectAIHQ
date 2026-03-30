@@ -2,7 +2,7 @@ import { isDbReady, isUuid } from "../../../../utils/http.js";
 import { normalizeThread } from "../shared.js";
 
 const THREAD_SELECT = `
-  id, tenant_key, channel, external_thread_id, external_user_id,
+  id, tenant_id, tenant_key, channel, external_thread_id, external_user_id,
   external_username, customer_name, status, last_message_at,
   last_inbound_at, last_outbound_at, unread_count, assigned_to,
   labels, meta, handoff_active, handoff_reason, handoff_priority,

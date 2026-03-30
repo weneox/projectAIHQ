@@ -1,10 +1,12 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import InboxDetailPanel from "./InboxDetailPanel.jsx";
 
 describe("InboxDetailPanel", () => {
   it("renders explicit detail surface feedback", () => {
+    const onInspectLineage = vi.fn();
+
     render(
       <InboxDetailPanel
         selectedThread={{
@@ -29,7 +31,28 @@ describe("InboxDetailPanel", () => {
             disallowedClaimBlockReason: "Diagnosis claims remain blocked in DMs.",
           },
         }}
-        messages={[]}
+        messages={[
+          {
+            id: "msg-1",
+            direction: "outbound",
+            sender_type: "agent",
+            text: "Your appointment request is on the way.",
+            sent_at: "2026-03-29T08:00:00.000Z",
+            outbound_attempt_correlation: "corr-1",
+          },
+        ]}
+        outboundAttempts={[
+          {
+            id: "attempt-1",
+            status: "failed",
+            attempt_count: 1,
+            max_attempts: 3,
+            provider: "meta",
+            updated_at: "2026-03-29T08:05:00.000Z",
+            message_correlation: "corr-1",
+          },
+        ]}
+        onInspectLineage={onInspectLineage}
         surface={{
           loading: false,
           error: "",
@@ -55,10 +78,19 @@ describe("InboxDetailPanel", () => {
     expect(screen.getByText(/blocked until repair/i)).toBeInTheDocument();
     expect(screen.getByText(/runtime authority unavailable/i)).toBeInTheDocument();
     expect(screen.getByText(/latest execution inspect/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/failed/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/most recent delivery attempt failed on attempt 1 of 3/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /inspect lineage/i })).toBeInTheDocument();
     expect(
       screen.getAllByText(/approved-runtime\/inbox-primary/i).length
     ).toBeGreaterThan(0);
     expect(screen.getByText(/offer booking consult/i)).toBeInTheDocument();
     expect(screen.getByText(/diagnosis claims remain blocked in dms/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /inspect lineage/i }));
+    expect(onInspectLineage).toHaveBeenCalledWith({
+      truthKind: "attempt_bound",
+      attemptId: "attempt-1",
+    });
   });
 });

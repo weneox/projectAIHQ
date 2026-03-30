@@ -3,6 +3,11 @@ import { Link, useSearchParams } from "react-router-dom";
 import { listComments } from "../api/comments.js";
 import { listProposals } from "../api/proposals.js";
 import { getSettingsTrustView } from "../api/trust.js";
+import {
+  executionFromProposal,
+  executionRetryLabel,
+  publishConfirmationLabel,
+} from "../features/proposals/proposal.selectors.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -113,6 +118,123 @@ function summarizeProposals(payloads = {}) {
   };
 }
 
+function allProposalItems(payloads = {}) {
+  return uniqById([
+    ...(Array.isArray(payloads.draft) ? payloads.draft : []),
+    ...(Array.isArray(payloads.inProgress) ? payloads.inProgress : []),
+    ...(Array.isArray(payloads.pending) ? payloads.pending : []),
+    ...(Array.isArray(payloads.approved) ? payloads.approved : []),
+    ...(Array.isArray(payloads.published) ? payloads.published : []),
+  ]).sort(sortNewestFirst);
+}
+
+function normalizePublishOutcome(item) {
+  const execution = executionFromProposal(item);
+  const publishConfirmation = publishConfirmationLabel(item, execution);
+  const executionStatus = s(execution?.status).toLowerCase();
+  const retryLabel = executionRetryLabel(execution);
+
+  if (publishConfirmation === "confirmed") {
+    return {
+      kind: "confirmed",
+      summary: "Publish is confirmed on this record.",
+    };
+  }
+
+  if (executionStatus === "queued" || executionStatus === "pending") {
+    return {
+      kind: "queued",
+      summary: "Publish was accepted and queued. It is not confirmed yet.",
+    };
+  }
+
+  if (executionStatus === "running" || executionStatus === "in_progress") {
+    return {
+      kind: "running",
+      summary: "Publish is in progress. It is not confirmed yet.",
+    };
+  }
+
+  if (executionStatus === "retrying" || executionStatus === "retryable") {
+    return {
+      kind: "retrying",
+      summary: retryLabel
+        ? `Publish retry lineage is active as ${retryLabel}. It is not confirmed yet.`
+        : "Publish retry lineage is active. It is not confirmed yet.",
+    };
+  }
+
+  if (executionStatus === "failed" || executionStatus === "error") {
+    return {
+      kind: "failed",
+      summary: "Latest publish execution failed. This record is not published.",
+    };
+  }
+
+  if (executionStatus === "skipped") {
+    return {
+      kind: "skipped",
+      summary: "Latest publish execution was skipped. This record is not published.",
+    };
+  }
+
+  if (executionStatus === "completed" || executionStatus === "success") {
+    return {
+      kind: "unconfirmed",
+      summary: "Latest publish execution completed without publish confirmation on this record.",
+    };
+  }
+
+  return null;
+}
+
+function summarizePublishOutcomes(payloads = {}) {
+  const items = allProposalItems(payloads);
+  const outcomes = [];
+  const priority = {
+    failed: 0,
+    skipped: 1,
+    unconfirmed: 2,
+    retrying: 3,
+    running: 4,
+    queued: 5,
+    confirmed: 6,
+  };
+  const counts = {
+    queued: 0,
+    running: 0,
+    retrying: 0,
+    failed: 0,
+    skipped: 0,
+    unconfirmed: 0,
+    confirmed: 0,
+  };
+
+  for (const item of items) {
+    const outcome = normalizePublishOutcome(item);
+    if (!outcome) continue;
+    counts[outcome.kind] = (counts[outcome.kind] || 0) + 1;
+    outcomes.push({
+      id: `publish-${s(item?.id)}`,
+      title: pickProposalLabel(item),
+      summary: outcome.summary,
+      kind: outcome.kind,
+      sortPriority: priority[outcome.kind] ?? 99,
+    });
+  }
+
+  return {
+    counts,
+    items: outcomes.sort((a, b) => {
+      if (a.sortPriority !== b.sortPriority) return a.sortPriority - b.sortPriority;
+      return sortNewestFirst(
+        items.find((item) => `publish-${s(item?.id)}` === a.id),
+        items.find((item) => `publish-${s(item?.id)}` === b.id)
+      );
+    }),
+  };
+}
+
 function summarizePublishingPosture(trust = {}) {
   const autonomyItems = Array.isArray(trust?.summary?.channelAutonomy?.items)
     ? trust.summary.channelAutonomy.items
@@ -209,11 +331,67 @@ function SummaryLine({ label, text, highlighted = false }) {
   );
 }
 
+function outcomeTone(kind = "") {
+  const value = s(kind).toLowerCase();
+  if (value === "failed" || value === "skipped") {
+    return {
+      border: "border-rose-200",
+      bg: "bg-rose-50",
+      pill: "bg-rose-100 text-rose-700",
+      label: "Needs intervention",
+    };
+  }
+  if (value === "unconfirmed") {
+    return {
+      border: "border-amber-200",
+      bg: "bg-amber-50",
+      pill: "bg-amber-100 text-amber-700",
+      label: "Unconfirmed",
+    };
+  }
+  if (value === "retrying") {
+    return {
+      border: "border-violet-200",
+      bg: "bg-violet-50",
+      pill: "bg-violet-100 text-violet-700",
+      label: "Retrying",
+    };
+  }
+  if (value === "queued" || value === "running") {
+    return {
+      border: "border-stone-200",
+      bg: "bg-stone-50",
+      pill: "bg-stone-200 text-stone-700",
+      label: value === "running" ? "In progress" : "Queued",
+    };
+  }
+  return {
+    border: "border-emerald-200",
+    bg: "bg-emerald-50",
+    pill: "bg-emerald-100 text-emerald-700",
+    label: "Confirmed",
+  };
+}
+
 function OutcomeRow({ item, highlighted = false }) {
+  const tone = outcomeTone(item?.kind);
   return (
-    <div className={rowClasses(highlighted)}>
-      <div className="text-[16px] font-semibold tracking-[-0.03em] text-stone-900">
-        {item.title}
+    <div
+      className={[
+        rowClasses(highlighted),
+        tone.border,
+        tone.bg,
+      ].join(" ")}
+    >
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="text-[16px] font-semibold tracking-[-0.03em] text-stone-900">
+          {item.title}
+        </div>
+        {item?.kind ? (
+          <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium ${tone.pill}`}>
+            {tone.label}
+          </span>
+        ) : null}
       </div>
       <div className="mt-2 text-sm leading-6 text-stone-600">
         {item.summary}
@@ -323,12 +501,13 @@ export default function PublishPage() {
   const summary = useMemo(() => {
     const comments = summarizeComments(state.comments || {});
     const proposals = summarizeProposals(state.proposals || {});
+    const publishOutcomes = summarizePublishOutcomes(state.proposals || {});
     const posture = summarizePublishingPosture(state.trust || {});
 
     const waitingText = proposals.waiting.length
       ? `${proposals.waiting.length} draft or in-progress proposal${
           proposals.waiting.length === 1 ? "" : "s"
-        } are waiting for the next publishing step.`
+        } are still upstream of publish execution.`
       : "No draft or in-progress proposal pressure is visible right now.";
 
     const moderationText = comments.pending
@@ -338,8 +517,32 @@ export default function PublishPage() {
     const approvalText = proposals.approved.length
       ? `${proposals.approved.length} approved item${
           proposals.approved.length === 1 ? "" : "s"
-        } are ready for publishing or final operator judgment.`
+        } are approved but not yet confirmed as published on this surface.`
       : "No approved publishing items are currently waiting.";
+
+    const queuedText = publishOutcomes.counts.queued + publishOutcomes.counts.running
+      ? `${publishOutcomes.counts.queued + publishOutcomes.counts.running} publish run${
+          publishOutcomes.counts.queued + publishOutcomes.counts.running === 1 ? "" : "s"
+        } are accepted or in progress and still unconfirmed.`
+      : "No queued or in-progress publish runs are visible right now.";
+
+    const retryText = publishOutcomes.counts.retrying
+      ? `${publishOutcomes.counts.retrying} publish run${
+          publishOutcomes.counts.retrying === 1 ? "" : "s"
+        } are in retry lineage and remain unconfirmed.`
+      : "No active publish retry lineage is visible right now.";
+
+    const inFlightCount = publishOutcomes.counts.queued + publishOutcomes.counts.running;
+    const interventionCount =
+      publishOutcomes.counts.failed +
+      publishOutcomes.counts.skipped +
+      publishOutcomes.counts.unconfirmed;
+
+    const failureText = publishOutcomes.counts.failed + publishOutcomes.counts.skipped + publishOutcomes.counts.unconfirmed
+      ? `${publishOutcomes.counts.failed + publishOutcomes.counts.skipped + publishOutcomes.counts.unconfirmed} publish run${
+          publishOutcomes.counts.failed + publishOutcomes.counts.skipped + publishOutcomes.counts.unconfirmed === 1 ? "" : "s"
+        } ended failed, skipped, or unconfirmed and need operator attention.`
+      : "No failed, skipped, or unconfirmed publish runs are visible right now.";
 
     const blockedText = posture.blocked.length
       ? posture.blocked
@@ -354,11 +557,6 @@ export default function PublishPage() {
         : s(posture.policyPosture?.explanation) ||
           "No blocked or paused publishing posture is visible in the current summary.";
 
-    const recentPublished = proposals.published.slice(0, 3).map((item) => ({
-      id: `published-${s(item?.id)}`,
-      title: pickProposalLabel(item),
-      summary: "This item was already published.",
-    }));
     const recentModeration = comments.items
       .filter((item) => {
         const status = s(item?.status).toLowerCase();
@@ -380,12 +578,18 @@ export default function PublishPage() {
     return {
       comments,
       proposals,
+      publishOutcomes,
       posture,
       waitingText,
       moderationText,
       approvalText,
+      queuedText,
+      retryText,
+      failureText,
+      interventionCount,
+      inFlightCount,
       blockedText,
-      recentItems: [...recentPublished, ...recentModeration].slice(0, 6),
+      recentItems: [...publishOutcomes.items.slice(0, 4), ...recentModeration].slice(0, 6),
     };
   }, [state.comments, state.proposals, state.trust]);
 
@@ -413,7 +617,7 @@ export default function PublishPage() {
                 Publish Workspace
               </div>
               <div className="max-w-3xl text-[15px] leading-7 text-stone-600">
-                A calm outgoing-work surface for moderation, draft pressure, approvals, blocked publishing state, and recent publishing results.
+                A publish operator surface for moderation, upstream draft pressure, blocked posture, and the latest execution-backed publish outcomes.
               </div>
               {state.error ? (
                 <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -423,10 +627,24 @@ export default function PublishPage() {
             </div>
 
             <div className="grid gap-3 md:grid-cols-4">
-              <SummaryMetric label="Waiting drafts" value={summary.proposals.waiting.length} />
-              <SummaryMetric label="Needs moderation" value={summary.comments.pending} tone="warm" />
-              <SummaryMetric label="Needs approval" value={summary.proposals.approved.length} />
-              <SummaryMetric label="Recently published" value={summary.proposals.published.length} tone="soft" />
+              <SummaryMetric
+                label="Needs intervention"
+                value={summary.interventionCount}
+                tone="warm"
+              />
+              <SummaryMetric
+                label="Retrying publish"
+                value={summary.publishOutcomes.counts.retrying}
+              />
+              <SummaryMetric
+                label="In-flight publish"
+                value={summary.inFlightCount}
+              />
+              <SummaryMetric
+                label="Confirmed publish"
+                value={summary.publishOutcomes.counts.confirmed}
+                tone="soft"
+              />
             </div>
 
             <div className={rowClasses()}>
@@ -434,7 +652,7 @@ export default function PublishPage() {
                 What this surface is for
               </div>
               <div className="mt-2 text-sm leading-6 text-stone-600">
-                Start here to see what is waiting, what is blocked, what still needs human review, and what the system already completed safely before you go deeper into proposal or moderation detail.
+                Start here to separate upstream approval pressure from actual publish execution state before you go deeper into proposal or moderation detail.
               </div>
             </div>
           </div>
@@ -444,7 +662,7 @@ export default function PublishPage() {
           id="publish-workflow"
           eyebrow="Outgoing Workflow"
           title="What is waiting now"
-          description="This section keeps draft pressure, moderation pressure, and approval pressure in one scan line so outgoing work feels like one flow."
+          description="This section keeps upstream work and real publish execution state in one scan line without treating accepted work as published work."
           highlighted={focusSection === "moderation"}
         >
           <div className="space-y-3">
@@ -455,6 +673,9 @@ export default function PublishPage() {
               highlighted={focusSection === "moderation"}
             />
             <SummaryLine label="Approvals" text={summary.approvalText} />
+            <SummaryLine label="Queued publish" text={summary.queuedText} />
+            <SummaryLine label="Retry lineage" text={summary.retryText} />
+            <SummaryLine label="Failed or unconfirmed" text={summary.failureText} />
           </div>
 
           <div className="flex flex-wrap gap-3 pt-1">
@@ -490,8 +711,8 @@ export default function PublishPage() {
         <Section
           id="publish-outcomes"
           eyebrow="Recent Outcomes"
-          title="What recently went out"
-          description="Recent published items and moderation completions are grouped together as one outcome feed."
+          title="Recent publish state"
+          description="Recent publish execution outcomes and moderation completions are shown together, but unconfirmed, retrying, failed, and skipped publish work stays explicit."
           highlighted={focusSection === "outcomes"}
         >
           <div className="space-y-3">
@@ -506,7 +727,7 @@ export default function PublishPage() {
             ) : (
               <SummaryLine
                 label="No recent outcomes"
-                text="Recent publishing and moderation outcomes will appear here when the system has visible completed work."
+                text="Recent publish execution outcomes and moderation completions will appear here when the system has visible state."
                 highlighted={focusSection === "outcomes"}
               />
             )}

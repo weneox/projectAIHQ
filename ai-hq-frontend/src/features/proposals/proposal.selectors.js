@@ -346,6 +346,116 @@ export function pickDraftCandidate(proposal) {
   );
 }
 
+export function pickExecutionCandidate(proposal) {
+  return (
+    proposal?.latest_execution ||
+    proposal?.lastExecution ||
+    proposal?.latestExecution ||
+    proposal?.execution ||
+    proposal?.job ||
+    (Array.isArray(proposal?.jobs) ? proposal.jobs[0] : null) ||
+    null
+  );
+}
+
+export function normalizeExecution(rawExecution) {
+  if (!rawExecution) return null;
+  const execution = typeof rawExecution === "string" ? safeJson(rawExecution) : rawExecution;
+  if (!execution || typeof execution !== "object") return null;
+
+  return {
+    id: execution.id || execution.executionId || execution.jobId || execution.job_id || null,
+    status: String(execution.status || execution.state || execution.result || "").trim().toLowerCase(),
+    attemptCount: Number(
+      execution.attempt_count || execution.attemptCount || execution.attempt || 0
+    ) || 0,
+    maxAttempts: Number(execution.max_attempts || execution.maxAttempts || 0) || 0,
+    retryOfId:
+      execution.retry_of_execution_id ||
+      execution.retryOfExecutionId ||
+      execution.parent_execution_id ||
+      execution.parentExecutionId ||
+      null,
+    updatedAt: execution.updated_at || execution.updatedAt || null,
+    createdAt: execution.created_at || execution.createdAt || null,
+    finishedAt: execution.finished_at || execution.finishedAt || null,
+    output: safeJson(execution.output) || execution.output || null,
+    raw: execution,
+  };
+}
+
+export function executionFromProposal(proposal) {
+  return normalizeExecution(pickExecutionCandidate(proposal));
+}
+
+export function executionStatusTone(status) {
+  const value = String(status || "").trim().toLowerCase();
+  if (!value) return "neutral";
+  if (
+    value === "completed" ||
+    value === "success" ||
+    value === "published" ||
+    value === "sent"
+  ) {
+    return "success";
+  }
+  if (
+    value === "failed" ||
+    value === "error" ||
+    value === "dead_lettered" ||
+    value === "cancelled"
+  ) {
+    return "danger";
+  }
+  if (
+    value === "queued" ||
+    value === "pending" ||
+    value === "retrying" ||
+    value === "retryable" ||
+    value === "running" ||
+    value === "in_progress"
+  ) {
+    return "warn";
+  }
+  return "neutral";
+}
+
+export function executionRetryLabel(execution) {
+  if (!execution) return "";
+  if (execution.attemptCount > 1) {
+    return execution.maxAttempts > 0
+      ? `retry ${execution.attemptCount} of ${execution.maxAttempts}`
+      : `retry ${execution.attemptCount}`;
+  }
+  if (execution.retryOfId) return "retry";
+  return "";
+}
+
+export function publishConfirmationLabel(proposal, execution) {
+  const proposalStatus = rawStatusOf(proposal);
+  if (proposalStatus === "published") return "confirmed";
+  if (execution?.output && execution.output.published === true) return "confirmed";
+
+  const executionStatus = String(execution?.status || "");
+  if (
+    executionStatus === "queued" ||
+    executionStatus === "pending" ||
+    executionStatus === "running" ||
+    executionStatus === "in_progress" ||
+    executionStatus === "retrying" ||
+    executionStatus === "retryable"
+  ) {
+    return "not confirmed";
+  }
+  if (executionStatus === "failed" || executionStatus === "error" || executionStatus === "skipped") {
+    return "not published";
+  }
+  if (executionStatus === "completed" || executionStatus === "success") {
+    return "unconfirmed";
+  }
+  return "";
+}
+
 export function normalizeDraft(rawDraft) {
   if (!rawDraft) return null;
   const d = typeof rawDraft === "string" ? safeJson(rawDraft) : rawDraft;

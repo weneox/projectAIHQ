@@ -1,5 +1,11 @@
+import { useEffect, useState } from "react";
+
 import SettingsSurfaceBanner from "../settings/SettingsSurfaceBanner.jsx";
 import { useThreadOutboundAttemptsSurface } from "./hooks/useThreadOutboundAttemptsSurface.js";
+import {
+  describeAttemptState,
+  getAttemptStatusTone,
+} from "./outboundAttemptTruth.js";
 
 function s(v) {
   return String(v ?? "").trim();
@@ -12,102 +18,51 @@ function fmtDate(v) {
   return d.toLocaleString();
 }
 
-function describeAttemptState(item = {}) {
-  const status = s(item?.status).toLowerCase();
-  const attemptCount = Number(item?.attempt_count || 0);
-  const maxAttempts = Number(item?.max_attempts || 0);
-
-  if (status === "queued") {
-    return {
-      label: "Queued locally",
-      detail: "Accepted into the outbound queue. Provider delivery has not completed yet.",
-    };
-  }
-
-  if (status === "sending") {
-    return {
-      label: "Send in progress",
-      detail: "An outbound attempt is actively trying to hand off to the provider.",
-    };
-  }
-
-  if (status === "sent") {
-    return {
-      label: "Sent",
-      detail:
-        attemptCount > 0
-          ? `Delivery succeeded on attempt ${attemptCount}${maxAttempts > 0 ? ` of ${maxAttempts}` : ""}.`
-          : "Delivery succeeded.",
-    };
-  }
-
-  if (status === "failed") {
-    return {
-      label: "Failed",
-      detail:
-        attemptCount > 0
-          ? `Most recent delivery attempt failed${maxAttempts > 0 ? ` on attempt ${attemptCount} of ${maxAttempts}.` : "."}`
-          : "Most recent delivery attempt failed.",
-    };
-  }
-
-  if (status === "retrying") {
-    return {
-      label: "Retrying",
-      detail:
-        attemptCount > 0
-          ? `Retry lineage is active after attempt ${attemptCount}${maxAttempts > 0 ? ` of ${maxAttempts}` : ""}.`
-          : "Retry lineage is active for this outbound delivery.",
-    };
-  }
-
-  if (status === "dead") {
-    return {
-      label: "Dead",
-      detail:
-        maxAttempts > 0
-          ? `Automatic delivery stopped after ${attemptCount || maxAttempts} of ${maxAttempts} attempts.`
-          : "Automatic delivery stopped. Operator cleanup is required.",
-    };
-  }
-
-  return {
-    label: status || "Unknown",
-    detail: "The backend reported an outbound attempt state the UI does not recognize yet.",
-  };
-}
-
 function StatusBadge({ status }) {
-  const x = s(status).toLowerCase();
-
-  const map = {
-    queued: "bg-stone-100 text-stone-700 border-stone-200",
-    sending: "bg-blue-50 text-blue-700 border-blue-200",
-    sent: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    failed: "bg-amber-50 text-amber-700 border-amber-200",
-    retrying: "bg-violet-50 text-violet-700 border-violet-200",
-    dead: "bg-rose-50 text-rose-700 border-rose-200",
-  };
+  const value = s(status).toLowerCase();
 
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${map[x] || map.queued}`}
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${getAttemptStatusTone(
+        value
+      )}`}
     >
-      {x || "unknown"}
+      {value || "unknown"}
     </span>
   );
 }
 
-export default function ThreadOutboundAttemptsPanel({
-  selectedThread,
-  actor = "operator",
+function ThreadOutboundAttemptsPanelView({
+  threadId,
+  attempts,
+  surface,
+  actionState,
+  handleResend,
+  handleMarkDead,
+  panelRef,
+  attentionKey = 0,
 }) {
-  const threadId = s(selectedThread?.id);
-  const { attempts, surface, actionState, handleResend, handleMarkDead } =
-    useThreadOutboundAttemptsSurface({ threadId, actor });
+  const [attentionVisible, setAttentionVisible] = useState(false);
+
+  useEffect(() => {
+    if (!attentionKey) return;
+    setAttentionVisible(true);
+    const timeoutId = window.setTimeout(() => {
+      setAttentionVisible(false);
+    }, 1800);
+    return () => window.clearTimeout(timeoutId);
+  }, [attentionKey]);
 
   return (
-    <div className="rounded-[30px] border border-[#ece2d3] bg-[#fffdf9]/92 p-5 shadow-[0_18px_44px_rgba(120,102,73,0.08)]">
+    <div
+      ref={panelRef}
+      tabIndex={-1}
+      className={`rounded-[30px] border bg-[#fffdf9]/92 p-5 shadow-[0_18px_44px_rgba(120,102,73,0.08)] outline-none transition ${
+        attentionVisible
+          ? "border-violet-300 ring-2 ring-violet-200"
+          : "border-[#ece2d3]"
+      }`}
+    >
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[16px] font-semibold tracking-[-0.03em] text-stone-900">
@@ -120,8 +75,8 @@ export default function ThreadOutboundAttemptsPanel({
 
         <button
           type="button"
-          onClick={surface.refresh}
-          disabled={surface.loading || surface.saving || !threadId}
+          onClick={surface?.refresh}
+          disabled={surface?.loading || surface?.saving || !threadId}
           className="rounded-xl border border-[#e8decf] bg-[#fffaf4] px-3 py-2 text-sm font-medium text-stone-700 transition hover:border-[#d9c8ac] hover:bg-white disabled:opacity-50"
         >
           Refresh
@@ -139,7 +94,7 @@ export default function ThreadOutboundAttemptsPanel({
       <div className="mt-5 rounded-[22px] border border-[#ece2d3] bg-[#fffdfa]">
         {!threadId ? (
           <div className="px-4 py-5 text-sm text-stone-500">No thread selected.</div>
-        ) : surface.loading ? (
+        ) : surface?.loading ? (
           <div className="px-4 py-5 text-sm text-stone-500">Loading attempts...</div>
         ) : attempts.length === 0 ? (
           <div className="px-4 py-5 text-sm text-stone-500">No delivery attempts for this thread.</div>
@@ -148,8 +103,8 @@ export default function ThreadOutboundAttemptsPanel({
             {attempts.map((item) => {
               const id = s(item?.id);
               const state = describeAttemptState(item);
-              const retryBusy = actionState.isActionPending(`retry:${id}`);
-              const deadBusy = actionState.isActionPending(`dead:${id}`);
+              const retryBusy = actionState?.isActionPending?.(`retry:${id}`);
+              const deadBusy = actionState?.isActionPending?.(`dead:${id}`);
               const isBusy = retryBusy || deadBusy;
 
               return (
@@ -191,7 +146,7 @@ export default function ThreadOutboundAttemptsPanel({
                     <button
                       type="button"
                       disabled={isBusy || s(item?.status) === "sent"}
-                      onClick={() => handleResend(id)}
+                      onClick={() => handleResend?.(id)}
                       className="rounded-xl border border-[#dfcfb2] bg-[#efe0c0] px-3 py-2 text-sm font-medium text-stone-900 transition disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {retryBusy ? "..." : "Retry"}
@@ -200,7 +155,7 @@ export default function ThreadOutboundAttemptsPanel({
                     <button
                       type="button"
                       disabled={isBusy || s(item?.status) === "dead"}
-                      onClick={() => handleMarkDead(id)}
+                      onClick={() => handleMarkDead?.(id)}
                       className="rounded-xl border border-[#e8decf] bg-[#fffaf4] px-3 py-2 text-sm font-medium text-stone-700 transition hover:border-[#d9c8ac] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {deadBusy ? "..." : "Dead"}
@@ -213,5 +168,60 @@ export default function ThreadOutboundAttemptsPanel({
         )}
       </div>
     </div>
+  );
+}
+
+function ThreadOutboundAttemptsPanelManaged({
+  selectedThread,
+  actor = "operator",
+  panelRef,
+  attentionKey = 0,
+}) {
+  const threadId = s(selectedThread?.id);
+  const managedSurface = useThreadOutboundAttemptsSurface({ threadId, actor });
+
+  return (
+    <ThreadOutboundAttemptsPanelView
+      threadId={threadId}
+      attempts={Array.isArray(managedSurface?.attempts) ? managedSurface.attempts : []}
+      surface={managedSurface?.surface}
+      actionState={managedSurface?.actionState}
+      handleResend={managedSurface?.handleResend}
+      handleMarkDead={managedSurface?.handleMarkDead}
+      panelRef={panelRef}
+      attentionKey={attentionKey}
+    />
+  );
+}
+
+export default function ThreadOutboundAttemptsPanel({
+  selectedThread,
+  actor = "operator",
+  attemptsSurface = null,
+  panelRef,
+  attentionKey = 0,
+}) {
+  if (!attemptsSurface) {
+    return (
+      <ThreadOutboundAttemptsPanelManaged
+        selectedThread={selectedThread}
+        actor={actor}
+        panelRef={panelRef}
+        attentionKey={attentionKey}
+      />
+    );
+  }
+
+  return (
+    <ThreadOutboundAttemptsPanelView
+      threadId={s(selectedThread?.id)}
+      attempts={Array.isArray(attemptsSurface?.attempts) ? attemptsSurface.attempts : []}
+      surface={attemptsSurface?.surface}
+      actionState={attemptsSurface?.actionState}
+      handleResend={attemptsSurface?.handleResend}
+      handleMarkDead={attemptsSurface?.handleMarkDead}
+      panelRef={panelRef}
+      attentionKey={attentionKey}
+    />
   );
 }

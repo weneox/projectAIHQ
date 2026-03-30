@@ -244,24 +244,40 @@ test("outbound attempt persistence module still keeps payload and tenant routing
 test("outbound attempt correlation lookup groups lineage by message id without heuristics", async () => {
   const db = {
     async query(text, params = []) {
-      assert.match(String(text || "").toLowerCase(), /from inbox_outbound_attempts/);
+      const sql = String(text || "").toLowerCase();
       assert.deepEqual(params[0], [
         "44444444-4444-4444-8444-444444444444",
         "55555555-5555-4555-8555-555555555555",
       ]);
       assert.equal(params[1], "66666666-6666-4666-8666-666666666666");
 
-      return {
-        rows: [
-          {
-            message_id: "44444444-4444-4444-8444-444444444444",
-            attempt_ids: [
-              "attempt-newest",
-              "attempt-oldest",
-            ],
-          },
-        ],
-      };
+      if (sql.includes("from inbox_outbound_attempts")) {
+        return {
+          rows: [
+            {
+              message_id: "44444444-4444-4444-8444-444444444444",
+              attempt_ids: [
+                "attempt-newest",
+                "attempt-oldest",
+              ],
+            },
+          ],
+        };
+      }
+
+      if (sql.includes("from durable_executions")) {
+        return {
+          rows: [
+            {
+              message_id: "55555555-5555-4555-8555-555555555555",
+              execution_ids: ["execution-1"],
+              referenced_attempt_ids: ["attempt-missing"],
+            },
+          ],
+        };
+      }
+
+      throw new Error(`Unexpected query: ${text}`);
     },
   };
 
@@ -278,8 +294,22 @@ test("outbound attempt correlation lookup groups lineage by message id without h
     message_id: "44444444-4444-4444-8444-444444444444",
     latest_attempt_id: "attempt-newest",
     attempt_ids: ["attempt-newest", "attempt-oldest"],
+    durable_execution_ids: [],
+    referenced_attempt_ids: [],
+    correlation_state: "correlated",
+    reason_code: "attempt_records_present",
+    historical_exception: false,
   });
-  assert.equal(correlations.has("55555555-5555-4555-8555-555555555555"), false);
+  assert.deepEqual(correlations.get("55555555-5555-4555-8555-555555555555"), {
+    message_id: "55555555-5555-4555-8555-555555555555",
+    latest_attempt_id: null,
+    attempt_ids: [],
+    durable_execution_ids: ["execution-1"],
+    referenced_attempt_ids: ["attempt-missing"],
+    correlation_state: "missing_attempt",
+    reason_code: "durable_execution_without_attempt_record",
+    historical_exception: false,
+  });
 });
 
 test("outbound message correlation helper stays explicit for outbound messages and absent for inbound", () => {
@@ -296,6 +326,11 @@ test("outbound message correlation helper stays explicit for outbound messages a
     message_id: "44444444-4444-4444-8444-444444444444",
     latest_attempt_id: null,
     attempt_ids: [],
+    durable_execution_ids: [],
+    referenced_attempt_ids: [],
+    correlation_state: "historical_missing_attempt",
+    reason_code: "legacy_message_without_attempt_records",
+    historical_exception: true,
   });
   assert.equal("outbound_attempt_correlation" in inbound, false);
 });

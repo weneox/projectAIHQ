@@ -17,6 +17,9 @@ import { GlassButton, ToneBadge, SurfacePill } from "./proposal-ui.jsx";
 import { cn } from "./proposal-utils.js";
 import {
   asDisplay,
+  executionFromProposal,
+  executionRetryLabel,
+  executionStatusTone,
   firstNonEmpty,
   getAssetUrlsFromEverywhere,
   isAssetReadyStatus,
@@ -41,6 +44,7 @@ import {
   pickDraftCandidate,
   pickPayloadObj,
   pretty,
+  publishConfirmationLabel,
   rawStatusOf,
   relTime,
   shortId,
@@ -115,6 +119,33 @@ function verdictLabel(verdict) {
 
 function scoreDisplay(score) {
   return typeof score === "number" ? `${score}/10` : "—";
+}
+
+function buildExecutionStatusNote(execution, publishConfirmation) {
+  const status = String(execution?.status || "").trim().toLowerCase();
+  if (!status) return "";
+  if (status === "queued" || status === "pending") {
+    return "Latest execution is queued. Publish has not been confirmed.";
+  }
+  if (status === "running" || status === "in_progress") {
+    return "Latest execution is in progress. Publish has not been confirmed.";
+  }
+  if (status === "retrying" || status === "retryable") {
+    return "Latest execution is in retry flow. Publish has not been confirmed.";
+  }
+  if (status === "failed" || status === "error") {
+    return "Latest execution failed. This record is not published.";
+  }
+  if (status === "skipped") {
+    return "Latest execution was skipped. This record is not published.";
+  }
+  if (
+    (status === "completed" || status === "success") &&
+    publishConfirmation !== "confirmed"
+  ) {
+    return "Latest execution completed without a publish confirmation on this record.";
+  }
+  return "";
 }
 
 export default function ProposalExpanded({
@@ -194,6 +225,10 @@ export default function ProposalExpanded({
   const stage = stageOf(item);
   const tone = panelTone(stage);
   const exactProposalStatus = stageLabel(item);
+  const execution = executionFromProposal(item);
+  const executionRetry = executionRetryLabel(execution);
+  const publishConfirmation = publishConfirmationLabel(item, execution);
+  const executionStatusNote = buildExecutionStatusNote(execution, publishConfirmation);
 
   const proposalStatus = String(item?.status || "draft").toLowerCase();
   const isRejected = proposalStatus === "rejected";
@@ -338,6 +373,22 @@ export default function ProposalExpanded({
                 </ToneBadge>
               ) : null}
 
+              {execution?.status ? (
+                <ToneBadge tone={executionStatusTone(execution.status)}>
+                  execution {execution.status}
+                </ToneBadge>
+              ) : null}
+
+              {executionRetry ? <ToneBadge tone="warn">{executionRetry}</ToneBadge> : null}
+
+              {publishConfirmation ? (
+                <ToneBadge
+                  tone={publishConfirmation === "confirmed" ? "success" : "warn"}
+                >
+                  publish {publishConfirmation}
+                </ToneBadge>
+              ) : null}
+
               {postType ? <ToneBadge tone="neutral">{postType}</ToneBadge> : null}
 
               <ToneBadge
@@ -374,6 +425,12 @@ export default function ProposalExpanded({
               <p className="mt-3 max-w-[900px] text-[14px] leading-7 text-white/46">
                 {summary}
               </p>
+            ) : null}
+
+            {executionStatusNote ? (
+              <div className="mt-4 max-w-[900px] rounded-[18px] border border-amber-300/14 bg-amber-300/[0.07] px-4 py-3 text-[13px] leading-6 text-amber-50/88">
+                {executionStatusNote}
+              </div>
             ) : null}
 
             <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px] text-white/40">
@@ -844,6 +901,9 @@ export default function ProposalExpanded({
                   />
                   <MetaRow k="Proposal status" v={exactProposalStatus || "—"} />
                   <MetaRow k="Draft status" v={resolvedDraft?.status || "—"} />
+                  <MetaRow k="Execution status" v={execution?.status || "â€”"} />
+                  <MetaRow k="Retry lineage" v={executionRetry || "â€”"} />
+                  <MetaRow k="Publish confirmation" v={publishConfirmation || "â€”"} />
                   <MetaRow
                     k="Assets"
                     v={hasPublishableAsset ? `${assetUrls.length} linked` : "—"}

@@ -2,7 +2,11 @@ import { ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import {
   captionFrom,
+  executionFromProposal,
+  executionRetryLabel,
+  executionStatusTone,
   formatFrom,
+  publishConfirmationLabel,
   rawStatusOf,
   relTime,
   stageOf,
@@ -80,6 +84,9 @@ export default function ProposalCard({
   const rawStatus = rawStatusOf(item);
   const stage = stageOf(item);
   const exactStatus = stageLabel(item);
+  const execution = executionFromProposal(item);
+  const executionRetry = executionRetryLabel(execution);
+  const publishConfirmation = publishConfirmationLabel(item, execution);
 
   const when = relTime(
     item?.updated_at ||
@@ -198,6 +205,24 @@ export default function ProposalCard({
                 {exactStatus ? (
                   <ToneBadge tone={stageTone(stage, rawStatus)}>
                     {exactStatus}
+                  </ToneBadge>
+                ) : null}
+
+                {execution?.status ? (
+                  <ToneBadge tone={executionStatusTone(execution.status)}>
+                    execution {execution.status}
+                  </ToneBadge>
+                ) : null}
+
+                {executionRetry ? (
+                  <ToneBadge tone="warn">{executionRetry}</ToneBadge>
+                ) : null}
+
+                {publishConfirmation ? (
+                  <ToneBadge
+                    tone={publishConfirmation === "confirmed" ? "success" : "warn"}
+                  >
+                    publish {publishConfirmation}
                   </ToneBadge>
                 ) : null}
 

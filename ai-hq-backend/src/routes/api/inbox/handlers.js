@@ -18,6 +18,7 @@ import {
   truthy,
   withMessageOutboundAttemptCorrelation,
 } from "./shared.js";
+import { persistOutboundMessage } from "./internal/execution.js";
 
 import {
   getOutboundAttemptById,
@@ -634,114 +635,182 @@ export function inboxHandlers({ db, wsHub }) {
         storageMessageType: messageType,
       };
 
-      const insert = await db.query(
-        `
-        insert into inbox_messages (
-          thread_id,
-          tenant_key,
-          direction,
-          sender_type,
-          external_message_id,
-          message_type,
-          text,
-          attachments,
-          meta,
-          sent_at
-        )
-        values (
-          $1::uuid,
-          $2::text,
-          $3::text,
-          $4::text,
-          $5::text,
-          $6::text,
-          $7::text,
-          $8::jsonb,
-          $9::jsonb,
-          now()
-        )
-        returning
-          id,
-          thread_id,
-          tenant_key,
-          direction,
-          sender_type,
-          external_message_id,
-          message_type,
-          text,
-          attachments,
-          meta,
-          sent_at,
-          created_at
-        `,
-        [
-          threadId,
-          tenantKey,
-          direction,
-          senderType,
-          externalMessageId,
-          messageType,
-          text,
-          JSON.stringify(attachments),
-          JSON.stringify(mergedMeta),
-        ]
-      );
+      let message = null;
+      let correlatedMessage = null;
 
-      const message = normalizeMessage(insert.rows?.[0] || null);
+      if (direction === "outbound") {
+        const client = await db.connect();
+        try {
+          await client.query("BEGIN");
 
-      await db.query(
-        `
-        update inbox_threads
-        set
-          last_message_at = now(),
-          last_inbound_at = case when $2::text = 'inbound' then now() else last_inbound_at end,
-          last_outbound_at = case when $2::text = 'outbound' then now() else last_outbound_at end,
-          unread_count = case
-            when $2::text = 'inbound' then coalesce(unread_count, 0) + 1
-            else unread_count
-          end,
-          handoff_active = case
-            when $3::boolean = true then false
-            else handoff_active
-          end,
-          handoff_reason = case
-            when $3::boolean = true then ''
-            else handoff_reason
-          end,
-          handoff_priority = case
-            when $3::boolean = true then 'normal'
-            else handoff_priority
-          end,
-          handoff_at = case
-            when $3::boolean = true then null
-            else handoff_at
-          end,
-          handoff_by = case
-            when $3::boolean = true then null
-            else handoff_by
-          end,
-          meta = case
-            when $3::boolean = true then
-              jsonb_set(
-                coalesce(meta, '{}'::jsonb),
-                '{handoff}',
-                '{"active":false,"reason":"","priority":"normal","at":null,"by":null}'::jsonb,
-                true
-              )
-            else coalesce(meta, '{}'::jsonb)
-          end,
-          updated_at = now()
-        where id = $1::uuid
-        `,
-        [threadId, direction, releaseHandoff]
-      );
+          const delivery = await persistOutboundMessage({
+            client,
+            thread: existingThread,
+            tenantId: existingThread?.tenant_id || "",
+            tenantKey,
+            channel: existingThread?.channel || "instagram",
+            recipientId:
+              s(mergedMeta?.recipientId || "") ||
+              s(existingThread?.external_user_id || "") ||
+              null,
+            senderType,
+            externalMessageId,
+            requestedMessageType,
+            storageMessageType: messageType,
+            text,
+            attachments,
+            meta: mergedMeta,
+            provider: s(mergedMeta?.provider || "meta") || "meta",
+            maxAttempts: clamp(toInt(req.body?.maxAttempts, 5), 1, 20),
+            enqueueExecution: !externalMessageId,
+          });
+
+          if (releaseHandoff && !["agent", "operator"].includes(senderType)) {
+            await client.query(
+              `
+              update inbox_threads
+              set
+                handoff_active = false,
+                handoff_reason = '',
+                handoff_priority = 'normal',
+                handoff_at = null,
+                handoff_by = null,
+                meta = jsonb_set(
+                  coalesce(meta, '{}'::jsonb),
+                  '{handoff}',
+                  '{"active":false,"reason":"","priority":"normal","at":null,"by":null}'::jsonb,
+                  true
+                ),
+                updated_at = now()
+              where id = $1::uuid
+              `,
+              [threadId]
+            );
+          }
+
+          await client.query("COMMIT");
+          message = delivery.message;
+          correlatedMessage = withMessageOutboundAttemptCorrelation(message, {
+            message_id: message?.id,
+            attempt_ids: delivery?.attempt?.id ? [delivery.attempt.id] : [],
+          });
+        } catch (error) {
+          try {
+            await client.query("ROLLBACK");
+          } catch {}
+          throw error;
+        } finally {
+          try {
+            client.release();
+          } catch {}
+        }
+      } else {
+        const insert = await db.query(
+          `
+          insert into inbox_messages (
+            thread_id,
+            tenant_key,
+            direction,
+            sender_type,
+            external_message_id,
+            message_type,
+            text,
+            attachments,
+            meta,
+            sent_at
+          )
+          values (
+            $1::uuid,
+            $2::text,
+            $3::text,
+            $4::text,
+            $5::text,
+            $6::text,
+            $7::text,
+            $8::jsonb,
+            $9::jsonb,
+            now()
+          )
+          returning
+            id,
+            thread_id,
+            tenant_key,
+            direction,
+            sender_type,
+            external_message_id,
+            message_type,
+            text,
+            attachments,
+            meta,
+            sent_at,
+            created_at
+          `,
+          [
+            threadId,
+            tenantKey,
+            direction,
+            senderType,
+            externalMessageId,
+            messageType,
+            text,
+            JSON.stringify(attachments),
+            JSON.stringify(mergedMeta),
+          ]
+        );
+
+        message = normalizeMessage(insert.rows?.[0] || null);
+
+        await db.query(
+          `
+          update inbox_threads
+          set
+            last_message_at = now(),
+            last_inbound_at = case when $2::text = 'inbound' then now() else last_inbound_at end,
+            last_outbound_at = case when $2::text = 'outbound' then now() else last_outbound_at end,
+            unread_count = case
+              when $2::text = 'inbound' then coalesce(unread_count, 0) + 1
+              else unread_count
+            end,
+            handoff_active = case
+              when $3::boolean = true then false
+              else handoff_active
+            end,
+            handoff_reason = case
+              when $3::boolean = true then ''
+              else handoff_reason
+            end,
+            handoff_priority = case
+              when $3::boolean = true then 'normal'
+              else handoff_priority
+            end,
+            handoff_at = case
+              when $3::boolean = true then null
+              else handoff_at
+            end,
+            handoff_by = case
+              when $3::boolean = true then null
+              else handoff_by
+            end,
+            meta = case
+              when $3::boolean = true then
+                jsonb_set(
+                  coalesce(meta, '{}'::jsonb),
+                  '{handoff}',
+                  '{"active":false,"reason":"","priority":"normal","at":null,"by":null}'::jsonb,
+                  true
+                )
+              else coalesce(meta, '{}'::jsonb)
+            end,
+            updated_at = now()
+          where id = $1::uuid
+          `,
+          [threadId, direction, releaseHandoff]
+        );
+
+        correlatedMessage = withMessageOutboundAttemptCorrelation(message, null);
+      }
 
       const thread = await refreshThread(db, threadId, null);
-
-      const correlatedMessage = withMessageOutboundAttemptCorrelation(
-        message,
-        direction === "outbound" ? { message_id: message?.id, attempt_ids: [] } : null
-      );
 
       try {
         emitRealtimeEvent(wsHub, {

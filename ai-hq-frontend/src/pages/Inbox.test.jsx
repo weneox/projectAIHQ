@@ -7,6 +7,7 @@ const useInboxThreadListSurface = vi.fn();
 const getAppSessionContext = vi.fn();
 const areInternalRoutesEnabled = vi.fn();
 const useInboxComposerSurface = vi.fn();
+const useThreadOutboundAttemptsSurface = vi.fn();
 const mockNavigate = vi.fn();
 const mockSetSearchParams = vi.fn();
 
@@ -50,6 +51,10 @@ vi.mock("../components/inbox/hooks/useInboxThreadListSurface.js", () => ({
 
 vi.mock("../components/inbox/hooks/useInboxComposerSurface.js", () => ({
   useInboxComposerSurface: (...args) => useInboxComposerSurface(...args),
+}));
+
+vi.mock("../components/inbox/hooks/useThreadOutboundAttemptsSurface.js", () => ({
+  useThreadOutboundAttemptsSurface: (...args) => useThreadOutboundAttemptsSurface(...args),
 }));
 
 vi.mock("../hooks/useInboxRealtime.js", () => ({
@@ -117,6 +122,25 @@ describe("Inbox", () => {
       },
       handleSend: vi.fn(),
       handleRelease: vi.fn(),
+    });
+
+    useThreadOutboundAttemptsSurface.mockReturnValue({
+      attempts: [],
+      surface: {
+        loading: false,
+        error: "",
+        unavailable: false,
+        ready: true,
+        saving: false,
+        saveError: "",
+        saveSuccess: "",
+        refresh: vi.fn(),
+      },
+      actionState: {
+        isActionPending: vi.fn().mockReturnValue(false),
+      },
+      handleResend: vi.fn(),
+      handleMarkDead: vi.fn(),
     });
 
     useInboxData.mockReturnValue({

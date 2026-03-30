@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 import {
   AlertTriangle,
   Bot,
@@ -18,6 +20,7 @@ import {
   prettyState,
   stateBadgeTone,
 } from "../../lib/inbox-ui.js";
+import { indexAttemptsByMessageCorrelation } from "./outboundAttemptTruth.js";
 import SettingsSurfaceBanner from "../settings/SettingsSurfaceBanner.jsx";
 import InboxMessageBubble from "./InboxMessageBubble.jsx";
 import InboxMiniInfo from "./InboxMiniInfo.jsx";
@@ -133,6 +136,8 @@ function Button({ children, onClick, tone = "default", disabled = false, icon: I
 export default function InboxDetailPanel({
   selectedThread,
   messages,
+  outboundAttempts,
+  onInspectLineage,
   surface,
   actionState,
   markRead,
@@ -165,6 +170,10 @@ export default function InboxDetailPanel({
     !actionState?.isActionPending?.("resolved");
   const canClose = hasThread && selectedThread?.status !== "closed" && !actionState?.isActionPending?.("closed");
   const canMarkRead = hasThread && unreadCount > 0 && !actionState?.isActionPending?.("read");
+  const attemptsByCorrelation = useMemo(
+    () => indexAttemptsByMessageCorrelation(outboundAttempts),
+    [outboundAttempts]
+  );
 
   return (
     <div className="rounded-[30px] border border-[#ece2d3] bg-[#fffdf9]/92 p-5 shadow-[0_18px_44px_rgba(120,102,73,0.08)]">
@@ -321,7 +330,14 @@ export default function InboxDetailPanel({
               <div className="mt-2 text-sm leading-6 text-stone-500">No messages are available for this thread yet.</div>
             </div>
           ) : (
-            messages.map((message) => <InboxMessageBubble key={message.id} m={message} />)
+            messages.map((message) => (
+              <InboxMessageBubble
+                key={message.id}
+                m={message}
+                attemptsByCorrelation={attemptsByCorrelation}
+                onInspectLineage={onInspectLineage}
+              />
+            ))
           )}
         </div>
       </div>

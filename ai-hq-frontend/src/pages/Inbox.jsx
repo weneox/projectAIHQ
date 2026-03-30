@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { UserRound } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -10,6 +10,7 @@ import InboxLeadPanel from "../components/inbox/InboxLeadPanel.jsx";
 import InboxThreadListPanel from "../components/inbox/InboxThreadListPanel.jsx";
 import RetryQueuePanel from "../components/inbox/RetryQueuePanel.jsx";
 import ThreadOutboundAttemptsPanel from "../components/inbox/ThreadOutboundAttemptsPanel.jsx";
+import { useThreadOutboundAttemptsSurface } from "../components/inbox/hooks/useThreadOutboundAttemptsSurface.js";
 import { useInboxData } from "../hooks/useInboxData.js";
 import { useInboxRealtime } from "../hooks/useInboxRealtime.js";
 import { areInternalRoutesEnabled } from "../lib/appEntry.js";
@@ -43,6 +44,8 @@ export default function Inbox() {
   const [wsState, setWsState] = useState("idle");
   const [tenantKey, setTenantKey] = useState("");
   const [operatorName, setOperatorName] = useState("");
+  const lineagePanelRef = useRef(null);
+  const [lineageAttentionKey, setLineageAttentionKey] = useState(0);
   const requestedThreadId = String(location.state?.selectedThreadId || searchParams.get("threadId") || "").trim();
 
   useEffect(() => {
@@ -117,6 +120,11 @@ export default function Inbox() {
     releaseHandoff,
   });
 
+  const threadAttemptSurface = useThreadOutboundAttemptsSurface({
+    threadId: selectedThread?.id || "",
+    actor: operatorName || "operator",
+  });
+
   useInboxRealtime({
     selectedThread,
     setWsState,
@@ -166,6 +174,21 @@ export default function Inbox() {
       unreadCount,
     };
   }, [threads]);
+
+  const handleInspectLineage = ({ truthKind = "" } = {}) => {
+    if (truthKind === "awaiting_attempt" || truthKind === "stale_attempt") {
+      threadAttemptSurface.surface?.refresh?.();
+    }
+
+    setLineageAttentionKey(Date.now());
+
+    const panel = lineagePanelRef.current;
+    if (!panel) return;
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => {
+      panel.focus?.();
+    }, 120);
+  };
 
   return (
     <div className="mx-auto max-w-[1240px] space-y-8 px-4 py-8 sm:px-6 lg:px-8">
@@ -251,6 +274,8 @@ export default function Inbox() {
           <InboxDetailPanel
             selectedThread={selectedThread}
             messages={messages}
+            outboundAttempts={threadAttemptSurface.attempts}
+            onInspectLineage={handleInspectLineage}
             surface={detailSurface}
             actionState={actionState}
             markRead={markRead}
@@ -270,7 +295,13 @@ export default function Inbox() {
             onReleaseHandoff={handleRelease}
           />
 
-          <ThreadOutboundAttemptsPanel selectedThread={selectedThread} actor={operatorName || "operator"} />
+          <ThreadOutboundAttemptsPanel
+            selectedThread={selectedThread}
+            actor={operatorName || "operator"}
+            attemptsSurface={threadAttemptSurface}
+            panelRef={lineagePanelRef}
+            attentionKey={lineageAttentionKey}
+          />
 
           {showInternalDebug ? (
             <div className={`${shellSection()} px-5 py-5`}>
