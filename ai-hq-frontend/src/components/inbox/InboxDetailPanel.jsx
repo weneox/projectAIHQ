@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCheck,
   MoreHorizontal,
@@ -28,6 +28,7 @@ function initialsFromName(value = "") {
     .filter(Boolean);
 
   if (!parts.length) return "U";
+
   return parts
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
@@ -42,6 +43,7 @@ function avatarTone(seed = "") {
     "bg-violet-100 text-violet-700",
     "bg-emerald-100 text-emerald-700",
   ];
+
   const score = String(seed || "")
     .split("")
     .reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
@@ -63,59 +65,165 @@ function QuietIconButton({ children, onClick, disabled = false, label = "" }) {
   );
 }
 
-function ActionButton({
-  children,
-  onClick,
-  disabled = false,
-  variant = "default",
-  icon: Icon,
+function DetailActionMenu({
+  open,
+  anchorRef,
+  onClose,
+  onAssign,
+  onHandoff,
+  onResolve,
+  onCloseThread,
+  disabledMap,
 }) {
-  const variants = {
-    default:
-      "border-slate-200/80 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-950",
-    subtle:
-      "border-slate-200/80 bg-[#f8f9fb] text-slate-600 hover:border-slate-300 hover:bg-white hover:text-slate-950",
-    amber:
-      "border-amber-200/80 bg-amber-50/80 text-amber-800 hover:border-amber-300",
-    rose:
-      "border-rose-200/80 bg-rose-50/80 text-rose-700 hover:border-rose-300",
-    emerald:
-      "border-emerald-200/80 bg-emerald-50/80 text-emerald-700 hover:border-emerald-300",
-  };
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function handlePointer(event) {
+      const target = event.target;
+      if (menuRef.current?.contains(target)) return;
+      if (anchorRef.current?.contains(target)) return;
+      onClose?.();
+    }
+
+    function handleEscape(event) {
+      if (event.key === "Escape") onClose?.();
+    }
+
+    document.addEventListener("mousedown", handlePointer);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointer);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [open, anchorRef, onClose]);
+
+  if (!open) return null;
+
+  const items = [
+    {
+      key: "assign",
+      label: disabledMap.assign ? "Assigning..." : "Assign",
+      icon: UserCog,
+      onClick: onAssign,
+      disabled: disabledMap.assign,
+    },
+    {
+      key: "handoff",
+      label: disabledMap.handoff ? "Activating..." : "Activate handoff",
+      icon: ShieldAlert,
+      onClick: onHandoff,
+      disabled: disabledMap.handoff || disabledMap.handoffLocked,
+    },
+    {
+      key: "resolved",
+      label: disabledMap.resolved ? "Resolving..." : "Resolve",
+      icon: Sparkles,
+      onClick: onResolve,
+      disabled: disabledMap.resolved,
+    },
+    {
+      key: "closed",
+      label: disabledMap.closed ? "Closing..." : "Close",
+      icon: XCircle,
+      onClick: onCloseThread,
+      disabled: disabledMap.closed,
+      tone: "text-rose-600",
+    },
+  ];
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={[
-        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-medium transition disabled:cursor-not-allowed disabled:opacity-45",
-        variants[variant] || variants.default,
-      ].join(" ")}
+    <div
+      ref={menuRef}
+      className="absolute right-0 top-[calc(100%+8px)] z-30 w-56 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.12)]"
     >
-      {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-      {children}
-    </button>
+      {items.map((item) => {
+        const Icon = item.icon;
+        return (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => {
+              item.onClick?.();
+              onClose?.();
+            }}
+            disabled={item.disabled}
+            className={[
+              "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition",
+              item.tone || "text-slate-700",
+              item.disabled
+                ? "cursor-not-allowed opacity-45"
+                : "hover:bg-slate-50",
+            ].join(" ")}
+          >
+            <Icon className="h-4 w-4" />
+            <span>{item.label}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
-function buildConversationTitle(thread = {}) {
-  const safe = obj(thread);
+function formatConversationMeta(thread = {}) {
+  const parts = [];
 
-  if (s(safe.subject)) return s(safe.subject);
-  if (s(safe.title)) return s(safe.title);
+  const channel =
+    s(thread.channel_label) ||
+    s(thread.channel_type) ||
+    s(thread.provider) ||
+    s(thread.source_type);
 
-  const preview = s(safe.last_message_text);
-  if (preview) {
-    if (preview.length <= 64) return preview;
-    return `${preview.slice(0, 64).trim()}…`;
-  }
+  const lastAt =
+    s(thread.last_message_at_label) ||
+    s(thread.last_message_relative) ||
+    s(thread.updated_at_label) ||
+    s(thread.updated_at_display) ||
+    s(thread.last_message_created_at);
+
+  if (channel) parts.push(channel);
+  if (lastAt) parts.push(lastAt);
+
+  return parts.filter(Boolean).join(" • ");
+}
+
+function ConversationIdentityBlock({ thread, onOpenDetails }) {
+  const selectedName =
+    thread?.customer_name ||
+    thread?.external_username ||
+    thread?.external_user_id ||
+    "Conversation";
+
+  const meta = formatConversationMeta(thread);
 
   return (
-    s(safe.customer_name) ||
-    s(safe.external_username) ||
-    s(safe.external_user_id) ||
-    "Conversation"
+    <div className="px-7 pb-3 pt-6">
+      <button
+        type="button"
+        onClick={onOpenDetails}
+        className="group flex items-start gap-3 text-left"
+      >
+        <div
+          className={[
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition group-hover:scale-[1.02]",
+            avatarTone(selectedName),
+          ].join(" ")}
+        >
+          {initialsFromName(selectedName)}
+        </div>
+
+        <div className="min-w-0 pt-0.5">
+          <div className="truncate text-[22px] font-semibold tracking-[-0.04em] text-slate-950">
+            {selectedName}
+          </div>
+          {meta ? (
+            <div className="mt-1 text-[13px] text-slate-500">{meta}</div>
+          ) : null}
+        </div>
+      </button>
+    </div>
   );
 }
 
@@ -133,6 +241,16 @@ export default function InboxDetailPanel({
   composer = null,
 }) {
   const hasThread = Boolean(selectedThread?.id);
+  const unreadCount = Number(selectedThread?.unread_count ?? 0);
+  const handoffActive = Boolean(selectedThread?.handoff_active);
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuAnchorRef = useRef(null);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [selectedThread?.id]);
+
   const showSurfaceBanner = hasThread && (
     surface?.unavailable ||
     surface?.availability === "unavailable" ||
@@ -141,32 +259,28 @@ export default function InboxDetailPanel({
     surface?.saveSuccess
   );
 
-  const selectedName =
-    selectedThread?.customer_name ||
-    selectedThread?.external_username ||
-    selectedThread?.external_user_id ||
-    "Conversation";
-
-  const conversationTitle = buildConversationTitle(selectedThread);
-  const unreadCount = Number(selectedThread?.unread_count ?? 0);
-  const handoffActive = Boolean(selectedThread?.handoff_active);
-
   const attemptsByCorrelation = useMemo(
     () => indexAttemptsByMessageCorrelation(outboundAttempts),
     [outboundAttempts]
   );
 
+  const disabledMap = {
+    assign: Boolean(actionState?.isActionPending?.("assign")),
+    handoff: Boolean(actionState?.isActionPending?.("handoff")),
+    handoffLocked: handoffActive,
+    resolved: Boolean(actionState?.isActionPending?.("resolved")),
+    closed: Boolean(actionState?.isActionPending?.("closed")),
+  };
+
   return (
     <section className="flex h-full min-h-0 flex-col bg-white">
-      <div className="border-b border-slate-200/70">
-        <div className="flex items-center justify-between gap-4 px-6 py-5">
-          <div className="min-w-0">
-            <h2 className="truncate text-[17px] font-semibold tracking-[-0.03em] text-slate-950">
-              {conversationTitle}
-            </h2>
+      <div className="border-b border-slate-200/70 px-5 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
+            Conversation
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <QuietIconButton
               onClick={hasThread ? () => markRead(selectedThread.id) : undefined}
               disabled={
@@ -188,84 +302,38 @@ export default function InboxDetailPanel({
             </QuietIconButton>
 
             {hasThread ? (
-              <button
-                type="button"
-                onClick={onOpenDetails}
-                aria-label="Open conversation details"
-                className={[
-                  "ml-1 flex h-9 w-9 items-center justify-center rounded-full text-[12px] font-semibold transition hover:scale-[1.02]",
-                  avatarTone(selectedName),
-                ].join(" ")}
-              >
-                {initialsFromName(selectedName)}
-              </button>
-            ) : (
-              <QuietIconButton label="More conversation actions">
-                <MoreHorizontal className="h-4 w-4" />
-              </QuietIconButton>
-            )}
+              <div className="relative" ref={menuAnchorRef}>
+                <QuietIconButton
+                  onClick={() => setMenuOpen((prev) => !prev)}
+                  label="Conversation actions"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </QuietIconButton>
+
+                <DetailActionMenu
+                  open={menuOpen}
+                  anchorRef={menuAnchorRef}
+                  onClose={() => setMenuOpen(false)}
+                  onAssign={() => assignThread(selectedThread.id)}
+                  onHandoff={() => activateHandoff(selectedThread.id)}
+                  onResolve={() => setThreadStatus(selectedThread.id, "resolved")}
+                  onCloseThread={() =>
+                    setThreadStatus(selectedThread.id, "closed")
+                  }
+                  disabledMap={disabledMap}
+                />
+              </div>
+            ) : null}
           </div>
         </div>
 
         {showSurfaceBanner ? (
-          <div className="px-6 pb-4">
+          <div className="pt-3">
             <SettingsSurfaceBanner
               surface={surface}
               unavailableMessage="Conversation detail is temporarily unavailable."
               refreshLabel="Refresh conversation"
             />
-          </div>
-        ) : null}
-
-        {hasThread ? (
-          <div className="border-t border-slate-200/60 px-6 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <ActionButton
-                icon={UserCog}
-                onClick={() => assignThread(selectedThread.id)}
-                disabled={actionState?.isActionPending?.("assign")}
-                variant="subtle"
-              >
-                {actionState?.isActionPending?.("assign")
-                  ? "Assigning..."
-                  : "Assign"}
-              </ActionButton>
-
-              <ActionButton
-                icon={ShieldAlert}
-                onClick={() => activateHandoff(selectedThread.id)}
-                disabled={
-                  handoffActive || actionState?.isActionPending?.("handoff")
-                }
-                variant="amber"
-              >
-                {actionState?.isActionPending?.("handoff")
-                  ? "Activating..."
-                  : "Activate handoff"}
-              </ActionButton>
-
-              <ActionButton
-                icon={Sparkles}
-                onClick={() => setThreadStatus(selectedThread.id, "resolved")}
-                disabled={actionState?.isActionPending?.("resolved")}
-                variant="emerald"
-              >
-                {actionState?.isActionPending?.("resolved")
-                  ? "Resolving..."
-                  : "Resolve"}
-              </ActionButton>
-
-              <ActionButton
-                icon={XCircle}
-                onClick={() => setThreadStatus(selectedThread.id, "closed")}
-                disabled={actionState?.isActionPending?.("closed")}
-                variant="rose"
-              >
-                {actionState?.isActionPending?.("closed")
-                  ? "Closing..."
-                  : "Close"}
-              </ActionButton>
-            </div>
           </div>
         ) : null}
       </div>
@@ -278,7 +346,7 @@ export default function InboxDetailPanel({
                 Conversation workspace
               </div>
               <div className="mt-2 max-w-[34rem] text-sm leading-7 text-slate-500">
-                Select a thread to open the message timeline.
+                Select a thread to open the timeline.
               </div>
             </div>
           ) : surface?.loading ? (
@@ -295,14 +363,21 @@ export default function InboxDetailPanel({
               </div>
             </div>
           ) : (
-            <div className="space-y-5 px-6 py-6">
-              {messages.map((message) => (
-                <InboxMessageBubble
-                  key={message.id}
-                  m={message}
-                  attemptsByCorrelation={attemptsByCorrelation}
-                />
-              ))}
+            <div className="px-0 py-0">
+              <ConversationIdentityBlock
+                thread={selectedThread}
+                onOpenDetails={onOpenDetails}
+              />
+
+              <div className="space-y-4 px-6 pb-6">
+                {messages.map((message) => (
+                  <InboxMessageBubble
+                    key={message.id}
+                    m={message}
+                    attemptsByCorrelation={attemptsByCorrelation}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
