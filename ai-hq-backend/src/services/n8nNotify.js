@@ -52,6 +52,12 @@ function normalizeAutomationMode(v, fallback = "manual") {
   return "manual";
 }
 
+function buildResponsePreview(data) {
+  return typeof data === "string"
+    ? data.slice(0, 220)
+    : JSON.stringify(data || {}).slice(0, 220);
+}
+
 function buildPromptOutputContract(mappedEvent = "", workflowHint = "") {
   const event = clean(mappedEvent).toLowerCase();
   const workflow = clean(workflowHint).toLowerCase();
@@ -587,20 +593,36 @@ export function buildPromptExtra({
   return base;
 }
 
-export function notifyN8n(event, proposal, extra = {}) {
+export async function notifyN8n(event, proposal, extra = {}) {
   const action = clean(extra.action || event);
   const mappedEvent = normalizeEventForTransport(event, extra);
   const url = pickWebhookUrl(mappedEvent, extra);
+  const workflowHint = pickWorkflowHint(event, { ...extra, action });
 
   if (!url) {
     console.log(`[n8n] skipped: no webhook url for ${mappedEvent}`);
-    return;
+    return {
+      ok: false,
+      attempted: false,
+      accepted: false,
+      dispatchOutcome: "skipped",
+      reasonCode: "webhook_url_missing",
+      mappedEvent,
+      action,
+      workflowHint,
+      webhookUrl: "",
+      statusCode: null,
+      correlationId: null,
+      idempotencyKey: null,
+      attemptCount: 0,
+      responsePreview: "",
+      error: "missing webhook url",
+    };
   }
 
   const callbackRel = extra?.callback?.url || "/api/executions/callback";
   const callbackAbs = absoluteCallbackUrl(callbackRel);
   const media = buildMediaPayload(proposal, extra);
-  const workflowHint = pickWorkflowHint(event, { ...extra, action });
 
   const tenantRuntime = buildTenantRuntime(proposal, extra);
   const promptExtra = buildPromptExtra({
@@ -696,28 +718,61 @@ export function notifyN8n(event, proposal, extra = {}) {
     ...extra,
   });
 
-  postToN8n({
-    url,
-    token: clean(cfg.n8n.webhookToken),
-    timeoutMs: Number(cfg.n8n.timeoutMs || 10_000),
-    payload,
-    retries: Number(cfg.n8n.retries ?? 2),
-    baseBackoffMs: Number(cfg.n8n.backoffMs ?? 500),
-    requestId: extra.requestId,
-    executionId: extra.executionId,
-  })
-    .then((r) => {
-      const info = r?.ok ? `ok ${r.status || ""}` : `fail ${r.status || r.error || ""}`;
-      const preview =
-        typeof r?.data === "string"
-          ? r.data.slice(0, 220)
-          : JSON.stringify(r?.data || {}).slice(0, 220);
-
-      console.log(
-        `[n8n] event=${mappedEvent} action=${action || "-"} workflow=${workflowHint} url=${url} -> ${info} ${preview}`
-      );
-    })
-    .catch((e) => {
-      console.log("[n8n] error", String(e?.message || e));
+  try {
+    const r = await postToN8n({
+      url,
+      token: clean(cfg.n8n.webhookToken),
+      timeoutMs: Number(cfg.n8n.timeoutMs || 10_000),
+      payload,
+      retries: Number(cfg.n8n.retries ?? 2),
+      baseBackoffMs: Number(cfg.n8n.backoffMs ?? 500),
+      requestId: extra.requestId,
+      executionId: extra.executionId,
     });
+
+    const info = r?.ok ? `ok ${r.status || ""}` : `fail ${r.status || r.error || ""}`;
+    const preview = buildResponsePreview(r?.data);
+
+    console.log(
+      `[n8n] event=${mappedEvent} action=${action || "-"} workflow=${workflowHint} url=${url} -> ${info} ${preview}`
+    );
+
+    return {
+      ok: !!r?.ok,
+      attempted: true,
+      accepted: !!r?.ok,
+      dispatchOutcome: r?.ok ? "accepted" : "failed",
+      reasonCode: r?.ok ? "dispatch_accepted" : "dispatch_failed",
+      mappedEvent,
+      action,
+      workflowHint,
+      webhookUrl: url,
+      statusCode: Number.isFinite(Number(r?.status)) ? Number(r.status) : null,
+      correlationId: clean(r?.correlationId) || null,
+      idempotencyKey: clean(r?.idempotencyKey) || null,
+      attemptCount: Number(r?.attempt || 0),
+      responsePreview: preview,
+      error: r?.ok ? null : clean(r?.error || "dispatch_failed"),
+    };
+  } catch (e) {
+    const error = clean(String(e?.message || e)) || "dispatch_failed";
+    console.log("[n8n] error", error);
+    return {
+      ok: false,
+      attempted: true,
+      accepted: false,
+      dispatchOutcome: "failed",
+      reasonCode: "dispatch_exception",
+      mappedEvent,
+      action,
+      workflowHint,
+      webhookUrl: url,
+      statusCode: null,
+      correlationId: null,
+      idempotencyKey: null,
+      attemptCount: 0,
+      responsePreview: "",
+      error,
+    };
+  }
 }

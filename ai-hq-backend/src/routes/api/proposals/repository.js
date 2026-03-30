@@ -86,7 +86,7 @@ export async function updateDbProposalDecision(db, id, { decision, by, reason, a
          decision_by = $2::text,
          payload = (coalesce(payload,'{}'::jsonb) || $3::jsonb)
      where id::text = $1::text
-     returning id, thread_id, agent, type, status, title, payload, created_at, decided_at, decision_by`,
+     returning tenant_id, tenant_key, id, thread_id, agent, type, status, title, payload, created_at, decided_at, decision_by`,
     [
       id,
       by,

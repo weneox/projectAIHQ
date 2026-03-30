@@ -45,6 +45,8 @@ export async function patchContentItem({ db, id, patch, dbReady }) {
 export async function createJob({ db, input, dbReady }) {
   assertDbReady(dbReady ? db : null);
   return dbCreateJob(db, {
+    tenantId: input.tenantId || null,
+    tenantKey: input.tenantKey || null,
     proposalId: input.proposalId,
     type: input.type,
     status: input.status || "queued",

@@ -26,7 +26,7 @@ import {
   getMetricsSnapshot,
 } from "../../../observability/runtimeSignals.js";
 
-import { dbUpdateJob, dbCreateJob } from "../../../db/helpers/jobs.js";
+import { dbGetJobById, dbUpdateJob, dbCreateJob } from "../../../db/helpers/jobs.js";
 import {
   dbGetProposalById,
   dbSetProposalStatus,
@@ -203,6 +203,97 @@ function normalizeDurableExecutionAttempt(attempt = {}) {
       commentId: fixText(String(resultSummary.commentId || "")),
     },
   };
+}
+
+const TERMINAL_EXECUTION_STATUSES = new Set([
+  "completed",
+  "failed",
+  "error",
+  "canceled",
+  "cancelled",
+]);
+
+function lower(v) {
+  return clean(v).toLowerCase();
+}
+
+function isTerminalExecutionStatus(status = "") {
+  return TERMINAL_EXECUTION_STATUSES.has(lower(status));
+}
+
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+
+function buildExecutionCallbackFingerprint({ status = "", result = {}, errorText = null } = {}) {
+  return crypto
+    .createHash("sha256")
+    .update(
+      JSON.stringify(
+        deepFix({
+          status: lower(status),
+          result: deepFix(result || {}),
+          error: errorText ? fixText(String(errorText)) : null,
+        })
+      )
+    )
+    .digest("hex");
+}
+
+function readExecutionCallbackControl(job = {}) {
+  return obj(job?.output?.callbackControl);
+}
+
+function buildExecutionCallbackConflict({
+  currentStatus = "",
+  requestedStatus = "",
+  reasonCode = "terminal_callback_conflict",
+  fingerprint = "",
+  currentFingerprint = "",
+  jobType = "",
+} = {}) {
+  return {
+    ok: false,
+    statusCode: 409,
+    error: "execution_callback_conflict",
+    mutationOutcome: "rejected",
+    details: {
+      reasonCode,
+      currentStatus: lower(currentStatus),
+      requestedStatus: lower(requestedStatus),
+      jobType: clean(jobType),
+      fingerprint: clean(fingerprint),
+      currentFingerprint: clean(currentFingerprint),
+    },
+  };
+}
+
+async function runExecutionCallbackTransaction(db, work) {
+  if (!db?.query) {
+    throw new Error("execution_db_unavailable");
+  }
+
+  const client = typeof db.connect === "function" ? await db.connect() : db;
+  let began = false;
+
+  try {
+    await client.query("begin");
+    began = true;
+    const result = await work(client);
+    await client.query("commit");
+    return result;
+  } catch (error) {
+    if (began) {
+      try {
+        await client.query("rollback");
+      } catch {}
+    }
+    throw error;
+  } finally {
+    if (client !== db && typeof client?.release === "function") {
+      client.release();
+    }
+  }
 }
 
 export async function enqueueVoiceSyncExecutionRequest(req, res, { db }) {
@@ -663,12 +754,6 @@ export async function executionCallback(req, res, { db, wsHub }) {
 
   try {
     const finished_at = nowIso();
-    const patch = {
-      status,
-      output: deepFix({ result }),
-      error: errorText,
-      finished_at,
-    };
 
     if (!isDbReady(db)) {
       return serviceUnavailableJson(
@@ -677,17 +762,65 @@ export async function executionCallback(req, res, { db, wsHub }) {
       );
     }
 
-    return await handleExecutionCallbackDb({
-      req,
-      res,
-      db,
-      wsHub,
-      jobId,
+    const callbackFingerprint = buildExecutionCallbackFingerprint({
       status,
       result,
       errorText,
-      finished_at,
-      patch,
+    });
+
+    const committed = await runExecutionCallbackTransaction(db, async (tx) =>
+      handleExecutionCallbackDb({
+        db: tx,
+        jobId,
+        status,
+        result,
+        errorText,
+        finished_at,
+        callbackFingerprint,
+      })
+    );
+
+    for (const event of committed?.postCommit?.realtimeEvents || []) {
+      wsHub?.broadcast?.(event);
+    }
+
+    for (const dispatch of committed?.postCommit?.n8nDispatches || []) {
+      try {
+        notifyN8n(dispatch.event, dispatch.proposal, dispatch.extra);
+      } catch {}
+    }
+
+    for (const mediaJobId of committed?.postCommit?.mediaJobIds || []) {
+      runMediaJobNow({ db, jobId: mediaJobId }).catch((e) => {
+        console.error("[media-runner] start failed:", String(e?.message || e));
+      });
+    }
+
+    if (committed?.postCommit?.push) {
+      await pushBroadcastToCeo(committed.postCommit.push);
+    }
+
+    if (!committed?.ok) {
+      return res.status(committed.statusCode || 500).json({
+        ok: false,
+        error: committed.error || "execution_callback_failed",
+        mutationOutcome: clean(committed.mutationOutcome || "rejected"),
+        details: committed.details || null,
+      });
+    }
+
+    return okJson(res, {
+      ok: true,
+      mutationOutcome: clean(committed.mutationOutcome || "applied"),
+      duplicate: committed.mutationOutcome === "ignored",
+      ignored: committed.mutationOutcome === "ignored",
+      jobId,
+      status,
+      jobType: committed.jobType,
+      proposalId: committed.proposalId,
+      contentId: committed.contentId,
+      nextJobId: committed.nextJobId,
+      nextJobType: committed.nextJobType,
     });
   } catch (e) {
     return okJson(res, {
@@ -699,27 +832,88 @@ export async function executionCallback(req, res, { db, wsHub }) {
 }
 
 async function handleExecutionCallbackDb({
-  res,
   db,
-  wsHub,
   jobId,
   status,
   result,
   errorText,
   finished_at,
-  patch,
+  callbackFingerprint,
 }) {
-  const jobRow = await dbUpdateJob(db, jobId, patch);
-  if (!jobRow) return okJson(res, { ok: false, error: "job not found" });
+  const existingJob = await dbGetJobById(db, jobId, { forUpdate: true });
+  if (!existingJob) {
+    return {
+      ok: false,
+      statusCode: 404,
+      error: "job not found",
+    };
+  }
 
-  const jt = jobTypeLc(jobRow.type);
+  const existingControl = readExecutionCallbackControl(existingJob);
+  if (isTerminalExecutionStatus(existingJob.status)) {
+    if (
+      existingControl?.finalized === true &&
+      lower(existingControl.finalStatus) === lower(status) &&
+      clean(existingControl.fingerprint) === clean(callbackFingerprint)
+    ) {
+      await dbAudit(db, "n8n", "execution.callback.ignored", "job", jobId, {
+        status,
+        jobType: jobTypeLc(existingJob.type),
+        reasonCode: "duplicate_terminal_callback",
+      });
+
+      return {
+        ok: true,
+        mutationOutcome: "ignored",
+        jobType: jobTypeLc(existingJob.type),
+        proposalId:
+          clean(existingJob.proposal_id || result?.proposalId || result?.proposal_id || "") ||
+          null,
+        contentId:
+          clean(
+            existingControl?.contentId ||
+              result?.contentId ||
+              result?.content_id ||
+              existingJob.input?.contentId ||
+              existingJob.input?.content_id
+          ) || null,
+        nextJobId: clean(existingControl?.nextJobId) || null,
+        nextJobType: clean(existingControl?.nextJobType) || null,
+        postCommit: {},
+      };
+    }
+
+    const conflict = buildExecutionCallbackConflict({
+      currentStatus: existingJob.status,
+      requestedStatus: status,
+      reasonCode:
+        existingControl?.finalized === true
+          ? "terminal_callback_conflict"
+          : "terminal_callback_unrecoverable",
+      fingerprint: callbackFingerprint,
+      currentFingerprint: existingControl?.fingerprint || "",
+      jobType: existingJob.type,
+    });
+
+    await dbAudit(db, "n8n", "execution.callback.rejected", "job", jobId, {
+      status,
+      jobType: jobTypeLc(existingJob.type),
+      reasonCode: conflict.details.reasonCode,
+      currentStatus: conflict.details.currentStatus,
+      requestedStatus: conflict.details.requestedStatus,
+    });
+
+    return conflict;
+  }
+
+  const jt = jobTypeLc(existingJob.type);
   const tenantId = pickTenantIdFromResult(result);
   const tenantKey =
-    clean(jobRow.tenant_key || result?.tenantKey || result?.tenant_key || "") ||
+    clean(existingJob.tenant_key || result?.tenantKey || result?.tenant_key || "") ||
     null;
-  const jobInput = deepFix(jobRow.input || {});
+  const jobInput = deepFix(existingJob.input || {});
   const proposalId =
-    String(jobRow.proposal_id || result?.proposalId || result?.proposal_id || "").trim() ||
+    String(existingJob.proposal_id || result?.proposalId || result?.proposal_id || "").trim() ||
     null;
   const automation = pickAutomationMeta(result, jobInput);
 
@@ -729,6 +923,12 @@ async function handleExecutionCallbackDb({
   let contentRow = null;
   let proposalRow = null;
   let nextJob = null;
+  const postCommit = {
+    realtimeEvents: [],
+    n8nDispatches: [],
+    mediaJobIds: [],
+    push: null,
+  };
 
   if (proposalId && incomingPack && isDraftJobType(jt)) {
     contentRow = await dbUpsertDraftFromCallback(db, {
@@ -811,19 +1011,23 @@ async function handleExecutionCallbackDb({
 
           contentRow = await dbFindContentItemById(db, contentRow.id);
 
-          notifyN8n(buildWorkflowEventByJobType(nextJobType), proposalRow, {
-            tenantId: tenantId || null,
-            tenantKey: tenantKey || null,
-            proposalId: String(proposalId),
-            threadId: String(proposalRow.thread_id || ""),
-            contentId: String(contentRow?.id || rowToUpdate.id),
-            jobId: nextJob?.id || null,
-            contentPack: merged,
-            automationMode: automation.mode,
-            autoPublish: automation.autoPublish,
-            callback: {
-              url: "/api/executions/callback",
-              tokenHeader: "x-webhook-token",
+          postCommit.n8nDispatches.push({
+            event: buildWorkflowEventByJobType(nextJobType),
+            proposal: proposalRow,
+            extra: {
+              tenantId: tenantId || null,
+              tenantKey: tenantKey || null,
+              proposalId: String(proposalId),
+              threadId: String(proposalRow.thread_id || ""),
+              contentId: String(contentRow?.id || rowToUpdate.id),
+              jobId: nextJob?.id || null,
+              contentPack: merged,
+              automationMode: automation.mode,
+              autoPublish: automation.autoPublish,
+              callback: {
+                url: "/api/executions/callback",
+                tokenHeader: "x-webhook-token",
+              },
             },
           });
 
@@ -833,15 +1037,8 @@ async function handleExecutionCallbackDb({
               String(nextJob.type || "").trim().toLowerCase()
             )
           ) {
-            runMediaJobNow({ db, jobId: nextJob.id }).catch((e) => {
-              console.error("[media-runner] start failed:", String(e?.message || e));
-            });
+            postCommit.mediaJobIds.push(nextJob.id);
           }
-
-          wsHub?.broadcast?.({
-            type: "execution.updated",
-            execution: nextJob,
-          });
         } else if (
           proposalRow &&
           contentRow &&
@@ -879,27 +1076,26 @@ async function handleExecutionCallbackDb({
 
           contentRow = await dbFindContentItemById(db, contentRow.id);
 
-          notifyN8n("content.publish", proposalRow, {
-            tenantId: tenantId || null,
-            tenantKey: tenantKey || null,
-            proposalId: String(proposalId),
-            threadId: String(proposalRow.thread_id || ""),
-            contentId: String(contentRow?.id || rowToUpdate.id),
-            jobId: publishJob?.id || null,
-            contentPack: merged,
-            assetUrl,
-            caption,
-            automationMode: "full_auto",
-            autoPublish: true,
-            callback: {
-              url: "/api/executions/callback",
-              tokenHeader: "x-webhook-token",
+          postCommit.n8nDispatches.push({
+            event: "content.publish",
+            proposal: proposalRow,
+            extra: {
+              tenantId: tenantId || null,
+              tenantKey: tenantKey || null,
+              proposalId: String(proposalId),
+              threadId: String(proposalRow.thread_id || ""),
+              contentId: String(contentRow?.id || rowToUpdate.id),
+              jobId: publishJob?.id || null,
+              contentPack: merged,
+              assetUrl,
+              caption,
+              automationMode: "full_auto",
+              autoPublish: true,
+              callback: {
+                url: "/api/executions/callback",
+                tokenHeader: "x-webhook-token",
+              },
             },
-          });
-
-          wsHub?.broadcast?.({
-            type: "execution.updated",
-            execution: publishJob,
           });
         }
       }
@@ -932,6 +1128,31 @@ async function handleExecutionCallbackDb({
     }
   }
 
+  const jobRow = await dbUpdateJob(db, jobId, {
+    status,
+    output: deepFix({
+      result,
+      callbackControl: {
+        finalized: true,
+        finalStatus: status,
+        fingerprint: callbackFingerprint,
+        appliedAt: finished_at,
+        contentId: contentRow?.id || null,
+        nextJobId: nextJob?.id || null,
+        nextJobType: nextJob?.type || null,
+      },
+    }),
+    error: errorText,
+    finished_at,
+  });
+  if (!jobRow) {
+    return {
+      ok: false,
+      statusCode: 404,
+      error: "job not found",
+    };
+  }
+
   const notifCopy = buildNotificationCopy(status, jt, errorText);
   const notif = await dbCreateNotification(db, {
     recipient: "ceo",
@@ -952,17 +1173,25 @@ async function handleExecutionCallbackDb({
     }),
   });
 
-  wsHub?.broadcast?.({ type: "execution.updated", execution: jobRow });
-  wsHub?.broadcast?.({
-    type: "notification.created",
-    notification: notif,
-  });
+  postCommit.realtimeEvents.push({ type: "execution.updated", execution: jobRow });
+  if (nextJob) {
+    postCommit.realtimeEvents.push({
+      type: "execution.updated",
+      execution: nextJob,
+    });
+  }
+  if (notif) {
+    postCommit.realtimeEvents.push({
+      type: "notification.created",
+      notification: notif,
+    });
+  }
   if (contentRow) {
-    wsHub?.broadcast?.({ type: "content.updated", content: contentRow });
+    postCommit.realtimeEvents.push({ type: "content.updated", content: contentRow });
   }
 
   const pushCopy = buildPushCopy(status, jt, errorText);
-  await pushBroadcastToCeo({
+  postCommit.push = {
     db,
     title: pushCopy.title,
     body: pushCopy.body,
@@ -974,17 +1203,19 @@ async function handleExecutionCallbackDb({
       nextJobId: nextJob?.id || null,
       nextJobType: nextJob?.type || null,
     },
-  });
+  };
 
   await dbAudit(db, "n8n", "execution.callback", "job", jobId, {
     status,
     jobType: jt,
     automationMode: automation.mode,
     nextJobType: nextJob?.type || null,
+    mutationOutcome: "applied",
   });
 
-  return okJson(res, {
+  return {
     ok: true,
+    mutationOutcome: "applied",
     jobId,
     status,
     jobType: jt,
@@ -992,5 +1223,6 @@ async function handleExecutionCallbackDb({
     contentId: contentRow?.id || null,
     nextJobId: nextJob?.id || null,
     nextJobType: nextJob?.type || null,
-  });
+    postCommit,
+  };
 }

@@ -4,6 +4,47 @@ function clean(v) {
   return String(v || "").trim();
 }
 
+function normalizeJobRow(row) {
+  const normalized = row || null;
+  if (!normalized) return null;
+
+  normalized.input = deepFix(normalized.input);
+  normalized.output = deepFix(normalized.output);
+  normalized.error = normalized.error ? fixText(String(normalized.error)) : normalized.error;
+  return normalized;
+}
+
+export async function dbGetJobById(db, id, { forUpdate = false } = {}) {
+  const q = await db.query(
+    `select id, tenant_id, tenant_key, proposal_id, type, status, input, output, error, created_at, started_at, finished_at
+     from jobs
+     where id = $1::uuid
+     limit 1${forUpdate ? " for update" : ""}`,
+    [id]
+  );
+
+  return normalizeJobRow(q.rows?.[0] || null);
+}
+
+export async function dbGetLatestJobByProposalAndType(
+  db,
+  proposalId,
+  type,
+  { forUpdate = false } = {}
+) {
+  const q = await db.query(
+    `select id, tenant_id, tenant_key, proposal_id, type, status, input, output, error, created_at, started_at, finished_at
+     from jobs
+     where proposal_id = $1::uuid
+       and type = $2::text
+     order by created_at desc
+     limit 1${forUpdate ? " for update" : ""}`,
+    [proposalId, type]
+  );
+
+  return normalizeJobRow(q.rows?.[0] || null);
+}
+
 export async function dbCreateJob(db, {
   tenantId = null,
   tenantKey = null,
@@ -26,13 +67,7 @@ export async function dbCreateJob(db, {
     ]
   );
 
-  const row = q.rows?.[0] || null;
-  if (!row) return null;
-
-  row.input = deepFix(row.input);
-  row.output = deepFix(row.output);
-  row.error = row.error ? fixText(String(row.error)) : row.error;
-  return row;
+  return normalizeJobRow(q.rows?.[0] || null);
 }
 
 export async function dbUpdateJob(db, id, patch) {
@@ -61,11 +96,5 @@ export async function dbUpdateJob(db, id, patch) {
     ]
   );
 
-  const row = q.rows?.[0] || null;
-  if (!row) return null;
-
-  row.input = deepFix(row.input);
-  row.output = deepFix(row.output);
-  row.error = row.error ? fixText(String(row.error)) : row.error;
-  return row;
+  return normalizeJobRow(q.rows?.[0] || null);
 }
