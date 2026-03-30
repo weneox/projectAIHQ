@@ -650,11 +650,11 @@ describe("Truth viewer smoke", () => {
     ).toBeInTheDocument();
 
     expect(
+      await screen.findByText(/rolling back to v3 would revert 1 canonical field/i)
+    ).toBeInTheDocument();
+    expect(
       screen.getAllByText(/rollback preview/i).length
     ).toBeGreaterThanOrEqual(1);
-    expect(
-      screen.getByText(/rolling back to v3 would revert 1 canonical field/i)
-    ).toBeInTheDocument();
     expect(screen.getByText(/selected version behavior/i)).toBeInTheDocument();
     expect(screen.getByText(/compared version behavior/i)).toBeInTheDocument();
     expect(screen.getAllByText(/primary cta/i).length).toBeGreaterThan(0);
@@ -870,9 +870,11 @@ describe("Truth viewer smoke", () => {
       await screen.findByTestId("truth-version-compare-open")
     ).toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /execute governed rollback/i })
-    );
+    const rollbackButton = await screen.findByRole("button", {
+      name: /execute governed rollback/i,
+    });
+
+    fireEvent.click(rollbackButton);
 
     await waitFor(() =>
       expect(rollbackTruthVersion).toHaveBeenCalledWith(
