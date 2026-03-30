@@ -64,8 +64,8 @@ describe("InboxDetailPanel", () => {
     expect(
       screen.getByRole("button", { name: /mark conversation read/i })
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /refresh conversation/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open conversation actions/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /mark read/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /assign/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /activate handoff/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /resolve/i })).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe("InboxDetailPanel", () => {
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^assign$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^mark read$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /mark conversation read/i }));
     fireEvent.click(screen.getByRole("button", { name: /activate handoff/i }));
     fireEvent.click(screen.getByRole("button", { name: /^resolve$/i }));
     fireEvent.click(screen.getByRole("button", { name: /^close$/i }));
