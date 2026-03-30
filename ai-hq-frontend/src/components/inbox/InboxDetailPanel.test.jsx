@@ -65,7 +65,7 @@ describe("InboxDetailPanel", () => {
       screen.getByRole("button", { name: /mark conversation read/i })
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /refresh conversation/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /open conversation actions/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open conversation details/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /assign/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /activate handoff/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /resolve/i })).toBeInTheDocument();
