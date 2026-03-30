@@ -10,9 +10,9 @@ function Button({
 }) {
   const toneMap = {
     cyan:
-      "border-[#dfe9ea] bg-[#f2fbfb] text-cyan-900 hover:border-[#cde0e2] hover:bg-[#ebf8f8]",
+      "border-cyan-200 bg-cyan-50 text-cyan-900 hover:border-cyan-300 hover:bg-cyan-100",
     violet:
-      "border-[#e6def1] bg-[#f7f3fc] text-violet-900 hover:border-[#d9cdea] hover:bg-[#f1ebfa]",
+      "border-slate-900 bg-slate-900 text-white hover:border-slate-950 hover:bg-slate-950",
   };
 
   return (
@@ -47,62 +47,84 @@ export default function InboxComposer({
   const releasing = actionState?.isActionPending?.("release");
 
   return (
-    <div className="rounded-[30px] border border-[#ece2d3] bg-[#fffdf9]/92 p-5 shadow-[0_18px_44px_rgba(120,102,73,0.08)]">
-      <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#e8decf] bg-[#fffaf4]">
-          <Send className="h-4 w-4 text-stone-600" />
-        </div>
-        <div>
-          <div className="text-[16px] font-semibold tracking-[-0.03em] text-stone-900">
-            Operator Reply
+    <section className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/88 shadow-[0_18px_40px_rgba(15,23,42,0.04)]">
+      <div className="border-b border-slate-200/80 px-5 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50">
+            <Send className="h-4 w-4 text-slate-600" />
           </div>
-          <div className="mt-1 text-sm text-stone-500">
-            Use this when a human response is needed or handoff should stay operator-controlled.
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Response zone
+            </div>
+            <div className="mt-1 text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
+              Operator reply
+            </div>
+            <div className="mt-1 text-sm text-slate-500">
+              A clean action strip for human response, handoff release, and future AI assist modules.
+            </div>
           </div>
         </div>
+
+        {hasThread ? (
+          <div className="mt-4">
+            <SettingsSurfaceBanner
+              surface={surface}
+              unavailableMessage="Operator reply controls are temporarily unavailable."
+              refreshLabel="Refresh reply controls"
+            />
+          </div>
+        ) : null}
       </div>
 
-      {hasThread ? (
-        <div className="mt-4">
-          <SettingsSurfaceBanner
-            surface={surface}
-            unavailableMessage="Operator reply controls are temporarily unavailable."
-            refreshLabel="Refresh reply controls"
+      <div className="px-5 py-4">
+        <div className="rounded-2xl border border-slate-200 bg-[#fbfcfd] p-4">
+          {!hasThread ? (
+            <div className="mb-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
+              <div className="text-sm font-medium text-slate-700">Composer placeholder</div>
+              <div className="mt-2 text-sm leading-6 text-slate-500">
+                AI assist / operator controls will live here after a conversation is selected.
+              </div>
+            </div>
+          ) : null}
+
+          <textarea
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            disabled={!hasThread || sending}
+            placeholder={hasThread ? "Reply as operator..." : "Select a thread first..."}
+            className="min-h-[132px] w-full resize-none rounded-[20px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-50"
           />
-        </div>
-      ) : null}
 
-      <div className="mt-5 rounded-[22px] border border-[#ece2d3] bg-[#fffdfa] p-4">
-        <textarea
-          value={replyText}
-          onChange={(e) => setReplyText(e.target.value)}
-          disabled={!hasThread || sending}
-          placeholder={
-            hasThread ? "Reply as operator..." : "Select a thread first..."
-          }
-          className="min-h-[120px] w-full resize-none rounded-[20px] border border-[#ece2d3] bg-white px-4 py-3 text-sm text-stone-900 outline-none placeholder:text-stone-400 disabled:cursor-not-allowed disabled:opacity-50"
-        />
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="text-[12px] text-slate-500">
+              {hasThread
+                ? "Operator-authored response. Delivery confirmation remains separate from send acceptance."
+                : "Select a conversation to enable reply controls."}
+            </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button
-            tone="violet"
-            icon={Send}
-            onClick={onSend}
-            disabled={!hasThread || !replyText.trim() || sending}
-          >
-            {sending ? "Sending..." : "Send operator reply"}
-          </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                tone="violet"
+                icon={Send}
+                onClick={onSend}
+                disabled={!hasThread || !replyText.trim() || sending}
+              >
+                {sending ? "Sending..." : "Send operator reply"}
+              </Button>
 
-          <Button
-            tone="cyan"
-            icon={Bot}
-            onClick={onReleaseHandoff}
-            disabled={!hasThread || !handoffActive || releasing}
-          >
-            {releasing ? "Releasing..." : "Release handoff"}
-          </Button>
+              <Button
+                tone="cyan"
+                icon={Bot}
+                onClick={onReleaseHandoff}
+                disabled={!hasThread || !handoffActive || releasing}
+              >
+                {releasing ? "Releasing..." : "Release handoff"}
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </section>
   );
 }

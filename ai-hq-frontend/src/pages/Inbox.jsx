@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { UserRound } from "lucide-react";
+import {
+  Bot,
+  RefreshCw,
+  UserRound,
+  Waves,
+} from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import InboxComposer from "../components/inbox/InboxComposer.jsx";
@@ -17,21 +22,61 @@ import { areInternalRoutesEnabled } from "../lib/appEntry.js";
 import { getAppSessionContext } from "../lib/appSession.js";
 import SettingsSurfaceBanner from "../components/settings/SettingsSurfaceBanner.jsx";
 
-function shellSection() {
-  return "rounded-[32px] border border-[#ece2d3] bg-[#fffdf9]/92 shadow-[0_18px_44px_rgba(120,102,73,0.08),inset_0_1px_0_rgba(255,255,255,0.78)]";
+function SurfaceShell({
+  title,
+  eyebrow = "",
+  description = "",
+  actions = null,
+  children,
+  className = "",
+}) {
+  return (
+    <section
+      className={[
+        "min-h-0 rounded-[28px] border border-slate-200/80 bg-white/88 shadow-[0_18px_40px_rgba(15,23,42,0.04)]",
+        className,
+      ].join(" ")}
+    >
+      <div className="border-b border-slate-200/80 px-5 py-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            {eyebrow ? (
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                {eyebrow}
+              </div>
+            ) : null}
+            <h2 className="mt-1 text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
+              {title}
+            </h2>
+            {description ? (
+              <p className="mt-2 max-w-[52ch] text-[13px] leading-6 text-slate-500">
+                {description}
+              </p>
+            ) : null}
+          </div>
+          {actions ? <div className="shrink-0">{actions}</div> : null}
+        </div>
+      </div>
+      <div className="min-h-0">{children}</div>
+    </section>
+  );
 }
 
-function QuietMetric({ label, value, tone = "neutral" }) {
-  const toneMap = {
-    neutral: "border-[#ece2d3] bg-[#fffdfa] text-stone-900",
-    warm: "border-[#e7d7ba] bg-[#faf3e6] text-stone-900",
-    soft: "border-[#e4eadf] bg-[#f6faf4] text-stone-900",
+function CompactMetric({ label, value, tone = "default" }) {
+  const toneClasses = {
+    default: "border-slate-200 bg-white text-slate-900",
+    muted: "border-slate-200 bg-slate-50 text-slate-700",
+    warning: "border-amber-200 bg-amber-50 text-amber-800",
   };
 
   return (
-    <div className={`rounded-[22px] border px-4 py-4 ${toneMap[tone] || toneMap.neutral}`}>
-      <div className="text-[11px] uppercase tracking-[0.2em] text-stone-400">{label}</div>
-      <div className="mt-2 text-[28px] font-semibold tracking-[-0.04em]">{value}</div>
+    <div className={`rounded-2xl border px-3 py-3 ${toneClasses[tone] || toneClasses.default}`}>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+        {label}
+      </div>
+      <div className="mt-2 text-[22px] font-semibold tracking-[-0.04em]">
+        {value}
+      </div>
     </div>
   );
 }
@@ -46,7 +91,9 @@ export default function Inbox() {
   const [operatorName, setOperatorName] = useState("");
   const lineagePanelRef = useRef(null);
   const [lineageAttentionKey, setLineageAttentionKey] = useState(0);
-  const requestedThreadId = String(location.state?.selectedThreadId || searchParams.get("threadId") || "").trim();
+  const requestedThreadId = String(
+    location.state?.selectedThreadId || searchParams.get("threadId") || ""
+  ).trim();
 
   useEffect(() => {
     let alive = true;
@@ -181,7 +228,6 @@ export default function Inbox() {
     }
 
     setLineageAttentionKey(Date.now());
-
     const panel = lineagePanelRef.current;
     if (!panel) return;
     panel.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -190,87 +236,64 @@ export default function Inbox() {
     }, 120);
   };
 
+  const conversationActions = (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
+        WS {wsState}
+      </div>
+      {dbDisabled ? (
+        <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-amber-800">
+          DB disabled
+        </div>
+      ) : null}
+      {surface?.refresh ? (
+        <button
+          type="button"
+          onClick={surface.refresh}
+          disabled={surface.loading || surface.saving}
+          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:opacity-50"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          Refresh inbox
+        </button>
+      ) : null}
+    </div>
+  );
+
   return (
-    <div className="mx-auto max-w-[1240px] space-y-8 px-4 py-8 sm:px-6 lg:px-8">
-      <section className={`${shellSection()} overflow-hidden px-6 py-6 sm:px-7 sm:py-7`}>
-        <div className="pointer-events-none absolute" />
-        <div className="space-y-6">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-            <div className="max-w-3xl">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-400">
-                Conversation Work
-              </div>
-              <h1 className="mt-2 text-[34px] font-semibold tracking-[-0.05em] text-stone-950">
-                Inbox
-              </h1>
-              <p className="mt-3 text-[15px] leading-7 text-stone-600">
-                See what needs attention, which threads need human review, and what the system is already handling.
-              </p>
-            </div>
+    <div className="flex flex-col gap-6">
+      <SurfaceShell
+        title="Inbox"
+        eyebrow="Conversation workspace"
+        description="A calmer operator queue on the left, a large conversation canvas in the center, and a quiet intelligence rail on the right."
+        actions={conversationActions}
+      >
+        <div className="grid gap-3 border-b border-slate-200/80 px-5 py-4 md:grid-cols-3 xl:grid-cols-5">
+          <CompactMetric label="Open" value={pageSummary.openCount} />
+          <CompactMetric label="Unread" value={pageSummary.unreadCount} />
+          <CompactMetric label="Handoff" value={pageSummary.handoffCount} tone="warning" />
+          <CompactMetric label="Operator" value={operatorName || "operator"} tone="muted" />
+          <CompactMetric label="Channel mode" value={dbDisabled ? "Fallback" : "Live"} tone={dbDisabled ? "warning" : "muted"} />
+        </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="rounded-full border border-[#e7dece] bg-[#fffaf4] px-3 py-2 text-[12px] text-stone-600">
-                Operator:
-                <input
-                  value={operatorName}
-                  onChange={(e) => setOperatorName(e.target.value)}
-                  className="ml-2 w-[100px] bg-transparent text-stone-900 outline-none placeholder:text-stone-400"
-                  placeholder="Name"
-                />
-              </div>
-
-              <div className="rounded-full border border-[#e7dece] bg-[#fffaf4] px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-stone-500">
-                WS: {wsState}
-              </div>
-
-              {dbDisabled ? (
-                <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-amber-800">
-                  DB disabled
-                </div>
-              ) : null}
-
-              {surface?.refresh ? (
-                <button
-                  type="button"
-                  onClick={surface.refresh}
-                  disabled={surface.loading || surface.saving}
-                  className="rounded-full border border-[#dfcfb2] bg-[#efe0c0] px-4 py-2 text-sm font-medium text-stone-900 transition hover:border-[#d4bf99] hover:bg-[#ead7b2] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Refresh inbox
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-3">
-            <QuietMetric label="Open conversations" value={pageSummary.openCount} />
-            <QuietMetric label="Waiting for handoff" value={pageSummary.handoffCount} tone="warm" />
-            <QuietMetric label="Unread pressure" value={pageSummary.unreadCount} tone="soft" />
-          </div>
-
-          <div className="rounded-[22px] border border-[#ece2d3] bg-[#fffdfa] px-4 py-4">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-400">
-              What this surface is for
-            </div>
-            <div className="mt-2 text-sm leading-6 text-stone-600">
-              Start with the thread list, review handoff and unread pressure, then move into conversation detail to understand why a thread matters and what to do next.
-            </div>
-          </div>
-
+        <div className="px-5 py-4">
           <SettingsSurfaceBanner
             surface={surface}
             unavailableMessage="Inbox operations are temporarily unavailable."
             refreshLabel="Refresh inbox"
           />
         </div>
-      </section>
+      </SurfaceShell>
 
-      <InboxThreadListPanel threadList={threadList} selectedThreadId={selectedThread?.id || ""} />
+      <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)_320px]">
+        <div className="min-h-0">
+          <InboxThreadListPanel
+            threadList={threadList}
+            selectedThreadId={selectedThread?.id || ""}
+          />
+        </div>
 
-      <RetryQueuePanel tenantKey={tenantKey} actor={operatorName || "operator"} />
-
-      <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
-        <div className="space-y-6">
+        <div className="min-h-0 space-y-6">
           <InboxDetailPanel
             selectedThread={selectedThread}
             messages={messages}
@@ -295,6 +318,38 @@ export default function Inbox() {
             onReleaseHandoff={handleRelease}
           />
 
+          {showInternalDebug ? (
+            <SurfaceShell
+              title="Thread meta"
+              eyebrow="Internal only"
+              description="Temporary diagnostic visibility for operator debugging."
+            >
+              <div className="px-5 py-4">
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4">
+                  {selectedThread ? (
+                    <pre className="overflow-auto text-xs leading-6 text-slate-600">
+                      {JSON.stringify(selectedThread, null, 2)}
+                    </pre>
+                  ) : (
+                    <div className="flex items-center gap-3 text-sm text-slate-500">
+                      <UserRound className="h-4 w-4" />
+                      No thread selected.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </SurfaceShell>
+          ) : null}
+        </div>
+
+        <div className="min-h-0 space-y-6">
+          <InboxLeadPanel
+            selectedThread={selectedThread}
+            surface={leadSurface}
+            relatedLead={relatedLead}
+            openLeadDetail={openLeadDetail}
+          />
+
           <ThreadOutboundAttemptsPanel
             selectedThread={selectedThread}
             actor={operatorName || "operator"}
@@ -303,36 +358,27 @@ export default function Inbox() {
             attentionKey={lineageAttentionKey}
           />
 
-          {showInternalDebug ? (
-            <div className={`${shellSection()} px-5 py-5`}>
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#e8decf] bg-[#fffaf4]">
-                  <UserRound className="h-4 w-4 text-stone-600" />
-                </div>
-                <div>
-                  <div className="text-[16px] font-semibold tracking-[-0.03em] text-stone-900">Thread Meta</div>
-                  <div className="mt-1 text-sm text-stone-500">Raw visibility data for internal operator debugging.</div>
-                </div>
-              </div>
+          <RetryQueuePanel tenantKey={tenantKey} actor={operatorName || "operator"} />
 
-              <div className="mt-5 rounded-[22px] border border-dashed border-[#ece2d3] bg-[#fffdfa] px-4 py-4">
-                {selectedThread ? (
-                  <pre className="overflow-auto text-xs leading-6 text-stone-600">{JSON.stringify(selectedThread, null, 2)}</pre>
-                ) : (
-                  <div className="text-sm text-stone-500">No thread selected.</div>
-                )}
+          <SurfaceShell
+            title="Operator notes"
+            eyebrow="Placeholder"
+            description="Customer intelligence block placeholder. Suggested replies, notes, and AI assist modules will live here in a later Inbox pass."
+          >
+            <div className="space-y-4 px-5 py-4">
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm leading-6 text-slate-500">
+                Conversation empty-state visual placeholder.
+              </div>
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                <Bot className="h-4 w-4 text-slate-400" />
+                AI assist / operator controls will live here.
+              </div>
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+                <Waves className="h-4 w-4 text-slate-400" />
+                Suggested replies module placeholder.
               </div>
             </div>
-          ) : null}
-        </div>
-
-        <div className="space-y-6">
-          <InboxLeadPanel
-            selectedThread={selectedThread}
-            surface={leadSurface}
-            relatedLead={relatedLead}
-            openLeadDetail={openLeadDetail}
-          />
+          </SurfaceShell>
         </div>
       </div>
     </div>

@@ -12,9 +12,9 @@ function s(v) {
 }
 
 function fmtDate(v) {
-  if (!v) return "—";
+  if (!v) return "--";
   const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "--";
   return d.toLocaleString();
 }
 
@@ -57,18 +57,21 @@ function ThreadOutboundAttemptsPanelView({
     <div
       ref={panelRef}
       tabIndex={-1}
-      className={`rounded-[30px] border bg-[#fffdf9]/92 p-5 shadow-[0_18px_44px_rgba(120,102,73,0.08)] outline-none transition ${
+      className={`rounded-[28px] border bg-white/88 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.04)] outline-none transition ${
         attentionVisible
           ? "border-violet-300 ring-2 ring-violet-200"
-          : "border-[#ece2d3]"
+          : "border-slate-200/80"
       }`}
     >
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-[16px] font-semibold tracking-[-0.03em] text-stone-900">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+            Delivery lineage
+          </div>
+          <div className="mt-1 text-[16px] font-semibold tracking-[-0.03em] text-slate-900">
             Thread Delivery Attempts
           </div>
-          <div className="mt-1 text-sm text-stone-500">
+          <div className="mt-1 text-sm leading-6 text-slate-500">
             Per-attempt outbound lineage for the selected conversation. Queued, retrying, failed, dead, and sent stay distinct here.
           </div>
         </div>
@@ -77,7 +80,7 @@ function ThreadOutboundAttemptsPanelView({
           type="button"
           onClick={surface?.refresh}
           disabled={surface?.loading || surface?.saving || !threadId}
-          className="rounded-xl border border-[#e8decf] bg-[#fffaf4] px-3 py-2 text-sm font-medium text-stone-700 transition hover:border-[#d9c8ac] hover:bg-white disabled:opacity-50"
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:opacity-50"
         >
           Refresh
         </button>
@@ -91,15 +94,15 @@ function ThreadOutboundAttemptsPanelView({
         />
       </div>
 
-      <div className="mt-5 rounded-[22px] border border-[#ece2d3] bg-[#fffdfa]">
+      <div className="mt-5 rounded-[22px] border border-slate-200 bg-white">
         {!threadId ? (
-          <div className="px-4 py-5 text-sm text-stone-500">No thread selected.</div>
+          <div className="px-4 py-5 text-sm text-slate-500">No thread selected.</div>
         ) : surface?.loading ? (
-          <div className="px-4 py-5 text-sm text-stone-500">Loading attempts...</div>
+          <div className="px-4 py-5 text-sm text-slate-500">Loading attempts...</div>
         ) : attempts.length === 0 ? (
-          <div className="px-4 py-5 text-sm text-stone-500">No delivery attempts for this thread.</div>
+          <div className="px-4 py-5 text-sm text-slate-500">No delivery attempts for this thread.</div>
         ) : (
-          <div className="divide-y divide-[#ece2d3]">
+          <div className="divide-y divide-slate-200">
             {attempts.map((item) => {
               const id = s(item?.id);
               const state = describeAttemptState(item);
@@ -111,7 +114,7 @@ function ThreadOutboundAttemptsPanelView({
                 <div key={id} className="p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge status={item?.status} />
-                    <span className="text-xs text-stone-400">
+                    <span className="text-xs text-slate-400">
                       attempt {Number(item?.attempt_count || 0)}
                       {Number(item?.max_attempts || 0) > 0
                         ? ` of ${Number(item?.max_attempts || 0)}`
@@ -119,22 +122,22 @@ function ThreadOutboundAttemptsPanelView({
                     </span>
                   </div>
 
-                  <div className="mt-2 text-sm font-medium text-stone-900">
+                  <div className="mt-2 text-sm font-medium text-slate-900">
                     {state.label}
                   </div>
 
-                  <div className="mt-2 text-sm text-stone-700">
-                    {s(item?.message_text) || "—"}
+                  <div className="mt-2 text-sm text-slate-700">
+                    {s(item?.message_text) || "--"}
                   </div>
 
-                  <div className="mt-2 text-xs leading-5 text-stone-500">
+                  <div className="mt-2 text-xs leading-5 text-slate-500">
                     {state.detail}
                   </div>
 
-                  <div className="mt-2 grid gap-2 text-xs text-stone-500 md:grid-cols-2">
+                  <div className="mt-2 grid gap-2 text-xs text-slate-500 md:grid-cols-2">
                     <div>State updated: {fmtDate(item?.updated_at)}</div>
                     <div>Next retry: {fmtDate(item?.next_retry_at)}</div>
-                    <div>Provider: {s(item?.provider) || "—"}</div>
+                    <div>Provider: {s(item?.provider) || "--"}</div>
                     <div>Attempt ID: {id}</div>
                   </div>
 
@@ -147,7 +150,7 @@ function ThreadOutboundAttemptsPanelView({
                       type="button"
                       disabled={isBusy || s(item?.status) === "sent"}
                       onClick={() => handleResend?.(id)}
-                      className="rounded-xl border border-[#dfcfb2] bg-[#efe0c0] px-3 py-2 text-sm font-medium text-stone-900 transition disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-medium text-cyan-900 transition hover:border-cyan-300 hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {retryBusy ? "..." : "Retry"}
                     </button>
@@ -156,7 +159,7 @@ function ThreadOutboundAttemptsPanelView({
                       type="button"
                       disabled={isBusy || s(item?.status) === "dead"}
                       onClick={() => handleMarkDead?.(id)}
-                      className="rounded-xl border border-[#e8decf] bg-[#fffaf4] px-3 py-2 text-sm font-medium text-stone-700 transition hover:border-[#d9c8ac] hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {deadBusy ? "..." : "Dead"}
                     </button>

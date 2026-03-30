@@ -27,15 +27,17 @@ export default function InboxThreadCard({ thread, selected, onOpen }) {
   const assignedTo = String(thread.assigned_to || "").trim();
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={() => onOpen?.(thread)}
       className={[
-        "group rounded-[26px] border p-5 transition duration-200",
+        "group w-full rounded-[22px] border px-4 py-4 text-left transition-colors duration-200",
         selected
-          ? "border-[#d9c8ac] bg-[#faf5eb]"
-          : "border-[#ece2d3] bg-[#fffdfa] hover:border-[#dfcfb2] hover:bg-white",
+          ? "border-slate-900 bg-slate-900 text-white"
+          : "border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50",
       ].join(" ")}
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <div
@@ -46,64 +48,95 @@ export default function InboxThreadCard({ thread, selected, onOpen }) {
               <ChannelIcon className="h-3.5 w-3.5" />
             </div>
 
-            <div className="truncate text-[15px] font-semibold tracking-[-0.03em] text-stone-900">
+            <div className="truncate text-[14px] font-semibold tracking-[-0.02em]">
               {name}
             </div>
 
-            <span className="rounded-full border border-[#ece2d3] bg-[#fffaf4] px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-stone-500">
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] ${
+                selected
+                  ? "border-white/12 bg-white/8 text-slate-200"
+                  : "border-slate-200 bg-slate-50 text-slate-500"
+              }`}
+            >
               {thread.channel || "other"}
             </span>
-
-            {unread > 0 ? (
-              <span className="rounded-full border border-[#dfe9ea] bg-[#f2fbfb] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-cyan-800">
-                {unread} unread
-              </span>
-            ) : null}
-
-            {thread.handoff_active ? (
-              <span
-                className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] ${getPriorityTone(
-                  thread.handoff_priority
-                )}`}
-              >
-                handoff {thread.handoff_priority || "normal"}
-              </span>
-            ) : null}
           </div>
 
-          <div className="mt-1 truncate text-sm text-stone-500">{handle}</div>
-
-          {assignedTo ? (
-            <div className="mt-2 text-[11px] uppercase tracking-[0.14em] text-violet-700">
-              Assigned: {assignedTo}
-            </div>
-          ) : null}
+          <div
+            className={`mt-1 truncate text-[12px] ${
+              selected ? "text-slate-300" : "text-slate-500"
+            }`}
+          >
+            {handle}
+          </div>
         </div>
 
         <div
-          className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${stateBadgeTone(
-            state
-          )}`}
+          className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${
+            selected
+              ? "border-white/12 bg-white/8 text-slate-100"
+              : stateBadgeTone(state)
+          }`}
         >
           {prettyState(state)}
         </div>
       </div>
 
-      <p className="mt-4 line-clamp-2 text-sm leading-6 text-stone-600">{preview}</p>
+      <p
+        className={`mt-4 line-clamp-2 text-[13px] leading-6 ${
+          selected ? "text-slate-200" : "text-slate-600"
+        }`}
+      >
+        {preview}
+      </p>
 
-      <div className="mt-5 flex items-center justify-between gap-4">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-400">
-          {fmtRelative(thread.last_message_at || thread.updated_at || thread.created_at)}
-        </div>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {unread > 0 ? (
+          <span
+            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] ${
+              selected
+                ? "border-white/12 bg-white/8 text-slate-100"
+                : "border-cyan-200 bg-cyan-50 text-cyan-800"
+            }`}
+          >
+            {unread} unread
+          </span>
+        ) : null}
 
-        <button
-          type="button"
-          onClick={() => onOpen?.(thread)}
-          className="rounded-full border border-[#e8decf] bg-[#fffaf4] px-3 py-1.5 text-[11px] font-medium tracking-[0.01em] text-stone-700 transition hover:border-[#d9c8ac] hover:bg-white hover:text-stone-900"
-        >
-          Open
-        </button>
+        {thread.handoff_active ? (
+          <span
+            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] ${
+              selected
+                ? "border-white/12 bg-white/8 text-slate-100"
+                : getPriorityTone(thread.handoff_priority)
+            }`}
+          >
+            handoff {thread.handoff_priority || "normal"}
+          </span>
+        ) : null}
+
+        {assignedTo ? (
+          <span
+            className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${
+              selected
+                ? "border-white/12 bg-white/8 text-slate-100"
+                : "border-slate-200 bg-slate-50 text-slate-600"
+            }`}
+          >
+            {assignedTo}
+          </span>
+        ) : null}
       </div>
-    </div>
+
+      <div
+        className={`mt-4 flex items-center justify-between text-[11px] uppercase tracking-[0.16em] ${
+          selected ? "text-slate-300" : "text-slate-400"
+        }`}
+      >
+        <span>{fmtRelative(thread.last_message_at || thread.updated_at || thread.created_at)}</span>
+        <span className={selected ? "text-slate-100" : "text-slate-700"}>Open</span>
+      </div>
+    </button>
   );
 }

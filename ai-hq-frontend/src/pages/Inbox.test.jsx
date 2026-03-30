@@ -211,7 +211,7 @@ describe("Inbox", () => {
       screen.getByText(/inbox operations are temporarily unavailable/i)
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/see what needs attention, which threads need human review/i)
+      screen.getByText(/a calmer operator queue on the left/i)
     ).toBeInTheDocument();
     expect(screen.getByText(/db disabled/i)).toBeInTheDocument();
   });

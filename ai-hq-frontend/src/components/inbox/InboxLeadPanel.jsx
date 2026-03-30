@@ -20,20 +20,14 @@ import {
 import SettingsSurfaceBanner from "../settings/SettingsSurfaceBanner.jsx";
 import InboxMiniInfo from "./InboxMiniInfo.jsx";
 
-function Button({ children, onClick, tone = "default", disabled = false, icon: Icon }) {
-  const toneMap = {
-    violet:
-      "border-[#e6def1] bg-[#f7f3fc] text-violet-900 hover:border-[#d9cdea] hover:bg-[#f1ebfa]",
-  };
-
+function Button({ children, onClick, disabled = false, icon: Icon }) {
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
       className={[
-        "inline-flex items-center justify-center gap-2 rounded-full border px-3.5 py-2 text-[12px] font-medium transition",
-        toneMap[tone] || toneMap.violet,
+        "inline-flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-3.5 py-2 text-[12px] font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950",
         disabled ? "cursor-not-allowed opacity-45" : "",
       ].join(" ")}
     >
@@ -50,43 +44,63 @@ export default function InboxLeadPanel({ selectedThread, surface, relatedLead, o
   const relatedLeadScore = Number(relatedLead?.score || 0);
 
   return (
-    <div className="rounded-[30px] border border-[#ece2d3] bg-[#fffdf9]/92 p-5 shadow-[0_18px_44px_rgba(120,102,73,0.08)]">
-      <div className="flex items-center gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#e8decf] bg-[#fffaf4]">
-          <BriefcaseBusiness className="h-4 w-4 text-stone-600" />
+    <section className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/88 shadow-[0_18px_40px_rgba(15,23,42,0.04)]">
+      <div className="border-b border-slate-200/80 px-5 py-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50">
+            <BriefcaseBusiness className="h-4 w-4 text-slate-600" />
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+              Intelligence rail
+            </div>
+            <div className="mt-1 text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
+              Customer context
+            </div>
+            <div className="mt-1 text-sm text-slate-500">
+              Lead status, pipeline value, and contact signals linked to the active conversation.
+            </div>
+          </div>
         </div>
-        <div>
-          <div className="text-[16px] font-semibold tracking-[-0.03em] text-stone-900">Related Lead</div>
-          <div className="mt-1 text-sm text-stone-500">Lead context linked to the selected conversation appears here.</div>
-        </div>
+
+        {hasThread ? (
+          <div className="mt-4">
+            <SettingsSurfaceBanner
+              surface={surface}
+              unavailableMessage="Related lead data is temporarily unavailable."
+              refreshLabel="Refresh lead"
+            />
+          </div>
+        ) : null}
       </div>
 
-      {hasThread ? (
-        <div className="mt-4">
-          <SettingsSurfaceBanner
-            surface={surface}
-            unavailableMessage="Related lead data is temporarily unavailable."
-            refreshLabel="Refresh lead"
-          />
-        </div>
-      ) : null}
-
-      <div className="mt-5 rounded-[22px] border border-[#ece2d3] bg-[#fffdfa] p-4">
+      <div className="px-5 py-4">
         {!hasThread ? (
-          <div className="text-sm text-stone-500">No thread selected.</div>
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
+            <div className="text-sm font-medium text-slate-700">Customer intelligence block placeholder</div>
+            <div className="mt-2 text-sm leading-6 text-slate-500">
+              Select a conversation to load customer and lead context here.
+            </div>
+          </div>
         ) : surface?.loading ? (
-          <div className="text-sm text-stone-500">Loading related lead...</div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-8 text-sm text-slate-500">
+            Loading related lead...
+          </div>
         ) : !hasLead ? (
-          <div className="rounded-[18px] border border-dashed border-[#ece2d3] px-4 py-8 text-center">
-            <div className="text-sm font-medium text-stone-700">No related lead</div>
-            <div className="mt-2 text-sm leading-6 text-stone-500">No lead is linked to this thread yet.</div>
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
+            <div className="text-sm font-medium text-slate-700">No related lead</div>
+            <div className="mt-2 text-sm leading-6 text-slate-500">
+              Lead intelligence placeholder. No lead is linked to this thread yet.
+            </div>
           </div>
         ) : (
           <>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <div className="truncate text-[17px] font-semibold tracking-[-0.03em] text-stone-900">{leadName(relatedLead)}</div>
-                <div className="mt-1 text-sm text-stone-500">{leadHandle(relatedLead)}</div>
+                <div className="truncate text-[17px] font-semibold tracking-[-0.03em] text-slate-900">
+                  {leadName(relatedLead)}
+                </div>
+                <div className="mt-1 text-sm text-slate-500">{leadHandle(relatedLead)}</div>
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -106,8 +120,8 @@ export default function InboxLeadPanel({ selectedThread, surface, relatedLead, o
               <InboxMiniInfo label="Pipeline value" value={relatedLeadValue} icon={BadgeDollarSign} />
             </div>
 
-            <div className="mt-4 rounded-2xl border border-[#ece2d3] bg-white px-4 py-3">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-stone-400">Score band</div>
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Score band</div>
               <div className="mt-2">
                 <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${scoreTone(relatedLeadScore)}`}>
                   {scoreBand(relatedLeadScore)}
@@ -116,13 +130,13 @@ export default function InboxLeadPanel({ selectedThread, surface, relatedLead, o
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button tone="violet" icon={ArrowUpRight} onClick={() => openLeadDetail(relatedLead)} disabled={!hasLead}>
+              <Button icon={ArrowUpRight} onClick={() => openLeadDetail(relatedLead)} disabled={!hasLead}>
                 Open in Leads
               </Button>
             </div>
           </>
         )}
       </div>
-    </div>
+    </section>
   );
 }
