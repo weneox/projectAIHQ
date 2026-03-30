@@ -9,11 +9,23 @@ const TABS = [
   { label: "Drafts", value: "resolved" },
 ];
 
+const TAB_COUNT_KEYS = {
+  all: null,
+  assigned: "open",
+  handoff: "handoff",
+  resolved: "resolved",
+};
+
 export default function InboxThreadListPanel({
   threadList,
   selectedThreadId = "",
   searchQuery = "",
 }) {
+  const stats = threadList?.stats || {};
+  const totalCount = Array.isArray(threadList?.filteredThreads)
+    ? threadList.filteredThreads.length
+    : 0;
+
   const filteredThreads = useMemo(() => {
     const base = Array.isArray(threadList?.filteredThreads)
       ? threadList.filteredThreads
@@ -51,26 +63,37 @@ export default function InboxThreadListPanel({
         >
           All conversations
         </h2>
+        {threadList?.deepLinkNotice ? (
+          <p className="mt-2 text-sm text-amber-700">{threadList.deepLinkNotice}</p>
+        ) : null}
       </div>
 
       <div className="border-b border-slate-200/80 px-5">
         <div className="flex h-12 items-end gap-6 overflow-x-auto">
           {TABS.map((tab) => {
             const active = threadList?.filter === tab.value;
+            const countKey = TAB_COUNT_KEYS[tab.value];
+            const count = countKey ? Number(stats?.[countKey] ?? 0) : totalCount;
+            const buttonLabel = `${tab.label} ${count}`;
 
             return (
               <button
                 key={tab.value}
                 type="button"
                 onClick={() => threadList?.setFilter?.(tab.value)}
+                aria-label={buttonLabel}
+                aria-pressed={active}
                 className={[
-                  "relative h-full whitespace-nowrap px-0 text-[14px] font-medium transition",
+                  "relative flex h-full items-center gap-2 whitespace-nowrap px-0 text-[14px] font-medium transition",
                   active
                     ? "text-[#2b5f9e]"
                     : "text-slate-500 hover:text-slate-900",
                 ].join(" ")}
               >
-                {tab.label}
+                <span>{tab.label}</span>
+                <span className="inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-[#eef0f3] px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
+                  {count}
+                </span>
                 {active ? (
                   <span className="absolute inset-x-0 bottom-0 h-[2px] rounded-full bg-[#2b5f9e]" />
                 ) : null}

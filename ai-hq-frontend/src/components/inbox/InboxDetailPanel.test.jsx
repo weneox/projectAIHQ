@@ -4,32 +4,21 @@ import { describe, expect, it, vi } from "vitest";
 import InboxDetailPanel from "./InboxDetailPanel.jsx";
 
 describe("InboxDetailPanel", () => {
-  it("renders explicit detail surface feedback", () => {
-    const onInspectLineage = vi.fn();
+  it("renders actionable conversation detail semantics and delivery truth", () => {
+    const markRead = vi.fn();
+    const assignThread = vi.fn();
+    const activateHandoff = vi.fn();
+    const setThreadStatus = vi.fn();
 
     render(
       <InboxDetailPanel
         selectedThread={{
           id: "thread-1",
-          status: "open",
-          labels: [],
+          customer_name: "Alex Morgan",
+          external_username: "alexm",
+          assigned_to: "Jamie",
           unread_count: 1,
-          last_decision_meta: {
-            executionPolicyOutcome: "blocked_until_repair",
-            executionPolicyReasonCodes: ["runtime_authority_unavailable", "projection_stale"],
-            runtimeReference: "approved-runtime/inbox-primary",
-            runtimeVersion: "2026.03.29",
-            behaviorSummary: "The assistant held a guided booking posture before offering a CTA.",
-            promptLayers: ["system-core", { label: "inbox-booking", version: "v4" }],
-            channel: "inbox",
-            usecase: "lead_capture",
-            ctaDecision: "Offer booking consult",
-            qualificationDecision: "Collect treatment intent",
-            qualificationReference: "lead-qualifier-v2",
-            handoffTrigger: "human_request",
-            handoffReason: "customer asked for a specialist",
-            disallowedClaimBlockReason: "Diagnosis claims remain blocked in DMs.",
-          },
+          handoff_active: false,
         }}
         messages={[
           {
@@ -52,7 +41,6 @@ describe("InboxDetailPanel", () => {
             message_correlation: "corr-1",
           },
         ]}
-        onInspectLineage={onInspectLineage}
         surface={{
           loading: false,
           error: "",
@@ -64,35 +52,40 @@ describe("InboxDetailPanel", () => {
           refresh: vi.fn(),
         }}
         actionState={{ isActionPending: vi.fn().mockReturnValue(false) }}
-        markRead={vi.fn()}
-        assignThread={vi.fn()}
-        activateHandoff={vi.fn()}
-        releaseHandoff={vi.fn()}
-        setThreadStatus={vi.fn()}
+        markRead={markRead}
+        assignThread={assignThread}
+        activateHandoff={activateHandoff}
+        setThreadStatus={setThreadStatus}
         composer={<div>Composer slot</div>}
       />
     );
 
     expect(screen.getByText(/thread assigned/i)).toBeInTheDocument();
-    expect(screen.getByText(/full thread history/i)).toBeInTheDocument();
-    expect(screen.getByText(/channel autonomy/i)).toBeInTheDocument();
-    expect(screen.getByText(/blocked until repair/i)).toBeInTheDocument();
-    expect(screen.getByText(/runtime authority unavailable/i)).toBeInTheDocument();
-    expect(screen.getByText(/latest execution inspect/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /mark conversation read/i })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open conversation actions/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /mark read/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /assign/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /activate handoff/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /resolve/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /close/i })).toBeInTheDocument();
     expect(screen.getByText(/composer slot/i)).toBeInTheDocument();
     expect(screen.getAllByText(/failed/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/most recent delivery attempt failed on attempt 1 of 3/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /inspect lineage/i })).toBeInTheDocument();
     expect(
-      screen.getAllByText(/approved-runtime\/inbox-primary/i).length
-    ).toBeGreaterThan(0);
-    expect(screen.getByText(/offer booking consult/i)).toBeInTheDocument();
-    expect(screen.getByText(/diagnosis claims remain blocked in dms/i)).toBeInTheDocument();
+      screen.getByText(/most recent delivery attempt failed on attempt 1 of 3/i)
+    ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /inspect lineage/i }));
-    expect(onInspectLineage).toHaveBeenCalledWith({
-      truthKind: "attempt_bound",
-      attemptId: "attempt-1",
-    });
+    fireEvent.click(screen.getByRole("button", { name: /^assign$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^mark read$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /activate handoff/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^resolve$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^close$/i }));
+
+    expect(assignThread).toHaveBeenCalledWith("thread-1");
+    expect(markRead).toHaveBeenCalledWith("thread-1");
+    expect(activateHandoff).toHaveBeenCalledWith("thread-1");
+    expect(setThreadStatus).toHaveBeenCalledWith("thread-1", "resolved");
+    expect(setThreadStatus).toHaveBeenCalledWith("thread-1", "closed");
   });
 });

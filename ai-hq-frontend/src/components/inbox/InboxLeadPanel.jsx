@@ -184,7 +184,7 @@ export default function InboxLeadPanel({
               </div>
             </div>
 
-            {surface?.availability === "unavailable" || surface?.error ? (
+            {surface?.unavailable || surface?.availability === "unavailable" || surface?.error ? (
               <div className="mt-4">
                 <SettingsSurfaceBanner
                   surface={surface}

@@ -29,5 +29,7 @@ describe("InboxComposer", () => {
 
     expect(screen.getByText(/reply accepted/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /send operator reply/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add note or attachment/i })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /reply to conversation/i })).toBeInTheDocument();
   });
 });

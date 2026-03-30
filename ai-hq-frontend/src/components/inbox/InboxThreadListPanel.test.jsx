@@ -19,13 +19,17 @@ describe("InboxThreadListPanel", () => {
           filteredThreads: [
             {
               id: "thread-1",
-              contact_name: "A",
+              customer_name: "Alex",
+              channel: "instagram",
+              last_message_text: "Need help with booking",
               status: "open",
               handoff_active: false,
             },
             {
               id: "thread-2",
-              contact_name: "B",
+              customer_name: "Blair",
+              channel: "instagram",
+              last_message_text: "Following up on my request",
               status: "resolved",
               handoff_active: false,
             },
@@ -39,21 +43,20 @@ describe("InboxThreadListPanel", () => {
     expect(
       screen.getByText(/requested inbox thread is no longer available/i)
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /all 2/i })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(screen.getByRole("button", { name: /assigned 1/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /mentions 3/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /drafts 4/i })).toBeInTheDocument();
 
-    expect(
-      screen.getAllByText((_, node) => /open\s*1/i.test(node?.textContent || "")).length
-    ).toBeGreaterThan(0);
-    expect(
-      screen.getAllByText((_, node) => /ai active\s*2/i.test(node?.textContent || "")).length
-    ).toBeGreaterThan(0);
-    expect(
-      screen.getAllByText((_, node) => /handoff\s*3/i.test(node?.textContent || "")).length
-    ).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getByRole("button", { name: "resolved" }));
+    fireEvent.click(screen.getByRole("button", { name: /drafts 4/i }));
     expect(setFilter).toHaveBeenCalledWith("resolved");
 
-    fireEvent.click(screen.getAllByRole("button", { name: /resolved/i }).at(-1));
-    expect(openThread).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /blair/i }));
+    expect(openThread).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "thread-2", customer_name: "Blair" })
+    );
   });
 });

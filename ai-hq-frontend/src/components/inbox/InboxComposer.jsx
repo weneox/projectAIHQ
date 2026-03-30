@@ -6,6 +6,7 @@ function IconButton({
   onClick,
   disabled = false,
   variant = "default",
+  label = "",
 }) {
   const variants = {
     default:
@@ -21,6 +22,8 @@ function IconButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-label={label || undefined}
+      title={label || undefined}
       className={[
         "flex h-10 items-center justify-center rounded-full border px-3 transition",
         variants[variant] || variants.default,
@@ -82,7 +85,11 @@ function ComposerBody({
       ) : null}
 
       <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
-        <IconButton disabled={!hasThread} variant="subtle">
+        <IconButton
+          disabled={!hasThread}
+          variant="subtle"
+          label="Add note or attachment"
+        >
           <Plus className="h-4 w-4" />
         </IconButton>
 
@@ -92,6 +99,7 @@ function ComposerBody({
           onKeyDown={handleKeyDown}
           disabled={!hasThread || sending}
           placeholder={hasThread ? "Reply to conversation..." : "Select a thread first..."}
+          aria-label={hasThread ? "Reply to conversation" : "Select a thread first"}
           className="h-10 flex-1 border-none bg-transparent px-0 text-[15px] text-slate-900 shadow-none outline-none placeholder:text-slate-400 focus:outline-none focus:ring-0"
         />
 
@@ -100,6 +108,7 @@ function ComposerBody({
             onClick={onReleaseHandoff}
             disabled={releasing}
             variant="subtle"
+            label={releasing ? "Release handoff" : "Release handoff"}
           >
             <Bot className="h-4 w-4" />
             <span className="ml-1 text-[12px] font-medium">
@@ -112,6 +121,7 @@ function ComposerBody({
           onClick={onSend}
           disabled={!hasThread || !replyText.trim() || sending}
           variant="accent"
+          label={sending ? "Sending operator reply" : "Send operator reply"}
         >
           <Send className="h-4 w-4" />
         </IconButton>

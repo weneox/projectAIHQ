@@ -122,6 +122,13 @@ export default function InboxDetailPanel({
   composer = null,
 }) {
   const hasThread = Boolean(selectedThread?.id);
+  const showSurfaceBanner = hasThread && (
+    surface?.unavailable ||
+    surface?.availability === "unavailable" ||
+    surface?.error ||
+    surface?.saveError ||
+    surface?.saveSuccess
+  );
 
   const selectedName =
     selectedThread?.customer_name ||
@@ -196,12 +203,14 @@ export default function InboxDetailPanel({
           <div className="flex items-center gap-1">
             <button
               type="button"
+              aria-label="Mark conversation read"
               className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-[#f3f4f6] hover:text-slate-900"
             >
               <CheckCheck className="h-4 w-4" />
             </button>
             <button
               type="button"
+              aria-label="Open conversation actions"
               className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-[#f3f4f6] hover:text-slate-900"
             >
               <MoreHorizontal className="h-4 w-4" />
@@ -209,7 +218,7 @@ export default function InboxDetailPanel({
           </div>
         </div>
 
-        {hasThread && (surface?.availability === "unavailable" || surface?.error) ? (
+        {showSurfaceBanner ? (
           <div className="mt-4">
             <SettingsSurfaceBanner
               surface={surface}
