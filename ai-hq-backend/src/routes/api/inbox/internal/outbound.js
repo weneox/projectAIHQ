@@ -3,6 +3,7 @@ import {
   findExistingOutboundMessage,
   findLatestAttemptByMessageId,
   getInboxThreadState,
+  listOutboundAttemptCorrelationsByMessageIds,
   getThreadById,
   refreshThread,
   upsertInboxThreadState,
@@ -11,6 +12,7 @@ import { logInfo, resolveTenantRow, rollbackAndRelease } from "./shared.js";
 import { parseOutboundRequest, validateOutboundRequest } from "./request.js";
 import { persistOutboundMessage } from "./execution.js";
 import { buildThreadStateForOutbound } from "./threadState.js";
+import { withMessageOutboundAttemptCorrelation } from "../shared.js";
 import {
   buildDuplicateOutboundResponse,
   buildOutboundSuccessResponse,
@@ -53,11 +55,19 @@ export function createInboxOutboundHandler({ db, wsHub }) {
         });
 
         if (existingMessage) {
+          const correlations = await listOutboundAttemptCorrelationsByMessageIds(
+            db,
+            [existingMessage.id],
+            { threadId }
+          );
           return okJson(
             res,
             buildDuplicateOutboundResponse({
               thread: existingThread,
-              message: existingMessage,
+              message: withMessageOutboundAttemptCorrelation(
+                existingMessage,
+                correlations.get(existingMessage.id) || null
+              ),
               attempt: await findLatestAttemptByMessageId(db, existingMessage.id),
               threadState: await getInboxThreadState(db, threadId),
             })
@@ -124,7 +134,10 @@ export function createInboxOutboundHandler({ db, wsHub }) {
       emitOutboundRealtime({
         wsHub,
         thread: normalizedThread,
-        message: delivery.message,
+        message: withMessageOutboundAttemptCorrelation(delivery.message, {
+          message_id: delivery.message?.id,
+          attempt_ids: delivery.attempt?.id ? [delivery.attempt.id] : [],
+        }),
         attempt: delivery.attempt,
         tenantKey: input.tenantKey,
         tenantId,
@@ -135,7 +148,10 @@ export function createInboxOutboundHandler({ db, wsHub }) {
         buildOutboundSuccessResponse({
           thread: normalizedThread,
           threadState: nextThreadState,
-          message: delivery.message,
+          message: withMessageOutboundAttemptCorrelation(delivery.message, {
+            message_id: delivery.message?.id,
+            attempt_ids: delivery.attempt?.id ? [delivery.attempt.id] : [],
+          }),
           attempt: delivery.attempt,
         })
       );

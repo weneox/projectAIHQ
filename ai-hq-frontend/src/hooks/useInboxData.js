@@ -286,7 +286,10 @@ export function useInboxData({ operatorName, navigate }) {
 
         await loadThreads(threadId);
         await syncSelected(threadId);
-        succeedSave({ message: "Operator reply sent." });
+        succeedSave({
+          message:
+            "Reply accepted. Waiting for outbound attempt status to confirm delivery.",
+        });
         return true;
       } catch (e) {
         failSave(String(e?.message || e || "Failed to send operator reply"));

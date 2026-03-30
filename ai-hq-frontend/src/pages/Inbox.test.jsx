@@ -111,7 +111,8 @@ describe("Inbox", () => {
         ready: false,
         saving: false,
         saveError: "",
-        saveSuccess: "Operator reply sent.",
+        saveSuccess:
+          "Reply accepted. Waiting for outbound attempt status to confirm delivery.",
         refresh: vi.fn(),
       },
       handleSend: vi.fn(),
@@ -135,7 +136,8 @@ describe("Inbox", () => {
         ready: false,
         saving: false,
         saveError: "",
-        saveSuccess: "Operator reply sent.",
+        saveSuccess:
+          "Reply accepted. Waiting for outbound attempt status to confirm delivery.",
         refresh: vi.fn(),
       },
       detailSurface: {
@@ -180,7 +182,7 @@ describe("Inbox", () => {
       await screen.findByRole("heading", { name: /^inbox$/i })
     ).toBeInTheDocument();
 
-    expect(screen.getByText(/operator reply sent/i)).toBeInTheDocument();
+    expect(screen.getByText(/reply accepted/i)).toBeInTheDocument();
     expect(
       screen.getByText(/inbox operations are temporarily unavailable/i)
     ).toBeInTheDocument();

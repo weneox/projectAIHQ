@@ -15,7 +15,8 @@ describe("InboxComposer", () => {
           ready: true,
           saving: false,
           saveError: "",
-          saveSuccess: "Operator reply sent.",
+          saveSuccess:
+            "Reply accepted. Waiting for outbound attempt status to confirm delivery.",
           refresh: vi.fn(),
         }}
         actionState={{ isActionPending: vi.fn().mockReturnValue(false) }}
@@ -26,7 +27,7 @@ describe("InboxComposer", () => {
       />
     );
 
-    expect(screen.getByText(/operator reply sent/i)).toBeInTheDocument();
+    expect(screen.getByText(/reply accepted/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /send operator reply/i })).toBeInTheDocument();
   });
 });

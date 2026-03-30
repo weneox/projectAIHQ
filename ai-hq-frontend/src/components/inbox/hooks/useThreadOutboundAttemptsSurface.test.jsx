@@ -40,4 +40,23 @@ describe("useThreadOutboundAttemptsSurface", () => {
     expect(result.current.surface.saveSuccess).toMatch(/marked dead/i);
     expect(result.current.actionState.pendingAction).toBe("");
   });
+
+  it("uses accepted retry feedback instead of implying delivery", async () => {
+    const { result } = renderHook(() =>
+      useThreadOutboundAttemptsSurface({ threadId: "thread-1", actor: "operator" })
+    );
+
+    await waitFor(() => {
+      expect(result.current.surface.ready).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.handleResend("attempt-1");
+    });
+
+    expect(result.current.surface.saveSuccess).toMatch(/retry accepted/i);
+    expect(result.current.surface.saveSuccess).toMatch(
+      /waiting for outbound attempt status to move/i
+    );
+  });
 });

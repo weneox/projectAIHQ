@@ -139,6 +139,15 @@ function pickContentIdFromProposal(p) {
   return "";
 }
 
+function buildAcceptedMessage(actionLabel, response = {}, fallback) {
+  const note = String(response?.note || "").trim();
+  const jobId = String(response?.jobId || "").trim();
+
+  if (note) return note;
+  if (jobId) return `${actionLabel} accepted. Job ${jobId} is now carrying the work.`;
+  return fallback;
+}
+
 function SurfaceMessage({
   icon,
   tone = "neutral",
@@ -337,10 +346,17 @@ export default function ProposalsPage() {
     setErr("");
 
     try {
-      await requestDraftChanges(proposalId, contentId, feedbackText);
-      await refreshProposals("Changes requested", {
-        status: statusRef.current,
-      });
+      const res = await requestDraftChanges(proposalId, contentId, feedbackText);
+      await refreshProposals(
+        buildAcceptedMessage(
+          "Change request",
+          res,
+          "Change request accepted. Waiting for backend draft status to move."
+        ),
+        {
+          status: statusRef.current,
+        }
+      );
       await refreshStats();
     } catch (e) {
       setErr(String(e?.message || e));
@@ -354,16 +370,23 @@ export default function ProposalsPage() {
     setErr("");
 
     try {
-      await approveDraft(proposalId, contentId);
+      const res = await approveDraft(proposalId, contentId);
       await refreshStats();
 
       if (statusRef.current !== "draft") {
         setStatus("draft");
       }
 
-      await refreshProposals("Asset generation started", {
-        status: "draft",
-      });
+      await refreshProposals(
+        buildAcceptedMessage(
+          "Approval",
+          res,
+          "Approval accepted. Waiting for backend status to advance."
+        ),
+        {
+          status: "draft",
+        }
+      );
     } catch (e) {
       setErr(String(e?.message || e));
     } finally {
@@ -432,8 +455,6 @@ export default function ProposalsPage() {
       const currentList = await fetchByUiStatus(currentStatus);
       setProposals(currentList);
 
-      showToast("Publish requested");
-
       try {
         const publishedItems = await fetchByUiStatus("published");
         const nowPublished = publishedItems.some(
@@ -444,8 +465,24 @@ export default function ProposalsPage() {
           setStatus("published");
           setProposals(publishedItems);
           showToast("Published");
+        } else {
+          showToast(
+            buildAcceptedMessage(
+              "Publish",
+              res,
+              "Publish accepted. Waiting for backend publish result."
+            )
+          );
         }
-      } catch {}
+      } catch {
+        showToast(
+          buildAcceptedMessage(
+            "Publish",
+            res,
+            "Publish accepted. Waiting for backend publish result."
+          )
+        );
+      }
     } catch (e) {
       setErr(String(e?.message || e));
     } finally {
@@ -593,7 +630,7 @@ export default function ProposalsPage() {
             title="No items in this view"
             desc={
               status === "draft"
-                ? "Draft intake is empty right now. New drafts, pending items, and in-progress items will appear here as soon as they enter the queue."
+                ? "The queue is empty right now. New drafts, pending items, and in-progress items will appear here as soon as the backend reports them."
                 : "There is nothing in this state yet. Switch the surface state or refresh when new items arrive."
             }
             action={
@@ -604,7 +641,7 @@ export default function ProposalsPage() {
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.05] px-3 py-2 text-[12px] text-white/62 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  Current view: {status}
+                  Current view: {status === "draft" ? "queue" : status}
                 </div>
               </div>
             }

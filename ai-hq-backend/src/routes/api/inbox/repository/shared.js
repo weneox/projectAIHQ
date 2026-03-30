@@ -63,6 +63,9 @@ export async function queryRows(db, text, params = []) {
 export function toAttempt(row) {
   if (!row) return null;
 
+  const messageId = s(row?.message_id);
+  const threadId = s(row?.thread_id);
+
   return {
     ...row,
     payload:
@@ -75,6 +78,10 @@ export function toAttempt(row) {
       !Array.isArray(row.provider_response)
         ? row.provider_response
         : {},
+    message_correlation: {
+      message_id: messageId,
+      thread_id: threadId,
+    },
   };
 }
 

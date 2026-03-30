@@ -16,6 +16,7 @@ import {
   s,
   toInt,
   truthy,
+  withMessageOutboundAttemptCorrelation,
 } from "./shared.js";
 
 import {
@@ -23,6 +24,7 @@ import {
   getOutboundAttemptsSummary,
   getThreadById,
   listFailedOutboundAttempts,
+  listOutboundAttemptCorrelationsByMessageIds,
   listOutboundAttemptsByThread,
   markOutboundAttemptDead,
   refreshThread,
@@ -273,7 +275,17 @@ export function inboxHandlers({ db, wsHub }) {
       );
 
       const messages = (result.rows || []).map(normalizeMessage);
-      return okJson(res, { ok: true, threadId, messages });
+      const correlations = await listOutboundAttemptCorrelationsByMessageIds(
+        db,
+        messages
+          .filter((message) => s(message?.direction).toLowerCase() === "outbound")
+          .map((message) => message.id),
+        { threadId }
+      );
+      const hydratedMessages = messages.map((message) =>
+        withMessageOutboundAttemptCorrelation(message, correlations.get(message.id) || null)
+      );
+      return okJson(res, { ok: true, threadId, messages: hydratedMessages });
     } catch (e) {
       return okJson(res, {
         ok: false,
@@ -726,14 +738,21 @@ export function inboxHandlers({ db, wsHub }) {
 
       const thread = await refreshThread(db, threadId, null);
 
+      const correlatedMessage = withMessageOutboundAttemptCorrelation(
+        message,
+        direction === "outbound" ? { message_id: message?.id, attempt_ids: [] } : null
+      );
+
       try {
         emitRealtimeEvent(wsHub, {
           type: "inbox.message.created",
           audience: "operator",
-          tenantKey: message?.tenant_key || thread?.tenant_key || req.auth?.tenantKey,
-          tenantId: message?.tenant_id || thread?.tenant_id || req.auth?.tenantId,
+          tenantKey:
+            correlatedMessage?.tenant_key || thread?.tenant_key || req.auth?.tenantKey,
+          tenantId:
+            correlatedMessage?.tenant_id || thread?.tenant_id || req.auth?.tenantId,
           threadId,
-          message,
+          message: correlatedMessage,
         });
       } catch {}
 
@@ -766,7 +785,7 @@ export function inboxHandlers({ db, wsHub }) {
         });
       } catch {}
 
-      return okJson(res, { ok: true, message, thread });
+      return okJson(res, { ok: true, message: correlatedMessage, thread });
     } catch (e) {
       return okJson(res, {
         ok: false,

@@ -12,6 +12,71 @@ function fmtDate(v) {
   return d.toLocaleString();
 }
 
+function describeAttemptState(item = {}) {
+  const status = s(item?.status).toLowerCase();
+  const attemptCount = Number(item?.attempt_count || 0);
+  const maxAttempts = Number(item?.max_attempts || 0);
+
+  if (status === "queued") {
+    return {
+      label: "Queued locally",
+      detail: "Accepted into the outbound queue. Provider delivery has not completed yet.",
+    };
+  }
+
+  if (status === "sending") {
+    return {
+      label: "Send in progress",
+      detail: "An outbound attempt is actively trying to hand off to the provider.",
+    };
+  }
+
+  if (status === "sent") {
+    return {
+      label: "Sent",
+      detail:
+        attemptCount > 0
+          ? `Delivery succeeded on attempt ${attemptCount}${maxAttempts > 0 ? ` of ${maxAttempts}` : ""}.`
+          : "Delivery succeeded.",
+    };
+  }
+
+  if (status === "failed") {
+    return {
+      label: "Failed",
+      detail:
+        attemptCount > 0
+          ? `Most recent delivery attempt failed${maxAttempts > 0 ? ` on attempt ${attemptCount} of ${maxAttempts}.` : "."}`
+          : "Most recent delivery attempt failed.",
+    };
+  }
+
+  if (status === "retrying") {
+    return {
+      label: "Retrying",
+      detail:
+        attemptCount > 0
+          ? `Retry lineage is active after attempt ${attemptCount}${maxAttempts > 0 ? ` of ${maxAttempts}` : ""}.`
+          : "Retry lineage is active for this outbound delivery.",
+    };
+  }
+
+  if (status === "dead") {
+    return {
+      label: "Dead",
+      detail:
+        maxAttempts > 0
+          ? `Automatic delivery stopped after ${attemptCount || maxAttempts} of ${maxAttempts} attempts.`
+          : "Automatic delivery stopped. Operator cleanup is required.",
+    };
+  }
+
+  return {
+    label: status || "Unknown",
+    detail: "The backend reported an outbound attempt state the UI does not recognize yet.",
+  };
+}
+
 function StatusBadge({ status }) {
   const x = s(status).toLowerCase();
 
@@ -49,7 +114,7 @@ export default function ThreadOutboundAttemptsPanel({
             Thread Delivery Attempts
           </div>
           <div className="mt-1 text-sm text-stone-500">
-            Outbound delivery status for the selected conversation.
+            Per-attempt outbound lineage for the selected conversation. Queued, retrying, failed, dead, and sent stay distinct here.
           </div>
         </div>
 
@@ -82,6 +147,7 @@ export default function ThreadOutboundAttemptsPanel({
           <div className="divide-y divide-[#ece2d3]">
             {attempts.map((item) => {
               const id = s(item?.id);
+              const state = describeAttemptState(item);
               const retryBusy = actionState.isActionPending(`retry:${id}`);
               const deadBusy = actionState.isActionPending(`dead:${id}`);
               const isBusy = retryBusy || deadBusy;
@@ -91,16 +157,27 @@ export default function ThreadOutboundAttemptsPanel({
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge status={item?.status} />
                     <span className="text-xs text-stone-400">
-                      attempts: {Number(item?.attempt_count || 0)} / {Number(item?.max_attempts || 0)}
+                      attempt {Number(item?.attempt_count || 0)}
+                      {Number(item?.max_attempts || 0) > 0
+                        ? ` of ${Number(item?.max_attempts || 0)}`
+                        : ""}
                     </span>
+                  </div>
+
+                  <div className="mt-2 text-sm font-medium text-stone-900">
+                    {state.label}
                   </div>
 
                   <div className="mt-2 text-sm text-stone-700">
                     {s(item?.message_text) || "—"}
                   </div>
 
+                  <div className="mt-2 text-xs leading-5 text-stone-500">
+                    {state.detail}
+                  </div>
+
                   <div className="mt-2 grid gap-2 text-xs text-stone-500 md:grid-cols-2">
-                    <div>Updated: {fmtDate(item?.updated_at)}</div>
+                    <div>State updated: {fmtDate(item?.updated_at)}</div>
                     <div>Next retry: {fmtDate(item?.next_retry_at)}</div>
                     <div>Provider: {s(item?.provider) || "—"}</div>
                     <div>Attempt ID: {id}</div>

@@ -1,6 +1,7 @@
 import { getDefaultTenantKey, resolveTenantKey } from "../../../../tenancy/index.js";
 import { isDbReady, isUuid } from "../../../../utils/http.js";
 import { toAttempt } from "./shared.js";
+import { buildOutboundAttemptCorrelation, s } from "../shared.js";
 
 export async function createOutboundAttempt({
   db,
@@ -91,6 +92,56 @@ export async function findLatestAttemptByMessageId(db, messageId) {
   );
 
   return toAttempt(result.rows?.[0] || null);
+}
+
+export async function listOutboundAttemptCorrelationsByMessageIds(
+  db,
+  messageIds = [],
+  { threadId = null } = {}
+) {
+  if (!isDbReady(db)) return new Map();
+
+  const normalizedMessageIds = Array.isArray(messageIds)
+    ? messageIds.filter((messageId) => isUuid(messageId))
+    : [];
+
+  if (!normalizedMessageIds.length) return new Map();
+  if (threadId && !isUuid(threadId)) return new Map();
+
+  const values = [normalizedMessageIds];
+  let where = `where message_id = any($1::uuid[])`;
+
+  if (threadId) {
+    values.push(threadId);
+    where += ` and thread_id = $2::uuid`;
+  }
+
+  const result = await db.query(
+    `
+    select
+      message_id,
+      array_agg(id order by created_at desc, id desc) as attempt_ids
+    from inbox_outbound_attempts
+    ${where}
+    group by message_id
+    `,
+    values
+  );
+
+  const correlations = new Map();
+
+  for (const row of result.rows || []) {
+    const messageId = s(row.message_id);
+    correlations.set(
+      messageId,
+      buildOutboundAttemptCorrelation({
+        messageId,
+        attemptIds: Array.isArray(row.attempt_ids) ? row.attempt_ids : [],
+      })
+    );
+  }
+
+  return correlations;
 }
 
 export async function listOutboundAttemptsByThread(db, threadId, limit = 100) {

@@ -57,7 +57,10 @@ describe("useInboxData", () => {
       await result.current.sendOperatorReply("thread-1", "hello");
     });
 
-    expect(result.current.surface.saveSuccess).toMatch(/operator reply sent/i);
+    expect(result.current.surface.saveSuccess).toMatch(/reply accepted/i);
+    expect(result.current.surface.saveSuccess).toMatch(
+      /waiting for outbound attempt status/i
+    );
     expect(result.current.actionState.pendingAction).toBe("");
   });
 });

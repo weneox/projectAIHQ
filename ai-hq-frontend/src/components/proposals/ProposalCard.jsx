@@ -6,6 +6,7 @@ import {
   rawStatusOf,
   relTime,
   stageOf,
+  stageLabel,
   stageTone,
   tagsFrom,
   titleFrom,
@@ -78,6 +79,7 @@ export default function ProposalCard({
   const format = formatFrom(item);
   const rawStatus = rawStatusOf(item);
   const stage = stageOf(item);
+  const exactStatus = stageLabel(item);
 
   const when = relTime(
     item?.updated_at ||
@@ -190,8 +192,14 @@ export default function ProposalCard({
 
               <div className="flex flex-wrap items-center gap-2">
                 <ToneBadge tone={stageTone(stage, rawStatus)}>
-                  {stage === "draft" ? "Draft" : stage}
+                  {stage === "draft" ? "Queue" : stage}
                 </ToneBadge>
+
+                {exactStatus ? (
+                  <ToneBadge tone={stageTone(stage, rawStatus)}>
+                    {exactStatus}
+                  </ToneBadge>
+                ) : null}
 
                 <SurfacePill className="text-white/58">
                   {typeChipLabel(format)}

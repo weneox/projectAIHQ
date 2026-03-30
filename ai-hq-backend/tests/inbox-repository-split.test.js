@@ -6,11 +6,13 @@ import {
   getTenantByKey,
   getInboxThreadState,
   getTenantInboxBrainContext,
+  listOutboundAttemptCorrelationsByMessageIds,
   markOutboundAttemptSending,
   upsertInboxThreadState,
   updateOutboundMessageDeliveryFailure,
   updateOutboundMessageProviderId,
 } from "../src/routes/api/inbox/repository.js";
+import { withMessageOutboundAttemptCorrelation } from "../src/routes/api/inbox/shared.js";
 import { createRuntimeAuthorityError } from "../src/services/businessBrain/runtimeAuthority.js";
 
 test("inbox tenant resolution requests strict runtime authority and returns authoritative tenant only", async () => {
@@ -229,6 +231,73 @@ test("outbound attempt persistence module still keeps payload and tenant routing
   assert.equal(attempt?.tenant_key, "acme");
   assert.equal(attempt?.payload?.text, "hello");
   assert.equal(attempt?.status, "queued");
+  assert.equal(
+    attempt?.message_correlation?.message_id,
+    "44444444-4444-4444-8444-444444444444"
+  );
+  assert.equal(
+    attempt?.message_correlation?.thread_id,
+    "55555555-5555-4555-8555-555555555555"
+  );
+});
+
+test("outbound attempt correlation lookup groups lineage by message id without heuristics", async () => {
+  const db = {
+    async query(text, params = []) {
+      assert.match(String(text || "").toLowerCase(), /from inbox_outbound_attempts/);
+      assert.deepEqual(params[0], [
+        "44444444-4444-4444-8444-444444444444",
+        "55555555-5555-4555-8555-555555555555",
+      ]);
+      assert.equal(params[1], "66666666-6666-4666-8666-666666666666");
+
+      return {
+        rows: [
+          {
+            message_id: "44444444-4444-4444-8444-444444444444",
+            attempt_ids: [
+              "attempt-newest",
+              "attempt-oldest",
+            ],
+          },
+        ],
+      };
+    },
+  };
+
+  const correlations = await listOutboundAttemptCorrelationsByMessageIds(
+    db,
+    [
+      "44444444-4444-4444-8444-444444444444",
+      "55555555-5555-4555-8555-555555555555",
+    ],
+    { threadId: "66666666-6666-4666-8666-666666666666" }
+  );
+
+  assert.deepEqual(correlations.get("44444444-4444-4444-8444-444444444444"), {
+    message_id: "44444444-4444-4444-8444-444444444444",
+    latest_attempt_id: "attempt-newest",
+    attempt_ids: ["attempt-newest", "attempt-oldest"],
+  });
+  assert.equal(correlations.has("55555555-5555-4555-8555-555555555555"), false);
+});
+
+test("outbound message correlation helper stays explicit for outbound messages and absent for inbound", () => {
+  const outbound = withMessageOutboundAttemptCorrelation({
+    id: "44444444-4444-4444-8444-444444444444",
+    direction: "outbound",
+  });
+  const inbound = withMessageOutboundAttemptCorrelation({
+    id: "55555555-5555-4555-8555-555555555555",
+    direction: "inbound",
+  });
+
+  assert.deepEqual(outbound?.outbound_attempt_correlation, {
+    message_id: "44444444-4444-4444-8444-444444444444",
+    latest_attempt_id: null,
+    attempt_ids: [],
+  });
+  assert.equal("outbound_attempt_correlation" in inbound, false);
 });
 
 test("outbound attempt sending only claims retry-eligible rows", async () => {

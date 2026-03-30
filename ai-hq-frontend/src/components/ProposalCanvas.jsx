@@ -15,12 +15,14 @@ import ProposalCard from "./proposals/ProposalCard.jsx";
 import ProposalExpanded from "./proposals/ProposalExpanded.jsx";
 import {
   captionFrom,
+  rawStatusOf,
+  stageLabel,
   stageOf,
   titleFrom,
 } from "../features/proposals/proposal.selectors.js";
 
 const STATUS_META = {
-  draft: { label: "Draft", icon: CircleDot },
+  draft: { label: "Queue", icon: CircleDot },
   approved: { label: "Approved", icon: CheckCircle2 },
   published: { label: "Published", icon: Send },
   rejected: { label: "Rejected", icon: XCircle },
@@ -81,6 +83,19 @@ function featuredSplit(items) {
     secondary: items.slice(1, 3),
     rest: items.slice(3),
   };
+}
+
+function countQueueStates(items = []) {
+  return items.reduce(
+    (acc, item) => {
+      const status = rawStatusOf(item);
+      if (status === "pending") acc.pending += 1;
+      else if (status === "in_progress" || status === "drafting") acc.inProgress += 1;
+      else acc.draft += 1;
+      return acc;
+    },
+    { draft: 0, inProgress: 0, pending: 0 }
+  );
 }
 
 function MetricStripCard({ label, value, status }) {
@@ -162,13 +177,14 @@ export default function ProposalCanvas({
   };
 
   const tabs = [
-    { key: "draft", label: "Draft", count: counts.draft },
+    { key: "draft", label: "Queue", count: counts.draft },
     { key: "approved", label: "Approved", count: counts.approved },
     { key: "published", label: "Published", count: counts.published },
     { key: "rejected", label: "Rejected", count: counts.rejected },
   ];
 
   const split = featuredSplit(filtered);
+  const queueBreakdown = useMemo(() => countQueueStates(filtered), [filtered]);
 
   return (
     <div className="relative space-y-6">
@@ -194,21 +210,20 @@ export default function ProposalCanvas({
               </h2>
 
               <p className="mt-4 max-w-[860px] text-[14px] leading-7 text-white/52 md:text-[15px]">
-                Review, approve, and publish from one continuous executive
-                surface with calmer hierarchy, cleaner controls, and less visual
-                noise.
+                Review queue state, approvals, and publish outcomes without
+                collapsing backend execution truth into a cleaner story.
               </p>
 
               <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] text-white/52">
                 <span>Draft → Approve → Publish</span>
-                <span>Live queue visibility</span>
-                <span>Context-preserving review</span>
+                <span>Acceptance is not terminal success</span>
+                <span>Raw backend status stays visible</span>
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
               <MetricStripCard
-                label="Active queue"
+                label="Queue"
                 value={counts.draft}
                 status="draft"
               />
@@ -303,6 +318,23 @@ export default function ProposalCanvas({
               <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/[0.04] px-3 py-2 text-[12px] text-white/64 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                 <Sparkles className="h-3.5 w-3.5 text-white/42" />
                 <span>{toast}</span>
+              </div>
+            ) : null}
+
+            {status === "draft" ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-white/60">
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.04] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <span className="text-white/36">Draft</span>
+                  <span className="font-medium text-white/78">{queueBreakdown.draft}</span>
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.04] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <span className="text-white/36">{stageLabel({ status: "in_progress" })}</span>
+                  <span className="font-medium text-white/78">{queueBreakdown.inProgress}</span>
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.04] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+                  <span className="text-white/36">{stageLabel({ status: "pending" })}</span>
+                  <span className="font-medium text-white/78">{queueBreakdown.pending}</span>
+                </div>
               </div>
             ) : null}
           </div>

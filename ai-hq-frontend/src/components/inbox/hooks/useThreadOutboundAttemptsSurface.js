@@ -84,7 +84,10 @@ export function useThreadOutboundAttemptsSurface({ threadId = "", actor = "opera
         );
         const refreshed = await load();
         if (refreshed) setData(refreshed);
-        return succeedSave({ message: "Delivery retry requested." });
+        return succeedSave({
+          message:
+            "Retry accepted. Waiting for outbound attempt status to move.",
+        });
       } catch (error) {
         return failSave(getErrorMessage(error, "Unable to retry this delivery attempt."));
       }

@@ -1,5 +1,5 @@
 import { emitRealtimeEvent } from "../../../../realtime/events.js";
-import { s } from "../shared.js";
+import { s, withMessageOutboundAttemptCorrelation } from "../shared.js";
 
 export function buildInboxTenantSummary(tenant) {
   if (!tenant) return null;
@@ -44,6 +44,14 @@ export function buildIngestSuccessResponse({
   handoffResults,
   executionResults,
 }) {
+  const normalizedExecutionResults = (executionResults || []).map((item) => ({
+    ...item,
+    message: withMessageOutboundAttemptCorrelation(item?.message, {
+      message_id: item?.message?.id,
+      attempt_ids: item?.attempt?.id ? [item.attempt.id] : [],
+    }),
+  }));
+
   return {
     ok: true,
     duplicate: false,
@@ -59,7 +67,7 @@ export function buildIngestSuccessResponse({
     actions,
     leadResults,
     handoffResults,
-    executionResults,
+    executionResults: normalizedExecutionResults,
   };
 }
 
@@ -130,13 +138,18 @@ export function emitIngestRealtime({
   for (const item of executionResults || []) {
     try {
       if (item?.message) {
+        const correlatedMessage = withMessageOutboundAttemptCorrelation(item.message, {
+          message_id: item?.message?.id,
+          attempt_ids: item?.attempt?.id ? [item.attempt.id] : [],
+        });
         emitRealtimeEvent(wsHub, {
           type: "inbox.message.created",
           audience: "operator",
-          tenantKey: item.message?.tenant_key || thread?.tenant_key || tenantKey,
+          tenantKey:
+            correlatedMessage?.tenant_key || thread?.tenant_key || tenantKey,
           tenantId: thread?.tenant_id || tenantId,
           threadId: thread?.id,
-          message: item.message,
+          message: correlatedMessage,
         });
       }
     } catch {}
@@ -164,13 +177,18 @@ export function emitOutboundRealtime({
   tenantId,
 }) {
   try {
+    const correlatedMessage = withMessageOutboundAttemptCorrelation(message, {
+      message_id: message?.id,
+      attempt_ids: attempt?.id ? [attempt.id] : [],
+    });
+
     emitRealtimeEvent(wsHub, {
       type: "inbox.message.created",
       audience: "operator",
-      tenantKey: message?.tenant_key || tenantKey,
+      tenantKey: correlatedMessage?.tenant_key || tenantKey,
       tenantId,
       threadId: s(thread?.id || ""),
-      message,
+      message: correlatedMessage,
     });
   } catch {}
 

@@ -127,6 +127,47 @@ export function normalizeMessage(row) {
   };
 }
 
+export function buildOutboundAttemptCorrelation({
+  messageId,
+  attemptIds = [],
+  latestAttemptId = null,
+} = {}) {
+  const normalizedMessageId = s(messageId);
+  if (!normalizedMessageId) return null;
+
+  const normalizedAttemptIds = Array.isArray(attemptIds)
+    ? attemptIds.map((id) => s(id)).filter(Boolean)
+    : [];
+  const normalizedLatestAttemptId =
+    s(latestAttemptId || normalizedAttemptIds[0] || "") || null;
+
+  return {
+    message_id: normalizedMessageId,
+    latest_attempt_id: normalizedLatestAttemptId,
+    attempt_ids: normalizedAttemptIds,
+  };
+}
+
+export function withMessageOutboundAttemptCorrelation(message, correlation = null) {
+  if (!message || typeof message !== "object") return message;
+  if (s(message.direction).toLowerCase() !== "outbound") return message;
+
+  const normalized =
+    correlation && typeof correlation === "object"
+      ? buildOutboundAttemptCorrelation({
+          messageId: correlation.message_id || correlation.messageId || message.id,
+          attemptIds: correlation.attempt_ids || correlation.attemptIds || [],
+          latestAttemptId:
+            correlation.latest_attempt_id || correlation.latestAttemptId || null,
+        })
+      : buildOutboundAttemptCorrelation({ messageId: message.id });
+
+  return {
+    ...message,
+    outbound_attempt_correlation: normalized,
+  };
+}
+
 export function normalizeLead(row) {
   if (!row) return null;
 

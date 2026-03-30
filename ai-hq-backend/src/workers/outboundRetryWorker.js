@@ -3,6 +3,7 @@ import { sendOutboundViaMetaGateway } from "../services/metaGatewayClient.js";
 import {
   getMessageById,
   getThreadById,
+  listOutboundAttemptCorrelationsByMessageIds,
   listRetryableOutboundAttempts,
   markOutboundAttemptDead,
   markOutboundAttemptFailed,
@@ -11,6 +12,7 @@ import {
   updateOutboundMessageDeliveryFailure,
   updateOutboundMessageProviderId,
 } from "../routes/api/inbox/repository.js";
+import { withMessageOutboundAttemptCorrelation } from "../routes/api/inbox/shared.js";
 import { writeAudit } from "../utils/auditLog.js";
 import { createLogger } from "../utils/logger.js";
 import { emitRealtimeEvent } from "../realtime/events.js";
@@ -267,15 +269,25 @@ async function processAttempt({ db, wsHub, attempt }) {
     });
   } catch {}
 
-  try {
-    emitRealtimeEvent(wsHub, {
-      type: "inbox.message.updated",
-      audience: "operator",
-      tenantKey: updatedMessage?.tenant_key || message?.tenant_key || attempt?.tenant_key,
-      threadId: String(updatedMessage?.thread_id || message.thread_id || ""),
-      message: updatedMessage || message,
-    });
-  } catch {}
+    try {
+      const correlations = await listOutboundAttemptCorrelationsByMessageIds(
+        db,
+        [message.id],
+        { threadId: message.thread_id }
+      );
+      const correlatedMessage = withMessageOutboundAttemptCorrelation(
+        updatedMessage || message,
+        correlations.get(message.id) || null
+      );
+      emitRealtimeEvent(wsHub, {
+        type: "inbox.message.updated",
+        audience: "operator",
+        tenantKey:
+          correlatedMessage?.tenant_key || message?.tenant_key || attempt?.tenant_key,
+        threadId: String(correlatedMessage?.thread_id || message.thread_id || ""),
+        message: correlatedMessage,
+      });
+    } catch {}
 }
 
 export function startOutboundRetryWorker({ db, wsHub }) {

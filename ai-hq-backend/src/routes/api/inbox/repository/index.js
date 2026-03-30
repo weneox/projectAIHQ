@@ -17,6 +17,7 @@ export {
   createOutboundAttempt,
   getOutboundAttemptById,
   findLatestAttemptByMessageId,
+  listOutboundAttemptCorrelationsByMessageIds,
   listOutboundAttemptsByThread,
   listRetryableOutboundAttempts,
   markOutboundAttemptSending,

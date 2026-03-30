@@ -45,6 +45,7 @@ import {
   relTime,
   shortId,
   stageOf,
+  stageLabel,
   stageTone,
   summaryOf,
   titleFrom,
@@ -192,6 +193,7 @@ export default function ProposalExpanded({
   const summary = summaryOf(item);
   const stage = stageOf(item);
   const tone = panelTone(stage);
+  const exactProposalStatus = stageLabel(item);
 
   const proposalStatus = String(item?.status || "draft").toLowerCase();
   const isRejected = proposalStatus === "rejected";
@@ -327,8 +329,14 @@ export default function ProposalExpanded({
           <div className="min-w-0 max-w-[980px]">
             <div className="flex flex-wrap items-center gap-2">
               <ToneBadge tone={stageTone(stage, rawStatusOf(item))}>
-                {stage === "draft" ? "Draft" : stage}
+                {stage === "draft" ? "Queue" : stage}
               </ToneBadge>
+
+              {exactProposalStatus ? (
+                <ToneBadge tone={stageTone(stage, rawStatusOf(item))}>
+                  {exactProposalStatus}
+                </ToneBadge>
+              ) : null}
 
               {postType ? <ToneBadge tone="neutral">{postType}</ToneBadge> : null}
 
@@ -834,6 +842,7 @@ export default function ProposalExpanded({
                     k="Updated"
                     v={resolvedDraft?.updatedAt ? relTime(resolvedDraft.updatedAt) : "—"}
                   />
+                  <MetaRow k="Proposal status" v={exactProposalStatus || "—"} />
                   <MetaRow k="Draft status" v={resolvedDraft?.status || "—"} />
                   <MetaRow
                     k="Assets"
