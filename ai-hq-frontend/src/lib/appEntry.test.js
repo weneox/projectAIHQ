@@ -4,6 +4,7 @@ import {
   areInternalRoutesEnabled,
   CORE_APP_ROUTES,
   INTERNAL_ONLY_APP_ROUTES,
+  isForcedWorkspaceEntryEnabled,
   isInternalOnlyPath,
   resolveAuthenticatedLanding,
 } from "./appEntry.js";
@@ -84,6 +85,10 @@ describe("resolveAuthenticatedLanding", () => {
 
   it("keeps internal routes disabled by default", () => {
     expect(areInternalRoutesEnabled()).toBe(false);
+  });
+
+  it("keeps forced workspace entry disabled by default", () => {
+    expect(isForcedWorkspaceEntryEnabled()).toBe(false);
   });
 
   it("falls back to truth when backend points a completed workspace at operator-only surfaces", () => {

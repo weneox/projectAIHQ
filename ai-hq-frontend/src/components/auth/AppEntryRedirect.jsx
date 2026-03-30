@@ -1,13 +1,23 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAppBootstrap } from "../../api/app.js";
-import { resolveAuthenticatedLanding } from "../../lib/appEntry.js";
+import {
+  isForcedWorkspaceEntryEnabled,
+  resolveAuthenticatedLanding,
+} from "../../lib/appEntry.js";
 
 export default function AppEntryRedirect() {
   const navigate = useNavigate();
 
   useEffect(() => {
     let alive = true;
+
+    if (isForcedWorkspaceEntryEnabled()) {
+      navigate("/workspace", { replace: true });
+      return () => {
+        alive = false;
+      };
+    }
 
     getAppBootstrap()
       .then((bootstrap) => {
@@ -16,7 +26,10 @@ export default function AppEntryRedirect() {
       })
       .catch(() => {
         if (!alive) return;
-        navigate("/setup/studio", { replace: true });
+        navigate(
+          isForcedWorkspaceEntryEnabled() ? "/workspace" : "/setup/studio",
+          { replace: true }
+        );
       });
 
     return () => {

@@ -6,7 +6,10 @@ import AdminRouteGuard from "./components/admin/AdminRouteGuard.jsx";
 import OperatorRouteGuard from "./components/auth/OperatorRouteGuard.jsx";
 import UserRouteGuard from "./components/auth/UserRouteGuard.jsx";
 import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
-import { INTERNAL_ONLY_APP_ROUTES } from "./lib/appEntry.js";
+import {
+  INTERNAL_ONLY_APP_ROUTES,
+  isForcedWorkspaceEntryEnabled,
+} from "./lib/appEntry.js";
 
 const Proposals = lazy(() => import("./pages/Proposals.jsx"));
 const Publish = lazy(() => import("./pages/Publish.jsx"));
@@ -56,6 +59,31 @@ function renderInternalRouteRedirects() {
 }
 
 export default function App() {
+  const forcedWorkspaceEntry = isForcedWorkspaceEntryEnabled();
+  const setupEntryElement = forcedWorkspaceEntry ? (
+    <Navigate to="/workspace" replace />
+  ) : (
+    <UserRouteGuard>
+      {withSuspense(<SetupStudioRoute />)}
+    </UserRouteGuard>
+  );
+
+  const setupRedirectElement = forcedWorkspaceEntry ? (
+    <Navigate to="/workspace" replace />
+  ) : (
+    <UserRouteGuard>
+      <Navigate to="/setup/studio" replace />
+    </UserRouteGuard>
+  );
+
+  const rootEntryElement = forcedWorkspaceEntry ? (
+    <Navigate to="/workspace" replace />
+  ) : (
+    <UserRouteGuard>
+      <AppEntryRedirect />
+    </UserRouteGuard>
+  );
+
   return (
     <BrowserRouter>
       <Routes>
@@ -82,84 +110,45 @@ export default function App() {
 
         <Route
           path="/setup/studio"
-          element={
-            <UserRouteGuard>
-              {withSuspense(<SetupStudioRoute />)}
-            </UserRouteGuard>
-          }
+          element={setupEntryElement}
         />
 
         <Route
           path="/setup"
-          element={
-            <UserRouteGuard>
-              <Navigate to="/setup/studio" replace />
-            </UserRouteGuard>
-          }
+          element={setupRedirectElement}
         />
 
         <Route
           path="/setup/business"
-          element={
-            <UserRouteGuard>
-              <Navigate to="/setup/studio" replace />
-            </UserRouteGuard>
-          }
+          element={setupRedirectElement}
         />
 
         <Route
           path="/setup/channels"
-          element={
-            <UserRouteGuard>
-              <Navigate to="/setup/studio" replace />
-            </UserRouteGuard>
-          }
+          element={setupRedirectElement}
         />
 
         <Route
           path="/setup/knowledge"
-          element={
-            <UserRouteGuard>
-              <Navigate to="/setup/studio" replace />
-            </UserRouteGuard>
-          }
+          element={setupRedirectElement}
         />
 
         <Route
           path="/setup/services"
-          element={
-            <UserRouteGuard>
-              <Navigate to="/setup/studio" replace />
-            </UserRouteGuard>
-          }
+          element={setupRedirectElement}
         />
 
         <Route
           path="/setup/playbooks"
-          element={
-            <UserRouteGuard>
-              <Navigate to="/setup/studio" replace />
-            </UserRouteGuard>
-          }
+          element={setupRedirectElement}
         />
 
         <Route
           path="/setup/runtime"
-          element={
-            <UserRouteGuard>
-              <Navigate to="/setup/studio" replace />
-            </UserRouteGuard>
-          }
+          element={setupRedirectElement}
         />
 
-        <Route
-          path="/"
-          element={
-            <UserRouteGuard>
-              <AppEntryRedirect />
-            </UserRouteGuard>
-          }
-        />
+        <Route path="/" element={rootEntryElement} />
 
         <Route
           path="/"

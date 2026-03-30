@@ -29,6 +29,10 @@ export function areInternalRoutesEnabled() {
   return s(import.meta.env?.VITE_ENABLE_INTERNAL_ROUTES) === "1";
 }
 
+export function isForcedWorkspaceEntryEnabled() {
+  return s(import.meta.env?.VITE_FORCE_WORKSPACE_ENTRY) === "1";
+}
+
 export function isSetupPath(path = "") {
   const next = s(path);
   return next === "/setup" || next.startsWith("/setup/");
@@ -45,6 +49,10 @@ export function isInternalOnlyPath(path = "") {
 }
 
 export function resolveAuthenticatedLanding(bootstrap = {}) {
+  if (isForcedWorkspaceEntryEnabled()) {
+    return "/workspace";
+  }
+
   const root = obj(bootstrap);
   const workspace = obj(root.workspace);
   const setup = obj(root.setup);

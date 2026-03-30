@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./lib/appEntry.js", () => ({
   INTERNAL_ONLY_APP_ROUTES: ["/command-demo", "/analytics", "/agents", "/threads"],
+  isForcedWorkspaceEntryEnabled: () => false,
 }));
 
 vi.mock("./components/layout/Shell.jsx", () => ({
