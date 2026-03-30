@@ -160,7 +160,19 @@ export default function Inbox() {
   }, [selectedThread?.id, loadMessages, loadRelatedLead]);
 
   return (
-    <div className="overflow-hidden rounded-[28px] border border-white/60 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.10)]">
+    <section
+      aria-labelledby="inbox-surface-title"
+      aria-describedby="inbox-surface-description"
+      className="overflow-hidden rounded-[28px] border border-white/60 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.10)]"
+    >
+      <header className="sr-only">
+        <h1 id="inbox-surface-title">Operator messaging workspace</h1>
+        <p id="inbox-surface-description">
+          Thread-first triage on the left, the live conversation in the center,
+          and compact operational context on the right.
+        </p>
+      </header>
+
       {surface?.availability === "unavailable" || surface?.error ? (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
           <SettingsSurfaceBanner
@@ -185,6 +197,7 @@ export default function Inbox() {
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Search inbox..."
+                  aria-label="Search inbox"
                   className="h-11 w-full rounded-full border border-slate-200 bg-[#f4f5f7] pl-10 pr-4 text-sm text-slate-900 shadow-none outline-none placeholder:text-slate-400 focus:border-slate-300 focus:bg-white"
                 />
               </div>
@@ -278,6 +291,6 @@ export default function Inbox() {
           />
         </div>
       </div>
-    </div>
+    </section>
   );
 }
