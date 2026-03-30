@@ -40,11 +40,17 @@ describe("InboxThreadListPanel", () => {
       screen.getByText(/requested inbox thread is no longer available/i)
     ).toBeInTheDocument();
 
-    const openThreadsBlock = screen.getByText(/open threads/i).closest("div");
-    const aiActiveBlock = screen.getByText(/ai active/i).closest("div");
-    const handoffBlock = screen.getByText(/handoff/i).closest("div");
-
+    const openThreadsBlock = screen.getByText(/^open threads$/i).parentElement;
     expect(openThreadsBlock).not.toBeNull();
+
+    const statsGrid = openThreadsBlock?.parentElement;
+    expect(statsGrid).not.toBeNull();
+
+    const statsScope = within(statsGrid);
+
+    const aiActiveBlock = statsScope.getByText(/^ai active$/i).parentElement;
+    const handoffBlock = statsScope.getByText(/^handoff$/i).parentElement;
+
     expect(aiActiveBlock).not.toBeNull();
     expect(handoffBlock).not.toBeNull();
 
