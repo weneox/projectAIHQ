@@ -40,7 +40,19 @@ export default function InboxThreadListPanel({
   }, [threadList?.filteredThreads, searchQuery]);
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-[#fbfbfc]">
+    <section
+      aria-labelledby="inbox-thread-list-title"
+      className="flex h-full min-h-0 flex-col bg-[#fbfbfc]"
+    >
+      <div className="border-b border-slate-200/80 px-5 py-4">
+        <h2
+          id="inbox-thread-list-title"
+          className="text-[18px] font-semibold tracking-[-0.03em] text-slate-950"
+        >
+          All conversations
+        </h2>
+      </div>
+
       <div className="border-b border-slate-200/80 px-5">
         <div className="flex h-12 items-end gap-6 overflow-x-auto">
           {TABS.map((tab) => {
@@ -70,11 +82,15 @@ export default function InboxThreadListPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {threadList?.surface?.loading ? (
-          <div className="px-5 py-8 text-sm text-slate-500">Loading conversations...</div>
+          <div className="px-5 py-8 text-sm text-slate-500">
+            Loading conversations...
+          </div>
         ) : !filteredThreads.length ? (
           <div className="px-5 py-8">
             <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center">
-              <div className="text-sm font-medium text-slate-900">No conversations found</div>
+              <div className="text-sm font-medium text-slate-900">
+                No conversations found
+              </div>
               <div className="mt-2 text-sm leading-6 text-slate-500">
                 New threads will appear here.
               </div>
