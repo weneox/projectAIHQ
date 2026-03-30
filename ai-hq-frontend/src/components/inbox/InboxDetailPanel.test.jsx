@@ -66,20 +66,25 @@ describe("InboxDetailPanel", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /refresh conversation/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open conversation details/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /assign/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /activate handoff/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /resolve/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /close/i })).toBeInTheDocument();
     expect(screen.getByText(/composer slot/i)).toBeInTheDocument();
     expect(screen.getAllByText(/failed/i).length).toBeGreaterThan(0);
     expect(
       screen.getByText(/most recent delivery attempt failed on attempt 1 of 3/i)
     ).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: /conversation actions/i }));
+    expect(screen.getByRole("button", { name: /^assign$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /activate handoff/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^resolve$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^close$/i })).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: /^assign$/i }));
     fireEvent.click(screen.getByRole("button", { name: /mark conversation read/i }));
+    fireEvent.click(screen.getByRole("button", { name: /conversation actions/i }));
     fireEvent.click(screen.getByRole("button", { name: /activate handoff/i }));
+    fireEvent.click(screen.getByRole("button", { name: /conversation actions/i }));
     fireEvent.click(screen.getByRole("button", { name: /^resolve$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /conversation actions/i }));
     fireEvent.click(screen.getByRole("button", { name: /^close$/i }));
 
     expect(assignThread).toHaveBeenCalledWith("thread-1");

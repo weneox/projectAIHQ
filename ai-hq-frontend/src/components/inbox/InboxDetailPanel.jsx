@@ -203,6 +203,7 @@ function ConversationIdentityBlock({ thread, onOpenDetails }) {
       <button
         type="button"
         onClick={onOpenDetails}
+        aria-label="Open conversation details"
         className="group flex items-start gap-3 text-left"
       >
         <div
