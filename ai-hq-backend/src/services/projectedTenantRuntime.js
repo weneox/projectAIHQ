@@ -238,8 +238,10 @@ function buildMetaChannelRuntime({
     enabled:
       lower(projected.channelType) === "instagram" ||
       lower(projected.channelType) === "facebook" ||
+      lower(projected.channelType) === "messenger" ||
       lower(match.channel_type) === "instagram" ||
-      lower(match.channel_type) === "facebook",
+      lower(match.channel_type) === "facebook" ||
+      lower(match.channel_type) === "messenger",
     channelType: s(projected.channelType || match.channel_type),
     provider: s(match.provider || "meta"),
     displayName: s(match.display_name || projected.label),
@@ -400,6 +402,46 @@ function resolveConsumerSurface({
   }
 
   return "";
+}
+
+function buildSurfaceAliasSet(surface = "") {
+  const normalized = lower(surface);
+  if (!normalized) return new Set();
+
+  if (normalized === "voice" || normalized === "twilio") {
+    return new Set(["voice", "twilio"]);
+  }
+
+  if (normalized === "meta") {
+    return new Set(["meta", "instagram", "facebook", "messenger"]);
+  }
+
+  if (["instagram", "facebook", "messenger"].includes(normalized)) {
+    return new Set(["meta", normalized]);
+  }
+
+  return new Set([normalized]);
+}
+
+function healthAffectsConsumerSurface(affectedSurfaces = [], consumerSurface = "") {
+  const normalizedAffected = arr(affectedSurfaces)
+    .map((item) => lower(item))
+    .filter(Boolean);
+
+  if (
+    normalizedAffected.includes("all") ||
+    normalizedAffected.includes("global") ||
+    normalizedAffected.includes("runtime")
+  ) {
+    return true;
+  }
+
+  if (!consumerSurface) {
+    return normalizedAffected.length > 0;
+  }
+
+  const aliases = buildSurfaceAliasSet(consumerSurface);
+  return normalizedAffected.some((surface) => aliases.has(surface));
 }
 
 function shouldTreatMissingHealthAsFatal({
@@ -566,13 +608,7 @@ function shouldBlockForProjectionHealth({
     const affectedSurfaces = normalizeAffectedSurfaces(health);
 
     if (consumerSurface && affectedSurfaces.length > 0) {
-      const affectsThisSurface =
-        affectedSurfaces.includes(consumerSurface) ||
-        affectedSurfaces.includes("all") ||
-        affectedSurfaces.includes("global") ||
-        affectedSurfaces.includes("runtime");
-
-      if (!affectsThisSurface) {
+      if (!healthAffectsConsumerSurface(affectedSurfaces, consumerSurface)) {
         return false;
       }
     }
