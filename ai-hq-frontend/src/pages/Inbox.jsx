@@ -1,10 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  Menu,
-  MoreHorizontal,
-  RefreshCw,
-  Search,
-} from "lucide-react";
+import { Menu, RefreshCw, Search } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import InboxComposer from "../components/inbox/InboxComposer.jsx";
@@ -57,6 +52,7 @@ export default function Inbox() {
   const [tenantKey, setTenantKey] = useState("");
   const [operatorName, setOperatorName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const requestedThreadId = String(
     location.state?.selectedThreadId || searchParams.get("threadId") || ""
@@ -69,7 +65,9 @@ export default function Inbox() {
       .then((next) => {
         if (!alive) return;
         setTenantKey(String(next?.tenantKey || "").trim().toLowerCase());
-        setOperatorName((prev) => prev || String(next?.actorName || "operator").trim());
+        setOperatorName(
+          (prev) => prev || String(next?.actorName || "operator").trim()
+        );
       })
       .catch(() => {
         if (!alive) return;
@@ -171,6 +169,16 @@ export default function Inbox() {
     }
   }, [selectedThread?.id, loadMessages, loadRelatedLead]);
 
+  useEffect(() => {
+    function onKeyDown(event) {
+      if (event.key === "Escape") setDetailOpen(false);
+    }
+
+    if (!detailOpen) return undefined;
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [detailOpen]);
+
   const showTopBanner = hasSurfaceFeedback(surface);
 
   return (
@@ -182,8 +190,8 @@ export default function Inbox() {
       <header className="sr-only">
         <h1 id="inbox-surface-title">Operator messaging workspace</h1>
         <p id="inbox-surface-description">
-          Thread-first triage on the left, the live conversation in the center,
-          and compact operational context on the right.
+          Thread-first triage on the left and the live conversation on the
+          right, with details opening as an overlay drawer.
         </p>
         <p>{dbDisabled ? "Fallback mode" : "Live mode"}</p>
       </header>
@@ -198,8 +206,8 @@ export default function Inbox() {
         </div>
       ) : null}
 
-      <div className="grid min-h-[calc(100vh-48px)] xl:grid-cols-[320px_minmax(0,1fr)_320px] xl:grid-rows-[68px_minmax(0,1fr)]">
-        <div className="col-span-1 border-b border-r border-slate-200/70 bg-[#f7f8fa] xl:col-span-2 xl:row-start-1">
+      <div className="relative grid min-h-[calc(100vh-48px)] grid-cols-[320px_minmax(0,1fr)] grid-rows-[68px_minmax(0,1fr)]">
+        <div className="col-span-2 border-b border-slate-200/70 bg-[#f7f8fa]">
           <div className="flex h-[68px] items-center justify-between gap-4 px-4">
             <div className="flex min-w-0 items-center gap-3">
               <IconButton label="Inbox navigation">
@@ -220,7 +228,9 @@ export default function Inbox() {
 
             <div className="flex items-center gap-1">
               <div className="hidden rounded-full border border-slate-200/70 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500 md:inline-flex">
-                {wsState === "connected" ? "Realtime on" : `Realtime ${wsState || "idle"}`}
+                {wsState === "connected"
+                  ? "Realtime on"
+                  : `Realtime ${wsState || "idle"}`}
               </div>
 
               <IconButton
@@ -234,24 +244,7 @@ export default function Inbox() {
           </div>
         </div>
 
-        <div className="border-b border-l border-slate-200/70 bg-[#fbfbfc] xl:col-start-3 xl:row-start-1">
-          <div className="flex h-[68px] items-center justify-between px-5">
-            <div>
-              <div className="text-[14px] font-semibold tracking-[-0.02em] text-slate-950">
-                Details
-              </div>
-              <div className="mt-0.5 text-[12px] text-slate-500">
-                Conversation context
-              </div>
-            </div>
-
-            <IconButton label="More detail actions">
-              <MoreHorizontal className="h-4 w-4" />
-            </IconButton>
-          </div>
-        </div>
-
-        <div className="min-h-0 border-r border-slate-200/70 bg-[#f7f8fa] xl:row-start-2">
+        <div className="min-h-0 border-r border-slate-200/70 bg-[#f7f8fa]">
           <InboxThreadListPanel
             threadList={threadList}
             selectedThreadId={selectedThread?.id || ""}
@@ -259,7 +252,7 @@ export default function Inbox() {
           />
         </div>
 
-        <div className="min-h-0 bg-white xl:row-start-2">
+        <div className="min-h-0 bg-white">
           <InboxDetailPanel
             selectedThread={selectedThread}
             messages={messages}
@@ -270,6 +263,7 @@ export default function Inbox() {
             assignThread={assignThread}
             activateHandoff={activateHandoff}
             setThreadStatus={setThreadStatus}
+            onOpenDetails={() => setDetailOpen(true)}
             composer={
               <InboxComposer
                 embedded
@@ -285,16 +279,37 @@ export default function Inbox() {
           />
         </div>
 
-        <div className="min-h-0 border-l border-slate-200/70 bg-[#fbfbfc] xl:row-start-2">
-          <InboxLeadPanel
-            selectedThread={selectedThread}
-            surface={leadSurface}
-            relatedLead={relatedLead}
-            openLeadDetail={openLeadDetail}
-            operatorName={operatorName}
-            tenantKey={tenantKey}
-            wsState={wsState}
+        <div
+          className={[
+            "absolute inset-0 z-30 transition",
+            detailOpen ? "pointer-events-auto" : "pointer-events-none",
+          ].join(" ")}
+        >
+          <div
+            onClick={() => setDetailOpen(false)}
+            className={[
+              "absolute inset-0 bg-slate-950/10 transition-opacity duration-200",
+              detailOpen ? "opacity-100" : "opacity-0",
+            ].join(" ")}
           />
+
+          <aside
+            className={[
+              "absolute inset-y-0 right-0 w-[360px] max-w-[92vw] border-l border-slate-200/80 bg-[#fbfbfc] shadow-[0_18px_60px_rgba(15,23,42,0.18)] transition-transform duration-200",
+              detailOpen ? "translate-x-0" : "translate-x-full",
+            ].join(" ")}
+          >
+            <InboxLeadPanel
+              selectedThread={selectedThread}
+              surface={leadSurface}
+              relatedLead={relatedLead}
+              openLeadDetail={openLeadDetail}
+              operatorName={operatorName}
+              tenantKey={tenantKey}
+              wsState={wsState}
+              onClose={() => setDetailOpen(false)}
+            />
+          </aside>
         </div>
       </div>
     </section>

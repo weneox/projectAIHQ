@@ -107,8 +107,8 @@ function buildConversationTitle(thread = {}) {
 
   const preview = s(safe.last_message_text);
   if (preview) {
-    if (preview.length <= 56) return preview;
-    return `${preview.slice(0, 56).trim()}…`;
+    if (preview.length <= 64) return preview;
+    return `${preview.slice(0, 64).trim()}…`;
   }
 
   return (
@@ -117,15 +117,6 @@ function buildConversationTitle(thread = {}) {
     s(safe.external_user_id) ||
     "Conversation"
   );
-}
-
-function buildParticipantBadge(thread = {}) {
-  const safe = obj(thread);
-  const channel = s(safe.channel || "other");
-  const username = s(safe.external_username);
-  if (username) return `@${username.replace(/^@+/, "")}`;
-  if (s(safe.external_user_id)) return s(safe.external_user_id);
-  return channel;
 }
 
 export default function InboxDetailPanel({
@@ -138,6 +129,7 @@ export default function InboxDetailPanel({
   assignThread,
   activateHandoff,
   setThreadStatus,
+  onOpenDetails,
   composer = null,
 }) {
   const hasThread = Boolean(selectedThread?.id);
@@ -153,13 +145,11 @@ export default function InboxDetailPanel({
     selectedThread?.customer_name ||
     selectedThread?.external_username ||
     selectedThread?.external_user_id ||
-    "Conversation workspace preview";
+    "Conversation";
 
   const conversationTitle = buildConversationTitle(selectedThread);
-  const participantBadge = buildParticipantBadge(selectedThread);
   const unreadCount = Number(selectedThread?.unread_count ?? 0);
   const handoffActive = Boolean(selectedThread?.handoff_active);
-  const assignedTo = s(selectedThread?.assigned_to, "Unassigned");
 
   const attemptsByCorrelation = useMemo(
     () => indexAttemptsByMessageCorrelation(outboundAttempts),
@@ -169,89 +159,63 @@ export default function InboxDetailPanel({
   return (
     <section className="flex h-full min-h-0 flex-col bg-white">
       <div className="border-b border-slate-200/70">
-        <div className="px-6 pt-5 pb-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <h2 className="truncate text-[17px] font-semibold tracking-[-0.03em] text-slate-950">
-                {conversationTitle}
-              </h2>
-
-              {hasThread ? (
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <div
-                    className={[
-                      "flex h-9 w-9 items-center justify-center rounded-full text-[13px] font-semibold",
-                      avatarTone(selectedName),
-                    ].join(" ")}
-                  >
-                    {initialsFromName(selectedName)}
-                  </div>
-
-                  <div className="min-w-0">
-                    <div className="truncate text-[14px] font-medium text-slate-800">
-                      {selectedName}
-                    </div>
-                  </div>
-
-                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-[#fbfbfc] px-2.5 py-1 text-[11px] font-medium text-slate-500">
-                    {participantBadge}
-                  </span>
-
-                  <span
-                    className={[
-                      "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
-                      handoffActive
-                        ? "border border-amber-200 bg-amber-50 text-amber-800"
-                        : "border border-emerald-200 bg-emerald-50 text-emerald-700",
-                    ].join(" ")}
-                  >
-                    {handoffActive ? "Handoff active" : "AI active"}
-                  </span>
-
-                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-[#f6f7f9] px-2.5 py-1 text-[11px] font-medium text-slate-600">
-                    {assignedTo}
-                  </span>
-                </div>
-              ) : (
-                <div className="mt-2 text-sm text-slate-500">
-                  Select a thread to open the conversation.
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-1">
-              <QuietIconButton
-                onClick={hasThread ? () => markRead(selectedThread.id) : undefined}
-                disabled={!hasThread || unreadCount <= 0 || actionState?.isActionPending?.("read")}
-                label="Mark conversation read"
-              >
-                <CheckCheck className="h-4 w-4" />
-              </QuietIconButton>
-
-              <QuietIconButton
-                onClick={surface?.refresh}
-                disabled={!hasThread || surface?.loading || surface?.saving}
-                label="Refresh conversation"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </QuietIconButton>
-
-              <QuietIconButton label="Open conversation actions">
-                <MoreHorizontal className="h-4 w-4" />
-              </QuietIconButton>
-            </div>
+        <div className="flex items-center justify-between gap-4 px-6 py-5">
+          <div className="min-w-0">
+            <h2 className="truncate text-[17px] font-semibold tracking-[-0.03em] text-slate-950">
+              {conversationTitle}
+            </h2>
           </div>
 
-          {showSurfaceBanner ? (
-            <div className="mt-4">
-              <SettingsSurfaceBanner
-                surface={surface}
-                unavailableMessage="Conversation detail is temporarily unavailable."
-                refreshLabel="Refresh conversation"
-              />
-            </div>
-          ) : null}
+          <div className="flex items-center gap-1">
+            <QuietIconButton
+              onClick={hasThread ? () => markRead(selectedThread.id) : undefined}
+              disabled={
+                !hasThread ||
+                unreadCount <= 0 ||
+                actionState?.isActionPending?.("read")
+              }
+              label="Mark conversation read"
+            >
+              <CheckCheck className="h-4 w-4" />
+            </QuietIconButton>
+
+            <QuietIconButton
+              onClick={surface?.refresh}
+              disabled={!hasThread || surface?.loading || surface?.saving}
+              label="Refresh conversation"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </QuietIconButton>
+
+            {hasThread ? (
+              <button
+                type="button"
+                onClick={onOpenDetails}
+                aria-label="Open conversation details"
+                className={[
+                  "ml-1 flex h-9 w-9 items-center justify-center rounded-full text-[12px] font-semibold transition hover:scale-[1.02]",
+                  avatarTone(selectedName),
+                ].join(" ")}
+              >
+                {initialsFromName(selectedName)}
+              </button>
+            ) : (
+              <QuietIconButton label="More conversation actions">
+                <MoreHorizontal className="h-4 w-4" />
+              </QuietIconButton>
+            )}
+          </div>
         </div>
+
+        {showSurfaceBanner ? (
+          <div className="px-6 pb-4">
+            <SettingsSurfaceBanner
+              surface={surface}
+              unavailableMessage="Conversation detail is temporarily unavailable."
+              refreshLabel="Refresh conversation"
+            />
+          </div>
+        ) : null}
 
         {hasThread ? (
           <div className="border-t border-slate-200/60 px-6 py-3">
@@ -262,13 +226,17 @@ export default function InboxDetailPanel({
                 disabled={actionState?.isActionPending?.("assign")}
                 variant="subtle"
               >
-                {actionState?.isActionPending?.("assign") ? "Assigning..." : "Assign"}
+                {actionState?.isActionPending?.("assign")
+                  ? "Assigning..."
+                  : "Assign"}
               </ActionButton>
 
               <ActionButton
                 icon={ShieldAlert}
                 onClick={() => activateHandoff(selectedThread.id)}
-                disabled={handoffActive || actionState?.isActionPending?.("handoff")}
+                disabled={
+                  handoffActive || actionState?.isActionPending?.("handoff")
+                }
                 variant="amber"
               >
                 {actionState?.isActionPending?.("handoff")
@@ -282,7 +250,9 @@ export default function InboxDetailPanel({
                 disabled={actionState?.isActionPending?.("resolved")}
                 variant="emerald"
               >
-                {actionState?.isActionPending?.("resolved") ? "Resolving..." : "Resolve"}
+                {actionState?.isActionPending?.("resolved")
+                  ? "Resolving..."
+                  : "Resolve"}
               </ActionButton>
 
               <ActionButton
@@ -291,50 +261,54 @@ export default function InboxDetailPanel({
                 disabled={actionState?.isActionPending?.("closed")}
                 variant="rose"
               >
-                {actionState?.isActionPending?.("closed") ? "Closing..." : "Close"}
+                {actionState?.isActionPending?.("closed")
+                  ? "Closing..."
+                  : "Close"}
               </ActionButton>
             </div>
           </div>
         ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-[#fcfcfd] px-6 py-6">
-        {!hasThread ? (
-          <div className="flex h-full min-h-[360px] flex-col items-center justify-center text-center">
-            <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-900">
-              Conversation workspace preview
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#fcfcfd] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {!hasThread ? (
+            <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-6 text-center">
+              <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-900">
+                Conversation workspace
+              </div>
+              <div className="mt-2 max-w-[34rem] text-sm leading-7 text-slate-500">
+                Select a thread to open the message timeline.
+              </div>
             </div>
-            <div className="mt-2 max-w-[34rem] text-sm leading-7 text-slate-500">
-              Select a thread to open the message timeline.
+          ) : surface?.loading ? (
+            <div className="flex h-full min-h-[320px] items-center justify-center px-6 text-sm text-slate-500">
+              Loading messages...
             </div>
-          </div>
-        ) : surface?.loading ? (
-          <div className="flex h-full min-h-[360px] items-center justify-center text-sm text-slate-500">
-            Loading messages...
-          </div>
-        ) : messages.length === 0 ? (
-          <div className="flex h-full min-h-[360px] flex-col items-center justify-center text-center">
-            <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-900">
-              No messages yet
+          ) : messages.length === 0 ? (
+            <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-6 text-center">
+              <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-900">
+                No messages yet
+              </div>
+              <div className="mt-2 max-w-[34rem] text-sm leading-7 text-slate-500">
+                This conversation has no message history yet.
+              </div>
             </div>
-            <div className="mt-2 max-w-[34rem] text-sm leading-7 text-slate-500">
-              This conversation has no message history yet.
+          ) : (
+            <div className="space-y-5 px-6 py-6">
+              {messages.map((message) => (
+                <InboxMessageBubble
+                  key={message.id}
+                  m={message}
+                  attemptsByCorrelation={attemptsByCorrelation}
+                />
+              ))}
             </div>
-          </div>
-        ) : (
-          <div className="space-y-5">
-            {messages.map((message) => (
-              <InboxMessageBubble
-                key={message.id}
-                m={message}
-                attemptsByCorrelation={attemptsByCorrelation}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {composer}
+        {composer}
+      </div>
     </section>
   );
 }

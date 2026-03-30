@@ -3,6 +3,7 @@ import {
   CalendarDays,
   MessageSquareText,
   UserRound,
+  X,
 } from "lucide-react";
 
 import {
@@ -154,6 +155,7 @@ export default function InboxLeadPanel({
   openLeadDetail,
   operatorName = "",
   wsState = "",
+  onClose,
 }) {
   const hasThread = Boolean(selectedThread?.id);
   const hasLead = Boolean(relatedLead?.id);
@@ -163,7 +165,7 @@ export default function InboxLeadPanel({
     s(selectedThread?.customer_name) ||
     s(selectedThread?.external_username) ||
     s(selectedThread?.external_user_id) ||
-    "Task Details";
+    "Details";
 
   const owner = s(selectedThread?.assigned_to) || operatorName || "Unassigned";
   const sourceLabel = hasLead
@@ -181,72 +183,82 @@ export default function InboxLeadPanel({
   return (
     <section className="flex h-full min-h-0 flex-col bg-[#fbfbfc]">
       <div className="border-b border-slate-200/70 px-5 py-5">
-        <h2 className="text-[15px] font-semibold tracking-[-0.02em] text-slate-950">
-          {title}
-        </h2>
-
-        {hasThread ? (
-          <>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Tag tone="green">{s(selectedThread?.channel, "thread")}</Tag>
-              <Tag tone="blue">
-                {hasLead ? s(relatedLead?.stage, "lead") : "context"}
-              </Tag>
-              <Tag tone="amber">
-                {selectedThread?.handoff_active ? "in progress" : "active"}
-              </Tag>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[15px] font-semibold tracking-[-0.02em] text-slate-950">
+              Details
+            </h2>
+            <div className="mt-0.5 text-[12px] text-slate-500">
+              Conversation context
             </div>
-
-            <div className="mt-4 flex items-center gap-3">
-              <div
-                className={[
-                  "flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold",
-                  avatarTone(owner),
-                ].join(" ")}
-              >
-                {initialsFromName(owner)}
-              </div>
-
-              <div className="min-w-0">
-                <div className="truncate text-[14px] font-medium text-slate-800">
-                  {owner}
-                </div>
-                <div className="mt-0.5 truncate text-[13px] text-slate-500">
-                  {wsState ? `Realtime ${wsState}` : "Just now"}
-                </div>
-              </div>
-            </div>
-
-            {surface?.unavailable ||
-            surface?.availability === "unavailable" ||
-            surface?.error ? (
-              <div className="mt-4">
-                <SettingsSurfaceBanner
-                  surface={surface}
-                  unavailableMessage="Related context is temporarily unavailable."
-                  refreshLabel="Refresh context"
-                />
-              </div>
-            ) : null}
-          </>
-        ) : (
-          <div className="mt-3 text-sm text-slate-500">
-            Select a conversation to load details.
           </div>
-        )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close details"
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white hover:text-slate-900"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {!hasThread ? (
           <div className="px-5 py-8 text-sm text-slate-500">
-            No thread selected.
-          </div>
-        ) : surface?.loading ? (
-          <div className="px-5 py-8 text-sm text-slate-500">
-            Loading details...
+            Select a conversation to load details.
           </div>
         ) : (
           <>
+            <div className="border-b border-slate-200/70 px-5 py-5">
+              <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-slate-950">
+                {title}
+              </h3>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Tag tone="green">{s(selectedThread?.channel, "thread")}</Tag>
+                <Tag tone="blue">
+                  {hasLead ? s(relatedLead?.stage, "lead") : "context"}
+                </Tag>
+                <Tag tone="amber">
+                  {selectedThread?.handoff_active ? "in progress" : "active"}
+                </Tag>
+              </div>
+
+              <div className="mt-4 flex items-center gap-3">
+                <div
+                  className={[
+                    "flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold",
+                    avatarTone(owner),
+                  ].join(" ")}
+                >
+                  {initialsFromName(owner)}
+                </div>
+
+                <div className="min-w-0">
+                  <div className="truncate text-[14px] font-medium text-slate-800">
+                    {owner}
+                  </div>
+                  <div className="mt-0.5 truncate text-[13px] text-slate-500">
+                    {wsState ? `Realtime ${wsState}` : "Just now"}
+                  </div>
+                </div>
+              </div>
+
+              {surface?.unavailable ||
+              surface?.availability === "unavailable" ||
+              surface?.error ? (
+                <div className="mt-4">
+                  <SettingsSurfaceBanner
+                    surface={surface}
+                    unavailableMessage="Related context is temporarily unavailable."
+                    refreshLabel="Refresh context"
+                  />
+                </div>
+              ) : null}
+            </div>
+
             <div className="px-5 py-3">
               <DetailRow label="Owner" value={owner} />
               <div className="border-t border-slate-200/70" />

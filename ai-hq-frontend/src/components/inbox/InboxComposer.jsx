@@ -143,33 +143,29 @@ export default function InboxComposer({
   onReleaseHandoff,
   embedded = false,
 }) {
+  const content = (
+    <ComposerBody
+      selectedThread={selectedThread}
+      surface={surface}
+      actionState={actionState}
+      replyText={replyText}
+      setReplyText={setReplyText}
+      onSend={onSend}
+      onReleaseHandoff={onReleaseHandoff}
+    />
+  );
+
   if (embedded) {
     return (
-      <div className="border-t border-slate-200/70 bg-[#fcfcfd] px-6 py-4">
-        <ComposerBody
-          selectedThread={selectedThread}
-          surface={surface}
-          actionState={actionState}
-          replyText={replyText}
-          setReplyText={setReplyText}
-          onSend={onSend}
-          onReleaseHandoff={onReleaseHandoff}
-        />
+      <div className="border-t border-slate-200/70 bg-white px-6 py-4">
+        {content}
       </div>
     );
   }
 
   return (
-    <section className="border-t border-slate-200/70 bg-[#fcfcfd] px-6 py-4">
-      <ComposerBody
-        selectedThread={selectedThread}
-        surface={surface}
-        actionState={actionState}
-        replyText={replyText}
-        setReplyText={setReplyText}
-        onSend={onSend}
-        onReleaseHandoff={onReleaseHandoff}
-      />
+    <section className="border-t border-slate-200/70 bg-white px-6 py-4">
+      {content}
     </section>
   );
 }
