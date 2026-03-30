@@ -46,19 +46,52 @@ function titleize(value = "") {
 function policyTone(outcome = "") {
   switch (s(outcome).toLowerCase()) {
     case "allowed":
-      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+      return "border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-200";
     case "allowed_with_logging":
-      return "border-cyan-200 bg-cyan-50 text-cyan-700";
+      return "border-cyan-400/20 bg-cyan-400/[0.08] text-cyan-200";
     case "allowed_with_human_review":
     case "handoff_required":
     case "operator_only":
-      return "border-amber-200 bg-amber-50 text-amber-700";
+      return "border-amber-400/20 bg-amber-400/[0.08] text-amber-200";
     case "blocked":
     case "blocked_until_repair":
-      return "border-rose-200 bg-rose-50 text-rose-700";
+      return "border-rose-400/20 bg-rose-400/[0.08] text-rose-200";
     default:
-      return "border-slate-200 bg-slate-100 text-slate-700";
+      return "border-white/10 bg-white/[0.04] text-slate-300";
   }
+}
+
+function Button({ children, onClick, tone = "default", disabled = false, icon: Icon }) {
+  const toneMap = {
+    default:
+      "border-white/10 bg-white/[0.04] text-slate-200 hover:border-white/20 hover:bg-white/[0.08]",
+    cyan:
+      "border-cyan-400/20 bg-cyan-400/[0.08] text-cyan-100 hover:border-cyan-400/30 hover:bg-cyan-400/[0.14]",
+    amber:
+      "border-amber-400/20 bg-amber-400/[0.08] text-amber-100 hover:border-amber-400/30 hover:bg-amber-400/[0.14]",
+    emerald:
+      "border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-100 hover:border-emerald-400/30 hover:bg-emerald-400/[0.14]",
+    rose:
+      "border-rose-400/20 bg-rose-400/[0.08] text-rose-100 hover:border-rose-400/30 hover:bg-rose-400/[0.14]",
+    violet:
+      "border-violet-400/20 bg-violet-400/[0.08] text-violet-100 hover:border-violet-400/30 hover:bg-violet-400/[0.14]",
+  };
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={[
+        "inline-flex items-center justify-center gap-2 rounded-full border px-3.5 py-2 text-[12px] font-medium transition",
+        toneMap[tone] || toneMap.default,
+        disabled ? "cursor-not-allowed opacity-45" : "",
+      ].join(" ")}
+    >
+      {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+      {children}
+    </button>
+  );
 }
 
 function deriveExecutionPolicy(thread = {}) {
@@ -98,39 +131,6 @@ function deriveExecutionPolicy(thread = {}) {
   return { outcome, reasonCodes, explanation };
 }
 
-function Button({ children, onClick, tone = "default", disabled = false, icon: Icon }) {
-  const toneMap = {
-    default:
-      "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-900",
-    cyan:
-      "border-cyan-200 bg-cyan-50 text-cyan-900 hover:border-cyan-300 hover:bg-cyan-100",
-    amber:
-      "border-amber-200 bg-amber-50 text-amber-900 hover:border-amber-300 hover:bg-amber-100",
-    emerald:
-      "border-emerald-200 bg-emerald-50 text-emerald-900 hover:border-emerald-300 hover:bg-emerald-100",
-    rose:
-      "border-rose-200 bg-rose-50 text-rose-900 hover:border-rose-300 hover:bg-rose-100",
-    violet:
-      "border-violet-200 bg-violet-50 text-violet-900 hover:border-violet-300 hover:bg-violet-100",
-  };
-
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={[
-        "inline-flex items-center justify-center gap-2 rounded-full border px-3.5 py-2 text-[12px] font-medium transition",
-        toneMap[tone] || toneMap.default,
-        disabled ? "cursor-not-allowed opacity-45" : "",
-      ].join(" ")}
-    >
-      {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
-      {children}
-    </button>
-  );
-}
-
 export default function InboxDetailPanel({
   selectedThread,
   messages,
@@ -141,8 +141,8 @@ export default function InboxDetailPanel({
   markRead,
   assignThread,
   activateHandoff,
-  releaseHandoff,
   setThreadStatus,
+  composer = null,
 }) {
   const hasThread = Boolean(selectedThread?.id);
   const selectedName =
@@ -150,6 +150,9 @@ export default function InboxDetailPanel({
     selectedThread?.external_username ||
     selectedThread?.external_user_id ||
     "Conversation workspace preview";
+  const selectedHandle = selectedThread?.external_username
+    ? `@${String(selectedThread.external_username).replace(/^@+/, "")}`
+    : selectedThread?.external_user_id || "Awaiting thread selection";
 
   const selectedState = deriveThreadState(selectedThread);
   const selectedLabels = Array.isArray(selectedThread?.labels) ? selectedThread.labels : [];
@@ -180,76 +183,63 @@ export default function InboxDetailPanel({
   );
 
   return (
-    <section className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/88 shadow-[0_18px_40px_rgba(15,23,42,0.04)]">
-      <div className="border-b border-slate-200/80 px-5 py-4">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[32px] border border-white/10 bg-[#0c1424]">
+      <div className="border-b border-white/8 px-5 py-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
               Conversation workspace
             </div>
-            <div className="mt-1 text-[20px] font-semibold tracking-[-0.03em] text-slate-950">
-              {selectedName}
-            </div>
-            <div className="mt-2 text-[13px] leading-6 text-slate-500">
-              {hasThread
-                ? "Conversation detail, message state, action controls, and runtime breadcrumbs for the selected thread."
-                : "Conversation workspace preview. Message state illustration goes here until a thread is selected."}
-            </div>
-          </div>
-
-          {hasThread ? (
-            <Button
-              onClick={() => markRead(selectedThread.id)}
-              disabled={!canMarkRead}
-              icon={CheckCheck}
-            >
-              {actionState?.isActionPending?.("read") ? "Marking..." : "Mark as read"}
-            </Button>
-          ) : null}
-        </div>
-
-        {hasThread ? (
-          <div className="mt-4">
-            <SettingsSurfaceBanner
-              surface={surface}
-              unavailableMessage="Conversation detail is temporarily unavailable."
-              refreshLabel="Refresh conversation"
-            />
-          </div>
-        ) : null}
-      </div>
-
-      <div className="border-b border-slate-200/80 px-5 py-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap gap-2">
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <h2 className="truncate text-[24px] font-semibold tracking-[-0.04em] text-white">
+                {selectedName}
+              </h2>
               {selectedThread?.channel ? (
-                <div
-                  className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] ${channelTone(selectedThread.channel)}`}
+                <span
+                  className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] ${channelTone(
+                    selectedThread.channel
+                  )}`}
                 >
                   {selectedThread.channel}
-                </div>
+                </span>
               ) : null}
-
               {selectedThread ? (
-                <div
-                  className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] ${stateBadgeTone(selectedState)}`}
+                <span
+                  className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] ${stateBadgeTone(
+                    selectedState
+                  )}`}
                 >
                   {prettyState(selectedState)}
-                </div>
+                </span>
               ) : null}
-
               {handoffActive ? (
-                <div
-                  className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] ${getPriorityTone(selectedThread.handoff_priority)}`}
+                <span
+                  className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] ${getPriorityTone(
+                    selectedThread.handoff_priority
+                  )}`}
                 >
-                  {selectedThread.handoff_priority || "normal"}
-                </div>
+                  handoff {selectedThread.handoff_priority || "normal"}
+                </span>
               ) : null}
+            </div>
+            <div className="mt-2 text-sm text-slate-400">{selectedHandle}</div>
+            <div className="mt-3 text-sm leading-6 text-slate-400">
+              {hasThread
+                ? "Full thread history, operator actions, and channel-aware reply controls for the selected conversation."
+                : "Select a thread to open the conversation timeline, operator actions, and composer."}
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
+            {hasThread ? (
+              <Button
+                onClick={() => markRead(selectedThread.id)}
+                disabled={!canMarkRead}
+                icon={CheckCheck}
+              >
+                {actionState?.isActionPending?.("read") ? "Marking..." : "Mark as read"}
+              </Button>
+            ) : null}
             <Button
               tone="violet"
               icon={UserCog}
@@ -295,64 +285,48 @@ export default function InboxDetailPanel({
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <InboxMiniInfo
-            label="AI state"
-            value={handoffActive ? "AI paused" : "AI active"}
-            icon={Bot}
-          />
-          <InboxMiniInfo label="Assigned" value={assignedTo} icon={UserCog} />
-          <InboxMiniInfo
-            label="Last activity"
-            value={fmtRelative(selectedThread?.last_message_at || selectedThread?.updated_at)}
-            icon={RefreshCw}
-          />
-          <InboxMiniInfo label="Unread" value={String(unreadCount)} icon={AlertTriangle} />
-          <InboxMiniInfo
-            label="Handoff at"
-            value={fmtDateTime(selectedThread?.handoff_at)}
-            icon={ShieldAlert}
-          />
-          <InboxMiniInfo
-            label="Thread status"
-            value={prettyState(selectedState)}
-            icon={CheckCircle2}
-          />
-        </div>
+        {hasThread ? (
+          <div className="mt-4">
+            <SettingsSurfaceBanner
+              surface={surface}
+              unavailableMessage="Conversation detail is temporarily unavailable."
+              refreshLabel="Refresh conversation"
+            />
+          </div>
+        ) : null}
+      </div>
 
-        <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
-              Labels
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {selectedLabels.length ? (
-                selectedLabels.map((label) => (
-                  <span
-                    key={label}
-                    className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-slate-600"
-                  >
-                    {label}
-                  </span>
-                ))
-              ) : (
-                <span className="text-sm text-slate-500">No labels attached.</span>
-              )}
-            </div>
+      <div className="border-b border-white/8 px-5 py-4">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(220px,300px)]">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <InboxMiniInfo
+              label="AI state"
+              value={handoffActive ? "AI paused" : "AI active"}
+              icon={Bot}
+            />
+            <InboxMiniInfo label="Assigned" value={assignedTo} icon={UserCog} />
+            <InboxMiniInfo
+              label="Last activity"
+              value={fmtRelative(selectedThread?.last_message_at || selectedThread?.updated_at)}
+              icon={RefreshCw}
+            />
+            <InboxMiniInfo label="Unread" value={String(unreadCount)} icon={AlertTriangle} />
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
                 Channel autonomy
               </div>
               <div
-                className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] ${policyTone(executionPolicy.outcome)}`}
+                className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] ${policyTone(
+                  executionPolicy.outcome
+                )}`}
               >
                 {titleize(executionPolicy.outcome || "unknown")}
               </div>
             </div>
-            <div className="mt-2 text-sm leading-6 text-slate-600">
+            <div className="mt-2 text-sm leading-6 text-slate-300">
               {executionPolicy.explanation}
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -360,7 +334,7 @@ export default function InboxDetailPanel({
                 executionPolicy.reasonCodes.map((code) => (
                   <span
                     key={code}
-                    className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-slate-600"
+                    className="rounded-full border border-white/10 bg-black/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-slate-400"
                   >
                     {titleize(code)}
                   </span>
@@ -371,54 +345,97 @@ export default function InboxDetailPanel({
             </div>
           </div>
         </div>
+
+        {hasThread ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {selectedLabels.length ? (
+              selectedLabels.map((label) => (
+                <span
+                  key={label}
+                  className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-400"
+                >
+                  {label}
+                </span>
+              ))
+            ) : (
+              <span className="text-xs uppercase tracking-[0.16em] text-slate-500">
+                No labels attached
+              </span>
+            )}
+
+            <span className="text-xs uppercase tracking-[0.16em] text-slate-500">
+              Handoff at {fmtDateTime(selectedThread?.handoff_at)}
+            </span>
+          </div>
+        ) : null}
       </div>
 
-      <div className="grid gap-4 border-b border-slate-200/80 px-5 py-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="min-h-[420px] rounded-2xl border border-slate-200 bg-[#fbfcfd] px-4 py-4">
-          {!hasThread ? (
-            <div className="flex h-full flex-col items-center justify-center text-center">
-              <div className="text-[16px] font-semibold tracking-[-0.03em] text-slate-900">
-                Conversation workspace preview
-              </div>
-              <div className="mt-2 max-w-[32rem] text-sm leading-7 text-slate-500">
-                Select a thread to open the message timeline. Message state illustration goes
-                here until a conversation is selected.
-              </div>
+      <div className="min-h-0 flex-1 overflow-hidden px-5 py-5">
+        <div className="flex h-full min-h-[420px] flex-col rounded-[28px] border border-white/10 bg-[#09111f]">
+          <div className="border-b border-white/8 px-4 py-3">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
+              Message history
             </div>
-          ) : surface?.loading ? (
-            <div className="flex h-full items-center justify-center text-sm text-slate-500">
-              Loading messages...
+            <div className="mt-1 text-sm text-slate-400">
+              {hasThread
+                ? "All messages for the selected thread appear here."
+                : "Conversation empty-state visual placeholder."}
             </div>
-          ) : messages.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center text-center">
-              <div className="text-[16px] font-semibold tracking-[-0.03em] text-slate-900">
-                No messages yet
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+            {!hasThread ? (
+              <div className="flex h-full flex-col items-center justify-center text-center">
+                <div className="text-[16px] font-semibold tracking-[-0.03em] text-white">
+                  Conversation workspace preview
+                </div>
+                <div className="mt-2 max-w-[32rem] text-sm leading-7 text-slate-400">
+                  Select a thread to open the message timeline. Conversation empty-state
+                  visual placeholder.
+                </div>
               </div>
-              <div className="mt-2 max-w-[32rem] text-sm leading-7 text-slate-500">
-                Conversation empty-state visual placeholder. Message timeline and operator
-                guidance will appear here when the thread receives activity.
+            ) : surface?.loading ? (
+              <div className="flex h-full items-center justify-center text-sm text-slate-400">
+                Loading messages...
               </div>
+            ) : messages.length === 0 ? (
+              <div className="flex h-full flex-col items-center justify-center text-center">
+                <div className="text-[16px] font-semibold tracking-[-0.03em] text-white">
+                  No messages yet
+                </div>
+                <div className="mt-2 max-w-[32rem] text-sm leading-7 text-slate-400">
+                  Conversation empty-state visual placeholder. Channel-aware reply
+                  controls will live here when the thread receives activity.
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {messages.map((message) => (
+                  <InboxMessageBubble
+                    key={message.id}
+                    m={message}
+                    attemptsByCorrelation={attemptsByCorrelation}
+                    onInspectLineage={onInspectLineage}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {hasThread ? (
+            <div className="border-t border-white/8 px-4 py-4">
+              <InboxReplayTraceCard
+                traceSource={selectedThread}
+                compact
+                title="Latest execution inspect"
+                subtitle="Runtime and reasoning breadcrumbs for the latest governed action on this thread."
+              />
             </div>
-          ) : (
-            <div className="space-y-4">
-              {messages.map((message) => (
-                <InboxMessageBubble
-                  key={message.id}
-                  m={message}
-                  attemptsByCorrelation={attemptsByCorrelation}
-                  onInspectLineage={onInspectLineage}
-                />
-              ))}
-            </div>
-          )}
+          ) : null}
         </div>
-
-        <InboxReplayTraceCard
-          traceSource={selectedThread}
-          title="Latest execution inspect"
-          subtitle="Runtime and reasoning breadcrumbs for the latest governed action on this thread."
-        />
       </div>
+
+      {composer}
     </section>
   );
 }

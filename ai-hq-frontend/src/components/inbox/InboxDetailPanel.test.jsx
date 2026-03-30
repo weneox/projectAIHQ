@@ -69,15 +69,17 @@ describe("InboxDetailPanel", () => {
         activateHandoff={vi.fn()}
         releaseHandoff={vi.fn()}
         setThreadStatus={vi.fn()}
+        composer={<div>Composer slot</div>}
       />
     );
 
     expect(screen.getByText(/thread assigned/i)).toBeInTheDocument();
-    expect(screen.getByText(/conversation detail/i)).toBeInTheDocument();
+    expect(screen.getByText(/full thread history/i)).toBeInTheDocument();
     expect(screen.getByText(/channel autonomy/i)).toBeInTheDocument();
     expect(screen.getByText(/blocked until repair/i)).toBeInTheDocument();
     expect(screen.getByText(/runtime authority unavailable/i)).toBeInTheDocument();
     expect(screen.getByText(/latest execution inspect/i)).toBeInTheDocument();
+    expect(screen.getByText(/composer slot/i)).toBeInTheDocument();
     expect(screen.getAllByText(/failed/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/most recent delivery attempt failed on attempt 1 of 3/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /inspect lineage/i })).toBeInTheDocument();

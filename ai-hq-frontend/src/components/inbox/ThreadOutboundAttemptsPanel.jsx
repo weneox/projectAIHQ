@@ -41,6 +41,7 @@ function ThreadOutboundAttemptsPanelView({
   handleMarkDead,
   panelRef,
   attentionKey = 0,
+  compact = false,
 }) {
   const [attentionVisible, setAttentionVisible] = useState(false);
 
@@ -57,30 +58,30 @@ function ThreadOutboundAttemptsPanelView({
     <div
       ref={panelRef}
       tabIndex={-1}
-      className={`rounded-[28px] border bg-white/88 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.04)] outline-none transition ${
-        attentionVisible
-          ? "border-violet-300 ring-2 ring-violet-200"
-          : "border-slate-200/80"
+      className={`rounded-[28px] border bg-[#121b2d] p-4 outline-none transition ${
+        attentionVisible ? "border-violet-400/30 ring-2 ring-violet-400/20" : "border-white/10"
       }`}
     >
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
             Delivery lineage
           </div>
-          <div className="mt-1 text-[16px] font-semibold tracking-[-0.03em] text-slate-900">
-            Thread Delivery Attempts
+          <div className="mt-1 text-[16px] font-semibold tracking-[-0.03em] text-slate-100">
+            Thread attempts
           </div>
-          <div className="mt-1 text-sm leading-6 text-slate-500">
-            Per-attempt outbound lineage for the selected conversation. Queued, retrying, failed, dead, and sent stay distinct here.
-          </div>
+          {!compact ? (
+            <div className="mt-1 text-sm leading-6 text-slate-400">
+              Per-attempt outbound lineage for the selected conversation.
+            </div>
+          ) : null}
         </div>
 
         <button
           type="button"
           onClick={surface?.refresh}
           disabled={surface?.loading || surface?.saving || !threadId}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:opacity-50"
+          className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/[0.08] disabled:opacity-50"
         >
           Refresh
         </button>
@@ -94,15 +95,15 @@ function ThreadOutboundAttemptsPanelView({
         />
       </div>
 
-      <div className="mt-5 rounded-[22px] border border-slate-200 bg-white">
+      <div className="mt-4 rounded-[22px] border border-white/10 bg-black/10">
         {!threadId ? (
-          <div className="px-4 py-5 text-sm text-slate-500">No thread selected.</div>
+          <div className="px-4 py-5 text-sm text-slate-400">No thread selected.</div>
         ) : surface?.loading ? (
-          <div className="px-4 py-5 text-sm text-slate-500">Loading attempts...</div>
+          <div className="px-4 py-5 text-sm text-slate-400">Loading attempts...</div>
         ) : attempts.length === 0 ? (
-          <div className="px-4 py-5 text-sm text-slate-500">No delivery attempts for this thread.</div>
+          <div className="px-4 py-5 text-sm text-slate-400">No delivery attempts for this thread.</div>
         ) : (
-          <div className="divide-y divide-slate-200">
+          <div className="divide-y divide-white/8">
             {attempts.map((item) => {
               const id = s(item?.id);
               const state = describeAttemptState(item);
@@ -114,7 +115,7 @@ function ThreadOutboundAttemptsPanelView({
                 <div key={id} className="p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge status={item?.status} />
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-slate-500">
                       attempt {Number(item?.attempt_count || 0)}
                       {Number(item?.max_attempts || 0) > 0
                         ? ` of ${Number(item?.max_attempts || 0)}`
@@ -122,11 +123,11 @@ function ThreadOutboundAttemptsPanelView({
                     </span>
                   </div>
 
-                  <div className="mt-2 text-sm font-medium text-slate-900">
+                  <div className="mt-2 text-sm font-medium text-slate-100">
                     {state.label}
                   </div>
 
-                  <div className="mt-2 text-sm text-slate-700">
+                  <div className="mt-2 text-sm text-slate-300">
                     {s(item?.message_text) || "--"}
                   </div>
 
@@ -134,15 +135,14 @@ function ThreadOutboundAttemptsPanelView({
                     {state.detail}
                   </div>
 
-                  <div className="mt-2 grid gap-2 text-xs text-slate-500 md:grid-cols-2">
+                  <div className="mt-2 grid gap-2 text-xs text-slate-500">
                     <div>State updated: {fmtDate(item?.updated_at)}</div>
                     <div>Next retry: {fmtDate(item?.next_retry_at)}</div>
                     <div>Provider: {s(item?.provider) || "--"}</div>
-                    <div>Attempt ID: {id}</div>
                   </div>
 
                   {s(item?.last_error) ? (
-                    <div className="mt-2 text-xs text-rose-600">{s(item?.last_error)}</div>
+                    <div className="mt-2 text-xs text-rose-300">{s(item?.last_error)}</div>
                   ) : null}
 
                   <div className="mt-3 flex gap-2">
@@ -150,7 +150,7 @@ function ThreadOutboundAttemptsPanelView({
                       type="button"
                       disabled={isBusy || s(item?.status) === "sent"}
                       onClick={() => handleResend?.(id)}
-                      className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-medium text-cyan-900 transition hover:border-cyan-300 hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-full border border-cyan-400/20 bg-cyan-400/[0.08] px-3 py-1.5 text-xs font-medium text-cyan-100 transition hover:border-cyan-400/30 hover:bg-cyan-400/[0.14] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {retryBusy ? "..." : "Retry"}
                     </button>
@@ -159,7 +159,7 @@ function ThreadOutboundAttemptsPanelView({
                       type="button"
                       disabled={isBusy || s(item?.status) === "dead"}
                       onClick={() => handleMarkDead?.(id)}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {deadBusy ? "..." : "Dead"}
                     </button>
@@ -179,6 +179,7 @@ function ThreadOutboundAttemptsPanelManaged({
   actor = "operator",
   panelRef,
   attentionKey = 0,
+  compact = false,
 }) {
   const threadId = s(selectedThread?.id);
   const managedSurface = useThreadOutboundAttemptsSurface({ threadId, actor });
@@ -193,6 +194,7 @@ function ThreadOutboundAttemptsPanelManaged({
       handleMarkDead={managedSurface?.handleMarkDead}
       panelRef={panelRef}
       attentionKey={attentionKey}
+      compact={compact}
     />
   );
 }
@@ -203,6 +205,7 @@ export default function ThreadOutboundAttemptsPanel({
   attemptsSurface = null,
   panelRef,
   attentionKey = 0,
+  compact = false,
 }) {
   if (!attemptsSurface) {
     return (
@@ -211,6 +214,7 @@ export default function ThreadOutboundAttemptsPanel({
         actor={actor}
         panelRef={panelRef}
         attentionKey={attentionKey}
+        compact={compact}
       />
     );
   }
@@ -225,6 +229,7 @@ export default function ThreadOutboundAttemptsPanel({
       handleMarkDead={attemptsSurface?.handleMarkDead}
       panelRef={panelRef}
       attentionKey={attentionKey}
+      compact={compact}
     />
   );
 }

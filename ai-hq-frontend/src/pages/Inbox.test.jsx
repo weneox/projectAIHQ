@@ -203,7 +203,7 @@ describe("Inbox", () => {
     render(<Inbox />);
 
     expect(
-      await screen.findByRole("heading", { name: /^inbox$/i })
+      await screen.findByRole("heading", { name: /operator messaging workspace/i })
     ).toBeInTheDocument();
 
     expect(screen.getByText(/reply accepted/i)).toBeInTheDocument();
@@ -211,8 +211,9 @@ describe("Inbox", () => {
       screen.getByText(/inbox operations are temporarily unavailable/i)
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/a calmer operator queue on the left/i)
+      screen.getByText(/thread-first triage on the left/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/db disabled/i)).toBeInTheDocument();
+    expect(screen.getByText(/fallback mode/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /all conversations/i })).toBeInTheDocument();
   });
 });

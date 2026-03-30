@@ -12,13 +12,10 @@ function fmtDate(v) {
   return d.toLocaleString();
 }
 
-function StatCard({ label, value }) {
+function MetricPill({ label, value }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-      <div className="text-xs uppercase tracking-[0.18em] text-slate-400">
-        {label}
-      </div>
-      <div className="mt-2 text-2xl font-semibold text-slate-900">{value}</div>
+    <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-slate-400">
+      <span className="text-slate-500">{label}</span> <span className="font-semibold text-slate-200">{value}</span>
     </div>
   );
 }
@@ -48,6 +45,7 @@ export default function RetryQueuePanel({
   tenantKey = "neox",
   actor = "operator",
   className = "",
+  compact = false,
 }) {
   const {
     attempts,
@@ -62,49 +60,53 @@ export default function RetryQueuePanel({
 
   return (
     <section className={className}>
-      <div className="rounded-[28px] border border-slate-200/80 bg-white/88 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.04)]">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-              Delivery resilience
+      <div className="rounded-[28px] border border-white/10 bg-[#121b2d] p-4">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Delivery resilience
+              </div>
+              <div className="mt-1 text-[16px] font-semibold tracking-[-0.03em] text-slate-100">
+                Retry queue
+              </div>
+              {!compact ? (
+                <div className="mt-1 text-sm leading-6 text-slate-400">
+                  Outbound delivery attempts that failed, are retrying, or need operator cleanup.
+                </div>
+              ) : null}
             </div>
-            <div className="mt-1 text-[18px] font-semibold tracking-[-0.03em] text-slate-900">
-              Retry Queue
-            </div>
-            <div className="mt-1 text-sm leading-6 text-slate-500">
-              Outbound delivery attempts that failed, are retrying, or need operator cleanup.
+
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="rounded-full border border-white/10 bg-black/10 px-3 py-2 text-sm text-slate-300 outline-none"
+              >
+                <option value="">All problem states</option>
+                <option value="failed">Failed</option>
+                <option value="retrying">Retrying</option>
+                <option value="dead">Dead</option>
+                <option value="queued">Queued</option>
+                <option value="sending">Sending</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={surface.refresh}
+                disabled={surface.loading || surface.saving}
+                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/[0.08] disabled:opacity-50"
+              >
+                Refresh
+              </button>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none"
-            >
-              <option value="">All problem states</option>
-              <option value="failed">Failed</option>
-              <option value="retrying">Retrying</option>
-              <option value="dead">Dead</option>
-              <option value="queued">Queued</option>
-              <option value="sending">Sending</option>
-            </select>
-
-            <button
-              type="button"
-              onClick={surface.refresh}
-              disabled={surface.loading || surface.saving}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:opacity-50"
-            >
-              Refresh
-            </button>
+          <div className="flex flex-wrap gap-2">
+            {cards.map(([label, value]) => (
+              <MetricPill key={label} label={label} value={value} />
+            ))}
           </div>
-        </div>
-
-        <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          {cards.map(([label, value]) => (
-            <StatCard key={label} label={label} value={value} />
-          ))}
         </div>
 
         <div className="mt-4">
@@ -115,13 +117,13 @@ export default function RetryQueuePanel({
           />
         </div>
 
-        <div className="mt-5 overflow-hidden rounded-[22px] border border-slate-200 bg-white">
+        <div className="mt-4 overflow-hidden rounded-[22px] border border-white/10 bg-black/10">
           {surface.loading ? (
-            <div className="p-6 text-sm text-slate-500">Loading queue...</div>
+            <div className="p-6 text-sm text-slate-400">Loading queue...</div>
           ) : attempts.length === 0 ? (
-            <div className="p-6 text-sm text-slate-500">No retry items.</div>
+            <div className="p-6 text-sm text-slate-400">No retry items.</div>
           ) : (
-            <div className="divide-y divide-slate-200">
+            <div className="divide-y divide-white/8">
               {attempts.map((item) => {
                 const id = s(item?.id);
                 const retryBusy = actionState.isActionPending(`retry:${id}`);
@@ -129,69 +131,41 @@ export default function RetryQueuePanel({
                 const isBusy = retryBusy || deadBusy;
 
                 return (
-                  <div
-                    key={id}
-                    className="grid gap-4 p-4 xl:grid-cols-[1.2fr_1fr_0.8fr_auto]"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <StatusBadge status={item?.status} />
-                        <span className="text-xs text-slate-400">
-                          attempts: {Number(item?.attempt_count || 0)} /{" "}
-                          {Number(item?.max_attempts || 0)}
-                        </span>
-                      </div>
-
-                      <div className="mt-2 truncate text-sm font-medium text-slate-900">
-                        {s(item?.customer_name) ||
-                          s(item?.external_username) ||
-                          s(item?.external_user_id) ||
-                          "Unknown recipient"}
-                      </div>
-
-                      <div className="mt-1 text-sm text-slate-600">
-                        {s(item?.message_text) || "--"}
-                      </div>
-
-                      {s(item?.last_error) ? (
-                        <div className="mt-2 text-xs text-rose-600">
-                          {s(item?.last_error)}
-                        </div>
-                      ) : null}
+                  <div key={id} className="p-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge status={item?.status} />
+                      <span className="text-xs text-slate-500">
+                        attempts: {Number(item?.attempt_count || 0)} / {Number(item?.max_attempts || 0)}
+                      </span>
                     </div>
 
-                    <div className="text-sm text-slate-500">
-                      <div>
-                        <span className="text-slate-400">Channel:</span>{" "}
-                        {s(item?.channel) || "--"}
-                      </div>
-                      <div className="mt-1">
-                        <span className="text-slate-400">Next retry:</span>{" "}
-                        {fmtDate(item?.next_retry_at)}
-                      </div>
-                      <div className="mt-1">
-                        <span className="text-slate-400">Updated:</span>{" "}
-                        {fmtDate(item?.updated_at)}
-                      </div>
+                    <div className="mt-2 text-sm font-medium text-slate-100">
+                      {s(item?.customer_name) ||
+                        s(item?.external_username) ||
+                        s(item?.external_user_id) ||
+                        "Unknown recipient"}
                     </div>
 
-                    <div className="text-sm text-slate-500">
-                      <div>
-                        <span className="text-slate-400">Provider:</span>{" "}
-                        {s(item?.provider) || "--"}
-                      </div>
-                      <div className="mt-1 break-all">
-                        <span className="text-slate-400">Attempt ID:</span>{" "}
-                        {id}
-                      </div>
+                    <div className="mt-1 text-sm text-slate-300">
+                      {s(item?.message_text) || "--"}
                     </div>
 
-                    <div className="flex items-start justify-start gap-2 xl:justify-end">
+                    {s(item?.last_error) ? (
+                      <div className="mt-2 text-xs text-rose-300">{s(item?.last_error)}</div>
+                    ) : null}
+
+                    <div className="mt-2 space-y-1 text-xs text-slate-500">
+                      <div>Channel: {s(item?.channel) || "--"}</div>
+                      <div>Next retry: {fmtDate(item?.next_retry_at)}</div>
+                      <div>Provider: {s(item?.provider) || "--"}</div>
+                    </div>
+
+                    <div className="mt-3 flex items-start gap-2">
                       <button
                         type="button"
                         disabled={isBusy || s(item?.status) === "sent"}
                         onClick={() => handleResend(id)}
-                        className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-medium text-cyan-900 transition hover:border-cyan-300 hover:bg-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-full border border-cyan-400/20 bg-cyan-400/[0.08] px-3 py-1.5 text-xs font-medium text-cyan-100 transition hover:border-cyan-400/30 hover:bg-cyan-400/[0.14] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {retryBusy ? "..." : "Retry"}
                       </button>
@@ -200,7 +174,7 @@ export default function RetryQueuePanel({
                         type="button"
                         disabled={isBusy || s(item?.status) === "dead"}
                         onClick={() => handleMarkDead(id)}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {deadBusy ? "..." : "Dead"}
                       </button>
