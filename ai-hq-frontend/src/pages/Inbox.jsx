@@ -187,6 +187,7 @@ export default function Inbox() {
           Thread-first triage on the left, the live conversation in the center,
           and compact operational context on the right.
         </p>
+        <p>{dbDisabled ? "Fallback mode" : "Live mode"}</p>
       </header>
 
       {showTopBanner ? (
