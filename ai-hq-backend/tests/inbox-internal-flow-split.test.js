@@ -102,6 +102,7 @@ test("inbox ingest duplicate handling short-circuits before runtime and brain or
 
   let runtimeCalls = 0;
   let brainCalls = 0;
+  let inboundLookupCount = 0;
 
   const client = {
     async query(text, values = []) {
@@ -177,6 +178,128 @@ test("inbox ingest duplicate handling short-circuits before runtime and brain or
   assert.equal(brainCalls, 0);
 });
 
+test("inbox ingest treats insert-time unique collisions as canonical duplicates", async () => {
+  const thread = {
+    id: "11111111-1111-4111-8111-111111111111",
+    tenant_id: "22222222-2222-4222-8222-222222222222",
+    tenant_key: "acme",
+    channel: "instagram",
+    external_thread_id: "thread-ext-1",
+    external_user_id: "user-ext-1",
+    external_username: "user1",
+    customer_name: "Customer One",
+    status: "open",
+    last_message_at: "2026-03-27T00:00:00.000Z",
+    last_inbound_at: "2026-03-27T00:00:00.000Z",
+    last_outbound_at: null,
+    unread_count: 1,
+    assigned_to: null,
+    labels: [],
+    meta: {},
+    handoff_active: false,
+    handoff_reason: "",
+    handoff_priority: "normal",
+    handoff_at: null,
+    handoff_by: null,
+    created_at: "2026-03-27T00:00:00.000Z",
+    updated_at: "2026-03-27T00:00:00.000Z",
+  };
+
+  const duplicateMessage = {
+    id: "33333333-3333-4333-8333-333333333333",
+    thread_id: thread.id,
+    tenant_key: "acme",
+    direction: "inbound",
+    sender_type: "customer",
+    external_message_id: "msg-ext-1",
+    message_type: "text",
+    text: "hello",
+    attachments: [],
+    meta: {},
+    sent_at: "2026-03-27T00:00:00.000Z",
+    created_at: "2026-03-27T00:00:00.000Z",
+  };
+
+  let runtimeCalls = 0;
+  let brainCalls = 0;
+  let inboundLookupCount = 0;
+
+  const client = {
+    async query(text) {
+      const sql = String(text?.text || text || "").toLowerCase();
+
+      if (sql === "begin" || sql === "rollback") return { rows: [] };
+      if (sql.includes("from tenants")) {
+        return { rows: [{ id: thread.tenant_id, tenant_key: "acme" }] };
+      }
+      if (sql.includes("from inbox_threads") && sql.includes("external_thread_id")) {
+        return { rows: [thread] };
+      }
+      if (sql.includes("update inbox_threads")) {
+        return { rows: [thread] };
+      }
+      if (sql.includes("direction = 'inbound'") && sql.includes("from inbox_messages")) {
+        inboundLookupCount += 1;
+        return { rows: inboundLookupCount === 1 ? [] : [duplicateMessage] };
+      }
+      if (sql.includes("insert into inbox_messages")) {
+        const error = new Error("duplicate");
+        error.code = "23505";
+        throw error;
+      }
+
+      throw new Error(`Unexpected query: ${text}`);
+    },
+    release() {},
+  };
+
+  const handler = createInboxIngestHandler({
+    db: {
+      connect: async () => client,
+      query: async (text) => {
+        const sql = String(text?.text || text || "").toLowerCase();
+        if (sql.includes("from inbox_threads")) return { rows: [thread] };
+        if (sql.includes("from inbox_thread_state")) return { rows: [] };
+        throw new Error(`Unexpected db query: ${text}`);
+      },
+    },
+    wsHub: null,
+    getRuntime: async () => {
+      runtimeCalls += 1;
+      return { tenant: { id: thread.tenant_id, tenant_key: "acme" } };
+    },
+    buildActions: async () => {
+      brainCalls += 1;
+      return { actions: [] };
+    },
+  });
+
+  const req = {
+    headers: {
+      "x-tenant-key": "acme",
+      "x-internal-token": "secret",
+    },
+    body: {
+      externalThreadId: "thread-ext-1",
+      externalUserId: "user-ext-1",
+      externalMessageId: "msg-ext-1",
+      text: "hello",
+      channel: "instagram",
+    },
+  };
+  const res = createMockRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.ok, true);
+  assert.equal(res.body?.duplicate, true);
+  assert.equal(res.body?.deduped, true);
+  assert.equal(res.body?.message?.id, duplicateMessage.id);
+  assert.equal(runtimeCalls, 0);
+  assert.equal(brainCalls, 0);
+});
+
 test("persistOutboundMessage preserves payload metadata and durable correlation wiring", async () => {
   const thread = {
     id: "11111111-1111-4111-8111-111111111111",
@@ -190,6 +313,7 @@ test("persistOutboundMessage preserves payload metadata and durable correlation 
       async query(text) {
         const sql = String(text || "").toLowerCase();
         if (sql.includes("insert into inbox_messages")) {
+          assert.equal(sql.includes("$9::timestamptz"), true);
           return {
             rows: [
               {
@@ -202,8 +326,14 @@ test("persistOutboundMessage preserves payload metadata and durable correlation 
                 message_type: "text",
                 text: "hello back",
                 attachments: [],
-                meta: {},
-                sent_at: "2026-03-27T00:00:00.000Z",
+                meta: {
+                  delivery: {
+                    status: "pending",
+                    pending: true,
+                    failed: false,
+                  },
+                },
+                sent_at: null,
                 created_at: "2026-03-27T00:00:00.000Z",
               },
             ],
@@ -238,8 +368,11 @@ test("persistOutboundMessage preserves payload metadata and durable correlation 
   });
 
   assert.equal(result.message?.id, "44444444-4444-4444-8444-444444444444");
+  assert.equal(result.message?.sent_at, null);
+  assert.equal(result.mergedMeta?.delivery?.status, "pending");
   assert.equal(createAttemptCalls[0]?.payload?.meta?.correlationId, "corr-1");
   assert.equal(createAttemptCalls[0]?.payload?.meta?.internalExecution, true);
+  assert.equal(createAttemptCalls[0]?.payload?.meta?.delivery?.status, "pending");
   assert.equal(enqueueCalls[0]?.payload?.meta?.correlationId, "corr-1");
   assert.equal(enqueueCalls[0]?.correlationIds?.messageId, result.message.id);
   assert.equal(enqueueCalls[0]?.safeMetadata?.recipientId, "user-ext-1");

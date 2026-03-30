@@ -2,6 +2,7 @@
 import {
   validateMetaInternalOutboundRequest,
   validateMetaCommentActionRequest,
+  validateMetaCommentActionResponse,
   validateMetaGatewayOutboundResponse,
 } from "@aihq/shared-contracts/critical";
 
@@ -39,10 +40,16 @@ function normalizePayload(input = {}) {
   };
 }
 
+function getMetaGatewayConfig() {
+  return {
+    base: trimSlash(process.env.META_GATEWAY_BASE_URL || ""),
+    token: s(process.env.META_GATEWAY_INTERNAL_TOKEN || ""),
+    timeoutMs: Number(process.env.META_GATEWAY_TIMEOUT_MS || 20000),
+  };
+}
+
 export async function sendOutboundViaMetaGateway(payload) {
-  const base = trimSlash(process.env.META_GATEWAY_BASE_URL || "");
-  const token = s(process.env.META_GATEWAY_INTERNAL_TOKEN || "");
-  const timeoutMs = Number(process.env.META_GATEWAY_TIMEOUT_MS || 20000);
+  const { base, token, timeoutMs } = getMetaGatewayConfig();
 
   if (!base) {
     return {
@@ -101,6 +108,75 @@ export async function sendOutboundViaMetaGateway(payload) {
           ? "meta gateway timeout"
           : String(err?.message || err),
       json: null,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function sendCommentActionsViaMetaGateway(payload) {
+  const { base, token, timeoutMs } = getMetaGatewayConfig();
+
+  if (!base) {
+    return {
+      ok: false,
+      status: 0,
+      error: "META_GATEWAY_BASE_URL missing",
+      json: null,
+      skipped: true,
+    };
+  }
+
+  const checked = validateMetaCommentActionRequest(payload || {});
+  if (!checked.ok) {
+    return {
+      ok: false,
+      status: 0,
+      error: checked.error,
+      json: null,
+      skipped: true,
+    };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(`${base}/internal/comment-actions/execute`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        Accept: "application/json",
+        ...(token ? { "x-internal-token": token } : {}),
+      },
+      body: JSON.stringify(checked.value.body),
+      signal: controller.signal,
+    });
+
+    const json = await safeReadJson(res);
+    const checkedResponse = validateMetaCommentActionResponse(json || { ok: false });
+
+    return {
+      ok: Boolean(res.ok && checkedResponse.ok && json?.ok !== false),
+      status: res.status,
+      json,
+      error: res.ok
+        ? checkedResponse.ok
+          ? null
+          : checkedResponse.error
+        : json?.error || json?.message || "meta gateway failed",
+      skipped: false,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 0,
+      error:
+        err?.name === "AbortError"
+          ? "meta gateway timeout"
+          : String(err?.message || err),
+      json: null,
+      skipped: false,
     };
   } finally {
     clearTimeout(timer);

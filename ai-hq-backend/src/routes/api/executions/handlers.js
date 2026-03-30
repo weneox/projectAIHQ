@@ -42,7 +42,10 @@ import { dbAudit } from "../../../db/helpers/audit.js";
 import { pushBroadcastToCeo } from "../../../services/pushBroadcast.js";
 import { notifyN8n } from "../../../services/n8nNotify.js";
 import { runMediaJobNow } from "../../../services/media/mediaExecutionRunner.js";
-import { enqueueVoiceSyncExecution } from "../../../services/durableExecutionService.js";
+import {
+  enqueueVoiceSyncExecution,
+  requeueMetaCommentReplyExecution,
+} from "../../../services/durableExecutionService.js";
 import { persistRuntimeIncident } from "../../../services/runtimeIncidentTrail.js";
 
 import {
@@ -88,23 +91,118 @@ import {
 import { buildNotificationCopy, buildPushCopy } from "./notify.js";
 
 function normalizeDurableExecutionRow(row = {}) {
-  return row && typeof row === "object"
-    ? {
-        ...row,
-        payload_summary:
-          row.payload_summary && typeof row.payload_summary === "object"
-            ? row.payload_summary
-            : {},
-        safe_metadata:
-          row.safe_metadata && typeof row.safe_metadata === "object"
-            ? row.safe_metadata
-            : {},
-        correlation_ids:
-          row.correlation_ids && typeof row.correlation_ids === "object"
-            ? row.correlation_ids
-            : {},
-      }
-    : null;
+  if (!row || typeof row !== "object") return null;
+
+  const payloadSummary =
+    row.payload_summary && typeof row.payload_summary === "object"
+      ? row.payload_summary
+      : {};
+  const safeMetadata =
+    row.safe_metadata && typeof row.safe_metadata === "object"
+      ? row.safe_metadata
+      : {};
+  const correlationIds =
+    row.correlation_ids && typeof row.correlation_ids === "object"
+      ? row.correlation_ids
+      : {};
+
+  const actionType = fixText(String(row.action_type || ""));
+  const status = fixText(String(row.status || ""));
+  const commentReply =
+    actionType === "meta.comment.reply"
+      ? {
+          commentId: fixText(
+            String(
+              safeMetadata.commentId ||
+                correlationIds.commentId ||
+                row.target_id ||
+                ""
+            )
+          ),
+          externalCommentId: fixText(
+            String(
+              safeMetadata.externalCommentId ||
+                correlationIds.externalCommentId ||
+                ""
+            )
+          ),
+          externalPostId: fixText(
+            String(
+              safeMetadata.externalPostId ||
+                correlationIds.externalPostId ||
+                row.conversation_id ||
+                ""
+            )
+          ),
+          externalUserId: fixText(String(safeMetadata.externalUserId || "")),
+          actor: fixText(String(safeMetadata.actor || "")),
+          approved: safeMetadata.approved !== false,
+          replyText: fixText(String(safeMetadata.replyText || "")),
+        }
+      : null;
+
+  const lastError =
+    row.last_error_code || row.last_error_message || row.last_error_classification
+      ? {
+          code: fixText(String(row.last_error_code || "")),
+          message: fixText(String(row.last_error_message || "")),
+          classification: fixText(String(row.last_error_classification || "")),
+        }
+      : null;
+
+  return {
+    ...row,
+    payload_summary: payloadSummary,
+    safe_metadata: safeMetadata,
+    correlation_ids: correlationIds,
+    execution_type: actionType,
+    durable_status: status,
+    target: {
+      type: fixText(String(row.target_type || "")),
+      targetId: fixText(String(row.target_id || "")),
+      threadId: fixText(String(row.thread_id || "")),
+      conversationId: fixText(String(row.conversation_id || "")),
+      messageId: fixText(String(row.message_id || "")),
+    },
+    retry_state: {
+      isRetryable: status === "retryable",
+      isDeadLettered: status === "dead_lettered",
+      isTerminal: status === "terminal",
+      nextRetryAt: row.next_retry_at || null,
+      deadLetteredAt: row.dead_lettered_at || null,
+      attemptCount: Number(row.attempt_count || 0),
+      maxAttempts: Number(row.max_attempts || 0),
+    },
+    last_error: lastError,
+    comment_reply: commentReply,
+  };
+}
+
+function normalizeDurableExecutionAttempt(attempt = {}) {
+  if (!attempt || typeof attempt !== "object") return null;
+
+  const resultSummary =
+    attempt.result_summary && typeof attempt.result_summary === "object"
+      ? attempt.result_summary
+      : {};
+  const correlationIds =
+    attempt.correlation_ids && typeof attempt.correlation_ids === "object"
+      ? attempt.correlation_ids
+      : {};
+
+  return {
+    ...attempt,
+    result_summary: resultSummary,
+    correlation_ids: correlationIds,
+    result: {
+      providerMessageId: fixText(String(resultSummary.providerMessageId || "")),
+      gatewayStatus:
+        Number.isFinite(Number(resultSummary.gatewayStatus))
+          ? Number(resultSummary.gatewayStatus)
+          : null,
+      commentId: fixText(String(resultSummary.commentId || "")),
+    },
+  };
 }
 
 export async function enqueueVoiceSyncExecutionRequest(req, res, { db }) {
@@ -296,6 +394,7 @@ export async function getExecutionById(req, res, { db }) {
 export async function listDurableExecutions(req, res, { db }) {
   const helpers = createDurableExecutionHelpers({ db });
   const status = String(req.query.status || req.query.queue || "").trim();
+  const actionType = String(req.query.actionType || req.query.type || "").trim();
   const limit = clamp(req.query.limit ?? 50, 1, 200);
   const tenantId = String(getAuthTenantId(req) || "").trim();
   const tenantKey = String(getAuthTenantKey(req) || "").trim();
@@ -310,6 +409,7 @@ export async function listDurableExecutions(req, res, { db }) {
 
     const executions = await helpers.listExecutions({
       status,
+      actionType,
       limit,
       tenantId,
       tenantKey,
@@ -398,7 +498,7 @@ export async function getDurableExecutionById(req, res, { db }) {
       return okJson(res, { ok: false, error: "not found" });
     }
 
-    const attempts = await helpers.listAttempts(id);
+    const attempts = (await helpers.listAttempts(id)).map(normalizeDurableExecutionAttempt);
     const auditTrail = await helpers.listExecutionAuditTrail(id, {
       tenantId,
       tenantKey,
@@ -409,6 +509,7 @@ export async function getDurableExecutionById(req, res, { db }) {
       ok: true,
       execution: normalizeDurableExecutionRow(execution),
       attempts,
+      latestAttempt: attempts[0] || null,
       auditTrail,
     });
   } catch (e) {
@@ -420,7 +521,7 @@ export async function getDurableExecutionById(req, res, { db }) {
   }
 }
 
-export async function retryDurableExecution(req, res, { db }) {
+export async function retryDurableExecution(req, res, { db, wsHub }) {
   const helpers = createDurableExecutionHelpers({ db });
   const id = String(req.params.id || "").trim();
   const tenantId = String(getAuthTenantId(req) || "").trim();
@@ -437,13 +538,18 @@ export async function retryDurableExecution(req, res, { db }) {
       );
     }
 
+    await db.query("begin");
     const execution = await helpers.getExecutionById(id);
-    if (!execution) return okJson(res, { ok: false, error: "not found" });
+    if (!execution) {
+      await db.query("rollback");
+      return okJson(res, { ok: false, error: "not found" });
+    }
 
     if (
       (tenantId && String(execution.tenant_id || "") !== tenantId) ||
       (!tenantId && tenantKey && String(execution.tenant_key || "").toLowerCase() !== tenantKey.toLowerCase())
     ) {
+      await db.query("rollback");
       return okJson(res, { ok: false, error: "not found" });
     }
 
@@ -453,10 +559,35 @@ export async function retryDurableExecution(req, res, { db }) {
     });
 
     if (!retried) {
+      await db.query("rollback");
       return okJson(res, {
         ok: false,
         error: "execution_not_retryable",
       });
+    }
+
+    let comment = null;
+    if (String(retried.action_type || "").trim().toLowerCase() === "meta.comment.reply") {
+      const recovered = await requeueMetaCommentReplyExecution({
+        db,
+        wsHub,
+        execution: retried,
+        requestedBy: actor,
+      });
+
+      if (!recovered.ok) {
+        await db.query("rollback");
+        return okJson(res, {
+          ok: false,
+          error: "execution_retry_sync_failed",
+          details: {
+            code: recovered.errorCode,
+            message: recovered.errorMessage,
+          },
+        });
+      }
+
+      comment = recovered.comment || null;
     }
 
     await dbAudit(db, actor, "durable_execution.manual_retry", "durable_execution", id, {
@@ -468,6 +599,8 @@ export async function retryDurableExecution(req, res, { db }) {
       requestedBy: actor,
       requestedAt: new Date().toISOString(),
     });
+
+    await db.query("commit");
 
     req.log?.info?.("durable_execution.manual_retry", {
       executionId: id,
@@ -486,9 +619,13 @@ export async function retryDurableExecution(req, res, { db }) {
     return okJson(res, {
       ok: true,
       execution: normalizeDurableExecutionRow(retried),
+      comment,
       auditTrail,
     });
   } catch (e) {
+    try {
+      await db.query("rollback");
+    } catch {}
     return okJson(res, {
       ok: false,
       error: "Error",

@@ -133,12 +133,21 @@ export async function persistOutboundMessage({
     storageMessageType || requestedMessageType || "text",
     "text"
   );
+  const deliveryStatus = externalMessageId ? "sent" : "pending";
   const mergedMeta = {
     ...normalizeObj(meta),
     recipientId,
     provider,
     originalMessageType: requestedMessageType,
     storageMessageType: messageType,
+    delivery: {
+      status: deliveryStatus,
+      provider,
+      pending: !externalMessageId,
+      failed: false,
+      providerMessageId: s(externalMessageId || "") || null,
+      updatedAt: nowIso(),
+    },
   };
 
   const inserted = await client.query(
@@ -149,7 +158,7 @@ export async function persistOutboundMessage({
     )
     values (
       $1::uuid, $2::text, 'outbound', $3::text, $4::text,
-      $5::text, $6::text, $7::jsonb, $8::jsonb, now()
+      $5::text, $6::text, $7::jsonb, $8::jsonb, $9::timestamptz
     )
     returning
       id, thread_id, tenant_key, direction, sender_type,
@@ -164,6 +173,7 @@ export async function persistOutboundMessage({
       text,
       JSON.stringify(Array.isArray(attachments) ? attachments : []),
       JSON.stringify(mergedMeta),
+      externalMessageId ? nowIso() : null,
     ]
   );
 

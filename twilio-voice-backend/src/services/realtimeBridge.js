@@ -14,6 +14,7 @@ import { getTenantVoiceConfig } from "./tenantConfig.js";
 import { createAihqVoiceClient } from "./aihqVoiceClient.js";
 import { cfg } from "../config.js";
 import { s, sendTwilioMedia, getBridgeEnv } from "./bridge/shared.js";
+import { recordRuntimeSignal } from "./runtimeObservability.js";
 
 const logger = createStructuredLogger({
   service: "twilio-voice-backend",
@@ -52,6 +53,55 @@ function safeDebugValue(value) {
   }
 }
 
+function normalizeBridgeTenantConfigResult(result = null) {
+  const config = result?.ok === true ? result?.config || null : null;
+  const authority = config?.authority || result?.authority || null;
+
+  if (!config || !s(config?.tenantKey) || authority?.available !== true) {
+    return {
+      ok: false,
+      status: Number(result?.status || 503),
+      error: s(result?.error || authority?.reasonCode || "tenant_config_unavailable"),
+      authority,
+    };
+  }
+
+  return {
+    ok: true,
+    config,
+  };
+}
+
+function deriveTwilioCloseOutcome({
+  stopReceived = false,
+  localHangupRequested = false,
+} = {}) {
+  if (stopReceived) {
+    return {
+      ok: true,
+      status: "completed",
+      reasonCode: "twilio_stop_received",
+      expected: true,
+    };
+  }
+
+  if (localHangupRequested) {
+    return {
+      ok: true,
+      status: "completed",
+      reasonCode: "local_hangup_requested",
+      expected: true,
+    };
+  }
+
+  return {
+    ok: false,
+    status: "failed",
+    reasonCode: "twilio_ws_closed_unexpected",
+    expected: false,
+  };
+}
+
 export function attachRealtimeBridge({
   wss,
   OPENAI_API_KEY,
@@ -62,6 +112,9 @@ export function attachRealtimeBridge({
   REALTIME_MODEL,
   REALTIME_VOICE,
   RECONNECT_MAX,
+  WebSocketImpl = WebSocket,
+  resolveTenantConfig = getTenantVoiceConfig,
+  voiceClient = null,
 }) {
   const {
     RESPONSE_MODALITIES,
@@ -79,13 +132,15 @@ export function attachRealtimeBridge({
     VAD_PREFIX_MS,
   } = getBridgeEnv();
 
-  const aihqVoiceClient = createAihqVoiceClient({
-    fetchFn: globalThis.fetch,
-    baseUrl: cfg.AIHQ_BASE_URL,
-    internalToken: cfg.AIHQ_INTERNAL_TOKEN,
-    timeoutMs: 8000,
-    debug: !!DEBUG_REALTIME,
-  });
+  const aihqVoiceClient =
+    voiceClient ||
+    createAihqVoiceClient({
+      fetchFn: globalThis.fetch,
+      baseUrl: cfg.AIHQ_BASE_URL,
+      internalToken: cfg.AIHQ_INTERNAL_TOKEN,
+      timeoutMs: 8000,
+      debug: !!DEBUG_REALTIME,
+    });
 
   function dlog(...args) {
     if (!DEBUG_REALTIME) return;
@@ -133,6 +188,10 @@ export function attachRealtimeBridge({
 
     let hangupAfterDone = false;
     let forceHangupTimer = null;
+    let localHangupRequested = false;
+    let stopReceived = false;
+    let finalizationPromise = null;
+    let finalDisposition = null;
 
     let reconnectAttempts = 0;
 
@@ -226,6 +285,7 @@ export function attachRealtimeBridge({
 
     async function hangupNowFn() {
       if (!twilioClient || !callSid) return;
+      localHangupRequested = true;
 
       try {
         await twilioClient.calls(callSid).update({ status: "completed" });
@@ -245,6 +305,7 @@ export function attachRealtimeBridge({
       } catch {}
 
       forceHangupTimer = setTimeout(() => {
+        localHangupRequested = true;
         hangupNowFn().finally(() => closeBoth());
       }, ms);
 
@@ -380,6 +441,77 @@ export function attachRealtimeBridge({
       } catch (e) {
         dlog("syncOperatorJoin failed", e?.message || e);
       }
+    }
+
+    async function finalizeCall({
+      eventType,
+      status,
+      reasonCode = "",
+      reportStatus = status,
+      error = "",
+      hangupCall = false,
+      closeTwilio = true,
+      closeRealtime = true,
+    } = {}) {
+      if (finalizationPromise) return finalizationPromise;
+
+      const endedAt = new Date().toISOString();
+      finalDisposition = {
+        eventType: s(eventType, "call_finalized"),
+        status: s(status, "failed"),
+        reasonCode: s(reasonCode),
+        reportStatus: s(reportStatus || status),
+        endedAt,
+      };
+
+      if (finalDisposition.status === "failed") {
+        recordRuntimeSignal({
+          level: "warn",
+          category: "realtime_bridge",
+          code: finalDisposition.eventType,
+          reasonCode: finalDisposition.reasonCode || finalDisposition.eventType,
+          status: 500,
+          callSid,
+          tenantKey,
+          error: s(error).slice(0, 240),
+        });
+      }
+
+      finalizationPromise = (async () => {
+        clearTimers();
+        setPending(false);
+        assistantSpeaking = false;
+        markGreetingEnd();
+
+        await syncState(finalDisposition.eventType, {
+          status: finalDisposition.status,
+          botActive: false,
+          operatorJoinRequested: !!core?.state?.awaitingTransferConfirm,
+          operatorJoined: false,
+          endedAt,
+        });
+
+        await reporters?.sendReports?.(
+          core.getReportCtx(durationSec, { metricResponses, metricCancels }),
+          { status: finalDisposition.reportStatus }
+        );
+
+        if (hangupCall) {
+          await hangupNowFn();
+        }
+
+        if (closeRealtime) closeOpenAI();
+
+        if (closeTwilio) {
+          try {
+            if (twilioWs.readyState === WebSocket.OPEN) twilioWs.close();
+          } catch {}
+        }
+      })().finally(() => {
+        clearTimers();
+      });
+
+      return finalizationPromise;
     }
 
     async function redirectToTransfer() {
@@ -659,7 +791,7 @@ export function attachRealtimeBridge({
         callSid,
       });
 
-      openaiWs = new WebSocket(
+      openaiWs = new WebSocketImpl(
         `wss://api.openai.com/v1/realtime?model=${encodeURIComponent(model)}`,
         {
           headers: {
@@ -721,15 +853,26 @@ export function attachRealtimeBridge({
         }
 
         if (msg.type === "error") {
+          const errorMessage = msg?.error?.message || JSON.stringify(msg?.error || msg);
           logger.warn("voice.bridge.openai.error_event", {
             callSid,
             streamSid,
             tenantKey,
-            error: msg?.error?.message || JSON.stringify(msg?.error || msg),
+            error: errorMessage,
           });
           setPending(false);
           assistantSpeaking = false;
           markGreetingEnd();
+          if (!openaiSessionReady) {
+            await finalizeCall({
+              eventType: "openai_session_error",
+              status: "failed",
+              reasonCode: "openai_session_error",
+              error: errorMessage,
+              closeTwilio: true,
+              closeRealtime: false,
+            });
+          }
           return;
         }
 
@@ -802,16 +945,13 @@ export function attachRealtimeBridge({
 
             forceHangupTimer = null;
 
-            await syncState("call_completed", {
+            await finalizeCall({
+              eventType: "call_completed",
               status: "completed",
-              botActive: false,
-              operatorJoinRequested: !!core?.state?.awaitingTransferConfirm,
-              operatorJoined: false,
-              endedAt: new Date().toISOString(),
+              hangupCall: true,
+              closeTwilio: true,
+              closeRealtime: true,
             });
-
-            await hangupNowFn();
-            closeBoth();
             return;
           }
 
@@ -864,7 +1004,7 @@ export function attachRealtimeBridge({
         }
       });
 
-      openaiWs.on("close", (code, reasonBuf) => {
+      openaiWs.on("close", async (code, reasonBuf) => {
         const reason =
           Buffer.isBuffer(reasonBuf) ? reasonBuf.toString("utf8") : String(reasonBuf || "");
 
@@ -884,6 +1024,8 @@ export function attachRealtimeBridge({
 
         const twilioAlive = twilioWs && twilioWs.readyState === WebSocket.OPEN;
 
+        if (finalizationPromise) return;
+
         if (twilioAlive && reconnectAttempts <= RECONNECT_MAX) {
           const wait = 700 * reconnectAttempts;
 
@@ -898,7 +1040,15 @@ export function attachRealtimeBridge({
           return;
         }
 
-        closeBoth();
+        await finalizeCall({
+          eventType: "openai_ws_closed",
+          status: "failed",
+          reasonCode:
+            reconnectAttempts > RECONNECT_MAX ? "openai_reconnect_exhausted" : "openai_ws_closed",
+          error: reason,
+          closeTwilio: twilioAlive,
+          closeRealtime: false,
+        });
       });
 
       openaiWs.on("error", (e) => {
@@ -934,7 +1084,7 @@ export function attachRealtimeBridge({
           tenantKey,
         });
 
-        tenantConfig = await getTenantVoiceConfig({
+        const tenantConfigResult = await resolveTenantConfig({
           tenant: {
             tenantKey,
             toNumber,
@@ -942,8 +1092,6 @@ export function attachRealtimeBridge({
           },
           logger,
         });
-
-        core.setTenantConfig(tenantConfig);
 
         setPending(false);
         assistantSpeaking = false;
@@ -961,15 +1109,45 @@ export function attachRealtimeBridge({
         greetingInProgress = false;
         greetingStartedAt = 0;
         hangupAfterDone = false;
+        localHangupRequested = false;
+        stopReceived = false;
+        finalizationPromise = null;
+        finalDisposition = null;
 
         lastFinalTranscript = "";
-        lastLang = detectDefaultLang(tenantConfig);
+        lastLang = "en";
         sawSpeechStart = false;
         lastInboundAt = 0;
 
         turnId = 0;
         respondedTurnId = -1;
         reconnectAttempts = 0;
+
+        const tenantResolution = normalizeBridgeTenantConfigResult(tenantConfigResult);
+        if (!tenantResolution.ok) {
+          logger.warn("voice.bridge.tenant_config_unavailable", {
+            callSid,
+            streamSid,
+            tenantKey,
+            toNumber,
+            error: tenantResolution.error,
+            authority: tenantResolution.authority || null,
+          });
+
+          await finalizeCall({
+            eventType: "call_failed_tenant_config_unavailable",
+            status: "failed",
+            reasonCode: tenantResolution.error,
+            error: tenantResolution.error,
+            closeTwilio: true,
+            closeRealtime: false,
+          });
+          return;
+        }
+
+        tenantConfig = tenantResolution.config;
+        core.setTenantConfig(tenantConfig);
+        lastLang = detectDefaultLang(tenantConfig);
 
         core.resetForNewCall({ callSid, fromNumber, tenantConfig });
 
@@ -991,16 +1169,13 @@ export function attachRealtimeBridge({
             tenantKey,
           });
 
-          await syncState("call_failed_missing_openai", {
+          await finalizeCall({
+            eventType: "call_failed_missing_openai",
             status: "failed",
-            botActive: false,
-            endedAt: new Date().toISOString(),
+            reasonCode: "openai_auth_not_configured",
+            closeTwilio: true,
+            closeRealtime: false,
           });
-
-          try {
-            twilioWs.close();
-          } catch {}
-
           return;
         }
 
@@ -1032,19 +1207,13 @@ export function attachRealtimeBridge({
 
       if (msg.event === "stop") {
         logger.info("voice.bridge.twilio.stop", { callSid, streamSid, tenantKey });
-
-        await syncState("call_stopped", {
+        stopReceived = true;
+        await finalizeCall({
+          eventType: "call_stopped",
           status: "completed",
-          botActive: false,
-          endedAt: new Date().toISOString(),
+          closeTwilio: true,
+          closeRealtime: true,
         });
-
-        reporters
-          ?.sendReports?.(
-            core.getReportCtx(durationSec, { metricResponses, metricCancels }),
-            { status: "completed" }
-          )
-          .finally(() => closeBoth());
       }
     });
 
@@ -1060,21 +1229,26 @@ export function attachRealtimeBridge({
         tenantKey,
       });
 
-      await syncState("twilio_ws_closed", {
-        status: "completed",
-        botActive: false,
-        endedAt: new Date().toISOString(),
+      if (finalizationPromise) {
+        await finalizationPromise;
+        closeOpenAI();
+        clearTimers();
+        return;
+      }
+
+      const closeOutcome = deriveTwilioCloseOutcome({
+        stopReceived,
+        localHangupRequested,
       });
 
-      reporters
-        ?.sendReports?.(
-          core.getReportCtx(durationSec, { metricResponses, metricCancels }),
-          { status: "completed" }
-        )
-        .finally(() => {
-          closeOpenAI();
-          clearTimers();
-        });
+      await finalizeCall({
+        eventType: closeOutcome.expected ? "twilio_ws_closed" : "twilio_ws_closed_unexpected",
+        status: closeOutcome.status,
+        reasonCode: closeOutcome.reasonCode,
+        error: reason,
+        closeTwilio: false,
+        closeRealtime: true,
+      });
     });
 
     twilioWs.on("error", async (e) => {
@@ -1085,21 +1259,19 @@ export function attachRealtimeBridge({
         error: e?.message || e,
       });
 
-      await syncState("twilio_ws_error", {
+      await finalizeCall({
+        eventType: "twilio_ws_error",
         status: "failed",
-        botActive: false,
-        endedAt: new Date().toISOString(),
+        reasonCode: "twilio_ws_error",
+        error: e?.message || e,
+        closeTwilio: false,
+        closeRealtime: true,
       });
-
-      reporters
-        ?.sendReports?.(
-          core.getReportCtx(durationSec, { metricResponses, metricCancels }),
-          { status: "completed" }
-        )
-        .finally(() => {
-          closeOpenAI();
-          clearTimers();
-        });
     });
   });
 }
+
+export const __test__ = {
+  normalizeBridgeTenantConfigResult,
+  deriveTwilioCloseOutcome,
+};

@@ -1,6 +1,33 @@
 import { normalizeMessage, normalizeThread, sortMessagesChronologically } from "../shared.js";
 import { INBOX_THREAD_SELECT_COLUMNS, safeJson } from "./shared.js";
 
+async function getExistingInboundMessageForInsert({
+  client,
+  threadId,
+  tenantKey,
+  externalMessageId,
+}) {
+  if (!threadId || !tenantKey || !externalMessageId) return null;
+
+  const existing = await client.query(
+    `
+    select
+      id, thread_id, tenant_key, direction, sender_type,
+      external_message_id, message_type, text, attachments, meta, sent_at, created_at
+    from inbox_messages
+    where tenant_key = $1::text
+      and thread_id = $2::uuid
+      and direction = 'inbound'
+      and external_message_id = $3::text
+    order by created_at desc
+    limit 1
+    `,
+    [tenantKey, threadId, externalMessageId]
+  );
+
+  return normalizeMessage(existing.rows?.[0] || null);
+}
+
 export async function findOrCreateThreadForIngest({
   client,
   tenantId,
@@ -116,23 +143,43 @@ export async function insertInboundMessage({
   meta,
   timestamp,
 }) {
-  const insertedMessage = await client.query(
-    `
-    insert into inbox_messages (
-      thread_id, tenant_key, direction, sender_type, external_message_id,
-      message_type, text, attachments, meta, sent_at
-    )
-    values (
-      $1::uuid, $2::text, 'inbound', 'customer', $3::text,
-      'text', $4::text, '[]'::jsonb, $5::jsonb,
-      coalesce(to_timestamp($6::double precision / 1000.0), now())
-    )
-    returning
-      id, thread_id, tenant_key, direction, sender_type,
-      external_message_id, message_type, text, attachments, meta, sent_at, created_at
-    `,
-    [threadId, tenantKey, externalMessageId, text, safeJson(meta), Number(timestamp || Date.now())]
-  );
+  let insertedMessage;
+  try {
+    insertedMessage = await client.query(
+      `
+      insert into inbox_messages (
+        thread_id, tenant_key, direction, sender_type, external_message_id,
+        message_type, text, attachments, meta, sent_at
+      )
+      values (
+        $1::uuid, $2::text, 'inbound', 'customer', $3::text,
+        'text', $4::text, '[]'::jsonb, $5::jsonb,
+        coalesce(to_timestamp($6::double precision / 1000.0), now())
+      )
+      returning
+        id, thread_id, tenant_key, direction, sender_type,
+        external_message_id, message_type, text, attachments, meta, sent_at, created_at
+      `,
+      [threadId, tenantKey, externalMessageId, text, safeJson(meta), Number(timestamp || Date.now())]
+    );
+  } catch (error) {
+    if (String(error?.code || "") !== "23505") throw error;
+
+    const existing = await getExistingInboundMessageForInsert({
+      client,
+      threadId,
+      tenantKey,
+      externalMessageId,
+    });
+
+    if (!existing) throw error;
+
+    return {
+      ...existing,
+      duplicate: true,
+      deduped: true,
+    };
+  }
 
   return normalizeMessage(insertedMessage.rows?.[0] || null);
 }

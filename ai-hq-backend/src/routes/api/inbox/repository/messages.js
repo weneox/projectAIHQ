@@ -95,6 +95,7 @@ export async function updateOutboundMessageProviderId({
     update inbox_messages
     set
       external_message_id = coalesce($2::text, external_message_id),
+      sent_at = coalesce(sent_at, now()),
       meta = coalesce(meta, '{}'::jsonb) || $3::jsonb
     where id = $1::uuid
     returning
@@ -104,7 +105,60 @@ export async function updateOutboundMessageProviderId({
     [
       messageId,
       providerMessageId || null,
-      JSON.stringify({ providerResponse: providerResponse || null }),
+      JSON.stringify({
+        providerResponse: providerResponse || null,
+        delivery: {
+          status: "sent",
+          pending: false,
+          failed: false,
+          providerMessageId: providerMessageId || null,
+          updatedAt: new Date().toISOString(),
+        },
+      }),
+    ]
+  );
+
+  return normalizeMessage(result.rows?.[0] || null);
+}
+
+export async function updateOutboundMessageDeliveryFailure({
+  db,
+  messageId,
+  status = "failed",
+  error = "send failed",
+  errorCode = "",
+  providerResponse = {},
+}) {
+  if (!isDbReady(db)) return null;
+  if (!messageId || !isUuid(messageId)) return null;
+
+  const normalizedStatus = String(status || "").trim().toLowerCase() === "dead"
+    ? "dead"
+    : "failed";
+
+  const result = await db.query(
+    `
+    update inbox_messages
+    set
+      meta = coalesce(meta, '{}'::jsonb) || $2::jsonb
+    where id = $1::uuid
+    returning
+      id, thread_id, tenant_key, direction, sender_type,
+      external_message_id, message_type, text, attachments, meta, sent_at, created_at
+    `,
+    [
+      messageId,
+      JSON.stringify({
+        providerResponse: providerResponse || null,
+        delivery: {
+          status: normalizedStatus,
+          pending: false,
+          failed: true,
+          error: String(error || "send failed"),
+          errorCode: String(errorCode || ""),
+          updatedAt: new Date().toISOString(),
+        },
+      }),
     ]
   );
 

@@ -130,6 +130,64 @@ test("insertComment normalizes inserted comment payload", async () => {
   assert.equal(result.raw.body, "Need pricing");
 });
 
+test("insertComment re-reads canonical row on duplicate insert races", async () => {
+  let selectCount = 0;
+  const db = createDb(async (sql, params = []) => {
+    const text = String(sql || "").toLowerCase();
+    if (text.includes("insert into comments")) {
+      const error = new Error("duplicate");
+      error.code = "23505";
+      throw error;
+    }
+    if (text.includes("from comments")) {
+      selectCount += 1;
+      return {
+        rows: [
+          {
+            id: "comment-dup-1",
+            tenant_key: params[0],
+            channel: params[1],
+            source: "meta",
+            external_comment_id: params[2],
+            external_parent_comment_id: "",
+            external_post_id: "post-1",
+            external_user_id: "user-1",
+            external_username: "customer",
+            customer_name: "Customer",
+            text: "Need help",
+            classification: { category: "support" },
+            raw: {},
+            created_at: new Date("2026-03-30T00:00:00.000Z"),
+            updated_at: new Date("2026-03-30T00:00:00.000Z"),
+          },
+        ],
+      };
+    }
+    throw new Error(`Unexpected query: ${sql}`);
+  });
+
+  const result = await insertComment(db, {
+    tenantKey: " Acme ",
+    channel: "instagram",
+    source: "meta",
+    externalCommentId: "ext-dup-1",
+    externalParentCommentId: null,
+    externalPostId: "post-1",
+    externalUserId: "user-1",
+    externalUsername: "customer",
+    customerName: "Customer",
+    text: "Need help",
+    classification: { category: "support" },
+    raw: {},
+    timestampMs: 1711756800000,
+  });
+
+  assert.equal(selectCount, 1);
+  assert.equal(result?.id, "comment-dup-1");
+  assert.equal(result?.duplicate, true);
+  assert.equal(result?.deduped, true);
+});
+
 test("updateCommentState returns normalized updated comment", async () => {
   const db = createDb(async (_sql, params) => ({
     rows: [

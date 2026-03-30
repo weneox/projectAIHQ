@@ -6,15 +6,32 @@ import {
   classifyMetaGatewayFailure,
   classifyVoiceSyncFailure,
 } from "./durableExecutionCore.js";
-import { sendOutboundViaMetaGateway } from "./metaGatewayClient.js";
+import {
+  sendCommentActionsViaMetaGateway,
+  sendOutboundViaMetaGateway,
+} from "./metaGatewayClient.js";
 import {
   getMessageById,
   getThreadById,
   markOutboundAttemptDead,
   markOutboundAttemptFailed,
   markOutboundAttemptSent,
+  updateOutboundMessageDeliveryFailure,
   updateOutboundMessageProviderId,
 } from "../routes/api/inbox/repository.js";
+import {
+  getCommentById,
+  updateCommentState,
+} from "../routes/api/comments/repository.js";
+import {
+  mergeClassificationForReply,
+  mergeClassificationForReplyPending,
+} from "../routes/api/comments/state.js";
+import {
+  buildReplyPendingRaw,
+  buildReplyRaw,
+  emitCommentUpdatedRealtime,
+} from "../routes/api/comments/handlers/shared.js";
 import { emitRealtimeEvent } from "../realtime/events.js";
 import { writeAudit } from "../utils/auditLog.js";
 import { createLogger } from "../utils/logger.js";
@@ -101,6 +118,132 @@ export async function enqueueMetaOutboundExecution({
   );
 }
 
+function normalizeCommentReplyChannel(channel = "instagram") {
+  return s(channel || "instagram").toLowerCase() || "instagram";
+}
+
+export function mapDurableExecutionToCommentDeliveryStatus(status = "") {
+  const value = s(status).toLowerCase();
+  if (value === "succeeded") return "sent";
+  if (value === "dead_lettered" || value === "terminal") return "dead";
+  if (value === "retryable") return "failed";
+  return "pending";
+}
+
+export function buildMetaCommentReplyExecutionInput({
+  tenantId = "",
+  tenantKey = "",
+  channel = "instagram",
+  provider = "meta",
+  commentId = "",
+  externalCommentId = "",
+  externalPostId = "",
+  externalUserId = "",
+  replyText = "",
+  actor = "operator",
+  approved = true,
+  maxAttempts = 5,
+} = {}) {
+  const safeChannel = normalizeCommentReplyChannel(channel);
+  const action = {
+    type: "reply_comment",
+    channel: safeChannel,
+    commentId: s(externalCommentId),
+    text: s(replyText),
+    meta: {
+      tenantKey: s(tenantKey),
+      commentId: s(commentId),
+      externalCommentId: s(externalCommentId),
+      externalPostId: s(externalPostId),
+      actor: s(actor || "operator"),
+    },
+  };
+
+  const payload = {
+    tenantKey: s(tenantKey),
+    actions: [action],
+    context: {
+      tenantKey: s(tenantKey),
+      channel: safeChannel,
+      commentId: s(externalCommentId),
+      externalCommentId: s(externalCommentId),
+      externalPostId: s(externalPostId),
+      recipientId: s(externalUserId),
+      userId: s(externalUserId),
+    },
+  };
+
+  return {
+    tenantId,
+    tenantKey,
+    channel: safeChannel,
+    provider,
+    actionType: "meta.comment.reply",
+    targetType: "comment",
+    targetId: commentId || externalCommentId,
+    conversationId: externalPostId || externalCommentId,
+    idempotencyKey: buildExecutionIdempotencyKey({
+      provider,
+      actionType: "meta.comment.reply",
+      commentId: s(commentId),
+      externalCommentId: s(externalCommentId),
+      replyText: s(replyText),
+      actor: s(actor || "operator"),
+    }),
+    payloadSummary: payload,
+    safeMetadata: {
+      commentId: s(commentId),
+      externalCommentId: s(externalCommentId),
+      externalPostId: s(externalPostId),
+      externalUserId: s(externalUserId),
+      replyText: s(replyText),
+      actor: s(actor || "operator"),
+      approved: Boolean(approved),
+    },
+    correlationIds: {
+      commentId: s(commentId),
+      externalCommentId: s(externalCommentId),
+      externalPostId: s(externalPostId),
+    },
+    maxAttempts,
+    nextRetryAt: new Date().toISOString(),
+  };
+}
+
+export async function enqueueMetaCommentReplyExecution({
+  db,
+  tenantId = "",
+  tenantKey = "",
+  channel = "instagram",
+  provider = "meta",
+  commentId = "",
+  externalCommentId = "",
+  externalPostId = "",
+  externalUserId = "",
+  replyText = "",
+  actor = "operator",
+  approved = true,
+  maxAttempts = 5,
+}) {
+  const helpers = createDurableExecutionHelpers({ db });
+  return helpers.enqueueExecution(
+    buildMetaCommentReplyExecutionInput({
+      tenantId,
+      tenantKey,
+      channel,
+      provider,
+      commentId,
+      externalCommentId,
+      externalPostId,
+      externalUserId,
+      replyText,
+      actor,
+      approved,
+      maxAttempts,
+    })
+  );
+}
+
 export async function enqueueVoiceSyncExecution({
   db,
   actionType,
@@ -159,6 +302,16 @@ async function processMetaOutboundExecution({ db, wsHub, execution, logger }) {
         retryDelaySeconds: 300,
       });
     }
+    if (messageId) {
+      await updateOutboundMessageDeliveryFailure({
+        db,
+        messageId,
+        status: "failed",
+        error: missing === "message_missing" ? "message not found" : "thread not found",
+        errorCode: missing,
+        providerResponse: {},
+      });
+    }
 
     return {
       ok: false,
@@ -188,6 +341,14 @@ async function processMetaOutboundExecution({ db, wsHub, execution, logger }) {
         await markOutboundAttemptDead(db, attemptId);
       }
     }
+    await updateOutboundMessageDeliveryFailure({
+      db,
+      messageId: message.id,
+      status: failure.retryable ? "failed" : "dead",
+      error: failure.errorMessage,
+      errorCode: failure.errorCode,
+      providerResponse: gateway.json || {},
+    });
 
     logger.warn("durable_execution.meta.failed", {
       executionId: execution.id,
@@ -337,6 +498,278 @@ async function processVoiceSyncExecution({ db, execution, logger }) {
   };
 }
 
+export async function processMetaCommentReplyExecution({
+  db,
+  wsHub,
+  execution,
+  logger,
+  sendCommentActions = sendCommentActionsViaMetaGateway,
+}) {
+  const metadata = obj(execution.safe_metadata);
+  const payload = obj(execution.payload_summary);
+  const commentId = s(metadata.commentId || execution.target_id);
+  const actor = s(metadata.actor || "operator");
+  const approved = Boolean(metadata.approved !== false);
+  const replyText =
+    s(metadata.replyText) ||
+    s(payload?.actions?.[0]?.text) ||
+    s(payload?.actions?.[0]?.meta?.replyText);
+
+  const comment = await getCommentById(db, commentId);
+  if (!comment) {
+    return {
+      ok: false,
+      retryable: true,
+      errorCode: "comment_missing",
+      errorMessage: "comment not found",
+      classification: "runtime_missing",
+      resultSummary: {},
+    };
+  }
+
+  const gateway = await sendCommentActions(payload);
+  if (!gateway.ok) {
+    const failure = classifyMetaGatewayFailure(gateway);
+    const deliveryStatus = failure.retryable ? "failed" : "dead";
+    const nextClassification = mergeClassificationForReply(comment.classification, {
+      replyText,
+      actor,
+      approved,
+      sent: false,
+      provider: gateway.json || null,
+      sendError: failure.errorMessage,
+      errorCode: failure.errorCode,
+      deliveryStatus,
+      executionId: execution.id,
+    });
+    const nextRaw = buildReplyRaw(comment, {
+      replyText,
+      actor,
+      approved,
+      sent: false,
+      provider: gateway.json || null,
+      sendError: failure.errorMessage,
+      errorCode: failure.errorCode,
+      deliveryStatus,
+      executionId: execution.id,
+    });
+    const updatedComment = await updateCommentState(
+      db,
+      comment.id,
+      nextClassification,
+      nextRaw
+    );
+
+    emitCommentUpdatedRealtime(wsHub, updatedComment || comment);
+    await writeAudit(db, {
+      actor: "system",
+      action:
+        deliveryStatus === "dead"
+          ? "comment.reply_delivery_dead"
+          : "comment.reply_delivery_failed",
+      objectType: "comment",
+      objectId: String(comment.id || ""),
+      meta: {
+        tenantKey: comment.tenant_key,
+        executionId: execution.id,
+        gatewayStatus: Number(gateway?.status || 0),
+        errorCode: failure.errorCode,
+        error: failure.errorMessage,
+      },
+    });
+
+    logger.warn("durable_execution.comment_reply.failed", {
+      executionId: execution.id,
+      commentId: comment.id,
+      retryable: failure.retryable,
+      errorCode: failure.errorCode,
+      gatewayStatus: failure.status,
+    });
+
+    return {
+      ok: false,
+      retryable: failure.retryable,
+      errorCode: failure.errorCode,
+      errorMessage: failure.errorMessage,
+      classification: failure.classification,
+      resultSummary: {
+        gatewayStatus: failure.status,
+        commentId: comment.id,
+      },
+    };
+  }
+
+  const providerResult = gateway?.json?.result || gateway?.json || {};
+  const providerResponse =
+    providerResult?.response || providerResult?.json || providerResult || {};
+  const providerMessageId =
+    s(
+      providerResponse?.message_id ||
+        providerResponse?.messageId ||
+        providerResponse?.id
+    ) || null;
+
+  const nextClassification = mergeClassificationForReply(comment.classification, {
+    replyText,
+    actor,
+    approved,
+    sent: true,
+    provider: gateway.json || null,
+    sendError: "",
+    errorCode: "",
+    deliveryStatus: "sent",
+    executionId: execution.id,
+    providerMessageId,
+  });
+  const nextRaw = buildReplyRaw(comment, {
+    replyText,
+    actor,
+    approved,
+    sent: true,
+    provider: gateway.json || null,
+    sendError: "",
+    errorCode: "",
+    deliveryStatus: "sent",
+    executionId: execution.id,
+    providerMessageId,
+  });
+  const updatedComment = await updateCommentState(
+    db,
+    comment.id,
+    nextClassification,
+    nextRaw
+  );
+
+  emitCommentUpdatedRealtime(wsHub, updatedComment || comment);
+  await writeAudit(db, {
+    actor: "system",
+    action: "comment.reply_delivery_sent",
+    objectType: "comment",
+    objectId: String(comment.id || ""),
+    meta: {
+      tenantKey: comment.tenant_key,
+      executionId: execution.id,
+      providerMessageId: s(providerMessageId),
+      gatewayStatus: Number(gateway?.status || 0),
+    },
+  });
+
+  logger.info("durable_execution.comment_reply.sent", {
+    executionId: execution.id,
+    commentId: comment.id,
+    providerMessageId: s(providerMessageId),
+    gatewayStatus: Number(gateway?.status || 0),
+  });
+
+  return {
+    ok: true,
+    retryable: false,
+    resultSummary: {
+      commentId: comment.id,
+      providerMessageId: s(providerMessageId),
+      gatewayStatus: Number(gateway?.status || 0),
+    },
+  };
+}
+
+export async function requeueMetaCommentReplyExecution({
+  db,
+  wsHub,
+  execution,
+  requestedBy = "system",
+}) {
+  const metadata = obj(execution?.safe_metadata);
+  const payload = obj(execution?.payload_summary);
+  const commentId = s(metadata.commentId || execution?.target_id);
+
+  if (!commentId) {
+    return {
+      ok: false,
+      errorCode: "comment_missing",
+      errorMessage: "comment not found",
+    };
+  }
+
+  const comment = await getCommentById(db, commentId);
+  if (!comment) {
+    return {
+      ok: false,
+      errorCode: "comment_missing",
+      errorMessage: "comment not found",
+    };
+  }
+
+  const executionTenantId = s(execution?.tenant_id);
+  const executionTenantKey = s(execution?.tenant_key).toLowerCase();
+  const commentTenantId = s(comment?.tenant_id);
+  const commentTenantKey = s(comment?.tenant_key).toLowerCase();
+
+  if (
+    (executionTenantId && commentTenantId && executionTenantId !== commentTenantId) ||
+    (executionTenantKey && commentTenantKey && executionTenantKey !== commentTenantKey)
+  ) {
+    return {
+      ok: false,
+      errorCode: "comment_tenant_mismatch",
+      errorMessage: "comment tenant mismatch",
+    };
+  }
+
+  const replyText =
+    s(metadata.replyText) ||
+    s(payload?.actions?.[0]?.text) ||
+    s(comment?.classification?.reply?.text) ||
+    s(comment?.raw?.reply?.text);
+  const actor =
+    s(metadata.actor) ||
+    s(comment?.classification?.reply?.actor) ||
+    s(comment?.raw?.reply?.actor) ||
+    "operator";
+  const approved = metadata.approved !== false;
+
+  const nextClassification = mergeClassificationForReplyPending(
+    comment.classification,
+    {
+      replyText,
+      actor,
+      approved,
+      executionId: execution.id,
+    }
+  );
+  const nextRaw = buildReplyPendingRaw(comment, {
+    replyText,
+    actor,
+    approved,
+    executionId: execution.id,
+  });
+  const updatedComment = await updateCommentState(
+    db,
+    comment.id,
+    nextClassification,
+    nextRaw
+  );
+
+  emitCommentUpdatedRealtime(wsHub, updatedComment || comment);
+  await writeAudit(db, {
+    actor: s(requestedBy || "system"),
+    action: "comment.reply_delivery_requeued",
+    objectType: "comment",
+    objectId: String(comment.id || ""),
+    meta: {
+      tenantKey: comment.tenant_key,
+      executionId: s(execution.id),
+      requestedBy: s(requestedBy || "system"),
+      deliveryStatus: "pending",
+      durableExecutionStatus: s(execution.status || ""),
+    },
+  });
+
+  return {
+    ok: true,
+    comment: updatedComment || comment,
+  };
+}
+
 export async function processDurableExecution({
   db,
   wsHub,
@@ -356,6 +789,10 @@ export async function processDurableExecution({
 
   if (execution?.action_type === "meta.outbound.send") {
     return processMetaOutboundExecution({ db, wsHub, execution, logger });
+  }
+
+  if (execution?.action_type === "meta.comment.reply") {
+    return processMetaCommentReplyExecution({ db, wsHub, execution, logger });
   }
 
   if (s(execution?.action_type).startsWith("voice.sync.")) {

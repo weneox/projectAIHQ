@@ -121,6 +121,20 @@ export function createInboxIngestHandler({
         timestamp: input.timestamp,
       });
 
+      if (message?.duplicate) {
+        await rollbackAndRelease(client);
+        client = null;
+
+        return okJson(
+          res,
+          buildDuplicateIngestResponse({
+            thread: await refreshThread(db, thread.id, thread),
+            message,
+            threadState: await getInboxThreadState(db, thread.id),
+          })
+        );
+      }
+
       const recentMessages = await loadRecentMessages(client, thread.id);
       const priorThreadState = await getInboxThreadState(client, thread.id);
       const runtimeState = await loadStrictInboxRuntime({

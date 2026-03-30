@@ -8,7 +8,7 @@ export async function getCommentById(db, id) {
   const result = await db.query(
     `
     select
-      id, tenant_key, channel, source, external_comment_id, external_parent_comment_id,
+      id, tenant_id, tenant_key, channel, source, external_comment_id, external_parent_comment_id,
       external_post_id, external_user_id, external_username, customer_name, text,
       classification, raw, created_at, updated_at
     from comments
@@ -33,7 +33,7 @@ export async function getExistingCommentByExternalId(
   const result = await db.query(
     `
     select
-      id, tenant_key, channel, source, external_comment_id, external_parent_comment_id,
+      id, tenant_id, tenant_key, channel, source, external_comment_id, external_parent_comment_id,
       external_post_id, external_user_id, external_username, customer_name, text,
       classification, raw, created_at, updated_at
     from comments
@@ -52,38 +52,58 @@ export async function insertComment(db, payload) {
   if (!isDbReady(db)) return null;
 
   const resolvedTenantKey = resolveTenantKey(payload.tenantKey);
-  const result = await db.query(
-    `
-    insert into comments (
-      tenant_key, channel, source, external_comment_id, external_parent_comment_id,
-      external_post_id, external_user_id, external_username, customer_name, text,
-      classification, raw, created_at, updated_at
-    )
-    values (
-      $1::text, $2::text, $3::text, $4::text, $5::text, $6::text, $7::text, $8::text,
-      $9::text, $10::text, $11::jsonb, $12::jsonb, to_timestamp($13::double precision / 1000.0), now()
-    )
-    returning
-      id, tenant_key, channel, source, external_comment_id, external_parent_comment_id,
-      external_post_id, external_user_id, external_username, customer_name, text,
-      classification, raw, created_at, updated_at
-    `,
-    [
+  let result;
+  try {
+    result = await db.query(
+      `
+      insert into comments (
+        tenant_key, channel, source, external_comment_id, external_parent_comment_id,
+        external_post_id, external_user_id, external_username, customer_name, text,
+        classification, raw, created_at, updated_at
+      )
+      values (
+        $1::text, $2::text, $3::text, $4::text, $5::text, $6::text, $7::text, $8::text,
+        $9::text, $10::text, $11::jsonb, $12::jsonb, to_timestamp($13::double precision / 1000.0), now()
+      )
+      returning
+        id, tenant_id, tenant_key, channel, source, external_comment_id, external_parent_comment_id,
+        external_post_id, external_user_id, external_username, customer_name, text,
+        classification, raw, created_at, updated_at
+      `,
+      [
+        resolvedTenantKey,
+        payload.channel,
+        payload.source,
+        payload.externalCommentId,
+        payload.externalParentCommentId,
+        payload.externalPostId,
+        payload.externalUserId,
+        payload.externalUsername,
+        payload.customerName,
+        payload.text,
+        JSON.stringify(payload.classification || {}),
+        JSON.stringify(payload.raw || {}),
+        payload.timestampMs,
+      ]
+    );
+  } catch (error) {
+    if (String(error?.code || "") !== "23505") throw error;
+
+    const existing = await getExistingCommentByExternalId(
+      db,
       resolvedTenantKey,
       payload.channel,
-      payload.source,
-      payload.externalCommentId,
-      payload.externalParentCommentId,
-      payload.externalPostId,
-      payload.externalUserId,
-      payload.externalUsername,
-      payload.customerName,
-      payload.text,
-      JSON.stringify(payload.classification || {}),
-      JSON.stringify(payload.raw || {}),
-      payload.timestampMs,
-    ]
-  );
+      payload.externalCommentId
+    );
+
+    if (!existing) throw error;
+
+    return {
+      ...existing,
+      duplicate: true,
+      deduped: true,
+    };
+  }
 
   return normalizeComment(result.rows?.[0] || null);
 }
@@ -101,7 +121,7 @@ export async function updateCommentState(db, id, nextClassification, nextRaw) {
     where id = $1::uuid
     returning
       id, tenant_key, channel, source, external_comment_id, external_parent_comment_id,
-      external_post_id, external_user_id, external_username, customer_name, text,
+      tenant_id, external_post_id, external_user_id, external_username, customer_name, text,
       classification, raw, created_at, updated_at
     `,
     [id, JSON.stringify(nextClassification || {}), JSON.stringify(nextRaw || {})]
@@ -146,7 +166,7 @@ export async function listComments(db, { tenantKey, channel, category, q, limit 
   const result = await db.query(
     `
     select
-      id, tenant_key, channel, source, external_comment_id, external_parent_comment_id,
+      id, tenant_id, tenant_key, channel, source, external_comment_id, external_parent_comment_id,
       external_post_id, external_user_id, external_username, customer_name, text,
       classification, raw, created_at, updated_at
     from comments

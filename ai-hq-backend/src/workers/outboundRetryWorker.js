@@ -8,6 +8,7 @@ import {
   markOutboundAttemptFailed,
   markOutboundAttemptSending,
   markOutboundAttemptSent,
+  updateOutboundMessageDeliveryFailure,
   updateOutboundMessageProviderId,
 } from "../routes/api/inbox/repository.js";
 import { writeAudit } from "../utils/auditLog.js";
@@ -81,6 +82,14 @@ async function processAttempt({ db, wsHub, attempt }) {
       providerResponse: {},
       retryDelaySeconds: 300,
     });
+    await updateOutboundMessageDeliveryFailure({
+      db,
+      messageId: attempt.message_id,
+      status: "failed",
+      error: "message not found",
+      errorCode: "message_missing",
+      providerResponse: {},
+    });
     return;
   }
 
@@ -93,6 +102,14 @@ async function processAttempt({ db, wsHub, attempt }) {
       errorCode: "thread_missing",
       providerResponse: {},
       retryDelaySeconds: 300,
+    });
+    await updateOutboundMessageDeliveryFailure({
+      db,
+      messageId: message.id,
+      status: "failed",
+      error: "thread not found",
+      errorCode: "thread_missing",
+      providerResponse: {},
     });
     return;
   }
@@ -152,6 +169,14 @@ async function processAttempt({ db, wsHub, attempt }) {
           retryDelaySeconds: 120,
         })
       : await markOutboundAttemptDead(db, attempt.id);
+    await updateOutboundMessageDeliveryFailure({
+      db,
+      messageId: message.id,
+      status: failure.retryable ? "failed" : "dead",
+      error: gateway.error || checkedGateway.error || "gateway send failed",
+      errorCode: String(gateway.status || ""),
+      providerResponse: gateway.json || {},
+    });
 
     try {
       await writeAudit(db, {

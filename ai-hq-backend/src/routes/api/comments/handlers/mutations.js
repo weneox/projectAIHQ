@@ -1,12 +1,15 @@
 import { okJson, isUuid } from "../../../../utils/http.js";
 import { getAuthTenantKey } from "../../../../utils/auth.js";
 import { deepFix } from "../../../../utils/textFix.js";
-import { forwardCommentReplyToMetaGateway } from "../gateway.js";
 import {
   buildExecutionPolicyDecisionAuditShape,
   evaluateExecutionPolicy,
   mapExecutionOutcomeToDecisionEventType,
 } from "../../../../services/executionPolicy.js";
+import {
+  enqueueMetaCommentReplyExecution,
+  mapDurableExecutionToCommentDeliveryStatus,
+} from "../../../../services/durableExecutionService.js";
 import { safeAppendDecisionEvent } from "../../../../db/helpers/decisionEvents.js";
 import { getCommentById, updateCommentState } from "../repository.js";
 import {
@@ -99,7 +102,7 @@ export function reviewCommentHandler({
 export function replyCommentHandler({
   db,
   wsHub,
-  forwardReply = forwardCommentReplyToMetaGateway,
+  enqueueReplyExecution = enqueueMetaCommentReplyExecution,
   updateState = updateCommentState,
   getOwnedComment = loadOwnedComment,
   getRuntime,
@@ -227,34 +230,32 @@ export function replyCommentHandler({
         }
       }
 
-      let sendResult = null;
+      let queuedExecution = null;
+      let deliveryStatus = executeNow ? "pending" : "";
       let sent = false;
       let sendError = "";
 
       if (executeNow) {
-        sendResult = await forwardReply({
-          tenantKey: existing.tenant_key,
-          channel: existing.channel,
-          comment: existing,
-          actions: [
-            {
-              type: "reply_comment",
-              channel: s(existing.channel || "instagram").toLowerCase() || "instagram",
-              commentId: s(existing.external_comment_id || ""),
-              text: replyText,
-              meta: {
-                tenantKey: s(existing.tenant_key || ""),
-                commentId: s(existing.id || ""),
-                externalCommentId: s(existing.external_comment_id || ""),
-                externalPostId: s(existing.external_post_id || ""),
-                actor: s(actor || "operator"),
-              },
-            },
-          ],
+        queuedExecution = await enqueueReplyExecution({
+          db,
+          tenantId: s(existing?.tenant_id || runtimeState?.tenant?.id),
+          tenantKey: s(existing.tenant_key || tenantKey),
+          channel: s(existing.channel || "instagram").toLowerCase() || "instagram",
+          provider: "meta",
+          commentId: s(existing.id || ""),
+          externalCommentId: s(existing.external_comment_id || ""),
+          externalPostId: s(existing.external_post_id || ""),
+          externalUserId: s(existing.external_user_id || ""),
+          replyText,
+          actor,
+          approved,
+          maxAttempts: 5,
         });
-
-        sent = Boolean(sendResult?.ok);
-        sendError = sent ? "" : s(sendResult?.error || "");
+        deliveryStatus = mapDurableExecutionToCommentDeliveryStatus(
+          queuedExecution?.status
+        );
+        sent = deliveryStatus === "sent";
+        sendError = s(queuedExecution?.last_error_message || "");
       }
 
       const nextClassification = mergeClassificationForReply(existing.classification, {
@@ -262,16 +263,20 @@ export function replyCommentHandler({
         actor,
         approved,
         sent,
-        provider: sendResult?.json || null,
+        provider: null,
         sendError,
+        deliveryStatus,
+        executionId: s(queuedExecution?.id || ""),
       });
       const nextRaw = buildReplyRaw(existing, {
         replyText,
         actor,
         approved,
         sent,
-        provider: sendResult?.json || null,
+        provider: null,
         sendError,
+        deliveryStatus,
+        executionId: s(queuedExecution?.id || ""),
       });
       const comment = await updateState(db, id, nextClassification, nextRaw);
 
@@ -280,7 +285,7 @@ export function replyCommentHandler({
         db,
         {
           actor,
-          action: sent ? "comment.reply_sent" : "comment.reply_saved",
+          action: executeNow ? "comment.reply_requested" : "comment.reply_saved",
           objectType: "comment",
           objectId: String(comment?.id || ""),
           meta: {
@@ -288,8 +293,11 @@ export function replyCommentHandler({
             replyText,
             executeNow: Boolean(executeNow),
             sent: Boolean(sent),
+            replyQueued: Boolean(executeNow && deliveryStatus === "pending"),
             sendError,
-            gatewayStatus: Number(sendResult?.status || 0),
+            deliveryStatus,
+            executionId: s(queuedExecution?.id || ""),
+            durableExecutionStatus: s(queuedExecution?.status || ""),
             executionPolicy,
           },
         },
@@ -299,19 +307,13 @@ export function replyCommentHandler({
       return okJson(res, {
         ok: true,
         comment,
-        replyQueued: false,
+        replyQueued: Boolean(executeNow && deliveryStatus === "pending"),
         replySaved: true,
         replySent: Boolean(sent),
         replyError: sendError || null,
         executionPolicy,
-        gateway: sendResult
-          ? {
-              ok: Boolean(sendResult.ok),
-              status: Number(sendResult.status || 0),
-              error: sendResult.error || null,
-              skipped: Boolean(sendResult.skipped),
-            }
-          : null,
+        durableExecution: queuedExecution,
+        gateway: null,
       });
     } catch (e) {
       return okJson(res, {

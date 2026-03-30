@@ -192,6 +192,7 @@ export function createDurableExecutionHelpers({ db }) {
 
   async function listExecutions({
     status = "",
+    actionType = "",
     tenantId = "",
     tenantKey = "",
     limit = 50,
@@ -206,6 +207,11 @@ export function createDurableExecutionHelpers({ db }) {
     } else if (tenantKey) {
       values.push(tenantKey.toLowerCase());
       where.push(`tenant_key = $${values.length}::text`);
+    }
+
+    if (s(actionType)) {
+      values.push(s(actionType));
+      where.push(`action_type = $${values.length}::text`);
     }
 
     if (normalizedStatus && normalizedStatus !== "recent_failed") {

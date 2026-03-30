@@ -6,7 +6,10 @@ import {
   getTenantByKey,
   getInboxThreadState,
   getTenantInboxBrainContext,
+  markOutboundAttemptSending,
   upsertInboxThreadState,
+  updateOutboundMessageDeliveryFailure,
+  updateOutboundMessageProviderId,
 } from "../src/routes/api/inbox/repository.js";
 import { createRuntimeAuthorityError } from "../src/services/businessBrain/runtimeAuthority.js";
 
@@ -226,4 +229,115 @@ test("outbound attempt persistence module still keeps payload and tenant routing
   assert.equal(attempt?.tenant_key, "acme");
   assert.equal(attempt?.payload?.text, "hello");
   assert.equal(attempt?.status, "queued");
+});
+
+test("outbound attempt sending only claims retry-eligible rows", async () => {
+  let capturedSql = "";
+  const db = {
+    async query(text) {
+      capturedSql = String(text || "").toLowerCase();
+      return {
+        rows: [
+          {
+            id: "33333333-3333-4333-8333-333333333333",
+            message_id: "44444444-4444-4444-8444-444444444444",
+            thread_id: "55555555-5555-4555-8555-555555555555",
+            tenant_key: "acme",
+            status: "sending",
+            attempt_count: 1,
+            max_attempts: 5,
+            payload: {},
+            provider_response: {},
+          },
+        ],
+      };
+    },
+  };
+
+  const attempt = await markOutboundAttemptSending(
+    db,
+    "33333333-3333-4333-8333-333333333333"
+  );
+
+  assert.equal(attempt?.status, "sending");
+  assert.match(capturedSql, /status in \('queued','failed','retrying'\)/);
+  assert.match(capturedSql, /attempt_count, 0\) < coalesce\(max_attempts, 5\)/);
+});
+
+test("outbound message success update records provider delivery truth", async () => {
+  const db = {
+    async query(text, params = []) {
+      assert.match(String(text || "").toLowerCase(), /sent_at = coalesce\(sent_at, now\(\)\)/);
+      const meta = JSON.parse(params[2]);
+      return {
+        rows: [
+          {
+            id: params[0],
+            thread_id: "55555555-5555-4555-8555-555555555555",
+            tenant_key: "acme",
+            direction: "outbound",
+            sender_type: "ai",
+            external_message_id: params[1],
+            message_type: "text",
+            text: "hello",
+            attachments: [],
+            meta,
+            sent_at: "2026-03-30T00:00:00.000Z",
+            created_at: "2026-03-29T00:00:00.000Z",
+          },
+        ],
+      };
+    },
+  };
+
+  const message = await updateOutboundMessageProviderId({
+    db,
+    messageId: "44444444-4444-4444-8444-444444444444",
+    providerMessageId: "provider-1",
+    providerResponse: { ok: true },
+  });
+
+  assert.equal(message?.sent_at, "2026-03-30T00:00:00.000Z");
+  assert.equal(message?.meta?.delivery?.status, "sent");
+  assert.equal(message?.meta?.delivery?.providerMessageId, "provider-1");
+});
+
+test("outbound message failure update preserves unsent truth and exposes failure state", async () => {
+  const db = {
+    async query(_text, params = []) {
+      const meta = JSON.parse(params[1]);
+      return {
+        rows: [
+          {
+            id: params[0],
+            thread_id: "55555555-5555-4555-8555-555555555555",
+            tenant_key: "acme",
+            direction: "outbound",
+            sender_type: "ai",
+            external_message_id: null,
+            message_type: "text",
+            text: "hello",
+            attachments: [],
+            meta,
+            sent_at: null,
+            created_at: "2026-03-29T00:00:00.000Z",
+          },
+        ],
+      };
+    },
+  };
+
+  const message = await updateOutboundMessageDeliveryFailure({
+    db,
+    messageId: "44444444-4444-4444-8444-444444444444",
+    status: "dead",
+    error: "gateway rejected",
+    errorCode: "403",
+    providerResponse: { ok: false },
+  });
+
+  assert.equal(message?.sent_at, null);
+  assert.equal(message?.meta?.delivery?.status, "dead");
+  assert.equal(message?.meta?.delivery?.failed, true);
+  assert.equal(message?.meta?.delivery?.errorCode, "403");
 });

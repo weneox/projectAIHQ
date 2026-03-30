@@ -20,6 +20,7 @@ class FakeDurableExecutionDb {
     this.executionAttempts = new Map();
     this.idempotency = new Map();
     this.auditEntries = [];
+    this.comments = new Map();
   }
 
   _clone(row) {
@@ -36,6 +37,10 @@ class FakeDurableExecutionDb {
 
   async query(sql, params = []) {
     const text = normalizeSql(sql);
+
+    if (["begin", "commit", "rollback"].includes(text)) {
+      return { rows: [] };
+    }
 
     if (text.startsWith("insert into durable_executions")) {
       const key = [params[2], params[4], params[5], params[11]].join("|");
@@ -94,6 +99,12 @@ class FakeDurableExecutionDb {
         rows = rows.filter((row) => String(row.tenant_id || "") === String(params[0] || ""));
       } else if (text.includes("tenant_key =")) {
         rows = rows.filter((row) => String(row.tenant_key || "") === String(params[0] || ""));
+      }
+
+      if (text.includes("action_type = $")) {
+        const actionTypeIndex = text.includes("status = $") ? params.length - 3 : params.length - 2;
+        const actionType = params[actionTypeIndex];
+        rows = rows.filter((row) => row.action_type === actionType);
       }
 
       if (text.includes("status = $")) {
@@ -298,18 +309,45 @@ class FakeDurableExecutionDb {
     }
 
     if (text.startsWith("insert into audit_log")) {
-      const row = {
-        id: `audit-${this.auditEntries.length + 1}`,
-        tenant_id: params[0] || null,
-        tenant_key: params[1] || null,
-        actor: params[2] || "system",
-        action: params[3],
-        object_type: params[4],
-        object_id: params[5],
-        meta: typeof params[6] === "string" ? JSON.parse(params[6]) : params[6],
-        created_at: nowIso(),
-      };
+      const writeAuditStyle = params.length === 5;
+      const row = writeAuditStyle
+        ? {
+            id: `audit-${this.auditEntries.length + 1}`,
+            tenant_id: null,
+            tenant_key: null,
+            actor: params[0] || "system",
+            action: params[1],
+            object_type: params[2],
+            object_id: params[3],
+            meta: typeof params[4] === "string" ? JSON.parse(params[4]) : params[4],
+            created_at: nowIso(),
+          }
+        : {
+            id: `audit-${this.auditEntries.length + 1}`,
+            tenant_id: params[0] || null,
+            tenant_key: params[1] || null,
+            actor: params[2] || "system",
+            action: params[3],
+            object_type: params[4],
+            object_id: params[5],
+            meta: typeof params[6] === "string" ? JSON.parse(params[6]) : params[6],
+            created_at: nowIso(),
+          };
       this.auditEntries.unshift(row);
+      return { rows: [this._clone(row)] };
+    }
+
+    if (text.includes("from comments") && text.includes("where id = $1::uuid")) {
+      return { rows: [this._clone(this.comments.get(params[0]))].filter(Boolean) };
+    }
+
+    if (text.startsWith("update comments")) {
+      const row = this.comments.get(params[0]);
+      if (!row) return { rows: [] };
+      row.classification = JSON.parse(params[1]);
+      row.raw = JSON.parse(params[2]);
+      row.updated_at = nowIso();
+      this.comments.set(row.id, row);
       return { rows: [this._clone(row)] };
     }
 
@@ -630,6 +668,138 @@ test("manual retry remains operator-only and requeues durable executions for adm
   assert.equal(allowed.res.body?.auditTrail?.[0]?.action, "durable_execution.manual_retry");
 });
 
+test("manual retry requeues durable comment replies and restores pending delivery truth", async () => {
+  const db = new FakeDurableExecutionDb();
+  const helpers = createDurableExecutionHelpers({ db });
+  const commentId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const events = [];
+
+  db.comments.set(commentId, {
+    id: commentId,
+    tenant_id: "tenant-1",
+    tenant_key: "acme",
+    channel: "instagram",
+    source: "meta",
+    external_comment_id: "external-comment-1",
+    external_parent_comment_id: null,
+    external_post_id: "post-1",
+    external_user_id: "user-1",
+    external_username: "customer",
+    customer_name: "Customer",
+    text: "Need help",
+    classification: {
+      category: "support",
+      reply: {
+        text: "We can help.",
+        actor: "operator",
+        approved: true,
+        sent: false,
+        error: "bad request",
+        errorCode: "http_400",
+        delivery: {
+          status: "dead",
+          executionId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          providerMessageId: "",
+          deadLetter: true,
+        },
+      },
+    },
+    raw: {
+      reply: {
+        text: "We can help.",
+        actor: "operator",
+        approved: true,
+        sent: false,
+        error: "bad request",
+        errorCode: "http_400",
+        provider: { gateway: "meta", status: 400 },
+        delivery: {
+          status: "dead",
+          executionId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          providerMessageId: "",
+          deadLetter: true,
+        },
+      },
+    },
+    created_at: nowIso(),
+    updated_at: nowIso(),
+  });
+
+  const execution = await helpers.enqueueExecution({
+    id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    provider: "meta",
+    channel: "instagram",
+    actionType: "meta.comment.reply",
+    targetType: "comment",
+    targetId: commentId,
+    conversationId: "post-1",
+    idempotencyKey: "idem-comment-retry",
+    payloadSummary: {
+      tenantKey: "acme",
+      actions: [{ type: "reply_comment", text: "We can help." }],
+    },
+    safeMetadata: {
+      commentId,
+      externalCommentId: "external-comment-1",
+      externalPostId: "post-1",
+      externalUserId: "user-1",
+      replyText: "We can help.",
+      actor: "operator",
+      approved: true,
+    },
+  });
+
+  await helpers.markExecutionTerminal({
+    executionId: execution.id,
+    errorCode: "http_400",
+    errorMessage: "bad request",
+    errorClassification: "terminal_gateway_failure",
+    deadLetter: true,
+  });
+
+  const router = executionsRoutes({
+    db,
+    wsHub: {
+      broadcast(event) {
+        events.push(event);
+        return true;
+      },
+    },
+  });
+
+  const result = await invokeRouter(
+    router,
+    "post",
+    `/executions/durable/${execution.id}/retry`,
+    {
+      params: { id: execution.id },
+      auth: buildAuth("admin"),
+    }
+  );
+
+  assert.equal(result.res.statusCode, 200);
+  assert.equal(result.res.body?.ok, true);
+  assert.equal(result.res.body?.execution?.status, "pending");
+  assert.equal(result.res.body?.comment?.reply_delivery?.status, "pending");
+  assert.equal(result.res.body?.comment?.reply_delivery?.executionId, execution.id);
+  assert.equal(result.res.body?.comment?.reply_delivery?.deadLetter, false);
+  assert.equal(result.res.body?.comment?.raw?.reply?.error, "");
+  assert.equal(result.res.body?.comment?.raw?.reply?.provider, null);
+  assert.equal(events.length, 1);
+  assert.equal(events[0]?.type, "comment.updated");
+  assert.equal(events[0]?.comment?.reply_delivery?.status, "pending");
+  assert.equal(
+    db.auditEntries.some((entry) => entry.action === "comment.reply_delivery_requeued"),
+    true
+  );
+  assert.equal(
+    db.auditEntries.some((entry) => entry.action === "durable_execution.manual_retry"),
+    true
+  );
+});
+
 test("durable summary endpoint exposes queue counts and worker health", async () => {
   const db = new FakeDurableExecutionDb();
   const helpers = createDurableExecutionHelpers({ db });
@@ -729,6 +899,142 @@ test("durable detail endpoint includes manual retry audit trail", async () => {
 
   assert.equal(result.res.statusCode, 200);
   assert.equal(result.res.body?.auditTrail?.[0]?.action, "durable_execution.manual_retry");
+});
+
+test("durable list endpoint exposes comment reply inspection fields and supports actionType filtering", async () => {
+  const db = new FakeDurableExecutionDb();
+  const helpers = createDurableExecutionHelpers({ db });
+
+  await helpers.enqueueExecution({
+    id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    provider: "meta",
+    channel: "instagram",
+    actionType: "meta.comment.reply",
+    targetType: "comment",
+    targetId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    conversationId: "post-9",
+    idempotencyKey: "idem-comment-observe",
+    payloadSummary: {
+      actions: [{ type: "reply_comment", text: "Thanks for reaching out." }],
+    },
+    safeMetadata: {
+      commentId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      externalCommentId: "external-comment-9",
+      externalPostId: "post-9",
+      externalUserId: "user-9",
+      replyText: "Thanks for reaching out.",
+      actor: "operator",
+      approved: true,
+    },
+    correlationIds: {
+      commentId: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      externalCommentId: "external-comment-9",
+      externalPostId: "post-9",
+    },
+  });
+
+  await helpers.enqueueExecution({
+    id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    provider: "meta",
+    channel: "instagram",
+    actionType: "meta.outbound.send",
+    idempotencyKey: "idem-generic-observe",
+    payloadSummary: {},
+  });
+
+  await helpers.markExecutionTerminal({
+    executionId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    errorCode: "http_503",
+    errorMessage: "temporary failure",
+    errorClassification: "retryable_gateway_failure",
+    deadLetter: true,
+  });
+
+  const router = executionsRoutes({ db, wsHub: null });
+  const result = await invokeRouter(router, "get", "/executions/durable", {
+    auth: buildAuth("operator"),
+    query: {
+      actionType: "meta.comment.reply",
+    },
+  });
+
+  assert.equal(result.res.statusCode, 200);
+  assert.equal(result.res.body?.ok, true);
+  assert.equal(result.res.body?.executions?.length, 1);
+  assert.equal(result.res.body?.executions?.[0]?.execution_type, "meta.comment.reply");
+  assert.equal(result.res.body?.executions?.[0]?.durable_status, "dead_lettered");
+  assert.equal(result.res.body?.executions?.[0]?.comment_reply?.commentId, "dddddddd-dddd-4ddd-8ddd-dddddddddddd");
+  assert.equal(result.res.body?.executions?.[0]?.comment_reply?.externalCommentId, "external-comment-9");
+  assert.equal(result.res.body?.executions?.[0]?.comment_reply?.replyText, "Thanks for reaching out.");
+  assert.equal(result.res.body?.executions?.[0]?.retry_state?.isDeadLettered, true);
+  assert.equal(result.res.body?.executions?.[0]?.last_error?.code, "http_503");
+});
+
+test("durable detail endpoint exposes comment reply linkage and latest attempt result metadata", async () => {
+  const db = new FakeDurableExecutionDb();
+  const helpers = createDurableExecutionHelpers({ db });
+  const execution = await helpers.enqueueExecution({
+    id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    provider: "meta",
+    channel: "instagram",
+    actionType: "meta.comment.reply",
+    targetType: "comment",
+    targetId: "12121212-1212-4212-8212-121212121212",
+    conversationId: "post-12",
+    idempotencyKey: "idem-comment-detail",
+    payloadSummary: {
+      actions: [{ type: "reply_comment", text: "Happy to help." }],
+    },
+    safeMetadata: {
+      commentId: "12121212-1212-4212-8212-121212121212",
+      externalCommentId: "external-comment-12",
+      externalPostId: "post-12",
+      externalUserId: "user-12",
+      replyText: "Happy to help.",
+      actor: "operator",
+      approved: true,
+    },
+  });
+
+  await helpers.createAttemptStart({
+    executionId: execution.id,
+    attemptNumber: 1,
+    statusFrom: "pending",
+    leaseToken: "lease-12",
+    correlationIds: {
+      commentId: "12121212-1212-4212-8212-121212121212",
+    },
+  });
+  await helpers.completeAttempt({
+    executionId: execution.id,
+    attemptNumber: 1,
+    statusTo: "succeeded",
+    resultSummary: {
+      commentId: "12121212-1212-4212-8212-121212121212",
+      providerMessageId: "provider-comment-12",
+      gatewayStatus: 200,
+    },
+  });
+
+  const router = executionsRoutes({ db, wsHub: null });
+  const result = await invokeRouter(router, "get", `/executions/durable/${execution.id}`, {
+    params: { id: execution.id },
+    auth: buildAuth("operator"),
+  });
+
+  assert.equal(result.res.statusCode, 200);
+  assert.equal(result.res.body?.ok, true);
+  assert.equal(result.res.body?.execution?.comment_reply?.commentId, "12121212-1212-4212-8212-121212121212");
+  assert.equal(result.res.body?.execution?.target?.targetId, "12121212-1212-4212-8212-121212121212");
+  assert.equal(result.res.body?.latestAttempt?.result?.providerMessageId, "provider-comment-12");
+  assert.equal(result.res.body?.latestAttempt?.result?.gatewayStatus, 200);
+  assert.equal(result.res.body?.latestAttempt?.result?.commentId, "12121212-1212-4212-8212-121212121212");
 });
 
 test("voice sync internal enqueue accepts work into the durable ledger instead of executing inline", async () => {

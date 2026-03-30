@@ -30,6 +30,37 @@ export function ingestCommentHandler({
   auditWriter,
   emitEvent,
 }) {
+  async function buildDuplicateResponse({ comment, tenant, input }) {
+    let lead = null;
+    try {
+      lead = await createLead({
+        db,
+        wsHub,
+        tenantKey: input.tenantKey,
+        comment,
+        classification: comment.classification || {},
+      });
+    } catch {}
+
+    const actions = buildActions({
+      tenantKey: input.tenantKey,
+      comment,
+      classification: comment.classification || {},
+      lead,
+    });
+
+    return {
+      ok: true,
+      duplicate: true,
+      deduped: true,
+      comment,
+      classification: deepFix(comment.classification || {}),
+      actions,
+      lead,
+      tenant: buildCommentTenantSummary(tenant),
+    };
+  }
+
   return async function ingestComment(req, res) {
     const internalAuth = getInternalTokenAuthResult(req);
     if (!internalAuth.ok) {
@@ -75,34 +106,14 @@ export function ingestCommentHandler({
       );
 
       if (existing) {
-        let lead = null;
-        try {
-          lead = await createLead({
-            db,
-            wsHub,
-            tenantKey: input.tenantKey,
+        return okJson(
+          res,
+          await buildDuplicateResponse({
             comment: existing,
-            classification: existing.classification || {},
-          });
-        } catch {}
-
-        const actions = buildActions({
-          tenantKey: input.tenantKey,
-          comment: existing,
-          classification: existing.classification || {},
-          lead,
-        });
-
-        return okJson(res, {
-          ok: true,
-          duplicate: true,
-          deduped: true,
-          comment: existing,
-          classification: deepFix(existing.classification || {}),
-          actions,
-          lead,
-          tenant: buildCommentTenantSummary(tenant),
-        });
+            tenant,
+            input,
+          })
+        );
       }
 
       const classification = await classify({
@@ -147,6 +158,17 @@ export function ingestCommentHandler({
         },
         timestampMs: input.timestampMs,
       });
+
+      if (comment?.duplicate) {
+        return okJson(
+          res,
+          await buildDuplicateResponse({
+            comment,
+            tenant,
+            input,
+          })
+        );
+      }
 
       emitCommentCreatedRealtime(wsHub, comment, emitEvent);
 

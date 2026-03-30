@@ -210,10 +210,89 @@ test("comments ingest persists new comments and keeps audit/realtime hooks intac
   }
 });
 
+test("comments ingest treats insert-time unique collisions as canonical duplicates without fake create side effects", async () => {
+  const previousInternalToken = cfg.security.aihqInternalToken;
+  const auditCalls = [];
+  const emitted = [];
+  let createLeadCalls = 0;
+
+  try {
+    cfg.security.aihqInternalToken = "internal-secret";
+
+    const handler = ingestCommentHandler({
+      db: { query: async () => ({ rows: [] }) },
+      wsHub: { name: "hub" },
+      getRuntime: async () => ({
+        tenant: {
+          id: "tenant-1",
+          tenant_key: "acme",
+          company_name: "Acme",
+          timezone: "Asia/Baku",
+        },
+      }),
+      getExistingComment: async () => null,
+      classify: async () => ({
+        category: "support",
+        shouldCreateLead: false,
+      }),
+      insert: async () => ({
+        id: "comment-race-1",
+        tenant_key: "acme",
+        tenant_id: "tenant-1",
+        channel: "instagram",
+        external_comment_id: "external-race-1",
+        classification: { category: "support" },
+        raw: {},
+        duplicate: true,
+        deduped: true,
+      }),
+      createLead: async () => {
+        createLeadCalls += 1;
+        return { id: "lead-race-1" };
+      },
+      buildActions: ({ lead }) => [{ type: "noop", leadId: lead?.id || "" }],
+      auditWriter: async (_db, payload) => {
+        auditCalls.push(payload);
+      },
+      emitEvent: (_hub, payload) => {
+        emitted.push(payload);
+      },
+    });
+
+    const req = {
+      headers: {
+        "x-internal-token": "internal-secret",
+        "x-tenant-key": "acme",
+      },
+      body: {
+        externalCommentId: "external-race-1",
+        text: "Need help",
+        channel: "instagram",
+      },
+    };
+    const res = createMockRes();
+
+    await handler(req, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body?.ok, true);
+    assert.equal(res.body?.duplicate, true);
+    assert.equal(res.body?.deduped, true);
+    assert.equal(res.body?.comment?.id, "comment-race-1");
+    assert.equal(res.body?.lead?.id, "lead-race-1");
+    assert.equal(createLeadCalls, 1);
+    assert.equal(auditCalls.length, 0);
+    assert.equal(emitted.length, 0);
+  } finally {
+    cfg.security.aihqInternalToken = previousInternalToken;
+  }
+});
+
 test("replyCommentHandler keeps reply orchestration, audit, and gateway semantics intact", async () => {
   const auditCalls = [];
   const emitted = [];
   const db = createDecisionEventDb();
+  const queuedExecutions = [];
 
   const handler = replyCommentHandler({
     db,
@@ -231,13 +310,15 @@ test("replyCommentHandler keeps reply orchestration, audit, and gateway semantic
         raw: {},
       },
     }),
-    forwardReply: async () => ({
-      ok: true,
-      status: 200,
-      json: { ok: true, provider: "meta" },
-      error: null,
-      skipped: false,
-    }),
+    enqueueReplyExecution: async (input) => {
+      queuedExecutions.push(input);
+      return {
+        id: "execution-1",
+        status: "pending",
+        tenant_key: input.tenantKey,
+        action_type: "meta.comment.reply",
+      };
+    },
     updateState: async (_db, id, classification, raw) => ({
       id,
       tenant_key: "acme",
@@ -301,15 +382,22 @@ test("replyCommentHandler keeps reply orchestration, audit, and gateway semantic
   await handler(req, res);
 
   assert.equal(res.body?.ok, true);
-  assert.equal(res.body?.replySent, true);
-  assert.equal(res.body?.gateway?.status, 200);
+  assert.equal(res.body?.replyQueued, true);
+  assert.equal(res.body?.replySent, false);
+  assert.equal(res.body?.gateway, null);
+  assert.equal(res.body?.durableExecution?.id, "execution-1");
   assert.equal(res.body?.executionPolicy?.outcome, "allowed_with_logging");
+  assert.equal(queuedExecutions.length, 1);
+  assert.equal(queuedExecutions[0].commentId, "11111111-1111-4111-8111-111111111111");
+  assert.equal(queuedExecutions[0].replyText, "Thanks, we can help.");
   assert.equal(auditCalls.length, 1);
-  assert.equal(auditCalls[0].action, "comment.reply_sent");
+  assert.equal(auditCalls[0].action, "comment.reply_requested");
   assert.equal(
     auditCalls[0].meta?.executionPolicy?.outcome,
     "allowed_with_logging"
   );
+  assert.equal(auditCalls[0].meta?.deliveryStatus, "pending");
+  assert.equal(auditCalls[0].meta?.executionId, "execution-1");
   assert.equal(db.decisionEvents.length, 1);
   assert.equal(db.decisionEvents[0].event_type, "execution_policy_decision");
   assert.equal(db.decisionEvents[0].runtime_projection_id, "projection-1");

@@ -160,6 +160,8 @@ export async function markOutboundAttemptSending(db, attemptId) {
       next_retry_at = null,
       updated_at = now()
     where id = $1::uuid
+      and status in ('queued','failed','retrying')
+      and coalesce(attempt_count, 0) < coalesce(max_attempts, 5)
     returning
       id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
       provider_message_id, payload, provider_response, status, attempt_count, max_attempts,
@@ -194,6 +196,7 @@ export async function markOutboundAttemptSent({
       last_error_code = null,
       updated_at = now()
     where id = $1::uuid
+      and status in ('queued','sending','failed','retrying')
     returning
       id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
       provider_message_id, payload, provider_response, status, attempt_count, max_attempts,
@@ -239,6 +242,7 @@ export async function markOutboundAttemptFailed({
       end,
       updated_at = now()
     where id = $1::uuid
+      and status in ('queued','sending','failed','retrying')
     returning
       id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
       provider_message_id, payload, provider_response, status, attempt_count, max_attempts,
@@ -295,6 +299,7 @@ export async function markOutboundAttemptDead(db, attemptId) {
     update inbox_outbound_attempts
     set status = 'dead', next_retry_at = null, updated_at = now()
     where id = $1::uuid
+      and status in ('queued','sending','failed','retrying')
     returning
       id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
       provider_message_id, payload, provider_response, status, attempt_count, max_attempts,

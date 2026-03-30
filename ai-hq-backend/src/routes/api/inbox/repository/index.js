@@ -10,6 +10,7 @@ export {
   findExistingOutboundMessage,
   getMessageById,
   updateOutboundMessageProviderId,
+  updateOutboundMessageDeliveryFailure,
 } from "./messages.js";
 export { refreshThread, getThreadById } from "./threads.js";
 export {
