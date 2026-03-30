@@ -177,7 +177,7 @@ export default function Inbox() {
     <section
       aria-labelledby="inbox-surface-title"
       aria-describedby="inbox-surface-description"
-      className="overflow-hidden rounded-[30px] border border-white/70 bg-[#f8f9fb] shadow-[0_30px_90px_rgba(15,23,42,0.10)]"
+      className="min-h-[calc(100vh-48px)] bg-transparent"
     >
       <header className="sr-only">
         <h1 id="inbox-surface-title">Operator messaging workspace</h1>
