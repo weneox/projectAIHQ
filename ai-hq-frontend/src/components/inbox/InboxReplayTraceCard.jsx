@@ -7,9 +7,9 @@ function s(value, fallback = "") {
 }
 
 function badgeTone(kind = "neutral") {
-  if (kind === "runtime") return "border-cyan-200 bg-cyan-50 text-cyan-800";
+  if (kind === "runtime") return "border-sky-200 bg-sky-50 text-sky-700";
   if (kind === "usecase") return "border-slate-200 bg-slate-100 text-slate-700";
-  return "border-violet-200 bg-violet-50 text-violet-800";
+  return "border-violet-200 bg-violet-50 text-violet-700";
 }
 
 export default function InboxReplayTraceCard({
@@ -42,14 +42,18 @@ export default function InboxReplayTraceCard({
         <div className="flex flex-wrap gap-2">
           {s(trace.runtimeReference) ? (
             <span
-              className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] ${badgeTone("runtime")}`}
+              className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] ${badgeTone(
+                "runtime"
+              )}`}
             >
               {trace.runtimeReference}
             </span>
           ) : null}
           {s(trace.usecase) ? (
             <span
-              className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] ${badgeTone("usecase")}`}
+              className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] ${badgeTone(
+                "usecase"
+              )}`}
             >
               {trace.usecase}
             </span>

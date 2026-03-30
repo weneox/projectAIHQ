@@ -1,5 +1,14 @@
-import { useEffect, useRef, useState } from "react";
-import { Bot, RefreshCw, UserRound, Waves } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  Mail,
+  Menu,
+  MessageSquare,
+  MoreHorizontal,
+  RefreshCw,
+  Search,
+  Star,
+  X,
+} from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import InboxComposer from "../components/inbox/InboxComposer.jsx";
@@ -8,49 +17,22 @@ import { useInboxThreadListSurface } from "../components/inbox/hooks/useInboxThr
 import InboxDetailPanel from "../components/inbox/InboxDetailPanel.jsx";
 import InboxLeadPanel from "../components/inbox/InboxLeadPanel.jsx";
 import InboxThreadListPanel from "../components/inbox/InboxThreadListPanel.jsx";
-import RetryQueuePanel from "../components/inbox/RetryQueuePanel.jsx";
-import ThreadOutboundAttemptsPanel from "../components/inbox/ThreadOutboundAttemptsPanel.jsx";
 import { useThreadOutboundAttemptsSurface } from "../components/inbox/hooks/useThreadOutboundAttemptsSurface.js";
 import SettingsSurfaceBanner from "../components/settings/SettingsSurfaceBanner.jsx";
 import { useInboxData } from "../hooks/useInboxData.js";
 import { useInboxRealtime } from "../hooks/useInboxRealtime.js";
-import { areInternalRoutesEnabled } from "../lib/appEntry.js";
 import { getAppSessionContext } from "../lib/appSession.js";
 
-function StatusPill({ label, tone = "default" }) {
-  const toneMap = {
-    default: "border-white/10 bg-white/[0.03] text-slate-300",
-    success: "border-emerald-400/20 bg-emerald-400/[0.08] text-emerald-200",
-    warn: "border-amber-400/20 bg-amber-400/[0.08] text-amber-200",
-  };
-
+function IconButton({ children, onClick, disabled = false }) {
   return (
-    <span
-      className={[
-        "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em]",
-        toneMap[tone] || toneMap.default,
-      ].join(" ")}
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-[#f3f4f6] hover:text-slate-950 disabled:opacity-45"
     >
-      {label}
-    </span>
-  );
-}
-
-function SecondaryModule({ title, eyebrow = "", children }) {
-  return (
-    <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[#121b2d]">
-      <div className="border-b border-white/8 px-4 py-4">
-        {eyebrow ? (
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-            {eyebrow}
-          </div>
-        ) : null}
-        <h2 className="mt-1 text-[15px] font-semibold tracking-[-0.02em] text-slate-100">
-          {title}
-        </h2>
-      </div>
-      <div className="px-4 py-4">{children}</div>
-    </section>
+      {children}
+    </button>
   );
 }
 
@@ -58,12 +40,12 @@ export default function Inbox() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const showInternalDebug = areInternalRoutesEnabled();
+
   const [wsState, setWsState] = useState("idle");
   const [tenantKey, setTenantKey] = useState("");
   const [operatorName, setOperatorName] = useState("");
-  const lineagePanelRef = useRef(null);
-  const [lineageAttentionKey, setLineageAttentionKey] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+
   const requestedThreadId = String(
     location.state?.selectedThreadId || searchParams.get("threadId") || ""
   ).trim();
@@ -177,84 +159,92 @@ export default function Inbox() {
     }
   }, [selectedThread?.id, loadMessages, loadRelatedLead]);
 
-  const handleInspectLineage = ({ truthKind = "" } = {}) => {
-    if (truthKind === "awaiting_attempt" || truthKind === "stale_attempt") {
-      threadAttemptSurface.surface?.refresh?.();
-    }
-
-    setLineageAttentionKey(Date.now());
-    const panel = lineagePanelRef.current;
-    if (!panel) return;
-    panel.scrollIntoView({ behavior: "smooth", block: "start" });
-    window.setTimeout(() => {
-      panel.focus?.();
-    }, 120);
-  };
-
   return (
-    <div className="flex flex-col gap-4 text-slate-100">
-      <section className="overflow-hidden rounded-[32px] border border-white/10 bg-[#0c1424]">
-        <div className="flex flex-col gap-4 px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-              Inbox
-            </div>
-            <h1 className="mt-2 text-[28px] font-semibold tracking-[-0.04em] text-white">
-              Operator messaging workspace
-            </h1>
-            <p className="mt-2 max-w-[58rem] text-sm leading-6 text-slate-400">
-              Thread-first triage on the left, the live conversation in the center,
-              and compact operational context on the right.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusPill label={`WS ${wsState}`} />
-            <StatusPill
-              label={dbDisabled ? "Fallback mode" : "Live mode"}
-              tone={dbDisabled ? "warn" : "success"}
-            />
-            <StatusPill label={operatorName || "operator"} />
-            {surface?.refresh ? (
-              <button
-                type="button"
-                onClick={surface.refresh}
-                disabled={surface.loading || surface.saving}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-[12px] font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/[0.08] disabled:opacity-50"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                Refresh inbox
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="border-t border-white/8 px-5 py-4">
+    <div className="overflow-hidden rounded-[28px] border border-white/60 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.10)]">
+      {surface?.availability === "unavailable" || surface?.error ? (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
           <SettingsSurfaceBanner
             surface={surface}
             unavailableMessage="Inbox operations are temporarily unavailable."
             refreshLabel="Refresh inbox"
           />
         </div>
-      </section>
+      ) : null}
 
-      <div className="grid min-h-[calc(100vh-220px)] gap-4 xl:grid-cols-[320px_minmax(0,1fr)_280px]">
-        <div className="min-h-0">
+      <div className="grid min-h-[calc(100vh-48px)] xl:grid-cols-[316px_minmax(0,1fr)_312px] xl:grid-rows-[64px_minmax(0,1fr)]">
+        <div className="col-span-1 border-b border-r border-slate-200/80 xl:col-span-2 xl:row-start-1">
+          <div className="flex h-16 items-center justify-between gap-4 px-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <IconButton>
+                <Menu className="h-4 w-4" />
+              </IconButton>
+
+              <div className="relative w-full max-w-[320px]">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search inbox..."
+                  className="h-11 w-full rounded-full border border-slate-200 bg-[#f4f5f7] pl-10 pr-4 text-sm text-slate-900 shadow-none outline-none placeholder:text-slate-400 focus:border-slate-300 focus:bg-white"
+                />
+              </div>
+
+              <IconButton>
+                <Star className="h-4 w-4" />
+              </IconButton>
+
+              <IconButton
+                onClick={surface?.refresh}
+                disabled={surface?.loading || surface?.saving}
+              >
+                <RefreshCw className="h-4 w-4" />
+              </IconButton>
+            </div>
+
+            <div className="hidden items-center gap-1 md:flex">
+              <IconButton>
+                <MessageSquare className="h-4 w-4" />
+              </IconButton>
+              <IconButton>
+                <Mail className="h-4 w-4" />
+              </IconButton>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-b border-l border-slate-200/80 xl:col-start-3 xl:row-start-1">
+          <div className="flex h-16 items-center justify-between px-5">
+            <div className="text-[14px] font-semibold tracking-[-0.02em] text-slate-950">
+              Task Details
+            </div>
+
+            <div className="flex items-center gap-1">
+              <IconButton>
+                <MoreHorizontal className="h-4 w-4" />
+              </IconButton>
+              <IconButton>
+                <X className="h-4 w-4" />
+              </IconButton>
+            </div>
+          </div>
+        </div>
+
+        <div className="min-h-0 border-r border-slate-200/80 xl:row-start-2">
           <InboxThreadListPanel
             threadList={threadList}
             selectedThreadId={selectedThread?.id || ""}
             wsState={wsState}
             dbDisabled={dbDisabled}
             operatorName={operatorName}
+            searchQuery={searchQuery}
           />
         </div>
 
-        <div className="min-h-0">
+        <div className="min-h-0 xl:row-start-2">
           <InboxDetailPanel
             selectedThread={selectedThread}
             messages={messages}
             outboundAttempts={threadAttemptSurface.attempts}
-            onInspectLineage={handleInspectLineage}
             surface={detailSurface}
             actionState={actionState}
             markRead={markRead}
@@ -276,57 +266,16 @@ export default function Inbox() {
           />
         </div>
 
-        <div className="min-h-0 space-y-4">
+        <div className="min-h-0 border-l border-slate-200/80 xl:row-start-2">
           <InboxLeadPanel
             selectedThread={selectedThread}
             surface={leadSurface}
             relatedLead={relatedLead}
             openLeadDetail={openLeadDetail}
+            operatorName={operatorName}
+            tenantKey={tenantKey}
+            wsState={wsState}
           />
-
-          <ThreadOutboundAttemptsPanel
-            compact
-            selectedThread={selectedThread}
-            actor={operatorName || "operator"}
-            attemptsSurface={threadAttemptSurface}
-            panelRef={lineagePanelRef}
-            attentionKey={lineageAttentionKey}
-          />
-
-          <RetryQueuePanel compact tenantKey={tenantKey} actor={operatorName || "operator"} />
-
-          <SecondaryModule title="Operator notes" eyebrow="Placeholder">
-            <div className="space-y-3">
-              <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-3.5 py-4 text-sm leading-6 text-slate-400">
-                Conversation empty-state visual placeholder.
-              </div>
-              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-3 text-sm text-slate-300">
-                <Bot className="h-4 w-4 text-slate-500" />
-                AI assist modules will land here in a later Inbox pass.
-              </div>
-              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-3 text-sm text-slate-300">
-                <Waves className="h-4 w-4 text-slate-500" />
-                Channel-aware reply controls will live here.
-              </div>
-            </div>
-          </SecondaryModule>
-
-          {showInternalDebug ? (
-            <SecondaryModule title="Thread meta" eyebrow="Internal only">
-              <div className="rounded-2xl border border-dashed border-white/10 bg-black/10 px-3.5 py-4">
-                {selectedThread ? (
-                  <pre className="overflow-auto text-xs leading-6 text-slate-300">
-                    {JSON.stringify(selectedThread, null, 2)}
-                  </pre>
-                ) : (
-                  <div className="flex items-center gap-3 text-sm text-slate-400">
-                    <UserRound className="h-4 w-4" />
-                    No thread selected.
-                  </div>
-                )}
-              </div>
-            </SecondaryModule>
-          ) : null}
         </div>
       </div>
     </div>

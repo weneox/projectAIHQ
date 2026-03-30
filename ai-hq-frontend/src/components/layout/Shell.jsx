@@ -10,8 +10,7 @@ import {
   getActiveShellSection,
 } from "./shellNavigation.js";
 
-const PRIMARY_RAIL_W = 72;
-const CONTEXT_RAIL_W = 248;
+const SHELL_SIDEBAR_W = 184;
 
 async function fetchShellResource(path) {
   try {
@@ -46,6 +45,7 @@ export default function Shell() {
 
   const shellSection = getActiveShellSection(location.pathname);
   const activeContextItem = getActiveContextItem(shellSection, location.pathname);
+  const isInboxRoute = location.pathname.startsWith("/inbox");
 
   async function loadShellStats() {
     const [inboxRes, leadsRes] = await Promise.all([
@@ -63,7 +63,8 @@ export default function Shell() {
         dbDisabled: false,
         availability: "unavailable",
         message:
-          failedResponse.message || "Shared workspace stats are temporarily unavailable.",
+          failedResponse.message ||
+          "Shared workspace stats are temporarily unavailable.",
       }));
       return;
     }
@@ -171,14 +172,12 @@ export default function Shell() {
 
   return (
     <div
-      className="min-h-screen bg-[#f3f5f7] text-slate-950 selection:bg-slate-900 selection:text-white"
+      className="min-h-screen bg-[#ececee] text-slate-950 selection:bg-slate-900 selection:text-white"
       style={{
-        "--primary-rail-w": `${PRIMARY_RAIL_W}px`,
-        "--context-rail-w": `${CONTEXT_RAIL_W}px`,
+        "--shell-sidebar-w": `${SHELL_SIDEBAR_W}px`,
       }}
     >
-      <div className="pointer-events-none fixed inset-0 -z-20 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.8),transparent_28%),linear-gradient(180deg,#f6f7f9_0%,#f3f5f7_100%)]" />
-      <div className="pointer-events-none fixed inset-y-0 left-[calc(var(--primary-rail-w)+var(--context-rail-w))] w-px bg-slate-200/70 hidden md:block" />
+      <div className="pointer-events-none fixed inset-0 -z-20 bg-[linear-gradient(180deg,#ececef_0%,#e8eaed_100%)]" />
 
       <Sidebar
         mobileOpen={mobileOpen}
@@ -186,37 +185,38 @@ export default function Shell() {
         shellStats={shellStats}
       />
 
-      <div className="min-h-screen md:pl-[calc(var(--primary-rail-w)+var(--context-rail-w))]">
-        <Header
-          onMenuClick={() => setMobileOpen(true)}
-          shellStats={shellStats}
-          notifications={notifications}
-          shellSection={shellSection}
-          activeContextItem={activeContextItem}
-        />
+      <div className="min-h-screen md:pl-[var(--shell-sidebar-w)]">
+        {!isInboxRoute ? (
+          <Header
+            onMenuClick={() => setMobileOpen(true)}
+            shellStats={shellStats}
+            notifications={notifications}
+            shellSection={shellSection}
+            activeContextItem={activeContextItem}
+          />
+        ) : null}
 
-        <main className="min-h-[calc(100vh-76px)] px-4 py-5 md:px-6 md:py-6 lg:px-10 lg:py-8">
-          <div className="mx-auto flex min-h-full w-full max-w-[1680px] flex-col">
-            <div className="mb-6 hidden items-start justify-between gap-4 border-b border-slate-200/80 pb-5 md:flex">
-              <div className="max-w-[52rem]">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                  {shellSection.kicker}
-                </div>
-                <p className="mt-2 text-[14px] leading-7 text-slate-500">
-                  {shellSection.description}
-                </p>
+        <main
+          className={
+            isInboxRoute
+              ? "min-h-screen px-4 py-4 md:px-6 md:py-6"
+              : "min-h-[calc(100vh-72px)] px-4 py-5 md:px-6 md:py-6 lg:px-8 lg:py-8"
+          }
+        >
+          <div
+            className={
+              isInboxRoute
+                ? "mx-auto w-full max-w-[1480px]"
+                : "mx-auto w-full max-w-[1480px]"
+            }
+          >
+            {!isInboxRoute && shellStats?.message ? (
+              <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {shellStats.message}
               </div>
+            ) : null}
 
-              {shellStats?.message ? (
-                <div className="max-w-[22rem] text-right text-[12px] leading-6 text-amber-700">
-                  {shellStats.message}
-                </div>
-              ) : null}
-            </div>
-
-            <div className="flex-1">
-              <Outlet />
-            </div>
+            <Outlet />
           </div>
         </main>
       </div>

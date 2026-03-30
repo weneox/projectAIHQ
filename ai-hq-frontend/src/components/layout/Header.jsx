@@ -9,7 +9,7 @@ function cn(...classes) {
 
 function CompactStat({ label, value, status = "default" }) {
   return (
-    <div className="min-w-[92px]">
+    <div className="min-w-[88px]">
       <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">
         {label}
       </div>
@@ -112,8 +112,8 @@ export default function Header({
 
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-[#f3f5f7]/90 backdrop-blur-md">
-        <div className="flex min-h-[76px] items-center justify-between gap-4 px-4 md:px-6 lg:px-10">
+      <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-[#ececee]/90 backdrop-blur-md">
+        <div className="flex min-h-[72px] items-center justify-between gap-4 px-4 md:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
@@ -129,17 +129,9 @@ export default function Header({
                 {shellSection?.kicker || "Workspace"}
               </div>
               <div className="mt-1 flex min-w-0 items-center gap-2">
-                <h1 className="truncate text-[22px] font-semibold tracking-[-0.04em] text-slate-950">
+                <h1 className="truncate text-[20px] font-semibold tracking-[-0.04em] text-slate-950">
                   {activeContextItem?.label || shellSection?.label || "AI HQ"}
                 </h1>
-                {shellSection?.label && activeContextItem?.label ? (
-                  <span className="hidden text-[13px] text-slate-400 sm:inline">/</span>
-                ) : null}
-                {shellSection?.label && activeContextItem?.label ? (
-                  <span className="hidden truncate text-[13px] text-slate-500 sm:inline">
-                    {shellSection.label}
-                  </span>
-                ) : null}
               </div>
             </div>
           </div>
@@ -148,7 +140,13 @@ export default function Header({
             <CompactStat
               label="Realtime"
               value={statsUnavailable ? "Unavailable" : realtimeState}
-              status={statsUnavailable ? "warning" : realtimeState === "off" ? "muted" : "default"}
+              status={
+                statsUnavailable
+                  ? "warning"
+                  : realtimeState === "off"
+                    ? "muted"
+                    : "default"
+              }
             />
             <CompactStat
               label="Open threads"

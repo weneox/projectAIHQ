@@ -1,12 +1,37 @@
 import {
   channelIcon,
-  channelTone,
   deriveThreadState,
   fmtRelative,
-  getPriorityTone,
   prettyState,
-  stateBadgeTone,
 } from "../../lib/inbox-ui.js";
+
+function initialsFromName(value = "") {
+  const parts = String(value || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!parts.length) return "U";
+  return parts
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+}
+
+function avatarTone(seed = "") {
+  const tones = [
+    "bg-amber-100 text-amber-700",
+    "bg-rose-100 text-rose-700",
+    "bg-sky-100 text-sky-700",
+    "bg-violet-100 text-violet-700",
+    "bg-emerald-100 text-emerald-700",
+  ];
+  const score = String(seed || "")
+    .split("")
+    .reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+
+  return tones[score % tones.length];
+}
 
 export default function InboxThreadCard({ thread, selected, onOpen }) {
   const state = deriveThreadState(thread);
@@ -18,109 +43,74 @@ export default function InboxThreadCard({ thread, selected, onOpen }) {
     thread.external_user_id ||
     "Unknown user";
 
-  const handle = thread.external_username
-    ? `@${String(thread.external_username).replace(/^@+/, "")}`
-    : thread.external_user_id || "--";
-
   const preview = thread.last_message_text || "No messages yet";
   const unread = Number(thread.unread_count || 0);
   const assignedTo = String(thread.assigned_to || "").trim();
+  const lastAt = fmtRelative(
+    thread.last_message_at || thread.updated_at || thread.created_at
+  );
 
   return (
     <button
       type="button"
       onClick={() => onOpen?.(thread)}
       className={[
-        "group w-full rounded-[22px] border px-3.5 py-3.5 text-left transition",
-        selected
-          ? "border-cyan-400/30 bg-[#151f33] text-white shadow-[0_12px_30px_rgba(8,15,28,0.34)]"
-          : "border-transparent bg-transparent text-slate-100 hover:border-white/8 hover:bg-white/[0.03]",
+        "w-full border-b border-slate-200/80 px-4 py-4 text-left transition",
+        selected ? "bg-white" : "bg-transparent hover:bg-white/70",
       ].join(" ")}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <div
-              className={`flex h-7 w-7 items-center justify-center rounded-full border ${channelTone(
-                thread.channel
-              )}`}
-            >
-              <ChannelIcon className="h-3.5 w-3.5" />
-            </div>
+      <div className="flex items-start gap-3">
+        <div
+          className={[
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+            avatarTone(name),
+          ].join(" ")}
+        >
+          {initialsFromName(name)}
+        </div>
 
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="truncate text-[14px] font-semibold tracking-[-0.02em]">
+              <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-slate-900">
                 {name}
               </div>
-              <div className={`truncate text-[12px] ${selected ? "text-slate-300" : "text-slate-500"}`}>
-                {handle}
+              <div className="mt-0.5 truncate text-[15px] font-medium text-slate-800">
+                {preview}
               </div>
             </div>
+
+            <div className="shrink-0 text-right">
+              <div className="text-[13px] text-slate-500">{lastAt}</div>
+              {unread > 0 ? (
+                <div className="mt-1 flex justify-end">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#4d8ae6]" />
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="mt-2 line-clamp-2 text-[13px] leading-5 text-slate-500">
+            {preview}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#f2f4f7] px-2.5 py-1 text-[11px] font-medium text-slate-600">
+              <ChannelIcon className="h-3.5 w-3.5" />
+              <span className="capitalize">{thread.channel || "other"}</span>
+            </span>
+
+            <span className="inline-flex rounded-full bg-[#f2f4f7] px-2.5 py-1 text-[11px] font-medium text-slate-600">
+              {prettyState(state)}
+            </span>
+
+            {assignedTo ? (
+              <span className="inline-flex rounded-full bg-[#eef3ff] px-2.5 py-1 text-[11px] font-medium text-[#315f9f]">
+                {assignedTo}
+              </span>
+            ) : null}
           </div>
         </div>
-
-        <div className="shrink-0 text-right">
-          <div
-            className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] ${
-              selected ? "border-cyan-400/20 bg-cyan-400/[0.12] text-cyan-100" : stateBadgeTone(state)
-            }`}
-          >
-            {prettyState(state)}
-          </div>
-          <div className={`mt-2 text-[11px] uppercase tracking-[0.14em] ${selected ? "text-slate-300" : "text-slate-500"}`}>
-            {fmtRelative(thread.last_message_at || thread.updated_at || thread.created_at)}
-          </div>
-        </div>
-      </div>
-
-      <p className={`mt-3 line-clamp-2 text-[13px] leading-6 ${selected ? "text-slate-200" : "text-slate-400"}`}>
-        {preview}
-      </p>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <span
-          className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${
-            selected
-              ? "border-white/10 bg-white/[0.04] text-slate-200"
-              : "border-white/10 bg-white/[0.04] text-slate-400"
-          }`}
-        >
-          {thread.channel || "other"}
-        </span>
-
-        {unread > 0 ? (
-          <span
-            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] ${
-              selected
-                ? "border-cyan-400/20 bg-cyan-400/[0.12] text-cyan-100"
-                : "border-cyan-400/20 bg-cyan-400/[0.08] text-cyan-200"
-            }`}
-          >
-            {unread} unread
-          </span>
-        ) : null}
-
-        {thread.handoff_active ? (
-          <span
-            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] ${getPriorityTone(
-              thread.handoff_priority
-            )}`}
-          >
-            handoff {thread.handoff_priority || "normal"}
-          </span>
-        ) : null}
-
-        {assignedTo ? (
-          <span
-            className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.14em] ${
-              selected
-                ? "border-white/10 bg-white/[0.04] text-slate-200"
-                : "border-white/10 bg-white/[0.04] text-slate-400"
-            }`}
-          >
-            {assignedTo}
-          </span>
-        ) : null}
       </div>
     </button>
   );
