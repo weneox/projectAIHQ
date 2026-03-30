@@ -2,7 +2,16 @@ import express from "express";
 import { requireOperatorSurfaceAccess } from "../../../utils/auth.js";
 import { createLogger } from "../../../utils/logger.js";
 import { recordRuntimeSignal } from "../../../observability/runtimeSignals.js";
-import { s, n, b, ok, fail, getActor, isLiveVoiceStatus } from "./shared.js";
+import {
+  s,
+  n,
+  b,
+  ok,
+  fail,
+  getActor,
+  isLiveVoiceStatus,
+  sameTenant,
+} from "./shared.js";
 import {
   getTenantVoiceSettings,
   upsertTenantVoiceSettings,
@@ -10,6 +19,9 @@ import {
   listVoiceCallEvents,
   getVoiceDailyUsage,
   listVoiceCallSessions,
+  getVoiceCallById,
+  getVoiceCallSessionById,
+  updateVoiceCall,
   updateVoiceCallSession,
   resolveTenantScope,
 } from "./repository.js";
@@ -20,6 +32,9 @@ import {
   getScopedSessionOrFail,
   findSessionByCallId,
   auditSafe,
+  runVoiceMutationTransaction,
+  appendVoiceEventStrict,
+  emitVoiceMutationRealtime,
 } from "./utils.js";
 
 const fallbackLogger = createLogger({
@@ -59,6 +74,266 @@ function recordVoiceRouteFailure({
       ...context,
     },
   });
+}
+
+const TERMINAL_SESSION_STATUSES = new Set(["completed", "failed"]);
+
+function lower(v, d = "") {
+  return s(v, d).toLowerCase();
+}
+
+function isTerminalSessionStatus(status = "") {
+  return TERMINAL_SESSION_STATUSES.has(lower(status));
+}
+
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+
+function getSessionCallId(session = {}) {
+  return s(
+    session?.voiceCallId ||
+      session?.voice_call_id ||
+      session?.callId ||
+      session?.call_id
+  );
+}
+
+function sessionMatchesCall(session = {}, callId = "") {
+  return s(getSessionCallId(session)) === s(callId);
+}
+
+async function getScopedCallForSessionOrFail({ db, scope, session, res }) {
+  const callId = getSessionCallId(session);
+  if (!callId) {
+    fail(res, 404, "voice_call_not_found");
+    return null;
+  }
+
+  return getScopedCallOrFail({ db, scope, callId, res });
+}
+
+function buildSessionStateConflict({
+  currentStatus = "",
+  requestedStatus = "",
+  eventType = "",
+} = {}) {
+  const current = lower(currentStatus);
+  const requested = lower(requestedStatus);
+
+  return {
+    ok: false,
+    statusCode: 409,
+    error: "voice_session_state_conflict",
+    mutationOutcome: "rejected",
+    details: {
+      reasonCode:
+        requested && requested !== current
+          ? "terminal_state_regression"
+          : "terminal_state_conflict",
+      currentStatus: current,
+      requestedStatus: requested,
+      eventType: s(eventType),
+    },
+  };
+}
+
+async function applyOperatorVoiceMutation({
+  db,
+  wsHub = null,
+  logger = null,
+  scope,
+  callId = "",
+  sessionId = "",
+  eventType = "",
+  rejectEventType = "",
+  ignoredEventType = "",
+  eventActor = "operator",
+  sessionPatch = {},
+  buildCallPatch = null,
+  buildEventPayload = null,
+  terminalBehavior = "reject",
+} = {}) {
+  const committed = await runVoiceMutationTransaction(db, async (tx) => {
+    const currentSession = await getVoiceCallSessionById(tx, sessionId);
+    if (!currentSession?.id) {
+      return {
+        ok: false,
+        statusCode: 404,
+        error: "voice_session_not_found",
+      };
+    }
+
+    if (!sameTenant(currentSession.tenantId ?? currentSession.tenant_id, scope?.tenantId)) {
+      return {
+        ok: false,
+        statusCode: 403,
+        error: "forbidden",
+      };
+    }
+
+    const resolvedCallId = s(callId || getSessionCallId(currentSession));
+    const currentCall = resolvedCallId ? await getVoiceCallById(tx, resolvedCallId) : null;
+    if (!currentCall?.id) {
+      return {
+        ok: false,
+        statusCode: 404,
+        error: "voice_call_not_found",
+      };
+    }
+
+    if (!sameTenant(currentCall.tenantId ?? currentCall.tenant_id, scope?.tenantId)) {
+      return {
+        ok: false,
+        statusCode: 403,
+        error: "forbidden",
+      };
+    }
+
+    const requestedStatus = s(sessionPatch?.status || currentSession.status);
+    if (isTerminalSessionStatus(currentSession.status)) {
+      if (
+        terminalBehavior === "ignore" &&
+        lower(requestedStatus) === lower(currentSession.status)
+      ) {
+        const event = await appendVoiceEventStrict(tx, {
+          callId: currentCall.id,
+          tenantId: currentCall.tenantId,
+          tenantKey: currentCall.tenantKey,
+          eventType: s(ignoredEventType || `${eventType}_ignored`),
+          actor: eventActor,
+          payload: {
+            ...obj(
+              typeof buildEventPayload === "function"
+                ? buildEventPayload({
+                    call: currentCall,
+                    session: currentSession,
+                    previousCall: currentCall,
+                    previousSession: currentSession,
+                  })
+                : buildEventPayload
+            ),
+            reasonCode: "already_terminal",
+            currentStatus: lower(currentSession.status),
+            requestedStatus: lower(requestedStatus),
+            mutationOutcome: "ignored",
+          },
+        });
+
+        return {
+          ok: true,
+          statusCode: 200,
+          payload: {
+            call: currentCall,
+            session: currentSession,
+            mutationOutcome: "ignored",
+          },
+          __voiceRealtime: {
+            call: currentCall,
+            session: currentSession,
+            event,
+            mutationOutcome: "ignored",
+          },
+        };
+      }
+
+      const conflict = buildSessionStateConflict({
+        currentStatus: currentSession.status,
+        requestedStatus,
+        eventType,
+      });
+      const event = await appendVoiceEventStrict(tx, {
+        callId: currentCall.id,
+        tenantId: currentCall.tenantId,
+        tenantKey: currentCall.tenantKey,
+        eventType: s(rejectEventType || `${eventType}_rejected`),
+        actor: eventActor,
+        payload: {
+          ...obj(
+            typeof buildEventPayload === "function"
+              ? buildEventPayload({
+                  call: currentCall,
+                  session: currentSession,
+                  previousCall: currentCall,
+                  previousSession: currentSession,
+                })
+              : buildEventPayload
+          ),
+          ...conflict.details,
+          mutationOutcome: "rejected",
+        },
+      });
+
+      return {
+        ...conflict,
+        __voiceRealtime: {
+          call: currentCall,
+          session: currentSession,
+          event,
+          mutationOutcome: "rejected",
+        },
+      };
+    }
+
+    const updatedSession = await updateVoiceCallSession(tx, currentSession.id, sessionPatch);
+    const callPatch =
+      typeof buildCallPatch === "function"
+        ? buildCallPatch({
+            call: currentCall,
+            session: updatedSession,
+            previousSession: currentSession,
+          })
+        : buildCallPatch;
+    const updatedCall = callPatch
+      ? await updateVoiceCall(tx, currentCall.id, callPatch)
+      : currentCall;
+    const eventPayload =
+      typeof buildEventPayload === "function"
+        ? buildEventPayload({
+            call: updatedCall,
+            session: updatedSession,
+            previousCall: currentCall,
+            previousSession: currentSession,
+          })
+        : buildEventPayload;
+    const event = await appendVoiceEventStrict(tx, {
+      callId: currentCall.id,
+      tenantId: currentCall.tenantId,
+      tenantKey: currentCall.tenantKey,
+      eventType,
+      actor: eventActor,
+      payload: {
+        ...obj(eventPayload),
+        mutationOutcome: "applied",
+      },
+    });
+
+    return {
+      ok: true,
+      statusCode: 200,
+      payload: {
+        call: updatedCall,
+        session: updatedSession,
+        mutationOutcome: "applied",
+      },
+      __voiceRealtime: {
+        call: updatedCall,
+        session: updatedSession,
+        event,
+        mutationOutcome: "applied",
+      },
+    };
+  });
+
+  if (committed?.__voiceRealtime) {
+    emitVoiceMutationRealtime({
+      wsHub,
+      logger,
+      ...obj(committed.__voiceRealtime),
+    });
+  }
+
+  return committed;
 }
 
 async function handleSettingsGet(req, res, { db, dbDisabled }) {
@@ -129,7 +404,7 @@ async function handleSettingsPost(req, res, { db, dbDisabled, audit }) {
   }
 }
 
-export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
+export function voiceRoutes({ db, dbDisabled = false, audit, wsHub = null } = {}) {
   const r = express.Router();
 
   r.get("/settings/voice", requireOperatorSurfaceAccess, (req, res) =>
@@ -452,6 +727,9 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
       }
 
       if (!session) return;
+      if (!sessionMatchesCall(session, call.id)) {
+        return fail(res, 404, "voice_session_not_found");
+      }
 
       const joinMode = s(req.body?.joinMode || req.body?.mode, "live").toLowerCase();
       const operatorName = s(req.body?.operatorName || actor);
@@ -465,18 +743,55 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
         ? joinMode
         : "live";
 
-      const updated = await updateVoiceCallSession(db, session.id, {
-        status: normalizedJoinMode === "whisper" ? "agent_whisper" : "agent_live",
-        operatorJoinRequested: true,
-        operatorJoined: true,
-        operatorJoinMode: normalizedJoinMode,
-        operatorName,
-        operatorUserId,
-        operatorRequestedAt: new Date().toISOString(),
-        operatorJoinedAt: new Date().toISOString(),
-        whisperActive: normalizedJoinMode === "whisper",
-        takeoverActive: normalizedJoinMode === "barge",
+      const timestamp = new Date().toISOString();
+      const result = await applyOperatorVoiceMutation({
+        db,
+        wsHub,
+        logger,
+        scope,
+        callId: call.id,
+        sessionId: session.id,
+        eventType: "operator_joined",
+        rejectEventType: "operator_join_rejected",
+        eventActor: "operator",
+        sessionPatch: {
+          status: normalizedJoinMode === "whisper" ? "agent_whisper" : "agent_live",
+          operatorJoinRequested: true,
+          operatorJoined: true,
+          operatorJoinMode: normalizedJoinMode,
+          operatorName,
+          operatorUserId,
+          operatorRequestedAt: timestamp,
+          operatorJoinedAt: timestamp,
+          whisperActive: normalizedJoinMode === "whisper",
+          takeoverActive: normalizedJoinMode === "barge",
+        },
+        buildCallPatch: ({ call: currentCall, session: updatedSession }) => ({
+          handoffRequested: true,
+          handoffCompleted: true,
+          handoffTarget:
+            updatedSession.resolvedDepartment ||
+            updatedSession.requestedDepartment ||
+            currentCall.handoffTarget ||
+            null,
+          agentMode: normalizedJoinMode === "live" ? "human" : "hybrid",
+        }),
+        buildEventPayload: ({ call: nextCall, session: nextSession }) => ({
+          operatorUserId: nextSession.operatorUserId,
+          operatorName: nextSession.operatorName,
+          operatorJoinMode: nextSession.operatorJoinMode,
+          sessionStatus: nextSession.status,
+          callStatus: nextCall.status,
+          callId: nextCall.id,
+        }),
       });
+
+      if (!result?.ok) {
+        return fail(res, result.statusCode || 500, result.error || "voice_join_failed", {
+          details: result.details,
+          mutationOutcome: s(result.mutationOutcome || "rejected"),
+        });
+      }
 
       await auditSafe(audit, {
         tenantId: scope.tenantId,
@@ -486,12 +801,17 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
         objectType: "voice_call_session",
         objectId: session.id,
         meta: {
-          joinMode: updated?.operatorJoinMode || normalizedJoinMode,
+          joinMode:
+            result.payload?.session?.operatorJoinMode || normalizedJoinMode,
           callId,
+          mutationOutcome: result.payload?.mutationOutcome || "applied",
         },
       });
 
-      return ok(res, { session: updated });
+      return ok(res, {
+        session: result.payload?.session,
+        mutationOutcome: result.payload?.mutationOutcome || "applied",
+      });
     } catch (err) {
       logger.error("voice.calls.join.failed", err, {
         callId: s(req.params?.id),
@@ -543,12 +863,45 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
       }
 
       if (!session) return;
+      if (!sessionMatchesCall(session, call.id)) {
+        return fail(res, 404, "voice_session_not_found");
+      }
 
-      const updated = await updateVoiceCallSession(db, session.id, {
-        status: "completed",
-        botActive: false,
-        endedAt: new Date().toISOString(),
+      const timestamp = new Date().toISOString();
+      const result = await applyOperatorVoiceMutation({
+        db,
+        wsHub,
+        logger,
+        scope,
+        callId: call.id,
+        sessionId: session.id,
+        eventType: "session_completed",
+        ignoredEventType: "session_end_ignored",
+        eventActor: "operator",
+        sessionPatch: {
+          status: "completed",
+          botActive: false,
+          endedAt: timestamp,
+        },
+        buildCallPatch: () => ({
+          status: "completed",
+          endedAt: timestamp,
+        }),
+        buildEventPayload: ({ call: nextCall, session: nextSession }) => ({
+          sessionStatus: nextSession.status,
+          callStatus: nextCall.status,
+          endedAt: nextSession.endedAt || nextCall.endedAt || timestamp,
+          callId: nextCall.id,
+        }),
+        terminalBehavior: "ignore",
       });
+
+      if (!result?.ok) {
+        return fail(res, result.statusCode || 500, result.error || "voice_end_failed", {
+          details: result.details,
+          mutationOutcome: s(result.mutationOutcome || "rejected"),
+        });
+      }
 
       await auditSafe(audit, {
         tenantId: scope.tenantId,
@@ -557,10 +910,16 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
         action: "voice.session.ended_from_call_view",
         objectType: "voice_call_session",
         objectId: session.id,
-        meta: { callId },
+        meta: {
+          callId,
+          mutationOutcome: result.payload?.mutationOutcome || "applied",
+        },
       });
 
-      return ok(res, { session: updated });
+      return ok(res, {
+        session: result.payload?.session,
+        mutationOutcome: result.payload?.mutationOutcome || "applied",
+      });
     } catch (err) {
       logger.error("voice.calls.end.failed", err, {
         callId: s(req.params?.id),
@@ -695,6 +1054,8 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
         res,
       });
       if (!session) return;
+      const call = await getScopedCallForSessionOrFail({ db, scope, session, res });
+      if (!call) return;
 
       const joinMode = s(req.body?.joinMode || req.body?.mode, "live").toLowerCase();
       const operatorName = s(req.body?.operatorName || actor);
@@ -708,14 +1069,56 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
         ? joinMode
         : "live";
 
-      const updated = await updateVoiceCallSession(db, session.id, {
-        status: "agent_ringing",
-        operatorJoinRequested: true,
-        operatorJoinMode: normalizedJoinMode,
-        operatorName,
-        operatorUserId,
-        operatorRequestedAt: new Date().toISOString(),
+      const timestamp = new Date().toISOString();
+      const result = await applyOperatorVoiceMutation({
+        db,
+        wsHub,
+        logger,
+        scope,
+        callId: call.id,
+        sessionId: session.id,
+        eventType: "operator_handoff_requested",
+        rejectEventType: "operator_handoff_request_rejected",
+        eventActor: "operator",
+        sessionPatch: {
+          status: "agent_ringing",
+          operatorJoinRequested: true,
+          operatorJoinMode: normalizedJoinMode,
+          operatorName,
+          operatorUserId,
+          operatorRequestedAt: timestamp,
+        },
+        buildCallPatch: ({ call: currentCall, session: updatedSession }) => ({
+          handoffRequested: true,
+          handoffCompleted: false,
+          handoffTarget:
+            updatedSession.requestedDepartment ||
+            updatedSession.resolvedDepartment ||
+            currentCall.handoffTarget ||
+            null,
+        }),
+        buildEventPayload: ({ call: nextCall, session: nextSession }) => ({
+          operatorUserId: nextSession.operatorUserId,
+          operatorName: nextSession.operatorName,
+          operatorJoinMode: nextSession.operatorJoinMode,
+          sessionStatus: nextSession.status,
+          callStatus: nextCall.status,
+          requestedDepartment:
+            nextSession.requestedDepartment || nextSession.resolvedDepartment || null,
+        }),
       });
+
+      if (!result?.ok) {
+        return fail(
+          res,
+          result.statusCode || 500,
+          result.error || "voice_handoff_request_failed",
+          {
+            details: result.details,
+            mutationOutcome: s(result.mutationOutcome || "rejected"),
+          }
+        );
+      }
 
       await auditSafe(audit, {
         tenantId: scope.tenantId,
@@ -725,13 +1128,18 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
         objectType: "voice_call_session",
         objectId: session.id,
         meta: {
-          joinMode: updated?.operatorJoinMode || normalizedJoinMode,
+          joinMode:
+            result.payload?.session?.operatorJoinMode || normalizedJoinMode,
           requestedDepartment:
-            updated?.requestedDepartment || session.requestedDepartment,
+            result.payload?.session?.requestedDepartment || session.requestedDepartment,
+          mutationOutcome: result.payload?.mutationOutcome || "applied",
         },
       });
 
-      return ok(res, { session: updated });
+      return ok(res, {
+        session: result.payload?.session,
+        mutationOutcome: result.payload?.mutationOutcome || "applied",
+      });
     } catch (err) {
       logger.error("voice.live.request_handoff.failed", err, {
         sessionId: s(req.params?.id),
@@ -767,15 +1175,58 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
         res,
       });
       if (!session) return;
+      const call = await getScopedCallForSessionOrFail({ db, scope, session, res });
+      if (!call) return;
 
       const mode = s(session.operatorJoinMode, "live");
-      const updated = await updateVoiceCallSession(db, session.id, {
-        status: mode === "whisper" ? "agent_whisper" : "agent_live",
-        operatorJoined: true,
-        whisperActive: mode === "whisper",
-        operatorJoinRequested: true,
-        operatorJoinedAt: new Date().toISOString(),
+      const timestamp = new Date().toISOString();
+      const result = await applyOperatorVoiceMutation({
+        db,
+        wsHub,
+        logger,
+        scope,
+        callId: call.id,
+        sessionId: session.id,
+        eventType: "operator_joined",
+        rejectEventType: "operator_join_rejected",
+        eventActor: "operator",
+        sessionPatch: {
+          status: mode === "whisper" ? "agent_whisper" : "agent_live",
+          operatorJoined: true,
+          whisperActive: mode === "whisper",
+          operatorJoinRequested: true,
+          operatorJoinedAt: timestamp,
+        },
+        buildCallPatch: ({ call: currentCall, session: updatedSession }) => ({
+          handoffRequested: true,
+          handoffCompleted: true,
+          handoffTarget:
+            updatedSession.resolvedDepartment ||
+            updatedSession.requestedDepartment ||
+            currentCall.handoffTarget ||
+            null,
+          agentMode: mode === "live" ? "human" : "hybrid",
+        }),
+        buildEventPayload: ({ call: nextCall, session: nextSession }) => ({
+          operatorUserId: nextSession.operatorUserId,
+          operatorName: nextSession.operatorName,
+          operatorJoinMode: nextSession.operatorJoinMode,
+          sessionStatus: nextSession.status,
+          callStatus: nextCall.status,
+        }),
       });
+
+      if (!result?.ok) {
+        return fail(
+          res,
+          result.statusCode || 500,
+          result.error || "voice_operator_join_failed",
+          {
+            details: result.details,
+            mutationOutcome: s(result.mutationOutcome || "rejected"),
+          }
+        );
+      }
 
       await auditSafe(audit, {
         tenantId: scope.tenantId,
@@ -785,11 +1236,15 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
         objectType: "voice_call_session",
         objectId: session.id,
         meta: {
-          joinMode: updated?.operatorJoinMode || mode,
+          joinMode: result.payload?.session?.operatorJoinMode || mode,
+          mutationOutcome: result.payload?.mutationOutcome || "applied",
         },
       });
 
-      return ok(res, { session: updated });
+      return ok(res, {
+        session: result.payload?.session,
+        mutationOutcome: result.payload?.mutationOutcome || "applied",
+      });
     } catch (err) {
       logger.error("voice.live.joined.failed", err, {
         sessionId: s(req.params?.id),
@@ -825,15 +1280,54 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
         res,
       });
       if (!session) return;
+      const call = await getScopedCallForSessionOrFail({ db, scope, session, res });
+      if (!call) return;
 
-      const updated = await updateVoiceCallSession(db, session.id, {
-        status: "agent_live",
-        operatorJoined: true,
-        takeoverActive: true,
-        whisperActive: false,
-        botActive: false,
-        operatorJoinedAt: new Date().toISOString(),
+      const timestamp = new Date().toISOString();
+      const result = await applyOperatorVoiceMutation({
+        db,
+        wsHub,
+        logger,
+        scope,
+        callId: call.id,
+        sessionId: session.id,
+        eventType: "operator_takeover",
+        rejectEventType: "operator_takeover_rejected",
+        eventActor: "operator",
+        sessionPatch: {
+          status: "agent_live",
+          operatorJoined: true,
+          takeoverActive: true,
+          whisperActive: false,
+          botActive: false,
+          operatorJoinedAt: timestamp,
+        },
+        buildCallPatch: ({ call: currentCall, session: updatedSession }) => ({
+          handoffRequested: true,
+          handoffCompleted: true,
+          handoffTarget:
+            updatedSession.resolvedDepartment ||
+            updatedSession.requestedDepartment ||
+            currentCall.handoffTarget ||
+            null,
+          agentMode: "human",
+        }),
+        buildEventPayload: ({ call: nextCall, session: nextSession }) => ({
+          operatorUserId: nextSession.operatorUserId,
+          operatorName: nextSession.operatorName,
+          operatorJoinMode: nextSession.operatorJoinMode,
+          sessionStatus: nextSession.status,
+          callStatus: nextCall.status,
+          takeoverActive: !!nextSession.takeoverActive,
+        }),
       });
+
+      if (!result?.ok) {
+        return fail(res, result.statusCode || 500, result.error || "voice_takeover_failed", {
+          details: result.details,
+          mutationOutcome: s(result.mutationOutcome || "rejected"),
+        });
+      }
 
       await auditSafe(audit, {
         tenantId: scope.tenantId,
@@ -842,10 +1336,15 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
         action: "voice.session.takeover",
         objectType: "voice_call_session",
         objectId: session.id,
-        meta: {},
+        meta: {
+          mutationOutcome: result.payload?.mutationOutcome || "applied",
+        },
       });
 
-      return ok(res, { session: updated });
+      return ok(res, {
+        session: result.payload?.session,
+        mutationOutcome: result.payload?.mutationOutcome || "applied",
+      });
     } catch (err) {
       logger.error("voice.live.takeover.failed", err, {
         sessionId: s(req.params?.id),
@@ -881,12 +1380,44 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
         res,
       });
       if (!session) return;
+      const call = await getScopedCallForSessionOrFail({ db, scope, session, res });
+      if (!call) return;
 
-      const updated = await updateVoiceCallSession(db, session.id, {
-        status: "completed",
-        botActive: false,
-        endedAt: new Date().toISOString(),
+      const timestamp = new Date().toISOString();
+      const result = await applyOperatorVoiceMutation({
+        db,
+        wsHub,
+        logger,
+        scope,
+        callId: call.id,
+        sessionId: session.id,
+        eventType: "session_completed",
+        ignoredEventType: "session_end_ignored",
+        eventActor: "operator",
+        sessionPatch: {
+          status: "completed",
+          botActive: false,
+          endedAt: timestamp,
+        },
+        buildCallPatch: () => ({
+          status: "completed",
+          endedAt: timestamp,
+        }),
+        buildEventPayload: ({ call: nextCall, session: nextSession }) => ({
+          sessionStatus: nextSession.status,
+          callStatus: nextCall.status,
+          endedAt: nextSession.endedAt || nextCall.endedAt || timestamp,
+          callId: nextCall.id,
+        }),
+        terminalBehavior: "ignore",
       });
+
+      if (!result?.ok) {
+        return fail(res, result.statusCode || 500, result.error || "voice_end_failed", {
+          details: result.details,
+          mutationOutcome: s(result.mutationOutcome || "rejected"),
+        });
+      }
 
       await auditSafe(audit, {
         tenantId: scope.tenantId,
@@ -895,10 +1426,15 @@ export function voiceRoutes({ db, dbDisabled = false, audit } = {}) {
         action: "voice.session.ended",
         objectType: "voice_call_session",
         objectId: session.id,
-        meta: {},
+        meta: {
+          mutationOutcome: result.payload?.mutationOutcome || "applied",
+        },
       });
 
-      return ok(res, { session: updated });
+      return ok(res, {
+        session: result.payload?.session,
+        mutationOutcome: result.payload?.mutationOutcome || "applied",
+      });
     } catch (err) {
       logger.error("voice.live.end.failed", err, {
         sessionId: s(req.params?.id),

@@ -135,7 +135,7 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   // bunlar session guard-dan əvvəl qalmalıdır
   r.use("/", healthRoutes({ db }));
   r.use("/", inboxInternalRoutes({ db, wsHub }));
-  r.use("/", voiceInternalRoutes({ db }));
+  r.use("/", voiceInternalRoutes({ db, wsHub }));
 
   // Browser cookie-authenticated writes must prove a trusted same-site/origin request.
   r.use(requireTrustedBrowserOriginForCookieAuth);
@@ -197,6 +197,7 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
       db,
       dbDisabled,
       audit,
+      wsHub,
     })
   );
 

@@ -31,7 +31,7 @@ function writeResult(res, result) {
   return res.status(result.statusCode || 200).json(result.payload || { ok: true });
 }
 
-export function voiceInternalRoutes({ db }) {
+export function voiceInternalRoutes({ db, wsHub = null }) {
   const r = express.Router();
   const requireTwilioVoiceInternal = createVoiceInternalTokenGuard({
     allowedServices: ["twilio-voice-backend"],
@@ -82,6 +82,8 @@ export function voiceInternalRoutes({ db }) {
         res,
         await processVoiceSessionUpsert({
           db,
+          wsHub,
+          logger,
           body: checked.value.body,
         })
       );
@@ -110,6 +112,8 @@ export function voiceInternalRoutes({ db }) {
         res,
         await processVoiceTranscript({
           db,
+          wsHub,
+          logger,
           providerCallSid: checked.value.providerCallSid,
           text: checked.value.text,
           role: checked.value.role,
@@ -141,6 +145,8 @@ export function voiceInternalRoutes({ db }) {
         res,
         await processVoiceSessionState({
           db,
+          wsHub,
+          logger,
           providerCallSid: checked.value.providerCallSid,
           body: checked.value.body,
         })
@@ -170,6 +176,8 @@ export function voiceInternalRoutes({ db }) {
         res,
         await processVoiceOperatorJoin({
           db,
+          wsHub,
+          logger,
           providerCallSid: checked.value.providerCallSid,
           body: checked.value.body,
         })

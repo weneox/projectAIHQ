@@ -12,15 +12,71 @@ export function buildConferenceName({ tenantKey, providerCallSid }) {
   return `${s(tenantKey, "default")}:${s(providerCallSid, "call")}`;
 }
 
+const TERMINAL_CALL_STATUSES = new Set([
+  "completed",
+  "failed",
+  "busy",
+  "no_answer",
+  "canceled",
+]);
+
+const TERMINAL_SESSION_STATUSES = new Set(["completed", "failed"]);
+
+function lower(v) {
+  return s(v).toLowerCase();
+}
+
+function isTerminalCallStatus(status = "") {
+  return TERMINAL_CALL_STATUSES.has(lower(status));
+}
+
+function isTerminalSessionStatus(status = "") {
+  return TERMINAL_SESSION_STATUSES.has(lower(status));
+}
+
+function preserveCallStatus(currentStatus = "", requestedStatus = "", appliedGuards = []) {
+  const current = lower(currentStatus);
+  const requested = lower(requestedStatus) || current;
+  if (isTerminalCallStatus(current) && requested !== current) {
+    appliedGuards.push("call_terminal_status_preserved");
+    return current;
+  }
+  return requested;
+}
+
+function preserveSessionStatus(currentStatus = "", requestedStatus = "", appliedGuards = []) {
+  const current = lower(currentStatus);
+  const requested = lower(requestedStatus) || current;
+  if (isTerminalSessionStatus(current) && requested !== current) {
+    appliedGuards.push("session_terminal_status_preserved");
+    return current;
+  }
+  return requested;
+}
+
+function ensureTerminalEndedAt(status = "", endedAt = null) {
+  if (isTerminalCallStatus(status) || isTerminalSessionStatus(status)) {
+    return endedAt || new Date().toISOString();
+  }
+  return endedAt || null;
+}
+
 export async function upsertCallAndSession(db, body = {}) {
   const providerCallSid = s(body.providerCallSid || body.callSid);
   if (!providerCallSid) {
     throw new Error("provider_call_sid_required");
   }
 
+  const appliedGuards = [];
+
   let call = await getVoiceCallByProviderSid(db, providerCallSid);
 
   if (!call) {
+    const initialCallStatus = preserveCallStatus(
+      "",
+      s(body.callStatus || body.status || "in_progress"),
+      appliedGuards
+    );
     call = await createVoiceCall(db, {
       tenantId: s(body.tenantId) || null,
       tenantKey: s(body.tenantKey),
@@ -28,11 +84,12 @@ export async function upsertCallAndSession(db, body = {}) {
       providerCallSid,
       providerStreamSid: s(body.providerStreamSid || body.streamSid) || null,
       direction: s(body.direction, "outbound"),
-      status: s(body.callStatus || body.status || "in_progress"),
+      status: initialCallStatus,
       fromNumber: s(body.fromNumber || body.from) || null,
       toNumber: s(body.toNumber || body.to) || null,
       callerName: s(body.customerName || body.callerName) || null,
       startedAt: body.startedAt || new Date().toISOString(),
+      endedAt: ensureTerminalEndedAt(initialCallStatus, body.endedAt || null),
       language: s(body.language, "en"),
       agentMode: s(body.agentMode, "assistant"),
       handoffRequested: b(body.handoffRequested, false),
@@ -52,17 +109,25 @@ export async function upsertCallAndSession(db, body = {}) {
       meta: isObj(body.meta) ? body.meta : {},
     });
   } else {
+    const nextCallStatus = preserveCallStatus(
+      call.status,
+      s(body.callStatus || body.status || call.status),
+      appliedGuards
+    );
     call = await updateVoiceCall(db, call.id, {
       tenantId: s(body.tenantId) || call.tenantId || null,
       tenantKey: s(body.tenantKey || call.tenantKey),
       providerStreamSid:
         s(body.providerStreamSid || body.streamSid) || call.providerStreamSid || null,
-      status: s(body.callStatus || body.status || call.status),
+      status: nextCallStatus,
       fromNumber: s(body.fromNumber || body.from || call.fromNumber) || null,
       toNumber: s(body.toNumber || body.to || call.toNumber) || null,
       callerName: s(body.customerName || body.callerName || call.callerName) || null,
       answeredAt: body.answeredAt || call.answeredAt || null,
-      endedAt: body.endedAt || call.endedAt || null,
+      endedAt: ensureTerminalEndedAt(
+        nextCallStatus,
+        body.endedAt || call.endedAt || null
+      ),
       durationSeconds: n(body.durationSeconds, call.durationSeconds || 0),
       language: s(body.language || call.language, "en"),
       agentMode: s(body.agentMode || call.agentMode, "assistant"),
@@ -87,6 +152,11 @@ export async function upsertCallAndSession(db, body = {}) {
   let session = await getVoiceCallSessionByProviderCallSid(db, providerCallSid);
 
   if (!session) {
+    const initialSessionStatus = preserveSessionStatus(
+      "",
+      s(body.sessionStatus || "bot_active"),
+      appliedGuards
+    );
     session = await createVoiceCallSession(db, {
       tenantId: s(body.tenantId) || null,
       tenantKey: s(body.tenantKey),
@@ -100,13 +170,15 @@ export async function upsertCallAndSession(db, body = {}) {
       customerNumber: s(body.customerNumber || body.fromNumber || body.from) || null,
       customerName: s(body.customerName || body.callerName) || null,
       direction: s(body.sessionDirection || "outbound_callback"),
-      status: s(body.sessionStatus || "bot_active"),
+      status: initialSessionStatus,
       requestedDepartment: s(body.requestedDepartment) || null,
       resolvedDepartment: s(body.resolvedDepartment) || null,
       operatorUserId: s(body.operatorUserId) || null,
       operatorName: s(body.operatorName) || null,
       operatorJoinMode: s(body.operatorJoinMode || "live"),
-      botActive: b(body.botActive, true),
+      botActive: isTerminalSessionStatus(initialSessionStatus)
+        ? false
+        : b(body.botActive, true),
       operatorJoinRequested: b(body.operatorJoinRequested, false),
       operatorJoined: b(body.operatorJoined, false),
       whisperActive: b(body.whisperActive, false),
@@ -118,9 +190,14 @@ export async function upsertCallAndSession(db, body = {}) {
       startedAt: body.startedAt || new Date().toISOString(),
       operatorRequestedAt: body.operatorRequestedAt || null,
       operatorJoinedAt: body.operatorJoinedAt || null,
-      endedAt: body.endedAt || null,
+      endedAt: ensureTerminalEndedAt(initialSessionStatus, body.endedAt || null),
     });
   } else {
+    const nextSessionStatus = preserveSessionStatus(
+      session.status,
+      s(body.sessionStatus || session.status || "bot_active"),
+      appliedGuards
+    );
     session = await updateVoiceCallSession(db, session.id, {
       tenantId: s(body.tenantId) || session.tenantId || null,
       tenantKey: s(body.tenantKey || session.tenantKey),
@@ -139,13 +216,15 @@ export async function upsertCallAndSession(db, body = {}) {
         null,
       customerName: s(body.customerName || body.callerName || session.customerName) || null,
       direction: s(body.sessionDirection || session.direction || "outbound_callback"),
-      status: s(body.sessionStatus || session.status || "bot_active"),
+      status: nextSessionStatus,
       requestedDepartment: s(body.requestedDepartment || session.requestedDepartment) || null,
       resolvedDepartment: s(body.resolvedDepartment || session.resolvedDepartment) || null,
       operatorUserId: s(body.operatorUserId || session.operatorUserId) || null,
       operatorName: s(body.operatorName || session.operatorName) || null,
       operatorJoinMode: s(body.operatorJoinMode || session.operatorJoinMode || "live"),
-      botActive: b(body.botActive, session.botActive),
+      botActive: isTerminalSessionStatus(nextSessionStatus)
+        ? false
+        : b(body.botActive, session.botActive),
       operatorJoinRequested: b(body.operatorJoinRequested, session.operatorJoinRequested),
       operatorJoined: b(body.operatorJoined, session.operatorJoined),
       whisperActive: b(body.whisperActive, session.whisperActive),
@@ -158,9 +237,12 @@ export async function upsertCallAndSession(db, body = {}) {
       meta: isObj(body.sessionMeta) ? body.sessionMeta : session.meta,
       operatorRequestedAt: body.operatorRequestedAt || session.operatorRequestedAt || null,
       operatorJoinedAt: body.operatorJoinedAt || session.operatorJoinedAt || null,
-      endedAt: body.endedAt || session.endedAt || null,
+      endedAt: ensureTerminalEndedAt(
+        nextSessionStatus,
+        body.endedAt || session.endedAt || null
+      ),
     });
   }
 
-  return { call, session };
+  return { call, session, appliedGuards };
 }

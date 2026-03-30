@@ -4,6 +4,7 @@ import twilio from "twilio";
 import { cfg } from "../config.js";
 import { resolveTenantFromRequest } from "../services/tenantResolver.js";
 import { getTenantVoiceConfig } from "../services/tenantConfig.js";
+import { createAihqVoiceClient } from "../services/aihqVoiceClient.js";
 import {
   contactUnavailableReply,
   pickLang,
@@ -42,6 +43,76 @@ function getBaseUrlFromReq(req) {
 
 function toWsUrl(httpUrl) {
   return httpUrl.replace(/^https:\/\//i, "wss://").replace(/^http:\/\//i, "ws://");
+}
+
+function buildConferenceName(tenantKey, callSid) {
+  return `${s(tenantKey || "default")}:${s(callSid || "call")}`;
+}
+
+function buildRequestContext(req, fallback = "") {
+  const requestId = s(req?.requestId || fallback || "voice-route");
+  const correlationId = s(req?.correlationId || requestId);
+  return {
+    requestId,
+    correlationId,
+  };
+}
+
+async function syncWebhookAccepted({
+  voiceClient,
+  tenantConfig,
+  req,
+  from,
+  to,
+  logger,
+}) {
+  const providerCallSid = s(req?.body?.CallSid || req?.query?.CallSid);
+  if (!voiceClient?.canUse?.() || !providerCallSid || !s(tenantConfig?.tenantKey)) return;
+
+  const requestContext = buildRequestContext(req, providerCallSid);
+
+  const result = await voiceClient.upsertSession(
+    {
+      tenantId: s(tenantConfig?.tenantId) || null,
+      tenantKey: s(tenantConfig?.tenantKey),
+      provider: "twilio",
+      providerCallSid,
+      providerStreamSid: null,
+      conferenceName: buildConferenceName(tenantConfig?.tenantKey, providerCallSid),
+      fromNumber: s(from) || null,
+      toNumber: s(to) || null,
+      customerNumber: s(from) || null,
+      customerName: "",
+      language: s(
+        tenantConfig?.voiceProfile?.defaultLanguage || tenantConfig?.defaultLanguage,
+        "en"
+      ).toLowerCase(),
+      agentMode: "assistant",
+      direction: "inbound",
+      callStatus: "queued",
+      sessionDirection: "inbound",
+      sessionStatus: "bot_silent",
+      botActive: false,
+      operatorJoinRequested: false,
+      operatorJoined: false,
+      whisperActive: false,
+      takeoverActive: false,
+      startedAt: new Date().toISOString(),
+      metrics: {},
+      sessionMeta: {
+        lifecycleStage: "webhook_accepted",
+      },
+    },
+    requestContext
+  );
+
+  if (!result?.ok) {
+    logger.warn("voice.route.webhook_accept_sync_failed", {
+      providerCallSid,
+      tenantKey: s(tenantConfig?.tenantKey),
+      error: s(result?.text || "voice_sync_request_failed"),
+    });
+  }
 }
 
 function getTwilioSignatureValidationResult(req) {
@@ -324,8 +395,16 @@ const routeLogger = createStructuredLogger({
   component: "twilio-routes",
 });
 
-export function twilioRouter() {
+export function twilioRouter({ voiceClient = null } = {}) {
   const r = express.Router();
+  const aihqVoiceClient =
+    voiceClient ||
+    createAihqVoiceClient({
+      fetchFn: globalThis.fetch,
+      baseUrl: cfg.AIHQ_BASE_URL,
+      internalToken: cfg.AIHQ_INTERNAL_TOKEN,
+      timeoutMs: 1500,
+    });
 
   r.options("/twilio/token", (_req, res) => res.sendStatus(204));
 
@@ -466,6 +545,15 @@ export function twilioRouter() {
         from,
         to,
         tenantKey,
+      });
+
+      void syncWebhookAccepted({
+        voiceClient: aihqVoiceClient,
+        tenantConfig,
+        req,
+        from,
+        to,
+        logger,
       });
 
       return res.type("text/xml").send(xml);

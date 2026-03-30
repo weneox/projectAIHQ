@@ -14,7 +14,7 @@ import { getTenantVoiceConfig } from "./tenantConfig.js";
 import { createAihqVoiceClient } from "./aihqVoiceClient.js";
 import { cfg } from "../config.js";
 import { s, sendTwilioMedia, getBridgeEnv } from "./bridge/shared.js";
-import { recordRuntimeSignal } from "./runtimeObservability.js";
+import { incrementRuntimeMetric, recordRuntimeSignal } from "./runtimeObservability.js";
 
 const logger = createStructuredLogger({
   service: "twilio-voice-backend",
@@ -75,13 +75,15 @@ function normalizeBridgeTenantConfigResult(result = null) {
 function deriveTwilioCloseOutcome({
   stopReceived = false,
   localHangupRequested = false,
+  transferHandoffCompleted = false,
 } = {}) {
-  if (stopReceived) {
+  if (transferHandoffCompleted) {
     return {
       ok: true,
       status: "completed",
-      reasonCode: "twilio_stop_received",
+      reasonCode: "transfer_handoff_completed",
       expected: true,
+      eventType: "call_handoff_completed",
     };
   }
 
@@ -91,6 +93,17 @@ function deriveTwilioCloseOutcome({
       status: "completed",
       reasonCode: "local_hangup_requested",
       expected: true,
+      eventType: "call_completed_local_hangup",
+    };
+  }
+
+  if (stopReceived) {
+    return {
+      ok: true,
+      status: "completed",
+      reasonCode: "twilio_stop_received",
+      expected: true,
+      eventType: "caller_hangup_completed",
     };
   }
 
@@ -99,6 +112,159 @@ function deriveTwilioCloseOutcome({
     status: "failed",
     reasonCode: "twilio_ws_closed_unexpected",
     expected: false,
+    eventType: "twilio_ws_closed_unexpected",
+  };
+}
+
+function buildInboundLifecycleMetadata() {
+  return {
+    direction: "inbound",
+    sessionDirection: "inbound",
+  };
+}
+
+function buildLiveLifecycleSummary(stage = "") {
+  if (stage === "webhook_accepted") {
+    return "Inbound call webhook accepted; waiting for Twilio media stream.";
+  }
+  if (stage === "media_stream_active") {
+    return "Twilio media stream active; realtime session not ready yet.";
+  }
+  if (stage === "realtime_session_ready") {
+    return "Realtime session ready; conversation established.";
+  }
+  return "";
+}
+
+function buildTerminalDisposition({
+  eventType,
+  status,
+  reasonCode = "",
+  localHangupRequested = false,
+  transferHandoffCompleted = false,
+  requestedDepartment = "",
+  resolvedDepartment = "",
+} = {}) {
+  const event = s(eventType).toLowerCase();
+  const terminalStatus = s(status, "failed").toLowerCase();
+  const reason = s(reasonCode || eventType).toLowerCase();
+  const handoffTarget = s(resolvedDepartment || requestedDepartment);
+
+  if (
+    transferHandoffCompleted ||
+    event === "call_handoff_completed" ||
+    reason === "transfer_handoff_completed"
+  ) {
+    return {
+      terminalOutcomeClass: "transfer_handoff_completed",
+      callOutcome: "handoff_completed",
+      handoffRequested: true,
+      handoffCompleted: true,
+      handoffTarget,
+      summary: handoffTarget
+        ? `Call handed off to transfer flow for ${handoffTarget}.`
+        : "Call handed off to transfer flow.",
+    };
+  }
+
+  if (
+    localHangupRequested ||
+    event === "call_completed_local_hangup" ||
+    reason === "local_hangup_requested"
+  ) {
+    return {
+      terminalOutcomeClass: "local_forced_completion",
+      callOutcome: "unknown",
+      handoffRequested: false,
+      handoffCompleted: false,
+      handoffTarget,
+      summary: "Call intentionally ended by the local runtime after a completion cue.",
+    };
+  }
+
+  if (
+    event.startsWith("openai_") ||
+    reason.startsWith("openai_")
+  ) {
+    return {
+      terminalOutcomeClass: "upstream_realtime_failure",
+      callOutcome: "failed",
+      handoffRequested: false,
+      handoffCompleted: false,
+      handoffTarget,
+      summary: "Call failed because the realtime upstream session ended and recovery did not succeed.",
+    };
+  }
+
+  if (
+    event === "caller_hangup_completed" ||
+    reason === "twilio_stop_received" ||
+    event === "twilio_ws_closed"
+  ) {
+    return {
+      terminalOutcomeClass: "caller_hangup",
+      callOutcome: "unknown",
+      handoffRequested: false,
+      handoffCompleted: false,
+      handoffTarget,
+      summary: "Call ended normally after caller or Twilio hangup.",
+    };
+  }
+
+  if (terminalStatus === "failed") {
+    return {
+      terminalOutcomeClass: "transport_failure",
+      callOutcome: "failed",
+      handoffRequested: false,
+      handoffCompleted: false,
+      handoffTarget,
+      summary: "Call failed because the media bridge ended unexpectedly.",
+    };
+  }
+
+  return {
+    terminalOutcomeClass: "completed",
+    callOutcome: "unknown",
+    handoffRequested: false,
+    handoffCompleted: false,
+    handoffTarget,
+    summary: "Call completed.",
+  };
+}
+
+function buildTerminalTranscriptDisposition(disposition = {}) {
+  const outcomeClass = s(disposition?.terminalOutcomeClass).toLowerCase();
+  const handoffTarget = s(disposition?.handoffTarget);
+
+  if (
+    outcomeClass === "transport_failure" ||
+    outcomeClass === "upstream_realtime_failure"
+  ) {
+    return {
+      shouldPersist: true,
+      role: "system",
+      truthClass: "partial_failure",
+      text:
+        "System note: call ended abnormally before bot resolution. Earlier transcript is partial and should not be treated as a completed bot conversation.",
+    };
+  }
+
+  if (outcomeClass === "transfer_handoff_completed") {
+    return {
+      shouldPersist: true,
+      role: "system",
+      truthClass: "pre_handoff_partial",
+      text: handoffTarget
+        ? `System note: bot conversation ended with operator handoff to ${handoffTarget}. Earlier transcript covers only the pre-handoff portion.`
+        : "System note: bot conversation ended with operator handoff. Earlier transcript covers only the pre-handoff portion.",
+    };
+  }
+
+  return {
+    shouldPersist: false,
+    role: "system",
+    truthClass: "terminal_aligned",
+    text: "",
   };
 }
 
@@ -188,12 +354,16 @@ export function attachRealtimeBridge({
 
     let hangupAfterDone = false;
     let forceHangupTimer = null;
+    let reconnectTimer = null;
     let localHangupRequested = false;
     let stopReceived = false;
+    let transferHandoffCompleted = false;
     let finalizationPromise = null;
     let finalDisposition = null;
 
     let reconnectAttempts = 0;
+    let mediaStreamActive = false;
+    let conversationEstablished = false;
 
     let metricResponses = 0;
     let metricCancels = 0;
@@ -272,6 +442,12 @@ export function attachRealtimeBridge({
       } catch {}
 
       forceHangupTimer = null;
+
+      try {
+        if (reconnectTimer) clearTimeout(reconnectTimer);
+      } catch {}
+
+      reconnectTimer = null;
     }
 
     function closeBoth() {
@@ -330,9 +506,9 @@ export function attachRealtimeBridge({
           customerName: "",
           language: lastLang || detectDefaultLang(tenantConfig),
           agentMode: "assistant",
-          direction: "outbound",
+          direction: buildInboundLifecycleMetadata().direction,
           callStatus: "in_progress",
-          sessionDirection: "outbound_callback",
+          sessionDirection: buildInboundLifecycleMetadata().sessionDirection,
           sessionStatus: "bot_active",
           botActive: true,
           operatorJoinRequested: false,
@@ -414,6 +590,9 @@ export function attachRealtimeBridge({
                 cancels: metricCancels,
                 inboundChunks: metricInboundChunks,
                 durationSec: durationSec(),
+                reconnectAttempt: Number(extra.reconnectAttempt || 0) || 0,
+                reconnectMax: Number(extra.reconnectMax || 0) || 0,
+                reconnectDelayMs: Number(extra.reconnectDelayMs || 0) || 0,
               }
             : {},
           endedAt: extra.endedAt || null,
@@ -443,6 +622,54 @@ export function attachRealtimeBridge({
       }
     }
 
+    async function syncLiveLifecycleStage(stage = "") {
+      const liveStage = s(stage);
+      if (!liveStage || !callSid) return;
+
+      if (liveStage === "media_stream_active" && mediaStreamActive) return;
+      if (liveStage === "realtime_session_ready" && conversationEstablished) return;
+
+      const sessionStatus =
+        liveStage === "realtime_session_ready" ? "bot_active" : "bot_silent";
+      const botActive = liveStage === "realtime_session_ready";
+
+      if (liveStage === "media_stream_active") {
+        mediaStreamActive = true;
+      }
+
+      if (liveStage === "realtime_session_ready") {
+        mediaStreamActive = true;
+        conversationEstablished = true;
+      }
+
+      await syncSessionUpsert({
+        language: lastLang,
+        callStatus: liveStage === "webhook_accepted" ? "queued" : "in_progress",
+        sessionStatus,
+        botActive,
+        operatorJoinRequested: false,
+        operatorJoined: false,
+        whisperActive: false,
+        takeoverActive: false,
+        sessionMeta: {
+          lifecycleStage: liveStage,
+        },
+      });
+
+      await syncState(
+        liveStage === "media_stream_active"
+          ? "twilio_media_stream_started"
+          : liveStage === "realtime_session_ready"
+            ? "openai_session_ready"
+            : "webhook_accepted",
+        {
+          status: sessionStatus,
+          botActive,
+          summary: buildLiveLifecycleSummary(liveStage),
+        }
+      );
+    }
+
     async function finalizeCall({
       eventType,
       status,
@@ -464,6 +691,20 @@ export function attachRealtimeBridge({
         endedAt,
       };
 
+      const terminalDisposition = buildTerminalDisposition({
+        eventType: finalDisposition.eventType,
+        status: finalDisposition.status,
+        reasonCode: finalDisposition.reasonCode,
+        localHangupRequested,
+        transferHandoffCompleted,
+        requestedDepartment: s(core?.state?.requestedDepartment),
+        resolvedDepartment: s(core?.state?.resolvedDepartment),
+      });
+      finalDisposition = {
+        ...finalDisposition,
+        ...terminalDisposition,
+      };
+
       if (finalDisposition.status === "failed") {
         recordRuntimeSignal({
           level: "warn",
@@ -482,12 +723,65 @@ export function attachRealtimeBridge({
         setPending(false);
         assistantSpeaking = false;
         markGreetingEnd();
+        const transcriptDisposition =
+          buildTerminalTranscriptDisposition(finalDisposition);
+
+        if (transcriptDisposition.shouldPersist) {
+          await syncTranscript(
+            transcriptDisposition.role,
+            transcriptDisposition.text
+          );
+        }
+
+        await syncSessionUpsert({
+          callStatus: finalDisposition.status,
+          sessionStatus: finalDisposition.status,
+          botActive: false,
+          operatorJoinRequested: finalDisposition.handoffRequested,
+          operatorJoined: finalDisposition.handoffCompleted,
+          whisperActive: false,
+          takeoverActive: false,
+          handoffRequested: finalDisposition.handoffRequested,
+          handoffCompleted: finalDisposition.handoffCompleted,
+          handoffTarget: finalDisposition.handoffTarget || null,
+          outcome: finalDisposition.callOutcome,
+          summary: finalDisposition.summary,
+          endedAt,
+          meta: {
+            terminalOutcomeClass: finalDisposition.terminalOutcomeClass,
+            terminalEventType: finalDisposition.eventType,
+            terminalReasonCode:
+              finalDisposition.reasonCode || finalDisposition.eventType,
+            transcriptTruthClass: transcriptDisposition.truthClass,
+          },
+          sessionMeta: {
+            lifecycleStage: "call_ended",
+            terminalOutcomeClass: finalDisposition.terminalOutcomeClass,
+            terminalEventType: finalDisposition.eventType,
+            terminalReasonCode:
+              finalDisposition.reasonCode || finalDisposition.eventType,
+            transcriptTruthClass: transcriptDisposition.truthClass,
+          },
+        });
 
         await syncState(finalDisposition.eventType, {
           status: finalDisposition.status,
           botActive: false,
-          operatorJoinRequested: !!core?.state?.awaitingTransferConfirm,
-          operatorJoined: false,
+          operatorJoinRequested: finalDisposition.handoffRequested,
+          operatorJoined: finalDisposition.handoffCompleted,
+          resolvedDepartment: finalDisposition.handoffTarget || null,
+          summary: finalDisposition.summary,
+          callMeta: {
+            terminalOutcomeClass: finalDisposition.terminalOutcomeClass,
+            terminalOutcome: finalDisposition.callOutcome,
+            terminalEventType: finalDisposition.eventType,
+            terminalReasonCode:
+              finalDisposition.reasonCode || finalDisposition.eventType,
+            handoffRequested: finalDisposition.handoffRequested,
+            handoffCompleted: finalDisposition.handoffCompleted,
+            handoffTarget: finalDisposition.handoffTarget || null,
+            transcriptTruthClass: transcriptDisposition.truthClass,
+          },
           endedAt,
         });
 
@@ -514,6 +808,49 @@ export function attachRealtimeBridge({
       return finalizationPromise;
     }
 
+    async function recordReconnectLifecycle({
+      eventType,
+      reasonCode,
+      attempt = 0,
+      maxAttempts = 0,
+      delayMs = 0,
+      recovered = false,
+      error = "",
+    } = {}) {
+      const safeAttempt = Math.max(0, Number(attempt || 0));
+      const safeMaxAttempts = Math.max(0, Number(maxAttempts || 0));
+      const safeDelayMs = Math.max(0, Number(delayMs || 0));
+      const summary = recovered
+        ? `Realtime upstream recovered on attempt ${safeAttempt}.`
+        : `Realtime upstream disconnected; reconnect attempt ${safeAttempt} of ${safeMaxAttempts} scheduled in ${safeDelayMs}ms.`;
+
+      if (recovered) {
+        incrementRuntimeMetric("voice_openai_reconnect_recoveries_total");
+      } else {
+        incrementRuntimeMetric("voice_openai_reconnect_attempts_total");
+      }
+
+      recordRuntimeSignal({
+        level: recovered ? "info" : "warn",
+        category: "realtime_bridge",
+        code: s(eventType),
+        reasonCode: s(reasonCode),
+        status: recovered ? 200 : 503,
+        callSid,
+        tenantKey,
+        error: s(error).slice(0, 240),
+      });
+
+      await syncState(eventType, {
+        status: recovered ? "bot_active" : "bot_silent",
+        summary,
+        botActive: recovered,
+        reconnectAttempt: safeAttempt,
+        reconnectMax: safeMaxAttempts,
+        reconnectDelayMs: safeDelayMs,
+      });
+    }
+
     async function redirectToTransfer() {
       if (!twilioClient || !callSid) return false;
 
@@ -534,6 +871,8 @@ export function attachRealtimeBridge({
           url,
           method: "POST",
         });
+
+        transferHandoffCompleted = true;
 
         await syncState("transfer_redirected", {
           status: "agent_ringing",
@@ -847,6 +1186,16 @@ export function attachRealtimeBridge({
           openaiSessionReady = true;
           setPending(false);
           assistantSpeaking = false;
+          await syncLiveLifecycleStage("realtime_session_ready");
+          if (reconnectAttempts > 1) {
+            await recordReconnectLifecycle({
+              eventType: "openai_reconnected",
+              reasonCode: "openai_reconnect_recovered",
+              attempt: reconnectAttempts,
+              maxAttempts: RECONNECT_MAX,
+              recovered: true,
+            });
+          }
           flushAudioQueueToOpenAI();
           setTimeout(() => maybeSendGreeting(), 220);
           return;
@@ -944,10 +1293,12 @@ export function attachRealtimeBridge({
             } catch {}
 
             forceHangupTimer = null;
+            localHangupRequested = true;
 
             await finalizeCall({
-              eventType: "call_completed",
+              eventType: "call_completed_local_hangup",
               status: "completed",
+              reasonCode: "local_hangup_requested",
               hangupCall: true,
               closeTwilio: true,
               closeRealtime: true,
@@ -1028,8 +1379,17 @@ export function attachRealtimeBridge({
 
         if (twilioAlive && reconnectAttempts <= RECONNECT_MAX) {
           const wait = 700 * reconnectAttempts;
+          await recordReconnectLifecycle({
+            eventType: "openai_reconnect_scheduled",
+            reasonCode: "openai_ws_closed_retrying",
+            attempt: reconnectAttempts,
+            maxAttempts: RECONNECT_MAX,
+            delayMs: wait,
+            error: reason,
+          });
 
-          setTimeout(() => {
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
             try {
               openOpenAI();
             } catch {
@@ -1037,11 +1397,16 @@ export function attachRealtimeBridge({
             }
           }, wait);
 
+          try {
+            reconnectTimer.unref?.();
+          } catch {}
+
           return;
         }
 
         await finalizeCall({
-          eventType: "openai_ws_closed",
+          eventType:
+            reconnectAttempts > RECONNECT_MAX ? "openai_reconnect_exhausted" : "openai_ws_closed",
           status: "failed",
           reasonCode:
             reconnectAttempts > RECONNECT_MAX ? "openai_reconnect_exhausted" : "openai_ws_closed",
@@ -1111,6 +1476,7 @@ export function attachRealtimeBridge({
         hangupAfterDone = false;
         localHangupRequested = false;
         stopReceived = false;
+        transferHandoffCompleted = false;
         finalizationPromise = null;
         finalDisposition = null;
 
@@ -1122,6 +1488,8 @@ export function attachRealtimeBridge({
         turnId = 0;
         respondedTurnId = -1;
         reconnectAttempts = 0;
+        mediaStreamActive = false;
+        conversationEstablished = false;
 
         const tenantResolution = normalizeBridgeTenantConfigResult(tenantConfigResult);
         if (!tenantResolution.ok) {
@@ -1151,16 +1519,7 @@ export function attachRealtimeBridge({
 
         core.resetForNewCall({ callSid, fromNumber, tenantConfig });
 
-        await syncSessionUpsert({
-          language: lastLang,
-          callStatus: "in_progress",
-          sessionStatus: "bot_active",
-          botActive: true,
-          operatorJoinRequested: false,
-          operatorJoined: false,
-          whisperActive: false,
-          takeoverActive: false,
-        });
+        await syncLiveLifecycleStage("media_stream_active");
 
         if (!OPENAI_API_KEY) {
           logger.error("voice.bridge.openai.misconfigured", null, {
@@ -1208,9 +1567,15 @@ export function attachRealtimeBridge({
       if (msg.event === "stop") {
         logger.info("voice.bridge.twilio.stop", { callSid, streamSid, tenantKey });
         stopReceived = true;
+        const stopOutcome = deriveTwilioCloseOutcome({
+          stopReceived: true,
+          localHangupRequested,
+          transferHandoffCompleted,
+        });
         await finalizeCall({
-          eventType: "call_stopped",
-          status: "completed",
+          eventType: stopOutcome.eventType,
+          status: stopOutcome.status,
+          reasonCode: stopOutcome.reasonCode,
           closeTwilio: true,
           closeRealtime: true,
         });
@@ -1239,10 +1604,11 @@ export function attachRealtimeBridge({
       const closeOutcome = deriveTwilioCloseOutcome({
         stopReceived,
         localHangupRequested,
+        transferHandoffCompleted,
       });
 
       await finalizeCall({
-        eventType: closeOutcome.expected ? "twilio_ws_closed" : "twilio_ws_closed_unexpected",
+        eventType: closeOutcome.eventType,
         status: closeOutcome.status,
         reasonCode: closeOutcome.reasonCode,
         error: reason,
@@ -1272,6 +1638,8 @@ export function attachRealtimeBridge({
 }
 
 export const __test__ = {
+  buildTerminalDisposition,
+  buildTerminalTranscriptDisposition,
   normalizeBridgeTenantConfigResult,
   deriveTwilioCloseOutcome,
 };

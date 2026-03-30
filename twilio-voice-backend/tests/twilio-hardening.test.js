@@ -155,6 +155,38 @@ function mockFetchJson({ ok = true, status = 200, json = {} } = {}) {
   });
 }
 
+function createVoiceClientRecorder() {
+  const calls = {
+    upsertSession: [],
+    updateSessionState: [],
+    appendTranscript: [],
+    markOperatorJoin: [],
+  };
+
+  return {
+    calls,
+    canUse() {
+      return true;
+    },
+    async upsertSession(payload) {
+      calls.upsertSession.push(payload);
+      return { ok: true };
+    },
+    async updateSessionState(payload) {
+      calls.updateSessionState.push(payload);
+      return { ok: true };
+    },
+    async appendTranscript(payload) {
+      calls.appendTranscript.push(payload);
+      return { ok: true };
+    },
+    async markOperatorJoin(payload) {
+      calls.markOperatorJoin.push(payload);
+      return { ok: true };
+    },
+  };
+}
+
 test.after(() => {
   global.fetch = originalFetch;
 });
@@ -658,6 +690,91 @@ test("allowed flows work with correct auth and signature", async () => {
 
   assert.equal(voiceResult.res.statusCode, 200);
   assert.match(String(voiceResult.res.body || ""), /<Response>/);
+});
+
+test("voice webhook acceptance is synced as queued before media stream activation", async () => {
+  const voiceClient = createVoiceClientRecorder();
+  const router = twilioRouter({ voiceClient });
+  mockFetchJson({
+    ok: true,
+    status: 200,
+    json: {
+      ok: true,
+      projectedRuntime: {
+        authority: {
+          mode: "strict",
+          required: true,
+          available: true,
+          source: "approved_runtime_projection",
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+          runtimeProjectionId: "projection-1",
+        },
+        tenant: {
+          tenantId: "tenant-1",
+          tenantKey: "acme",
+          companyName: "Acme",
+          mainLanguage: "en",
+        },
+        channels: {
+          voice: {
+            enabled: true,
+            supportsCalls: true,
+            primaryPhone: "+15550001111",
+            profile: {
+              defaultLanguage: "en",
+            },
+            contact: {},
+          },
+        },
+      },
+      operationalChannels: {
+        voice: {
+          available: true,
+          ready: true,
+          provider: "twilio",
+          operator: {
+            enabled: true,
+            phone: "+15550001111",
+            mode: "manual",
+          },
+          operatorRouting: {
+            mode: "manual",
+            departments: {},
+          },
+          realtime: {},
+        },
+      },
+    },
+  });
+
+  const params = {
+    CallSid: "CA-webhook-1",
+    To: "+15551234567",
+    From: "+15557654321",
+  };
+  const signature = twilio.getExpectedTwilioSignature(
+    "twilio-auth-token-placeholder",
+    "https://voice.example.test/twilio/voice",
+    params
+  );
+
+  const { res } = await invokeHandler(router, "post", "/twilio/voice", {
+    headers: {
+      "x-twilio-signature": signature,
+    },
+    body: params,
+  });
+
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(voiceClient.calls.upsertSession.length, 1);
+  assert.equal(voiceClient.calls.upsertSession[0]?.providerCallSid, "CA-webhook-1");
+  assert.equal(voiceClient.calls.upsertSession[0]?.callStatus, "queued");
+  assert.equal(voiceClient.calls.upsertSession[0]?.sessionStatus, "bot_silent");
+  assert.equal(voiceClient.calls.upsertSession[0]?.direction, "inbound");
+  assert.equal(voiceClient.calls.upsertSession[0]?.sessionDirection, "inbound");
 });
 
 test("voice route fails closed when AIHQ tenant config cannot be resolved", async () => {
