@@ -32,6 +32,20 @@ function IconButton({
   );
 }
 
+function hasSurfaceFeedback(surface) {
+  const safe = surface && typeof surface === "object" ? surface : {};
+  return Boolean(
+    safe.unavailable ||
+      safe.error ||
+      safe.message ||
+      safe.saveError ||
+      safe.saveSuccess ||
+      safe.successMessage ||
+      safe.errorMessage ||
+      safe.availability === "unavailable"
+  );
+}
+
 function ComposerBody({
   selectedThread,
   surface,
@@ -45,6 +59,7 @@ function ComposerBody({
   const handoffActive = Boolean(selectedThread?.handoff_active);
   const sending = actionState?.isActionPending?.("reply");
   const releasing = actionState?.isActionPending?.("release");
+  const showBanner = hasThread && hasSurfaceFeedback(surface);
 
   function handleKeyDown(event) {
     if (event.key !== "Enter") return;
@@ -56,7 +71,7 @@ function ComposerBody({
 
   return (
     <>
-      {hasThread && (surface?.availability === "unavailable" || surface?.error) ? (
+      {showBanner ? (
         <div className="mb-3">
           <SettingsSurfaceBanner
             surface={surface}

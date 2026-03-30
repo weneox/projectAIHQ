@@ -36,6 +36,20 @@ function IconButton({ children, onClick, disabled = false }) {
   );
 }
 
+function hasSurfaceFeedback(surface) {
+  const safe = surface && typeof surface === "object" ? surface : {};
+  return Boolean(
+    safe.unavailable ||
+      safe.error ||
+      safe.message ||
+      safe.saveError ||
+      safe.saveSuccess ||
+      safe.successMessage ||
+      safe.errorMessage ||
+      safe.availability === "unavailable"
+  );
+}
+
 export default function Inbox() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -159,6 +173,8 @@ export default function Inbox() {
     }
   }, [selectedThread?.id, loadMessages, loadRelatedLead]);
 
+  const showTopBanner = hasSurfaceFeedback(surface);
+
   return (
     <section
       aria-labelledby="inbox-surface-title"
@@ -173,8 +189,8 @@ export default function Inbox() {
         </p>
       </header>
 
-      {surface?.availability === "unavailable" || surface?.error ? (
-        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3">
+      {showTopBanner ? (
+        <div className="border-b border-slate-200/80 bg-[#fafafa] px-4 py-3">
           <SettingsSurfaceBanner
             surface={surface}
             unavailableMessage="Inbox operations are temporarily unavailable."
