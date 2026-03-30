@@ -42,6 +42,9 @@ export default function InboxThreadListPanel({
         thread?.last_message_text,
         thread?.assigned_to,
         thread?.channel,
+        thread?.subject,
+        thread?.title,
+        thread?.conversation_title,
       ]
         .filter(Boolean)
         .join(" ")
@@ -54,22 +57,31 @@ export default function InboxThreadListPanel({
   return (
     <section
       aria-labelledby="inbox-thread-list-title"
-      className="flex h-full min-h-0 flex-col bg-[#fbfbfc]"
+      className="flex h-full min-h-0 flex-col bg-[#f7f8fa]"
     >
-      <div className="border-b border-slate-200/80 px-5 py-4">
-        <h2
-          id="inbox-thread-list-title"
-          className="text-[18px] font-semibold tracking-[-0.03em] text-slate-950"
-        >
-          All conversations
-        </h2>
+      <div className="border-b border-slate-200/70 px-5 py-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2
+            id="inbox-thread-list-title"
+            className="text-[17px] font-semibold tracking-[-0.03em] text-slate-950"
+          >
+            All conversations
+          </h2>
+
+          <div className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.18)]">
+            {totalCount}
+          </div>
+        </div>
+
         {threadList?.deepLinkNotice ? (
-          <p className="mt-2 text-sm text-amber-700">{threadList.deepLinkNotice}</p>
+          <p className="mt-2 text-[13px] leading-5 text-amber-700">
+            {threadList.deepLinkNotice}
+          </p>
         ) : null}
       </div>
 
-      <div className="border-b border-slate-200/80 px-5">
-        <div className="flex h-12 items-end gap-6 overflow-x-auto">
+      <div className="border-b border-slate-200/70 px-5">
+        <div className="flex h-12 items-end gap-5 overflow-x-auto">
           {TABS.map((tab) => {
             const active = threadList?.filter === tab.value;
             const countKey = TAB_COUNT_KEYS[tab.value];
@@ -91,7 +103,14 @@ export default function InboxThreadListPanel({
                 ].join(" ")}
               >
                 <span>{tab.label}</span>
-                <span className="inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-[#eef0f3] px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
+                <span
+                  className={[
+                    "inline-flex min-w-[1.35rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-medium",
+                    active
+                      ? "bg-[#e8f0fd] text-[#2b5f9e]"
+                      : "bg-slate-200/70 text-slate-600",
+                  ].join(" ")}
+                >
                   {count}
                 </span>
                 {active ? (
@@ -110,7 +129,7 @@ export default function InboxThreadListPanel({
           </div>
         ) : !filteredThreads.length ? (
           <div className="px-5 py-8">
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center">
+            <div className="rounded-3xl border border-dashed border-slate-200 bg-white px-5 py-8 text-center">
               <div className="text-sm font-medium text-slate-900">
                 No conversations found
               </div>

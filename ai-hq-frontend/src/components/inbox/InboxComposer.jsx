@@ -10,11 +10,11 @@ function IconButton({
 }) {
   const variants = {
     default:
-      "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950",
+      "border-slate-200/80 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-950",
     accent:
       "border-transparent bg-[#4d8ae6] text-white hover:bg-[#3f79cf]",
     subtle:
-      "border-slate-200 bg-[#f5f7fb] text-slate-600 hover:border-slate-300 hover:text-slate-950",
+      "border-slate-200/80 bg-[#f7f8fb] text-slate-600 hover:border-slate-300 hover:bg-white hover:text-slate-950",
   };
 
   return (
@@ -25,9 +25,8 @@ function IconButton({
       aria-label={label || undefined}
       title={label || undefined}
       className={[
-        "flex h-10 items-center justify-center rounded-full border px-3 transition",
+        "inline-flex h-10 items-center justify-center rounded-full border px-3 transition disabled:cursor-not-allowed disabled:opacity-45",
         variants[variant] || variants.default,
-        disabled ? "cursor-not-allowed opacity-45" : "",
       ].join(" ")}
     >
       {children}
@@ -84,47 +83,51 @@ function ComposerBody({
         </div>
       ) : null}
 
-      <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-2 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
-        <IconButton
-          disabled={!hasThread}
-          variant="subtle"
-          label="Add note or attachment"
-        >
-          <Plus className="h-4 w-4" />
-        </IconButton>
-
-        <input
-          value={replyText}
-          onChange={(event) => setReplyText(event.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={!hasThread || sending}
-          placeholder={hasThread ? "Reply to conversation..." : "Select a thread first..."}
-          aria-label={hasThread ? "Reply to conversation" : "Select a thread first"}
-          className="h-10 flex-1 border-none bg-transparent px-0 text-[15px] text-slate-900 shadow-none outline-none placeholder:text-slate-400 focus:outline-none focus:ring-0"
-        />
-
-        {handoffActive ? (
+      <div className="rounded-[28px] border border-slate-200/80 bg-white/98 px-3 py-2 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
+        <div className="flex items-center gap-3">
           <IconButton
-            onClick={onReleaseHandoff}
-            disabled={releasing}
+            disabled={!hasThread}
             variant="subtle"
-            label={releasing ? "Release handoff" : "Release handoff"}
+            label="Add note or attachment"
           >
-            <Bot className="h-4 w-4" />
-            <span className="ml-1 text-[12px] font-medium">
-              {releasing ? "Releasing..." : "Release"}
-            </span>
+            <Plus className="h-4 w-4" />
           </IconButton>
-        ) : null}
 
-        <IconButton
-          onClick={onSend}
-          disabled={!hasThread || !replyText.trim() || sending}
-          variant="accent"
-          label={sending ? "Sending operator reply" : "Send operator reply"}
-        >
-          <Send className="h-4 w-4" />
-        </IconButton>
+          <input
+            value={replyText}
+            onChange={(event) => setReplyText(event.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={!hasThread || sending}
+            placeholder={
+              hasThread ? "Reply to conversation..." : "Select a thread first..."
+            }
+            aria-label={hasThread ? "Reply to conversation" : "Select a thread first"}
+            className="h-11 flex-1 border-none bg-transparent px-0 text-[15px] text-slate-900 shadow-none outline-none placeholder:text-slate-400 focus:outline-none focus:ring-0"
+          />
+
+          {handoffActive ? (
+            <IconButton
+              onClick={onReleaseHandoff}
+              disabled={releasing}
+              variant="subtle"
+              label="Release handoff"
+            >
+              <Bot className="h-4 w-4" />
+              <span className="ml-1 text-[12px] font-medium">
+                {releasing ? "Releasing..." : "Release"}
+              </span>
+            </IconButton>
+          ) : null}
+
+          <IconButton
+            onClick={onSend}
+            disabled={!hasThread || !replyText.trim() || sending}
+            variant="accent"
+            label={sending ? "Sending operator reply" : "Send operator reply"}
+          >
+            <Send className="h-4 w-4" />
+          </IconButton>
+        </div>
       </div>
     </>
   );
@@ -142,7 +145,7 @@ export default function InboxComposer({
 }) {
   if (embedded) {
     return (
-      <div className="border-t border-slate-200/80 px-6 py-4">
+      <div className="border-t border-slate-200/70 bg-[#fcfcfd] px-6 py-4">
         <ComposerBody
           selectedThread={selectedThread}
           surface={surface}
@@ -157,7 +160,7 @@ export default function InboxComposer({
   }
 
   return (
-    <section className="border-t border-slate-200/80 px-6 py-4">
+    <section className="border-t border-slate-200/70 bg-[#fcfcfd] px-6 py-4">
       <ComposerBody
         selectedThread={selectedThread}
         surface={surface}

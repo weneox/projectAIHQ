@@ -1,13 +1,9 @@
 import { useEffect, useState } from "react";
 import {
-  Mail,
   Menu,
-  MessageSquare,
   MoreHorizontal,
   RefreshCw,
   Search,
-  Star,
-  X,
 } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
@@ -23,13 +19,15 @@ import { useInboxData } from "../hooks/useInboxData.js";
 import { useInboxRealtime } from "../hooks/useInboxRealtime.js";
 import { getAppSessionContext } from "../lib/appSession.js";
 
-function IconButton({ children, onClick, disabled = false }) {
+function IconButton({ children, onClick, disabled = false, label = "" }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-[#f3f4f6] hover:text-slate-950 disabled:opacity-45"
+      aria-label={label || undefined}
+      title={label || undefined}
+      className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-white hover:text-slate-950 disabled:opacity-45"
     >
       {children}
     </button>
@@ -179,7 +177,7 @@ export default function Inbox() {
     <section
       aria-labelledby="inbox-surface-title"
       aria-describedby="inbox-surface-description"
-      className="overflow-hidden rounded-[28px] border border-white/60 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.10)]"
+      className="overflow-hidden rounded-[30px] border border-white/70 bg-[#f8f9fb] shadow-[0_30px_90px_rgba(15,23,42,0.10)]"
     >
       <header className="sr-only">
         <h1 id="inbox-surface-title">Operator messaging workspace</h1>
@@ -191,7 +189,7 @@ export default function Inbox() {
       </header>
 
       {showTopBanner ? (
-        <div className="border-b border-slate-200/80 bg-[#fafafa] px-4 py-3">
+        <div className="border-b border-slate-200/70 bg-white/80 px-4 py-3 backdrop-blur">
           <SettingsSurfaceBanner
             surface={surface}
             unavailableMessage="Inbox operations are temporarily unavailable."
@@ -200,77 +198,68 @@ export default function Inbox() {
         </div>
       ) : null}
 
-      <div className="grid min-h-[calc(100vh-48px)] xl:grid-cols-[316px_minmax(0,1fr)_312px] xl:grid-rows-[64px_minmax(0,1fr)]">
-        <div className="col-span-1 border-b border-r border-slate-200/80 xl:col-span-2 xl:row-start-1">
-          <div className="flex h-16 items-center justify-between gap-4 px-4">
+      <div className="grid min-h-[calc(100vh-48px)] xl:grid-cols-[320px_minmax(0,1fr)_320px] xl:grid-rows-[68px_minmax(0,1fr)]">
+        <div className="col-span-1 border-b border-r border-slate-200/70 bg-[#f7f8fa] xl:col-span-2 xl:row-start-1">
+          <div className="flex h-[68px] items-center justify-between gap-4 px-4">
             <div className="flex min-w-0 items-center gap-3">
-              <IconButton>
+              <IconButton label="Inbox navigation">
                 <Menu className="h-4 w-4" />
               </IconButton>
 
-              <div className="relative w-full max-w-[320px]">
+              <div className="relative w-full max-w-[340px]">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search inbox..."
+                  placeholder="Search conversations"
                   aria-label="Search inbox"
-                  className="h-11 w-full rounded-full border border-slate-200 bg-[#f4f5f7] pl-10 pr-4 text-sm text-slate-900 shadow-none outline-none placeholder:text-slate-400 focus:border-slate-300 focus:bg-white"
+                  className="h-11 w-full rounded-full border border-transparent bg-white pl-10 pr-4 text-sm text-slate-900 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.14)] outline-none placeholder:text-slate-400 focus:bg-white focus:shadow-[inset_0_0_0_1px_rgba(100,116,139,0.22)]"
                 />
               </div>
+            </div>
 
-              <IconButton>
-                <Star className="h-4 w-4" />
-              </IconButton>
+            <div className="flex items-center gap-1">
+              <div className="hidden rounded-full border border-slate-200/70 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500 md:inline-flex">
+                {wsState === "connected" ? "Realtime on" : `Realtime ${wsState || "idle"}`}
+              </div>
 
               <IconButton
                 onClick={surface?.refresh}
                 disabled={surface?.loading || surface?.saving}
+                label="Refresh inbox"
               >
                 <RefreshCw className="h-4 w-4" />
               </IconButton>
             </div>
-
-            <div className="hidden items-center gap-1 md:flex">
-              <IconButton>
-                <MessageSquare className="h-4 w-4" />
-              </IconButton>
-              <IconButton>
-                <Mail className="h-4 w-4" />
-              </IconButton>
-            </div>
           </div>
         </div>
 
-        <div className="border-b border-l border-slate-200/80 xl:col-start-3 xl:row-start-1">
-          <div className="flex h-16 items-center justify-between px-5">
-            <div className="text-[14px] font-semibold tracking-[-0.02em] text-slate-950">
-              Task Details
+        <div className="border-b border-l border-slate-200/70 bg-[#fbfbfc] xl:col-start-3 xl:row-start-1">
+          <div className="flex h-[68px] items-center justify-between px-5">
+            <div>
+              <div className="text-[14px] font-semibold tracking-[-0.02em] text-slate-950">
+                Details
+              </div>
+              <div className="mt-0.5 text-[12px] text-slate-500">
+                Conversation context
+              </div>
             </div>
 
-            <div className="flex items-center gap-1">
-              <IconButton>
-                <MoreHorizontal className="h-4 w-4" />
-              </IconButton>
-              <IconButton>
-                <X className="h-4 w-4" />
-              </IconButton>
-            </div>
+            <IconButton label="More detail actions">
+              <MoreHorizontal className="h-4 w-4" />
+            </IconButton>
           </div>
         </div>
 
-        <div className="min-h-0 border-r border-slate-200/80 xl:row-start-2">
+        <div className="min-h-0 border-r border-slate-200/70 bg-[#f7f8fa] xl:row-start-2">
           <InboxThreadListPanel
             threadList={threadList}
             selectedThreadId={selectedThread?.id || ""}
-            wsState={wsState}
-            dbDisabled={dbDisabled}
-            operatorName={operatorName}
             searchQuery={searchQuery}
           />
         </div>
 
-        <div className="min-h-0 xl:row-start-2">
+        <div className="min-h-0 bg-white xl:row-start-2">
           <InboxDetailPanel
             selectedThread={selectedThread}
             messages={messages}
@@ -296,7 +285,7 @@ export default function Inbox() {
           />
         </div>
 
-        <div className="min-h-0 border-l border-slate-200/80 xl:row-start-2">
+        <div className="min-h-0 border-l border-slate-200/70 bg-[#fbfbfc] xl:row-start-2">
           <InboxLeadPanel
             selectedThread={selectedThread}
             surface={leadSurface}

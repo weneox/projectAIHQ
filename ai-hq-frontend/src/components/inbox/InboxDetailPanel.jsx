@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import {
-  Bot,
   CheckCheck,
   MoreHorizontal,
   RefreshCw,
@@ -50,7 +49,21 @@ function avatarTone(seed = "") {
   return tones[score % tones.length];
 }
 
-function ActionChip({
+function QuietIconButton({ children, onClick, disabled = false, label = "" }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-45"
+    >
+      {children}
+    </button>
+  );
+}
+
+function ActionButton({
   children,
   onClick,
   disabled = false,
@@ -59,17 +72,15 @@ function ActionChip({
 }) {
   const variants = {
     default:
-      "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-950",
+      "border-slate-200/80 bg-white text-slate-700 hover:border-slate-300 hover:text-slate-950",
     subtle:
-      "border-slate-200 bg-[#f7f8fa] text-slate-600 hover:border-slate-300 hover:text-slate-950",
+      "border-slate-200/80 bg-[#f8f9fb] text-slate-600 hover:border-slate-300 hover:bg-white hover:text-slate-950",
     amber:
-      "border-amber-200 bg-amber-50 text-amber-800 hover:border-amber-300",
+      "border-amber-200/80 bg-amber-50/80 text-amber-800 hover:border-amber-300",
     rose:
-      "border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300",
+      "border-rose-200/80 bg-rose-50/80 text-rose-700 hover:border-rose-300",
     emerald:
-      "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300",
-    blue:
-      "border-sky-200 bg-sky-50 text-sky-700 hover:border-sky-300",
+      "border-emerald-200/80 bg-emerald-50/80 text-emerald-700 hover:border-emerald-300",
   };
 
   return (
@@ -78,9 +89,8 @@ function ActionChip({
       onClick={onClick}
       disabled={disabled}
       className={[
-        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-medium transition",
+        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12px] font-medium transition disabled:cursor-not-allowed disabled:opacity-45",
         variants[variant] || variants.default,
-        disabled ? "cursor-not-allowed opacity-45" : "",
       ].join(" ")}
     >
       {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
@@ -97,8 +107,8 @@ function buildConversationTitle(thread = {}) {
 
   const preview = s(safe.last_message_text);
   if (preview) {
-    if (preview.length <= 46) return preview;
-    return `${preview.slice(0, 46).trim()}…`;
+    if (preview.length <= 56) return preview;
+    return `${preview.slice(0, 56).trim()}…`;
   }
 
   return (
@@ -107,6 +117,15 @@ function buildConversationTitle(thread = {}) {
     s(safe.external_user_id) ||
     "Conversation"
   );
+}
+
+function buildParticipantBadge(thread = {}) {
+  const safe = obj(thread);
+  const channel = s(safe.channel || "other");
+  const username = s(safe.external_username);
+  if (username) return `@${username.replace(/^@+/, "")}`;
+  if (s(safe.external_user_id)) return s(safe.external_user_id);
+  return channel;
 }
 
 export default function InboxDetailPanel({
@@ -136,11 +155,8 @@ export default function InboxDetailPanel({
     selectedThread?.external_user_id ||
     "Conversation workspace preview";
 
-  const selectedHandle = selectedThread?.external_username
-    ? `@${String(selectedThread.external_username).replace(/^@+/, "")}`
-    : selectedThread?.external_user_id || "Awaiting thread selection";
-
   const conversationTitle = buildConversationTitle(selectedThread);
+  const participantBadge = buildParticipantBadge(selectedThread);
   const unreadCount = Number(selectedThread?.unread_count ?? 0);
   const handoffActive = Boolean(selectedThread?.handoff_active);
   const assignedTo = s(selectedThread?.assigned_to, "Unassigned");
@@ -152,146 +168,137 @@ export default function InboxDetailPanel({
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-white">
-      <div className="border-b border-slate-200/80 px-6 py-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h2 className="truncate text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
-              {conversationTitle}
-            </h2>
+      <div className="border-b border-slate-200/70">
+        <div className="px-6 pt-5 pb-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <h2 className="truncate text-[17px] font-semibold tracking-[-0.03em] text-slate-950">
+                {conversationTitle}
+              </h2>
 
-            {hasThread ? (
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <div
-                  className={[
-                    "flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold",
-                    avatarTone(selectedName),
-                  ].join(" ")}
-                >
-                  {initialsFromName(selectedName)}
-                </div>
-
-                <div className="min-w-0">
-                  <div className="truncate text-[14px] font-medium text-slate-800">
-                    {selectedName}
+              {hasThread ? (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <div
+                    className={[
+                      "flex h-9 w-9 items-center justify-center rounded-full text-[13px] font-semibold",
+                      avatarTone(selectedName),
+                    ].join(" ")}
+                  >
+                    {initialsFromName(selectedName)}
                   </div>
-                  <div className="mt-0.5 truncate text-[13px] text-slate-500">
-                    {selectedHandle}
+
+                  <div className="min-w-0">
+                    <div className="truncate text-[14px] font-medium text-slate-800">
+                      {selectedName}
+                    </div>
                   </div>
+
+                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-[#fbfbfc] px-2.5 py-1 text-[11px] font-medium text-slate-500">
+                    {participantBadge}
+                  </span>
+
+                  <span
+                    className={[
+                      "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
+                      handoffActive
+                        ? "border border-amber-200 bg-amber-50 text-amber-800"
+                        : "border border-emerald-200 bg-emerald-50 text-emerald-700",
+                    ].join(" ")}
+                  >
+                    {handoffActive ? "Handoff active" : "AI active"}
+                  </span>
+
+                  <span className="inline-flex items-center rounded-full border border-slate-200 bg-[#f6f7f9] px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                    {assignedTo}
+                  </span>
                 </div>
+              ) : (
+                <div className="mt-2 text-sm text-slate-500">
+                  Select a thread to open the conversation.
+                </div>
+              )}
+            </div>
 
-                {handoffActive ? (
-                  <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-800">
-                    Handoff active
-                  </span>
-                ) : (
-                  <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-                    AI active
-                  </span>
-                )}
+            <div className="flex items-center gap-1">
+              <QuietIconButton
+                onClick={hasThread ? () => markRead(selectedThread.id) : undefined}
+                disabled={!hasThread || unreadCount <= 0 || actionState?.isActionPending?.("read")}
+                label="Mark conversation read"
+              >
+                <CheckCheck className="h-4 w-4" />
+              </QuietIconButton>
 
-                <span className="inline-flex rounded-full border border-slate-200 bg-[#f6f7f9] px-2.5 py-1 text-[11px] font-medium text-slate-600">
-                  {assignedTo}
-                </span>
-              </div>
-            ) : (
-              <div className="mt-2 text-sm text-slate-500">
-                Select a thread to open the conversation.
-              </div>
-            )}
+              <QuietIconButton
+                onClick={surface?.refresh}
+                disabled={!hasThread || surface?.loading || surface?.saving}
+                label="Refresh conversation"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </QuietIconButton>
+
+              <QuietIconButton label="Open conversation actions">
+                <MoreHorizontal className="h-4 w-4" />
+              </QuietIconButton>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              aria-label="Mark conversation read"
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-[#f3f4f6] hover:text-slate-900"
-            >
-              <CheckCheck className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              aria-label="Open conversation actions"
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-[#f3f4f6] hover:text-slate-900"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
-          </div>
+          {showSurfaceBanner ? (
+            <div className="mt-4">
+              <SettingsSurfaceBanner
+                surface={surface}
+                unavailableMessage="Conversation detail is temporarily unavailable."
+                refreshLabel="Refresh conversation"
+              />
+            </div>
+          ) : null}
         </div>
 
-        {showSurfaceBanner ? (
-          <div className="mt-4">
-            <SettingsSurfaceBanner
-              surface={surface}
-              unavailableMessage="Conversation detail is temporarily unavailable."
-              refreshLabel="Refresh conversation"
-            />
+        {hasThread ? (
+          <div className="border-t border-slate-200/60 px-6 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <ActionButton
+                icon={UserCog}
+                onClick={() => assignThread(selectedThread.id)}
+                disabled={actionState?.isActionPending?.("assign")}
+                variant="subtle"
+              >
+                {actionState?.isActionPending?.("assign") ? "Assigning..." : "Assign"}
+              </ActionButton>
+
+              <ActionButton
+                icon={ShieldAlert}
+                onClick={() => activateHandoff(selectedThread.id)}
+                disabled={handoffActive || actionState?.isActionPending?.("handoff")}
+                variant="amber"
+              >
+                {actionState?.isActionPending?.("handoff")
+                  ? "Activating..."
+                  : "Activate handoff"}
+              </ActionButton>
+
+              <ActionButton
+                icon={Sparkles}
+                onClick={() => setThreadStatus(selectedThread.id, "resolved")}
+                disabled={actionState?.isActionPending?.("resolved")}
+                variant="emerald"
+              >
+                {actionState?.isActionPending?.("resolved") ? "Resolving..." : "Resolve"}
+              </ActionButton>
+
+              <ActionButton
+                icon={XCircle}
+                onClick={() => setThreadStatus(selectedThread.id, "closed")}
+                disabled={actionState?.isActionPending?.("closed")}
+                variant="rose"
+              >
+                {actionState?.isActionPending?.("closed") ? "Closing..." : "Close"}
+              </ActionButton>
+            </div>
           </div>
         ) : null}
       </div>
 
-      {hasThread ? (
-        <div className="border-b border-slate-200/80 px-6 py-3">
-          <div className="flex flex-wrap gap-2">
-            <ActionChip
-              icon={CheckCheck}
-              onClick={() => markRead(selectedThread.id)}
-              disabled={unreadCount <= 0 || actionState?.isActionPending?.("read")}
-              variant="subtle"
-            >
-              {actionState?.isActionPending?.("read") ? "Marking..." : "Mark read"}
-            </ActionChip>
-
-            <ActionChip
-              icon={UserCog}
-              onClick={() => assignThread(selectedThread.id)}
-              disabled={actionState?.isActionPending?.("assign")}
-              variant="subtle"
-            >
-              {actionState?.isActionPending?.("assign") ? "Assigning..." : "Assign"}
-            </ActionChip>
-
-            <ActionChip
-              icon={ShieldAlert}
-              onClick={() => activateHandoff(selectedThread.id)}
-              disabled={handoffActive || actionState?.isActionPending?.("handoff")}
-              variant="amber"
-            >
-              {actionState?.isActionPending?.("handoff")
-                ? "Activating..."
-                : "Activate handoff"}
-            </ActionChip>
-
-            <ActionChip
-              icon={Sparkles}
-              onClick={() => setThreadStatus(selectedThread.id, "resolved")}
-              disabled={actionState?.isActionPending?.("resolved")}
-              variant="emerald"
-            >
-              {actionState?.isActionPending?.("resolved") ? "Resolving..." : "Resolve"}
-            </ActionChip>
-
-            <ActionChip
-              icon={XCircle}
-              onClick={() => setThreadStatus(selectedThread.id, "closed")}
-              disabled={actionState?.isActionPending?.("closed")}
-              variant="rose"
-            >
-              {actionState?.isActionPending?.("closed") ? "Closing..." : "Close"}
-            </ActionChip>
-
-            <ActionChip
-              icon={RefreshCw}
-              onClick={surface?.refresh}
-              disabled={surface?.loading || surface?.saving}
-              variant="blue"
-            >
-              Refresh
-            </ActionChip>
-          </div>
-        </div>
-      ) : null}
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-[#fcfcfd] px-6 py-6">
         {!hasThread ? (
           <div className="flex h-full min-h-[360px] flex-col items-center justify-center text-center">
             <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-900">
