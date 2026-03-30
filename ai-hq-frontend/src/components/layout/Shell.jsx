@@ -199,14 +199,14 @@ export default function Shell() {
         <main
           className={
             isInboxRoute
-              ? "min-h-screen px-4 py-4 md:px-6 md:py-6"
+              ? "min-h-screen p-0"
               : "min-h-[calc(100vh-72px)] px-4 py-5 md:px-6 md:py-6 lg:px-8 lg:py-8"
           }
         >
           <div
             className={
               isInboxRoute
-                ? "mx-auto w-full max-w-[1480px]"
+                ? "w-full"
                 : "mx-auto w-full max-w-[1480px]"
             }
           >
