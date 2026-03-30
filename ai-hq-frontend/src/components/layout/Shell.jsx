@@ -5,30 +5,33 @@ import Header from "./Header.jsx";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
 import { apiGet } from "../../api/client.js";
+import {
+  getActiveContextItem,
+  getActiveShellSection,
+} from "./shellNavigation.js";
 
-const SIDEBAR_RAIL_W = 84;
+const PRIMARY_RAIL_W = 72;
+const CONTEXT_RAIL_W = 248;
 
 async function fetchShellResource(path) {
   try {
     return { ok: true, data: await apiGet(path) };
-  } catch (e) {
+  } catch (error) {
     return {
       ok: false,
-      status: Number(e?.status || 0),
+      status: Number(error?.status || 0),
       message:
-        typeof e?.message === "string" && e.message.trim()
-          ? e.message.trim()
+        typeof error?.message === "string" && error.message.trim()
+          ? error.message.trim()
           : "Shared workspace stats are temporarily unavailable.",
     };
   }
 }
 
 export default function Shell() {
-  const [expanded, setExpanded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const notifications = useNotificationsSurface();
-
   const refreshTimerRef = useRef(0);
 
   const [shellStats, setShellStats] = useState({
@@ -41,15 +44,16 @@ export default function Shell() {
     message: "",
   });
 
+  const shellSection = getActiveShellSection(location.pathname);
+  const activeContextItem = getActiveContextItem(shellSection, location.pathname);
+
   async function loadShellStats() {
     const [inboxRes, leadsRes] = await Promise.all([
       fetchShellResource("/api/inbox/threads"),
       fetchShellResource("/api/leads"),
     ]);
 
-    const responses = [inboxRes, leadsRes];
-    const failedResponse = responses.find((entry) => !entry?.ok);
-
+    const failedResponse = [inboxRes, leadsRes].find((entry) => !entry?.ok);
     if (failedResponse) {
       setShellStats((prev) => ({
         ...prev,
@@ -66,22 +70,19 @@ export default function Shell() {
 
     const inboxData = inboxRes.data;
     const leadsData = leadsRes.data;
-
     const threads = Array.isArray(inboxData?.threads) ? inboxData.threads : [];
     const leads = Array.isArray(leadsData?.leads) ? leadsData.leads : [];
 
     const inboxUnread = threads.reduce(
-      (sum, t) => sum + Number(t?.unread_count || 0),
+      (sum, thread) => sum + Number(thread?.unread_count || 0),
       0
     );
-
-    const inboxOpen = threads.filter((t) => {
-      const status = String(t?.status || "open").toLowerCase();
+    const inboxOpen = threads.filter((thread) => {
+      const status = String(thread?.status || "open").toLowerCase();
       return status !== "resolved" && status !== "closed";
     }).length;
-
     const leadsOpen = leads.filter(
-      (l) => String(l?.status || "open").toLowerCase() === "open"
+      (lead) => String(lead?.status || "open").toLowerCase() === "open"
     ).length;
 
     setShellStats((prev) => ({
@@ -89,10 +90,7 @@ export default function Shell() {
       inboxUnread,
       inboxOpen,
       leadsOpen,
-      dbDisabled: Boolean(
-        inboxData?.dbDisabled ||
-          leadsData?.dbDisabled
-      ),
+      dbDisabled: Boolean(inboxData?.dbDisabled || leadsData?.dbDisabled),
       availability: "ready",
       message: "",
     }));
@@ -106,9 +104,9 @@ export default function Shell() {
   }
 
   useEffect(() => {
-    const prevOverflow = document.body.style.overflow;
-    const prevOverflowX = document.body.style.overflowX;
-    const prevOverflowY = document.body.style.overflowY;
+    const previousOverflow = document.body.style.overflow;
+    const previousOverflowX = document.body.style.overflowX;
+    const previousOverflowY = document.body.style.overflowY;
 
     if (mobileOpen) {
       document.body.style.overflow = "hidden";
@@ -119,9 +117,9 @@ export default function Shell() {
     }
 
     return () => {
-      document.body.style.overflow = prevOverflow;
-      document.body.style.overflowX = prevOverflowX;
-      document.body.style.overflowY = prevOverflowY;
+      document.body.style.overflow = previousOverflow;
+      document.body.style.overflowX = previousOverflowX;
+      document.body.style.overflowY = previousOverflowY;
     };
   }, [mobileOpen]);
 
@@ -142,20 +140,21 @@ export default function Shell() {
       }));
     });
 
-    const unsubscribeEvents = realtimeStore.subscribeEvents((evt) => {
-        const type = String(evt?.type || "");
+    const unsubscribeEvents = realtimeStore.subscribeEvents((event) => {
+      const type = String(event?.type || "");
 
-        if (
-          type === "inbox.message.created" ||
-          type === "inbox.thread.updated" ||
-          type === "inbox.thread.read" ||
-          type === "inbox.thread.created" ||
-          type === "lead.created" ||
-          type === "lead.updated"
-        ) {
-          scheduleShellRefresh(120);
-        }
+      if (
+        type === "inbox.message.created" ||
+        type === "inbox.thread.updated" ||
+        type === "inbox.thread.read" ||
+        type === "inbox.thread.created" ||
+        type === "lead.created" ||
+        type === "lead.updated"
+      ) {
+        scheduleShellRefresh(120);
+      }
     });
+
     if (!realtimeStore.canUseWs()) {
       setShellStats((prev) => ({
         ...prev,
@@ -172,46 +171,54 @@ export default function Shell() {
 
   return (
     <div
-      className="relative min-h-screen overflow-x-clip bg-[#f6f1e7] text-stone-900 selection:bg-[#e6d5b6] selection:text-stone-900"
+      className="min-h-screen bg-[#f3f5f7] text-slate-950 selection:bg-slate-900 selection:text-white"
       style={{
-        "--sidebar-rail-w": `${SIDEBAR_RAIL_W}px`,
+        "--primary-rail-w": `${PRIMARY_RAIL_W}px`,
+        "--context-rail-w": `${CONTEXT_RAIL_W}px`,
       }}
     >
-      <div className="pointer-events-none fixed inset-0 -z-[100] bg-[linear-gradient(180deg,#f8f3ea_0%,#f5efe4_38%,#f3ecdf_100%)]" />
-      <div className="pointer-events-none fixed inset-0 -z-[90] bg-[radial-gradient(1100px_circle_at_0%_0%,rgba(227,207,171,0.20),transparent_24%),radial-gradient(920px_circle_at_100%_0%,rgba(255,255,255,0.65),transparent_26%),radial-gradient(1100px_circle_at_50%_100%,rgba(222,210,189,0.16),transparent_30%)]" />
-      <div className="pointer-events-none fixed inset-0 -z-[80] opacity-[0.08] [background-image:linear-gradient(rgba(149,129,99,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(149,129,99,0.06)_1px,transparent_1px)] [background-size:44px_44px] [mask-image:radial-gradient(circle_at_center,black,transparent_88%)]" />
-      <div className="pointer-events-none fixed left-[var(--sidebar-rail-w)] top-0 -z-[50] h-[260px] w-[440px] bg-[radial-gradient(circle_at_0%_0%,rgba(227,207,171,0.18),transparent_70%)] blur-3xl" />
-      <div className="pointer-events-none fixed right-0 top-0 -z-[50] h-[320px] w-[560px] bg-[radial-gradient(circle_at_100%_0%,rgba(255,255,255,0.72),transparent_68%)] blur-3xl" />
+      <div className="pointer-events-none fixed inset-0 -z-20 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.8),transparent_28%),linear-gradient(180deg,#f6f7f9_0%,#f3f5f7_100%)]" />
+      <div className="pointer-events-none fixed inset-y-0 left-[calc(var(--primary-rail-w)+var(--context-rail-w))] w-px bg-slate-200/70 hidden md:block" />
 
       <Sidebar
-        expanded={expanded}
-        setExpanded={setExpanded}
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
         shellStats={shellStats}
       />
 
-      <div className="relative z-10 md:pl-[var(--sidebar-rail-w)]">
-        <div className="relative min-h-screen">
-          <div className="pointer-events-none absolute inset-0">
-            <div className="absolute inset-y-0 left-0 w-px bg-[linear-gradient(180deg,transparent,rgba(187,168,138,0.30),transparent)]" />
-            <div className="absolute inset-0 bg-[radial-gradient(900px_circle_at_0%_0%,rgba(227,207,171,0.10),transparent_22%),radial-gradient(900px_circle_at_100%_0%,rgba(255,255,255,0.40),transparent_24%),radial-gradient(900px_circle_at_50%_100%,rgba(221,209,190,0.18),transparent_30%)]" />
-          </div>
+      <div className="min-h-screen md:pl-[calc(var(--primary-rail-w)+var(--context-rail-w))]">
+        <Header
+          onMenuClick={() => setMobileOpen(true)}
+          shellStats={shellStats}
+          notifications={notifications}
+          shellSection={shellSection}
+          activeContextItem={activeContextItem}
+        />
 
-          <div className="relative flex min-h-screen flex-col">
-            <div className="px-3 pt-3 md:px-4 md:pt-4 lg:px-5 lg:pt-5">
-              <Header
-                onMenuClick={() => setMobileOpen(true)}
-                shellStats={shellStats}
-                notifications={notifications}
-              />
+        <main className="min-h-[calc(100vh-76px)] px-4 py-5 md:px-6 md:py-6 lg:px-10 lg:py-8">
+          <div className="mx-auto flex min-h-full w-full max-w-[1680px] flex-col">
+            <div className="mb-6 hidden items-start justify-between gap-4 border-b border-slate-200/80 pb-5 md:flex">
+              <div className="max-w-[52rem]">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  {shellSection.kicker}
+                </div>
+                <p className="mt-2 text-[14px] leading-7 text-slate-500">
+                  {shellSection.description}
+                </p>
+              </div>
+
+              {shellStats?.message ? (
+                <div className="max-w-[22rem] text-right text-[12px] leading-6 text-amber-700">
+                  {shellStats.message}
+                </div>
+              ) : null}
             </div>
 
-            <main className="relative flex-1 px-3 pb-6 pt-5 md:px-4 md:pb-7 md:pt-6 lg:px-5 lg:pb-8 lg:pt-7">
+            <div className="flex-1">
               <Outlet />
-            </main>
+            </div>
           </div>
-        </div>
+        </main>
       </div>
     </div>
   );

@@ -5,34 +5,34 @@ import { describe, expect, it } from "vitest";
 import Sidebar from "./Sidebar.jsx";
 
 describe("Sidebar", () => {
-  it("keeps visible navigation aligned to the four primary product surfaces", () => {
+  it("renders the command rail and inbox contextual rail without exposing old dashboard navigation", () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={["/inbox"]}>
         <Sidebar
-          expanded
-          setExpanded={() => {}}
           mobileOpen={false}
           setMobileOpen={() => {}}
-          shellStats={{ inboxUnread: 3 }}
+          shellStats={{ inboxUnread: 3, leadsOpen: 5 }}
         />
       </MemoryRouter>
     );
 
-    expect(screen.getByText("İdarə Mərkəzi")).toBeInTheDocument();
-    expect(screen.getByText("Yazışmalar")).toBeInTheDocument();
-    expect(screen.getByText("Yayım Mərkəzi")).toBeInTheDocument();
-    expect(screen.getByText("Dərin İdarə")).toBeInTheDocument();
+    expect(screen.getByLabelText("Workspace")).toBeInTheDocument();
+    expect(screen.getByLabelText("Inbox")).toBeInTheDocument();
+    expect(screen.getByLabelText("Contacts")).toBeInTheDocument();
+    expect(screen.getByLabelText("Publish")).toBeInTheDocument();
+    expect(screen.getByLabelText("Calls")).toBeInTheDocument();
+    expect(screen.getByLabelText("Intelligence")).toBeInTheDocument();
+    expect(screen.getByLabelText("Expert")).toBeInTheDocument();
+    expect(screen.getByLabelText("Settings")).toBeInTheDocument();
 
-    expect(screen.queryByText("Setup Studio")).not.toBeInTheDocument();
-    expect(screen.queryByText("Business Truth")).not.toBeInTheDocument();
-    expect(screen.queryByText("Truth Control Plane")).not.toBeInTheDocument();
-    expect(screen.queryByText("Incidents")).not.toBeInTheDocument();
-    expect(screen.queryByText("Settings")).not.toBeInTheDocument();
-    expect(screen.queryByText("Operations")).not.toBeInTheDocument();
+    expect(screen.getByText("Conversation ops")).toBeInTheDocument();
+    expect(screen.getByText("All conversations")).toBeInTheDocument();
+    expect(screen.getByText("Voice queue")).toBeInTheDocument();
+    expect(screen.getByText("Mine")).toBeInTheDocument();
 
-    expect(screen.queryByText("Agents")).not.toBeInTheDocument();
-    expect(screen.queryByText("Analytics")).not.toBeInTheDocument();
-    expect(screen.queryByText("Threads")).not.toBeInTheDocument();
-    expect(screen.queryByText(/command demo/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("İdarə Mərkəzi")).not.toBeInTheDocument();
+    expect(screen.queryByText("Yazışmalar")).not.toBeInTheDocument();
+    expect(screen.queryByText("Yayım Mərkəzi")).not.toBeInTheDocument();
+    expect(screen.queryByText("Dərin İdarə")).not.toBeInTheDocument();
   });
 });
