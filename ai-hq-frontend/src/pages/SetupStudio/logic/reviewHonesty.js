@@ -103,25 +103,25 @@ export function summarizeSetupStudioHonesty({
     barrierWarnings.length > 0;
 
   let tone = "default";
-  let title = "Reviewed session draft";
+  let title = "Review detected business details";
   let message =
-    "This is still a temporary review-session draft. Source-derived evidence should be confirmed field by field before finalization.";
+    "Check the detected information before saving it to your business profile.";
 
   if (barrierWarnings.length) {
     tone = "warn";
-    title = "Barrier-limited source draft";
+    title = "Limited source coverage";
     message =
-      "Some sources blocked or limited extraction. Treat observed evidence as incomplete and verify important fields manually before finalizing.";
+      "Some sources limited what could be detected. Verify important fields manually before saving.";
   } else if (partialWarnings.length || lowConfidenceFields.length) {
     tone = "warn";
-    title = "Partial source evidence";
+    title = "Some fields need review";
     message =
-      "Some draft fields still rely on weak or partial source signals. Keep the draft editable and confirm those fields before finalizing.";
+      "Some fields were detected with limited confidence. Review them before saving.";
   } else if (sourceBackedFieldCount > 0) {
     tone = "success";
-    title = "Source-backed review draft";
+    title = "Detected information is ready for review";
     message =
-      "The draft is backed by visible source evidence, but it still becomes approved truth only after final review and finalize.";
+      "Detected values are backed by source evidence. Confirm them before saving.";
   }
 
   const chips = [
@@ -139,13 +139,13 @@ export function summarizeSetupStudioHonesty({
       : null,
     lowConfidenceFields.length
       ? {
-          label: `${lowConfidenceFields.length} weak field${lowConfidenceFields.length === 1 ? "" : "s"}`,
+          label: `${lowConfidenceFields.length} low-confidence field${lowConfidenceFields.length === 1 ? "" : "s"}`,
           tone: "warn",
         }
       : null,
     sourceBackedFieldCount
       ? {
-          label: `${sourceBackedFieldCount} source-backed field${sourceBackedFieldCount === 1 ? "" : "s"}`,
+          label: `${sourceBackedFieldCount} detected field${sourceBackedFieldCount === 1 ? "" : "s"}`,
           tone: "default",
         }
       : null,
@@ -158,10 +158,10 @@ export function summarizeSetupStudioHonesty({
   ].filter(Boolean);
 
   const finalizeMessage = barrierWarnings.length
-    ? "Barrier-limited source results remain in this draft. Finalize only after checking those fields against visible evidence or manual confirmation."
+    ? "Some detected values came from limited source coverage. Save only after checking those fields carefully."
     : lowConfidenceFields.length || partialWarnings.length
-      ? "Weak or partial source signals remain in this draft. Finalize only after reviewing those fields against visible evidence."
-      : "Finalize only after the reviewed draft and the source-derived evidence both look correct.";
+      ? "Some fields still have limited evidence. Review them before saving."
+      : "Save after the draft and detected source evidence both look correct.";
 
   return {
     tone,
@@ -209,43 +209,43 @@ export function describeSetupStudioFieldHonesty({
   if (!hasObservedSignal && hasBarrier) {
     return {
       tone: "warn",
-      label: "Barrier-limited",
-      note: "Source access was blocked or limited for this field, so the observed side is incomplete.",
-      provenanceLabel: "Source-derived suggestion",
+      label: "Limited access",
+      note: "Source access was limited for this field, so the detected value may be incomplete.",
+      provenanceLabel: "Detected from source",
     };
   }
 
   if (!hasObservedSignal) {
     return {
       tone: "warn",
-      label: "No visible evidence",
-      note: "No visible source evidence was captured for this field yet.",
-      provenanceLabel: "Needs manual review",
+      label: "Needs review",
+      note: "No field-specific source evidence was captured for this field yet.",
+      provenanceLabel: "Source",
     };
   }
 
   if (score >= 0.8) {
     return {
       tone: "success",
-      label: "Stronger signal",
-      note: "This field has comparatively stronger source support, but it is still not approved truth until finalized.",
-      provenanceLabel: "Source-derived suggestion",
+      label: "High confidence",
+      note: "This value has strong source support, but it should still be confirmed before saving.",
+      provenanceLabel: "Detected from source",
     };
   }
 
   if (score >= 0.55) {
     return {
       tone: "default",
-      label: "Needs confirmation",
-      note: "This field has some source support, but it still needs a human review decision.",
-      provenanceLabel: "Source-derived suggestion",
+      label: "Needs review",
+      note: "This value has some source support, but it should be confirmed before saving.",
+      provenanceLabel: "Detected from source",
     };
   }
 
   return {
     tone: "warn",
-    label: "Weak signal",
-    note: "The current source support for this field is weak or incomplete, so the draft should be treated cautiously.",
-    provenanceLabel: "Source-derived suggestion",
+    label: "Low confidence",
+    note: "This value was detected with limited support and should be reviewed carefully before saving.",
+    provenanceLabel: "Detected from source",
   };
 }

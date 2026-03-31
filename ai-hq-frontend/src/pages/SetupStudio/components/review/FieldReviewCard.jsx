@@ -87,7 +87,7 @@ export default function FieldReviewCard({
         ) : (
           <TinyChip tone="success">
             <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-            Reviewed
+            Ready
           </TinyChip>
         )}
         {s(honesty.label) ? (
@@ -101,7 +101,7 @@ export default function FieldReviewCard({
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div className="min-w-0">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Review-session draft
+            Your draft
           </div>
           <FieldValue
             value={value}
@@ -115,7 +115,7 @@ export default function FieldReviewCard({
 
         <div className="min-w-0">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Source-derived evidence
+            Detected from source
           </div>
           <FieldValue
             value={observedValue}
@@ -135,7 +135,7 @@ export default function FieldReviewCard({
       {visibleEvidence.length ? (
         <div className="mt-4 rounded-[22px] border border-slate-200/80 bg-slate-50/70 p-4">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Provenance
+            Source details
           </div>
           <div className="mt-3 space-y-3">
             {visibleEvidence.map((item, index) => (
@@ -152,7 +152,7 @@ export default function FieldReviewCard({
                       rel="noreferrer"
                       className="text-xs font-medium text-slate-500 transition hover:text-slate-900"
                     >
-                      Open source
+                      View source
                     </a>
                   ) : null}
                 </div>

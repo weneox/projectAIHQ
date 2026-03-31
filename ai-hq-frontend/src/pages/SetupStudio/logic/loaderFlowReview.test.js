@@ -114,6 +114,37 @@ describe("loaderFlowReview", () => {
     ]);
   });
 
+  it("replaces source-bound identity fields instead of carrying values from the previous site", () => {
+    const businessForm = buildSetupStudioHydratedBusinessForm({
+      prev: {
+        companyName: "Northstar Legal",
+        description: "Commercial counsel for founders.",
+        websiteUrl: "https://northstar.example",
+        primaryPhone: "+44 20 7946 0958",
+        primaryEmail: "hello@northstar.example",
+        primaryAddress: "1 Fleet Street, London",
+        timezone: "Europe/London",
+        language: "en",
+      },
+      baseProfile: {
+        companyName: "Harbor Dental",
+        websiteUrl: "https://harbor.example",
+      },
+      preserveBusinessForm: false,
+      reviewInfo: {
+        sourceType: "website",
+        sourceUrl: "https://harbor.example",
+      },
+    });
+
+    expect(businessForm.companyName).toBe("Harbor Dental");
+    expect(businessForm.websiteUrl).toBe("https://harbor.example");
+    expect(businessForm.primaryPhone).toBe("");
+    expect(businessForm.primaryEmail).toBe("");
+    expect(businessForm.primaryAddress).toBe("");
+    expect(businessForm.description).toBe("");
+  });
+
   it("shapes a review-load failure issue conservatively", () => {
     const issue = buildSetupStudioReviewLoadFailureIssue(
       new Error("boom")

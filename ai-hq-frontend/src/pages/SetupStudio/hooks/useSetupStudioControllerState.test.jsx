@@ -97,4 +97,80 @@ describe("useSetupStudioControllerState", () => {
       fingerprint: "website|acme.example",
     });
   });
+
+  it("clears previous site values before hydrating a second website review", () => {
+    const { result } = renderHook(() => useSetupStudioControllerState());
+
+    act(() => {
+      result.current.applyReviewState(
+        {
+          review: {
+            draft: {
+              businessProfile: {
+                companyName: "Northstar Legal",
+                websiteUrl: "https://northstar.example",
+                primaryPhone: "+44 20 7946 0958",
+                primaryEmail: "hello@northstar.example",
+                primaryAddress: "1 Fleet Street, London",
+                summaryShort: "Commercial counsel for founders.",
+              },
+              services: [
+                { title: "Fundraising support", description: "Investor-ready legal support" },
+              ],
+              sourceSummary: {
+                latestImport: {
+                  sourceType: "website",
+                  sourceUrl: "https://northstar.example",
+                },
+              },
+            },
+          },
+        }
+      );
+    });
+
+    act(() => {
+      result.current.resetBusinessTwinDraftForNewScan("https://harbor.example");
+      result.current.clearStudioReviewState({ preserveActiveSource: true });
+      result.current.applyReviewState(
+        {
+          review: {
+            session: {
+              id: "session-99",
+              status: "active",
+            },
+            draft: {
+              businessProfile: {
+                companyName: "Harbor Dental",
+                websiteUrl: "https://harbor.example",
+              },
+              sourceSummary: {
+                latestImport: {
+                  sourceType: "website",
+                  sourceUrl: "https://harbor.example",
+                },
+              },
+            },
+          },
+        },
+        { preserveBusinessForm: true }
+      );
+    });
+
+    expect(result.current.businessForm.companyName).toBe("Harbor Dental");
+    expect(result.current.businessForm.websiteUrl).toBe("https://harbor.example");
+    expect(result.current.businessForm.primaryPhone).toBe("");
+    expect(result.current.businessForm.primaryEmail).toBe("");
+    expect(result.current.businessForm.primaryAddress).toBe("");
+    expect(result.current.businessForm.description).toBe("");
+    expect(result.current.manualSections).toEqual({
+      servicesText: "",
+      faqsText: "",
+      policiesText: "",
+    });
+    expect(result.current.discoveryState.lastUrl).toBe("https://harbor.example");
+    expect(
+      deriveCanonicalReviewProjection(result.current.currentReview).overview.companyName
+    ).toBe("Harbor Dental");
+  });
 });

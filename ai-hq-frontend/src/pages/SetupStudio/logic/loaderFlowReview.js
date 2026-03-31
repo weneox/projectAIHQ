@@ -69,28 +69,27 @@ export function buildSetupStudioHydratedBusinessForm({
   preserveBusinessForm = false,
   reviewInfo = {},
 }) {
+  const localeSeed = {
+    ...DEFAULT_BUSINESS_FORM,
+    timezone: s(baseProfile?.timezone || prev.timezone || "Asia/Baku"),
+    language:
+      resolveMainLanguageValue(
+        baseProfile?.mainLanguage,
+        baseProfile?.primaryLanguage,
+        baseProfile?.language,
+        firstLanguage(baseProfile),
+        prev.language
+      ) || "en",
+    websiteUrl: s(reviewInfo.sourceUrl),
+  };
+
   if (!hasMeaningfulProfile(baseProfile)) {
-    return {
-      ...DEFAULT_BUSINESS_FORM,
-      timezone: s(prev.timezone || "Asia/Baku"),
-      language: s(prev.language || "en"),
-      websiteUrl: s(reviewInfo.sourceUrl),
-    };
+    return localeSeed;
   }
 
   if (!preserveBusinessForm) {
     return hydrateBusinessFormFromProfile(
-      formFromProfile(baseProfile, {
-        ...prev,
-        timezone: s(baseProfile?.timezone || "Asia/Baku"),
-        language:
-          resolveMainLanguageValue(
-            baseProfile?.mainLanguage,
-            baseProfile?.primaryLanguage,
-            baseProfile?.language,
-            firstLanguage(baseProfile)
-          ) || "en",
-      }),
+      formFromProfile(baseProfile, localeSeed),
       baseProfile,
       { force: true }
     );

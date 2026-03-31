@@ -411,10 +411,11 @@ export function profilePreviewRows(profile = {}) {
     ", "
   );
 
-  return [
-    [
-      "Name",
-      firstMeaningfulDiscoveryValue(
+  const rowDefs = [
+    {
+      fieldKey: "companyName",
+      label: "Name",
+      value: firstMeaningfulDiscoveryValue(
         p.companyName,
         p.displayName,
         p.businessName,
@@ -423,10 +424,11 @@ export function profilePreviewRows(profile = {}) {
         p.brandName,
         p.companyTitle
       ),
-    ],
-    [
-      "Description",
-      firstMeaningfulDiscoveryValue(
+    },
+    {
+      fieldKey: "description",
+      label: "Description",
+      value: firstMeaningfulDiscoveryValue(
         p.description,
         p.summaryShort,
         p.summary,
@@ -437,11 +439,16 @@ export function profilePreviewRows(profile = {}) {
         p.summaryLong,
         p.aboutSection
       ),
-    ],
-    ["Timezone", sanitizeDiscoveryText(p.timezone || p.timeZone)],
-    [
-      "Language",
-      sanitizeDiscoveryText(
+    },
+    {
+      fieldKey: "timezone",
+      label: "Timezone",
+      value: sanitizeDiscoveryText(p.timezone || p.timeZone),
+    },
+    {
+      fieldKey: "language",
+      label: "Language",
+      value: sanitizeDiscoveryText(
         p.language ||
           p.mainLanguage ||
           p.main_language ||
@@ -449,22 +456,44 @@ export function profilePreviewRows(profile = {}) {
           arr(p.supportedLanguages)[0] ||
           arr(p.supported_languages)[0]
       ),
-    ],
-    [
-      "Website",
-      sanitizeDiscoveryText(p.websiteUrl || p.website || p.url || p.siteUrl || p.site_url),
-    ],
-    ["Phone", sanitizeDiscoveryText(p.primaryPhone || p.primary_phone || arr(p.phones)[0])],
-    ["Email", sanitizeDiscoveryText(p.primaryEmail || p.primary_email || arr(p.emails)[0])],
-    [
-      "Address",
-      sanitizeDiscoveryText(p.primaryAddress || p.primary_address || arr(p.addresses)[0]),
-    ],
-    ["Services", services],
-    ["Products", products],
-    ["Pricing", pricingHints],
-    ["Social", socialLinks],
-  ].filter(([, value]) => value);
+    },
+    {
+      fieldKey: "websiteUrl",
+      label: "Website",
+      value: sanitizeDiscoveryText(
+        p.websiteUrl || p.website || p.url || p.siteUrl || p.site_url
+      ),
+    },
+    {
+      fieldKey: "primaryPhone",
+      label: "Phone",
+      value: sanitizeDiscoveryText(
+        p.primaryPhone || p.primary_phone || arr(p.phones)[0]
+      ),
+    },
+    {
+      fieldKey: "primaryEmail",
+      label: "Email",
+      value: sanitizeDiscoveryText(
+        p.primaryEmail || p.primary_email || arr(p.emails)[0]
+      ),
+    },
+    {
+      fieldKey: "primaryAddress",
+      label: "Address",
+      value: sanitizeDiscoveryText(
+        p.primaryAddress || p.primary_address || arr(p.addresses)[0]
+      ),
+    },
+    { fieldKey: "services", label: "Services", value: services },
+    { fieldKey: "products", label: "Products", value: products },
+    { fieldKey: "pricingHints", label: "Pricing", value: pricingHints },
+    { fieldKey: "socialLinks", label: "Social", value: socialLinks },
+  ];
+
+  return rowDefs
+    .filter((row) => s(row.value))
+    .map((row) => [row.label, row.value]);
 }
 
 function provenanceSourceLabel(source = {}) {
@@ -528,7 +557,9 @@ export function profilePreviewRowsWithProvenance(
   fieldProvenance = {}
 ) {
   const provenanceMap = obj(fieldProvenance);
-  const baseRows = profilePreviewRows(profile);
+  const baseRows = new Map(
+    profilePreviewRows(profile).map((row) => [s(row[0]), s(row[1])])
+  );
   const rowDefs = [
     { fieldKey: "companyName", label: "Name" },
     { fieldKey: "description", label: "Description" },
@@ -545,9 +576,8 @@ export function profilePreviewRowsWithProvenance(
   ];
 
   return rowDefs
-    .map((def, index) => {
-      const row = baseRows[index];
-      const label = Array.isArray(row) ? s(row[0]) : s(row?.label || def.label);
+    .map((def) => {
+      const label = def.label;
       const fieldKey = def.fieldKey;
       const provenance = obj(provenanceMap[fieldKey]);
       const observedValue = compactValue(
@@ -555,9 +585,7 @@ export function profilePreviewRowsWithProvenance(
           provenance.observed_value ||
           provenance.value
       );
-      const value = Array.isArray(row)
-        ? s(row[1] || observedValue)
-        : s(row?.value || observedValue);
+      const value = s(baseRows.get(label) || observedValue);
 
       if (!value) return null;
 

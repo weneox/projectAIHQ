@@ -77,7 +77,7 @@ export default function SetupStudioReviewWorkspaceDialog({
     <FocusDialog
       open={open}
       onClose={onClose}
-      title="Review workspace"
+      title="Review detected business details"
       backdropClassName="bg-[rgba(15,23,42,.18)] backdrop-blur-[14px]"
       panelClassName="w-full max-w-[1180px]"
     >

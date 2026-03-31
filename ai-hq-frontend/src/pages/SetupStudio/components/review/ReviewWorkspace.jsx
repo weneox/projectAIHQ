@@ -73,7 +73,7 @@ function pickObservedFieldValue({
   return textFromValue(fallback);
 }
 
-function normalizeEvidenceEntries(value, fallbackSources = []) {
+function normalizeEvidenceEntries(value) {
   const item = obj(value);
   const authorityRank = Number(item.authorityRank || item.authority_rank);
   const sources = arr(
@@ -138,24 +138,22 @@ function normalizeEvidenceEntries(value, fallbackSources = []) {
     })
     .filter((entry) => entry.label || entry.value || entry.note || entry.url);
 
-  const fallback = arr(fallbackSources)
-    .map((source) => ({
-      label: s(source?.label || source?.sourceType || source?.url),
-      value: "",
-      note: s(source?.role),
-      url: s(source?.url),
-    }))
-    .filter((entry) => entry.label || entry.url);
-
   const deduped = [];
   const seen = new Set();
 
-  [...direct, ...normalizedSources, ...fallback].forEach((entry) => {
-    const key = [entry.label, entry.value, entry.note, entry.url].join("|");
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    deduped.push(entry);
-  });
+  [...direct, ...normalizedSources]
+    .filter((entry) => s(entry.value) || s(entry.note))
+    .forEach((entry) => {
+      const key = [
+        s(entry.label).toLowerCase(),
+        s(entry.value).toLowerCase(),
+        s(entry.note).toLowerCase(),
+        s(entry.url).toLowerCase(),
+      ].join("|");
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      deduped.push(entry);
+    });
 
   return deduped;
 }
@@ -165,7 +163,6 @@ function buildFieldCards({
   manualSections = {},
   discoveryProfileRows = [],
   reviewProjection = {},
-  reviewSources = [],
 }) {
   const form = obj(businessForm);
   const sections = obj(manualSections);
@@ -304,7 +301,7 @@ function buildFieldCards({
               : [field.key],
       fallback: field.observedValue || row.value,
     });
-    const evidence = normalizeEvidenceEntries(provenance, reviewSources);
+    const evidence = normalizeEvidenceEntries(provenance);
     const honesty = describeSetupStudioFieldHonesty({
       fieldKey: field.key,
       fieldConfidence,
@@ -321,10 +318,11 @@ function buildFieldCards({
       evidence:
         evidence.length > 0
           ? evidence
-          : normalizeEvidenceEntries(
-              { label: s(row.label), value: s(row.value), note: s(row.provenance) },
-              reviewSources
-            ),
+          : normalizeEvidenceEntries({
+              label: s(row.label),
+              value: s(row.value),
+              note: s(row.provenance),
+            }),
     };
   });
 }
@@ -359,7 +357,6 @@ export default function ReviewWorkspace({
     manualSections,
     discoveryProfileRows,
     reviewProjection: draft,
-    reviewSources,
   });
 
   const issues = [
@@ -397,20 +394,20 @@ export default function ReviewWorkspace({
       <div className="relative z-10 flex items-center justify-between gap-4 border-b border-slate-200/80 px-5 py-4 backdrop-blur-[14px] sm:px-6">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <TinyLabel>Review workspace</TinyLabel>
+            <TinyLabel>Detected business details</TinyLabel>
             {attentionCount ? (
               <TinyChip tone="warn">
-                {attentionCount} field{attentionCount === 1 ? "" : "s"} still need review
+                {attentionCount} field{attentionCount === 1 ? "" : "s"} need review
               </TinyChip>
             ) : (
               <TinyChip tone="success">
                 <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                Ready to finalize
+                Ready to save
               </TinyChip>
             )}
           </div>
           <div className="mt-2 text-[24px] font-semibold tracking-[-0.04em] text-slate-950">
-            Confirm the proposed truth field by field
+            Review detected information before saving it to your business profile
           </div>
           {quickSummary ? (
             <div className="mt-1 max-w-[820px] text-sm leading-6 text-slate-500">

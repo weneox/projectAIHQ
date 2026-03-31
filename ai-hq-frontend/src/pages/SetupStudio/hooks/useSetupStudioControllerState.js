@@ -255,19 +255,21 @@ export function useSetupStudioControllerState() {
     );
 
     setBusinessForm((prev) => {
+      const localeSeed = {
+        ...DEFAULT_BUSINESS_FORM,
+        timezone: s(prev.timezone || "Asia/Baku"),
+        language: s(prev.language || "en"),
+        websiteUrl: s(reviewInfo.sourceUrl),
+      };
+
       if (!hasMeaningfulProfile(preferredProfile)) {
-        return {
-          ...DEFAULT_BUSINESS_FORM,
-          timezone: s(prev.timezone || "Asia/Baku"),
-          language: s(prev.language || "en"),
-          websiteUrl: s(reviewInfo.sourceUrl),
-        };
+        return localeSeed;
       }
 
       return hydrateBusinessFormFromProfile(
         preserveBusinessForm
           ? prev
-          : formFromProfile(reviewProjection.overview, prev),
+          : formFromProfile(reviewProjection.overview, localeSeed),
         preferredProfile,
         { force: !preserveBusinessForm }
       );

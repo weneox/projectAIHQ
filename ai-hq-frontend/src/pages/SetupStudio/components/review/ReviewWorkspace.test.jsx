@@ -87,7 +87,8 @@ describe("ReviewWorkspace", () => {
     expect(screen.getAllByText("Northstar Legal").length).toBeGreaterThan(1);
     expect(screen.getAllByText("https://northstar.example").length).toBeGreaterThan(1);
     expect(screen.getAllByText("+442079460958").length).toBeGreaterThan(1);
-    expect(screen.getAllByText(/open source/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/review detected information before saving it to your business profile/i)).toBeTruthy();
+    expect(screen.getAllByText(/view source/i).length).toBeGreaterThan(0);
   });
 
   it("falls back to provenance observed values when overview rows are empty", () => {
@@ -180,5 +181,163 @@ describe("ReviewWorkspace", () => {
         }),
       ])
     );
+  });
+
+  it("keeps field mapping stable when earlier fields are empty", () => {
+    const rows = profilePreviewRowsWithProvenance(
+      {
+        primaryPhone: "+15550001111",
+        primaryEmail: "hello@harbor.example",
+      },
+      {}
+    );
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldKey: "primaryPhone",
+          label: "Phone",
+          value: "+15550001111",
+        }),
+        expect.objectContaining({
+          fieldKey: "primaryEmail",
+          label: "Email",
+          value: "hello@harbor.example",
+        }),
+      ])
+    );
+    expect(rows.find((row) => row.fieldKey === "websiteUrl")).toBeUndefined();
+  });
+
+  it("keeps provenance attached to the correct field when profile rows are sparse", () => {
+    const rows = profilePreviewRowsWithProvenance(
+      {},
+      {
+        primaryPhone: {
+          label: "Website",
+          observedValue: "+15550001111",
+        },
+        primaryEmail: {
+          label: "Website",
+          observedValue: "hello@harbor.example",
+        },
+      }
+    );
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          fieldKey: "primaryPhone",
+          label: "Phone",
+          value: "+15550001111",
+        }),
+        expect.objectContaining({
+          fieldKey: "primaryEmail",
+          label: "Email",
+          value: "hello@harbor.example",
+        }),
+      ])
+    );
+  });
+
+  it("does not render generic duplicate source blocks without field-specific evidence", () => {
+    render(
+      <ReviewWorkspace
+        savingBusiness={false}
+        businessForm={{
+          companyName: "",
+          websiteUrl: "",
+          primaryPhone: "",
+          primaryEmail: "",
+          primaryAddress: "",
+          language: "",
+          description: "",
+          behavior: "",
+        }}
+        discoveryProfileRows={[]}
+        manualSections={{ servicesText: "", faqsText: "", policiesText: "" }}
+        onSetBusinessField={vi.fn()}
+        onSetManualSection={vi.fn()}
+        onSaveBusiness={vi.fn()}
+        onClose={vi.fn()}
+        reviewSources={[
+          {
+            sourceType: "website",
+            label: "Website",
+            url: "https://northstar.example",
+            role: "primary",
+          },
+        ]}
+        currentReview={{
+          draft: {
+            businessProfile: {
+              companyName: "Northstar Legal",
+            },
+          },
+          fieldProvenance: {
+            companyName: {
+              label: "Website",
+              url: "https://northstar.example",
+            },
+          },
+        }}
+        reviewSyncState={{}}
+      />
+    );
+
+    expect(screen.queryByText(/view source/i)).toBeNull();
+    expect(screen.queryByText(/^source details$/i)).toBeNull();
+  });
+
+  it("renders professional copy and confidence labels", () => {
+    render(
+      <ReviewWorkspace
+        savingBusiness={false}
+        businessForm={{
+          companyName: "",
+          websiteUrl: "",
+          primaryPhone: "",
+          primaryEmail: "",
+          primaryAddress: "",
+          language: "",
+          description: "",
+          behavior: "",
+        }}
+        discoveryProfileRows={[]}
+        manualSections={{ servicesText: "", faqsText: "", policiesText: "" }}
+        onSetBusinessField={vi.fn()}
+        onSetManualSection={vi.fn()}
+        onSaveBusiness={vi.fn()}
+        onClose={vi.fn()}
+        currentReview={{
+          draft: {
+            businessProfile: {
+              primaryPhone: "+15550001111",
+            },
+          },
+          reviewDraftSummary: {
+            fieldConfidence: {
+              primaryPhone: 0.92,
+            },
+          },
+          fieldProvenance: {
+            primaryPhone: {
+              label: "Website",
+              observedValue: "+15550001111",
+              note: "Homepage footer",
+            },
+          },
+        }}
+        reviewSyncState={{}}
+      />
+    );
+
+    expect(screen.getByText(/detected business details/i)).toBeTruthy();
+    expect(screen.getAllByText(/your draft/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/detected from source/i).length).toBeGreaterThan(1);
+    expect(screen.getByText(/high confidence/i)).toBeTruthy();
+    expect(
+      screen.getByText(/this value has strong source support, but it should still be confirmed before saving/i)
+    ).toBeTruthy();
   });
 });
