@@ -46,6 +46,8 @@ export default function Shell() {
   const shellSection = getActiveShellSection(location.pathname);
   const activeContextItem = getActiveContextItem(shellSection, location.pathname);
   const isInboxRoute = location.pathname.startsWith("/inbox");
+  const isChannelsRoute = location.pathname.startsWith("/channels");
+  const hideTopHeader = isInboxRoute || isChannelsRoute;
 
   async function loadShellStats() {
     const [inboxRes, leadsRes] = await Promise.all([
@@ -194,7 +196,7 @@ export default function Shell() {
           isInboxRoute ? "h-screen overflow-hidden" : "min-h-screen",
         ].join(" ")}
       >
-        {!isInboxRoute ? (
+        {!hideTopHeader ? (
           <Header
             onMenuClick={() => setMobileOpen(true)}
             shellStats={shellStats}
@@ -208,7 +210,9 @@ export default function Shell() {
           className={
             isInboxRoute
               ? "h-full overflow-hidden p-0"
-              : "min-h-[calc(100vh-72px)] px-4 py-5 md:px-6 md:py-6 lg:px-8 lg:py-8"
+              : hideTopHeader
+                ? "min-h-screen px-4 py-5 md:px-6 md:py-6 lg:px-8 lg:py-8"
+                : "min-h-[calc(100vh-72px)] px-4 py-5 md:px-6 md:py-6 lg:px-8 lg:py-8"
           }
         >
           <div

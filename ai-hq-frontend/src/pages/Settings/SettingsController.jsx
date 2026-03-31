@@ -10,7 +10,6 @@ import {
   ShieldCheck,
   Sparkles,
   Users,
-  Waypoints,
   BrainCircuit,
   Contact2,
   ListTree,
@@ -24,7 +23,6 @@ import Button from "../../components/ui/Button.jsx";
 import Badge from "../../components/ui/Badge.jsx";
 
 import SettingsShell from "../../components/settings/SettingsShell.jsx";
-import ChannelsPanel from "../../components/settings/ChannelsPanel.jsx";
 import AgentsPanel from "../../components/settings/AgentsPanel.jsx";
 import TeamPanel from "../../components/settings/TeamPanel.jsx";
 import SettingsSaveBar from "../../components/settings/SettingsSaveBar.jsx";
@@ -105,7 +103,6 @@ const SETTINGS_SECTION_ALIASES = Object.freeze({
 
   locations: "locations",
   contacts: "contacts",
-  channels: "channels",
   agents: "agents",
   team: "team",
   notifications: "notifications",
@@ -293,8 +290,6 @@ export default function SettingsController({
 
   const canManageOperational =
     controlPlanePermissions.operationalSettingsWrite.allowed;
-  const canManageChannels =
-    canManageSettings && planCapabilities?.metaChannelConnect?.allowed !== false;
   const canManageAgents =
     canManageSettings && planCapabilities?.agentConfigMutation?.allowed !== false;
 
@@ -419,13 +414,6 @@ export default function SettingsController({
         description: "Phone, email, WhatsApp, public lines",
         dirty: !!dirtyMap.contacts,
         icon: Contact2,
-      },
-      {
-        key: "channels",
-        label: "Channels",
-        description: "Instagram, WhatsApp, Messenger",
-        dirty: !!dirtyMap.channels,
-        icon: Waypoints,
       },
       {
         key: "agents",
@@ -784,9 +772,6 @@ export default function SettingsController({
             viewerRole={viewerRole}
           />
         );
-
-      case "channels":
-        return <ChannelsPanel canManage={canManageChannels} />;
 
       case "agents":
         return (

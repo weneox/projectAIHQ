@@ -24,6 +24,7 @@ const Incidents = lazy(() => import("./pages/Incidents.jsx"));
 const Voice = lazy(() => import("./pages/Voice.jsx"));
 const Login = lazy(() => import("./pages/Login.jsx"));
 const TruthViewerPage = lazy(() => import("./pages/Truth/TruthViewerPage.jsx"));
+const ChannelCatalog = lazy(() => import("./pages/ChannelCatalog.jsx"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin.jsx"));
 const AdminTenants = lazy(() => import("./pages/AdminTenants.jsx"));
 const AdminTeam = lazy(() => import("./pages/AdminTeam.jsx"));
@@ -63,9 +64,7 @@ export default function App() {
   const setupEntryElement = localWorkspaceEntry ? (
     <Navigate to="/workspace" replace />
   ) : (
-    <UserRouteGuard>
-      {withSuspense(<SetupStudioRoute />)}
-    </UserRouteGuard>
+    <UserRouteGuard>{withSuspense(<SetupStudioRoute />)}</UserRouteGuard>
   );
 
   const setupRedirectElement = localWorkspaceEntry ? (
@@ -87,10 +86,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route
-          path="/login"
-          element={withSuspense(<Login />)}
-        />
+        <Route path="/login" element={withSuspense(<Login />)} />
 
         <Route path="/admin/login" element={withSuspense(<AdminLogin />)} />
 
@@ -108,45 +104,14 @@ export default function App() {
           <Route path="secrets" element={withSuspense(<AdminSecrets />)} />
         </Route>
 
-        <Route
-          path="/setup/studio"
-          element={setupEntryElement}
-        />
-
-        <Route
-          path="/setup"
-          element={setupRedirectElement}
-        />
-
-        <Route
-          path="/setup/business"
-          element={setupRedirectElement}
-        />
-
-        <Route
-          path="/setup/channels"
-          element={setupRedirectElement}
-        />
-
-        <Route
-          path="/setup/knowledge"
-          element={setupRedirectElement}
-        />
-
-        <Route
-          path="/setup/services"
-          element={setupRedirectElement}
-        />
-
-        <Route
-          path="/setup/playbooks"
-          element={setupRedirectElement}
-        />
-
-        <Route
-          path="/setup/runtime"
-          element={setupRedirectElement}
-        />
+        <Route path="/setup/studio" element={setupEntryElement} />
+        <Route path="/setup" element={setupRedirectElement} />
+        <Route path="/setup/business" element={setupRedirectElement} />
+        <Route path="/setup/channels" element={setupRedirectElement} />
+        <Route path="/setup/knowledge" element={setupRedirectElement} />
+        <Route path="/setup/services" element={setupRedirectElement} />
+        <Route path="/setup/playbooks" element={setupRedirectElement} />
+        <Route path="/setup/runtime" element={setupRedirectElement} />
 
         <Route path="/" element={rootEntryElement} />
 
@@ -159,6 +124,7 @@ export default function App() {
           }
         >
           <Route path="workspace" element={withSuspense(<WorkspacePage />)} />
+
           <Route
             path="publish"
             element={
@@ -170,6 +136,7 @@ export default function App() {
               </OperatorRouteGuard>
             }
           />
+
           <Route
             path="proposals"
             element={
@@ -181,7 +148,10 @@ export default function App() {
               </OperatorRouteGuard>
             }
           />
+
           <Route path="inbox" element={withSuspense(<Inbox />)} />
+          <Route path="channels" element={withSuspense(<ChannelCatalog />)} />
+
           <Route
             path="leads"
             element={
@@ -193,6 +163,7 @@ export default function App() {
               </OperatorRouteGuard>
             }
           />
+
           <Route
             path="comments"
             element={
@@ -204,6 +175,7 @@ export default function App() {
               </OperatorRouteGuard>
             }
           />
+
           <Route
             path="incidents"
             element={
@@ -215,6 +187,7 @@ export default function App() {
               </OperatorRouteGuard>
             }
           />
+
           <Route
             path="voice"
             element={
@@ -226,8 +199,10 @@ export default function App() {
               </OperatorRouteGuard>
             }
           />
+
           <Route path="truth" element={withSuspense(<TruthViewerPage />)} />
           <Route path="expert" element={withSuspense(<Expert />)} />
+
           <Route
             path="executions"
             element={
@@ -239,6 +214,7 @@ export default function App() {
               </OperatorRouteGuard>
             }
           />
+
           <Route path="settings" element={withSuspense(<Settings />)} />
           {renderInternalRouteRedirects()}
         </Route>

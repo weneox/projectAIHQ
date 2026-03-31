@@ -7,6 +7,7 @@ import {
   Settings2,
   Sparkles,
   Waves,
+  Waypoints,
 } from "lucide-react";
 
 const PRIMARY_SECTIONS = [
@@ -60,6 +61,32 @@ const PRIMARY_SECTIONS = [
           { label: "Mine", hint: "Personal assignment view" },
           { label: "Unassigned", hint: "Queue intake view" },
           { label: "Voice queue", to: "/voice" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "channels",
+    label: "Channels",
+    kicker: "Catalog",
+    description: "Connected channels, planned surfaces, and routing inventory.",
+    icon: Waypoints,
+    to: "/channels",
+    paths: ["/channels"],
+    contextGroups: [
+      {
+        title: "Catalog",
+        items: [
+          { label: "Channel catalog", to: "/channels" },
+          { label: "Settings surface", to: "/settings" },
+          { label: "Website chat", hint: "Embeddable widget path" },
+        ],
+      },
+      {
+        title: "Expansion",
+        items: [
+          { label: "Messaging stack", hint: "WhatsApp, Telegram, Messenger" },
+          { label: "Social stack", hint: "Instagram, TikTok, Facebook" },
         ],
       },
     ],
@@ -202,7 +229,7 @@ const UTILITY_SECTIONS = [
         title: "Configuration",
         items: [
           { label: "General settings", to: "/settings" },
-          { label: "Channels", hint: "Channel management sections" },
+          { label: "Channels", hint: "Legacy channel management sections" },
           { label: "Integrations", hint: "Provider and system wiring" },
         ],
       },
@@ -226,7 +253,9 @@ function getActiveShellSection(pathname = "/") {
 
 function getActiveContextItem(section, pathname = "/") {
   for (const group of section?.contextGroups || []) {
-    const activeItem = (group.items || []).find((item) => item.to && pathMatches(pathname, item.to));
+    const activeItem = (group.items || []).find(
+      (item) => item.to && pathMatches(pathname, item.to)
+    );
     if (activeItem) return activeItem;
   }
 

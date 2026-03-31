@@ -17,20 +17,77 @@ import {
   readCurrentSessions,
 } from "./utils.js";
 
+function s(v, d = "") {
+  return String(v ?? d).trim();
+}
+
+function trimTrailingSlash(value = "") {
+  return s(value).replace(/\/+$/, "");
+}
+
+function normalizeOrigin(value = "") {
+  const raw = s(value);
+  if (!raw) return "";
+
+  try {
+    return new URL(raw).origin;
+  } catch {
+    return "";
+  }
+}
+
+function isLocalDevOrigin(origin = "") {
+  try {
+    const host = new URL(origin).hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host.endsWith(".localhost");
+  } catch {
+    return false;
+  }
+}
+
+function toWsOrigin(origin = "") {
+  const normalized = normalizeOrigin(origin);
+  if (!normalized) return "";
+
+  return normalized
+    .replace(/^https:/i, "wss:")
+    .replace(/^http:/i, "ws:");
+}
+
 export function adminSessionRoutes({ db, wsHub } = {}) {
   const r = express.Router();
 
   function buildRealtimeWsUrl(req) {
-    const publicBase = String(cfg.urls.publicBaseUrl || "").trim().replace(/\/+$/, "");
-    if (publicBase) {
-      return `${publicBase.replace(/^https:/i, "wss:").replace(/^http:/i, "ws:")}/ws`;
+    const requestOrigin = normalizeOrigin(
+      req.headers?.origin || req.headers?.referer || ""
+    );
+
+    if (requestOrigin && isLocalDevOrigin(requestOrigin)) {
+      return `${toWsOrigin(requestOrigin)}/ws`;
     }
 
-    const forwardedProto = String(req.headers?.["x-forwarded-proto"] || req.protocol || "https")
+    const publicBase = trimTrailingSlash(cfg.urls.publicBaseUrl || "");
+    if (publicBase) {
+      return `${publicBase
+        .replace(/^https:/i, "wss:")
+        .replace(/^http:/i, "ws:")}/ws`;
+    }
+
+    if (requestOrigin) {
+      return `${toWsOrigin(requestOrigin)}/ws`;
+    }
+
+    const forwardedProto = s(
+      req.headers?.["x-forwarded-proto"] || req.protocol || "https"
+    )
       .split(",")[0]
       .trim();
+
     const protocol = forwardedProto.toLowerCase() === "http" ? "ws" : "wss";
-    const host = String(req.headers?.["x-forwarded-host"] || req.get?.("host") || "")
+
+    const host = s(
+      req.headers?.["x-forwarded-host"] || req.get?.("host") || ""
+    )
       .split(",")[0]
       .trim();
 
@@ -149,7 +206,9 @@ export function adminSessionRoutes({ db, wsHub } = {}) {
         tenantId: payload.tenantId || null,
         role: payload.role || "member",
         audience:
-          ["owner", "admin", "operator"].includes(String(payload.role || "").toLowerCase())
+          ["owner", "admin", "operator"].includes(
+            String(payload.role || "").toLowerCase()
+          )
             ? "operator"
             : "tenant",
       },
@@ -160,18 +219,19 @@ export function adminSessionRoutes({ db, wsHub } = {}) {
     "/auth/debug-session",
     (req, res, next) => requireSafeDiagnostics(req, res, next, { env: cfg.app.env }),
     async (req, res) => {
-    setNoStore(res);
+      setNoStore(res);
 
-    const dbOk = await checkDb(db);
-    const debug = await getDebugSessionPayload(req, db);
+      const dbOk = await checkDb(db);
+      const debug = await getDebugSessionPayload(req, db);
 
-    return res.status(200).json({
-      ok: true,
-      marker: "AUTH_DEBUG_SESSION_V4",
-      ...debug,
-      runtime: buildAuthRuntimeInfo(db, dbOk),
-    });
-  });
+      return res.status(200).json({
+        ok: true,
+        marker: "AUTH_DEBUG_SESSION_V4",
+        ...debug,
+        runtime: buildAuthRuntimeInfo(db, dbOk),
+      });
+    }
+  );
 
   return r;
 }

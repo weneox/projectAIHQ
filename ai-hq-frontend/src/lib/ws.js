@@ -1,10 +1,14 @@
 import { validateRealtimeEnvelope } from "@aihq/shared-contracts/realtime";
 
-const API_BASE = String(import.meta.env.VITE_API_BASE || "").trim().replace(/\/+$/, "");
-const WS_URL = String(import.meta.env.VITE_WS_URL || "").trim();
+const RAW_API_BASE = String(import.meta.env.VITE_API_BASE || "").trim();
+const RAW_WS_URL = String(import.meta.env.VITE_WS_URL || "").trim();
 
 function s(v, d = "") {
   return String(v ?? d).trim();
+}
+
+function trimTrailingSlash(value = "") {
+  return s(value).replace(/\/+$/, "");
 }
 
 function safeJson(x) {
@@ -16,21 +20,83 @@ function safeJson(x) {
   }
 }
 
+function isAbsoluteHttpUrl(value = "") {
+  return /^https?:\/\//i.test(s(value));
+}
+
+function isAbsoluteWsUrl(value = "") {
+  return /^wss?:\/\//i.test(s(value));
+}
+
+function getBrowserHttpOrigin() {
+  if (typeof window === "undefined") return "http://localhost:5173";
+  return `${window.location.protocol}//${window.location.host}`;
+}
+
+function getBrowserWsOrigin() {
+  if (typeof window === "undefined") return "ws://localhost:5173";
+  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${window.location.host}`;
+}
+
+function absolutizeWsBase(value = "") {
+  const raw = trimTrailingSlash(value);
+  if (!raw) return "";
+
+  if (isAbsoluteWsUrl(raw)) {
+    return raw;
+  }
+
+  if (isAbsoluteHttpUrl(raw)) {
+    return raw.replace(/^https:/i, "wss:").replace(/^http:/i, "ws:");
+  }
+
+  if (raw.startsWith("/")) {
+    return `${getBrowserWsOrigin()}${raw}`;
+  }
+
+  try {
+    return new URL(raw, `${getBrowserWsOrigin()}/`).toString().replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
+}
+
+function resolveApiBase() {
+  const raw = trimTrailingSlash(RAW_API_BASE);
+  if (!raw) return "/api";
+  return raw;
+}
+
+function buildRealtimeSessionEndpoint() {
+  const base = resolveApiBase();
+
+  if (/\/api$/i.test(base)) {
+    return `${base}/auth/realtime-session`;
+  }
+
+  return `${base}/api/auth/realtime-session`;
+}
+
 function buildFallbackWsUrl() {
-  if (WS_URL) return WS_URL.replace(/\/+$/, "");
-  const base = API_BASE;
-  if (!base) return "";
-  return base.replace(/^https:/i, "wss:").replace(/^http:/i, "ws:") + "/ws";
+  const configuredWs = absolutizeWsBase(RAW_WS_URL);
+  if (configuredWs) return configuredWs;
+
+  const base = resolveApiBase();
+
+  if (isAbsoluteHttpUrl(base)) {
+    return base
+      .replace(/^https:/i, "wss:")
+      .replace(/^http:/i, "ws:")
+      .replace(/\/api$/i, "") + "/ws";
+  }
+
+  return `${getBrowserWsOrigin()}/ws`;
 }
 
 async function requestRealtimeSession() {
-  if (!API_BASE) {
-    const err = new Error("missing VITE_API_BASE");
-    err.status = 0;
-    throw err;
-  }
+  const endpoint = buildRealtimeSessionEndpoint();
 
-  const endpoint = `${API_BASE}/api/auth/realtime-session`;
   const res = await fetch(endpoint, {
     method: "GET",
     credentials: "include",
@@ -41,6 +107,7 @@ async function requestRealtimeSession() {
 
   const text = await res.text().catch(() => "");
   let json = null;
+
   try {
     json = text ? JSON.parse(text) : null;
   } catch {
@@ -57,7 +124,7 @@ async function requestRealtimeSession() {
   }
 
   return {
-    wsUrl: s(json?.realtime?.wsUrl || buildFallbackWsUrl()),
+    wsUrl: s(json?.realtime?.wsUrl),
     ticket: s(json?.realtime?.ticket),
     scope: {
       tenantKey: s(json?.realtime?.tenantKey).toLowerCase(),
@@ -69,9 +136,16 @@ async function requestRealtimeSession() {
 }
 
 function buildSocketUrl(session = {}) {
-  const wsBase = s(session.wsUrl || buildFallbackWsUrl()).replace(/\/+$/, "");
+  const preferredWsBase =
+    absolutizeWsBase(RAW_WS_URL) ||
+    absolutizeWsBase(session.wsUrl) ||
+    buildFallbackWsUrl();
+
+  const wsBase = trimTrailingSlash(preferredWsBase);
   const ticket = s(session.ticket);
+
   if (!wsBase || !ticket) return "";
+
   const sep = wsBase.includes("?") ? "&" : "?";
   return `${wsBase}${sep}ticket=${encodeURIComponent(ticket)}`;
 }
@@ -244,6 +318,7 @@ export function createWsClient({ onEvent, onStatus, maxDelayMs = 12000 } = {}) {
 
         const type = msg.type || msg.event;
         if (!type) return;
+
         if (type !== "hello") {
           const checked = validateRealtimeEnvelope(msg);
           if (!checked.ok) {
