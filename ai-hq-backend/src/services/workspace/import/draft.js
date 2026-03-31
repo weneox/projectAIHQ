@@ -828,10 +828,21 @@ function mapSynthesisProfileToBusinessProfile(profile = {}, sourceType = "", sou
   const reviewFlags = normalizeProfileArrays(x.reviewFlags, 20, 80);
   const fieldConfidence = isPlainObject(x.fieldConfidence) ? obj(x.fieldConfidence) : {};
 
-  const companyName = pickFirstSanitized(
+  let companyName = pickFirstSanitized(
     buildCompanyNameCandidates(x),
     sanitizeCompanyName
   );
+  const companyTitle = cleanDisplayText(x.companyTitle || companyName, 160);
+
+  if (
+    companyTitle &&
+    companyName &&
+    companyTitle !== companyName &&
+    companyName.split(/\s+/).filter(Boolean).length >= 4 &&
+    companyTitle.split(/\s+/).filter(Boolean).length <= 3
+  ) {
+    companyName = companyTitle;
+  }
 
   const websiteUrl = cleanDisplayText(
     x.websiteUrl || x.website || (sourceType === "website" ? sourceUrl : ""),
@@ -934,7 +945,7 @@ function mapSynthesisProfileToBusinessProfile(profile = {}, sourceType = "", sou
   return compactObject({
     companyName,
     displayName: cleanDisplayText(x.displayName || companyName, 160),
-    companyTitle: cleanDisplayText(x.companyTitle || companyName, 160),
+    companyTitle,
 
     websiteUrl,
     primaryPhone,
@@ -990,11 +1001,90 @@ function sanitizeFieldSources(fieldSources = {}, businessProfile = {}) {
   const safeSources = {};
 
   for (const [field, source] of Object.entries(obj(fieldSources))) {
-    if (!s(businessProfile[field])) continue;
+    const value = businessProfile[field];
+    const hasValue =
+      Array.isArray(value)
+        ? value.length > 0
+        : value && typeof value === "object"
+          ? Object.keys(value).length > 0
+          : !!s(value);
+    if (!hasValue) continue;
     safeSources[field] = obj(source);
   }
 
   return safeSources;
+}
+
+function fieldObservedValue(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === "object" ? cleanDisplayText(item?.url || item?.platform || item?.label || "", 260) : cleanDisplayText(item, 260)))
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  if (value && typeof value === "object") {
+    return cleanDisplayText(
+      value.url ||
+        value.value ||
+        value.label ||
+        value.title ||
+        value.platform ||
+        "",
+      260
+    );
+  }
+
+  return cleanDisplayText(value, 420);
+}
+
+function buildDraftFieldSources(businessProfile = {}, sourceType = "", sourceUrl = "") {
+  const profile = obj(businessProfile);
+  const label = sourceTypeLabel(sourceType);
+  const resolvedUrl = cleanDisplayText(sourceUrl || profile.sourceUrl || profile.websiteUrl, 320);
+  const authorityRank =
+    sourceType === "website" ? 300 : sourceType === "instagram" ? 200 : sourceType === "google_maps" ? 100 : 0;
+  const source = {
+    sourceType: cleanDisplayText(sourceType, 24),
+    sourceUrl: resolvedUrl,
+    sourceLabel: label,
+    authorityRank,
+  };
+
+  const fieldMap = {
+    companyName: profile.companyName,
+    displayName: profile.displayName,
+    websiteUrl: profile.websiteUrl,
+    primaryPhone: profile.primaryPhone,
+    primaryEmail: profile.primaryEmail,
+    primaryAddress: profile.primaryAddress,
+    companySummaryShort: profile.companySummaryShort,
+    companySummaryLong: profile.companySummaryLong,
+    description: profile.description || profile.companySummaryLong || profile.companySummaryShort,
+    mainLanguage: profile.mainLanguage,
+    primaryLanguage: profile.primaryLanguage,
+    language: profile.language || profile.mainLanguage,
+    services: profile.services,
+    products: profile.products,
+    pricingHints: profile.pricingHints,
+    socialLinks: profile.socialLinks,
+  };
+
+  return Object.fromEntries(
+    Object.entries(fieldMap)
+      .map(([field, value]) => {
+        const observedValue = fieldObservedValue(value);
+        if (!observedValue) return null;
+        return [
+          field,
+          {
+            ...source,
+            observedValue,
+          },
+        ];
+      })
+      .filter(Boolean)
+  );
 }
 
 export function sanitizeSetupBusinessProfile(businessProfile = {}) {
@@ -1566,6 +1656,14 @@ export function deriveDraftPatch({
       sourceProfilePatch
     )
   );
+
+  if (Object.keys(businessProfile).length) {
+    businessProfile.fieldSources = buildDraftFieldSources(
+      businessProfile,
+      sourceType,
+      sourceUrl
+    );
+  }
 
   const capabilities = compactObject(
     mergeDeep(

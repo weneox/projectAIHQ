@@ -5,6 +5,10 @@ import { cfg } from "../src/config.js";
 import { analyzePage } from "../src/services/sourceSync/websiteExtractor/pageModel.js";
 import { __test__ as websiteExtractorTest } from "../src/services/sourceSync/websiteExtractor/index.js";
 import { buildSiteRollup } from "../src/services/sourceSync/websiteExtractor/rollup.js";
+import {
+  buildWebsiteSignals,
+  synthesizeBusinessProfile,
+} from "../src/services/sourceSync/websiteHelpers.js";
 
 const HOME_HTML = `
 <html>
@@ -236,4 +240,143 @@ test("buildSiteRollup salvages minimum contact evidence and debug metadata from 
     rollup.debug.pagesWithContactSignals.some((item) => /alpha\.example\/contact/i.test(item.url))
   );
   assert.ok(rollup.debug.weakSelectionReasons.includes("limited_kept_page_coverage"));
+});
+
+test("buildWebsiteSignals and synthesizeBusinessProfile preserve weak-homepage contact salvage across generic business sites", () => {
+  const weakHome = analyzePage({
+    html: `
+      <html>
+        <head><title>Northstar Legal</title></head>
+        <body>
+          <h1>Northstar Legal</h1>
+          <p>Commercial advisory for founders and growing teams.</p>
+          <a href="/contact">Contact</a>
+        </body>
+      </html>
+    `,
+    pageUrl: "https://northstar.example/",
+  });
+
+  const contactPage = analyzePage({
+    html: `
+      <html>
+        <head><title>Contact | Northstar Legal</title></head>
+        <body>
+          <h1>Contact Northstar Legal</h1>
+          <p>Email: hello@northstar.example</p>
+          <p>Phone: +44 20 7946 0958</p>
+          <p>Address: 22 King Street, London, UK</p>
+          <a href="https://linkedin.com/company/northstar-legal">LinkedIn</a>
+        </body>
+      </html>
+    `,
+    pageUrl: "https://northstar.example/contact",
+  });
+
+  const aboutPage = analyzePage({
+    html: `
+      <html>
+        <head>
+          <title>About | Northstar Legal</title>
+          <meta name="description" content="Northstar Legal helps founders with commercial contracts, SaaS terms, employment support, and practical legal operations." />
+        </head>
+        <body>
+          <h1>About Northstar Legal</h1>
+          <p>Northstar Legal helps founders with commercial contracts, SaaS terms, employment support, and practical legal operations.</p>
+        </body>
+      </html>
+    `,
+    pageUrl: "https://northstar.example/about",
+  });
+
+  const rollup = buildSiteRollup(weakHome, [weakHome, aboutPage], [], {
+    fetchedPages: [weakHome, aboutPage, contactPage],
+    pageAdmissions: [
+      { url: weakHome.url, admitted: true, admissionReason: "fallback_identity_only_page" },
+      { url: aboutPage.url, admitted: true, admissionReason: "business_critical_page_with_content" },
+      { url: contactPage.url, admitted: false, admissionReason: "business_critical_page_with_content" },
+    ],
+  });
+
+  const websiteSignals = buildWebsiteSignals({
+    pages: [weakHome, aboutPage],
+    site: rollup,
+    crawl: { warnings: ["limited_page_coverage"] },
+  });
+  const profile = synthesizeBusinessProfile(websiteSignals);
+
+  assert.equal(profile.companyTitle, "Northstar Legal");
+  assert.ok(profile.emails.includes("hello@northstar.example"));
+  assert.ok(profile.phones.includes("+442079460958"));
+  assert.ok(profile.addresses.some((item) => /king street/i.test(item)));
+  assert.ok(profile.socialLinks.some((item) => item.platform === "linkedin"));
+  assert.ok(/founders/i.test(profile.companySummaryShort));
+  assert.equal(profile.emails.length >= 1, true);
+});
+
+test("service-heavy sites preserve offering hints from summary text and booking-style service pages", () => {
+  const homePage = analyzePage({
+    html: `
+      <html>
+        <head>
+          <title>PeakFit Studio</title>
+          <meta name="description" content="PeakFit Studio offers personal training, reformer pilates, nutrition coaching, and recovery plans." />
+        </head>
+        <body>
+          <h1>PeakFit Studio</h1>
+          <p>Training plans for strength, mobility, and sustainable results.</p>
+          <a href="/services">Services</a>
+          <a href="/pricing">Pricing</a>
+        </body>
+      </html>
+    `,
+    pageUrl: "https://peakfit.example/",
+  });
+
+  const servicesPage = analyzePage({
+    html: `
+      <html>
+        <head><title>Services | PeakFit Studio</title></head>
+        <body>
+          <h1>Services</h1>
+          <ul>
+            <li>Personal training</li>
+            <li>Reformer pilates</li>
+            <li>Nutrition coaching</li>
+            <li>Recovery programming</li>
+          </ul>
+          <p>Book a consultation to match the right coaching plan.</p>
+        </body>
+      </html>
+    `,
+    pageUrl: "https://peakfit.example/services",
+  });
+
+  const pricingPage = analyzePage({
+    html: `
+      <html>
+        <head><title>Memberships | PeakFit Studio</title></head>
+        <body>
+          <h1>Plans & Pricing</h1>
+          <p>Starter plan from 90 USD per month.</p>
+          <p>Reformer package from 180 USD.</p>
+          <p>Custom coaching quotes are available for teams.</p>
+        </body>
+      </html>
+    `,
+    pageUrl: "https://peakfit.example/pricing",
+  });
+
+  const rollup = buildSiteRollup(homePage, [homePage, servicesPage, pricingPage], []);
+  const websiteSignals = buildWebsiteSignals({
+    pages: [homePage, servicesPage, pricingPage],
+    site: rollup,
+    crawl: { warnings: [] },
+  });
+  const profile = synthesizeBusinessProfile(websiteSignals);
+
+  assert.ok(profile.services.some((item) => /personal training/i.test(item)));
+  assert.ok(profile.services.some((item) => /reformer pilates/i.test(item)));
+  assert.ok(/personal training/i.test(profile.companySummaryShort));
+  assert.ok(/PeakFit Studio/i.test(profile.companySummaryShort));
 });

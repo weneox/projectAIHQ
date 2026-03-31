@@ -24,6 +24,7 @@ import {
   uniqBy,
   isNearDuplicateText,
 } from "./shared.js";
+import { looksLikeOperationalHoursLine } from "./websiteExtractor/signals.js";
 
 const WEBSITE_CRAWL_VERSION = "website_raw_v6_0";
 const SOURCE_SYNC_VERSION = "source_sync_v8_0";
@@ -560,7 +561,31 @@ function expandServiceCandidates(raw = "") {
       return splitIntoSentences(safe, 120);
     })
     .map(normalizeServiceCandidate)
-    .filter(Boolean);
+      .filter(Boolean);
+}
+
+function extractSummaryOfferingCandidates(raw = "", maxItems = 6) {
+  const safe = cleanInlineText(raw);
+  if (!safe || safe.length < 20) return [];
+
+  const match = safe.match(
+    /\b(?:offers?|provides?|speciali[sz]es in|focuses on|includes?)\b[:\s-]+(.+)/i
+  );
+  const candidateSource = cleanInlineText(match?.[1] || safe)
+    .replace(/\band\b/gi, ",")
+    .replace(/[.]+$/g, "");
+  const parts = candidateSource
+    .split(/\s*,\s*/)
+    .map(normalizeServiceCandidate)
+    .filter(Boolean)
+    .filter((item) => shouldKeepTextCandidate(item, 4))
+    .filter((item) => !isServiceNoise(item))
+    .filter((item) => !detectPricingLine(item))
+    .filter((item) => item.split(/\s+/).length <= 4)
+    .filter((item) => !/[.!?]/.test(item))
+    .slice(0, maxItems);
+
+  return uniq(parts);
 }
 
 function canonicalizeServiceList(items = [], maxItems = 12) {
@@ -642,6 +667,13 @@ function cleanPricingHintsList(items = [], maxItems = 6) {
       if (
         /\b(days|gün|gun|timeline|project complexity|requirements)\b/i.test(safe) &&
         !/\b(price|pricing|quote|qiymət|qiymet|paket|package|from|starting)\b/i.test(safe)
+      ) {
+        continue;
+      }
+
+      if (
+        /\b(book|consultation|contact us|call us|get in touch|speak to our team)\b/i.test(safe) &&
+        !/\b(price|pricing|quote|qiymÉ™t|qiymet|paket|package|from|starting|\$|usd|eur|azn)\b/i.test(safe)
       ) {
         continue;
       }
@@ -1108,10 +1140,69 @@ function buildWebsiteSignals(extracted = {}) {
     ...allParagraphs.filter((item) => item.length <= 220),
   ];
 
-  const services = canonicalizeServiceList(
-    serviceSourceText.filter((x) => detectServiceLine(x)),
+  const contextualServiceText = [
+    ...servicePages.flatMap((x) => arr(x.listItems)),
+    ...bookingPages.flatMap((x) => arr(x.listItems)),
+    ...servicePages.flatMap((x) =>
+      arr(x.headings).filter((item) => {
+        const safe = cleanInlineText(item);
+        return safe && !NAV_NOISE_RE.test(safe) && !PROMO_NOISE_RE.test(safe);
+      })
+    ),
+    ...bookingPages.flatMap((x) =>
+      arr(x.headings).filter((item) => {
+        const safe = cleanInlineText(item);
+        return safe && !NAV_NOISE_RE.test(safe) && !PROMO_NOISE_RE.test(safe);
+      })
+    ),
+    ...servicePages.flatMap((x) =>
+      arr(x.paragraphs).filter((item) => {
+        const safe = cleanInlineText(item);
+        return (
+          safe &&
+          safe.length <= 120 &&
+          !NAV_NOISE_RE.test(safe) &&
+          !PROMO_NOISE_RE.test(safe) &&
+          !detectPricingLine(safe)
+        );
+      })
+    ),
+    ...bookingPages.flatMap((x) =>
+      arr(x.paragraphs).filter((item) => {
+        const safe = cleanInlineText(item);
+        return (
+          safe &&
+          safe.length <= 120 &&
+          !NAV_NOISE_RE.test(safe) &&
+          !PROMO_NOISE_RE.test(safe) &&
+          !detectPricingLine(safe)
+        );
+      })
+    ),
+    ...arr(siteIdentity.serviceHints),
+  ];
+
+  let services = canonicalizeServiceList(
+    [
+      ...serviceSourceText.filter((x) => detectServiceLine(x)),
+      ...contextualServiceText,
+    ],
     12
   );
+
+  if (!services.length) {
+    services = extractSummaryOfferingCandidates(
+      [
+        mainPage?.metaDescription || "",
+        aboutPages[0]?.metaDescription || "",
+        aboutPages[0]?.paragraphs?.[0] || "",
+        mainPage?.paragraphs?.[0] || "",
+      ]
+        .filter(Boolean)
+        .join(" | "),
+      8
+    );
+  }
 
   const products = canonicalizeProductList(
     [...allListItems, ...allHeadings].filter((x) => detectProductLine(x)),

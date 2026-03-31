@@ -5,6 +5,7 @@ import { buildFrontendReviewShape } from "../src/services/workspace/setup/review
 import { loadCurrentReviewPayload } from "../src/services/workspace/setup/reviewFlow.js";
 import { projectSetupReviewDraftToCanonical } from "../src/services/workspace/setup/projection.js";
 import { loadSetupTruthPayload } from "../src/services/workspace/setup/truthPayloads.js";
+import { deriveDraftPatch } from "../src/services/workspace/import/draft.js";
 
 test("service extraction: review shape keeps bundle and provenance summary", () => {
   const shaped = buildFrontendReviewShape({
@@ -62,6 +63,119 @@ test("service extraction: review shape keeps bundle and provenance summary", () 
   assert.equal(shaped.fieldProvenance.companyName.label, "Website");
   assert.equal(shaped.fieldProvenance.companyName.observedValue, "Alpha Studio");
   assert.equal(shaped.reviewDraftSummary.serviceCount, 1);
+  assert.equal(shaped.reviewDraftSummary.fieldSourceObservedValueCount, 1);
+});
+
+test("service extraction: fresh website draft shaping carries observed field values into review provenance", () => {
+  const patch = deriveDraftPatch({
+    currentDraft: {},
+    session: { id: "session-1", primarySourceType: "website" },
+    source: { id: "source-1" },
+    run: { id: "run-1" },
+    result: {
+      profile: {
+        companyTitle: "SaytPro",
+        websiteUrl: "https://saytpro.az",
+        primaryPhone: "+994707370717",
+        primaryEmail: "salam@saytpro.az",
+        companySummaryShort: "Bakida pesekar vebsayt hazirlanmasi ve SEO xidmetleri.",
+        mainLanguage: "az",
+        services: ["Website development", "Technical SEO"],
+        products: ["Premium hosting"],
+        pricingHints: ["Starting from 300 AZN"],
+        socialLinks: [{ platform: "instagram", url: "https://instagram.com/saytpro" }],
+      },
+      warnings: [],
+      signals: {},
+      extracted: {
+        crawl: {
+          effectiveLimits: {
+            maxPagesAllowed: 6,
+            maxCandidatesQueued: 40,
+            maxFetchPages: 10,
+          },
+          pagesRequested: 18,
+          pagesSucceeded: 6,
+          pagesKept: 4,
+          pagesRejected: 2,
+          warnings: ["limited_page_coverage"],
+        },
+        site: {
+          debug: {
+            weakSelectionReasons: ["limited_kept_page_coverage"],
+            pageAdmissions: [{ url: "https://saytpro.az/contact", admitted: false }],
+            pagesWithContactSignals: [{ url: "https://saytpro.az/contact", phones: ["+994707370717"] }],
+          },
+        },
+      },
+    },
+    requestId: "req-1",
+    sourceType: "website",
+    sourceUrl: "https://saytpro.az",
+    intakeContext: {},
+    collector: {
+      profilePatch: {},
+      capabilitiesPatch: {},
+      candidates: [],
+      observationCount: 0,
+      candidateCount: 0,
+      snapshotCount: 0,
+      lastSnapshotId: null,
+    },
+  });
+
+  const shaped = buildFrontendReviewShape({
+    session: { id: "session-1", primarySourceId: "source-1" },
+    draft: patch,
+    sources: [
+      {
+        sourceId: "source-1",
+        sourceType: "website",
+        role: "primary",
+        label: "Website",
+        url: "https://saytpro.az",
+      },
+    ],
+    events: [],
+  });
+
+  assert.equal(shaped.fieldProvenance.websiteUrl.observedValue, "https://saytpro.az");
+  assert.equal(shaped.fieldProvenance.primaryPhone.observedValue, "+994707370717");
+  assert.equal(shaped.fieldProvenance.primaryEmail.observedValue, "salam@saytpro.az");
+  assert.equal(
+    shaped.fieldProvenance.description.observedValue,
+    "Bakida pesekar vebsayt hazirlanmasi ve SEO xidmetleri."
+  );
+  assert.equal(
+    shaped.fieldProvenance.socialLinks.observedValue,
+    "https://instagram.com/saytpro"
+  );
+  assert.ok(
+    shaped.fieldProvenance.services.observedValue.includes("Website development")
+  );
+  assert.ok(
+    shaped.fieldProvenance.services.observedValue.includes("Technical SEO")
+  );
+  assert.equal(
+    shaped.fieldProvenance.products.observedValue,
+    "Premium hosting"
+  );
+  assert.equal(
+    shaped.fieldProvenance.pricingHints.observedValue,
+    "Starting from 300 AZN"
+  );
+  assert.ok(
+    shaped.reviewDraftSummary.fieldSourceObservedFields.includes("websiteUrl")
+  );
+  assert.ok(
+    shaped.reviewDraftSummary.fieldSourceObservedFields.includes("socialLinks")
+  );
+  assert.deepEqual(shaped.reviewDebug.effectiveLimits, {
+    maxPagesAllowed: 6,
+    maxCandidatesQueued: 40,
+    maxFetchPages: 10,
+  });
+  assert.ok(shaped.reviewDebug.weakSelectionReasons.includes("limited_kept_page_coverage"));
 });
 
 test("service extraction: current review payload keeps shaped review and setup", async () => {

@@ -37,5 +37,7 @@ describe("FieldReviewCard", () => {
     expect(screen.getByText(/weak signal/i)).toBeTruthy();
     expect(screen.getByText(/source-derived suggestion/i)).toBeTruthy();
     expect(screen.getByText(/should be treated cautiously/i)).toBeTruthy();
+    expect(screen.getAllByText("+15550001111").length).toBeGreaterThan(1);
+    expect(screen.getByText(/homepage footer/i)).toBeTruthy();
   });
 });

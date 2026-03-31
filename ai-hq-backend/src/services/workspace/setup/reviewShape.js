@@ -82,7 +82,10 @@ function normalizeContributionSummary(draft = {}) {
 }
 
 function normalizeFieldProvenance(draft = {}) {
-  const fieldSources = obj(obj(draft?.businessProfile).fieldSources);
+  const fieldSources = {
+    ...obj(obj(obj(draft?.draftPayload).profile).fieldSources),
+    ...obj(obj(draft?.businessProfile).fieldSources),
+  };
   const importantFields = [
     "companyName",
     "displayName",
@@ -90,9 +93,16 @@ function normalizeFieldProvenance(draft = {}) {
     "primaryPhone",
     "primaryEmail",
     "primaryAddress",
+    "description",
     "companySummaryShort",
     "companySummaryLong",
+    "services",
+    "products",
+    "pricingHints",
+    "socialLinks",
+    "language",
     "mainLanguage",
+    "primaryLanguage",
   ];
 
   return Object.fromEntries(
@@ -106,12 +116,63 @@ function normalizeFieldProvenance(draft = {}) {
           authorityRank: Number(fieldSources[field].authorityRank || 0),
           label: s(fieldSources[field].sourceLabel || fieldSources[field].sourceType),
           observedValue: fieldSources[field].observedValue,
+          value: fieldSources[field].observedValue,
         }),
       ])
   );
 }
 
+function normalizeReviewDebug(draft = {}) {
+  const payload = obj(draft?.draftPayload);
+  const extracted = obj(payload.extracted);
+  const crawl = obj(extracted.crawl);
+  const site = obj(extracted.site);
+  const rollupDebug = obj(site.debug);
+
+  const effectiveLimits = obj(crawl.effectiveLimits);
+  const pageAdmissions = arr(rollupDebug.pageAdmissions);
+  const pagesWithContactSignals = arr(rollupDebug.pagesWithContactSignals);
+  const weakSelectionReasons = arr(rollupDebug.weakSelectionReasons);
+
+  if (
+    !Object.keys(effectiveLimits).length &&
+    !pageAdmissions.length &&
+    !pagesWithContactSignals.length &&
+    !weakSelectionReasons.length &&
+    !arr(crawl.failures).length
+  ) {
+    return {};
+  }
+
+  return compactObject({
+    effectiveLimits,
+    crawl: compactObject({
+      pagesRequested: Number(crawl.pagesRequested || 0),
+      pagesSucceeded: Number(crawl.pagesSucceeded || 0),
+      pagesKept: Number(crawl.pagesKept || 0),
+      pagesRejected: Number(crawl.pagesRejected || 0),
+      pagesFailed: Number(crawl.pagesFailed || 0),
+      pagesPendingLeft: Number(crawl.pagesPendingLeft || 0),
+      warnings: arr(crawl.warnings),
+      failures: arr(crawl.failures).slice(0, 20),
+      rejected: arr(crawl.rejected).slice(0, 20),
+      skipped: arr(crawl.skipped).slice(0, 20),
+    }),
+    weakSelectionReasons,
+    pageAdmissions: pageAdmissions.slice(0, 30),
+    pagesWithContactSignals: pagesWithContactSignals.slice(0, 20),
+  });
+}
+
 function normalizeReviewDraftSummary(draft = {}) {
+  const fieldSources = {
+    ...obj(obj(obj(draft?.draftPayload).profile).fieldSources),
+    ...obj(obj(draft?.businessProfile).fieldSources),
+  };
+  const observedFields = Object.entries(fieldSources)
+    .filter(([, value]) => s(value?.observedValue || value?.observed_value))
+    .map(([field]) => field);
+
   return {
     completeness: obj(draft?.completeness),
     confidence: obj(draft?.confidenceSummary),
@@ -122,6 +183,8 @@ function normalizeReviewDraftSummary(draft = {}) {
     hasBusinessProfile:
       Object.keys(compactObject(draft?.businessProfile))
         .filter((field) => field !== "fieldSources").length > 0,
+    fieldSourceObservedValueCount: observedFields.length,
+    fieldSourceObservedFields: observedFields,
   };
 }
 
@@ -141,5 +204,6 @@ export function buildFrontendReviewShape({
     contributionSummary: normalizeContributionSummary(safeDraft),
     fieldProvenance: normalizeFieldProvenance(safeDraft),
     reviewDraftSummary: normalizeReviewDraftSummary(safeDraft),
+    reviewDebug: normalizeReviewDebug(safeDraft),
   };
 }
