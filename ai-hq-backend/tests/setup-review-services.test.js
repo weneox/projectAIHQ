@@ -66,6 +66,42 @@ test("service extraction: review shape keeps bundle and provenance summary", () 
   assert.equal(shaped.reviewDraftSummary.fieldSourceObservedValueCount, 1);
 });
 
+test("service extraction: review shape keeps observed values from snake_case provenance", () => {
+  const shaped = buildFrontendReviewShape({
+    session: { id: "session-1", primarySourceId: "source-1" },
+    draft: {
+      businessProfile: {
+        companyName: "Alpha Studio",
+        primaryPhone: "+15550001111",
+        fieldSources: {
+          companyName: {
+            source_type: "website",
+            source_url: "https://alpha.example",
+            authority_rank: 300,
+            source_label: "Website",
+            observed_value: "Alpha Studio",
+          },
+          primaryPhone: {
+            source_type: "website",
+            source_url: "https://alpha.example/contact",
+            source_label: "Website",
+            observed_value: "+15550001111",
+          },
+        },
+      },
+    },
+    sources: [{ sourceId: "source-1", sourceType: "website", role: "primary" }],
+    events: [],
+  });
+
+  assert.equal(shaped.fieldProvenance.companyName.sourceType, "website");
+  assert.equal(shaped.fieldProvenance.companyName.sourceUrl, "https://alpha.example");
+  assert.equal(shaped.fieldProvenance.companyName.label, "Website");
+  assert.equal(shaped.fieldProvenance.companyName.observedValue, "Alpha Studio");
+  assert.equal(shaped.fieldProvenance.companyName.value, "Alpha Studio");
+  assert.equal(shaped.fieldProvenance.primaryPhone.observedValue, "+15550001111");
+});
+
 test("service extraction: fresh website draft shaping carries observed field values into review provenance", () => {
   const patch = deriveDraftPatch({
     currentDraft: {},

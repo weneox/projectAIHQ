@@ -528,34 +528,47 @@ export function profilePreviewRowsWithProvenance(
   fieldProvenance = {}
 ) {
   const provenanceMap = obj(fieldProvenance);
-  const rows = profilePreviewRows(profile);
-  const fieldKeys = [
-    "companyName",
-    "description",
-    "timezone",
-    "language",
-    "websiteUrl",
-    "primaryPhone",
-    "primaryEmail",
-    "primaryAddress",
-    "services",
-    "products",
-    "pricingHints",
-    "socialLinks",
+  const baseRows = profilePreviewRows(profile);
+  const rowDefs = [
+    { fieldKey: "companyName", label: "Name" },
+    { fieldKey: "description", label: "Description" },
+    { fieldKey: "timezone", label: "Timezone" },
+    { fieldKey: "language", label: "Language" },
+    { fieldKey: "websiteUrl", label: "Website" },
+    { fieldKey: "primaryPhone", label: "Phone" },
+    { fieldKey: "primaryEmail", label: "Email" },
+    { fieldKey: "primaryAddress", label: "Address" },
+    { fieldKey: "services", label: "Services" },
+    { fieldKey: "products", label: "Products" },
+    { fieldKey: "pricingHints", label: "Pricing" },
+    { fieldKey: "socialLinks", label: "Social" },
   ];
 
-  return rows.map((row, index) => {
-    const label = Array.isArray(row) ? s(row[0]) : s(row?.label);
-    const value = Array.isArray(row) ? s(row[1]) : s(row?.value);
-    const fieldKey = fieldKeys[index] || "";
+  return rowDefs
+    .map((def, index) => {
+      const row = baseRows[index];
+      const label = Array.isArray(row) ? s(row[0]) : s(row?.label || def.label);
+      const fieldKey = def.fieldKey;
+      const provenance = obj(provenanceMap[fieldKey]);
+      const observedValue = compactValue(
+        provenance.observedValue ||
+          provenance.observed_value ||
+          provenance.value
+      );
+      const value = Array.isArray(row)
+        ? s(row[1] || observedValue)
+        : s(row?.value || observedValue);
 
-    return {
-      label,
-      value,
-      fieldKey,
-      provenance: summarizeFieldProvenance(provenanceMap[fieldKey]),
-    };
-  });
+      if (!value) return null;
+
+      return {
+        label,
+        value,
+        fieldKey,
+        provenance: summarizeFieldProvenance(provenance),
+      };
+    })
+    .filter(Boolean);
 }
 
 export function discoveryModeLabel(mode = "") {

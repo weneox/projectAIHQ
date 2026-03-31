@@ -75,6 +75,7 @@ import {
 } from "../../../services/workspace/setup/actorApp.js";
 import { auditSetupAction } from "../../../services/workspace/setup/auditApp.js";
 import { discardSetupReviewComposition } from "../../../services/workspace/setup/discardApp.js";
+import { buildSetupStatus } from "../../../services/workspace/setup.js";
 import { registerSetupReadRoutes } from "./setupRoutesReads.js";
 import { registerSetupReviewRoutes } from "./setupRoutesReview.js";
 import { registerSetupImportRoutes } from "./setupRoutesImports.js";

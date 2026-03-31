@@ -41,6 +41,38 @@ function textFromValue(value) {
   return s(value);
 }
 
+function provenanceObservedValue(value = {}) {
+  const item = obj(value);
+  return textFromValue(
+    item.observedValue ||
+      item.observed_value ||
+      item.value ||
+      item.rawValue ||
+      item.raw_value
+  );
+}
+
+function pickObservedFieldValue({
+  row = {},
+  overview = {},
+  fieldProvenance = {},
+  keys = [],
+  fallback = "",
+}) {
+  for (const key of arr(keys)) {
+    const rowValue = s(row?.fieldKey === key ? row?.value : "");
+    if (rowValue) return rowValue;
+
+    const overviewValue = textFromValue(overview?.[key]);
+    if (overviewValue) return overviewValue;
+
+    const provenanceValue = provenanceObservedValue(fieldProvenance?.[key]);
+    if (provenanceValue) return provenanceValue;
+  }
+
+  return textFromValue(fallback);
+}
+
 function normalizeEvidenceEntries(value, fallbackSources = []) {
   const item = obj(value);
   const authorityRank = Number(item.authorityRank || item.authority_rank);
@@ -258,18 +290,32 @@ function buildFieldCards({
   return defs.map((field) => {
     const row = rowMap.get(field.key) || {};
     const provenance = fieldProvenance[field.key] || {};
+    const observedValue = pickObservedFieldValue({
+      row,
+      overview,
+      fieldProvenance,
+      keys:
+        field.key === "companyName"
+          ? ["companyName", "displayName"]
+          : field.key === "language"
+            ? ["language", "mainLanguage", "primaryLanguage"]
+            : field.key === "description"
+              ? ["description", "companySummaryShort", "companySummaryLong", "summaryShort", "summaryLong"]
+              : [field.key],
+      fallback: field.observedValue || row.value,
+    });
     const evidence = normalizeEvidenceEntries(provenance, reviewSources);
     const honesty = describeSetupStudioFieldHonesty({
       fieldKey: field.key,
       fieldConfidence,
-      observedValue: s(field.observedValue || row.value),
+      observedValue,
       evidence,
       warnings: [...arr(draft.reviewFlags), ...arr(draft.warnings)],
     });
 
     return {
       ...field,
-      observedValue: s(field.observedValue || row.value),
+      observedValue,
       needsAttention: !s(field.value),
       honesty,
       evidence:

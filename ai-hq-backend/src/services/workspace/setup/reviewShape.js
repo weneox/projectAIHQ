@@ -1,6 +1,17 @@
 import { sanitizeSetupReviewDraft } from "../import/draft.js";
 import { arr, compactObject, obj, s } from "./utils.js";
 
+function firstObservedValue(source = {}) {
+  return (
+    source?.observedValue ??
+    source?.observed_value ??
+    source?.value ??
+    source?.rawValue ??
+    source?.raw_value ??
+    ""
+  );
+}
+
 function normalizeBundleSources({ session = {}, draft = {}, sources = [] } = {}) {
   const summary = obj(draft?.sourceSummary);
   const imports = arr(summary.imports);
@@ -107,16 +118,29 @@ function normalizeFieldProvenance(draft = {}) {
 
   return Object.fromEntries(
     importantFields
-      .filter((field) => obj(fieldSources[field]).sourceType || obj(fieldSources[field]).sourceUrl)
+      .filter(
+        (field) =>
+          obj(fieldSources[field]).sourceType ||
+          obj(fieldSources[field]).source_type ||
+          obj(fieldSources[field]).sourceUrl ||
+          obj(fieldSources[field]).source_url
+      )
       .map((field) => [
         field,
         compactObject({
-          sourceType: s(fieldSources[field].sourceType),
-          sourceUrl: s(fieldSources[field].sourceUrl),
-          authorityRank: Number(fieldSources[field].authorityRank || 0),
-          label: s(fieldSources[field].sourceLabel || fieldSources[field].sourceType),
-          observedValue: fieldSources[field].observedValue,
-          value: fieldSources[field].observedValue,
+          sourceType: s(fieldSources[field].sourceType || fieldSources[field].source_type),
+          sourceUrl: s(fieldSources[field].sourceUrl || fieldSources[field].source_url),
+          authorityRank: Number(
+            fieldSources[field].authorityRank || fieldSources[field].authority_rank || 0
+          ),
+          label: s(
+            fieldSources[field].sourceLabel ||
+              fieldSources[field].source_label ||
+              fieldSources[field].sourceType ||
+              fieldSources[field].source_type
+          ),
+          observedValue: firstObservedValue(fieldSources[field]),
+          value: firstObservedValue(fieldSources[field]),
         }),
       ])
   );
