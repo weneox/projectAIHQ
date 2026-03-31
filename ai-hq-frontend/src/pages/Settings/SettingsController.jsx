@@ -23,6 +23,7 @@ import Button from "../../components/ui/Button.jsx";
 import Badge from "../../components/ui/Badge.jsx";
 
 import SettingsShell from "../../components/settings/SettingsShell.jsx";
+import ChannelsPanel from "../../components/settings/ChannelsPanel.jsx";
 import AgentsPanel from "../../components/settings/AgentsPanel.jsx";
 import TeamPanel from "../../components/settings/TeamPanel.jsx";
 import SettingsSaveBar from "../../components/settings/SettingsSaveBar.jsx";
@@ -100,6 +101,8 @@ const SETTINGS_SECTION_ALIASES = Object.freeze({
 
   "channel-policies": "channel_policies",
   channel_policies: "channel_policies",
+  channels: "channels",
+  channel: "channels",
 
   locations: "locations",
   contacts: "contacts",
@@ -290,6 +293,8 @@ export default function SettingsController({
 
   const canManageOperational =
     controlPlanePermissions.operationalSettingsWrite.allowed;
+  const canManageChannels =
+    canManageSettings && planCapabilities?.metaChannelConnect?.allowed !== false;
   const canManageAgents =
     canManageSettings && planCapabilities?.agentConfigMutation?.allowed !== false;
 
@@ -400,6 +405,13 @@ export default function SettingsController({
         description: "Per-channel reply behavior rules",
         dirty: !!dirtyMap.channel_policies,
         icon: ListTree,
+      },
+      {
+        key: "channels",
+        label: "Channels",
+        description: "Meta connection state and channel repair access",
+        dirty: !!dirtyMap.channels,
+        icon: RefreshCw,
       },
       {
         key: "locations",
@@ -772,6 +784,9 @@ export default function SettingsController({
             viewerRole={viewerRole}
           />
         );
+
+      case "channels":
+        return <ChannelsPanel canManage={canManageChannels} />;
 
       case "agents":
         return (

@@ -2,8 +2,13 @@ import { defineConfig, mergeConfig } from "vite";
 
 import baseConfig from "./vite.config.js";
 
+const resolvedBaseConfig =
+  typeof baseConfig === "function"
+    ? baseConfig({ command: "serve", mode: "test" })
+    : baseConfig;
+
 export default mergeConfig(
-  baseConfig,
+  resolvedBaseConfig,
   defineConfig({
     test: {
       include: [

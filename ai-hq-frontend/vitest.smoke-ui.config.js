@@ -6,8 +6,13 @@ const routerMockPath = fileURLToPath(
   new URL("./src/test/react-router-dom.smoke-mock.jsx", import.meta.url)
 );
 
+const resolvedBaseConfig =
+  typeof baseConfig === "function"
+    ? baseConfig({ command: "serve", mode: "test" })
+    : baseConfig;
+
 export default mergeConfig(
-  baseConfig,
+  resolvedBaseConfig,
   defineConfig({
     resolve: {
       alias: {
