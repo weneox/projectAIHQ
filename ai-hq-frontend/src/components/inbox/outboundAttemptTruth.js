@@ -2,6 +2,62 @@ function s(value) {
   return String(value ?? "").trim();
 }
 
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function stableSerialize(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableSerialize(item)).join(",")}]`;
+  }
+
+  if (isPlainObject(value)) {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`)
+      .join(",")}}`;
+  }
+
+  return JSON.stringify(value ?? null);
+}
+
+function collectCorrelationLookupKeys(value, prefix = "") {
+  const keys = [];
+  const push = (candidate) => {
+    const normalized = s(candidate);
+    if (normalized && !keys.includes(normalized)) keys.push(normalized);
+  };
+
+  if (value == null) return keys;
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    push(prefix ? `${prefix}:${value}` : value);
+    if (prefix) push(value);
+    return keys;
+  }
+
+  if (Array.isArray(value)) {
+    push(stableSerialize(value));
+    value.forEach((item, index) => {
+      collectCorrelationLookupKeys(item, `${prefix || "item"}[${index}]`).forEach(push);
+    });
+    return keys;
+  }
+
+  if (isPlainObject(value)) {
+    push(stableSerialize(value));
+    Object.entries(value).forEach(([key, nested]) => {
+      collectCorrelationLookupKeys(nested, key).forEach(push);
+    });
+  }
+
+  return keys;
+}
+
+function getCorrelationLookupKeys(value) {
+  return collectCorrelationLookupKeys(value);
+}
+
 function toTimestamp(value) {
   if (!value) return 0;
   const stamp = new Date(value).getTime();
@@ -24,13 +80,19 @@ function getAttemptTimestamp(attempt = {}) {
 }
 
 export function getMessageAttemptCorrelation(message = {}) {
-  return s(
-    message?.outbound_attempt_correlation ?? message?.outboundAttemptCorrelation
+  return (
+    getCorrelationLookupKeys(
+      message?.outbound_attempt_correlation ?? message?.outboundAttemptCorrelation
+    )[0] || ""
   );
 }
 
 export function getAttemptMessageCorrelation(attempt = {}) {
-  return s(attempt?.message_correlation ?? attempt?.messageCorrelation);
+  return (
+    getCorrelationLookupKeys(
+      attempt?.message_correlation ?? attempt?.messageCorrelation
+    )[0] || ""
+  );
 }
 
 function isPreferredAttempt(candidate, current) {
@@ -55,12 +117,17 @@ export function indexAttemptsByMessageCorrelation(attempts = []) {
   const index = new Map();
 
   for (const attempt of Array.isArray(attempts) ? attempts : []) {
-    const correlation = getAttemptMessageCorrelation(attempt);
-    if (!correlation) continue;
-    const current = index.get(correlation);
-    if (!current || isPreferredAttempt(attempt, current)) {
-      index.set(correlation, attempt);
-    }
+    const correlations = getCorrelationLookupKeys(
+      attempt?.message_correlation ?? attempt?.messageCorrelation
+    );
+    if (!correlations.length) continue;
+
+    correlations.forEach((correlation) => {
+      const current = index.get(correlation);
+      if (!current || isPreferredAttempt(attempt, current)) {
+        index.set(correlation, attempt);
+      }
+    });
   }
 
   return index;
@@ -145,11 +212,13 @@ export function getAttemptStatusTone(status) {
 }
 
 export function getMessageOutboundTruth(message = {}, attemptsByCorrelation) {
-  const correlation = getMessageAttemptCorrelation(message);
+  const correlations = getCorrelationLookupKeys(
+    message?.outbound_attempt_correlation ?? message?.outboundAttemptCorrelation
+  );
   const direction = s(message?.direction).toLowerCase();
   if (direction !== "outbound") return null;
 
-  if (!correlation) {
+  if (!correlations.length) {
     return {
       kind: "missing_correlation",
       label: "Authoritative link missing",
@@ -159,7 +228,10 @@ export function getMessageOutboundTruth(message = {}, attemptsByCorrelation) {
     };
   }
 
-  const attempt = attemptsByCorrelation?.get?.(correlation) || null;
+  const attempt =
+    correlations
+      .map((correlation) => attemptsByCorrelation?.get?.(correlation) || null)
+      .find(Boolean) || null;
   if (!attempt) {
     return {
       kind: "awaiting_attempt",

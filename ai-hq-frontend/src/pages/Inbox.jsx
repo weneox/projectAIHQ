@@ -6,6 +6,8 @@ import { useInboxComposerSurface } from "../components/inbox/hooks/useInboxCompo
 import { useInboxThreadListSurface } from "../components/inbox/hooks/useInboxThreadListSurface.js";
 import InboxDetailPanel from "../components/inbox/InboxDetailPanel.jsx";
 import InboxLeadPanel from "../components/inbox/InboxLeadPanel.jsx";
+import RetryQueuePanel from "../components/inbox/RetryQueuePanel.jsx";
+import ThreadOutboundAttemptsPanel from "../components/inbox/ThreadOutboundAttemptsPanel.jsx";
 import InboxThreadListPanel from "../components/inbox/InboxThreadListPanel.jsx";
 import { useThreadOutboundAttemptsSurface } from "../components/inbox/hooks/useThreadOutboundAttemptsSurface.js";
 import SettingsSurfaceBanner from "../components/settings/SettingsSurfaceBanner.jsx";
@@ -196,30 +198,48 @@ export default function Inbox() {
         </div>
 
         <div className="min-h-0 overflow-hidden bg-[#f6f6f7]">
-          <InboxDetailPanel
-            selectedThread={selectedThread}
-            messages={messages}
-            outboundAttempts={threadAttemptSurface.attempts}
-            surface={detailSurface}
-            actionState={actionState}
-            markRead={markRead}
-            assignThread={assignThread}
-            activateHandoff={activateHandoff}
-            setThreadStatus={setThreadStatus}
-            onOpenDetails={() => setDetailOpen(true)}
-            composer={
-              <InboxComposer
-                embedded
-                selectedThread={selectedThread}
-                surface={composerSurface}
-                actionState={actionState}
-                replyText={replyText}
-                setReplyText={setReplyText}
-                onSend={handleSend}
-                onReleaseHandoff={handleRelease}
-              />
-            }
-          />
+          <div className="grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto]">
+            <InboxDetailPanel
+              selectedThread={selectedThread}
+              messages={messages}
+              outboundAttempts={threadAttemptSurface.attempts}
+              surface={detailSurface}
+              actionState={actionState}
+              markRead={markRead}
+              assignThread={assignThread}
+              activateHandoff={activateHandoff}
+              setThreadStatus={setThreadStatus}
+              onOpenDetails={() => setDetailOpen(true)}
+              composer={
+                <InboxComposer
+                  embedded
+                  selectedThread={selectedThread}
+                  surface={composerSurface}
+                  actionState={actionState}
+                  replyText={replyText}
+                  setReplyText={setReplyText}
+                  onSend={handleSend}
+                  onReleaseHandoff={handleRelease}
+                />
+              }
+            />
+
+            <div className="border-t border-slate-200/80 bg-[#e9edf2] px-4 py-4">
+              <div className="grid gap-4 xl:grid-cols-2">
+                <ThreadOutboundAttemptsPanel
+                  selectedThread={selectedThread}
+                  actor={operatorName || "operator"}
+                  attemptsSurface={threadAttemptSurface}
+                  compact
+                />
+                <RetryQueuePanel
+                  tenantKey={tenantKey}
+                  actor={operatorName || "operator"}
+                  compact
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         <div
