@@ -43,16 +43,25 @@ describe("InboxThreadListPanel", () => {
     expect(
       screen.getByText(/requested inbox thread is no longer available/i)
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /all 2/i })).toHaveAttribute(
+    expect(screen.getByRole("heading", { name: /neox\.az/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /primary/i })).toHaveAttribute(
       "aria-pressed",
       "true"
     );
-    expect(screen.getByRole("button", { name: /assigned 1/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /mentions 3/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /drafts 4/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /general/i })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+    expect(screen.getByRole("button", { name: /requests/i })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+    expect(screen.getByRole("button", { name: /switch inbox view/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open compose options/i })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /search conversations/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /drafts 4/i }));
-    expect(setFilter).toHaveBeenCalledWith("resolved");
+    fireEvent.click(screen.getByRole("button", { name: /requests/i }));
+    expect(setFilter).toHaveBeenCalledWith("handoff");
 
     fireEvent.click(screen.getByRole("button", { name: /blair/i }));
     expect(openThread).toHaveBeenCalledWith(

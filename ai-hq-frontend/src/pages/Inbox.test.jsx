@@ -214,6 +214,6 @@ describe("Inbox", () => {
       screen.getByText(/thread-first triage on the left/i)
     ).toBeInTheDocument();
     expect(screen.getByText(/fallback mode/i)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /all conversations/i })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /neox\.az/i })).toBeInTheDocument();
   });
 });

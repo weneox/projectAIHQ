@@ -9,6 +9,7 @@ describe("InboxDetailPanel", () => {
     const assignThread = vi.fn();
     const activateHandoff = vi.fn();
     const setThreadStatus = vi.fn();
+    const onOpenDetails = vi.fn();
 
     render(
       <InboxDetailPanel
@@ -56,30 +57,34 @@ describe("InboxDetailPanel", () => {
         assignThread={assignThread}
         activateHandoff={activateHandoff}
         setThreadStatus={setThreadStatus}
+        onOpenDetails={onOpenDetails}
         composer={<div>Composer slot</div>}
       />
     );
 
     expect(screen.getByText(/thread assigned/i)).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /mark conversation read/i })
-    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /refresh conversation/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open conversation details/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open detail drawer/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /conversation actions/i })).toBeInTheDocument();
     expect(screen.getByText(/composer slot/i)).toBeInTheDocument();
     expect(screen.getAllByText(/failed/i).length).toBeGreaterThan(0);
     expect(
       screen.getByText(/most recent delivery attempt failed on attempt 1 of 3/i)
     ).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: /open conversation details/i }));
+    fireEvent.click(screen.getByRole("button", { name: /open detail drawer/i }));
     fireEvent.click(screen.getByRole("button", { name: /conversation actions/i }));
+    expect(screen.getByRole("button", { name: /mark as read/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^assign$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /activate handoff/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^resolve$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^close$/i })).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("button", { name: /mark as read/i }));
+    fireEvent.click(screen.getByRole("button", { name: /conversation actions/i }));
     fireEvent.click(screen.getByRole("button", { name: /^assign$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /mark conversation read/i }));
     fireEvent.click(screen.getByRole("button", { name: /conversation actions/i }));
     fireEvent.click(screen.getByRole("button", { name: /activate handoff/i }));
     fireEvent.click(screen.getByRole("button", { name: /conversation actions/i }));
@@ -92,5 +97,6 @@ describe("InboxDetailPanel", () => {
     expect(activateHandoff).toHaveBeenCalledWith("thread-1");
     expect(setThreadStatus).toHaveBeenCalledWith("thread-1", "resolved");
     expect(setThreadStatus).toHaveBeenCalledWith("thread-1", "closed");
+    expect(onOpenDetails).toHaveBeenCalledTimes(2);
   });
 });
