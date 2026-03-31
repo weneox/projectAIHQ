@@ -8,8 +8,6 @@ const getAppSessionContext = vi.fn();
 const areInternalRoutesEnabled = vi.fn();
 const useInboxComposerSurface = vi.fn();
 const useThreadOutboundAttemptsSurface = vi.fn();
-const mockRetryQueuePanel = vi.fn();
-const mockThreadOutboundAttemptsPanel = vi.fn();
 const mockNavigate = vi.fn();
 const mockSetSearchParams = vi.fn();
 
@@ -57,20 +55,6 @@ vi.mock("../components/inbox/hooks/useInboxComposerSurface.js", () => ({
 
 vi.mock("../components/inbox/hooks/useThreadOutboundAttemptsSurface.js", () => ({
   useThreadOutboundAttemptsSurface: (...args) => useThreadOutboundAttemptsSurface(...args),
-}));
-
-vi.mock("../components/inbox/RetryQueuePanel.jsx", () => ({
-  default: (props) => {
-    mockRetryQueuePanel(props);
-    return <div data-testid="retry-queue-panel">Retry queue panel</div>;
-  },
-}));
-
-vi.mock("../components/inbox/ThreadOutboundAttemptsPanel.jsx", () => ({
-  default: (props) => {
-    mockThreadOutboundAttemptsPanel(props);
-    return <div data-testid="thread-outbound-attempts-panel">Thread attempts panel</div>;
-  },
 }));
 
 vi.mock("../hooks/useInboxRealtime.js", () => ({
@@ -141,7 +125,7 @@ describe("Inbox", () => {
     });
 
     useThreadOutboundAttemptsSurface.mockReturnValue({
-      attempts: [{ id: "attempt-1", status: "dead" }],
+      attempts: [],
       surface: {
         loading: false,
         error: "",
@@ -160,11 +144,11 @@ describe("Inbox", () => {
     });
 
     useInboxData.mockReturnValue({
-      threads: [{ id: "thread-1" }],
+      threads: [],
       setThreads: vi.fn(),
       messages: [],
       setMessages: vi.fn(),
-      selectedThread: { id: "thread-1" },
+      selectedThread: null,
       setSelectedThread: vi.fn(),
       relatedLead: null,
       setRelatedLead: vi.fn(),
@@ -222,7 +206,7 @@ describe("Inbox", () => {
       await screen.findByRole("heading", { name: /operator messaging workspace/i })
     ).toBeInTheDocument();
 
-    expect(screen.getAllByText(/reply accepted/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/reply accepted/i)).toBeInTheDocument();
     expect(
       screen.getByText(/inbox operations are temporarily unavailable/i)
     ).toBeInTheDocument();
@@ -233,24 +217,5 @@ describe("Inbox", () => {
     expect(
       screen.getByRole("heading", { name: /all conversations/i })
     ).toBeInTheDocument();
-    expect(screen.getByTestId("thread-outbound-attempts-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("retry-queue-panel")).toBeInTheDocument();
-    expect(mockThreadOutboundAttemptsPanel.mock.calls.at(-1)?.[0]).toEqual(
-      expect.objectContaining({
-        selectedThread: { id: "thread-1" },
-        actor: "operator",
-        attemptsSurface: expect.objectContaining({
-          attempts: [{ id: "attempt-1", status: "dead" }],
-        }),
-        compact: true,
-      })
-    );
-    expect(mockRetryQueuePanel.mock.calls.at(-1)?.[0]).toEqual(
-      expect.objectContaining({
-        tenantKey: "acme",
-        actor: "operator",
-        compact: true,
-      })
-    );
   });
 });

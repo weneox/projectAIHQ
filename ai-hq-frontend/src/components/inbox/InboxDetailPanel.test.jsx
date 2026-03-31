@@ -28,10 +28,7 @@ describe("InboxDetailPanel", () => {
             sender_type: "agent",
             text: "Your appointment request is on the way.",
             sent_at: "2026-03-29T08:00:00.000Z",
-            outbound_attempt_correlation: {
-              message_id: "msg-1",
-              type: "outbound_attempt",
-            },
+            outbound_attempt_correlation: "corr-1",
           },
         ]}
         outboundAttempts={[
@@ -42,10 +39,7 @@ describe("InboxDetailPanel", () => {
             max_attempts: 3,
             provider: "meta",
             updated_at: "2026-03-29T08:05:00.000Z",
-            message_correlation: {
-              type: "outbound_attempt",
-              message_id: "msg-1",
-            },
+            message_correlation: "corr-1",
           },
         ]}
         surface={{

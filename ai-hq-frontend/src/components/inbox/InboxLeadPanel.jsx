@@ -214,8 +214,8 @@ function IdentityCard({ selectedThread, relatedLead, owner, wsState }) {
           <InfoRow label="Owner" value={owner} valueTone="strong" />
           <div className="border-t border-slate-200/70" />
           <InfoRow
-            label="Operator realtime socket"
-            value={wsState ? `Socket ${wsState}` : "Socket status unknown"}
+            label="Realtime"
+            value={wsState ? `Realtime ${wsState}` : "Connected"}
           />
         </div>
       </div>
