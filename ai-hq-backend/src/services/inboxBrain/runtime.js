@@ -490,7 +490,63 @@ export function getRuntimeFactory() {
   return nestedCandidates[0] || null;
 }
 
-export function normalizeRuntimeResult(rawRuntime, fallback) {
+function buildStrictRuntimeFallback({ tenantKey, threadState = null } = {}) {
+  return {
+    tenantKey: getResolvedTenantKey(tenantKey),
+    tenant: null,
+    profile: {},
+    aiPolicy: {},
+    threadState: threadState || null,
+    displayName: "",
+    industry: "generic_business",
+    businessSummary: "",
+    businessType: "",
+    niche: "",
+    subNiche: "",
+    serviceCatalog: [],
+    knowledgeEntries: [],
+    responsePlaybooks: [],
+    services: [],
+    disabledServices: [],
+    languages: [],
+    tone: "",
+    toneProfile: "",
+    maxSentences: 2,
+    leadPrompts: [],
+    forbiddenClaims: [],
+    conversionGoal: "",
+    primaryCta: "",
+    leadQualificationMode: "",
+    qualificationQuestions: [],
+    bookingFlowType: "",
+    handoffTriggers: [],
+    disallowedClaims: [],
+    behavior: {},
+    channelBehavior: {},
+    urgentKeywords: [],
+    pricingKeywords: [],
+    humanKeywords: [],
+    supportKeywords: [],
+  };
+}
+
+function assertAuthoritativeRuntimeTenant(runtime, tenantKey) {
+  const container = obj(runtime?.runtime || runtime?.data || runtime);
+  const tenant = obj(container?.tenant);
+  if (tenant?.id || tenant?.tenant_key) return tenant;
+
+  throw createRuntimeAuthorityError({
+    mode: "strict",
+    tenantKey: getResolvedTenantKey(tenantKey),
+    reasonCode: "runtime_projection_missing",
+    reason: "runtime_projection_missing",
+    message:
+      "Approved runtime authority is unavailable because no authoritative tenant payload was returned.",
+  });
+}
+
+export function normalizeRuntimeResult(rawRuntime, fallback, options = {}) {
+  const strictAuthority = options?.strictAuthority === true;
   const container = obj(rawRuntime?.runtime || rawRuntime?.data || rawRuntime);
   const rawTenant = obj(container.tenant);
   const rawProfile = obj(container.profile);
@@ -524,17 +580,23 @@ export function normalizeRuntimeResult(rawRuntime, fallback) {
 
   const normalizedCatalog = rawServiceCatalog.length
     ? rawServiceCatalog.map(normalizeServiceEntry).filter((x) => x.name)
-    : arr(fallback.serviceCatalog);
+    : strictAuthority
+      ? []
+      : arr(fallback.serviceCatalog);
 
   const normalizedKnowledge = rawKnowledgeEntries.length
     ? rawKnowledgeEntries
         .map(normalizeKnowledgeEntry)
         .filter((x) => x.active && (x.title || x.answer))
-    : arr(fallback.knowledgeEntries);
+    : strictAuthority
+      ? []
+      : arr(fallback.knowledgeEntries);
 
   const normalizedPlaybooks = rawPlaybooks.length
     ? rawPlaybooks.map(normalizePlaybook).filter((x) => x.active)
-    : arr(fallback.responsePlaybooks);
+    : strictAuthority
+      ? []
+      : arr(fallback.responsePlaybooks);
 
   const activeVisibleServices = normalizedCatalog.filter((x) => x.active && x.visibleInAi);
   const disabledVisibleServices = normalizedCatalog.filter((x) => !x.active && x.visibleInAi);
@@ -562,16 +624,30 @@ export function normalizeRuntimeResult(rawRuntime, fallback) {
   const forbiddenClaims = uniqStrings([
     ...(arr(container.forbiddenClaims).length
       ? container.forbiddenClaims
-      : arr(fallback.forbiddenClaims)),
+      : strictAuthority
+        ? []
+        : arr(fallback.forbiddenClaims)),
     ...disallowedClaims,
   ]);
 
   return {
     ...fallback,
     ...container,
-    tenant: Object.keys(rawTenant).length ? { ...obj(fallback.tenant), ...rawTenant } : fallback.tenant,
-    profile: Object.keys(rawProfile).length ? { ...obj(fallback.profile), ...rawProfile } : fallback.profile,
-    aiPolicy: Object.keys(rawAiPolicy).length ? { ...obj(fallback.aiPolicy), ...rawAiPolicy } : fallback.aiPolicy,
+    tenant: Object.keys(rawTenant).length
+      ? strictAuthority
+        ? rawTenant
+        : { ...obj(fallback.tenant), ...rawTenant }
+      : fallback.tenant,
+    profile: Object.keys(rawProfile).length
+      ? strictAuthority
+        ? rawProfile
+        : { ...obj(fallback.profile), ...rawProfile }
+      : fallback.profile,
+    aiPolicy: Object.keys(rawAiPolicy).length
+      ? strictAuthority
+        ? rawAiPolicy
+        : { ...obj(fallback.aiPolicy), ...rawAiPolicy }
+      : fallback.aiPolicy,
     threadState: Object.keys(rawThreadState).length ? rawThreadState : fallback.threadState,
     displayName:
       s(container.displayName) ||
@@ -610,10 +686,28 @@ export function normalizeRuntimeResult(rawRuntime, fallback) {
     serviceCatalog: normalizedCatalog,
     knowledgeEntries: normalizedKnowledge,
     responsePlaybooks: normalizedPlaybooks,
-    services: services.length ? services : arr(fallback.services),
-    disabledServices: disabledServices.length ? disabledServices : arr(fallback.disabledServices),
-    languages: uniqStrings(arr(container.languages).length ? container.languages : arr(fallback.languages)),
-    tone: s(container.tone || container.toneText || fallback.tone),
+    services: services.length ? services : strictAuthority ? [] : arr(fallback.services),
+    disabledServices: disabledServices.length
+      ? disabledServices
+      : strictAuthority
+        ? []
+        : arr(fallback.disabledServices),
+    languages: uniqStrings(
+      arr(container.languages).length
+        ? container.languages
+        : strictAuthority
+          ? [
+              ...arr(rawTenant.supported_languages),
+              ...arr(rawTenant.enabled_languages),
+              s(rawTenant.default_language),
+            ].filter(Boolean)
+          : arr(fallback.languages)
+    ),
+    tone: s(
+      container.tone ||
+        container.toneText ||
+        (strictAuthority ? rawProfile.tone_of_voice : fallback.tone)
+    ),
     toneProfile: s(
       container.toneProfile ||
         container.tone_profile ||
@@ -657,7 +751,9 @@ export function normalizeRuntimeResult(rawRuntime, fallback) {
             ? rawBehavior.qualificationQuestions
             : arr(rawBehavior.qualification_questions).length
               ? rawBehavior.qualification_questions
-              : arr(fallback.qualificationQuestions)
+              : strictAuthority
+                ? []
+                : arr(fallback.qualificationQuestions)
     ),
     bookingFlowType: s(
       container.bookingFlowType ||
@@ -675,7 +771,9 @@ export function normalizeRuntimeResult(rawRuntime, fallback) {
             ? rawBehavior.handoffTriggers
             : arr(rawBehavior.handoff_triggers).length
               ? rawBehavior.handoff_triggers
-              : arr(fallback.handoffTriggers)
+              : strictAuthority
+                ? []
+                : arr(fallback.handoffTriggers)
     ),
     disallowedClaims,
     behavior: Object.keys(rawBehavior).length ? rawBehavior : obj(fallback.behavior),
@@ -683,16 +781,32 @@ export function normalizeRuntimeResult(rawRuntime, fallback) {
       ? rawChannelBehavior
       : obj(fallback.channelBehavior),
     urgentKeywords: uniqStrings(
-      arr(container.urgentKeywords).length ? container.urgentKeywords : arr(fallback.urgentKeywords)
+      arr(container.urgentKeywords).length
+        ? container.urgentKeywords
+        : strictAuthority
+          ? []
+          : arr(fallback.urgentKeywords)
     ),
     pricingKeywords: uniqStrings(
-      arr(container.pricingKeywords).length ? container.pricingKeywords : arr(fallback.pricingKeywords)
+      arr(container.pricingKeywords).length
+        ? container.pricingKeywords
+        : strictAuthority
+          ? []
+          : arr(fallback.pricingKeywords)
     ),
     humanKeywords: uniqStrings(
-      arr(container.humanKeywords).length ? container.humanKeywords : arr(fallback.humanKeywords)
+      arr(container.humanKeywords).length
+        ? container.humanKeywords
+        : strictAuthority
+          ? []
+          : arr(fallback.humanKeywords)
     ),
     supportKeywords: uniqStrings(
-      arr(container.supportKeywords).length ? container.supportKeywords : arr(fallback.supportKeywords)
+      arr(container.supportKeywords).length
+        ? container.supportKeywords
+        : strictAuthority
+          ? []
+          : arr(fallback.supportKeywords)
     ),
   };
 }
@@ -715,20 +829,14 @@ export async function resolveInboxRuntime({
   runtime = null,
 }) {
   const resolvedTenantKey = getResolvedTenantKey(tenantKey);
-  const fallbackProfile = getTenantBusinessProfile(tenant, tenantKey, services);
-
-  const fallback = {
-    ...fallbackProfile,
-    tenant,
-    tenantKey: getResolvedTenantKey(tenantKey),
-    serviceCatalog: arr(fallbackProfile.serviceCatalog),
-    knowledgeEntries: arr(knowledgeEntries).map(normalizeKnowledgeEntry).filter((x) => x.active && (x.title || x.answer)),
-    responsePlaybooks: arr(responsePlaybooks).map(normalizePlaybook).filter((x) => x.active),
-    threadState: threadState || null,
-  };
+  const fallback = buildStrictRuntimeFallback({
+    tenantKey: resolvedTenantKey,
+    threadState,
+  });
 
   if (runtime && typeof runtime === "object") {
-    return normalizeRuntimeResult(runtime, fallback);
+    assertAuthoritativeRuntimeTenant(runtime, resolvedTenantKey);
+    return normalizeRuntimeResult(runtime, fallback, { strictAuthority: true });
   }
 
   const runtimeFactory = getRuntimeFactory();
@@ -761,7 +869,8 @@ export async function resolveInboxRuntime({
       conversationContext,
     });
 
-    return normalizeRuntimeResult(produced, fallback);
+    assertAuthoritativeRuntimeTenant(produced, resolvedTenantKey);
+    return normalizeRuntimeResult(produced, fallback, { strictAuthority: true });
   } catch (error) {
     if (isRuntimeAuthorityError(error)) {
       throw error;

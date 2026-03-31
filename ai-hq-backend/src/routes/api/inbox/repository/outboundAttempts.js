@@ -55,9 +55,18 @@ export async function createOutboundAttempt({
   return toAttempt(result.rows?.[0] || null);
 }
 
-export async function getOutboundAttemptById(db, attemptId) {
+export async function getOutboundAttemptById(db, attemptId, tenantKey = "") {
   if (!isDbReady(db)) return null;
   if (!attemptId || !isUuid(attemptId)) return null;
+
+  const resolvedTenantKey = resolveTenantKey(tenantKey);
+  const values = [attemptId];
+  let where = `where id = $1::uuid`;
+
+  if (resolvedTenantKey) {
+    values.push(resolvedTenantKey);
+    where += ` and tenant_key = $2::text`;
+  }
 
   const result = await db.query(
     `
@@ -67,10 +76,10 @@ export async function getOutboundAttemptById(db, attemptId) {
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
       last_error, last_error_code, created_at, updated_at
     from inbox_outbound_attempts
-    where id = $1::uuid
+    ${where}
     limit 1
     `,
-    [attemptId]
+    values
   );
 
   return toAttempt(result.rows?.[0] || null);
@@ -193,9 +202,20 @@ export async function listOutboundAttemptCorrelationsByMessageIds(
   return correlations;
 }
 
-export async function listOutboundAttemptsByThread(db, threadId, limit = 100) {
+export async function listOutboundAttemptsByThread(db, threadId, limit = 100, tenantKey = "") {
   if (!isDbReady(db)) return [];
   if (!threadId || !isUuid(threadId)) return [];
+
+  const resolvedTenantKey = resolveTenantKey(tenantKey);
+  const values = [threadId];
+  let where = `where a.thread_id = $1::uuid`;
+
+  if (resolvedTenantKey) {
+    values.push(resolvedTenantKey);
+    where += ` and a.tenant_key = $2::text`;
+  }
+
+  values.push(Number(limit || 100));
 
   const result = await db.query(
     `
@@ -207,11 +227,11 @@ export async function listOutboundAttemptsByThread(db, threadId, limit = 100) {
       m.text as message_text, m.sender_type, m.message_type
     from inbox_outbound_attempts a
     left join inbox_messages m on m.id = a.message_id
-    where a.thread_id = $1::uuid
+    ${where}
     order by a.created_at desc
-    limit $2::int
+    limit $${values.length}::int
     `,
-    [threadId, Number(limit || 100)]
+    values
   );
 
   return (result.rows || []).map((row) => ({
@@ -245,9 +265,18 @@ export async function listRetryableOutboundAttempts(db, limit = 50) {
   return (result.rows || []).map(toAttempt);
 }
 
-export async function markOutboundAttemptSending(db, attemptId) {
+export async function markOutboundAttemptSending(db, attemptId, tenantKey = "") {
   if (!isDbReady(db)) return null;
   if (!attemptId || !isUuid(attemptId)) return null;
+
+  const resolvedTenantKey = resolveTenantKey(tenantKey);
+  const values = [attemptId];
+  let where = `where id = $1::uuid`;
+
+  if (resolvedTenantKey) {
+    values.push(resolvedTenantKey);
+    where += ` and tenant_key = $2::text`;
+  }
 
   const result = await db.query(
     `
@@ -259,7 +288,7 @@ export async function markOutboundAttemptSending(db, attemptId) {
       last_attempt_at = now(),
       next_retry_at = null,
       updated_at = now()
-    where id = $1::uuid
+    ${where}
       and status in ('queued','failed','retrying')
       and coalesce(attempt_count, 0) < coalesce(max_attempts, 5)
     returning
@@ -268,7 +297,7 @@ export async function markOutboundAttemptSending(db, attemptId) {
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
       last_error, last_error_code, created_at, updated_at
     `,
-    [attemptId]
+    values
   );
 
   return toAttempt(result.rows?.[0] || null);
@@ -277,11 +306,21 @@ export async function markOutboundAttemptSending(db, attemptId) {
 export async function markOutboundAttemptSent({
   db,
   attemptId,
+  tenantKey = "",
   providerMessageId = null,
   providerResponse = {},
 }) {
   if (!isDbReady(db)) return null;
   if (!attemptId || !isUuid(attemptId)) return null;
+
+  const resolvedTenantKey = resolveTenantKey(tenantKey);
+  const values = [attemptId, providerMessageId, JSON.stringify(providerResponse || {})];
+  let where = `where id = $1::uuid`;
+
+  if (resolvedTenantKey) {
+    values.push(resolvedTenantKey);
+    where += ` and tenant_key = $4::text`;
+  }
 
   const result = await db.query(
     `
@@ -295,7 +334,7 @@ export async function markOutboundAttemptSent({
       last_error = null,
       last_error_code = null,
       updated_at = now()
-    where id = $1::uuid
+    ${where}
       and status in ('queued','sending','failed','retrying')
     returning
       id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
@@ -303,7 +342,7 @@ export async function markOutboundAttemptSent({
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
       last_error, last_error_code, created_at, updated_at
     `,
-    [attemptId, providerMessageId, JSON.stringify(providerResponse || {})]
+    values
   );
 
   return toAttempt(result.rows?.[0] || null);
@@ -312,6 +351,7 @@ export async function markOutboundAttemptSent({
 export async function markOutboundAttemptFailed({
   db,
   attemptId,
+  tenantKey = "",
   error = "send failed",
   errorCode = "",
   providerResponse = {},
@@ -320,13 +360,29 @@ export async function markOutboundAttemptFailed({
   if (!isDbReady(db)) return null;
   if (!attemptId || !isUuid(attemptId)) return null;
 
-  const existing = await getOutboundAttemptById(db, attemptId);
+  const resolvedTenantKey = resolveTenantKey(tenantKey);
+  const existing = await getOutboundAttemptById(db, attemptId, resolvedTenantKey);
   if (!existing) return null;
 
   const attempts = Number(existing.attempt_count || 0);
   const maxAttempts = Number(existing.max_attempts || 5);
   const dead = attempts >= maxAttempts;
   const nextStatus = dead ? "dead" : "failed";
+
+  const values = [
+    attemptId,
+    nextStatus,
+    JSON.stringify(providerResponse || {}),
+    String(error || "send failed"),
+    String(errorCode || ""),
+    Number(retryDelaySeconds || 120),
+  ];
+  let where = `where id = $1::uuid`;
+
+  if (resolvedTenantKey) {
+    values.push(resolvedTenantKey);
+    where += ` and tenant_key = $7::text`;
+  }
 
   const result = await db.query(
     `
@@ -341,7 +397,7 @@ export async function markOutboundAttemptFailed({
         else now() + make_interval(secs => $6::int)
       end,
       updated_at = now()
-    where id = $1::uuid
+    ${where}
       and status in ('queued','sending','failed','retrying')
     returning
       id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
@@ -349,14 +405,7 @@ export async function markOutboundAttemptFailed({
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
       last_error, last_error_code, created_at, updated_at
     `,
-    [
-      attemptId,
-      nextStatus,
-      JSON.stringify(providerResponse || {}),
-      String(error || "send failed"),
-      String(errorCode || ""),
-      Number(retryDelaySeconds || 120),
-    ]
+    values
   );
 
   return toAttempt(result.rows?.[0] || null);
@@ -365,10 +414,20 @@ export async function markOutboundAttemptFailed({
 export async function scheduleOutboundRetry({
   db,
   attemptId,
+  tenantKey = "",
   retryDelaySeconds = 120,
 }) {
   if (!isDbReady(db)) return null;
   if (!attemptId || !isUuid(attemptId)) return null;
+
+  const resolvedTenantKey = resolveTenantKey(tenantKey);
+  const values = [attemptId, Number(retryDelaySeconds || 120)];
+  let where = `where id = $1::uuid`;
+
+  if (resolvedTenantKey) {
+    values.push(resolvedTenantKey);
+    where += ` and tenant_key = $3::text`;
+  }
 
   const result = await db.query(
     `
@@ -377,28 +436,37 @@ export async function scheduleOutboundRetry({
       status = 'retrying',
       next_retry_at = now() + make_interval(secs => $2::int),
       updated_at = now()
-    where id = $1::uuid
+    ${where}
     returning
       id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
       provider_message_id, payload, provider_response, status, attempt_count, max_attempts,
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
       last_error, last_error_code, created_at, updated_at
     `,
-    [attemptId, Number(retryDelaySeconds || 120)]
+    values
   );
 
   return toAttempt(result.rows?.[0] || null);
 }
 
-export async function markOutboundAttemptDead(db, attemptId) {
+export async function markOutboundAttemptDead(db, attemptId, tenantKey = "") {
   if (!isDbReady(db)) return null;
   if (!attemptId || !isUuid(attemptId)) return null;
+
+  const resolvedTenantKey = resolveTenantKey(tenantKey);
+  const values = [attemptId];
+  let where = `where id = $1::uuid`;
+
+  if (resolvedTenantKey) {
+    values.push(resolvedTenantKey);
+    where += ` and tenant_key = $2::text`;
+  }
 
   const result = await db.query(
     `
     update inbox_outbound_attempts
     set status = 'dead', next_retry_at = null, updated_at = now()
-    where id = $1::uuid
+    ${where}
       and status in ('queued','sending','failed','retrying')
     returning
       id, message_id, thread_id, tenant_key, channel, provider, recipient_id,
@@ -406,7 +474,7 @@ export async function markOutboundAttemptDead(db, attemptId) {
       queued_at, first_attempt_at, last_attempt_at, next_retry_at, sent_at,
       last_error, last_error_code, created_at, updated_at
     `,
-    [attemptId]
+    values
   );
 
   return toAttempt(result.rows?.[0] || null);

@@ -13,8 +13,7 @@ export function parseIngestRequest(req) {
       s(
         req.body?.externalThreadId ||
           req.body?.threadExternalId ||
-          req.body?.threadId ||
-          req.body?.userId
+          req.body?.threadId
       )
     ) || null;
 

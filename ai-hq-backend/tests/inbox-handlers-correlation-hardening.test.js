@@ -252,6 +252,37 @@ test("thread message reads classify legacy outbound rows without attempts as his
     async query(text, params = []) {
       const sql = String(text || "").toLowerCase();
 
+      if (sql.includes("from inbox_threads") && sql.includes("where id = $1::uuid")) {
+        return {
+          rows: [
+            {
+              id: threadId,
+              tenant_key: "acme",
+              channel: "instagram",
+              external_thread_id: "thread-ext-1",
+              external_user_id: "user-ext-1",
+              external_username: "user1",
+              customer_name: "Customer One",
+              status: "open",
+              last_message_at: "2026-03-20T10:00:00.000Z",
+              last_inbound_at: "2026-03-20T10:00:00.000Z",
+              last_outbound_at: "2026-03-20T10:00:00.000Z",
+              unread_count: 0,
+              assigned_to: null,
+              labels: [],
+              meta: {},
+              handoff_active: false,
+              handoff_reason: "",
+              handoff_priority: "normal",
+              handoff_at: null,
+              handoff_by: null,
+              created_at: "2026-03-20T10:00:00.000Z",
+              updated_at: "2026-03-20T10:00:00.000Z",
+            },
+          ],
+        };
+      }
+
       if (sql.includes("from inbox_messages") && sql.includes("where thread_id = $1::uuid")) {
         return {
           rows: [

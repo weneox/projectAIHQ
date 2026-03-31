@@ -36,6 +36,10 @@ function normalizeObj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
 
+function getScopedTenantKey(req) {
+  return fixText(s(req.auth?.tenantKey || req.user?.tenantKey || "")) || resolveTenantKeyFromReq(req);
+}
+
 const STORED_INBOX_MESSAGE_TYPES = new Set([
   "text",
   "image",
@@ -112,7 +116,7 @@ export function inboxHandlers({ db, wsHub }) {
   const r = express.Router();
 
   r.get("/inbox/threads", async (req, res) => {
-    const tenantKey = resolveTenantKeyFromReq(req);
+    const tenantKey = getScopedTenantKey(req);
     const status = String(req.query?.status || "").trim().toLowerCase();
     const q = fixText(String(req.query?.q || "").trim());
     const handoffOnly = truthy(req.query?.handoffOnly);
@@ -210,6 +214,7 @@ export function inboxHandlers({ db, wsHub }) {
 
   r.get("/inbox/threads/:id", async (req, res) => {
     const threadId = String(req.params.id || "").trim();
+    const tenantKey = getScopedTenantKey(req);
     if (!threadId) return okJson(res, { ok: false, error: "threadId required" });
 
     try {
@@ -221,7 +226,8 @@ export function inboxHandlers({ db, wsHub }) {
         return okJson(res, { ok: false, error: "threadId must be uuid" });
       }
 
-      const row = await getThreadById(db, threadId);
+      const row = await getThreadById(db, threadId, tenantKey);
+      if (!row) return okJson(res, { ok: false, error: "thread not found" });
       return okJson(res, { ok: true, thread: row });
     } catch (e) {
       return okJson(res, {
@@ -234,6 +240,7 @@ export function inboxHandlers({ db, wsHub }) {
 
   r.get("/inbox/threads/:id/messages", async (req, res) => {
     const threadId = String(req.params.id || "").trim();
+    const tenantKey = getScopedTenantKey(req);
     const limit = clamp(toInt(req.query?.limit, 200), 1, 1000);
 
     if (!threadId) return okJson(res, { ok: false, error: "threadId required" });
@@ -250,6 +257,11 @@ export function inboxHandlers({ db, wsHub }) {
 
       if (!isUuid(threadId)) {
         return okJson(res, { ok: false, error: "threadId must be uuid" });
+      }
+
+      const thread = await getThreadById(db, threadId, tenantKey);
+      if (!thread) {
+        return okJson(res, { ok: false, error: "thread not found" });
       }
 
       const result = await db.query(
@@ -269,10 +281,11 @@ export function inboxHandlers({ db, wsHub }) {
           created_at
         from inbox_messages
         where thread_id = $1::uuid
+          and tenant_key = $2::text
         order by sent_at asc, created_at asc
-        limit $2::int
+        limit $3::int
         `,
-        [threadId, limit]
+        [threadId, tenantKey, limit]
       );
 
       const messages = (result.rows || []).map(normalizeMessage);
@@ -298,6 +311,7 @@ export function inboxHandlers({ db, wsHub }) {
 
   r.get("/inbox/threads/:id/outbound-attempts", async (req, res) => {
     const threadId = s(req.params.id);
+    const tenantKey = getScopedTenantKey(req);
     const limit = clamp(toInt(req.query?.limit, 100), 1, 500);
 
     if (!threadId) return okJson(res, { ok: false, error: "threadId required" });
@@ -316,10 +330,10 @@ export function inboxHandlers({ db, wsHub }) {
         return okJson(res, { ok: false, error: "threadId must be uuid" });
       }
 
-      const thread = await getThreadById(db, threadId);
+      const thread = await getThreadById(db, threadId, tenantKey);
       if (!thread) return okJson(res, { ok: false, error: "thread not found" });
 
-      const attempts = await listOutboundAttemptsByThread(db, threadId, limit);
+      const attempts = await listOutboundAttemptsByThread(db, threadId, limit, tenantKey);
 
       return okJson(res, {
         ok: true,
@@ -338,6 +352,7 @@ export function inboxHandlers({ db, wsHub }) {
 
   r.post("/inbox/outbound/:attemptId/resend", async (req, res) => {
     const attemptId = s(req.params.attemptId);
+    const tenantKey = getScopedTenantKey(req);
     const actor = fixText(s(req.body?.actor || "operator")) || "operator";
     const retryDelaySeconds = clamp(toInt(req.body?.retryDelaySeconds, 0), 0, 86400);
 
@@ -352,7 +367,7 @@ export function inboxHandlers({ db, wsHub }) {
         return okJson(res, { ok: false, error: "attemptId must be uuid" });
       }
 
-      const attempt = await getOutboundAttemptById(db, attemptId);
+      const attempt = await getOutboundAttemptById(db, attemptId, tenantKey);
       if (!attempt) return okJson(res, { ok: false, error: "attempt not found" });
 
       if (attempt.status === "sent") {
@@ -374,6 +389,7 @@ export function inboxHandlers({ db, wsHub }) {
       const updated = await scheduleOutboundRetry({
         db,
         attemptId,
+        tenantKey,
         retryDelaySeconds,
       });
 
@@ -418,6 +434,7 @@ export function inboxHandlers({ db, wsHub }) {
 
   r.post("/inbox/outbound/:attemptId/mark-dead", async (req, res) => {
     const attemptId = s(req.params.attemptId);
+    const tenantKey = getScopedTenantKey(req);
     const actor = fixText(s(req.body?.actor || "operator")) || "operator";
 
     if (!attemptId) return okJson(res, { ok: false, error: "attemptId required" });
@@ -431,10 +448,10 @@ export function inboxHandlers({ db, wsHub }) {
         return okJson(res, { ok: false, error: "attemptId must be uuid" });
       }
 
-      const attempt = await getOutboundAttemptById(db, attemptId);
+      const attempt = await getOutboundAttemptById(db, attemptId, tenantKey);
       if (!attempt) return okJson(res, { ok: false, error: "attempt not found" });
 
-      const updated = await markOutboundAttemptDead(db, attemptId);
+      const updated = await markOutboundAttemptDead(db, attemptId, tenantKey);
 
       try {
         await writeAudit(db, {
@@ -475,7 +492,7 @@ export function inboxHandlers({ db, wsHub }) {
   });
 
   r.post("/inbox/threads", async (req, res) => {
-    const tenantKey = resolveTenantKeyFromReq(req);
+    const tenantKey = getScopedTenantKey(req);
     const channel = String(req.body?.channel || "instagram").trim().toLowerCase() || "instagram";
     const externalThreadId = fixText(String(req.body?.externalThreadId || "").trim()) || null;
     const externalUserId = fixText(String(req.body?.externalUserId || "").trim()) || null;
@@ -595,7 +612,7 @@ export function inboxHandlers({ db, wsHub }) {
 
   r.post("/inbox/threads/:id/messages", async (req, res) => {
     const threadId = String(req.params.id || "").trim();
-    const tenantKey = resolveTenantKeyFromReq(req);
+    const tenantKey = getScopedTenantKey(req);
     const direction = String(req.body?.direction || "inbound").trim().toLowerCase() || "inbound";
     const senderType =
       String(req.body?.senderType || "customer").trim().toLowerCase() || "customer";
@@ -624,7 +641,7 @@ export function inboxHandlers({ db, wsHub }) {
         return okJson(res, { ok: false, error: "threadId must be uuid" });
       }
 
-      const existingThread = await getThreadById(db, threadId);
+      const existingThread = await getThreadById(db, threadId, tenantKey);
       if (!existingThread) {
         return okJson(res, { ok: false, error: "thread not found" });
       }
@@ -683,8 +700,9 @@ export function inboxHandlers({ db, wsHub }) {
                 ),
                 updated_at = now()
               where id = $1::uuid
+                and tenant_key = $2::text
               `,
-              [threadId]
+              [threadId, tenantKey]
             );
           }
 
@@ -803,14 +821,15 @@ export function inboxHandlers({ db, wsHub }) {
             end,
             updated_at = now()
           where id = $1::uuid
+            and tenant_key = $4::text
           `,
-          [threadId, direction, releaseHandoff]
+          [threadId, direction, releaseHandoff, tenantKey]
         );
 
         correlatedMessage = withMessageOutboundAttemptCorrelation(message, null);
       }
 
-      const thread = await refreshThread(db, threadId, null);
+      const thread = await refreshThread(db, threadId, null, tenantKey);
 
       try {
         emitRealtimeEvent(wsHub, {
@@ -866,6 +885,7 @@ export function inboxHandlers({ db, wsHub }) {
 
   r.post("/inbox/threads/:id/read", async (req, res) => {
     const threadId = String(req.params.id || "").trim();
+    const tenantKey = getScopedTenantKey(req);
     if (!threadId) return okJson(res, { ok: false, error: "threadId required" });
 
     try {
@@ -877,16 +897,22 @@ export function inboxHandlers({ db, wsHub }) {
         return okJson(res, { ok: false, error: "threadId must be uuid" });
       }
 
+      const existingThread = await getThreadById(db, threadId, tenantKey);
+      if (!existingThread) {
+        return okJson(res, { ok: false, error: "thread not found" });
+      }
+
       await db.query(
         `
         update inbox_threads
         set unread_count = 0, updated_at = now()
         where id = $1::uuid
+          and tenant_key = $2::text
         `,
-        [threadId]
+        [threadId, tenantKey]
       );
 
-      const thread = await refreshThread(db, threadId, null);
+      const thread = await refreshThread(db, threadId, null, tenantKey);
 
       try {
         emitRealtimeEvent(wsHub, {
@@ -930,6 +956,7 @@ export function inboxHandlers({ db, wsHub }) {
 
   r.post("/inbox/threads/:id/assign", async (req, res) => {
     const threadId = s(req.params.id);
+    const tenantKey = getScopedTenantKey(req);
     const assignedTo = fixText(s(req.body?.assignedTo));
     const actor = fixText(s(req.body?.actor || assignedTo || "operator")) || "operator";
 
@@ -951,6 +978,7 @@ export function inboxHandlers({ db, wsHub }) {
           assigned_to = $2::text,
           updated_at = now()
         where id = $1::uuid
+          and tenant_key = $3::text
         returning
           id,
           tenant_key,
@@ -975,7 +1003,7 @@ export function inboxHandlers({ db, wsHub }) {
           created_at,
           updated_at
         `,
-        [threadId, assignedTo]
+        [threadId, assignedTo, tenantKey]
       );
 
       const thread = normalizeThread(updated.rows?.[0] || null);
@@ -1013,6 +1041,7 @@ export function inboxHandlers({ db, wsHub }) {
 
   r.post("/inbox/threads/:id/handoff/activate", async (req, res) => {
     const threadId = s(req.params.id);
+    const tenantKey = getScopedTenantKey(req);
     const actor = fixText(s(req.body?.actor || "operator")) || "operator";
     const assignedTo = fixText(s(req.body?.assignedTo || "")) || "human_handoff";
     const reason = fixText(s(req.body?.reason || "manual_review")) || "manual_review";
@@ -1048,6 +1077,7 @@ export function inboxHandlers({ db, wsHub }) {
           meta = coalesce(meta, '{}'::jsonb) || $6::jsonb,
           updated_at = now()
         where id = $1::uuid
+          and tenant_key = $7::text
         returning
           id,
           tenant_key,
@@ -1087,6 +1117,7 @@ export function inboxHandlers({ db, wsHub }) {
               by: actor,
             },
           }),
+          tenantKey,
         ]
       );
 
@@ -1125,6 +1156,7 @@ export function inboxHandlers({ db, wsHub }) {
 
   r.post("/inbox/threads/:id/handoff/release", async (req, res) => {
     const threadId = s(req.params.id);
+    const tenantKey = getScopedTenantKey(req);
     const actor = fixText(s(req.body?.actor || "operator")) || "operator";
 
     if (!threadId) return okJson(res, { ok: false, error: "threadId required" });
@@ -1149,6 +1181,7 @@ export function inboxHandlers({ db, wsHub }) {
           meta = coalesce(meta, '{}'::jsonb) || '{"handoff":{"active":false,"reason":"","priority":"normal","at":null,"by":null}}'::jsonb,
           updated_at = now()
         where id = $1::uuid
+          and tenant_key = $2::text
         returning
           id,
           tenant_key,
@@ -1173,7 +1206,7 @@ export function inboxHandlers({ db, wsHub }) {
           created_at,
           updated_at
         `,
-        [threadId]
+        [threadId, tenantKey]
       );
 
       const thread = normalizeThread(updated.rows?.[0] || null);
@@ -1211,6 +1244,7 @@ export function inboxHandlers({ db, wsHub }) {
 
   r.post("/inbox/threads/:id/status", async (req, res) => {
     const threadId = s(req.params.id);
+    const tenantKey = getScopedTenantKey(req);
     const actor = fixText(s(req.body?.actor || "operator")) || "operator";
     const status = fixText(s(req.body?.status || "")).toLowerCase();
 
@@ -1237,6 +1271,7 @@ export function inboxHandlers({ db, wsHub }) {
           status = $2::text,
           updated_at = now()
         where id = $1::uuid
+          and tenant_key = $3::text
         returning
           id,
           tenant_key,
@@ -1261,7 +1296,7 @@ export function inboxHandlers({ db, wsHub }) {
           created_at,
           updated_at
         `,
-        [threadId, status]
+        [threadId, status, tenantKey]
       );
 
       const thread = normalizeThread(updated.rows?.[0] || null);
@@ -1298,7 +1333,7 @@ export function inboxHandlers({ db, wsHub }) {
   });
 
   r.get("/inbox/outbound/summary", async (req, res) => {
-    const tenantKey = resolveTenantKeyFromReq(req);
+    const tenantKey = getScopedTenantKey(req);
 
     try {
       if (!isDbReady(db)) {
@@ -1330,7 +1365,7 @@ export function inboxHandlers({ db, wsHub }) {
   });
 
   r.get("/inbox/outbound/failed", async (req, res) => {
-    const tenantKey = resolveTenantKeyFromReq(req);
+    const tenantKey = getScopedTenantKey(req);
     const status = s(req.query?.status || "");
     const limit = clamp(toInt(req.query?.limit, 50), 1, 500);
 

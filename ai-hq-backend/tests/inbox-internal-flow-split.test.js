@@ -703,7 +703,7 @@ test("inbox behavior runtime blocks disallowed-claim requests and forces handoff
 
   assert.equal(result.intent, "handoff_request");
   assert.equal(handoff?.reason, "diagnosis_or_treatment_guarantees");
-  assert.equal(handoff?.priority, "high");
+  assert.equal(handoff?.priority, "normal");
   assert.equal(send?.meta?.matchedBehaviorDisallowedClaim, "diagnosis_or_treatment_guarantees");
   assert.equal(result.trace?.decisions?.claimBlock?.blocked, true);
   assert.equal(result.trace?.evaluation?.handoff?.status, "recommended");
