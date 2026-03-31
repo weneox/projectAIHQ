@@ -104,6 +104,13 @@ function summaryCandidateScore(value = "") {
   if (/\b(bank|company|business|brand|team|services|solutions|digital|platform|customer|branch|office|academy|clinic|shop|store|agency|studio)\b/i.test(x)) {
     score += 5;
   }
+  if (
+    /\b(we help|helps|we provide|provides|we offer|offers|speciali[sz]es in|focuses on|serves|supports)\b/i.test(
+      x
+    )
+  ) {
+    score += 4;
+  }
   if (/[,.;:]/.test(x)) score += 1;
   if ((x.match(/[.!?]/g) || []).length >= 1) score += 2;
   if ((x.match(/[.!?]/g) || []).length > 4) score -= 2;
@@ -131,10 +138,24 @@ function pickBestSummary({
     "about the company",
   ]);
 
+  const serviceWindow = extractTextWindowByKeywords(text, [
+    "services",
+    "solutions",
+    "we help",
+    "helps",
+    "we provide",
+    "provides",
+    "we offer",
+    "offers",
+    "specializes in",
+    "focuses on",
+  ]);
+
   const candidatePool = [
     ...arr(structuredDescriptions),
     metaDescription,
     aboutWindow,
+    serviceWindow,
     ...arr(paragraphs).slice(0, 10),
     ...arr(headings).slice(0, 4),
   ]
@@ -477,7 +498,7 @@ export function analyzePage({ html = "", pageUrl = "" }) {
     .filter((x) => !/(cookie|privacy|policy|terms|conditions|all rights reserved|newsletter|sign in|register)/i.test(x));
 
   const serviceParagraphs = strongParagraphs.filter((x) =>
-    /\b(service|services|solution|solutions|offer|offering|product|products|treatment|package|automation|design|development|consulting|academy|clinic|spa|course|repair|maintenance)\b/i.test(
+    /\b(service|services|solution|solutions|offer|offering|product|products|treatment|package|automation|design|development|consulting|academy|clinic|spa|course|repair|maintenance|speciali[sz]es in|focuses on|helps|provides|bookkeeping|payroll|accounting|tax|vat|fractional cfo|compliance|advisory|legal)\b/i.test(
       x
     )
   );

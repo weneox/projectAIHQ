@@ -340,4 +340,71 @@ describe("ReviewWorkspace", () => {
       screen.getByText(/this value has strong source support, but it should still be confirmed before saving/i)
     ).toBeTruthy();
   });
+
+  it("shows only evidence-backed fields when a weak website scan yields a small useful draft", () => {
+    render(
+      <ReviewWorkspace
+        savingBusiness={false}
+        businessForm={{
+          companyName: "",
+          websiteUrl: "",
+          primaryPhone: "",
+          primaryEmail: "",
+          primaryAddress: "",
+          timezone: "Asia/Baku",
+          language: "en",
+          description: "",
+          behavior: "",
+        }}
+        discoveryProfileRows={[]}
+        manualSections={{ servicesText: "", faqsText: "", policiesText: "" }}
+        onSetBusinessField={vi.fn()}
+        onSetManualSection={vi.fn()}
+        onSaveBusiness={vi.fn()}
+        onClose={vi.fn()}
+        currentReview={{
+          draft: {
+            businessProfile: {
+              companyName: "Harbor Accounting",
+              websiteUrl: "https://harbor.example",
+              primaryPhone: "+442079460958",
+            },
+            warnings: [
+              "limited_page_coverage",
+              "faq_help_content_not_detected",
+            ],
+          },
+          fieldProvenance: {
+            companyName: {
+              label: "Website",
+              observedValue: "Harbor Accounting",
+            },
+            websiteUrl: {
+              label: "Website",
+              observedValue: "https://harbor.example",
+            },
+            primaryPhone: {
+              label: "Website",
+              observedValue: "+442079460958",
+            },
+          },
+          reviewDraftSummary: {
+            warnings: ["limited_page_coverage", "faq_help_content_not_detected"],
+            warningCount: 2,
+          },
+        }}
+        reviewSyncState={{}}
+      />
+    );
+
+    expect(screen.getByText("Company name")).toBeTruthy();
+    expect(screen.getByText("Website URL")).toBeTruthy();
+    expect(screen.getByText("Primary phone")).toBeTruthy();
+    expect(screen.queryByText("Primary email")).toBeNull();
+    expect(screen.queryByText("Primary address")).toBeNull();
+    expect(screen.queryByText("Timezone")).toBeNull();
+    expect(screen.queryByText("Primary language")).toBeNull();
+    expect(screen.queryByText("Short business summary")).toBeNull();
+    expect(screen.queryByText(/faq\/help content/i)).toBeNull();
+  });
 });

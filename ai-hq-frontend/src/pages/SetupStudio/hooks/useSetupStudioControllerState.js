@@ -126,10 +126,8 @@ export function useSetupStudioControllerState() {
   }
 
   function resetBusinessTwinDraftForNewScan(nextSourceUrl = "") {
-    setBusinessForm((prev) => ({
+    setBusinessForm(() => ({
       ...DEFAULT_BUSINESS_FORM,
-      timezone: s(prev.timezone || "Asia/Baku"),
-      language: s(prev.language || "en"),
       websiteUrl: s(nextSourceUrl),
     }));
 
@@ -142,7 +140,8 @@ export function useSetupStudioControllerState() {
     setBusinessForm((prev) =>
       formFromProfile(profile, {
         ...DEFAULT_BUSINESS_FORM,
-        timezone: s(prev.timezone || "Asia/Baku"),
+        timezone: s(prev.timezone),
+        language: s(prev.language),
       })
     );
   }
@@ -257,8 +256,8 @@ export function useSetupStudioControllerState() {
     setBusinessForm((prev) => {
       const localeSeed = {
         ...DEFAULT_BUSINESS_FORM,
-        timezone: s(prev.timezone || "Asia/Baku"),
-        language: s(prev.language || "en"),
+        timezone: s(prev.timezone),
+        language: s(prev.language),
         websiteUrl: s(reviewInfo.sourceUrl),
       };
 

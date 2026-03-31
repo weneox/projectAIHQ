@@ -71,7 +71,7 @@ export function buildSetupStudioHydratedBusinessForm({
 }) {
   const localeSeed = {
     ...DEFAULT_BUSINESS_FORM,
-    timezone: s(baseProfile?.timezone || prev.timezone || "Asia/Baku"),
+    timezone: s(baseProfile?.timezone || prev.timezone),
     language:
       resolveMainLanguageValue(
         baseProfile?.mainLanguage,
@@ -79,7 +79,7 @@ export function buildSetupStudioHydratedBusinessForm({
         baseProfile?.language,
         firstLanguage(baseProfile),
         prev.language
-      ) || "en",
+      ) || "",
     websiteUrl: s(reviewInfo.sourceUrl),
   };
 

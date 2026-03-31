@@ -569,7 +569,7 @@ function extractSummaryOfferingCandidates(raw = "", maxItems = 6) {
   if (!safe || safe.length < 20) return [];
 
   const match = safe.match(
-    /\b(?:offers?|provides?|speciali[sz]es in|focuses on|includes?)\b[:\s-]+(.+)/i
+    /\b(?:offers?|provides?|speciali[sz]es in|focuses on|includes?|helps(?:\s+\w+){0,3}\s+with)\b[:\s-]+(.+)/i
   );
   const candidateSource = cleanInlineText(match?.[1] || safe)
     .replace(/\band\b/gi, ",")
@@ -1712,38 +1712,51 @@ function buildWebsiteExtractionWarnings({
   const warnings = [];
   const pageTypeCounts = obj(extracted.site?.pageTypeCounts);
   const pagesScanned = Number(extracted.site?.pagesScanned || 0);
+  const hasIdentitySignal = !!(
+    profile.companyTitle ||
+    profile.aboutSection ||
+    profile.companySummaryShort ||
+    profile.companySummaryLong
+  );
+  const hasServiceSignal = arr(profile.services).length > 0;
+  const hasDirectContactSignal =
+    arr(profile.emails).length > 0 ||
+    arr(profile.phones).length > 0 ||
+    arr(profile.bookingLinks).length > 0 ||
+    arr(profile.whatsappLinks).length > 0;
+  const hasUsefulDraft =
+    hasIdentitySignal ||
+    hasServiceSignal ||
+    hasDirectContactSignal ||
+    arr(profile.addresses).length > 0 ||
+    arr(profile.socialLinks).length > 0;
 
   warnings.push(...arr(extracted.crawl?.warnings));
   warnings.push(...arr(extracted.site?.quality?.warnings));
   warnings.push(...arr(trust?.warnings));
 
-  if (pagesScanned <= 1) {
+  if (pagesScanned <= 1 && !hasUsefulDraft) {
     warnings.push("website crawl only collected the homepage");
   }
-  if (!profile.companyTitle && !profile.aboutSection) {
+  if (!hasIdentitySignal && !hasDirectContactSignal) {
     warnings.push("website identity extraction is weak");
   }
-  if (!arr(profile.services).length) {
+  if (!hasServiceSignal && !hasIdentitySignal && !hasDirectContactSignal) {
     warnings.push("no strong service signals were extracted from the website");
   }
-  if (
-    !arr(profile.emails).length &&
-    !arr(profile.phones).length &&
-    !arr(profile.bookingLinks).length &&
-    !arr(profile.whatsappLinks).length
-  ) {
+  if (!hasDirectContactSignal) {
     warnings.push("no strong direct contact signals were extracted from the website");
   }
-  if (!pageTypeCounts.about) {
+  if (pagesScanned > 1 && !pageTypeCounts.about && !hasIdentitySignal) {
     warnings.push("about page was not detected during website crawl");
   }
-  if (!pageTypeCounts.contact) {
+  if (pagesScanned > 1 && !pageTypeCounts.contact && !hasDirectContactSignal) {
     warnings.push("contact page was not detected during website crawl");
   }
-  if (!pageTypeCounts.services && !arr(profile.services).length) {
+  if (pagesScanned > 1 && !pageTypeCounts.services && !hasServiceSignal && !hasIdentitySignal) {
     warnings.push("services page was not detected during website crawl");
   }
-  if (!arr(signals.faq?.items).length && !pageTypeCounts.faq) {
+  if (!arr(signals.faq?.items).length && !pageTypeCounts.faq && !hasUsefulDraft) {
     warnings.push("faq/help content was not detected during website crawl");
   }
 

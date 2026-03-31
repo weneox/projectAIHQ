@@ -572,7 +572,6 @@ export function buildSiteRollup(entryPage, allPages, extraWarnings = [], options
     ...pages.flatMap((x) => arr(x.qualityWarnings)),
     ...(contactEmails.length || contactPhones.length ? [] : ["missing_contact_signals"]),
     ...(serviceHints.length ? [] : ["missing_service_signals"]),
-    ...(faqPreview.length ? [] : ["faq_help_content_not_detected"]),
     ...(pages.length >= 2 ? [] : ["limited_page_coverage"]),
     ...arr(extraWarnings),
   ]);

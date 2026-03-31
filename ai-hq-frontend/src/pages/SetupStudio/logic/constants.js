@@ -4,8 +4,8 @@ export const UUID_RE =
 export const DEFAULT_BUSINESS_FORM = {
   companyName: "",
   description: "",
-  timezone: "Asia/Baku",
-  language: "en",
+  timezone: "",
+  language: "",
   websiteUrl: "",
   primaryPhone: "",
   primaryEmail: "",

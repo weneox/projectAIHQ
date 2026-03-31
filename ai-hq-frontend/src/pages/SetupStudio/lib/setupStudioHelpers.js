@@ -114,7 +114,7 @@ export function firstLanguage(profile) {
     return String(p.supported_languages[0]);
   }
 
-  return "az";
+  return "";
 }
 
 export function extractItems(payload) {
@@ -369,11 +369,11 @@ export function mergeBusinessForm(prev, patch = {}) {
     next.description = s(patch.description);
   }
 
-  if (s(patch.timezone) && (!s(prev.timezone) || s(prev.timezone) === "Asia/Baku")) {
+  if (s(patch.timezone) && !s(prev.timezone)) {
     next.timezone = s(patch.timezone);
   }
 
-  if (s(patch.language) && (!s(prev.language) || s(prev.language) === "az")) {
+  if (s(patch.language) && !s(prev.language)) {
     next.language = s(patch.language);
   }
 

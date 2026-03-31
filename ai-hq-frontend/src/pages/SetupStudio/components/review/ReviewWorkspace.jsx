@@ -73,6 +73,26 @@ function pickObservedFieldValue({
   return textFromValue(fallback);
 }
 
+function normalizeFieldValue(fieldKey = "", value = "") {
+  const text = textFromValue(value);
+  if (!text) return "";
+
+  if (fieldKey === "timezone" && /^asia\/baku$/i.test(text)) return "";
+  if (fieldKey === "language" && /^(en|az)$/i.test(text)) return "";
+
+  return text;
+}
+
+function hasMeaningfulFieldValue(fieldKey = "", value = "") {
+  return !!s(normalizeFieldValue(fieldKey, value));
+}
+
+function hasMeaningfulEvidence(evidence = []) {
+  return arr(evidence).some(
+    (item) => s(item?.value) || s(item?.note) || s(item?.url)
+  );
+}
+
 function normalizeEvidenceEntries(value) {
   const item = obj(value);
   const authorityRank = Number(item.authorityRank || item.authority_rank);
@@ -284,47 +304,98 @@ function buildFieldCards({
     },
   ];
 
-  return defs.map((field) => {
-    const row = rowMap.get(field.key) || {};
-    const provenance = fieldProvenance[field.key] || {};
-    const observedValue = pickObservedFieldValue({
-      row,
-      overview,
-      fieldProvenance,
-      keys:
-        field.key === "companyName"
-          ? ["companyName", "displayName"]
-          : field.key === "language"
-            ? ["language", "mainLanguage", "primaryLanguage"]
-            : field.key === "description"
-              ? ["description", "companySummaryShort", "companySummaryLong", "summaryShort", "summaryLong"]
-              : [field.key],
-      fallback: field.observedValue || row.value,
-    });
-    const evidence = normalizeEvidenceEntries(provenance);
-    const honesty = describeSetupStudioFieldHonesty({
-      fieldKey: field.key,
-      fieldConfidence,
-      observedValue,
-      evidence,
-      warnings: [...arr(draft.reviewFlags), ...arr(draft.warnings)],
-    });
-
-    return {
-      ...field,
-      observedValue,
-      needsAttention: !s(field.value),
-      honesty,
-      evidence:
+  return defs
+    .map((field) => {
+      const row = rowMap.get(field.key) || {};
+      const provenance = fieldProvenance[field.key] || {};
+      const observedValue = pickObservedFieldValue({
+        row,
+        overview,
+        fieldProvenance,
+        keys:
+          field.key === "companyName"
+            ? ["companyName", "displayName"]
+            : field.key === "language"
+              ? ["language", "mainLanguage", "primaryLanguage"]
+              : field.key === "description"
+                ? [
+                    "description",
+                    "companySummaryShort",
+                    "companySummaryLong",
+                    "summaryShort",
+                    "summaryLong",
+                  ]
+                : [field.key],
+        fallback: field.observedValue || row.value,
+      });
+      const evidence = normalizeEvidenceEntries(provenance);
+      const draftValue = normalizeFieldValue(field.key, field.value);
+      const normalizedObservedValue = normalizeFieldValue(field.key, observedValue);
+      const fallbackEvidence =
         evidence.length > 0
           ? evidence
           : normalizeEvidenceEntries({
               label: s(row.label),
               value: s(row.value),
               note: s(row.provenance),
-            }),
-    };
-  });
+            });
+      const honesty = describeSetupStudioFieldHonesty({
+        fieldKey: field.key,
+        fieldConfidence,
+        observedValue: normalizedObservedValue,
+        evidence: fallbackEvidence,
+        warnings: [...arr(draft.reviewFlags), ...arr(draft.warnings)],
+      });
+      const hasDraftValue = hasMeaningfulFieldValue(field.key, draftValue);
+      const hasObservedValue = hasMeaningfulFieldValue(
+        field.key,
+        normalizedObservedValue
+      );
+      const hasEvidence = hasMeaningfulEvidence(fallbackEvidence);
+      const showCard = hasDraftValue || hasObservedValue || hasEvidence;
+
+      return {
+        ...field,
+        value: draftValue,
+        observedValue: normalizedObservedValue,
+        needsAttention: !hasDraftValue && (hasObservedValue || hasEvidence),
+        showCard,
+        honesty,
+        evidence: fallbackEvidence,
+      };
+    })
+    .filter((field) => field.showCard);
+}
+
+const LOW_SIGNAL_ISSUE_PATTERNS = [
+  /faq\/help content was not detected/i,
+  /faq_help_content_not_detected/i,
+  /about page was not detected/i,
+  /contact page was not detected/i,
+  /services page was not detected/i,
+  /missing_contact_signals/i,
+  /missing_service_signals/i,
+  /limited_page_coverage/i,
+];
+
+function buildVisibleIssues({ draft = {}, fieldCards = [] }) {
+  const allIssues = [
+    ...arr(draft.reviewFlags).map((item) => humanizeStudioIssue(item)),
+    ...arr(draft.warnings).map((item) => humanizeStudioIssue(item)),
+  ]
+    .filter(Boolean)
+    .filter((item, index, list) => list.indexOf(item) === index);
+
+  if (!allIssues.length) return [];
+
+  const hasDetectedSurface = fieldCards.length > 0;
+  if (!hasDetectedSurface) return allIssues.slice(0, 4);
+
+  const prioritized = allIssues.filter(
+    (item) => !LOW_SIGNAL_ISSUE_PATTERNS.some((pattern) => pattern.test(item))
+  );
+
+  return (prioritized.length ? prioritized : allIssues.slice(0, 2)).slice(0, 4);
 }
 
 export default function ReviewWorkspace({
@@ -359,13 +430,7 @@ export default function ReviewWorkspace({
     reviewProjection: draft,
   });
 
-  const issues = [
-    ...arr(draft.reviewFlags).map((item) => humanizeStudioIssue(item)),
-    ...arr(draft.warnings).map((item) => humanizeStudioIssue(item)),
-  ]
-    .filter(Boolean)
-    .filter((item, index, list) => list.indexOf(item) === index)
-    .slice(0, 8);
+  const issues = buildVisibleIssues({ draft, fieldCards });
 
   const attentionCount = fieldCards.filter((field) => field.needsAttention).length;
   const honestySummary = summarizeSetupStudioHonesty({

@@ -705,7 +705,7 @@ function resolveMainLanguage(profile = {}) {
     if (KNOWN_LANGS.has(lang)) return lang;
   }
 
-  return "en";
+  return "";
 }
 
 function readFieldConfidenceScore(fieldConfidence = {}, field = "") {
@@ -937,7 +937,11 @@ function mapSynthesisProfileToBusinessProfile(profile = {}, sourceType = "", sou
     });
 
   const supportedLanguages = normalizeProfileArrays(
-    arr(x.supportedLanguages).length ? x.supportedLanguages : [mainLanguage],
+    arr(x.supportedLanguages).length
+      ? x.supportedLanguages
+      : mainLanguage
+        ? [mainLanguage]
+        : [],
     8,
     24
   );

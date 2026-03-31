@@ -380,3 +380,56 @@ test("service-heavy sites preserve offering hints from summary text and booking-
   assert.ok(/personal training/i.test(profile.companySummaryShort));
   assert.ok(/PeakFit Studio/i.test(profile.companySummaryShort));
 });
+
+test("common landing pages with footer contact clues still yield a useful setup draft", () => {
+  const homePage = analyzePage({
+    html: `
+      <html>
+        <head>
+          <title>Harbor Accounting | Bookkeeping, VAT, and CFO support</title>
+          <meta
+            name="description"
+            content="Harbor Accounting helps founders with bookkeeping, payroll, VAT filing, and fractional CFO support."
+          />
+        </head>
+        <body>
+          <main>
+            <h1>Harbor Accounting</h1>
+            <p>
+              We help growing companies stay compliant with bookkeeping, payroll,
+              VAT filing, and fractional CFO support.
+            </p>
+            <ul>
+              <li>Bookkeeping</li>
+              <li>Payroll support</li>
+              <li>VAT filing</li>
+              <li>Fractional CFO</li>
+            </ul>
+            <a href="mailto:hello@harbor.example">Email our team</a>
+            <a href="tel:+44 20 7946 0958">Call us</a>
+            <p>22 King Street, London, UK</p>
+            <a href="https://linkedin.com/company/harbor-accounting">LinkedIn</a>
+          </main>
+        </body>
+      </html>
+    `,
+    pageUrl: "https://harbor.example/",
+  });
+
+  const rollup = buildSiteRollup(homePage, [homePage], []);
+  const websiteSignals = buildWebsiteSignals({
+    pages: [homePage],
+    site: rollup,
+    crawl: { warnings: [] },
+  });
+  const profile = synthesizeBusinessProfile(websiteSignals);
+
+  assert.equal(profile.companyTitle, "Harbor Accounting");
+  assert.ok(profile.emails.includes("hello@harbor.example"));
+  assert.ok(profile.phones.includes("+442079460958"));
+  assert.ok(profile.addresses.some((item) => /king street/i.test(item)));
+  assert.ok(profile.services.some((item) => /bookkeeping/i.test(item)));
+  assert.ok(profile.services.some((item) => /vat filing/i.test(item)));
+  assert.ok(/help(s)? founders|growing companies/i.test(profile.companySummaryShort));
+  assert.ok(profile.socialLinks.some((item) => item.platform === "linkedin"));
+});

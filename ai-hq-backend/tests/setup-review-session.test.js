@@ -1130,7 +1130,25 @@ test("Case W: partial website barrier still seeds a usable setup review draft fr
   assert.ok(shaped.services.length >= 1);
 });
 
-test("Case X: requested review lock parsing and concurrency info use explicit draft version", () => {
+test("Case X: website draft shaping does not invent language fields without source support", () => {
+  const shaped = draftTest.mapSynthesisProfileToBusinessProfile(
+    {
+      companyName: "Harbor Accounting",
+      websiteUrl: "https://harbor.example",
+      primaryPhone: "+442079460958",
+      primaryEmail: "hello@harbor.example",
+      services: ["Bookkeeping", "VAT filing"],
+    },
+    "website",
+    "https://harbor.example"
+  );
+
+  assert.equal("mainLanguage" in shaped, false);
+  assert.equal("primaryLanguage" in shaped, false);
+  assert.equal("supportedLanguages" in shaped, false);
+});
+
+test("Case Y: requested review lock parsing and concurrency info use explicit draft version", () => {
   const lock = setupTest.normalizeRequestedReviewLock({
     metadata: {
       sessionId: "session-1",
