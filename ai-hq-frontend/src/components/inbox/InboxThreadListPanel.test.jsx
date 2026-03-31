@@ -43,7 +43,9 @@ describe("InboxThreadListPanel", () => {
     expect(
       screen.getByText(/requested inbox thread is no longer available/i)
     ).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /neox\.az/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /all conversations/i })
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /primary/i })).toHaveAttribute(
       "aria-pressed",
       "true"
@@ -56,8 +58,9 @@ describe("InboxThreadListPanel", () => {
       "aria-pressed",
       "false"
     );
-    expect(screen.getByRole("button", { name: /switch inbox view/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /open compose options/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /open conversation filters/i })
+    ).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: /search conversations/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /requests/i }));
