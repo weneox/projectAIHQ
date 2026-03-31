@@ -56,7 +56,7 @@ function clampMs(value, fallback, min = 500, max = 120000) {
   return Math.max(min, Math.min(max, x));
 }
 
-function resolveCrawlLimits() {
+export function resolveWebsiteCrawlLimits() {
   const totalCrawlMs = clampMs(
     cfg?.sourceSync?.websiteExtractTimeoutMs,
     DEFAULT_CRAWL_LIMITS.totalCrawlMs,
@@ -253,6 +253,9 @@ function pageLooksUseful(page = {}) {
     safeArray(page?.phones).length > 0 ||
     safeArray(page?.addresses).length > 0 ||
     safeArray(page?.hours).length > 0 ||
+    safeArray(page?.socialLinks).length > 0 ||
+    safeArray(page?.whatsappLinks).length > 0 ||
+    safeArray(page?.bookingLinks).length > 0 ||
     safeArray(page?.serviceHints).length > 0 ||
     safeArray(page?.faqItems).length > 0
   );
@@ -363,6 +366,18 @@ function buildBlockedExtractionResult({
     entry?.page?.url || entry?.url || sourceUrl,
     warning
   );
+  const effectiveLimits = {
+    maxPagesAllowed: 1,
+    maxCandidatesQueued: 0,
+    maxFetchPages: 1,
+    totalCrawlMs,
+    entryFetchMs: totalCrawlMs,
+    robotsFetchMs: 0,
+    sitemapFetchMs: 0,
+    pageFetchMs: 0,
+    finalizeReserveMs,
+    minStepBudgetMs: 0,
+  };
 
   const site = buildSiteRollup(blockedPage, [blockedPage], [
     warning,
@@ -392,6 +407,7 @@ function buildBlockedExtractionResult({
       maxPagesAllowed: 1,
       maxCandidatesQueued: 0,
       maxFetchPages: 1,
+      effectiveLimits,
       mainHtmlBytes: 0,
       failures: [
         {
@@ -404,6 +420,15 @@ function buildBlockedExtractionResult({
       skipped: [],
       rejected: [],
       warnings: uniq([warning, "blocked_entry_fetch"]),
+      debug: {
+        limitDiagnostics: {
+          effectiveLimits,
+          hitFetchLimit: false,
+          hitKeptPageLimit: false,
+          exhaustedBudget: false,
+        },
+        fetchedPages: [],
+      },
     },
     discovery: {
       robots: {
@@ -442,6 +467,39 @@ function isEntryHardBlocked(entry = {}) {
     [401, 403, 406, 410, 429, 451].includes(status) ||
     error.startsWith("unsafe_")
   );
+}
+
+function resolveCrawlLimits() {
+  return resolveWebsiteCrawlLimits();
+}
+
+function buildPageDebugRecord(record = {}, admissions = new Map()) {
+  const page = record?.page || {};
+  const admission = admissions.get(canonicalPageKey(page?.canonicalUrl || page?.url)) || null;
+
+  return {
+    url: s(page?.url),
+    canonicalUrl: s(page?.canonicalUrl),
+    pageType: s(page?.pageType || "generic"),
+    source: s(record?.source || "unknown"),
+    depth: safeNum(record?.depth, 0),
+    qualityBand: s(page?.quality?.band || "weak"),
+    qualityScore: safeNum(page?.quality?.score, 0),
+    admitted: !!admission?.admitted,
+    admissionReason: s(admission?.reason || admission?.admissionReason),
+    signals: {
+      emails: safeArray(page?.emails),
+      phones: safeArray(page?.phones),
+      addresses: safeArray(page?.addresses),
+      socialLinks: safeArray(page?.socialLinks).map((item) => ({
+        platform: s(item?.platform),
+        url: s(item?.url),
+      })),
+      whatsappLinks: safeArray(page?.whatsappLinks),
+      bookingLinks: safeArray(page?.bookingLinks),
+      serviceHints: safeArray(page?.serviceHints),
+    },
+  };
 }
 
 async function crawlPendingQueue({
@@ -784,11 +842,30 @@ export async function extractWebsiteSource(source) {
     (x) => canonicalPageKey(x.canonicalUrl || x.url)
   );
 
-  const rollup = buildSiteRollup(
-    mainPage,
-    allPages,
-    safeArray(admissions?.admissionWarnings)
+  const admissionMap = new Map(
+    safeArray(admissions?.pageAdmissions).map((item) => [
+      canonicalPageKey(item?.canonicalUrl || item?.url),
+      item,
+    ])
   );
+
+  const effectiveLimits = {
+    maxPagesAllowed,
+    maxCandidatesQueued,
+    maxFetchPages,
+    totalCrawlMs,
+    entryFetchMs,
+    robotsFetchMs,
+    sitemapFetchMs,
+    pageFetchMs,
+    finalizeReserveMs,
+    minStepBudgetMs,
+  };
+
+  const rollup = buildSiteRollup(mainPage, allPages, safeArray(admissions?.admissionWarnings), {
+    fetchedPages: fetchedPageRecords.map((item) => item.page).filter(Boolean),
+    pageAdmissions: safeArray(admissions?.pageAdmissions),
+  });
 
   const usefulCoverage =
     allPages.length >= 2 ||
@@ -832,11 +909,25 @@ export async function extractWebsiteSource(source) {
       maxPagesAllowed,
       maxCandidatesQueued,
       maxFetchPages,
+      effectiveLimits,
       mainHtmlBytes: safeByteLength(mainFetch.html),
       failures: failed.slice(0, 20),
       skipped: skipped.slice(0, 20),
       rejected: safeArray(admissions?.rejectedPages).slice(0, 30),
       warnings: crawlWarnings,
+      debug: {
+        limitDiagnostics: {
+          effectiveLimits,
+          hitFetchLimit: fetchedPageRecords.length >= maxFetchPages,
+          hitKeptPageLimit: allPages.length >= maxPagesAllowed,
+          exhaustedBudget:
+            remainingBudget(crawlDeadlineAt, pageFetchMs, minStepBudgetMs) <= 0 &&
+            pending.length > 0,
+        },
+        fetchedPages: fetchedPageRecords
+          .map((record) => buildPageDebugRecord(record, admissionMap))
+          .slice(0, 30),
+      },
     },
     discovery: {
       robots: {
@@ -869,3 +960,7 @@ export function buildWebsiteKnowledgeCandidates() {
     "buildWebsiteKnowledgeCandidates was moved out of websiteExtractor.js. Use sourceSync/orchestrator.js synthesis layer."
   );
 }
+
+export const __test__ = {
+  resolveWebsiteCrawlLimits,
+};

@@ -1216,6 +1216,7 @@ function buildWebsiteSignals(extracted = {}) {
       addresses: allAddresses,
       hours: allHours,
       socialLinks: cleanSocialLinks(arr(extracted.site?.socialLinks), 12),
+      contactPageClues: arr(siteIdentity.contactPageClues || extracted.site?.identitySignals?.contactPageClues),
       whatsappLinks: cleanUrlList(arr(extracted.site?.whatsappLinks), 8),
       bookingLinks: cleanUrlList(arr(extracted.site?.bookingLinks), 10),
     },
@@ -1231,6 +1232,7 @@ function buildWebsiteSignals(extracted = {}) {
       scannedPages: arr(extracted.site?.scannedPages),
       pageTypeCounts: obj(extracted.site?.pageTypeCounts),
       quality: obj(extracted.site?.quality),
+      debug: obj(extracted.site?.debug),
       warnings: arr(extracted.crawl?.warnings),
     },
   };
@@ -1577,6 +1579,8 @@ function buildWebsiteSyncQualitySummary({
 
     scannedPages: extracted.site?.scannedPages || [],
     pageTypeCounts,
+    crawlDebug: obj(extracted.crawl?.debug),
+    siteDebug: obj(extracted.site?.debug),
     companyTitle: profile.companyTitle || "",
     supportMode: profile.supportMode || "",
     pricingPolicy: profile.pricingPolicy || "",

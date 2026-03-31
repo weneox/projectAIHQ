@@ -367,13 +367,108 @@ function collectFaqPreview(allPages = []) {
     .slice(0, 16);
 }
 
-export function buildSiteRollup(entryPage, allPages, extraWarnings = []) {
+function pageSignalDebugSummary(page = {}) {
+  return {
+    url: s(page?.url),
+    pageType: s(page?.pageType || "generic"),
+    title: s(page?.title),
+    phones: arr(page?.phones),
+    emails: arr(page?.emails),
+    addresses: arr(page?.addresses),
+    socialLinks: arr(page?.socialLinks).map((item) => ({
+      platform: s(item?.platform),
+      url: s(item?.url),
+    })),
+    whatsappLinks: arr(page?.whatsappLinks),
+    bookingLinks: arr(page?.bookingLinks),
+  };
+}
+
+function buildContactPageClues(pages = []) {
+  return uniqBy(
+    arr(pages)
+      .filter((page) => {
+        const pageType = s(page?.pageType);
+        return (
+          pageType === "contact" ||
+          arr(page?.emails).length > 0 ||
+          arr(page?.phones).length > 0 ||
+          arr(page?.addresses).length > 0 ||
+          arr(page?.socialLinks).length > 0 ||
+          arr(page?.whatsappLinks).length > 0 ||
+          arr(page?.bookingLinks).length > 0
+        );
+      })
+      .map((page) => ({
+        url: s(page?.url),
+        pageType: s(page?.pageType || "generic"),
+        title: s(page?.title),
+        clue: normalizeVisibleText(
+          page?.sections?.contact ||
+            page?.metaDescription ||
+            page?.visibleExcerpt ||
+            page?.title,
+          220
+        ),
+      }))
+      .filter((item) => item.url || item.clue),
+    (item) => `${lower(item.url)}|${lower(item.clue)}`
+  ).slice(0, 10);
+}
+
+function deriveWeakSelectionReasons({
+  pages = [],
+  nameCandidates = [],
+  descriptionCandidates = [],
+  contactEmails = [],
+  contactPhones = [],
+  addresses = [],
+  socialLinks = [],
+  extraWarnings = [],
+}) {
+  const out = [];
+
+  if (!arr(nameCandidates).length) out.push("no_strong_name_candidate_selected");
+  if (!arr(descriptionCandidates).length) {
+    out.push("no_strong_summary_candidate_selected");
+  }
+  if (arr(pages).length <= 1) out.push("limited_kept_page_coverage");
+  if (
+    !arr(contactEmails).length &&
+    !arr(contactPhones).length &&
+    !arr(addresses).length &&
+    !arr(socialLinks).length
+  ) {
+    out.push("no_salvageable_contact_signals_detected");
+  }
+
+  for (const warning of arr(extraWarnings)) {
+    if (
+      [
+        "fallback_identity_only_extraction",
+        "duplicate_shell_routes_detected",
+        "shell_like_website_detected",
+        "blocked_entry_fetch",
+      ].includes(s(warning))
+    ) {
+      out.push(s(warning));
+    }
+  }
+
+  return uniq(out);
+}
+
+export function buildSiteRollup(entryPage, allPages, extraWarnings = [], options = {}) {
   const pages = arr(allPages).filter(Boolean);
   const referencePage = entryPage || pages[0] || {};
+  const fetchedPages = uniqBy(
+    [...pages, ...arr(options?.fetchedPages).filter(Boolean)],
+    (x) => lower(s(x?.canonicalUrl || x?.url))
+  );
 
   const allLinks = uniq([
-    ...pages.flatMap((x) => arr(x.links)),
-    ...pages.flatMap((x) => arr(x.structured?.sameAs)),
+    ...fetchedPages.flatMap((x) => arr(x.links)),
+    ...fetchedPages.flatMap((x) => arr(x.structured?.sameAs)),
   ]);
 
   const shouldExtractSocial = cfg.sourceSync?.extractSocialLinks !== false;
@@ -406,19 +501,39 @@ export function buildSiteRollup(entryPage, allPages, extraWarnings = []) {
   const descriptionCandidateRows = collectDescriptionCandidates(pages, referencePage);
   const descriptionCandidates = descriptionCandidateRows.map((x) => x.value);
 
-  const contactEmails = uniq(
+  const keptContactEmails = uniq(
     collectPrioritizedValues(pages, (page) => arr(page?.emails), ["contact", "about", "generic"])
   ).slice(0, 20);
 
-  const contactPhones = uniq(
+  const keptContactPhones = uniq(
     collectPrioritizedValues(pages, (page) => arr(page?.phones), ["contact", "about", "generic"])
   ).slice(0, 20);
 
-  const addresses = collectAddresses(pages);
+  const contactEmails = uniq([
+    ...keptContactEmails,
+    ...collectPrioritizedValues(
+      fetchedPages,
+      (page) => arr(page?.emails),
+      ["contact", "about", "generic"]
+    ),
+  ]).slice(0, 20);
+
+  const contactPhones = uniq([
+    ...keptContactPhones,
+    ...collectPrioritizedValues(
+      fetchedPages,
+      (page) => arr(page?.phones),
+      ["contact", "about", "generic"]
+    ),
+  ]).slice(0, 20);
+
+  const keptAddresses = collectAddresses(pages);
+  const addresses = uniq([...keptAddresses, ...collectAddresses(fetchedPages)]).slice(0, 12);
   const hours = collectHours(pages);
   const serviceHints = collectServiceHints(pages);
   const pricingHints = collectPricingHints(pages);
   const faqPreview = collectFaqPreview(pages);
+  const contactPageClues = buildContactPageClues(fetchedPages);
 
   const primaryCtas = uniqBy(
     pages.map((x) => x.primaryCta).filter(Boolean),
@@ -438,7 +553,12 @@ export function buildSiteRollup(entryPage, allPages, extraWarnings = []) {
   if (pricingHints.length) qualityScore += 6;
   if (nameCandidates.length) qualityScore += 8;
   if (descriptionCandidates.length) qualityScore += 8;
-  if (socialLinks.length) qualityScore += 4;
+  const socialLinksMerged = uniqBy(
+    [...socialLinks, ...extractSocialLinks(allLinks)],
+    (item) => `${lower(s(item?.platform))}|${lower(s(item?.url))}`
+  ).slice(0, 20);
+
+  if (socialLinksMerged.length) qualityScore += 4;
   if (primaryCtas.length) qualityScore += 4;
 
   if (arr(extraWarnings).includes("fallback_identity_only_extraction")) qualityScore -= 14;
@@ -457,13 +577,24 @@ export function buildSiteRollup(entryPage, allPages, extraWarnings = []) {
     ...arr(extraWarnings),
   ]);
 
+  const weakSelectionReasons = deriveWeakSelectionReasons({
+    pages,
+    nameCandidates,
+    descriptionCandidates,
+    contactEmails,
+    contactPhones,
+    addresses,
+    socialLinks: socialLinksMerged,
+    extraWarnings,
+  });
+
   return {
     sourceUrl: s(referencePage.url),
     finalUrl: s(referencePage.url),
     pagesScanned: pages.length,
     linksScanned: allLinks.length,
-    socialLinks,
-    socialProfileLabels: socialLinks
+    socialLinks: socialLinksMerged,
+    socialProfileLabels: socialLinksMerged
       .map((item) => s(item?.handle ? `${item.platform}: ${item.handle}` : item?.url))
       .filter(Boolean)
       .slice(0, 12),
@@ -484,6 +615,8 @@ export function buildSiteRollup(entryPage, allPages, extraWarnings = []) {
       serviceHints,
       pricingHints,
       faqPreview,
+      socialLinks: socialLinksMerged,
+      contactPageClues,
       selectionMeta: {
         primaryName: deriveSelectionMeta(
           nameCandidates.map((value) => ({
@@ -504,11 +637,48 @@ export function buildSiteRollup(entryPage, allPages, extraWarnings = []) {
           s(descriptionCandidates[0] || "")
         ),
       },
+      minimumContactSalvage: {
+        used:
+          contactEmails.length > keptContactEmails.length ||
+          contactPhones.length > keptContactPhones.length ||
+          addresses.length > keptAddresses.length ||
+          socialLinksMerged.length > socialLinks.length,
+        keptCoverage: {
+          emails: keptContactEmails.length,
+          phones: keptContactPhones.length,
+          addresses: keptAddresses.length,
+          socialLinks: socialLinks.length,
+        },
+        totalCoverage: {
+          emails: contactEmails.length,
+          phones: contactPhones.length,
+          addresses: addresses.length,
+          socialLinks: socialLinksMerged.length,
+        },
+      },
     },
     quality: {
       score: qualityScore,
       band: qualityScore >= 60 ? "strong" : qualityScore >= 35 ? "medium" : "weak",
       warnings: qualityWarnings,
+    },
+    debug: {
+      fetchedPageCount: fetchedPages.length,
+      keptPageCount: pages.length,
+      weakSelectionReasons,
+      pagesWithContactSignals: fetchedPages
+        .filter(
+          (page) =>
+            arr(page?.emails).length > 0 ||
+            arr(page?.phones).length > 0 ||
+            arr(page?.addresses).length > 0 ||
+            arr(page?.socialLinks).length > 0 ||
+            arr(page?.whatsappLinks).length > 0 ||
+            arr(page?.bookingLinks).length > 0
+        )
+        .map((page) => pageSignalDebugSummary(page))
+        .slice(0, 20),
+      pageAdmissions: arr(options?.pageAdmissions).slice(0, 30),
     },
     scannedPages: pages.map((x) => ({
       url: x.url,

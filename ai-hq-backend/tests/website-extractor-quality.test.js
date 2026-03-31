@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { cfg } from "../src/config.js";
 import { analyzePage } from "../src/services/sourceSync/websiteExtractor/pageModel.js";
+import { __test__ as websiteExtractorTest } from "../src/services/sourceSync/websiteExtractor/index.js";
 import { buildSiteRollup } from "../src/services/sourceSync/websiteExtractor/rollup.js";
 
 const HOME_HTML = `
@@ -135,4 +137,103 @@ test("buildSiteRollup prefers clean business-relevant identity, service, pricing
       rollup.identitySignals.selectionMeta?.primaryDescription?.source
     )
   );
+});
+
+test("website extractor runtime defaults now match the stronger crawl limits unless explicitly overridden", () => {
+  const previous = {
+    websiteFetchTimeoutMs: cfg.sourceSync.websiteFetchTimeoutMs,
+    websitePageTimeoutMs: cfg.sourceSync.websitePageTimeoutMs,
+    websiteEntryTimeoutMs: cfg.sourceSync.websiteEntryTimeoutMs,
+    websiteExtractTimeoutMs: cfg.sourceSync.websiteExtractTimeoutMs,
+    websiteFinalizeReserveMs: cfg.sourceSync.websiteFinalizeReserveMs,
+    websiteMinStepBudgetMs: cfg.sourceSync.websiteMinStepBudgetMs,
+    websiteRobotsTimeoutMs: cfg.sourceSync.websiteRobotsTimeoutMs,
+    websiteSitemapTimeoutMs: cfg.sourceSync.websiteSitemapTimeoutMs,
+    websiteMaxPagesAllowed: cfg.sourceSync.websiteMaxPagesAllowed,
+    websiteMaxCandidatesQueued: cfg.sourceSync.websiteMaxCandidatesQueued,
+    websiteMaxFetchPages: cfg.sourceSync.websiteMaxFetchPages,
+  };
+
+  try {
+    cfg.sourceSync.websiteFetchTimeoutMs = undefined;
+    cfg.sourceSync.websitePageTimeoutMs = undefined;
+    cfg.sourceSync.websiteEntryTimeoutMs = undefined;
+    cfg.sourceSync.websiteExtractTimeoutMs = undefined;
+    cfg.sourceSync.websiteFinalizeReserveMs = undefined;
+    cfg.sourceSync.websiteMinStepBudgetMs = undefined;
+    cfg.sourceSync.websiteRobotsTimeoutMs = undefined;
+    cfg.sourceSync.websiteSitemapTimeoutMs = undefined;
+    cfg.sourceSync.websiteMaxPagesAllowed = undefined;
+    cfg.sourceSync.websiteMaxCandidatesQueued = undefined;
+    cfg.sourceSync.websiteMaxFetchPages = undefined;
+
+    const limits = websiteExtractorTest.resolveWebsiteCrawlLimits();
+    assert.deepEqual(limits, {
+      maxPagesAllowed: 6,
+      maxCandidatesQueued: 40,
+      maxFetchPages: 10,
+      totalCrawlMs: 32000,
+      entryFetchMs: 18000,
+      robotsFetchMs: 2200,
+      sitemapFetchMs: 4500,
+      pageFetchMs: 7000,
+      finalizeReserveMs: 4000,
+      minStepBudgetMs: 400,
+    });
+  } finally {
+    Object.assign(cfg.sourceSync, previous);
+  }
+});
+
+test("buildSiteRollup salvages minimum contact evidence and debug metadata from fetched pages even when kept pages stay weak", () => {
+  const weakHome = analyzePage({
+    html: `
+      <html>
+        <head><title>Alpha Studio</title></head>
+        <body><h1>Alpha Studio</h1><p>Creative work.</p></body>
+      </html>
+    `,
+    pageUrl: "https://alpha.example/",
+  });
+
+  const contactPage = analyzePage({
+    html: `
+      <html>
+        <head><title>Contact | Alpha Studio</title></head>
+        <body>
+          <h1>Contact Alpha Studio</h1>
+          <p>Email: hello@alpha.example</p>
+          <p>Phone: +994 50 700 11 22</p>
+          <p>Address: 22 Nizami Street, Baku, Azerbaijan</p>
+          <a href="https://instagram.com/alphastudio.az">Instagram</a>
+        </body>
+      </html>
+    `,
+    pageUrl: "https://alpha.example/contact",
+  });
+
+  const rollup = buildSiteRollup(weakHome, [weakHome], ["fallback_identity_only_extraction"], {
+    fetchedPages: [weakHome, contactPage],
+    pageAdmissions: [
+      { url: weakHome.url, admitted: true, admissionReason: "fallback_identity_only_page" },
+      { url: contactPage.url, admitted: false, admissionReason: "weak_generic_page" },
+    ],
+  });
+
+  assert.ok(rollup.identitySignals.contactEmails.includes("hello@alpha.example"));
+  assert.ok(rollup.identitySignals.contactPhones.includes("+994507001122"));
+  assert.ok(rollup.identitySignals.addresses.some((item) => /nizami street/i.test(item)));
+  assert.ok(
+    rollup.identitySignals.socialLinks.some(
+      (item) => item.platform === "instagram" && /alphastudio/i.test(item.url)
+    )
+  );
+  assert.ok(
+    rollup.identitySignals.contactPageClues.some((item) => /contact/i.test(item.url))
+  );
+  assert.equal(rollup.identitySignals.minimumContactSalvage.used, true);
+  assert.ok(
+    rollup.debug.pagesWithContactSignals.some((item) => /alpha\.example\/contact/i.test(item.url))
+  );
+  assert.ok(rollup.debug.weakSelectionReasons.includes("limited_kept_page_coverage"));
 });

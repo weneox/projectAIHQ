@@ -87,5 +87,10 @@ test("instagram business profile derives support mode and external website from 
   assert.equal(profile.primaryEmail, "hello@lunasmile.az");
   assert.equal(profile.primaryPhone, "+994505551212");
   assert.match(profile.primaryAddress, /Nizami Street/i);
+  assert.ok(
+    profile.socialLinks.some(
+      (item) => item.platform === "instagram" && /lunasmile\.az/i.test(item.url)
+    )
+  );
   assert.equal(profile.selectionMeta.websiteSource, "page.website");
 });

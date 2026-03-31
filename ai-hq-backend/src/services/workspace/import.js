@@ -196,6 +196,13 @@ function mergeProfileWithPrecedence(contributions = []) {
         sourceType,
         sourceUrl,
         authorityRank: incomingRank,
+        sourceLabel: s(latestImport.sourceLabel || sourceType),
+        observedValue:
+          Array.isArray(value)
+            ? value.map((item) => s(item)).filter(Boolean)
+            : typeof value === "object"
+              ? cloneJson(value, value)
+              : s(value),
       };
     }
   }

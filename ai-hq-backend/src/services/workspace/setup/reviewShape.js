@@ -104,6 +104,8 @@ function normalizeFieldProvenance(draft = {}) {
           sourceType: s(fieldSources[field].sourceType),
           sourceUrl: s(fieldSources[field].sourceUrl),
           authorityRank: Number(fieldSources[field].authorityRank || 0),
+          label: s(fieldSources[field].sourceLabel || fieldSources[field].sourceType),
+          observedValue: fieldSources[field].observedValue,
         }),
       ])
   );

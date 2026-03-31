@@ -17,6 +17,8 @@ test("service extraction: review shape keeps bundle and provenance summary", () 
             sourceType: "website",
             sourceUrl: "https://alpha.example",
             authorityRank: 300,
+            sourceLabel: "Website",
+            observedValue: "Alpha Studio",
           },
         },
       },
@@ -57,6 +59,8 @@ test("service extraction: review shape keeps bundle and provenance summary", () 
   assert.equal(shaped.bundleSources.length, 1);
   assert.equal(shaped.bundleSources[0].role, "primary");
   assert.equal(shaped.fieldProvenance.companyName.sourceType, "website");
+  assert.equal(shaped.fieldProvenance.companyName.label, "Website");
+  assert.equal(shaped.fieldProvenance.companyName.observedValue, "Alpha Studio");
   assert.equal(shaped.reviewDraftSummary.serviceCount, 1);
 });
 

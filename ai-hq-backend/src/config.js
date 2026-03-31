@@ -293,23 +293,23 @@ export const cfg = {
   sourceSync: {
     websiteFetchTimeoutMs: n(
       process.env.SOURCE_SYNC_WEBSITE_FETCH_TIMEOUT_MS,
-      6_500
+      7_000
     ),
     websitePageTimeoutMs: n(
       process.env.SOURCE_SYNC_WEBSITE_PAGE_TIMEOUT_MS,
-      6_500
+      7_000
     ),
     websiteEntryTimeoutMs: n(
       process.env.SOURCE_SYNC_WEBSITE_ENTRY_TIMEOUT_MS,
-      9_000
+      18_000
     ),
     websiteExtractTimeoutMs: n(
       process.env.SOURCE_SYNC_WEBSITE_EXTRACT_TIMEOUT_MS,
-      24_000
+      32_000
     ),
     websiteSyncTimeoutMs: n(
       process.env.SOURCE_SYNC_WEBSITE_SYNC_TIMEOUT_MS,
-      30_000
+      52_000
     ),
     websiteFinalizeReserveMs: n(
       process.env.SOURCE_SYNC_WEBSITE_FINALIZE_RESERVE_MS,
@@ -325,7 +325,7 @@ export const cfg = {
     ),
     websiteSitemapTimeoutMs: n(
       process.env.SOURCE_SYNC_WEBSITE_SITEMAP_TIMEOUT_MS,
-      3_000
+      4_500
     ),
     websiteMaxHtmlBytes: n(
       process.env.SOURCE_SYNC_WEBSITE_MAX_HTML_BYTES,
@@ -333,15 +333,15 @@ export const cfg = {
     ),
     websiteMaxPagesAllowed: n(
       process.env.SOURCE_SYNC_WEBSITE_MAX_PAGES_ALLOWED,
-      4
+      6
     ),
     websiteMaxCandidatesQueued: n(
       process.env.SOURCE_SYNC_WEBSITE_MAX_CANDIDATES_QUEUED,
-      24
+      40
     ),
     websiteMaxFetchPages: n(
       process.env.SOURCE_SYNC_WEBSITE_MAX_FETCH_PAGES,
-      6
+      10
     ),
     websiteUserAgent: s(
       process.env.SOURCE_SYNC_WEBSITE_USER_AGENT,
