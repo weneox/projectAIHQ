@@ -98,24 +98,25 @@ export default function Leads() {
   const score = Number(sel?.score || 0);
 
   return (
-    <div className="min-h-screen px-6 pb-6 pt-6 md:px-8">
+    <div className="premium-page px-6 pb-8 pt-3 md:px-8">
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <div className="text-[30px] font-semibold tracking-[-0.05em] text-white">
+          <div className="premium-kicker">Revenue Workspace</div>
+          <div className="mt-2 text-[32px] font-semibold tracking-[-0.055em] text-slate-950">
             Leads
           </div>
-          <div className="mt-2 text-sm text-white/46">
+          <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
             AI Inbox, DM və satış axınlarından yaranan lead-lər üçün enterprise CRM paneli.
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-white/60">
+          <div className="premium-pill">
             WS: {wsState}
           </div>
 
           {dbDisabled ? (
-            <div className="rounded-full border border-amber-300/20 bg-amber-300/[0.06] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-amber-100">
+            <div className="premium-pill border-amber-200 bg-amber-50 text-amber-700">
               DB disabled
             </div>
           ) : null}
@@ -123,7 +124,7 @@ export default function Leads() {
           <button
             type="button"
             onClick={loadLeadsData}
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[12px] font-medium text-white/72 transition hover:border-white/16 hover:bg-white/[0.06] hover:text-white"
+            className="ui-button-secondary"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
@@ -132,7 +133,7 @@ export default function Leads() {
       </div>
 
       {error ? (
-        <div className="mb-6 rounded-[22px] border border-rose-400/20 bg-rose-400/[0.06] px-4 py-3 text-sm text-rose-100">
+        <div className="premium-panel-subtle mb-6 border-rose-200 bg-rose-50/90 px-4 py-3 text-sm text-rose-700">
           {error}
         </div>
       ) : null}
@@ -150,13 +151,13 @@ export default function Leads() {
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
-        <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-          <div className="flex flex-col gap-4 border-b border-white/8 pb-4 md:flex-row md:items-center md:justify-between">
+        <div className="premium-panel p-5">
+          <div className="flex flex-col gap-4 border-b premium-divider pb-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <div className="text-[18px] font-semibold tracking-[-0.03em] text-white">
+              <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
                 Lead Pipeline
               </div>
-              <div className="mt-1 text-sm text-white/46">
+              <div className="mt-1 text-sm text-slate-500">
                 Inbox-dən yaranan və CRM-də saxlanan lead siyahısı.
               </div>
             </div>
@@ -167,10 +168,10 @@ export default function Leads() {
                   key={stage}
                   type="button"
                   onClick={() => setStageFilter(stage)}
-                  className={`rounded-full border px-3.5 py-2 text-[12px] font-medium transition ${
+                  className={`premium-pill ${
                     stageFilter === stage
-                      ? "border-white/10 bg-white/[0.04] text-white/78"
-                      : "border-white/10 bg-white/[0.02] text-white/44 hover:border-white/16 hover:bg-white/[0.04] hover:text-white/70"
+                      ? "is-active"
+                      : "hover:text-slate-900"
                   }`}
                 >
                   {stage}
@@ -180,7 +181,7 @@ export default function Leads() {
           </div>
 
           <div className="mt-5 space-y-3">
-            <div className="hidden xl:grid xl:grid-cols-[1.25fr_0.9fr_1fr_0.8fr_0.8fr_0.7fr] xl:gap-3 xl:px-2 xl:text-[11px] xl:uppercase xl:tracking-[0.18em] xl:text-white/28">
+            <div className="hidden xl:grid xl:grid-cols-[1.25fr_0.9fr_1fr_0.8fr_0.8fr_0.7fr] xl:gap-3 xl:px-2 xl:text-[11px] xl:uppercase xl:tracking-[0.18em] xl:text-slate-400">
               <div>Name</div>
               <div>Source</div>
               <div>Interest</div>
@@ -190,13 +191,13 @@ export default function Leads() {
             </div>
 
             {loading ? (
-              <div className="rounded-[22px] border border-white/8 bg-black/20 px-4 py-10 text-center text-sm text-white/52">
+              <div className="premium-empty px-4 py-10 text-center text-sm text-slate-500">
                 Loading leads...
               </div>
             ) : filteredLeads.length === 0 ? (
-              <div className="rounded-[22px] border border-dashed border-white/10 bg-black/20 px-4 py-10 text-center">
-                <div className="text-sm font-medium text-white/64">No leads yet</div>
-                <div className="mt-2 text-sm leading-6 text-white/40">
+              <div className="premium-empty px-4 py-10 text-center">
+                <div className="text-sm font-medium text-slate-700">No leads yet</div>
+                <div className="mt-2 text-sm leading-6 text-slate-500">
                   Inbox və satış axını bağlandıqca lead-lər burada görünəcək.
                 </div>
               </div>
@@ -214,26 +215,26 @@ export default function Leads() {
         </div>
 
         <div className="space-y-6">
-          <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+          <div className="premium-panel p-5">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
-                <BriefcaseBusiness className="h-4 w-4 text-white/72" />
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/80 bg-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_-18px_rgba(15,23,42,0.18)]">
+                <BriefcaseBusiness className="h-4 w-4 text-slate-600" />
               </div>
               <div>
-                <div className="text-[16px] font-semibold tracking-[-0.03em] text-white">
+                <div className="text-[16px] font-semibold tracking-[-0.03em] text-slate-950">
                   Lead Detail
                 </div>
-                <div className="mt-1 text-sm text-white/46">
+                <div className="mt-1 text-sm text-slate-500">
                   Seçilmiş lead üçün interaktiv CRM görünüşü.
                 </div>
               </div>
             </div>
 
-            <div className="mt-5 rounded-[22px] border border-white/8 bg-black/20 p-4">
+            <div className="premium-panel-subtle mt-5 p-4">
               {!sel ? (
                 <div className="px-2 py-8 text-center">
-                  <div className="text-sm font-medium text-white/64">No lead selected</div>
-                  <div className="mt-2 text-sm leading-6 text-white/40">
+                  <div className="text-sm font-medium text-slate-700">No lead selected</div>
+                  <div className="mt-2 text-sm leading-6 text-slate-500">
                     Sol tərəfdən bir lead seç.
                   </div>
                 </div>
@@ -241,10 +242,10 @@ export default function Leads() {
                 <>
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <div className="truncate text-[18px] font-semibold tracking-[-0.03em] text-white">
+                      <div className="truncate text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
                         {leadName(sel)}
                       </div>
-                      <div className="mt-1 text-sm text-white/44">{leadHandle(sel)}</div>
+                      <div className="mt-1 text-sm text-slate-500">{leadHandle(sel)}</div>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
@@ -279,7 +280,7 @@ export default function Leads() {
                       type="button"
                       onClick={openInboxThread}
                       disabled={!sel?.inbox_thread_id}
-                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-[12px] font-medium text-white/72 transition hover:border-white/16 hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      className="premium-pill disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <ArrowUpRight className="h-3.5 w-3.5" />
                       Open Inbox Thread
@@ -289,7 +290,7 @@ export default function Leads() {
                       type="button"
                       onClick={() => quickSetStage("contacted")}
                       disabled={savingField === "stage"}
-                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-[12px] font-medium text-white/72 transition hover:border-white/16 hover:bg-white/[0.06] hover:text-white"
+                      className="premium-pill"
                     >
                       <CircleDot className="h-3.5 w-3.5" />
                       Mark Contacted
@@ -299,7 +300,7 @@ export default function Leads() {
                       type="button"
                       onClick={() => quickSetStage("qualified")}
                       disabled={savingField === "stage"}
-                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-[12px] font-medium text-white/72 transition hover:border-white/16 hover:bg-white/[0.06] hover:text-white"
+                      className="premium-pill"
                     >
                       <Target className="h-3.5 w-3.5" />
                       Move to Qualified
@@ -357,7 +358,7 @@ export default function Leads() {
                           type="button"
                           onClick={() => saveStage(form.stage)}
                           disabled={savingField === "stage"}
-                          className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-white/78 transition hover:border-white/16 hover:bg-white/[0.06]"
+                          className="premium-panel-subtle inline-flex items-center justify-center px-4 text-slate-700 transition hover:border-slate-300"
                         >
                           <Save className="h-4 w-4" />
                         </button>
@@ -379,7 +380,7 @@ export default function Leads() {
                           type="button"
                           onClick={() => saveStatus(form.status)}
                           disabled={savingField === "status"}
-                          className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-white/78 transition hover:border-white/16 hover:bg-white/[0.06]"
+                          className="premium-panel-subtle inline-flex items-center justify-center px-4 text-slate-700 transition hover:border-slate-300"
                         >
                           <Save className="h-4 w-4" />
                         </button>
@@ -397,7 +398,7 @@ export default function Leads() {
                           type="button"
                           onClick={saveOwner}
                           disabled={savingField === "owner"}
-                          className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-white/78 transition hover:border-white/16 hover:bg-white/[0.06]"
+                          className="premium-panel-subtle inline-flex items-center justify-center px-4 text-slate-700 transition hover:border-slate-300"
                         >
                           <UserCog className="h-4 w-4" />
                         </button>
@@ -461,7 +462,7 @@ export default function Leads() {
                       type="button"
                       onClick={saveFollowUp}
                       disabled={savingField === "followup"}
-                      className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white/78 transition hover:border-white/16 hover:bg-white/[0.06]"
+                      className="premium-panel-subtle inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300"
                     >
                       <CalendarDays className="h-4 w-4" />
                       Save Follow-up
@@ -483,8 +484,8 @@ export default function Leads() {
                     />
                   </div>
 
-                  <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-white/32">
+                  <div className="premium-panel-subtle mt-4 px-4 py-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
                       Score band
                     </div>
                     <div className="mt-2">
@@ -498,8 +499,8 @@ export default function Leads() {
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
-                    <div className="mb-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-white/32">
+                  <div className="premium-panel-subtle mt-4 px-4 py-3">
+                    <div className="mb-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
                       <FileText className="h-3.5 w-3.5" />
                       Add Note
                     </div>
@@ -514,7 +515,7 @@ export default function Leads() {
                         type="button"
                         onClick={saveNote}
                         disabled={savingField === "note" || !noteText.trim()}
-                        className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-medium text-white/78 transition hover:border-white/16 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+                        className="premium-panel-subtle inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <Save className="h-4 w-4" />
                         Save Note
@@ -522,22 +523,22 @@ export default function Leads() {
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-white/32">
+                  <div className="premium-panel-subtle mt-4 px-4 py-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
                       Full Notes
                     </div>
-                    <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/76">
+                    <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
                       {sel.notes || "—"}
                     </div>
                   </div>
 
                   {showInternalDebug && selExtra && Object.keys(selExtra).length > 0 ? (
-                    <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.02] p-3">
-                      <div className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-white/32">
+                    <div className="premium-panel-subtle mt-4 p-3">
+                      <div className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
                         <ShieldCheck className="h-3.5 w-3.5" />
                         Internal Payload
                       </div>
-                      <pre className="overflow-auto text-xs leading-6 text-white/58">
+                      <pre className="overflow-auto text-xs leading-6 text-slate-600">
                         {JSON.stringify(selExtra, null, 2)}
                       </pre>
                     </div>
@@ -547,30 +548,30 @@ export default function Leads() {
             </div>
           </div>
 
-          <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-            <div className="flex items-center gap-2 text-[16px] font-semibold tracking-[-0.03em] text-white">
-              <Activity className="h-4 w-4 text-white/70" />
+          <div className="premium-panel p-5">
+            <div className="flex items-center gap-2 text-[16px] font-semibold tracking-[-0.03em] text-slate-950">
+              <Activity className="h-4 w-4 text-slate-500" />
               Activity Timeline
             </div>
 
             <div className="mt-5 space-y-3">
               {!sel ? (
-                <div className="rounded-2xl border border-white/8 bg-black/20 px-4 py-8 text-center text-sm text-white/52">
+                <div className="premium-empty px-4 py-8 text-center text-sm text-slate-500">
                   Select a lead to see activity.
                 </div>
               ) : eventsLoading ? (
-                <div className="rounded-2xl border border-white/8 bg-black/20 px-4 py-8 text-center text-sm text-white/52">
+                <div className="premium-empty px-4 py-8 text-center text-sm text-slate-500">
                   Loading activity...
                 </div>
               ) : events.length === 0 ? (
-                <div className="rounded-2xl border border-white/8 bg-black/20 px-4 py-8 text-center text-sm text-white/52">
+                <div className="premium-empty px-4 py-8 text-center text-sm text-slate-500">
                   No events yet.
                 </div>
               ) : (
                 events.map((ev) => (
                   <div
                     key={ev.id}
-                    className="rounded-[22px] border border-white/8 bg-black/20 p-4"
+                    className="premium-panel-subtle p-4"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div>
@@ -581,22 +582,22 @@ export default function Leads() {
                         >
                           {prettyEventType(ev.type)}
                         </span>
-                        <div className="mt-3 text-sm font-medium text-white/78">
+                        <div className="mt-3 text-sm font-medium text-slate-800">
                           {ev.actor || "system"}
                         </div>
-                        <div className="mt-1 text-xs uppercase tracking-[0.14em] text-white/32">
+                        <div className="mt-1 text-xs uppercase tracking-[0.14em] text-slate-400">
                           {fmtDateTime(ev.created_at)}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 text-xs text-white/38">
+                      <div className="flex items-center gap-2 text-xs text-slate-400">
                         <Clock3 className="h-3.5 w-3.5" />
                         {fmtRelative(ev.created_at)}
                       </div>
                     </div>
 
                     {showInternalDebug && ev?.payload ? (
-                      <pre className="mt-3 overflow-auto rounded-2xl border border-white/6 bg-white/[0.02] p-3 text-xs leading-6 text-white/54">
+                      <pre className="mt-3 overflow-auto rounded-2xl border border-slate-200/80 bg-white/66 p-3 text-xs leading-6 text-slate-600">
                         {JSON.stringify(ev.payload, null, 2)}
                       </pre>
                     ) : null}
@@ -606,8 +607,8 @@ export default function Leads() {
             </div>
           </div>
 
-          <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-            <div className="text-[16px] font-semibold tracking-[-0.03em] text-white">
+          <div className="premium-panel p-5">
+            <div className="text-[16px] font-semibold tracking-[-0.03em] text-slate-950">
               Source Mix
             </div>
 
@@ -615,12 +616,12 @@ export default function Leads() {
               {sourceMix.map((item) => (
                 <div key={item.label}>
                   <div className="mb-2 flex items-center justify-between text-sm">
-                    <span className="text-white/62">{item.label}</span>
-                    <span className="text-white/42">{item.pct}%</span>
+                    <span className="text-slate-600">{item.label}</span>
+                    <span className="text-slate-400">{item.pct}%</span>
                   </div>
-                  <div className="h-2 rounded-full bg-white/[0.06]">
+                  <div className="h-2 rounded-full bg-slate-200/70">
                     <div
-                      className="h-2 rounded-full bg-white/40"
+                      className="h-2 rounded-full bg-slate-500/70"
                       style={{ width: `${item.pct}%` }}
                     />
                   </div>
@@ -629,8 +630,8 @@ export default function Leads() {
             </div>
           </div>
 
-          <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_22px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-            <div className="text-[16px] font-semibold tracking-[-0.03em] text-white">
+          <div className="premium-panel p-5">
+            <div className="text-[16px] font-semibold tracking-[-0.03em] text-slate-950">
               Stage Overview
             </div>
 
@@ -638,21 +639,21 @@ export default function Leads() {
               {Object.entries(stageMix).map(([stage, count]) => (
                 <div
                   key={stage}
-                  className="rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3"
+                  className="premium-panel-subtle px-4 py-3"
                 >
-                  <div className="text-[10px] uppercase tracking-[0.18em] text-white/32">
+                  <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
                     {stage}
                   </div>
-                  <div className="mt-2 text-lg font-semibold text-white">{count}</div>
+                  <div className="mt-2 text-lg font-semibold text-slate-950">{count}</div>
                 </div>
               ))}
             </div>
 
-            <div className="mt-5 rounded-2xl border border-white/8 bg-white/[0.02] px-4 py-3">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-white/32">
+            <div className="premium-panel-subtle mt-5 px-4 py-3">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
                 Last refresh
               </div>
-              <div className="mt-2 text-sm text-white/76">
+              <div className="mt-2 text-sm text-slate-700">
                 {fmtRelative(new Date().toISOString())}
               </div>
             </div>

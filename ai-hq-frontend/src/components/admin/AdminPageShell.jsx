@@ -13,15 +13,15 @@ export default function AdminPageShell({
 }) {
   return (
     <div className="space-y-5">
-      <section className="rounded-[28px] border border-white/10 bg-[#07111d] px-5 py-5">
+      <section className="premium-page-hero px-5 py-5">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             {eyebrow ? (
-              <div className="text-[11px] uppercase tracking-[0.26em] text-white/42">{eyebrow}</div>
+              <div className="premium-kicker">{eyebrow}</div>
             ) : null}
-            <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.04em] text-white">{title}</h1>
+            <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.045em] text-slate-950">{title}</h1>
             {description ? (
-              <p className="mt-2 max-w-3xl text-sm text-white/58">{description}</p>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{description}</p>
             ) : null}
           </div>
 
@@ -32,7 +32,7 @@ export default function AdminPageShell({
                 variant="secondary"
                 onClick={surface.refresh}
                 disabled={surface.loading || surface.saving}
-                className="h-11 rounded-2xl border-white/10 bg-white/[0.05] px-4 text-sm font-medium text-white/86 hover:bg-white/[0.08]"
+                className="h-11 rounded-full border-white/80 bg-white/72 px-4 text-sm font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_-18px_rgba(15,23,42,0.18)] hover:bg-white"
               >
                 {refreshLabel}
               </Button>

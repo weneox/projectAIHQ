@@ -3,7 +3,7 @@ import React from "react";
 export function LeadField({ label, children }) {
   return (
     <label className="block">
-      <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-white/32">
+      <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
         {label}
       </div>
       {children}
@@ -18,7 +18,7 @@ export function LeadInput({ value, onChange, placeholder = "", type = "text" }) 
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none placeholder:text-white/24 focus:border-cyan-400/20"
+      className="premium-input w-full rounded-2xl px-4 py-3 text-sm outline-none focus:border-sky-300/90"
     />
   );
 }
@@ -28,7 +28,7 @@ export function LeadSelect({ value, onChange, children }) {
     <select
       value={value}
       onChange={onChange}
-      className="w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none focus:border-cyan-400/20"
+      className="premium-select w-full rounded-2xl px-4 py-3 text-sm outline-none focus:border-sky-300/90"
     >
       {children}
     </select>
@@ -42,7 +42,7 @@ export function LeadTextArea({ value, onChange, rows = 4, placeholder = "" }) {
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className="w-full resize-none rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm leading-6 text-white outline-none placeholder:text-white/24 focus:border-cyan-400/20"
+      className="premium-textarea w-full resize-none rounded-2xl px-4 py-3 text-sm leading-6 outline-none focus:border-sky-300/90"
     />
   );
 }

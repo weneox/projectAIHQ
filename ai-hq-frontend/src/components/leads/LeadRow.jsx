@@ -40,8 +40,8 @@ export default function LeadRow({ lead, selected, onSelect }) {
       onClick={() => onSelect?.(lead)}
       className={`w-full rounded-[22px] border px-4 py-4 text-left transition ${
         selected
-          ? "border-cyan-400/20 bg-cyan-400/[0.05]"
-          : "border-white/8 bg-black/20 hover:border-white/12 hover:bg-black/26"
+          ? "border-sky-200 bg-sky-50/90 shadow-[0_16px_34px_-26px_rgba(14,165,233,0.28)]"
+          : "border-slate-200/80 bg-white/62 hover:border-slate-300 hover:bg-white/82"
       }`}
     >
       <div className="grid gap-4 xl:grid-cols-[1.25fr_0.9fr_1fr_0.8fr_0.8fr_0.7fr] xl:items-center">
@@ -54,15 +54,15 @@ export default function LeadRow({ lead, selected, onSelect }) {
             >
               <ChannelIcon className="h-3.5 w-3.5" />
             </div>
-            <div className="truncate text-sm font-semibold text-white">{name}</div>
+            <div className="truncate text-sm font-semibold text-slate-900">{name}</div>
           </div>
-          <div className="mt-1 truncate text-xs uppercase tracking-[0.16em] text-white/34">
+          <div className="mt-1 truncate text-xs uppercase tracking-[0.16em] text-slate-400">
             {leadHandle(lead)}
           </div>
         </div>
 
-        <div className="text-sm text-white/62">{source}</div>
-        <div className="truncate text-sm text-white/62">{interest}</div>
+        <div className="text-sm text-slate-600">{source}</div>
+        <div className="truncate text-sm text-slate-600">{interest}</div>
 
         <div>
           <span
@@ -84,7 +84,7 @@ export default function LeadRow({ lead, selected, onSelect }) {
           </span>
         </div>
 
-        <div className="text-right text-sm font-medium text-white/74">{value}</div>
+        <div className="text-right text-sm font-medium text-slate-700">{value}</div>
       </div>
     </button>
   );

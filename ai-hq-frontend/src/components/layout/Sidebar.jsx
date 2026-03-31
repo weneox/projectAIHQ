@@ -17,8 +17,8 @@ function formatBadgeCount(count) {
 function Brand() {
   return (
     <div className="flex items-center gap-3 px-4 py-5">
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#7dd3fc_0%,#fca5a5_45%,#c4b5fd_100%)] shadow-[0_8px_20px_rgba(15,23,42,0.12)]">
-        <div className="h-6 w-6 rounded-md border border-white/80 bg-white/90" />
+      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#8fd7cb_0%,#d8c6a5_52%,#d9e7f8_100%)] shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
+        <div className="h-6 w-6 rounded-[10px] border border-white/80 bg-white/92" />
       </div>
       <div className="text-[18px] font-semibold tracking-[-0.04em] text-slate-950">
         AI-HQ
@@ -36,10 +36,10 @@ function NavItem({ item, shellStats = {}, onNavigate }) {
       {({ isActive }) => (
         <div
           className={cn(
-            "flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-[15px] transition",
+            "flex items-center justify-between gap-3 rounded-2xl px-3 py-2.5 text-[15px] transition",
             isActive
-              ? "bg-[#eef0f3] text-slate-950"
-              : "text-slate-600 hover:bg-[#f5f6f8] hover:text-slate-950"
+              ? "bg-white/80 text-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_-18px_rgba(15,23,42,0.18)]"
+              : "text-slate-600 hover:bg-white/66 hover:text-slate-950"
           )}
         >
           <div className="flex min-w-0 items-center gap-3">
@@ -61,7 +61,7 @@ function NavItem({ item, shellStats = {}, onNavigate }) {
 function DesktopSidebar({ shellStats }) {
   return (
     <aside
-      className="fixed inset-y-0 left-0 z-40 hidden border-r border-slate-200/80 bg-[#f8f8f9] md:flex md:flex-col"
+      className="fixed inset-y-0 left-0 z-40 hidden border-r border-white/70 bg-[rgba(247,248,249,0.78)] backdrop-blur-xl md:flex md:flex-col"
       style={{ width: SIDEBAR_WIDTH }}
     >
       <Brand />
@@ -74,7 +74,7 @@ function DesktopSidebar({ shellStats }) {
         </div>
       </div>
 
-      <div className="border-t border-slate-200/80 px-3 py-4">
+      <div className="border-t border-white/70 px-3 py-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
             N
@@ -87,7 +87,7 @@ function DesktopSidebar({ shellStats }) {
                 <NavLink
                   key={item.id}
                   to={item.to}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-[#f0f2f5] hover:text-slate-950"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-white/70 hover:text-slate-950"
                 >
                   <Icon className="h-4 w-4" strokeWidth={1.85} />
                 </NavLink>
@@ -96,14 +96,14 @@ function DesktopSidebar({ shellStats }) {
 
             <button
               type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-[#f0f2f5] hover:text-slate-950"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-white/70 hover:text-slate-950"
             >
               <Moon className="h-4 w-4" strokeWidth={1.85} />
             </button>
 
             <button
               type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-[#f0f2f5] hover:text-slate-950"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-white/70 hover:text-slate-950"
             >
               <Settings2 className="h-4 w-4" strokeWidth={1.85} />
             </button>
@@ -121,12 +121,12 @@ function MobileSidebar({ pathname, setMobileOpen, shellStats = {} }) {
       animate={{ x: 0 }}
       exit={{ x: -260 }}
       transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-      className="fixed inset-y-0 left-0 z-[70] flex w-[280px] flex-col border-r border-slate-200/80 bg-[#f8f8f9] md:hidden"
+      className="fixed inset-y-0 left-0 z-[70] flex w-[280px] flex-col border-r border-white/70 bg-[rgba(247,248,249,0.92)] backdrop-blur-xl md:hidden"
     >
-      <div className="flex items-center justify-between border-b border-slate-200/80 px-4 py-4">
+      <div className="flex items-center justify-between border-b border-white/70 px-4 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[linear-gradient(135deg,#7dd3fc_0%,#fca5a5_45%,#c4b5fd_100%)]">
-            <div className="h-5 w-5 rounded-md border border-white/80 bg-white/90" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#8fd7cb_0%,#d8c6a5_52%,#d9e7f8_100%)]">
+            <div className="h-5 w-5 rounded-[9px] border border-white/80 bg-white/92" />
           </div>
           <div className="text-[18px] font-semibold tracking-[-0.04em] text-slate-950">
             AI-HQ
@@ -137,7 +137,7 @@ function MobileSidebar({ pathname, setMobileOpen, shellStats = {} }) {
           type="button"
           onClick={() => setMobileOpen(false)}
           aria-label="Close navigation"
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/74 text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_-18px_rgba(15,23,42,0.18)]"
         >
           <X className="h-4 w-4" />
         </button>

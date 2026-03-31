@@ -173,14 +173,14 @@ export default function Shell() {
   return (
     <div
       className={[
-        "bg-[#ececee] text-slate-950 selection:bg-slate-900 selection:text-white",
+        "premium-page bg-transparent text-slate-950 selection:bg-slate-900 selection:text-white",
         isInboxRoute ? "h-screen overflow-hidden" : "min-h-screen",
       ].join(" ")}
       style={{
         "--shell-sidebar-w": `${SHELL_SIDEBAR_W}px`,
       }}
     >
-      <div className="pointer-events-none fixed inset-0 -z-20 bg-[linear-gradient(180deg,#ececef_0%,#e8eaed_100%)]" />
+      <div className="pointer-events-none fixed inset-0 -z-20 bg-[linear-gradient(180deg,#f3f4f4_0%,#eef1f2_100%)]" />
 
       <Sidebar
         mobileOpen={mobileOpen}
@@ -219,7 +219,7 @@ export default function Shell() {
             }
           >
             {!isInboxRoute && shellStats?.message ? (
-              <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <div className="premium-panel-subtle mb-4 px-4 py-3 text-sm text-amber-800">
                 {shellStats.message}
               </div>
             ) : null}
