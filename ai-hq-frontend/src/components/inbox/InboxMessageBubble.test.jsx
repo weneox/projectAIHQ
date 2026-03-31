@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import InboxMessageBubble from "./InboxMessageBubble.jsx";
 import { indexAttemptsByMessageCorrelation } from "./outboundAttemptTruth.js";
@@ -68,12 +68,9 @@ describe("InboxMessageBubble", () => {
     expect(screen.getByText(/retry lineage is active after attempt 2 of 5/i)).toBeInTheDocument();
     expect(screen.getByText(/provider: meta/i)).toBeInTheDocument();
     expect(screen.getByText(/error: provider timeout/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /inspect lineage/i })).toBeInTheDocument();
   });
 
-  it("keeps waiting state explicit when correlation exists but attempt truth has not arrived", () => {
-    const onInspectLineage = vi.fn();
-
+  it("keeps waiting state explicit when object correlation exists but attempt truth has not arrived", () => {
     render(
       <InboxMessageBubble
         m={{
@@ -82,10 +79,13 @@ describe("InboxMessageBubble", () => {
           sender_type: "agent",
           sent_at: "2026-03-29T08:00:00.000Z",
           text: "Following up now.",
-          outbound_attempt_correlation: "corr-2",
+          outbound_attempt_correlation: {
+            message_id: "msg-3",
+            provider_message_id: "provider-3",
+            type: "outbound_attempt",
+          },
         }}
         attemptsByCorrelation={indexAttemptsByMessageCorrelation([])}
-        onInspectLineage={onInspectLineage}
       />
     );
 
@@ -93,11 +93,6 @@ describe("InboxMessageBubble", () => {
     expect(
       screen.getByText(/no outbound attempt record is attached yet/i)
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /inspect pending lineage/i }));
-    expect(onInspectLineage).toHaveBeenCalledWith({
-      truthKind: "awaiting_attempt",
-      attemptId: "",
-    });
   });
 
   it("marks correlated attempt truth stale when the attempt record predates the message", () => {
@@ -128,6 +123,45 @@ describe("InboxMessageBubble", () => {
     expect(screen.getByText(/attempt truth may be stale/i)).toBeInTheDocument();
     expect(
       screen.getByText(/latest recorded state predates this message record/i)
+    ).toBeInTheDocument();
+  });
+
+  it("renders outbound attempt truth when object correlations match", () => {
+    render(
+      <InboxMessageBubble
+        m={{
+          id: "msg-5",
+          direction: "outbound",
+          sender_type: "agent",
+          sent_at: "2026-03-29T08:00:00.000Z",
+          text: "Structured lineage should bind.",
+          outbound_attempt_correlation: {
+            provider_message_id: "provider-5",
+            message_id: "msg-5",
+            type: "outbound_attempt",
+          },
+        }}
+        attemptsByCorrelation={indexAttemptsByMessageCorrelation([
+          {
+            id: "attempt-5",
+            status: "failed",
+            attempt_count: 1,
+            max_attempts: 3,
+            provider: "meta",
+            last_error: "Provider timeout",
+            message_correlation: {
+              type: "outbound_attempt",
+              message_id: "msg-5",
+              provider_message_id: "provider-5",
+            },
+          },
+        ])}
+      />
+    );
+
+    expect(screen.getAllByText(/failed/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/most recent delivery attempt failed on attempt 1 of 3/i)
     ).toBeInTheDocument();
   });
 });

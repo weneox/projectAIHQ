@@ -99,4 +99,66 @@ describe("InboxDetailPanel", () => {
     expect(setThreadStatus).toHaveBeenCalledWith("thread-1", "closed");
     expect(onOpenDetails).toHaveBeenCalledTimes(2);
   });
+
+  it("renders object-shaped outbound lineage truth without changing detail behavior", () => {
+    render(
+      <InboxDetailPanel
+        selectedThread={{
+          id: "thread-2",
+          customer_name: "Alex Morgan",
+          unread_count: 0,
+          handoff_active: false,
+        }}
+        messages={[
+          {
+            id: "msg-2",
+            direction: "outbound",
+            sender_type: "agent",
+            text: "Your follow-up is retrying.",
+            sent_at: "2026-03-29T08:00:00.000Z",
+            outbound_attempt_correlation: {
+              message_id: "msg-2",
+              provider_message_id: "provider-2",
+              type: "outbound_attempt",
+            },
+          },
+        ]}
+        outboundAttempts={[
+          {
+            id: "attempt-2",
+            status: "retrying",
+            attempt_count: 2,
+            max_attempts: 5,
+            provider: "meta",
+            updated_at: "2026-03-29T08:05:00.000Z",
+            message_correlation: {
+              type: "outbound_attempt",
+              provider_message_id: "provider-2",
+              message_id: "msg-2",
+            },
+          },
+        ]}
+        surface={{
+          loading: false,
+          error: "",
+          unavailable: false,
+          ready: true,
+          saving: false,
+          saveError: "",
+          saveSuccess: "",
+          refresh: vi.fn(),
+        }}
+        actionState={{ isActionPending: vi.fn().mockReturnValue(false) }}
+        markRead={vi.fn()}
+        assignThread={vi.fn()}
+        activateHandoff={vi.fn()}
+        setThreadStatus={vi.fn()}
+        onOpenDetails={vi.fn()}
+        composer={null}
+      />
+    );
+
+    expect(screen.getAllByText(/retrying/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/retry lineage is active after attempt 2 of 5/i)).toBeInTheDocument();
+  });
 });
