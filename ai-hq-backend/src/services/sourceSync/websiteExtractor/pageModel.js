@@ -167,6 +167,7 @@ function cleanListItems(values = []) {
       .filter(Boolean)
       .filter((x) => x.length >= 2)
       .filter((x) => !looksLikeNavCluster(x))
+      .filter((x) => !looksLikeThinOperationalSnippet(x))
   ).slice(0, 48);
 }
 
@@ -176,6 +177,8 @@ function cleanHeadings(values = []) {
       .map((x) => decodeMeta(x, 200))
       .filter(Boolean)
       .filter((x) => x.length >= 2)
+      .filter((x) => !looksLikeNavCluster(x))
+      .filter((x) => !looksLikeThinOperationalSnippet(x))
   ).slice(0, 24);
 }
 
@@ -336,6 +339,11 @@ export function isBusinessCriticalPageType(pageType = "") {
 function looksServiceish(value = "") {
   if (!value) return false;
 
+  if (looksLikeThinOperationalSnippet(value)) return false;
+  if (/\b(cookie|privacy|policy|terms|login|sign in|read more|learn more|contact us)\b/i.test(value)) {
+    return false;
+  }
+
   if (
     /\b(service|services|solution|solutions|automation|marketing|design|development|consulting|seo|branding|website|ecommerce|software|platform|support|repair|maintenance|training|course|academy|clinic|dental|beauty|spa|tour|travel|real estate|law|accounting|printing|delivery|catering|xidmət|xidmet|kurs|təmir|temir|satış|satis)\b/i.test(
       value
@@ -465,7 +473,20 @@ export function analyzePage({ html = "", pageUrl = "" }) {
 
   const strongParagraphs = paragraphs
     .filter((x) => !looksLikeNavCluster(x))
-    .filter((x) => !looksLikeThinOperationalSnippet(x));
+    .filter((x) => !looksLikeThinOperationalSnippet(x))
+    .filter((x) => !/(cookie|privacy|policy|terms|conditions|all rights reserved|newsletter|sign in|register)/i.test(x));
+
+  const serviceParagraphs = strongParagraphs.filter((x) =>
+    /\b(service|services|solution|solutions|offer|offering|product|products|treatment|package|automation|design|development|consulting|academy|clinic|spa|course|repair|maintenance)\b/i.test(
+      x
+    )
+  );
+
+  const pricingParagraphs = strongParagraphs.filter((x) =>
+    /(\$|€|£|₼|\bazn\b|\busd\b|\beur\b|\bprice\b|\bpricing\b|\bpackage\b|\bplan\b|\bstarting\b|\bfrom\b|\bquote\b)/i.test(
+      x
+    )
+  );
 
   const heroSection = compactText(
     uniq([headings[0] || "", headings[1] || "", ...pickStrongParagraphs(strongParagraphs, 2)])
@@ -563,6 +584,10 @@ export function analyzePage({ html = "", pageUrl = "" }) {
         .map((x) => sanitizeServiceCandidate(x))
         .filter(Boolean)
         .filter(looksServiceish),
+      ...serviceParagraphs
+        .map((x) => sanitizeServiceCandidate(x))
+        .filter(Boolean)
+        .filter(looksServiceish),
     ].filter(Boolean)
   ).slice(0, 20);
 
@@ -570,7 +595,7 @@ export function analyzePage({ html = "", pageUrl = "" }) {
     [
       ...arr(structured.priceHints).map((x) => sanitizePricingCandidate(x)).filter(Boolean),
       ...listItems.map((x) => sanitizePricingCandidate(x)).filter(Boolean),
-      ...strongParagraphs.map((x) => sanitizePricingCandidate(x)).filter(Boolean),
+      ...pricingParagraphs.map((x) => sanitizePricingCandidate(x)).filter(Boolean),
     ].filter(Boolean)
   ).slice(0, 14);
 

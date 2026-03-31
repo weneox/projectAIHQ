@@ -29,11 +29,15 @@ export function scoreAnchorIntent(url = "", text = "", title = "", sourceUrl = "
   if (/(location|branch|office|find-us|visit-us)/i.test(joined)) score += 24;
   if (/(team|founder|leadership)/i.test(joined)) score += 20;
   if (/(testimonials|reviews|case-studies|portfolio|work|projects)/i.test(joined)) score += 16;
+  if (/(products|product|menu|treatments|solutions|industries|expertise|book-online)/i.test(joined)) {
+    score += 18;
+  }
   if (/(policy|privacy|refund|return|terms|conditions)/i.test(joined)) score += 8;
 
   if (/(blog|news|article|post|author|tag|category|press|events)/i.test(joined)) score -= 20;
   if (/(career|careers|jobs|vacancies)/i.test(joined)) score -= 18;
   if (/(login|signin|sign-in|signup|register|account|cart|checkout)/i.test(joined)) score -= 30;
+  if (/(privacy|cookie|legal|terms|refund|return|shipping|track-order)/i.test(joined)) score -= 16;
   if (isBlockedCrawlPath(url)) score -= 50;
 
   try {
@@ -80,19 +84,28 @@ export function buildPriorityPathSeeds(baseUrl = "") {
       "/company",
       "/services",
       "/service",
+      "/products",
+      "/product",
+      "/menu",
       "/solutions",
+      "/offers",
+      "/pricing-and-packages",
       "/contact",
       "/contact-us",
+      "/reach-us",
       "/pricing",
       "/plans",
+      "/packages",
       "/faq",
       "/help",
       "/locations",
       "/branches",
+      "/find-us",
       "/book",
       "/booking",
       "/schedule",
       "/appointment",
+      "/consultation",
       "/team",
       "/our-team",
     ];

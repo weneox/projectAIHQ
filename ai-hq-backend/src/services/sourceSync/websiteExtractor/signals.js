@@ -38,6 +38,12 @@ const GENERIC_SOCIAL_PATH_RE =
 const GENERIC_SOCIAL_HOST_RE =
   /^(m\.)?(instagram\.com|facebook\.com|linkedin\.com|youtube\.com|youtu\.be|tiktok\.com|telegram\.me|t\.me|x\.com|twitter\.com|wa\.me|whatsapp\.com)$/i;
 
+const SERVICE_NOISE_RE =
+  /\b(home|about|contact|faq|blog|news|privacy|policy|terms|cookie|career|vacancy|review|testimonial|menu|read more|learn more|view more|book now|call now|follow us)\b/i;
+
+const PRICING_NOISE_RE =
+  /\b(updated|published|posted|article|news|blog|privacy|policy|terms|working hours|business hours|cookie)\b/i;
+
 function decodeHtmlEntities(text = "") {
   const value = s(text);
   if (!value) return "";
@@ -109,6 +115,15 @@ function looksLikeDateishNumber(value = "", contextLine = "") {
   }
 
   if (!raw.startsWith("+") && DATEISH_CONTEXT_RE.test(contextLine)) return true;
+  if (
+    !raw.startsWith("+") &&
+    /\b(19|20)\d{2}[-/.](0[1-9]|1[0-2])[-/.](0[1-9]|[12]\d|3[01])\b/.test(contextLine)
+  ) {
+    return true;
+  }
+  if (!raw.startsWith("+") && /\b\d{1,2}:\d{2}\b/.test(contextLine) && !PHONE_CONTEXT_RE.test(contextLine)) {
+    return true;
+  }
 
   return false;
 }
@@ -157,6 +172,8 @@ export function extractPhones(text = "") {
 
       const digits = digitsOnly(normalized);
 
+      if (/^20\d{7,}$/.test(digits) && !hasContext) continue;
+      if (!hasContext && /^\d{7,9}$/.test(digits)) continue;
       if (!hasContext && !normalized.startsWith("+")) {
         if (digits.length < 10) continue;
       }
@@ -491,10 +508,12 @@ export function sanitizeServiceCandidate(text = "") {
   if (/(privacy|policy|cookie|terms|conditions|refund|return|shipping)/i.test(value)) return "";
   if (/(mon|tue|wed|thu|fri|sat|sun|hours|iş saat|business hours)/i.test(value)) return "";
   if (/(price|pricing|plan|package|qiymət|qiymet)/i.test(value) && /\d/.test(value)) return "";
+  if (SERVICE_NOISE_RE.test(value)) return "";
   if (ADDRESS_NEGATIVE_RE.test(value)) return "";
 
   const words = value.split(/\s+/).filter(Boolean);
   if (words.length > 10) return "";
+  if (words.length < 2 && !/\b(seo|crm|spa|smm|ui\/ux)\b/i.test(value)) return "";
 
   return value;
 }
@@ -505,6 +524,10 @@ export function sanitizePricingCandidate(text = "") {
   if (looksLikeAddressLine(value)) return "";
   if (looksLikeOperationalHoursLine(value)) return "";
   if (/\b(\+?\d[\d\s()-]{6,}|@)\b/.test(value)) return "";
+  if (PRICING_NOISE_RE.test(value)) return "";
+  if (!/(\$|€|£|₼|\bazn\b|\busd\b|\beur\b|\bfrom\b|\bstarting\b|\bstart(?:s|ing)?\b|\bprice\b|\bpricing\b|\bpackage\b|\bplan\b|\bquote\b)/i.test(value)) {
+    return "";
+  }
   return value;
 }
 

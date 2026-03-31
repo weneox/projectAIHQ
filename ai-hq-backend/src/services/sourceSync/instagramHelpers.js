@@ -95,6 +95,10 @@ function captionBusinessLines(text = "") {
   );
 }
 
+function isInstagramInternalUrl(url = "") {
+  return /instagram\.com/i.test(s(url));
+}
+
 function buildPageLocationText(page = {}) {
   const location = obj(page?.location);
   return compactText(
@@ -215,6 +219,7 @@ export function buildInstagramSignals(extracted = {}) {
   const allUrls = uniq(
     [profileWebsite, ...urlsFromBio, ...urlsFromPage, ...urlsFromCaptions].filter(Boolean)
   );
+  const externalUrls = allUrls.filter((url) => !isInstagramInternalUrl(url));
 
   const emails = uniq([
     ...extractEmails(biography),
@@ -240,7 +245,7 @@ export function buildInstagramSignals(extracted = {}) {
   );
 
   const summaryCandidates = dedupeTextList(
-    [biography, pageAbout, ...captions.slice(0, 6)],
+    [pageAbout, biography, ...captions.slice(0, 6)],
     { maxItems: 8, maxText: 320 }
   );
   const pricingHints = extractPricingHints([biography, pageAbout, ...captions.slice(0, 8)]);
@@ -268,6 +273,7 @@ export function buildInstagramSignals(extracted = {}) {
     emails,
     phones,
     urls: allUrls,
+    externalUrls,
     socialLinks: instagramUrl
       ? [{ platform: "instagram", url: instagramUrl }]
       : [],
@@ -278,6 +284,34 @@ export function buildInstagramSignals(extracted = {}) {
     categoryHints,
     pricingHints,
     addresses,
+    contactClues: dedupeTextList(
+      [
+        pageAbout,
+        biography,
+        s(page?.phone) ? `Phone: ${s(page.phone)}` : "",
+        arr(page?.emails).length ? `Email: ${arr(page.emails).join(", ")}` : "",
+        s(page?.website) ? `Website: ${s(page.website)}` : "",
+      ],
+      { maxItems: 8, maxText: 180 }
+    ),
+    selectionMeta: {
+      summaryPrimarySource: pageAbout ? "page.about" : biography ? "account.biography" : "",
+      websiteSource: profileWebsite
+        ? account?.website
+          ? "account.website"
+          : page?.website
+            ? "page.website"
+            : "bio_or_caption_url"
+        : "",
+      contactSource:
+        emails[0]
+          ? "profile_contact"
+          : phones[0]
+            ? "profile_contact"
+            : addresses[0]
+              ? "page.location_or_profile_text"
+              : "",
+    },
     captions: captions.slice(0, 10),
     media: media.map((item) => ({
       id: s(item?.id),
@@ -320,7 +354,7 @@ export function synthesizeInstagramBusinessProfile(signals = {}) {
       [s(account?.biography), s(page?.about)].filter(Boolean).join(". "),
       1400
     ),
-    websiteUrl: s(account?.website || page?.website || arr(signals?.urls)[0]),
+    websiteUrl: s(account?.website || page?.website || arr(signals?.externalUrls)[0] || arr(signals?.urls)[0]),
     primaryPhone: s(arr(signals?.phones)[0]),
     primaryEmail: s(arr(signals?.emails)[0]),
     primaryAddress: s(arr(signals?.addresses)[0]),
@@ -339,7 +373,13 @@ export function synthesizeInstagramBusinessProfile(signals = {}) {
       maxText: 180,
     }),
     pricingPolicy: "",
-    supportMode: "instagram_dm",
+    supportMode: deriveInstagramSupportMode({
+      whatsappLinks: signals?.whatsappLinks,
+      bookingLinks: signals?.bookingLinks,
+      phones: signals?.phones,
+      emails: signals?.emails,
+      contactClues: signals?.contactClues,
+    }),
     hours: [],
     emails: uniq(arr(signals?.emails).map((x) => s(x)).filter(Boolean)),
     phones: uniq(arr(signals?.phones).map((x) => s(x)).filter(Boolean)),
@@ -356,6 +396,7 @@ export function synthesizeInstagramBusinessProfile(signals = {}) {
     instagramUsername: s(account?.username),
     instagramUrl:
       s(arr(signals?.socialLinks)[0]?.url) || buildInstagramSocialUrl(account?.username),
+    selectionMeta: obj(signals?.selectionMeta),
   };
 }
 
@@ -687,4 +728,18 @@ export function buildInstagramSyncQualitySummary({
     signalCount,
     profilePicturePresent: !!s(account?.profilePictureUrl),
   };
+}
+
+function deriveInstagramSupportMode({
+  whatsappLinks = [],
+  bookingLinks = [],
+  phones = [],
+  emails = [],
+  contactClues = [],
+} = {}) {
+  if (arr(whatsappLinks).length) return "whatsapp";
+  if (arr(contactClues).some((item) => /\bwhatsapp\b/i.test(s(item)))) return "whatsapp";
+  if (arr(bookingLinks).length) return "booking";
+  if (arr(phones).length || arr(emails).length) return "direct_contact";
+  return "instagram_dm";
 }

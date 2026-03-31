@@ -13,14 +13,14 @@ import { finalizePageAdmissions } from "./admission.js";
 import { buildSiteRollup } from "./rollup.js";
 
 const DEFAULT_CRAWL_LIMITS = Object.freeze({
-  maxPagesAllowed: 4,
-  maxCandidatesQueued: 24,
-  maxFetchPages: 6,
-  totalCrawlMs: 24000,
+  maxPagesAllowed: 6,
+  maxCandidatesQueued: 40,
+  maxFetchPages: 10,
+  totalCrawlMs: 32000,
   entryFetchMs: 18000,
   robotsFetchMs: 2200,
-  sitemapFetchMs: 3000,
-  pageFetchMs: 6500,
+  sitemapFetchMs: 4500,
+  pageFetchMs: 7000,
   finalizeReserveMs: 4000,
   minStepBudgetMs: 400,
 });
@@ -703,7 +703,7 @@ export async function extractWebsiteSource(source) {
 
   const preSitemapTargetTotalPages = Math.min(
     maxFetchPages,
-    Math.max(2, Math.min(maxPagesAllowed, 3))
+    Math.max(3, Math.min(maxPagesAllowed, 4))
   );
 
   pending = await crawlPendingQueue({

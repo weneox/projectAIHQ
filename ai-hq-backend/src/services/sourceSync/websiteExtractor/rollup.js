@@ -80,10 +80,10 @@ function scoreDescriptionCandidate(value = "", page = {}, source = "") {
   const words = wordCount(x);
 
   score += pageTypeWeight(page?.pageType);
-  if (source === "about") score += 16;
+  if (source === "about") score += 18;
   if (source === "hero") score += 8;
   if (source === "structured") score += 10;
-  if (source === "meta") score += 7;
+  if (source === "meta") score += 16;
 
   if (words >= 12 && words <= 70) score += 10;
   if (x.length >= 70 && x.length <= 320) score += 10;
@@ -100,6 +100,48 @@ function scoreDescriptionCandidate(value = "", page = {}, source = "") {
   ) {
     score += 4;
   }
+  if (/\b(baku|azerbaijan|clinic|agency|studio|store|shop|practice|office)\b/i.test(x)) {
+    score += 6;
+  }
+
+  const nameTokens = uniq(
+    [
+      ...arr(page?.structured?.names),
+      s(page?.title),
+    ]
+      .join(" ")
+      .split(/[^a-z0-9]+/i)
+      .map((item) => lower(item))
+      .filter((item) => item.length >= 4)
+      .slice(0, 4)
+  );
+
+  if (nameTokens.some((token) => lower(x).includes(token))) {
+    score += 8;
+  }
+  if (/^[A-Z][\w&' -]{2,80}\s+is\s+(an?|the)\b/.test(x)) {
+    score += 12;
+  }
+
+  if (
+    s(page?.pageType) === "contact" &&
+    source !== "meta" &&
+    !/\b(company|business|clinic|agency|studio|services|solutions)\b/i.test(x)
+  ) {
+    score -= 14;
+  }
+
+  if (
+    /\b(contact|call|reach us|get in touch|appointment|support)\b/i.test(x) &&
+    !/\b(company|business|clinic|agency|studio|services|solutions|about)\b/i.test(x)
+  ) {
+    score -= 10;
+  }
+
+  if (/^contact\b/i.test(x)) score -= 18;
+  if (/^(call|reach|get in touch)\b/i.test(x)) score -= 18;
+  if (/\b(appointment|appointments|treatment questions|support team)\b/i.test(x)) score -= 10;
+  if (source === "hero" && /^contact\b/i.test(x)) score -= 20;
 
   if (words > 85) score -= 4;
 
@@ -192,6 +234,9 @@ function collectDescriptionCandidates(allPages = [], referencePage = {}) {
     for (const value of arr(page?.structured?.descriptions)) {
       raw.push({ value, page, source: "structured" });
     }
+    for (const value of arr(page?.paragraphs).slice(0, 3)) {
+      raw.push({ value, page, source: "paragraph" });
+    }
   }
 
   if (referencePage?.metaDescription) {
@@ -203,17 +248,24 @@ function collectDescriptionCandidates(allPages = [], referencePage = {}) {
   }
 
   return rankedUniqueCandidates(
-    raw.map((item) => {
-      const value = cleanNarrative(item.value, 500, 30);
-      return {
-        ...item,
-        value,
-        score: scoreDescriptionCandidate(value, item.page, item.source),
-      };
-    }),
-    (x) => lower(x.value),
-    20
-  ).map((x) => x.value);
+      raw.map((item) => {
+        const value = cleanNarrative(item.value, 500, 30);
+        return {
+          ...item,
+          value,
+          score:
+            scoreDescriptionCandidate(value, item.page, item.source) +
+            (/\b(service|services|solution|solutions|company|business|team|clinic|studio|agency|store|shop)\b/i.test(
+              value
+            )
+              ? 4
+              : 0) -
+            (/\b(book now|call now|request quote|contact us|follow us)\b/i.test(value) ? 6 : 0),
+        };
+      }),
+      (x) => lower(x.value),
+      20
+    );
 }
 
 function collectPrioritizedValues(allPages = [], selector, preferredTypes = []) {
@@ -243,6 +295,7 @@ function collectServiceHints(allPages = []) {
     .filter(Boolean)
     .filter((x) => !looksLikeOperationalHoursLine(x))
     .filter((x) => !looksLikeAddressLine(x))
+    .filter((x) => !/\b(contact|about|read more|learn more|book now|call now|follow us)\b/i.test(x))
     .slice(0, 30);
 }
 
@@ -257,7 +310,26 @@ function collectPricingHints(allPages = []) {
     .filter(Boolean)
     .filter((x) => !looksLikeOperationalHoursLine(x))
     .filter((x) => !looksLikeAddressLine(x))
+    .filter((x) => !/\b(updated|published|article|blog|news)\b/i.test(x))
     .slice(0, 16);
+}
+
+function deriveSelectionMeta(candidates = [], preferredValue = "") {
+  const normalized = lower(cleanNarrative(preferredValue, 500, 0));
+  const selected =
+    arr(candidates).find((item) => lower(cleanNarrative(item?.value, 500, 0)) === normalized) ||
+    arr(candidates)[0] ||
+    null;
+
+  if (!selected) return null;
+
+  return {
+    value: s(selected.value),
+    source: s(selected.source),
+    pageType: s(selected.page?.pageType),
+    url: s(selected.page?.url),
+    score: Number(selected.score || 0),
+  };
 }
 
 function collectAddresses(allPages = []) {
@@ -331,7 +403,8 @@ export function buildSiteRollup(entryPage, allPages, extraWarnings = []) {
   }, {});
 
   const nameCandidates = collectNameCandidates(pages, referencePage);
-  const descriptionCandidates = collectDescriptionCandidates(pages, referencePage);
+  const descriptionCandidateRows = collectDescriptionCandidates(pages, referencePage);
+  const descriptionCandidates = descriptionCandidateRows.map((x) => x.value);
 
   const contactEmails = uniq(
     collectPrioritizedValues(pages, (page) => arr(page?.emails), ["contact", "about", "generic"])
@@ -411,6 +484,26 @@ export function buildSiteRollup(entryPage, allPages, extraWarnings = []) {
       serviceHints,
       pricingHints,
       faqPreview,
+      selectionMeta: {
+        primaryName: deriveSelectionMeta(
+          nameCandidates.map((value) => ({
+            value,
+            source: "candidate",
+            page: pages.find(
+              (page) =>
+                arr(page?.structured?.names).includes(value) ||
+                s(page?.title) === value ||
+                arr(page?.headings).includes(value)
+            ),
+            score: 0,
+          })),
+          s(nameCandidates[0] || "")
+        ),
+        primaryDescription: deriveSelectionMeta(
+          descriptionCandidateRows,
+          s(descriptionCandidates[0] || "")
+        ),
+      },
     },
     quality: {
       score: qualityScore,
