@@ -261,7 +261,7 @@ export function formFromProfile(profile = {}, prev = {}) {
       x.language,
       x.sourceLanguage,
       x.source_language
-    ) || s(prev.language || "en");
+    ) || s(prev.language);
   const safePhone = sanitizeExtractedContactValue(
     x.primaryPhone || x.primary_phone || x.phone,
     "phone"
@@ -280,7 +280,7 @@ export function formFromProfile(profile = {}, prev = {}) {
       safeCompanyName || (!rawCompanyName ? prev.companyName : "")
     ),
     description: s(safeDescription || prev.description),
-    timezone: s(x.timezone || prev.timezone || "Asia/Baku"),
+    timezone: s(x.timezone || prev.timezone),
     language: resolvedLanguage,
     websiteUrl: s(
       x.websiteUrl ||
@@ -464,11 +464,11 @@ export function hydrateBusinessFormFromProfile(
   }
 
   if (force || !s(next.timezone)) {
-    next.timezone = s(candidate.timezone || prev.timezone || "Asia/Baku");
+    next.timezone = s(candidate.timezone || prev.timezone);
   }
 
   if (force || !s(next.language)) {
-    next.language = s(candidate.language || prev.language || "en");
+    next.language = s(candidate.language || prev.language);
   }
 
   next.behavior = normalizeBehaviorProfile(
@@ -504,11 +504,13 @@ export function buildBusinessProfilePatch({
       discoveryState.mainLanguage,
       discoveryState.primaryLanguage,
       discoveryState.language
-    ) || "en";
+    ) || "";
 
   const supportedLanguages = arr(existing.supportedLanguages).length
     ? arr(existing.supportedLanguages)
-    : [resolvedLanguage];
+    : resolvedLanguage
+      ? [resolvedLanguage]
+      : [];
 
   return {
     ...existing,
@@ -522,7 +524,7 @@ export function buildBusinessProfilePatch({
     primaryLanguage: resolvedLanguage,
     language: resolvedLanguage,
     supportedLanguages,
-    timezone: s(businessForm.timezone || "Asia/Baku"),
+    timezone: s(businessForm.timezone || existing.timezone || discoveryState.timezone),
     websiteUrl: s(
       businessForm.websiteUrl || existing.websiteUrl || discoveryState?.lastUrl
     ),
@@ -560,11 +562,13 @@ export function buildCapabilitiesPatch({
       existing.primaryLanguage,
       existing.mainLanguage,
       existing.language
-    ) || "en";
+    ) || "";
 
   const supportedLanguages = arr(existing.supportedLanguages).length
     ? arr(existing.supportedLanguages)
-    : [language];
+    : language
+      ? [language]
+      : [];
 
   return {
     ...existing,
@@ -670,7 +674,7 @@ export function buildSafeUiProfile({
     address: safeAddress,
     mainLanguage: safeMainLanguage,
     primaryLanguage: safePrimaryLanguage,
-    language: safeMainLanguage || s(profile.language || "en"),
+    language: safeMainLanguage || s(profile.language),
     reviewRequired: !!reviewRequired,
     reviewFlags: arr(reviewFlags),
     fieldConfidence: obj(fieldConfidence),

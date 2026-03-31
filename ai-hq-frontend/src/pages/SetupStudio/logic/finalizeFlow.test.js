@@ -200,6 +200,45 @@ describe("finalizeFlow", () => {
     });
   });
 
+  it("does not invent locale defaults in the staged finalize patch when the draft has no locale evidence", () => {
+    const patch = buildSetupStudioFinalizePatch({
+      currentReview: {
+        draft: {
+          businessProfile: {
+            companyName: "Acme Bakery",
+          },
+          capabilities: {},
+          services: [],
+          knowledgeItems: [],
+        },
+      },
+      discoveryState: {
+        requestId: "req-2",
+      },
+      businessForm: {
+        companyName: "Acme Bakery",
+        description: "Neighborhood bakery",
+        timezone: "",
+        language: "",
+        websiteUrl: "https://acme.example",
+        behavior: {},
+      },
+      manualSections: {
+        servicesText: "",
+        faqsText: "",
+        policiesText: "",
+      },
+    });
+
+    expect(patch.businessProfile.mainLanguage || "").toBe("");
+    expect(patch.businessProfile.primaryLanguage || "").toBe("");
+    expect(patch.businessProfile.language || "").toBe("");
+    expect(patch.businessProfile.timezone || "").toBe("");
+    expect(patch.capabilities.primaryLanguage || "").toBe("");
+    expect(Array.isArray(patch.capabilities.supportedLanguages)).toBe(true);
+    expect(patch.capabilities.supportedLanguages).toEqual([]);
+  });
+
   it("shapes finalize failures and preserves concurrency issue propagation", () => {
     const failure = buildSetupStudioFinalizeFailure({
       error: {

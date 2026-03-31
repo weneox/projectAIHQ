@@ -737,7 +737,7 @@ export function buildSafeUiProfile({
     address: safeAddress,
     mainLanguage: safeMainLanguage,
     primaryLanguage: safePrimaryLanguage,
-    language: safeMainLanguage || s(profile.language || "en"),
+    language: safeMainLanguage || s(profile.language),
     reviewRequired: !!reviewRequired,
     reviewFlags: arr(reviewFlags),
     fieldConfidence: obj(fieldConfidence),

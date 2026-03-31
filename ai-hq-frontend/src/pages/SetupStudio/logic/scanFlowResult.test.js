@@ -153,4 +153,36 @@ describe("reconcileSetupStudioScanResult", () => {
     expect(errorState.importedKnowledgeItems).toEqual([]);
     expect(errorState.importedServices).toEqual([]);
   });
+
+  it("does not invent locale fields for sparse website scan results without source evidence", () => {
+    const result = reconcileSetupStudioScanResult({
+      plan: buildPlan(),
+      importResult: {
+        warnings: [],
+        profile: {
+          websiteUrl: "https://acme.example",
+          primaryPhone: "+15550001111",
+        },
+      },
+      analyzeResult: {
+        mode: "success",
+        shouldReview: false,
+        candidateCount: 0,
+        requestId: "req-2",
+        profile: {
+          websiteUrl: "https://acme.example",
+          primaryPhone: "+15550001111",
+        },
+      },
+      reviewPayload: {},
+      createEmptyReviewState,
+    });
+
+    expect(result.bestIncomingProfile.websiteUrl).toBe("https://acme.example");
+    expect(result.bestIncomingProfile.primaryPhone).toBe("+15550001111");
+    expect(result.bestIncomingProfile.language || "").toBe("");
+    expect(result.bestIncomingProfile.mainLanguage || "").toBe("");
+    expect(result.bestIncomingProfile.primaryLanguage || "").toBe("");
+    expect(result.bestIncomingProfile.timezone || "").toBe("");
+  });
 });
