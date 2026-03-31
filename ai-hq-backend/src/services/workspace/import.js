@@ -525,7 +525,9 @@ function shouldReuseSessionForImport({
   incomingType = "",
   incomingUrl = "",
   nextIntakeContext = {},
+  allowSessionReuse = false,
 } = {}) {
+  if (!allowSessionReuse) return false;
   if (!s(currentReview?.session?.id)) return false;
   if (lower(currentReview?.session?.status) === "failed") return false;
   if (isPollutedFailedReviewDraft(currentReview)) return false;
@@ -1149,6 +1151,7 @@ async function importSourceByType({
   sources = [],
   primarySource = null,
   metadataJson = {},
+  allowSessionReuse = false,
   waitForCompletion = false,
   requestId: requestIdOverride = "",
 }) {
@@ -1224,6 +1227,7 @@ async function importSourceByType({
     incomingType: normalizedType,
     incomingUrl: normalizedUrl,
     nextIntakeContext: rawIntakeContext,
+    allowSessionReuse,
   });
 
   const intakeContext = reuseExistingSession
@@ -1680,6 +1684,7 @@ export async function importSourceBundle({
       metadataJson: mergeDeep(obj(bundle.metadataJson), {
         bundlePrimarySourceType: "website",
       }),
+      allowSessionReuse: true,
       primarySource: bundle.primarySource,
       sources: bundle.sources,
     });

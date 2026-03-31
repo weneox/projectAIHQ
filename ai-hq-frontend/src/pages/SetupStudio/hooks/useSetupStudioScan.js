@@ -124,7 +124,7 @@ export function createSetupStudioScan(ctx, helpers) {
 
       const refreshResult = await refreshAndMaybeRouteHome({
         preserveBusinessForm: true,
-        hydrateReview: true,
+        hydrateReview: false,
         activeSourceType: effectiveSourceType,
         activeSourceUrl: effectiveSourceUrl,
       });

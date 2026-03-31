@@ -22,8 +22,9 @@ export function useSetupStudioControllerEffects({
 }) {
   useEffect(() => {
     actions.loadData({
-      hydrateReview: true,
-      preserveBusinessForm: true,
+      hydrateReview: false,
+      preserveBusinessForm: false,
+      seedBootProfile: false,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

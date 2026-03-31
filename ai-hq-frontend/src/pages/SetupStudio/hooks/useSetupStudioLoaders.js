@@ -37,6 +37,7 @@ export function createSetupStudioLoaders(ctx, shared) {
     updateActiveSourceScope,
     resolveActiveSourceScope,
     clearStudioReviewState,
+    resetBusinessTwinDraftForNewScan,
     seedBusinessFormFromBootProfile,
     syncDiscoveryStateFromReview,
     applyReviewState,
@@ -104,6 +105,7 @@ export function createSetupStudioLoaders(ctx, shared) {
     silent = false,
     preserveBusinessForm = false,
     hydrateReview = false,
+    seedBootProfile = true,
     activeSourceType = "",
     activeSourceUrl = "",
   } = {}) {
@@ -141,7 +143,10 @@ export function createSetupStudioLoaders(ctx, shared) {
       if (!hydrateReview) {
         if (!preserveBusinessForm) {
           clearStudioReviewState({ preserveActiveSource: false });
-          seedBusinessFormFromBootProfile(bootSnapshot.profile);
+          resetBusinessTwinDraftForNewScan("");
+          if (seedBootProfile) {
+            seedBusinessFormFromBootProfile(bootSnapshot.profile);
+          }
         }
 
         return {

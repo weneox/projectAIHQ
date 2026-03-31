@@ -6,6 +6,15 @@ import { buildFrontendReviewShape } from "./reviewShape.js";
 import { arr, obj, s } from "./utils.js";
 import { safeUuidOrNull } from "./draftShared.js";
 
+function bool(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  const normalized = s(value).toLowerCase();
+  if (!normalized) return fallback;
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
 async function defaultGetCurrentSetupReview(tenantId) {
   const reviewHelper = await import("../../../db/helpers/tenantSetupReview.js");
   return reviewHelper.getCurrentSetupReview(tenantId);
@@ -102,6 +111,13 @@ export function buildImportArgs({ actor, body = {}, requestId = "" }) {
     sources: arr(body?.sources),
     primarySource: body?.primarySource || body?.primary_source || null,
     metadataJson: obj(body?.metadataJson || body?.metadata_json),
+    allowSessionReuse: bool(
+      body?.allowSessionReuse ??
+        body?.allow_session_reuse ??
+        body?.resumeExistingSession ??
+        body?.resume_existing_session,
+      false
+    ),
   };
 }
 

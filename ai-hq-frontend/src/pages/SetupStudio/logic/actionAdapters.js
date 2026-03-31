@@ -26,10 +26,14 @@ export function createSetupStudioActionAdapters(ctx, actions) {
   }
 
   function refreshStudio(overrides = {}) {
+    const shouldHydrateReview =
+      overrides.hydrateReview ?? !freshEntryMode;
+
     return actions.loadData({
       silent: true,
       preserveBusinessForm: !freshEntryMode,
-      hydrateReview: true,
+      hydrateReview: shouldHydrateReview,
+      seedBootProfile: shouldHydrateReview,
       ...buildActiveSourceRequest(overrides),
       ...overrides,
     });

@@ -65,6 +65,7 @@ test("Case A: different primary intake starts a fresh session", () => {
     currentReview,
     incomingType: "website",
     incomingUrl: "https://beta.example",
+    allowSessionReuse: true,
     nextIntakeContext: {
       primarySource: {
         sourceType: "website",
@@ -122,10 +123,52 @@ test("Case A: same intake bundle reuses the current session", () => {
     currentReview,
     incomingType: "website",
     incomingUrl: "https://alpha.example",
+    allowSessionReuse: true,
     nextIntakeContext: bundle,
   });
 
   assert.equal(shouldReuse, true);
+});
+
+test("Case A: same intake bundle stays fresh-by-default until reuse is explicit", () => {
+  const bundle = {
+    primarySource: {
+      sourceType: "website",
+      url: "https://alpha.example",
+    },
+    sources: [
+      {
+        sourceType: "website",
+        url: "https://alpha.example",
+        isPrimary: true,
+      },
+    ],
+  };
+
+  const currentReview = {
+    session: {
+      id: "session-a",
+      metadata: {
+        intakeBundleKey: importTest.buildIntakeBundleKey(bundle),
+      },
+    },
+    draft: {
+      sourceSummary: {
+        primarySourceType: "website",
+        primarySourceUrl: "https://alpha.example",
+      },
+    },
+    sources: [],
+  };
+
+  const shouldReuse = importTest.shouldReuseSessionForImport({
+    currentReview,
+    incomingType: "website",
+    incomingUrl: "https://alpha.example",
+    nextIntakeContext: bundle,
+  });
+
+  assert.equal(shouldReuse, false);
 });
 
 test("Case B: same-bundle re-import evicts unsupported source-derived fields", () => {
@@ -911,6 +954,7 @@ test("Case S: polluted failed active session is not silently reused", () => {
     currentReview,
     incomingType: "website",
     incomingUrl: "https://saytpro.az",
+    allowSessionReuse: true,
     nextIntakeContext: {
       primarySource: {
         sourceType: "website",

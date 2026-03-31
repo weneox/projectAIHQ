@@ -56,9 +56,41 @@ describe("createSetupStudioActionAdapters", () => {
     expect(actions.loadData).toHaveBeenCalledWith({
       silent: true,
       preserveBusinessForm: false,
-      hydrateReview: true,
+      hydrateReview: false,
+      seedBootProfile: false,
       activeSourceType: "manual",
       activeSourceUrl: "",
+    });
+  });
+
+  it("keeps review hydration available once the user explicitly resumes review mode", () => {
+    const actions = {
+      loadCurrentReview: vi.fn(),
+      loadData: vi.fn(),
+      onScanBusiness: vi.fn(),
+    };
+    const ctx = {
+      navigate: vi.fn(),
+      discoveryForm: {},
+      freshEntryMode: false,
+      activeSourceScope: {
+        sourceType: "website",
+        sourceUrl: "https://acme.example",
+      },
+      setShowRefine: vi.fn(),
+      setShowKnowledge: vi.fn(),
+    };
+
+    const adapters = createSetupStudioActionAdapters(ctx, actions);
+    adapters.refreshStudio();
+
+    expect(actions.loadData).toHaveBeenCalledWith({
+      silent: true,
+      preserveBusinessForm: true,
+      hydrateReview: true,
+      seedBootProfile: true,
+      activeSourceType: "website",
+      activeSourceUrl: "https://acme.example",
     });
   });
 });

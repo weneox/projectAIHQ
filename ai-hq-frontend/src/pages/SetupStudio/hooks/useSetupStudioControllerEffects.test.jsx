@@ -51,8 +51,9 @@ describe("useSetupStudioControllerEffects", () => {
 
     expect(actions.loadData).toHaveBeenCalledTimes(1);
     expect(actions.loadData).toHaveBeenCalledWith({
-      hydrateReview: true,
-      preserveBusinessForm: true,
+      hydrateReview: false,
+      preserveBusinessForm: false,
+      seedBootProfile: false,
     });
   });
 
