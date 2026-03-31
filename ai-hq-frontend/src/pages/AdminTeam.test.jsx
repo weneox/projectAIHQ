@@ -65,7 +65,7 @@ describe("AdminTeam", () => {
   it("renders shared surface banner feedback", () => {
     render(<AdminTeam />);
 
-    expect(screen.getByText(/user has been deleted/i)).toBeInTheDocument();
-    expect(screen.getByText(/admin team management is temporarily unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/^User has been deleted$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Team unavailable$/i)).toBeInTheDocument();
   });
 });

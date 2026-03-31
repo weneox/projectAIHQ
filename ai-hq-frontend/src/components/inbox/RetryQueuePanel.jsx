@@ -109,13 +109,11 @@ export default function RetryQueuePanel({
           </div>
         </div>
 
-        <div className="mt-4">
-          <SettingsSurfaceBanner
-            surface={surface}
-            unavailableMessage="Retry queue is temporarily unavailable."
-            refreshLabel="Refresh retry queue"
-          />
-        </div>
+        <SettingsSurfaceBanner
+          surface={surface}
+          unavailableMessage="Retry queue is temporarily unavailable."
+          refreshLabel="Refresh retry queue"
+        />
 
         <div className="mt-4 overflow-hidden rounded-[22px] border border-white/10 bg-black/10">
           {surface.loading ? (

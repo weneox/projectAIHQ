@@ -1,7 +1,7 @@
 import {
   ArrowUpRight,
-  CalendarDays,
   MessageSquareText,
+  Radio,
   UserRound,
   X,
 } from "lucide-react";
@@ -24,6 +24,7 @@ function initialsFromName(value = "") {
     .filter(Boolean);
 
   if (!parts.length) return "U";
+
   return parts
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
@@ -38,6 +39,7 @@ function avatarTone(seed = "") {
     "bg-violet-100 text-violet-700",
     "bg-emerald-100 text-emerald-700",
   ];
+
   const score = String(seed || "")
     .split("")
     .reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
@@ -45,18 +47,58 @@ function avatarTone(seed = "") {
   return tones[score % tones.length];
 }
 
+function resolveAvatarUrl(entity = {}) {
+  return (
+    s(entity.avatar_url) ||
+    s(entity.profile_image_url) ||
+    s(entity.customer_avatar_url) ||
+    s(entity.external_avatar_url) ||
+    s(entity.photo_url)
+  );
+}
+
+function resolveDisplayName(selectedThread = {}, relatedLead = null) {
+  return (
+    s(selectedThread?.customer_name) ||
+    s(selectedThread?.external_username) ||
+    s(relatedLead?.name) ||
+    s(selectedThread?.external_user_id) ||
+    "Conversation"
+  );
+}
+
+function resolveHandle(selectedThread = {}, relatedLead = null) {
+  return (
+    (relatedLead ? s(leadHandle(relatedLead)) : "") ||
+    s(selectedThread?.external_username) ||
+    s(selectedThread?.external_user_id)
+  );
+}
+
+function prettyStatus(selectedThread = {}, relatedLead = null) {
+  if (selectedThread?.handoff_active) return "In handoff";
+  if (relatedLead?.status) return s(relatedLead.status);
+  if (selectedThread?.status) return s(selectedThread.status);
+  return "Active";
+}
+
+function prettyStage(relatedLead = null) {
+  return s(relatedLead?.stage || "");
+}
+
 function Tag({ children, tone = "default" }) {
   const tones = {
-    default: "border border-slate-200 bg-slate-100 text-slate-600",
-    green: "border border-emerald-200 bg-emerald-50 text-emerald-700",
-    blue: "border border-sky-200 bg-sky-50 text-sky-700",
-    amber: "border border-amber-200 bg-amber-50 text-amber-700",
+    default: "border-slate-200 bg-slate-100 text-slate-600",
+    soft: "border-slate-200 bg-white text-slate-700",
+    green: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    blue: "border-sky-200 bg-sky-50 text-sky-700",
+    amber: "border-amber-200 bg-amber-50 text-amber-700",
   };
 
   return (
     <span
       className={[
-        "inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium",
+        "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium",
         tones[tone] || tones.default,
       ].join(" ")}
     >
@@ -65,29 +107,32 @@ function Tag({ children, tone = "default" }) {
   );
 }
 
-function DetailRow({ label, value }) {
+function InfoRow({ label, value, valueTone = "default" }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-3">
-      <div className="text-[13px] font-medium text-slate-700">{label}</div>
-      <div className="truncate text-right text-[13px] text-slate-500">{value}</div>
+    <div className="flex items-center justify-between gap-4 py-3">
+      <div className="text-[13px] font-medium text-slate-500">{label}</div>
+      <div
+        className={[
+          "min-w-0 truncate text-right text-[13px]",
+          valueTone === "strong" ? "font-medium text-slate-900" : "text-slate-700",
+        ].join(" ")}
+      >
+        {value || "--"}
+      </div>
     </div>
   );
 }
 
-function Section({ icon: Icon, title, count = null, children }) {
+function Section({ icon: Icon, title, children, action = null }) {
   return (
     <section className="border-t border-slate-200/70 px-5 py-5">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[14px] font-medium text-slate-800">
+        <div className="flex items-center gap-2 text-[14px] font-medium text-slate-900">
           {Icon ? <Icon className="h-4 w-4 text-slate-400" /> : null}
-          {title}
+          <span>{title}</span>
         </div>
 
-        {count !== null ? (
-          <span className="flex h-7 min-w-[28px] items-center justify-center rounded-full bg-slate-100 px-2 text-[12px] font-medium text-slate-600">
-            {count}
-          </span>
-        ) : null}
+        {action}
       </div>
 
       <div className="mt-4">{children}</div>
@@ -95,19 +140,19 @@ function Section({ icon: Icon, title, count = null, children }) {
   );
 }
 
-function AvatarStack({ names = [] }) {
-  const safe = names.filter(Boolean).slice(0, 4);
+function AvatarStack({ people = [] }) {
+  const safe = people.filter(Boolean).slice(0, 4);
 
   return (
     <div className="flex items-center">
       {safe.map((name, index) => (
         <div
           key={`${name}-${index}`}
+          title={name}
           className={[
-            "-ml-2 first:ml-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white text-xs font-semibold shadow-[0_2px_8px_rgba(15,23,42,0.06)]",
+            "-ml-2 first:ml-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white text-xs font-semibold shadow-[0_4px_14px_rgba(15,23,42,0.08)]",
             avatarTone(name),
           ].join(" ")}
-          title={name}
         >
           {initialsFromName(name)}
         </div>
@@ -116,36 +161,66 @@ function AvatarStack({ names = [] }) {
   );
 }
 
-function buildChecklist({ selectedThread, relatedLead }) {
-  const items = [];
+function IdentityCard({ selectedThread, relatedLead, owner, wsState }) {
+  const name = resolveDisplayName(selectedThread, relatedLead);
+  const handle = resolveHandle(selectedThread, relatedLead);
+  const avatarUrl = resolveAvatarUrl(selectedThread);
+  const sourceLabel = relatedLead
+    ? prettyLeadSource(relatedLead)
+    : s(selectedThread?.channel, "conversation");
+  const stage = prettyStage(relatedLead);
+  const statusLabel = prettyStatus(selectedThread, relatedLead);
 
-  items.push({
-    label: `Review latest thread from ${
-      s(selectedThread?.customer_name) ||
-      s(selectedThread?.external_username) ||
-      "customer"
-    }`,
-    done: Number(selectedThread?.unread_count || 0) === 0,
-  });
+  return (
+    <div className="px-5 py-5">
+      <div className="rounded-[28px] border border-slate-200/80 bg-white px-5 py-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+        <div className="flex flex-col items-center text-center">
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={name}
+              className="h-20 w-20 rounded-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div
+              className={[
+                "flex h-20 w-20 items-center justify-center rounded-full text-[24px] font-semibold",
+                avatarTone(name),
+              ].join(" ")}
+            >
+              {initialsFromName(name)}
+            </div>
+          )}
 
-  items.push({
-    label: "Confirm delivery state",
-    done: !selectedThread?.handoff_active,
-  });
+          <div className="mt-4 text-[20px] font-semibold tracking-[-0.03em] text-slate-950">
+            {name}
+          </div>
 
-  if (relatedLead?.id) {
-    items.push({
-      label: `Follow up on ${s(relatedLead?.stage, "lead")} stage`,
-      done: String(relatedLead?.status || "").toLowerCase() === "won",
-    });
-  } else {
-    items.push({
-      label: "Create or attach related lead",
-      done: false,
-    });
-  }
+          {handle ? (
+            <div className="mt-1 text-[14px] text-slate-500">@{handle.replace(/^@/, "")}</div>
+          ) : null}
 
-  return items;
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            <Tag tone="soft">{sourceLabel || "conversation"}</Tag>
+            <Tag tone="blue">{stage || "context"}</Tag>
+            <Tag tone={selectedThread?.handoff_active ? "amber" : "green"}>
+              {statusLabel}
+            </Tag>
+          </div>
+        </div>
+
+        <div className="mt-5 border-t border-slate-200/70 pt-2">
+          <InfoRow label="Owner" value={owner} valueTone="strong" />
+          <div className="border-t border-slate-200/70" />
+          <InfoRow
+            label="Realtime"
+            value={wsState ? `Realtime ${wsState}` : "Connected"}
+          />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function InboxLeadPanel({
@@ -160,17 +235,11 @@ export default function InboxLeadPanel({
   const hasThread = Boolean(selectedThread?.id);
   const hasLead = Boolean(relatedLead?.id);
 
-  const title =
-    s(relatedLead?.interest) ||
-    s(selectedThread?.customer_name) ||
-    s(selectedThread?.external_username) ||
-    s(selectedThread?.external_user_id) ||
-    "Details";
-
   const owner = s(selectedThread?.assigned_to) || operatorName || "Unassigned";
   const sourceLabel = hasLead
     ? prettyLeadSource(relatedLead)
     : s(selectedThread?.channel, "--");
+
   const people = [
     s(selectedThread?.customer_name),
     s(selectedThread?.assigned_to),
@@ -178,18 +247,25 @@ export default function InboxLeadPanel({
     operatorName,
   ].filter(Boolean);
 
-  const checklist = buildChecklist({ selectedThread, relatedLead });
+  const preview =
+    s(selectedThread?.last_message_text) ||
+    "No message preview is available yet for this conversation.";
+
+  const showSurfaceBanner =
+    surface?.unavailable ||
+    surface?.availability === "unavailable" ||
+    surface?.error;
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-[#fbfbfc]">
-      <div className="border-b border-slate-200/70 px-5 py-5">
+      <div className="border-b border-slate-200/70 bg-[#fbfbfc] px-5 py-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-[15px] font-semibold tracking-[-0.02em] text-slate-950">
-              Details
+              Conversation details
             </h2>
             <div className="mt-0.5 text-[12px] text-slate-500">
-              Conversation context
+              Profile, routing, and context
             </div>
           </div>
 
@@ -197,7 +273,7 @@ export default function InboxLeadPanel({
             type="button"
             onClick={onClose}
             aria-label="Close details"
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white hover:text-slate-900"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition hover:bg-white hover:text-slate-900"
           >
             <X className="h-4 w-4" />
           </button>
@@ -211,123 +287,107 @@ export default function InboxLeadPanel({
           </div>
         ) : (
           <>
-            <div className="border-b border-slate-200/70 px-5 py-5">
-              <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-slate-950">
-                {title}
-              </h3>
+            <IdentityCard
+              selectedThread={selectedThread}
+              relatedLead={relatedLead}
+              owner={owner}
+              wsState={wsState}
+            />
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Tag tone="green">{s(selectedThread?.channel, "thread")}</Tag>
-                <Tag tone="blue">
-                  {hasLead ? s(relatedLead?.stage, "lead") : "context"}
-                </Tag>
-                <Tag tone="amber">
-                  {selectedThread?.handoff_active ? "in progress" : "active"}
-                </Tag>
+            {showSurfaceBanner ? (
+              <div className="px-5 pb-2">
+                <SettingsSurfaceBanner
+                  surface={surface}
+                  unavailableMessage="Related context is temporarily unavailable."
+                  refreshLabel="Refresh context"
+                />
               </div>
+            ) : null}
 
-              <div className="mt-4 flex items-center gap-3">
-                <div
-                  className={[
-                    "flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold",
-                    avatarTone(owner),
-                  ].join(" ")}
-                >
-                  {initialsFromName(owner)}
-                </div>
-
-                <div className="min-w-0">
-                  <div className="truncate text-[14px] font-medium text-slate-800">
-                    {owner}
-                  </div>
-                  <div className="mt-0.5 truncate text-[13px] text-slate-500">
-                    {wsState ? `Realtime ${wsState}` : "Just now"}
-                  </div>
-                </div>
+            <Section icon={Radio} title="Routing">
+              <div className="rounded-[24px] border border-slate-200/80 bg-white px-4 py-2 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+                <InfoRow label="Source" value={sourceLabel || "--"} />
+                <div className="border-t border-slate-200/70" />
+                <InfoRow
+                  label="Status"
+                  value={prettyStatus(selectedThread, relatedLead)}
+                  valueTone="strong"
+                />
+                <div className="border-t border-slate-200/70" />
+                <InfoRow
+                  label="Assigned to"
+                  value={owner}
+                  valueTone="strong"
+                />
               </div>
+            </Section>
 
-              {surface?.unavailable ||
-              surface?.availability === "unavailable" ||
-              surface?.error ? (
-                <div className="mt-4">
-                  <SettingsSurfaceBanner
-                    surface={surface}
-                    unavailableMessage="Related context is temporarily unavailable."
-                    refreshLabel="Refresh context"
-                  />
-                </div>
-              ) : null}
-            </div>
+            <Section
+              icon={UserRound}
+              title="People"
+              action={
+                people.length ? (
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                    {people.length}
+                  </span>
+                ) : null
+              }
+            >
+              <div className="rounded-[24px] border border-slate-200/80 bg-white px-4 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+                <div className="flex items-center justify-between gap-4">
+                  <AvatarStack people={people} />
 
-            <div className="px-5 py-3">
-              <DetailRow label="Owner" value={owner} />
-              <div className="border-t border-slate-200/70" />
-              <DetailRow label="Source" value={sourceLabel || "--"} />
-              <div className="border-t border-slate-200/70" />
-              <DetailRow
-                label="Due Date"
-                value={selectedThread?.updated_at ? "Recently updated" : "--"}
-              />
-            </div>
-
-            <Section icon={UserRound} title="People" count={people.length}>
-              <div className="flex items-center justify-between gap-3">
-                <AvatarStack names={people} />
-                <div className="min-w-0 text-right text-[12px] text-slate-500">
-                  <div className="truncate">
-                    {hasLead
-                      ? leadHandle(relatedLead)
-                      : s(selectedThread?.external_username, "--")}
+                  <div className="min-w-0 text-right">
+                    <div className="truncate text-[13px] font-medium text-slate-800">
+                      {resolveDisplayName(selectedThread, relatedLead)}
+                    </div>
+                    <div className="mt-1 truncate text-[12px] text-slate-500">
+                      {resolveHandle(selectedThread, relatedLead)
+                        ? `@${resolveHandle(selectedThread, relatedLead).replace(/^@/, "")}`
+                        : "--"}
+                    </div>
                   </div>
                 </div>
               </div>
             </Section>
 
-            <Section icon={MessageSquareText} title="Description">
-              <div className="space-y-3 rounded-[22px] border border-slate-200/80 bg-white/95 p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-                {checklist.map((item) => (
-                  <label
-                    key={item.label}
-                    className="flex items-start gap-3 text-[14px] leading-6 text-slate-700"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={item.done}
-                      readOnly
-                      className="mt-1 h-4 w-4 rounded border-slate-300"
-                    />
-                    <span>{item.label}</span>
-                  </label>
-                ))}
-
-                <button
-                  type="button"
-                  className="pt-1 text-left text-[14px] text-slate-500 transition hover:text-slate-900"
-                >
-                  + Add subtask
-                </button>
-              </div>
-            </Section>
-
-            <Section icon={CalendarDays} title="Activity">
-              <div className="rounded-[22px] border border-slate-200/80 bg-white/95 px-4 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
-                <div className="text-[14px] leading-6 text-slate-800">
-                  {owner} updated this conversation context
-                </div>
-                <div className="mt-1 text-[13px] leading-6 text-slate-500">
-                  Latest thread and context details are available for review.
-                </div>
-
-                {hasLead ? (
+            {hasLead ? (
+              <Section
+                icon={ArrowUpRight}
+                title="Related lead"
+                action={
                   <button
                     type="button"
                     onClick={() => openLeadDetail?.(relatedLead)}
-                    className="mt-4 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-[#f7f8fa] px-3 py-1.5 text-[12px] font-medium text-slate-700 transition hover:border-slate-300 hover:bg-white hover:text-slate-950"
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
                   >
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                    Open in Leads
+                    Open
                   </button>
-                ) : null}
+                }
+              >
+                <div className="rounded-[24px] border border-slate-200/80 bg-white px-4 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+                  <div className="text-[15px] font-medium text-slate-900">
+                    {leadName(relatedLead) || "Lead"}
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {prettyStage(relatedLead) ? (
+                      <Tag tone="blue">{prettyStage(relatedLead)}</Tag>
+                    ) : null}
+                    {s(relatedLead?.status) ? (
+                      <Tag tone="green">{s(relatedLead.status)}</Tag>
+                    ) : null}
+                    {leadHandle(relatedLead) ? (
+                      <Tag tone="soft">{leadHandle(relatedLead)}</Tag>
+                    ) : null}
+                  </div>
+                </div>
+              </Section>
+            ) : null}
+
+            <Section icon={MessageSquareText} title="Latest message">
+              <div className="rounded-[24px] border border-slate-200/80 bg-white px-4 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+                <div className="text-[14px] leading-6 text-slate-700">{preview}</div>
               </div>
             </Section>
           </>

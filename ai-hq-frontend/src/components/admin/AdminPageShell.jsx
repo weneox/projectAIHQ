@@ -40,13 +40,11 @@ export default function AdminPageShell({
           </div>
         </div>
 
-        <div className="mt-5">
-          <SettingsSurfaceBanner
-            surface={surface}
-            unavailableMessage={unavailableMessage}
-            refreshLabel={refreshLabel}
-          />
-        </div>
+        <SettingsSurfaceBanner
+          surface={surface}
+          unavailableMessage={unavailableMessage}
+          refreshLabel={refreshLabel}
+        />
       </section>
 
       {children}

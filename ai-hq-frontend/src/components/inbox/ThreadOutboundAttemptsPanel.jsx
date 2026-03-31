@@ -87,13 +87,11 @@ function ThreadOutboundAttemptsPanelView({
         </button>
       </div>
 
-      <div className="mt-4">
-        <SettingsSurfaceBanner
-          surface={surface}
-          unavailableMessage="Thread delivery attempts are temporarily unavailable."
-          refreshLabel="Refresh attempts"
-        />
-      </div>
+      <SettingsSurfaceBanner
+        surface={surface}
+        unavailableMessage="Thread delivery attempts are temporarily unavailable."
+        refreshLabel="Refresh attempts"
+      />
 
       <div className="mt-4 rounded-[22px] border border-white/10 bg-black/10">
         {!threadId ? (

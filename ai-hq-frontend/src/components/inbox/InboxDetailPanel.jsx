@@ -4,6 +4,7 @@ import {
   MoreHorizontal,
   RefreshCw,
   ShieldAlert,
+  SlidersHorizontal,
   Sparkles,
   UserCog,
   XCircle,
@@ -15,10 +16,6 @@ import { indexAttemptsByMessageCorrelation } from "./outboundAttemptTruth.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
-}
-
-function obj(v, d = {}) {
-  return v && typeof v === "object" && !Array.isArray(v) ? v : d;
 }
 
 function initialsFromName(value = "") {
@@ -51,14 +48,66 @@ function avatarTone(seed = "") {
   return tones[score % tones.length];
 }
 
-function QuietIconButton({ children, onClick, disabled = false, label = "" }) {
+function resolveDisplayName(thread = {}) {
+  return (
+    s(thread.customer_name) ||
+    s(thread.external_username) ||
+    s(thread.external_user_id) ||
+    "Conversation"
+  );
+}
+
+function resolveAvatarUrl(thread = {}) {
+  return (
+    s(thread.avatar_url) ||
+    s(thread.profile_image_url) ||
+    s(thread.customer_avatar_url) ||
+    s(thread.external_avatar_url) ||
+    s(thread.photo_url)
+  );
+}
+
+function formatConversationMeta(thread = {}) {
+  const parts = [];
+
+  const channel =
+    s(thread.channel_label) ||
+    s(thread.channel_type) ||
+    s(thread.provider) ||
+    s(thread.source_type);
+
+  const state =
+    s(thread.status_label) ||
+    s(thread.status) ||
+    (thread?.handoff_active ? "handoff" : "");
+
+  if (channel) parts.push(channel);
+  if (state && state.toLowerCase() !== "open") parts.push(state);
+
+  return parts.filter(Boolean).join(" • ");
+}
+
+function QuietIconButton({
+  children,
+  onClick,
+  disabled = false,
+  label = "",
+  active = false,
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-45"
+      title={label}
+      className={[
+        "flex h-10 w-10 items-center justify-center rounded-full transition",
+        active
+          ? "bg-slate-900 text-white"
+          : "text-slate-400 hover:bg-white hover:text-slate-900",
+        disabled ? "cursor-not-allowed opacity-45" : "",
+      ].join(" ")}
     >
       {children}
     </button>
@@ -69,6 +118,8 @@ function DetailActionMenu({
   open,
   anchorRef,
   onClose,
+  onMarkRead,
+  canMarkRead,
   onAssign,
   onHandoff,
   onResolve,
@@ -103,6 +154,15 @@ function DetailActionMenu({
   if (!open) return null;
 
   const items = [
+    canMarkRead
+      ? {
+          key: "read",
+          label: disabledMap.read ? "Marking..." : "Mark as read",
+          icon: CheckCheck,
+          onClick: onMarkRead,
+          disabled: disabledMap.read,
+        }
+      : null,
     {
       key: "assign",
       label: disabledMap.assign ? "Assigning..." : "Assign",
@@ -132,7 +192,7 @@ function DetailActionMenu({
       disabled: disabledMap.closed,
       tone: "text-rose-600",
     },
-  ];
+  ].filter(Boolean);
 
   return (
     <div
@@ -167,63 +227,132 @@ function DetailActionMenu({
   );
 }
 
-function formatConversationMeta(thread = {}) {
-  const parts = [];
-
-  const channel =
-    s(thread.channel_label) ||
-    s(thread.channel_type) ||
-    s(thread.provider) ||
-    s(thread.source_type);
-
-  const lastAt =
-    s(thread.last_message_at_label) ||
-    s(thread.last_message_relative) ||
-    s(thread.updated_at_label) ||
-    s(thread.updated_at_display) ||
-    s(thread.last_message_created_at);
-
-  if (channel) parts.push(channel);
-  if (lastAt) parts.push(lastAt);
-
-  return parts.filter(Boolean).join(" • ");
-}
-
-function ConversationIdentityBlock({ thread, onOpenDetails }) {
-  const selectedName =
-    thread?.customer_name ||
-    thread?.external_username ||
-    thread?.external_user_id ||
-    "Conversation";
-
+function ConversationTopBar({
+  thread,
+  unreadCount,
+  onOpenDetails,
+  onRefresh,
+  onMenuToggle,
+  menuOpen,
+  menuAnchorRef,
+  menu,
+  surface,
+}) {
+  const name = resolveDisplayName(thread);
   const meta = formatConversationMeta(thread);
+  const avatarUrl = resolveAvatarUrl(thread);
 
   return (
-    <div className="px-7 pb-3 pt-6">
-      <button
-        type="button"
-        onClick={onOpenDetails}
-        aria-label="Open conversation details"
-        className="group flex items-start gap-3 text-left"
-      >
-        <div
-          className={[
-            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition group-hover:scale-[1.02]",
-            avatarTone(selectedName),
-          ].join(" ")}
+    <div className="border-b border-slate-200/70 bg-[#f6f6f7] px-5 py-4">
+      <div className="flex items-center justify-between gap-4">
+        <button
+          type="button"
+          onClick={onOpenDetails}
+          aria-label="Open conversation details"
+          className="group flex min-w-0 items-center gap-3 text-left"
         >
-          {initialsFromName(selectedName)}
-        </div>
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={name}
+              className="h-11 w-11 rounded-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div
+              className={[
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition group-hover:scale-[1.02]",
+                avatarTone(name),
+              ].join(" ")}
+            >
+              {initialsFromName(name)}
+            </div>
+          )}
 
-        <div className="min-w-0 pt-0.5">
-          <div className="truncate text-[22px] font-semibold tracking-[-0.04em] text-slate-950">
-            {selectedName}
+          <div className="min-w-0">
+            <div className="truncate text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
+              {name}
+            </div>
+            {meta ? (
+              <div className="truncate text-[13px] text-slate-500">{meta}</div>
+            ) : null}
           </div>
-          {meta ? (
-            <div className="mt-1 text-[13px] text-slate-500">{meta}</div>
+        </button>
+
+        <div className="flex items-center gap-1">
+          <QuietIconButton
+            onClick={onRefresh}
+            disabled={!thread?.id || surface?.loading || surface?.saving}
+            label="Refresh conversation"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </QuietIconButton>
+
+          <QuietIconButton
+            onClick={onOpenDetails}
+            disabled={!thread?.id}
+            label="Open detail drawer"
+            active={false}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+          </QuietIconButton>
+
+          <div className="relative" ref={menuAnchorRef}>
+            <QuietIconButton
+              onClick={onMenuToggle}
+              disabled={!thread?.id}
+              label="Conversation actions"
+              active={menuOpen}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </QuietIconButton>
+
+            {menu}
+          </div>
+
+          {unreadCount > 0 ? (
+            <span className="ml-1 inline-flex min-w-[22px] items-center justify-center rounded-full bg-[#eef2ff] px-2 py-1 text-[11px] font-semibold text-[#4c6fff]">
+              {unreadCount}
+            </span>
           ) : null}
         </div>
-      </button>
+      </div>
+    </div>
+  );
+}
+
+function ConversationProfileIntro({ thread }) {
+  const name = resolveDisplayName(thread);
+  const meta = formatConversationMeta(thread);
+  const avatarUrl = resolveAvatarUrl(thread);
+
+  return (
+    <div className="flex flex-col items-center px-6 pb-8 pt-10 text-center">
+      {avatarUrl ? (
+        <img
+          src={avatarUrl}
+          alt={name}
+          className="h-28 w-28 rounded-full object-cover shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
+          loading="lazy"
+        />
+      ) : (
+        <div
+          className={[
+            "flex h-28 w-28 items-center justify-center rounded-full text-[30px] font-semibold shadow-[0_10px_30px_rgba(15,23,42,0.08)]",
+            avatarTone(name),
+          ].join(" ")}
+        >
+          {initialsFromName(name)}
+        </div>
+      )}
+
+      <div className="mt-4 text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
+        {name}
+      </div>
+
+      {meta ? (
+        <div className="mt-1 text-[14px] text-slate-500">{meta}</div>
+      ) : null}
     </div>
   );
 }
@@ -266,6 +395,7 @@ export default function InboxDetailPanel({
   );
 
   const disabledMap = {
+    read: Boolean(actionState?.isActionPending?.("read")),
     assign: Boolean(actionState?.isActionPending?.("assign")),
     handoff: Boolean(actionState?.isActionPending?.("handoff")),
     handoffLocked: handoffActive,
@@ -273,74 +403,57 @@ export default function InboxDetailPanel({
     closed: Boolean(actionState?.isActionPending?.("closed")),
   };
 
+  const canMarkRead = hasThread && unreadCount > 0;
+
   return (
-    <section className="flex h-full min-h-0 flex-col bg-white">
-      <div className="border-b border-slate-200/70 px-5 py-3">
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
+    <section className="relative flex h-full min-h-0 flex-col bg-[#f6f6f7]">
+      {hasThread ? (
+        <ConversationTopBar
+          thread={selectedThread}
+          unreadCount={unreadCount}
+          onOpenDetails={onOpenDetails}
+          onRefresh={surface?.refresh}
+          onMenuToggle={() => setMenuOpen((prev) => !prev)}
+          menuOpen={menuOpen}
+          menuAnchorRef={menuAnchorRef}
+          surface={surface}
+          menu={
+            <DetailActionMenu
+              open={menuOpen}
+              anchorRef={menuAnchorRef}
+              onClose={() => setMenuOpen(false)}
+              onMarkRead={() => markRead(selectedThread.id)}
+              canMarkRead={canMarkRead}
+              onAssign={() => assignThread(selectedThread.id)}
+              onHandoff={() => activateHandoff(selectedThread.id)}
+              onResolve={() => setThreadStatus(selectedThread.id, "resolved")}
+              onCloseThread={() => setThreadStatus(selectedThread.id, "closed")}
+              disabledMap={disabledMap}
+            />
+          }
+        />
+      ) : (
+        <div className="border-b border-slate-200/70 bg-[#f6f6f7] px-5 py-4">
+          <div className="text-[12px] font-medium uppercase tracking-[0.18em] text-slate-400">
             Conversation
           </div>
-
-          <div className="flex items-center gap-1.5">
-            <QuietIconButton
-              onClick={hasThread ? () => markRead(selectedThread.id) : undefined}
-              disabled={
-                !hasThread ||
-                unreadCount <= 0 ||
-                actionState?.isActionPending?.("read")
-              }
-              label="Mark conversation read"
-            >
-              <CheckCheck className="h-4 w-4" />
-            </QuietIconButton>
-
-            <QuietIconButton
-              onClick={surface?.refresh}
-              disabled={!hasThread || surface?.loading || surface?.saving}
-              label="Refresh conversation"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </QuietIconButton>
-
-            {hasThread ? (
-              <div className="relative" ref={menuAnchorRef}>
-                <QuietIconButton
-                  onClick={() => setMenuOpen((prev) => !prev)}
-                  label="Conversation actions"
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </QuietIconButton>
-
-                <DetailActionMenu
-                  open={menuOpen}
-                  anchorRef={menuAnchorRef}
-                  onClose={() => setMenuOpen(false)}
-                  onAssign={() => assignThread(selectedThread.id)}
-                  onHandoff={() => activateHandoff(selectedThread.id)}
-                  onResolve={() => setThreadStatus(selectedThread.id, "resolved")}
-                  onCloseThread={() =>
-                    setThreadStatus(selectedThread.id, "closed")
-                  }
-                  disabledMap={disabledMap}
-                />
-              </div>
-            ) : null}
-          </div>
         </div>
+      )}
 
-        {showSurfaceBanner ? (
-          <div className="pt-3">
+      {showSurfaceBanner ? (
+        <div className="pointer-events-none absolute inset-x-0 top-[78px] z-20 flex justify-center px-4 pt-3">
+          <div className="pointer-events-auto w-full max-w-[760px]">
             <SettingsSurfaceBanner
               surface={surface}
               unavailableMessage="Conversation detail is temporarily unavailable."
               refreshLabel="Refresh conversation"
             />
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 overflow-y-auto bg-[#fcfcfd] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#f6f6f7] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {!hasThread ? (
             <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-6 text-center">
               <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-900">
@@ -354,31 +467,30 @@ export default function InboxDetailPanel({
             <div className="flex h-full min-h-[320px] items-center justify-center px-6 text-sm text-slate-500">
               Loading messages...
             </div>
-          ) : messages.length === 0 ? (
-            <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-6 text-center">
-              <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-900">
-                No messages yet
-              </div>
-              <div className="mt-2 max-w-[34rem] text-sm leading-7 text-slate-500">
-                This conversation has no message history yet.
-              </div>
-            </div>
           ) : (
             <div className="px-0 py-0">
-              <ConversationIdentityBlock
-                thread={selectedThread}
-                onOpenDetails={onOpenDetails}
-              />
+              <ConversationProfileIntro thread={selectedThread} />
 
-              <div className="space-y-4 px-6 pb-6">
-                {messages.map((message) => (
-                  <InboxMessageBubble
-                    key={message.id}
-                    m={message}
-                    attemptsByCorrelation={attemptsByCorrelation}
-                  />
-                ))}
-              </div>
+              {messages.length === 0 ? (
+                <div className="px-6 pb-10 text-center">
+                  <div className="text-[15px] font-medium text-slate-900">
+                    No messages yet
+                  </div>
+                  <div className="mt-2 text-sm leading-6 text-slate-500">
+                    This conversation has no message history yet.
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 px-6 pb-6">
+                  {messages.map((message) => (
+                    <InboxMessageBubble
+                      key={message.id}
+                      m={message}
+                      attemptsByCorrelation={attemptsByCorrelation}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

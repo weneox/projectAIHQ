@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Menu, RefreshCw, Search } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import InboxComposer from "../components/inbox/InboxComposer.jsx";
@@ -14,32 +13,12 @@ import { useInboxData } from "../hooks/useInboxData.js";
 import { useInboxRealtime } from "../hooks/useInboxRealtime.js";
 import { getAppSessionContext } from "../lib/appSession.js";
 
-function IconButton({ children, onClick, disabled = false, label = "" }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label || undefined}
-      title={label || undefined}
-      className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-500 transition hover:bg-white hover:text-slate-950 disabled:opacity-45"
-    >
-      {children}
-    </button>
-  );
-}
-
-function hasSurfaceFeedback(surface) {
-  const safe = surface && typeof surface === "object" ? surface : {};
+function shouldRenderSurfaceBanner(surface) {
   return Boolean(
-    safe.unavailable ||
-      safe.error ||
-      safe.message ||
-      safe.saveError ||
-      safe.saveSuccess ||
-      safe.successMessage ||
-      safe.errorMessage ||
-      safe.availability === "unavailable"
+    surface?.saveSuccess ||
+      surface?.saveError ||
+      surface?.unavailable ||
+      (!surface?.unavailable && surface?.error)
   );
 }
 
@@ -51,7 +30,6 @@ export default function Inbox() {
   const [wsState, setWsState] = useState("idle");
   const [tenantKey, setTenantKey] = useState("");
   const [operatorName, setOperatorName] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
   const [detailOpen, setDetailOpen] = useState(false);
 
   const requestedThreadId = String(
@@ -179,13 +157,13 @@ export default function Inbox() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [detailOpen]);
 
-  const showTopBanner = hasSurfaceFeedback(surface);
+  const showTopBanner = shouldRenderSurfaceBanner(surface);
 
   return (
     <section
       aria-labelledby="inbox-surface-title"
       aria-describedby="inbox-surface-description"
-      className="min-h-[calc(100vh-48px)] bg-transparent"
+      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-transparent"
     >
       <header className="sr-only">
         <h1 id="inbox-surface-title">Operator messaging workspace</h1>
@@ -197,62 +175,27 @@ export default function Inbox() {
       </header>
 
       {showTopBanner ? (
-        <div className="border-b border-slate-200/70 bg-white/80 px-4 py-3 backdrop-blur">
-          <SettingsSurfaceBanner
-            surface={surface}
-            unavailableMessage="Inbox operations are temporarily unavailable."
-            refreshLabel="Refresh inbox"
-          />
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center px-4 pt-4">
+          <div className="pointer-events-auto w-full max-w-[920px]">
+            <SettingsSurfaceBanner
+              surface={surface}
+              unavailableMessage="Inbox operations are temporarily unavailable."
+              refreshLabel="Refresh inbox"
+            />
+          </div>
         </div>
       ) : null}
 
-      <div className="relative grid min-h-[calc(100vh-48px)] grid-cols-[320px_minmax(0,1fr)] grid-rows-[68px_minmax(0,1fr)]">
-        <div className="col-span-2 border-b border-slate-200/70 bg-[#f7f8fa]">
-          <div className="flex h-[68px] items-center justify-between gap-4 px-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <IconButton label="Inbox navigation">
-                <Menu className="h-4 w-4" />
-              </IconButton>
-
-              <div className="relative w-full max-w-[340px]">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search conversations"
-                  aria-label="Search inbox"
-                  className="h-11 w-full rounded-full border border-transparent bg-white pl-10 pr-4 text-sm text-slate-900 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.14)] outline-none placeholder:text-slate-400 focus:bg-white focus:shadow-[inset_0_0_0_1px_rgba(100,116,139,0.22)]"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1">
-              <div className="hidden rounded-full border border-slate-200/70 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-500 md:inline-flex">
-                {wsState === "connected"
-                  ? "Realtime on"
-                  : `Realtime ${wsState || "idle"}`}
-              </div>
-
-              <IconButton
-                onClick={surface?.refresh}
-                disabled={surface?.loading || surface?.saving}
-                label="Refresh inbox"
-              >
-                <RefreshCw className="h-4 w-4" />
-              </IconButton>
-            </div>
-          </div>
-        </div>
-
-        <div className="min-h-0 border-r border-slate-200/70 bg-[#f7f8fa]">
+      <div className="relative grid flex-1 min-h-0 overflow-hidden grid-cols-[344px_minmax(0,1fr)] bg-[#f6f6f7]">
+        <div className="min-h-0 overflow-hidden border-r border-slate-200/80 bg-[#f6f6f7]">
           <InboxThreadListPanel
             threadList={threadList}
             selectedThreadId={selectedThread?.id || ""}
-            searchQuery={searchQuery}
+            searchQuery=""
           />
         </div>
 
-        <div className="min-h-0 bg-white">
+        <div className="min-h-0 overflow-hidden bg-[#f6f6f7]">
           <InboxDetailPanel
             selectedThread={selectedThread}
             messages={messages}

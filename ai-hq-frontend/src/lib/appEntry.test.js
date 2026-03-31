@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   areInternalRoutesEnabled,
@@ -10,6 +10,16 @@ import {
 } from "./appEntry.js";
 
 describe("resolveAuthenticatedLanding", () => {
+  const originalForceWorkspaceEntry = import.meta.env?.VITE_FORCE_WORKSPACE_ENTRY;
+
+  beforeEach(() => {
+    import.meta.env.VITE_FORCE_WORKSPACE_ENTRY = "";
+  });
+
+  afterEach(() => {
+    import.meta.env.VITE_FORCE_WORKSPACE_ENTRY = originalForceWorkspaceEntry;
+  });
+
   it("routes incomplete workspaces into setup studio", () => {
     const target = resolveAuthenticatedLanding({
       workspace: {

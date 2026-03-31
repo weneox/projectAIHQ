@@ -49,7 +49,7 @@ describe("AdminTenants", () => {
   it("renders shared surface banner feedback", () => {
     render(<AdminTenants />);
 
-    expect(screen.getByText(/tenant-a tenant created/i)).toBeInTheDocument();
-    expect(screen.getByText(/tenant administration is temporarily unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/^tenant-a tenant created$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Tenants unavailable$/i)).toBeInTheDocument();
   });
 });

@@ -58,7 +58,7 @@ describe("TeamPanel", () => {
   it("renders shared surface banner feedback for team async state", () => {
     render(<TeamPanel canManage />);
 
-    expect(screen.getByText(/team user created/i)).toBeInTheDocument();
-    expect(screen.getByText(/team management is temporarily unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Team user created$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Team unavailable$/i)).toBeInTheDocument();
   });
 });

@@ -37,7 +37,7 @@ describe("ChannelsPanel", () => {
   it("renders shared surface banner feedback for channel async state", () => {
     render(<ChannelsPanel canManage />);
 
-    expect(screen.getByText(/instagram connection removed/i)).toBeInTheDocument();
-    expect(screen.getByText(/meta channel status is temporarily unavailable/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Instagram connection removed$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Channel status unavailable$/i)).toBeInTheDocument();
   });
 });

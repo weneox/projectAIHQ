@@ -8,13 +8,14 @@ afterEach(() => {
 });
 
 describe("SettingsSurfaceBanner", () => {
-  it("renders save feedback and unavailable refresh affordances consistently", () => {
+  it("renders floating overlay notifications with compact copy and refresh support", () => {
     const refresh = vi.fn();
 
     render(
       <SettingsSurfaceBanner
         surface={{
           saveSuccess: "Saved cleanly.",
+          message: "Heads up.",
           saveError: "",
           error: "",
           unavailable: true,
@@ -22,14 +23,27 @@ describe("SettingsSurfaceBanner", () => {
           saving: false,
           refresh,
         }}
-        unavailableMessage="Surface unavailable."
-        refreshLabel="Retry"
+        unavailableMessage="Inbox operations are temporarily unavailable."
+        refreshLabel="Refresh"
       />
     );
 
-    expect(screen.getByText(/saved cleanly/i)).toBeInTheDocument();
-    expect(screen.getByText(/surface unavailable/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    const overlayRoot = document.getElementById("settings-surface-banner-root");
+    expect(overlayRoot).toBeTruthy();
+    expect(overlayRoot).toHaveClass("fixed");
+
+    expect(screen.getByText("Saved")).toBeInTheDocument();
+    expect(screen.getByText("Heads up")).toBeInTheDocument();
+    expect(screen.getByText("Inbox unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText(/inbox operations are temporarily unavailable/i)
+    ).toHaveClass("sr-only");
+
+    fireEvent.click(screen.getByRole("button", { name: /^refresh$/i }));
     expect(refresh).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /dismiss inbox unavailable/i })
+    );
   });
 });

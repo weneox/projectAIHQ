@@ -172,7 +172,10 @@ export default function Shell() {
 
   return (
     <div
-      className="min-h-screen bg-[#ececee] text-slate-950 selection:bg-slate-900 selection:text-white"
+      className={[
+        "bg-[#ececee] text-slate-950 selection:bg-slate-900 selection:text-white",
+        isInboxRoute ? "h-screen overflow-hidden" : "min-h-screen",
+      ].join(" ")}
       style={{
         "--shell-sidebar-w": `${SHELL_SIDEBAR_W}px`,
       }}
@@ -185,7 +188,12 @@ export default function Shell() {
         shellStats={shellStats}
       />
 
-      <div className="min-h-screen md:pl-[var(--shell-sidebar-w)]">
+      <div
+        className={[
+          "md:pl-[var(--shell-sidebar-w)]",
+          isInboxRoute ? "h-screen overflow-hidden" : "min-h-screen",
+        ].join(" ")}
+      >
         {!isInboxRoute ? (
           <Header
             onMenuClick={() => setMobileOpen(true)}
@@ -199,14 +207,14 @@ export default function Shell() {
         <main
           className={
             isInboxRoute
-              ? "min-h-screen p-0"
+              ? "h-full overflow-hidden p-0"
               : "min-h-[calc(100vh-72px)] px-4 py-5 md:px-6 md:py-6 lg:px-8 lg:py-8"
           }
         >
           <div
             className={
               isInboxRoute
-                ? "w-full"
+                ? "h-full w-full overflow-hidden"
                 : "mx-auto w-full max-w-[1480px]"
             }
           >
