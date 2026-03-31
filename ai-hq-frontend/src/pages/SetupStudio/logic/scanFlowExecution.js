@@ -1,6 +1,5 @@
 import {
   analyzeSetupIntake,
-  getCurrentSetupReview,
   importBundleForSetup,
   importSourceForSetup,
 } from "../../../api/setup.js";
@@ -21,11 +20,12 @@ export async function executeSetupStudioScanPlan(plan) {
       answers: plan.analyzePayload.answers,
       sources: plan.requestedSources,
       primarySource: plan.requestedPrimarySource,
+      allowSessionReuse: false,
     };
 
     if (plan.shouldUseBundledImport) {
       importResult = await importBundleForSetup(importPayload);
-      reviewPayload = await getCurrentSetupReview({ eventLimit: 30 });
+      reviewPayload = importResult?.review || {};
     } else {
       importResult = await importSourceForSetup(importPayload);
     }
