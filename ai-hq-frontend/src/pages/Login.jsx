@@ -537,9 +537,10 @@ export default function Login() {
 
     try {
       const auth = await getAppAuthContext({ force: true });
+      const bootstrap = auth?.bootstrap || auth?.workspace || auth;
       const target = resolveAuthenticatedLanding({
         auth,
-        bootstrap: auth,
+        bootstrap,
       });
 
       navigate(target, { replace: true });

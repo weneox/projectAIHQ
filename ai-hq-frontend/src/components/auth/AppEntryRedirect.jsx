@@ -4,7 +4,6 @@ import { getAppAuthContext, getAppBootstrapContext } from "../../lib/appSession.
 import {
   WORKSPACE_SELECTION_ROUTE,
   hasMultipleWorkspaceChoices,
-  isLocalWorkspaceEntryEnabled,
   resolveAuthenticatedLanding,
 } from "../../lib/appEntry.js";
 import AppBootSurface from "../loading/AppBootSurface.jsx";
@@ -17,11 +16,6 @@ export default function AppEntryRedirect() {
     let alive = true;
 
     async function run() {
-      if (isLocalWorkspaceEntryEnabled()) {
-        navigate("/workspace", { replace: true });
-        return;
-      }
-
       try {
         const auth = await getAppAuthContext();
         if (!alive) return;

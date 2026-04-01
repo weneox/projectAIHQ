@@ -173,10 +173,6 @@ export function hasMultipleWorkspaceChoices(auth = {}) {
 }
 
 export function resolveWorkspaceContractRoute(payload = {}) {
-  if (isLocalWorkspaceEntryEnabled()) {
-    return "/workspace";
-  }
-
   const workspace = getCanonicalWorkspaceContract(payload);
   const setupCompleted = workspace.workspaceReady;
   const nextRoute = s(workspace.nextRoute || "/workspace");
@@ -209,10 +205,6 @@ export function resolveAuthenticatedLanding({
   auth = {},
   bootstrap = {},
 } = {}) {
-  if (isLocalWorkspaceEntryEnabled()) {
-    return "/workspace";
-  }
-
   if (hasMultipleWorkspaceChoices(auth)) {
     return WORKSPACE_SELECTION_ROUTE;
   }

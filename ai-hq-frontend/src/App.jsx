@@ -6,10 +6,7 @@ import AdminRouteGuard from "./components/admin/AdminRouteGuard.jsx";
 import OperatorRouteGuard from "./components/auth/OperatorRouteGuard.jsx";
 import UserRouteGuard from "./components/auth/UserRouteGuard.jsx";
 import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
-import {
-  INTERNAL_ONLY_APP_ROUTES,
-  isLocalWorkspaceEntryEnabled,
-} from "./lib/appEntry.js";
+import { INTERNAL_ONLY_APP_ROUTES } from "./lib/appEntry.js";
 
 const Proposals = lazy(() => import("./pages/Proposals.jsx"));
 const Publish = lazy(() => import("./pages/Publish.jsx"));
@@ -62,33 +59,23 @@ function renderInternalRouteRedirects() {
 }
 
 export default function App() {
-  const localWorkspaceEntry = isLocalWorkspaceEntryEnabled();
-
-  const setupEntryElement = localWorkspaceEntry ? (
-    withSuspense(<SetupStudioRoute />)
-  ) : (
+  const setupEntryElement = (
     <UserRouteGuard>{withSuspense(<SetupStudioRoute />)}</UserRouteGuard>
   );
 
-  const setupRedirectElement = localWorkspaceEntry ? (
-    <Navigate to="/setup/studio" replace />
-  ) : (
+  const setupRedirectElement = (
     <UserRouteGuard>
       <Navigate to="/setup/studio" replace />
     </UserRouteGuard>
   );
 
-  const rootEntryElement = localWorkspaceEntry ? (
-    <Navigate to="/workspace" replace />
-  ) : (
+  const rootEntryElement = (
     <UserRouteGuard>
       <AppEntryRedirect />
     </UserRouteGuard>
   );
 
-  const selectWorkspaceEntryElement = localWorkspaceEntry ? (
-    <Navigate to="/workspace" replace />
-  ) : (
+  const selectWorkspaceEntryElement = (
     <UserRouteGuard>{withSuspense(<SelectWorkspace />)}</UserRouteGuard>
   );
 
