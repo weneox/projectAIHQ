@@ -15,6 +15,10 @@ import {
 
 import { loginUser, logoutUser, selectWorkspaceUser } from "../api/auth.js";
 import { clearAppSessionContext, getAppAuthContext } from "../lib/appSession.js";
+import {
+  WORKSPACE_SELECTION_ROUTE,
+  hasMultipleWorkspaceChoices,
+} from "../lib/appEntry.js";
 import googleIconSrc from "../assets/setup-studio/channels/google.svg";
 import appleIconSrc from "../assets/setup-studio/channels/apple.svg";
 
@@ -603,13 +607,14 @@ export default function Login() {
 
     const email = s(form.email);
     const password = String(form.password || "");
+    const usingInlineWorkspaceSelection = accountChoices.length > 0;
 
     if (!email || !password) {
       setError("Enter your email and password.");
       return;
     }
 
-    if (accountChoices.length > 0 && !selectedAccountToken) {
+    if (usingInlineWorkspaceSelection && !selectedAccountToken) {
       setError("Select the correct workspace to continue.");
       return;
     }
@@ -619,7 +624,7 @@ export default function Login() {
       setError("");
       setServiceNotice((prev) => ({ ...prev, visible: false }));
 
-      const response = accountChoices.length
+      const response = usingInlineWorkspaceSelection
         ? await selectWorkspaceUser({
             email,
             password,
@@ -634,6 +639,20 @@ export default function Login() {
           });
 
       clearAppSessionContext();
+
+      if (usingInlineWorkspaceSelection) {
+        navigate(resolvePostAuthTarget(response), { replace: true });
+        return;
+      }
+
+      try {
+        const auth = await getAppAuthContext({ force: true });
+        if (hasMultipleWorkspaceChoices(auth)) {
+          navigate(WORKSPACE_SELECTION_ROUTE, { replace: true });
+          return;
+        }
+      } catch {}
+
       navigate(resolvePostAuthTarget(response), { replace: true });
     } catch (submitError) {
       if (isServiceUnavailableError(submitError)) {

@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAppBootstrapContext } from "../../lib/appSession.js";
+import { getAppAuthContext, getAppBootstrapContext } from "../../lib/appSession.js";
 import {
+  WORKSPACE_SELECTION_ROUTE,
+  hasMultipleWorkspaceChoices,
   isLocalWorkspaceEntryEnabled,
   resolveAuthenticatedLanding,
 } from "../../lib/appEntry.js";
@@ -14,23 +16,41 @@ export default function AppEntryRedirect() {
   useEffect(() => {
     let alive = true;
 
-    if (isLocalWorkspaceEntryEnabled()) {
-      navigate("/workspace", { replace: true });
-      return () => {
-        alive = false;
-      };
-    }
+    async function run() {
+      if (isLocalWorkspaceEntryEnabled()) {
+        navigate("/workspace", { replace: true });
+        return;
+      }
 
-    getAppBootstrapContext()
-      .then((bootstrap) => {
+      try {
+        const auth = await getAppAuthContext();
         if (!alive) return;
+
+        if (!auth?.authenticated) {
+          navigate("/login", { replace: true });
+          return;
+        }
+
+        if (hasMultipleWorkspaceChoices(auth)) {
+          setFailed(false);
+          navigate(WORKSPACE_SELECTION_ROUTE, { replace: true });
+          return;
+        }
+
+        const bootstrap = await getAppBootstrapContext();
+        if (!alive) return;
+
         setFailed(false);
-        navigate(resolveAuthenticatedLanding(bootstrap), { replace: true });
-      })
-      .catch(() => {
+        navigate(resolveAuthenticatedLanding({ auth, bootstrap }), {
+          replace: true,
+        });
+      } catch {
         if (!alive) return;
         setFailed(true);
-      });
+      }
+    }
+
+    run();
 
     return () => {
       alive = false;

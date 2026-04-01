@@ -3,6 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import {
   getCanonicalWorkspaceContract,
   isLocalWorkspaceEntryEnabled,
+  isWorkspaceSelectionPath,
 } from "../../lib/appEntry.js";
 import { getAppAuthContext, getAppBootstrapContext } from "../../lib/appSession.js";
 import AppBootSurface from "../loading/AppBootSurface.jsx";
@@ -10,9 +11,11 @@ import AppBootSurface from "../loading/AppBootSurface.jsx";
 function isSetupPath(pathname = "") {
   return pathname === "/setup" || pathname.startsWith("/setup/");
 }
+
 export default function UserRouteGuard({ children }) {
   const location = useLocation();
   const localWorkspaceEntry = isLocalWorkspaceEntryEnabled();
+  const onWorkspaceSelection = isWorkspaceSelectionPath(location.pathname);
 
   const [state, setState] = useState({
     loading: true,
@@ -43,6 +46,16 @@ export default function UserRouteGuard({ children }) {
           setState({
             loading: false,
             ok: false,
+            redirectTo: "",
+            failed: false,
+          });
+          return;
+        }
+
+        if (onWorkspaceSelection) {
+          setState({
+            loading: false,
+            ok: true,
             redirectTo: "",
             failed: false,
           });
@@ -95,10 +108,15 @@ export default function UserRouteGuard({ children }) {
     return () => {
       alive = false;
     };
-  }, [localWorkspaceEntry, location.pathname]);
+  }, [localWorkspaceEntry, location.pathname, onWorkspaceSelection]);
 
   if (state.loading) {
-    return <AppBootSurface label="Preparing workspace" detail="Syncing operator context" />;
+    return (
+      <AppBootSurface
+        label="Preparing workspace"
+        detail="Syncing operator context"
+      />
+    );
   }
 
   if (state.failed) {

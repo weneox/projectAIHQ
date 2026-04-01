@@ -31,6 +31,7 @@ const AdminTenants = lazy(() => import("./pages/AdminTenants.jsx"));
 const AdminTeam = lazy(() => import("./pages/AdminTeam.jsx"));
 const AdminSecrets = lazy(() => import("./pages/AdminSecrets.jsx"));
 const SetupStudioRoute = lazy(() => import("./pages/SetupStudio/index.jsx"));
+const SelectWorkspace = lazy(() => import("./pages/SelectWorkspace.jsx"));
 
 function RouteFallback() {
   return (
@@ -62,6 +63,7 @@ function renderInternalRouteRedirects() {
 
 export default function App() {
   const localWorkspaceEntry = isLocalWorkspaceEntryEnabled();
+
   const setupEntryElement = localWorkspaceEntry ? (
     <Navigate to="/workspace" replace />
   ) : (
@@ -82,6 +84,12 @@ export default function App() {
     <UserRouteGuard>
       <AppEntryRedirect />
     </UserRouteGuard>
+  );
+
+  const selectWorkspaceEntryElement = localWorkspaceEntry ? (
+    <Navigate to="/workspace" replace />
+  ) : (
+    <UserRouteGuard>{withSuspense(<SelectWorkspace />)}</UserRouteGuard>
   );
 
   return (
@@ -115,6 +123,7 @@ export default function App() {
         <Route path="/setup/playbooks" element={setupRedirectElement} />
         <Route path="/setup/runtime" element={setupRedirectElement} />
 
+        <Route path="/select-workspace" element={selectWorkspaceEntryElement} />
         <Route path="/" element={rootEntryElement} />
 
         <Route
