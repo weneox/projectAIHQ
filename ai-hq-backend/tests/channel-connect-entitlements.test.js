@@ -57,6 +57,8 @@ async function invokeRouter(router, method, path, req = {}) {
       app: req.app || { locals: {} },
       auth: req.auth || {
         userId: "user-1",
+        identityId: "identity-1",
+        membershipId: "membership-1",
         email: "owner@acme.test",
         tenantId: "tenant-1",
         tenantKey: "acme",
@@ -64,6 +66,8 @@ async function invokeRouter(router, method, path, req = {}) {
       },
       user: req.user || {
         id: "user-1",
+        identityId: "identity-1",
+        membershipId: "membership-1",
         email: "owner@acme.test",
         tenantId: "tenant-1",
         tenantKey: "acme",
