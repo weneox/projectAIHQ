@@ -82,11 +82,11 @@ function resetSessionCompositionCache() {
 }
 
 async function loadAppAuthContext() {
-  return getAuthMe().catch(() => ({}));
+  return getAuthMe();
 }
 
 async function loadAppBootstrapContext() {
-  return getAppBootstrap().catch(() => ({}));
+  return getAppBootstrap();
 }
 
 export function clearAppAuthContext() {

@@ -51,4 +51,20 @@ describe("AppEntryRedirect", () => {
     expect(getAppBootstrapContext).toHaveBeenCalledTimes(1);
     expect(resolveAuthenticatedLanding).toHaveBeenCalledTimes(1);
   });
+
+  it("shows a controlled unavailable surface on bootstrap loader failure", async () => {
+    getAppBootstrapContext.mockRejectedValue(new Error("bootstrap offline"));
+
+    const view = render(
+      <MemoryRouter>
+        <AppEntryRedirect />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(view.getByText("Workspace unavailable")).toBeInTheDocument();
+    });
+
+    expect(navigate).not.toHaveBeenCalled();
+  });
 });

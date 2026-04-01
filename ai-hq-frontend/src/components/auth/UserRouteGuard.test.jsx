@@ -76,4 +76,22 @@ describe("UserRouteGuard", () => {
       expect(screen.getByTestId("navigate")).toHaveTextContent("/login");
     });
   });
+
+  it("shows a controlled unavailable surface on auth loader failure", async () => {
+    getAppAuthContext.mockRejectedValue(new Error("auth offline"));
+
+    render(
+      <MemoryRouter initialEntries={["/workspace"]}>
+        <UserRouteGuard>
+          <div>Protected workspace</div>
+        </UserRouteGuard>
+      </MemoryRouter>
+    );
+
+    expect(
+      await screen.findByText((content) => content.includes("Workspace unavailable"))
+    ).toBeInTheDocument();
+
+    expect(screen.queryByTestId("navigate")).not.toBeInTheDocument();
+  });
 });

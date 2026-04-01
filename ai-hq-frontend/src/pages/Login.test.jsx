@@ -126,4 +126,15 @@ describe("Login", () => {
       });
     });
   });
+
+  it("shows service-unavailable messaging on auth load failure", async () => {
+    getAppAuthContext.mockRejectedValueOnce(new Error("Failed to fetch"));
+
+    renderLogin();
+
+    expect(await screen.findByText("Service unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText("Authentication is temporarily unavailable. Try again shortly.")
+    ).toBeInTheDocument();
+  });
 });

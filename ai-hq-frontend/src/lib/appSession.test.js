@@ -50,6 +50,14 @@ describe("appSession", () => {
     expect(getAuthMe).not.toHaveBeenCalled();
   });
 
+  it("treats unauthenticated auth responses as valid non-error state", async () => {
+    getAuthMe.mockResolvedValueOnce({ authenticated: false, user: null });
+
+    const auth = await getAppAuthContext();
+
+    expect(auth.authenticated).toBe(false);
+  });
+
   it("composes session context from shared auth and bootstrap caches", async () => {
     const session = await getAppSessionContext();
 
@@ -75,5 +83,17 @@ describe("appSession", () => {
 
     expect(getAuthMe).toHaveBeenCalledTimes(2);
     expect(getAppBootstrap).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not swallow auth loader failures as empty objects", async () => {
+    getAuthMe.mockRejectedValueOnce(new Error("auth offline"));
+
+    await expect(getAppAuthContext()).rejects.toThrow("auth offline");
+  });
+
+  it("does not swallow bootstrap loader failures as empty objects", async () => {
+    getAppBootstrap.mockRejectedValueOnce(new Error("bootstrap offline"));
+
+    await expect(getAppBootstrapContext()).rejects.toThrow("bootstrap offline");
   });
 });

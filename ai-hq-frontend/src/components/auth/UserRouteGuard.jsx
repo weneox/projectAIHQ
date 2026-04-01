@@ -26,6 +26,7 @@ export default function UserRouteGuard({ children }) {
     loading: true,
     ok: false,
     redirectTo: "",
+    failed: false,
   });
 
   useEffect(() => {
@@ -37,6 +38,7 @@ export default function UserRouteGuard({ children }) {
           loading: false,
           ok: true,
           redirectTo: isSetupPath(location.pathname) ? "/workspace" : "",
+          failed: false,
         });
         return;
       }
@@ -50,6 +52,7 @@ export default function UserRouteGuard({ children }) {
             loading: false,
             ok: false,
             redirectTo: "",
+            failed: false,
           });
           return;
         }
@@ -67,6 +70,7 @@ export default function UserRouteGuard({ children }) {
           loading: false,
           ok: true,
           redirectTo,
+          failed: false,
         });
       } catch {
         if (!alive) return;
@@ -75,6 +79,7 @@ export default function UserRouteGuard({ children }) {
           loading: false,
           ok: false,
           redirectTo: "",
+          failed: true,
         });
       }
     }
@@ -88,6 +93,15 @@ export default function UserRouteGuard({ children }) {
 
   if (state.loading) {
     return <AppBootSurface label="Preparing workspace" detail="Syncing operator context" />;
+  }
+
+  if (state.failed) {
+    return (
+      <AppBootSurface
+        label="Workspace unavailable"
+        detail="We could not verify your session right now."
+      />
+    );
   }
 
   if (!state.ok) {
