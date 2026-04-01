@@ -11,6 +11,7 @@
     "dev": "node --watch --import ../scripts/workspace-module-loader.mjs server.js",
     "migrate": "node --import ../scripts/workspace-module-loader.mjs scripts/migrate.js",
     "backfill:operational-data": "node --import ../scripts/workspace-module-loader.mjs scripts/backfill-operational-data.mjs",
+    "repair:canonical-auth": "node --import ../scripts/workspace-module-loader.mjs scripts/repair-canonical-auth.mjs",
     "check:operational-readiness": "node --import ../scripts/workspace-module-loader.mjs scripts/check-operational-readiness.mjs",
     "validate:env": "node --import ../scripts/workspace-module-loader.mjs scripts/validate-env.mjs",
     "lint": "node ../scripts/check-js-syntax.mjs server.js src tests scripts",
