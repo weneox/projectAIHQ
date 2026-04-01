@@ -1,10 +1,19 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { AlertCircle, ArrowRight, Building2, Loader2, Lock, Mail, User2 } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  Building2,
+  Loader2,
+  Lock,
+  Mail,
+  User2,
+} from "lucide-react";
 
 import { signupUser } from "../api/auth.js";
-import { clearAppSessionContext } from "../lib/appSession.js";
+import { clearAppSessionContext, getAppAuthContext } from "../lib/appSession.js";
+import { resolveAuthenticatedLanding } from "../lib/appEntry.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -22,9 +31,11 @@ function getFriendlyError(error, fallback = "Unable to create your account.") {
   );
 }
 
-function resolvePostAuthTarget(payload = {}) {
-  const destination = payload?.destination || payload?.workspace?.destination || {};
-  return s(destination?.path || payload?.workspace?.routeHint || "/setup/studio");
+function resolvePostAuthTarget({ auth = null, payload = {} } = {}) {
+  return resolveAuthenticatedLanding({
+    auth,
+    bootstrap: payload,
+  });
 }
 
 function AuthField({
@@ -90,9 +101,22 @@ export default function Signup() {
     try {
       setLoading(true);
       setError("");
+
       const response = await signupUser(payload);
       clearAppSessionContext();
-      navigate(resolvePostAuthTarget(response), { replace: true });
+
+      let auth = null;
+      try {
+        auth = await getAppAuthContext({ force: true });
+      } catch {}
+
+      navigate(
+        resolvePostAuthTarget({
+          auth,
+          payload: response,
+        }),
+        { replace: true }
+      );
     } catch (signupError) {
       setError(getFriendlyError(signupError));
     } finally {
@@ -108,19 +132,26 @@ export default function Signup() {
             <div className="inline-flex rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/72">
               Canonical workspace access
             </div>
+
             <h1 className="mt-6 text-[34px] font-semibold tracking-[-0.05em]">
               Create your first workspace and enter setup in one flow.
             </h1>
+
             <p className="mt-4 text-[15px] leading-8 text-white/72">
-              Your account becomes the canonical identity, your first business is created,
-              and we route you straight into setup or the ready workspace.
+              Your account becomes the canonical identity, your first business is
+              created, and we route you straight into setup or the ready
+              workspace.
             </p>
+
             <div className="mt-8 space-y-4 text-sm text-white/78">
               <div className="rounded-[18px] border border-white/10 bg-white/5 p-4">
-                Email and password live on the identity layer, not the old company-name login model.
+                Email and password live on the identity layer, not the old
+                company-name login model.
               </div>
+
               <div className="rounded-[18px] border border-white/10 bg-white/5 p-4">
-                Workspace membership is created immediately so switching between businesses stays clean later.
+                Workspace membership is created immediately so switching between
+                businesses stays clean later.
               </div>
             </div>
           </div>
@@ -131,11 +162,14 @@ export default function Signup() {
             <div className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#0b6a71]">
               Sign up
             </div>
+
             <h2 className="mt-3 text-[32px] font-semibold tracking-[-0.04em] text-slate-950">
               Start your workspace
             </h2>
+
             <p className="mt-3 text-[15px] leading-7 text-slate-600">
-              Create your identity and first business in the canonical auth flow.
+              Create your identity and first business in the canonical auth
+              flow.
             </p>
 
             {error ? (
@@ -154,6 +188,7 @@ export default function Signup() {
                 placeholder="Jane Doe"
                 onChange={onChange}
               />
+
               <AuthField
                 label="Business name"
                 icon={Building2}
@@ -162,6 +197,7 @@ export default function Signup() {
                 placeholder="Acme Clinic"
                 onChange={onChange}
               />
+
               <AuthField
                 label="Email"
                 icon={Mail}
@@ -171,6 +207,7 @@ export default function Signup() {
                 placeholder="owner@acme.com"
                 onChange={onChange}
               />
+
               <AuthField
                 label="Password"
                 icon={Lock}
