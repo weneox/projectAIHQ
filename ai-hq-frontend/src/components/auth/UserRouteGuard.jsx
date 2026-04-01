@@ -16,6 +16,9 @@ export default function UserRouteGuard({ children }) {
   const location = useLocation();
   const localWorkspaceEntry = isLocalWorkspaceEntryEnabled();
   const onWorkspaceSelection = isWorkspaceSelectionPath(location.pathname);
+  const allowSetupBypass =
+    location.pathname === "/workspace" &&
+    location.state?.allowSetupBypass === true;
 
   const [state, setState] = useState({
     loading: true,
@@ -72,7 +75,7 @@ export default function UserRouteGuard({ children }) {
         const onSetup = isSetupPath(location.pathname);
         let redirectTo = "";
 
-        if (!setupCompleted && !onSetup) {
+        if (!setupCompleted && !onSetup && !allowSetupBypass) {
           redirectTo = setupRoute;
         } else if (setupCompleted && onSetup) {
           redirectTo = "/workspace";
@@ -108,7 +111,12 @@ export default function UserRouteGuard({ children }) {
     return () => {
       alive = false;
     };
-  }, [localWorkspaceEntry, location.pathname, onWorkspaceSelection]);
+  }, [
+    allowSetupBypass,
+    localWorkspaceEntry,
+    location.pathname,
+    onWorkspaceSelection,
+  ]);
 
   if (state.loading) {
     return (
