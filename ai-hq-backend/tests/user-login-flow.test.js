@@ -526,6 +526,43 @@ test("host tenant constraint signs in directly when matching membership exists",
   assert.equal(login.res.body?.user?.tenantKey, "acme");
 });
 
+test("explicit tenant context signs in directly when matching membership exists", async () => {
+  const db = new FakeLoginDb();
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    companyName: "Acme Clinic",
+    membershipId: "membership-1",
+    userId: "user-1",
+  });
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
+    tenantId: "tenant-2",
+    tenantKey: "globex",
+    companyName: "Globex",
+    membershipId: "membership-2",
+    userId: "user-2",
+  });
+
+  const router = userLoginRoutes({ db });
+  const login = await invokeRoute(router, "post", "/auth/login", {
+    body: {
+      email: "shared@company.test",
+      password: "shared-pass",
+      tenantKey: "acme",
+    },
+    headers: { host: "localhost:5173" },
+  });
+
+  assert.equal(login.res.statusCode, 200);
+  assert.equal(login.res.body?.user?.tenantKey, "acme");
+});
+
 test("host tenant constraint fails closed when membership does not exist", async () => {
   const db = new FakeLoginDb();
   seedIdentityWithMembership(db, {

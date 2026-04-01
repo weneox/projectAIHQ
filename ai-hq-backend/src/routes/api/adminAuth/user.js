@@ -130,7 +130,8 @@ export function userLoginRoutes({ db } = {}) {
     const password = s(req.body?.password);
     const explicitTenantKey = normalizeTenantKeyInput(req.body);
     const hostTenantKey = resolveTenantKeyFromRequestHost(req);
-    const tenantKey = hostTenantKey || explicitTenantKey;
+    const requestedTenantKey = hostTenantKey || explicitTenantKey || "";
+    const tenantKey = requestedTenantKey;
     const accountSelectionToken = s(
       req.body?.accountSelectionToken || req.body?.account_selection_token
     );
@@ -237,7 +238,7 @@ export function userLoginRoutes({ db } = {}) {
     try {
       memberships = await listIdentityMembershipChoicesForLogin(db, {
         identityId: identity.id,
-        tenantKey: hostTenantKey || "",
+        tenantKey: requestedTenantKey,
       });
     } catch (e) {
       const timeout = isDbTimeoutError(e);
@@ -250,13 +251,13 @@ export function userLoginRoutes({ db } = {}) {
 
     const compatibleChoices = await resolveCompatibleMemberships(db, identity, memberships);
 
-    if (hostTenantKey) {
-      const hostChoice =
+    if (requestedTenantKey) {
+      const requestedChoice =
         compatibleChoices.find(
-          (choice) => s(choice.tenant_key).toLowerCase() === hostTenantKey
+          (choice) => s(choice.tenant_key).toLowerCase() === requestedTenantKey
         ) || null;
 
-      if (!hostChoice) {
+      if (!requestedChoice) {
         return res.status(403).json({
           ok: false,
           error: "This identity does not have access to the requested workspace",
@@ -265,7 +266,7 @@ export function userLoginRoutes({ db } = {}) {
       }
 
       memberships.length = 0;
-      memberships.push(hostChoice);
+      memberships.push(requestedChoice);
     }
 
     let selectedChoice = null;
@@ -293,7 +294,7 @@ export function userLoginRoutes({ db } = {}) {
           code: "invalid_membership_selection",
         });
       }
-    } else if (hostTenantKey) {
+    } else if (requestedTenantKey) {
       selectedChoice = memberships[0] || null;
     } else if (compatibleChoices.length === 1) {
       selectedChoice = compatibleChoices[0];
