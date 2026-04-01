@@ -136,6 +136,61 @@ function getUserSessionSecret() {
   return s(cfg.auth.userSessionSecret || cfg.auth.adminSessionSecret);
 }
 
+const RESERVED_TENANT_HOST_LABELS = new Set([
+  "www",
+  "api",
+  "hq",
+  "mail",
+  "docs",
+  "status",
+  "admin",
+  "app",
+  "cdn",
+  "assets",
+  "blog",
+  "help",
+  "support",
+  "auth",
+  "m",
+  "dev",
+  "staging",
+  "demo",
+]);
+
+function normalizeHostname(value = "") {
+  return s(value)
+    .split(",")[0]
+    .trim()
+    .toLowerCase()
+    .replace(/:\d+$/, "");
+}
+
+function isLoopbackHost(host = "") {
+  const normalized = normalizeHostname(host);
+  return (
+    !normalized ||
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized.endsWith(".localhost")
+  );
+}
+
+function getTenantBaseHosts(publicBaseUrl = cfg.urls.publicBaseUrl) {
+  const hosts = new Set();
+
+  try {
+    const host = new URL(s(publicBaseUrl)).hostname;
+    if (host) {
+      hosts.add(normalizeHostname(host));
+    }
+  } catch {}
+
+  hosts.add("weneox.com");
+
+  return Array.from(hosts).filter(Boolean).sort((a, b) => b.length - a.length);
+}
+
 function getSessionCookieToken(req, cookieName) {
   const values = getAllCookieValues(req, cookieName);
 
@@ -225,6 +280,41 @@ export function getAdminCookieName() {
 
 export function getUserCookieName() {
   return s(cfg.auth.userSessionCookieName, "aihq_user");
+}
+
+export function resolveTenantKeyFromRequestHost(
+  req,
+  { publicBaseUrl = cfg.urls.publicBaseUrl } = {}
+) {
+  const requestHost = normalizeHostname(
+    req?.headers?.["x-forwarded-host"] ||
+      req?.headers?.host ||
+      req?.get?.("host")
+  );
+
+  if (isLoopbackHost(requestHost)) return "";
+
+  for (const baseHost of getTenantBaseHosts(publicBaseUrl)) {
+    if (!baseHost || requestHost === baseHost) continue;
+    if (!requestHost.endsWith(`.${baseHost}`)) continue;
+
+    const tenantLabel = requestHost
+      .slice(0, -(`.${baseHost}`).length)
+      .trim()
+      .toLowerCase();
+
+    if (
+      !tenantLabel ||
+      tenantLabel.includes(".") ||
+      RESERVED_TENANT_HOST_LABELS.has(tenantLabel)
+    ) {
+      return "";
+    }
+
+    return tenantLabel;
+  }
+
+  return "";
 }
 
 function shouldUseCrossSiteSessionCookie(req) {
@@ -616,6 +706,80 @@ export function verifyUserSessionToken(token) {
       !payload?.email
     ) {
       return { ok: false, error: "invalid session payload" };
+    }
+
+    return { ok: true, payload };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e || "verify failed") };
+  }
+}
+
+export function createUserLoginSelectionToken(account = {}) {
+  const secret = getUserSessionSecret();
+  if (!secret) {
+    throw new Error("login selection secret missing");
+  }
+
+  const payload = {
+    typ: "tenant_user_login_choice",
+    userId: s(account.userId || account.id),
+    tenantId: s(account.tenantId || account.tenant_id),
+    tenantKey: s(account.tenantKey || account.tenant_key).toLowerCase(),
+    email: s(account.email || account.user_email).toLowerCase(),
+    iat: nowSec(),
+    exp: nowSec() + 10 * 60,
+  };
+
+  const payloadB64 = base64url(JSON.stringify(payload));
+  const sigB64 = base64url(
+    crypto.createHmac("sha256", secret).update(payloadB64).digest()
+  );
+
+  return `${payloadB64}.${sigB64}`;
+}
+
+export function verifyUserLoginSelectionToken(token) {
+  try {
+    const secret = getUserSessionSecret();
+    if (!secret) return { ok: false, error: "selection secret missing" };
+
+    const raw = s(token);
+    if (!raw || !raw.includes(".")) {
+      return { ok: false, error: "invalid token format" };
+    }
+
+    const [payloadB64, sigB64] = raw.split(".");
+    if (!payloadB64 || !sigB64) {
+      return { ok: false, error: "invalid token parts" };
+    }
+
+    const expectedSig = crypto
+      .createHmac("sha256", secret)
+      .update(payloadB64)
+      .digest();
+
+    const gotSig = unbase64url(sigB64);
+    if (!safeEqBuffer(expectedSig, gotSig)) {
+      return { ok: false, error: "bad signature" };
+    }
+
+    const payload = JSON.parse(unbase64url(payloadB64).toString("utf8") || "{}");
+    if (payload?.typ !== "tenant_user_login_choice") {
+      return { ok: false, error: "invalid token type" };
+    }
+
+    const now = nowSec();
+    if (!Number.isFinite(payload?.exp) || now >= Number(payload.exp)) {
+      return { ok: false, error: "token expired" };
+    }
+
+    if (
+      !s(payload?.userId) ||
+      !s(payload?.tenantId) ||
+      !s(payload?.tenantKey) ||
+      !s(payload?.email)
+    ) {
+      return { ok: false, error: "invalid selection payload" };
     }
 
     return { ok: true, payload };

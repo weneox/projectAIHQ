@@ -32,6 +32,7 @@ export default function Shell() {
   const location = useLocation();
   const notifications = useNotificationsSurface();
   const refreshTimerRef = useRef(0);
+  const statsRequestRef = useRef(null);
 
   const [shellStats, setShellStats] = useState({
     inboxUnread: null,
@@ -49,60 +50,73 @@ export default function Shell() {
   const isChannelsRoute = location.pathname.startsWith("/channels");
   const hideTopHeader = isInboxRoute || isChannelsRoute;
 
-  async function loadShellStats() {
-    const [inboxRes, leadsRes] = await Promise.all([
+  async function loadShellStats({ skipIfHidden = false } = {}) {
+    if (hideTopHeader && skipIfHidden) return;
+    if (hideTopHeader) return;
+    if (statsRequestRef.current) return statsRequestRef.current;
+
+    const request = Promise.all([
       fetchShellResource("/api/inbox/threads"),
       fetchShellResource("/api/leads"),
-    ]);
+    ])
+      .then(([inboxRes, leadsRes]) => {
+        const failedResponse = [inboxRes, leadsRes].find((entry) => !entry?.ok);
+        if (failedResponse) {
+          setShellStats((prev) => ({
+            ...prev,
+            inboxUnread: null,
+            inboxOpen: null,
+            leadsOpen: null,
+            dbDisabled: false,
+            availability: "unavailable",
+            message:
+              failedResponse.message ||
+              "Shared workspace stats are temporarily unavailable.",
+          }));
+          return;
+        }
 
-    const failedResponse = [inboxRes, leadsRes].find((entry) => !entry?.ok);
-    if (failedResponse) {
-      setShellStats((prev) => ({
-        ...prev,
-        inboxUnread: null,
-        inboxOpen: null,
-        leadsOpen: null,
-        dbDisabled: false,
-        availability: "unavailable",
-        message:
-          failedResponse.message ||
-          "Shared workspace stats are temporarily unavailable.",
-      }));
-      return;
-    }
+        const inboxData = inboxRes.data;
+        const leadsData = leadsRes.data;
+        const threads = Array.isArray(inboxData?.threads) ? inboxData.threads : [];
+        const leads = Array.isArray(leadsData?.leads) ? leadsData.leads : [];
 
-    const inboxData = inboxRes.data;
-    const leadsData = leadsRes.data;
-    const threads = Array.isArray(inboxData?.threads) ? inboxData.threads : [];
-    const leads = Array.isArray(leadsData?.leads) ? leadsData.leads : [];
+        const inboxUnread = threads.reduce(
+          (sum, thread) => sum + Number(thread?.unread_count || 0),
+          0
+        );
+        const inboxOpen = threads.filter((thread) => {
+          const status = String(thread?.status || "open").toLowerCase();
+          return status !== "resolved" && status !== "closed";
+        }).length;
+        const leadsOpen = leads.filter(
+          (lead) => String(lead?.status || "open").toLowerCase() === "open"
+        ).length;
 
-    const inboxUnread = threads.reduce(
-      (sum, thread) => sum + Number(thread?.unread_count || 0),
-      0
-    );
-    const inboxOpen = threads.filter((thread) => {
-      const status = String(thread?.status || "open").toLowerCase();
-      return status !== "resolved" && status !== "closed";
-    }).length;
-    const leadsOpen = leads.filter(
-      (lead) => String(lead?.status || "open").toLowerCase() === "open"
-    ).length;
+        setShellStats((prev) => ({
+          ...prev,
+          inboxUnread,
+          inboxOpen,
+          leadsOpen,
+          dbDisabled: Boolean(inboxData?.dbDisabled || leadsData?.dbDisabled),
+          availability: "ready",
+          message: "",
+        }));
+      })
+      .finally(() => {
+        if (statsRequestRef.current === request) {
+          statsRequestRef.current = null;
+        }
+      });
 
-    setShellStats((prev) => ({
-      ...prev,
-      inboxUnread,
-      inboxOpen,
-      leadsOpen,
-      dbDisabled: Boolean(inboxData?.dbDisabled || leadsData?.dbDisabled),
-      availability: "ready",
-      message: "",
-    }));
+    statsRequestRef.current = request;
+    return request;
   }
 
   function scheduleShellRefresh(delay = 180) {
     clearTimeout(refreshTimerRef.current);
     refreshTimerRef.current = setTimeout(() => {
-      loadShellStats();
+      loadShellStats({ skipIfHidden: hideTopHeader });
     }, delay);
   }
 
@@ -125,10 +139,6 @@ export default function Shell() {
       document.body.style.overflowY = previousOverflowY;
     };
   }, [mobileOpen]);
-
-  useEffect(() => {
-    loadShellStats();
-  }, []);
 
   useEffect(() => {
     setMobileOpen(false);

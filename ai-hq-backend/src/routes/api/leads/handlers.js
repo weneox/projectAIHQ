@@ -201,6 +201,33 @@ export function createLeadHandlers({ db, wsHub }) {
     }
   }
 
+  async function getLeadByInboxThreadId(req, res) {
+    const inboxThreadId = String(req.params.threadId || "").trim();
+    const tenantKey = getResolvedTenantKey(getAuthTenantKey(req));
+    if (!inboxThreadId) {
+      return okJson(res, { ok: false, error: "thread id required" });
+    }
+
+    try {
+      if (!isDbReady(db)) {
+        return okJson(res, { ok: true, lead: null, dbDisabled: true });
+      }
+
+      if (!isUuid(inboxThreadId)) {
+        return okJson(res, { ok: false, error: "thread id must be uuid" });
+      }
+
+      const lead = await findActiveLeadByInboxThreadId(db, tenantKey, inboxThreadId);
+      return okJson(res, { ok: true, lead });
+    } catch (e) {
+      return okJson(res, {
+        ok: false,
+        error: "Error",
+        details: { message: String(e?.message || e) },
+      });
+    }
+  }
+
   async function getLeadEvents(req, res) {
     const id = String(req.params.id || "").trim();
     const tenantKey = getResolvedTenantKey(getAuthTenantKey(req));
@@ -687,6 +714,7 @@ export function createLeadHandlers({ db, wsHub }) {
     ingestLead,
     getLeads,
     getLeadById,
+    getLeadByInboxThreadId,
     getLeadEvents,
     createLead,
     updateLead,

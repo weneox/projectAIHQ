@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { ShieldAlert } from "lucide-react";
 import { getAppSessionContext } from "../../lib/appSession.js";
+import AppBootSurface from "../loading/AppBootSurface.jsx";
 
 const DEFAULT_ALLOWED_ROLES = new Set(["owner", "admin", "operator"]);
 
@@ -97,7 +98,9 @@ export default function OperatorRouteGuard({
     };
   }, [allowedRoles]);
 
-  if (state.loading) return null;
+  if (state.loading) {
+    return <AppBootSurface label="Preparing workspace" detail="Loading operator access" />;
+  }
 
   if (!state.authenticated) {
     return <Navigate to="/login" replace state={{ from: location }} />;

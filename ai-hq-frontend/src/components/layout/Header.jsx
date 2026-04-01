@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BellRing, LogOut, Menu } from "lucide-react";
 import { logoutUser } from "../../api/auth.js";
+import { clearAppSessionContext } from "../../lib/appSession.js";
 import NotificationsPanel from "./NotificationsPanel.jsx";
 
 function cn(...classes) {
@@ -65,6 +66,7 @@ function LogoutButton() {
 
     try {
       await logoutUser();
+      clearAppSessionContext();
 
       localStorage.removeItem("token");
       localStorage.removeItem("user");

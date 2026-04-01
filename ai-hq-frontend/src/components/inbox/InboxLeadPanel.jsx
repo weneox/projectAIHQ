@@ -12,6 +12,7 @@ import {
   prettyLeadSource,
 } from "../../lib/inbox-ui.js";
 import SettingsSurfaceBanner from "../settings/SettingsSurfaceBanner.jsx";
+import { InboxLeadSkeleton } from "./InboxLoadingSurface.jsx";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -285,6 +286,8 @@ export default function InboxLeadPanel({
           <div className="px-5 py-8 text-sm text-slate-500">
             Select a conversation to load details.
           </div>
+        ) : surface?.loading && !hasLead ? (
+          <InboxLeadSkeleton />
         ) : (
           <>
             <IdentityCard

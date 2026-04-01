@@ -254,7 +254,43 @@ textarea::placeholder {
   display: none !important;
 }
 
+@keyframes lux-loading-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes lux-loading-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1);
+  }
+}
+
 @layer components {
+  .lux-loading-shimmer {
+    background-image: linear-gradient(
+      90deg,
+      rgba(226, 232, 240, 0.56) 0%,
+      rgba(255, 255, 255, 0.96) 38%,
+      rgba(226, 232, 240, 0.58) 78%
+    );
+    background-size: 220% 100%;
+    animation: lux-loading-shimmer 1.8s ease-in-out infinite;
+  }
+
+  .lux-loading-pulse {
+    animation: lux-loading-pulse 2.3s ease-in-out infinite;
+  }
+
   .premium-page {
     position: relative;
     isolation: isolate;

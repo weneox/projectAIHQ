@@ -23,6 +23,10 @@ export async function getLead(id) {
   return apiGet(`/api/leads/${encodeURIComponent(id)}`);
 }
 
+export async function getLeadByThreadId(threadId) {
+  return apiGet(`/api/leads/by-thread/${encodeURIComponent(threadId)}`);
+}
+
 export async function getLeadEvents(id, limit = 50) {
   return apiGet(
     `/api/leads/${encodeURIComponent(id)}/events?limit=${encodeURIComponent(limit)}`

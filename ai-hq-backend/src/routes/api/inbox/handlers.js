@@ -183,14 +183,16 @@ export function inboxHandlers({ db, wsHub }) {
           t.handoff_by,
           t.created_at,
           t.updated_at,
-          (
-            select m.text
-            from inbox_messages m
-            where m.thread_id = t.id
-            order by m.sent_at desc, m.created_at desc
-            limit 1
-          ) as last_message_text
+          coalesce(last_message.text, '') as last_message_text
         from inbox_threads t
+        left join lateral (
+          select m.text
+          from inbox_messages m
+          where m.thread_id = t.id
+            and m.tenant_key = t.tenant_key
+          order by m.sent_at desc, m.created_at desc
+          limit 1
+        ) last_message on true
         ${where}
         order by coalesce(t.last_message_at, t.updated_at, t.created_at) desc
         limit $${values.length}::int

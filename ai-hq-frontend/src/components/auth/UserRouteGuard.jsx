@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { getAuthMe } from "../../api/auth.js";
-import { getAppBootstrap } from "../../api/app.js";
 import { isLocalWorkspaceEntryEnabled } from "../../lib/appEntry.js";
+import { getAppSessionContext } from "../../lib/appSession.js";
+import AppBootSurface from "../loading/AppBootSurface.jsx";
 
 function isSetupPath(pathname = "") {
   return pathname === "/setup" || pathname.startsWith("/setup/");
@@ -42,7 +42,8 @@ export default function UserRouteGuard({ children }) {
       }
 
       try {
-        const auth = await getAuthMe();
+        const session = await getAppSessionContext();
+        const auth = session?.auth || {};
         if (!alive) return;
 
         if (!auth?.authenticated) {
@@ -55,33 +56,11 @@ export default function UserRouteGuard({ children }) {
         }
 
         const onSetup = isSetupPath(location.pathname);
-        let redirectTo = "";
-
-        try {
-          await getAppBootstrap();
-
-          if (location.pathname === "/setup") {
-            redirectTo = "/setup/studio";
-          } else if (
-            onSetup &&
-            location.pathname !== normalizeSetupRoute(location.pathname)
-          ) {
-            redirectTo = "/setup/studio";
-          } else {
-            redirectTo = "";
-          }
-        } catch {
-          if (location.pathname === "/setup") {
-            redirectTo = "/setup/studio";
-          } else if (
-            onSetup &&
-            location.pathname !== normalizeSetupRoute(location.pathname)
-          ) {
-            redirectTo = "/setup/studio";
-          } else {
-            redirectTo = "";
-          }
-        }
+        const redirectTo =
+          location.pathname === "/setup" ||
+          (onSetup && location.pathname !== normalizeSetupRoute(location.pathname))
+            ? "/setup/studio"
+            : "";
 
         if (!alive) return;
 
@@ -108,7 +87,9 @@ export default function UserRouteGuard({ children }) {
     };
   }, [localWorkspaceEntry, location.pathname]);
 
-  if (state.loading) return null;
+  if (state.loading) {
+    return <AppBootSurface label="Preparing workspace" detail="Syncing operator context" />;
+  }
 
   if (!state.ok) {
     return <Navigate to="/login" replace state={{ from: location }} />;

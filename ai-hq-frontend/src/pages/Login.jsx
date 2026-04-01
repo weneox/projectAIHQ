@@ -4,7 +4,6 @@ import { motion, useMotionTemplate, useMotionValue } from "framer-motion";
 import {
   AlertCircle,
   ArrowRight,
-  Building2,
   CheckCircle2,
   Eye,
   EyeOff,
@@ -15,6 +14,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { getAuthMe, loginUser, logoutUser } from "../api/auth.js";
+import { clearAppSessionContext } from "../lib/appSession.js";
 
 const RESERVED_SUBDOMAINS = new Set([
   "www",
@@ -102,12 +102,28 @@ function getFriendlyError(error, fallback = "Unable to continue.") {
   }
 
   return s(
+    error?.payload?.error ||
+      error?.payload?.message ||
     error?.response?.data?.error ||
       error?.response?.data?.message ||
       error?.message ||
       fallback,
     fallback
   );
+}
+
+function isMultipleAccountsError(error) {
+  const code = s(error?.code || error?.payload?.code || error?.response?.data?.code).toLowerCase();
+  return code === "multiple_accounts";
+}
+
+function normalizeAccountChoices(error) {
+  const accounts =
+    error?.payload?.accounts ||
+    error?.response?.data?.accounts ||
+    [];
+
+  return Array.isArray(accounts) ? accounts : [];
 }
 
 function StatusLine({ icon: Icon, title, body, tone = "neutral" }) {
@@ -186,6 +202,8 @@ export default function Login() {
   const [error, setError] = useState("");
   const [focusedField, setFocusedField] = useState("");
   const [activeSession, setActiveSession] = useState(null);
+  const [accountChoices, setAccountChoices] = useState([]);
+  const [selectedAccountToken, setSelectedAccountToken] = useState("");
   const [serviceNotice, setServiceNotice] = useState({
     visible: false,
     title: "",
@@ -194,15 +212,13 @@ export default function Login() {
   });
 
   const [form, setForm] = useState({
-    tenantKey: detectedTenantKey || "",
     email: "",
     password: "",
-    remember: true,
   });
 
   const activeTenantKey = useMemo(
-    () => normalizeTenantKey(form.tenantKey),
-    [form.tenantKey]
+    () => normalizeTenantKey(detectedTenantKey),
+    [detectedTenantKey]
   );
 
   const workspaceName = useMemo(
@@ -281,7 +297,11 @@ export default function Login() {
     setSessionActionBusy(true);
     try {
       await logoutUser();
+      clearAppSessionContext();
       setActiveSession(null);
+      setAccountChoices([]);
+      setSelectedAccountToken("");
+      setError("");
       setServiceNotice({
         visible: false,
         title: "",
@@ -305,32 +325,30 @@ export default function Login() {
 
     setForm((prev) => ({
       ...prev,
-      [name]:
-        type === "checkbox"
-          ? checked
-          : name === "tenantKey"
-            ? normalizeTenantKey(value)
-            : value,
+      [name]: type === "checkbox" ? checked : value,
     }));
 
     if (error) setError("");
+    if (name === "email") {
+      setAccountChoices([]);
+      setSelectedAccountToken("");
+    }
   }
 
   async function onSubmit(e) {
     e.preventDefault();
     if (loading) return;
 
-    const tenantKey = normalizeTenantKey(form.tenantKey);
     const email = s(form.email);
     const password = String(form.password || "");
 
-    if (!tenantKey) {
-      setError("Enter your workspace.");
+    if (!email || !password) {
+      setError("Enter your email and password.");
       return;
     }
 
-    if (!email || !password) {
-      setError("Enter your email and password.");
+    if (accountChoices.length > 0 && !selectedAccountToken) {
+      setError("Select the correct workspace to continue.");
       return;
     }
 
@@ -342,8 +360,10 @@ export default function Login() {
       await loginUser({
         email,
         password,
-        tenantKey,
+        tenantKey: activeTenantKey || undefined,
+        accountSelectionToken: selectedAccountToken || undefined,
       });
+      clearAppSessionContext();
 
       window.location.replace(redirectTo);
     } catch (submitError) {
@@ -353,6 +373,16 @@ export default function Login() {
           title: "Authentication paused",
           body: getFriendlyError(submitError),
           tone: "warning",
+        });
+        setError("");
+      } else if (isMultipleAccountsError(submitError)) {
+        setAccountChoices(normalizeAccountChoices(submitError));
+        setSelectedAccountToken("");
+        setServiceNotice({
+          visible: true,
+          title: "Choose workspace",
+          body: "This email is active in more than one workspace. Select the correct one to continue.",
+          tone: "neutral",
         });
         setError("");
       } else {
@@ -442,7 +472,7 @@ export default function Login() {
                       Back inside.
                     </h1>
                     <p className="mt-3 max-w-[320px] text-sm leading-7 text-slate-600">
-                      Use your workspace credentials.
+                      Use your email and password to open your operator session.
                     </p>
                   </div>
 
@@ -454,7 +484,7 @@ export default function Login() {
                 <div className="mt-6 space-y-3">
                   {serviceNotice.visible ? (
                     <StatusLine
-                      icon={activeSession ? CheckCircle2 : WifiOff}
+                      icon={activeSession || serviceNotice.tone === "neutral" ? CheckCircle2 : WifiOff}
                       title={serviceNotice.title}
                       body={serviceNotice.body}
                       tone={serviceNotice.tone}
@@ -513,25 +543,19 @@ export default function Login() {
                 ) : null}
 
                 <form className="mt-7 space-y-5" onSubmit={onSubmit}>
-                  <Field
-                    label="Workspace"
-                    icon={Building2}
-                    focused={focusedField === "tenantKey"}
-                    invalid={!s(form.tenantKey) && !!error}
-                  >
-                    <input
-                      type="text"
-                      name="tenantKey"
-                      placeholder="company-name"
-                      value={form.tenantKey}
-                      onChange={onChange}
-                      onFocus={() => setFocusedField("tenantKey")}
-                      onBlur={() => setFocusedField("")}
-                      autoComplete="organization"
-                      spellCheck={false}
-                      className="h-full w-full bg-transparent text-[15px] outline-none placeholder:text-slate-400"
-                    />
-                  </Field>
+                  {activeTenantKey ? (
+                    <div className="rounded-[22px] border border-black/8 bg-white/64 px-4 py-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        Workspace
+                      </div>
+                      <div className="mt-1 text-sm leading-6 text-slate-700">
+                        {workspaceName || activeTenantKey}
+                      </div>
+                      <div className="text-[12px] leading-6 text-slate-500">
+                        Resolved automatically from this host.
+                      </div>
+                    </div>
+                  ) : null}
 
                   <Field
                     label="Email"
@@ -557,14 +581,6 @@ export default function Login() {
                     icon={Lock}
                     focused={focusedField === "password"}
                     invalid={!s(form.password) && !!error}
-                    right={
-                      <button
-                        type="button"
-                        className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 transition hover:text-slate-700"
-                      >
-                        Reset
-                      </button>
-                    }
                   >
                     <input
                       type={showPassword ? "text" : "password"}
@@ -592,22 +608,58 @@ export default function Login() {
                     </button>
                   </Field>
 
-                  <div className="flex items-center justify-between gap-4 pt-1">
-                    <label className="flex items-center gap-3 text-sm text-slate-600">
-                      <input
-                        type="checkbox"
-                        name="remember"
-                        checked={form.remember}
-                        onChange={onChange}
-                        className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-300"
-                      />
-                      <span>Remember</span>
-                    </label>
+                  {accountChoices.length ? (
+                    <div className="rounded-[24px] border border-black/8 bg-white/72 p-4">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        Select workspace
+                      </div>
+                      <div className="mt-2 text-sm leading-6 text-slate-600">
+                        Choose the account you want to access with this email.
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {accountChoices.map((account) => {
+                          const token = s(account.selectionToken);
+                          const selected = token && token === selectedAccountToken;
+                          const passwordUnavailable =
+                            s(account.authProvider || "local").toLowerCase() !== "local" ||
+                            account.passwordReady === false;
 
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                      {activeTenantKey ? workspaceName || activeTenantKey : "Workspace"}
+                          return (
+                            <button
+                              key={token || `${account.tenantKey}-${account.role}`}
+                              type="button"
+                              disabled={passwordUnavailable}
+                              onClick={() => {
+                                setSelectedAccountToken(token);
+                                setError("");
+                              }}
+                              className={`flex w-full items-start justify-between gap-4 rounded-[20px] border px-4 py-3 text-left transition ${
+                                selected
+                                  ? "border-slate-950 bg-slate-950 text-white"
+                                  : "border-black/8 bg-[#fbfaf7] text-slate-800 hover:border-black/16"
+                              } ${passwordUnavailable ? "cursor-not-allowed opacity-55" : ""}`}
+                            >
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium leading-6">
+                                  {s(account.companyName) || formatWorkspaceName(account.tenantKey) || account.tenantKey}
+                                </div>
+                                <div className={`text-[12px] leading-6 ${selected ? "text-white/75" : "text-slate-500"}`}>
+                                  {s(account.tenantKey)} · {s(account.role || "member")}
+                                </div>
+                              </div>
+                              <div className={`shrink-0 text-[11px] font-semibold uppercase tracking-[0.18em] ${selected ? "text-white/72" : "text-slate-400"}`}>
+                                {passwordUnavailable
+                                  ? s(account.authProvider || "access")
+                                  : selected
+                                    ? "Selected"
+                                    : "Choose"}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
+                  ) : null}
 
                   <motion.button
                     whileHover={loading || checking ? {} : { y: -1 }}
@@ -622,7 +674,11 @@ export default function Login() {
                         Continue
                       </span>
                       <span className="mt-1 block text-[15px] font-medium">
-                        {loading ? "Signing in..." : "Open session"}
+                        {loading
+                          ? "Signing in..."
+                          : accountChoices.length
+                            ? "Open selected workspace"
+                            : "Open session"}
                       </span>
                     </span>
 

@@ -9,6 +9,7 @@ export function leadsRoutes({ db, wsHub }) {
 
   r.post("/leads/ingest", h.ingestLead);
   r.get("/leads", requireOperatorSurfaceAccess, h.getLeads);
+  r.get("/leads/by-thread/:threadId", requireOperatorSurfaceAccess, h.getLeadByInboxThreadId);
   r.get("/leads/:id", requireOperatorSurfaceAccess, h.getLeadById);
   r.get("/leads/:id/events", requireOperatorSurfaceAccess, h.getLeadEvents);
   r.post("/leads", h.createLead);

@@ -12,6 +12,7 @@ import {
 
 import SettingsSurfaceBanner from "../settings/SettingsSurfaceBanner.jsx";
 import InboxMessageBubble from "./InboxMessageBubble.jsx";
+import { InboxDetailSkeleton } from "./InboxLoadingSurface.jsx";
 import { indexAttemptsByMessageCorrelation } from "./outboundAttemptTruth.js";
 
 function s(v, d = "") {
@@ -432,6 +433,22 @@ export default function InboxDetailPanel({
             />
           }
         />
+      ) : surface?.loading ? (
+        <div className="border-b border-slate-200/70 bg-[#f6f6f7] px-5 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="lux-loading-shimmer h-11 w-11 rounded-full bg-slate-100" />
+              <div className="min-w-0 space-y-2">
+                <div className="lux-loading-shimmer h-4 w-36 rounded-full bg-slate-100" />
+                <div className="lux-loading-shimmer h-3 w-24 rounded-full bg-slate-100/80" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <div className="lux-loading-shimmer h-10 w-10 rounded-full bg-slate-100" />
+              <div className="lux-loading-shimmer h-10 w-10 rounded-full bg-slate-100" />
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="border-b border-slate-200/70 bg-[#f6f6f7] px-5 py-4">
           <div className="text-[12px] font-medium uppercase tracking-[0.18em] text-slate-400">
@@ -454,7 +471,9 @@ export default function InboxDetailPanel({
 
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto bg-[#f6f6f7] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {!hasThread ? (
+          {surface?.loading && !hasThread ? (
+            <InboxDetailSkeleton />
+          ) : !hasThread ? (
             <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-6 text-center">
               <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-900">
                 Conversation workspace
@@ -462,10 +481,6 @@ export default function InboxDetailPanel({
               <div className="mt-2 max-w-[34rem] text-sm leading-7 text-slate-500">
                 Select a thread to open the timeline.
               </div>
-            </div>
-          ) : surface?.loading ? (
-            <div className="flex h-full min-h-[320px] items-center justify-center px-6 text-sm text-slate-500">
-              Loading messages...
             </div>
           ) : (
             <div className="px-0 py-0">

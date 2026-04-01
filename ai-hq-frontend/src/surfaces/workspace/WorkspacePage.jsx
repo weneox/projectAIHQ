@@ -6,6 +6,7 @@ import {
   parseWorkspaceIntent,
 } from "../../view-models/workspaceIntents.js";
 import useWorkspaceNarration from "../../view-models/useWorkspaceNarration.js";
+import WorkspaceLoadingSurface from "./WorkspaceLoadingSurface.jsx";
 
 function toneForPriority(priority = "") {
   switch (String(priority || "").toLowerCase()) {
@@ -471,13 +472,7 @@ export default function WorkspacePage() {
   }
 
   if (workspace.loading) {
-    return (
-      <div className="mx-auto max-w-[1080px] px-4 py-12 sm:px-6 lg:px-8">
-        <div className="rounded-[32px] border border-[#ece2d3] bg-[#fffdf9]/90 px-6 py-6 text-sm leading-6 text-stone-500 shadow-[0_18px_44px_rgba(120,102,73,0.08)]">
-          Loading workspace brief...
-        </div>
-      </div>
-    );
+    return <WorkspaceLoadingSurface />;
   }
 
   return (

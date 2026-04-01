@@ -21,6 +21,7 @@ import { buildWorkspaceSetupGuidance } from "./workspaceSetupGuidance.js";
 import { buildWorkspaceBusinessMemory } from "./workspaceBusinessMemory.js";
 import { buildWorkspaceSuggestedActions } from "./workspaceIntents.js";
 import { applyWorkspaceRouteMap } from "./workspaceRouteMap.js";
+import { getAppSessionContext } from "../lib/appSession.js";
 
 const CAPABILITY_ORDER = [
   "business_memory",
@@ -190,66 +191,128 @@ function classifyNarration(items = []) {
   };
 }
 
+const WORKSPACE_SAMPLE_LIMIT = 8;
+const WORKSPACE_CACHE_TTL_MS = 15000;
+
+let workspaceNarrationSnapshot = null;
+let workspaceNarrationSnapshotAt = 0;
+let workspaceNarrationInflightPromise = null;
+
+async function loadWorkspaceNarrationPayloads() {
+  const session = await getAppSessionContext().catch(() => null);
+  const bootstrapPromise = session?.bootstrap
+    ? Promise.resolve(session.bootstrap)
+    : getAppBootstrap();
+
+  const results = await Promise.allSettled([
+    bootstrapPromise,
+    getSetupOverview(),
+    getSettingsTrustView({ limit: 6 }),
+    getTruthReviewWorkbench({ limit: 6 }),
+    listInboxThreads({ limit: WORKSPACE_SAMPLE_LIMIT }),
+    getOutboundSummary(),
+    listComments({ limit: WORKSPACE_SAMPLE_LIMIT }),
+  ]);
+
+  const payloads = {
+    bootstrap: results[0].status === "fulfilled" ? results[0].value : null,
+    overview: results[1].status === "fulfilled" ? results[1].value : null,
+    trust: results[2].status === "fulfilled" ? results[2].value : null,
+    workbench: results[3].status === "fulfilled" ? results[3].value : null,
+    inboxThreads: results[4].status === "fulfilled" ? results[4].value : null,
+    inboxOutbound: results[5].status === "fulfilled" ? results[5].value : null,
+    comments: results[6].status === "fulfilled" ? results[6].value : null,
+  };
+
+  const failures = results.filter((item) => item.status === "rejected");
+
+  return {
+    loading: false,
+    error:
+      failures.length === results.length
+        ? "Workspace narration could not be loaded."
+        : "",
+    payloads,
+  };
+}
+
+function hasFreshWorkspaceNarrationSnapshot() {
+  return (
+    workspaceNarrationSnapshot &&
+    Date.now() - workspaceNarrationSnapshotAt < WORKSPACE_CACHE_TTL_MS
+  );
+}
+
+function getWorkspaceNarrationLoadPromise({ force = false } = {}) {
+  if (hasFreshWorkspaceNarrationSnapshot() && !force) {
+    return Promise.resolve(workspaceNarrationSnapshot);
+  }
+
+  if (!workspaceNarrationInflightPromise || force) {
+    workspaceNarrationInflightPromise = loadWorkspaceNarrationPayloads()
+      .then((snapshot) => {
+        workspaceNarrationSnapshot = snapshot;
+        workspaceNarrationSnapshotAt = Date.now();
+        return snapshot;
+      })
+      .finally(() => {
+        workspaceNarrationInflightPromise = null;
+      });
+  }
+
+  return workspaceNarrationInflightPromise;
+}
+
 export function useWorkspaceNarration() {
-  const [state, setState] = useState({
-    loading: true,
-    error: "",
-    payloads: {
-      bootstrap: null,
-      overview: null,
-      trust: null,
-      workbench: null,
-      inboxThreads: null,
-      inboxOutbound: null,
-      comments: null,
-    },
-  });
+  const [state, setState] = useState(
+    () =>
+      workspaceNarrationSnapshot || {
+        loading: true,
+        error: "",
+        payloads: {
+          bootstrap: null,
+          overview: null,
+          trust: null,
+          workbench: null,
+          inboxThreads: null,
+          inboxOutbound: null,
+          comments: null,
+        },
+      }
+  );
 
   useEffect(() => {
     let alive = true;
 
-    async function load() {
+    if (!hasFreshWorkspaceNarrationSnapshot()) {
       setState((prev) => ({
         ...prev,
         loading: true,
         error: "",
       }));
-
-      const results = await Promise.allSettled([
-        getAppBootstrap(),
-        getSetupOverview(),
-        getSettingsTrustView({ limit: 6 }),
-        getTruthReviewWorkbench({ limit: 6 }),
-        listInboxThreads({ limit: 12 }),
-        getOutboundSummary(),
-        listComments({ limit: 12 }),
-      ]);
-
-      if (!alive) return;
-
-      const payloads = {
-        bootstrap: results[0].status === "fulfilled" ? results[0].value : null,
-        overview: results[1].status === "fulfilled" ? results[1].value : null,
-        trust: results[2].status === "fulfilled" ? results[2].value : null,
-        workbench: results[3].status === "fulfilled" ? results[3].value : null,
-        inboxThreads: results[4].status === "fulfilled" ? results[4].value : null,
-        inboxOutbound: results[5].status === "fulfilled" ? results[5].value : null,
-        comments: results[6].status === "fulfilled" ? results[6].value : null,
-      };
-
-      const failures = results.filter((item) => item.status === "rejected");
-
-      setState({
-        loading: false,
-        error:
-          failures.length === results.length
-            ? "Workspace narration could not be loaded."
-            : "",
-        payloads,
-      });
     }
 
-    load();
+    getWorkspaceNarrationLoadPromise()
+      .then((snapshot) => {
+        if (!alive) return;
+        setState(snapshot);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setState({
+          loading: false,
+          error: "Workspace narration could not be loaded.",
+          payloads: {
+            bootstrap: null,
+            overview: null,
+            trust: null,
+            workbench: null,
+            inboxThreads: null,
+            inboxOutbound: null,
+            comments: null,
+          },
+        });
+      });
 
     return () => {
       alive = false;

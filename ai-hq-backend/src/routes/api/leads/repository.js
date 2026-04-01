@@ -85,7 +85,7 @@ export async function findActiveLeadByInboxThreadId(db, tenantKey, inboxThreadId
     [tenantKey, inboxThreadId]
   );
 
-  return result.rows?.[0] || null;
+  return normalizeLead(result.rows?.[0] || null);
 }
 
 export async function insertLead(db, data) {

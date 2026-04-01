@@ -16,6 +16,35 @@ vi.mock("../../view-models/workspaceIntents.js", () => ({
 import WorkspacePage from "./WorkspacePage.jsx";
 
 describe("WorkspacePage smoke", () => {
+  it("renders the workspace loading surface instead of inline loading text", () => {
+    useWorkspaceNarration.mockReturnValue({
+      loading: true,
+      error: "",
+      suggestedActions: [],
+      systemBrief: {
+        changed: "",
+        mattersMost: "",
+        safeToIgnore: "",
+      },
+      setupGuidance: { visible: false },
+      businessMemory: { visible: false },
+      decisions: [],
+      capabilities: [],
+      recentOutcomes: [],
+    });
+
+    render(
+      <MemoryRouter>
+        <WorkspacePage />
+      </MemoryRouter>
+    );
+
+    expect(
+      screen.getByLabelText(/preparing workspace brief/i)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/loading workspace brief/i)).not.toBeInTheDocument();
+  });
+
   it("renders the primary workspace operating surface", () => {
     useWorkspaceNarration.mockReturnValue({
       loading: false,
@@ -50,10 +79,8 @@ describe("WorkspacePage smoke", () => {
       </MemoryRouter>
     );
 
-    expect(
-      screen.getByRole("heading", { name: /command workspace/i })
-    ).toBeInTheDocument();
+    expect(screen.getByText(/command workspace/i)).toBeInTheDocument();
     expect(screen.getByText(/what matters right now/i)).toBeInTheDocument();
-    expect(screen.getByText(/business memory/i)).toBeInTheDocument();
+    expect(screen.getByText(/business memory is mostly stable/i)).toBeInTheDocument();
   });
 });

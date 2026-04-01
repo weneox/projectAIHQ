@@ -1,7 +1,44 @@
 import { useCallback, useState } from "react";
 import { apiGet, apiPost } from "../api/client.js";
+import { getLeadByThreadId } from "../api/leads.js";
 import { useSurfaceActionState } from "../components/settings/hooks/useSurfaceActionState.js";
 import { useSettingsSurfaceState } from "../pages/Settings/hooks/useSettingsSurfaceState.js";
+
+const inboxInflightRequests = new Map();
+
+function withSharedInboxRequest(key, load) {
+  const cacheKey = String(key || "").trim();
+  if (!cacheKey) return load();
+
+  if (inboxInflightRequests.has(cacheKey)) {
+    return inboxInflightRequests.get(cacheKey);
+  }
+
+  const request = Promise.resolve()
+    .then(load)
+    .finally(() => {
+      if (inboxInflightRequests.get(cacheKey) === request) {
+        inboxInflightRequests.delete(cacheKey);
+      }
+    });
+
+  inboxInflightRequests.set(cacheKey, request);
+  return request;
+}
+
+function clearSharedInboxRequests(prefix = "") {
+  const needle = String(prefix || "").trim();
+  if (!needle) {
+    inboxInflightRequests.clear();
+    return;
+  }
+
+  for (const key of inboxInflightRequests.keys()) {
+    if (key.startsWith(needle)) {
+      inboxInflightRequests.delete(key);
+    }
+  }
+}
 
 export function useInboxData({ operatorName, navigate }) {
   const actorName = String(operatorName || "").trim() || "operator";
@@ -41,7 +78,9 @@ export function useInboxData({ operatorName, navigate }) {
       try {
         beginRefresh();
 
-        const j = await apiGet("/api/inbox/threads");
+        const j = await withSharedInboxRequest("threads:list", () =>
+          apiGet("/api/inbox/threads")
+        );
         const arr = Array.isArray(j?.threads) ? j.threads : [];
 
         setData({
@@ -88,7 +127,9 @@ export function useInboxData({ operatorName, navigate }) {
     try {
       setLoadingThreadDetail(true);
       setThreadDetailError("");
-      const j = await apiGet(`/api/inbox/threads/${threadId}`);
+      const j = await withSharedInboxRequest(`threads:detail:${threadId}`, () =>
+        apiGet(`/api/inbox/threads/${threadId}`)
+      );
       if (j?.thread) {
         setSelectedThread(j.thread);
         setData((prev) => ({
@@ -113,7 +154,9 @@ export function useInboxData({ operatorName, navigate }) {
     try {
       setLoadingMessages(true);
       setMessagesError("");
-      const j = await apiGet(`/api/inbox/threads/${threadId}/messages?limit=200`);
+      const j = await withSharedInboxRequest(`threads:messages:${threadId}`, () =>
+        apiGet(`/api/inbox/threads/${threadId}/messages?limit=200`)
+      );
       setMessages(Array.isArray(j?.messages) ? j.messages : []);
     } catch (e) {
       setMessages([]);
@@ -132,10 +175,10 @@ export function useInboxData({ operatorName, navigate }) {
     try {
       setLoadingLead(true);
       setLeadError("");
-      const j = await apiGet("/api/leads");
-      const arr = Array.isArray(j?.leads) ? j.leads : [];
-      const found = arr.find((x) => String(x?.inbox_thread_id || "") === String(threadId));
-      setRelatedLead(found || null);
+      const j = await withSharedInboxRequest(`threads:lead:${threadId}`, () =>
+        getLeadByThreadId(threadId)
+      );
+      setRelatedLead(j?.lead || null);
     } catch (e) {
       setRelatedLead(null);
       setLeadError(String(e?.message || e || "Failed to load related lead"));
@@ -162,6 +205,7 @@ export function useInboxData({ operatorName, navigate }) {
       try {
         beginSave();
         await actionState.runAction("read", () => apiPost(`/api/inbox/threads/${threadId}/read`, {}));
+        clearSharedInboxRequests("threads:");
         await syncSelected(threadId);
         succeedSave({ message: "Thread marked as read." });
       } catch (e) {
@@ -183,6 +227,7 @@ export function useInboxData({ operatorName, navigate }) {
             actor: actorName,
           })
         );
+        clearSharedInboxRequests("threads:");
         await loadThreads(threadId);
         await syncSelected(threadId);
         succeedSave({ message: "Thread assigned." });
@@ -207,6 +252,7 @@ export function useInboxData({ operatorName, navigate }) {
             actor: actorName,
           })
         );
+        clearSharedInboxRequests("threads:");
         await loadThreads(threadId);
         await syncSelected(threadId);
         succeedSave({ message: "Handoff activated." });
@@ -228,6 +274,7 @@ export function useInboxData({ operatorName, navigate }) {
             actor: actorName,
           })
         );
+        clearSharedInboxRequests("threads:");
         await loadThreads(threadId);
         await syncSelected(threadId);
         succeedSave({ message: "Handoff released." });
@@ -250,6 +297,7 @@ export function useInboxData({ operatorName, navigate }) {
             actor: actorName,
           })
         );
+        clearSharedInboxRequests("threads:");
         await loadThreads(threadId);
         await syncSelected(threadId);
         succeedSave({ message: status === "closed" ? "Thread closed." : "Thread resolved." });
@@ -284,6 +332,7 @@ export function useInboxData({ operatorName, navigate }) {
           })
         );
 
+        clearSharedInboxRequests("threads:");
         await loadThreads(threadId);
         await syncSelected(threadId);
         succeedSave({

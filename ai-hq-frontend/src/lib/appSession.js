@@ -80,6 +80,10 @@ async function loadAppSessionContext() {
 
 let sessionContextPromise = null;
 
+export function clearAppSessionContext() {
+  sessionContextPromise = null;
+}
+
 export async function getAppSessionContext({ force = false } = {}) {
   if (!sessionContextPromise || force) {
     sessionContextPromise = loadAppSessionContext().catch((error) => {

@@ -2,11 +2,17 @@
 
 import { apiGet, apiPost } from "./client.js";
 
-export async function loginUser({ email, password, tenantKey }) {
+export async function loginUser({
+  email,
+  password,
+  tenantKey,
+  accountSelectionToken,
+}) {
   return apiPost("/api/auth/login", {
     email,
     password,
     tenantKey,
+    accountSelectionToken,
   });
 }
 

@@ -24,8 +24,8 @@ describe("useInboxData", () => {
       if (String(path).startsWith("/api/inbox/threads/thread-1/messages")) {
         return Promise.resolve({ messages: [] });
       }
-      if (String(path) === "/api/leads") {
-        return Promise.resolve({ leads: [] });
+      if (String(path) === "/api/leads/by-thread/thread-1") {
+        return Promise.resolve({ lead: { id: "lead-1", inbox_thread_id: "thread-1" } });
       }
       if (String(path) === "/api/inbox/threads/thread-1") {
         return Promise.resolve({ thread: { id: "thread-1", status: "open", handoff_active: false } });
@@ -54,9 +54,15 @@ describe("useInboxData", () => {
     });
 
     await act(async () => {
+      await result.current.loadRelatedLead("thread-1");
+    });
+
+    await act(async () => {
       await result.current.sendOperatorReply("thread-1", "hello");
     });
 
+    expect(apiGet).toHaveBeenCalledWith("/api/leads/by-thread/thread-1");
+    expect(result.current.relatedLead?.id).toBe("lead-1");
     expect(result.current.surface.saveSuccess).toMatch(/reply accepted/i);
     expect(result.current.surface.saveSuccess).toMatch(
       /waiting for outbound attempt status/i

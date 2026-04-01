@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Funnel, Search } from "lucide-react";
 
 import InboxThreadCard from "./InboxThreadCard.jsx";
+import { InboxThreadListSkeleton } from "./InboxLoadingSurface.jsx";
 
 const TOP_TABS = [
   { label: "Primary", value: "all" },
@@ -333,10 +334,8 @@ export default function InboxThreadListPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {threadList?.surface?.loading ? (
-          <div className="px-7 py-8 text-sm text-slate-500">
-            Loading conversations...
-          </div>
+        {threadList?.surface?.loading && !filteredThreads.length ? (
+          <InboxThreadListSkeleton />
         ) : !filteredThreads.length ? (
           <div className="px-7 py-8">
             <div className="rounded-[34px] border border-slate-200/70 bg-[#fafafb] px-6 py-9 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">

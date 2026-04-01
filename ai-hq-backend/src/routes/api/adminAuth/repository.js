@@ -1,13 +1,13 @@
 import { lower, s } from "./utils.js";
 import { queryDbWithTimeout } from "./utils.js";
 
-export async function findTenantUserForLogin(db, { email, tenantKey }) {
-  if (!db) return null;
+export async function listTenantUsersForLogin(db, { email, tenantKey }) {
+  if (!db) return [];
 
   const e = lower(email);
   const tk = s(tenantKey);
 
-  if (!e) return null;
+  if (!e) return [];
 
   const params = [e];
   let whereTenant = "";
@@ -39,14 +39,18 @@ export async function findTenantUserForLogin(db, { email, tenantKey }) {
       case when tu.status = 'active' then 0 else 1 end,
       tu.updated_at desc nulls last,
       tu.created_at desc nulls last
-    limit 1
   `;
 
   const q = await queryDbWithTimeout(db, sql, params, {
     timeoutMs: 3000,
-    label: "auth.login.findTenantUser",
+    label: "auth.login.listTenantUsers",
   });
-  return q?.rows?.[0] || null;
+  return Array.isArray(q?.rows) ? q.rows : [];
+}
+
+export async function findTenantUserForLogin(db, { email, tenantKey }) {
+  const rows = await listTenantUsersForLogin(db, { email, tenantKey });
+  return rows[0] || null;
 }
 
 export async function markUserLogin(db, userId) {
