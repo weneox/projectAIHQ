@@ -16,6 +16,20 @@ export async function loginUser({
   });
 }
 
+export async function selectWorkspaceUser({
+  email,
+  password,
+  tenantKey,
+  accountSelectionToken,
+}) {
+  return apiPost("/api/auth/select-workspace", {
+    email,
+    password,
+    tenantKey,
+    accountSelectionToken,
+  });
+}
+
 export async function logoutUser() {
   return apiPost("/api/auth/logout", {});
 }

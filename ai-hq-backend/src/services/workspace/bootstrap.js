@@ -4,6 +4,7 @@
 import { arr, lower, obj, s } from "./shared.js";
 import { getRowsFromFirstTable } from "./db.js";
 import { getWorkspaceReadiness } from "./readiness.js";
+import { buildPostAuthWorkspaceStateFromReadiness } from "./postAuth.js";
 
 const THREAD_TABLES = ["inbox_threads", "threads"];
 const COMMENT_TABLES = ["comments"];
@@ -113,16 +114,27 @@ export async function buildAppBootstrap({
     tenantKey: safeTenant.key,
   });
 
+  const workspaceState = buildPostAuthWorkspaceStateFromReadiness({
+    readiness,
+    tenant: safeTenant,
+    tenantId: safeTenant.id,
+    tenantKey: safeTenant.key,
+    role: safeUser.role,
+  });
+
   return {
     user: safeUser,
     tenant: safeTenant,
     workspace: {
+      ...workspaceState,
       setupCompleted: readiness.setupCompleted,
+      setupRequired: workspaceState.setupRequired,
+      workspaceReady: workspaceState.workspaceReady,
       readinessScore: readiness.readinessScore,
       readinessLabel: readiness.readinessLabel,
       missingSteps: arr(readiness.missingSteps),
       primaryMissingStep: s(readiness.primaryMissingStep),
-      nextRoute: s(readiness.nextRoute),
+      nextRoute: s(workspaceState.routeHint || readiness.nextRoute || "/workspace"),
       nextSetupRoute: s(readiness.nextSetupRoute),
       checks: obj(readiness.checks),
     },
@@ -135,7 +147,7 @@ export async function buildAppBootstrap({
       catalog: obj(readiness.catalog),
     },
     navigation: {
-      initialRoute: s(readiness.nextRoute),
+      initialRoute: s(workspaceState.routeHint || "/workspace"),
       setupRoute: s(readiness.nextSetupRoute || "/setup"),
     },
   };

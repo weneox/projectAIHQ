@@ -3,6 +3,7 @@
 
 import { arr, obj, s } from "./shared.js";
 import { getWorkspaceReadiness } from "./readiness.js";
+import { buildPostAuthWorkspaceStateFromReadiness } from "./postAuth.js";
 
 function pluralize(count, one, many) {
   return `${count} ${count === 1 ? one : many}`;
@@ -125,6 +126,14 @@ export async function buildSetupStatus({
     tenant,
   });
 
+  const workspaceState = buildPostAuthWorkspaceStateFromReadiness({
+    readiness,
+    tenant,
+    tenantId,
+    tenantKey,
+    role,
+  });
+
   return {
     progress: {
       setupCompleted: readiness.setupCompleted,
@@ -132,8 +141,9 @@ export async function buildSetupStatus({
       readinessLabel: readiness.readinessLabel,
       missingSteps: arr(readiness.missingSteps),
       primaryMissingStep: s(readiness.primaryMissingStep),
-      nextRoute: s(readiness.nextRoute),
+      nextRoute: s(workspaceState.routeHint || "/workspace"),
       nextSetupRoute: s(readiness.nextSetupRoute),
+      nextStudioStage: s(readiness.nextStudioStage),
     },
     checks: obj(readiness.checks),
     tenantProfile: obj(readiness.tenantProfile),

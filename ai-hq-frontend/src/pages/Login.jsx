@@ -13,7 +13,7 @@ import {
   LogOut,
   WifiOff,
 } from "lucide-react";
-import { loginUser, logoutUser } from "../api/auth.js";
+import { loginUser, logoutUser, selectWorkspaceUser } from "../api/auth.js";
 import { clearAppSessionContext, getAppAuthContext } from "../lib/appSession.js";
 
 const RESERVED_SUBDOMAINS = new Set([
@@ -126,6 +126,18 @@ function normalizeAccountChoices(error) {
     [];
 
   return Array.isArray(accounts) ? accounts : [];
+}
+
+function resolvePostAuthTarget(payload = {}) {
+  const destination = payload?.destination || payload?.workspace?.destination || {};
+  const target = s(
+    destination?.path ||
+      payload?.workspace?.routeHint ||
+      payload?.workspace?.nextRoute ||
+      payload?.nextRoute
+  );
+
+  return target || "/workspace";
 }
 
 function StatusLine({ icon: Icon, title, body, tone = "neutral" }) {
@@ -359,15 +371,22 @@ export default function Login() {
       setError("");
       setServiceNotice((prev) => ({ ...prev, visible: false }));
 
-      await loginUser({
-        email,
-        password,
-        tenantKey: activeTenantKey || undefined,
-        accountSelectionToken: selectedAccountToken || undefined,
-      });
+      const response = accountChoices.length
+        ? await selectWorkspaceUser({
+            email,
+            password,
+            tenantKey: activeTenantKey || undefined,
+            accountSelectionToken: selectedAccountToken || undefined,
+          })
+        : await loginUser({
+            email,
+            password,
+            tenantKey: activeTenantKey || undefined,
+            accountSelectionToken: undefined,
+          });
       clearAppSessionContext();
 
-      window.location.replace(redirectTo);
+      navigate(resolvePostAuthTarget(response), { replace: true });
     } catch (submitError) {
       if (isServiceUnavailableError(submitError)) {
         setServiceNotice({
@@ -649,12 +668,16 @@ export default function Login() {
                                   {s(account.tenantKey)} · {s(account.role || "member")}
                                 </div>
                               </div>
-                              <div className={`shrink-0 text-[11px] font-semibold uppercase tracking-[0.18em] ${selected ? "text-white/72" : "text-slate-400"}`}>
+                              <div className={`shrink-0 text-right text-[11px] font-semibold uppercase tracking-[0.18em] ${selected ? "text-white/72" : "text-slate-400"}`}>
                                 {passwordUnavailable
                                   ? s(account.authProvider || "access")
                                   : selected
                                     ? "Selected"
-                                    : "Choose"}
+                                    : account.setupRequired
+                                      ? "Setup required"
+                                      : account.workspaceReady
+                                        ? "Ready"
+                                        : "Choose"}
                               </div>
                             </button>
                           );

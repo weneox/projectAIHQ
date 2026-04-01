@@ -46,6 +46,19 @@ describe("resolveAuthenticatedLanding", () => {
     expect(target).toBe("/expert");
   });
 
+  it("prefers explicit workspace destination paths from bootstrap", () => {
+    const target = resolveAuthenticatedLanding({
+      workspace: {
+        setupCompleted: false,
+        destination: {
+          path: "/setup/studio",
+        },
+      },
+    });
+
+    expect(target).toBe("/setup/studio");
+  });
+
   it("falls back to workspace when completed workspace points at non-product root", () => {
     const target = resolveAuthenticatedLanding({
       workspace: {

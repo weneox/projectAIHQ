@@ -64,6 +64,7 @@ export function resolveAuthenticatedLanding(bootstrap = {}) {
   const workspace = obj(root.workspace);
   const setup = obj(root.setup);
   const progress = obj(setup.progress || workspace.progress || workspace);
+  const destination = obj(root.destination || workspace.destination);
 
   const setupCompleted = !!(
     progress.setupCompleted ??
@@ -71,7 +72,9 @@ export function resolveAuthenticatedLanding(bootstrap = {}) {
     false
   );
 
-  const nextRoute = s(progress.nextRoute || workspace.nextRoute || "/");
+  const nextRoute = s(
+    destination.path || progress.nextRoute || workspace.nextRoute || "/"
+  );
   const nextSetupRoute = s(
     progress.nextSetupRoute || workspace.nextSetupRoute || "/setup/studio"
   );

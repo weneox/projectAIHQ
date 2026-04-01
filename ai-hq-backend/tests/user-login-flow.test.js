@@ -376,6 +376,39 @@ function seedIdentityWithMembership(db, {
   }
 }
 
+function createLoginRouter(db, workspaceStates = {}) {
+  return userLoginRoutes({
+    db,
+    resolveWorkspaceState: async ({
+      tenantId,
+      tenantKey,
+      membershipId,
+      role,
+      tenant,
+    }) => {
+      const override = workspaceStates[String(tenantKey || "").toLowerCase()] || {};
+
+      return {
+        tenantId,
+        tenantKey,
+        companyName: tenant?.company_name || "",
+        membershipId,
+        role,
+        setupCompleted: true,
+        setupRequired: false,
+        workspaceReady: true,
+        activeSetupSessionId: "",
+        routeHint: "/workspace",
+        destination: { kind: "workspace", path: "/workspace" },
+        readinessLabel: "ready",
+        missingSteps: [],
+        primaryMissingStep: "",
+        ...override,
+      };
+    },
+  });
+}
+
 const previousUserSessionSecret = cfg.auth.userSessionSecret;
 cfg.auth.userSessionSecret = previousUserSessionSecret || "test-user-session-secret";
 after(() => {
@@ -396,7 +429,7 @@ test("single identity + one membership logs in successfully", async () => {
     role: "owner",
   });
 
-  const loginRouter = userLoginRoutes({ db });
+  const loginRouter = createLoginRouter(db);
   const sessionRouter = adminSessionRoutes({ db, wsHub: null });
   const login = await invokeRoute(loginRouter, "post", "/auth/login", {
     body: { email: "owner@acme.test", password: "secret-pass" },
@@ -407,6 +440,7 @@ test("single identity + one membership logs in successfully", async () => {
   assert.equal(login.res.body?.user?.identityId, "identity-1");
   assert.equal(login.res.body?.user?.membershipId, "membership-1");
   assert.equal(login.res.body?.user?.tenantKey, "acme");
+  assert.equal(login.res.body?.destination?.path, "/workspace");
 
   const sessionCookie = login.res.cookies.find((cookie) => cookie.name === "aihq_user");
   const me = await invokeRoute(sessionRouter, "get", "/auth/me", {
@@ -414,6 +448,40 @@ test("single identity + one membership logs in successfully", async () => {
   });
   assert.equal(me.res.body?.authenticated, true);
   assert.equal(me.res.body?.user?.tenantKey, "acme");
+});
+
+test("single workspace with setup incomplete returns setup destination", async () => {
+  const db = new FakeLoginDb();
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "owner@acme.test",
+    password: "secret-pass",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    companyName: "Acme Clinic",
+    membershipId: "membership-1",
+    userId: "user-1",
+    role: "owner",
+  });
+
+  const router = createLoginRouter(db, {
+    acme: {
+      setupCompleted: false,
+      setupRequired: true,
+      workspaceReady: false,
+      routeHint: "/setup/studio",
+      destination: { kind: "setup", path: "/setup/studio" },
+      activeSetupSessionId: "setup-session-1",
+    },
+  });
+  const login = await invokeRoute(router, "post", "/auth/login", {
+    body: { email: "owner@acme.test", password: "secret-pass" },
+    headers: { host: "app.weneox.com" },
+  });
+
+  assert.equal(login.res.statusCode, 200);
+  assert.equal(login.res.body?.workspace?.setupRequired, true);
+  assert.equal(login.res.body?.destination?.path, "/setup/studio");
 });
 
 test("single identity + multiple memberships returns explicit chooser response", async () => {
@@ -440,7 +508,7 @@ test("single identity + multiple memberships returns explicit chooser response",
     role: "operator",
   });
 
-  const router = userLoginRoutes({ db });
+  const router = createLoginRouter(db);
   const login = await invokeRoute(router, "post", "/auth/login", {
     body: { email: "shared@company.test", password: "shared-pass" },
     headers: { host: "app.weneox.com" },
@@ -475,7 +543,7 @@ test("explicit membership selection completes login deterministically", async ()
     userId: "user-2",
   });
 
-  const router = userLoginRoutes({ db });
+  const router = createLoginRouter(db);
   const ambiguous = await invokeRoute(router, "post", "/auth/login", {
     body: { email: "shared@company.test", password: "shared-pass" },
   });
@@ -491,6 +559,97 @@ test("explicit membership selection completes login deterministically", async ()
 
   assert.equal(login.res.statusCode, 200);
   assert.equal(login.res.body?.user?.tenantKey, "globex");
+});
+
+test("workspace selection endpoint completes login with per-workspace destination", async () => {
+  const db = new FakeLoginDb();
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    companyName: "Acme Clinic",
+    membershipId: "membership-1",
+    userId: "user-1",
+  });
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
+    tenantId: "tenant-2",
+    tenantKey: "globex",
+    companyName: "Globex",
+    membershipId: "membership-2",
+    userId: "user-2",
+  });
+
+  const router = createLoginRouter(db, {
+    globex: {
+      setupCompleted: false,
+      setupRequired: true,
+      workspaceReady: false,
+      routeHint: "/setup/studio",
+      destination: { kind: "setup", path: "/setup/studio" },
+    },
+  });
+  const ambiguous = await invokeRoute(router, "post", "/auth/login", {
+    body: { email: "shared@company.test", password: "shared-pass" },
+  });
+  const selected = ambiguous.res.body?.memberships?.find((membership) => membership.tenantKey === "globex");
+
+  const login = await invokeRoute(router, "post", "/auth/select-workspace", {
+    body: {
+      email: "shared@company.test",
+      password: "shared-pass",
+      accountSelectionToken: selected.selectionToken,
+    },
+  });
+
+  assert.equal(login.res.statusCode, 200);
+  assert.equal(login.res.body?.user?.tenantKey, "globex");
+  assert.equal(login.res.body?.destination?.path, "/setup/studio");
+});
+
+test("workspace selection endpoint rejects unauthorized selection tokens", async () => {
+  const db = new FakeLoginDb();
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    companyName: "Acme Clinic",
+    membershipId: "membership-1",
+    userId: "user-1",
+  });
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
+    tenantId: "tenant-2",
+    tenantKey: "globex",
+    companyName: "Globex",
+    membershipId: "membership-2",
+    userId: "user-2",
+  });
+
+  const router = createLoginRouter(db);
+  const ambiguous = await invokeRoute(router, "post", "/auth/login", {
+    body: { email: "shared@company.test", password: "shared-pass" },
+  });
+  const selected = ambiguous.res.body?.memberships?.find((membership) => membership.tenantKey === "globex");
+
+  const login = await invokeRoute(router, "post", "/auth/select-workspace", {
+    body: {
+      email: "shared@company.test",
+      password: "shared-pass",
+      accountSelectionToken: `${selected.selectionToken}tampered`,
+    },
+  });
+
+  assert.equal(login.res.statusCode, 400);
+  assert.equal(login.res.body?.code, "invalid_membership_selection");
 });
 
 test("host tenant constraint signs in directly when matching membership exists", async () => {
@@ -516,7 +675,7 @@ test("host tenant constraint signs in directly when matching membership exists",
     userId: "user-2",
   });
 
-  const router = userLoginRoutes({ db });
+  const router = createLoginRouter(db);
   const login = await invokeRoute(router, "post", "/auth/login", {
     body: { email: "shared@company.test", password: "shared-pass" },
     headers: { host: "acme.weneox.com" },
@@ -549,7 +708,7 @@ test("explicit tenant context signs in directly when matching membership exists"
     userId: "user-2",
   });
 
-  const router = userLoginRoutes({ db });
+  const router = createLoginRouter(db);
   const login = await invokeRoute(router, "post", "/auth/login", {
     body: {
       email: "shared@company.test",
@@ -576,7 +735,7 @@ test("host tenant constraint fails closed when membership does not exist", async
     userId: "user-2",
   });
 
-  const router = userLoginRoutes({ db });
+  const router = createLoginRouter(db);
   const login = await invokeRoute(router, "post", "/auth/login", {
     body: { email: "shared@company.test", password: "shared-pass" },
     headers: { host: "acme.weneox.com" },
@@ -599,7 +758,7 @@ test("wrong password fails against canonical identity", async () => {
     userId: "user-1",
   });
 
-  const router = userLoginRoutes({ db });
+  const router = createLoginRouter(db);
   const login = await invokeRoute(router, "post", "/auth/login", {
     body: { email: "owner@acme.test", password: "wrong-pass" },
   });
@@ -644,7 +803,7 @@ test("logout and session invalidation still work", async () => {
     userId: "user-1",
   });
 
-  const loginRouter = userLoginRoutes({ db });
+  const loginRouter = createLoginRouter(db);
   const sessionRouter = adminSessionRoutes({ db, wsHub: null });
   const login = await invokeRoute(loginRouter, "post", "/auth/login", {
     body: { email: "owner@acme.test", password: "secret-pass" },
@@ -685,7 +844,7 @@ test("compatibility bridge fails clearly instead of guessing when legacy tenant 
     status: "active",
   });
 
-  const router = userLoginRoutes({ db });
+  const router = createLoginRouter(db);
   const login = await invokeRoute(router, "post", "/auth/login", {
     body: { email: "owner@acme.test", password: "secret-pass" },
   });

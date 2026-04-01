@@ -4,6 +4,7 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 
 const navigate = vi.fn();
 const loginUser = vi.fn();
+const selectWorkspaceUser = vi.fn();
 const getAppAuthContext = vi.fn();
 const logoutUser = vi.fn();
 const clearAppSessionContext = vi.fn();
@@ -20,6 +21,7 @@ vi.mock("framer-motion", () => ({
 
 vi.mock("../api/auth.js", () => ({
   loginUser: (...args) => loginUser(...args),
+  selectWorkspaceUser: (...args) => selectWorkspaceUser(...args),
   logoutUser: (...args) => logoutUser(...args),
 }));
 
@@ -50,7 +52,16 @@ describe("Login", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getAppAuthContext.mockResolvedValue({ authenticated: false });
-    loginUser.mockResolvedValue({ ok: true, authenticated: true });
+    loginUser.mockResolvedValue({
+      ok: true,
+      authenticated: true,
+      destination: { path: "/workspace" },
+    });
+    selectWorkspaceUser.mockResolvedValue({
+      ok: true,
+      authenticated: true,
+      destination: { path: "/workspace" },
+    });
     logoutUser.mockResolvedValue({ ok: true });
     clearAppSessionContext.mockImplementation(() => {});
   });
@@ -81,6 +92,8 @@ describe("Login", () => {
                 role: "owner",
                 authProvider: "local",
                 passwordReady: true,
+                workspaceReady: true,
+                setupRequired: false,
               },
               {
                 selectionToken: "token-globex",
@@ -89,18 +102,18 @@ describe("Login", () => {
                 role: "operator",
                 authProvider: "local",
                 passwordReady: true,
+                workspaceReady: false,
+                setupRequired: true,
               },
             ],
           },
         })
-      )
-      .mockImplementationOnce(
-        () =>
-          new Promise(() => {
-            // Keep the second submit pending so the test can assert the call
-            // without having to stub window.location.replace.
-          })
       );
+    selectWorkspaceUser.mockResolvedValueOnce({
+      ok: true,
+      authenticated: true,
+      destination: { path: "/setup/studio" },
+    });
 
     renderLogin();
 
@@ -114,16 +127,45 @@ describe("Login", () => {
     fireEvent.click(screen.getByRole("button", { name: /open session/i }));
 
     expect(await screen.findByText("Select workspace")).toBeInTheDocument();
+    expect(screen.getByText("Setup required")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /globex/i }));
     fireEvent.click(screen.getByRole("button", { name: /open selected workspace/i }));
 
     await waitFor(() => {
-      expect(loginUser).toHaveBeenLastCalledWith({
+      expect(selectWorkspaceUser).toHaveBeenLastCalledWith({
         email: "shared@company.test",
         password: "secret-pass",
         tenantKey: undefined,
         accountSelectionToken: "token-globex",
       });
+    });
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith("/setup/studio", { replace: true });
+    });
+  });
+
+  it("routes single-workspace setup-incomplete login into setup", async () => {
+    loginUser.mockResolvedValueOnce({
+      ok: true,
+      authenticated: true,
+      destination: { path: "/setup/studio" },
+      workspace: { setupRequired: true },
+    });
+
+    renderLogin();
+
+    fireEvent.change(await screen.findByPlaceholderText("name@company.com"), {
+      target: { name: "email", value: "owner@company.test" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
+      target: { name: "password", value: "secret-pass" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /open session/i }));
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith("/setup/studio", { replace: true });
     });
   });
 

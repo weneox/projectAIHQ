@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { isLocalWorkspaceEntryEnabled } from "../../lib/appEntry.js";
-import { getAppAuthContext } from "../../lib/appSession.js";
+import { getAppAuthContext, getAppBootstrapContext } from "../../lib/appSession.js";
 import AppBootSurface from "../loading/AppBootSurface.jsx";
 
 function isSetupPath(pathname = "") {
@@ -57,12 +57,34 @@ export default function UserRouteGuard({ children }) {
           return;
         }
 
+        const bootstrap = await getAppBootstrapContext();
+        if (!alive) return;
+
+        const setupCompleted = !!(
+          bootstrap?.workspace?.setupCompleted ??
+          bootstrap?.workspace?.workspaceReady ??
+          false
+        );
+        const setupRoute =
+          normalizeSetupRoute(
+            bootstrap?.workspace?.destination?.path ||
+              bootstrap?.workspace?.nextSetupRoute ||
+              "/setup/studio"
+          ) || "/setup/studio";
+
         const onSetup = isSetupPath(location.pathname);
-        const redirectTo =
+        let redirectTo = "";
+
+        if (!setupCompleted && !onSetup) {
+          redirectTo = setupRoute;
+        } else if (setupCompleted && onSetup) {
+          redirectTo = "/workspace";
+        } else if (
           location.pathname === "/setup" ||
           (onSetup && location.pathname !== normalizeSetupRoute(location.pathname))
-            ? "/setup/studio"
-            : "";
+        ) {
+          redirectTo = setupRoute;
+        }
 
         if (!alive) return;
 
