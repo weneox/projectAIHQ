@@ -149,9 +149,13 @@ class FakeLoginDb {
     return `${actorType}|${scopeKey}|${ip}`;
   }
 
-  async query(input) {
+  async query(input, maybeValues = []) {
     const text = String(input?.text || input || "").trim().toLowerCase();
-    const values = Array.isArray(input?.values) ? input.values : [];
+    const values = Array.isArray(input?.values) ? input.values : maybeValues;
+
+    if (text === "begin" || text === "commit" || text === "rollback") {
+      return { rowCount: 0, rows: [] };
+    }
 
     if (text.includes("from auth_identities") && text.includes("where normalized_email = $1")) {
       const identity =
@@ -207,6 +211,18 @@ class FakeLoginDb {
           },
         ],
       };
+    }
+
+    if (text.includes("from tenant_users") && text.includes("lower(user_email)")) {
+      const tenantId = String(values[0]);
+      const email = String(values[1]).toLowerCase();
+      const user =
+        Array.from(this.users.values()).find(
+          (row) =>
+            String(row.tenant_id) === tenantId &&
+            String(row.user_email).toLowerCase() === email
+        ) || null;
+      return { rowCount: user ? 1 : 0, rows: user ? [{ ...user }] : [] };
     }
 
     if (text.startsWith("insert into auth_identity_sessions")) {

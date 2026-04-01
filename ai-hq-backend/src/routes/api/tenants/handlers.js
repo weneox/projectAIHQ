@@ -55,6 +55,12 @@ import {
   dbUpsertTenantCore,
   dbUpsertTenantProfile,
 } from "./repository.js";
+import {
+  createTenantUser as createCanonicalTenantUser,
+  deleteTenantUser as deleteCanonicalTenantUser,
+  setTenantUserStatus as setCanonicalTenantUserStatus,
+  updateTenantUser as updateCanonicalTenantUser,
+} from "../team/repository.js";
 
 export function createTenantsHandlers({ db }) {
   const requireAdmin = requireAdminSession;
@@ -237,7 +243,7 @@ export function createTenantsHandlers({ db }) {
         });
       }
 
-      const user = await dbCreateTenantUser(db, tenant.id, input);
+      const user = await createCanonicalTenantUser(db, tenant.id, input);
 
       await auditSafe(db, actor, "tenant.user.created", "tenant_user", user?.id, {
         tenantId: tenant.id,
@@ -276,7 +282,12 @@ export function createTenantsHandlers({ db }) {
         ...asJsonObj(req.body, {}),
       });
 
-      const user = await dbUpdateTenantUser(db, tenant.id, req.params.id, patchInput);
+      const user = await updateCanonicalTenantUser(
+        db,
+        tenant.id,
+        req.params.id,
+        patchInput
+      );
 
       await auditSafe(db, actor, "tenant.user.updated", "tenant_user", user?.id, {
         tenantId: tenant.id,
@@ -308,7 +319,12 @@ export function createTenantsHandlers({ db }) {
       const status = cleanLower(req.body?.status || "");
       if (!status) return bad(res, "status is required");
 
-      const user = await dbSetTenantUserStatus(db, tenant.id, req.params.id, status);
+      const user = await setCanonicalTenantUserStatus(
+        db,
+        tenant.id,
+        req.params.id,
+        status
+      );
       if (!user?.id) {
         return res.status(404).json({ ok: false, error: "User not found" });
       }
@@ -346,7 +362,7 @@ export function createTenantsHandlers({ db }) {
       const password = cleanString(req.body?.password || "");
       if (!password) return bad(res, "password is required");
 
-      const user = await dbUpdateTenantUser(db, tenant.id, req.params.id, {
+      const user = await updateCanonicalTenantUser(db, tenant.id, req.params.id, {
         ...current,
         password_hash: hashUserPassword(password),
         auth_provider: "local",
@@ -387,7 +403,7 @@ export function createTenantsHandlers({ db }) {
         return res.status(404).json({ ok: false, error: "User not found" });
       }
 
-      const deleted = await dbDeleteTenantUser(db, tenant.id, req.params.id);
+      const deleted = await deleteCanonicalTenantUser(db, tenant.id, req.params.id);
       if (!deleted) {
         return bad(res, "Delete failed");
       }
@@ -612,7 +628,7 @@ export function createTenantsHandlers({ db }) {
       );
 
       if (!alreadyOwner?.id) {
-        await dbCreateTenantUser(db, tenantCore.id, ownerInput);
+        await createCanonicalTenantUser(db, tenantCore.id, ownerInput);
       }
 
       const agents = pickDefaultAgents(body);

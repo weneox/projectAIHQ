@@ -16,6 +16,24 @@ export async function loginUser({
   });
 }
 
+export async function signupUser({
+  fullName,
+  companyName,
+  email,
+  password,
+  tenantKey,
+  websiteUrl,
+}) {
+  return apiPost("/api/auth/signup", {
+    fullName,
+    companyName,
+    email,
+    password,
+    tenantKey,
+    websiteUrl,
+  });
+}
+
 export async function selectWorkspaceUser({
   email,
   password,

@@ -31,6 +31,11 @@ import {
   markIdentityLogin,
   markUserLogin,
 } from "./repository.js";
+import {
+  ensureCanonicalAndLegacyAccessForEmail,
+  ensureLegacyBridgeForMemberships,
+  repairCanonicalAccessFromLegacyUsers,
+} from "../../../services/auth/canonicalUserAccess.js";
 
 function normalizeTenantKeyInput(body = {}) {
   return s(
@@ -277,7 +282,11 @@ export function userLoginRoutes({ db, resolveWorkspaceState = loadActiveWorkspac
 
     let identity = null;
     try {
-      identity = await findAuthIdentityForLogin(db, { email });
+      const bootstrap = await ensureCanonicalAndLegacyAccessForEmail(db, {
+        email,
+        tenantKey: requestedTenantKey,
+      });
+      identity = bootstrap?.identity || (await findAuthIdentityForLogin(db, { email }));
     } catch (e) {
       const timeout = isDbTimeoutError(e);
       res.status(timeout ? 503 : 500).json({
@@ -328,7 +337,21 @@ export function userLoginRoutes({ db, resolveWorkspaceState = loadActiveWorkspac
       return null;
     }
 
-    const valid = verifyUserPassword(password, identity.password_hash);
+    let valid = verifyUserPassword(password, identity.password_hash);
+    if (!valid) {
+      try {
+        const repaired = await repairCanonicalAccessFromLegacyUsers(db, {
+          email,
+          tenantKey: requestedTenantKey,
+          forcePasswordHashFromLegacy: true,
+        });
+        if (repaired?.identity?.id) {
+          identity = repaired.identity;
+          valid = verifyUserPassword(password, identity.password_hash);
+        }
+      } catch {}
+    }
+
     if (!valid) {
       await registerFailedLoginAttempt(db, {
         actorType: "user",
@@ -357,6 +380,7 @@ export function userLoginRoutes({ db, resolveWorkspaceState = loadActiveWorkspac
   async function resolveLoginChoices({
     identity,
     requestedTenantKey = "",
+    email = "",
     res,
   }) {
     let memberships = [];
@@ -375,11 +399,49 @@ export function userLoginRoutes({ db, resolveWorkspaceState = loadActiveWorkspac
       return null;
     }
 
-    const compatibleChoices = await resolveCompatibleMemberships(db, identity, memberships);
+    if (!memberships.length) {
+      try {
+        await repairCanonicalAccessFromLegacyUsers(db, {
+          email: email || identity?.primary_email || identity?.normalized_email,
+          tenantKey: requestedTenantKey,
+        });
+        memberships = await listIdentityMembershipChoicesForLogin(db, {
+          identityId: identity.id,
+          tenantKey: requestedTenantKey,
+        });
+      } catch {}
+    }
+
+    let compatibleChoices = await resolveCompatibleMemberships(db, identity, memberships);
+    if (!compatibleChoices.length && memberships.length) {
+      try {
+        await ensureLegacyBridgeForMemberships(db, identity, memberships);
+        compatibleChoices = await resolveCompatibleMemberships(db, identity, memberships);
+      } catch {}
+    }
+
     const enrichedChoices = await enrichMembershipChoices(
       resolveWorkspaceState,
       compatibleChoices
     );
+
+    if (!memberships.length && requestedTenantKey) {
+      res.status(403).json({
+        ok: false,
+        error: "This identity does not have access to the requested workspace",
+        code: "membership_not_found",
+      });
+      return null;
+    }
+
+    if (!memberships.length) {
+      res.status(403).json({
+        ok: false,
+        error: "This identity is not linked to any workspace",
+        code: "identity_membership_missing",
+      });
+      return null;
+    }
 
     if (requestedTenantKey) {
       const requestedChoice =
@@ -439,6 +501,7 @@ export function userLoginRoutes({ db, resolveWorkspaceState = loadActiveWorkspac
     const resolvedChoices = await resolveLoginChoices({
       identity,
       requestedTenantKey,
+      email,
       res,
     });
     if (!resolvedChoices) return;
@@ -540,6 +603,7 @@ export function userLoginRoutes({ db, resolveWorkspaceState = loadActiveWorkspac
     const resolvedChoices = await resolveLoginChoices({
       identity,
       requestedTenantKey,
+      email,
       res,
     });
     if (!resolvedChoices) return;

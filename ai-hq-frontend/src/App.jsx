@@ -23,6 +23,7 @@ const Comments = lazy(() => import("./pages/Comments.jsx"));
 const Incidents = lazy(() => import("./pages/Incidents.jsx"));
 const Voice = lazy(() => import("./pages/Voice.jsx"));
 const Login = lazy(() => import("./pages/Login.jsx"));
+const Signup = lazy(() => import("./pages/Signup.jsx"));
 const TruthViewerPage = lazy(() => import("./pages/Truth/TruthViewerPage.jsx"));
 const ChannelCatalog = lazy(() => import("./pages/ChannelCatalog.jsx"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin.jsx"));
@@ -87,6 +88,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={withSuspense(<Login />)} />
+        <Route path="/signup" element={withSuspense(<Signup />)} />
 
         <Route path="/admin/login" element={withSuspense(<AdminLogin />)} />
 
