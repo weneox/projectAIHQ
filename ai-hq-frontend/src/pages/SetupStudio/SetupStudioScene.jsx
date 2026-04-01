@@ -1,16 +1,9 @@
 import { AnimatePresence } from "framer-motion";
-import { RefreshCw } from "lucide-react";
-import React from "react";
-
-import { TinyChip, TinyLabel } from "./components/SetupStudioUi.jsx";
+import React, { useMemo } from "react";
 
 import SetupStudioEntryStage from "./stages/SetupStudioEntryStage.jsx";
 import SetupStudioScanningStage from "./stages/SetupStudioScanningStage.jsx";
 import SetupStudioReviewStage from "./stages/SetupStudioReviewStage.jsx";
-import SetupStudioReadyStage from "./stages/SetupStudioReadyStage.jsx";
-import SetupStudioReviewWorkspaceDialog, {
-  SetupStudioReviewSyncBanner,
-} from "./components/SetupStudioReviewWorkspaceDialog.jsx";
 import { useSetupStudioStageFlow } from "./hooks/useSetupStudioStageFlow.js";
 import { useSetupStudioSceneView } from "./hooks/useSetupStudioSceneView.js";
 
@@ -28,12 +21,10 @@ export default function SetupStudioScene({
 }) {
   const {
     loading,
-    refreshing,
     importingWebsite,
     savingBusiness,
     actingKnowledgeId,
     savingServiceSuggestion,
-    showRefine,
     showKnowledge,
     error,
   } = obj(status);
@@ -78,8 +69,6 @@ export default function SetupStudioScene({
     openWorkspace: onOpenWorkspace,
     openTruth: onOpenTruth,
     reloadReviewDraft: onReloadReviewDraft,
-    refresh: onRefresh,
-    toggleRefine: onToggleRefine,
     toggleKnowledge: onToggleKnowledge,
   } = obj(actions);
 
@@ -110,160 +99,128 @@ export default function SetupStudioScene({
     currentReview,
     businessForm,
     manualSections,
-    showRefine,
+    showRefine: false,
     savingBusiness,
     discoveryProfileRows,
     onSetBusinessField,
     onSetManualSection,
     onSaveBusiness,
     onReloadReviewDraft,
-    onToggleRefine,
+    onToggleRefine: undefined,
     reviewSources,
     reviewSyncState,
   });
 
+  const activeStage = useMemo(() => {
+    if (stageFlow.stage === "ready") return "review";
+    return stageFlow.stage;
+  }, [stageFlow.stage]);
+
+  const handleReviewContinue = React.useCallback(() => {
+    if (typeof onOpenWorkspace === "function") {
+      onOpenWorkspace();
+      return;
+    }
+
+    if (typeof stageFlow.goNextFromReview === "function") {
+      stageFlow.goNextFromReview();
+    }
+  }, [onOpenWorkspace, stageFlow]);
+
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center px-6">
-        <div className="rounded-full border border-white/80 bg-[rgba(250,250,250,.82)] px-4 py-2 text-sm text-slate-600 shadow-[0_10px_24px_-20px_rgba(15,23,42,.28)] backdrop-blur-[10px]">
-          Preparing Setup Studio...
+      <div className="min-h-screen bg-white">
+        <div className="mx-auto flex min-h-screen w-full max-w-[1120px] items-center justify-center px-6">
+          <div className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 shadow-sm">
+            Preparing setup…
+          </div>
         </div>
       </div>
     );
   }
 
-  if (stageFlow.stage === "entry") {
+  if (activeStage === "entry") {
     return (
-      <>
-        <SetupStudioEntryStage
-          importingWebsite={importingWebsite}
-          discoveryForm={discoveryForm}
-          businessForm={businessForm}
-          manualSections={manualSections}
-          hasStoredReview={hasStoredReview}
-          hasApprovedTruth={hasApprovedTruth}
-          onSetBusinessField={onSetBusinessField}
-          onSetManualSection={onSetManualSection}
-          onSetDiscoveryField={onSetDiscoveryField}
-          onContinueFlow={stageFlow.handleContinueFromEntry}
-          onResumeReview={stageFlow.handleResumeFromEntry}
-          onOpenReviewWorkspace={onToggleRefine}
-          onOpenTruth={onOpenTruth}
-        />
-
-        <AnimatePresence>
-          {showRefine ? (
-            <SetupStudioReviewWorkspaceDialog
-              {...sceneView.reviewWorkspaceDialogProps}
-            />
-          ) : null}
-        </AnimatePresence>
-      </>
-    );
-  }
-
-  return (
-    <>
-      <div className="min-h-screen overflow-y-auto">
-        <main className="mx-auto w-full max-w-[1200px] px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <TinyLabel>Setup Studio</TinyLabel>
-              <TinyChip>
-                {sceneView.sourceLabel ? sceneView.sourceLabel : "Source draft"}
-              </TinyChip>
-            </div>
-
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={refreshing}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-white/80 bg-[rgba(250,250,250,.82)] px-4 text-sm font-medium text-slate-700 shadow-[0_10px_24px_-20px_rgba(15,23,42,.28)] backdrop-blur-[10px] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-              />
-              Refresh
-            </button>
-          </div>
-
-          <div className="mb-6">
-            <SetupStudioReviewSyncBanner
-              reviewSyncState={reviewSyncState}
-              onReloadReviewDraft={onReloadReviewDraft}
-            />
-          </div>
-
-          <AnimatePresence mode="wait">
-            {stageFlow.stage === "scanning" ? (
-              <SetupStudioScanningStage
-                key="scanning"
-                lastUrl={discoveryState?.lastUrl}
-                sourceType={sceneView.scanningView.sourceType}
-                hasSourceInput={sceneView.scanningView.hasSourceInput}
-                hasManualInput={sceneView.scanningView.hasManualInput}
-                hasVoiceInput={sceneView.scanningView.hasVoiceInput}
-                scanLines={sceneView.scanningView.scanLines}
-                scanLineIndex={sceneView.scanningView.scanLineIndex}
-              />
-            ) : null}
-
-            {stageFlow.stage === "review" ? (
-              <SetupStudioReviewStage
-                key="review"
-                meta={meta}
-                currentTitle={currentTitle}
-                currentDescription={currentDescription}
-                discoveryProfileRows={discoveryProfileRows}
-                discoveryWarnings={sceneView.discoveryWarnings}
-                honestySummary={sceneView.honestySummary}
-                sourceLabel={sceneView.sourceLabel}
-                reviewSources={reviewSources}
-                reviewEvents={reviewEvents}
-                knowledgePreview={knowledgePreview}
-                knowledgeItems={knowledgeItems}
-                actingKnowledgeId={actingKnowledgeId}
-                showKnowledge={showKnowledge}
-                serviceSuggestionTitle={serviceSuggestionTitle}
-                services={services}
-                savingServiceSuggestion={savingServiceSuggestion}
-                onApproveKnowledge={onApproveKnowledge}
-                onRejectKnowledge={onRejectKnowledge}
-                onCreateSuggestedService={onCreateSuggestedService}
-                onToggleKnowledge={onToggleKnowledge}
-                onToggleRefine={onToggleRefine}
-                onNext={stageFlow.goNextFromReview}
-              />
-            ) : null}
-
-            {stageFlow.stage === "ready" ? (
-              <SetupStudioReadyStage
-                key="ready"
-                meta={meta}
-                studioProgress={studioProgress}
-                hasKnowledge={visibleKnowledgeCount > 0}
-                honestySummary={sceneView.honestySummary}
-                onToggleRefine={onToggleRefine}
-                onToggleKnowledge={onToggleKnowledge}
-                onOpenTruth={onOpenTruth}
-                onOpenWorkspace={onOpenWorkspace}
-              />
-            ) : null}
-          </AnimatePresence>
+      <div className="min-h-screen bg-white">
+        <main className="mx-auto w-full max-w-[1120px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <SetupStudioEntryStage
+            importingWebsite={importingWebsite}
+            discoveryForm={discoveryForm}
+            businessForm={businessForm}
+            manualSections={manualSections}
+            hasStoredReview={hasStoredReview}
+            hasApprovedTruth={hasApprovedTruth}
+            onSetBusinessField={onSetBusinessField}
+            onSetManualSection={onSetManualSection}
+            onSetDiscoveryField={onSetDiscoveryField}
+            onContinueFlow={stageFlow.handleContinueFromEntry}
+            onResumeReview={stageFlow.handleResumeFromEntry}
+            onOpenTruth={onOpenTruth}
+          />
 
           {error ? (
-            <div className="mt-6 rounded-[24px] border border-rose-200 bg-rose-50/90 px-4 py-3 text-sm text-rose-700">
+            <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
               {error}
             </div>
           ) : null}
         </main>
       </div>
+    );
+  }
 
-      <AnimatePresence>
-        <SetupStudioReviewWorkspaceDialog
-          {...sceneView.reviewWorkspaceDialogProps}
-        />
-      </AnimatePresence>
-    </>
+  return (
+    <div className="min-h-screen bg-white">
+      <main className="mx-auto w-full max-w-[1120px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <AnimatePresence mode="wait">
+          {activeStage === "scanning" ? (
+            <SetupStudioScanningStage
+              key="building"
+              lastUrl={discoveryState?.lastUrl}
+              sourceType={sceneView.scanningView.sourceType}
+              hasSourceInput={sceneView.scanningView.hasSourceInput}
+              hasManualInput={sceneView.scanningView.hasManualInput}
+              hasVoiceInput={sceneView.scanningView.hasVoiceInput}
+              scanLines={sceneView.scanningView.scanLines}
+              scanLineIndex={sceneView.scanningView.scanLineIndex}
+            />
+          ) : null}
+
+          {activeStage === "review" ? (
+            <SetupStudioReviewStage
+              key="review"
+              meta={meta}
+              currentTitle={currentTitle}
+              currentDescription={currentDescription}
+              discoveryProfileRows={discoveryProfileRows}
+              discoveryWarnings={sceneView.discoveryWarnings}
+              honestySummary={sceneView.honestySummary}
+              sourceLabel={sceneView.sourceLabel}
+              reviewSources={reviewSources}
+              reviewEvents={reviewEvents}
+              knowledgePreview={knowledgePreview}
+              knowledgeItems={knowledgeItems}
+              actingKnowledgeId={actingKnowledgeId}
+              showKnowledge={showKnowledge}
+              serviceSuggestionTitle={serviceSuggestionTitle}
+              services={services}
+              savingServiceSuggestion={savingServiceSuggestion}
+              onApproveKnowledge={onApproveKnowledge}
+              onRejectKnowledge={onRejectKnowledge}
+              onCreateSuggestedService={onCreateSuggestedService}
+              onToggleKnowledge={onToggleKnowledge}
+              onNext={handleReviewContinue}
+              onOpenTruth={onOpenTruth}
+              onOpenWorkspace={onOpenWorkspace}
+            />
+          ) : null}
+        </AnimatePresence>
+
+        {error ? (
+          <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {error}
+          </div>
+        ) : null}
+      </main>
+    </div>
   );
 }

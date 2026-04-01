@@ -10,21 +10,21 @@ function lower(v, d = "") {
   return s(v, d).toLowerCase();
 }
 
-const LEGACY_REVIEW_STAGES = new Set([
+const COLLAPSED_REVIEW_STAGES = new Set([
   "identity",
   "knowledge",
   "service",
   "review",
+  "ready",
 ]);
 
 export function normalizeSetupStudioStage(value = "") {
   const stage = lower(value);
 
   if (!stage) return "";
-  if (LEGACY_REVIEW_STAGES.has(stage)) return "review";
   if (stage === "entry") return "entry";
   if (stage === "scanning") return "scanning";
-  if (stage === "ready") return "ready";
+  if (COLLAPSED_REVIEW_STAGES.has(stage)) return "review";
 
   return "";
 }
@@ -60,7 +60,6 @@ export function getSetupStudioHasAnyReviewContent({
 }
 
 export function resolveSetupStudioStage({
-  prevStage = "entry",
   importingWebsite = false,
   discoveryMode = "",
   setupCompleted = false,
@@ -68,46 +67,32 @@ export function resolveSetupStudioStage({
   entryLocked = true,
   hasVisibleResults = false,
   hasAnyReviewContent = false,
+  showKnowledge = false,
+  visibleKnowledgeCount = 0,
 }) {
   const mode = lower(discoveryMode);
-  const normalizedPrevStage = normalizeSetupStudioStage(prevStage) || "entry";
   const normalizedNextStage = normalizeSetupStudioStage(nextStudioStage);
-  const hasReviewContent = !!hasVisibleResults || !!hasAnyReviewContent;
-  const forcedReady = !!setupCompleted || normalizedNextStage === "ready";
-
-  if (importingWebsite || mode === "running") {
-    return "scanning";
-  }
+  const hasReviewContent =
+    !!setupCompleted ||
+    !!hasVisibleResults ||
+    !!hasAnyReviewContent ||
+    !!showKnowledge ||
+    Number(visibleKnowledgeCount || 0) > 0 ||
+    normalizedNextStage === "review";
 
   if (entryLocked) {
     return "entry";
   }
 
-  if (!hasReviewContent) {
-    return "entry";
+  if (importingWebsite || mode === "running" || nextStudioStage === "scanning") {
+    return "scanning";
   }
 
-  if (forcedReady) {
-    return "ready";
-  }
-
-  if (normalizedNextStage === "review") {
+  if (hasReviewContent) {
     return "review";
   }
 
-  if (
-    normalizedPrevStage === "entry" ||
-    normalizedPrevStage === "scanning" ||
-    normalizedPrevStage === "review"
-  ) {
-    return "review";
-  }
-
-  if (normalizedPrevStage === "ready") {
-    return "review";
-  }
-
-  return "review";
+  return "entry";
 }
 
 export function resolveSetupStudioNextStageFromEntry() {
@@ -123,11 +108,9 @@ export function resolveSetupStudioNextStageFromKnowledge() {
 }
 
 export function resolveSetupStudioNextStageFromService() {
-  return "ready";
+  return "review";
 }
 
-export function resolveSetupStudioNextStageFromReview({
-  setupCompleted = false,
-} = {}) {
-  return setupCompleted ? "ready" : "ready";
+export function resolveSetupStudioNextStageFromReview() {
+  return "review";
 }
