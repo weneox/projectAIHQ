@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { isLocalWorkspaceEntryEnabled } from "../../lib/appEntry.js";
-import { getAppSessionContext } from "../../lib/appSession.js";
+import { getAppAuthContext } from "../../lib/appSession.js";
 import AppBootSurface from "../loading/AppBootSurface.jsx";
 
 function isSetupPath(pathname = "") {
@@ -42,8 +42,7 @@ export default function UserRouteGuard({ children }) {
       }
 
       try {
-        const session = await getAppSessionContext();
-        const auth = session?.auth || {};
+        const auth = await getAppAuthContext();
         if (!alive) return;
 
         if (!auth?.authenticated) {

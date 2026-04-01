@@ -4,7 +4,7 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 
 const navigate = vi.fn();
 const loginUser = vi.fn();
-const getAuthMe = vi.fn();
+const getAppAuthContext = vi.fn();
 const logoutUser = vi.fn();
 const clearAppSessionContext = vi.fn();
 
@@ -19,12 +19,12 @@ vi.mock("framer-motion", () => ({
 }));
 
 vi.mock("../api/auth.js", () => ({
-  getAuthMe: (...args) => getAuthMe(...args),
   loginUser: (...args) => loginUser(...args),
   logoutUser: (...args) => logoutUser(...args),
 }));
 
 vi.mock("../lib/appSession.js", () => ({
+  getAppAuthContext: (...args) => getAppAuthContext(...args),
   clearAppSessionContext: (...args) => clearAppSessionContext(...args),
 }));
 
@@ -49,7 +49,7 @@ function renderLogin() {
 describe("Login", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getAuthMe.mockResolvedValue({ authenticated: false });
+    getAppAuthContext.mockResolvedValue({ authenticated: false });
     loginUser.mockResolvedValue({ ok: true, authenticated: true });
     logoutUser.mockResolvedValue({ ok: true });
     clearAppSessionContext.mockImplementation(() => {});
@@ -59,6 +59,7 @@ describe("Login", () => {
     renderLogin();
 
     expect(await screen.findByPlaceholderText("name@company.com")).toBeInTheDocument();
+    expect(getAppAuthContext).toHaveBeenCalledTimes(1);
     expect(screen.getByPlaceholderText("Password")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("company-name")).not.toBeInTheDocument();
     expect(screen.queryByText("Remember")).not.toBeInTheDocument();

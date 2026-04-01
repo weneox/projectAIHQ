@@ -63,12 +63,7 @@ function pickViewerRole(auth = {}, bootstrap = {}) {
   ).toLowerCase();
 }
 
-async function loadAppSessionContext() {
-  const [auth, bootstrap] = await Promise.all([
-    getAuthMe().catch(() => ({})),
-    getAppBootstrap().catch(() => ({})),
-  ]);
-
+function buildSessionContext(auth = {}, bootstrap = {}) {
   return {
     tenantKey: pickTenantKey(auth, bootstrap),
     actorName: pickActorName(auth, bootstrap),
@@ -78,18 +73,84 @@ async function loadAppSessionContext() {
   };
 }
 
+let authContextPromise = null;
+let bootstrapContextPromise = null;
 let sessionContextPromise = null;
 
-export function clearAppSessionContext() {
+function resetSessionCompositionCache() {
   sessionContextPromise = null;
+}
+
+async function loadAppAuthContext() {
+  return getAuthMe().catch(() => ({}));
+}
+
+async function loadAppBootstrapContext() {
+  return getAppBootstrap().catch(() => ({}));
+}
+
+export function clearAppAuthContext() {
+  authContextPromise = null;
+  resetSessionCompositionCache();
+}
+
+export function clearAppBootstrapContext() {
+  bootstrapContextPromise = null;
+  resetSessionCompositionCache();
+}
+
+export function clearAppSessionContext() {
+  authContextPromise = null;
+  bootstrapContextPromise = null;
+  sessionContextPromise = null;
+}
+
+export async function getAppAuthContext({ force = false } = {}) {
+  if (!authContextPromise || force) {
+    if (force) {
+      resetSessionCompositionCache();
+    }
+
+    authContextPromise = loadAppAuthContext().catch((error) => {
+      authContextPromise = null;
+      throw error;
+    });
+  }
+
+  return authContextPromise;
+}
+
+export async function getAppBootstrapContext({ force = false } = {}) {
+  if (!bootstrapContextPromise || force) {
+    if (force) {
+      resetSessionCompositionCache();
+    }
+
+    bootstrapContextPromise = loadAppBootstrapContext().catch((error) => {
+      bootstrapContextPromise = null;
+      throw error;
+    });
+  }
+
+  return bootstrapContextPromise;
 }
 
 export async function getAppSessionContext({ force = false } = {}) {
   if (!sessionContextPromise || force) {
-    sessionContextPromise = loadAppSessionContext().catch((error) => {
-      sessionContextPromise = null;
-      throw error;
-    });
+    if (force) {
+      authContextPromise = null;
+      bootstrapContextPromise = null;
+    }
+
+    sessionContextPromise = Promise.all([
+      getAppAuthContext({ force }),
+      getAppBootstrapContext({ force }),
+    ])
+      .then(([auth, bootstrap]) => buildSessionContext(auth, bootstrap))
+      .catch((error) => {
+        sessionContextPromise = null;
+        throw error;
+      });
   }
 
   return sessionContextPromise;

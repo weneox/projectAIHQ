@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getAppSessionContext } from "../../lib/appSession.js";
+import { getAppBootstrapContext } from "../../lib/appSession.js";
 import {
   isLocalWorkspaceEntryEnabled,
   resolveAuthenticatedLanding,
@@ -19,8 +19,8 @@ export default function AppEntryRedirect() {
       };
     }
 
-    getAppSessionContext()
-      .then(({ bootstrap }) => {
+    getAppBootstrapContext()
+      .then((bootstrap) => {
         if (!alive) return;
         navigate(resolveAuthenticatedLanding(bootstrap), { replace: true });
       })

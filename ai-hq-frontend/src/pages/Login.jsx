@@ -13,8 +13,8 @@ import {
   LogOut,
   WifiOff,
 } from "lucide-react";
-import { getAuthMe, loginUser, logoutUser } from "../api/auth.js";
-import { clearAppSessionContext } from "../lib/appSession.js";
+import { loginUser, logoutUser } from "../api/auth.js";
+import { clearAppSessionContext, getAppAuthContext } from "../lib/appSession.js";
 
 const RESERVED_SUBDOMAINS = new Set([
   "www",
@@ -104,7 +104,7 @@ function getFriendlyError(error, fallback = "Unable to continue.") {
   return s(
     error?.payload?.error ||
       error?.payload?.message ||
-    error?.response?.data?.error ||
+      error?.response?.data?.error ||
       error?.response?.data?.message ||
       error?.message ||
       fallback,
@@ -231,7 +231,7 @@ export default function Login() {
 
     (async () => {
       try {
-        const auth = await getAuthMe();
+        const auth = await getAppAuthContext();
         if (!alive) return;
 
         if (auth?.authenticated) {
