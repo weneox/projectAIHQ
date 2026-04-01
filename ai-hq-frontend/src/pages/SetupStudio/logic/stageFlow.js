@@ -6,6 +6,29 @@ function arr(v, d = []) {
   return Array.isArray(v) ? v : d;
 }
 
+function lower(v, d = "") {
+  return s(v, d).toLowerCase();
+}
+
+const LEGACY_REVIEW_STAGES = new Set([
+  "identity",
+  "knowledge",
+  "service",
+  "review",
+]);
+
+export function normalizeSetupStudioStage(value = "") {
+  const stage = lower(value);
+
+  if (!stage) return "";
+  if (LEGACY_REVIEW_STAGES.has(stage)) return "review";
+  if (stage === "entry") return "entry";
+  if (stage === "scanning") return "scanning";
+  if (stage === "ready") return "ready";
+
+  return "";
+}
+
 export function getSetupStudioHasServiceStage({
   serviceSuggestionTitle,
   services,
@@ -45,13 +68,12 @@ export function resolveSetupStudioStage({
   entryLocked = true,
   hasVisibleResults = false,
   hasAnyReviewContent = false,
-  showKnowledge = false,
-  visibleKnowledgeCount = 0,
-  hasServiceStage = false,
 }) {
-  const mode = s(discoveryMode).toLowerCase();
-  const forcedReady =
-    !!setupCompleted || s(nextStudioStage).toLowerCase() === "ready";
+  const mode = lower(discoveryMode);
+  const normalizedPrevStage = normalizeSetupStudioStage(prevStage) || "entry";
+  const normalizedNextStage = normalizeSetupStudioStage(nextStudioStage);
+  const hasReviewContent = !!hasVisibleResults || !!hasAnyReviewContent;
+  const forcedReady = !!setupCompleted || normalizedNextStage === "ready";
 
   if (importingWebsite || mode === "running") {
     return "scanning";
@@ -61,7 +83,7 @@ export function resolveSetupStudioStage({
     return "entry";
   }
 
-  if (!hasVisibleResults && !hasAnyReviewContent) {
+  if (!hasReviewContent) {
     return "entry";
   }
 
@@ -69,39 +91,43 @@ export function resolveSetupStudioStage({
     return "ready";
   }
 
-  if (prevStage === "entry" || prevStage === "scanning") {
-    if (showKnowledge && Number(visibleKnowledgeCount || 0) > 0) {
-      return "knowledge";
-    }
-    return "identity";
+  if (normalizedNextStage === "review") {
+    return "review";
   }
 
-  if (prevStage === "knowledge" && Number(visibleKnowledgeCount || 0) <= 0) {
-    return hasServiceStage ? "service" : "ready";
+  if (
+    normalizedPrevStage === "entry" ||
+    normalizedPrevStage === "scanning" ||
+    normalizedPrevStage === "review"
+  ) {
+    return "review";
   }
 
-  if (prevStage === "service" && !hasServiceStage) {
-    return "ready";
+  if (normalizedPrevStage === "ready") {
+    return "review";
   }
 
-  return prevStage;
+  return "review";
 }
 
-export function resolveSetupStudioNextStageFromIdentity({
-  visibleKnowledgeCount = 0,
-  hasServiceStage = false,
-}) {
-  if (Number(visibleKnowledgeCount || 0) > 0) return "knowledge";
-  if (hasServiceStage) return "service";
-  return "ready";
+export function resolveSetupStudioNextStageFromEntry() {
+  return "scanning";
 }
 
-export function resolveSetupStudioNextStageFromKnowledge({
-  hasServiceStage = false,
-}) {
-  return hasServiceStage ? "service" : "ready";
+export function resolveSetupStudioNextStageFromIdentity() {
+  return "review";
+}
+
+export function resolveSetupStudioNextStageFromKnowledge() {
+  return "review";
 }
 
 export function resolveSetupStudioNextStageFromService() {
   return "ready";
+}
+
+export function resolveSetupStudioNextStageFromReview({
+  setupCompleted = false,
+} = {}) {
+  return setupCompleted ? "ready" : "ready";
 }

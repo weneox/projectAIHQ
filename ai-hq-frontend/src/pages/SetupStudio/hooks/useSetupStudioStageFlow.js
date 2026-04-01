@@ -3,8 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import {
   getSetupStudioHasAnyReviewContent,
   getSetupStudioHasServiceStage,
+  resolveSetupStudioNextStageFromEntry,
   resolveSetupStudioNextStageFromIdentity,
   resolveSetupStudioNextStageFromKnowledge,
+  resolveSetupStudioNextStageFromReview,
   resolveSetupStudioNextStageFromService,
   resolveSetupStudioStage,
 } from "../logic/stageFlow.js";
@@ -92,11 +94,27 @@ export function useSetupStudioStageFlow({
 
   function handleContinueFromEntry() {
     setEntryLocked(false);
+    setStage(resolveSetupStudioNextStageFromEntry());
     onContinueFlow?.();
   }
 
   function handleResumeFromEntry() {
     setEntryLocked(false);
+    setStage(
+      resolveSetupStudioStage({
+        prevStage: stage,
+        importingWebsite,
+        discoveryMode,
+        setupCompleted,
+        nextStudioStage,
+        entryLocked: false,
+        hasVisibleResults,
+        hasAnyReviewContent,
+        showKnowledge,
+        visibleKnowledgeCount,
+        hasServiceStage,
+      })
+    );
     onResumeReview?.();
   }
 
@@ -117,6 +135,10 @@ export function useSetupStudioStageFlow({
     setStage(resolveSetupStudioNextStageFromService());
   }
 
+  function goNextFromReview() {
+    setStage(resolveSetupStudioNextStageFromReview({ setupCompleted }));
+  }
+
   return {
     stage,
     entryLocked,
@@ -127,5 +149,6 @@ export function useSetupStudioStageFlow({
     goNextFromIdentity,
     goNextFromKnowledge,
     goNextFromService,
+    goNextFromReview,
   };
 }

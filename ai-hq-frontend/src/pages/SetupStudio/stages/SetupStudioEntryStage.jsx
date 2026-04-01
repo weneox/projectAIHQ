@@ -60,10 +60,66 @@ const TEXTAREA_RESET_STYLE = {
 };
 
 const TYPING_EXAMPLES = [
-  "We are a dental clinic in Baku offering implants, whitening, and consultations in Azerbaijani and English.",
-  "We run a women’s fashion boutique with same-day delivery in Baku and most orders coming from Instagram.",
-  "We are a law firm helping startups with company setup, contracts, accounting coordination, and tax support.",
-  "We operate a premium beauty studio offering hair, nails, makeup, and bridal appointments by booking.",
+  "Dental clinic in Baku. Implants, whitening, consultations. Azerbaijani and English.",
+  "Women’s fashion boutique in Baku. Same-day delivery. Most orders come from Instagram.",
+  "Law firm for startups. Company setup, contracts, accounting coordination, tax support.",
+  "Beauty studio offering hair, nails, makeup, and bridal appointments by booking.",
+];
+
+const SOURCE_OPTIONS = [
+  {
+    key: "website",
+    label: "Website",
+    icon: websiteIcon,
+    placeholder: "yourbusiness.com",
+    title: "Website",
+    description: "Main business website",
+    actionLabel: "Save",
+  },
+  {
+    key: "instagram",
+    label: "Instagram",
+    icon: instagramIcon,
+    placeholder: "@yourbrand or instagram.com/yourbrand",
+    title: "Instagram",
+    description: "Connected account or public profile",
+    actionLabel: "Save",
+  },
+  {
+    key: "facebook",
+    label: "Facebook",
+    icon: facebookIcon,
+    placeholder: "facebook.com/yourbrand",
+    title: "Facebook",
+    description: "Public business page",
+    actionLabel: "Save",
+  },
+  {
+    key: "linkedin",
+    label: "LinkedIn",
+    icon: linkedinIcon,
+    placeholder: "linkedin.com/company/yourbrand",
+    title: "LinkedIn",
+    description: "Company page",
+    actionLabel: "Save",
+  },
+  {
+    key: "google_maps",
+    label: "Google Maps",
+    icon: googleMapsIcon,
+    placeholder: "Business name, city or Maps link",
+    title: "Google Maps",
+    description: "Maps link or business + city",
+    actionLabel: "Save",
+  },
+];
+
+const VISIBLE_SOURCE_KEYS = [
+  "website",
+  "instagram",
+  "facebook",
+  "linkedin",
+  "google_maps",
 ];
 
 function s(v) {
@@ -76,6 +132,10 @@ function obj(v, d = {}) {
 
 function lower(v) {
   return s(v).toLowerCase();
+}
+
+function sourceByKey(key = "") {
+  return SOURCE_OPTIONS.find((item) => item.key === key) || null;
 }
 
 function instagramProfileUrlFromChannel(channel = {}) {
@@ -108,66 +168,6 @@ function normalizeInstagramStatusPayload(raw = {}) {
     channel,
     error: "",
   };
-}
-
-const SOURCE_OPTIONS = [
-  {
-    key: "website",
-    label: "Website",
-    icon: websiteIcon,
-    placeholder: "yourbusiness.com",
-    title: "Website",
-    description: "Add the main business website.",
-    actionLabel: "Save source",
-  },
-  {
-    key: "instagram",
-    label: "Instagram",
-    icon: instagramIcon,
-    placeholder: "@yourbrand or instagram.com/yourbrand",
-    title: "Instagram",
-    description: "Connect the real account, or add a public profile link manually.",
-    actionLabel: "Save source",
-  },
-  {
-    key: "facebook",
-    label: "Facebook",
-    icon: facebookIcon,
-    placeholder: "facebook.com/yourbrand",
-    title: "Facebook",
-    description: "Add the public business page link.",
-    actionLabel: "Save source",
-  },
-  {
-    key: "linkedin",
-    label: "LinkedIn",
-    icon: linkedinIcon,
-    placeholder: "linkedin.com/company/yourbrand",
-    title: "LinkedIn",
-    description: "Add the company page link.",
-    actionLabel: "Save source",
-  },
-  {
-    key: "google_maps",
-    label: "Google Maps",
-    icon: googleMapsIcon,
-    placeholder: "Business name, city or Maps link",
-    title: "Google Maps",
-    description: "Add a Maps link, or the business name with city.",
-    actionLabel: "Save source",
-  },
-];
-
-const VISIBLE_SOURCE_KEYS = [
-  "website",
-  "instagram",
-  "facebook",
-  "linkedin",
-  "google_maps",
-];
-
-function sourceByKey(key = "") {
-  return SOURCE_OPTIONS.find((item) => item.key === key) || null;
 }
 
 function buildInitialSourceDrafts(discoveryForm = {}) {
@@ -209,13 +209,11 @@ function cleanComposerText(raw = "", sourceDrafts = {}) {
     }
   }
 
-  text = text
+  return text
     .replace(/\s{2,}/g, " ")
     .replace(/^[,;:\-\s]+/, "")
     .replace(/[,:;\-\s]+$/, "")
     .trim();
-
-  return text;
 }
 
 function detectInlineSource(raw = "") {
@@ -347,16 +345,13 @@ function useTypingExamples(enabled = true) {
       return undefined;
     }
 
-    const examples = TYPING_EXAMPLES;
-    let charIndex = 0;
-    let deleting = false;
     let mounted = true;
     let timeoutId;
 
     function tick(currentIndex, currentCharIndex, isDeleting) {
       if (!mounted) return;
 
-      const current = examples[currentIndex % examples.length] || "";
+      const current = TYPING_EXAMPLES[currentIndex % TYPING_EXAMPLES.length] || "";
 
       if (!isDeleting) {
         const nextCharIndex = currentCharIndex + 1;
@@ -365,13 +360,13 @@ function useTypingExamples(enabled = true) {
         if (nextCharIndex >= current.length) {
           timeoutId = window.setTimeout(() => {
             tick(currentIndex, nextCharIndex, true);
-          }, 1350);
+          }, 1200);
           return;
         }
 
         timeoutId = window.setTimeout(() => {
           tick(currentIndex, nextCharIndex, false);
-        }, 24);
+        }, 18);
         return;
       }
 
@@ -379,22 +374,22 @@ function useTypingExamples(enabled = true) {
       setDisplay(current.slice(0, Math.max(0, nextCharIndex)));
 
       if (nextCharIndex <= 0) {
-        const nextIndex = (currentIndex + 1) % examples.length;
+        const nextIndex = (currentIndex + 1) % TYPING_EXAMPLES.length;
         setExampleIndex(nextIndex);
         timeoutId = window.setTimeout(() => {
           tick(nextIndex, 0, false);
-        }, 220);
+        }, 180);
         return;
       }
 
       timeoutId = window.setTimeout(() => {
         tick(currentIndex, nextCharIndex, true);
-      }, 14);
+      }, 10);
     }
 
     timeoutId = window.setTimeout(() => {
       tick(exampleIndex, 0, false);
-    }, 420);
+    }, 320);
 
     return () => {
       mounted = false;
@@ -410,14 +405,29 @@ function NeoxWordmark() {
     <div className="inline-flex select-none items-center justify-center">
       <div
         style={DISPLAY_FONT_STYLE}
-        className="inline-flex items-end gap-[8px] text-[30px] font-semibold leading-none tracking-[-0.06em] sm:text-[34px] lg:text-[38px]"
+        className="inline-flex items-end gap-[8px] text-[28px] font-semibold leading-none tracking-[-0.06em] sm:text-[32px] lg:text-[36px]"
       >
         <span className="text-slate-950">NEOX</span>
-        <span className="bg-[linear-gradient(180deg,#4b5563_0%,#0f172a_100%)] bg-clip-text text-transparent">
+        <span className="bg-[linear-gradient(180deg,#64748b_0%,#0f172a_100%)] bg-clip-text text-transparent">
           AI Studio
         </span>
       </div>
     </div>
+  );
+}
+
+function TinyPill({ children, tone = "default" }) {
+  const toneClass =
+    tone === "success"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : "border-slate-200 bg-white text-slate-600";
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-3 py-1 text-[12px] font-medium ${toneClass}`}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -431,10 +441,10 @@ function SourceAction({
     <button
       type="button"
       onClick={onClick}
-      className={`group inline-flex h-[42px] items-center gap-2 rounded-full px-3.5 text-[14px] font-medium tracking-[-0.02em] transition ${
+      className={`inline-flex h-[42px] items-center gap-2 rounded-full border px-3.5 text-[14px] font-medium tracking-[-0.02em] transition ${
         attached
-          ? "bg-white text-slate-900 shadow-[0_10px_24px_-18px_rgba(15,23,42,.12)]"
-          : "text-slate-500 hover:text-slate-900"
+          ? "border-white bg-white text-slate-900 shadow-[0_10px_24px_-18px_rgba(15,23,42,.12)]"
+          : "border-transparent bg-slate-100/80 text-slate-600 hover:bg-white hover:text-slate-900"
       }`}
     >
       <img
@@ -442,7 +452,6 @@ function SourceAction({
         alt={source.label}
         className="h-[16px] w-[16px] object-contain"
       />
-
       <span>{source.label}</span>
 
       {attached ? (
@@ -468,9 +477,10 @@ function SourceModal({
   onInstagramConnect,
   onUseConnectedInstagram,
 }) {
+  const inputRef = useRef(null);
+
   if (!source) return null;
 
-  const inputRef = useRef(null);
   const isInstagram = source.key === "instagram";
   const connected = Boolean(instagramMeta?.connected);
   const connectedHandle = s(instagramMeta?.username)
@@ -501,16 +511,15 @@ function SourceModal({
                   alt={source.label}
                   className="h-10 w-10 shrink-0 object-contain"
                 />
-
                 <h3
                   style={DISPLAY_FONT_STYLE}
-                  className="truncate text-[26px] font-semibold leading-none tracking-[-0.05em] text-slate-950 sm:text-[28px]"
+                  className="truncate text-[24px] font-semibold leading-none tracking-[-0.05em] text-slate-950 sm:text-[26px]"
                 >
                   {source.title}
                 </h3>
               </div>
 
-              <p className="ml-14 mt-3 text-[15px] leading-7 text-slate-500">
+              <p className="ml-14 mt-3 text-[14px] leading-6 text-slate-500">
                 {source.description}
               </p>
             </div>
@@ -529,12 +538,12 @@ function SourceModal({
               {instagramMeta?.loading ? (
                 <div className="flex items-center gap-3 text-[14px] text-slate-500">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Checking connected Instagram account...
+                  Checking Instagram...
                 </div>
               ) : connected ? (
                 <div className="rounded-[24px] border border-[rgba(15,23,42,.07)] bg-white/80 px-5 py-5">
                   <div className="text-[12px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                    Connected account
+                    Connected
                   </div>
 
                   <div className="mt-4 flex items-center justify-between gap-4">
@@ -545,7 +554,7 @@ function SourceModal({
                         className="h-[22px] w-[22px] shrink-0 object-contain"
                       />
                       <div className="min-w-0 text-left">
-                        <div className="truncate text-[28px] font-semibold tracking-[-0.04em] text-slate-950">
+                        <div className="truncate text-[24px] font-semibold tracking-[-0.04em] text-slate-950">
                           {connectedHandle}
                         </div>
                       </div>
@@ -556,7 +565,7 @@ function SourceModal({
                       onClick={onUseConnectedInstagram}
                       className="inline-flex h-11 shrink-0 items-center justify-center rounded-full bg-slate-950 px-5 text-[14px] font-medium text-white transition hover:bg-slate-800"
                     >
-                      Use connected account
+                      Use connected
                     </button>
                   </div>
                 </div>
@@ -565,7 +574,7 @@ function SourceModal({
                   <div className="rounded-[24px] border border-[rgba(15,23,42,.07)] bg-white/72 px-5 py-5">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div className="text-[14px] leading-6 text-slate-500">
-                        Connect the real Instagram account first, or add a public profile manually.
+                        Connect first or paste the public profile.
                       </div>
 
                       <button
@@ -579,9 +588,7 @@ function SourceModal({
                         ) : (
                           <PlugZap className="h-4 w-4" />
                         )}
-                        {instagramMeta?.connecting
-                          ? "Connecting..."
-                          : "Connect Instagram"}
+                        {instagramMeta?.connecting ? "Connecting..." : "Connect"}
                       </button>
                     </div>
                   </div>
@@ -734,6 +741,12 @@ export default function SetupStudioEntryStage({
     return buildInterpretation(composerValue, sourceDrafts);
   }, [composerValue, sourceDrafts]);
 
+  const attachedSourceCount = useMemo(() => {
+    return VISIBLE_SOURCE_KEYS.reduce((count, key) => {
+      return count + (s(obj(sourceDrafts[key]).value) ? 1 : 0);
+    }, 0);
+  }, [sourceDrafts]);
+
   const hasRealSource = !!s(interpretation.sourceValue);
   const hasComposerContent = !!s(composerValue);
   const canContinue = !!(hasComposerContent || hasRealSource);
@@ -750,13 +763,14 @@ export default function SetupStudioEntryStage({
       }));
 
       const status = await getMetaChannelStatus();
+      const normalized = normalizeInstagramStatusPayload(status);
 
       setInstagramMeta((prev) => ({
         ...prev,
-        ...normalizeInstagramStatusPayload(status),
+        ...normalized,
       }));
 
-      return normalizeInstagramStatusPayload(status);
+      return normalized;
     } catch (error) {
       const message = s(error?.message || "Failed to load Instagram status");
       setInstagramMeta((prev) => ({
@@ -804,6 +818,7 @@ export default function SetupStudioEntryStage({
         !s(obj(sourceDraftsRef.current.instagram).value)
       ) {
         const connectedUrl = s(status.profileUrl);
+
         if (connectedUrl) {
           const nextDrafts = {
             ...sourceDraftsRef.current,
@@ -842,6 +857,7 @@ export default function SetupStudioEntryStage({
     const nextUrl = `${window.location.pathname}${
       nextQuery ? `?${nextQuery}` : ""
     }${window.location.hash || ""}`;
+
     window.history.replaceState({}, "", nextUrl);
   }, [onSetBusinessField, onSetDiscoveryField, refreshInstagramStatus]);
 
@@ -870,8 +886,7 @@ export default function SetupStudioEntryStage({
       const current = obj(sourceDrafts[activeSource.key]);
       const currentValue = s(current.value);
       const connectedUrl = s(instagramMeta.profileUrl);
-      const fallbackValue = currentValue || connectedUrl;
-      setModalValue(fallbackValue);
+      setModalValue(currentValue || connectedUrl);
       return;
     }
 
@@ -880,7 +895,7 @@ export default function SetupStudioEntryStage({
   }, [activeSource, sourceDrafts, instagramMeta.profileUrl]);
 
   useEffect(() => {
-    if (!activeSourceKey) return;
+    if (!activeSourceKey) return undefined;
 
     const body = document.body;
     const scrollbarWidth =
@@ -935,6 +950,7 @@ export default function SetupStudioEntryStage({
 
   function handleSaveSource() {
     if (!activeSource) return;
+
     const nextValue = s(modalValue);
     if (!nextValue) return;
 
@@ -1005,6 +1021,7 @@ export default function SetupStudioEntryStage({
           },
         }
       );
+
       if (!result?.ok) {
         throw new Error("Failed to start Instagram connect");
       }
@@ -1147,6 +1164,7 @@ export default function SetupStudioEntryStage({
       stopVoiceCapture();
       return;
     }
+
     startVoiceCapture();
   }
 
@@ -1161,8 +1179,8 @@ export default function SetupStudioEntryStage({
   return (
     <>
       <section className="w-full bg-transparent">
-        <div className="mx-auto max-w-[1280px] px-4 py-[42px] sm:px-6 sm:py-[56px] lg:px-8 lg:py-[64px]">
-          <div className="mx-auto w-full max-w-[1180px] text-center">
+        <div className="mx-auto max-w-[1280px] px-4 py-[38px] sm:px-6 sm:py-[52px] lg:px-8 lg:py-[60px]">
+          <div className="mx-auto w-full max-w-[1120px] text-center">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1172,184 +1190,193 @@ export default function SetupStudioEntryStage({
 
               <h1
                 style={DISPLAY_FONT_STYLE}
-                className="mx-auto mt-5 max-w-[1040px] text-[31px] font-semibold leading-[1.1] tracking-[-0.045em] text-slate-950 sm:text-[38px] lg:text-[44px]"
+                className="mx-auto mt-5 max-w-[940px] text-[30px] font-semibold leading-[1.08] tracking-[-0.05em] text-slate-950 sm:text-[36px] lg:text-[42px]"
               >
-                Build your business draft from real signals.
+                Start with a source or a short description.
               </h1>
+
+              <p className="mx-auto mt-4 max-w-[620px] text-[15px] leading-7 text-slate-500">
+                Add what you have. We’ll build the first draft from there.
+              </p>
             </motion.div>
+
+            {hasStoredReview || hasApprovedTruth ? (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, delay: 0.03 }}
+                className="mx-auto mt-8 max-w-[1040px] rounded-[28px] border border-[rgba(15,23,42,.07)] bg-white/82 px-5 py-4 text-left shadow-[0_16px_34px_-28px_rgba(15,23,42,.12)]"
+              >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {hasStoredReview ? <TinyPill>Draft exists</TinyPill> : null}
+                      {hasApprovedTruth ? (
+                        <TinyPill tone="success">Approved exists</TinyPill>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    {hasStoredReview ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={onResumeReview}
+                          className="inline-flex h-[42px] items-center justify-center rounded-full bg-white px-5 text-[14px] font-medium text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,.12)] transition hover:text-slate-950"
+                        >
+                          Resume
+                        </button>
+                        <button
+                          type="button"
+                          onClick={onOpenReviewWorkspace}
+                          className="inline-flex h-[42px] items-center justify-center rounded-full bg-white px-5 text-[14px] font-medium text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,.12)] transition hover:text-slate-950"
+                        >
+                          Open workspace
+                        </button>
+                      </>
+                    ) : null}
+
+                    {hasApprovedTruth ? (
+                      <button
+                        type="button"
+                        onClick={onOpenTruth}
+                        className="inline-flex h-[42px] items-center justify-center rounded-full bg-white px-5 text-[14px] font-medium text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,.12)] transition hover:text-slate-950"
+                      >
+                        View approved
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </motion.div>
+            ) : null}
 
             <motion.div
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.24, delay: 0.04 }}
-              className="relative mx-auto mt-10 w-full max-w-[1320px]"
+              className="relative mx-auto mt-8 w-full max-w-[1100px]"
             >
-              {hasStoredReview || hasApprovedTruth ? (
-                <div className="mb-4 rounded-[28px] border border-[rgba(15,23,42,.07)] bg-white/82 px-5 py-4 text-left shadow-[0_16px_34px_-28px_rgba(15,23,42,.12)]">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                        Existing state
-                      </div>
-                      <div className="mt-1 text-[15px] leading-7 text-slate-600">
-                        Start from Entry, or explicitly resume the existing review and approved truth.
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3">
-                      {hasStoredReview ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={onResumeReview}
-                            className="inline-flex h-[44px] items-center justify-center rounded-full bg-white px-5 text-[14px] font-medium text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,.12)] transition hover:text-slate-950"
-                          >
-                            Resume review
-                          </button>
-                          <button
-                            type="button"
-                            onClick={onOpenReviewWorkspace}
-                            className="inline-flex h-[44px] items-center justify-center rounded-full bg-white px-5 text-[14px] font-medium text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,.12)] transition hover:text-slate-950"
-                          >
-                            Open review workspace
-                          </button>
-                        </>
-                      ) : null}
-
-                      {hasApprovedTruth ? (
-                        <button
-                          type="button"
-                          onClick={onOpenTruth}
-                          className="inline-flex h-[44px] items-center justify-center rounded-full bg-white px-5 text-[14px] font-medium text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,.12)] transition hover:text-slate-950"
-                        >
-                          View approved truth
-                        </button>
+              <div className="overflow-hidden rounded-[34px] border border-[rgba(15,23,42,.07)] bg-[linear-gradient(180deg,rgba(255,255,255,.92)_0%,rgba(249,249,250,.86)_100%)] shadow-[0_20px_44px_-30px_rgba(15,23,42,.12)] backdrop-blur-[12px]">
+                <div className="px-6 pb-6 pt-6 sm:px-8 sm:pb-7 sm:pt-7">
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-left">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <TinyPill>
+                        {attachedSourceCount} source
+                        {attachedSourceCount === 1 ? "" : "s"}
+                      </TinyPill>
+                      {hasComposerContent ? (
+                        <TinyPill>Description added</TinyPill>
                       ) : null}
                     </div>
-                  </div>
-                </div>
-              ) : null}
 
-              <div className="relative overflow-hidden rounded-[34px] border border-[rgba(15,23,42,.07)] bg-[linear-gradient(180deg,rgba(255,255,255,.90)_0%,rgba(249,249,250,.84)_100%)] shadow-[0_20px_44px_-30px_rgba(15,23,42,.12)] backdrop-blur-[12px]">
-                <div className="relative px-7 pb-6 pt-7 sm:px-9 sm:pb-7 sm:pt-8">
-                  <div className="relative min-h-[108px] text-left sm:min-h-[118px]">
-                    <textarea
-                      ref={textareaRef}
-                      value={composerValue}
-                      onChange={(e) => handleComposerChange(e.target.value)}
-                      onFocus={() => setIsComposerFocused(true)}
-                      onBlur={() => setIsComposerFocused(false)}
-                      rows={4}
-                      style={TEXTAREA_RESET_STYLE}
-                      className="relative z-10 min-h-[108px] w-full bg-transparent p-0 text-[18px] font-normal leading-[1.8] tracking-[-0.03em] text-slate-900 placeholder:text-transparent outline-none focus:outline-none focus:ring-0 sm:min-h-[118px]"
-                    />
-
-                    {!composerValue ? (
-                      <div className="pointer-events-none absolute inset-0 z-0 text-left">
-                        <div className="max-w-[920px] pr-4 text-[18px] leading-[1.8] tracking-[-0.03em] text-slate-400">
-                          {typingExample}
-                          <motion.span
-                            animate={{ opacity: [0, 1, 0] }}
-                            transition={{
-                              duration: 0.9,
-                              repeat: Infinity,
-                              ease: "linear",
-                            }}
-                            className="ml-[2px] inline-block h-[1.1em] w-[2px] translate-y-[3px] bg-slate-300 align-top"
-                          />
-                        </div>
-                      </div>
+                    {speechSupported ? (
+                      <button
+                        type="button"
+                        onClick={handleVoiceAction}
+                        className={`inline-flex h-[42px] items-center gap-2 rounded-full px-4 text-[14px] font-medium transition ${
+                          isListening
+                            ? "bg-rose-50 text-rose-700"
+                            : "bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,.12)] hover:text-slate-950"
+                        }`}
+                      >
+                        {isListening ? (
+                          <Square className="h-[14px] w-[14px] fill-current" />
+                        ) : (
+                          <Mic className="h-[16px] w-[16px]" />
+                        )}
+                        <span>{isListening ? "Listening..." : "Voice"}</span>
+                      </button>
                     ) : null}
                   </div>
 
-                  <div className="mt-4 border-t border-[rgba(15,23,42,.06)] pt-4">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                      <div className="min-w-0 flex-1 text-left">
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
-                          {VISIBLE_SOURCE_KEYS.map((key) => {
-                            const source = sourceByKey(key);
-                            if (!source) return null;
+                  <div className="mt-5 flex flex-wrap gap-2.5">
+                    {VISIBLE_SOURCE_KEYS.map((key) => {
+                      const source = sourceByKey(key);
+                      if (!source) return null;
 
-                            const record = obj(sourceDrafts[key]);
-                            const attached = !!s(record.value);
-                            const connectedOnly =
-                              key === "instagram" &&
-                              !attached &&
-                              instagramMeta.connected;
+                      const record = obj(sourceDrafts[key]);
+                      const attached = !!s(record.value);
+                      const connectedOnly =
+                        key === "instagram" &&
+                        !attached &&
+                        instagramMeta.connected;
 
-                            return (
-                              <SourceAction
-                                key={key}
-                                source={source}
-                                attached={attached}
-                                connectedOnly={connectedOnly}
-                                onClick={() => openSourceModal(key)}
-                              />
-                            );
-                          })}
-                        </div>
+                      return (
+                        <SourceAction
+                          key={key}
+                          source={source}
+                          attached={attached}
+                          connectedOnly={connectedOnly}
+                          onClick={() => openSourceModal(key)}
+                        />
+                      );
+                    })}
+                  </div>
 
-                        <div className="mt-4 flex flex-wrap items-center gap-4">
-                          <button
-                            type="button"
-                            onClick={handleVoiceAction}
-                            className={`inline-flex h-[48px] items-center gap-3 rounded-full px-5 text-[15px] font-medium tracking-[-0.02em] transition ${
-                              isListening
-                                ? "bg-rose-50 text-rose-700"
-                                : "bg-white text-slate-700 shadow-[0_10px_24px_-18px_rgba(15,23,42,.12)] hover:text-slate-950"
-                            }`}
-                          >
-                            {isListening ? (
-                              <Square className="h-[14px] w-[14px] fill-current" />
-                            ) : (
-                              <Mic className="h-[18px] w-[18px]" />
-                            )}
-                            <span>
-                              {isListening
-                                ? "Listening..."
-                                : speechSupported
-                                ? "Use voice"
-                                : "Voice unavailable"}
-                            </span>
-                          </button>
+                  <div className="mt-5 rounded-[28px] border border-[rgba(15,23,42,.06)] bg-white/70 px-5 py-5 text-left">
+                    <div className="relative min-h-[124px] sm:min-h-[132px]">
+                      <textarea
+                        ref={textareaRef}
+                        value={composerValue}
+                        onChange={(e) => handleComposerChange(e.target.value)}
+                        onFocus={() => setIsComposerFocused(true)}
+                        onBlur={() => setIsComposerFocused(false)}
+                        rows={5}
+                        style={TEXTAREA_RESET_STYLE}
+                        className="relative z-10 min-h-[124px] w-full bg-transparent p-0 text-[17px] font-normal leading-[1.8] tracking-[-0.03em] text-slate-900 placeholder:text-transparent outline-none focus:outline-none focus:ring-0 sm:min-h-[132px]"
+                      />
 
-                          <div className="text-[14px] tracking-[-0.02em] text-slate-400">
-                            {isListening
-                              ? "Describe the business naturally."
-                              : "Write a short business description or attach your sources."}
+                      {!composerValue ? (
+                        <div className="pointer-events-none absolute inset-0 z-0">
+                          <div className="max-w-[860px] pr-4 text-[17px] leading-[1.8] tracking-[-0.03em] text-slate-400">
+                            {typingExample}
+                            <motion.span
+                              animate={{ opacity: [0, 1, 0] }}
+                              transition={{
+                                duration: 0.9,
+                                repeat: Infinity,
+                                ease: "linear",
+                              }}
+                              className="ml-[2px] inline-block h-[1.05em] w-[2px] translate-y-[3px] bg-slate-300 align-top"
+                            />
                           </div>
                         </div>
-
-                        {speechError ? (
-                          <div className="mt-3 text-[14px] text-rose-600">
-                            {speechError}
-                          </div>
-                        ) : null}
-                      </div>
-
-                      <div className="flex shrink-0 items-center justify-end">
-                        <button
-                          type="button"
-                          disabled={!canContinue || importingWebsite}
-                          onClick={handleContinue}
-                          className={`group inline-flex h-[56px] items-center gap-3 rounded-full px-7 text-[16px] font-medium tracking-[-0.03em] transition ${
-                            canContinue && !importingWebsite
-                              ? "bg-slate-950 text-white hover:bg-slate-800"
-                              : "bg-[rgba(15,23,42,.10)] text-white/90"
-                          }`}
-                        >
-                          <span>
-                            {importingWebsite ? "Analyzing..." : "Create draft"}
-                          </span>
-
-                          {importingWebsite ? (
-                            <Loader2 className="h-[17px] w-[17px] animate-spin" />
-                          ) : (
-                            <ArrowRight className="h-[17px] w-[17px] transition-transform duration-200 group-hover:translate-x-[2px]" />
-                          )}
-                        </button>
-                      </div>
+                      ) : null}
                     </div>
+                  </div>
+
+                  {speechError ? (
+                    <div className="mt-3 text-left text-[13px] text-rose-600">
+                      {speechError}
+                    </div>
+                  ) : null}
+
+                  <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-left text-[14px] text-slate-500">
+                      Keep it short. One or two lines is enough.
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={!canContinue || importingWebsite}
+                      onClick={handleContinue}
+                      className={`group inline-flex h-[54px] items-center gap-3 rounded-full px-7 text-[15px] font-medium tracking-[-0.03em] transition ${
+                        canContinue && !importingWebsite
+                          ? "bg-slate-950 text-white hover:bg-slate-800"
+                          : "bg-[rgba(15,23,42,.10)] text-white/90"
+                      }`}
+                    >
+                      <span>
+                        {importingWebsite ? "Analyzing..." : "Create draft"}
+                      </span>
+
+                      {importingWebsite ? (
+                        <Loader2 className="h-[17px] w-[17px] animate-spin" />
+                      ) : (
+                        <ArrowRight className="h-[17px] w-[17px] transition-transform duration-200 group-hover:translate-x-[2px]" />
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>

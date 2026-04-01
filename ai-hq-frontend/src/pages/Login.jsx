@@ -18,6 +18,8 @@ import { clearAppSessionContext, getAppAuthContext } from "../lib/appSession.js"
 import {
   WORKSPACE_SELECTION_ROUTE,
   hasMultipleWorkspaceChoices,
+  resolveAuthenticatedLanding,
+  resolveWorkspaceContractRoute,
 } from "../lib/appEntry.js";
 import googleIconSrc from "../assets/setup-studio/channels/google.svg";
 import appleIconSrc from "../assets/setup-studio/channels/apple.svg";
@@ -142,17 +144,11 @@ function normalizeAccountChoices(error) {
   return Array.isArray(accounts) ? accounts : [];
 }
 
-function resolvePostAuthTarget(payload = {}) {
-  const destination =
-    payload?.destination || payload?.workspace?.destination || {};
-  const target = s(
-    destination?.path ||
-      payload?.workspace?.routeHint ||
-      payload?.workspace?.nextRoute ||
-      payload?.nextRoute
-  );
-
-  return target || "/workspace";
+function resolvePostAuthTarget({ auth = {}, payload = {} } = {}) {
+  return resolveAuthenticatedLanding({
+    auth,
+    bootstrap: payload,
+  });
 }
 
 function InputResetStyles() {
@@ -428,7 +424,8 @@ function VideoColumn() {
     >
       <video
         ref={videoRef}
-        className="h-full w-full object-cover"
+        className="absolute inset-0 h-full w-full object-cover object-top"
+        style={{ objectPosition: "center top" }}
         src={STUDIO_PREVIEW_VIDEO}
         muted
         loop
@@ -537,8 +534,25 @@ export default function Login() {
     if (sessionActionBusy) return;
 
     setSessionActionBusy(true);
+
     try {
-      navigate(redirectTo === "/login" ? "/" : redirectTo, { replace: true });
+      const auth = await getAppAuthContext({ force: true });
+      const target = resolveAuthenticatedLanding({
+        auth,
+        bootstrap: auth,
+      });
+
+      navigate(target, { replace: true });
+    } catch (sessionError) {
+      setServiceNotice({
+        visible: true,
+        title: "Session check failed",
+        body: getFriendlyError(
+          sessionError,
+          "We could not resolve the correct entry route."
+        ),
+        tone: "warning",
+      });
     } finally {
       setSessionActionBusy(false);
     }
@@ -641,19 +655,28 @@ export default function Login() {
       clearAppSessionContext();
 
       if (usingInlineWorkspaceSelection) {
-        navigate(resolvePostAuthTarget(response), { replace: true });
+        navigate(resolveWorkspaceContractRoute(response), { replace: true });
         return;
       }
 
+      let auth = null;
+
       try {
-        const auth = await getAppAuthContext({ force: true });
+        auth = await getAppAuthContext({ force: true });
+
         if (hasMultipleWorkspaceChoices(auth)) {
           navigate(WORKSPACE_SELECTION_ROUTE, { replace: true });
           return;
         }
       } catch {}
 
-      navigate(resolvePostAuthTarget(response), { replace: true });
+      navigate(
+        resolvePostAuthTarget({
+          auth,
+          payload: response,
+        }),
+        { replace: true }
+      );
     } catch (submitError) {
       if (isServiceUnavailableError(submitError)) {
         setServiceNotice({

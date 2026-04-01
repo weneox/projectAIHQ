@@ -6,9 +6,7 @@ import { TinyChip, TinyLabel } from "./components/SetupStudioUi.jsx";
 
 import SetupStudioEntryStage from "./stages/SetupStudioEntryStage.jsx";
 import SetupStudioScanningStage from "./stages/SetupStudioScanningStage.jsx";
-import SetupStudioIdentityStage from "./stages/SetupStudioIdentityStage.jsx";
-import SetupStudioKnowledgeStage from "./stages/SetupStudioKnowledgeStage.jsx";
-import SetupStudioServiceStage from "./stages/SetupStudioServiceStage.jsx";
+import SetupStudioReviewStage from "./stages/SetupStudioReviewStage.jsx";
 import SetupStudioReadyStage from "./stages/SetupStudioReadyStage.jsx";
 import SetupStudioReviewWorkspaceDialog, {
   SetupStudioReviewSyncBanner,
@@ -39,7 +37,9 @@ export default function SetupStudioScene({
     showKnowledge,
     error,
   } = obj(status);
+
   const { businessForm, discoveryForm, manualSections } = obj(forms);
+
   const {
     discoveryState,
     currentReview,
@@ -50,6 +50,7 @@ export default function SetupStudioScene({
     hasStoredReview = false,
     hasApprovedTruth = false,
   } = obj(review);
+
   const {
     currentTitle,
     currentDescription,
@@ -63,6 +64,7 @@ export default function SetupStudioScene({
     visibleKnowledgeCount = 0,
     visibleServiceCount = 0,
   } = obj(content);
+
   const {
     setBusinessField: onSetBusinessField,
     setManualSection: onSetManualSection,
@@ -80,6 +82,7 @@ export default function SetupStudioScene({
     toggleRefine: onToggleRefine,
     toggleKnowledge: onToggleKnowledge,
   } = obj(actions);
+
   const stageFlow = useSetupStudioStageFlow({
     importingWebsite,
     discoveryMode: discoveryState?.mode,
@@ -99,6 +102,7 @@ export default function SetupStudioScene({
     onContinueFlow,
     onResumeReview,
   });
+
   const sceneView = useSetupStudioSceneView({
     discoveryState,
     discoveryModeLabel,
@@ -166,7 +170,7 @@ export default function SetupStudioScene({
             <div className="flex flex-wrap items-center gap-2">
               <TinyLabel>Setup Studio</TinyLabel>
               <TinyChip>
-                {sceneView.sourceLabel ? sceneView.sourceLabel : "Draft flow"}
+                {sceneView.sourceLabel ? sceneView.sourceLabel : "Source draft"}
               </TinyChip>
             </div>
 
@@ -204,9 +208,10 @@ export default function SetupStudioScene({
               />
             ) : null}
 
-            {stageFlow.stage === "identity" ? (
-              <SetupStudioIdentityStage
-                key="identity"
+            {stageFlow.stage === "review" ? (
+              <SetupStudioReviewStage
+                key="review"
+                meta={meta}
                 currentTitle={currentTitle}
                 currentDescription={currentDescription}
                 discoveryProfileRows={discoveryProfileRows}
@@ -214,38 +219,20 @@ export default function SetupStudioScene({
                 honestySummary={sceneView.honestySummary}
                 sourceLabel={sceneView.sourceLabel}
                 reviewSources={reviewSources}
-                onNext={stageFlow.goNextFromIdentity}
-                onToggleRefine={onToggleRefine}
-              />
-            ) : null}
-
-            {stageFlow.stage === "knowledge" ? (
-              <SetupStudioKnowledgeStage
-                key="knowledge"
+                reviewEvents={reviewEvents}
                 knowledgePreview={knowledgePreview}
                 knowledgeItems={knowledgeItems}
                 actingKnowledgeId={actingKnowledgeId}
-                sourceLabel={sceneView.sourceLabel}
-                warnings={sceneView.discoveryWarnings}
-                honestySummary={sceneView.honestySummary}
-                onApproveKnowledge={onApproveKnowledge}
-                onRejectKnowledge={onRejectKnowledge}
-                onNext={stageFlow.goNextFromKnowledge}
-                onToggleKnowledge={onToggleKnowledge}
-              />
-            ) : null}
-
-            {stageFlow.stage === "service" ? (
-              <SetupStudioServiceStage
-                key="service"
+                showKnowledge={showKnowledge}
                 serviceSuggestionTitle={serviceSuggestionTitle}
-                meta={meta}
                 services={services}
                 savingServiceSuggestion={savingServiceSuggestion}
-                onCreateSeed={async () => {
-                  await onCreateSuggestedService?.();
-                }}
-                onSkip={stageFlow.goNextFromService}
+                onApproveKnowledge={onApproveKnowledge}
+                onRejectKnowledge={onRejectKnowledge}
+                onCreateSuggestedService={onCreateSuggestedService}
+                onToggleKnowledge={onToggleKnowledge}
+                onToggleRefine={onToggleRefine}
+                onNext={stageFlow.goNextFromReview}
               />
             ) : null}
 
