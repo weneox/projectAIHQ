@@ -32,7 +32,7 @@ export default function UserRouteGuard({ children }) {
         setState({
           loading: false,
           ok: true,
-          redirectTo: isSetupPath(location.pathname) ? "/workspace" : "",
+          redirectTo: "",
           failed: false,
         });
         return;

@@ -65,13 +65,13 @@ export default function App() {
   const localWorkspaceEntry = isLocalWorkspaceEntryEnabled();
 
   const setupEntryElement = localWorkspaceEntry ? (
-    <Navigate to="/workspace" replace />
+    withSuspense(<SetupStudioRoute />)
   ) : (
     <UserRouteGuard>{withSuspense(<SetupStudioRoute />)}</UserRouteGuard>
   );
 
   const setupRedirectElement = localWorkspaceEntry ? (
-    <Navigate to="/workspace" replace />
+    <Navigate to="/setup/studio" replace />
   ) : (
     <UserRouteGuard>
       <Navigate to="/setup/studio" replace />

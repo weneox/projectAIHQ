@@ -1,10 +1,12 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { Outlet } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const isLocalWorkspaceEntryEnabled = vi.fn();
 
 vi.mock("./lib/appEntry.js", () => ({
   INTERNAL_ONLY_APP_ROUTES: ["/command-demo", "/analytics", "/agents", "/threads"],
-  isForcedWorkspaceEntryEnabled: () => false,
+  isLocalWorkspaceEntryEnabled: (...args) => isLocalWorkspaceEntryEnabled(...args),
 }));
 
 vi.mock("./components/layout/Shell.jsx", () => ({
@@ -117,6 +119,10 @@ afterEach(() => {
 });
 
 describe("App primary product route smoke", () => {
+  beforeEach(() => {
+    isLocalWorkspaceEntryEnabled.mockReturnValue(false);
+  });
+
   it.each([
     ["/", "App Entry Redirect"],
     ["/workspace", "Workspace Page"],
@@ -150,5 +156,14 @@ describe("App primary product route smoke", () => {
     window.history.pushState({}, "", path);
     render(<App />);
     expect(await screen.findByText("Workspace Page")).toBeInTheDocument();
+  });
+
+  it("keeps setup studio reachable when local workspace entry is enabled", async () => {
+    isLocalWorkspaceEntryEnabled.mockReturnValue(true);
+    window.history.pushState({}, "", "/setup/studio");
+
+    render(<App />);
+
+    expect(await screen.findByText("Setup Studio Route")).toBeInTheDocument();
   });
 });

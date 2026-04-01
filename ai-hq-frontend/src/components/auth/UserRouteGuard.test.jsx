@@ -74,6 +74,26 @@ describe("UserRouteGuard", () => {
     expect(getAppBootstrapContext).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps setup routes reachable when local workspace entry mode is enabled", async () => {
+    isLocalWorkspaceEntryEnabled.mockReturnValue(true);
+
+    render(
+      <MemoryRouter initialEntries={["/setup/studio"]}>
+        <UserRouteGuard>
+          <div>Local setup route</div>
+        </UserRouteGuard>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Local setup route")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId("navigate")).not.toBeInTheDocument();
+    expect(getAppAuthContext).not.toHaveBeenCalled();
+    expect(getAppBootstrapContext).not.toHaveBeenCalled();
+  });
+
   it("redirects unauthenticated users to login", async () => {
     getAppAuthContext.mockResolvedValue({ authenticated: false });
 
