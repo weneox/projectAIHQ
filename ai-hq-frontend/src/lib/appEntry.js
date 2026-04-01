@@ -6,6 +6,16 @@ function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function normalizeSetupRoute(target = "") {
+  const value = s(target);
+
+  if (!value) return "/setup/studio";
+  if (value === "/setup") return "/setup/studio";
+  if (value.startsWith("/setup/")) return "/setup/studio";
+
+  return value;
+}
+
 export const CORE_APP_ROUTES = Object.freeze([
   "/workspace",
   "/truth",
@@ -55,29 +65,49 @@ export function isInternalOnlyPath(path = "") {
   return INTERNAL_ONLY_ROUTE_SET.has(next);
 }
 
+export function getCanonicalWorkspaceContract(payload = {}) {
+  const root = obj(payload);
+  const workspace = obj(root.workspace);
+  const destination = obj(root.destination || workspace.destination);
+
+  return {
+    setupCompleted: !!(
+      workspace.setupCompleted ??
+      workspace.workspaceReady ??
+      false
+    ),
+    setupRequired: !!(workspace.setupRequired ?? !workspace.workspaceReady),
+    workspaceReady: !!(
+      workspace.workspaceReady ??
+      workspace.setupCompleted ??
+      false
+    ),
+    destination,
+    routeHint: s(workspace.routeHint || destination.path),
+    nextRoute: s(
+      destination.path ||
+      workspace.routeHint ||
+      workspace.nextRoute ||
+      "/workspace"
+    ),
+    nextSetupRoute: normalizeSetupRoute(
+      workspace.nextSetupRoute ||
+        destination.path ||
+        workspace.routeHint ||
+        "/setup/studio"
+    ),
+  };
+}
+
 export function resolveAuthenticatedLanding(bootstrap = {}) {
   if (isLocalWorkspaceEntryEnabled()) {
     return "/workspace";
   }
 
-  const root = obj(bootstrap);
-  const workspace = obj(root.workspace);
-  const setup = obj(root.setup);
-  const progress = obj(setup.progress || workspace.progress || workspace);
-  const destination = obj(root.destination || workspace.destination);
-
-  const setupCompleted = !!(
-    progress.setupCompleted ??
-    workspace.setupCompleted ??
-    false
-  );
-
-  const nextRoute = s(
-    destination.path || progress.nextRoute || workspace.nextRoute || "/"
-  );
-  const nextSetupRoute = s(
-    progress.nextSetupRoute || workspace.nextSetupRoute || "/setup/studio"
-  );
+  const workspace = getCanonicalWorkspaceContract(bootstrap);
+  const setupCompleted = workspace.workspaceReady;
+  const nextRoute = s(workspace.nextRoute || "/workspace");
+  const nextSetupRoute = workspace.nextSetupRoute;
 
   if (!setupCompleted) {
     return isSetupPath(nextSetupRoute) ? nextSetupRoute : "/setup/studio";

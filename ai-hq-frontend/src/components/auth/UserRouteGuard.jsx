@@ -1,23 +1,15 @@
 import { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { isLocalWorkspaceEntryEnabled } from "../../lib/appEntry.js";
+import {
+  getCanonicalWorkspaceContract,
+  isLocalWorkspaceEntryEnabled,
+} from "../../lib/appEntry.js";
 import { getAppAuthContext, getAppBootstrapContext } from "../../lib/appSession.js";
 import AppBootSurface from "../loading/AppBootSurface.jsx";
 
 function isSetupPath(pathname = "") {
   return pathname === "/setup" || pathname.startsWith("/setup/");
 }
-
-function normalizeSetupRoute(target = "") {
-  const value = String(target || "").trim();
-
-  if (!value) return "/setup/studio";
-  if (value === "/setup") return "/setup/studio";
-  if (value.startsWith("/setup/")) return "/setup/studio";
-
-  return value;
-}
-
 export default function UserRouteGuard({ children }) {
   const location = useLocation();
   const localWorkspaceEntry = isLocalWorkspaceEntryEnabled();
@@ -60,17 +52,9 @@ export default function UserRouteGuard({ children }) {
         const bootstrap = await getAppBootstrapContext();
         if (!alive) return;
 
-        const setupCompleted = !!(
-          bootstrap?.workspace?.setupCompleted ??
-          bootstrap?.workspace?.workspaceReady ??
-          false
-        );
-        const setupRoute =
-          normalizeSetupRoute(
-            bootstrap?.workspace?.destination?.path ||
-              bootstrap?.workspace?.nextSetupRoute ||
-              "/setup/studio"
-          ) || "/setup/studio";
+        const workspace = getCanonicalWorkspaceContract(bootstrap);
+        const setupCompleted = workspace.workspaceReady;
+        const setupRoute = workspace.nextSetupRoute || "/setup/studio";
 
         const onSetup = isSetupPath(location.pathname);
         let redirectTo = "";
@@ -81,7 +65,7 @@ export default function UserRouteGuard({ children }) {
           redirectTo = "/workspace";
         } else if (
           location.pathname === "/setup" ||
-          (onSetup && location.pathname !== normalizeSetupRoute(location.pathname))
+          (onSetup && location.pathname !== setupRoute)
         ) {
           redirectTo = setupRoute;
         }

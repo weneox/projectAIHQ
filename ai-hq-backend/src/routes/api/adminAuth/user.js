@@ -20,7 +20,10 @@ import {
 } from "../../../utils/adminAuth.js";
 import { cfg } from "../../../config.js";
 import { s, lower, getIp, setNoStore, isDbTimeoutError } from "./utils.js";
-import { loadPostAuthWorkspaceState } from "../../../services/workspace/postAuth.js";
+import {
+  buildWorkspaceAccessSummary,
+  loadActiveWorkspaceContract,
+} from "../../../services/workspace/activeWorkspace.js";
 import {
   findAuthIdentityForLogin,
   listIdentityMembershipChoicesForLogin,
@@ -105,27 +108,24 @@ async function enrichMembershipChoices(
 
 function buildMembershipChoice(choice = {}) {
   return {
-    selectionToken: createUserLoginSelectionToken({
-      identity_id: choice.identity_id,
-      membership_id: choice.membership_id,
-      userId: choice.legacy_user_id,
-      tenant_id: choice.tenant_id,
-      tenant_key: choice.tenant_key,
-      user_email: choice.identity_email,
+    ...buildWorkspaceAccessSummary({
+      workspace: choice.workspace,
+      membershipId: choice.membership_id,
+      tenantId: choice.tenant_id,
+      tenantKey: choice.tenant_key,
+      companyName: choice.company_name,
+      role: choice.role,
+      selectionToken: createUserLoginSelectionToken({
+        identity_id: choice.identity_id,
+        membership_id: choice.membership_id,
+        userId: choice.legacy_user_id,
+        tenant_id: choice.tenant_id,
+        tenant_key: choice.tenant_key,
+        user_email: choice.identity_email,
+      }),
     }),
-    membershipId: choice.membership_id,
-    tenantId: choice.tenant_id,
-    tenantKey: choice.tenant_key,
-    companyName: choice.company_name,
     email: choice.identity_email,
-    role: choice.role,
     status: choice.status,
-    setupRequired: !!choice.workspace?.setupRequired,
-    workspaceReady: !!choice.workspace?.workspaceReady,
-    routeHint: s(choice.workspace?.routeHint),
-    destination: choice.workspace?.destination || null,
-    readinessLabel: s(choice.workspace?.readinessLabel),
-    activeSetupSessionId: s(choice.workspace?.activeSetupSessionId),
   };
 }
 
@@ -224,7 +224,7 @@ async function finalizeWorkspaceLogin({
   });
 }
 
-export function userLoginRoutes({ db, resolveWorkspaceState = loadPostAuthWorkspaceState } = {}) {
+export function userLoginRoutes({ db, resolveWorkspaceState = loadActiveWorkspaceContract } = {}) {
   const r = express.Router();
 
   async function authenticateIdentityRequest(req, res) {

@@ -499,6 +499,9 @@ test("single identity + one membership logs in successfully", async () => {
   assert.equal(login.res.body?.user?.identityId, "identity-1");
   assert.equal(login.res.body?.user?.membershipId, "membership-1");
   assert.equal(login.res.body?.user?.tenantKey, "acme");
+  assert.equal(login.res.body?.workspace?.setupCompleted, true);
+  assert.equal(login.res.body?.workspace?.workspaceReady, true);
+  assert.equal(login.res.body?.workspace?.routeHint, "/workspace");
   assert.equal(login.res.body?.destination?.path, "/workspace");
 
   const sessionCookie = login.res.cookies.find((cookie) => cookie.name === "aihq_user");
@@ -539,7 +542,9 @@ test("single workspace with setup incomplete returns setup destination", async (
   });
 
   assert.equal(login.res.statusCode, 200);
+  assert.equal(login.res.body?.workspace?.setupCompleted, false);
   assert.equal(login.res.body?.workspace?.setupRequired, true);
+  assert.equal(login.res.body?.workspace?.workspaceReady, false);
   assert.equal(login.res.body?.destination?.path, "/setup/studio");
 });
 
@@ -667,6 +672,8 @@ test("workspace selection endpoint completes login with per-workspace destinatio
 
   assert.equal(login.res.statusCode, 200);
   assert.equal(login.res.body?.user?.tenantKey, "globex");
+  assert.equal(login.res.body?.workspace?.setupRequired, true);
+  assert.equal(login.res.body?.workspace?.workspaceReady, false);
   assert.equal(login.res.body?.destination?.path, "/setup/studio");
 });
 
@@ -954,7 +961,9 @@ test("auth me loads canonical active workspace state and available workspaces", 
   assert.equal(me.res.body?.membership?.id, "membership-1");
   assert.equal(me.res.body?.workspace?.tenantKey, "dental");
   assert.equal(me.res.body?.workspace?.active, true);
+  assert.equal(me.res.body?.workspace?.setupCompleted, true);
   assert.equal(me.res.body?.workspace?.workspaceReady, true);
+  assert.equal(me.res.body?.workspace?.routeHint, "/workspace");
   assert.equal(me.res.body?.workspaces?.length, 2);
   assert.ok(me.res.body?.workspaces?.every((workspace) => workspace.switchToken));
 });
@@ -1037,6 +1046,9 @@ test("workspace switch updates the canonical active workspace and preserves it a
 
   assert.equal(switched.res.statusCode, 200);
   assert.equal(switched.res.body?.user?.tenantKey, "hotel");
+  assert.equal(switched.res.body?.workspace?.setupCompleted, false);
+  assert.equal(switched.res.body?.workspace?.setupRequired, true);
+  assert.equal(switched.res.body?.workspace?.workspaceReady, false);
   assert.equal(switched.res.body?.destination?.path, "/setup/studio");
 
   const meAfter = await invokeRoute(sessionRouter, "get", "/auth/me", {

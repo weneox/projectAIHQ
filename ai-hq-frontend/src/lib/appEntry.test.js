@@ -23,10 +23,11 @@ describe("resolveAuthenticatedLanding", () => {
   it("routes incomplete workspaces into setup studio", () => {
     const target = resolveAuthenticatedLanding({
       workspace: {
-        progress: {
-          setupCompleted: false,
-          nextSetupRoute: "/setup/studio",
-        },
+        setupCompleted: false,
+        setupRequired: true,
+        workspaceReady: false,
+        nextSetupRoute: "/setup/studio",
+        destination: { path: "/setup/studio" },
       },
     });
 
@@ -36,10 +37,10 @@ describe("resolveAuthenticatedLanding", () => {
   it("routes completed workspaces into backend-provided core route", () => {
     const target = resolveAuthenticatedLanding({
       workspace: {
-        progress: {
-          setupCompleted: true,
-          nextRoute: "/settings",
-        },
+        setupCompleted: true,
+        workspaceReady: true,
+        routeHint: "/settings",
+        destination: { path: "/settings" },
       },
     });
 
@@ -50,6 +51,8 @@ describe("resolveAuthenticatedLanding", () => {
     const target = resolveAuthenticatedLanding({
       workspace: {
         setupCompleted: false,
+        setupRequired: true,
+        workspaceReady: false,
         destination: {
           path: "/setup/studio",
         },
@@ -62,10 +65,9 @@ describe("resolveAuthenticatedLanding", () => {
   it("falls back to workspace when completed workspace points at non-product root", () => {
     const target = resolveAuthenticatedLanding({
       workspace: {
-        progress: {
-          setupCompleted: true,
-          nextRoute: "/",
-        },
+        setupCompleted: true,
+        workspaceReady: true,
+        routeHint: "/",
       },
     });
 
@@ -75,10 +77,9 @@ describe("resolveAuthenticatedLanding", () => {
   it("refuses internal-only routes as authenticated landing targets", () => {
     const target = resolveAuthenticatedLanding({
       workspace: {
-        progress: {
-          setupCompleted: true,
-          nextRoute: "/analytics",
-        },
+        setupCompleted: true,
+        workspaceReady: true,
+        routeHint: "/analytics",
       },
     });
 
@@ -117,10 +118,9 @@ describe("resolveAuthenticatedLanding", () => {
   it("falls back to truth when backend points a completed workspace at operator-only surfaces", () => {
     const target = resolveAuthenticatedLanding({
       workspace: {
-        progress: {
-          setupCompleted: true,
-          nextRoute: "/incidents",
-        },
+        setupCompleted: true,
+        workspaceReady: true,
+        routeHint: "/incidents",
       },
     });
 
@@ -130,9 +130,8 @@ describe("resolveAuthenticatedLanding", () => {
   it("promotes workspace as the default completed landing when no better core route is provided", () => {
     const target = resolveAuthenticatedLanding({
       workspace: {
-        progress: {
-          setupCompleted: true,
-        },
+        setupCompleted: true,
+        workspaceReady: true,
       },
     });
 
@@ -142,13 +141,26 @@ describe("resolveAuthenticatedLanding", () => {
   it("accepts expert as a first-class authenticated route", () => {
     const target = resolveAuthenticatedLanding({
       workspace: {
-        progress: {
-          setupCompleted: true,
-          nextRoute: "/expert",
-        },
+        setupCompleted: true,
+        workspaceReady: true,
+        routeHint: "/expert",
       },
     });
 
     expect(target).toBe("/expert");
+  });
+
+  it("trusts the canonical backend setup route for incomplete workspaces", () => {
+    const target = resolveAuthenticatedLanding({
+      workspace: {
+        setupCompleted: false,
+        setupRequired: true,
+        workspaceReady: false,
+        routeHint: "/setup/studio",
+        nextSetupRoute: "/setup/studio",
+      },
+    });
+
+    expect(target).toBe("/setup/studio");
   });
 });

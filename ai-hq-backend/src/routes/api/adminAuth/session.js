@@ -11,7 +11,10 @@ import { cfg } from "../../../config.js";
 import { requireSafeDiagnostics } from "../../../utils/securitySurface.js";
 import { issueRealtimeTicket } from "../../../realtime/auth.js";
 import { listIdentityMembershipChoicesForLogin, findLegacyTenantUserForIdentityLogin } from "./repository.js";
-import { loadPostAuthWorkspaceState } from "../../../services/workspace/postAuth.js";
+import {
+  buildWorkspaceAccessSummary,
+  loadActiveWorkspaceContract,
+} from "../../../services/workspace/activeWorkspace.js";
 import {
   setNoStore,
   checkDb,
@@ -62,16 +65,15 @@ function buildCanonicalWorkspaceChoice(choice = {}) {
   const membershipId = s(choice.membership_id || choice.id);
 
   return {
-    membershipId,
-    tenantId: s(choice.tenant_id),
-    tenantKey: s(choice.tenant_key).toLowerCase(),
-    companyName: s(choice.company_name),
-    role: s(choice.role || "member").toLowerCase(),
-    setupRequired: !!choice.workspace?.setupRequired,
-    workspaceReady: !!choice.workspace?.workspaceReady,
-    routeHint: s(choice.workspace?.routeHint),
-    destination: choice.workspace?.destination || null,
-    active: !!choice.active,
+    ...buildWorkspaceAccessSummary({
+      workspace: choice.workspace,
+      membershipId,
+      tenantId: choice.tenant_id,
+      tenantKey: choice.tenant_key,
+      companyName: choice.company_name,
+      role: choice.role,
+      active: !!choice.active,
+    }),
     switchToken: createUserWorkspaceSwitchToken({
       identityId: choice.identity_id,
       membershipId,
@@ -128,7 +130,7 @@ async function loadSessionWorkspaceChoices(db, sessionPayload, req, resolveWorks
 export function adminSessionRoutes({
   db,
   wsHub,
-  resolveWorkspaceState = loadPostAuthWorkspaceState,
+  resolveWorkspaceState = loadActiveWorkspaceContract,
 } = {}) {
   const r = express.Router();
 
@@ -249,10 +251,14 @@ export function adminSessionRoutes({
         tenantKey: userSession.payload?.tenantKey || null,
         companyName: userSession.payload?.companyName || "",
         role: userSession.payload?.role || "member",
+        setupCompleted: true,
         setupRequired: false,
         workspaceReady: true,
         routeHint: "/workspace",
         destination: { kind: "workspace", path: "/workspace" },
+        readinessScore: 100,
+        readinessLabel: "ready",
+        activeSetupSessionId: "",
         active: true,
       };
 

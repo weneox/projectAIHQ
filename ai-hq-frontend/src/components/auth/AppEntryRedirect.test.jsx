@@ -35,7 +35,7 @@ describe("AppEntryRedirect", () => {
 
   it("uses shared bootstrap context to resolve the authenticated landing route", async () => {
     getAppBootstrapContext.mockResolvedValue({
-      workspace: { setupCompleted: true, nextRoute: "/workspace" },
+      workspace: { setupCompleted: true, workspaceReady: true, routeHint: "/workspace" },
     });
 
     render(

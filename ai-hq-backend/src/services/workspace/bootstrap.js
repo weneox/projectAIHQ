@@ -1,10 +1,9 @@
 // src/services/workspace/bootstrap.js
 // FINAL v1.0 — app bootstrap payload
 
-import { arr, lower, obj, s } from "./shared.js";
+import { lower, obj, s } from "./shared.js";
 import { getRowsFromFirstTable } from "./db.js";
-import { getWorkspaceReadiness } from "./readiness.js";
-import { buildPostAuthWorkspaceStateFromReadiness } from "./postAuth.js";
+import { resolveAuthenticatedWorkspaceState } from "./activeWorkspace.js";
 
 const THREAD_TABLES = ["inbox_threads", "threads"];
 const COMMENT_TABLES = ["comments"];
@@ -96,30 +95,25 @@ export async function buildAppBootstrap({
   tenant,
   tenantId,
   tenantKey,
+  resolveWorkspaceState = resolveAuthenticatedWorkspaceState,
+  loadOperationalCounts = getOperationalCounts,
 }) {
   const safeUser = extractUser(obj(user));
   const safeTenant = extractTenant(obj(tenant), tenantKey, tenantId);
 
-  const readiness = await getWorkspaceReadiness({
+  const { workspace: workspaceState, readiness } =
+    await resolveWorkspaceState({
+    db,
+      tenantId: safeTenant.id,
+      tenantKey: safeTenant.key,
+      role: safeUser.role,
+      tenant: safeTenant,
+    });
+
+  const counts = await loadOperationalCounts({
     db,
     tenantId: safeTenant.id,
     tenantKey: safeTenant.key,
-    role: safeUser.role,
-    tenant: safeTenant,
-  });
-
-  const counts = await getOperationalCounts({
-    db,
-    tenantId: safeTenant.id,
-    tenantKey: safeTenant.key,
-  });
-
-  const workspaceState = buildPostAuthWorkspaceStateFromReadiness({
-    readiness,
-    tenant: safeTenant,
-    tenantId: safeTenant.id,
-    tenantKey: safeTenant.key,
-    role: safeUser.role,
   });
 
   return {
@@ -127,15 +121,7 @@ export async function buildAppBootstrap({
     tenant: safeTenant,
     workspace: {
       ...workspaceState,
-      setupCompleted: readiness.setupCompleted,
-      setupRequired: workspaceState.setupRequired,
-      workspaceReady: workspaceState.workspaceReady,
-      readinessScore: readiness.readinessScore,
-      readinessLabel: readiness.readinessLabel,
-      missingSteps: arr(readiness.missingSteps),
-      primaryMissingStep: s(readiness.primaryMissingStep),
-      nextRoute: s(workspaceState.routeHint || readiness.nextRoute || "/workspace"),
-      nextSetupRoute: s(readiness.nextSetupRoute),
+      nextRoute: s(workspaceState.routeHint || "/workspace"),
       checks: obj(readiness.checks),
     },
     counts,
@@ -148,7 +134,7 @@ export async function buildAppBootstrap({
     },
     navigation: {
       initialRoute: s(workspaceState.routeHint || "/workspace"),
-      setupRoute: s(readiness.nextSetupRoute || "/setup"),
+      setupRoute: s(workspaceState.nextSetupRoute || "/setup/studio"),
     },
   };
 }

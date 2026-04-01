@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const getAppAuthContext = vi.fn();
 const getAppBootstrapContext = vi.fn();
 const isLocalWorkspaceEntryEnabled = vi.fn();
+const getCanonicalWorkspaceContract = vi.fn();
 
 vi.mock("../../lib/appSession.js", () => ({
   getAppAuthContext: (...args) => getAppAuthContext(...args),
@@ -13,6 +14,7 @@ vi.mock("../../lib/appSession.js", () => ({
 
 vi.mock("../../lib/appEntry.js", () => ({
   isLocalWorkspaceEntryEnabled: (...args) => isLocalWorkspaceEntryEnabled(...args),
+  getCanonicalWorkspaceContract: (...args) => getCanonicalWorkspaceContract(...args),
 }));
 
 vi.mock("../loading/AppBootSurface.jsx", () => ({
@@ -38,9 +40,11 @@ describe("UserRouteGuard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     isLocalWorkspaceEntryEnabled.mockReturnValue(false);
+    getCanonicalWorkspaceContract.mockImplementation((payload) => payload?.workspace || {});
     getAppBootstrapContext.mockResolvedValue({
       workspace: {
         setupCompleted: true,
+        workspaceReady: true,
         destination: { path: "/workspace" },
       },
     });
@@ -112,6 +116,8 @@ describe("UserRouteGuard", () => {
     getAppBootstrapContext.mockResolvedValue({
       workspace: {
         setupCompleted: false,
+        setupRequired: true,
+        workspaceReady: false,
         destination: { path: "/setup/studio" },
       },
     });
@@ -137,6 +143,7 @@ describe("UserRouteGuard", () => {
     getAppBootstrapContext.mockResolvedValue({
       workspace: {
         setupCompleted: true,
+        workspaceReady: true,
         destination: { path: "/workspace" },
       },
     });
@@ -151,6 +158,34 @@ describe("UserRouteGuard", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("navigate")).toHaveTextContent("/workspace");
+    });
+  });
+
+  it("trusts the canonical setup route from the backend contract", async () => {
+    getAppAuthContext.mockResolvedValue({
+      authenticated: true,
+      user: { email: "owner@acme.test" },
+    });
+    getAppBootstrapContext.mockResolvedValue({
+      workspace: {
+        setupCompleted: false,
+        setupRequired: true,
+        workspaceReady: false,
+        routeHint: "/setup/studio",
+        nextSetupRoute: "/setup/studio",
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/workspace"]}>
+        <UserRouteGuard>
+          <div>Protected workspace</div>
+        </UserRouteGuard>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("navigate")).toHaveTextContent("/setup/studio");
     });
   });
 });

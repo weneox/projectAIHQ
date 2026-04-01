@@ -3,7 +3,7 @@
 
 import { arr, obj, s } from "./shared.js";
 import { getWorkspaceReadiness } from "./readiness.js";
-import { buildPostAuthWorkspaceStateFromReadiness } from "./postAuth.js";
+import { buildActiveWorkspaceContract } from "./activeWorkspace.js";
 
 function pluralize(count, one, many) {
   return `${count} ${count === 1 ? one : many}`;
@@ -126,7 +126,7 @@ export async function buildSetupStatus({
     tenant,
   });
 
-  const workspaceState = buildPostAuthWorkspaceStateFromReadiness({
+  const workspaceState = buildActiveWorkspaceContract({
     readiness,
     tenant,
     tenantId,
