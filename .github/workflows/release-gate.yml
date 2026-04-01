@@ -74,10 +74,12 @@ jobs:
         run: |
           $contractsJunit = Test-Path "ai-hq-frontend/test-results/frontend-contracts.junit.xml"
           $smokeHooksJunit = Test-Path "ai-hq-frontend/test-results/frontend-smoke-hooks.junit.xml"
-          $smokeUiJunit = Test-Path "ai-hq-frontend/test-results/frontend-smoke-ui.junit.xml"
+          $smokeUiJunitFiles = Get-ChildItem -Path "ai-hq-frontend/test-results" -Filter "frontend-smoke-ui-*.junit.xml" -ErrorAction SilentlyContinue
+          $smokeUiJunit = @($smokeUiJunitFiles).Count -gt 0
           $contractsJson = Test-Path "ai-hq-frontend/test-results/frontend-contracts.json"
           $smokeHooksJson = Test-Path "ai-hq-frontend/test-results/frontend-smoke-hooks.json"
-          $smokeUiJson = Test-Path "ai-hq-frontend/test-results/frontend-smoke-ui.json"
+          $smokeUiJsonFiles = Get-ChildItem -Path "ai-hq-frontend/test-results" -Filter "frontend-smoke-ui-*.json" -ErrorAction SilentlyContinue
+          $smokeUiJson = @($smokeUiJsonFiles).Count -gt 0
           "contracts_junit=$contractsJunit" >> $env:GITHUB_OUTPUT
           "smoke_hooks_junit=$smokeHooksJunit" >> $env:GITHUB_OUTPUT
           "smoke_ui_junit=$smokeUiJunit" >> $env:GITHUB_OUTPUT
@@ -124,10 +126,10 @@ jobs:
           | Artifact upload step | `${{ steps.upload_frontend_windows_results.outcome }}` |
           | Contracts JUnit file | `${{ steps.inspect_frontend_windows_outputs.outputs.contracts_junit }}` |
           | Smoke hooks JUnit file | `${{ steps.inspect_frontend_windows_outputs.outputs.smoke_hooks_junit }}` |
-          | Smoke UI JUnit file | `${{ steps.inspect_frontend_windows_outputs.outputs.smoke_ui_junit }}` |
+          | Smoke UI JUnit shards present | `${{ steps.inspect_frontend_windows_outputs.outputs.smoke_ui_junit }}` |
           | Contracts JSON file | `${{ steps.inspect_frontend_windows_outputs.outputs.contracts_json }}` |
           | Smoke hooks JSON file | `${{ steps.inspect_frontend_windows_outputs.outputs.smoke_hooks_json }}` |
-          | Smoke UI JSON file | `${{ steps.inspect_frontend_windows_outputs.outputs.smoke_ui_json }}` |
+          | Smoke UI JSON shards present | `${{ steps.inspect_frontend_windows_outputs.outputs.smoke_ui_json }}` |
 
           Checks:
           - `Frontend Stable Tests (Windows)` for file-level failures and test names
@@ -241,10 +243,12 @@ jobs:
         run: |
           $contractsJunit = Test-Path "ai-hq-frontend/test-results/frontend-contracts.junit.xml"
           $smokeHooksJunit = Test-Path "ai-hq-frontend/test-results/frontend-smoke-hooks.junit.xml"
-          $smokeUiJunit = Test-Path "ai-hq-frontend/test-results/frontend-smoke-ui.junit.xml"
+          $smokeUiJunitFiles = Get-ChildItem -Path "ai-hq-frontend/test-results" -Filter "frontend-smoke-ui-*.junit.xml" -ErrorAction SilentlyContinue
+          $smokeUiJunit = @($smokeUiJunitFiles).Count -gt 0
           $contractsJson = Test-Path "ai-hq-frontend/test-results/frontend-contracts.json"
           $smokeHooksJson = Test-Path "ai-hq-frontend/test-results/frontend-smoke-hooks.json"
-          $smokeUiJson = Test-Path "ai-hq-frontend/test-results/frontend-smoke-ui.json"
+          $smokeUiJsonFiles = Get-ChildItem -Path "ai-hq-frontend/test-results" -Filter "frontend-smoke-ui-*.json" -ErrorAction SilentlyContinue
+          $smokeUiJson = @($smokeUiJsonFiles).Count -gt 0
           "contracts_junit=$contractsJunit" >> $env:GITHUB_OUTPUT
           "smoke_hooks_junit=$smokeHooksJunit" >> $env:GITHUB_OUTPUT
           "smoke_ui_junit=$smokeUiJunit" >> $env:GITHUB_OUTPUT
@@ -291,10 +295,10 @@ jobs:
           | Artifact upload step | `${{ steps.upload_frontend_linux_results.outcome }}` |
           | Contracts JUnit file | `${{ steps.inspect_frontend_linux_outputs.outputs.contracts_junit }}` |
           | Smoke hooks JUnit file | `${{ steps.inspect_frontend_linux_outputs.outputs.smoke_hooks_junit }}` |
-          | Smoke UI JUnit file | `${{ steps.inspect_frontend_linux_outputs.outputs.smoke_ui_junit }}` |
+          | Smoke UI JUnit shards present | `${{ steps.inspect_frontend_linux_outputs.outputs.smoke_ui_junit }}` |
           | Contracts JSON file | `${{ steps.inspect_frontend_linux_outputs.outputs.contracts_json }}` |
           | Smoke hooks JSON file | `${{ steps.inspect_frontend_linux_outputs.outputs.smoke_hooks_json }}` |
-          | Smoke UI JSON file | `${{ steps.inspect_frontend_linux_outputs.outputs.smoke_ui_json }}` |
+          | Smoke UI JSON shards present | `${{ steps.inspect_frontend_linux_outputs.outputs.smoke_ui_json }}` |
 
           Checks:
           - `Frontend Stable Tests (Linux)` for file-level failures and test names
