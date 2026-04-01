@@ -11,9 +11,9 @@ import {
   User2,
 } from "lucide-react";
 
-import { signupUser } from "../api/auth.js";
-import { clearAppSessionContext, getAppAuthContext } from "../lib/appSession.js";
-import { resolveAuthenticatedLanding } from "../lib/appEntry.js";
+import { signupUser } from "../../api/auth.js";
+import { clearAppSessionContext, getAppAuthContext } from "../../lib/appSession.js";
+import { resolveAuthenticatedLanding } from "../../lib/appEntry.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
