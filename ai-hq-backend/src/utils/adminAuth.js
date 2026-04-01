@@ -192,15 +192,14 @@ function getTenantBaseHosts(publicBaseUrl = cfg.urls.publicBaseUrl) {
 }
 
 function getSessionCookieToken(req, cookieName) {
-  const values = getAllCookieValues(req, cookieName);
+  const values = getSessionCookieTokens(req, cookieName);
 
   for (const value of values) {
     const token = s(value);
     if (token) return token;
   }
 
-  const cookies = parseCookies(req);
-  return s(cookies[cookieName] || "");
+  return "";
 }
 
 function normalizeUserSessionPayload(row = {}) {
@@ -587,6 +586,19 @@ function getAllCookieValues(req, cookieName) {
   });
 
   return values.filter(Boolean);
+}
+
+export function getSessionCookieTokens(req, cookieName) {
+  const values = getAllCookieValues(req, cookieName)
+    .map((value) => s(value))
+    .filter(Boolean);
+
+  if (values.length) {
+    return Array.from(new Set(values));
+  }
+
+  const fallback = s(parseCookies(req)?.[cookieName]);
+  return fallback ? [fallback] : [];
 }
 
 export function isAdminAuthConfigured() {

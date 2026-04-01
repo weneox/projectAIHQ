@@ -903,6 +903,43 @@ test("logout and session invalidation still work", async () => {
   assert.equal(me.res.body?.authenticated, false);
 });
 
+test("logout revokes the active session even when duplicate user cookies are present", async () => {
+  const db = new FakeLoginDb();
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "owner@acme.test",
+    password: "secret-pass",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    companyName: "Acme Clinic",
+    membershipId: "membership-1",
+    userId: "user-1",
+  });
+
+  const loginRouter = createLoginRouter(db);
+  const sessionRouter = createSessionRouter(db);
+  const login = await invokeRoute(loginRouter, "post", "/auth/login", {
+    body: { email: "owner@acme.test", password: "secret-pass" },
+  });
+  const sessionCookie = login.res.cookies.find((cookie) => cookie.name === "aihq_user");
+  const duplicateCookieHeader = `aihq_user=${sessionCookie.value}; aihq_user=stale-shadow-token`;
+
+  const meBefore = await invokeRoute(sessionRouter, "get", "/auth/me", {
+    headers: { cookie: duplicateCookieHeader },
+  });
+  assert.equal(meBefore.res.body?.authenticated, true);
+
+  const logout = await invokeRoute(loginRouter, "post", "/auth/logout", {
+    headers: { cookie: duplicateCookieHeader },
+  });
+  assert.equal(logout.res.body?.loggedOut, true);
+
+  const meAfter = await invokeRoute(sessionRouter, "get", "/auth/me", {
+    headers: { cookie: duplicateCookieHeader },
+  });
+  assert.equal(meAfter.res.body?.authenticated, false);
+});
+
 test("auth me loads canonical active workspace state and available workspaces", async () => {
   const db = new FakeLoginDb();
   seedIdentityWithMembership(db, {

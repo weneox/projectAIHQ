@@ -8,7 +8,7 @@ import {
   userCookieOptions,
   clearUserCookie,
   getUserCookieName,
-  parseCookies,
+  getSessionCookieTokens,
   revokeUserSessionByToken,
   loadUserSessionFromRequest,
   checkLoginRateLimit,
@@ -744,7 +744,7 @@ export function userLoginRoutes({ db, resolveWorkspaceState = loadActiveWorkspac
       });
     }
 
-    const sessionToken = s(parseCookies(req)?.[getUserCookieName()]);
+    const sessionToken = getSessionCookieTokens(req, getUserCookieName())[0] || "";
     const switched = await switchUserSessionWorkspaceByToken(db, sessionToken, {
       tenantId: selectedChoice.tenant_id,
       membershipId: selectedChoice.membership_id,
@@ -783,8 +783,8 @@ export function userLoginRoutes({ db, resolveWorkspaceState = loadActiveWorkspac
   r.post("/auth/logout", async (req, res) => {
     setNoStore(res);
     try {
-      const rawToken = s(parseCookies(req)?.[getUserCookieName()]);
-      if (rawToken) {
+      const rawTokens = getSessionCookieTokens(req, getUserCookieName());
+      for (const rawToken of rawTokens) {
         await revokeUserSessionByToken(db, rawToken);
       }
     } catch {}

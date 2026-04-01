@@ -6,7 +6,7 @@ import {
   adminCookieOptions,
   clearAdminCookie,
   getAdminCookieName,
-  parseCookies,
+  getSessionCookieTokens,
   revokeAdminSessionByToken,
   checkLoginRateLimit,
   registerFailedLoginAttempt,
@@ -105,8 +105,8 @@ export function adminLoginRoutes({ db } = {}) {
   r.post("/admin-auth/logout", async (req, res) => {
     setNoStore(res);
     try {
-      const rawToken = s(parseCookies(req)?.[getAdminCookieName()]);
-      if (rawToken) {
+      const rawTokens = getSessionCookieTokens(req, getAdminCookieName());
+      for (const rawToken of rawTokens) {
         await revokeAdminSessionByToken(db, rawToken);
       }
     } catch {}
