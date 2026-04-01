@@ -95,6 +95,10 @@ async function invokeRoute(router, method, path, req = {}) {
 
 class FakeUserSessionDb {
   constructor() {
+    this.identities = new Map();
+    this.memberships = new Map();
+    this.tenants = new Map();
+    this.users = new Map();
     this.authSessions = new Map();
   }
 
@@ -102,6 +106,22 @@ class FakeUserSessionDb {
     this.authSessions.set(tokenHash, {
       revoked_at: new Date().toISOString(),
     });
+  }
+
+  seedIdentity(identity) {
+    this.identities.set(String(identity.id), { ...identity });
+  }
+
+  seedMembership(membership) {
+    this.memberships.set(String(membership.id), { ...membership });
+  }
+
+  seedTenant(tenant) {
+    this.tenants.set(String(tenant.id), { ...tenant });
+  }
+
+  seedUser(user) {
+    this.users.set(String(user.id), { ...user });
   }
 
   async query(input) {
@@ -112,12 +132,42 @@ class FakeUserSessionDb {
       return { rows: [{ ok: 1 }] };
     }
 
-    if (text.includes("from auth_sessions s") && text.includes("join tenant_users")) {
+    if (text.includes("from auth_identity_sessions s") && text.includes("join auth_identities i")) {
       const row = this.authSessions.get(String(values[0])) || null;
       if (!row || row.revoked_at) {
         return { rowCount: 0, rows: [] };
       }
-      return { rowCount: 0, rows: [] };
+      const identity = this.identities.get(String(row.identity_id)) || null;
+      const membership = this.memberships.get(String(row.active_membership_id)) || null;
+      const tenant = this.tenants.get(String(row.active_tenant_id)) || null;
+      const user =
+        Array.from(this.users.values()).find(
+          (entry) =>
+            String(entry.tenant_id) === String(row.active_tenant_id) &&
+            String(entry.user_email).toLowerCase() ===
+              String(identity?.normalized_email || identity?.primary_email || "").toLowerCase()
+        ) || null;
+      if (!identity || !membership || !tenant) {
+        return { rowCount: 0, rows: [] };
+      }
+      return {
+        rowCount: 1,
+        rows: [
+          {
+            ...row,
+            tenant_id: row.active_tenant_id,
+            membership_id: membership.id,
+            user_id: user?.id || identity.id,
+            tenant_user_id: user?.id || "",
+            user_email: identity.primary_email,
+            full_name: user?.full_name || "",
+            role: membership.role,
+            user_status: user?.status || "",
+            tenant_key: tenant.tenant_key,
+            company_name: tenant.company_name || "",
+          },
+        ],
+      };
     }
 
     throw new Error(`Unhandled auth route query: ${text}`);

@@ -34,6 +34,12 @@ export async function logoutUser() {
   return apiPost("/api/auth/logout", {});
 }
 
+export async function switchWorkspaceUser({ switchToken }) {
+  return apiPost("/api/auth/switch-workspace", {
+    switchToken,
+  });
+}
+
 export async function getAuthMe() {
   return apiGet("/api/auth/me", {
     allowStatuses: [401],

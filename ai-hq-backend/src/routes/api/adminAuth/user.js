@@ -3,17 +3,20 @@ import {
   isUserAuthConfigured,
   verifyUserPassword,
   createUserSessionRecord,
+  switchUserSessionWorkspaceByToken,
   createUserLoginSelectionToken,
   userCookieOptions,
   clearUserCookie,
   getUserCookieName,
   parseCookies,
   revokeUserSessionByToken,
+  loadUserSessionFromRequest,
   checkLoginRateLimit,
   registerFailedLoginAttempt,
   clearLoginAttempts,
   resolveTenantKeyFromRequestHost,
   verifyUserLoginSelectionToken,
+  verifyUserWorkspaceSwitchToken,
 } from "../../../utils/adminAuth.js";
 import { cfg } from "../../../config.js";
 import { s, lower, getIp, setNoStore, isDbTimeoutError } from "./utils.js";
@@ -164,13 +167,11 @@ async function finalizeWorkspaceLogin({
   const { token, expiresAt } = await createUserSessionRecord(
     db,
     {
-      id: legacyUser.id,
+      identityId: identity.id,
+      membershipId: selectedChoice.membership_id,
       tenant_id: legacyUser.tenant_id,
       tenant_key: legacyUser.tenant_key,
-      user_email: legacyUser.user_email,
-      full_name: legacyUser.full_name,
-      role: legacyUser.role,
-      session_version: legacyUser.session_version,
+      session_version: 1,
     },
     {
       ip: getIp(req),
@@ -576,6 +577,142 @@ export function userLoginRoutes({ db, resolveWorkspaceState = loadPostAuthWorksp
       selectedChoice,
       resolvedRateLimitScope,
       rateLimitScope,
+    });
+  });
+
+  r.post("/auth/switch-workspace", async (req, res) => {
+    setNoStore(res);
+
+    if (!db) {
+      return res.status(503).json({
+        ok: false,
+        error: "Database is not available",
+      });
+    }
+
+    const session = await loadUserSessionFromRequest(req, { db, touch: false });
+    if (!session?.ok || !session?.payload) {
+      clearUserCookie(res);
+      return res.status(401).json({
+        ok: false,
+        error: "Unauthorized",
+        reason: session?.error || "invalid_session",
+      });
+    }
+
+    const hostTenantKey = resolveTenantKeyFromRequestHost(req);
+    const switchToken = s(req.body?.switchToken || req.body?.switch_token);
+    if (!switchToken) {
+      return res.status(400).json({
+        ok: false,
+        error: "switchToken is required",
+      });
+    }
+
+    const checked = verifyUserWorkspaceSwitchToken(switchToken);
+    if (!checked?.ok) {
+      return res.status(400).json({
+        ok: false,
+        error: "Workspace selection is no longer valid",
+        code: "invalid_workspace_switch",
+      });
+    }
+
+    if (s(checked.payload?.identityId) !== s(session.payload.identityId)) {
+      return res.status(403).json({
+        ok: false,
+        error: "This session cannot access the requested workspace",
+        code: "workspace_not_allowed",
+      });
+    }
+
+    if (
+      hostTenantKey &&
+      s(checked.payload?.tenantKey).toLowerCase() !== s(hostTenantKey).toLowerCase()
+    ) {
+      return res.status(403).json({
+        ok: false,
+        error: "This session cannot access the requested workspace",
+        code: "workspace_not_allowed",
+      });
+    }
+
+    const memberships = await listIdentityMembershipChoicesForLogin(db, {
+      identityId: session.payload.identityId,
+      tenantKey: hostTenantKey || "",
+    });
+    const membership =
+      memberships.find(
+        (item) =>
+          s(item.id) === s(checked.payload.membershipId) &&
+          s(item.tenant_id) === s(checked.payload.tenantId) &&
+          s(item.tenant_key).toLowerCase() === s(checked.payload.tenantKey).toLowerCase()
+      ) || null;
+
+    if (!membership) {
+      return res.status(403).json({
+        ok: false,
+        error: "This session cannot access the requested workspace",
+        code: "workspace_not_allowed",
+      });
+    }
+
+    const identity = await findAuthIdentityForLogin(db, { email: session.payload.email });
+    if (!identity?.id || s(identity.id) !== s(session.payload.identityId)) {
+      return res.status(403).json({
+        ok: false,
+        error: "This session cannot access the requested workspace",
+        code: "workspace_not_allowed",
+      });
+    }
+
+    const compatibleChoices = await enrichMembershipChoices(
+      resolveWorkspaceState,
+      await resolveCompatibleMemberships(db, identity, [membership])
+    );
+    const selectedChoice = compatibleChoices[0] || null;
+
+    if (!selectedChoice?.legacy_user?.id) {
+      return res.status(403).json({
+        ok: false,
+        error: "No compatible workspace session profile was found",
+        code: "legacy_membership_bridge_missing",
+      });
+    }
+
+    const sessionToken = s(parseCookies(req)?.[getUserCookieName()]);
+    const switched = await switchUserSessionWorkspaceByToken(db, sessionToken, {
+      tenantId: selectedChoice.tenant_id,
+      membershipId: selectedChoice.membership_id,
+    });
+
+    if (!switched) {
+      return res.status(400).json({
+        ok: false,
+        error: "Workspace switch could not be saved",
+        code: "workspace_switch_failed",
+      });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      authenticated: true,
+      workspace: selectedChoice.workspace || null,
+      destination: selectedChoice.workspace?.destination || {
+        kind: "workspace",
+        path: "/workspace",
+      },
+      user: {
+        id: selectedChoice.legacy_user.id,
+        identityId: identity.id,
+        membershipId: selectedChoice.membership_id,
+        tenantId: selectedChoice.tenant_id,
+        tenantKey: selectedChoice.tenant_key,
+        email: session.payload.email,
+        fullName: selectedChoice.legacy_user.full_name || session.payload.fullName || "",
+        companyName: selectedChoice.company_name || "",
+        role: selectedChoice.role,
+      },
     });
   });
 

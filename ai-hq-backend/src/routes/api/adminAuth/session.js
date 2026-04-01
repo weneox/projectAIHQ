@@ -4,10 +4,14 @@ import {
   isUserAuthConfigured,
   clearUserCookie,
   loadUserSessionFromRequest,
+  createUserWorkspaceSwitchToken,
+  resolveTenantKeyFromRequestHost,
 } from "../../../utils/adminAuth.js";
 import { cfg } from "../../../config.js";
 import { requireSafeDiagnostics } from "../../../utils/securitySurface.js";
 import { issueRealtimeTicket } from "../../../realtime/auth.js";
+import { listIdentityMembershipChoicesForLogin, findLegacyTenantUserForIdentityLogin } from "./repository.js";
+import { loadPostAuthWorkspaceState } from "../../../services/workspace/postAuth.js";
 import {
   setNoStore,
   checkDb,
@@ -54,7 +58,78 @@ function toWsOrigin(origin = "") {
     .replace(/^http:/i, "ws:");
 }
 
-export function adminSessionRoutes({ db, wsHub } = {}) {
+function buildCanonicalWorkspaceChoice(choice = {}) {
+  const membershipId = s(choice.membership_id || choice.id);
+
+  return {
+    membershipId,
+    tenantId: s(choice.tenant_id),
+    tenantKey: s(choice.tenant_key).toLowerCase(),
+    companyName: s(choice.company_name),
+    role: s(choice.role || "member").toLowerCase(),
+    setupRequired: !!choice.workspace?.setupRequired,
+    workspaceReady: !!choice.workspace?.workspaceReady,
+    routeHint: s(choice.workspace?.routeHint),
+    destination: choice.workspace?.destination || null,
+    active: !!choice.active,
+    switchToken: createUserWorkspaceSwitchToken({
+      identityId: choice.identity_id,
+      membershipId,
+      tenantId: choice.tenant_id,
+      tenantKey: choice.tenant_key,
+    }),
+  };
+}
+
+async function loadSessionWorkspaceChoices(db, sessionPayload, req, resolveWorkspaceState) {
+  const hostTenantKey = resolveTenantKeyFromRequestHost(req);
+  const memberships = await listIdentityMembershipChoicesForLogin(db, {
+    identityId: sessionPayload.identityId,
+    tenantKey: hostTenantKey || "",
+  });
+
+  const compatible = [];
+  for (const membership of memberships) {
+    const legacyUser = await findLegacyTenantUserForIdentityLogin(db, {
+      tenantId: membership.tenant_id,
+      email: sessionPayload.email,
+    });
+
+    if (!legacyUser?.id || (s(legacyUser.status) && s(legacyUser.status).toLowerCase() !== "active")) {
+      continue;
+    }
+
+    const workspace = await resolveWorkspaceState({
+      db,
+      tenantId: membership.tenant_id,
+      tenantKey: membership.tenant_key,
+      membershipId: membership.id,
+      role: membership.role,
+      tenant: {
+        id: membership.tenant_id,
+        tenant_key: membership.tenant_key,
+        company_name: membership.company_name,
+      },
+    });
+
+    compatible.push({
+      ...membership,
+      identity_id: sessionPayload.identityId,
+      workspace,
+      active:
+        s(sessionPayload.membershipId) === s(membership.id) &&
+        s(sessionPayload.tenantId) === s(membership.tenant_id),
+    });
+  }
+
+  return compatible.map(buildCanonicalWorkspaceChoice);
+}
+
+export function adminSessionRoutes({
+  db,
+  wsHub,
+  resolveWorkspaceState = loadPostAuthWorkspaceState,
+} = {}) {
   const r = express.Router();
 
   function buildRealtimeWsUrl(req) {
@@ -158,19 +233,56 @@ export function adminSessionRoutes({ db, wsHub } = {}) {
       });
     }
 
+    const workspaces = await loadSessionWorkspaceChoices(
+      db,
+      userSession.payload,
+      req,
+      resolveWorkspaceState
+    ).catch(
+      () => []
+    );
+    const activeWorkspace =
+      workspaces.find((workspace) => workspace.active) ||
+      {
+        membershipId: userSession.payload?.membershipId || null,
+        tenantId: userSession.payload?.tenantId || null,
+        tenantKey: userSession.payload?.tenantKey || null,
+        companyName: userSession.payload?.companyName || "",
+        role: userSession.payload?.role || "member",
+        setupRequired: false,
+        workspaceReady: true,
+        routeHint: "/workspace",
+        destination: { kind: "workspace", path: "/workspace" },
+        active: true,
+      };
+
     return res.status(200).json({
       ok: true,
       authenticated: true,
       user: {
         id: userSession.payload?.userId || null,
+        identityId: userSession.payload?.identityId || null,
+        membershipId: userSession.payload?.membershipId || null,
         tenantId: userSession.payload?.tenantId || null,
         tenantKey: userSession.payload?.tenantKey || null,
         email: userSession.payload?.email || null,
         fullName: userSession.payload?.fullName || "",
         role: userSession.payload?.role || "member",
+        companyName: userSession.payload?.companyName || "",
         exp: userSession.payload?.exp || null,
         iat: userSession.payload?.iat || null,
       },
+      identity: {
+        id: userSession.payload?.identityId || null,
+        email: userSession.payload?.email || null,
+      },
+      membership: {
+        id: userSession.payload?.membershipId || null,
+        role: userSession.payload?.role || "member",
+      },
+      workspace: activeWorkspace,
+      workspaces,
+      destination: activeWorkspace?.destination || null,
       runtime,
       marker: "AUTH_ME_DEBUG_V4",
     });

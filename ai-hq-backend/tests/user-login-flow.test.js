@@ -182,7 +182,11 @@ class FakeLoginDb {
       return { rowCount: rows.length, rows };
     }
 
-    if (text.includes("from tenant_users tu") && text.includes("join tenants t")) {
+    if (
+      text.includes("from tenant_users tu") &&
+      text.includes("join tenants t") &&
+      text.includes("where tu.tenant_id = $1")
+    ) {
       const tenantId = String(values[0]);
       const email = String(values[1]).toLowerCase();
       const user =
@@ -205,16 +209,17 @@ class FakeLoginDb {
       };
     }
 
-    if (text.startsWith("insert into auth_sessions")) {
+    if (text.startsWith("insert into auth_identity_sessions")) {
       const row = {
         id: `session-${this.authSessions.size + 1}`,
-        tenant_user_id: values[0],
-        tenant_id: values[1],
-        session_token_hash: values[2],
-        session_version: values[3],
-        ip: values[4],
-        user_agent: values[5],
-        expires_at: values[6],
+        identity_id: values[0],
+        active_tenant_id: values[1],
+        active_membership_id: values[2],
+        session_token_hash: values[3],
+        session_version: values[4],
+        ip: values[5],
+        user_agent: values[6],
+        expires_at: values[7],
         revoked_at: null,
         created_at: new Date().toISOString(),
         last_seen_at: new Date().toISOString(),
@@ -223,25 +228,36 @@ class FakeLoginDb {
       return { rowCount: 1, rows: [] };
     }
 
-    if (text.includes("from auth_sessions s") && text.includes("join tenant_users")) {
+    if (text.includes("from auth_identity_sessions s") && text.includes("join auth_identities i")) {
       const row = this.authSessions.get(String(values[0])) || null;
       if (!row || row.revoked_at) return { rowCount: 0, rows: [] };
       if (new Date(row.expires_at).getTime() <= Date.now()) return { rowCount: 0, rows: [] };
-      const user = this.users.get(String(row.tenant_user_id)) || null;
-      const tenant = this.tenants.get(String(row.tenant_id)) || null;
-      if (!user || !tenant) return { rowCount: 0, rows: [] };
+      const identity = this.identities.get(String(row.identity_id)) || null;
+      const membership = this.memberships.get(String(row.active_membership_id)) || null;
+      const tenant = this.tenants.get(String(row.active_tenant_id)) || null;
+      const user =
+        Array.from(this.users.values()).find(
+          (entry) =>
+            String(entry.tenant_id) === String(row.active_tenant_id) &&
+            String(entry.user_email).toLowerCase() ===
+              String(identity?.normalized_email || identity?.primary_email || "").toLowerCase()
+        ) || null;
+      if (!identity || !membership || !tenant) return { rowCount: 0, rows: [] };
       return {
         rowCount: 1,
         rows: [
           {
             ...row,
-            user_id: user.id,
-            user_email: user.user_email,
-            full_name: user.full_name,
-            role: user.role,
-            user_status: user.status,
-            user_session_version: user.session_version,
+            tenant_id: row.active_tenant_id,
+            membership_id: membership.id,
+            user_id: user?.id || identity.id,
+            tenant_user_id: user?.id || "",
+            user_email: identity.primary_email,
+            full_name: user?.full_name || "",
+            role: membership.role,
+            user_status: user?.status || "",
             tenant_key: tenant.tenant_key,
+            company_name: tenant.company_name || "",
           },
         ],
       };
@@ -266,7 +282,7 @@ class FakeLoginDb {
       return { rowCount: identity ? 1 : 0, rows: [] };
     }
 
-    if (text.startsWith("update auth_sessions") && text.includes("set revoked_at = now()")) {
+    if (text.startsWith("update auth_identity_sessions") && text.includes("set revoked_at = now()")) {
       const row = this.authSessions.get(String(values[0])) || null;
       if (!row || row.revoked_at) return { rowCount: 0, rows: [] };
       row.revoked_at = new Date().toISOString();
@@ -274,7 +290,7 @@ class FakeLoginDb {
       return { rowCount: 1, rows: [] };
     }
 
-    if (text.startsWith("update auth_sessions") && text.includes("set last_seen_at = now()")) {
+    if (text.startsWith("update auth_identity_sessions") && text.includes("set last_seen_at = now()")) {
       for (const row of this.authSessions.values()) {
         if (String(row.id) === String(values[0])) {
           row.last_seen_at = new Date().toISOString();
@@ -282,6 +298,15 @@ class FakeLoginDb {
         }
       }
       return { rowCount: 0, rows: [] };
+    }
+
+    if (text.startsWith("update auth_identity_sessions") && text.includes("active_tenant_id = $2")) {
+      const row = this.authSessions.get(String(values[0])) || null;
+      if (!row || row.revoked_at) return { rowCount: 0, rows: [] };
+      row.active_tenant_id = values[1];
+      row.active_membership_id = values[2];
+      row.last_seen_at = new Date().toISOString();
+      return { rowCount: 1, rows: [] };
     }
 
     if (text.startsWith("select attempt_count")) {
@@ -377,36 +402,70 @@ function seedIdentityWithMembership(db, {
 }
 
 function createLoginRouter(db, workspaceStates = {}) {
-  return userLoginRoutes({
-    db,
-    resolveWorkspaceState: async ({
+  const resolveWorkspaceState = async ({
+    tenantId,
+    tenantKey,
+    membershipId,
+    role,
+    tenant,
+  }) => {
+    const override = workspaceStates[String(tenantKey || "").toLowerCase()] || {};
+
+    return {
       tenantId,
       tenantKey,
+      companyName: tenant?.company_name || "",
       membershipId,
       role,
-      tenant,
-    }) => {
-      const override = workspaceStates[String(tenantKey || "").toLowerCase()] || {};
+      setupCompleted: true,
+      setupRequired: false,
+      workspaceReady: true,
+      activeSetupSessionId: "",
+      routeHint: "/workspace",
+      destination: { kind: "workspace", path: "/workspace" },
+      readinessLabel: "ready",
+      missingSteps: [],
+      primaryMissingStep: "",
+      ...override,
+    };
+  };
 
-      return {
-        tenantId,
-        tenantKey,
-        companyName: tenant?.company_name || "",
-        membershipId,
-        role,
-        setupCompleted: true,
-        setupRequired: false,
-        workspaceReady: true,
-        activeSetupSessionId: "",
-        routeHint: "/workspace",
-        destination: { kind: "workspace", path: "/workspace" },
-        readinessLabel: "ready",
-        missingSteps: [],
-        primaryMissingStep: "",
-        ...override,
-      };
-    },
+  return userLoginRoutes({
+    db,
+    resolveWorkspaceState,
   });
+}
+
+function createSessionRouter(db, workspaceStates = {}) {
+  const resolveWorkspaceState = async ({
+    tenantId,
+    tenantKey,
+    membershipId,
+    role,
+    tenant,
+  }) => {
+    const override = workspaceStates[String(tenantKey || "").toLowerCase()] || {};
+
+    return {
+      tenantId,
+      tenantKey,
+      companyName: tenant?.company_name || "",
+      membershipId,
+      role,
+      setupCompleted: true,
+      setupRequired: false,
+      workspaceReady: true,
+      activeSetupSessionId: "",
+      routeHint: "/workspace",
+      destination: { kind: "workspace", path: "/workspace" },
+      readinessLabel: "ready",
+      missingSteps: [],
+      primaryMissingStep: "",
+      ...override,
+    };
+  };
+
+  return adminSessionRoutes({ db, wsHub: null, resolveWorkspaceState });
 }
 
 const previousUserSessionSecret = cfg.auth.userSessionSecret;
@@ -430,7 +489,7 @@ test("single identity + one membership logs in successfully", async () => {
   });
 
   const loginRouter = createLoginRouter(db);
-  const sessionRouter = adminSessionRoutes({ db, wsHub: null });
+  const sessionRouter = createSessionRouter(db);
   const login = await invokeRoute(loginRouter, "post", "/auth/login", {
     body: { email: "owner@acme.test", password: "secret-pass" },
     headers: { host: "app.weneox.com" },
@@ -804,7 +863,7 @@ test("logout and session invalidation still work", async () => {
   });
 
   const loginRouter = createLoginRouter(db);
-  const sessionRouter = adminSessionRoutes({ db, wsHub: null });
+  const sessionRouter = createSessionRouter(db);
   const login = await invokeRoute(loginRouter, "post", "/auth/login", {
     body: { email: "owner@acme.test", password: "secret-pass" },
   });
@@ -819,6 +878,204 @@ test("logout and session invalidation still work", async () => {
     headers: { cookie: `aihq_user=${sessionCookie.value}` },
   });
   assert.equal(me.res.body?.authenticated, false);
+});
+
+test("auth me loads canonical active workspace state and available workspaces", async () => {
+  const db = new FakeLoginDb();
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
+    tenantId: "tenant-1",
+    tenantKey: "dental",
+    companyName: "Dental HQ",
+    membershipId: "membership-1",
+    userId: "user-1",
+    role: "owner",
+  });
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
+    tenantId: "tenant-2",
+    tenantKey: "hotel",
+    companyName: "Hotel HQ",
+    membershipId: "membership-2",
+    userId: "user-2",
+    role: "member",
+  });
+
+  const loginRouter = createLoginRouter(db, {
+    dental: {
+      setupCompleted: true,
+      setupRequired: false,
+      workspaceReady: true,
+      routeHint: "/workspace",
+      destination: { kind: "workspace", path: "/workspace" },
+    },
+    hotel: {
+      setupCompleted: false,
+      setupRequired: true,
+      workspaceReady: false,
+      routeHint: "/setup/studio",
+      destination: { kind: "setup", path: "/setup/studio" },
+    },
+  });
+  const sessionRouter = createSessionRouter(db, {
+    dental: {
+      setupCompleted: true,
+      setupRequired: false,
+      workspaceReady: true,
+      routeHint: "/workspace",
+      destination: { kind: "workspace", path: "/workspace" },
+    },
+    hotel: {
+      setupCompleted: false,
+      setupRequired: true,
+      workspaceReady: false,
+      routeHint: "/setup/studio",
+      destination: { kind: "setup", path: "/setup/studio" },
+    },
+  });
+
+  const login = await invokeRoute(loginRouter, "post", "/auth/login", {
+    body: { email: "shared@company.test", password: "shared-pass", tenantKey: "dental" },
+    headers: { host: "localhost:5173" },
+  });
+  const sessionCookie = login.res.cookies.find((cookie) => cookie.name === "aihq_user");
+
+  const me = await invokeRoute(sessionRouter, "get", "/auth/me", {
+    headers: { cookie: `aihq_user=${sessionCookie.value}` },
+  });
+
+  assert.equal(me.res.statusCode, 200);
+  assert.equal(me.res.body?.authenticated, true);
+  assert.equal(me.res.body?.identity?.id, "identity-1");
+  assert.equal(me.res.body?.membership?.id, "membership-1");
+  assert.equal(me.res.body?.workspace?.tenantKey, "dental");
+  assert.equal(me.res.body?.workspace?.active, true);
+  assert.equal(me.res.body?.workspace?.workspaceReady, true);
+  assert.equal(me.res.body?.workspaces?.length, 2);
+  assert.ok(me.res.body?.workspaces?.every((workspace) => workspace.switchToken));
+});
+
+test("workspace switch updates the canonical active workspace and preserves it across refresh", async () => {
+  const db = new FakeLoginDb();
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
+    tenantId: "tenant-1",
+    tenantKey: "dental",
+    companyName: "Dental HQ",
+    membershipId: "membership-1",
+    userId: "user-1",
+    role: "owner",
+  });
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
+    tenantId: "tenant-2",
+    tenantKey: "hotel",
+    companyName: "Hotel HQ",
+    membershipId: "membership-2",
+    userId: "user-2",
+    role: "member",
+  });
+
+  const loginRouter = createLoginRouter(db, {
+    dental: {
+      setupCompleted: true,
+      setupRequired: false,
+      workspaceReady: true,
+      routeHint: "/workspace",
+      destination: { kind: "workspace", path: "/workspace" },
+    },
+    hotel: {
+      setupCompleted: false,
+      setupRequired: true,
+      workspaceReady: false,
+      routeHint: "/setup/studio",
+      destination: { kind: "setup", path: "/setup/studio" },
+    },
+  });
+  const sessionRouter = createSessionRouter(db, {
+    dental: {
+      setupCompleted: true,
+      setupRequired: false,
+      workspaceReady: true,
+      routeHint: "/workspace",
+      destination: { kind: "workspace", path: "/workspace" },
+    },
+    hotel: {
+      setupCompleted: false,
+      setupRequired: true,
+      workspaceReady: false,
+      routeHint: "/setup/studio",
+      destination: { kind: "setup", path: "/setup/studio" },
+    },
+  });
+
+  const login = await invokeRoute(loginRouter, "post", "/auth/login", {
+    body: { email: "shared@company.test", password: "shared-pass", tenantKey: "dental" },
+    headers: { host: "localhost:5173" },
+  });
+  const sessionCookie = login.res.cookies.find((cookie) => cookie.name === "aihq_user");
+
+  const meBefore = await invokeRoute(sessionRouter, "get", "/auth/me", {
+    headers: { cookie: `aihq_user=${sessionCookie.value}` },
+  });
+  const hotelWorkspace = meBefore.res.body?.workspaces?.find(
+    (workspace) => workspace.tenantKey === "hotel"
+  );
+
+  const switched = await invokeRoute(loginRouter, "post", "/auth/switch-workspace", {
+    headers: { cookie: `aihq_user=${sessionCookie.value}`, host: "localhost:5173" },
+    body: { switchToken: hotelWorkspace?.switchToken },
+  });
+
+  assert.equal(switched.res.statusCode, 200);
+  assert.equal(switched.res.body?.user?.tenantKey, "hotel");
+  assert.equal(switched.res.body?.destination?.path, "/setup/studio");
+
+  const meAfter = await invokeRoute(sessionRouter, "get", "/auth/me", {
+    headers: { cookie: `aihq_user=${sessionCookie.value}` },
+  });
+
+  assert.equal(meAfter.res.body?.workspace?.tenantKey, "hotel");
+  assert.equal(meAfter.res.body?.workspace?.setupRequired, true);
+  assert.equal(meAfter.res.body?.workspaces?.find((workspace) => workspace.tenantKey === "hotel")?.active, true);
+  assert.equal(meAfter.res.body?.user?.tenantKey, "hotel");
+});
+
+test("workspace switch rejects unauthorized targets", async () => {
+  const db = new FakeLoginDb();
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "owner@dental.test",
+    password: "secret-pass",
+    tenantId: "tenant-1",
+    tenantKey: "dental",
+    companyName: "Dental HQ",
+    membershipId: "membership-1",
+    userId: "user-1",
+    role: "owner",
+  });
+
+  const loginRouter = createLoginRouter(db);
+  const login = await invokeRoute(loginRouter, "post", "/auth/login", {
+    body: { email: "owner@dental.test", password: "secret-pass" },
+  });
+  const sessionCookie = login.res.cookies.find((cookie) => cookie.name === "aihq_user");
+
+  const switched = await invokeRoute(loginRouter, "post", "/auth/switch-workspace", {
+    headers: { cookie: `aihq_user=${sessionCookie.value}` },
+    body: { switchToken: `${"bad.token"}` },
+  });
+
+  assert.equal(switched.res.statusCode, 400);
+  assert.equal(switched.res.body?.code, "invalid_workspace_switch");
 });
 
 test("compatibility bridge fails clearly instead of guessing when legacy tenant user is missing", async () => {

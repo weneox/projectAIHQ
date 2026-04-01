@@ -209,15 +209,18 @@ function normalizeUserSessionPayload(row = {}) {
   return {
     sessionType: "user",
     sessionId: s(row.session_id || row.id),
-    tenantUserId: s(row.tenant_user_id),
-    userId: s(row.user_id || row.tenant_user_id),
+    identityId: s(row.identity_id),
+    membershipId: s(row.active_membership_id || row.membership_id),
+    tenantUserId: s(row.tenant_user_id || row.legacy_user_id),
+    userId: s(row.user_id || row.tenant_user_id || row.legacy_user_id || row.identity_id),
     tenantId: s(row.tenant_id),
     tenantKey: s(row.tenant_key).toLowerCase(),
     email: s(row.user_email).toLowerCase(),
     fullName: s(row.full_name),
     role: s(row.role || "member").toLowerCase(),
+    companyName: s(row.company_name),
     status: s(row.user_status || row.status),
-    sessionVersion: Number(row.user_session_version || row.session_version || 1),
+    sessionVersion: Number(row.session_version || 1),
     exp: row.expires_at ? Math.floor(new Date(row.expires_at).getTime() / 1000) : null,
     iat: row.created_at ? Math.floor(new Date(row.created_at).getTime() / 1000) : null,
     expiresAt: row.expires_at || null,
@@ -247,7 +250,7 @@ async function touchUserSession(db, sessionId = "") {
     await authQuery(
       db,
       `
-      update auth_sessions
+      update auth_identity_sessions
       set last_seen_at = now()
       where id = $1
       `,
@@ -792,6 +795,80 @@ export function verifyUserLoginSelectionToken(token) {
   }
 }
 
+export function createUserWorkspaceSwitchToken(account = {}) {
+  const secret = getUserSessionSecret();
+  if (!secret) {
+    throw new Error("workspace switch secret missing");
+  }
+
+  const payload = {
+    typ: "identity_workspace_switch",
+    identityId: s(account.identityId || account.identity_id),
+    membershipId: s(account.membershipId || account.membership_id || account.id),
+    tenantId: s(account.tenantId || account.tenant_id),
+    tenantKey: s(account.tenantKey || account.tenant_key).toLowerCase(),
+    iat: nowSec(),
+    exp: nowSec() + 10 * 60,
+  };
+
+  const payloadB64 = base64url(JSON.stringify(payload));
+  const sigB64 = base64url(
+    crypto.createHmac("sha256", secret).update(payloadB64).digest()
+  );
+
+  return `${payloadB64}.${sigB64}`;
+}
+
+export function verifyUserWorkspaceSwitchToken(token) {
+  try {
+    const secret = getUserSessionSecret();
+    if (!secret) return { ok: false, error: "workspace switch secret missing" };
+
+    const raw = s(token);
+    if (!raw || !raw.includes(".")) {
+      return { ok: false, error: "invalid token format" };
+    }
+
+    const [payloadB64, sigB64] = raw.split(".");
+    if (!payloadB64 || !sigB64) {
+      return { ok: false, error: "invalid token parts" };
+    }
+
+    const expectedSig = crypto
+      .createHmac("sha256", secret)
+      .update(payloadB64)
+      .digest();
+
+    const gotSig = unbase64url(sigB64);
+    if (!safeEqBuffer(expectedSig, gotSig)) {
+      return { ok: false, error: "bad signature" };
+    }
+
+    const payload = JSON.parse(unbase64url(payloadB64).toString("utf8") || "{}");
+    if (payload?.typ !== "identity_workspace_switch") {
+      return { ok: false, error: "invalid token type" };
+    }
+
+    const now = nowSec();
+    if (!Number.isFinite(payload?.exp) || now >= Number(payload.exp)) {
+      return { ok: false, error: "token expired" };
+    }
+
+    if (
+      !s(payload?.identityId) ||
+      !s(payload?.membershipId) ||
+      !s(payload?.tenantId) ||
+      !s(payload?.tenantKey)
+    ) {
+      return { ok: false, error: "invalid workspace switch payload" };
+    }
+
+    return { ok: true, payload };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e || "verify failed") };
+  }
+}
+
 export function verifyAdminPasscode(passcode) {
   try {
     const stored = s(cfg.auth.adminPasscodeHash);
@@ -860,9 +937,10 @@ export async function createUserSessionRecord(db, user = {}, meta = {}) {
   await authQuery(
     db,
     `
-    insert into auth_sessions (
-      tenant_user_id,
-      tenant_id,
+    insert into auth_identity_sessions (
+      identity_id,
+      active_tenant_id,
+      active_membership_id,
       session_token_hash,
       session_version,
       ip,
@@ -870,11 +948,12 @@ export async function createUserSessionRecord(db, user = {}, meta = {}) {
       expires_at,
       last_seen_at
     )
-    values ($1,$2,$3,$4,$5,$6,$7,now())
+    values ($1,$2,$3,$4,$5,$6,$7,$8,now())
     `,
     [
-      s(user.id),
-      s(user.tenant_id || user.tenantId),
+      s(user.identity_id || user.identityId),
+      s(user.tenant_id || user.tenantId || user.active_tenant_id),
+      s(user.membership_id || user.membershipId || user.active_membership_id),
       hashSessionToken(token),
       Number(user.session_version ?? user.sessionVersion ?? 1),
       s(meta.ip),
@@ -918,12 +997,41 @@ export async function revokeUserSessionByToken(db, token = "") {
   const result = await authQuery(
     db,
     `
-    update auth_sessions
+    update auth_identity_sessions
     set revoked_at = now(), last_seen_at = now()
     where session_token_hash = $1
       and revoked_at is null
     `,
     [hashSessionToken(raw)],
+    1500
+  );
+
+  return Number(result?.rowCount || 0) > 0;
+}
+
+export async function switchUserSessionWorkspaceByToken(
+  db,
+  token = "",
+  {
+    tenantId = "",
+    membershipId = "",
+  } = {}
+) {
+  const raw = s(token);
+  if (!raw || !db || !tenantId || !membershipId) return false;
+
+  const result = await authQuery(
+    db,
+    `
+    update auth_identity_sessions
+    set
+      active_tenant_id = $2,
+      active_membership_id = $3,
+      last_seen_at = now()
+    where session_token_hash = $1
+      and revoked_at is null
+    `,
+    [hashSessionToken(raw), s(tenantId), s(membershipId)],
     1500
   );
 
@@ -965,25 +1073,46 @@ export async function loadUserSessionFromRequest(req, { db, touch = true } = {})
       `
       select
         s.id as session_id,
-        s.tenant_user_id,
-        s.tenant_id,
+        s.identity_id,
+        s.active_membership_id,
+        s.active_tenant_id as tenant_id,
         s.session_version,
         s.expires_at,
         s.created_at,
         s.last_seen_at,
+        i.primary_email as user_email,
+        m.id as membership_id,
+        m.role,
+        m.status,
+        t.tenant_key,
+        t.company_name,
+        tu.id as tenant_user_id,
         tu.id as user_id,
-        tu.user_email,
         tu.full_name,
-        tu.role,
-        tu.status as user_status,
-        tu.session_version as user_session_version,
-        t.tenant_key
-      from auth_sessions s
-      join tenant_users tu on tu.id = s.tenant_user_id
-      join tenants t on t.id = s.tenant_id
+        tu.status as user_status
+      from auth_identity_sessions s
+      join auth_identities i on i.id = s.identity_id
+      join auth_identity_memberships m
+        on m.id = s.active_membership_id
+       and m.identity_id = s.identity_id
+       and m.tenant_id = s.active_tenant_id
+      join tenants t on t.id = s.active_tenant_id
+      left join lateral (
+        select
+          tu.id,
+          tu.full_name,
+          tu.status
+        from tenant_users tu
+        where tu.tenant_id = s.active_tenant_id
+          and lower(tu.user_email) = lower(i.normalized_email)
+        order by tu.created_at asc, tu.id asc
+        limit 1
+      ) tu on true
       where s.session_token_hash = $1
         and s.revoked_at is null
         and s.expires_at > now()
+        and i.status in ('active', 'invited')
+        and m.status = 'active'
       limit 1
       `,
       [hashSessionToken(token)],
@@ -995,12 +1124,8 @@ export async function loadUserSessionFromRequest(req, { db, touch = true } = {})
       return { ok: false, error: "session not found" };
     }
 
-    if (s(row.user_status) !== "active") {
+    if (s(row.user_status) && s(row.user_status) !== "active") {
       return { ok: false, error: "user inactive" };
-    }
-
-    if (Number(row.session_version || 0) !== Number(row.user_session_version || 0)) {
-      return { ok: false, error: "session revoked" };
     }
 
     const payload = normalizeUserSessionPayload(row);
@@ -1303,6 +1428,8 @@ export async function requireUserSession(req, res, next) {
   if (
     existingAuth &&
     s(existingAuth.userId) &&
+    s(existingAuth.identityId) &&
+    s(existingAuth.membershipId) &&
     s(existingAuth.tenantId) &&
     s(existingAuth.tenantKey) &&
     s(existingAuth.email)
@@ -1310,6 +1437,8 @@ export async function requireUserSession(req, res, next) {
     if (!req.user) {
       req.user = {
         id: s(existingAuth.userId),
+        identityId: s(existingAuth.identityId),
+        membershipId: s(existingAuth.membershipId),
         tenantId: s(existingAuth.tenantId),
         tenantKey: s(existingAuth.tenantKey),
         tenant_id: s(existingAuth.tenantId),
@@ -1341,16 +1470,21 @@ export async function requireUserSession(req, res, next) {
   req.adminSession = null;
   req.auth = {
     userId: session.payload.userId,
+    identityId: session.payload.identityId,
+    membershipId: session.payload.membershipId,
     tenantId: session.payload.tenantId,
     tenantKey: session.payload.tenantKey,
     email: session.payload.email,
     fullName: session.payload.fullName || "",
+    companyName: session.payload.companyName || "",
     role: session.payload.role || "member",
     sessionVersion: Number(session.payload.sessionVersion || 1),
   };
 
   req.user = {
     id: session.payload.userId,
+    identityId: session.payload.identityId,
+    membershipId: session.payload.membershipId,
     tenantId: session.payload.tenantId,
     tenantKey: session.payload.tenantKey,
     tenant_id: session.payload.tenantId,

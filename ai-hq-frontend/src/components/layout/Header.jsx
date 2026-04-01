@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { BellRing, LogOut, Menu } from "lucide-react";
-import { logoutUser } from "../../api/auth.js";
-import { clearAppSessionContext } from "../../lib/appSession.js";
+import { useEffect, useState } from "react";
+import { BellRing, Building2, Check, ChevronDown, LogOut, Menu } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { logoutUser, switchWorkspaceUser } from "../../api/auth.js";
+import { clearAppSessionContext, getAppAuthContext } from "../../lib/appSession.js";
 import NotificationsPanel from "./NotificationsPanel.jsx";
 
 function cn(...classes) {
@@ -54,6 +55,164 @@ function NotificationButton({ notifications }) {
         </span>
       ) : null}
     </button>
+  );
+}
+
+function WorkspaceSwitcher() {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [switchingToken, setSwitchingToken] = useState("");
+  const [state, setState] = useState({
+    current: null,
+    workspaces: [],
+    error: "",
+  });
+
+  useEffect(() => {
+    let alive = true;
+
+    getAppAuthContext()
+      .then((auth) => {
+        if (!alive) return;
+        setState({
+          current: auth?.workspace || null,
+          workspaces: Array.isArray(auth?.workspaces) ? auth.workspaces : [],
+          error: "",
+        });
+      })
+      .catch((error) => {
+        if (!alive) return;
+        setState((prev) => ({
+          ...prev,
+          error:
+            typeof error?.message === "string" && error.message.trim()
+              ? error.message.trim()
+              : "Workspace list unavailable.",
+        }));
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const workspaces = Array.isArray(state.workspaces) ? state.workspaces : [];
+  const current = state.current || workspaces.find((item) => item?.active) || null;
+  const showSwitcher = workspaces.length > 1;
+
+  if (!showSwitcher) {
+    return current?.companyName ? (
+      <div className="hidden rounded-full border border-white/80 bg-white/72 px-3.5 py-2 text-[13px] font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_-18px_rgba(15,23,42,0.18)] lg:flex lg:items-center lg:gap-2">
+        <Building2 className="h-4 w-4 text-slate-500" />
+        <span>{current.companyName}</span>
+      </div>
+    ) : null;
+  }
+
+  async function onSwitch(workspace) {
+    const token = String(workspace?.switchToken || "").trim();
+    if (!token || token === switchingToken) return;
+
+    setSwitchingToken(token);
+    try {
+      const response = await switchWorkspaceUser({ switchToken: token });
+      clearAppSessionContext();
+      setOpen(false);
+      navigate(
+        response?.destination?.path || response?.workspace?.routeHint || "/workspace",
+        { replace: true }
+      );
+    } finally {
+      setSwitchingToken("");
+    }
+  }
+
+  return (
+    <div className="relative hidden lg:block">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex h-10 items-center gap-2 rounded-full border border-white/80 bg-white/72 px-3.5 text-[13px] font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_-18px_rgba(15,23,42,0.18)] transition-colors duration-200 hover:border-slate-300 hover:text-slate-950"
+      >
+        <Building2 className="h-4 w-4 text-slate-500" />
+        <span>{current?.companyName || "Workspaces"}</span>
+        <ChevronDown className="h-4 w-4 text-slate-400" />
+      </button>
+
+      {open ? (
+        <div className="absolute right-0 top-[calc(100%+10px)] z-40 w-[320px] rounded-[22px] border border-white/80 bg-[rgba(255,255,255,.94)] p-3 shadow-[0_28px_64px_-32px_rgba(15,23,42,.32)] backdrop-blur-xl">
+          <div className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+            Switch workspace
+          </div>
+          {state.error ? (
+            <div className="px-2 pb-2 text-sm text-amber-700">{state.error}</div>
+          ) : null}
+          {loading ? (
+            <div className="px-2 pb-2 text-sm text-slate-500">Loading workspaces...</div>
+          ) : (
+            <div className="space-y-2">
+              {workspaces.map((workspace) => {
+                const active = !!workspace?.active;
+                const switching = switchingToken && switchingToken === workspace?.switchToken;
+
+                return (
+                  <button
+                    key={workspace?.membershipId || workspace?.tenantKey}
+                    type="button"
+                    disabled={active || switching}
+                    onClick={() => onSwitch(workspace)}
+                    className={cn(
+                      "flex w-full items-start justify-between gap-3 rounded-[18px] border px-3 py-3 text-left transition",
+                      active
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-black/8 bg-[#fbfaf7] text-slate-800 hover:border-black/16",
+                      switching ? "opacity-70" : ""
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium leading-6">
+                        {workspace?.companyName || workspace?.tenantKey}
+                      </div>
+                      <div
+                        className={cn(
+                          "text-[12px] leading-6",
+                          active ? "text-white/72" : "text-slate-500"
+                        )}
+                      >
+                        {workspace?.tenantKey} / {workspace?.role || "member"}
+                      </div>
+                    </div>
+                    <div
+                      className={cn(
+                        "shrink-0 text-right text-[11px] font-semibold uppercase tracking-[0.18em]",
+                        active ? "text-white/72" : "text-slate-400"
+                      )}
+                    >
+                      {active ? (
+                        <span className="inline-flex items-center gap-1">
+                          <Check className="h-3.5 w-3.5" />
+                          Current
+                        </span>
+                      ) : switching ? (
+                        "Switching"
+                      ) : workspace?.setupRequired ? (
+                        "Setup required"
+                      ) : (
+                        "Ready"
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -163,6 +322,7 @@ export default function Header({
           </div>
 
           <div className="flex items-center gap-2">
+            <WorkspaceSwitcher />
             <NotificationButton notifications={notifications} />
             <LogoutButton />
           </div>

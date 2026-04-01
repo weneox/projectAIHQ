@@ -90,8 +90,8 @@ export async function dbCreateAuthIdentitySession(db, input = {}) {
   return normalizeSessionRow(rowOrNull(query));
 }
 
-export async function dbLoadAuthIdentitySessionByToken(db, token = "") {
-  if (!db || !token) return null;
+export async function dbLoadAuthIdentitySessionByTokenHash(db, sessionTokenHash = "") {
+  if (!db || !sessionTokenHash) return null;
 
   const query = await db.query(
     `
@@ -101,14 +101,19 @@ export async function dbLoadAuthIdentitySessionByToken(db, token = "") {
       where session_token_hash = $1
       limit 1
     `,
-    [hashSessionToken(token)]
+    [cleanString(sessionTokenHash)]
   );
 
   return normalizeSessionRow(rowOrNull(query));
 }
 
-export async function dbRevokeAuthIdentitySessionByToken(db, token = "") {
-  if (!db || !token) return false;
+export async function dbLoadAuthIdentitySessionByToken(db, token = "") {
+  if (!token) return null;
+  return dbLoadAuthIdentitySessionByTokenHash(db, hashSessionToken(token));
+}
+
+export async function dbRevokeAuthIdentitySessionByTokenHash(db, sessionTokenHash = "") {
+  if (!db || !sessionTokenHash) return false;
 
   const query = await db.query(
     `
@@ -117,10 +122,15 @@ export async function dbRevokeAuthIdentitySessionByToken(db, token = "") {
       where session_token_hash = $1
         and revoked_at is null
     `,
-    [hashSessionToken(token)]
+    [cleanString(sessionTokenHash)]
   );
 
   return Number(query?.rowCount || 0) > 0;
+}
+
+export async function dbRevokeAuthIdentitySessionByToken(db, token = "") {
+  if (!token) return false;
+  return dbRevokeAuthIdentitySessionByTokenHash(db, hashSessionToken(token));
 }
 
 export const __test__ = {
