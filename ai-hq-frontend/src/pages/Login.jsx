@@ -20,6 +20,7 @@ import {
   resolveAuthenticatedLanding,
   resolveWorkspaceContractRoute,
 } from "../lib/appEntry.js";
+import AppBootSurface from "../components/loading/AppBootSurface.jsx";
 
 const RESERVED_SUBDOMAINS = new Set([
   "www",
@@ -521,6 +522,19 @@ export default function Login() {
     !s(form.companyName) ||
     !s(form.email) ||
     !s(form.password);
+
+  if (checking) {
+    return (
+      <AppBootSurface
+        label={isSignupMode ? "Preparing account" : "Checking session"}
+        detail={
+          isSignupMode
+            ? "Verifying whether you already have an active workspace session."
+            : "Verifying whether you already have an active workspace session."
+        }
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white text-slate-950">

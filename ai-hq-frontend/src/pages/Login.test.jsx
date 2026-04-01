@@ -44,6 +44,17 @@ function renderLogin() {
   );
 }
 
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return { promise, resolve, reject };
+}
+
 describe("Login", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -62,8 +73,17 @@ describe("Login", () => {
     clearAppSessionContext.mockImplementation(() => {});
   });
 
-  it("renders canonical email and password sign-in fields", async () => {
+  it("shows a boot surface instead of the login form while auth is still resolving", async () => {
+    const authCheck = createDeferred();
+    getAppAuthContext.mockReturnValueOnce(authCheck.promise);
+
     renderLogin();
+
+    expect(screen.getByText("Checking session")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Enter email address")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Enter password")).not.toBeInTheDocument();
+
+    authCheck.resolve({ authenticated: false });
 
     expect(await screen.findByPlaceholderText("Enter email address")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Enter password")).toBeInTheDocument();
@@ -71,9 +91,15 @@ describe("Login", () => {
   });
 
   it("keeps an anonymous visitor on the login page after auth context settles", async () => {
-    getAppAuthContext.mockResolvedValueOnce({ authenticated: false });
+    const authCheck = createDeferred();
+    getAppAuthContext.mockReturnValueOnce(authCheck.promise);
 
     renderLogin();
+
+    expect(screen.getByText("Checking session")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Enter email address")).not.toBeInTheDocument();
+
+    authCheck.resolve({ authenticated: false });
 
     expect(await screen.findByPlaceholderText("Enter email address")).toBeInTheDocument();
 
@@ -85,8 +111,16 @@ describe("Login", () => {
     expect(navigate).not.toHaveBeenCalledWith("/workspace", { replace: true });
   });
 
-  it("auto-lands a genuinely authenticated user on the setup route from the workspace contract", async () => {
-    getAppAuthContext.mockResolvedValueOnce({
+  it("auto-lands a genuinely authenticated user on the setup route without flashing the login form", async () => {
+    const authCheck = createDeferred();
+    getAppAuthContext.mockReturnValueOnce(authCheck.promise);
+
+    renderLogin();
+
+    expect(screen.getByText("Checking session")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Enter email address")).not.toBeInTheDocument();
+
+    authCheck.resolve({
       authenticated: true,
       workspace: {
         setupCompleted: false,
@@ -97,8 +131,6 @@ describe("Login", () => {
         destination: { path: "/setup/studio" },
       },
     });
-
-    renderLogin();
 
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith("/setup/studio", { replace: true });
