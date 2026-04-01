@@ -70,10 +70,10 @@ describe("Login", () => {
     loginUser
       .mockRejectedValueOnce(
         Object.assign(new Error("Multiple accounts"), {
-          code: "multiple_accounts",
+          code: "multiple_memberships",
           payload: {
-            code: "multiple_accounts",
-            accounts: [
+            code: "multiple_memberships",
+            memberships: [
               {
                 selectionToken: "token-acme",
                 tenantKey: "acme",

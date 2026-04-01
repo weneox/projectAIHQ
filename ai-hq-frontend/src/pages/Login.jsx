@@ -114,12 +114,14 @@ function getFriendlyError(error, fallback = "Unable to continue.") {
 
 function isMultipleAccountsError(error) {
   const code = s(error?.code || error?.payload?.code || error?.response?.data?.code).toLowerCase();
-  return code === "multiple_accounts";
+  return code === "multiple_accounts" || code === "multiple_memberships";
 }
 
 function normalizeAccountChoices(error) {
   const accounts =
+    error?.payload?.memberships ||
     error?.payload?.accounts ||
+    error?.response?.data?.memberships ||
     error?.response?.data?.accounts ||
     [];
 

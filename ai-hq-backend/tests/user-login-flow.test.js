@@ -103,6 +103,8 @@ async function invokeRoute(router, method, path, req = {}) {
 class FakeLoginDb {
   constructor() {
     this.tenants = new Map();
+    this.identities = new Map();
+    this.memberships = new Map();
     this.users = new Map();
     this.authSessions = new Map();
     this.loginAttempts = new Map();
@@ -110,6 +112,26 @@ class FakeLoginDb {
 
   seedTenant(tenant) {
     this.tenants.set(String(tenant.id), { ...tenant });
+  }
+
+  seedIdentity(identity) {
+    this.identities.set(String(identity.id), {
+      auth_provider: "local",
+      email_verified: true,
+      status: "active",
+      meta: {},
+      ...identity,
+    });
+  }
+
+  seedMembership(membership) {
+    this.memberships.set(String(membership.id), {
+      role: "member",
+      status: "active",
+      permissions: {},
+      meta: {},
+      ...membership,
+    });
   }
 
   seedUser(user) {
@@ -131,28 +153,56 @@ class FakeLoginDb {
     const text = String(input?.text || input || "").trim().toLowerCase();
     const values = Array.isArray(input?.values) ? input.values : [];
 
-    if (text.includes("from tenant_users tu") && text.includes("join tenants t")) {
-      const email = String(values[0] || "").toLowerCase();
+    if (text.includes("from auth_identities") && text.includes("where normalized_email = $1")) {
+      const identity =
+        Array.from(this.identities.values()).find(
+          (row) => String(row.normalized_email).toLowerCase() === String(values[0]).toLowerCase()
+        ) || null;
+      return { rowCount: identity ? 1 : 0, rows: identity ? [{ ...identity }] : [] };
+    }
+
+    if (text.includes("from auth_identity_memberships m") && text.includes("join tenants t")) {
+      const identityId = String(values[0]);
       const tenantKey = String(values[1] || "").toLowerCase();
-      const rows = Array.from(this.users.values())
-        .filter((user) => String(user.user_email || "").toLowerCase() === email)
-        .map((user) => {
-          const tenant = this.tenants.get(String(user.tenant_id)) || {};
+      const rows = Array.from(this.memberships.values())
+        .filter(
+          (membership) =>
+            String(membership.identity_id) === identityId &&
+            String(membership.status).toLowerCase() === "active"
+        )
+        .map((membership) => {
+          const tenant = this.tenants.get(String(membership.tenant_id)) || {};
           return {
-            ...user,
-            tenant_key: tenant.tenant_key,
+            ...membership,
+            tenant_key: tenant.tenant_key || "",
             company_name: tenant.company_name || "",
           };
         })
-        .filter((row) => !tenantKey || String(row.tenant_key || "").toLowerCase() === tenantKey)
-        .sort((a, b) => {
-          const aRank = String(a.status) === "active" ? 0 : 1;
-          const bRank = String(b.status) === "active" ? 0 : 1;
-          if (aRank !== bRank) return aRank - bRank;
-          return String(b.updated_at).localeCompare(String(a.updated_at));
-        });
-
+        .filter((membership) => !tenantKey || String(membership.tenant_key).toLowerCase() === tenantKey);
       return { rowCount: rows.length, rows };
+    }
+
+    if (text.includes("from tenant_users tu") && text.includes("join tenants t")) {
+      const tenantId = String(values[0]);
+      const email = String(values[1]).toLowerCase();
+      const user =
+        Array.from(this.users.values()).find(
+          (row) =>
+            String(row.tenant_id) === tenantId &&
+            String(row.user_email).toLowerCase() === email
+        ) || null;
+      if (!user) return { rowCount: 0, rows: [] };
+      const tenant = this.tenants.get(String(user.tenant_id)) || {};
+      return {
+        rowCount: 1,
+        rows: [
+          {
+            ...user,
+            tenant_key: tenant.tenant_key || "",
+            company_name: tenant.company_name || "",
+          },
+        ],
+      };
     }
 
     if (text.startsWith("insert into auth_sessions")) {
@@ -203,9 +253,17 @@ class FakeLoginDb {
         user.last_login_at = new Date().toISOString();
         user.last_seen_at = new Date().toISOString();
         user.updated_at = new Date().toISOString();
-        return { rowCount: 1, rows: [] };
       }
-      return { rowCount: 0, rows: [] };
+      return { rowCount: user ? 1 : 0, rows: [] };
+    }
+
+    if (text.startsWith("update auth_identities")) {
+      const identity = this.identities.get(String(values[0])) || null;
+      if (identity) {
+        identity.last_login_at = new Date().toISOString();
+        identity.updated_at = new Date().toISOString();
+      }
+      return { rowCount: identity ? 1 : 0, rows: [] };
     }
 
     if (text.startsWith("update auth_sessions") && text.includes("set revoked_at = now()")) {
@@ -227,9 +285,7 @@ class FakeLoginDb {
     }
 
     if (text.startsWith("select attempt_count")) {
-      const row = this.loginAttempts.get(
-        this._loginAttemptKey(values[0], values[1], values[2])
-      );
+      const row = this.loginAttempts.get(this._loginAttemptKey(values[0], values[1], values[2]));
       return { rowCount: row ? 1 : 0, rows: row ? [{ ...row }] : [] };
     }
 
@@ -270,33 +326,54 @@ class FakeLoginDb {
   }
 }
 
-function seedTenantUser(db, {
+function seedIdentityWithMembership(db, {
+  identityId,
+  email,
+  password,
+  identityStatus = "active",
   tenantId,
   tenantKey,
   companyName,
+  membershipId,
+  membershipStatus = "active",
   userId,
-  email,
-  password,
-  status = "active",
+  userStatus = "active",
   role = "member",
-  authProvider = "local",
 }) {
   db.seedTenant({
     id: tenantId,
     tenant_key: tenantKey,
     company_name: companyName || tenantKey,
   });
-  db.seedUser({
-    id: userId,
+  if (identityId && !db.identities.has(identityId)) {
+    db.seedIdentity({
+      id: identityId,
+      primary_email: email,
+      normalized_email: String(email).toLowerCase(),
+      password_hash: password ? hashUserPassword(password) : "",
+      status: identityStatus,
+      email_verified: true,
+    });
+  }
+  db.seedMembership({
+    id: membershipId,
+    identity_id: identityId,
     tenant_id: tenantId,
-    user_email: email,
-    full_name: `${tenantKey} User`,
     role,
-    status,
-    auth_provider: authProvider,
-    password_hash: password ? hashUserPassword(password) : "",
-    session_version: 2,
+    status: membershipStatus,
   });
+  if (userId) {
+    db.seedUser({
+      id: userId,
+      tenant_id: tenantId,
+      user_email: email,
+      full_name: `${tenantKey} User`,
+      role,
+      status: userStatus,
+      password_hash: "legacy-ignored",
+      session_version: 2,
+    });
+  }
 }
 
 const previousUserSessionSecret = cfg.auth.userSessionSecret;
@@ -305,185 +382,104 @@ after(() => {
   cfg.auth.userSessionSecret = previousUserSessionSecret;
 });
 
-test("single-account tenant user login succeeds and /auth/me resolves the session", async () => {
+test("single identity + one membership logs in successfully", async () => {
   const db = new FakeLoginDb();
-  seedTenantUser(db, {
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "owner@acme.test",
+    password: "secret-pass",
     tenantId: "tenant-1",
     tenantKey: "acme",
     companyName: "Acme Clinic",
+    membershipId: "membership-1",
     userId: "user-1",
-    email: "owner@acme.test",
-    password: "secret-pass",
     role: "owner",
   });
 
   const loginRouter = userLoginRoutes({ db });
   const sessionRouter = adminSessionRoutes({ db, wsHub: null });
-
   const login = await invokeRoute(loginRouter, "post", "/auth/login", {
-    body: {
-      email: "owner@acme.test",
-      password: "secret-pass",
-    },
+    body: { email: "owner@acme.test", password: "secret-pass" },
     headers: { host: "app.weneox.com" },
   });
 
   assert.equal(login.res.statusCode, 200);
-  assert.equal(login.res.body?.authenticated, true);
+  assert.equal(login.res.body?.user?.identityId, "identity-1");
+  assert.equal(login.res.body?.user?.membershipId, "membership-1");
   assert.equal(login.res.body?.user?.tenantKey, "acme");
-  const sessionCookie = login.res.cookies.find((cookie) => cookie.name === "aihq_user");
-  assert.ok(sessionCookie?.value);
 
+  const sessionCookie = login.res.cookies.find((cookie) => cookie.name === "aihq_user");
   const me = await invokeRoute(sessionRouter, "get", "/auth/me", {
     headers: { cookie: `aihq_user=${sessionCookie.value}` },
   });
-
-  assert.equal(me.res.statusCode, 200);
   assert.equal(me.res.body?.authenticated, true);
-  assert.equal(me.res.body?.user?.email, "owner@acme.test");
+  assert.equal(me.res.body?.user?.tenantKey, "acme");
 });
 
-test("host tenant context deterministically constrains login when same email exists in multiple workspaces", async () => {
+test("single identity + multiple memberships returns explicit chooser response", async () => {
   const db = new FakeLoginDb();
-  seedTenantUser(db, {
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
     tenantId: "tenant-1",
     tenantKey: "acme",
     companyName: "Acme Clinic",
+    membershipId: "membership-1",
     userId: "user-1",
-    email: "shared@company.test",
-    password: "acme-pass",
   });
-  seedTenantUser(db, {
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
     tenantId: "tenant-2",
     tenantKey: "globex",
     companyName: "Globex",
+    membershipId: "membership-2",
     userId: "user-2",
-    email: "shared@company.test",
-    password: "globex-pass",
-  });
-
-  const router = userLoginRoutes({ db });
-  const login = await invokeRoute(router, "post", "/auth/login", {
-    body: {
-      email: "shared@company.test",
-      password: "acme-pass",
-    },
-    headers: { host: "acme.weneox.com:3000" },
-  });
-
-  assert.equal(login.res.statusCode, 200);
-  assert.equal(login.res.body?.user?.tenantKey, "acme");
-});
-
-test("wrong password fails closed", async () => {
-  const db = new FakeLoginDb();
-  seedTenantUser(db, {
-    tenantId: "tenant-1",
-    tenantKey: "acme",
-    userId: "user-1",
-    email: "owner@acme.test",
-    password: "secret-pass",
-  });
-
-  const router = userLoginRoutes({ db });
-  const login = await invokeRoute(router, "post", "/auth/login", {
-    body: {
-      email: "owner@acme.test",
-      password: "wrong-pass",
-    },
-  });
-
-  assert.equal(login.res.statusCode, 401);
-  assert.equal(login.res.body?.error, "Invalid credentials");
-});
-
-test("inactive tenant users are rejected explicitly", async () => {
-  const db = new FakeLoginDb();
-  seedTenantUser(db, {
-    tenantId: "tenant-1",
-    tenantKey: "acme",
-    userId: "user-1",
-    email: "owner@acme.test",
-    password: "secret-pass",
-    status: "invited",
-  });
-
-  const router = userLoginRoutes({ db });
-  const login = await invokeRoute(router, "post", "/auth/login", {
-    body: {
-      email: "owner@acme.test",
-      password: "secret-pass",
-    },
-  });
-
-  assert.equal(login.res.statusCode, 403);
-  assert.equal(login.res.body?.error, "User is not active");
-});
-
-test("ambiguous email returns explicit workspace choices instead of guessing", async () => {
-  const db = new FakeLoginDb();
-  seedTenantUser(db, {
-    tenantId: "tenant-1",
-    tenantKey: "acme",
-    companyName: "Acme Clinic",
-    userId: "user-1",
-    email: "shared@company.test",
-    password: "shared-pass",
-  });
-  seedTenantUser(db, {
-    tenantId: "tenant-2",
-    tenantKey: "globex",
-    companyName: "Globex",
-    userId: "user-2",
-    email: "shared@company.test",
-    password: "shared-pass",
     role: "operator",
   });
 
   const router = userLoginRoutes({ db });
   const login = await invokeRoute(router, "post", "/auth/login", {
-    body: {
-      email: "shared@company.test",
-      password: "shared-pass",
-    },
+    body: { email: "shared@company.test", password: "shared-pass" },
     headers: { host: "app.weneox.com" },
   });
 
   assert.equal(login.res.statusCode, 409);
-  assert.equal(login.res.body?.code, "multiple_accounts");
-  assert.equal(login.res.body?.accounts?.length, 2);
-  assert.ok(login.res.body?.accounts?.every((account) => account.selectionToken));
+  assert.equal(login.res.body?.code, "multiple_memberships");
+  assert.equal(login.res.body?.memberships?.length, 2);
+  assert.ok(login.res.body?.memberships?.every((membership) => membership.selectionToken));
 });
 
-test("explicit workspace selection token completes ambiguous login safely", async () => {
+test("explicit membership selection completes login deterministically", async () => {
   const db = new FakeLoginDb();
-  seedTenantUser(db, {
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
     tenantId: "tenant-1",
     tenantKey: "acme",
     companyName: "Acme Clinic",
+    membershipId: "membership-1",
     userId: "user-1",
+  });
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
     email: "shared@company.test",
     password: "shared-pass",
-  });
-  seedTenantUser(db, {
     tenantId: "tenant-2",
     tenantKey: "globex",
     companyName: "Globex",
+    membershipId: "membership-2",
     userId: "user-2",
-    email: "shared@company.test",
-    password: "shared-pass",
   });
 
   const router = userLoginRoutes({ db });
   const ambiguous = await invokeRoute(router, "post", "/auth/login", {
-    body: {
-      email: "shared@company.test",
-      password: "shared-pass",
-    },
+    body: { email: "shared@company.test", password: "shared-pass" },
   });
-
-  const selected = ambiguous.res.body?.accounts?.find((account) => account.tenantKey === "globex");
-  assert.ok(selected?.selectionToken);
+  const selected = ambiguous.res.body?.memberships?.find((membership) => membership.tenantKey === "globex");
 
   const login = await invokeRoute(router, "post", "/auth/login", {
     body: {
@@ -497,39 +493,166 @@ test("explicit workspace selection token completes ambiguous login safely", asyn
   assert.equal(login.res.body?.user?.tenantKey, "globex");
 });
 
-test("logout revokes the session and /auth/me becomes unauthenticated", async () => {
+test("host tenant constraint signs in directly when matching membership exists", async () => {
   const db = new FakeLoginDb();
-  seedTenantUser(db, {
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
     tenantId: "tenant-1",
     tenantKey: "acme",
+    companyName: "Acme Clinic",
+    membershipId: "membership-1",
     userId: "user-1",
+  });
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
+    tenantId: "tenant-2",
+    tenantKey: "globex",
+    companyName: "Globex",
+    membershipId: "membership-2",
+    userId: "user-2",
+  });
+
+  const router = userLoginRoutes({ db });
+  const login = await invokeRoute(router, "post", "/auth/login", {
+    body: { email: "shared@company.test", password: "shared-pass" },
+    headers: { host: "acme.weneox.com" },
+  });
+
+  assert.equal(login.res.statusCode, 200);
+  assert.equal(login.res.body?.user?.tenantKey, "acme");
+});
+
+test("host tenant constraint fails closed when membership does not exist", async () => {
+  const db = new FakeLoginDb();
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
+    tenantId: "tenant-2",
+    tenantKey: "globex",
+    companyName: "Globex",
+    membershipId: "membership-2",
+    userId: "user-2",
+  });
+
+  const router = userLoginRoutes({ db });
+  const login = await invokeRoute(router, "post", "/auth/login", {
+    body: { email: "shared@company.test", password: "shared-pass" },
+    headers: { host: "acme.weneox.com" },
+  });
+
+  assert.equal(login.res.statusCode, 403);
+  assert.equal(login.res.body?.code, "membership_not_found");
+});
+
+test("wrong password fails against canonical identity", async () => {
+  const db = new FakeLoginDb();
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
     email: "owner@acme.test",
     password: "secret-pass",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    companyName: "Acme Clinic",
+    membershipId: "membership-1",
+    userId: "user-1",
+  });
+
+  const router = userLoginRoutes({ db });
+  const login = await invokeRoute(router, "post", "/auth/login", {
+    body: { email: "owner@acme.test", password: "wrong-pass" },
+  });
+
+  assert.equal(login.res.statusCode, 401);
+  assert.equal(login.res.body?.error, "Invalid credentials");
+});
+
+test("disabled identity fails closed", async () => {
+  const db = new FakeLoginDb();
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "owner@acme.test",
+    password: "secret-pass",
+    identityStatus: "disabled",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    companyName: "Acme Clinic",
+    membershipId: "membership-1",
+    userId: "user-1",
+  });
+
+  const router = userLoginRoutes({ db });
+  const login = await invokeRoute(router, "post", "/auth/login", {
+    body: { email: "owner@acme.test", password: "secret-pass" },
+  });
+
+  assert.equal(login.res.statusCode, 403);
+  assert.equal(login.res.body?.error, "Identity is not active");
+});
+
+test("logout and session invalidation still work", async () => {
+  const db = new FakeLoginDb();
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "owner@acme.test",
+    password: "secret-pass",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    companyName: "Acme Clinic",
+    membershipId: "membership-1",
+    userId: "user-1",
   });
 
   const loginRouter = userLoginRoutes({ db });
   const sessionRouter = adminSessionRoutes({ db, wsHub: null });
-
   const login = await invokeRoute(loginRouter, "post", "/auth/login", {
-    body: {
-      email: "owner@acme.test",
-      password: "secret-pass",
-    },
+    body: { email: "owner@acme.test", password: "secret-pass" },
   });
   const sessionCookie = login.res.cookies.find((cookie) => cookie.name === "aihq_user");
-  assert.ok(sessionCookie?.value);
 
   const logout = await invokeRoute(loginRouter, "post", "/auth/logout", {
     headers: { cookie: `aihq_user=${sessionCookie.value}` },
   });
-
-  assert.equal(logout.res.statusCode, 200);
   assert.equal(logout.res.body?.loggedOut, true);
 
   const me = await invokeRoute(sessionRouter, "get", "/auth/me", {
     headers: { cookie: `aihq_user=${sessionCookie.value}` },
   });
-
-  assert.equal(me.res.statusCode, 200);
   assert.equal(me.res.body?.authenticated, false);
+});
+
+test("compatibility bridge fails clearly instead of guessing when legacy tenant user is missing", async () => {
+  const db = new FakeLoginDb();
+  db.seedTenant({
+    id: "tenant-1",
+    tenant_key: "acme",
+    company_name: "Acme Clinic",
+  });
+  db.seedIdentity({
+    id: "identity-1",
+    primary_email: "owner@acme.test",
+    normalized_email: "owner@acme.test",
+    password_hash: hashUserPassword("secret-pass"),
+    status: "active",
+    email_verified: true,
+  });
+  db.seedMembership({
+    id: "membership-1",
+    identity_id: "identity-1",
+    tenant_id: "tenant-1",
+    role: "owner",
+    status: "active",
+  });
+
+  const router = userLoginRoutes({ db });
+  const login = await invokeRoute(router, "post", "/auth/login", {
+    body: { email: "owner@acme.test", password: "secret-pass" },
+  });
+
+  assert.equal(login.res.statusCode, 403);
+  assert.equal(login.res.body?.code, "legacy_membership_bridge_missing");
 });

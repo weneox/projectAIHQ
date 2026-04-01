@@ -721,8 +721,10 @@ export function createUserLoginSelectionToken(account = {}) {
   }
 
   const payload = {
-    typ: "tenant_user_login_choice",
-    userId: s(account.userId || account.id),
+    typ: "identity_membership_login_choice",
+    identityId: s(account.identityId || account.identity_id),
+    membershipId: s(account.membershipId || account.membership_id || account.id),
+    userId: s(account.userId || account.legacyUserId || account.user_id),
     tenantId: s(account.tenantId || account.tenant_id),
     tenantKey: s(account.tenantKey || account.tenant_key).toLowerCase(),
     email: s(account.email || account.user_email).toLowerCase(),
@@ -764,7 +766,7 @@ export function verifyUserLoginSelectionToken(token) {
     }
 
     const payload = JSON.parse(unbase64url(payloadB64).toString("utf8") || "{}");
-    if (payload?.typ !== "tenant_user_login_choice") {
+    if (payload?.typ !== "identity_membership_login_choice") {
       return { ok: false, error: "invalid token type" };
     }
 
@@ -774,6 +776,8 @@ export function verifyUserLoginSelectionToken(token) {
     }
 
     if (
+      !s(payload?.identityId) ||
+      !s(payload?.membershipId) ||
       !s(payload?.userId) ||
       !s(payload?.tenantId) ||
       !s(payload?.tenantKey) ||

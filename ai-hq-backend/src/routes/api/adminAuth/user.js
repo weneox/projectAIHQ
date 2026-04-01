@@ -17,7 +17,13 @@ import {
 } from "../../../utils/adminAuth.js";
 import { cfg } from "../../../config.js";
 import { s, lower, getIp, setNoStore, isDbTimeoutError } from "./utils.js";
-import { listTenantUsersForLogin, markUserLogin } from "./repository.js";
+import {
+  findAuthIdentityForLogin,
+  listIdentityMembershipChoicesForLogin,
+  findLegacyTenantUserForIdentityLogin,
+  markIdentityLogin,
+  markUserLogin,
+} from "./repository.js";
 
 function normalizeTenantKeyInput(body = {}) {
   return s(
@@ -34,19 +40,70 @@ function buildRateLimitScope(email, tenantKey = "") {
   return `user:${s(tenantKey).toLowerCase() || "any"}:${lower(email)}`;
 }
 
-function buildAccountChoice(user = {}) {
+async function resolveCompatibleMemberships(db, identity, memberships = []) {
+  const resolved = [];
+
+  for (const membership of memberships) {
+    const legacyUser = await findLegacyTenantUserForIdentityLogin(db, {
+      tenantId: membership.tenant_id,
+      email: identity?.primary_email || identity?.normalized_email,
+    });
+
+    if (!legacyUser?.id) continue;
+    if (s(legacyUser.status).toLowerCase() !== "active") continue;
+
+    resolved.push({
+      identity_id: s(identity?.id),
+      identity_email: lower(identity?.normalized_email || identity?.primary_email),
+      membership_id: s(membership.id),
+      tenant_id: s(membership.tenant_id),
+      tenant_key: s(membership.tenant_key).toLowerCase(),
+      company_name: s(membership.company_name),
+      role: s(membership.role || legacyUser.role || "member").toLowerCase(),
+      status: s(membership.status || "active").toLowerCase(),
+      permissions: membership.permissions || {},
+      meta: membership.meta || {},
+      legacy_user_id: s(legacyUser.id),
+      legacy_user: legacyUser,
+    });
+  }
+
+  return resolved;
+}
+
+function buildMembershipChoice(choice = {}) {
   return {
-    selectionToken: createUserLoginSelectionToken(user),
-    tenantKey: s(user.tenant_key).toLowerCase(),
-    tenantId: s(user.tenant_id),
-    companyName: s(user.company_name),
-    email: lower(user.user_email),
-    fullName: s(user.full_name),
-    role: s(user.role || "member").toLowerCase(),
-    status: s(user.status || "").toLowerCase(),
-    authProvider: s(user.auth_provider || "local").toLowerCase(),
-    passwordReady: Boolean(s(user.password_hash)),
+    selectionToken: createUserLoginSelectionToken({
+      identity_id: choice.identity_id,
+      membership_id: choice.membership_id,
+      userId: choice.legacy_user_id,
+      tenant_id: choice.tenant_id,
+      tenant_key: choice.tenant_key,
+      user_email: choice.identity_email,
+    }),
+    membershipId: choice.membership_id,
+    tenantId: choice.tenant_id,
+    tenantKey: choice.tenant_key,
+    companyName: choice.company_name,
+    email: choice.identity_email,
+    role: choice.role,
+    status: choice.status,
   };
+}
+
+function findSelectedMembership(choices = [], tokenPayload = {}, email = "") {
+  return (
+    choices.find(
+      (choice) =>
+        s(choice.identity_id) === s(tokenPayload.identityId) &&
+        s(choice.membership_id) === s(tokenPayload.membershipId) &&
+        s(choice.tenant_id) === s(tokenPayload.tenantId) &&
+        s(choice.tenant_key).toLowerCase() === s(tokenPayload.tenantKey).toLowerCase() &&
+        s(choice.legacy_user_id) === s(tokenPayload.userId) &&
+        lower(choice.identity_email) === lower(tokenPayload.email) &&
+        lower(choice.identity_email) === lower(email)
+    ) || null
+  );
 }
 
 export function userLoginRoutes({ db } = {}) {
@@ -112,9 +169,9 @@ export function userLoginRoutes({ db } = {}) {
       });
     }
 
-    let candidates = [];
+    let identity = null;
     try {
-      candidates = await listTenantUsersForLogin(db, { email, tenantKey });
+      identity = await findAuthIdentityForLogin(db, { email });
     } catch (e) {
       const timeout = isDbTimeoutError(e);
       return res.status(timeout ? 503 : 500).json({
@@ -124,54 +181,7 @@ export function userLoginRoutes({ db } = {}) {
       });
     }
 
-    const activeCandidates = candidates.filter(
-      (candidate) => s(candidate.status).toLowerCase() === "active"
-    );
-
-    let user = null;
-
-    if (accountSelectionToken) {
-      const checked = verifyUserLoginSelectionToken(accountSelectionToken);
-      if (!checked?.ok || lower(checked.payload?.email) !== email) {
-        return res.status(400).json({
-          ok: false,
-          error: "Account selection is no longer valid",
-          code: "invalid_account_selection",
-        });
-      }
-
-      user =
-        candidates.find(
-          (candidate) =>
-            s(candidate.id) === s(checked.payload?.userId) &&
-            s(candidate.tenant_id) === s(checked.payload?.tenantId) &&
-            lower(candidate.user_email) === lower(checked.payload?.email) &&
-            lower(candidate.tenant_key) === lower(checked.payload?.tenantKey)
-        ) || null;
-
-      if (!user) {
-        return res.status(400).json({
-          ok: false,
-          error: "Account selection is no longer valid",
-          code: "invalid_account_selection",
-        });
-      }
-    } else if (activeCandidates.length === 1) {
-      user = activeCandidates[0];
-    } else if (activeCandidates.length > 1) {
-      return res.status(409).json({
-        ok: false,
-        error: "Multiple accounts found for this email",
-        code: "multiple_accounts",
-        message: "Select the correct workspace to continue.",
-        accounts: activeCandidates.map(buildAccountChoice),
-        tenantResolvedFromHost: Boolean(hostTenantKey),
-      });
-    } else if (candidates.length === 1) {
-      user = candidates[0];
-    }
-
-    if (!user) {
+    if (!identity) {
       await registerFailedLoginAttempt(db, {
         actorType: "user",
         scopeKey: rateLimitScope,
@@ -186,34 +196,32 @@ export function userLoginRoutes({ db } = {}) {
       });
     }
 
-    const resolvedRateLimitScope = buildRateLimitScope(email, user.tenant_key || tenantKey);
-
-    if (s(user.status) !== "active") {
+    if (!["active", "invited"].includes(s(identity.status).toLowerCase())) {
       return res.status(403).json({
         ok: false,
-        error: "User is not active",
+        error: "Identity is not active",
       });
     }
 
-    if (s(user.auth_provider, "local") !== "local") {
+    if (s(identity.auth_provider, "local") !== "local") {
       return res.status(400).json({
         ok: false,
-        error: `This account uses ${s(user.auth_provider)} login`,
+        error: `This account uses ${s(identity.auth_provider)} login`,
       });
     }
 
-    if (!s(user.password_hash)) {
+    if (!s(identity.password_hash)) {
       return res.status(403).json({
         ok: false,
         error: "Password is not set for this account",
       });
     }
 
-    const valid = verifyUserPassword(password, user.password_hash);
+    const valid = verifyUserPassword(password, identity.password_hash);
     if (!valid) {
       await registerFailedLoginAttempt(db, {
         actorType: "user",
-        scopeKey: resolvedRateLimitScope,
+        scopeKey: rateLimitScope,
         ip: getIp(req),
         windowMs: Number(cfg.auth.userRateLimitWindowMs || 15 * 60 * 1000),
         maxAttempts: Number(cfg.auth.userRateLimitMaxAttempts || 8),
@@ -225,16 +233,102 @@ export function userLoginRoutes({ db } = {}) {
       });
     }
 
+    let memberships = [];
+    try {
+      memberships = await listIdentityMembershipChoicesForLogin(db, {
+        identityId: identity.id,
+        tenantKey: hostTenantKey || "",
+      });
+    } catch (e) {
+      const timeout = isDbTimeoutError(e);
+      return res.status(timeout ? 503 : 500).json({
+        ok: false,
+        error: timeout ? "Authentication database timeout" : "Membership query failed",
+        reason: timeout ? "auth_db_timeout" : s(e?.message || e || "Membership query failed"),
+      });
+    }
+
+    const compatibleChoices = await resolveCompatibleMemberships(db, identity, memberships);
+
+    if (hostTenantKey) {
+      const hostChoice =
+        compatibleChoices.find(
+          (choice) => s(choice.tenant_key).toLowerCase() === hostTenantKey
+        ) || null;
+
+      if (!hostChoice) {
+        return res.status(403).json({
+          ok: false,
+          error: "This identity does not have access to the requested workspace",
+          code: "membership_not_found",
+        });
+      }
+
+      memberships.length = 0;
+      memberships.push(hostChoice);
+    }
+
+    let selectedChoice = null;
+
+    if (accountSelectionToken) {
+      const checked = verifyUserLoginSelectionToken(accountSelectionToken);
+      if (!checked?.ok || lower(checked.payload?.email) !== email) {
+        return res.status(400).json({
+          ok: false,
+          error: "Workspace selection is no longer valid",
+          code: "invalid_membership_selection",
+        });
+      }
+
+      selectedChoice = findSelectedMembership(
+        compatibleChoices,
+        checked.payload,
+        email
+      );
+
+      if (!selectedChoice) {
+        return res.status(400).json({
+          ok: false,
+          error: "Workspace selection is no longer valid",
+          code: "invalid_membership_selection",
+        });
+      }
+    } else if (hostTenantKey) {
+      selectedChoice = memberships[0] || null;
+    } else if (compatibleChoices.length === 1) {
+      selectedChoice = compatibleChoices[0];
+    } else if (compatibleChoices.length > 1) {
+      return res.status(409).json({
+        ok: false,
+        error: "Multiple workspaces found for this identity",
+        code: "multiple_memberships",
+        message: "Select the correct workspace to continue.",
+        memberships: compatibleChoices.map(buildMembershipChoice),
+        accounts: compatibleChoices.map(buildMembershipChoice),
+      });
+    }
+
+    if (!selectedChoice?.legacy_user?.id) {
+      return res.status(403).json({
+        ok: false,
+        error: "No compatible workspace session profile was found",
+        code: "legacy_membership_bridge_missing",
+      });
+    }
+
+    const legacyUser = selectedChoice.legacy_user;
+    const resolvedRateLimitScope = buildRateLimitScope(email, selectedChoice.tenant_key);
+
     const { token, expiresAt } = await createUserSessionRecord(
       db,
       {
-        id: user.id,
-        tenant_id: user.tenant_id,
-        tenant_key: user.tenant_key,
-        user_email: user.user_email,
-        full_name: user.full_name,
-        role: user.role,
-        session_version: user.session_version,
+        id: legacyUser.id,
+        tenant_id: legacyUser.tenant_id,
+        tenant_key: legacyUser.tenant_key,
+        user_email: legacyUser.user_email,
+        full_name: legacyUser.full_name,
+        role: legacyUser.role,
+        session_version: legacyUser.session_version,
       },
       {
         ip: getIp(req),
@@ -258,20 +352,25 @@ export function userLoginRoutes({ db } = {}) {
     clearUserCookie(res);
     res.cookie(getUserCookieName(), token, userCookieOptions(req));
 
-    await markUserLogin(db, user.id);
+    await Promise.allSettled([
+      markIdentityLogin(db, identity.id),
+      markUserLogin(db, legacyUser.id),
+    ]);
 
     return res.status(200).json({
       ok: true,
       authenticated: true,
       authType: "tenant_user",
       user: {
-        id: user.id,
-        email: user.user_email,
-        fullName: user.full_name || "",
-        role: user.role,
-        tenantId: user.tenant_id,
-        tenantKey: user.tenant_key,
-        companyName: user.company_name || "",
+        id: legacyUser.id,
+        email: identity.primary_email || identity.normalized_email,
+        fullName: legacyUser.full_name || "",
+        role: legacyUser.role,
+        tenantId: legacyUser.tenant_id,
+        tenantKey: legacyUser.tenant_key,
+        companyName: legacyUser.company_name || "",
+        identityId: identity.id,
+        membershipId: selectedChoice.membership_id,
         sessionExpiresAt: expiresAt,
       },
     });
