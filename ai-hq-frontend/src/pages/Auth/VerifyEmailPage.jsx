@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 
 import { signupUser } from "../api/auth.js";
-import { clearAppSessionContext } from "../lib/appSession.js";
+import { clearAppSessionContext, getAppAuthContext } from "../lib/appSession.js";
+import { resolveAuthenticatedLanding } from "../lib/appEntry.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -28,6 +29,13 @@ function getFriendlyError(error, fallback = "Unable to create your account.") {
       fallback,
     fallback
   );
+}
+
+function resolvePostAuthTarget({ auth = null, payload = {} } = {}) {
+  return resolveAuthenticatedLanding({
+    auth,
+    bootstrap: payload,
+  });
 }
 
 function AuthField({
@@ -94,16 +102,21 @@ export default function Signup() {
       setLoading(true);
       setError("");
 
-      await signupUser(payload);
+      const response = await signupUser(payload);
       clearAppSessionContext();
 
-      navigate("/verify-email", {
-        replace: true,
-        state: {
-          email: payload.email,
-          postVerifyPath: "/setup/studio",
-        },
-      });
+      let auth = null;
+      try {
+        auth = await getAppAuthContext({ force: true });
+      } catch {}
+
+      navigate(
+        resolvePostAuthTarget({
+          auth,
+          payload: response,
+        }),
+        { replace: true }
+      );
     } catch (signupError) {
       setError(getFriendlyError(signupError));
     } finally {
@@ -126,7 +139,8 @@ export default function Signup() {
 
             <p className="mt-4 text-[15px] leading-8 text-white/72">
               Your account becomes the canonical identity, your first business is
-              created, and we route you into email verification before setup.
+              created, and we route you straight into setup or the ready
+              workspace.
             </p>
 
             <div className="mt-8 space-y-4 text-sm text-white/78">
