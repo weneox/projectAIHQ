@@ -1,19 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
 import {
-  AlertCircle,
-  CheckCircle2,
+  ChevronDown,
   Eye,
   EyeOff,
+  Globe,
   Loader2,
   Lock,
-  LogOut,
   Mail,
-  WifiOff,
+  User2,
+  Building2,
 } from "lucide-react";
 
-import { loginUser, logoutUser, selectWorkspaceUser } from "../api/auth.js";
+import { loginUser, selectWorkspaceUser, signupUser } from "../api/auth.js";
 import { clearAppSessionContext, getAppAuthContext } from "../lib/appSession.js";
 import {
   WORKSPACE_SELECTION_ROUTE,
@@ -21,11 +20,6 @@ import {
   resolveAuthenticatedLanding,
   resolveWorkspaceContractRoute,
 } from "../lib/appEntry.js";
-import googleIconSrc from "../assets/setup-studio/channels/google.svg";
-import appleIconSrc from "../assets/setup-studio/channels/apple.svg";
-
-const STUDIO_PREVIEW_VIDEO =
-  "https://res.cloudinary.com/dppoomunj/video/upload/v1775016242/292914_medium_jlp8gi.mp4";
 
 const RESERVED_SUBDOMAINS = new Set([
   "www",
@@ -86,17 +80,6 @@ function normalizeTenantKey(value) {
   return s(value).toLowerCase().replace(/\s+/g, "-");
 }
 
-function formatWorkspaceName(key) {
-  const clean = s(key);
-  if (!clean) return "";
-
-  return clean
-    .split("-")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
 function isServiceUnavailableError(error) {
   const message = s(error?.message).toLowerCase();
   return (
@@ -154,7 +137,7 @@ function resolvePostAuthTarget({ auth = {}, payload = {} } = {}) {
 function InputResetStyles() {
   return (
     <style>{`
-      .login-auth-field-input {
+      .auth-clean-input {
         position: absolute;
         inset: 0;
         width: 100%;
@@ -173,15 +156,15 @@ function InputResetStyles() {
         font: inherit;
       }
 
-      .login-auth-field-input::-ms-reveal,
-      .login-auth-field-input::-ms-clear {
+      .auth-clean-input::-ms-reveal,
+      .auth-clean-input::-ms-clear {
         display: none;
       }
 
-      .login-auth-field-input:-webkit-autofill,
-      .login-auth-field-input:-webkit-autofill:hover,
-      .login-auth-field-input:-webkit-autofill:focus,
-      .login-auth-field-input:-webkit-autofill:active {
+      .auth-clean-input:-webkit-autofill,
+      .auth-clean-input:-webkit-autofill:hover,
+      .auth-clean-input:-webkit-autofill:focus,
+      .auth-clean-input:-webkit-autofill:active {
         -webkit-text-fill-color: #0f172a !important;
         caret-color: #0f172a !important;
         background: transparent !important;
@@ -192,31 +175,30 @@ function InputResetStyles() {
   );
 }
 
-function StatusLine({ icon: Icon, title, body, tone = "neutral", spin = false }) {
-  const toneClass =
-    tone === "error"
-      ? "border-rose-200 bg-rose-50 text-rose-900"
-      : tone === "warning"
-        ? "border-[#ead9a2] bg-[#fffaf0] text-[#7a5a08]"
-        : "border-[#e5e9e8] bg-white text-slate-800";
-
+function TopBar() {
   return (
-    <div className={cn("rounded-[14px] border px-4 py-3", toneClass)}>
-      <div className="flex items-start gap-3">
-        <Icon className={cn("mt-0.5 h-4 w-4 shrink-0", spin && "animate-spin")} />
-        <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em]">
-            {title}
-          </div>
-          <div className="mt-1 text-[13px] leading-6 opacity-90">{body}</div>
-        </div>
-      </div>
+    <div className="flex items-center justify-between px-6 py-6 sm:px-10 lg:px-14">
+      <button
+        type="button"
+        className="text-left text-[34px] font-semibold tracking-[-0.05em] text-slate-950"
+      >
+        <span>NEOX</span>{" "}
+        <span className="font-medium text-slate-500">AI Studio</span>
+      </button>
+
+      <button
+        type="button"
+        className="inline-flex h-[46px] items-center gap-2 rounded-[14px] border border-[#DADDE5] bg-white px-4 text-[15px] font-medium text-slate-700 transition hover:bg-slate-50"
+      >
+        <Globe className="h-4 w-4" />
+        <span>English</span>
+        <ChevronDown className="h-4 w-4" />
+      </button>
     </div>
   );
 }
 
 function AuthField({
-  label,
   icon: Icon,
   type = "text",
   name,
@@ -227,214 +209,117 @@ function AuthField({
   onBlur,
   autoComplete,
   focused = false,
-  invalid = false,
   rightSlot = null,
 }) {
   return (
-    <label className="block">
-      <div className="mb-2 text-[12px] font-medium text-slate-800">{label}</div>
+    <div
+      className={cn(
+        "relative h-[68px] overflow-hidden rounded-[16px] border bg-white transition-all duration-200",
+        focused
+          ? "border-[#121826] shadow-[0_0_0_1.5px_rgba(15,23,42,0.10)]"
+          : "border-[#E2E5EC] hover:border-[#D4D9E2]"
+      )}
+    >
+      <span className="pointer-events-none absolute left-5 top-1/2 z-10 -translate-y-1/2 text-[#A0A8B8]">
+        <Icon className="h-[18px] w-[18px]" />
+      </span>
 
-      <div
+      <input
+        type={type}
+        name={name}
+        value={value}
+        placeholder={placeholder}
+        onChange={onChange}
+        onFocus={onFocus}
+        onBlur={onBlur}
+        autoComplete={autoComplete}
         className={cn(
-          "relative h-[56px] overflow-hidden rounded-[14px] border bg-white transition-all duration-200",
-          invalid
-            ? "border-rose-300"
-            : focused
-              ? "border-[#0b6870] shadow-[0_0_0_1.5px_rgba(11,104,112,.14)]"
-              : "border-[#d8dddd] hover:border-[#c5cbcb]"
+          "auth-clean-input text-[20px] text-slate-900 placeholder:text-[#B6BCC8]",
+          rightSlot ? "pl-[58px] pr-[58px]" : "pl-[58px] pr-5"
         )}
-      >
-        <span className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-[#98a4b8]">
-          <Icon className="h-[18px] w-[18px]" />
-        </span>
+      />
 
-        <input
-          type={type}
-          name={name}
-          value={value}
-          placeholder={placeholder}
-          onChange={onChange}
-          onFocus={onFocus}
-          onBlur={onBlur}
-          autoComplete={autoComplete}
-          className={cn(
-            "login-auth-field-input text-[15px] text-slate-900 placeholder:text-slate-400",
-            rightSlot ? "pr-[52px] pl-[54px]" : "pr-4 pl-[54px]"
-          )}
-        />
-
-        {rightSlot ? (
-          <div className="absolute right-4 top-1/2 z-10 -translate-y-1/2">
-            {rightSlot}
-          </div>
-        ) : null}
-      </div>
-    </label>
-  );
-}
-
-function Divider() {
-  return (
-    <div className="flex items-center gap-4 py-1">
-      <div className="h-px flex-1 bg-[#e6ebea]" />
-      <div className="text-[12px] font-medium uppercase tracking-[0.18em] text-slate-400">
-        Or
-      </div>
-      <div className="h-px flex-1 bg-[#e6ebea]" />
+      {rightSlot ? (
+        <div className="absolute right-5 top-1/2 z-10 -translate-y-1/2">
+          {rightSlot}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function SocialButton({ iconSrc, children, onClick }) {
+function PasswordHint({ password = "" }) {
+  const length = String(password || "").length;
+  const progress = Math.min(length, 8);
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex h-[50px] w-full items-center justify-center gap-3 rounded-[12px] border border-[#dedfdf] bg-white px-4 text-[15px] font-medium text-slate-700 transition hover:border-[#c9d0cf] hover:text-slate-950"
-    >
-      <img
-        src={iconSrc}
-        alt=""
-        aria-hidden="true"
-        className="h-[18px] w-[18px] object-contain"
-      />
-      <span>{children}</span>
-    </button>
+    <div className="space-y-3">
+      <div className="grid grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, index) => {
+          const threshold = (index + 1) * 2;
+          const filled = progress >= threshold;
+          return (
+            <div
+              key={index}
+              className={cn(
+                "h-[4px] rounded-full transition",
+                filled ? "bg-[#121826]" : "bg-[#E5E7EB]"
+              )}
+            />
+          );
+        })}
+      </div>
+
+      <div className="flex items-center justify-between text-[13px] text-slate-600">
+        <span>At least 8 symbols, one uppercase letter and one digit</span>
+        <span>{Math.min(length, 8)}/8</span>
+      </div>
+    </div>
+  );
+}
+
+function InlineError({ message }) {
+  if (!message) return null;
+
+  return (
+    <div className="text-[14px] leading-6 text-[#C43C3C]">
+      {message}
+    </div>
   );
 }
 
 function WorkspaceChoiceCard({ account, selected, onSelect }) {
   const token = s(account?.selectionToken);
-  const stateText = account?.setupRequired
-    ? "Setup required"
-    : account?.workspaceReady
-      ? "Ready"
-      : "Select";
 
   return (
     <button
       type="button"
       onClick={() => onSelect(token)}
       className={cn(
-        "flex w-full items-start justify-between gap-4 rounded-[14px] border px-4 py-3 text-left transition-all duration-200",
+        "flex w-full items-center justify-between rounded-[16px] border px-4 py-4 text-left transition",
         selected
-          ? "border-[#0b5b60] bg-[#0b5b60] text-white"
-          : "border-[#d8dfde] bg-white text-slate-800 hover:border-[#afc0be]"
+          ? "border-[#121826] bg-slate-50"
+          : "border-[#E2E5EC] bg-white hover:border-[#C9D0DB]"
       )}
     >
       <div className="min-w-0">
-        <div className="text-[14px] font-semibold leading-6">
-          {s(account?.companyName) ||
-            formatWorkspaceName(account?.tenantKey) ||
-            account?.tenantKey}
+        <div className="text-[15px] font-medium text-slate-900">
+          {s(account?.companyName) || s(account?.tenantKey) || "Workspace"}
         </div>
-        <div
-          className={cn(
-            "text-[12px] leading-6",
-            selected ? "text-white/75" : "text-slate-500"
-          )}
-        >
+        <div className="mt-1 text-[13px] text-slate-500">
           {s(account?.tenantKey)} · {s(account?.role || "member")}
         </div>
       </div>
 
       <div
         className={cn(
-          "shrink-0 text-right text-[11px] font-semibold uppercase tracking-[0.16em]",
-          selected ? "text-white/72" : "text-slate-400"
+          "h-4 w-4 rounded-full border transition",
+          selected
+            ? "border-[#121826] bg-[#121826]"
+            : "border-[#C9D0DB] bg-white"
         )}
-      >
-        {selected ? "Selected" : stateText}
-      </div>
-    </button>
-  );
-}
-
-function VideoColumn() {
-  const videoRef = useRef(null);
-  const previewPreparedRef = useRef(false);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const previewTime = 0.08;
-
-    function preparePreviewFrame() {
-      if (!video || previewPreparedRef.current) return;
-      previewPreparedRef.current = true;
-
-      const finishPause = () => {
-        try {
-          video.pause();
-        } catch {}
-      };
-
-      try {
-        if (Math.abs(video.currentTime - previewTime) > 0.02) {
-          const handleSeeked = () => finishPause();
-          video.addEventListener("seeked", handleSeeked, { once: true });
-          video.currentTime = previewTime;
-        } else {
-          finishPause();
-        }
-      } catch {
-        finishPause();
-      }
-    }
-
-    if (video.readyState >= 1) {
-      preparePreviewFrame();
-    }
-
-    video.addEventListener("loadedmetadata", preparePreviewFrame);
-    video.addEventListener("loadeddata", preparePreviewFrame);
-    video.addEventListener("canplay", preparePreviewFrame);
-
-    return () => {
-      video.removeEventListener("loadedmetadata", preparePreviewFrame);
-      video.removeEventListener("loadeddata", preparePreviewFrame);
-      video.removeEventListener("canplay", preparePreviewFrame);
-    };
-  }, []);
-
-  async function handleHoverStart() {
-    const video = videoRef.current;
-    if (!video) return;
-
-    try {
-      await video.play();
-    } catch {}
-  }
-
-  function handleHoverEnd() {
-    const video = videoRef.current;
-    if (!video) return;
-
-    try {
-      video.pause();
-    } catch {}
-  }
-
-  return (
-    <div
-      onPointerEnter={handleHoverStart}
-      onPointerLeave={handleHoverEnd}
-      className="relative h-full w-full overflow-hidden bg-[#09111a]"
-    >
-      <video
-        ref={videoRef}
-        className="absolute inset-0 h-full w-full object-cover object-top"
-        style={{ objectPosition: "center top" }}
-        src={STUDIO_PREVIEW_VIDEO}
-        muted
-        loop
-        playsInline
-        preload="auto"
       />
-
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-[#f6f7f6]/16 to-transparent" />
-    </div>
+    </button>
   );
 }
 
@@ -442,39 +327,27 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const detectedTenantKey = useMemo(() => getTenantKeyFromHost(), []);
+  const isSignupMode = location.pathname === "/signup";
   const redirectTo = location.state?.from?.pathname || "/";
-
-  const [checking, setChecking] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [sessionActionBusy, setSessionActionBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [focusedField, setFocusedField] = useState("");
-  const [activeSession, setActiveSession] = useState(null);
-  const [accountChoices, setAccountChoices] = useState([]);
-  const [selectedAccountToken, setSelectedAccountToken] = useState("");
-  const [serviceNotice, setServiceNotice] = useState({
-    visible: false,
-    title: "",
-    body: "",
-    tone: "warning",
-  });
-
-  const [form, setForm] = useState({
-    email: "",
-    password: "",
-  });
-
+  const detectedTenantKey = useMemo(() => getTenantKeyFromHost(), []);
   const activeTenantKey = useMemo(
     () => normalizeTenantKey(detectedTenantKey),
     [detectedTenantKey]
   );
 
-  const workspaceName = useMemo(
-    () => formatWorkspaceName(activeTenantKey),
-    [activeTenantKey]
-  );
+  const [checking, setChecking] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [focusedField, setFocusedField] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [accountChoices, setAccountChoices] = useState([]);
+  const [selectedAccountToken, setSelectedAccountToken] = useState("");
+  const [form, setForm] = useState({
+    fullName: "",
+    companyName: "",
+    email: "",
+    password: "",
+  });
 
   useEffect(() => {
     let alive = true;
@@ -482,44 +355,18 @@ export default function Login() {
     (async () => {
       try {
         const auth = await getAppAuthContext();
+
         if (!alive) return;
 
         if (auth?.authenticated) {
-          const user = auth?.user || {};
-          setActiveSession({
-            email: s(user.email),
-            fullName: s(user.fullName),
-            tenantKey: s(user.tenantKey).toLowerCase(),
+          const target = resolveAuthenticatedLanding({
+            auth,
+            bootstrap: auth?.bootstrap || auth?.workspace || auth,
           });
-
-          setServiceNotice({
-            visible: true,
-            title: "Already signed in",
-            body: "This session is active. Continue to your workspace or sign out to switch accounts.",
-            tone: "neutral",
-          });
-        } else {
-          setActiveSession(null);
-          setServiceNotice({
-            visible: false,
-            title: "",
-            body: "",
-            tone: "warning",
-          });
+          navigate(target, { replace: true });
+          return;
         }
-      } catch (authError) {
-        if (!alive) return;
-
-        setActiveSession(null);
-        setServiceNotice({
-          visible: true,
-          title: "Service unavailable",
-          body: getFriendlyError(
-            authError,
-            "We could not verify your session."
-          ),
-          tone: "warning",
-        });
+      } catch {
       } finally {
         if (alive) setChecking(false);
       }
@@ -528,83 +375,20 @@ export default function Login() {
     return () => {
       alive = false;
     };
-  }, [navigate, redirectTo]);
+  }, [navigate]);
 
-  async function handleContinueWithSession() {
-    if (sessionActionBusy) return;
+  useEffect(() => {
+    setError("");
+    setAccountChoices([]);
+    setSelectedAccountToken("");
+    setShowPassword(false);
+  }, [isSignupMode]);
 
-    setSessionActionBusy(true);
+  function onChange(event) {
+    const { name, value } = event.target;
 
-    try {
-      const auth = await getAppAuthContext({ force: true });
-      const bootstrap = auth?.bootstrap || auth?.workspace || auth;
-      const target = resolveAuthenticatedLanding({
-        auth,
-        bootstrap,
-      });
-
-      navigate(target, { replace: true });
-    } catch (sessionError) {
-      setServiceNotice({
-        visible: true,
-        title: "Session check failed",
-        body: getFriendlyError(
-          sessionError,
-          "We could not resolve the correct entry route."
-        ),
-        tone: "warning",
-      });
-    } finally {
-      setSessionActionBusy(false);
-    }
-  }
-
-  async function handleSignOutCurrentSession() {
-    if (sessionActionBusy) return;
-
-    setSessionActionBusy(true);
-    try {
-      await logoutUser();
-      clearAppSessionContext();
-      setActiveSession(null);
-      setAccountChoices([]);
-      setSelectedAccountToken("");
-      setError("");
-      setServiceNotice({
-        visible: false,
-        title: "",
-        body: "",
-        tone: "warning",
-      });
-    } catch (logoutError) {
-      setServiceNotice({
-        visible: true,
-        title: "Session sign-out failed",
-        body: getFriendlyError(
-          logoutError,
-          "We could not end the current session."
-        ),
-        tone: "warning",
-      });
-    } finally {
-      setSessionActionBusy(false);
-    }
-  }
-
-  function handleProviderClick(message) {
-    setServiceNotice({
-      visible: true,
-      title: "Unavailable",
-      body: message,
-      tone: "neutral",
-    });
-  }
-
-  function onChange(e) {
-    const { name, value } = e.target;
-
-    setForm((prev) => ({
-      ...prev,
+    setForm((current) => ({
+      ...current,
       [name]: value,
     }));
 
@@ -616,10 +400,7 @@ export default function Login() {
     }
   }
 
-  async function onSubmit(e) {
-    e.preventDefault();
-    if (loading) return;
-
+  async function handleLogin() {
     const email = s(form.email);
     const password = String(form.password || "");
     const usingInlineWorkspaceSelection = accountChoices.length > 0;
@@ -634,315 +415,269 @@ export default function Login() {
       return;
     }
 
+    const response = usingInlineWorkspaceSelection
+      ? await selectWorkspaceUser({
+          email,
+          password,
+          tenantKey: activeTenantKey || undefined,
+          accountSelectionToken: selectedAccountToken || undefined,
+        })
+      : await loginUser({
+          email,
+          password,
+          tenantKey: activeTenantKey || undefined,
+          accountSelectionToken: undefined,
+        });
+
+    clearAppSessionContext();
+
+    if (usingInlineWorkspaceSelection) {
+      navigate(resolveWorkspaceContractRoute(response), { replace: true });
+      return;
+    }
+
+    let auth = null;
+
+    try {
+      auth = await getAppAuthContext({ force: true });
+
+      if (hasMultipleWorkspaceChoices(auth)) {
+        navigate(WORKSPACE_SELECTION_ROUTE, { replace: true });
+        return;
+      }
+    } catch {}
+
+    navigate(
+      resolvePostAuthTarget({
+        auth,
+        payload: response,
+      }),
+      { replace: true }
+    );
+  }
+
+  async function handleSignup() {
+    const payload = {
+      fullName: s(form.fullName),
+      companyName: s(form.companyName),
+      email: s(form.email),
+      password: String(form.password || ""),
+    };
+
+    if (!payload.companyName || !payload.email || !payload.password) {
+      setError("Enter your business name, email, and password.");
+      return;
+    }
+
+    await signupUser(payload);
+    clearAppSessionContext();
+
+    navigate("/verify-email", {
+      replace: true,
+      state: {
+        email: payload.email,
+        postVerifyPath: "/setup/studio",
+      },
+    });
+  }
+
+  async function onSubmit(event) {
+    event.preventDefault();
+    if (loading || checking) return;
+
     try {
       setLoading(true);
       setError("");
-      setServiceNotice((prev) => ({ ...prev, visible: false }));
 
-      const response = usingInlineWorkspaceSelection
-        ? await selectWorkspaceUser({
-            email,
-            password,
-            tenantKey: activeTenantKey || undefined,
-            accountSelectionToken: selectedAccountToken || undefined,
-          })
-        : await loginUser({
-            email,
-            password,
-            tenantKey: activeTenantKey || undefined,
-            accountSelectionToken: undefined,
-          });
-
-      clearAppSessionContext();
-
-      if (usingInlineWorkspaceSelection) {
-        navigate(resolveWorkspaceContractRoute(response), { replace: true });
-        return;
+      if (isSignupMode) {
+        await handleSignup();
+      } else {
+        await handleLogin();
       }
-
-      let auth = null;
-
-      try {
-        auth = await getAppAuthContext({ force: true });
-
-        if (hasMultipleWorkspaceChoices(auth)) {
-          navigate(WORKSPACE_SELECTION_ROUTE, { replace: true });
-          return;
-        }
-      } catch {}
-
-      navigate(
-        resolvePostAuthTarget({
-          auth,
-          payload: response,
-        }),
-        { replace: true }
-      );
     } catch (submitError) {
-      if (isServiceUnavailableError(submitError)) {
-        setServiceNotice({
-          visible: true,
-          title: "Authentication paused",
-          body: getFriendlyError(submitError),
-          tone: "warning",
-        });
-        setError("");
-      } else if (isMultipleAccountsError(submitError)) {
+      if (!isSignupMode && isMultipleAccountsError(submitError)) {
         setAccountChoices(normalizeAccountChoices(submitError));
         setSelectedAccountToken("");
-        setServiceNotice({
-          visible: true,
-          title: "Choose workspace",
-          body: "This email is active in more than one workspace. Select the correct one to continue.",
-          tone: "neutral",
-        });
-        setError("");
+        setError("Select your workspace to continue.");
       } else {
-        setError(getFriendlyError(submitError, "Sign in failed."));
+        setError(
+          getFriendlyError(
+            submitError,
+            isSignupMode ? "Unable to create your account." : "Sign in failed."
+          )
+        );
       }
     } finally {
       setLoading(false);
     }
   }
 
+  const isLoginDisabled =
+    checking || loading || !s(form.email) || !s(form.password);
+
+  const isSignupDisabled =
+    checking ||
+    loading ||
+    !s(form.companyName) ||
+    !s(form.email) ||
+    !s(form.password);
+
   return (
-    <div className="h-screen overflow-hidden bg-[#f6f7f6] text-slate-950">
+    <div className="min-h-screen bg-white text-slate-950">
       <InputResetStyles />
 
-      <div className="flex h-full w-full">
-        <div className="flex h-full w-full items-center justify-center px-8 py-6 lg:w-1/2 lg:px-16 xl:px-20">
-          <div className="w-full max-w-[430px]">
-            {activeTenantKey ? (
-              <div className="mb-6 text-[12px] font-medium uppercase tracking-[0.16em] text-[#0b6a71]">
-                {workspaceName || activeTenantKey}
-              </div>
-            ) : null}
+      <TopBar />
 
-            <h1 className="text-[34px] font-semibold tracking-[-0.05em] text-slate-950 xl:text-[36px]">
-              Welcome Back!
+      <main className="mx-auto flex w-full max-w-[760px] justify-center px-6 pb-16 pt-6 sm:px-8 lg:px-10">
+        <div className="w-full max-w-[636px]">
+          <div className="pt-6 text-center">
+            <h1 className="text-[64px] font-semibold leading-none tracking-[-0.06em] text-[#121826] sm:text-[74px]">
+              {isSignupMode ? "Create account" : "Log in"}
             </h1>
+          </div>
 
-            <p className="mt-4 max-w-[390px] text-[15px] leading-8 text-slate-600">
-              Sign in to access your dashboard and continue optimizing your QA
-              process.
-            </p>
+          <form className="mt-12 space-y-6" onSubmit={onSubmit}>
+            {isSignupMode ? (
+              <>
+                <AuthField
+                  icon={User2}
+                  name="fullName"
+                  value={form.fullName}
+                  placeholder="Enter full name"
+                  onChange={onChange}
+                  onFocus={() => setFocusedField("fullName")}
+                  onBlur={() => setFocusedField("")}
+                  autoComplete="name"
+                  focused={focusedField === "fullName"}
+                />
 
-            <div className="mt-6 space-y-3">
-              {serviceNotice.visible ? (
-                <StatusLine
-                  icon={
-                    activeSession || serviceNotice.tone === "neutral"
-                      ? CheckCircle2
-                      : WifiOff
+                <AuthField
+                  icon={Building2}
+                  name="companyName"
+                  value={form.companyName}
+                  placeholder="Enter business name"
+                  onChange={onChange}
+                  onFocus={() => setFocusedField("companyName")}
+                  onBlur={() => setFocusedField("")}
+                  autoComplete="organization"
+                  focused={focusedField === "companyName"}
+                />
+              </>
+            ) : null}
+
+            <AuthField
+              icon={Mail}
+              name="email"
+              type="email"
+              value={form.email}
+              placeholder="Enter email address"
+              onChange={onChange}
+              onFocus={() => setFocusedField("email")}
+              onBlur={() => setFocusedField("")}
+              autoComplete="email"
+              focused={focusedField === "email"}
+            />
+
+            <AuthField
+              icon={Lock}
+              name="password"
+              type={showPassword ? "text" : "password"}
+              value={form.password}
+              placeholder="Enter password"
+              onChange={onChange}
+              onFocus={() => setFocusedField("password")}
+              onBlur={() => setFocusedField("")}
+              autoComplete={isSignupMode ? "new-password" : "current-password"}
+              focused={focusedField === "password"}
+              rightSlot={
+                <button
+                  type="button"
+                  className="text-[#9BA3B2] transition hover:text-slate-700"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label="Toggle password visibility"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-[18px] w-[18px]" />
+                  ) : (
+                    <Eye className="h-[18px] w-[18px]" />
+                  )}
+                </button>
+              }
+            />
+
+            {isSignupMode ? (
+              <PasswordHint password={form.password} />
+            ) : (
+              <div className="flex justify-start">
+                <button
+                  type="button"
+                  className="text-[16px] font-medium text-[#1F2A3D] underline underline-offset-4 transition hover:text-slate-950"
+                  onClick={() =>
+                    setError("Password recovery is not enabled yet.")
                   }
-                  title={serviceNotice.title}
-                  body={serviceNotice.body}
-                  tone={serviceNotice.tone}
-                />
-              ) : null}
+                >
+                  Forgot your password?
+                </button>
+              </div>
+            )}
 
-              {checking ? (
-                <StatusLine
-                  icon={Loader2}
-                  title="Session"
-                  body="Checking your current sign-in state."
-                  spin
-                />
-              ) : null}
+            <InlineError message={error} />
 
-              {error ? (
-                <StatusLine
-                  icon={AlertCircle}
-                  title="Unable to continue"
-                  body={error}
-                  tone="error"
-                />
-              ) : null}
-            </div>
-
-            {activeSession ? (
-              <div className="mt-5 rounded-[14px] border border-[#d9dddd] bg-white p-4">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Current session
-                </div>
-
-                <div className="mt-2 text-[14px] leading-6 text-slate-700">
-                  {activeSession.fullName || activeSession.email || "Signed-in user"}
-                  {activeSession.tenantKey
-                    ? ` · ${formatWorkspaceName(activeSession.tenantKey) || activeSession.tenantKey}`
-                    : ""}
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={handleContinueWithSession}
-                    disabled={sessionActionBusy}
-                    className="inline-flex h-[46px] items-center justify-center rounded-[12px] bg-[#0b5b60] px-4 text-[14px] font-medium text-white transition hover:bg-[#08494c] disabled:opacity-60"
-                  >
-                    {sessionActionBusy ? "Opening..." : "Open workspace"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleSignOutCurrentSession}
-                    disabled={sessionActionBusy}
-                    className="inline-flex h-[46px] items-center justify-center gap-2 rounded-[12px] border border-[#d9dddd] bg-white px-4 text-[14px] font-medium text-slate-700 transition hover:border-[#c4cccc] hover:text-slate-950 disabled:opacity-60"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Use another account
-                  </button>
-                </div>
+            {accountChoices.length ? (
+              <div className="space-y-3">
+                {accountChoices.map((account) => (
+                  <WorkspaceChoiceCard
+                    key={
+                      s(account?.selectionToken) ||
+                      `${account?.tenantKey}-${account?.role}`
+                    }
+                    account={account}
+                    selected={s(account?.selectionToken) === selectedAccountToken}
+                    onSelect={setSelectedAccountToken}
+                  />
+                ))}
               </div>
             ) : null}
 
-            <form className="mt-7 space-y-4" onSubmit={onSubmit}>
-              <AuthField
-                label="Email"
-                icon={Mail}
-                name="email"
-                type="email"
-                value={form.email}
-                placeholder="Enter your email"
-                onChange={onChange}
-                onFocus={() => setFocusedField("email")}
-                onBlur={() => setFocusedField("")}
-                autoComplete="email"
-                focused={focusedField === "email"}
-                invalid={!s(form.email) && !!error}
-              />
+            <button
+              type="submit"
+              disabled={isSignupMode ? isSignupDisabled : isLoginDisabled}
+              className={cn(
+                "mt-2 inline-flex h-[72px] w-full items-center justify-center rounded-full px-6 text-[20px] font-semibold transition",
+                (isSignupMode ? isSignupDisabled : isLoginDisabled)
+                  ? "bg-[#F1F1F1] text-[#B7BCC6]"
+                  : "bg-[#121826] text-white hover:bg-[#0B1020]"
+              )}
+            >
+              {loading ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  {isSignupMode ? "Creating account..." : "Logging in..."}
+                </span>
+              ) : isSignupMode ? (
+                "Create account"
+              ) : accountChoices.length ? (
+                "Open selected workspace"
+              ) : (
+                "Log in"
+              )}
+            </button>
 
-              <AuthField
-                label="Password"
-                icon={Lock}
-                name="password"
-                type={showPassword ? "text" : "password"}
-                value={form.password}
-                placeholder="Enter your password"
-                onChange={onChange}
-                onFocus={() => setFocusedField("password")}
-                onBlur={() => setFocusedField("")}
-                autoComplete="current-password"
-                focused={focusedField === "password"}
-                invalid={!s(form.password) && !!error}
-                rightSlot={
-                  <button
-                    type="button"
-                    className="text-[#9ba6bb] transition hover:text-slate-700"
-                    onClick={() => setShowPassword((prev) => !prev)}
-                    aria-label="Toggle password visibility"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-[18px] w-[18px]" />
-                    ) : (
-                      <Eye className="h-[18px] w-[18px]" />
-                    )}
-                  </button>
+            <div className="pt-2 text-center text-[18px] text-[#1F2A3D]">
+              {isSignupMode ? "Already have an account?" : "Don't have an account?"}{" "}
+              <button
+                type="button"
+                className="font-medium underline underline-offset-4"
+                onClick={() =>
+                  navigate(isSignupMode ? "/login" : "/signup")
                 }
-              />
-
-              <div className="flex justify-end pt-0.5">
-                <button
-                  type="button"
-                  className="text-[13px] font-medium text-[#0b6a71] transition hover:text-[#084c52]"
-                  onClick={() =>
-                    handleProviderClick(
-                      "Password recovery is not enabled yet for this workspace."
-                    )
-                  }
-                >
-                  Forgot Password?
-                </button>
-              </div>
-
-              <motion.button
-                whileHover={loading || checking ? {} : { y: -1 }}
-                whileTap={loading || checking ? {} : { scale: 0.995 }}
-                type="submit"
-                disabled={loading || checking}
-                className="inline-flex h-[54px] w-full items-center justify-center rounded-[14px] bg-[#0a5961] px-5 text-[15px] font-semibold text-white transition hover:bg-[#084a51] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {loading ? (
-                  <span className="inline-flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Signing in...
-                  </span>
-                ) : accountChoices.length ? (
-                  "Open selected workspace"
-                ) : (
-                  "Sign In"
-                )}
-              </motion.button>
-
-              {accountChoices.length ? (
-                <div className="space-y-3 rounded-[14px] border border-[#d8dfde] bg-[#fbfcfb] p-4">
-                  <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      Select workspace
-                    </div>
-                    <div className="mt-1 text-sm leading-6 text-slate-600">
-                      Choose where you want to continue.
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {accountChoices.map((account) => (
-                      <WorkspaceChoiceCard
-                        key={
-                          s(account?.selectionToken) ||
-                          `${account?.tenantKey}-${account?.role}`
-                        }
-                        account={account}
-                        selected={s(account?.selectionToken) === selectedAccountToken}
-                        onSelect={setSelectedAccountToken}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="pt-1">
-                <Divider />
-              </div>
-
-              <div className="space-y-3">
-                <SocialButton
-                  iconSrc={googleIconSrc}
-                  onClick={() =>
-                    handleProviderClick("Google sign-in is not enabled yet.")
-                  }
-                >
-                  Continue with Google
-                </SocialButton>
-
-                <SocialButton
-                  iconSrc={appleIconSrc}
-                  onClick={() =>
-                    handleProviderClick("Apple sign-in is not enabled yet.")
-                  }
-                >
-                  Continue with Apple
-                </SocialButton>
-              </div>
-
-              <div className="pt-1 text-center text-[14px] text-slate-500">
-                Don’t have an Account?{" "}
-                <button
-                  type="button"
-                  className="font-medium text-[#0b6a71] transition hover:text-[#084c52]"
-                  onClick={() => navigate("/signup")}
-                >
-                  Sign Up
-                </button>
-              </div>
-            </form>
-          </div>
+                {isSignupMode ? "Log in" : "Sign up"}
+              </button>
+            </div>
+          </form>
         </div>
-
-        <div className="hidden h-full w-1/2 lg:block">
-          <VideoColumn />
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

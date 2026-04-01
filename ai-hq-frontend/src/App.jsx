@@ -21,7 +21,7 @@ const Incidents = lazy(() => import("./pages/Incidents.jsx"));
 const Voice = lazy(() => import("./pages/Voice.jsx"));
 const Login = lazy(() => import("./pages/Login.jsx"));
 const Signup = lazy(() => import("./pages/Signup.jsx"));
-const VerifyEmail = lazy(() => import("./pages/VerifyEmail.jsx"));
+const VerifyEmail = lazy(() => import("./pages/Auth/VerifyEmailPage.jsx"));
 const TruthViewerPage = lazy(() => import("./pages/Truth/TruthViewerPage.jsx"));
 const ChannelCatalog = lazy(() => import("./pages/ChannelCatalog.jsx"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin.jsx"));
