@@ -21,6 +21,7 @@ export function useSetupStudioControllerEffects({
 }) {
   useEffect(() => {
     actions.loadData({
+      silent: true,
       hydrateReview: false,
       preserveBusinessForm: false,
       seedBootProfile: false,

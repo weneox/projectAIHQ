@@ -32,7 +32,7 @@ export function useSetupStudioControllerState() {
   const autoRevealRef = useRef("");
   const activeSourceRef = useRef(createEmptySourceScope());
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [importingWebsite, setImportingWebsite] = useState(false);
   const [savingBusiness, setSavingBusiness] = useState(false);

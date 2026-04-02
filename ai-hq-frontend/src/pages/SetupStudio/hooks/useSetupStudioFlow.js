@@ -47,5 +47,16 @@ export function createSetupStudioFlow(ctx, helpers) {
     }
   }
 
-  return { onOpenWorkspace };
+  function onOpenWorkspacePreview() {
+    setError("");
+    navigate("/workspace", {
+      replace: true,
+      state: {
+        allowSetupBypass: true,
+        fromSetupPreview: true,
+      },
+    });
+  }
+
+  return { onOpenWorkspace, onOpenWorkspacePreview };
 }

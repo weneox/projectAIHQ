@@ -65,14 +65,23 @@ export default function UserRouteGuard({ children }) {
           return;
         }
 
+        const onSetup = isSetupPath(location.pathname);
+
+        if (onSetup) {
+          setState({
+            loading: false,
+            ok: true,
+            redirectTo: "",
+            failed: false,
+          });
+        }
+
         const bootstrap = await getAppBootstrapContext();
         if (!alive) return;
 
         const workspace = getCanonicalWorkspaceContract(bootstrap);
         const setupCompleted = workspace.workspaceReady;
         const setupRoute = workspace.nextSetupRoute || "/setup";
-
-        const onSetup = isSetupPath(location.pathname);
         let redirectTo = "";
 
         if (!setupCompleted && !onSetup && !allowSetupBypass) {
@@ -96,6 +105,16 @@ export default function UserRouteGuard({ children }) {
         });
       } catch {
         if (!alive) return;
+
+        if (isSetupPath(location.pathname)) {
+          setState({
+            loading: false,
+            ok: true,
+            redirectTo: "",
+            failed: false,
+          });
+          return;
+        }
 
         setState({
           loading: false,

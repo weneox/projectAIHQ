@@ -79,8 +79,8 @@ function ResumeCard({
   );
 }
 
-function WorkspacePreviewCard({ onOpenWorkspace }) {
-  if (typeof onOpenWorkspace !== "function") return null;
+function WorkspacePreviewCard({ onOpenWorkspacePreview }) {
+  if (typeof onOpenWorkspacePreview !== "function") return null;
 
   return (
     <div className="rounded-[28px] border border-sky-200 bg-sky-50/60 p-5">
@@ -94,7 +94,7 @@ function WorkspacePreviewCard({ onOpenWorkspace }) {
         Temporary shortcut for manual visual review during this cleanup pass.
       </div>
       <div className="mt-4">
-        <QuietButton type="button" onClick={onOpenWorkspace}>
+        <QuietButton type="button" onClick={onOpenWorkspacePreview}>
           Open workspace
         </QuietButton>
       </div>
@@ -113,6 +113,7 @@ export default function SetupStudioEntryStage({
   onContinueFlow,
   onResumeReview,
   onOpenWorkspace,
+  onOpenWorkspacePreview,
 }) {
   const websiteValue = buildWebsiteValue(discoveryForm, businessForm);
   const descriptionValue = buildDescriptionValue(discoveryForm, businessForm);
@@ -197,7 +198,7 @@ export default function SetupStudioEntryStage({
         </div>
 
         <div className="space-y-4">
-          <WorkspacePreviewCard onOpenWorkspace={onOpenWorkspace} />
+          <WorkspacePreviewCard onOpenWorkspacePreview={onOpenWorkspacePreview} />
 
           <ResumeCard
             hasStoredReview={hasStoredReview}

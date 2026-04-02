@@ -49,6 +49,7 @@ describe("buildSetupStudioSceneContract", () => {
       onRejectKnowledge: vi.fn(),
       onCreateSuggestedService: vi.fn(),
       onOpenWorkspace: vi.fn(),
+      onOpenWorkspacePreview: vi.fn(),
     };
     const adapters = {
       continueFlow: vi.fn(),
@@ -72,5 +73,6 @@ describe("buildSetupStudioSceneContract", () => {
     expect(contract.content.visibleServiceCount).toBe(1);
     expect(contract.actions.resumeReview).toBe(adapters.loadActiveReview);
     expect(contract.actions.scanBusiness).toBe(actions.onScanBusiness);
+    expect(contract.actions.openWorkspacePreview).toBe(actions.onOpenWorkspacePreview);
   });
 });

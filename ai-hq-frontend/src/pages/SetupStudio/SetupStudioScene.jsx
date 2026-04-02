@@ -61,7 +61,9 @@ export default function SetupStudioScene({
     resumeReview: onResumeReview,
     saveBusiness: onSaveBusiness,
     openWorkspace: onOpenWorkspace,
+    openWorkspacePreview: onOpenWorkspacePreview,
     reloadReviewDraft: onReloadReviewDraft,
+    refresh: onRefresh,
     toggleKnowledge: onToggleKnowledge,
   } = obj(actions);
 
@@ -127,6 +129,7 @@ export default function SetupStudioScene({
               onContinueFlow={stageFlow.handleContinueFromEntry}
               onResumeReview={stageFlow.handleResumeFromEntry}
               onOpenWorkspace={onOpenWorkspace}
+              onOpenWorkspacePreview={onOpenWorkspacePreview}
             />
           ) : null}
 
@@ -179,7 +182,18 @@ export default function SetupStudioScene({
 
         {error ? (
           <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {error}
+            <div>{error}</div>
+            {typeof onRefresh === "function" ? (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => onRefresh()}
+                  className="inline-flex h-9 items-center justify-center rounded-full border border-rose-200 bg-white px-3.5 text-xs font-medium text-rose-700 transition hover:bg-rose-50"
+                >
+                  Retry setup load
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </main>

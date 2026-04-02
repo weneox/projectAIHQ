@@ -158,6 +158,39 @@ describe("UserRouteGuard", () => {
     });
   });
 
+  it("allows the temporary setup preview jump into workspace when bypass state is present", async () => {
+    getAppAuthContext.mockResolvedValue({
+      authenticated: true,
+      user: { email: "owner@acme.test" },
+    });
+    getAppBootstrapContext.mockResolvedValue({
+      workspace: {
+        setupCompleted: false,
+        setupRequired: true,
+        workspaceReady: false,
+        destination: { path: "/setup" },
+      },
+    });
+
+    render(
+      <MemoryRouter
+        initialEntries={[
+          { pathname: "/workspace", state: { allowSetupBypass: true } },
+        ]}
+      >
+        <UserRouteGuard>
+          <div>Protected workspace</div>
+        </UserRouteGuard>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Protected workspace")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId("navigate")).not.toBeInTheDocument();
+  });
+
   it("redirects ready workspaces away from setup routes", async () => {
     getAppAuthContext.mockResolvedValue({
       authenticated: true,
@@ -182,6 +215,64 @@ describe("UserRouteGuard", () => {
     await waitFor(() => {
       expect(screen.getByTestId("navigate")).toHaveTextContent("/workspace");
     });
+  });
+
+  it("renders setup routes immediately while bootstrap is still pending", async () => {
+    let resolveBootstrap;
+    getAppAuthContext.mockResolvedValue({
+      authenticated: true,
+      user: { email: "owner@acme.test" },
+    });
+    getAppBootstrapContext.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveBootstrap = resolve;
+        })
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/setup"]}>
+        <UserRouteGuard>
+          <div>Setup route</div>
+        </UserRouteGuard>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Setup route")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId("navigate")).not.toBeInTheDocument();
+
+    resolveBootstrap?.({
+      workspace: {
+        setupCompleted: false,
+        workspaceReady: false,
+        destination: { path: "/setup" },
+      },
+    });
+  });
+
+  it("keeps setup routes reachable when bootstrap fails after auth succeeds", async () => {
+    getAppAuthContext.mockResolvedValue({
+      authenticated: true,
+      user: { email: "owner@acme.test" },
+    });
+    getAppBootstrapContext.mockRejectedValue(new Error("bootstrap offline"));
+
+    render(
+      <MemoryRouter initialEntries={["/setup"]}>
+        <UserRouteGuard>
+          <div>Setup route</div>
+        </UserRouteGuard>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Setup route")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByTestId("navigate")).not.toBeInTheDocument();
   });
 
   it("trusts the canonical setup route from the backend contract", async () => {

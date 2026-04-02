@@ -49,6 +49,7 @@ describe("useSetupStudioControllerEffects", () => {
 
     expect(actions.loadData).toHaveBeenCalledTimes(1);
     expect(actions.loadData).toHaveBeenCalledWith({
+      silent: true,
       hydrateReview: false,
       preserveBusinessForm: false,
       seedBootProfile: false,

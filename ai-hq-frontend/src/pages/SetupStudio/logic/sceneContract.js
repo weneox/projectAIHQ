@@ -55,6 +55,7 @@ export function buildSetupStudioSceneContract({
       rejectKnowledge: actions.onRejectKnowledge,
       createSuggestedService: actions.onCreateSuggestedService,
       openWorkspace: actions.onOpenWorkspace,
+      openWorkspacePreview: actions.onOpenWorkspacePreview,
       reloadReviewDraft: adapters.loadActiveReview,
       refresh: adapters.refreshStudio,
       toggleKnowledge: adapters.toggleKnowledge,
