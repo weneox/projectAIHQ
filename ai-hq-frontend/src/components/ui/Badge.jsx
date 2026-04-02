@@ -69,6 +69,10 @@ export default function Badge({
     size === "md"
       ? "h-7 rounded-[14px] px-2.5 text-[12px]"
       : "h-6 rounded-[12px] px-2.25 text-[11px]";
+  const pillCls =
+    size === "md"
+      ? "min-h-[34px] rounded-full px-3.5 text-[12px]"
+      : "min-h-[30px] rounded-full px-3 text-[11px]";
 
   return (
     <span
@@ -77,8 +81,16 @@ export default function Badge({
         "select-none whitespace-nowrap",
         "font-semibold leading-none tracking-[-0.01em]",
         "transition-[background-color,border-color,color,box-shadow] duration-200",
-        sizeCls,
-        p[variant] || p.subtle,
+        variant === "pill" ? pillCls : sizeCls,
+        variant === "pill"
+          ? cx(
+              "border-white/70 bg-white/78 text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_-20px_rgba(15,23,42,0.18)]",
+              tone === "success" && "border-emerald-200/90 bg-emerald-50/90 text-emerald-800",
+              tone === "warn" && "border-amber-200/90 bg-amber-50/90 text-amber-900",
+              tone === "danger" && "border-rose-200/90 bg-rose-50/90 text-rose-800",
+              tone === "info" && "border-sky-200/90 bg-sky-50/90 text-sky-800"
+            )
+          : p[variant] || p.subtle,
         className
       )}
     >

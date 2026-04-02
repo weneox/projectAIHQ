@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { FileText, Globe2, Loader2 } from "lucide-react";
 
+import { InlineCallout } from "../../../components/ui/PageSection.jsx";
 import SetupStudioStageShell from "../components/SetupStudioStageShell.jsx";
 import { MetricCard, StageSection, TinyChip, TinyLabel } from "../components/SetupStudioUi.jsx";
 import { truncateMiddle } from "../lib/setupStudioHelpers.js";
@@ -140,13 +141,15 @@ export default function SetupStudioScanningStage({
             detail="You will check the draft before confirming anything."
           />
           {clippedUrl ? (
-            <div className="rounded-[24px] border border-slate-200 bg-white/82 p-4 text-sm leading-6 text-slate-500">
-              <div className="mb-2 flex items-center gap-2 font-medium text-slate-700">
+            <InlineCallout
+              title={
+                <span className="mb-2 flex items-center gap-2 font-medium text-slate-700">
                 <Globe2 className="h-4 w-4 text-slate-400" />
                 Website
-              </div>
-              <div>{clippedUrl}</div>
-            </div>
+                </span>
+              }
+              body={clippedUrl}
+            />
           ) : null}
         </StageSection>
       </div>

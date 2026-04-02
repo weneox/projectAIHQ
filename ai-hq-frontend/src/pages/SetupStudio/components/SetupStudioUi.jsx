@@ -1,17 +1,15 @@
+import Badge from "../../../components/ui/Badge.jsx";
+import Button from "../../../components/ui/Button.jsx";
+
 function cx(...parts) {
   return parts.filter(Boolean).join(" ");
 }
 
 export function TinyLabel({ children, className = "" }) {
   return (
-    <div
-      className={cx(
-        "inline-flex items-center gap-2 rounded-full bg-white/78 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500",
-        className
-      )}
-    >
+    <Badge variant="pill" size="sm" className={cx("gap-1.5 !text-[10px] uppercase tracking-[0.2em] text-slate-500", className)}>
       {children}
-    </div>
+    </Badge>
   );
 }
 
@@ -22,21 +20,17 @@ export function TinyChip({
 }) {
   const toneClass =
     tone === "warn"
-      ? "bg-amber-50 text-amber-800"
+      ? "warn"
       : tone === "success"
-        ? "bg-emerald-50 text-emerald-700"
-        : "bg-white/76 text-slate-600";
+        ? "success"
+        : tone === "info"
+          ? "info"
+          : "neutral";
 
   return (
-    <div
-      className={cx(
-        "inline-flex items-center rounded-full px-3 py-1.5 text-[11px] font-medium",
-        toneClass,
-        className
-      )}
-    >
+    <Badge variant="pill" tone={toneClass} className={className}>
       {children}
-    </div>
+    </Badge>
   );
 }
 
@@ -50,22 +44,17 @@ export function GhostButton({
   type = "button",
 }) {
   return (
-    <button
+    <Button
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={cx(
-        "inline-flex h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition",
-        active
-          ? "bg-slate-950 text-white shadow-[0_16px_34px_-22px_rgba(15,23,42,.65)] hover:bg-slate-800"
-          : "bg-white/82 text-slate-700 hover:bg-white hover:text-slate-950",
-        disabled ? "cursor-not-allowed opacity-50" : "",
-        className
-      )}
+      variant={active ? "brand" : "surface"}
+      size="pill"
+      className={className}
+      leftIcon={Icon ? <Icon className="h-4 w-4 shrink-0" /> : undefined}
     >
-      {Icon ? <Icon className="h-4 w-4 shrink-0" /> : null}
-      <span>{children}</span>
-    </button>
+      {children}
+    </Button>
   );
 }
 

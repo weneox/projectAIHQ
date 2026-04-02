@@ -32,33 +32,60 @@ function Surface({
   disabled = false,
   readOnly = false,
   invalid = false,
+  appearance = "editorial",
 }) {
+  const editorialClass = invalid
+    ? "border-rose-300/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(254,242,242,0.88))] shadow-[inset_0_1px_0_rgba(255,255,255,0.78),0_12px_30px_rgba(244,63,94,0.08)] dark:border-rose-400/30 dark:bg-[linear-gradient(180deg,rgba(127,29,29,0.18),rgba(15,23,42,0.82))]"
+    : readOnly
+    ? "border-slate-200/70 bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(241,245,249,0.90))] shadow-[inset_0_1px_0_rgba(255,255,255,0.76),0_8px_20px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.02))]"
+    : "border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.78),0_12px_32px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(2,6,23,0.80))] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_18px_44px_rgba(0,0,0,0.46)]";
+
+  const productClass = invalid
+    ? "border-rose-200 bg-rose-50/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.84)]"
+    : readOnly
+    ? "border-slate-200/80 bg-slate-50/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]"
+    : "border-slate-200/85 bg-white/82 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_12px_26px_-24px_rgba(15,23,42,0.22)]";
+
+  const focusClass =
+    appearance === "product"
+      ? !disabled &&
+        !readOnly &&
+        !invalid &&
+        "focus-within:border-slate-300 focus-within:bg-white focus-within:shadow-[0_0_0_4px_rgba(148,210,255,0.12),0_16px_32px_-26px_rgba(15,23,42,0.2)]"
+      : !disabled &&
+        !readOnly &&
+        !invalid &&
+        "focus-within:border-sky-300/90 focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_0_0_4px_rgba(56,189,248,0.08),0_16px_38px_rgba(15,23,42,0.08)] dark:focus-within:border-sky-400/30 dark:focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_0_4px_rgba(56,189,248,0.10),0_18px_46px_rgba(0,0,0,0.52)]";
+
   return (
     <div
       className={cx(
         "relative w-full min-w-0 overflow-hidden rounded-[22px] border",
         "transition-[border-color,box-shadow,background-color,transform] duration-200",
         "focus-within:outline-none",
-        invalid
-          ? "border-rose-300/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(254,242,242,0.88))] shadow-[inset_0_1px_0_rgba(255,255,255,0.78),0_12px_30px_rgba(244,63,94,0.08)] dark:border-rose-400/30 dark:bg-[linear-gradient(180deg,rgba(127,29,29,0.18),rgba(15,23,42,0.82))]"
-          : readOnly
-          ? "border-slate-200/70 bg-[linear-gradient(180deg,rgba(248,250,252,0.96),rgba(241,245,249,0.90))] shadow-[inset_0_1px_0_rgba(255,255,255,0.76),0_8px_20px_rgba(15,23,42,0.04)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.02))]"
-          : "border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.78),0_12px_32px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(2,6,23,0.80))] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_18px_44px_rgba(0,0,0,0.46)]",
-        !disabled &&
-          !readOnly &&
-          !invalid &&
-          "focus-within:border-sky-300/90 focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_0_0_4px_rgba(56,189,248,0.08),0_16px_38px_rgba(15,23,42,0.08)] dark:focus-within:border-sky-400/30 dark:focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_0_0_4px_rgba(56,189,248,0.10),0_18px_46px_rgba(0,0,0,0.52)]",
+        appearance === "product" ? productClass : editorialClass,
+        focusClass,
         disabled ? "opacity-55" : "",
         className
       )}
     >
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.20),transparent_44%)] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_38%)]"
+        className={cx(
+          "pointer-events-none absolute inset-0 rounded-[22px]",
+          appearance === "product"
+            ? "bg-[linear-gradient(180deg,rgba(255,255,255,0.16),transparent_40%)]"
+            : "bg-[linear-gradient(180deg,rgba(255,255,255,0.20),transparent_44%)] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_38%)]"
+        )}
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent dark:via-white/10"
+        className={cx(
+          "pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent",
+          appearance === "product"
+            ? "via-white/80 to-transparent"
+            : "via-white/60 to-transparent dark:via-white/10"
+        )}
       />
       <div className="relative">{children}</div>
     </div>
@@ -76,6 +103,7 @@ export function InputGroup({
   disabled,
   readOnly,
   invalid = false,
+  appearance = "editorial",
   ...props
 }) {
   const showClear =
@@ -91,6 +119,7 @@ export function InputGroup({
         disabled={disabled}
         readOnly={readOnly}
         invalid={invalid}
+        appearance={appearance}
       >
         <div className="flex h-12 items-center gap-2.5 px-3.5">
           {leftIcon ? (
@@ -154,6 +183,7 @@ const Input = forwardRef(function Input({
   disabled,
   readOnly,
   invalid = false,
+  appearance = "editorial",
   leftIcon,
   right,
   ...props
@@ -165,6 +195,7 @@ const Input = forwardRef(function Input({
         disabled={disabled}
         readOnly={readOnly}
         invalid={invalid}
+        appearance={appearance}
       >
         <div className="flex h-12 items-center gap-2.5 px-3.5">
           {leftIcon ? (
@@ -204,3 +235,90 @@ const Input = forwardRef(function Input({
 });
 
 export default Input;
+
+export const Textarea = forwardRef(function Textarea(
+  {
+    className,
+    textClassName,
+    disabled,
+    readOnly,
+    invalid = false,
+    appearance = "editorial",
+    rows = 5,
+    ...props
+  },
+  ref
+) {
+  return (
+    <div className="relative w-full min-w-0">
+      <Surface
+        className={className}
+        disabled={disabled}
+        readOnly={readOnly}
+        invalid={invalid}
+        appearance={appearance}
+      >
+        <div className="px-4 py-3">
+          <textarea
+            ref={ref}
+            rows={rows}
+            disabled={disabled}
+            readOnly={readOnly}
+            className={cx(
+              "min-h-[140px] w-full resize-none bg-transparent text-[14px] leading-7 outline-none",
+              "placeholder:text-slate-400 dark:placeholder:text-slate-500",
+              readOnly
+                ? "text-slate-600 dark:text-slate-300"
+                : "text-slate-900 dark:text-slate-100",
+              disabled ? "cursor-not-allowed" : "",
+              textClassName
+            )}
+            {...props}
+          />
+        </div>
+      </Surface>
+    </div>
+  );
+});
+
+export const Select = forwardRef(function Select(
+  {
+    className,
+    selectClassName,
+    disabled,
+    readOnly,
+    invalid = false,
+    appearance = "editorial",
+    children,
+    ...props
+  },
+  ref
+) {
+  return (
+    <div className="relative w-full min-w-0">
+      <Surface
+        className={className}
+        disabled={disabled}
+        readOnly={readOnly}
+        invalid={invalid}
+        appearance={appearance}
+      >
+        <div className="px-3.5">
+          <select
+            ref={ref}
+            disabled={disabled}
+            className={cx(
+              "h-12 w-full bg-transparent text-[14px] outline-none",
+              readOnly ? "text-slate-600 dark:text-slate-300" : "text-slate-900 dark:text-slate-100",
+              disabled ? "cursor-not-allowed" : "",
+              selectClassName
+            )}
+            {...props}
+          >
+            {children}
+          </select>
+        </div>
+      </Surface>
+    </div>
+  );
+});

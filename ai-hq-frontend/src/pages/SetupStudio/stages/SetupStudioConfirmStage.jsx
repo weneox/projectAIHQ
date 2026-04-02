@@ -1,5 +1,8 @@
 import React from "react";
 
+import Button from "../../../components/ui/Button.jsx";
+import Input, { Textarea } from "../../../components/ui/Input.jsx";
+import { InlineCallout, PageSection, SurfaceBlock } from "../../../components/ui/PageSection.jsx";
 import { getControlPlanePermissions } from "../../../lib/controlPlanePermissions.js";
 import SetupStudioStageShell from "../components/SetupStudioStageShell.jsx";
 import { TinyChip, TinyLabel } from "../components/SetupStudioUi.jsx";
@@ -71,28 +74,6 @@ function buildFieldList(businessForm = {}, manualSections = {}) {
   ];
 }
 
-function PrimaryButton({ children, className = "", ...props }) {
-  return (
-    <button
-      {...props}
-      className={`inline-flex h-12 items-center justify-center rounded-full bg-slate-950 px-6 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function SecondaryButton({ children, className = "", ...props }) {
-  return (
-    <button
-      {...props}
-      className={`inline-flex h-12 items-center justify-center rounded-full border border-slate-200 bg-white px-6 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
 function Field({
   label,
   value,
@@ -104,19 +85,27 @@ function Field({
 
   return (
     <label className="block">
-      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+      <div className="product-field-label mb-2">
         {label}
       </div>
-      <Element
-        rows={multiline ? 4 : undefined}
-        value={value}
-        onChange={(event) => onChange?.(event.target.value)}
-        placeholder={placeholder}
-        autoComplete="off"
-        className={`w-full rounded-[20px] border border-slate-200 bg-white px-4 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-slate-300 focus:ring-2 focus:ring-slate-100 ${
-          multiline ? "min-h-[112px] resize-none py-3" : "h-12"
-        }`}
-      />
+      {Element === "textarea" ? (
+        <Textarea
+          rows={4}
+          value={value}
+          onChange={(event) => onChange?.(event.target.value)}
+          placeholder={placeholder}
+          autoComplete="off"
+          appearance="product"
+        />
+      ) : (
+        <Input
+          value={value}
+          onChange={(event) => onChange?.(event.target.value)}
+          placeholder={placeholder}
+          autoComplete="off"
+          appearance="product"
+        />
+      )}
     </label>
   );
 }
@@ -131,19 +120,18 @@ function BlockingBanner({
   if (!message) return null;
 
   return (
-    <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-4">
-      <div className="text-sm font-semibold text-amber-900">
-        Final confirmation is paused
-      </div>
-      <div className="mt-2 text-sm leading-6 text-amber-900">{message}</div>
-      {syncMessage && typeof onReloadReviewDraft === "function" ? (
-        <div className="mt-3">
-          <SecondaryButton type="button" onClick={onReloadReviewDraft} className="h-10 px-4">
+    <InlineCallout
+      title="Final confirmation is paused"
+      body={message}
+      tone="warn"
+      action={
+        syncMessage && typeof onReloadReviewDraft === "function" ? (
+          <Button type="button" variant="surface" size="pill" onClick={onReloadReviewDraft}>
             Reload draft
-          </SecondaryButton>
-        </div>
-      ) : null}
-    </div>
+          </Button>
+        ) : null
+      }
+    />
   );
 }
 
@@ -158,7 +146,7 @@ function DetailSummary({ businessForm = {}, manualSections = {} }) {
   ].filter(Boolean);
 
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5 sm:p-6">
+    <SurfaceBlock className="p-5 sm:p-6">
       <div className="flex flex-wrap items-center gap-2">
         <TinyLabel>Step 4 of 4</TinyLabel>
         <TinyChip>{values.length} section{values.length === 1 ? "" : "s"} ready</TinyChip>
@@ -170,7 +158,7 @@ function DetailSummary({ businessForm = {}, manualSections = {} }) {
       <p className="mt-2 max-w-[760px] text-sm leading-7 text-slate-600">
         Make any final edits here, then confirm and start using your workspace.
       </p>
-    </div>
+    </SurfaceBlock>
   );
 }
 
@@ -213,7 +201,8 @@ export default function SetupStudioConfirmStage({
           onReloadReviewDraft={onReloadReviewDraft}
         />
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <PageSection>
+          <div className="grid gap-4 lg:grid-cols-2">
           {fields.map((field) => (
             <div
               key={field.key}
@@ -235,28 +224,35 @@ export default function SetupStudioConfirmStage({
               />
             </div>
           ))}
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-2">
-          <div className="text-sm leading-6 text-slate-500">
-            You can finish details like FAQs, policies, and extra sources later in Settings.
           </div>
+        </PageSection>
 
-          <div className="flex flex-wrap gap-3">
-            {typeof onBack === "function" ? (
-              <SecondaryButton type="button" onClick={onBack} disabled={savingBusiness}>
+        <PageSection>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <InlineCallout
+              title="You can finish the rest later"
+              body="Add FAQs, policies, and extra sources after setup in Settings."
+              className="max-w-[420px]"
+            />
+
+            <div className="flex flex-wrap gap-3">
+              {typeof onBack === "function" ? (
+                <Button type="button" variant="surface" size="hero" onClick={onBack} disabled={savingBusiness}>
                 Back
-              </SecondaryButton>
-            ) : null}
-            <PrimaryButton
-              type="button"
-              onClick={onSubmit}
-              disabled={savingBusiness || blocked}
-            >
-              {savingBusiness ? "Confirming..." : "Confirm and enter workspace"}
-            </PrimaryButton>
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="brand"
+                size="hero"
+                onClick={onSubmit}
+                disabled={savingBusiness || blocked}
+              >
+                {savingBusiness ? "Confirming..." : "Confirm and enter workspace"}
+              </Button>
+            </div>
           </div>
-        </div>
+        </PageSection>
       </div>
     </SetupStudioStageShell>
   );

@@ -1,6 +1,8 @@
 import { AnimatePresence } from "framer-motion";
 import React from "react";
 
+import Button from "../../components/ui/Button.jsx";
+import { InlineCallout } from "../../components/ui/PageSection.jsx";
 import { useSetupStudioSceneView } from "./hooks/useSetupStudioSceneView.js";
 import { useSetupStudioStageFlow } from "./hooks/useSetupStudioStageFlow.js";
 import SetupStudioEntryStage from "./stages/SetupStudioEntryStage.jsx";
@@ -102,7 +104,7 @@ export default function SetupStudioScene({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white">
+      <div className="min-h-screen bg-transparent">
         <div className="mx-auto flex min-h-screen w-full max-w-[1120px] items-center justify-center px-6">
           <div className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 shadow-sm">
             Preparing setup...
@@ -113,7 +115,7 @@ export default function SetupStudioScene({
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-transparent">
       <main className="mx-auto w-full max-w-[1120px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <AnimatePresence mode="wait">
           {stageFlow.stage === "entry" ? (
@@ -181,19 +183,19 @@ export default function SetupStudioScene({
         </AnimatePresence>
 
         {error ? (
-          <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            <div>{error}</div>
-            {typeof onRefresh === "function" ? (
-              <div className="mt-3">
-                <button
-                  type="button"
-                  onClick={() => onRefresh()}
-                  className="inline-flex h-9 items-center justify-center rounded-full border border-rose-200 bg-white px-3.5 text-xs font-medium text-rose-700 transition hover:bg-rose-50"
-                >
-                  Retry setup load
-                </button>
-              </div>
-            ) : null}
+          <div className="mt-6">
+            <InlineCallout
+              title="Setup data could not be loaded"
+              body={error}
+              tone="danger"
+              action={
+                typeof onRefresh === "function" ? (
+                  <Button type="button" variant="surface" size="pill" onClick={() => onRefresh()}>
+                    Retry setup load
+                  </Button>
+                ) : null
+              }
+            />
           </div>
         ) : null}
       </main>

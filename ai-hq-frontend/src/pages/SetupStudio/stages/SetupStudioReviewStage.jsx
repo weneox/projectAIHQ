@@ -1,5 +1,7 @@
 import React from "react";
 
+import Button from "../../../components/ui/Button.jsx";
+import { InlineCallout, PageSection, SurfaceBlock } from "../../../components/ui/PageSection.jsx";
 import SetupStudioStageShell from "../components/SetupStudioStageShell.jsx";
 import { TinyChip, TinyLabel } from "../components/SetupStudioUi.jsx";
 
@@ -59,31 +61,9 @@ function humanize(value = "") {
     .trim();
 }
 
-function PrimaryButton({ children, className = "", ...props }) {
-  return (
-    <button
-      {...props}
-      className={`inline-flex h-12 items-center justify-center rounded-full bg-slate-950 px-6 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function SecondaryButton({ children, className = "", ...props }) {
-  return (
-    <button
-      {...props}
-      className={`inline-flex h-12 items-center justify-center rounded-full border border-slate-200 bg-white px-6 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
 function ReviewSection({ title, body = "", children }) {
   return (
-    <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_18px_44px_-34px_rgba(15,23,42,.22)] sm:p-6">
+    <PageSection>
       <div className="mb-4">
         <h3 className="text-lg font-semibold tracking-[-0.03em] text-slate-950">
           {title}
@@ -93,13 +73,13 @@ function ReviewSection({ title, body = "", children }) {
         ) : null}
       </div>
       {children}
-    </section>
+    </PageSection>
   );
 }
 
 function DraftSummary({ currentTitle, currentDescription, sourceLabel }) {
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5 sm:p-6">
+    <SurfaceBlock className="p-5 sm:p-6">
       <div className="flex flex-wrap items-center gap-2">
         <TinyLabel>Step 3 of 4</TinyLabel>
         {s(sourceLabel) ? <TinyChip>{sourceLabel}</TinyChip> : null}
@@ -113,7 +93,7 @@ function DraftSummary({ currentTitle, currentDescription, sourceLabel }) {
         {s(currentDescription) ||
           "This is the first draft based on the information you provided. Review it once, then continue to the final confirmation step."}
       </p>
-    </div>
+    </SurfaceBlock>
   );
 }
 
@@ -137,7 +117,7 @@ function BusinessDetails({ rows = [] }) {
   }
 
   return (
-    <div className="divide-y divide-slate-100 overflow-hidden rounded-[20px] border border-slate-100 bg-slate-50/70">
+      <div className="divide-y divide-slate-200/70 overflow-hidden">
       {visibleRows.map((row, index) => (
         <div
           key={`${row.label}-${index}`}
@@ -162,19 +142,20 @@ function ServicesList({ services = [], serviceSuggestionTitle = "" }) {
 
   if (!visibleServices.length && !s(serviceSuggestionTitle)) {
     return (
-      <div className="rounded-[20px] border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-500">
-        No services were added to the draft yet.
-      </div>
+        <div className="rounded-[20px] border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-500">
+          No services were added to the draft yet.
+        </div>
     );
   }
 
   return (
     <div className="space-y-3">
       {s(serviceSuggestionTitle) ? (
-        <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 px-4 py-4 text-sm leading-6 text-slate-600">
-          Suggested service:{" "}
-          <span className="font-medium text-slate-900">{serviceSuggestionTitle}</span>
-        </div>
+        <InlineCallout
+          title="Suggested service"
+          body={serviceSuggestionTitle}
+          className="py-2"
+        />
       ) : null}
 
       {visibleServices.length ? (
@@ -182,7 +163,7 @@ function ServicesList({ services = [], serviceSuggestionTitle = "" }) {
           {visibleServices.map((title, index) => (
             <div
               key={`${title}-${index}`}
-              className="rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"
+              className="border-t border-slate-200/80 px-1 py-3 text-sm text-slate-700 first:border-t-0 first:pt-0"
             >
               {title}
             </div>
@@ -211,18 +192,17 @@ function NotesList({ knowledgeItems = [], showKnowledge, onToggleKnowledge }) {
 
   if (!showKnowledge) {
     return (
-      <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
-        <div className="text-sm leading-6 text-slate-600">
-          {visibleItems.length} note{visibleItems.length === 1 ? "" : "s"} found for this draft.
-        </div>
-        {typeof onToggleKnowledge === "function" ? (
-          <div className="mt-3">
-            <SecondaryButton type="button" onClick={onToggleKnowledge} className="h-10 px-4">
+      <InlineCallout
+        title={`${visibleItems.length} note${visibleItems.length === 1 ? "" : "s"} found for this draft`}
+        body="Open these only if you want more detail before continuing."
+        action={
+          typeof onToggleKnowledge === "function" ? (
+            <Button type="button" variant="surface" size="pill" onClick={onToggleKnowledge}>
               Show notes
-            </SecondaryButton>
-          </div>
-        ) : null}
-      </div>
+            </Button>
+          ) : null
+        }
+      />
     );
   }
 
@@ -241,9 +221,9 @@ function NotesList({ knowledgeItems = [], showKnowledge, onToggleKnowledge }) {
       ))}
       {typeof onToggleKnowledge === "function" ? (
         <div>
-          <SecondaryButton type="button" onClick={onToggleKnowledge} className="h-10 px-4">
+          <Button type="button" variant="surface" size="pill" onClick={onToggleKnowledge}>
             Hide notes
-          </SecondaryButton>
+          </Button>
         </div>
       ) : null}
     </div>
@@ -255,19 +235,20 @@ function WarningNotice({ warnings = [] }) {
   if (!visibleWarnings.length) return null;
 
   return (
-    <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-900">
-      <div className="font-semibold">Review this carefully</div>
-      <div className="mt-2">
-        Some parts of the draft may be incomplete. Check the details below before you continue.
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {visibleWarnings.slice(0, 4).map((warning, index) => (
-          <TinyChip key={`${warning}-${index}`} tone="warn">
-            {warning}
-          </TinyChip>
-        ))}
-      </div>
-    </div>
+    <InlineCallout
+      title="Review this carefully"
+      body="Some parts of the draft may be incomplete. Check the details below before you continue."
+      tone="warn"
+      action={
+        <div className="flex flex-wrap gap-2">
+          {visibleWarnings.slice(0, 4).map((warning, index) => (
+            <TinyChip key={`${warning}-${index}`} tone="warn">
+              {warning}
+            </TinyChip>
+          ))}
+        </div>
+      }
+    />
   );
 }
 
@@ -326,13 +307,13 @@ export default function SetupStudioReviewStage({
 
           <div className="flex flex-wrap gap-3">
             {typeof onBack === "function" ? (
-              <SecondaryButton type="button" onClick={onBack}>
+              <Button type="button" variant="surface" size="hero" onClick={onBack}>
                 Back
-              </SecondaryButton>
+              </Button>
             ) : null}
-            <PrimaryButton type="button" onClick={onNext}>
+            <Button type="button" variant="brand" size="hero" onClick={onNext}>
               Continue
-            </PrimaryButton>
+            </Button>
           </div>
         </div>
       </div>

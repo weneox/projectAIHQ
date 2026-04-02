@@ -34,11 +34,19 @@ const SIZE = {
   sm: "h-9 rounded-xl px-3.5 text-sm",
   md: "h-10 rounded-xl px-4 text-sm",
   lg: "h-11 rounded-2xl px-5 text-sm",
+  pill: "h-11 rounded-full px-5 text-sm",
+  hero: "h-12 rounded-full px-6 text-sm",
   icon: "h-10 w-10 rounded-xl px-0",
 };
 
 function variantClass(variant) {
   switch (variant) {
+    case "brand":
+      return "border border-slate-950 bg-slate-950 text-white shadow-[0_18px_32px_-20px_rgba(15,23,42,0.42)] hover:bg-slate-900 hover:shadow-[0_22px_38px_-22px_rgba(15,23,42,0.46)]";
+    case "surface":
+      return "border border-slate-200/90 bg-white/86 text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_14px_28px_-24px_rgba(15,23,42,0.2)] hover:border-slate-300 hover:text-slate-950 hover:bg-white";
+    case "quiet":
+      return "border border-transparent bg-transparent text-slate-600 hover:bg-white/70 hover:text-slate-950";
     case "primary":
       return "bg-cyan-400 text-slate-950 hover:brightness-110";
     case "secondary":

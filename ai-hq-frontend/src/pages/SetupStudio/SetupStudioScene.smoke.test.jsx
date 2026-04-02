@@ -103,6 +103,73 @@ describe("Setup Studio entry smoke", () => {
     expect(openWorkspace).not.toHaveBeenCalled();
   });
 
+  it("keeps the main build draft CTA working with the shared visual system", () => {
+    const continueFlow = vi.fn();
+
+    render(
+      <SetupStudioScene
+        status={{
+          loading: false,
+          refreshing: false,
+          importingWebsite: false,
+          savingBusiness: false,
+          actingKnowledgeId: "",
+          savingServiceSuggestion: "",
+          showKnowledge: false,
+          error: "",
+        }}
+        forms={{
+          businessForm: {},
+          discoveryForm: { note: "Bakery with custom cakes" },
+          manualSections: {},
+        }}
+        review={{
+          discoveryState: { mode: "idle" },
+          currentReview: {},
+          meta: { setupCompleted: false },
+          reviewSources: [],
+          reviewEvents: [],
+          reviewSyncState: {},
+          hasStoredReview: false,
+          hasApprovedTruth: false,
+        }}
+        content={{
+          currentTitle: "",
+          currentDescription: "",
+          discoveryProfileRows: [],
+          knowledgePreview: "",
+          knowledgeItems: [],
+          serviceSuggestionTitle: "",
+          studioProgress: { nextStudioStage: "" },
+          services: [],
+          hasVisibleResults: false,
+          visibleKnowledgeCount: 0,
+          visibleServiceCount: 0,
+        }}
+        actions={{
+          setBusinessField: noop,
+          setManualSection: noop,
+          setDiscoveryField: noop,
+          continueFlow,
+          resumeReview: noop,
+          saveBusiness: noop,
+          approveKnowledge: noop,
+          rejectKnowledge: noop,
+          createSuggestedService: vi.fn(),
+          openWorkspace: noop,
+          openWorkspacePreview: noop,
+          reloadReviewDraft: noop,
+          refresh: noop,
+          toggleKnowledge: noop,
+        }}
+        discoveryModeLabel={() => "Draft flow"}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /build draft/i }));
+    expect(continueFlow).toHaveBeenCalledTimes(1);
+  });
+
   it("shows a visible retry action when background loading fails", () => {
     const refresh = vi.fn();
 
