@@ -15,7 +15,7 @@ afterEach(() => {
 function noop() {}
 
 describe("Setup Studio entry smoke", () => {
-  it("opens on entry first and shows explicit review/truth actions when relevant", () => {
+  it("opens on entry first and shows the simplified setup actions", () => {
     render(
       <SetupStudioScene
         status={{
@@ -25,7 +25,6 @@ describe("Setup Studio entry smoke", () => {
           savingBusiness: false,
           actingKnowledgeId: "",
           savingServiceSuggestion: "",
-          showRefine: false,
           showKnowledge: false,
           error: "",
         }}
@@ -68,10 +67,8 @@ describe("Setup Studio entry smoke", () => {
           rejectKnowledge: noop,
           createSuggestedService: vi.fn(),
           openWorkspace: noop,
-          openTruth: noop,
           reloadReviewDraft: noop,
           refresh: noop,
-          toggleRefine: noop,
           toggleKnowledge: noop,
         }}
         discoveryModeLabel={() => "Draft flow"}
@@ -80,20 +77,17 @@ describe("Setup Studio entry smoke", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: /build your business draft from real signals/i,
+        name: /tell us about your business/i,
       })
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: /create draft/i })
+      screen.getByRole("button", { name: /build draft/i })
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: /resume review/i })
+      screen.getByRole("button", { name: /continue draft/i })
     ).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: /open review workspace/i })
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: /view approved truth/i })
+      screen.getByRole("button", { name: /enter workspace/i })
     ).toBeTruthy();
   });
 });

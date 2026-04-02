@@ -6,6 +6,7 @@ const getAppAuthContext = vi.fn();
 const getAppBootstrapContext = vi.fn();
 const isLocalWorkspaceEntryEnabled = vi.fn();
 const getCanonicalWorkspaceContract = vi.fn();
+const isWorkspaceSelectionPath = vi.fn();
 
 vi.mock("../../lib/appSession.js", () => ({
   getAppAuthContext: (...args) => getAppAuthContext(...args),
@@ -15,6 +16,7 @@ vi.mock("../../lib/appSession.js", () => ({
 vi.mock("../../lib/appEntry.js", () => ({
   isLocalWorkspaceEntryEnabled: (...args) => isLocalWorkspaceEntryEnabled(...args),
   getCanonicalWorkspaceContract: (...args) => getCanonicalWorkspaceContract(...args),
+  isWorkspaceSelectionPath: (...args) => isWorkspaceSelectionPath(...args),
 }));
 
 vi.mock("../loading/AppBootSurface.jsx", () => ({
@@ -40,6 +42,7 @@ describe("UserRouteGuard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     isLocalWorkspaceEntryEnabled.mockReturnValue(false);
+    isWorkspaceSelectionPath.mockReturnValue(false);
     getCanonicalWorkspaceContract.mockImplementation((payload) => payload?.workspace || {});
     getAppBootstrapContext.mockResolvedValue({
       workspace: {
@@ -78,7 +81,7 @@ describe("UserRouteGuard", () => {
     isLocalWorkspaceEntryEnabled.mockReturnValue(true);
 
     render(
-      <MemoryRouter initialEntries={["/setup/studio"]}>
+      <MemoryRouter initialEntries={["/setup"]}>
         <UserRouteGuard>
           <div>Local setup route</div>
         </UserRouteGuard>
@@ -138,7 +141,7 @@ describe("UserRouteGuard", () => {
         setupCompleted: false,
         setupRequired: true,
         workspaceReady: false,
-        destination: { path: "/setup/studio" },
+        destination: { path: "/setup" },
       },
     });
 
@@ -151,7 +154,7 @@ describe("UserRouteGuard", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("navigate")).toHaveTextContent("/setup/studio");
+      expect(screen.getByTestId("navigate")).toHaveTextContent("/setup");
     });
   });
 
@@ -169,7 +172,7 @@ describe("UserRouteGuard", () => {
     });
 
     render(
-      <MemoryRouter initialEntries={["/setup/studio"]}>
+      <MemoryRouter initialEntries={["/setup"]}>
         <UserRouteGuard>
           <div>Protected workspace</div>
         </UserRouteGuard>
@@ -191,8 +194,8 @@ describe("UserRouteGuard", () => {
         setupCompleted: false,
         setupRequired: true,
         workspaceReady: false,
-        routeHint: "/setup/studio",
-        nextSetupRoute: "/setup/studio",
+        routeHint: "/setup",
+        nextSetupRoute: "/setup",
       },
     });
 
@@ -205,7 +208,8 @@ describe("UserRouteGuard", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId("navigate")).toHaveTextContent("/setup/studio");
+      expect(screen.getByTestId("navigate")).toHaveTextContent("/setup");
     });
   });
 });
+

@@ -17,7 +17,6 @@ export function useSetupStudioControllerEffects({
   visibleServiceItems,
   discoveryProfileRows,
   setShowKnowledge,
-  setShowRefine,
   barrierOnlyAutoReveal,
 }) {
   useEffect(() => {
@@ -34,7 +33,9 @@ export function useSetupStudioControllerEffects({
     if (meta.setupCompleted) return;
 
     if (
-      s(meta.nextStudioStage).toLowerCase() === "knowledge" &&
+      ["knowledge", "review", "confirm"].includes(
+        s(meta.nextStudioStage).toLowerCase()
+      ) &&
       knowledgeCandidates.length > 0
     ) {
       setShowKnowledge(true);
@@ -67,8 +68,6 @@ export function useSetupStudioControllerEffects({
     if (autoRevealRef.current === autoRevealKey) return;
     autoRevealRef.current = autoRevealKey;
 
-    setShowRefine(!barrierOnlyAutoReveal);
-
     if (
       !barrierOnlyAutoReveal &&
       (visibleKnowledgeItems.length > 0 ||
@@ -90,7 +89,6 @@ export function useSetupStudioControllerEffects({
     activeReviewAligned,
     autoRevealRef,
     setShowKnowledge,
-    setShowRefine,
     barrierOnlyAutoReveal,
   ]);
 }

@@ -107,7 +107,7 @@ describe("Login", () => {
       expect(getAppAuthContext).toHaveBeenCalled();
     });
 
-    expect(navigate).not.toHaveBeenCalledWith("/setup/studio", { replace: true });
+    expect(navigate).not.toHaveBeenCalledWith("/setup", { replace: true });
     expect(navigate).not.toHaveBeenCalledWith("/workspace", { replace: true });
   });
 
@@ -126,14 +126,14 @@ describe("Login", () => {
         setupCompleted: false,
         setupRequired: true,
         workspaceReady: false,
-        routeHint: "/setup/studio",
-        nextSetupRoute: "/setup/studio",
-        destination: { path: "/setup/studio" },
+        routeHint: "/setup",
+        nextSetupRoute: "/setup",
+        destination: { path: "/setup" },
       },
     });
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith("/setup/studio", { replace: true });
+      expect(navigate).toHaveBeenCalledWith("/setup", { replace: true });
     });
   });
 
@@ -167,7 +167,7 @@ describe("Login", () => {
     selectWorkspaceUser.mockResolvedValueOnce({
       ok: true,
       authenticated: true,
-      destination: { path: "/setup/studio" },
+      destination: { path: "/setup" },
     });
 
     renderLogin();
@@ -195,7 +195,7 @@ describe("Login", () => {
     });
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith("/setup/studio", { replace: true });
+      expect(navigate).toHaveBeenCalledWith("/setup", { replace: true });
     });
   });
 
@@ -249,3 +249,4 @@ describe("Login", () => {
     expect(navigate).toHaveBeenCalledWith("/signup");
   });
 });
+

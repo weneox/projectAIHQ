@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   ChevronDown,
@@ -20,7 +20,6 @@ import {
   resolveAuthenticatedLanding,
   resolveWorkspaceContractRoute,
 } from "../lib/appEntry.js";
-import AppBootSurface from "../components/loading/AppBootSurface.jsx";
 
 const RESERVED_SUBDOMAINS = new Set([
   "www",
@@ -89,7 +88,8 @@ function isServiceUnavailableError(error) {
     message.includes("networkerror") ||
     message.includes("network request failed") ||
     message.includes("auth check failed") ||
-    message.includes("vite_api_base is not set")
+    message.includes("vite_api_base is not set") ||
+    message.includes("request timeout")
   );
 }
 
@@ -176,24 +176,59 @@ function InputResetStyles() {
   );
 }
 
+function GoogleMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M21.805 12.23c0-.72-.064-1.412-.184-2.077H12v3.932h5.498a4.704 4.704 0 0 1-2.041 3.087v2.564h3.3c1.932-1.78 3.048-4.404 3.048-7.506Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 22c2.76 0 5.076-.914 6.768-2.472l-3.3-2.564c-.914.612-2.083.973-3.468.973-2.664 0-4.922-1.798-5.728-4.215H2.86v2.645A10.22 10.22 0 0 0 12 22Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M6.272 13.722A6.142 6.142 0 0 1 5.952 12c0-.598.108-1.177.32-1.722V7.633H2.86A10.22 10.22 0 0 0 1.777 12c0 1.648.395 3.208 1.083 4.367l3.412-2.645Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 6.064c1.5 0 2.848.516 3.909 1.53l2.932-2.932C17.072 3.014 14.756 2 12 2 7.86 2 4.293 4.379 2.86 7.633l3.412 2.645C7.078 7.862 9.336 6.064 12 6.064Z"
+      />
+    </svg>
+  );
+}
+
+function AppleMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M15.1 3.5c.77-.94 1.3-2.22 1.16-3.5-1.12.05-2.47.74-3.28 1.68-.74.85-1.38 2.14-1.2 3.4 1.25.1 2.53-.64 3.32-1.58Zm3.86 12.81c-.03-2.64 2.16-3.9 2.26-3.96-1.24-1.8-3.15-2.05-3.82-2.08-1.63-.17-3.18.96-4.01.96-.85 0-2.14-.94-3.52-.91-1.82.03-3.49 1.05-4.43 2.68-1.9 3.29-.48 8.15 1.35 10.8.9 1.28 1.95 2.71 3.35 2.66 1.35-.06 1.86-.86 3.49-.86 1.62 0 2.08.86 3.52.83 1.46-.02 2.37-1.31 3.26-2.6 1.03-1.47 1.45-2.9 1.48-2.98-.04-.01-2.84-1.09-2.93-4.54Z"
+      />
+    </svg>
+  );
+}
+
 function TopBar() {
   return (
-    <div className="flex items-center justify-between px-6 py-6 sm:px-10 lg:px-14">
+    <div className="relative z-10 flex items-center justify-between px-6 py-6 sm:px-10 lg:px-14">
       <button
         type="button"
-        className="text-left text-[34px] font-semibold tracking-[-0.05em] text-slate-950"
+        className="text-left"
       >
-        <span>NEOX</span>{" "}
-        <span className="font-medium text-slate-500">AI Studio</span>
+        <div className="bg-[linear-gradient(135deg,#0f172a_0%,#344256_45%,#94a3b8_100%)] bg-clip-text text-[31px] font-semibold tracking-[-0.07em] text-transparent sm:text-[34px]">
+          NEOX <span className="font-medium opacity-75">AI Studio</span>
+        </div>
       </button>
 
       <button
         type="button"
-        className="inline-flex h-[46px] items-center gap-2 rounded-[14px] border border-[#DADDE5] bg-white px-4 text-[15px] font-medium text-slate-700 transition hover:bg-slate-50"
+        className="inline-flex h-[44px] items-center gap-2 rounded-full border border-slate-200/90 bg-white/78 px-4 text-[14px] font-medium text-slate-700 shadow-[0_8px_30px_rgba(15,23,42,0.04)] backdrop-blur-md transition hover:border-slate-300 hover:bg-white"
       >
-        <Globe className="h-4 w-4" />
+        <Globe className="h-4 w-4 text-slate-500" />
         <span>English</span>
-        <ChevronDown className="h-4 w-4" />
+        <ChevronDown className="h-4 w-4 text-slate-400" />
       </button>
     </div>
   );
@@ -215,13 +250,13 @@ function AuthField({
   return (
     <div
       className={cn(
-        "relative h-[68px] overflow-hidden rounded-[16px] border bg-white transition-all duration-200",
+        "relative h-[72px] overflow-hidden rounded-[22px] border bg-white/78 shadow-[0_12px_38px_rgba(15,23,42,0.045)] backdrop-blur-md transition-all duration-200",
         focused
-          ? "border-[#121826] shadow-[0_0_0_1.5px_rgba(15,23,42,0.10)]"
-          : "border-[#E2E5EC] hover:border-[#D4D9E2]"
+          ? "border-slate-300 bg-white shadow-[0_18px_46px_rgba(15,23,42,0.08)]"
+          : "border-slate-200/80 hover:border-slate-300/80 hover:bg-white"
       )}
     >
-      <span className="pointer-events-none absolute left-5 top-1/2 z-10 -translate-y-1/2 text-[#A0A8B8]">
+      <span className="pointer-events-none absolute left-6 top-1/2 z-10 -translate-y-1/2 text-slate-400">
         <Icon className="h-[18px] w-[18px]" />
       </span>
 
@@ -235,13 +270,13 @@ function AuthField({
         onBlur={onBlur}
         autoComplete={autoComplete}
         className={cn(
-          "auth-clean-input text-[20px] text-slate-900 placeholder:text-[#B6BCC8]",
-          rightSlot ? "pl-[58px] pr-[58px]" : "pl-[58px] pr-5"
+          "auth-clean-input text-[18px] font-medium tracking-[-0.03em] text-slate-900 placeholder:font-normal placeholder:text-slate-400",
+          rightSlot ? "pl-[62px] pr-[62px]" : "pl-[62px] pr-6"
         )}
       />
 
       {rightSlot ? (
-        <div className="absolute right-5 top-1/2 z-10 -translate-y-1/2">
+        <div className="absolute right-6 top-1/2 z-10 -translate-y-1/2">
           {rightSlot}
         </div>
       ) : null}
@@ -255,7 +290,7 @@ function PasswordHint({ password = "" }) {
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 gap-2.5">
         {Array.from({ length: 4 }).map((_, index) => {
           const threshold = (index + 1) * 2;
           const filled = progress >= threshold;
@@ -263,15 +298,17 @@ function PasswordHint({ password = "" }) {
             <div
               key={index}
               className={cn(
-                "h-[4px] rounded-full transition",
-                filled ? "bg-[#121826]" : "bg-[#E5E7EB]"
+                "h-[4px] rounded-full transition duration-200",
+                filled
+                  ? "bg-[linear-gradient(90deg,#0f172a_0%,#475569_100%)]"
+                  : "bg-slate-200"
               )}
             />
           );
         })}
       </div>
 
-      <div className="flex items-center justify-between text-[13px] text-slate-600">
+      <div className="flex items-center justify-between text-[12px] font-medium tracking-[-0.01em] text-slate-500">
         <span>At least 8 symbols, one uppercase letter and one digit</span>
         <span>{Math.min(length, 8)}/8</span>
       </div>
@@ -283,7 +320,7 @@ function InlineError({ message }) {
   if (!message) return null;
 
   return (
-    <div className="text-[14px] leading-6 text-[#C43C3C]">
+    <div className="rounded-[18px] border border-rose-200/80 bg-rose-50/90 px-4 py-3 text-[13px] font-medium leading-6 text-rose-700">
       {message}
     </div>
   );
@@ -297,30 +334,67 @@ function WorkspaceChoiceCard({ account, selected, onSelect }) {
       type="button"
       onClick={() => onSelect(token)}
       className={cn(
-        "flex w-full items-center justify-between rounded-[16px] border px-4 py-4 text-left transition",
+        "flex w-full items-center justify-between rounded-[20px] border px-4 py-4 text-left shadow-[0_10px_30px_rgba(15,23,42,0.04)] transition",
         selected
-          ? "border-[#121826] bg-slate-50"
-          : "border-[#E2E5EC] bg-white hover:border-[#C9D0DB]"
+          ? "border-slate-300 bg-slate-50"
+          : "border-slate-200/80 bg-white/80 hover:border-slate-300 hover:bg-white"
       )}
     >
       <div className="min-w-0">
-        <div className="text-[15px] font-medium text-slate-900">
+        <div className="text-[15px] font-semibold tracking-[-0.02em] text-slate-900">
           {s(account?.companyName) || s(account?.tenantKey) || "Workspace"}
         </div>
-        <div className="mt-1 text-[13px] text-slate-500">
+        <div className="mt-1 text-[13px] font-medium text-slate-500">
           {s(account?.tenantKey)} · {s(account?.role || "member")}
         </div>
       </div>
 
       <div
         className={cn(
-          "h-4 w-4 rounded-full border transition",
+          "relative h-[18px] w-[18px] rounded-full border transition",
           selected
-            ? "border-[#121826] bg-[#121826]"
-            : "border-[#C9D0DB] bg-white"
+            ? "border-slate-900 bg-slate-900"
+            : "border-slate-300 bg-white"
         )}
-      />
+      >
+        {selected ? <div className="absolute inset-[4px] rounded-full bg-white" /> : null}
+      </div>
     </button>
+  );
+}
+
+function SocialButton({ icon, label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex h-[56px] w-full items-center justify-center gap-3 rounded-[18px] border border-slate-200/85 bg-white/78 px-4 text-[15px] font-medium tracking-[-0.01em] text-slate-800 shadow-[0_10px_30px_rgba(15,23,42,0.04)] backdrop-blur-md transition duration-200 hover:border-slate-300 hover:bg-white"
+    >
+      <span className="shrink-0">{icon}</span>
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function Divider() {
+  return (
+    <div className="relative flex items-center py-1">
+      <div className="h-px flex-1 bg-slate-200" />
+      <span className="px-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+        Or
+      </span>
+      <div className="h-px flex-1 bg-slate-200" />
+    </div>
+  );
+}
+
+function BackgroundGlow() {
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className="absolute left-[-8%] top-[-10%] h-[360px] w-[360px] rounded-full bg-[radial-gradient(circle_at_center,rgba(15,23,42,0.08),rgba(15,23,42,0)_68%)] blur-3xl" />
+      <div className="absolute right-[-6%] top-[12%] h-[320px] w-[320px] rounded-full bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.07),rgba(59,130,246,0)_70%)] blur-3xl" />
+      <div className="absolute bottom-[-16%] left-1/2 h-[320px] w-[680px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle_at_center,rgba(148,163,184,0.10),rgba(148,163,184,0)_70%)] blur-3xl" />
+    </div>
   );
 }
 
@@ -329,14 +403,12 @@ export default function Login() {
   const location = useLocation();
 
   const isSignupMode = location.pathname === "/signup";
-  const redirectTo = location.state?.from?.pathname || "/";
   const detectedTenantKey = useMemo(() => getTenantKeyFromHost(), []);
   const activeTenantKey = useMemo(
     () => normalizeTenantKey(detectedTenantKey),
     [detectedTenantKey]
   );
 
-  const [checking, setChecking] = useState(true);
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -349,41 +421,6 @@ export default function Login() {
     email: "",
     password: "",
   });
-
-  useEffect(() => {
-    let alive = true;
-
-    (async () => {
-      try {
-        const auth = await getAppAuthContext();
-
-        if (!alive) return;
-
-        if (auth?.authenticated) {
-          const target = resolveAuthenticatedLanding({
-            auth,
-            bootstrap: auth?.bootstrap || auth?.workspace || auth,
-          });
-          navigate(target, { replace: true });
-          return;
-        }
-      } catch {
-      } finally {
-        if (alive) setChecking(false);
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, [navigate]);
-
-  useEffect(() => {
-    setError("");
-    setAccountChoices([]);
-    setSelectedAccountToken("");
-    setShowPassword(false);
-  }, [isSignupMode]);
 
   function onChange(event) {
     const { name, value } = event.target;
@@ -399,6 +436,10 @@ export default function Login() {
       setAccountChoices([]);
       setSelectedAccountToken("");
     }
+  }
+
+  function handleUnavailableProvider(provider) {
+    setError(`${provider} sign in is not enabled yet.`);
   }
 
   async function handleLogin() {
@@ -484,7 +525,7 @@ export default function Login() {
 
   async function onSubmit(event) {
     event.preventDefault();
-    if (loading || checking) return;
+    if (loading) return;
 
     try {
       setLoading(true);
@@ -513,51 +554,52 @@ export default function Login() {
     }
   }
 
-  const isLoginDisabled =
-    checking || loading || !s(form.email) || !s(form.password);
-
+  const isLoginDisabled = loading || !s(form.email) || !s(form.password);
   const isSignupDisabled =
-    checking ||
     loading ||
     !s(form.companyName) ||
     !s(form.email) ||
     !s(form.password);
 
-  if (checking) {
-    return (
-      <AppBootSurface
-        label={isSignupMode ? "Preparing account" : "Checking session"}
-        detail={
-          isSignupMode
-            ? "Verifying whether you already have an active workspace session."
-            : "Verifying whether you already have an active workspace session."
-        }
-      />
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-white text-slate-950">
+    <div className="relative min-h-screen overflow-hidden bg-[#F7F8FA] text-slate-950">
       <InputResetStyles />
-
+      <BackgroundGlow />
       <TopBar />
 
-      <main className="mx-auto flex w-full max-w-[760px] justify-center px-6 pb-16 pt-6 sm:px-8 lg:px-10">
-        <div className="w-full max-w-[636px]">
-          <div className="pt-6 text-center">
-            <h1 className="text-[64px] font-semibold leading-none tracking-[-0.06em] text-[#121826] sm:text-[74px]">
+      <main className="relative z-10 mx-auto flex w-full max-w-[760px] justify-center px-6 pb-16 pt-4 sm:px-8 lg:px-10">
+        <div className="w-full max-w-[620px]">
+          <div className="pt-4 text-center">
+            <h1 className="text-[56px] font-semibold leading-[0.94] tracking-[-0.08em] text-slate-950 sm:text-[68px]">
               {isSignupMode ? "Create account" : "Log in"}
             </h1>
           </div>
 
-          <form className="mt-12 space-y-6" onSubmit={onSubmit}>
+          <div className="mt-9 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <SocialButton
+              icon={<GoogleMark />}
+              label="Continue with Google"
+              onClick={() => handleUnavailableProvider("Google")}
+            />
+            <SocialButton
+              icon={<AppleMark />}
+              label="Continue with Apple"
+              onClick={() => handleUnavailableProvider("Apple")}
+            />
+          </div>
+
+          <div className="mt-6">
+            <Divider />
+          </div>
+
+          <form className="mt-6 space-y-5" onSubmit={onSubmit}>
             {isSignupMode ? (
               <>
                 <AuthField
                   icon={User2}
                   name="fullName"
                   value={form.fullName}
-                  placeholder="Enter full name"
+                  placeholder="Full name"
                   onChange={onChange}
                   onFocus={() => setFocusedField("fullName")}
                   onBlur={() => setFocusedField("")}
@@ -569,7 +611,7 @@ export default function Login() {
                   icon={Building2}
                   name="companyName"
                   value={form.companyName}
-                  placeholder="Enter business name"
+                  placeholder="Business name"
                   onChange={onChange}
                   onFocus={() => setFocusedField("companyName")}
                   onBlur={() => setFocusedField("")}
@@ -584,7 +626,7 @@ export default function Login() {
               name="email"
               type="email"
               value={form.email}
-              placeholder="Enter email address"
+              placeholder="Email address"
               onChange={onChange}
               onFocus={() => setFocusedField("email")}
               onBlur={() => setFocusedField("")}
@@ -597,7 +639,7 @@ export default function Login() {
               name="password"
               type={showPassword ? "text" : "password"}
               value={form.password}
-              placeholder="Enter password"
+              placeholder="Password"
               onChange={onChange}
               onFocus={() => setFocusedField("password")}
               onBlur={() => setFocusedField("")}
@@ -606,7 +648,7 @@ export default function Login() {
               rightSlot={
                 <button
                   type="button"
-                  className="text-[#9BA3B2] transition hover:text-slate-700"
+                  className="text-slate-400 transition hover:text-slate-700"
                   onClick={() => setShowPassword((prev) => !prev)}
                   aria-label="Toggle password visibility"
                 >
@@ -625,7 +667,7 @@ export default function Login() {
               <div className="flex justify-start">
                 <button
                   type="button"
-                  className="text-[16px] font-medium text-[#1F2A3D] underline underline-offset-4 transition hover:text-slate-950"
+                  className="text-[14px] font-semibold tracking-[-0.02em] text-slate-500 transition hover:text-slate-900"
                   onClick={() =>
                     setError("Password recovery is not enabled yet.")
                   }
@@ -657,10 +699,10 @@ export default function Login() {
               type="submit"
               disabled={isSignupMode ? isSignupDisabled : isLoginDisabled}
               className={cn(
-                "mt-2 inline-flex h-[72px] w-full items-center justify-center rounded-full px-6 text-[20px] font-semibold transition",
+                "mt-1 inline-flex h-[72px] w-full items-center justify-center rounded-[24px] px-6 text-[18px] font-semibold tracking-[-0.03em] transition duration-200",
                 (isSignupMode ? isSignupDisabled : isLoginDisabled)
-                  ? "bg-[#F1F1F1] text-[#B7BCC6]"
-                  : "bg-[#121826] text-white hover:bg-[#0B1020]"
+                  ? "bg-slate-200 text-slate-400"
+                  : "bg-[linear-gradient(135deg,#0f172a_0%,#1e293b_55%,#334155_100%)] text-white shadow-[0_20px_44px_rgba(15,23,42,0.22)] hover:translate-y-[-1px] hover:shadow-[0_26px_58px_rgba(15,23,42,0.26)]"
               )}
             >
               {loading ? (
@@ -677,14 +719,12 @@ export default function Login() {
               )}
             </button>
 
-            <div className="pt-2 text-center text-[18px] text-[#1F2A3D]">
+            <div className="pt-2 text-center text-[15px] font-medium tracking-[-0.01em] text-slate-500">
               {isSignupMode ? "Already have an account?" : "Don't have an account?"}{" "}
               <button
                 type="button"
-                className="font-medium underline underline-offset-4"
-                onClick={() =>
-                  navigate(isSignupMode ? "/login" : "/signup")
-                }
+                className="font-semibold text-slate-900 transition hover:text-slate-600"
+                onClick={() => navigate(isSignupMode ? "/login" : "/signup")}
               >
                 {isSignupMode ? "Log in" : "Sign up"}
               </button>

@@ -2,10 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   getSetupStudioHasAnyReviewContent,
-  getSetupStudioHasServiceStage,
-  resolveSetupStudioNextStageFromIdentity,
-  resolveSetupStudioNextStageFromKnowledge,
-  resolveSetupStudioNextStageFromService,
+  resolveSetupStudioNextStageFromConfirm,
+  resolveSetupStudioNextStageFromEntry,
+  resolveSetupStudioNextStageFromReview,
   resolveSetupStudioStage,
 } from "./stageFlow.js";
 
@@ -41,50 +40,18 @@ describe("stageFlow", () => {
     ).toBe("entry");
   });
 
-  it("auto-advances to knowledge, service, or ready using current gating rules", () => {
+  it("moves from scanning into review when draft content exists", () => {
     expect(
       resolveSetupStudioStage({
-        prevStage: "entry",
+        prevStage: "scanning",
         entryLocked: false,
         hasVisibleResults: true,
         hasAnyReviewContent: true,
-        showKnowledge: true,
-        visibleKnowledgeCount: 2,
-        hasServiceStage: true,
       })
-    ).toBe("knowledge");
-
-    expect(
-      resolveSetupStudioStage({
-        prevStage: "knowledge",
-        entryLocked: false,
-        hasVisibleResults: true,
-        hasAnyReviewContent: true,
-        visibleKnowledgeCount: 0,
-        hasServiceStage: true,
-      })
-    ).toBe("service");
-
-    expect(
-      resolveSetupStudioStage({
-        prevStage: "service",
-        entryLocked: false,
-        hasVisibleResults: true,
-        hasAnyReviewContent: true,
-        hasServiceStage: false,
-      })
-    ).toBe("ready");
+    ).toBe("review");
   });
 
-  it("recognizes service and review content gates", () => {
-    expect(
-      getSetupStudioHasServiceStage({
-        serviceSuggestionTitle: "",
-        services: [],
-        visibleServiceCount: 1,
-      })
-    ).toBe(true);
-
+  it("recognizes review content gates", () => {
     expect(
       getSetupStudioHasAnyReviewContent({
         discoveryProfileRows: [],
@@ -97,18 +64,9 @@ describe("stageFlow", () => {
     ).toBe(true);
   });
 
-  it("uses the same next-stage rules for identity, knowledge, and service", () => {
-    expect(
-      resolveSetupStudioNextStageFromIdentity({
-        visibleKnowledgeCount: 2,
-        hasServiceStage: true,
-      })
-    ).toBe("knowledge");
-    expect(
-      resolveSetupStudioNextStageFromKnowledge({
-        hasServiceStage: true,
-      })
-    ).toBe("service");
-    expect(resolveSetupStudioNextStageFromService()).toBe("ready");
+  it("uses the new straight-line next-stage rules", () => {
+    expect(resolveSetupStudioNextStageFromEntry()).toBe("scanning");
+    expect(resolveSetupStudioNextStageFromReview()).toBe("confirm");
+    expect(resolveSetupStudioNextStageFromConfirm()).toBe("confirm");
   });
 });

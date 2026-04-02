@@ -1216,7 +1216,7 @@ function buildApprovedTruthUnavailableSnapshot(
             requiredRole: "operator",
             allowed: true,
             target: {
-              path: "/setup/studio",
+              path: "/setup",
               section: "truth",
             },
           },

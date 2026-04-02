@@ -438,7 +438,7 @@ export default function TeamPanel({ canManage = false }) {
                             onChange={(e) =>
                               setForm((state) => ({ ...state, full_name: e.target.value }))
                             }
-                            placeholder="NEOX Operator"
+                            placeholder="Operator name"
                             disabled={!canManage}
                           />
                         </Field>

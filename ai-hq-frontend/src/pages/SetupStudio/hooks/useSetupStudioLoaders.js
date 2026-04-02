@@ -32,7 +32,6 @@ export function createSetupStudioLoaders(ctx, shared) {
     setServices,
     setMeta,
     setShowKnowledge,
-    setShowRefine,
     setFreshEntryMode,
     updateActiveSourceScope,
     resolveActiveSourceScope,
@@ -216,7 +215,6 @@ export function createSetupStudioLoaders(ctx, shared) {
         nextMeta: bootSnapshot.meta,
         pendingKnowledge: bootSnapshot.pendingKnowledge,
         setShowKnowledge,
-        setShowRefine,
       });
 
       return {
@@ -265,7 +263,6 @@ export function createSetupStudioLoaders(ctx, shared) {
         nextMeta,
         pendingKnowledge: arr(snapshot?.pendingKnowledge),
         setShowKnowledge,
-        setShowRefine,
       });
     }
 

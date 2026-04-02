@@ -27,13 +27,13 @@ describe("resolveAuthenticatedLanding", () => {
           setupCompleted: false,
           setupRequired: true,
           workspaceReady: false,
-          nextSetupRoute: "/setup/studio",
-          destination: { path: "/setup/studio" },
+          nextSetupRoute: "/setup",
+          destination: { path: "/setup" },
         },
       },
     });
 
-    expect(target).toBe("/setup/studio");
+    expect(target).toBe("/setup");
   });
 
   it("routes completed workspaces into backend-provided core route", () => {
@@ -59,13 +59,13 @@ describe("resolveAuthenticatedLanding", () => {
           setupRequired: true,
           workspaceReady: false,
           destination: {
-            path: "/setup/studio",
+            path: "/setup",
           },
         },
       },
     });
 
-    expect(target).toBe("/setup/studio");
+    expect(target).toBe("/setup");
   });
 
   it("falls back to workspace when completed workspace points at non-product root", () => {
@@ -174,12 +174,13 @@ describe("resolveAuthenticatedLanding", () => {
           setupCompleted: false,
           setupRequired: true,
           workspaceReady: false,
-          routeHint: "/setup/studio",
-          nextSetupRoute: "/setup/studio",
+          routeHint: "/setup",
+          nextSetupRoute: "/setup",
         },
       },
     });
 
-    expect(target).toBe("/setup/studio");
+    expect(target).toBe("/setup");
   });
 });
+

@@ -140,7 +140,7 @@ describe("App primary product route smoke", () => {
     ["/settings", "Settings Page"],
     ["/comments", "Comments Page"],
     ["/proposals", "Proposals Page"],
-    ["/setup/studio", "Setup Studio Route"],
+    ["/setup", "Setup Studio Route"],
   ])("keeps legacy route %s available", async (path, text) => {
     window.history.pushState({}, "", path);
     render(<App />);
@@ -160,10 +160,11 @@ describe("App primary product route smoke", () => {
 
   it("keeps setup studio reachable when local workspace entry is enabled", async () => {
     isLocalWorkspaceEntryEnabled.mockReturnValue(true);
-    window.history.pushState({}, "", "/setup/studio");
+    window.history.pushState({}, "", "/setup");
 
     render(<App />);
 
     expect(await screen.findByText("Setup Studio Route")).toBeInTheDocument();
   });
 });
+

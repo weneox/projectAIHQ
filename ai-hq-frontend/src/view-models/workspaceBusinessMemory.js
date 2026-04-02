@@ -12,12 +12,6 @@ function obj(value, fallback = {}) {
     : fallback;
 }
 
-function titleize(value = "") {
-  return s(value)
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (item) => item.toUpperCase());
-}
-
 function formatDate(value = "") {
   const text = s(value);
   if (!text) return "";
@@ -84,7 +78,7 @@ export function buildWorkspaceBusinessMemory({
     ? blockedItems
         .map((item) => s(item?.title || item?.reasonCode || "A memory blocker"))
         .filter(Boolean)
-        .join(" • ")
+        .join(" | ")
     : "No active blockers are currently stopping business memory from being relied on.";
 
   const recentlyReliable =
@@ -97,7 +91,12 @@ export function buildWorkspaceBusinessMemory({
         : "Recent reliability changes will appear here when new evidence or approvals arrive.";
 
   return {
-    visible: !!(truth?.latestVersionId || pendingCount || blockedItems.length || latestRun),
+    visible: !!(
+      truth?.latestVersionId ||
+      pendingCount ||
+      blockedItems.length ||
+      latestRun
+    ),
     headline: "Business Memory",
     description:
       "A calm summary of what the system currently knows about the business, what may have changed, and what still needs confirmation.",
@@ -117,13 +116,13 @@ export function buildWorkspaceBusinessMemory({
           path: "/truth",
         }
       : {
-          label: "Open detailed truth view",
+          label: "Open business data",
           path: "/truth",
         },
     secondaryAction: hasSetupFollowUp
       ? {
           label: "Continue setup",
-          path: "/setup/studio",
+          path: "/setup",
         }
       : null,
   };

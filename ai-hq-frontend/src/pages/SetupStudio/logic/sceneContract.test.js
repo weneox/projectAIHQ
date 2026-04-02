@@ -11,7 +11,6 @@ describe("buildSetupStudioSceneContract", () => {
       savingBusiness: false,
       actingKnowledgeId: "candidate-1",
       savingServiceSuggestion: "",
-      showRefine: true,
       showKnowledge: false,
       error: "",
       businessForm: { companyName: "Acme Bakery" },
@@ -54,9 +53,7 @@ describe("buildSetupStudioSceneContract", () => {
     const adapters = {
       continueFlow: vi.fn(),
       loadActiveReview: vi.fn(),
-      openTruth: vi.fn(),
       refreshStudio: vi.fn(),
-      toggleRefine: vi.fn(),
       toggleKnowledge: vi.fn(),
     };
 
@@ -75,6 +72,5 @@ describe("buildSetupStudioSceneContract", () => {
     expect(contract.content.visibleServiceCount).toBe(1);
     expect(contract.actions.resumeReview).toBe(adapters.loadActiveReview);
     expect(contract.actions.scanBusiness).toBe(actions.onScanBusiness);
-    expect(contract.actions.openTruth).toBe(adapters.openTruth);
   });
 });

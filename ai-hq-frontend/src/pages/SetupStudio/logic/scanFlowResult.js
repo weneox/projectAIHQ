@@ -383,22 +383,18 @@ export function buildSetupStudioScanRevealState({
   const refreshedPendingKnowledge = arr(refreshResult?.snapshot?.pendingKnowledge);
 
   return {
-    shouldOpenKnowledge:
-      !barrierOnlyResult &&
-      (!!analyzeResult?.shouldReview ||
-        Number(analyzeResult?.candidateCount || 0) > 0 ||
-        refreshedPendingKnowledge.length > 0 ||
-        importedVisibleKnowledgeItems.length > 0 ||
-        importedVisibleServiceItems.length > 0 ||
-        s(refreshResult?.snapshot?.meta?.nextStudioStage).toLowerCase() ===
-          "knowledge"),
-    shouldOpenRefine:
-      !barrierOnlyResult &&
-      (hasImmediateVisibleResults ||
-        hasMeaningfulProfile(bestIncomingProfile) ||
-        importedProfileRows.length > 0),
-  };
-}
+      shouldOpenKnowledge:
+        !barrierOnlyResult &&
+        (!!analyzeResult?.shouldReview ||
+          Number(analyzeResult?.candidateCount || 0) > 0 ||
+          refreshedPendingKnowledge.length > 0 ||
+          importedVisibleKnowledgeItems.length > 0 ||
+          importedVisibleServiceItems.length > 0 ||
+          ["knowledge", "review", "confirm"].includes(
+            s(refreshResult?.snapshot?.meta?.nextStudioStage).toLowerCase()
+          )),
+    };
+  }
 
 export function buildSetupStudioScanErrorState({
   prev,

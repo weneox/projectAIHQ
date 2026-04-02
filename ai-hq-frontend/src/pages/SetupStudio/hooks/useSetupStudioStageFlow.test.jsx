@@ -7,13 +7,8 @@ function buildProps(overrides = {}) {
   return {
     importingWebsite: false,
     discoveryMode: "idle",
-    setupCompleted: false,
     nextStudioStage: "",
     hasVisibleResults: false,
-    showKnowledge: false,
-    visibleKnowledgeCount: 0,
-    visibleServiceCount: 0,
-    serviceSuggestionTitle: "",
     services: [],
     discoveryProfileRows: [],
     knowledgeItems: [],
@@ -51,7 +46,7 @@ describe("useSetupStudioStageFlow", () => {
     expect(resumeReview).toHaveBeenCalledTimes(1);
   });
 
-  it("moves into knowledge/service/ready with the same gating behavior", () => {
+  it("moves from entry to review and then confirm in a straight line", () => {
     const rendered = renderHook((props) => useSetupStudioStageFlow(props), {
       initialProps: buildProps(),
     });
@@ -64,26 +59,23 @@ describe("useSetupStudioStageFlow", () => {
       rendered.rerender(
         buildProps({
           hasVisibleResults: true,
-          showKnowledge: true,
-          visibleKnowledgeCount: 2,
-          serviceSuggestionTitle: "Suggested service",
-          visibleServiceCount: 1,
+          discoveryProfileRows: [{ label: "Business name", value: "Acme" }],
         })
       );
     });
 
-    expect(rendered.result.current.stage).toBe("knowledge");
+    expect(rendered.result.current.stage).toBe("review");
 
     act(() => {
-      rendered.result.current.goNextFromKnowledge();
+      rendered.result.current.goToConfirm();
     });
 
-    expect(rendered.result.current.stage).toBe("service");
+    expect(rendered.result.current.stage).toBe("confirm");
 
     act(() => {
-      rendered.result.current.goNextFromService();
+      rendered.result.current.goToReview();
     });
 
-    expect(rendered.result.current.stage).toBe("ready");
+    expect(rendered.result.current.stage).toBe("review");
   });
 });

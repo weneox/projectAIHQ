@@ -1,22 +1,34 @@
 import React from "react";
 
-function s(v, d = "") {
-  return String(v ?? d).trim();
+import SetupStudioStageShell from "../components/SetupStudioStageShell.jsx";
+import { TinyChip, TinyLabel } from "../components/SetupStudioUi.jsx";
+
+function s(value, fallback = "") {
+  return String(value ?? fallback).trim();
 }
 
-function arr(v, d = []) {
-  return Array.isArray(v) ? v : d;
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
 }
 
-function obj(v, d = {}) {
-  return v && typeof v === "object" && !Array.isArray(v) ? v : d;
+function obj(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : fallback;
 }
 
-function humanize(value = "") {
-  return s(value)
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+function pickRowLabel(row = {}, index = 0) {
+  return (
+    s(row.label) ||
+    s(row.title) ||
+    s(row.key) ||
+    s(row.fieldKey) ||
+    `Field ${index + 1}`
+  );
+}
+
+function pickRowValue(row = {}) {
+  return s(row.value) || s(row.displayValue) || s(row.description);
 }
 
 function pickKnowledgeTitle(item = {}) {
@@ -25,8 +37,7 @@ function pickKnowledgeTitle(item = {}) {
     s(item.name) ||
     s(item.label) ||
     s(item.question) ||
-    s(item.heading) ||
-    "Note"
+    "Business note"
   );
 }
 
@@ -41,51 +52,18 @@ function pickKnowledgeBody(item = {}) {
   );
 }
 
-function pickKnowledgeCategory(item = {}) {
-  return s(item.category) || s(item.kind) || s(item.type) || "note";
+function humanize(value = "") {
+  return s(value)
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-function pickKnowledgeId(item = {}) {
-  return s(item.id) || s(item.candidateId) || s(item.knowledgeId);
-}
-
-function pickServiceTitle(item = {}) {
-  return s(item.title) || s(item.name) || s(item.label) || "Service";
-}
-
-function pickRowLabel(row = {}, index = 0) {
-  return (
-    s(row.label) ||
-    s(row.title) ||
-    s(row.key) ||
-    s(row.name) ||
-    `Field ${index + 1}`
-  );
-}
-
-function pickRowValue(row = {}) {
-  return s(row.value) || s(row.displayValue) || s(row.description);
-}
-
-function Section({ title, action, children }) {
-  return (
-    <section className="rounded-[28px] border border-slate-200 bg-white p-5 sm:p-6">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
-          {title}
-        </h2>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function PrimaryButton({ children, ...props }) {
+function PrimaryButton({ children, className = "", ...props }) {
   return (
     <button
       {...props}
-      className="inline-flex h-11 items-center justify-center rounded-full bg-slate-950 px-5 text-[14px] font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+      className={`inline-flex h-12 items-center justify-center rounded-full bg-slate-950 px-6 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     >
       {children}
     </button>
@@ -96,55 +74,50 @@ function SecondaryButton({ children, className = "", ...props }) {
   return (
     <button
       {...props}
-      className={`inline-flex h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-5 text-[14px] font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
+      className={`inline-flex h-12 items-center justify-center rounded-full border border-slate-200 bg-white px-6 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-50 ${className}`}
     >
       {children}
     </button>
   );
 }
 
-function EmptyState({ text }) {
+function ReviewSection({ title, body = "", children }) {
   return (
-    <div className="rounded-[22px] border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-500">
-      {text}
-    </div>
+    <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_18px_44px_-34px_rgba(15,23,42,.22)] sm:p-6">
+      <div className="mb-4">
+        <h3 className="text-lg font-semibold tracking-[-0.03em] text-slate-950">
+          {title}
+        </h3>
+        {body ? (
+          <p className="mt-1 text-sm leading-6 text-slate-500">{body}</p>
+        ) : null}
+      </div>
+      {children}
+    </section>
   );
 }
 
-function ReviewNotice({ honestySummary, warnings }) {
-  const warningList = arr(warnings).map(humanize).filter(Boolean);
-  const summary = s(honestySummary);
-
-  if (!summary && !warningList.length) return null;
-
+function DraftSummary({ currentTitle, currentDescription, sourceLabel }) {
   return (
-    <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-4 sm:px-5">
-      <div className="text-[14px] font-semibold text-amber-900">
-        Needs a quick check
+    <div className="rounded-[28px] border border-slate-200 bg-slate-50/80 p-5 sm:p-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <TinyLabel>Step 3 of 4</TinyLabel>
+        {s(sourceLabel) ? <TinyChip>{sourceLabel}</TinyChip> : null}
       </div>
 
-      <p className="mt-2 text-[14px] leading-6 text-amber-800">
-        {summary ||
-          "Some parts of this draft may be incomplete. Check the details below before you launch."}
-      </p>
+      <div className="mt-4 text-[26px] font-semibold tracking-[-0.045em] text-slate-950 sm:text-[32px]">
+        {s(currentTitle) || "Your business draft is ready"}
+      </div>
 
-      {warningList.length ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {warningList.slice(0, 3).map((warning, index) => (
-            <span
-              key={`${warning}-${index}`}
-              className="rounded-full border border-amber-200 bg-white px-3 py-1 text-[12px] font-medium text-amber-700"
-            >
-              {warning}
-            </span>
-          ))}
-        </div>
-      ) : null}
+      <p className="mt-2 max-w-[760px] text-sm leading-7 text-slate-600">
+        {s(currentDescription) ||
+          "This is the first draft based on the information you provided. Review it once, then continue to the final confirmation step."}
+      </p>
     </div>
   );
 }
 
-function ProfileRows({ rows = [] }) {
+function BusinessDetails({ rows = [] }) {
   const visibleRows = arr(rows)
     .map((row, index) => {
       const item = obj(row);
@@ -156,20 +129,24 @@ function ProfileRows({ rows = [] }) {
     .filter(Boolean);
 
   if (!visibleRows.length) {
-    return <EmptyState text="No business details yet." />;
+    return (
+      <div className="rounded-[20px] border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-500">
+        The draft is still sparse. Continue anyway and fill in the missing details on the next step.
+      </div>
+    );
   }
 
   return (
-    <div className="divide-y divide-slate-100 overflow-hidden rounded-[22px] border border-slate-100 bg-slate-50/60">
+    <div className="divide-y divide-slate-100 overflow-hidden rounded-[20px] border border-slate-100 bg-slate-50/70">
       {visibleRows.map((row, index) => (
         <div
           key={`${row.label}-${index}`}
           className="grid gap-1 px-4 py-4 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-4"
         >
-          <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
             {row.label}
           </div>
-          <div className="min-w-0 break-words text-[14px] leading-6 text-slate-700">
+          <div className="min-w-0 break-words text-sm leading-6 text-slate-700">
             {row.value}
           </div>
         </div>
@@ -178,137 +155,118 @@ function ProfileRows({ rows = [] }) {
   );
 }
 
-function KnowledgeList({
-  items = [],
-  actingKnowledgeId = "",
-  onApproveKnowledge,
-  onRejectKnowledge,
-}) {
-  const visibleItems = arr(items);
+function ServicesList({ services = [], serviceSuggestionTitle = "" }) {
+  const visibleServices = arr(services)
+    .map((item) => s(item?.title || item?.name || item?.label))
+    .filter(Boolean);
 
-  if (!visibleItems.length) {
-    return <EmptyState text="No important notes yet." />;
+  if (!visibleServices.length && !s(serviceSuggestionTitle)) {
+    return (
+      <div className="rounded-[20px] border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-500">
+        No services were added to the draft yet.
+      </div>
+    );
   }
 
   return (
     <div className="space-y-3">
-      {visibleItems.map((rawItem, index) => {
-        const item = obj(rawItem);
-        const id = pickKnowledgeId(item) || `knowledge-${index}`;
-        const title = pickKnowledgeTitle(item);
-        const body = pickKnowledgeBody(item);
-        const category = humanize(pickKnowledgeCategory(item));
-        const busy = s(actingKnowledgeId) && s(actingKnowledgeId) === s(id);
-
-        return (
-          <div
-            key={id}
-            className="rounded-[22px] border border-slate-100 bg-slate-50/60 p-4"
-          >
-            <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-              {category}
-            </div>
-
-            <div className="mt-2 text-[15px] font-semibold tracking-[-0.025em] text-slate-900">
-              {title}
-            </div>
-
-            {body ? (
-              <p className="mt-2 text-[14px] leading-6 text-slate-600">
-                {body}
-              </p>
-            ) : null}
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              <PrimaryButton
-                type="button"
-                disabled={busy}
-                onClick={() => onApproveKnowledge?.(item)}
-              >
-                {busy ? "Saving..." : "Keep"}
-              </PrimaryButton>
-
-              <SecondaryButton
-                type="button"
-                disabled={busy}
-                onClick={() => onRejectKnowledge?.(item)}
-              >
-                Remove
-              </SecondaryButton>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function ServicesBlock({
-  serviceSuggestionTitle,
-  services,
-  savingServiceSuggestion,
-  onCreateSuggestedService,
-}) {
-  const serviceList = arr(services)
-    .map((service) => pickServiceTitle(obj(service)))
-    .filter(Boolean);
-
-  return (
-    <div className="space-y-4">
       {s(serviceSuggestionTitle) ? (
-        <div className="rounded-[22px] border border-slate-100 bg-slate-50/60 p-4">
-          <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-            Suggested service
-          </div>
-
-          <div className="mt-2 text-[15px] font-semibold tracking-[-0.025em] text-slate-900">
-            {serviceSuggestionTitle}
-          </div>
-
-          <div className="mt-4">
-            <PrimaryButton
-              type="button"
-              disabled={savingServiceSuggestion}
-              onClick={() => onCreateSuggestedService?.()}
-            >
-              {savingServiceSuggestion ? "Saving..." : "Add service"}
-            </PrimaryButton>
-          </div>
+        <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 px-4 py-4 text-sm leading-6 text-slate-600">
+          Suggested service:{" "}
+          <span className="font-medium text-slate-900">{serviceSuggestionTitle}</span>
         </div>
       ) : null}
 
-      {serviceList.length ? (
+      {visibleServices.length ? (
         <div className="grid gap-3 sm:grid-cols-2">
-          {serviceList.map((title, index) => (
+          {visibleServices.map((title, index) => (
             <div
               key={`${title}-${index}`}
-              className="rounded-[20px] border border-slate-100 bg-white px-4 py-3 text-[14px] font-medium text-slate-700"
+              className="rounded-[18px] border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700"
             >
               {title}
             </div>
           ))}
         </div>
-      ) : !s(serviceSuggestionTitle) ? (
-        <EmptyState text="No services yet." />
       ) : null}
     </div>
   );
 }
 
-function FooterMeta({ sourceLabel, reviewSources, reviewEvents }) {
-  const sourceCount = arr(reviewSources).length;
-  const eventCount = arr(reviewEvents).length;
-  const label = s(sourceLabel);
+function NotesList({ knowledgeItems = [], showKnowledge, onToggleKnowledge }) {
+  const visibleItems = arr(knowledgeItems)
+    .map((item) => ({
+      title: pickKnowledgeTitle(obj(item)),
+      body: pickKnowledgeBody(obj(item)),
+    }))
+    .filter((item) => item.title || item.body);
 
-  if (!label && !sourceCount && !eventCount) return null;
+  if (!visibleItems.length) {
+    return (
+      <div className="rounded-[20px] border border-dashed border-slate-200 px-4 py-4 text-sm text-slate-500">
+        No extra notes were added to this draft.
+      </div>
+    );
+  }
+
+  if (!showKnowledge) {
+    return (
+      <div className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4">
+        <div className="text-sm leading-6 text-slate-600">
+          {visibleItems.length} note{visibleItems.length === 1 ? "" : "s"} found for this draft.
+        </div>
+        {typeof onToggleKnowledge === "function" ? (
+          <div className="mt-3">
+            <SecondaryButton type="button" onClick={onToggleKnowledge} className="h-10 px-4">
+              Show notes
+            </SecondaryButton>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
-    <div className="px-1 text-[13px] text-slate-500">
-      {label ? <span>{label}</span> : null}
-      {label && (sourceCount || eventCount) ? <span> · </span> : null}
-      {sourceCount ? <span>{sourceCount} source{sourceCount > 1 ? "s" : ""}</span> : null}
-      {sourceCount && eventCount ? <span> · </span> : null}
-      {eventCount ? <span>{eventCount} update{eventCount > 1 ? "s" : ""}</span> : null}
+    <div className="space-y-3">
+      {visibleItems.map((item, index) => (
+        <div
+          key={`${item.title}-${index}`}
+          className="rounded-[20px] border border-slate-200 bg-slate-50/70 p-4"
+        >
+          <div className="text-sm font-semibold text-slate-900">{item.title}</div>
+          {item.body ? (
+            <p className="mt-2 text-sm leading-6 text-slate-600">{item.body}</p>
+          ) : null}
+        </div>
+      ))}
+      {typeof onToggleKnowledge === "function" ? (
+        <div>
+          <SecondaryButton type="button" onClick={onToggleKnowledge} className="h-10 px-4">
+            Hide notes
+          </SecondaryButton>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function WarningNotice({ warnings = [] }) {
+  const visibleWarnings = arr(warnings).map((item) => humanize(item)).filter(Boolean);
+  if (!visibleWarnings.length) return null;
+
+  return (
+    <div className="rounded-[24px] border border-amber-200 bg-amber-50 px-4 py-4 text-sm leading-6 text-amber-900">
+      <div className="font-semibold">Review this carefully</div>
+      <div className="mt-2">
+        Some parts of the draft may be incomplete. Check the details below before you continue.
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {visibleWarnings.slice(0, 4).map((warning, index) => (
+          <TinyChip key={`${warning}-${index}`} tone="warn">
+            {warning}
+          </TinyChip>
+        ))}
+      </div>
     </div>
   );
 }
@@ -318,123 +276,66 @@ export default function SetupStudioReviewStage({
   currentDescription,
   discoveryProfileRows,
   discoveryWarnings,
-  honestySummary,
   sourceLabel,
-  reviewSources,
-  reviewEvents,
-  knowledgePreview,
   knowledgeItems,
-  actingKnowledgeId,
   showKnowledge,
   serviceSuggestionTitle,
   services,
-  savingServiceSuggestion,
-  onApproveKnowledge,
-  onRejectKnowledge,
-  onCreateSuggestedService,
   onToggleKnowledge,
   onNext,
-  onOpenTruth,
-  onOpenWorkspace,
+  onBack,
 }) {
-  const profileRows = arr(discoveryProfileRows);
-  const knowledge = arr(knowledgeItems);
-
-  const title = s(currentTitle) || "Your first business draft";
-  const description =
-    s(currentDescription) ||
-    s(knowledgePreview) ||
-    "Review the draft, keep what looks right, and open the workspace when you are ready.";
-
-  const primaryAction = onOpenWorkspace || onNext;
-  const canToggleKnowledge = knowledge.length > 0;
-
   return (
-    <section className="mx-auto max-w-[980px] space-y-6">
-      <header className="space-y-4 px-1 pt-2">
-        <h1 className="text-[32px] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[42px]">
-          {title}
-        </h1>
-
-        <p className="max-w-[760px] text-[16px] leading-7 text-slate-600">
-          {description}
-        </p>
-
-        <div className="flex flex-wrap gap-3 pt-1">
-          {onOpenTruth ? (
-            <SecondaryButton type="button" onClick={onOpenTruth}>
-              Open truth view
-            </SecondaryButton>
-          ) : null}
-
-          {primaryAction ? (
-            <PrimaryButton type="button" onClick={primaryAction}>
-              Open workspace
-            </PrimaryButton>
-          ) : null}
-        </div>
-      </header>
-
-      <ReviewNotice
-        honestySummary={honestySummary}
-        warnings={discoveryWarnings}
-      />
-
-      <Section title="Business details">
-        <ProfileRows rows={profileRows} />
-      </Section>
-
-      <Section title="Services">
-        <ServicesBlock
-          serviceSuggestionTitle={serviceSuggestionTitle}
-          services={services}
-          savingServiceSuggestion={savingServiceSuggestion}
-          onCreateSuggestedService={onCreateSuggestedService}
+    <SetupStudioStageShell
+      eyebrow="review"
+      title="Review your draft"
+      body="Check the draft once before you confirm it. You can make final edits on the next step."
+    >
+      <div className="mx-auto max-w-[1040px] space-y-6">
+        <DraftSummary
+          currentTitle={currentTitle}
+          currentDescription={currentDescription}
+          sourceLabel={sourceLabel}
         />
-      </Section>
 
-      <Section
-        title="Important notes"
-        action={
-          canToggleKnowledge ? (
-            <SecondaryButton
-              type="button"
-              onClick={onToggleKnowledge}
-              className="h-9 px-4 text-[13px]"
-            >
-              {showKnowledge ? "Hide notes" : "Review notes"}
-            </SecondaryButton>
-          ) : null
-        }
-      >
-        {showKnowledge ? (
-          <KnowledgeList
-            items={knowledge}
-            actingKnowledgeId={actingKnowledgeId}
-            onApproveKnowledge={onApproveKnowledge}
-            onRejectKnowledge={onRejectKnowledge}
+        <WarningNotice warnings={discoveryWarnings} />
+
+        <ReviewSection title="Business details" body="This is the information we could prepare from your website or description.">
+          <BusinessDetails rows={discoveryProfileRows} />
+        </ReviewSection>
+
+        <ReviewSection title="Services" body="Services can stay simple here. You can edit them later if needed.">
+          <ServicesList
+            services={services}
+            serviceSuggestionTitle={serviceSuggestionTitle}
           />
-        ) : knowledge.length ? (
-          <div className="space-y-3">
-            <div className="text-[14px] leading-6 text-slate-600">
-              {s(knowledgePreview) ||
-                `${knowledge.length} note${knowledge.length > 1 ? "s" : ""} found for review.`}
-            </div>
+        </ReviewSection>
 
-            <div className="text-[13px] text-slate-500">
-              Open the notes only if you want to keep or remove individual items.
-            </div>
+        <ReviewSection title="Extra notes" body="Only open these if you want to inspect more detail before continuing.">
+          <NotesList
+            knowledgeItems={knowledgeItems}
+            showKnowledge={showKnowledge}
+            onToggleKnowledge={onToggleKnowledge}
+          />
+        </ReviewSection>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="text-sm leading-6 text-slate-500">
+            You can still edit the final details before anything is confirmed.
           </div>
-        ) : (
-          <EmptyState text="No important notes yet." />
-        )}
-      </Section>
 
-      <FooterMeta
-        sourceLabel={sourceLabel}
-        reviewSources={reviewSources}
-        reviewEvents={reviewEvents}
-      />
-    </section>
+          <div className="flex flex-wrap gap-3">
+            {typeof onBack === "function" ? (
+              <SecondaryButton type="button" onClick={onBack}>
+                Back
+              </SecondaryButton>
+            ) : null}
+            <PrimaryButton type="button" onClick={onNext}>
+              Continue
+            </PrimaryButton>
+          </div>
+        </div>
+      </div>
+    </SetupStudioStageShell>
   );
 }

@@ -13,11 +13,11 @@ function arr(value) {
 function normalizeSetupRoute(target = "") {
   const value = s(target);
 
-  if (!value) return "/setup/studio";
-  if (value === "/setup") return "/setup/studio";
-  if (value.startsWith("/setup/")) return value;
+  if (!value) return "/setup";
+  if (value === "/setup" || value === "/setup/studio") return "/setup";
+  if (value.startsWith("/setup/")) return "/setup";
 
-  return "/setup/studio";
+  return "/setup";
 }
 
 function normalizeRoute(target = "", fallback = "/workspace") {
@@ -126,7 +126,7 @@ export function getCanonicalWorkspaceContract(payload = {}) {
       source.nextSetupRoute ||
         destination.path ||
         source.routeHint ||
-        "/setup/studio"
+        "/setup"
     ),
   };
 }
@@ -179,7 +179,7 @@ export function resolveWorkspaceContractRoute(payload = {}) {
   const nextSetupRoute = workspace.nextSetupRoute;
 
   if (!setupCompleted) {
-    return isSetupPath(nextSetupRoute) ? nextSetupRoute : "/setup/studio";
+    return isSetupPath(nextSetupRoute) ? normalizeSetupRoute(nextSetupRoute) : "/setup";
   }
 
   if (nextRoute === "/settings") {

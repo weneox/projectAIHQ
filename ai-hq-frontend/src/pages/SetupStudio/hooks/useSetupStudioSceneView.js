@@ -1,18 +1,18 @@
 import { useMemo } from "react";
 import { resolveReviewSourceInfo } from "../state/reviewState.js";
-import { deriveCanonicalReviewProjection } from "../state/reviewState.js";
-import { summarizeSetupStudioHonesty } from "../logic/reviewHonesty.js";
 
-function s(v, d = "") {
-  return String(v ?? d).trim();
+function s(value, fallback = "") {
+  return String(value ?? fallback).trim();
 }
 
-function arr(v, d = []) {
-  return Array.isArray(v) ? v : d;
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
 }
 
-function obj(v, d = {}) {
-  return v && typeof v === "object" && !Array.isArray(v) ? v : d;
+function obj(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : fallback;
 }
 
 function hasText(value = "") {
@@ -46,32 +46,12 @@ export function getSetupStudioHasManualInput({
     hasText(form.primaryEmail) ||
     hasText(form.primaryAddress) ||
     hasText(form.websiteUrl) ||
-    hasText(form.timezone) ||
-    hasText(form.language) ||
     hasText(sections.servicesText) ||
     hasText(sections.faqsText) ||
     hasText(sections.policiesText) ||
     hasText(discovery.note) ||
     hasText(state.manualTranscript) ||
     hasText(state.manualSummary)
-  );
-}
-
-export function getSetupStudioHasVoiceInput({
-  discoveryForm = {},
-  discoveryState = {},
-}) {
-  const discovery = obj(discoveryForm);
-  const state = obj(discoveryState);
-
-  return !!(
-    hasText(discovery.voiceTranscript) ||
-    hasText(discovery.voiceNote) ||
-    hasText(discovery.voiceText) ||
-    hasText(state.voiceTranscript) ||
-    hasText(state.voiceNote) ||
-    hasText(state.voiceText) ||
-    hasText(state.audioTranscript)
   );
 }
 
@@ -125,44 +105,8 @@ export function getSetupStudioScanningView({
       discoveryForm,
       discoveryState,
     }),
-    hasVoiceInput: getSetupStudioHasVoiceInput({
-      discoveryForm,
-      discoveryState,
-    }),
     scanLines,
     scanLineIndex,
-  };
-}
-
-export function buildSetupStudioReviewWorkspaceDialogProps({
-  showRefine,
-  savingBusiness,
-  businessForm,
-  discoveryProfileRows,
-  manualSections,
-  onSetBusinessField,
-  onSetManualSection,
-  onSaveBusiness,
-  onReloadReviewDraft,
-  onToggleRefine,
-  currentReview,
-  reviewSources,
-  reviewSyncState,
-}) {
-  return {
-    open: showRefine,
-    savingBusiness,
-    businessForm,
-    discoveryProfileRows,
-    manualSections,
-    onSetBusinessField,
-    onSetManualSection,
-    onSaveBusiness,
-    onReloadReviewDraft,
-    onClose: onToggleRefine,
-    currentReview,
-    reviewSources,
-    reviewSyncState,
   };
 }
 
@@ -173,16 +117,6 @@ export function useSetupStudioSceneView({
   currentReview,
   businessForm,
   manualSections,
-  showRefine,
-  savingBusiness,
-  discoveryProfileRows,
-  onSetBusinessField,
-  onSetManualSection,
-  onSaveBusiness,
-  onReloadReviewDraft,
-  onToggleRefine,
-  reviewSources,
-  reviewSyncState,
 }) {
   const sourceLabel = useMemo(
     () => getSetupStudioSourceLabel(discoveryState, discoveryModeLabel),
@@ -206,55 +140,9 @@ export function useSetupStudioSceneView({
     [discoveryState, discoveryForm, currentReview, businessForm, manualSections]
   );
 
-  const honestySummary = useMemo(
-    () =>
-      summarizeSetupStudioHonesty({
-        reviewProjection: deriveCanonicalReviewProjection(currentReview),
-        reviewSources,
-        extraWarnings: discoveryState?.warnings,
-      }),
-    [currentReview, reviewSources, discoveryState?.warnings]
-  );
-
-  const reviewWorkspaceDialogProps = useMemo(
-    () =>
-      buildSetupStudioReviewWorkspaceDialogProps({
-        showRefine,
-        savingBusiness,
-        businessForm,
-        discoveryProfileRows,
-        manualSections,
-        onSetBusinessField,
-        onSetManualSection,
-        onSaveBusiness,
-        onReloadReviewDraft,
-        onToggleRefine,
-        currentReview,
-        reviewSources,
-        reviewSyncState,
-      }),
-    [
-      showRefine,
-      savingBusiness,
-      businessForm,
-      discoveryProfileRows,
-      manualSections,
-      onSetBusinessField,
-      onSetManualSection,
-      onSaveBusiness,
-      onReloadReviewDraft,
-      onToggleRefine,
-      currentReview,
-      reviewSources,
-      reviewSyncState,
-    ]
-  );
-
   return {
     sourceLabel,
     discoveryWarnings,
-    honestySummary,
     scanningView,
-    reviewWorkspaceDialogProps,
   };
 }

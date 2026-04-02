@@ -30,7 +30,7 @@ export const DEFAULT_SETUP_META = {
   missingSteps: [],
   primaryMissingStep: "",
   nextRoute: "/",
-  nextSetupRoute: "/setup/studio",
+  nextSetupRoute: "/setup",
   nextStudioStage: "",
   setupCompleted: false,
   pendingCandidateCount: 0,

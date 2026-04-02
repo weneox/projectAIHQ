@@ -8,7 +8,6 @@ export function createSetupStudioFlow(ctx, helpers) {
     activeSourceScope,
     setError,
     setShowKnowledge,
-    setShowRefine,
   } = ctx;
 
   const { loadData } = helpers;
@@ -37,11 +36,10 @@ export function createSetupStudioFlow(ctx, helpers) {
           nextMeta,
           pendingKnowledge: arr(snapshot?.pendingKnowledge),
           setShowKnowledge,
-          setShowRefine,
         });
       }
 
-      navigate("/setup/studio", { replace: true });
+      navigate("/setup", { replace: true });
     } catch (e) {
       setError(
         String(e?.message || e || "Workspace status could not be checked.")

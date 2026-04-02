@@ -1,44 +1,16 @@
-function s(v, d = "") {
-  return String(v ?? d).trim();
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
 }
 
-function arr(v, d = []) {
-  return Array.isArray(v) ? v : d;
+function lower(value = "") {
+  return String(value ?? "").trim().toLowerCase();
 }
 
-function lower(v, d = "") {
-  return s(v, d).toLowerCase();
-}
-
-const COLLAPSED_REVIEW_STAGES = new Set([
-  "identity",
-  "knowledge",
-  "service",
-  "review",
-  "ready",
-]);
+const STAGES = new Set(["entry", "scanning", "review", "confirm"]);
 
 export function normalizeSetupStudioStage(value = "") {
   const stage = lower(value);
-
-  if (!stage) return "";
-  if (stage === "entry") return "entry";
-  if (stage === "scanning") return "scanning";
-  if (COLLAPSED_REVIEW_STAGES.has(stage)) return "review";
-
-  return "";
-}
-
-export function getSetupStudioHasServiceStage({
-  serviceSuggestionTitle,
-  services,
-  visibleServiceCount,
-}) {
-  return (
-    !!s(serviceSuggestionTitle) ||
-    arr(services).length > 0 ||
-    Number(visibleServiceCount || 0) > 0
-  );
+  return STAGES.has(stage) ? stage : "";
 }
 
 export function getSetupStudioHasAnyReviewContent({
@@ -60,36 +32,33 @@ export function getSetupStudioHasAnyReviewContent({
 }
 
 export function resolveSetupStudioStage({
+  prevStage = "entry",
   importingWebsite = false,
   discoveryMode = "",
-  setupCompleted = false,
-  nextStudioStage = "",
   entryLocked = true,
+  nextStudioStage = "",
   hasVisibleResults = false,
   hasAnyReviewContent = false,
-  showKnowledge = false,
-  visibleKnowledgeCount = 0,
 }) {
-  const mode = lower(discoveryMode);
-  const normalizedNextStage = normalizeSetupStudioStage(nextStudioStage);
-  const hasReviewContent =
-    !!setupCompleted ||
-    !!hasVisibleResults ||
-    !!hasAnyReviewContent ||
-    !!showKnowledge ||
-    Number(visibleKnowledgeCount || 0) > 0 ||
-    normalizedNextStage === "review";
-
   if (entryLocked) {
     return "entry";
   }
 
-  if (importingWebsite || mode === "running" || nextStudioStage === "scanning") {
+  if (
+    importingWebsite ||
+    lower(discoveryMode) === "running" ||
+    lower(nextStudioStage) === "scanning"
+  ) {
     return "scanning";
   }
 
-  if (hasReviewContent) {
-    return "review";
+  if (
+    hasVisibleResults ||
+    hasAnyReviewContent ||
+    lower(nextStudioStage) === "review" ||
+    lower(nextStudioStage) === "confirm"
+  ) {
+    return prevStage === "confirm" ? "confirm" : "review";
   }
 
   return "entry";
@@ -99,18 +68,10 @@ export function resolveSetupStudioNextStageFromEntry() {
   return "scanning";
 }
 
-export function resolveSetupStudioNextStageFromIdentity() {
-  return "review";
-}
-
-export function resolveSetupStudioNextStageFromKnowledge() {
-  return "review";
-}
-
-export function resolveSetupStudioNextStageFromService() {
-  return "review";
-}
-
 export function resolveSetupStudioNextStageFromReview() {
-  return "review";
+  return "confirm";
+}
+
+export function resolveSetupStudioNextStageFromConfirm() {
+  return "confirm";
 }

@@ -280,7 +280,7 @@ export function getStudioProgress({ importingWebsite, discoveryState, effectiveM
     ),
     nextRoute: s(effectiveMeta.nextRoute || derived.nextRoute || "/"),
     nextSetupRoute: s(
-      effectiveMeta.nextSetupRoute || derived.nextSetupRoute || "/setup/studio"
+      effectiveMeta.nextSetupRoute || derived.nextSetupRoute || "/setup"
     ),
     nextStudioStage: s(effectiveMeta.nextStudioStage || ""),
     setupCompleted: !!(effectiveMeta.setupCompleted ?? derived.setupCompleted),

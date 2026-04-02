@@ -87,7 +87,7 @@ function buildMoments(meta = {}) {
       summary:
         "The workspace still needs a clear business identity before setup can feel complete.",
       detail:
-        "Start by confirming the business name and core profile details in the existing setup flow.",
+        "Start by adding the business name and basic profile details.",
     });
   } else {
     moments.push({
@@ -97,7 +97,7 @@ function buildMoments(meta = {}) {
         ? meta.quickSummary
         : `${meta.companyName} already has a setup profile in progress.`,
       detail:
-        "The current setup summary is being reused here so you can continue without opening staged setup screens first.",
+        "The current draft is already available, so you can continue without starting over.",
     });
   }
 
@@ -112,7 +112,7 @@ function buildMoments(meta = {}) {
             } still need review.`
           : "Some imported setup details still require review before they can be trusted.",
       detail:
-        "These are still handled by the existing setup review logic and remain source-of-truth there.",
+        "Review these before the workspace relies on them.",
     });
   }
 
@@ -132,7 +132,7 @@ function buildMoments(meta = {}) {
               .slice(1, 3)
               .map((item) => titleize(item))
               .join(", ")}.`
-          : "Finish the missing details in Setup Studio to unlock a more complete operating posture.",
+          : "Finish the missing details in setup to make the workspace more complete.",
     });
   }
 
@@ -144,7 +144,7 @@ function buildMoments(meta = {}) {
         ? `Current setup posture is ${titleize(meta.readinessLabel)}.`
         : "The next part of setup is ready when you are.",
       detail:
-        "The guided workspace keeps the setup story calm here, but the actual step-by-step work still runs through the existing setup experience.",
+        "The next setup step is ready when you are.",
     });
   }
 
@@ -176,14 +176,14 @@ export function buildWorkspaceSetupGuidance({
 
   const headline = meta.companyName
     ? `Continue setup for ${meta.companyName}`
-    : "Continue setup intake";
+    : "Continue setup";
 
   const description =
     meta.pendingCandidateCount > 0 || meta.reviewRequired
-      ? "Setup still has discovered details that need review before the system can fully rely on them."
+      ? "Some draft details still need a quick review before you continue."
       : meta.missingSteps.length > 0
-        ? "Setup is still missing a few details, so the workspace is keeping guidance conservative."
-        : "The workspace can keep guiding setup here without exposing the old stage machine.";
+        ? "Setup is still missing a few details."
+        : "The next setup step is ready.";
 
   return {
     visible: true,
@@ -193,13 +193,13 @@ export function buildWorkspaceSetupGuidance({
     moments: buildMoments(meta),
     primaryAction: {
       label: "Continue setup",
-      path: "/setup/studio",
+      path: "/setup",
     },
     secondaryAction:
       meta.pendingCandidateCount > 0 || meta.reviewRequired
         ? {
             label: "Review discovered business changes",
-            path: "/setup/studio",
+            path: "/setup",
           }
         : null,
   };

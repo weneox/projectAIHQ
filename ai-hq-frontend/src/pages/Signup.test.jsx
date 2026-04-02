@@ -44,7 +44,7 @@ describe("Signup", () => {
     signupUser.mockResolvedValue({
       ok: true,
       authenticated: true,
-      destination: { path: "/setup/studio" },
+      destination: { path: "/setup" },
     });
     clearAppSessionContext.mockImplementation(() => {});
   });
@@ -77,7 +77,7 @@ describe("Signup", () => {
     });
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith("/setup/studio", { replace: true });
+      expect(navigate).toHaveBeenCalledWith("/setup", { replace: true });
     });
   });
 
@@ -102,3 +102,4 @@ describe("Signup", () => {
     ).toBeInTheDocument();
   });
 });
+

@@ -693,7 +693,7 @@ describe("Truth viewer smoke", () => {
               requiredRole: "operator",
               allowed: true,
               target: {
-                path: "/setup/studio",
+                path: "/setup",
               },
             },
           },
@@ -717,7 +717,7 @@ describe("Truth viewer smoke", () => {
       expect.objectContaining({
         id: "open_setup_route",
         kind: "route",
-        target: { path: "/setup/studio" },
+        target: { path: "/setup" },
       })
     );
 

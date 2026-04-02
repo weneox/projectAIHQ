@@ -38,7 +38,6 @@ export function useSetupStudioControllerState() {
   const [savingBusiness, setSavingBusiness] = useState(false);
   const [actingKnowledgeId, setActingKnowledgeId] = useState("");
   const [savingServiceSuggestion, setSavingServiceSuggestion] = useState("");
-  const [showRefine, setShowRefine] = useState(false);
   const [showKnowledge, setShowKnowledge] = useState(false);
   const [freshEntryMode, setFreshEntryMode] = useState(true);
   const [error, setError] = useState("");
@@ -117,7 +116,6 @@ export function useSetupStudioControllerState() {
     autoRevealRef.current = "";
     setCurrentReview(createEmptyReviewState());
     setDiscoveryState(createIdleDiscoveryState());
-    setShowRefine(false);
     setShowKnowledge(false);
 
     if (!preserveActiveSource) {
@@ -296,7 +294,6 @@ export function useSetupStudioControllerState() {
     savingBusiness,
     actingKnowledgeId,
     savingServiceSuggestion,
-    showRefine,
     showKnowledge,
     freshEntryMode,
     error,
@@ -315,7 +312,6 @@ export function useSetupStudioControllerState() {
     setSavingBusiness,
     setActingKnowledgeId,
     setSavingServiceSuggestion,
-    setShowRefine,
     setShowKnowledge,
     setFreshEntryMode,
     setError,

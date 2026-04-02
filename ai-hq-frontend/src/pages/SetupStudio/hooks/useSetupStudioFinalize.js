@@ -24,7 +24,6 @@ export function createSetupStudioFinalize(ctx, helpers) {
     setFreshEntryMode,
     setSavingBusiness,
     setError,
-    setShowRefine,
     setShowKnowledge,
   } = ctx;
 
@@ -66,7 +65,6 @@ export function createSetupStudioFinalize(ctx, helpers) {
 
       await finalizeCurrentSetupReview(finalizePayload);
 
-      setShowRefine(false);
       setShowKnowledge(false);
 
       const refreshed = await refreshAndMaybeRouteHome(

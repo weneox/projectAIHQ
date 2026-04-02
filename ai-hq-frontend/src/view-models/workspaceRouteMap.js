@@ -10,7 +10,7 @@ export function resolveWorkspaceTarget(targetKind = "") {
     case "setup":
       return {
         destinationSurface: "workspace",
-        path: "/setup/studio",
+        path: "/setup",
       };
     case "source_governance":
       return {

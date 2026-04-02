@@ -29,7 +29,6 @@ export default function SetupStudioController() {
       discoveryForm: state.discoveryForm,
       freshEntryMode: state.freshEntryMode,
       activeSourceScope: state.activeSourceScope,
-      setShowRefine: state.setShowRefine,
       setShowKnowledge: state.setShowKnowledge,
     },
     actions
@@ -56,7 +55,6 @@ export default function SetupStudioController() {
     visibleServiceItems: viewModel.visibleServiceItems,
     discoveryProfileRows: viewModel.discoveryProfileRows,
     setShowKnowledge: state.setShowKnowledge,
-    setShowRefine: state.setShowRefine,
     barrierOnlyAutoReveal: viewModel.barrierOnlyAutoReveal,
   });
 

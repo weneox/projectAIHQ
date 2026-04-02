@@ -1,65 +1,36 @@
 import { useEffect, useMemo, useState } from "react";
 
-function hasMeaningfulItems(value) {
+function hasItems(value) {
   return Array.isArray(value) && value.length > 0;
 }
 
-function hasMeaningfulRows(value) {
-  return Array.isArray(value) && value.length > 0;
-}
-
-function hasMeaningfulWarnings(value) {
-  return Array.isArray(value) && value.length > 0;
-}
-
-function resolveCollapsedStage({
+function shouldAutoShowReview({
   entryLocked,
   importingWebsite,
   discoveryMode,
-  setupCompleted,
-  nextStudioStage,
   hasVisibleResults,
   hasAnyReviewContent,
-  showKnowledge,
-  visibleKnowledgeCount,
+  nextStudioStage,
 }) {
-  if (entryLocked) return "entry";
+  if (entryLocked) return false;
+  if (importingWebsite || discoveryMode === "running") return false;
 
-  if (importingWebsite || discoveryMode === "running" || nextStudioStage === "scanning") {
-    return "scanning";
-  }
-
-  if (
-    setupCompleted ||
+  return (
     hasVisibleResults ||
     hasAnyReviewContent ||
-    showKnowledge ||
-    visibleKnowledgeCount > 0 ||
     nextStudioStage === "review" ||
-    nextStudioStage === "ready" ||
-    nextStudioStage === "identity" ||
-    nextStudioStage === "knowledge" ||
-    nextStudioStage === "service"
-  ) {
-    return "review";
-  }
-
-  return "entry";
+    nextStudioStage === "confirm"
+  );
 }
 
 export function useSetupStudioStageFlow({
   importingWebsite,
   discoveryMode,
-  setupCompleted,
   nextStudioStage,
   hasVisibleResults,
-  showKnowledge,
-  visibleKnowledgeCount,
-  visibleServiceCount,
-  serviceSuggestionTitle,
-  services,
   discoveryProfileRows,
   knowledgeItems,
+  services,
   reviewSources,
   reviewEvents,
   discoveryWarnings,
@@ -69,22 +40,14 @@ export function useSetupStudioStageFlow({
   const [stage, setStage] = useState("entry");
   const [entryLocked, setEntryLocked] = useState(true);
 
-  const hasServiceStage = useMemo(() => {
-    return (
-      Boolean(serviceSuggestionTitle) ||
-      visibleServiceCount > 0 ||
-      hasMeaningfulItems(services)
-    );
-  }, [serviceSuggestionTitle, visibleServiceCount, services]);
-
   const hasAnyReviewContent = useMemo(() => {
     return (
-      hasMeaningfulRows(discoveryProfileRows) ||
-      hasMeaningfulItems(knowledgeItems) ||
-      hasMeaningfulItems(services) ||
-      hasMeaningfulItems(reviewSources) ||
-      hasMeaningfulItems(reviewEvents) ||
-      hasMeaningfulWarnings(discoveryWarnings)
+      hasItems(discoveryProfileRows) ||
+      hasItems(knowledgeItems) ||
+      hasItems(services) ||
+      hasItems(reviewSources) ||
+      hasItems(reviewEvents) ||
+      hasItems(discoveryWarnings)
     );
   }, [
     discoveryProfileRows,
@@ -96,29 +59,35 @@ export function useSetupStudioStageFlow({
   ]);
 
   useEffect(() => {
-    setStage(
-      resolveCollapsedStage({
+    if (importingWebsite || discoveryMode === "running") {
+      setStage("scanning");
+      return;
+    }
+
+    if (
+      shouldAutoShowReview({
         entryLocked,
         importingWebsite,
         discoveryMode,
-        setupCompleted,
-        nextStudioStage,
         hasVisibleResults,
         hasAnyReviewContent,
-        showKnowledge,
-        visibleKnowledgeCount,
+        nextStudioStage,
       })
-    );
+    ) {
+      setStage((current) => (current === "confirm" ? "confirm" : "review"));
+      return;
+    }
+
+    if (entryLocked) {
+      setStage("entry");
+    }
   }, [
     entryLocked,
     importingWebsite,
     discoveryMode,
-    setupCompleted,
-    nextStudioStage,
     hasVisibleResults,
     hasAnyReviewContent,
-    showKnowledge,
-    visibleKnowledgeCount,
+    nextStudioStage,
   ]);
 
   function handleContinueFromEntry() {
@@ -133,32 +102,28 @@ export function useSetupStudioStageFlow({
     onResumeReview?.();
   }
 
-  function goNextFromIdentity() {
+  function goToEntry() {
+    setStage("entry");
+  }
+
+  function goToReview() {
+    setEntryLocked(false);
     setStage("review");
   }
 
-  function goNextFromKnowledge() {
-    setStage("review");
-  }
-
-  function goNextFromService() {
-    setStage("review");
-  }
-
-  function goNextFromReview() {
-    setStage("review");
+  function goToConfirm() {
+    setEntryLocked(false);
+    setStage("confirm");
   }
 
   return {
     stage,
     entryLocked,
-    hasServiceStage,
     hasAnyReviewContent,
     handleContinueFromEntry,
     handleResumeFromEntry,
-    goNextFromIdentity,
-    goNextFromKnowledge,
-    goNextFromService,
-    goNextFromReview,
+    goToEntry,
+    goToReview,
+    goToConfirm,
   };
 }

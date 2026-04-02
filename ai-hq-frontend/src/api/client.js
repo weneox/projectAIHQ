@@ -1,8 +1,9 @@
 // src/api/client.js
-// FINAL v1.2 - resilient API client for same-origin or explicit API base
+// hardened API client with request timeout support
 
 const RAW = String(import.meta.env?.VITE_API_BASE ?? "").trim();
 const API_BASE = RAW ? RAW.replace(/\/+$/, "") : "";
+const DEFAULT_TIMEOUT_MS = 12000;
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -125,6 +126,8 @@ export async function apiRequest(path, options = {}) {
     credentials = "include",
     allowStatuses = [],
     rawBody = false,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    signal: externalSignal,
   } = options;
 
   const url = apiUrl(path);
@@ -154,14 +157,64 @@ export async function apiRequest(path, options = {}) {
     }
   }
 
+  let controller = null;
+  let cleanupExternalAbort = null;
+  let timeoutId = null;
+  let didTimeout = false;
+
+  if (typeof AbortController !== "undefined") {
+    controller = new AbortController();
+    init.signal = controller.signal;
+
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        controller.abort(externalSignal.reason);
+      } else {
+        const onAbort = () => controller.abort(externalSignal.reason);
+        externalSignal.addEventListener("abort", onAbort, { once: true });
+        cleanupExternalAbort = () =>
+          externalSignal.removeEventListener("abort", onAbort);
+      }
+    }
+
+    if (Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0) {
+      timeoutId = setTimeout(() => {
+        didTimeout = true;
+        try {
+          controller.abort();
+        } catch {}
+      }, Number(timeoutMs));
+    }
+  } else if (externalSignal) {
+    init.signal = externalSignal;
+  }
+
   let response;
   try {
     response = await fetch(url, init);
   } catch (e) {
+    if (timeoutId) clearTimeout(timeoutId);
+    if (cleanupExternalAbort) cleanupExternalAbort();
+
+    if (didTimeout) {
+      const error = new Error(`Request timeout (${method} ${path})`);
+      error.code = "REQUEST_TIMEOUT";
+      throw error;
+    }
+
+    if (s(e?.name).toLowerCase() === "aborterror") {
+      const error = new Error(`Request aborted (${method} ${path})`);
+      error.code = "REQUEST_ABORTED";
+      throw error;
+    }
+
     throw new Error(
       `Network error (${method} ${path}): ${String(e?.message || e)}`
     );
   }
+
+  if (timeoutId) clearTimeout(timeoutId);
+  if (cleanupExternalAbort) cleanupExternalAbort();
 
   const payload = await readPayload(response);
   const allowed = Array.isArray(allowStatuses)

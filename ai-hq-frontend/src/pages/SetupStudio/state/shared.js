@@ -205,7 +205,7 @@ export function normalizeBootMeta(
     ),
     nextRoute: s(progress?.nextRoute || workspace?.nextRoute || "/"),
     nextSetupRoute: s(
-      progress?.nextSetupRoute || workspace?.nextSetupRoute || "/setup/studio"
+      progress?.nextSetupRoute || workspace?.nextSetupRoute || "/setup"
     ),
     nextStudioStage: s(
       progress?.nextStudioStage || workspace?.nextStudioStage || ""
@@ -739,17 +739,14 @@ export function applyUiHintsFromMeta({
   nextMeta = {},
   pendingKnowledge = [],
   setShowKnowledge,
-  setShowRefine,
 }) {
   const stage = s(nextMeta?.nextStudioStage).toLowerCase();
 
-  if (stage === "knowledge" && arr(pendingKnowledge).length > 0) {
+  if (
+    ["knowledge", "review", "confirm"].includes(stage) &&
+    arr(pendingKnowledge).length > 0
+  ) {
     setShowKnowledge(true);
-    return;
-  }
-
-  if (stage === "identity" || stage === "business_profile") {
-    setShowRefine(true);
   }
 }
 

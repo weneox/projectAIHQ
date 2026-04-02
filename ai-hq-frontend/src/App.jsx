@@ -64,9 +64,9 @@ export default function App() {
     <UserRouteGuard>{withSuspense(<SetupStudioRoute />)}</UserRouteGuard>
   );
 
-  const setupRedirectElement = (
+  const setupLegacyEntryElement = (
     <UserRouteGuard>
-      <Navigate to="/setup/studio" replace />
+      <Navigate to="/setup" replace />
     </UserRouteGuard>
   );
 
@@ -103,14 +103,8 @@ export default function App() {
           <Route path="secrets" element={withSuspense(<AdminSecrets />)} />
         </Route>
 
-        <Route path="/setup/studio" element={setupEntryElement} />
-        <Route path="/setup" element={setupRedirectElement} />
-        <Route path="/setup/business" element={setupRedirectElement} />
-        <Route path="/setup/channels" element={setupRedirectElement} />
-        <Route path="/setup/knowledge" element={setupRedirectElement} />
-        <Route path="/setup/services" element={setupRedirectElement} />
-        <Route path="/setup/playbooks" element={setupRedirectElement} />
-        <Route path="/setup/runtime" element={setupRedirectElement} />
+        <Route path="/setup/studio" element={setupLegacyEntryElement} />
+        <Route path="/setup" element={setupEntryElement} />
 
         <Route path="/select-workspace" element={selectWorkspaceEntryElement} />
         <Route path="/" element={rootEntryElement} />

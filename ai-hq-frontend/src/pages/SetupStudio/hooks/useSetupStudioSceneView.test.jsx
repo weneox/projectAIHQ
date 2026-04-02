@@ -1,25 +1,17 @@
 /* @vitest-environment jsdom */
 
 import { renderHook } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
-  buildSetupStudioReviewWorkspaceDialogProps,
   getSetupStudioHasManualInput,
-  getSetupStudioHasVoiceInput,
   getSetupStudioScanningView,
   getSetupStudioSourceLabel,
   useSetupStudioSceneView,
 } from "./useSetupStudioSceneView.js";
 
 describe("useSetupStudioSceneView", () => {
-  it("shapes source labels, scanning view, and dialog props", () => {
-    const onSetBusinessField = vi.fn();
-    const onSetManualSection = vi.fn();
-    const onSaveBusiness = vi.fn();
-    const onReloadReviewDraft = vi.fn();
-    const onToggleRefine = vi.fn();
-
+  it("shapes source labels and scanning view for the simplified flow", () => {
     const { result } = renderHook(() =>
       useSetupStudioSceneView({
         discoveryState: {
@@ -43,33 +35,18 @@ describe("useSetupStudioSceneView", () => {
         manualSections: {
           servicesText: "Custom Cakes",
         },
-        showRefine: true,
-        savingBusiness: false,
-        discoveryProfileRows: [{ key: "companyName" }],
-        onSetBusinessField,
-        onSetManualSection,
-        onSaveBusiness,
-        onReloadReviewDraft,
-        onToggleRefine,
-        reviewSources: [{ id: "source-1" }],
-        reviewSyncState: { level: "ready" },
       })
     );
 
     expect(result.current.sourceLabel).toBe("Website");
     expect(result.current.discoveryWarnings).toEqual(["http_403"]);
-    expect(result.current.honestySummary.title).toBe("Barrier-limited source draft");
-    expect(result.current.honestySummary.barrierWarnings).toEqual(["http_403"]);
     expect(result.current.scanningView).toMatchObject({
       sourceType: "website",
       hasSourceInput: true,
       hasManualInput: true,
-      hasVoiceInput: false,
       scanLines: ["Scanning homepage", "Extracting profile"],
       scanLineIndex: 1,
     });
-    expect(result.current.reviewWorkspaceDialogProps.open).toBe(true);
-    expect(result.current.reviewWorkspaceDialogProps.onClose).toBe(onToggleRefine);
   });
 
   it("supports the pure helper functions directly", () => {
@@ -83,12 +60,6 @@ describe("useSetupStudioSceneView", () => {
     expect(
       getSetupStudioHasManualInput({
         businessForm: { companyName: "Acme Bakery" },
-      })
-    ).toBe(true);
-
-    expect(
-      getSetupStudioHasVoiceInput({
-        discoveryForm: { voiceTranscript: "Hello there" },
       })
     ).toBe(true);
 
@@ -108,24 +79,5 @@ describe("useSetupStudioSceneView", () => {
       scanLines: ["Step 1"],
       scanLineIndex: 0,
     });
-
-    const dialogProps = buildSetupStudioReviewWorkspaceDialogProps({
-      showRefine: true,
-      savingBusiness: false,
-      businessForm: {},
-      discoveryProfileRows: [],
-      manualSections: {},
-      onSetBusinessField: vi.fn(),
-      onSetManualSection: vi.fn(),
-      onSaveBusiness: vi.fn(),
-      onReloadReviewDraft: vi.fn(),
-      onToggleRefine: vi.fn(),
-      currentReview: {},
-      reviewSources: [],
-      reviewSyncState: {},
-    });
-
-    expect(dialogProps.open).toBe(true);
-    expect(typeof dialogProps.onClose).toBe("function");
   });
 });

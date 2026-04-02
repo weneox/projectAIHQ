@@ -24,7 +24,6 @@ export function createSetupStudioScan(ctx, helpers) {
     setFreshEntryMode,
     setError,
     setShowKnowledge,
-    setShowRefine,
     autoRevealRef,
   } = ctx;
 
@@ -142,7 +141,6 @@ export function createSetupStudioScan(ctx, helpers) {
         });
 
         setShowKnowledge(revealState.shouldOpenKnowledge);
-        setShowRefine(revealState.shouldOpenRefine);
       }
     } catch (e2) {
       const message = String(

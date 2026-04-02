@@ -9,7 +9,6 @@ function renderControllerEffects(overrides = {}) {
   };
   const autoRevealRef = { current: "" };
   const setShowKnowledge = vi.fn();
-  const setShowRefine = vi.fn();
 
   const props = {
     actions,
@@ -32,7 +31,6 @@ function renderControllerEffects(overrides = {}) {
     visibleServiceItems: [],
     discoveryProfileRows: [],
     setShowKnowledge,
-    setShowRefine,
     barrierOnlyAutoReveal: false,
     ...overrides,
   };
@@ -69,7 +67,7 @@ describe("useSetupStudioControllerEffects", () => {
     expect(setShowKnowledge).toHaveBeenCalledWith(true);
   });
 
-  it("reveals refine and knowledge panels once results become eligible", () => {
+  it("reveals knowledge once results become eligible", () => {
     const rendered = renderControllerEffects({
       freshEntryMode: true,
       hasVisibleResults: false,
@@ -91,13 +89,11 @@ describe("useSetupStudioControllerEffects", () => {
         visibleServiceItems: rendered.visibleServiceItems,
         discoveryProfileRows: rendered.discoveryProfileRows,
         setShowKnowledge: rendered.setShowKnowledge,
-        setShowRefine: rendered.setShowRefine,
         barrierOnlyAutoReveal: false,
       });
     });
 
     expect(rendered.autoRevealRef.current).toBe("website|acme.example");
-    expect(rendered.setShowRefine).toHaveBeenCalledWith(true);
     expect(rendered.setShowKnowledge).toHaveBeenCalledWith(true);
   });
 });

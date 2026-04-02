@@ -10,14 +10,12 @@ describe("createSetupStudioActionAdapters", () => {
       onScanBusiness: vi.fn(),
     };
     const ctx = {
-      navigate: vi.fn(),
       discoveryForm: { sourceValue: "https://acme.example" },
       freshEntryMode: false,
       activeSourceScope: {
         sourceType: "website",
         sourceUrl: "https://acme.example",
       },
-      setShowRefine: vi.fn(),
       setShowKnowledge: vi.fn(),
     };
 
@@ -39,14 +37,12 @@ describe("createSetupStudioActionAdapters", () => {
       onScanBusiness: vi.fn(),
     };
     const ctx = {
-      navigate: vi.fn(),
       discoveryForm: {},
       freshEntryMode: true,
       activeSourceScope: {
         sourceType: "manual",
         sourceUrl: "",
       },
-      setShowRefine: vi.fn(),
       setShowKnowledge: vi.fn(),
     };
 
@@ -70,14 +66,12 @@ describe("createSetupStudioActionAdapters", () => {
       onScanBusiness: vi.fn(),
     };
     const ctx = {
-      navigate: vi.fn(),
       discoveryForm: {},
       freshEntryMode: false,
       activeSourceScope: {
         sourceType: "website",
         sourceUrl: "https://acme.example",
       },
-      setShowRefine: vi.fn(),
       setShowKnowledge: vi.fn(),
     };
 

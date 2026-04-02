@@ -1,5 +1,5 @@
 // src/features/setup-studio/lib/setupStudioHelpers.js
-// FINAL v2.2 — canonical setup studio helpers with barrier/warning-safe projection
+// FINAL v2.2 - canonical setup studio helpers with barrier/warning-safe projection
 
 export function arr(value) {
   return Array.isArray(value) ? value : [];
@@ -169,7 +169,7 @@ export function compactValue(value) {
       .map((item) => sanitizeDiscoveryText(item))
       .filter(Boolean)
       .slice(0, 3)
-      .join(" · ");
+      .join(" | ");
   }
 
   if (value && typeof value === "object") {
@@ -177,7 +177,7 @@ export function compactValue(value) {
       .map((item) => sanitizeDiscoveryText(item))
       .filter(Boolean)
       .slice(0, 3)
-      .join(" · ");
+      .join(" | ");
   }
 
   return sanitizeDiscoveryText(value);
@@ -233,7 +233,7 @@ export function candidateValue(item = {}) {
   const combined =
     sanitizeDiscoveryText(valueJson.question || normalizedJson.question) &&
     sanitizeDiscoveryText(valueJson.answer || normalizedJson.answer)
-      ? `${sanitizeDiscoveryText(valueJson.question || normalizedJson.question)} — ${sanitizeDiscoveryText(
+      ? `${sanitizeDiscoveryText(valueJson.question || normalizedJson.question)} - ${sanitizeDiscoveryText(
           valueJson.answer || normalizedJson.answer
         )}`
       : firstMeaningfulDiscoveryValue(
@@ -401,7 +401,7 @@ export function profilePreviewRows(profile = {}) {
     arr(p.pricingHints || p.pricing_hints),
     (item) => (typeof item === "string" ? item : compactValue(item)),
     3,
-    " · "
+    " | "
   );
 
   const socialLinks = sanitizePreviewCollection(
@@ -620,10 +620,15 @@ function normalizeProgressStage(value = "") {
   const x = s(value).toLowerCase();
 
   if (["entry", "source"].includes(x)) return "entry";
-  if (["identity", "business_profile", "business"].includes(x)) return "identity";
-  if (["knowledge", "review"].includes(x)) return "knowledge";
-  if (["service", "services"].includes(x)) return "service";
-  if (["ready", "launch", "complete"].includes(x)) return "ready";
+  if (["scanning", "running", "processing", "syncing"].includes(x)) return "scanning";
+  if (
+    ["identity", "business_profile", "business", "knowledge", "review", "service", "services"].includes(
+      x
+    )
+  ) {
+    return "review";
+  }
+  if (["ready", "launch", "complete", "confirm"].includes(x)) return "confirm";
 
   return "entry";
 }
@@ -634,7 +639,7 @@ export function deriveStudioProgress({ importingWebsite, discoveryState, meta })
   const missingSteps = arr(meta?.missingSteps);
   const primaryMissingStep = s(meta?.primaryMissingStep);
   const nextRoute = s(meta?.nextRoute || "/");
-  const nextSetupRoute = s(meta?.nextSetupRoute || "/setup/studio");
+  const nextSetupRoute = s(meta?.nextSetupRoute || "/setup");
   const nextStudioStage = normalizeProgressStage(meta?.nextStudioStage);
   const readinessLabel = s(meta?.readinessLabel);
   const pendingCandidateCount = Number(meta?.pendingCandidateCount || 0);
@@ -723,3 +728,4 @@ export function pageTone(mode = "", importingWebsite = false) {
     chip: "border-slate-900/8 bg-slate-900/5 text-slate-600",
   };
 }
+

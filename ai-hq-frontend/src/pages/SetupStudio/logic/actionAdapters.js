@@ -1,10 +1,8 @@
 export function createSetupStudioActionAdapters(ctx, actions) {
   const {
-    navigate,
     discoveryForm,
     freshEntryMode,
     activeSourceScope,
-    setShowRefine,
     setShowKnowledge,
   } = ctx;
 
@@ -43,14 +41,6 @@ export function createSetupStudioActionAdapters(ctx, actions) {
     return actions.onScanBusiness(discoveryForm);
   }
 
-  function openTruth() {
-    navigate("/truth");
-  }
-
-  function toggleRefine() {
-    setShowRefine((prev) => !prev);
-  }
-
   function toggleKnowledge() {
     setShowKnowledge((prev) => !prev);
   }
@@ -59,8 +49,6 @@ export function createSetupStudioActionAdapters(ctx, actions) {
     loadActiveReview,
     refreshStudio,
     continueFlow,
-    openTruth,
-    toggleRefine,
     toggleKnowledge,
   };
 }

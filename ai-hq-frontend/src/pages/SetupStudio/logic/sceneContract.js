@@ -12,7 +12,6 @@ export function buildSetupStudioSceneContract({
       savingBusiness: state.savingBusiness,
       actingKnowledgeId: state.actingKnowledgeId,
       savingServiceSuggestion: state.savingServiceSuggestion,
-      showRefine: state.showRefine,
       showKnowledge: state.showKnowledge,
       error: state.error,
     },
@@ -56,10 +55,8 @@ export function buildSetupStudioSceneContract({
       rejectKnowledge: actions.onRejectKnowledge,
       createSuggestedService: actions.onCreateSuggestedService,
       openWorkspace: actions.onOpenWorkspace,
-      openTruth: adapters.openTruth,
       reloadReviewDraft: adapters.loadActiveReview,
       refresh: adapters.refreshStudio,
-      toggleRefine: adapters.toggleRefine,
       toggleKnowledge: adapters.toggleKnowledge,
     },
   };

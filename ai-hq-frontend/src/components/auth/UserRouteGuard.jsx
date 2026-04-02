@@ -70,7 +70,7 @@ export default function UserRouteGuard({ children }) {
 
         const workspace = getCanonicalWorkspaceContract(bootstrap);
         const setupCompleted = workspace.workspaceReady;
-        const setupRoute = workspace.nextSetupRoute || "/setup/studio";
+        const setupRoute = workspace.nextSetupRoute || "/setup";
 
         const onSetup = isSetupPath(location.pathname);
         let redirectTo = "";
