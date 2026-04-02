@@ -111,6 +111,9 @@ vi.mock("./pages/AdminSecrets.jsx", () => ({
 vi.mock("./pages/SetupStudio/index.jsx", () => ({
   default: () => <div>Setup Studio Route</div>,
 }));
+vi.mock("./pages/DesignLab.jsx", () => ({
+  default: () => <div>Design Lab Page</div>,
+}));
 
 import App from "./App.jsx";
 
@@ -126,6 +129,7 @@ describe("App primary product route smoke", () => {
   it.each([
     ["/", "App Entry Redirect"],
     ["/workspace", "Workspace Page"],
+    ["/design-lab", "Design Lab Page"],
     ["/inbox", "Inbox Page"],
     ["/publish", "Publish Page"],
     ["/expert", "Expert Page"],

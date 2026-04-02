@@ -30,6 +30,7 @@ const AdminTeam = lazy(() => import("./pages/AdminTeam.jsx"));
 const AdminSecrets = lazy(() => import("./pages/AdminSecrets.jsx"));
 const SetupStudioRoute = lazy(() => import("./pages/SetupStudio/index.jsx"));
 const SelectWorkspace = lazy(() => import("./pages/SelectWorkspace.jsx"));
+const DesignLab = lazy(() => import("./pages/DesignLab.jsx"));
 
 function RouteFallback() {
   return (
@@ -118,6 +119,7 @@ export default function App() {
           }
         >
           <Route path="workspace" element={withSuspense(<WorkspacePage />)} />
+          <Route path="design-lab" element={withSuspense(<DesignLab />)} />
 
           <Route
             path="publish"
