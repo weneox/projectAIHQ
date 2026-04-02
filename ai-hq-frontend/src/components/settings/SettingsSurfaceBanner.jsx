@@ -25,18 +25,18 @@ function ensureOverlayRoot() {
 
 function toneClasses(tone = "neutral") {
   if (tone === "success") {
-    return "border-emerald-200/80 bg-white/88 text-emerald-950 shadow-[0_18px_45px_rgba(16,185,129,0.12)]";
+    return "border-emerald-200/80 bg-white/88 text-emerald-950";
   }
 
   if (tone === "warn") {
-    return "border-amber-200/80 bg-white/88 text-amber-950 shadow-[0_18px_45px_rgba(245,158,11,0.12)]";
+    return "border-amber-200/80 bg-white/88 text-amber-950";
   }
 
   if (tone === "danger") {
-    return "border-rose-200/80 bg-white/88 text-rose-950 shadow-[0_18px_45px_rgba(244,63,94,0.12)]";
+    return "border-rose-200/80 bg-white/88 text-rose-950";
   }
 
-  return "border-slate-200/80 bg-white/88 text-slate-800 shadow-[0_18px_45px_rgba(15,23,42,0.11)]";
+  return "border-slate-200/80 bg-white/88 text-slate-800";
 }
 
 function toneDotClasses(tone = "neutral") {
@@ -188,7 +188,7 @@ function NotificationCard({ item, onRemove }) {
       role={item.tone === "danger" || item.tone === "warn" ? "alert" : "status"}
       aria-live={item.tone === "danger" || item.tone === "warn" ? "assertive" : "polite"}
       className={[
-        "pointer-events-auto relative w-full max-w-[min(560px,calc(100vw-1.5rem))] overflow-hidden rounded-[22px] border backdrop-blur-xl transition duration-200 ease-out",
+        "pointer-events-auto relative w-full max-w-[min(560px,calc(100vw-1.5rem))] overflow-hidden rounded-[22px] border transition duration-200 ease-out",
         toneClasses(item.tone),
         visible ? "translate-y-0 opacity-100" : "-translate-y-3 opacity-0",
       ].join(" ")}

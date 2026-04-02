@@ -5,14 +5,14 @@ function s(v, d = "") {
 export default function TruthFieldTable({ fields = [] }) {
   if (!Array.isArray(fields) || !fields.length) {
     return (
-      <div className="rounded-[24px] border border-slate-200/80 bg-white/80 px-5 py-5 text-sm leading-6 text-slate-500">
+      <div className="border-l-2 border-slate-200 px-5 py-5 text-sm leading-6 text-slate-500">
         No approved fields were returned by the backend.
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-[24px] border border-slate-200/80 bg-white/84">
+    <div className="overflow-hidden border-t border-slate-200/80 bg-transparent">
       <div className="grid gap-0 md:grid-cols-[220px_minmax(0,1fr)_300px]">
         <div className="border-b border-slate-200/80 px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
           Field

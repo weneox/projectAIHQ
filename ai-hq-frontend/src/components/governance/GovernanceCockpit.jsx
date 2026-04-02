@@ -113,7 +113,7 @@ function collectPolicyPosture(summary = {}, truth = {}) {
     requiredAction: s(source.requiredAction),
     explanation: s(
       source.explanation ||
-        "Policy telemetry is unavailable. The cockpit stays explicit instead of inferring authority."
+        "Policy telemetry is unavailable. This view stays explicit instead of inferring authority."
     ),
     nextAction: obj(source.nextAction),
     affectedSurfaces: arr(source.affectedSurfaces),
@@ -232,11 +232,11 @@ export function GovernanceSignalStrip({
     : "neutral";
 
   return (
-    <Card variant="surface" className="rounded-[28px]">
+    <Card variant="surface" className="border-t rounded-none">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
         <div className="space-y-2">
           <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-            Governed Operations
+            Business data operations
           </div>
           <div className="text-[22px] font-semibold tracking-[-0.04em] text-slate-950 dark:text-white">
             Approved truth, runtime health, and repair stay in one operator loop.
@@ -298,8 +298,8 @@ export function GovernanceSignalStrip({
 }
 
 export default function GovernanceCockpit({
-  title = "Governance Cockpit",
-  subtitle = "Truth governance, runtime projection health, finalize impact, and repair guidance in one operator view.",
+  title = "Business data review",
+  subtitle = "Business data approval, runtime projection health, approval impact, and repair guidance in one view.",
   truth = {},
   trust = {},
   onRunAction,
@@ -345,7 +345,7 @@ export default function GovernanceCockpit({
           runtimeHealth.autonomousOperation || "continue"
         )} mode.`
       : "Autonomous operation is fail-closed until projection health is repaired."
-    : "Runtime health telemetry is temporarily unavailable. The cockpit is showing safe diagnostic defaults instead of inferring execution authority.";
+    : "Runtime health telemetry is temporarily unavailable. This view is showing safe diagnostic defaults instead of inferring execution authority.";
 
   useEffect(() => {
     const refMap = {
@@ -438,7 +438,7 @@ export default function GovernanceCockpit({
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[0.8fr_1.2fr]">
-          <Card variant="surface" className="rounded-[28px]" tone={policyTone}>
+          <Card variant="surface" className="border-t rounded-none" tone={policyTone}>
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -522,7 +522,7 @@ export default function GovernanceCockpit({
             </div>
           </Card>
 
-          <Card variant="surface" className="rounded-[28px]">
+          <Card variant="surface" className="border-t rounded-none">
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -547,7 +547,7 @@ export default function GovernanceCockpit({
                   {channelAutonomy.map((item) => (
                     <div
                       key={item.surface}
-                      className="rounded-[22px] border border-slate-200/80 bg-white/70 px-4 py-4 dark:border-white/10 dark:bg-white/[0.03]"
+                      className="border-t border-slate-200/80 px-4 py-4 dark:border-white/10"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="text-sm font-semibold text-slate-950 dark:text-white">
@@ -610,7 +610,7 @@ export default function GovernanceCockpit({
         </div>
 
         <div ref={policyControlsRef}>
-        <Card variant="surface" className="rounded-[28px]">
+        <Card variant="surface" className="border-t rounded-none">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -631,13 +631,13 @@ export default function GovernanceCockpit({
             </div>
 
             {policyControlState.error ? (
-              <div className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200">
+              <div className="border-l-2 border-rose-200 px-4 py-3 text-sm text-rose-700 dark:border-rose-400/20 dark:text-rose-200">
                 {policyControlState.error}
               </div>
             ) : null}
 
             {policyControls.cannotLoosenAutonomy ? (
-              <div className="rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-100">
+              <div className="border-l-2 border-amber-200 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/20 dark:text-amber-100">
                 Runtime or truth safety posture currently forbids loosening autonomy. Safer control modes remain available.
               </div>
             ) : null}
@@ -653,7 +653,7 @@ export default function GovernanceCockpit({
                   return (
                     <div
                       key={savingKey}
-                      className="rounded-[22px] border border-slate-200/80 bg-white/70 px-4 py-4 dark:border-white/10 dark:bg-white/[0.03]"
+                      className="border-t border-slate-200/80 px-4 py-4 dark:border-white/10"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="text-sm font-semibold text-slate-950 dark:text-white">
@@ -724,7 +724,7 @@ export default function GovernanceCockpit({
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-          <Card variant="surface" className="rounded-[28px]">
+          <Card variant="surface" className="border-t rounded-none">
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -790,7 +790,7 @@ export default function GovernanceCockpit({
           </Card>
 
           <div ref={runtimeHealthRef}>
-          <Card variant="surface" className="rounded-[28px]" tone={hasRuntimeTelemetry ? toneForHealth(runtimeStatus) : "neutral"}>
+          <Card variant="surface" className="border-t rounded-none" tone={hasRuntimeTelemetry ? toneForHealth(runtimeStatus) : "neutral"}>
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -822,7 +822,7 @@ export default function GovernanceCockpit({
               />
 
               <div className="grid gap-3 md:grid-cols-2">
-                <div className="rounded-[20px] border border-slate-200/80 bg-white/70 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
+                <div className="border-t border-slate-200/80 px-4 py-3 dark:border-white/10">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
                     Last Known Good
                   </div>
@@ -835,7 +835,7 @@ export default function GovernanceCockpit({
                       : "Diagnostic visibility only. Never used as runtime authority."}
                   </div>
                 </div>
-                <div className="rounded-[20px] border border-slate-200/80 bg-white/70 px-4 py-3 dark:border-white/10 dark:bg-white/[0.03]">
+                <div className="border-t border-slate-200/80 px-4 py-3 dark:border-white/10">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
                     Latest Failure
                   </div>
@@ -865,7 +865,7 @@ export default function GovernanceCockpit({
           </div>
         </div>
 
-        <Card variant="surface" className="rounded-[28px]">
+        <Card variant="surface" className="border-t rounded-none">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>

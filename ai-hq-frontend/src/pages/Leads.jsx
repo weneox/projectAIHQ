@@ -151,7 +151,7 @@ export default function Leads() {
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
-        <div className="premium-panel p-5">
+        <div className="border-t border-slate-200/80 px-1 py-5">
           <div className="flex flex-col gap-4 border-b premium-divider pb-4 md:flex-row md:items-center md:justify-between">
             <div>
               <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
@@ -215,7 +215,7 @@ export default function Leads() {
         </div>
 
         <div className="space-y-6">
-          <div className="premium-panel p-5">
+          <div className="border-t border-slate-200/80 px-1 py-5">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/80 bg-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_-18px_rgba(15,23,42,0.18)]">
                 <BriefcaseBusiness className="h-4 w-4 text-slate-600" />
@@ -230,7 +230,7 @@ export default function Leads() {
               </div>
             </div>
 
-            <div className="premium-panel-subtle mt-5 p-4">
+            <div className="border-t border-slate-200/70 px-4 py-4">
               {!sel ? (
                 <div className="px-2 py-8 text-center">
                   <div className="text-sm font-medium text-slate-700">No lead selected</div>
@@ -358,7 +358,7 @@ export default function Leads() {
                           type="button"
                           onClick={() => saveStage(form.stage)}
                           disabled={savingField === "stage"}
-                          className="premium-panel-subtle inline-flex items-center justify-center px-4 text-slate-700 transition hover:border-slate-300"
+                          className="inline-flex items-center justify-center border-t border-slate-200 px-4 text-slate-700 transition hover:border-slate-300"
                         >
                           <Save className="h-4 w-4" />
                         </button>
@@ -380,7 +380,7 @@ export default function Leads() {
                           type="button"
                           onClick={() => saveStatus(form.status)}
                           disabled={savingField === "status"}
-                          className="premium-panel-subtle inline-flex items-center justify-center px-4 text-slate-700 transition hover:border-slate-300"
+                          className="inline-flex items-center justify-center border-t border-slate-200 px-4 text-slate-700 transition hover:border-slate-300"
                         >
                           <Save className="h-4 w-4" />
                         </button>
@@ -398,7 +398,7 @@ export default function Leads() {
                           type="button"
                           onClick={saveOwner}
                           disabled={savingField === "owner"}
-                          className="premium-panel-subtle inline-flex items-center justify-center px-4 text-slate-700 transition hover:border-slate-300"
+                          className="inline-flex items-center justify-center border-t border-slate-200 px-4 text-slate-700 transition hover:border-slate-300"
                         >
                           <UserCog className="h-4 w-4" />
                         </button>
@@ -462,7 +462,7 @@ export default function Leads() {
                       type="button"
                       onClick={saveFollowUp}
                       disabled={savingField === "followup"}
-                      className="premium-panel-subtle inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300"
+                      className="inline-flex items-center gap-2 border-t border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300"
                     >
                       <CalendarDays className="h-4 w-4" />
                       Save Follow-up
@@ -484,7 +484,7 @@ export default function Leads() {
                     />
                   </div>
 
-                  <div className="premium-panel-subtle mt-4 px-4 py-3">
+                  <div className="mt-4 border-t border-slate-200/70 px-4 py-3">
                     <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
                       Score band
                     </div>
@@ -499,7 +499,7 @@ export default function Leads() {
                     </div>
                   </div>
 
-                  <div className="premium-panel-subtle mt-4 px-4 py-3">
+                  <div className="mt-4 border-t border-slate-200/70 px-4 py-3">
                     <div className="mb-3 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
                       <FileText className="h-3.5 w-3.5" />
                       Add Note
@@ -515,7 +515,7 @@ export default function Leads() {
                         type="button"
                         onClick={saveNote}
                         disabled={savingField === "note" || !noteText.trim()}
-                        className="premium-panel-subtle inline-flex items-center gap-2 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="inline-flex items-center gap-2 border-t border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <Save className="h-4 w-4" />
                         Save Note
@@ -523,7 +523,7 @@ export default function Leads() {
                     </div>
                   </div>
 
-                  <div className="premium-panel-subtle mt-4 px-4 py-3">
+                  <div className="mt-4 border-t border-slate-200/70 px-4 py-3">
                     <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
                       Full Notes
                     </div>
@@ -533,7 +533,7 @@ export default function Leads() {
                   </div>
 
                   {showInternalDebug && selExtra && Object.keys(selExtra).length > 0 ? (
-                    <div className="premium-panel-subtle mt-4 p-3">
+                    <div className="mt-4 border-t border-slate-200/70 p-3">
                       <div className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
                         <ShieldCheck className="h-3.5 w-3.5" />
                         Internal Payload
@@ -548,7 +548,7 @@ export default function Leads() {
             </div>
           </div>
 
-          <div className="premium-panel p-5">
+          <div className="border-t border-slate-200/80 px-1 py-5">
             <div className="flex items-center gap-2 text-[16px] font-semibold tracking-[-0.03em] text-slate-950">
               <Activity className="h-4 w-4 text-slate-500" />
               Activity Timeline
@@ -571,7 +571,7 @@ export default function Leads() {
                 events.map((ev) => (
                   <div
                     key={ev.id}
-                    className="premium-panel-subtle p-4"
+                    className="border-t border-slate-200/70 p-4"
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div>
@@ -607,7 +607,7 @@ export default function Leads() {
             </div>
           </div>
 
-          <div className="premium-panel p-5">
+          <div className="border-t border-slate-200/80 px-1 py-5">
             <div className="text-[16px] font-semibold tracking-[-0.03em] text-slate-950">
               Source Mix
             </div>
@@ -630,7 +630,7 @@ export default function Leads() {
             </div>
           </div>
 
-          <div className="premium-panel p-5">
+          <div className="border-t border-slate-200/80 px-1 py-5">
             <div className="text-[16px] font-semibold tracking-[-0.03em] text-slate-950">
               Stage Overview
             </div>
@@ -639,7 +639,7 @@ export default function Leads() {
               {Object.entries(stageMix).map(([stage, count]) => (
                 <div
                   key={stage}
-                  className="premium-panel-subtle px-4 py-3"
+                  className="border-t border-slate-200/70 px-4 py-3"
                 >
                   <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
                     {stage}
@@ -649,7 +649,7 @@ export default function Leads() {
               ))}
             </div>
 
-            <div className="premium-panel-subtle mt-5 px-4 py-3">
+            <div className="mt-5 border-t border-slate-200/70 px-4 py-3">
               <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
                 Last refresh
               </div>

@@ -8,7 +8,7 @@ function arr(v, d = []) {
 
 export default function TruthHistoryPanel({ history = [], onOpenVersion }) {
   return (
-    <section className="rounded-[24px] border border-slate-200/80 bg-white/80 px-5 py-5">
+    <section className="border-t border-slate-200/80 px-5 py-5">
       <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
         History
       </div>
@@ -50,7 +50,7 @@ export default function TruthHistoryPanel({ history = [], onOpenVersion }) {
               </div>
 
               <div className="mt-1 text-sm leading-6 text-slate-600">
-                {[s(item.approvedAt), s(item.approvedBy)].filter(Boolean).join(" · ") ||
+                {[s(item.approvedAt), s(item.approvedBy)].filter(Boolean).join(" | ") ||
                   "Approval metadata was not returned for this version."}
               </div>
 
@@ -61,13 +61,13 @@ export default function TruthHistoryPanel({ history = [], onOpenVersion }) {
               ) : null}
 
               {s(item.diffSummary) ? (
-                <div className="mt-2 rounded-[18px] border border-slate-200/70 bg-slate-50/80 px-3 py-2 text-sm leading-6 text-slate-600">
+                <div className="mt-2 border-l-2 border-slate-200 px-3 py-2 text-sm leading-6 text-slate-600">
                   Changed fields: {item.diffSummary}
                 </div>
               ) : null}
 
               {s(item.behaviorSummary) ? (
-                <div className="mt-2 rounded-[18px] border border-cyan-200/70 bg-cyan-50/70 px-3 py-2 text-sm leading-6 text-cyan-900">
+                <div className="mt-2 border-l-2 border-cyan-200 px-3 py-2 text-sm leading-6 text-cyan-900">
                   Behavior snapshot: {item.behaviorSummary}
                 </div>
               ) : null}

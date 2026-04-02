@@ -296,8 +296,8 @@ describe("TrustMaintenanceSection", () => {
       />
     );
 
-    expect(screen.getByText(/trust repair hub/i)).toBeInTheDocument();
-    expect(screen.getByText(/operator governance cockpit/i)).toBeInTheDocument();
+    expect(screen.getByText(/repair hub/i)).toBeInTheDocument();
+    expect(screen.getByText(/business data review/i)).toBeInTheDocument();
     expect(screen.getAllByText(/runtime projection blocker/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/projection authority and repair/i)).toBeInTheDocument();
     expect(screen.getByText(/approval and runtime state/i)).toBeInTheDocument();

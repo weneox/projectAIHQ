@@ -13,7 +13,7 @@ export default function AdminPageShell({
 }) {
   return (
     <div className="space-y-5">
-      <section className="premium-page-hero px-5 py-5">
+      <section className="border-b border-slate-200/70 px-1 py-5 dark:border-white/10">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             {eyebrow ? (
@@ -32,7 +32,7 @@ export default function AdminPageShell({
                 variant="secondary"
                 onClick={surface.refresh}
                 disabled={surface.loading || surface.saving}
-                className="h-11 rounded-full border-white/80 bg-white/72 px-4 text-sm font-medium text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_-18px_rgba(15,23,42,0.18)] hover:bg-white"
+                className="h-11 rounded-full border-white/80 bg-white/72 px-4 text-sm font-medium text-slate-700 hover:bg-white"
               >
                 {refreshLabel}
               </Button>

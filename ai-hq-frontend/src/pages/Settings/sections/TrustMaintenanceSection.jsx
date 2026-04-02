@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { saveSettingsTrustPolicyControl } from "../../../api/trust.js";
 
-import Card from "../../../components/ui/Card.jsx";
 import Button from "../../../components/ui/Button.jsx";
 import Badge from "../../../components/ui/Badge.jsx";
 import RepairHub from "../../../components/readiness/RepairHub.jsx";
@@ -121,20 +120,20 @@ export default function TrustMaintenanceSection({
 
   return (
     <SettingsSection
-      eyebrow="Truth Governance"
-      title="Source Governance"
-      subtitle="Refresh evidence, review what is weak or conflicting, inspect finalize impact, and keep runtime authority healthy before operations continue."
+      eyebrow="Business data"
+      title="Source review"
+      subtitle="Refresh sources, review what is weak or conflicting, inspect approval impact, and keep runtime authority healthy before operations continue."
       tone="default"
     >
       <div className="space-y-6">
         <div ref={repairHubRef}>
           <RepairHub
-            title="Trust Repair Hub"
+            title="Repair hub"
             readiness={trustReadiness}
             blockers={trustReadiness.blockers}
             canManage={canManage}
-            emptyMessage="Trust maintenance prerequisites are aligned. Approved truth and runtime projection are ready for controlled operations."
-            unavailableMessage="Trust maintenance is degraded. Approved truth and runtime projection stay protected until the listed blockers are repaired."
+            emptyMessage="Source review prerequisites are aligned. Approved business data and runtime projection are ready for controlled operations."
+            unavailableMessage="Source review is degraded. Approved business data and runtime projection stay protected until the listed blockers are repaired."
             onRunAction={(action) => dispatchRepairAction(action)}
           />
         </div>
@@ -142,8 +141,8 @@ export default function TrustMaintenanceSection({
         <GovernanceCockpit
           truth={truthHealth}
           trust={trust?.view || {}}
-          title="Operator Governance Cockpit"
-          subtitle="This cockpit makes the main operator path explicit: approved truth, review pressure, finalize impact, runtime projection health, affected surfaces, and the next safe repair step."
+          title="Business data review"
+          subtitle="Keep approved business data, review pressure, approval impact, runtime projection health, affected surfaces, and the next safe repair step in one place."
           onRunAction={handleRepairAction}
           onSavePolicyControl={handleSavePolicyControl}
           policyControlState={policyControlState}
@@ -154,19 +153,19 @@ export default function TrustMaintenanceSection({
           <StatTile
             label="Total Sources"
             value={sourceHealth.total ?? items.length}
-            hint="Registered evidence sources for this tenant"
+            hint="Registered sources for this workspace"
             tone="info"
           />
           <StatTile
             label="Connected"
             value={sourceHealth.connected ?? connectedCount}
-            hint="Sources actively feeding evidence into the governance loop"
+            hint="Sources actively feeding evidence into the review loop"
             tone="success"
           />
           <StatTile
             label="Enabled"
             value={sourceHealth.enabled ?? enabledCount}
-            hint="Eligible for refresh and review-backed promotion"
+            hint="Eligible for refresh and review-backed updates"
             tone="neutral"
           />
         </div>
@@ -200,14 +199,14 @@ export default function TrustMaintenanceSection({
           </div>
         ) : null}
 
-        <div className="rounded-[22px] border border-slate-200/80 bg-slate-50/90 px-4 py-4 text-sm leading-6 text-slate-700 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
-          Source sync refreshes evidence only. Anything that could change approved truth, runtime behavior, or downstream channels should become explicit review or repair work before it is allowed through.
+        <div className="border-l-2 border-slate-200 px-4 py-4 text-sm leading-6 text-slate-700 dark:border-white/10 dark:text-slate-300">
+          Source sync refreshes source data only. Anything that could change approved business data, runtime behavior, or downstream channels should become explicit review or repair work before it is allowed through.
         </div>
 
         <SettingsSurfaceBanner
           surface={trust?.surface}
           errorMessage={trustError}
-          unavailableMessage="Operator trust summary is temporarily unavailable. Source cards below still reflect the last loaded settings state, but governance and runtime signals could not be refreshed."
+          unavailableMessage="Business data review is temporarily unavailable. Source cards below still reflect the last loaded settings state, but approval and runtime signals could not be refreshed."
           refreshLabel="Refresh Trust"
         />
 
@@ -229,8 +228,8 @@ export default function TrustMaintenanceSection({
 
         {!items.length ? (
           <EmptyState
-            title="No governed sources yet"
-            subtitle="Add a website, provider, or imported source so evidence can enter review before approved truth changes."
+            title="No sources yet"
+            subtitle="Add a website, provider, or imported source so new information can enter review before approved business data changes."
             actionLabel="Create First Source"
             onAction={() => onCreate(createNewSource())}
             disabled={!canManage}
@@ -252,7 +251,7 @@ export default function TrustMaintenanceSection({
           </div>
         )}
 
-        <Card variant="surface" padded="md" className="rounded-[24px]">
+        <div className="border-t border-slate-200/80 px-1 py-5">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -260,7 +259,7 @@ export default function TrustMaintenanceSection({
                   Recent Evidence Refreshes
                 </div>
                 <div className="text-sm text-slate-500 dark:text-slate-400">
-                  Latest source sync outcomes that may affect review pressure, truth promotion, and operator repair work.
+                  Latest source sync outcomes that may affect review pressure, approved business data, and repair work.
                 </div>
               </div>
               <Badge tone="info" variant="subtle" dot>
@@ -278,7 +277,7 @@ export default function TrustMaintenanceSection({
                 {recentRuns.slice(0, 5).map((run) => (
                   <div
                     key={run.id || `${run.sourceId || "source"}-${run.startedAt || run.createdAt || ""}`}
-                    className="flex flex-col gap-2 rounded-[18px] border border-slate-200/80 px-4 py-3 dark:border-white/10"
+                    className="flex flex-col gap-2 border-t border-slate-200/80 px-4 py-3 dark:border-white/10"
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge tone="info" variant="subtle" dot>
@@ -303,7 +302,7 @@ export default function TrustMaintenanceSection({
               </div>
             )}
           </div>
-        </Card>
+        </div>
       </div>
     </SettingsSection>
   );

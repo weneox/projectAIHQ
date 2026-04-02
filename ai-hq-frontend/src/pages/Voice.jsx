@@ -26,9 +26,9 @@ function n(v, d = 0) {
 }
 
 function dt(v) {
-  if (!v) return "—";
+  if (!v) return "-";
   const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
   return d.toLocaleString();
 }
 
@@ -64,7 +64,7 @@ function pickFrom(x) {
 }
 
 function pickLang(x) {
-  return s(x?.language || x?.lang || x?.detectedLanguage || "—");
+  return s(x?.language || x?.lang || x?.detectedLanguage || "-");
 }
 
 function pickDuration(x) {
@@ -80,13 +80,13 @@ function pickEndedAt(x) {
 }
 
 function pickOperatorName(x) {
-  return s(x?.operatorName || x?.operator_name || x?.operatorLabel || "—");
+  return s(x?.operatorName || x?.operator_name || x?.operatorLabel || "-");
 }
 
 function statCard(icon, label, value, hint) {
   const Icon = icon;
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 shadow-[0_10px_30px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+    <div className="border-t border-white/10 p-4">
       <div className="mb-3 flex items-center gap-3">
         <div className="rounded-2xl border border-white/10 bg-white/5 p-2">
           <Icon className="h-4 w-4 text-white/80" />
@@ -136,10 +136,10 @@ function CallRow({ item, active, onClick }) {
       type="button"
       onClick={() => onClick?.(item)}
       className={[
-        "w-full rounded-3xl border p-4 text-left transition",
+        "w-full border-t p-4 text-left transition",
         active
-          ? "border-cyan-400/40 bg-cyan-400/10 shadow-[0_0_0_1px_rgba(34,211,238,0.18)]"
-          : "border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.05]",
+          ? "border-cyan-400/40 bg-cyan-400/10"
+          : "border-white/10 bg-transparent hover:border-white/20 hover:bg-white/[0.03]",
       ].join(" ")}
     >
       <div className="flex items-start justify-between gap-3">
@@ -172,16 +172,24 @@ function CallRow({ item, active, onClick }) {
 
 function EventRow({ item }) {
   const type = s(item?.type || item?.event || item?.name || "event");
-  const text = s(item?.text || item?.message || item?.content || item?.summary || item?.detail || item?.payload?.text || "");
+  const text = s(
+    item?.text ||
+      item?.message ||
+      item?.content ||
+      item?.summary ||
+      item?.detail ||
+      item?.payload?.text ||
+      ""
+  );
   const at = item?.createdAt || item?.created_at || item?.timestamp || item?.time || null;
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+    <div className="border-t border-white/10 p-3">
       <div className="flex items-center justify-between gap-3">
         <div className="text-sm font-medium text-white">{type}</div>
         <div className="text-[11px] text-white/40">{dt(at)}</div>
       </div>
-      <div className="mt-2 text-sm text-white/65">{text || "—"}</div>
+      <div className="mt-2 text-sm text-white/65">{text || "-"}</div>
     </div>
   );
 }
@@ -193,7 +201,7 @@ function SessionRow({ item }) {
   const label = s(item?.label || item?.participantName || item?.identity || item?.userId || role);
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+    <div className="border-t border-white/10 p-3">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-medium text-white">{label}</div>
@@ -217,7 +225,7 @@ function SessionRow({ item }) {
 
 function InfoTile({ label, value }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+    <div className="border-t border-white/10 p-3">
       <div className="text-[11px] uppercase tracking-[0.18em] text-white/35">{label}</div>
       <div className="mt-2 text-sm text-white/80">{value}</div>
     </div>
@@ -226,7 +234,7 @@ function InfoTile({ label, value }) {
 
 function InfoRow({ label, value }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-3">
+    <div className="flex items-center justify-between gap-3 border-t border-white/10 px-3 py-3">
       <span>{label}</span>
       <span className="truncate text-white/90">{value}</span>
     </div>
@@ -295,9 +303,9 @@ export default function Voice() {
     <div className="min-h-screen bg-[#07111f] text-white">
       <div className="mx-auto max-w-[1600px] px-6 py-6 lg:px-8">
         <AdminPageShell
-          eyebrow="Voice ops"
+          eyebrow="Voice"
           title="Voice Center"
-          description="Active calls, live events, session timeline, and operator live controls."
+          description="Active calls, live events, session timeline, and live call controls."
           surface={surface}
           refreshLabel="Refresh voice surface"
           unavailableMessage="Voice operations are temporarily unavailable."
@@ -317,15 +325,15 @@ export default function Voice() {
             {statCard(Activity, "Live calls", surface.loading ? "..." : String(overviewData?.liveCalls ?? liveCount), "Currently active calls")}
             {statCard(Phone, "Total calls", surface.loading ? "..." : String(overviewData?.totalCalls ?? totalCount), "Latest loaded call list")}
             {statCard(Clock3, "Talk minutes", surface.loading ? "..." : String(overviewData?.totalMinutes ?? totalMinutes), "Total tracked duration")}
-            {statCard(Languages, "Default language", s(overviewData?.defaultLanguage || overviewData?.language || "—"), "Tenant voice overview")}
+            {statCard(Languages, "Default language", s(overviewData?.defaultLanguage || overviewData?.language || "-"), "Tenant voice overview")}
           </div>
 
-          <section className="mb-6 rounded-[30px] border border-white/10 bg-white/[0.03] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+          <section className="mb-6 border-t border-white/10 px-1 py-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <div className="text-lg font-semibold text-white">Live session controls</div>
                 <div className="mt-1 text-sm text-white/45">
-                  Canonical live-session state and operator interventions.
+                  Live session state and intervention controls.
                 </div>
               </div>
 
@@ -337,19 +345,19 @@ export default function Voice() {
             <div className="mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
               <div className="grid gap-3 md:grid-cols-2">
                 <InfoTile label="Selected live session" value={pickSessionId(selectedLiveSession) || "No live session selected"} />
-                <InfoTile label="Live session state" value={selectedLiveSessionStatus || "—"} />
+                <InfoTile label="Live session state" value={selectedLiveSessionStatus || "-"} />
                 <InfoTile label="Operator" value={pickOperatorName(selectedLiveSession)} />
-                <InfoTile label="Call link" value={pickSessionCallId(selectedLiveSession) || selectedId || "—"} />
+                <InfoTile label="Call link" value={pickSessionCallId(selectedLiveSession) || selectedId || "-"} />
               </div>
 
-              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(34,211,238,0.08),rgba(255,255,255,0.02))] p-4">
+              <div className="border-l-2 border-cyan-400/30 pl-4">
                 {surface.saveError ? (
-                  <div className="mb-3 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-3 py-3 text-sm text-rose-100">
+                  <div className="mb-3 border-l-2 border-rose-400/40 pl-3 text-sm text-rose-100">
                     {surface.saveError}
                   </div>
                 ) : null}
                 {surface.saveSuccess ? (
-                  <div className="mb-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-3 text-sm text-emerald-100">
+                  <div className="mb-3 border-l-2 border-emerald-400/40 pl-3 text-sm text-emerald-100">
                     {surface.saveSuccess}
                   </div>
                 ) : null}
@@ -382,11 +390,11 @@ export default function Voice() {
 
                 {!canControlSelectedLiveSession ? (
                   <div className="mt-3 text-xs text-white/42">
-                    No canonical live session is selected for the current call, so live controls are unavailable.
+                    No live session is selected for this call, so live controls are unavailable.
                   </div>
                 ) : (
                   <div className="mt-3 text-xs text-white/42">
-                    Voice live-session state refreshes automatically while active sessions exist.
+                    Live session state refreshes automatically while active sessions exist.
                   </div>
                 )}
               </div>
@@ -394,7 +402,7 @@ export default function Voice() {
           </section>
 
           <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
-            <section className="rounded-[30px] border border-white/10 bg-white/[0.03] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+            <section className="border-t border-white/10 px-1 py-4">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <div className="text-lg font-semibold text-white">Call list</div>
@@ -407,7 +415,7 @@ export default function Voice() {
 
               <div className="space-y-3">
                 {surface.loading ? (
-                  <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/50">Loading calls...</div>
+                  <div className="border-l-2 border-white/10 pl-4 text-sm text-white/50">Loading calls...</div>
                 ) : calls.length ? (
                   calls.map((item, i) => {
                     const id = pickCallId(item);
@@ -415,22 +423,22 @@ export default function Voice() {
                     return <CallRow key={key} item={item} active={id === selectedId} onClick={() => setSelectedId(id)} />;
                   })
                 ) : (
-                  <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-center">
-                    <PhoneOff className="mx-auto h-8 w-8 text-white/25" />
+                  <div className="border-l-2 border-dashed border-white/15 pl-4">
+                    <PhoneOff className="h-8 w-8 text-white/25" />
                     <div className="mt-3 text-sm text-white/65">No calls found.</div>
                   </div>
                 )}
               </div>
             </section>
 
-            <section className="rounded-[30px] border border-white/10 bg-white/[0.03] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+            <section className="border-t border-white/10 px-1 py-4">
               {!detailSurface.unavailable && detailSurface.error ? (
-                <div className="mb-5 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+                <div className="mb-5 border-l-2 border-rose-400/40 pl-4 text-sm text-rose-100">
                   {detailSurface.error}
                 </div>
               ) : null}
 
-              <div className="mb-5 flex flex-col gap-4 rounded-[28px] border border-white/10 bg-white/[0.03] p-5 lg:flex-row lg:items-start lg:justify-between">
+              <div className="mb-5 flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
                   <div className="mb-2 flex flex-wrap items-center gap-2">
                     <StatusPill status={selectedStatus} />
@@ -455,18 +463,18 @@ export default function Voice() {
                 <div className="min-w-0">
                   <div className="mb-3 flex items-center gap-2">
                     <Mic className="h-4 w-4 text-white/55" />
-                    <div className="text-sm font-medium text-white">Live transcript / events</div>
+                    <div className="text-sm font-medium text-white">Live transcript and events</div>
                   </div>
 
                   <div className="max-h-[620px] space-y-3 overflow-auto pr-1">
                     {detailSurface.loading ? (
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/50">
+                      <div className="border-l-2 border-white/10 pl-4 text-sm text-white/50">
                         Loading call detail...
                       </div>
                     ) : events.length ? (
                       events.map((item, i) => <EventRow key={s(item?.id || item?.event || item?.name || `event-${i}`)} item={item} />)
                     ) : (
-                      <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-5 text-sm text-white/50">
+                      <div className="border-l-2 border-dashed border-white/15 pl-4 text-sm text-white/50">
                         No call events recorded.
                       </div>
                     )}
@@ -481,28 +489,28 @@ export default function Voice() {
 
                   <div className="space-y-3">
                     {detailSurface.loading ? (
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/50">
+                      <div className="border-l-2 border-white/10 pl-4 text-sm text-white/50">
                         Loading sessions...
                       </div>
                     ) : sessions.length ? (
                       sessions.map((item, i) => <SessionRow key={pickSessionId(item) || `session-${i}`} item={item} />)
                     ) : (
-                      <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-5 text-sm text-white/50">
+                      <div className="border-l-2 border-dashed border-white/15 pl-4 text-sm text-white/50">
                         No sessions recorded.
                       </div>
                     )}
                   </div>
 
-                  <div className="mt-6 rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(34,211,238,0.08),rgba(255,255,255,0.02))] p-4">
+                  <div className="mt-6 border-l-2 border-cyan-400/30 pl-4">
                     <div className="mb-3 flex items-center gap-2">
                       <Settings2 className="h-4 w-4 text-cyan-200" />
-                      <div className="text-sm font-medium text-white">Join panel</div>
+                      <div className="text-sm font-medium text-white">Join call</div>
                     </div>
 
                     <div className="space-y-3 text-sm text-white/65">
-                      <InfoRow label="Selected call" value={selectedId || "—"} />
-                      <InfoRow label="Call state" value={selectedStatus || "—"} />
-                      <InfoRow label="Session" value={pickSessionId(sessions?.[0]) || "—"} />
+                      <InfoRow label="Selected call" value={selectedId || "-"} />
+                      <InfoRow label="Call state" value={selectedStatus || "-"} />
+                      <InfoRow label="Session" value={pickSessionId(sessions?.[0]) || "-"} />
 
                       <button
                         type="button"

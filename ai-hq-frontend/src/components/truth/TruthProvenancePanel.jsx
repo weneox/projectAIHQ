@@ -1,6 +1,6 @@
 export default function TruthProvenancePanel({ hasProvenance }) {
   return (
-    <section className="rounded-[24px] border border-slate-200/80 bg-white/80 px-5 py-5">
+    <section className="border-t border-slate-200/80 px-5 py-5">
       <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
         Provenance
       </div>

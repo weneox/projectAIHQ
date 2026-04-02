@@ -144,24 +144,14 @@ export function Select({ className = "", children, ...props }) {
   return (
     <div
       className={cx(
-        "relative w-full min-w-0 overflow-hidden rounded-[22px] border",
-        "border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.92))]",
-        "shadow-[inset_0_1px_0_rgba(255,255,255,0.78),0_12px_32px_rgba(15,23,42,0.06)]",
+        "relative w-full min-w-0 overflow-hidden border-t",
+        "border-slate-200/80 bg-transparent",
         "transition-[border-color,box-shadow,background-color] duration-200",
-        "focus-within:border-sky-300/90 focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_0_0_4px_rgba(56,189,248,0.08),0_16px_38px_rgba(15,23,42,0.08)]",
-        "dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,23,42,0.72),rgba(2,6,23,0.80))]",
-        "dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_18px_44px_rgba(0,0,0,0.46)]",
+        "focus-within:border-sky-300/90 focus-within:ring-4 focus-within:ring-sky-100/70",
+        "dark:border-white/10 dark:bg-transparent dark:focus-within:ring-sky-400/10",
         className
       )}
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.20),transparent_44%)] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_38%)]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent dark:via-white/10"
-      />
       <select
         {...props}
         className="relative z-10 h-12 w-full appearance-none bg-transparent px-4 text-[14px] text-slate-900 outline-none dark:text-slate-100"
@@ -218,7 +208,7 @@ function Field({ label, hint, children }) {
 
 export function StatTile({ label, value, hint, tone = "neutral" }) {
   return (
-    <Card variant="subtle" padded="md" tone={tone} className="rounded-[24px]">
+    <div className="border-t border-slate-200/80 px-1 py-4">
       <div className="space-y-1.5">
         <div className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
           {label}
@@ -232,7 +222,7 @@ export function StatTile({ label, value, hint, tone = "neutral" }) {
           </div>
         ) : null}
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -244,12 +234,7 @@ function FeatureToggleCard({
   disabled = false,
 }) {
   return (
-    <Card
-      variant="subtle"
-      padded="md"
-      className="rounded-[24px]"
-      tone={checked ? "info" : "neutral"}
-    >
+    <div className="border-t border-slate-200/80 px-1 py-4">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -273,13 +258,13 @@ function FeatureToggleCard({
 
         <Toggle checked={checked} onChange={onChange} disabled={disabled} />
       </div>
-    </Card>
+    </div>
   );
 }
 
 export function EmptyState({ title, subtitle, actionLabel, onAction, disabled = false }) {
   return (
-    <Card variant="subtle" padded="lg" className="rounded-[28px]">
+    <div className="border-t border-slate-200/80 px-1 py-5">
       <div className="space-y-4">
         <div>
           <div className="text-base font-semibold text-slate-900 dark:text-white">
@@ -297,7 +282,7 @@ export function EmptyState({ title, subtitle, actionLabel, onAction, disabled = 
           </div>
         ) : null}
       </div>
-    </Card>
+    </div>
   );
 }
 

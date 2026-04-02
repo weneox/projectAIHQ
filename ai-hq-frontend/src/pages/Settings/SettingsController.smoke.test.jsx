@@ -320,7 +320,7 @@ vi.mock("./sections/TrustMaintenanceSection.jsx", () => ({
 
     return (
       <section>
-        <div>Operator governance cockpit</div>
+        <div>Business data review</div>
         <div>Decision timeline and incident replay context</div>
         <div>Trust repair hub</div>
         <div>{blockerTitle}</div>
@@ -828,9 +828,9 @@ describe("Settings truth-maintenance smoke", () => {
       ).length
     ).toBeGreaterThan(0);
 
-    expect(screen.getByText(/operator governance cockpit/i)).toBeTruthy();
+    expect(screen.getByText(/business data review/i)).toBeTruthy();
     expect(screen.getByText(/latest approved change footprint/i)).toBeTruthy();
-    expect(screen.getByText(/trust repair hub/i)).toBeTruthy();
+    expect(screen.getByText(/repair hub/i)).toBeTruthy();
     expect(
       screen.getAllByText(/runtime projection blocker/i).length
     ).toBeGreaterThan(0);
@@ -926,7 +926,7 @@ describe("Settings truth-maintenance smoke", () => {
       ).length
     ).toBeGreaterThan(0);
 
-    expect(screen.getByText(/operator governance cockpit/i)).toBeTruthy();
+    expect(screen.getByText(/business data review/i)).toBeTruthy();
     expect(
       screen.getByText(/decision timeline and incident replay context/i)
     ).toBeTruthy();

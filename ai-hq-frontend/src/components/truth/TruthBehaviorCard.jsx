@@ -18,7 +18,7 @@ export default function TruthBehaviorCard({
   const safeRows = arr(rows).filter((row) => s(row?.label) && s(row?.value));
 
   return (
-    <section className="rounded-[24px] border border-slate-200/80 bg-white/80 px-5 py-5">
+    <section className="border-t border-slate-200/80 px-5 py-5">
       <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
         Behavior
       </div>
@@ -39,7 +39,7 @@ export default function TruthBehaviorCard({
           {safeRows.map((row) => (
             <div
               key={row.key}
-              className="rounded-[18px] border border-slate-200/80 bg-slate-50/80 px-4 py-3"
+              className="border-t border-slate-200/70 px-4 py-3"
             >
               <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
                 {row.label}
@@ -65,7 +65,7 @@ export function TruthBehaviorChangesCard({
   );
 
   return (
-    <div className="rounded-[22px] border border-slate-200/80 bg-white/84 px-4 py-4">
+    <div className="border-t border-slate-200/80 px-4 py-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
@@ -89,7 +89,7 @@ export function TruthBehaviorChangesCard({
           {safeChanges.map((change) => (
             <div
               key={change.key}
-              className="rounded-[18px] border border-slate-200/70 bg-slate-50/80 px-3 py-3"
+              className="border-t border-slate-200/70 px-3 py-3"
             >
               <div className="text-sm font-medium text-slate-900">{change.label}</div>
               <div className="mt-3 grid gap-3 md:grid-cols-2">

@@ -79,6 +79,29 @@ function ResumeCard({
   );
 }
 
+function WorkspacePreviewCard({ onOpenWorkspace }) {
+  if (typeof onOpenWorkspace !== "function") return null;
+
+  return (
+    <div className="rounded-[28px] border border-sky-200 bg-sky-50/60 p-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <TinyChip tone="info">Temporary QA</TinyChip>
+      </div>
+      <div className="mt-3 text-base font-semibold tracking-[-0.03em] text-slate-950">
+        Open workspace preview
+      </div>
+      <div className="mt-1 text-sm leading-6 text-slate-500">
+        Temporary shortcut for manual visual review during this cleanup pass.
+      </div>
+      <div className="mt-4">
+        <QuietButton type="button" onClick={onOpenWorkspace}>
+          Open workspace
+        </QuietButton>
+      </div>
+    </div>
+  );
+}
+
 export default function SetupStudioEntryStage({
   importingWebsite = false,
   discoveryForm = {},
@@ -174,6 +197,8 @@ export default function SetupStudioEntryStage({
         </div>
 
         <div className="space-y-4">
+          <WorkspacePreviewCard onOpenWorkspace={onOpenWorkspace} />
+
           <ResumeCard
             hasStoredReview={hasStoredReview}
             hasApprovedTruth={hasApprovedTruth}

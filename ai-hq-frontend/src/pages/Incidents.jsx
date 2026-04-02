@@ -22,9 +22,9 @@ function prettyService(service = "") {
 
 function postureTone(status = "") {
   const normalized = String(status || "").toLowerCase();
-  if (normalized === "degraded") return "border-rose-400/18 bg-rose-500/12 text-rose-100";
-  if (normalized === "attention") return "border-amber-400/18 bg-amber-500/12 text-amber-100";
-  return "border-emerald-400/18 bg-emerald-500/12 text-emerald-100";
+  if (normalized === "degraded") return "border-rose-400/18 text-rose-100";
+  if (normalized === "attention") return "border-amber-400/18 text-amber-100";
+  return "border-emerald-400/18 text-emerald-100";
 }
 
 function postureLabel(status = "") {
@@ -79,11 +79,11 @@ export default function Incidents() {
 
   return (
     <AdminPageShell
-      eyebrow="Operational triage"
+      eyebrow="Operational review"
       title="Incident Trail"
       description="Recent durable runtime incidents across AI HQ, Meta, and Twilio. Filter by service, severity, and reason code to inspect the latest production-critical events."
       surface={surface}
-      refreshLabel="Refresh Incidents"
+      refreshLabel="Refresh incidents"
       unavailableMessage="Incident history is temporarily unavailable."
       actions={
         <div className="flex flex-wrap items-center gap-3 text-xs text-white/48">
@@ -102,9 +102,9 @@ export default function Incidents() {
         </div>
       }
     >
-      <section className="rounded-[28px] border border-white/10 bg-[#07111d] px-5 py-5">
+      <section className="border-t border-white/10 px-1 py-5">
         {summary ? (
-          <div className={cx("mb-5 rounded-[22px] border px-4 py-4", postureTone(summary.status))}>
+          <div className={cx("mb-5 border-l-2 pl-4", postureTone(summary.status))}>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="text-[11px] uppercase tracking-[0.18em] text-white/58">
@@ -114,8 +114,7 @@ export default function Incidents() {
                   {postureLabel(summary.status)} over the last {summary.sinceHours || filters.sinceHours}h
                 </div>
                 <div className="mt-2 text-sm text-white/72">
-                  {summary.total || 0} recent incident{Number(summary.total || 0) === 1 ? "" : "s"}.
-                  {" "}
+                  {summary.total || 0} recent incident{Number(summary.total || 0) === 1 ? "" : "s"}.{" "}
                   {summary.errorCount || 0} error, {summary.warnCount || 0} warn.
                 </div>
               </div>
@@ -135,7 +134,7 @@ export default function Incidents() {
           </div>
           <div>
             <div className="text-sm font-semibold text-white">Filters</div>
-            <div className="text-xs text-white/48">Slice the recent durable trail without leaving the operator surface.</div>
+            <div className="text-xs text-white/48">Filter the recent incident trail without leaving this page.</div>
           </div>
         </div>
 
@@ -204,7 +203,7 @@ export default function Incidents() {
         </div>
       </section>
 
-      <section className="rounded-[28px] border border-white/10 bg-[#07111d] px-5 py-5">
+      <section className="border-t border-white/10 px-1 py-5">
         <div className="mb-5 flex items-center justify-between gap-4">
           <div>
             <div className="text-sm font-semibold text-white">Recent durable incidents</div>
@@ -216,7 +215,7 @@ export default function Incidents() {
 
         <div className="space-y-4">
           {!surface.loading && !incidents.length ? (
-            <div className="rounded-[22px] border border-dashed border-white/10 bg-white/[0.02] px-5 py-6 text-sm text-white/48">
+            <div className="border-l-2 border-dashed border-white/15 pl-4 text-sm text-white/48">
               No recent durable incidents matched the current filters.
             </div>
           ) : null}
@@ -224,7 +223,7 @@ export default function Incidents() {
           {incidents.map((incident) => (
             <article
               key={incident.id}
-              className="rounded-[24px] border border-white/10 bg-white/[0.03] px-5 py-5"
+              className="border-t border-white/10 px-1 py-5"
             >
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 flex-1">

@@ -67,7 +67,7 @@ function AdminNavItem({ to, icon: Icon, label, hint }) {
 export default function AdminSidebar() {
   return (
     <aside className="hidden xl:flex xl:w-[292px] xl:shrink-0 xl:flex-col">
-      <div className="m-4 flex h-[calc(100vh-32px)] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.03] shadow-[0_10px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+      <div className="m-4 flex h-[calc(100vh-32px)] flex-col overflow-hidden border-r border-white/10 bg-transparent">
         <div className="border-b border-white/10 px-5 py-5">
           <div className="flex items-start gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-400/20 via-cyan-300/10 to-transparent ring-1 ring-white/10">
@@ -78,9 +78,7 @@ export default function AdminSidebar() {
               <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
                 Administration
               </div>
-              <div className="mt-1 text-base font-semibold text-white">
-                Platform Control
-              </div>
+              <div className="mt-1 text-base font-semibold text-white">Admin workspace</div>
               <div className="mt-1 text-sm text-slate-400">
                 Manage workspaces, users, and security settings.
               </div>
@@ -90,7 +88,7 @@ export default function AdminSidebar() {
 
         <div className="flex-1 px-3 py-4">
           <div className="px-2 pb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-            Workspace Settings
+            Administration
           </div>
 
           <div className="space-y-1.5">

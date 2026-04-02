@@ -89,5 +89,8 @@ describe("Setup Studio entry smoke", () => {
     expect(
       screen.getByRole("button", { name: /enter workspace/i })
     ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /^open workspace$/i })
+    ).toBeTruthy();
   });
 });

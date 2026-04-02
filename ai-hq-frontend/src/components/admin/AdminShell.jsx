@@ -19,7 +19,7 @@ function NavPill({ to, icon: Icon, label }) {
           className={cx(
             "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200",
             isActive
-              ? "bg-white/12 text-white ring-1 ring-cyan-400/20 shadow-[0_8px_24px_rgba(0,0,0,0.24)]"
+              ? "bg-white/12 text-white ring-1 ring-cyan-400/20"
               : "bg-white/[0.04] text-slate-400 ring-1 ring-white/[0.06] hover:bg-white/[0.07] hover:text-white"
           )}
         >
@@ -70,17 +70,17 @@ export default function AdminShell() {
       <div className="pointer-events-none fixed inset-0 -z-[90] bg-[radial-gradient(1200px_circle_at_0%_0%,rgba(34,211,238,0.09),transparent_24%),radial-gradient(900px_circle_at_100%_0%,rgba(99,102,241,0.08),transparent_24%),radial-gradient(1100px_circle_at_50%_100%,rgba(8,145,178,0.05),transparent_28%)]" />
 
       <div className="mx-auto max-w-[1860px] px-4 py-5 md:px-6 xl:px-8">
-        <header className="mb-8">
-          <div className="rounded-[34px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(10,14,24,0.86),rgba(5,8,16,0.96))] shadow-[0_24px_80px_rgba(0,0,0,0.36)] backdrop-blur-2xl">
+        <header className="mb-8 border-b border-white/[0.08] bg-transparent">
+          <div>
             <div className="flex flex-col gap-6 px-5 py-5 lg:flex-row lg:items-center lg:justify-between lg:px-7">
               <div className="flex min-w-0 items-center gap-5">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px] bg-[linear-gradient(180deg,rgba(18,24,42,0.96),rgba(10,14,28,0.98))] text-cyan-300 shadow-[0_18px_40px_rgba(0,0,0,0.35)]">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px] border border-white/10 bg-white/[0.03] text-cyan-300">
                   <Sparkles className="h-5 w-5" />
                 </div>
 
                 <div className="min-w-0">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-                    Private control system
+                    Admin area
                   </div>
                   <div className="mt-1 text-[28px] font-semibold tracking-[-0.04em] text-white md:text-[34px]">
                     Administration
