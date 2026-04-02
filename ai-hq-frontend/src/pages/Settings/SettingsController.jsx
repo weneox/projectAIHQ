@@ -169,8 +169,8 @@ function SectionContractCopy({ activeSection }) {
           approved, or rejected here.
         </div>
         <div className="mt-1">
-          Source-derived changes do not become governed truth until they are
-          reviewed through the control plane.
+          Source-derived changes do not become approved business data until they
+          are reviewed here.
         </div>
       </div>
     );
@@ -198,9 +198,9 @@ function SectionContractCopy({ activeSection }) {
 }
 
 export default function SettingsController({
-  shellEyebrow = "Control Center",
-  shellTitle = "Governance & Settings",
-  shellSubtitle = "Approved truth, runtime health, repairability, and workspace controls in one operator control plane.",
+  shellEyebrow = "Settings",
+  shellTitle = "Business settings",
+  shellSubtitle = "Manage business details, connected sources, runtime health, and workspace controls in one place.",
   navTitle = "Navigation",
   navSubtitle = "Settings sections",
   showSectionContractCopy = true,

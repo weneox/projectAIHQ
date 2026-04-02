@@ -599,9 +599,11 @@ describe("Truth viewer smoke", () => {
     ).toBeInTheDocument();
 
     expect(
-      await screen.findByRole("heading", { name: /business truth/i })
+      await screen.findByRole("heading", { name: /approved business data/i })
     ).toBeInTheDocument();
-    expect(screen.getByText(/truth governance cockpit/i)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /approved business data/i })
+    ).toBeInTheDocument();
     expect(screen.getByText(/approval and execution state/i)).toBeInTheDocument();
     expect(screen.getByText(/truth review workbench/i)).toBeInTheDocument();
     expect(screen.getByText(/conflict resolution/i)).toBeInTheDocument();
@@ -768,7 +770,7 @@ describe("Truth viewer smoke", () => {
     renderPage();
 
     expect(
-      await screen.findByText(/truth governance cockpit/i)
+      await screen.findByRole("heading", { name: /approved business data/i })
     ).toBeInTheDocument();
     expect(
       screen.getAllByText(/policy telemetry is unavailable/i).length
@@ -793,7 +795,7 @@ describe("Truth viewer smoke", () => {
     renderPage();
 
     expect(
-      await screen.findByRole("heading", { name: /business truth/i })
+      await screen.findByRole("heading", { name: /approved business data/i })
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /approve selected value/i }));
@@ -861,7 +863,7 @@ describe("Truth viewer smoke", () => {
     renderPage();
 
     expect(
-      await screen.findByRole("heading", { name: /business truth/i })
+      await screen.findByRole("heading", { name: /approved business data/i })
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /view compare/i }));

@@ -30,14 +30,14 @@ function titleize(value = "") {
 
 function sectionClasses(highlighted = false) {
   return [
-    "relative overflow-hidden rounded-[32px] px-6 py-6 sm:px-7 sm:py-7",
-    "border bg-[#fffdf9]/90 shadow-[0_18px_44px_rgba(120,102,73,0.08),inset_0_1px_0_rgba(255,255,255,0.78)]",
-    highlighted ? "border-[#dbc8aa]" : "border-[#ece2d3]",
+    "relative px-1 py-6 sm:py-7",
+    "border-t",
+    highlighted ? "border-[#d8c2a0]" : "border-[#e8ddd0]",
   ].join(" ");
 }
 
 function softRowClasses() {
-  return "rounded-[22px] border border-[#efe6d7] bg-[#fffdfa]/94 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]";
+  return "border-b border-[#efe6d7] px-0 py-4 last:border-b-0";
 }
 
 function Section({
@@ -260,10 +260,10 @@ function CommandBar({
             ))}
           </div>
           <div className="text-xs leading-5 text-stone-500">
-            Supported examples: {examples.join(" · ")}
+            Supported examples: {examples.join(" | ")}
           </div>
           {statusMessage ? (
-            <div className="rounded-[18px] border border-[#ece2d3] bg-[#fffdfa] px-4 py-3 text-sm text-stone-600">
+            <div className="border-l-2 border-[#dcc5a7] pl-4 text-sm text-stone-600">
               {statusMessage}
             </div>
           ) : null}
@@ -483,13 +483,13 @@ export default function WorkspacePage() {
             Workspace
           </div>
           <div className="text-[34px] font-semibold tracking-[-0.055em] text-stone-950">
-            Command Workspace
+            Workspace
           </div>
           <div className="max-w-3xl text-[15px] leading-7 text-stone-600">
-            A lightweight operating brief across setup, business memory, inbox, and publishing.
+            A direct operating brief across setup, business details, inbox, and publishing.
           </div>
           {workspace.error ? (
-            <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="border-l-2 border-amber-300 pl-4 text-sm text-amber-800">
               {workspace.error}
             </div>
           ) : null}

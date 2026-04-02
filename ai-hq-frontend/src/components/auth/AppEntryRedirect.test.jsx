@@ -1,18 +1,21 @@
 import { MemoryRouter } from "react-router-dom";
-import { render, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const navigate = vi.fn();
+const getAppAuthContext = vi.fn();
 const getAppBootstrapContext = vi.fn();
-const isLocalWorkspaceEntryEnabled = vi.fn();
+const hasMultipleWorkspaceChoices = vi.fn();
 const resolveAuthenticatedLanding = vi.fn();
 
 vi.mock("../../lib/appSession.js", () => ({
+  getAppAuthContext: (...args) => getAppAuthContext(...args),
   getAppBootstrapContext: (...args) => getAppBootstrapContext(...args),
 }));
 
 vi.mock("../../lib/appEntry.js", () => ({
-  isLocalWorkspaceEntryEnabled: (...args) => isLocalWorkspaceEntryEnabled(...args),
+  WORKSPACE_SELECTION_ROUTE: "/select-workspace",
+  hasMultipleWorkspaceChoices: (...args) => hasMultipleWorkspaceChoices(...args),
   resolveAuthenticatedLanding: (...args) => resolveAuthenticatedLanding(...args),
 }));
 
@@ -29,13 +32,43 @@ import AppEntryRedirect from "./AppEntryRedirect.jsx";
 describe("AppEntryRedirect", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    isLocalWorkspaceEntryEnabled.mockReturnValue(false);
+    hasMultipleWorkspaceChoices.mockReturnValue(false);
     resolveAuthenticatedLanding.mockReturnValue("/workspace");
   });
 
-  it("uses shared bootstrap context to resolve the authenticated landing route", async () => {
+  it("sends an unauthenticated user to login", async () => {
+    getAppAuthContext.mockResolvedValue({ authenticated: false });
+
+    render(
+      <MemoryRouter>
+        <AppEntryRedirect />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith("/login", { replace: true });
+    });
+  });
+
+  it("sends a multi-workspace user to workspace selection", async () => {
+    getAppAuthContext.mockResolvedValue({ authenticated: true });
+    hasMultipleWorkspaceChoices.mockReturnValue(true);
+
+    render(
+      <MemoryRouter>
+        <AppEntryRedirect />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith("/select-workspace", { replace: true });
+    });
+  });
+
+  it("uses shared auth and bootstrap context to resolve the authenticated landing route", async () => {
+    getAppAuthContext.mockResolvedValue({ authenticated: true });
     getAppBootstrapContext.mockResolvedValue({
-      workspace: { setupCompleted: true, workspaceReady: true, routeHint: "/workspace" },
+      workspace: { setupCompleted: true, workspaceReady: true },
     });
 
     render(
@@ -48,23 +81,20 @@ describe("AppEntryRedirect", () => {
       expect(navigate).toHaveBeenCalledWith("/workspace", { replace: true });
     });
 
-    expect(getAppBootstrapContext).toHaveBeenCalledTimes(1);
     expect(resolveAuthenticatedLanding).toHaveBeenCalledTimes(1);
   });
 
-  it("shows a controlled unavailable surface on bootstrap loader failure", async () => {
-    getAppBootstrapContext.mockRejectedValue(new Error("bootstrap offline"));
+  it("shows a controlled unavailable surface on load failure", async () => {
+    getAppAuthContext.mockRejectedValue(new Error("auth offline"));
 
-    const view = render(
+    render(
       <MemoryRouter>
         <AppEntryRedirect />
       </MemoryRouter>
     );
 
-    await waitFor(() => {
-      expect(view.getByText("Workspace unavailable")).toBeInTheDocument();
-    });
-
-    expect(navigate).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText((content) => content.includes("Account unavailable"))
+    ).toBeInTheDocument();
   });
 });

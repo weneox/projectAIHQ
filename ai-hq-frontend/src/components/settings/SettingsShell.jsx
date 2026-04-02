@@ -1,5 +1,4 @@
 import React from "react";
-import Card from "../ui/Card.jsx";
 import SettingsNav from "./SettingsNav.jsx";
 
 function resolveActiveItem(items, activeKey) {
@@ -14,7 +13,7 @@ function resolveActiveItem(items, activeKey) {
 }
 
 export default function SettingsShell({
-  eyebrow = "Control Center",
+  eyebrow = "Settings",
   title = "Settings",
   subtitle = "Workspace, brand, AI policy and advanced configuration.",
   navTitle = "Navigation",
@@ -36,16 +35,10 @@ export default function SettingsShell({
 
   return (
     <div className="space-y-7">
-      <header className="relative overflow-hidden rounded-[32px] border border-[#e8ddcd] bg-[linear-gradient(180deg,rgba(255,252,246,0.96),rgba(251,247,239,0.96))] px-6 py-6 shadow-[0_18px_50px_rgba(120,102,73,0.10),inset_0_1px_0_rgba(255,255,255,0.82)] sm:px-7 sm:py-7">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d8c9b3] to-transparent" />
-          <div className="absolute -right-16 top-0 h-40 w-40 rounded-full bg-[#ead7b6]/40 blur-3xl" />
-          <div className="absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-white/70 blur-3xl" />
-        </div>
-
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <header className="border-b border-[#e8ddcd] pb-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0 space-y-2">
-            <div className="inline-flex items-center rounded-full border border-[#e8decf] bg-[#fffaf4] px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-stone-500 backdrop-blur">
+            <div className="text-[11px] font-medium uppercase tracking-[0.24em] text-stone-500">
               {eyebrow}
             </div>
 
@@ -59,7 +52,7 @@ export default function SettingsShell({
             </div>
           </div>
 
-          <div className="relative max-w-full rounded-[24px] border border-[#ece2d3] bg-[#fffdfa] p-4 backdrop-blur lg:min-w-[260px]">
+          <div className="max-w-full border-l border-[#ece2d3] pl-5 lg:min-w-[260px]">
             <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-stone-400">
               Active Section
             </div>
@@ -75,8 +68,8 @@ export default function SettingsShell({
 
       <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="min-w-0 self-start xl:sticky xl:top-6">
-          <Card className="overflow-hidden rounded-[28px] border border-[#ece2d3] bg-[#fffdf9]/92 p-0 shadow-[0_18px_44px_rgba(120,102,73,0.08)] backdrop-blur">
-            <div className="border-b border-[#eee4d5] px-5 py-4">
+          <div className="border-r border-[#ece2d3] pr-4">
+            <div className="pb-4">
               <div className="text-[11px] font-medium uppercase tracking-[0.24em] text-stone-400">
                 {navTitle}
               </div>
@@ -85,10 +78,10 @@ export default function SettingsShell({
               </div>
             </div>
 
-            <div className="max-h-[calc(100vh-12rem)] overflow-y-auto p-3">
+            <div className="max-h-[calc(100vh-12rem)] overflow-y-auto">
               <SettingsNav items={items} activeKey={activeKey} onChange={onChange} />
             </div>
-          </Card>
+          </div>
         </aside>
 
         <section className="min-w-0 space-y-6">{children}</section>

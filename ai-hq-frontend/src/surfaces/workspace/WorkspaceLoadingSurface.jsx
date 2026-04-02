@@ -6,11 +6,10 @@ function SurfaceCard({ className = "", children }) {
   return (
     <div
       className={[
-        "relative overflow-hidden rounded-[32px] border border-[#ece2d3] bg-[#fffdf9]/90 p-6 shadow-[0_18px_44px_rgba(120,102,73,0.08),inset_0_1px_0_rgba(255,255,255,0.78)]",
+        "relative border-t border-[#e8ddd0] px-1 py-6",
         className,
       ].join(" ")}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(520px_circle_at_0%_0%,rgba(229,211,180,0.12),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.3),transparent_26%)]" />
       <div className="relative">{children}</div>
     </div>
   );
@@ -60,7 +59,7 @@ export default function WorkspaceLoadingSurface() {
               {Array.from({ length: 3 }).map((_, index) => (
                 <div
                   key={index}
-                  className="rounded-[22px] border border-[#efe6d7] bg-[#fffdfa]/94 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]"
+                  className="border-b border-[#efe6d7] px-0 py-4 last:border-b-0"
                 >
                   <Shimmer className="h-3 w-24 rounded-full bg-[#f1e8dc]" />
                   <Shimmer className="mt-3 h-4 w-full rounded-full bg-[#f3ebdf]" />
@@ -82,7 +81,7 @@ export default function WorkspaceLoadingSurface() {
               {Array.from({ length: 3 }).map((_, index) => (
                 <div
                   key={index}
-                  className="rounded-[22px] border border-[#efe6d7] bg-[#fffdfa]/94 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]"
+                  className="border-b border-[#efe6d7] px-0 py-4 last:border-b-0"
                 >
                   <div className="flex flex-wrap gap-2">
                     <Shimmer className="h-7 w-20 rounded-full bg-[#f1e8dc]" />
@@ -106,7 +105,7 @@ export default function WorkspaceLoadingSurface() {
               {Array.from({ length: 4 }).map((_, index) => (
                 <div
                   key={index}
-                  className="rounded-[22px] border border-[#efe6d7] bg-[#fffdfa]/94 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]"
+                  className="border-b border-[#efe6d7] px-0 py-4 last:border-b-0"
                 >
                   <Shimmer className="h-4 w-32 rounded-full bg-[#f3ebdf]" />
                   <Shimmer className="mt-3 h-4 w-full rounded-full bg-[#f4ede2]" />

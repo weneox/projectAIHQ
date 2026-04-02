@@ -54,8 +54,8 @@ export default function AppEntryRedirect() {
   if (failed) {
     return (
       <AppBootSurface
-        label="Workspace unavailable"
-        detail="We could not load your workspace entry right now."
+        label="Account unavailable"
+        detail="We could not load your next step right now."
       />
     );
   }

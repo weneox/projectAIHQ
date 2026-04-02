@@ -5,25 +5,31 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const navigate = vi.fn();
 const loginUser = vi.fn();
 const selectWorkspaceUser = vi.fn();
+const signupUser = vi.fn();
 const getAppAuthContext = vi.fn();
-const logoutUser = vi.fn();
+const getAppBootstrapContext = vi.fn();
 const clearAppSessionContext = vi.fn();
-
-vi.mock("framer-motion", () => ({
-  motion: {
-    button: ({ children, ...props }) => <button {...props}>{children}</button>,
-  },
-}));
+const hasMultipleWorkspaceChoices = vi.fn();
+const resolveAuthenticatedLanding = vi.fn();
+const resolveWorkspaceContractRoute = vi.fn();
 
 vi.mock("../api/auth.js", () => ({
   loginUser: (...args) => loginUser(...args),
   selectWorkspaceUser: (...args) => selectWorkspaceUser(...args),
-  logoutUser: (...args) => logoutUser(...args),
+  signupUser: (...args) => signupUser(...args),
 }));
 
 vi.mock("../lib/appSession.js", () => ({
   getAppAuthContext: (...args) => getAppAuthContext(...args),
+  getAppBootstrapContext: (...args) => getAppBootstrapContext(...args),
   clearAppSessionContext: (...args) => clearAppSessionContext(...args),
+}));
+
+vi.mock("../lib/appEntry.js", () => ({
+  WORKSPACE_SELECTION_ROUTE: "/select-workspace",
+  hasMultipleWorkspaceChoices: (...args) => hasMultipleWorkspaceChoices(...args),
+  resolveAuthenticatedLanding: (...args) => resolveAuthenticatedLanding(...args),
+  resolveWorkspaceContractRoute: (...args) => resolveWorkspaceContractRoute(...args),
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -36,9 +42,9 @@ vi.mock("react-router-dom", async () => {
 
 import Login from "./Login.jsx";
 
-function renderLogin() {
+function renderRoute(path = "/login") {
   return render(
-    <MemoryRouter initialEntries={["/login"]}>
+    <MemoryRouter initialEntries={[path]}>
       <Login />
     </MemoryRouter>
   );
@@ -51,93 +57,52 @@ function createDeferred() {
     resolve = res;
     reject = rej;
   });
-
   return { promise, resolve, reject };
 }
 
-describe("Login", () => {
+describe("Login auth entry", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getAppAuthContext.mockResolvedValue({ authenticated: false });
-    loginUser.mockResolvedValue({
-      ok: true,
-      authenticated: true,
-      destination: { path: "/workspace" },
-    });
-    selectWorkspaceUser.mockResolvedValue({
-      ok: true,
-      authenticated: true,
-      destination: { path: "/workspace" },
-    });
-    logoutUser.mockResolvedValue({ ok: true });
+    hasMultipleWorkspaceChoices.mockReturnValue(false);
+    resolveAuthenticatedLanding.mockReturnValue("/workspace");
+    resolveWorkspaceContractRoute.mockReturnValue("/setup");
     clearAppSessionContext.mockImplementation(() => {});
+    getAppBootstrapContext.mockResolvedValue({
+      workspace: { setupCompleted: true, workspaceReady: true },
+    });
   });
 
-  it("shows a boot surface instead of the login form while auth is still resolving", async () => {
+  it("shows a session check before rendering the auth form", async () => {
     const authCheck = createDeferred();
     getAppAuthContext.mockReturnValueOnce(authCheck.promise);
 
-    renderLogin();
+    renderRoute("/login");
 
-    expect(screen.getByText("Checking session")).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText("Enter email address")).not.toBeInTheDocument();
-    expect(screen.queryByPlaceholderText("Enter password")).not.toBeInTheDocument();
+    expect(screen.getByText("Checking account")).toBeInTheDocument();
 
     authCheck.resolve({ authenticated: false });
 
-    expect(await screen.findByPlaceholderText("Enter email address")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Enter password")).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText("company-name")).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Email address")).toBeInTheDocument();
   });
 
-  it("keeps an anonymous visitor on the login page after auth context settles", async () => {
-    const authCheck = createDeferred();
-    getAppAuthContext.mockReturnValueOnce(authCheck.promise);
-
-    renderLogin();
-
-    expect(screen.getByText("Checking session")).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText("Enter email address")).not.toBeInTheDocument();
-
-    authCheck.resolve({ authenticated: false });
-
-    expect(await screen.findByPlaceholderText("Enter email address")).toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(getAppAuthContext).toHaveBeenCalled();
+  it("redirects an existing authenticated user to the resolved landing route", async () => {
+    getAppAuthContext.mockResolvedValue({ authenticated: true });
+    getAppBootstrapContext.mockResolvedValue({
+      workspace: { setupCompleted: false, workspaceReady: false },
     });
+    resolveAuthenticatedLanding.mockReturnValue("/setup");
 
-    expect(navigate).not.toHaveBeenCalledWith("/setup", { replace: true });
-    expect(navigate).not.toHaveBeenCalledWith("/workspace", { replace: true });
-  });
-
-  it("auto-lands a genuinely authenticated user on the setup route without flashing the login form", async () => {
-    const authCheck = createDeferred();
-    getAppAuthContext.mockReturnValueOnce(authCheck.promise);
-
-    renderLogin();
-
-    expect(screen.getByText("Checking session")).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText("Enter email address")).not.toBeInTheDocument();
-
-    authCheck.resolve({
-      authenticated: true,
-      workspace: {
-        setupCompleted: false,
-        setupRequired: true,
-        workspaceReady: false,
-        routeHint: "/setup",
-        nextSetupRoute: "/setup",
-        destination: { path: "/setup" },
-      },
-    });
+    renderRoute("/login");
 
     await waitFor(() => {
       expect(navigate).toHaveBeenCalledWith("/setup", { replace: true });
     });
   });
 
-  it("shows workspace selection on ambiguity and resubmits with the chosen membership token", async () => {
+  it("shows workspace selection after an ambiguous login and continues with the chosen account", async () => {
+    getAppAuthContext.mockResolvedValue({ authenticated: false });
     loginUser.mockRejectedValueOnce(
       Object.assign(new Error("Multiple workspaces"), {
         code: "multiple_memberships",
@@ -149,16 +114,12 @@ describe("Login", () => {
               tenantKey: "acme",
               companyName: "Acme Clinic",
               role: "owner",
-              workspaceReady: true,
-              setupRequired: false,
             },
             {
               selectionToken: "token-globex",
               tenantKey: "globex",
               companyName: "Globex",
               role: "operator",
-              workspaceReady: false,
-              setupRequired: true,
             },
           ],
         },
@@ -166,27 +127,27 @@ describe("Login", () => {
     );
     selectWorkspaceUser.mockResolvedValueOnce({
       ok: true,
-      authenticated: true,
       destination: { path: "/setup" },
     });
 
-    renderLogin();
+    renderRoute("/login");
 
-    fireEvent.change(await screen.findByPlaceholderText("Enter email address"), {
+    fireEvent.change(await screen.findByPlaceholderText("Email address"), {
       target: { name: "email", value: "shared@company.test" },
     });
-    fireEvent.change(screen.getByPlaceholderText("Enter password"), {
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
       target: { name: "password", value: "secret-pass" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
 
     expect(await screen.findByText("Select your workspace to continue.")).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: /globex/i }));
     fireEvent.click(screen.getByRole("button", { name: /open selected workspace/i }));
 
     await waitFor(() => {
-      expect(selectWorkspaceUser).toHaveBeenLastCalledWith({
+      expect(selectWorkspaceUser).toHaveBeenCalledWith({
         email: "shared@company.test",
         password: "secret-pass",
         tenantKey: undefined,
@@ -199,54 +160,47 @@ describe("Login", () => {
     });
   });
 
-  it("routes a ready single-workspace login to the backend destination", async () => {
-    getAppAuthContext
-      .mockResolvedValueOnce({ authenticated: false })
-      .mockResolvedValueOnce({
-        authenticated: true,
-        workspace: {
-          setupCompleted: true,
-          setupRequired: false,
-          workspaceReady: true,
-          routeHint: "/workspace",
-          destination: { path: "/workspace" },
-        },
-      });
-    loginUser.mockResolvedValueOnce({
-      ok: true,
-      authenticated: true,
-      workspace: {
-        setupCompleted: true,
-        setupRequired: false,
-        workspaceReady: true,
-        routeHint: "/workspace",
-        destination: { path: "/workspace" },
-      },
-      destination: { path: "/workspace" },
-    });
+  it("creates an account from the signup route and sends the user to verify email", async () => {
+    getAppAuthContext.mockResolvedValue({ authenticated: false });
+    signupUser.mockResolvedValue({ ok: true });
 
-    renderLogin();
+    renderRoute("/signup");
 
-    fireEvent.change(await screen.findByPlaceholderText("Enter email address"), {
-      target: { name: "email", value: "owner@company.test" },
+    fireEvent.change(await screen.findByPlaceholderText("Full name"), {
+      target: { name: "fullName", value: "Jane Doe" },
     });
-    fireEvent.change(screen.getByPlaceholderText("Enter password"), {
+    fireEvent.change(screen.getByPlaceholderText("Business name"), {
+      target: { name: "companyName", value: "Acme Clinic" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Email address"), {
+      target: { name: "email", value: "owner@acme.com" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Password"), {
       target: { name: "password", value: "secret-pass" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+    const submitButton = screen.getByRole("button", { name: "Create account" });
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith("/workspace", { replace: true });
+      expect(submitButton).not.toBeDisabled();
+    });
+
+    fireEvent.submit(submitButton.closest("form"));
+
+    await waitFor(() => {
+      expect(signupUser).toHaveBeenCalledWith({
+        fullName: "Jane Doe",
+        companyName: "Acme Clinic",
+        email: "owner@acme.com",
+        password: "secret-pass",
+      });
+    });
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith("/verify-email", {
+        replace: true,
+        state: { email: "owner@acme.com" },
+      });
     });
   });
-
-  it("sends users to signup from the footer action", async () => {
-    renderLogin();
-
-    fireEvent.click(await screen.findByRole("button", { name: "Sign up" }));
-
-    expect(navigate).toHaveBeenCalledWith("/signup");
-  });
 });
-

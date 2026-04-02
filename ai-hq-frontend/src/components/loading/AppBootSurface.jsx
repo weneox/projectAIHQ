@@ -1,6 +1,6 @@
 export default function AppBootSurface({
   label = "Preparing workspace",
-  detail = "Syncing operator context",
+  detail = "Checking your account and workspace.",
 }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#f6f6f4] px-6 py-10">

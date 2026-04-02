@@ -19,13 +19,13 @@ export default function TruthHeader({ approval = {}, notices = [] }) {
   return (
     <div className="border-b border-slate-200/80 pb-6">
       <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-        Governed Truth
+        Business data
       </div>
       <h1 className="mt-2 text-[34px] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[40px]">
-        Business truth
+        Approved business data
       </h1>
       <p className="mt-3 max-w-[760px] text-[15px] leading-7 text-slate-600">
-        This is the current approved business twin and its governed execution context. Approval, provenance, runtime health, and repair posture are shown honestly when they are available and fail closed when they are not.
+        This is the current approved business profile. Approval history, source details, and runtime status are shown here when they are available.
       </p>
 
       <div className="mt-6 grid gap-5 sm:grid-cols-3">
@@ -35,7 +35,7 @@ export default function TruthHeader({ approval = {}, notices = [] }) {
       </div>
 
       {Array.isArray(notices) && notices.length ? (
-        <div className="mt-5 rounded-[22px] border border-slate-200/80 bg-slate-50/90 px-4 py-3 text-sm leading-6 text-slate-600">
+        <div className="mt-5 border-l-2 border-slate-300 pl-4 text-sm leading-6 text-slate-600">
           {notices[0]}
         </div>
       ) : null}

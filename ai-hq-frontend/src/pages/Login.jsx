@@ -1,25 +1,20 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import {
-  ChevronDown,
-  Eye,
-  EyeOff,
-  Globe,
-  Loader2,
-  Lock,
-  Mail,
-  User2,
-  Building2,
-} from "lucide-react";
+import { Eye, EyeOff, Loader2, Lock, Mail, User2, Building2 } from "lucide-react";
 
 import { loginUser, selectWorkspaceUser, signupUser } from "../api/auth.js";
-import { clearAppSessionContext, getAppAuthContext } from "../lib/appSession.js";
+import {
+  clearAppSessionContext,
+  getAppAuthContext,
+  getAppBootstrapContext,
+} from "../lib/appSession.js";
 import {
   WORKSPACE_SELECTION_ROUTE,
   hasMultipleWorkspaceChoices,
   resolveAuthenticatedLanding,
   resolveWorkspaceContractRoute,
 } from "../lib/appEntry.js";
+import AppBootSurface from "../components/loading/AppBootSurface.jsx";
 
 const RESERVED_SUBDOMAINS = new Set([
   "www",
@@ -176,60 +171,12 @@ function InputResetStyles() {
   );
 }
 
-function GoogleMark() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
-      <path
-        fill="#4285F4"
-        d="M21.805 12.23c0-.72-.064-1.412-.184-2.077H12v3.932h5.498a4.704 4.704 0 0 1-2.041 3.087v2.564h3.3c1.932-1.78 3.048-4.404 3.048-7.506Z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 22c2.76 0 5.076-.914 6.768-2.472l-3.3-2.564c-.914.612-2.083.973-3.468.973-2.664 0-4.922-1.798-5.728-4.215H2.86v2.645A10.22 10.22 0 0 0 12 22Z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M6.272 13.722A6.142 6.142 0 0 1 5.952 12c0-.598.108-1.177.32-1.722V7.633H2.86A10.22 10.22 0 0 0 1.777 12c0 1.648.395 3.208 1.083 4.367l3.412-2.645Z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 6.064c1.5 0 2.848.516 3.909 1.53l2.932-2.932C17.072 3.014 14.756 2 12 2 7.86 2 4.293 4.379 2.86 7.633l3.412 2.645C7.078 7.862 9.336 6.064 12 6.064Z"
-      />
-    </svg>
-  );
-}
-
-function AppleMark() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M15.1 3.5c.77-.94 1.3-2.22 1.16-3.5-1.12.05-2.47.74-3.28 1.68-.74.85-1.38 2.14-1.2 3.4 1.25.1 2.53-.64 3.32-1.58Zm3.86 12.81c-.03-2.64 2.16-3.9 2.26-3.96-1.24-1.8-3.15-2.05-3.82-2.08-1.63-.17-3.18.96-4.01.96-.85 0-2.14-.94-3.52-.91-1.82.03-3.49 1.05-4.43 2.68-1.9 3.29-.48 8.15 1.35 10.8.9 1.28 1.95 2.71 3.35 2.66 1.35-.06 1.86-.86 3.49-.86 1.62 0 2.08.86 3.52.83 1.46-.02 2.37-1.31 3.26-2.6 1.03-1.47 1.45-2.9 1.48-2.98-.04-.01-2.84-1.09-2.93-4.54Z"
-      />
-    </svg>
-  );
-}
-
 function TopBar() {
   return (
-    <div className="relative z-10 flex items-center justify-between px-6 py-6 sm:px-10 lg:px-14">
-      <button
-        type="button"
-        className="text-left"
-      >
-        <div className="bg-[linear-gradient(135deg,#0f172a_0%,#344256_45%,#94a3b8_100%)] bg-clip-text text-[31px] font-semibold tracking-[-0.07em] text-transparent sm:text-[34px]">
-          NEOX <span className="font-medium opacity-75">AI Studio</span>
-        </div>
-      </button>
-
-      <button
-        type="button"
-        className="inline-flex h-[44px] items-center gap-2 rounded-full border border-slate-200/90 bg-white/78 px-4 text-[14px] font-medium text-slate-700 shadow-[0_8px_30px_rgba(15,23,42,0.04)] backdrop-blur-md transition hover:border-slate-300 hover:bg-white"
-      >
-        <Globe className="h-4 w-4 text-slate-500" />
-        <span>English</span>
-        <ChevronDown className="h-4 w-4 text-slate-400" />
-      </button>
+    <div className="relative z-10 px-6 py-6 sm:px-10 lg:px-14">
+      <div className="bg-[linear-gradient(135deg,#0f172a_0%,#344256_45%,#94a3b8_100%)] bg-clip-text text-[31px] font-semibold tracking-[-0.07em] text-transparent sm:text-[34px]">
+        AI HQ
+      </div>
     </div>
   );
 }
@@ -345,7 +292,7 @@ function WorkspaceChoiceCard({ account, selected, onSelect }) {
           {s(account?.companyName) || s(account?.tenantKey) || "Workspace"}
         </div>
         <div className="mt-1 text-[13px] font-medium text-slate-500">
-          {s(account?.tenantKey)} · {s(account?.role || "member")}
+          {s(account?.tenantKey)} | {s(account?.role || "member")}
         </div>
       </div>
 
@@ -360,31 +307,6 @@ function WorkspaceChoiceCard({ account, selected, onSelect }) {
         {selected ? <div className="absolute inset-[4px] rounded-full bg-white" /> : null}
       </div>
     </button>
-  );
-}
-
-function SocialButton({ icon, label, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex h-[56px] w-full items-center justify-center gap-3 rounded-[18px] border border-slate-200/85 bg-white/78 px-4 text-[15px] font-medium tracking-[-0.01em] text-slate-800 shadow-[0_10px_30px_rgba(15,23,42,0.04)] backdrop-blur-md transition duration-200 hover:border-slate-300 hover:bg-white"
-    >
-      <span className="shrink-0">{icon}</span>
-      <span>{label}</span>
-    </button>
-  );
-}
-
-function Divider() {
-  return (
-    <div className="relative flex items-center py-1">
-      <div className="h-px flex-1 bg-slate-200" />
-      <span className="px-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
-        Or
-      </span>
-      <div className="h-px flex-1 bg-slate-200" />
-    </div>
   );
 }
 
@@ -410,6 +332,7 @@ export default function Login() {
   );
 
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [focusedField, setFocusedField] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -438,9 +361,50 @@ export default function Login() {
     }
   }
 
-  function handleUnavailableProvider(provider) {
-    setError(`${provider} sign in is not enabled yet.`);
-  }
+  useEffect(() => {
+    let alive = true;
+
+    async function run() {
+      try {
+        const auth = await getAppAuthContext();
+        if (!alive) return;
+
+        if (!auth?.authenticated) {
+          setCheckingSession(false);
+          return;
+        }
+
+        if (hasMultipleWorkspaceChoices(auth)) {
+          navigate(WORKSPACE_SELECTION_ROUTE, { replace: true });
+          return;
+        }
+
+        let bootstrap = null;
+        try {
+          bootstrap = await getAppBootstrapContext();
+        } catch {}
+
+        if (!alive) return;
+
+        navigate(
+          resolveAuthenticatedLanding({
+            auth,
+            bootstrap,
+          }),
+          { replace: true }
+        );
+      } catch {
+        if (!alive) return;
+        setCheckingSession(false);
+      }
+    }
+
+    run();
+
+    return () => {
+      alive = false;
+    };
+  }, [navigate]);
 
   async function handleLogin() {
     const email = s(form.email);
@@ -518,7 +482,6 @@ export default function Login() {
       replace: true,
       state: {
         email: payload.email,
-        postVerifyPath: "/setup/studio",
       },
     });
   }
@@ -561,6 +524,15 @@ export default function Login() {
     !s(form.email) ||
     !s(form.password);
 
+  if (checkingSession) {
+    return (
+      <AppBootSurface
+        label="Checking account"
+        detail="Looking for an active session before we show the sign-in screen."
+      />
+    );
+  }
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#F7F8FA] text-slate-950">
       <InputResetStyles />
@@ -571,25 +543,13 @@ export default function Login() {
         <div className="w-full max-w-[620px]">
           <div className="pt-4 text-center">
             <h1 className="text-[56px] font-semibold leading-[0.94] tracking-[-0.08em] text-slate-950 sm:text-[68px]">
-              {isSignupMode ? "Create account" : "Log in"}
+              {isSignupMode ? "Create your account" : "Sign in"}
             </h1>
-          </div>
-
-          <div className="mt-9 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <SocialButton
-              icon={<GoogleMark />}
-              label="Continue with Google"
-              onClick={() => handleUnavailableProvider("Google")}
-            />
-            <SocialButton
-              icon={<AppleMark />}
-              label="Continue with Apple"
-              onClick={() => handleUnavailableProvider("Apple")}
-            />
-          </div>
-
-          <div className="mt-6">
-            <Divider />
+            <p className="mx-auto mt-4 max-w-[34rem] text-[16px] leading-7 text-slate-500">
+              {isSignupMode
+                ? "Create your account, verify your email, and we will take you into setup."
+                : "Sign in to continue to setup or open your workspace."}
+            </p>
           </div>
 
           <form className="mt-6 space-y-5" onSubmit={onSubmit}>
@@ -715,18 +675,18 @@ export default function Login() {
               ) : accountChoices.length ? (
                 "Open selected workspace"
               ) : (
-                "Log in"
+                "Sign in"
               )}
             </button>
 
             <div className="pt-2 text-center text-[15px] font-medium tracking-[-0.01em] text-slate-500">
-              {isSignupMode ? "Already have an account?" : "Don't have an account?"}{" "}
+              {isSignupMode ? "Already have an account?" : "Do not have an account?"}{" "}
               <button
                 type="button"
                 className="font-semibold text-slate-900 transition hover:text-slate-600"
                 onClick={() => navigate(isSignupMode ? "/login" : "/signup")}
               >
-                {isSignupMode ? "Log in" : "Sign up"}
+                {isSignupMode ? "Sign in" : "Create one"}
               </button>
             </div>
           </form>
@@ -735,3 +695,4 @@ export default function Login() {
     </div>
   );
 }
+
