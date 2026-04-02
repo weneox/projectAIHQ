@@ -300,7 +300,7 @@ describe("TrustMaintenanceSection", () => {
     expect(screen.getByText(/operator governance cockpit/i)).toBeInTheDocument();
     expect(screen.getAllByText(/runtime projection blocker/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/projection authority and repair/i)).toBeInTheDocument();
-    expect(screen.getByText(/approval and execution state/i)).toBeInTheDocument();
+    expect(screen.getByText(/approval and runtime state/i)).toBeInTheDocument();
     expect(screen.getByText(/allowed, reviewed, handed off, or blocked by surface/i)).toBeInTheDocument();
     expect(screen.getByText(/latest approved change footprint/i)).toBeInTheDocument();
     expect(screen.getByText(/decision timeline and incident replay context/i)).toBeInTheDocument();

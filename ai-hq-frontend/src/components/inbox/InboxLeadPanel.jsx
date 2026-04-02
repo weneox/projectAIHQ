@@ -174,7 +174,7 @@ function IdentityCard({ selectedThread, relatedLead, owner, wsState }) {
 
   return (
     <div className="px-5 py-5">
-      <div className="rounded-[28px] border border-slate-200/80 bg-white px-5 py-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+      <div className="border-t border-slate-200/70 px-1 py-5">
         <div className="flex flex-col items-center text-center">
           {avatarUrl ? (
             <img
@@ -266,7 +266,7 @@ export default function InboxLeadPanel({
               Conversation details
             </h2>
             <div className="mt-0.5 text-[12px] text-slate-500">
-              Profile, routing, and context
+              Profile, routing, and recent context
             </div>
           </div>
 
@@ -308,7 +308,7 @@ export default function InboxLeadPanel({
             ) : null}
 
             <Section icon={Radio} title="Routing">
-              <div className="rounded-[24px] border border-slate-200/80 bg-white px-4 py-2 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+              <div className="border-t border-slate-200/70 px-0 py-2">
                 <InfoRow label="Source" value={sourceLabel || "--"} />
                 <div className="border-t border-slate-200/70" />
                 <InfoRow
@@ -330,13 +330,13 @@ export default function InboxLeadPanel({
               title="People"
               action={
                 people.length ? (
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                  <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600">
                     {people.length}
                   </span>
                 ) : null
               }
             >
-              <div className="rounded-[24px] border border-slate-200/80 bg-white px-4 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+              <div className="border-t border-slate-200/70 px-0 py-4">
                 <div className="flex items-center justify-between gap-4">
                   <AvatarStack people={people} />
 
@@ -368,7 +368,7 @@ export default function InboxLeadPanel({
                   </button>
                 }
               >
-                <div className="rounded-[24px] border border-slate-200/80 bg-white px-4 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+                <div className="border-t border-slate-200/70 px-0 py-4">
                   <div className="text-[15px] font-medium text-slate-900">
                     {leadName(relatedLead) || "Lead"}
                   </div>
@@ -389,7 +389,7 @@ export default function InboxLeadPanel({
             ) : null}
 
             <Section icon={MessageSquareText} title="Latest message">
-              <div className="rounded-[24px] border border-slate-200/80 bg-white px-4 py-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+              <div className="border-t border-slate-200/70 px-0 py-4">
                 <div className="text-[14px] leading-6 text-slate-700">{preview}</div>
               </div>
             </Section>

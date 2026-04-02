@@ -85,7 +85,7 @@ function formatConversationMeta(thread = {}) {
   if (channel) parts.push(channel);
   if (state && state.toLowerCase() !== "open") parts.push(state);
 
-  return parts.filter(Boolean).join(" • ");
+  return parts.filter(Boolean).join(" | ");
 }
 
 function QuietIconButton({
@@ -173,7 +173,7 @@ function DetailActionMenu({
     },
     {
       key: "handoff",
-      label: disabledMap.handoff ? "Activating..." : "Activate handoff",
+      label: disabledMap.handoff ? "Starting..." : "Start handoff",
       icon: ShieldAlert,
       onClick: onHandoff,
       disabled: disabledMap.handoff || disabledMap.handoffLocked,
@@ -198,7 +198,7 @@ function DetailActionMenu({
   return (
     <div
       ref={menuRef}
-      className="absolute right-0 top-[calc(100%+8px)] z-30 w-56 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-1.5 shadow-[0_18px_50px_rgba(15,23,42,0.12)]"
+      className="absolute right-0 top-[calc(100%+8px)] z-30 w-56 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-1.5 shadow-[0_10px_28px_rgba(15,23,42,0.08)]"
     >
       {items.map((item) => {
         const Icon = item.icon;

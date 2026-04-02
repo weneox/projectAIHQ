@@ -162,7 +162,9 @@ describe("Executions durable surface", () => {
   it("renders summary, detail, and manual retry flow", async () => {
     render(<Executions />);
 
-    expect(await screen.findByText(/operator execution surface/i)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: /^durable executions$/i })
+    ).toBeInTheDocument();
     const summarySection = screen.getByText(/worker health/i).closest("section");
     expect(summarySection).not.toBeNull();
     expect(within(summarySection).getByText("Dead-lettered")).toBeInTheDocument();

@@ -62,7 +62,7 @@ function ChipList({ items = [], empty = "Unavailable" }) {
 
 function VersionSummary({ title, version = {} }) {
   return (
-    <div className="rounded-[20px] border border-slate-200/80 bg-white/84 px-4 py-4">
+    <div className="border-t border-slate-200/80 px-0 py-4">
       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
         {title}
       </div>
@@ -107,32 +107,32 @@ export default function TruthVersionComparePanel({
     <FocusDialog
       open={open}
       onClose={onClose}
-      title="Truth version compare"
+      title="Business data version compare"
       backdropClassName="bg-[rgba(15,23,42,.18)] backdrop-blur-[12px]"
       panelClassName="w-full max-w-[1180px]"
     >
-      <div className="rounded-[28px] border border-slate-200/80 bg-[rgba(249,250,251,.98)] shadow-[0_32px_80px_-36px_rgba(15,23,42,.28)]">
+      <div className="border-t border-slate-200/80 bg-[rgba(249,250,251,.98)]">
         <div className="border-b border-slate-200/80 px-6 py-5">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-            Truth compare
+            Version compare
           </div>
           <div className="mt-2 text-[22px] font-semibold tracking-[-0.03em] text-slate-950">
-            Version detail and rollback preview
+            Version details and rollback preview
           </div>
           <div className="mt-2 text-sm leading-6 text-slate-600">
-            Compare approved truth versions, inspect governed differences, and understand rollback consequences before any revert path is used.
+            Compare approved business-data versions, review the differences, and understand rollback impact before restoring an older version.
           </div>
         </div>
 
         <div className="max-h-[80vh] overflow-y-auto px-6 py-5">
           {loading ? (
-            <div className="rounded-[20px] border border-slate-200/80 bg-white/80 px-4 py-4 text-sm text-slate-500">
+            <div className="border-l-2 border-slate-200 pl-4 text-sm text-slate-500">
               Loading truth version detail...
             </div>
           ) : null}
 
           {!loading && s(error) ? (
-            <div className="rounded-[20px] border border-rose-200 bg-rose-50/90 px-4 py-4 text-sm leading-6 text-rose-700">
+            <div className="border-l-2 border-rose-300 pl-4 text-sm leading-6 text-rose-700">
               {error}
             </div>
           ) : null}
@@ -199,13 +199,13 @@ export default function TruthVersionComparePanel({
               />
 
               {s(detail?.diffSummary) ? (
-                <div className="rounded-[20px] border border-slate-200/80 bg-slate-50/90 px-4 py-4 text-sm leading-6 text-slate-700">
+                <div className="border-l-2 border-slate-200 pl-4 text-sm leading-6 text-slate-700">
                   {detail.diffSummary}
                 </div>
               ) : null}
 
               <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-[22px] border border-slate-200/80 bg-white/84 px-4 py-4">
+                <div className="border-t border-slate-200/80 px-0 py-4">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
                     Version diff
                   </div>
@@ -275,7 +275,7 @@ export default function TruthVersionComparePanel({
                   </div>
                 </div>
 
-                <div className="rounded-[22px] border border-slate-200/80 bg-white/84 px-4 py-4">
+                <div className="border-t border-slate-200/80 px-0 py-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
@@ -334,18 +334,18 @@ export default function TruthVersionComparePanel({
                       />
                     </div>
                   </div>
-                  <div className="mt-4 rounded-[18px] border border-slate-200/80 bg-slate-50/80 px-3 py-3">
+                  <div className="mt-4 border-l-2 border-slate-200 pl-3">
                     <div className="text-xs leading-5 text-slate-600">
                       {s(rollbackAction?.reason) ||
                         "Rollback action telemetry is unavailable."}
                     </div>
                     {s(rollbackSurface?.error) ? (
-                      <div className="mt-2 rounded-[14px] border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-5 text-rose-700">
+                      <div className="mt-2 border-l-2 border-rose-300 pl-3 text-xs leading-5 text-rose-700">
                         {rollbackSurface.error}
                       </div>
                     ) : null}
                     {s(rollbackSurface?.saveSuccess) ? (
-                      <div className="mt-2 rounded-[14px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs leading-5 text-emerald-700">
+                      <div className="mt-2 border-l-2 border-emerald-300 pl-3 text-xs leading-5 text-emerald-700">
                         {rollbackSurface.saveSuccess}
                       </div>
                     ) : null}
@@ -365,7 +365,7 @@ export default function TruthVersionComparePanel({
               </div>
 
               {rollbackReceipt ? (
-                <div className="rounded-[22px] border border-slate-200/80 bg-white/84 px-4 py-4">
+                <div className="border-t border-slate-200/80 px-0 py-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
@@ -430,7 +430,7 @@ export default function TruthVersionComparePanel({
                       </div>
                     </div>
                   </div>
-                  <div className="mt-4 rounded-[18px] border border-slate-200/80 bg-slate-50/80 px-3 py-3">
+                  <div className="mt-4 border-l-2 border-slate-200 pl-3">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
                       Preview vs actual
                     </div>
@@ -463,7 +463,7 @@ export default function TruthVersionComparePanel({
                     {changedFields.map((field) => (
                       <div
                         key={field.key || field.label}
-                        className="rounded-full border border-slate-200/80 bg-white/80 px-3 py-1.5 text-xs font-medium text-slate-700"
+                        className="rounded-full border border-slate-200/80 bg-white px-3 py-1.5 text-xs font-medium text-slate-700"
                       >
                         {s(field.label || field.key)}
                       </div>
@@ -480,7 +480,7 @@ export default function TruthVersionComparePanel({
                   {fieldChanges.map((change) => (
                     <div
                       key={change.key || change.label}
-                      className="rounded-[20px] border border-slate-200/80 bg-white/84 px-4 py-4"
+                      className="border-t border-slate-200/80 px-0 py-4"
                     >
                       <div className="text-sm font-medium text-slate-900">
                         {s(change.label || change.key)}
@@ -491,7 +491,7 @@ export default function TruthVersionComparePanel({
                         </div>
                       ) : null}
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        <div className="rounded-[16px] border border-slate-200/70 bg-slate-50/80 px-3 py-3">
+                        <div className="border-l-2 border-slate-200/70 pl-3">
                           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
                             Before
                           </div>
@@ -499,7 +499,7 @@ export default function TruthVersionComparePanel({
                             {s(change.beforeSummary) || "Not returned by backend"}
                           </div>
                         </div>
-                        <div className="rounded-[16px] border border-slate-200/70 bg-slate-50/80 px-3 py-3">
+                        <div className="border-l-2 border-slate-200/70 pl-3">
                           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
                             After
                           </div>
@@ -522,7 +522,7 @@ export default function TruthVersionComparePanel({
                     {sectionChanges.map((change) => (
                       <div
                         key={change.key || change.label}
-                        className="rounded-[18px] border border-slate-200/80 bg-white/84 px-4 py-3"
+                        className="border-t border-slate-200/80 px-0 py-3"
                       >
                         <div className="text-sm font-medium text-slate-900">
                           {s(change.label || change.key)}
@@ -537,7 +537,7 @@ export default function TruthVersionComparePanel({
               ) : null}
 
               {!detail?.hasStructuredDiff ? (
-                <div className="rounded-[20px] border border-slate-200/80 bg-slate-50/90 px-4 py-4 text-sm leading-6 text-slate-600">
+                <div className="border-l-2 border-slate-200 pl-4 text-sm leading-6 text-slate-600">
                   The backend did not return structured diff detail for this version comparison.
                 </div>
               ) : null}

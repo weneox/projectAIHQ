@@ -106,7 +106,7 @@ export default function Leads() {
             Leads
           </div>
           <div className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            AI Inbox, DM və satış axınlarından yaranan lead-lər üçün enterprise CRM paneli.
+            Leads from Inbox, direct messages, and sales follow-up in one workspace.
           </div>
         </div>
 
@@ -133,7 +133,7 @@ export default function Leads() {
       </div>
 
       {error ? (
-        <div className="premium-panel-subtle mb-6 border-rose-200 bg-rose-50/90 px-4 py-3 text-sm text-rose-700">
+        <div className="mb-6 border-l-2 border-rose-300 pl-4 text-sm text-rose-700">
           {error}
         </div>
       ) : null}
@@ -158,7 +158,7 @@ export default function Leads() {
                 Lead Pipeline
               </div>
               <div className="mt-1 text-sm text-slate-500">
-                Inbox-dən yaranan və CRM-də saxlanan lead siyahısı.
+                Leads captured from inbox activity and stored for follow-up.
               </div>
             </div>
 

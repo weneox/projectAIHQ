@@ -604,8 +604,8 @@ describe("Truth viewer smoke", () => {
     expect(
       await screen.findByRole("heading", { name: /approved business data/i })
     ).toBeInTheDocument();
-    expect(screen.getByText(/approval and execution state/i)).toBeInTheDocument();
-    expect(screen.getByText(/truth review workbench/i)).toBeInTheDocument();
+    expect(screen.getByText(/approval and runtime state/i)).toBeInTheDocument();
+    expect(screen.getByText(/business data review/i)).toBeInTheDocument();
     expect(screen.getByText(/conflict resolution/i)).toBeInTheDocument();
     expect(screen.getByText(/current approved phone/i)).toBeInTheDocument();
     expect(screen.getByText(/change impact simulator/i)).toBeInTheDocument();

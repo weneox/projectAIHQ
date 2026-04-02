@@ -193,7 +193,7 @@ export default function TeamPanel({ canManage = false }) {
                     Team Access Control
                   </div>
                   <div className="max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
-                    Workspace members, role assignment, and status changes are managed from this panel.
+                    Manage workspace members, roles, and status updates here.
                   </div>
                 </div>
               </div>

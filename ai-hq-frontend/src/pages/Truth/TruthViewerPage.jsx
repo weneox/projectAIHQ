@@ -554,11 +554,11 @@ export default function TruthViewerPage() {
           <GovernanceCockpit
             truth={state.data}
             trust={state.data.trustView || {}}
-            title="Truth Governance Cockpit"
+            title="Business data review"
             subtitle={
               state.data.trustUnavailable
-                ? "Approved truth is still shown, but live runtime health and repair telemetry are temporarily unavailable."
-                : "Approved truth, runtime projection health, finalize impact, and repairability are shown together so operators can understand the full governed execution path."
+                ? "Approved business data is still shown, but live runtime health and repair details are temporarily unavailable."
+                : "Approval status, runtime health, rollback impact, and repair details are shown together here."
             }
             onRunAction={(action) => dispatchRepairAction(action)}
           />
@@ -566,7 +566,7 @@ export default function TruthViewerPage() {
       ) : null}
 
       {state.error ? (
-        <div className="mt-6 rounded-[24px] border border-rose-200 bg-rose-50/90 px-5 py-4 text-sm leading-6 text-rose-700">
+        <div className="mt-6 border-l-2 border-rose-300 pl-5 text-sm leading-6 text-rose-700">
           {state.error}
         </div>
       ) : null}

@@ -130,7 +130,7 @@ describe("TruthVersionComparePanel", () => {
       />
     );
 
-    expect(screen.getByText(/version detail and rollback preview/i)).toBeInTheDocument();
+    expect(screen.getByText(/version details and rollback preview/i)).toBeInTheDocument();
     expect(screen.getByText(/selected version behavior/i)).toBeInTheDocument();
     expect(screen.getByText(/compared version behavior/i)).toBeInTheDocument();
     expect(screen.getByText(/behavior changes/i)).toBeInTheDocument();

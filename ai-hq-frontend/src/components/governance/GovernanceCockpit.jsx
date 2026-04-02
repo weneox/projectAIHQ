@@ -369,7 +369,7 @@ export default function GovernanceCockpit({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
             <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500">
-              Governed Control Plane
+              Approval and runtime
             </div>
             <div className="text-[30px] font-semibold tracking-[-0.05em] text-slate-950 dark:text-white">
               {title}
@@ -446,7 +446,7 @@ export default function GovernanceCockpit({
                     Policy Posture
                   </div>
                   <div className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">
-                    Approval and execution state
+                     Approval and runtime state
                   </div>
                 </div>
                 <Badge tone={policyTone} variant="subtle" dot>

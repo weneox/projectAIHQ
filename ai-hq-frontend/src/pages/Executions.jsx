@@ -53,9 +53,9 @@ export default function Executions() {
 
   return (
     <AdminPageShell
-      eyebrow="Durable execution control plane"
-      title="Operator execution surface"
-      description="Primary queue view for durable runtime control. Legacy jobs stay out of this operator path."
+      eyebrow="Execution health"
+      title="Durable executions"
+      description="Queue health, retries, and execution detail for durable background work."
       surface={surface}
       refreshLabel="Refresh durable surface"
       unavailableMessage="Durable execution controls are temporarily unavailable."
@@ -70,7 +70,7 @@ export default function Executions() {
         </button>
       }
     >
-      <section className="rounded-[28px] border border-white/10 bg-[#07111d] px-5 py-5">
+      <section className="border-t border-white/10 px-1 py-5">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <SummaryCard label="Retryable" value={summary?.counts?.retryable} tone="amber" />
           <SummaryCard label="Dead-lettered" value={summary?.deadLetterCount} tone="rose" />
@@ -89,7 +89,7 @@ export default function Executions() {
         </div>
 
         {summary?.operational?.alerts?.length ? (
-          <div className="mt-4 rounded-[22px] border border-amber-400/18 bg-amber-400/[0.08] px-4 py-4">
+          <div className="mt-4 border-l-2 border-amber-400/30 pl-4">
             <div className="text-[11px] uppercase tracking-[0.24em] text-amber-100/72">Attention needed</div>
             <div className="mt-2 text-sm text-amber-50">
               {summary.operational.alerts.map((item) => item.message).join(" ")}
@@ -115,7 +115,7 @@ export default function Executions() {
         ) : null}
       </section>
 
-      <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-4">
+      <section className="border-t border-white/10 px-1 py-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter} options={STATUS_FILTERS} />
           <FilterSelect
@@ -143,7 +143,7 @@ export default function Executions() {
       </section>
 
       <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
-        <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-4">
+        <section className="border-t border-white/10 px-1 py-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <div className="text-[11px] uppercase tracking-[0.24em] text-white/42">Queue view</div>
@@ -157,7 +157,7 @@ export default function Executions() {
           {surface.loading ? (
             <div className="flex items-center gap-3 rounded-[22px] border border-white/10 bg-[#08111d] px-4 py-5 text-sm text-white/60">
               <LoaderCircle className="h-4 w-4 animate-spin" />
-              Loading durable execution queues
+              Loading execution queue
             </div>
           ) : filteredItems.length ? (
             <div className="space-y-3">
@@ -166,13 +166,13 @@ export default function Executions() {
               ))}
             </div>
           ) : (
-            <div className="rounded-[22px] border border-white/10 bg-[#08111d] px-4 py-5 text-sm text-white/56">
-              No durable executions match the current filters.
+            <div className="border-l-2 border-white/10 pl-4 text-sm text-white/56">
+              No executions match the current filters.
             </div>
           )}
         </section>
 
-        <section className="rounded-[28px] border border-white/10 bg-white/[0.04] p-4">
+        <section className="border-t border-white/10 px-1 py-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <div className="text-[11px] uppercase tracking-[0.24em] text-white/42">Execution detail</div>
@@ -183,7 +183,7 @@ export default function Executions() {
           </div>
 
           {!detailSurface.unavailable && detailSurface.error ? (
-            <div className="mb-4 rounded-[22px] border border-rose-400/16 bg-rose-400/[0.08] px-4 py-5 text-sm text-rose-100">
+            <div className="mb-4 border-l-2 border-rose-400/30 pl-4 text-sm text-rose-100">
               {detailSurface.error}
             </div>
           ) : null}
