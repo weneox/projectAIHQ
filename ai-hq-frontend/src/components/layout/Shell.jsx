@@ -1,16 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
-import Sidebar from "./Sidebar.jsx";
-import Header from "./Header.jsx";
+import { apiGet } from "../../api/client.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
-import { apiGet } from "../../api/client.js";
+import Sidebar, { SIDEBAR_WIDTH } from "./Sidebar.jsx";
+import Header from "./Header.jsx";
 import {
   getActiveContextItem,
   getActiveShellSection,
 } from "./shellNavigation.js";
-
-const SHELL_SIDEBAR_W = 184;
 
 async function fetchShellResource(path) {
   try {
@@ -27,32 +25,34 @@ async function fetchShellResource(path) {
   }
 }
 
+const INITIAL_SHELL_STATS = {
+  inboxUnread: null,
+  inboxOpen: null,
+  leadsOpen: null,
+  dbDisabled: false,
+  wsState: "idle",
+  availability: "loading",
+  message: "",
+};
+
 export default function Shell() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [shellStats, setShellStats] = useState(INITIAL_SHELL_STATS);
+
   const location = useLocation();
   const notifications = useNotificationsSurface();
+
   const refreshTimerRef = useRef(0);
   const statsRequestRef = useRef(null);
 
-  const [shellStats, setShellStats] = useState({
-    inboxUnread: null,
-    inboxOpen: null,
-    leadsOpen: null,
-    dbDisabled: false,
-    wsState: "idle",
-    availability: "loading",
-    message: "",
-  });
-
   const shellSection = getActiveShellSection(location.pathname);
   const activeContextItem = getActiveContextItem(shellSection, location.pathname);
-  const isInboxRoute = location.pathname.startsWith("/inbox");
-  const isChannelsRoute = location.pathname.startsWith("/channels");
-  const hideTopHeader = isInboxRoute || isChannelsRoute;
 
-  async function loadShellStats({ skipIfHidden = false } = {}) {
-    if (hideTopHeader && skipIfHidden) return;
-    if (hideTopHeader) return;
+  const isImmersiveRoute =
+    location.pathname.startsWith("/inbox") ||
+    location.pathname.startsWith("/channels");
+
+  const loadShellStats = useCallback(async () => {
     if (statsRequestRef.current) return statsRequestRef.current;
 
     const request = Promise.all([
@@ -61,6 +61,7 @@ export default function Shell() {
     ])
       .then(([inboxRes, leadsRes]) => {
         const failedResponse = [inboxRes, leadsRes].find((entry) => !entry?.ok);
+
         if (failedResponse) {
           setShellStats((prev) => ({
             ...prev,
@@ -85,10 +86,7 @@ export default function Shell() {
           (sum, thread) => sum + Number(thread?.unread_count || 0),
           0
         );
-        const inboxOpen = threads.filter((thread) => {
-          const status = String(thread?.status || "open").toLowerCase();
-          return status !== "resolved" && status !== "closed";
-        }).length;
+
         const leadsOpen = leads.filter(
           (lead) => String(lead?.status || "open").toLowerCase() === "open"
         ).length;
@@ -96,7 +94,7 @@ export default function Shell() {
         setShellStats((prev) => ({
           ...prev,
           inboxUnread,
-          inboxOpen,
+          inboxOpen: threads.length,
           leadsOpen,
           dbDisabled: Boolean(inboxData?.dbDisabled || leadsData?.dbDisabled),
           availability: "ready",
@@ -111,39 +109,31 @@ export default function Shell() {
 
     statsRequestRef.current = request;
     return request;
-  }
+  }, []);
 
-  function scheduleShellRefresh(delay = 180) {
-    clearTimeout(refreshTimerRef.current);
-    refreshTimerRef.current = setTimeout(() => {
-      loadShellStats({ skipIfHidden: hideTopHeader });
-    }, delay);
-  }
-
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    const previousOverflowX = document.body.style.overflowX;
-    const previousOverflowY = document.body.style.overflowY;
-
-    if (mobileOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-      document.body.style.overflowX = "hidden";
-      document.body.style.overflowY = "auto";
-    }
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.body.style.overflowX = previousOverflowX;
-      document.body.style.overflowY = previousOverflowY;
-    };
-  }, [mobileOpen]);
+  const scheduleShellRefresh = useCallback(
+    (delay = 180) => {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = setTimeout(() => {
+        loadShellStats();
+      }, delay);
+    },
+    [loadShellStats]
+  );
 
   useEffect(() => {
     setMobileOpen(false);
     loadShellStats();
-  }, [location.pathname]);
+  }, [location.pathname, loadShellStats]);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileOpen]);
 
   useEffect(() => {
     const unsubscribeStatus = realtimeStore.subscribeStatus((status) => {
@@ -180,20 +170,13 @@ export default function Shell() {
       unsubscribeEvents();
       unsubscribeStatus();
     };
-  }, []);
+  }, [scheduleShellRefresh]);
 
   return (
     <div
-      className={[
-        "premium-page bg-transparent text-slate-950 selection:bg-slate-900 selection:text-white",
-        isInboxRoute ? "h-screen overflow-hidden" : "min-h-screen",
-      ].join(" ")}
-      style={{
-        "--shell-sidebar-w": `${SHELL_SIDEBAR_W}px`,
-      }}
+      className="min-h-screen bg-transparent text-text"
+      style={{ "--shell-sidebar-w": `${SIDEBAR_WIDTH}px` }}
     >
-      <div className="pointer-events-none fixed inset-0 -z-20 bg-[linear-gradient(180deg,#f3f4f4_0%,#eef1f2_100%)]" />
-
       <Sidebar
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
@@ -201,39 +184,25 @@ export default function Shell() {
       />
 
       <div
-        className={[
-          "md:pl-[var(--shell-sidebar-w)]",
-          isInboxRoute ? "h-screen overflow-hidden" : "min-h-screen",
-        ].join(" ")}
+        className={isImmersiveRoute ? "min-h-screen md:pl-[var(--shell-sidebar-w)]" : "min-h-screen md:pl-[var(--shell-sidebar-w)]"}
       >
-        {!hideTopHeader ? (
-          <Header
-            onMenuClick={() => setMobileOpen(true)}
-            shellStats={shellStats}
-            notifications={notifications}
-            shellSection={shellSection}
-            activeContextItem={activeContextItem}
-          />
-        ) : null}
+        <Header
+          onMenuClick={() => setMobileOpen(true)}
+          notifications={notifications}
+          shellSection={shellSection}
+          activeContextItem={activeContextItem}
+        />
 
         <main
           className={
-            isInboxRoute
-              ? "h-full overflow-hidden p-0"
-              : hideTopHeader
-                ? "min-h-screen px-4 py-5 md:px-6 md:py-6 lg:px-8 lg:py-8"
-                : "min-h-[calc(100vh-72px)] px-4 py-5 md:px-6 md:py-6 lg:px-8 lg:py-8"
+            isImmersiveRoute
+              ? "min-h-[calc(100vh-76px)] px-0 py-0"
+              : "min-h-[calc(100vh-76px)] px-4 py-5 md:px-6 md:py-6 xl:px-8 xl:py-8"
           }
         >
-          <div
-            className={
-              isInboxRoute
-                ? "h-full w-full overflow-hidden"
-                : "mx-auto w-full max-w-[1480px]"
-            }
-          >
-            {!isInboxRoute && shellStats?.message ? (
-              <div className="premium-panel-subtle mb-4 px-4 py-3 text-sm text-amber-800">
+          <div className={isImmersiveRoute ? "h-full w-full" : "mx-auto max-w-shell-content"}>
+            {!isImmersiveRoute && shellStats?.message ? (
+              <div className="mb-5 rounded-[18px] border border-line bg-surface px-4 py-3 text-sm text-text-muted shadow-panel">
                 {shellStats.message}
               </div>
             ) : null}

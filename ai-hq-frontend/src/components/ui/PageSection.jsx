@@ -1,67 +1,33 @@
 import { cx } from "../../lib/cx.js";
+import {
+  PageHeader as ShellPageHeader,
+  Surface,
+} from "./AppShellPrimitives.jsx";
 
-export function PageHeader({
-  eyebrow = "",
-  title,
-  body = "",
-  align = "left",
-  className = "",
-}) {
-  const centered = String(align ?? "").trim().toLowerCase() === "center";
-
-  return (
-    <div className={cx("border-b product-divider pb-8", centered ? "text-center" : "", className)}>
-      <div className={cx(centered ? "mx-auto max-w-[740px]" : "max-w-[760px]")}>
-        {eyebrow ? <div className="product-kicker mb-4">{eyebrow}</div> : null}
-        <h2 className="text-[30px] font-semibold leading-[1.04] tracking-[-0.055em] text-slate-950 sm:text-[38px] lg:text-[44px]">
-          {title}
-        </h2>
-        {body ? (
-          <p className="mt-3 max-w-[720px] text-[15px] leading-7 text-slate-600">
-            {body}
-          </p>
-        ) : null}
-      </div>
-    </div>
-  );
+export function PageHeader(props) {
+  return <ShellPageHeader {...props} />;
 }
 
-export function PageSection({
-  children,
-  className = "",
-  divider = true,
-}) {
+export function PageSection({ children, className = "", divider = true }) {
   return (
-    <section className={cx(divider ? "product-section" : "", className)}>
+    <section className={cx(divider ? "border-t border-line-soft pt-6" : "", className)}>
       {children}
     </section>
   );
 }
 
-export function SurfaceBlock({
-  children,
-  className = "",
-  tone = "default",
-}) {
-  const toneClass =
-    tone === "info"
-      ? "border-sky-200/80 bg-sky-50/55"
-      : tone === "warn"
-      ? "border-amber-200/80 bg-amber-50/60"
-      : tone === "success"
-      ? "border-emerald-200/80 bg-emerald-50/55"
-      : "border-slate-200/80 bg-white/68";
-
+export function SurfaceBlock({ children, className = "", tone = "default" }) {
   return (
-    <div
+    <Surface
       className={cx(
-        "product-surface rounded-[28px] p-5 sm:p-6",
-        toneClass,
+        tone === "info" && "border-brand/15 bg-brand-soft/40",
+        tone === "warn" && "border-warning/20 bg-warning/10",
+        tone === "success" && "border-success/20 bg-success/10",
         className
       )}
     >
       {children}
-    </div>
+    </Surface>
   );
 }
 
@@ -72,26 +38,14 @@ export function InlineCallout({
   action = null,
   className = "",
 }) {
-  const toneClass =
-    tone === "info"
-      ? "product-callout-info"
-      : tone === "warn"
-      ? "product-callout-warn"
-      : tone === "danger"
-      ? "product-callout-danger"
-      : "";
-
   return (
-    <div className={cx("product-callout", toneClass, className)}>
-      {title ? (
-        <div className="text-sm font-semibold tracking-[-0.02em] text-slate-950">
-          {title}
-        </div>
-      ) : null}
-      {body ? (
-        <div className="mt-1 text-sm leading-6 text-slate-600">{body}</div>
-      ) : null}
+    <SurfaceBlock
+      tone={tone}
+      className={cx("rounded-[20px] p-4", className)}
+    >
+      {title ? <div className="text-sm font-semibold text-text">{title}</div> : null}
+      {body ? <div className="mt-1 text-sm leading-6 text-text-muted">{body}</div> : null}
       {action ? <div className="mt-3">{action}</div> : null}
-    </div>
+    </SurfaceBlock>
   );
 }

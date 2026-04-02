@@ -1,6 +1,15 @@
+import { Button as AntButton, Input } from "antd";
+import { ArrowRight, Command as CommandIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import Badge from "../../components/ui/Badge.jsx";
+import {
+  EmptyState,
+  PageCanvas,
+  PageHeader,
+  SectionHeader,
+  Surface,
+} from "../../components/ui/AppShellPrimitives.jsx";
 import {
   getWorkspaceIntentExamples,
   parseWorkspaceIntent,
@@ -28,67 +37,45 @@ function titleize(value = "") {
     .replace(/\b\w/g, (item) => item.toUpperCase());
 }
 
-function sectionClasses(highlighted = false) {
-  return [
-    "relative px-1 py-6 sm:py-7",
-    "border-t",
-    highlighted ? "border-[#d8c2a0]" : "border-[#e8ddd0]",
-  ].join(" ");
-}
-
-function softRowClasses() {
-  return "border-b border-[#efe6d7] px-0 py-4 last:border-b-0";
-}
-
-function Section({
+function SectionShell({
   id,
   eyebrow,
   title,
+  description,
   items = [],
   emptyMessage,
   children,
-  highlighted = false,
 }) {
   return (
-    <section id={id} className={sectionClasses(highlighted)}>
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(520px_circle_at_0%_0%,rgba(229,211,180,0.14),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.34),transparent_26%)]" />
-      <div className="relative space-y-5">
-        <div className="space-y-2">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-400">
-            {eyebrow}
-          </div>
-          <div className="text-[23px] font-semibold tracking-[-0.045em] text-stone-900">
-            {title}
-          </div>
-        </div>
-
-        {children}
-
-        {!items.length ? (
-          <div className="text-sm leading-6 text-stone-500">{emptyMessage}</div>
-        ) : null}
-      </div>
-    </section>
+    <Surface id={id} className="scroll-mt-28">
+      <SectionHeader
+        eyebrow={eyebrow}
+        title={title}
+        description={description}
+        className="pb-5"
+      />
+      {items.length ? children : <EmptyState title={emptyMessage} />}
+    </Surface>
   );
 }
 
-function BriefLine({ label, text }) {
+function BriefMetric({ label, text }) {
   return (
-    <div className={softRowClasses()}>
-      <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-400">
+    <div className="rounded-[18px] border border-line-soft bg-surface-muted p-4">
+      <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-text-subtle">
         {label}
       </div>
-      <div className="mt-2 text-sm leading-6 text-stone-600">{text}</div>
+      <div className="mt-3 text-sm leading-6 text-text-muted">{text}</div>
     </div>
   );
 }
 
-function ExpandToggle({ expanded, onToggle }) {
+function DetailToggle({ expanded, onToggle }) {
   return (
     <button
       type="button"
       onClick={onToggle}
-      className="text-sm font-medium text-stone-700 underline decoration-stone-300 underline-offset-4 transition hover:text-stone-950"
+      className="text-sm font-semibold text-brand transition hover:text-brand-strong"
     >
       {expanded ? "Hide detail" : "Why this matters"}
     </button>
@@ -98,30 +85,27 @@ function ExpandToggle({ expanded, onToggle }) {
 function NextActionLink({ nextAction }) {
   if (!nextAction?.label) return null;
 
-  if (nextAction?.path) {
-    return (
-      <div className="text-sm font-medium">
-        <Link
-          to={nextAction.path}
-          className="text-stone-700 underline decoration-stone-300 underline-offset-4 transition hover:text-stone-950"
-        >
-          {nextAction.label}
-        </Link>
-        <span className="text-stone-500"> in {titleize(nextAction.destinationSurface)}</span>
-      </div>
-    );
-  }
+  const text = nextAction.path ? (
+    <Link to={nextAction.path} className="font-semibold text-brand hover:text-brand-strong">
+      {nextAction.label}
+    </Link>
+  ) : (
+    <span className="font-semibold text-text">{nextAction.label}</span>
+  );
 
   return (
-    <div className="text-sm font-medium text-stone-700">
-      Next: {nextAction.label} in {titleize(nextAction.destinationSurface)}
+    <div className="text-sm text-text-muted">
+      {text}
+      {nextAction.destinationSurface ? (
+        <span> in {titleize(nextAction.destinationSurface)}</span>
+      ) : null}
     </div>
   );
 }
 
 function NarrationRow({ item, expanded = false, onToggle }) {
   return (
-    <div className={softRowClasses()}>
+    <div className="rounded-[20px] border border-line bg-surface p-5 shadow-panel">
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone={toneForPriority(item.priority)} variant="subtle" dot>
           {titleize(item.priority || "medium")}
@@ -136,24 +120,20 @@ function NarrationRow({ item, expanded = false, onToggle }) {
         ) : null}
       </div>
 
-      <div className="mt-3 text-[17px] font-semibold text-stone-900">
+      <div className="mt-4 font-display text-[1.3rem] font-semibold tracking-[-0.04em] text-text">
         {item.title}
       </div>
-
-      <div className="mt-2 text-sm leading-6 text-stone-600">
-        {item.whatHappened}
-      </div>
+      <div className="mt-2 text-sm leading-6 text-text-muted">{item.whatHappened}</div>
 
       <div className="mt-4 flex flex-wrap items-center gap-4">
         {item.why || item.impact || item.nextAction ? (
-          <ExpandToggle expanded={expanded} onToggle={onToggle} />
+          <DetailToggle expanded={expanded} onToggle={onToggle} />
         ) : null}
-
         {!expanded && item.nextAction ? <NextActionLink nextAction={item.nextAction} /> : null}
       </div>
 
       {expanded ? (
-        <div className="mt-4 space-y-2 border-t border-[#eee3d3] pt-4 text-sm leading-6 text-stone-500">
+        <div className="mt-4 space-y-2 border-t border-line-soft pt-4 text-sm leading-6 text-text-muted">
           {item.why ? <div>Why: {item.why}</div> : null}
           {item.impact ? <div>Impact: {item.impact}</div> : null}
           {item.nextAction ? <NextActionLink nextAction={item.nextAction} /> : null}
@@ -165,13 +145,11 @@ function NarrationRow({ item, expanded = false, onToggle }) {
 
 function CapabilityRow({ item, expanded = false, onToggle }) {
   return (
-    <div className={softRowClasses()}>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
+    <div className="rounded-[20px] border border-line bg-surface p-5 shadow-panel">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="text-sm font-semibold text-stone-900">
-              {item.label}
-            </div>
+            <div className="text-sm font-semibold text-text">{item.label}</div>
             <Badge tone={toneForPriority(item.priority)} variant="subtle">
               {item.statusLabel}
             </Badge>
@@ -181,36 +159,46 @@ function CapabilityRow({ item, expanded = false, onToggle }) {
               </Badge>
             ) : null}
           </div>
-
-          <div className="mt-2 text-sm leading-6 text-stone-600">
-            {item.sentence}
-          </div>
+          <div className="mt-3 text-sm leading-6 text-text-muted">{item.sentence}</div>
         </div>
 
         {item.nextAction?.path ? (
           <Link
             to={item.nextAction.path}
-            className="shrink-0 text-sm font-medium text-stone-700 underline decoration-stone-300 underline-offset-4 transition hover:text-stone-950"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-brand hover:text-brand-strong"
           >
             {item.nextAction.label}
+            <ArrowRight className="h-4 w-4" />
           </Link>
         ) : null}
       </div>
 
       {item.why || item.impact ? (
-        <div className="mt-3">
-          <ExpandToggle expanded={expanded} onToggle={onToggle} />
+        <div className="mt-4">
+          <DetailToggle expanded={expanded} onToggle={onToggle} />
         </div>
       ) : null}
 
       {expanded ? (
-        <div className="mt-4 space-y-2 border-t border-[#eee3d3] pt-4 text-sm leading-6 text-stone-500">
+        <div className="mt-4 space-y-2 border-t border-line-soft pt-4 text-sm leading-6 text-text-muted">
           {item.why ? <div>Why: {item.why}</div> : null}
           {item.impact ? <div>Impact: {item.impact}</div> : null}
           {item.nextAction ? <NextActionLink nextAction={item.nextAction} /> : null}
         </div>
       ) : null}
     </div>
+  );
+}
+
+function ActionChip({ action, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(action)}
+      className="rounded-pill border border-line bg-surface px-3.5 py-2 text-sm font-semibold text-text transition hover:border-line-strong hover:bg-surface-muted"
+    >
+      {action.label}
+    </button>
   );
 }
 
@@ -225,67 +213,55 @@ function CommandBar({
   const examples = useMemo(() => getWorkspaceIntentExamples(), []);
 
   return (
-    <section className={sectionClasses()}>
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(640px_circle_at_0%_0%,rgba(233,217,188,0.16),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.38),transparent_24%)]" />
-      <div className="relative space-y-5">
-        <div className="space-y-2">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-400">
-            Command Bar
-          </div>
-          <div className="text-[23px] font-semibold tracking-[-0.045em] text-stone-900">
-            Go where the work is
-          </div>
-          <div className="max-w-3xl text-sm leading-6 text-stone-600">
-            Type a simple command or choose a suggested action. Commands use deterministic matching only.
-          </div>
+    <Surface>
+      <SectionHeader
+        eyebrow="Command Workspace"
+        title="Go where the work is"
+        description="Use deterministic routing to jump into the right surface, continue setup, or focus the current brief."
+        className="pb-5"
+      />
+
+      <form onSubmit={onSubmit} className="space-y-4">
+        <Input
+          size="large"
+          prefix={<CommandIcon className="h-4 w-4 text-text-subtle" />}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder='Try "continue setup" or "open inbox"'
+          className="!h-12 !rounded-[16px]"
+        />
+
+        <div className="flex flex-wrap gap-2">
+          {suggestedActions.map((action) => (
+            <ActionChip
+              key={action.id}
+              action={action}
+              onClick={onSuggestedAction}
+            />
+          ))}
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <input
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder='Try "continue setup" or "open inbox"'
-            className="h-13 w-full rounded-[22px] border border-[#e8decf] bg-[#fffdfa] px-4 text-sm text-stone-900 outline-none transition placeholder:text-stone-400 focus:border-[#d9c8ac] focus:bg-white"
-          />
-          <div className="flex flex-wrap gap-2">
-            {suggestedActions.map((action) => (
-              <button
-                key={action.id}
-                type="button"
-                onClick={() => onSuggestedAction(action)}
-                className="rounded-full border border-[#e7ddcf] bg-[#fffaf4] px-3.5 py-2 text-[12px] font-medium text-stone-700 transition hover:border-[#d9c8ac] hover:bg-white hover:text-stone-950"
-              >
-                {action.label}
-              </button>
-            ))}
+        <div className="text-xs leading-5 text-text-subtle">
+          Supported examples: {examples.join(" | ")}
+        </div>
+
+        {statusMessage ? (
+          <div className="rounded-[16px] border border-brand/15 bg-brand-soft/50 px-4 py-3 text-sm text-text-muted">
+            {statusMessage}
           </div>
-          <div className="text-xs leading-5 text-stone-500">
-            Supported examples: {examples.join(" | ")}
-          </div>
-          {statusMessage ? (
-            <div className="border-l-2 border-[#dcc5a7] pl-4 text-sm text-stone-600">
-              {statusMessage}
-            </div>
-          ) : null}
-        </form>
-      </div>
-    </section>
+        ) : null}
+      </form>
+    </Surface>
   );
 }
 
-function SetupMoment({ moment }) {
+function GuidedMoment({ moment }) {
   return (
-    <div className={softRowClasses()}>
-      <div className="text-sm font-semibold text-stone-900">
-        {moment.label}
-      </div>
-      <div className="mt-2 text-sm leading-6 text-stone-600">
-        {moment.summary}
-      </div>
+    <div className="rounded-[18px] border border-line-soft bg-surface-muted p-4">
+      <div className="text-sm font-semibold text-text">{moment.label}</div>
+      <div className="mt-2 text-sm leading-6 text-text-muted">{moment.summary}</div>
       {moment.detail ? (
-        <div className="mt-2 text-sm leading-6 text-stone-500">
-          {moment.detail}
-        </div>
+        <div className="mt-2 text-sm leading-6 text-text-subtle">{moment.detail}</div>
       ) : null}
     </div>
   );
@@ -295,59 +271,50 @@ function SetupGuidanceBlock({ guidance }) {
   if (!guidance?.visible) return null;
 
   return (
-    <section className={sectionClasses()}>
-      <div className="relative space-y-5">
-        <div className="space-y-2">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-400">
-            Guided Setup
-          </div>
-          <div className="text-[23px] font-semibold tracking-[-0.045em] text-stone-900">
-            {guidance.headline}
-          </div>
-          <div className="max-w-3xl text-sm leading-6 text-stone-600">
-            {guidance.description}
-          </div>
-        </div>
+    <Surface>
+      <SectionHeader
+        eyebrow="Guided Setup"
+        title={guidance.headline}
+        description={guidance.description}
+        className="pb-5"
+      />
 
-        <div className="space-y-3">
-          {guidance.moments.map((moment) => (
-            <SetupMoment key={moment.id} moment={moment} />
-          ))}
-        </div>
-
-        <div className="flex flex-wrap gap-3 pt-1">
-          {guidance.primaryAction?.path ? (
-            <Link
-              to={guidance.primaryAction.path}
-              className="inline-flex items-center rounded-full border border-[#dfcfb2] bg-[#efe0c0] px-4 py-2 text-sm font-medium text-stone-900 transition hover:border-[#d4bf99] hover:bg-[#ead7b2]"
-            >
-              {guidance.primaryAction.label}
-            </Link>
-          ) : null}
-
-          {guidance.secondaryAction?.path ? (
-            <Link
-              to={guidance.secondaryAction.path}
-              className="inline-flex items-center rounded-full border border-[#e8decf] bg-[#fffaf4] px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-[#d9c8ac] hover:bg-white hover:text-stone-950"
-            >
-              {guidance.secondaryAction.label}
-            </Link>
-          ) : null}
-        </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        {guidance.moments.map((moment) => (
+          <GuidedMoment key={moment.id} moment={moment} />
+        ))}
       </div>
-    </section>
+
+      <div className="mt-5 flex flex-wrap gap-3">
+        {guidance.primaryAction?.path ? (
+          <Link
+            to={guidance.primaryAction.path}
+            className="inline-flex h-11 items-center rounded-[16px] bg-brand px-5 text-sm font-semibold text-white transition hover:bg-brand-strong"
+          >
+            {guidance.primaryAction.label}
+          </Link>
+        ) : null}
+
+        {guidance.secondaryAction?.path ? (
+          <Link
+            to={guidance.secondaryAction.path}
+            className="inline-flex h-11 items-center rounded-[16px] border border-line bg-surface px-5 text-sm font-semibold text-text transition hover:border-line-strong hover:bg-surface-muted"
+          >
+            {guidance.secondaryAction.label}
+          </Link>
+        ) : null}
+      </div>
+    </Surface>
   );
 }
 
 function BusinessMemoryLine({ label, text }) {
   return (
-    <div className={softRowClasses()}>
-      <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-400">
+    <div className="rounded-[18px] border border-line-soft bg-surface-muted p-4">
+      <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-text-subtle">
         {label}
       </div>
-      <div className="mt-2 text-sm leading-6 text-stone-600">
-        {text}
-      </div>
+      <div className="mt-3 text-sm leading-6 text-text-muted">{text}</div>
     </div>
   );
 }
@@ -356,49 +323,45 @@ function BusinessMemoryBlock({ memory }) {
   if (!memory?.visible) return null;
 
   return (
-    <section className={sectionClasses()}>
-      <div className="relative space-y-5">
-        <div className="space-y-2">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-400">
-            Business Memory
-          </div>
-          <div className="text-[23px] font-semibold tracking-[-0.045em] text-stone-900">
-            {memory.headline}
-          </div>
-          <div className="max-w-3xl text-sm leading-6 text-stone-600">
-            {memory.description}
-          </div>
-        </div>
+    <Surface>
+      <SectionHeader
+        eyebrow="Business Memory"
+        title={memory.headline}
+        description={memory.description}
+        className="pb-5"
+      />
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <BusinessMemoryLine label="What we currently know" text={memory.currentKnown} />
-          <BusinessMemoryLine label="What may have changed" text={memory.mayHaveChanged} />
-          <BusinessMemoryLine label="What needs confirmation" text={memory.needsConfirmation} />
-          <BusinessMemoryLine label="What is blocked" text={memory.blocked} />
-          <BusinessMemoryLine label="What recently became reliable" text={memory.recentlyReliable} />
-        </div>
-
-        <div className="flex flex-wrap gap-3 pt-1">
-          {memory.primaryAction?.path ? (
-            <Link
-              to={memory.primaryAction.path}
-              className="inline-flex items-center rounded-full border border-[#dfcfb2] bg-[#efe0c0] px-4 py-2 text-sm font-medium text-stone-900 transition hover:border-[#d4bf99] hover:bg-[#ead7b2]"
-            >
-              {memory.primaryAction.label}
-            </Link>
-          ) : null}
-
-          {memory.secondaryAction?.path ? (
-            <Link
-              to={memory.secondaryAction.path}
-              className="inline-flex items-center rounded-full border border-[#e8decf] bg-[#fffaf4] px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-[#d9c8ac] hover:bg-white hover:text-stone-950"
-            >
-              {memory.secondaryAction.label}
-            </Link>
-          ) : null}
-        </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <BusinessMemoryLine label="What we currently know" text={memory.currentKnown} />
+        <BusinessMemoryLine label="What may have changed" text={memory.mayHaveChanged} />
+        <BusinessMemoryLine label="What needs confirmation" text={memory.needsConfirmation} />
+        <BusinessMemoryLine label="What is blocked" text={memory.blocked} />
+        <BusinessMemoryLine
+          label="What recently became reliable"
+          text={memory.recentlyReliable}
+        />
       </div>
-    </section>
+
+      <div className="mt-5 flex flex-wrap gap-3">
+        {memory.primaryAction?.path ? (
+          <Link
+            to={memory.primaryAction.path}
+            className="inline-flex h-11 items-center rounded-[16px] bg-brand px-5 text-sm font-semibold text-white transition hover:bg-brand-strong"
+          >
+            {memory.primaryAction.label}
+          </Link>
+        ) : null}
+
+        {memory.secondaryAction?.path ? (
+          <Link
+            to={memory.secondaryAction.path}
+            className="inline-flex h-11 items-center rounded-[16px] border border-line bg-surface px-5 text-sm font-semibold text-text transition hover:border-line-strong hover:bg-surface-muted"
+          >
+            {memory.secondaryAction.label}
+          </Link>
+        ) : null}
+      </div>
+    </Surface>
   );
 }
 
@@ -451,7 +414,7 @@ export default function WorkspacePage() {
   function handleIntent(intent) {
     if (!intent) {
       setCommandStatus(
-        'Supported commands are limited in Phase 3. Try "continue setup", "review business changes", or "open inbox".'
+        'Supported commands are limited in this pass. Try "continue setup", "review business changes", or "open inbox".'
       );
       return;
     }
@@ -476,112 +439,116 @@ export default function WorkspacePage() {
   }
 
   return (
-    <div className="mx-auto max-w-[1080px] px-4 py-12 sm:px-6 lg:px-8">
-      <div className="space-y-8">
-        <div className="space-y-3 px-1">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-400">
-            Workspace
-          </div>
-          <div className="text-[34px] font-semibold tracking-[-0.055em] text-stone-950">
-            Workspace
-          </div>
-          <div className="max-w-3xl text-[15px] leading-7 text-stone-600">
-            A direct operating brief across setup, business details, inbox, and publishing.
-          </div>
-          {workspace.error ? (
-            <div className="border-l-2 border-amber-300 pl-4 text-sm text-amber-800">
+    <PageCanvas className="space-y-6 px-4 py-6 md:px-6 md:py-8 xl:px-0">
+      <PageHeader
+        eyebrow="Workspace"
+        title="Command workspace"
+        description="A cleaner operator brief across setup, business state, conversations, and publishing so the next action is obvious."
+        actions={
+          workspace.error ? (
+            <div className="rounded-[16px] border border-warning/20 bg-warning/10 px-4 py-3 text-sm text-text-muted">
               {workspace.error}
             </div>
-          ) : null}
+          ) : (
+            <AntButton size="large" type="default" href="/settings">
+              Review settings
+            </AntButton>
+          )
+        }
+      />
+
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.95fr)]">
+        <div className="space-y-6">
+          <CommandBar
+            value={command}
+            onChange={setCommand}
+            onSubmit={handleSubmit}
+            onSuggestedAction={handleIntent}
+            suggestedActions={workspace.suggestedActions || []}
+            statusMessage={commandStatus}
+          />
+
+          <SectionShell
+            id="workspace-brief"
+            eyebrow="System Brief"
+            title="What matters right now"
+            description="The most important changes, what demands attention, and what can safely wait."
+            items={[workspace.systemBrief].filter(Boolean)}
+            emptyMessage="The workspace will summarize the current operating state here."
+          >
+            <div className="grid gap-4 md:grid-cols-3">
+              <BriefMetric label="What changed" text={workspace.systemBrief.changed} />
+              <BriefMetric label="What matters most" text={workspace.systemBrief.mattersMost} />
+              <BriefMetric label="Safe to ignore" text={workspace.systemBrief.safeToIgnore} />
+            </div>
+          </SectionShell>
+
+          <SectionShell
+            id="workspace-decisions"
+            eyebrow="Active Decisions"
+            title="Human decisions"
+            description="Items that still need operator judgement before the system should move."
+            items={workspace.decisions}
+            emptyMessage="No explicit human decision is waiting right now."
+          >
+            <div className="space-y-4">
+              {workspace.decisions.map((item) => (
+                <NarrationRow
+                  key={item.id}
+                  item={item}
+                  expanded={expandedRows[item.id] === true}
+                  onToggle={() => toggleExpanded(item.id)}
+                />
+              ))}
+            </div>
+          </SectionShell>
+
+          <SectionShell
+            id="workspace-capabilities"
+            eyebrow="Capability Summary"
+            title="Current capability posture"
+            description="A practical read on what is working, degraded, or waiting on review."
+            items={workspace.capabilities}
+            emptyMessage="Capability posture is not available yet."
+          >
+            <div className="space-y-4">
+              {workspace.capabilities.map((item) => (
+                <CapabilityRow
+                  key={item.id}
+                  item={item}
+                  expanded={expandedRows[item.id] === true}
+                  onToggle={() => toggleExpanded(item.id)}
+                />
+              ))}
+            </div>
+          </SectionShell>
+
+          <SectionShell
+            id="workspace-outcomes"
+            eyebrow="Recent Outcomes"
+            title="Recent system outcomes"
+            description="The latest completed actions and the operator context behind them."
+            items={workspace.recentOutcomes}
+            emptyMessage="Recent outcomes will appear here as the system completes work."
+          >
+            <div className="space-y-4">
+              {workspace.recentOutcomes.map((item) => (
+                <NarrationRow
+                  key={item.id}
+                  item={item}
+                  expanded={expandedRows[item.id] === true}
+                  onToggle={() => toggleExpanded(item.id)}
+                />
+              ))}
+            </div>
+          </SectionShell>
         </div>
 
-        <CommandBar
-          value={command}
-          onChange={setCommand}
-          onSubmit={handleSubmit}
-          onSuggestedAction={handleIntent}
-          suggestedActions={workspace.suggestedActions || []}
-          statusMessage={commandStatus}
-        />
-
-        <Section
-          id="workspace-brief"
-          eyebrow="System Brief"
-          title="What matters right now"
-          items={[workspace.systemBrief].filter(Boolean)}
-          emptyMessage="The workspace will summarize the current operating state here."
-        >
-          <div className="grid gap-3 md:grid-cols-3">
-            <BriefLine label="What changed" text={workspace.systemBrief.changed} />
-            <BriefLine label="What matters most" text={workspace.systemBrief.mattersMost} />
-            <BriefLine label="Safe to ignore" text={workspace.systemBrief.safeToIgnore} />
-          </div>
-        </Section>
-
-        <SetupGuidanceBlock guidance={workspace.setupGuidance} />
-
-        <BusinessMemoryBlock memory={workspace.businessMemory} />
-
-        <Section
-          id="workspace-decisions"
-          eyebrow="Active Decisions"
-          title="Human decisions"
-          items={workspace.decisions}
-          emptyMessage="No explicit human decision is waiting right now."
-          highlighted={focusSection === "decisions"}
-        >
-          <div className="space-y-3">
-            {workspace.decisions.map((item) => (
-              <NarrationRow
-                key={item.id}
-                item={item}
-                expanded={expandedRows[item.id] === true}
-                onToggle={() => toggleExpanded(item.id)}
-              />
-            ))}
-          </div>
-        </Section>
-
-        <Section
-          id="workspace-capabilities"
-          eyebrow="Capability Summary"
-          title="Current capability posture"
-          items={workspace.capabilities}
-          emptyMessage="Capability posture is not available yet."
-          highlighted={focusSection === "capabilities"}
-        >
-          <div className="space-y-3">
-            {workspace.capabilities.map((item) => (
-              <CapabilityRow
-                key={item.id}
-                item={item}
-                expanded={expandedRows[item.id] === true}
-                onToggle={() => toggleExpanded(item.id)}
-              />
-            ))}
-          </div>
-        </Section>
-
-        <Section
-          id="workspace-outcomes"
-          eyebrow="Recent Outcomes"
-          title="Recent system outcomes"
-          items={workspace.recentOutcomes}
-          emptyMessage="Recent outcomes will appear here as the system completes work."
-          highlighted={focusSection === "outcomes"}
-        >
-          <div className="space-y-3">
-            {workspace.recentOutcomes.map((item) => (
-              <NarrationRow
-                key={item.id}
-                item={item}
-                expanded={expandedRows[item.id] === true}
-                onToggle={() => toggleExpanded(item.id)}
-              />
-            ))}
-          </div>
-        </Section>
+        <div className="space-y-6">
+          <SetupGuidanceBlock guidance={workspace.setupGuidance} />
+          <BusinessMemoryBlock memory={workspace.businessMemory} />
+        </div>
       </div>
-    </div>
+    </PageCanvas>
   );
 }

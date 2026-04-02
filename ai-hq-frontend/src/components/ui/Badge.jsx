@@ -1,53 +1,35 @@
-// src/components/ui/Badge.jsx
-// ULTRA v4 — Editorial Premium Badge
-
 import { cx } from "../../lib/cx.js";
 
 const TONES = {
   neutral: {
-    solid:
-      "border-slate-900/90 bg-slate-950 text-white dark:border-slate-100/80 dark:bg-slate-100 dark:text-slate-950",
-    subtle:
-      "border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.92))] text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.025))] dark:text-slate-200 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]",
-    outline:
-      "border-slate-300/90 bg-transparent text-slate-700 dark:border-white/14 dark:text-slate-200",
-    dot: "bg-slate-400 dark:bg-slate-500",
+    solid: "border-text bg-text text-white",
+    subtle: "border-line bg-surface-muted text-text-muted",
+    outline: "border-line text-text-muted",
+    dot: "bg-text-subtle",
   },
   success: {
-    solid:
-      "border-emerald-600/90 bg-emerald-600 text-white dark:border-emerald-400/70 dark:bg-emerald-400 dark:text-slate-950",
-    subtle:
-      "border-emerald-200/90 bg-emerald-50/90 text-emerald-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-emerald-400/18 dark:bg-emerald-400/10 dark:text-emerald-200 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
-    outline:
-      "border-emerald-300 bg-transparent text-emerald-800 dark:border-emerald-400/24 dark:text-emerald-200",
-    dot: "bg-emerald-500",
+    solid: "border-success bg-success text-white",
+    subtle: "border-success/20 bg-success/10 text-success",
+    outline: "border-success/20 text-success",
+    dot: "bg-success",
   },
   warn: {
-    solid:
-      "border-amber-500/90 bg-amber-500 text-slate-950 dark:border-amber-400/70 dark:bg-amber-400 dark:text-slate-950",
-    subtle:
-      "border-amber-200/90 bg-amber-50/90 text-amber-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-amber-400/18 dark:bg-amber-400/10 dark:text-amber-200 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
-    outline:
-      "border-amber-300 bg-transparent text-amber-900 dark:border-amber-400/24 dark:text-amber-200",
-    dot: "bg-amber-500",
+    solid: "border-warning bg-warning text-white",
+    subtle: "border-warning/20 bg-warning/10 text-warning",
+    outline: "border-warning/20 text-warning",
+    dot: "bg-warning",
   },
   danger: {
-    solid:
-      "border-rose-600/90 bg-rose-600 text-white dark:border-rose-400/70 dark:bg-rose-400 dark:text-slate-950",
-    subtle:
-      "border-rose-200/90 bg-rose-50/90 text-rose-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-rose-400/18 dark:bg-rose-400/10 dark:text-rose-200 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
-    outline:
-      "border-rose-300 bg-transparent text-rose-800 dark:border-rose-400/24 dark:text-rose-200",
-    dot: "bg-rose-500",
+    solid: "border-danger bg-danger text-white",
+    subtle: "border-danger/20 bg-danger/10 text-danger",
+    outline: "border-danger/20 text-danger",
+    dot: "bg-danger",
   },
   info: {
-    solid:
-      "border-sky-600/90 bg-sky-600 text-white dark:border-sky-400/70 dark:bg-sky-400 dark:text-slate-950",
-    subtle:
-      "border-sky-200/90 bg-sky-50/90 text-sky-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] dark:border-sky-400/18 dark:bg-sky-400/10 dark:text-sky-200 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]",
-    outline:
-      "border-sky-300 bg-transparent text-sky-800 dark:border-sky-400/24 dark:text-sky-200",
-    dot: "bg-sky-500",
+    solid: "border-brand bg-brand text-white",
+    subtle: "border-brand/20 bg-brand/10 text-brand",
+    outline: "border-brand/20 text-brand",
+    dot: "bg-brand",
   },
 };
 
@@ -65,47 +47,17 @@ export default function Badge({
 }) {
   const p = tonePack(tone);
 
-  const sizeCls =
-    size === "md"
-      ? "h-7 rounded-[14px] px-2.5 text-[12px]"
-      : "h-6 rounded-[12px] px-2.25 text-[11px]";
-  const pillCls =
-    size === "md"
-      ? "min-h-[34px] rounded-full px-3.5 text-[12px]"
-      : "min-h-[30px] rounded-full px-3 text-[11px]";
-
   return (
     <span
       className={cx(
-        "relative inline-flex items-center gap-2 border",
-        "select-none whitespace-nowrap",
-        "font-semibold leading-none tracking-[-0.01em]",
-        "transition-[background-color,border-color,color,box-shadow] duration-200",
-        variant === "pill" ? pillCls : sizeCls,
-        variant === "pill"
-          ? cx(
-              "border-white/70 bg-white/78 text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_-20px_rgba(15,23,42,0.18)]",
-              tone === "success" && "border-emerald-200/90 bg-emerald-50/90 text-emerald-800",
-              tone === "warn" && "border-amber-200/90 bg-amber-50/90 text-amber-900",
-              tone === "danger" && "border-rose-200/90 bg-rose-50/90 text-rose-800",
-              tone === "info" && "border-sky-200/90 bg-sky-50/90 text-sky-800"
-            )
-          : p[variant] || p.subtle,
+        "inline-flex items-center gap-2 rounded-pill border font-semibold tracking-[-0.01em]",
+        size === "md" ? "min-h-[30px] px-3 text-[12px]" : "min-h-[26px] px-2.5 text-[11px]",
+        p[variant] || p.subtle,
         className
       )}
     >
-      {dot ? (
-        <span
-          aria-hidden="true"
-          className={cx(
-            "h-1.5 w-1.5 rounded-full",
-            p.dot,
-            "shadow-[0_0_0_2px_rgba(255,255,255,0.76)] dark:shadow-[0_0_0_2px_rgba(2,6,23,0.76)]"
-          )}
-        />
-      ) : null}
-
-      <span className="relative top-[0.25px]">{children}</span>
+      {dot ? <span className={cx("h-1.5 w-1.5 rounded-full", p.dot)} /> : null}
+      <span>{children}</span>
     </span>
   );
 }

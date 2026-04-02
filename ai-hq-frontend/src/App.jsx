@@ -6,6 +6,7 @@ import AdminRouteGuard from "./components/admin/AdminRouteGuard.jsx";
 import OperatorRouteGuard from "./components/auth/OperatorRouteGuard.jsx";
 import UserRouteGuard from "./components/auth/UserRouteGuard.jsx";
 import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
+import { LoadingSurface, PageCanvas } from "./components/ui/AppShellPrimitives.jsx";
 import { INTERNAL_ONLY_APP_ROUTES } from "./lib/appEntry.js";
 
 const Proposals = lazy(() => import("./pages/Proposals.jsx"));
@@ -34,11 +35,13 @@ const DesignLab = lazy(() => import("./pages/DesignLab.jsx"));
 
 function RouteFallback() {
   return (
-    <div className="flex min-h-[40vh] items-center justify-center px-6 py-10">
-      <div className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-white/70 backdrop-blur-xl">
-        Loading...
-      </div>
-    </div>
+    <PageCanvas className="px-4 py-8 md:px-6 md:py-10">
+      <LoadingSurface
+        title="Loading page"
+        description="Preparing the next workspace surface."
+        className="mx-auto max-w-[720px]"
+      />
+    </PageCanvas>
   );
 }
 

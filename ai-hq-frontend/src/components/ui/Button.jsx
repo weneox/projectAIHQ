@@ -15,50 +15,48 @@ function Spinner({ className }) {
         r="9"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2.5"
+        strokeWidth="2.25"
         className="opacity-20"
       />
       <path
         d="M21 12a9 9 0 0 0-9-9"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2.5"
+        strokeWidth="2.25"
         strokeLinecap="round"
-        className="opacity-90"
       />
     </svg>
   );
 }
 
 const SIZE = {
-  sm: "h-9 rounded-xl px-3.5 text-sm",
-  md: "h-10 rounded-xl px-4 text-sm",
-  lg: "h-11 rounded-2xl px-5 text-sm",
-  pill: "h-11 rounded-full px-5 text-sm",
-  hero: "h-12 rounded-full px-6 text-sm",
-  icon: "h-10 w-10 rounded-xl px-0",
+  sm: "h-9 rounded-[12px] px-3.5 text-sm",
+  md: "h-10 rounded-[14px] px-4 text-sm",
+  lg: "h-11 rounded-[16px] px-5 text-sm",
+  pill: "h-11 rounded-pill px-5 text-sm",
+  hero: "h-12 rounded-pill px-6 text-sm",
+  icon: "h-10 w-10 rounded-[14px] px-0",
 };
 
 function variantClass(variant) {
   switch (variant) {
     case "brand":
-      return "border border-slate-950 bg-slate-950 text-white shadow-[0_18px_32px_-20px_rgba(15,23,42,0.42)] hover:bg-slate-900 hover:shadow-[0_22px_38px_-22px_rgba(15,23,42,0.46)]";
-    case "surface":
-      return "border border-slate-200/90 bg-white/86 text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_14px_28px_-24px_rgba(15,23,42,0.2)] hover:border-slate-300 hover:text-slate-950 hover:bg-white";
-    case "quiet":
-      return "border border-transparent bg-transparent text-slate-600 hover:bg-white/70 hover:text-slate-950";
     case "primary":
-      return "bg-cyan-400 text-slate-950 hover:brightness-110";
+      return "border border-brand bg-brand text-white shadow-panel hover:border-brand-strong hover:bg-brand-strong";
+    case "surface":
+      return "border border-line bg-surface text-text shadow-none hover:border-line-strong hover:bg-surface-muted";
+    case "quiet":
+      return "border border-transparent bg-transparent text-text-muted hover:bg-surface-muted hover:text-text";
     case "secondary":
-      return "bg-slate-800 text-white hover:bg-slate-700";
+      return "border border-line-soft bg-surface-muted text-text hover:border-line hover:bg-surface";
     case "outline":
-      return "bg-slate-900/70 text-slate-200 hover:bg-slate-800 border border-slate-700";
+      return "border border-line bg-transparent text-text hover:border-line-strong hover:bg-surface";
     case "ghost":
-      return "bg-transparent text-slate-300 hover:bg-white/5 hover:text-white";
+      return "border border-transparent bg-transparent text-text-muted hover:bg-surface hover:text-text";
     case "destructive":
-      return "bg-rose-600 text-white hover:bg-rose-500";
+      return "border border-danger bg-danger text-white hover:brightness-95";
     default:
-      return "bg-slate-800 text-white hover:bg-slate-700";
+      return "border border-brand bg-brand text-white shadow-panel hover:border-brand-strong hover:bg-brand-strong";
   }
 }
 
@@ -87,12 +85,11 @@ const Button = React.forwardRef(function Button(
       aria-busy={isLoading || undefined}
       whileHover={isDisabled ? undefined : { y: -1 }}
       whileTap={isDisabled ? undefined : { scale: 0.985 }}
-      transition={{ type: "spring", stiffness: 320, damping: 24 }}
+      transition={{ type: "spring", stiffness: 340, damping: 28 }}
       className={cx(
-        "inline-flex items-center justify-center gap-2 font-medium transition-all duration-150",
+        "inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold tracking-[-0.015em] transition-[background-color,border-color,color,box-shadow,transform] duration-200",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        "focus:outline-none focus:ring-2 focus:ring-cyan-400/30",
-        "whitespace-nowrap",
+        "focus-visible:ring-0",
         SIZE[size] || SIZE.md,
         variantClass(variant),
         className

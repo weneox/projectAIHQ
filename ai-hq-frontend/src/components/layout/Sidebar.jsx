@@ -1,56 +1,70 @@
-import { AnimatePresence, motion } from "framer-motion";
+import * as React from "react";
+import { Badge, Button, Drawer } from "antd";
+import { LogOut, PanelLeftClose } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
-import { Moon, Settings2, X } from "lucide-react";
-import { PRIMARY_SECTIONS, UTILITY_SECTIONS } from "./shellNavigation.js";
+import { logoutUser } from "../../api/auth.js";
+import { clearAppSessionContext } from "../../lib/appSession.js";
+import { cx } from "../../lib/cx.js";
+import {
+  PRIMARY_SECTIONS,
+  UTILITY_SECTIONS,
+  getActiveShellSection,
+} from "./shellNavigation.js";
 
-const SIDEBAR_WIDTH = 184;
-
-function cn(...classes) {
-  return classes.filter(Boolean).join(" ");
-}
+const SIDEBAR_WIDTH = 304;
+const SHELL_TOPBAR_HEIGHT = 76;
 
 function formatBadgeCount(count) {
   if (typeof count !== "number" || count <= 0) return null;
   return count > 99 ? "99+" : String(count);
 }
 
-function Brand() {
-  return (
-    <div className="flex items-center gap-3 px-4 py-5">
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#8fd7cb_0%,#d8c6a5_52%,#d9e7f8_100%)] shadow-[0_12px_28px_rgba(15,23,42,0.12)]">
-        <div className="h-6 w-6 rounded-[10px] border border-white/80 bg-white/92" />
-      </div>
-      <div className="text-[18px] font-semibold tracking-[-0.04em] text-slate-950">
-        AI-HQ
-      </div>
-    </div>
-  );
-}
-
-function NavItem({ item, shellStats = {}, onNavigate }) {
+function NavItem({ item, shellStats = {}, compact = false, onNavigate }) {
   const Icon = item.icon;
   const badgeCount = formatBadgeCount(shellStats?.[item.badgeKey]);
 
   return (
-    <NavLink to={item.to} onClick={onNavigate} className="block">
+    <NavLink to={item.to} onClick={onNavigate}>
       {({ isActive }) => (
         <div
-          className={cn(
-            "flex items-center justify-between gap-3 rounded-2xl px-3 py-2.5 text-[15px] transition",
+          className={cx(
+            "group flex items-start gap-3 rounded-[18px] border px-3.5 py-3 transition-all duration-200",
             isActive
-              ? "bg-white/80 text-slate-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_-18px_rgba(15,23,42,0.18)]"
-              : "text-slate-600 hover:bg-white/66 hover:text-slate-950"
+              ? "border-brand/10 bg-brand-soft text-brand-strong shadow-panel"
+              : "border-transparent bg-transparent text-text-muted hover:border-line-soft hover:bg-surface hover:text-text"
           )}
         >
-          <div className="flex min-w-0 items-center gap-3">
-            <Icon className="h-[17px] w-[17px] shrink-0" strokeWidth={1.85} />
-            <span className="truncate">{item.label}</span>
+          <div
+            className={cx(
+              "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border transition",
+              isActive
+                ? "border-brand/10 bg-surface text-brand"
+                : "border-line-soft bg-surface-muted text-text-subtle group-hover:border-line group-hover:bg-surface"
+            )}
+          >
+            <Icon className="h-[18px] w-[18px]" strokeWidth={1.9} />
           </div>
 
-          {badgeCount ? (
-            <span className="inline-flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full bg-slate-900 px-1.5 text-[10px] font-semibold text-white">
-              {badgeCount}
-            </span>
+          {!compact ? (
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold">{item.label}</div>
+                  <div className="truncate text-[11px] font-bold uppercase tracking-[0.18em] text-text-subtle">
+                    {item.kicker}
+                  </div>
+                </div>
+                {badgeCount ? (
+                  <Badge
+                    count={badgeCount}
+                    className="[&_.ant-scroll-number]:!bg-brand [&_.ant-scroll-number]:!shadow-none"
+                  />
+                ) : null}
+              </div>
+              <div className="mt-2 text-xs leading-5 text-text-muted">
+                {item.description}
+              </div>
+            </div>
           ) : null}
         </div>
       )}
@@ -58,108 +72,121 @@ function NavItem({ item, shellStats = {}, onNavigate }) {
   );
 }
 
-function DesktopSidebar({ shellStats }) {
+function ActiveContextCard({ pathname }) {
+  const section = getActiveShellSection(pathname);
+
   return (
-    <aside
-      className="fixed inset-y-0 left-0 z-40 hidden border-r border-white/70 bg-[rgba(247,248,249,0.78)] backdrop-blur-xl md:flex md:flex-col"
-      style={{ width: SIDEBAR_WIDTH }}
-    >
-      <Brand />
-
-      <div className="flex-1 px-3 pb-4 pt-2">
-        <div className="space-y-1">
-          {PRIMARY_SECTIONS.map((item) => (
-            <NavItem key={item.id} item={item} shellStats={shellStats} />
-          ))}
-        </div>
+    <div className="rounded-[20px] border border-line bg-surface p-4 shadow-panel">
+      <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-text-subtle">
+        {section.kicker}
+      </div>
+      <div className="mt-2 font-display text-[1.35rem] font-semibold tracking-[-0.04em] text-text">
+        {section.label}
+      </div>
+      <div className="mt-2 text-sm leading-6 text-text-muted">
+        {section.description}
       </div>
 
-      <div className="border-t border-white/70 px-3 py-4">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
-            N
+      <div className="mt-4 space-y-2">
+        {(section.contextGroups || []).slice(0, 2).map((group) => (
+          <div key={group.title} className="rounded-[16px] border border-line-soft bg-surface-muted p-3">
+            <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-text-subtle">
+              {group.title}
+            </div>
+            <div className="mt-2 space-y-1.5">
+              {(group.items || []).slice(0, 3).map((item) => (
+                <div key={item.label} className="text-sm text-text-muted">
+                  {item.label}
+                </div>
+              ))}
+            </div>
           </div>
-
-          <div className="flex items-center gap-1">
-            {UTILITY_SECTIONS.slice(0, 1).map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.id}
-                  to={item.to}
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-white/70 hover:text-slate-950"
-                >
-                  <Icon className="h-4 w-4" strokeWidth={1.85} />
-                </NavLink>
-              );
-            })}
-
-            <button
-              type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-white/70 hover:text-slate-950"
-            >
-              <Moon className="h-4 w-4" strokeWidth={1.85} />
-            </button>
-
-            <button
-              type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-white/70 hover:text-slate-950"
-            >
-              <Settings2 className="h-4 w-4" strokeWidth={1.85} />
-            </button>
-          </div>
-        </div>
+        ))}
       </div>
-    </aside>
+    </div>
   );
 }
 
-function MobileSidebar({ pathname, setMobileOpen, shellStats = {} }) {
+function UtilityBar({ onNavigate }) {
+  const [loggingOut, setLoggingOut] = React.useState(false);
+
+  async function onLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+
+    try {
+      await logoutUser();
+      clearAppSessionContext();
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("auth");
+      localStorage.removeItem("authUser");
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("user");
+      sessionStorage.removeItem("auth");
+      sessionStorage.removeItem("authUser");
+      window.location.replace("/login");
+    } catch (error) {
+      console.error("Logout failed:", error);
+      setLoggingOut(false);
+    }
+  }
+
   return (
-    <motion.aside
-      initial={{ x: -260 }}
-      animate={{ x: 0 }}
-      exit={{ x: -260 }}
-      transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-      className="fixed inset-y-0 left-0 z-[70] flex w-[280px] flex-col border-r border-white/70 bg-[rgba(247,248,249,0.92)] backdrop-blur-xl md:hidden"
-    >
-      <div className="flex items-center justify-between border-b border-white/70 px-4 py-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#8fd7cb_0%,#d8c6a5_52%,#d9e7f8_100%)]">
-            <div className="h-5 w-5 rounded-[9px] border border-white/80 bg-white/92" />
-          </div>
-          <div className="text-[18px] font-semibold tracking-[-0.04em] text-slate-950">
-            AI-HQ
-          </div>
+    <div className="space-y-2 border-t border-line-soft pt-4">
+      {UTILITY_SECTIONS.map((item) => (
+        <NavItem key={item.id} item={item} compact={false} onNavigate={onNavigate} />
+      ))}
+
+      <Button
+        block
+        size="large"
+        icon={<LogOut className="h-4 w-4" />}
+        className="!h-11 !justify-start !rounded-[16px] !border-line-soft !bg-transparent !px-4 !text-text-muted !shadow-none hover:!border-line hover:!bg-surface hover:!text-text"
+        onClick={onLogout}
+        disabled={loggingOut}
+      >
+        {loggingOut ? "Signing out..." : "Sign out"}
+      </Button>
+    </div>
+  );
+}
+
+function SidebarContent({ pathname, shellStats, onNavigate }) {
+  return (
+    <div className="flex h-full flex-col gap-5 px-5 py-5">
+      <div className="flex items-center gap-3">
+        <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-[linear-gradient(180deg,#1f3b68_0%,#101828_100%)] text-white shadow-panel">
+          <PanelLeftClose className="h-5 w-5" strokeWidth={2} />
         </div>
-
-        <button
-          type="button"
-          onClick={() => setMobileOpen(false)}
-          aria-label="Close navigation"
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-white/80 bg-white/74 text-slate-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_-18px_rgba(15,23,42,0.18)]"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="flex-1 px-3 py-4">
-        <div className="space-y-1">
-          {PRIMARY_SECTIONS.map((item) => (
-            <NavItem
-              key={item.id}
-              item={item}
-              shellStats={shellStats}
-              onNavigate={() => setMobileOpen(false)}
-            />
-          ))}
+        <div className="min-w-0">
+          <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-text-subtle">
+            AI HQ
+          </div>
+          <div className="font-display text-[1.1rem] font-semibold tracking-[-0.04em] text-text">
+            Operator Suite
+          </div>
         </div>
       </div>
 
-      <div className="border-t border-slate-200/80 px-3 py-4">
-        <div className="text-xs text-slate-400">{pathname}</div>
+      <ActiveContextCard pathname={pathname} />
+
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+        <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-text-subtle">
+          Primary
+        </div>
+        {PRIMARY_SECTIONS.map((item) => (
+          <NavItem
+            key={item.id}
+            item={item}
+            shellStats={shellStats}
+            onNavigate={onNavigate}
+          />
+        ))}
       </div>
-    </motion.aside>
+
+      <UtilityBar onNavigate={onNavigate} />
+    </div>
   );
 }
 
@@ -168,35 +195,37 @@ export default function Sidebar({
   setMobileOpen,
   shellStats = {},
 }) {
-  const location = useLocation();
-  const pathname = location.pathname;
+  const { pathname } = useLocation();
 
   return (
     <>
-      <DesktopSidebar shellStats={shellStats} />
+      <aside
+        className="fixed inset-y-0 left-0 z-[70] hidden border-r border-line-soft bg-canvas/80 backdrop-blur-xl md:block"
+        style={{ width: SIDEBAR_WIDTH }}
+      >
+        <SidebarContent pathname={pathname} shellStats={shellStats} />
+      </aside>
 
-      <AnimatePresence>
-        {mobileOpen ? (
-          <>
-            <motion.button
-              type="button"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setMobileOpen(false)}
-              className="fixed inset-0 z-[60] bg-slate-950/30 backdrop-blur-[2px] md:hidden"
-              aria-label="Close navigation overlay"
-            />
-            <MobileSidebar
-              pathname={pathname}
-              setMobileOpen={setMobileOpen}
-              shellStats={shellStats}
-            />
-          </>
-        ) : null}
-      </AnimatePresence>
+      <Drawer
+        placement="left"
+        open={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        width={Math.min(SIDEBAR_WIDTH, 320)}
+        closeIcon={null}
+        styles={{
+          body: { padding: 0 },
+          header: { display: "none" },
+          content: { background: "rgb(var(--color-canvas))" },
+        }}
+      >
+        <SidebarContent
+          pathname={pathname}
+          shellStats={shellStats}
+          onNavigate={() => setMobileOpen(false)}
+        />
+      </Drawer>
     </>
   );
 }
 
-export { SIDEBAR_WIDTH };
+export { SIDEBAR_WIDTH, SHELL_TOPBAR_HEIGHT };

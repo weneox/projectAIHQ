@@ -5,7 +5,7 @@ import {
   MessageSquareText,
   Radar,
   Settings2,
-  Sparkles,
+  ShieldCheck,
   Waves,
   Waypoints,
 } from "lucide-react";
@@ -14,8 +14,8 @@ const PRIMARY_SECTIONS = [
   {
     id: "workspace",
     label: "Workspace",
-    kicker: "Overview",
-    description: "Business summary, activity, and the main place to work.",
+    kicker: "Operator console",
+    description: "Business state, system brief, and the main command surface.",
     icon: LayoutGrid,
     to: "/workspace",
     paths: ["/workspace"],
@@ -28,20 +28,13 @@ const PRIMARY_SECTIONS = [
           { label: "Settings controller", to: "/settings" },
         ],
       },
-      {
-        title: "Readiness",
-        items: [
-          { label: "Operational posture", hint: "Shared readiness summary" },
-          { label: "Escalation watch", hint: "Incidents and execution blockers" },
-        ],
-      },
     ],
   },
   {
     id: "inbox",
     label: "Inbox",
-    kicker: "Messages",
-    description: "Customer conversations, replies, and handoffs.",
+    kicker: "Conversation ops",
+    description: "Customer conversations, queue triage, and operator handling.",
     icon: MessageSquareText,
     to: "/inbox",
     badgeKey: "inboxUnread",
@@ -58,8 +51,8 @@ const PRIMARY_SECTIONS = [
       {
         title: "Operator views",
         items: [
-          { label: "Mine", hint: "Personal assignment view" },
-          { label: "Unassigned", hint: "Queue intake view" },
+          { label: "Mine", hint: "Assigned queue" },
+          { label: "Unassigned", hint: "Intake queue" },
           { label: "Voice queue", to: "/voice" },
         ],
       },
@@ -68,8 +61,8 @@ const PRIMARY_SECTIONS = [
   {
     id: "channels",
     label: "Channels",
-    kicker: "Catalog",
-    description: "Connected channels and where customers can reach you.",
+    kicker: "Distribution",
+    description: "Connected channels, catalog structure, and surface coverage.",
     icon: Waypoints,
     to: "/channels",
     paths: ["/channels"],
@@ -79,14 +72,6 @@ const PRIMARY_SECTIONS = [
         items: [
           { label: "Channel catalog", to: "/channels" },
           { label: "Settings surface", to: "/settings" },
-          { label: "Website chat", hint: "Embeddable widget path" },
-        ],
-      },
-      {
-        title: "Expansion",
-        items: [
-          { label: "Messaging stack", hint: "WhatsApp, Telegram, Messenger" },
-          { label: "Social stack", hint: "Instagram, TikTok, Facebook" },
         ],
       },
     ],
@@ -95,7 +80,7 @@ const PRIMARY_SECTIONS = [
     id: "contacts",
     label: "Contacts",
     kicker: "Pipeline",
-    description: "Lead pipeline, proposals, and follow-up.",
+    description: "Lead pipeline, proposals, and conversion follow-through.",
     icon: BriefcaseBusiness,
     to: "/leads",
     badgeKey: "leadsOpen",
@@ -108,20 +93,13 @@ const PRIMARY_SECTIONS = [
           { label: "Proposals", to: "/proposals" },
         ],
       },
-      {
-        title: "Lifecycle",
-        items: [
-          { label: "Segments", hint: "Audience cohorts" },
-          { label: "Saved lists", hint: "Reusable operator views" },
-        ],
-      },
     ],
   },
   {
     id: "publish",
     label: "Publish",
     kicker: "Outbound",
-    description: "Scheduled content, publishing queue, and delivery status.",
+    description: "Publishing queue, execution state, and delivery outcomes.",
     icon: BellDot,
     to: "/publish",
     paths: ["/publish", "/executions"],
@@ -133,20 +111,13 @@ const PRIMARY_SECTIONS = [
           { label: "Executions", to: "/executions" },
         ],
       },
-      {
-        title: "Planning",
-        items: [
-          { label: "Campaign briefs", hint: "Planned" },
-          { label: "Retry lineage", hint: "Delivery and publish recovery" },
-        ],
-      },
     ],
   },
   {
     id: "voice",
     label: "Calls",
     kicker: "Realtime",
-    description: "Calls, callbacks, and live handoff handling.",
+    description: "Voice operations, handoffs, and callback handling.",
     icon: Waves,
     to: "/voice",
     paths: ["/voice"],
@@ -156,14 +127,6 @@ const PRIMARY_SECTIONS = [
         items: [
           { label: "Call workspace", to: "/voice" },
           { label: "Inbox bridge", to: "/inbox" },
-          { label: "Incidents", to: "/incidents" },
-        ],
-      },
-      {
-        title: "Coverage",
-        items: [
-          { label: "Callback routing", hint: "Operator callback handling" },
-          { label: "Handoff lanes", hint: "Voice-to-human controls" },
         ],
       },
     ],
@@ -171,9 +134,9 @@ const PRIMARY_SECTIONS = [
   {
     id: "intelligence",
     label: "Intelligence",
-    kicker: "Advanced",
-    description: "Advanced business data, review history, and AI controls.",
-    icon: Sparkles,
+    kicker: "Governance",
+    description: "Truth, review history, and business intelligence controls.",
+    icon: ShieldCheck,
     to: "/truth",
     paths: ["/truth"],
     contextGroups: [
@@ -185,13 +148,6 @@ const PRIMARY_SECTIONS = [
           { label: "Executions", to: "/executions" },
         ],
       },
-      {
-        title: "Signals",
-        items: [
-          { label: "Runtime confidence", hint: "System health and confidence" },
-          { label: "Approval boundaries", hint: "Protected approval rules" },
-        ],
-      },
     ],
   },
 ];
@@ -201,18 +157,14 @@ const UTILITY_SECTIONS = [
     id: "expert",
     label: "Expert",
     kicker: "Advanced control",
-    description: "Advanced tools for deeper review and debugging.",
+    description: "Deep review, diagnostics, and advanced operator tooling.",
     icon: Radar,
     to: "/expert",
     paths: ["/expert"],
     contextGroups: [
       {
         title: "Control",
-        items: [
-          { label: "Expert surface", to: "/expert" },
-          { label: "Truth viewer", to: "/truth" },
-          { label: "Executions", to: "/executions" },
-        ],
+        items: [{ label: "Expert surface", to: "/expert" }],
       },
     ],
   },
@@ -220,18 +172,14 @@ const UTILITY_SECTIONS = [
     id: "settings",
     label: "Settings",
     kicker: "Configuration",
-    description: "Business details, channels, integrations, and team settings.",
+    description: "Business details, integrations, channels, and team setup.",
     icon: Settings2,
     to: "/settings",
     paths: ["/settings"],
     contextGroups: [
       {
         title: "Configuration",
-        items: [
-          { label: "General settings", to: "/settings" },
-          { label: "Channels", hint: "Channel settings" },
-          { label: "Integrations", hint: "Provider and system wiring" },
-        ],
+        items: [{ label: "General settings", to: "/settings" }],
       },
     ],
   },
@@ -263,6 +211,7 @@ function getActiveContextItem(section, pathname = "/") {
 }
 
 export {
+  ALL_SECTIONS,
   PRIMARY_SECTIONS,
   UTILITY_SECTIONS,
   getActiveContextItem,
