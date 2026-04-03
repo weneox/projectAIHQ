@@ -25,25 +25,25 @@ function ensureOverlayRoot() {
 
 function toneClasses(tone = "neutral") {
   if (tone === "success") {
-    return "border-emerald-200/80 bg-white/88 text-emerald-950";
+    return "border-success/25 bg-surface/95 text-text shadow-xs";
   }
 
   if (tone === "warn") {
-    return "border-amber-200/80 bg-white/88 text-amber-950";
+    return "border-warning/30 bg-surface/95 text-text shadow-xs";
   }
 
   if (tone === "danger") {
-    return "border-rose-200/80 bg-white/88 text-rose-950";
+    return "border-danger/25 bg-surface/95 text-text shadow-xs";
   }
 
-  return "border-slate-200/80 bg-white/88 text-slate-800";
+  return "border-line bg-surface/95 text-text shadow-xs";
 }
 
 function toneDotClasses(tone = "neutral") {
-  if (tone === "success") return "bg-emerald-500";
-  if (tone === "warn") return "bg-amber-500";
-  if (tone === "danger") return "bg-rose-500";
-  return "bg-slate-400";
+  if (tone === "success") return "bg-success";
+  if (tone === "warn") return "bg-warning";
+  if (tone === "danger") return "bg-danger";
+  return "bg-text-subtle";
 }
 
 function compactUnavailableMessage(message) {
@@ -188,7 +188,7 @@ function NotificationCard({ item, onRemove }) {
       role={item.tone === "danger" || item.tone === "warn" ? "alert" : "status"}
       aria-live={item.tone === "danger" || item.tone === "warn" ? "assertive" : "polite"}
       className={[
-        "pointer-events-auto relative w-full max-w-[min(560px,calc(100vw-1.5rem))] overflow-hidden rounded-[22px] border transition duration-200 ease-out",
+        "pointer-events-auto relative w-full max-w-[min(560px,calc(100vw-1.5rem))] overflow-hidden rounded-panel border backdrop-blur-sm transition duration-base ease-out",
         toneClasses(item.tone),
         visible ? "translate-y-0 opacity-100" : "-translate-y-3 opacity-0",
       ].join(" ")}
@@ -217,7 +217,7 @@ function NotificationCard({ item, onRemove }) {
               type="button"
               onClick={item.action.onClick}
               disabled={item.action.disabled}
-              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-slate-200/80 bg-white/82 px-3 text-[12px] font-medium text-slate-700 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-8 items-center gap-1.5 rounded-pill border border-line bg-surface px-3 text-[12px] font-medium text-text-muted transition duration-fast hover:border-line-strong hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
             >
               <RefreshCw className="h-3.5 w-3.5" />
               <span>{item.action.label || "Refresh"}</span>
@@ -228,7 +228,7 @@ function NotificationCard({ item, onRemove }) {
             type="button"
             onClick={handleClose}
             aria-label={`Dismiss ${item.displayMessage}`}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-text-subtle transition duration-fast hover:bg-surface-subtle hover:text-text"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -254,11 +254,15 @@ export default function SettingsSurfaceBanner({
     const refreshAction = buildAction(surface, refreshLabel);
     const unavailable =
       !!surface?.unavailable || s(surface?.availability).toLowerCase() === "unavailable";
+    const sharedFeedback = surface?.feedback || null;
 
     pushItem(next, {
       key: "save-success",
       tone: "success",
-      message: saveSuccessMessage || surface?.saveSuccess,
+      message:
+        saveSuccessMessage ||
+        surface?.saveSuccess ||
+        (sharedFeedback?.kind === "save-success" ? sharedFeedback.message : ""),
       action: null,
       autoDismissMs: 2600,
     });
@@ -285,6 +289,7 @@ export default function SettingsSurfaceBanner({
         tone: "warn",
         message:
           unavailableMessage ||
+          (sharedFeedback?.kind === "unavailable" ? sharedFeedback.message : "") ||
           surface?.error ||
           surface?.errorMessage ||
           "Surface unavailable",
@@ -295,7 +300,10 @@ export default function SettingsSurfaceBanner({
       pushItem(next, {
         key: "save-error",
         tone: "danger",
-        message: saveErrorMessage || surface?.saveError,
+        message:
+          saveErrorMessage ||
+          surface?.saveError ||
+          (sharedFeedback?.kind === "save-error" ? sharedFeedback.message : ""),
         action: null,
         autoDismissMs: null,
       });
@@ -303,7 +311,11 @@ export default function SettingsSurfaceBanner({
       pushItem(next, {
         key: "error",
         tone: "danger",
-        message: errorMessage || surface?.errorMessage || surface?.error,
+        message:
+          errorMessage ||
+          (sharedFeedback?.kind === "error" ? sharedFeedback.message : "") ||
+          surface?.errorMessage ||
+          surface?.error,
         action: refreshAction,
         autoDismissMs: null,
       });

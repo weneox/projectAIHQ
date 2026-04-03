@@ -82,9 +82,10 @@ const Button = React.forwardRef(function Button(
       disabled={isDisabled}
       aria-busy={isLoading || undefined}
       className={cx(
-        "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium tracking-[-0.01em] transition-[background-color,border-color,color] duration-150",
-        "disabled:cursor-not-allowed disabled:opacity-50",
-        "focus-visible:ring-0",
+        "inline-flex items-center justify-center gap-2 whitespace-nowrap border font-semibold tracking-[-0.01em]",
+        "transition-[background-color,border-color,color,box-shadow] duration-fast ease-premium",
+        "disabled:cursor-not-allowed disabled:opacity-60",
+        "focus-visible:ring-0 focus-visible:outline-none",
         SIZE[size] || SIZE.md,
         variantClass(variant),
         className

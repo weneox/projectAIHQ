@@ -1,17 +1,17 @@
+import {
+  StateSkeletonBlock,
+  Surface,
+} from "../../components/ui/AppShellPrimitives.jsx";
+
 function Shimmer({ className = "" }) {
-  return <div className={`animate-pulse rounded-md bg-surface-subtle ${className}`.trim()} />;
+  return <StateSkeletonBlock className={className} />;
 }
 
 function SurfaceCard({ className = "", children }) {
   return (
-    <div
-      className={[
-        "rounded-lg border border-line bg-surface px-4 py-4",
-        className,
-      ].join(" ")}
-    >
+    <Surface className={className} padded="sm">
       {children}
-    </div>
+    </Surface>
   );
 }
 

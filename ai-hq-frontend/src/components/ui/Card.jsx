@@ -33,15 +33,15 @@ export default function Card({
     variant === "plain"
       ? "border-transparent bg-transparent shadow-none"
       : variant === "subtle"
-      ? "bg-surface-muted shadow-none"
+      ? "border-line-soft bg-surface-muted shadow-none"
       : variant === "elevated"
       ? "border-line bg-surface shadow-panel"
-      : "bg-surface shadow-none";
+      : "border-line bg-surface shadow-none";
 
   return (
     <div
       className={cx(
-        "min-w-0 rounded-panel border transition-[border-color,background-color] duration-150",
+        "min-w-0 rounded-panel border transition-[border-color,background-color,box-shadow] duration-fast ease-premium",
         clip ? "overflow-hidden" : "overflow-visible",
         pad,
         toneClass,

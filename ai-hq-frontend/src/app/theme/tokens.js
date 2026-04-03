@@ -16,10 +16,14 @@ export const APP_TOKENS = {
     brand: "#2563eb",
     brandEmphasis: "#1d4ed8",
     brandSoft: "#eff6ff",
-    success: "#0f766e",
-    warning: "#b45309",
-    danger: "#be123c",
     info: "#2563eb",
+    infoSoft: "#eff6ff",
+    success: "#0f766e",
+    successSoft: "#f0fdfa",
+    warning: "#b45309",
+    warningSoft: "#fffbeb",
+    danger: "#be123c",
+    dangerSoft: "#fff1f2",
     focus: "rgba(37, 99, 235, 0.14)",
     overlay: "rgba(15, 23, 42, 0.22)",
   },
@@ -60,6 +64,11 @@ export const APP_TOKENS = {
     height: 42,
     heightLarge: 48,
   },
+  motion: {
+    fast: "0.16s",
+    base: "0.22s",
+    easeOut: "cubic-bezier(0.22, 1, 0.36, 1)",
+  },
 };
 
 export function getAntdTheme() {
@@ -91,9 +100,9 @@ export function getAntdTheme() {
       controlHeightLG: APP_TOKENS.control.heightLarge,
       boxShadow: APP_TOKENS.shadow.sm,
       boxShadowSecondary: APP_TOKENS.shadow.xs,
-      motionDurationFast: "0.16s",
-      motionDurationMid: "0.24s",
-      motionEaseOutCirc: "cubic-bezier(0.22, 1, 0.36, 1)",
+      motionDurationFast: APP_TOKENS.motion.fast,
+      motionDurationMid: APP_TOKENS.motion.base,
+      motionEaseOutCirc: APP_TOKENS.motion.easeOut,
     },
     components: {
       Layout: {

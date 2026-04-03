@@ -8,6 +8,37 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function buildFeedback({ unavailable, error, saveError, saveSuccess }) {
+  if (saveError) {
+    return {
+      tone: "danger",
+      kind: "save-error",
+      title: "Unable to save",
+      message: saveError,
+    };
+  }
+
+  if (saveSuccess) {
+    return {
+      tone: "success",
+      kind: "save-success",
+      title: "Saved",
+      message: saveSuccess,
+    };
+  }
+
+  if (error) {
+    return {
+      tone: unavailable ? "warn" : "danger",
+      kind: unavailable ? "unavailable" : "error",
+      title: unavailable ? "Unavailable" : "Something went wrong",
+      message: error,
+    };
+  }
+
+  return null;
+}
+
 export function useSettingsSurfaceState({ initialData, initialLoading = true }) {
   const initialDataRef = useRef();
   if (typeof initialDataRef.current === "undefined") {
@@ -86,14 +117,23 @@ export function useSettingsSurfaceState({ initialData, initialLoading = true }) 
 
   const surface = useMemo(
     () => ({
+      status: loading ? "loading" : unavailable ? "unavailable" : "ready",
+      availability: unavailable ? "unavailable" : "available",
       loading,
       error,
+      errorMessage: error,
       unavailable,
       ready: !loading && !unavailable,
       lastUpdated,
       saving,
       saveError,
       saveSuccess,
+      feedback: buildFeedback({
+        unavailable,
+        error,
+        saveError,
+        saveSuccess,
+      }),
     }),
     [error, lastUpdated, loading, saveError, saveSuccess, saving, unavailable]
   );

@@ -1,5 +1,7 @@
 import { render, waitFor } from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import "../../test/vitest.setup.js";
 
 const apiGet = vi.fn();
 let pathname = "/inbox";
@@ -26,11 +28,19 @@ vi.mock("./Sidebar.jsx", () => ({
   default: function SidebarMock() {
     return <div>sidebar</div>;
   },
+  SIDEBAR_WIDTH: 52,
+  SHELL_TOPBAR_HEIGHT: 52,
 }));
 
 vi.mock("./Header.jsx", () => ({
   default: function HeaderMock() {
     return <div>header</div>;
+  },
+}));
+
+vi.mock("./AskAIWidget.jsx", () => ({
+  default: function AskAIWidgetMock() {
+    return <div>ask-ai-widget</div>;
   },
 }));
 
@@ -49,12 +59,14 @@ describe("Shell", () => {
     vi.clearAllMocks();
   });
 
-  it("skips shared inbox stats fetches while the inbox route is active", async () => {
+  it("loads shared stats while the inbox route is active", async () => {
     pathname = "/inbox";
+    apiGet.mockResolvedValueOnce({ threads: [] }).mockResolvedValueOnce({ leads: [] });
     render(<Shell />);
 
     await waitFor(() => {
-      expect(apiGet).not.toHaveBeenCalled();
+      expect(apiGet).toHaveBeenCalledWith("/api/inbox/threads");
+      expect(apiGet).toHaveBeenCalledWith("/api/leads");
     });
   });
 
@@ -67,6 +79,17 @@ describe("Shell", () => {
     await waitFor(() => {
       expect(apiGet).toHaveBeenCalledWith("/api/inbox/threads");
       expect(apiGet).toHaveBeenCalledWith("/api/leads");
+    });
+  });
+
+  it("mounts the ask ai widget inside the shell", async () => {
+    pathname = "/workspace";
+    apiGet.mockResolvedValueOnce({ threads: [] }).mockResolvedValueOnce({ leads: [] });
+
+    const view = render(<Shell />);
+
+    await waitFor(() => {
+      expect(view.getByText("ask-ai-widget")).toBeInTheDocument();
     });
   });
 });

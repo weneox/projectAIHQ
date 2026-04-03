@@ -7,28 +7,33 @@
 :root {
   color-scheme: light;
 
-  --color-canvas: 243 245 248;
-  --color-canvas-muted: 237 241 245;
+  --color-canvas: 245 247 250;
+  --color-canvas-muted: 238 242 246;
   --color-surface: 255 255 255;
-  --color-surface-muted: 247 249 252;
-  --color-surface-subtle: 241 244 248;
-  --color-surface-inverse: 16 24 40;
+  --color-surface-muted: 248 250 252;
+  --color-surface-subtle: 241 245 249;
+  --color-surface-inverse: 17 24 39;
 
-  --color-text: 17 24 39;
-  --color-text-muted: 91 100 114;
-  --color-text-subtle: 123 135 151;
+  --color-text: 15 23 42;
+  --color-text-muted: 71 85 105;
+  --color-text-subtle: 100 116 139;
   --color-text-inverse: 248 250 252;
 
-  --color-line: 216 224 234;
-  --color-line-strong: 199 209 222;
-  --color-line-soft: 231 237 243;
+  --color-line: 215 222 231;
+  --color-line-strong: 195 206 217;
+  --color-line-soft: 229 235 242;
 
-  --color-brand: 29 78 216;
-  --color-brand-strong: 22 63 179;
-  --color-brand-soft: 232 239 255;
+  --color-brand: 37 99 235;
+  --color-brand-strong: 29 78 216;
+  --color-brand-soft: 239 246 255;
+  --color-info: 37 99 235;
+  --color-info-soft: 239 246 255;
   --color-success: 15 118 110;
+  --color-success-soft: 240 253 250;
   --color-warning: 180 83 9;
+  --color-warning-soft: 255 251 235;
   --color-danger: 190 18 60;
+  --color-danger-soft: 255 241 242;
   --color-overlay: 15 23 42;
 
   --font-sans:
@@ -59,6 +64,9 @@
   --shadow-md: 0 16px 40px rgba(15, 23, 42, 0.10);
   --shadow-lg: 0 24px 60px rgba(15, 23, 42, 0.12);
   --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.14);
+  --motion-fast: 160ms;
+  --motion-base: 220ms;
+  --motion-premium: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html,
@@ -344,6 +352,22 @@ table {
     background-color: rgb(var(--color-brand-soft));
   }
 
+  .bg-info-soft {
+    background-color: rgb(var(--color-info-soft));
+  }
+
+  .bg-success-soft {
+    background-color: rgb(var(--color-success-soft));
+  }
+
+  .bg-warning-soft {
+    background-color: rgb(var(--color-warning-soft));
+  }
+
+  .bg-danger-soft {
+    background-color: rgb(var(--color-danger-soft));
+  }
+
   .text-text {
     color: rgb(var(--color-text));
   }
@@ -358,6 +382,22 @@ table {
 
   .text-brand {
     color: rgb(var(--color-brand));
+  }
+
+  .text-info {
+    color: rgb(var(--color-info));
+  }
+
+  .text-success {
+    color: rgb(var(--color-success));
+  }
+
+  .text-warning {
+    color: rgb(var(--color-warning));
+  }
+
+  .text-danger {
+    color: rgb(var(--color-danger));
   }
 
   .border-line {

@@ -25,7 +25,7 @@ function FieldShell({
   return (
     <div
       className={cx(
-        "relative w-full overflow-hidden rounded-[16px] border transition-[border-color,background-color,box-shadow] duration-200",
+        "relative w-full overflow-hidden rounded-panel border transition-[border-color,background-color,box-shadow] duration-base ease-premium",
         surfaceClass({ disabled, readOnly, invalid }),
         className
       )}
@@ -81,7 +81,7 @@ export function InputGroup({
           <button
             type="button"
             onClick={onClear}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[12px] text-text-subtle transition hover:bg-surface-muted hover:text-text"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-soft text-text-subtle transition-[background-color,color] duration-fast ease-premium hover:bg-surface-muted hover:text-text"
             aria-label="Clear"
           >
             <X className="h-4 w-4" />

@@ -1,30 +1,45 @@
 import {
   ArrowRight,
-  BookMarked,
-  Cable,
   ChevronRight,
   MessageSquareText,
   Settings2,
   Sparkles,
   Waypoints,
+  Waves,
 } from "lucide-react";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import Badge from "../../components/ui/Badge.jsx";
 import Button from "../../components/ui/Button.jsx";
 import {
+  InlineNotice,
   LoadingSurface,
   PageCanvas,
-  Surface,
 } from "../../components/ui/AppShellPrimitives.jsx";
 import useProductHome from "../../view-models/useProductHome.js";
+
+const LIVE_ICONS = {
+  inbox: MessageSquareText,
+  comments: Waypoints,
+  voice: Waves,
+};
+
+const LIVE_POSITIONS = [
+  "md:left-[10%] md:top-[14%]",
+  "md:right-[12%] md:top-[20%]",
+  "md:left-[22%] md:bottom-[14%]",
+];
+
+function compactText(value, fallback = "") {
+  return String(value ?? fallback).trim();
+}
 
 function InlineAction({ label, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-1 text-sm font-medium text-text hover:text-brand"
+      className="inline-flex items-center gap-1 text-sm font-medium text-text-muted transition duration-fast hover:text-text"
     >
       <span>{label}</span>
       <ChevronRight className="h-4 w-4" />
@@ -36,20 +51,11 @@ function AvailabilityNotice({ note, onRetry, isFetching }) {
   if (!note) return null;
 
   return (
-    <Surface subdued padded="sm" className="space-y-2">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Badge tone="warn" variant="subtle">
-              Limited signal
-            </Badge>
-            <div className="text-sm font-medium text-text">{note.title}</div>
-          </div>
-          <div className="max-w-[840px] text-sm leading-5 text-text-muted">
-            {note.description}
-          </div>
-        </div>
-
+    <InlineNotice
+      tone="warning"
+      title={note.title || "Limited signal"}
+      description={note.description}
+      action={
         <Button
           type="button"
           size="sm"
@@ -59,348 +65,279 @@ function AvailabilityNotice({ note, onRetry, isFetching }) {
         >
           Retry
         </Button>
-      </div>
-    </Surface>
+      }
+    />
   );
 }
 
-function Hero({ home, onNavigate }) {
-  const spotlight = home.supportingStatus.filter(
-    (item) => item.action?.path !== home.currentStatus.action?.path
-  );
-  const supportingSignal = spotlight[0] || null;
+function SceneNode({ item, index, onNavigate }) {
+  const Icon = LIVE_ICONS[item.id] || Sparkles;
 
   return (
-    <section className="rounded-[20px] border border-line bg-surface px-5 py-5 md:px-6 md:py-6">
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.85fr)]">
-        <div className="space-y-5">
-          <div className="inline-flex items-center gap-2 rounded-full border border-line-soft bg-surface-muted px-3 py-1.5 text-sm font-medium text-text-muted">
-            <Sparkles className="h-4 w-4 text-brand" />
-            <span>Product home · {home.companyName}</span>
+    <button
+      type="button"
+      onClick={() => onNavigate(item.action)}
+      className={[
+        "group relative flex items-center gap-3 rounded-[22px] border border-line/80 bg-surface/90 px-4 py-3 text-left shadow-xs backdrop-blur-sm transition duration-base ease-premium hover:border-brand/30 hover:bg-surface",
+        "md:absolute md:w-[220px]",
+        LIVE_POSITIONS[index] || "",
+      ].join(" ")}
+    >
+      <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-surface-muted text-text">
+        <Icon className="h-4.5 w-4.5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-text">{item.title}</span>
+        <span className="mt-0.5 block truncate text-xs text-text-muted">{item.status}</span>
+      </span>
+      <ChevronRight className="h-4 w-4 text-text-subtle transition group-hover:text-text" />
+    </button>
+  );
+}
+
+function SignalScene({ items, onNavigate }) {
+  const liveItems = items.slice(0, 3);
+
+  return (
+    <div className="relative overflow-hidden rounded-[30px] border border-line bg-[radial-gradient(circle_at_top,rgba(var(--color-brand-soft),0.85),transparent_36%),linear-gradient(180deg,rgba(var(--color-surface),0.98),rgba(var(--color-surface-muted),0.98))] px-5 py-5 md:min-h-[430px] md:px-6 md:py-6">
+      <div className="absolute inset-0">
+        <div className="absolute left-[18%] top-[12%] h-28 w-28 rounded-full bg-brand-soft/60 blur-3xl" />
+        <div className="absolute bottom-[10%] right-[10%] h-36 w-36 rounded-full bg-info-soft/70 blur-3xl" />
+        <div className="absolute left-1/2 top-1/2 hidden h-[260px] w-[260px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-line-soft md:block" />
+        <div className="absolute left-1/2 top-1/2 hidden h-[170px] w-[170px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-line-soft/70 md:block" />
+        <div className="absolute left-[28%] top-[34%] hidden h-px w-[28%] rotate-[14deg] bg-gradient-to-r from-transparent via-line-soft to-transparent md:block" />
+        <div className="absolute left-[44%] top-[39%] hidden h-px w-[24%] -rotate-[18deg] bg-gradient-to-r from-transparent via-line-soft to-transparent md:block" />
+        <div className="absolute left-[34%] top-[58%] hidden h-px w-[21%] -rotate-[42deg] bg-gradient-to-r from-transparent via-line-soft to-transparent md:block" />
+      </div>
+
+      <div className="relative">
+        <div className="mx-auto mb-5 flex h-28 w-28 flex-col items-center justify-center rounded-full border border-line bg-surface/95 text-center shadow-xs md:absolute md:left-1/2 md:top-1/2 md:mb-0 md:h-36 md:w-36 md:-translate-x-1/2 md:-translate-y-1/2">
+          <span className="mb-2 inline-flex h-3 w-3 animate-pulse rounded-full bg-brand" />
+          <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-text-subtle">
+            Live
+          </span>
+          <span className="mt-1 text-sm font-semibold text-text md:text-base">AI HQ</span>
+        </div>
+
+        <div className="grid gap-3 md:block">
+          {liveItems.map((item, index) => (
+            <SceneNode
+              key={item.id}
+              item={item}
+              index={index}
+              onNavigate={onNavigate}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HeroStage({ home, liveItems, onNavigate }) {
+  const setupSignal = home.heroStats?.find((item) => item.id === "setup") || null;
+  const memorySignal = home.heroStats?.find((item) => item.id === "memory") || null;
+
+  return (
+    <section className="relative overflow-hidden rounded-[34px] border border-line bg-[linear-gradient(180deg,rgba(var(--color-surface),0.98),rgba(var(--color-surface-muted),0.96))] px-5 py-6 md:px-7 md:py-7">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand/35 to-transparent" />
+      <div className="absolute left-[-4rem] top-[-5rem] h-44 w-44 rounded-full bg-brand-soft/45 blur-3xl" />
+      <div className="absolute right-[-3rem] top-[2rem] h-36 w-36 rounded-full bg-info-soft/60 blur-3xl" />
+
+      <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_460px] xl:items-center">
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-text-muted">
+            <span className="font-medium text-text">AI HQ</span>
+            <span className="text-text-subtle">/</span>
+            <span>{home.companyName || "Operator home"}</span>
           </div>
 
-          <div className="space-y-3">
-            <h1 className="max-w-[760px] font-display text-[2.85rem] font-semibold leading-[0.93] tracking-[-0.055em] text-text md:text-[3.6rem]">
-              Run social inbox, auto-comment, and voice receptionist from one operator product.
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-pill border border-line-soft bg-surface/80 px-3 py-1.5 text-[12px] font-medium text-text-muted backdrop-blur-sm">
+              <Sparkles className="h-3.5 w-3.5 text-brand" />
+              <span>Welcome back, {home.actorName}</span>
+            </div>
+
+            <h1 className="max-w-[10ch] font-display text-[2.9rem] font-semibold leading-[0.92] tracking-[-0.06em] text-text md:text-[4.35rem]">
+              Live work starts here.
             </h1>
-            <p className="max-w-[720px] text-[16px] leading-7 text-text-muted">
-              The current launch slice is intentionally narrower than the repo. Start from inbox, comments, or voice, then move into setup and internal control surfaces only when the work actually needs them.
+
+            <p className="max-w-[34rem] text-[15px] leading-7 text-text-muted">
+              Inbox, comments, and voice stay in one operator lane. Everything else supports the lane.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              size="hero"
-              onClick={() => onNavigate(home.currentStatus.action)}
-              rightIcon={<ArrowRight className="h-4 w-4" />}
-            >
-              {home.currentStatus.action?.label || "Open workspace"}
-            </Button>
-            <Button
-              size="hero"
-              variant="secondary"
-              onClick={() => onNavigate(home.currentStatus.secondaryAction)}
-            >
-              {home.currentStatus.secondaryAction?.label || "Open workspace"}
-            </Button>
+          <div className="flex flex-wrap gap-3">
+            {home.currentStatus.action?.path ? (
+              <Button
+                size="hero"
+                onClick={() => onNavigate(home.currentStatus.action)}
+                rightIcon={<ArrowRight className="h-4 w-4" />}
+              >
+                {home.currentStatus.action.label}
+              </Button>
+            ) : null}
+
+            {home.currentStatus.secondaryAction?.path ? (
+              <Button
+                size="hero"
+                variant="secondary"
+                onClick={() => onNavigate(home.currentStatus.secondaryAction)}
+              >
+                {home.currentStatus.secondaryAction.label}
+              </Button>
+            ) : null}
           </div>
 
-          <div className="grid gap-4 border-t border-line-soft pt-4 md:grid-cols-3">
-            {home.heroStats.map((item) => (
-              <div key={item.id} className="space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-sm font-medium text-text">{item.label}</div>
-                  <Badge tone="neutral" variant="subtle">
+          <div className="flex flex-wrap items-start gap-5 border-t border-line-soft pt-5">
+            <div className="min-w-[180px]">
+              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-text-subtle">
+                Start here
+              </div>
+              <div className="mt-2 text-sm font-semibold text-text">
+                {home.currentStatus.title}
+              </div>
+              <div className="mt-1 text-sm leading-6 text-text-muted">
+                {home.currentStatus.summary}
+              </div>
+            </div>
+
+            {setupSignal ? (
+              <div className="min-w-[150px]">
+                <div className="text-[11px] uppercase tracking-[0.16em] text-text-subtle">
+                  Setup
+                </div>
+                <div className="mt-2 text-sm font-medium text-text">{setupSignal.status}</div>
+                <div className="mt-1 text-sm text-text-muted">{setupSignal.summary}</div>
+              </div>
+            ) : null}
+
+            {memorySignal ? (
+              <div className="min-w-[150px]">
+                <div className="text-[11px] uppercase tracking-[0.16em] text-text-subtle">
+                  Truth
+                </div>
+                <div className="mt-2 text-sm font-medium text-text">{memorySignal.status}</div>
+                <div className="mt-1 text-sm text-text-muted">{memorySignal.summary}</div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <SignalScene items={liveItems} onNavigate={onNavigate} />
+      </div>
+    </section>
+  );
+}
+
+function LiveLane({ items, onNavigate }) {
+  const liveItems = items.slice(0, 3);
+
+  return (
+    <section className="overflow-hidden rounded-[28px] border border-line bg-surface">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line-soft px-5 py-4 md:px-6">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.16em] text-text-subtle">Live lane</div>
+          <div className="mt-1 text-lg font-semibold tracking-[-0.03em] text-text">
+            Inbox, comments, voice
+          </div>
+        </div>
+        <div className="inline-flex items-center gap-2 rounded-pill bg-surface-muted px-3 py-1.5 text-[12px] font-medium text-text-muted">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-brand" />
+          <span>One operating front</span>
+        </div>
+      </div>
+
+      <div className="grid divide-y divide-line-soft md:grid-cols-[1.18fr_1fr_1fr] md:divide-x md:divide-y-0">
+        {liveItems.map((item, index) => {
+          const Icon = LIVE_ICONS[item.id] || Sparkles;
+
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onNavigate(item.action)}
+              className={[
+                "group relative min-h-[220px] px-5 py-5 text-left transition duration-base ease-premium hover:bg-surface-muted/70 md:px-6",
+                index === 0
+                  ? "bg-[linear-gradient(135deg,rgba(var(--color-brand-soft),0.55),transparent_52%)]"
+                  : "",
+              ].join(" ")}
+            >
+              {index === 0 ? (
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brand/45 to-transparent" />
+              ) : null}
+
+              <div className="flex h-full flex-col">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-surface-muted text-text">
+                    <Icon className="h-4.5 w-4.5" />
+                  </span>
+                  <Badge tone={index === 0 ? "info" : "neutral"} variant="subtle">
                     {item.status}
                   </Badge>
                 </div>
-                <div className="text-sm leading-5 text-text-muted">{item.summary}</div>
-              </div>
-            ))}
-          </div>
-        </div>
 
-        <div className="flex flex-col rounded-[16px] border border-line-soft bg-surface-muted px-4 py-4">
-          <div className="space-y-1.5 pb-4">
-            <div className="text-sm font-medium text-text-muted">Current state</div>
-            <div className="text-[1.45rem] font-semibold tracking-[-0.03em] text-text">
-              {home.currentStatus.title}
-            </div>
-            <div className="text-sm leading-6 text-text-muted">
-              {home.currentStatus.summary}
-            </div>
-          </div>
-
-          <div className="border-t border-line-soft pt-4">
-            <div className="flex flex-wrap gap-2.5">
-              {home.currentStatus.action?.path ? (
-                <Button
-                  size="sm"
-                  onClick={() => onNavigate(home.currentStatus.action)}
-                >
-                  {home.currentStatus.action.label}
-                </Button>
-              ) : null}
-              {home.currentStatus.secondaryAction?.path ? (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => onNavigate(home.currentStatus.secondaryAction)}
-                >
-                  {home.currentStatus.secondaryAction.label}
-                </Button>
-              ) : null}
-            </div>
-          </div>
-
-          {supportingSignal ? (
-            <div className="border-t border-line-soft pt-4">
-              <div className="text-sm font-medium text-text-muted">Supporting signal</div>
-              <div className="mt-2 space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-sm font-medium text-text">{supportingSignal.label}</div>
-                  <Badge tone="neutral" variant="subtle">
-                    {supportingSignal.status}
-                  </Badge>
+                <div className="mt-6">
+                  <div className="text-[1.35rem] font-semibold tracking-[-0.04em] text-text">
+                    {item.title}
+                  </div>
+                  <div className="mt-3 max-w-[28ch] text-sm leading-6 text-text-muted">
+                    {compactText(item.detail, item.summary)}
+                  </div>
                 </div>
-                <div className="text-sm leading-5 text-text-muted">{supportingSignal.summary}</div>
-                {supportingSignal.action?.path ? (
-                  <InlineAction
-                    label={supportingSignal.action.label}
-                    onClick={() => onNavigate(supportingSignal.action)}
-                  />
-                ) : null}
+
+                <div className="mt-auto pt-6">
+                  <div className="inline-flex items-center gap-1 text-sm font-medium text-text-muted transition group-hover:text-text">
+                    <span>{item.action.label}</span>
+                    <ChevronRight className="h-4 w-4" />
+                  </div>
+                </div>
               </div>
-            </div>
-          ) : null}
-        </div>
+            </button>
+          );
+        })}
       </div>
     </section>
   );
 }
 
-function OperatingModel({ onNavigate }) {
-  const steps = [
-    {
-      id: "inbox",
-      title: "Run the active queue first",
-      description: "Start with the real work surface: inbox for messaging, comments for moderation, and voice for live receptionist sessions.",
-      action: { label: "Open inbox", path: "/inbox" },
-      icon: MessageSquareText,
-    },
-    {
-      id: "comments",
-      title: "Keep comment moderation moving",
-      description: "Use the comment queue as a first-class operator surface instead of burying it under generic workspace navigation.",
-      action: { label: "Open comments", path: "/comments" },
-      icon: Waypoints,
-    },
-    {
-      id: "voice",
-      title: "Stay ready for live calls",
-      description: "Move into voice when the receptionist loop needs operator awareness, handoff, or direct intervention.",
-      action: { label: "Open voice", path: "/voice" },
-      icon: Cable,
-    },
-    {
-      id: "sources",
-      title: "Use setup as support",
-      description: "Bring business context, source material, and setup inputs in behind the launch loops instead of presenting setup as the product itself.",
-      action: { label: "Open setup", path: "/setup" },
-      icon: Settings2,
-    },
-    {
-      id: "memory",
-      title: "Approve business memory",
-      description: "Review and confirm the business facts that support inbox, comments, and voice behavior.",
-      action: { label: "Review business changes", path: "/truth" },
-      icon: BookMarked,
-    },
-    {
-      id: "operators",
-      title: "Keep support surfaces in their place",
-      description: "Workspace, launch scope, truth, and settings stay available for control and review, but they are no longer the first thing the product asks operators to open.",
-      action: { label: "Open workspace", path: "/workspace" },
-      icon: Cable,
-    },
-  ];
+function SupportStrip({ items, onNavigate }) {
+  if (!items.length) return null;
 
   return (
-    <section className="space-y-4">
-      <div className="max-w-[760px]">
-        <div className="mb-1.5 text-sm font-medium text-text-muted">Operating model</div>
-        <h2 className="font-display text-[1.95rem] font-semibold tracking-[-0.03em] text-text">
-          One focused launch product with internal support behind it.
-        </h2>
-        <p className="mt-2 text-[15px] leading-7 text-text-muted">
-            The product is tighter than the codebase. The operating path should begin with inbox, comments, and voice, while setup, memory, and review stay as supporting infrastructure.
-        </p>
-      </div>
-
-      <div className="rounded-[18px] border border-line-soft bg-surface-muted px-4 py-4 md:px-5">
-        <div className="space-y-0">
-          {steps.map((step, index) => {
-            const Icon = step.icon;
-            return (
-              <div
-                key={step.id}
-                className={index === 0 ? "" : "border-t border-line-soft pt-4"}
-              >
-                <div className="grid gap-3 md:grid-cols-[56px_minmax(0,1fr)_auto] md:items-start">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-md border border-line bg-surface text-text">
-                    <Icon className="h-4 w-4" />
-                  </div>
-                  <div className="space-y-1.5 pb-4">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <div className="text-sm font-medium text-text-muted">0{index + 1}</div>
-                      <div className="text-[1.05rem] font-semibold text-text">{step.title}</div>
-                    </div>
-                    <div className="max-w-[760px] text-sm leading-6 text-text-muted">
-                      {step.description}
-                    </div>
-                  </div>
-                  <div className="pb-4">
-                    <InlineAction
-                      label={step.action.label}
-                      onClick={() => onNavigate(step.action)}
-                    />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function CoreSurfaces({ featured, secondary, onNavigate }) {
-  return (
-    <section className="space-y-4">
-      <div className="max-w-[760px]">
-        <div className="mb-1.5 text-sm font-medium text-text-muted">Entry paths</div>
-        <h2 className="font-display text-[1.95rem] font-semibold tracking-[-0.03em] text-text">
-          Enter the surface that matches the next real piece of work.
-        </h2>
-        <p className="mt-2 text-[15px] leading-7 text-text-muted">
-          The real launch loops stay primary. Internal and future-facing surfaces stay available without becoming the headline.
-        </p>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
-        <div className="space-y-3">
-          {featured.map((item) => (
-            <Surface key={item.id} padded="md" className="space-y-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-1.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="text-[1.05rem] font-semibold text-text">{item.title}</div>
-                    <Badge tone="neutral" variant="subtle">
-                      {item.status}
-                    </Badge>
-                  </div>
-                  <div className="text-sm leading-5 text-text">{item.summary}</div>
-                  <div className="max-w-[760px] text-sm leading-6 text-text-muted">
-                    {item.detail}
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => onNavigate(item.action)}
-                >
-                  {item.action.label}
-                </Button>
-              </div>
-            </Surface>
-          ))}
-        </div>
-
-        <div className="rounded-[18px] border border-line-soft bg-surface-muted px-4 py-4">
-          <div className="space-y-1.5">
-            <div className="text-sm font-medium text-text-muted">Additional paths</div>
-            <div className="text-[1.2rem] font-semibold tracking-[-0.03em] text-text">
-              Keep internal surfaces close without turning them into fake product breadth.
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-0">
-            {secondary.map((item, index) => (
-              <div
-                key={item.id}
-                className={index === 0 ? "py-0" : "border-t border-line-soft pt-4"}
-              >
-                <div className="space-y-1.5 pb-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="text-sm font-medium text-text">{item.title}</div>
-                    <Badge tone="neutral" variant="subtle">
-                      {item.status}
-                    </Badge>
-                  </div>
-                  <div className="text-sm leading-5 text-text-muted">{item.detail}</div>
-                  <InlineAction
-                    label={item.action.label}
-                    onClick={() => onNavigate(item.action)}
-                  />
-                </div>
-              </div>
-            ))}
+    <section className="border-t border-line-soft pt-5">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.16em] text-text-subtle">Support</div>
+          <div className="mt-1 text-sm text-text-muted">
+            Setup, truth, workspace stay nearby.
           </div>
         </div>
-      </div>
-    </section>
-  );
-}
 
-function WhyItMatters({ items }) {
-  return (
-    <section className="space-y-4">
-      <div className="max-w-[760px]">
-        <div className="mb-1.5 text-sm font-medium text-text-muted">Why it matters</div>
-        <h2 className="font-display text-[1.95rem] font-semibold tracking-[-0.03em] text-text">
-          The product gets stronger when the launch slice is credible, not when the copy gets broader.
-        </h2>
-      </div>
-
-      <div className="grid gap-x-8 gap-y-0 md:grid-cols-2">
-        {items.map((item, index) => (
-          <div
-            key={item.id}
-            className={index < 2 ? "border-t border-line-soft pt-4" : "border-t border-line-soft pt-4"}
-          >
-            <div className="pb-4">
-              <div className="text-[1.02rem] font-semibold text-text">{item.title}</div>
-              <div className="mt-1.5 max-w-[34rem] text-sm leading-6 text-text-muted">
-                {item.summary}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function FinalPathways({ actions, onNavigate }) {
-  return (
-    <section className="rounded-[18px] border border-line-soft bg-surface-muted px-4 py-4 md:px-5">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="max-w-[720px]">
-          <div className="text-sm font-medium text-text-muted">Next path</div>
-          <div className="mt-1 text-[1.2rem] font-semibold tracking-[-0.03em] text-text">
-            Pick the surface where the next real decision is waiting.
-          </div>
-        </div>
         <div className="flex flex-wrap gap-2.5">
-          {actions.map((action, index) => (
-            <Button
-              key={action.path}
-              variant={index === 0 ? "primary" : "secondary"}
-              onClick={() => onNavigate(action)}
+          {items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onNavigate(item.action)}
+              className="group inline-flex items-center gap-3 rounded-pill border border-line-soft bg-surface px-3.5 py-2.5 text-left transition duration-fast hover:border-line hover:bg-surface-muted"
             >
-              {action.label}
-            </Button>
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-surface-muted text-text-muted">
+                {item.id === "setup" ? (
+                  <Settings2 className="h-4 w-4" />
+                ) : item.id === "truth" ? (
+                  <Sparkles className="h-4 w-4" />
+                ) : (
+                  <MessageSquareText className="h-4 w-4" />
+                )}
+              </span>
+              <span>
+                <span className="block text-sm font-medium text-text">{item.title}</span>
+                <span className="block text-xs text-text-muted">{item.status}</span>
+              </span>
+              <ChevronRight className="h-4 w-4 text-text-subtle transition group-hover:text-text" />
+            </button>
           ))}
         </div>
       </div>
@@ -412,11 +349,51 @@ function ProductHomeLoadingSurface() {
   return (
     <PageCanvas className="px-4 py-5 md:px-6 md:py-7 xl:px-0">
       <LoadingSurface
-        title="Loading product home"
-        description="Preparing your business overview and next actions."
+        title="Loading home"
+        description="Preparing your next path."
       />
     </PageCanvas>
   );
+}
+
+function buildSupportItems(home, secondaryEntryPoints) {
+  const setupSignal = home.heroStats?.find((item) => item.id === "setup");
+  const truthSignal = home.heroStats?.find((item) => item.id === "memory");
+  const workspaceSignal =
+    secondaryEntryPoints.find((item) => item.id === "workspace") ||
+    home.entryPoints?.find((item) => item.id === "workspace");
+
+  return [
+    setupSignal
+      ? {
+          id: "setup",
+          title: "Setup",
+          status: setupSignal.status,
+          action: setupSignal.action,
+        }
+      : { id: "setup", title: "Setup", status: "Support", action: { label: "Open setup", path: "/setup" } },
+    truthSignal
+      ? {
+          id: "truth",
+          title: "Truth",
+          status: truthSignal.status,
+          action: truthSignal.action,
+        }
+      : { id: "truth", title: "Truth", status: "Support", action: { label: "Open truth", path: "/truth" } },
+    workspaceSignal
+      ? {
+          id: "workspace",
+          title: "Workspace",
+          status: workspaceSignal.status,
+          action: workspaceSignal.action,
+        }
+      : {
+          id: "workspace",
+          title: "Workspace",
+          status: "Support",
+          action: { label: "Open workspace", path: "/workspace" },
+        },
+  ].filter((item) => item.action?.path);
 }
 
 export default function ProductHomePage() {
@@ -427,9 +404,15 @@ export default function ProductHomePage() {
     () => home.entryPointGroups?.featured || home.entryPoints?.slice(0, 3) || [],
     [home.entryPointGroups, home.entryPoints]
   );
+
   const secondaryEntryPoints = useMemo(
     () => home.entryPointGroups?.secondary || home.entryPoints?.slice(3) || [],
     [home.entryPointGroups, home.entryPoints]
+  );
+
+  const supportItems = useMemo(
+    () => buildSupportItems(home, secondaryEntryPoints),
+    [home, secondaryEntryPoints]
   );
 
   function navigateFromAction(action = null) {
@@ -442,33 +425,22 @@ export default function ProductHomePage() {
   }
 
   return (
-    <PageCanvas className="space-y-8 px-4 py-5 md:px-6 md:py-7 xl:px-0">
-      <div className="space-y-1.5">
-        <div className="text-sm font-medium text-text-muted">Welcome back, {home.actorName} · Product home</div>
-        <div className="max-w-[760px] text-[15px] leading-7 text-text-muted">
-          Start from the real operator loop, then move deeper only when the next decision actually requires a support surface.
-        </div>
-      </div>
-
+    <PageCanvas className="space-y-5 px-4 py-5 md:px-6 md:py-7 xl:px-0">
       <AvailabilityNotice
         note={home.availabilityNote}
         onRetry={home.refetch}
         isFetching={home.isFetching}
       />
 
-      <Hero home={home} onNavigate={navigateFromAction} />
-
-      <OperatingModel onNavigate={navigateFromAction} />
-
-      <CoreSurfaces
-        featured={featuredEntryPoints}
-        secondary={secondaryEntryPoints}
+      <HeroStage
+        home={home}
+        liveItems={featuredEntryPoints}
         onNavigate={navigateFromAction}
       />
 
-      <WhyItMatters items={home.benefits} />
+      <LiveLane items={featuredEntryPoints} onNavigate={navigateFromAction} />
 
-      <FinalPathways actions={home.finalActions} onNavigate={navigateFromAction} />
+      <SupportStrip items={supportItems} onNavigate={navigateFromAction} />
     </PageCanvas>
   );
 }

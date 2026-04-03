@@ -1,9 +1,11 @@
 import * as React from "react";
-import { Badge, Button, Drawer } from "antd";
-import { LogOut, Sparkles } from "lucide-react";
-import { NavLink, useLocation } from "react-router-dom";
-import { logoutUser } from "../../api/auth.js";
-import { clearAppSessionContext } from "../../lib/appSession.js";
+import { Drawer, Tooltip } from "antd";
+import { NavLink } from "react-router-dom";
+import {
+  Building2,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
 import { cx } from "../../lib/cx.js";
 import {
   PRIMARY_SECTIONS,
@@ -11,144 +13,190 @@ import {
   UTILITY_SECTIONS,
 } from "./shellNavigation.js";
 
-const SIDEBAR_WIDTH = 280;
-const SHELL_TOPBAR_HEIGHT = 76;
+const SIDEBAR_WIDTH = 52;
+const EXPANDED_SIDEBAR_WIDTH = 220;
+const SHELL_TOPBAR_HEIGHT = 52;
+
+const RAIL_ITEMS = [
+  ...PRIMARY_SECTIONS,
+  ...SECONDARY_SECTIONS,
+  ...UTILITY_SECTIONS,
+];
 
 function formatBadgeCount(count) {
   if (typeof count !== "number" || count <= 0) return null;
   return count > 99 ? "99+" : String(count);
 }
 
-function NavItem({ item, shellStats = {}, onNavigate }) {
+function NavRailItem({
+  item,
+  shellStats = {},
+  onNavigate,
+  expanded = false,
+}) {
   const Icon = item.icon;
   const badgeCount = formatBadgeCount(shellStats?.[item.badgeKey]);
 
-  return (
+  const content = (
     <NavLink to={item.to} onClick={onNavigate}>
       {({ isActive }) => (
         <div
           className={cx(
-            "group flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors duration-150",
+            "relative flex items-center transition-all duration-200",
+            expanded
+              ? "h-10 w-full gap-3 rounded-[14px] px-3"
+              : "h-9 w-9 justify-center rounded-[12px]",
             isActive
-              ? "bg-brand-soft text-brand-strong"
+              ? "bg-brand-soft text-brand shadow-[inset_0_0_0_1px_rgba(37,99,235,0.08)]"
               : "text-text-muted hover:bg-surface-muted hover:text-text"
           )}
         >
-          <div
-            className={cx(
-              "flex h-8 w-8 shrink-0 items-center justify-center rounded-sm transition-colors duration-150",
-              isActive
-                ? "bg-surface text-brand"
-                : "text-text-subtle group-hover:bg-surface group-hover:text-text"
-            )}
-          >
-            <Icon className="h-4 w-4" strokeWidth={1.9} />
-          </div>
+          {isActive ? (
+            <span
+              className={cx(
+                "absolute top-1/2 -translate-y-1/2 rounded-r-full bg-brand",
+                expanded ? "left-0 h-5 w-[2px]" : "left-0 h-4 w-[2px]"
+              )}
+            />
+          ) : null}
 
-          <div className="min-w-0 flex flex-1 items-center justify-between gap-3">
-            <div className="truncate text-sm font-medium">{item.label}</div>
-            {badgeCount ? (
-              <Badge
-                count={badgeCount}
-                className="[&_.ant-scroll-number]:!bg-brand [&_.ant-scroll-number]:!shadow-none"
-              />
-            ) : null}
-          </div>
+          <Icon
+            className={cx("shrink-0", expanded ? "h-4 w-4" : "h-4 w-4")}
+            strokeWidth={1.95}
+          />
+
+          {expanded ? (
+            <>
+              <div className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-[-0.02em]">
+                {item.label}
+              </div>
+
+              {badgeCount ? (
+                <div className="min-w-[18px] rounded-full bg-brand px-1.5 py-[3px] text-center text-[9px] font-semibold leading-none text-white shadow-sm">
+                  {badgeCount}
+                </div>
+              ) : null}
+            </>
+          ) : badgeCount ? (
+            <div className="absolute -right-1 -top-1 min-w-[15px] rounded-full bg-brand px-1 py-[2px] text-center text-[8px] font-semibold leading-none text-white shadow-sm">
+              {badgeCount}
+            </div>
+          ) : null}
         </div>
       )}
     </NavLink>
   );
-}
 
-function UtilityBar({ onNavigate }) {
-  const [loggingOut, setLoggingOut] = React.useState(false);
-
-  async function onLogout() {
-    if (loggingOut) return;
-    setLoggingOut(true);
-
-    try {
-      await logoutUser();
-      clearAppSessionContext();
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      localStorage.removeItem("auth");
-      localStorage.removeItem("authUser");
-      sessionStorage.removeItem("token");
-      sessionStorage.removeItem("user");
-      sessionStorage.removeItem("auth");
-      sessionStorage.removeItem("authUser");
-      window.location.replace("/login");
-    } catch (error) {
-      console.error("Logout failed:", error);
-      setLoggingOut(false);
-    }
-  }
+  if (expanded) return content;
 
   return (
-    <div className="space-y-1 border-t border-line-soft pt-4">
-      {UTILITY_SECTIONS.map((item) => (
-        <NavItem key={item.id} item={item} onNavigate={onNavigate} />
-      ))}
-
-      <Button
-        block
-        size="large"
-        icon={<LogOut className="h-4 w-4" />}
-        className="!h-10 !justify-start !rounded-md !border-0 !bg-transparent !px-3 !text-text-muted !shadow-none hover:!bg-surface-muted hover:!text-text"
-        onClick={onLogout}
-        disabled={loggingOut}
-      >
-        {loggingOut ? "Signing out..." : "Sign out"}
-      </Button>
-    </div>
+    <Tooltip title={item.label} placement="right">
+      {content}
+    </Tooltip>
   );
 }
 
-function SidebarContent({ shellStats, onNavigate }) {
+function BrandMark({ expanded = false }) {
   return (
-    <div className="flex h-full flex-col gap-5 px-4 py-4">
-      <div className="flex items-center gap-3 px-1">
-        <div className="flex h-8 w-8 items-center justify-center rounded-sm bg-brand-soft text-brand">
-          <Sparkles className="h-4 w-4" strokeWidth={1.9} />
-        </div>
+    <NavLink
+      to="/home"
+      className={cx(
+        "flex items-center rounded-[14px] transition hover:bg-surface-muted",
+        expanded
+          ? "w-full gap-3 px-2 py-1.5"
+          : "justify-center p-1"
+      )}
+      aria-label="AI HQ Home"
+    >
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-line bg-surface-muted shadow-sm">
+        <Building2 className="h-4 w-4 text-brand" strokeWidth={1.95} />
+      </div>
+
+      {expanded ? (
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-text">AI HQ</div>
-          <div className="text-xs text-text-muted">Launch slice</div>
+          <div className="truncate text-[13px] font-semibold tracking-[-0.02em] text-text">
+            AI HQ
+          </div>
+          <div className="truncate text-[11px] text-text-subtle">
+            Operator shell
+          </div>
         </div>
+      ) : null}
+    </NavLink>
+  );
+}
+
+function ExpandToggle({ expanded, onToggle }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={cx(
+        "flex items-center text-text-muted transition hover:bg-surface-muted hover:text-text",
+        expanded
+          ? "h-10 w-full gap-3 rounded-[14px] px-3"
+          : "h-9 w-9 justify-center rounded-[12px]"
+      )}
+      aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
+    >
+      {expanded ? (
+        <>
+          <PanelLeftClose className="h-4 w-4 shrink-0" strokeWidth={1.95} />
+          <span className="truncate text-[13px] font-medium tracking-[-0.02em]">
+            Collapse
+          </span>
+        </>
+      ) : (
+        <Tooltip title="Expand" placement="right">
+          <div className="flex h-full w-full items-center justify-center">
+            <PanelLeftOpen className="h-4 w-4" strokeWidth={1.95} />
+          </div>
+        </Tooltip>
+      )}
+    </button>
+  );
+}
+
+function SidebarContent({
+  shellStats,
+  onNavigate,
+  expanded = false,
+  onToggleExpanded,
+}) {
+  return (
+    <div
+      className={cx(
+        "flex h-full flex-col px-1.5 py-2",
+        expanded ? "items-stretch" : "items-center"
+      )}
+    >
+      <BrandMark expanded={expanded} />
+
+      <div
+        className={cx(
+          "mt-2 flex flex-1 flex-col gap-1",
+          expanded ? "items-stretch" : "items-center"
+        )}
+      >
+        {RAIL_ITEMS.map((item) => (
+          <NavRailItem
+            key={item.id}
+            item={item}
+            shellStats={shellStats}
+            onNavigate={onNavigate}
+            expanded={expanded}
+          />
+        ))}
       </div>
 
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
-        <div className="space-y-1">
-          <div className="px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-            Launch product
-          </div>
-          {PRIMARY_SECTIONS.map((item) => (
-            <NavItem
-              key={item.id}
-              item={item}
-              shellStats={shellStats}
-              onNavigate={onNavigate}
-            />
-          ))}
-        </div>
-
-        <div className="space-y-1 border-t border-line-soft pt-4">
-          <div className="px-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-            Support and backoffice
-          </div>
-          {SECONDARY_SECTIONS.map((item) => (
-            <NavItem
-              key={item.id}
-              item={item}
-              shellStats={shellStats}
-              onNavigate={onNavigate}
-            />
-          ))}
-        </div>
+      <div
+        className={cx(
+          "mt-2 border-t border-line-soft pt-2",
+          expanded ? "w-full" : "w-auto"
+        )}
+      >
+        <ExpandToggle expanded={expanded} onToggle={onToggleExpanded} />
       </div>
-
-      <UtilityBar onNavigate={onNavigate} />
     </div>
   );
 }
@@ -158,31 +206,41 @@ export default function Sidebar({
   setMobileOpen,
   shellStats = {},
 }) {
-  useLocation();
+  const [expanded, setExpanded] = React.useState(false);
+  const sidebarWidth = expanded ? EXPANDED_SIDEBAR_WIDTH : SIDEBAR_WIDTH;
 
   return (
     <>
       <aside
-        className="fixed inset-y-0 left-0 z-[70] hidden border-r border-line-soft bg-canvas md:block"
-        style={{ width: SIDEBAR_WIDTH }}
+        className="fixed inset-y-0 left-0 z-[70] hidden border-r border-line bg-surface transition-[width] duration-200 md:block"
+        style={{ width: sidebarWidth }}
       >
-        <SidebarContent shellStats={shellStats} />
+        <SidebarContent
+          shellStats={shellStats}
+          expanded={expanded}
+          onToggleExpanded={() => setExpanded((value) => !value)}
+        />
       </aside>
 
       <Drawer
         placement="left"
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}
-        width={Math.min(SIDEBAR_WIDTH, 320)}
+        width={sidebarWidth}
         closeIcon={null}
         styles={{
           body: { padding: 0 },
           header: { display: "none" },
-          content: { background: "rgb(var(--color-canvas))" },
+          content: {
+            background: "rgb(var(--color-surface))",
+            borderRight: "1px solid rgb(var(--color-line))",
+          },
         }}
       >
         <SidebarContent
           shellStats={shellStats}
+          expanded={expanded}
+          onToggleExpanded={() => setExpanded((value) => !value)}
           onNavigate={() => setMobileOpen(false)}
         />
       </Drawer>

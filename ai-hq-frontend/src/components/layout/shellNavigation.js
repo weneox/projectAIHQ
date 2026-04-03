@@ -6,7 +6,6 @@ import {
   MessageCircleMore,
   MessageSquareText,
   Radar,
-  Settings2,
   ShieldCheck,
   Waves,
   Waypoints,
@@ -184,6 +183,22 @@ const SECONDARY_SECTIONS = [
   },
 ];
 
+const SETTINGS_SECTION = {
+  id: "settings",
+  label: "Settings",
+  kicker: "Configuration",
+  description: "Launch-slice policy, Meta integration, team access, and operator notifications.",
+  icon: LayoutGrid,
+  to: "/settings",
+  paths: ["/settings"],
+  contextGroups: [
+    {
+      title: "Configuration",
+      items: [{ label: "Operator settings", to: "/settings" }],
+    },
+  ],
+};
+
 const UTILITY_SECTIONS = [
   {
     id: "setup",
@@ -215,27 +230,13 @@ const UTILITY_SECTIONS = [
       },
     ],
   },
-  {
-    id: "settings",
-    label: "Settings",
-    kicker: "Configuration",
-    description: "Launch-slice policy, Meta integration, team access, and operator notifications.",
-    icon: Settings2,
-    to: "/settings",
-    paths: ["/settings"],
-    contextGroups: [
-      {
-        title: "Configuration",
-        items: [{ label: "Operator settings", to: "/settings" }],
-      },
-    ],
-  },
 ];
 
 const ALL_SECTIONS = [
   ...PRIMARY_SECTIONS,
   ...SECONDARY_SECTIONS,
   ...UTILITY_SECTIONS,
+  SETTINGS_SECTION,
 ];
 
 function pathMatches(pathname = "", candidate = "") {
@@ -266,6 +267,7 @@ export {
   PRIMARY_SECTIONS,
   SECONDARY_SECTIONS,
   UTILITY_SECTIONS,
+  SETTINGS_SECTION,
   getActiveContextItem,
   getActiveShellSection,
 };

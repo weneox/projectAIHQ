@@ -3,8 +3,9 @@ import { Outlet, useLocation } from "react-router-dom";
 import { apiGet } from "../../api/client.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
-import Sidebar, { SIDEBAR_WIDTH } from "./Sidebar.jsx";
+import Sidebar, { SIDEBAR_WIDTH, SHELL_TOPBAR_HEIGHT } from "./Sidebar.jsx";
 import Header from "./Header.jsx";
+import AskAIWidget from "./AskAIWidget.jsx";
 import {
   getActiveContextItem,
   getActiveShellSection,
@@ -176,7 +177,7 @@ export default function Shell() {
 
   return (
     <div
-      className="min-h-screen bg-transparent text-text"
+      className="min-h-screen bg-canvas text-text"
       style={{ "--shell-sidebar-w": `${SIDEBAR_WIDTH}px` }}
     >
       <Sidebar
@@ -185,9 +186,7 @@ export default function Shell() {
         shellStats={shellStats}
       />
 
-      <div
-        className={isImmersiveRoute ? "min-h-screen md:pl-[var(--shell-sidebar-w)]" : "min-h-screen md:pl-[var(--shell-sidebar-w)]"}
-      >
+      <div className="min-h-screen md:pl-[var(--shell-sidebar-w)]">
         <Header
           onMenuClick={() => setMobileOpen(true)}
           notifications={notifications}
@@ -198,13 +197,20 @@ export default function Shell() {
         <main
           className={
             isImmersiveRoute
-              ? "min-h-[calc(100vh-76px)] px-0 py-0"
-              : "min-h-[calc(100vh-76px)] px-4 py-4 md:px-6 md:py-5 xl:px-8 xl:py-6"
+              ? "bg-canvas px-0 py-0"
+              : "bg-canvas px-3 py-3 md:px-4 md:py-4 xl:px-6 xl:py-5"
           }
+          style={{
+            minHeight: `calc(100vh - ${SHELL_TOPBAR_HEIGHT}px)`,
+          }}
         >
-          <div className={isImmersiveRoute ? "h-full w-full" : "mx-auto max-w-shell-content"}>
+          <div
+            className={
+              isImmersiveRoute ? "h-full w-full" : "mx-auto max-w-shell-content"
+            }
+          >
             {!isImmersiveRoute && shellStats?.message ? (
-              <div className="mb-5 rounded-md border border-line bg-surface px-4 py-3 text-sm text-text-muted">
+              <div className="mb-4 rounded-md border border-line bg-surface px-4 py-3 text-sm text-text-muted">
                 {shellStats.message}
               </div>
             ) : null}
@@ -213,6 +219,12 @@ export default function Shell() {
           </div>
         </main>
       </div>
+
+      <AskAIWidget
+        shellSection={shellSection}
+        activeContextItem={activeContextItem}
+        shellStats={shellStats}
+      />
     </div>
   );
 }

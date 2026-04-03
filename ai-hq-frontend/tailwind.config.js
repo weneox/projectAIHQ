@@ -32,11 +32,17 @@ export default {
         brand: "rgb(var(--color-brand) / <alpha-value>)",
         "brand-strong": "rgb(var(--color-brand-strong) / <alpha-value>)",
         "brand-soft": "rgb(var(--color-brand-soft) / <alpha-value>)",
+        info: "rgb(var(--color-info) / <alpha-value>)",
+        "info-soft": "rgb(var(--color-info-soft) / <alpha-value>)",
         success: "rgb(var(--color-success) / <alpha-value>)",
+        "success-soft": "rgb(var(--color-success-soft) / <alpha-value>)",
         warning: "rgb(var(--color-warning) / <alpha-value>)",
+        "warning-soft": "rgb(var(--color-warning-soft) / <alpha-value>)",
         danger: "rgb(var(--color-danger) / <alpha-value>)",
+        "danger-soft": "rgb(var(--color-danger-soft) / <alpha-value>)",
       },
       boxShadow: {
+        xs: "var(--shadow-xs)",
         panel: "var(--shadow-sm)",
         "panel-strong": "var(--shadow-lg)",
       },
@@ -45,6 +51,10 @@ export default {
       },
       transitionTimingFunction: {
         premium: "cubic-bezier(0.22, 1, 0.36, 1)",
+      },
+      transitionDuration: {
+        fast: "var(--motion-fast)",
+        base: "var(--motion-base)",
       },
     },
   },

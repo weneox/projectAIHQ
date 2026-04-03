@@ -145,7 +145,7 @@ describe("ProductHomePage", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "Run social inbox, auto-comment, and voice receptionist from one operator product.",
+        name: "Live work starts here.",
       })
     ).toBeInTheDocument();
 
