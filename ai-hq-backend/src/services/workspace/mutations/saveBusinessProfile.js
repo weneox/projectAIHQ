@@ -30,6 +30,13 @@ export async function saveBusinessProfile({
     throw new Error("saveBusinessProfile: tenant scope is required");
   }
 
+  const blocked = new Error(
+    "Direct business profile writes are no longer allowed here. Stage governed business/profile changes through /api/setup/business-profile and publish them through setup review."
+  );
+  blocked.code = "GOVERNED_BUSINESS_PROFILE_WRITE_BLOCKED";
+  blocked.statusCode = 409;
+  throw blocked;
+
   const { normalized, provided, providedKeys } = normalizeBusinessProfileInput(body);
 
   if (!providedKeys.length) {

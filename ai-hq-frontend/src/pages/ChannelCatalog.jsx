@@ -1,662 +1,664 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
-  ArrowUpRight,
-  Building2,
+  ArrowRight,
+  CircleDot,
+  Database,
+  Filter,
   Globe,
-  Mail,
+  MessageCircleMore,
+  MessageSquareText,
   PhoneCall,
   Search,
+  ShieldCheck,
+  Sparkles,
+  Waypoints,
 } from "lucide-react";
-
-import whatsappIcon from "../assets/setup-studio/channels/whatsapp.svg";
+import webIcon from "../assets/setup-studio/channels/web.svg";
+import gmailIcon from "../assets/setup-studio/channels/gmail.svg";
+import googleDriveIcon from "../assets/setup-studio/channels/google-drive.svg";
 import instagramIcon from "../assets/setup-studio/channels/instagram.svg";
 import messengerIcon from "../assets/setup-studio/channels/messenger.svg";
-import facebookIcon from "../assets/setup-studio/channels/facebook.svg";
-import linkedinIcon from "../assets/setup-studio/channels/linkedin.svg";
-import googleMapsIcon from "../assets/setup-studio/channels/google-maps.svg";
-import websiteIcon from "../assets/setup-studio/channels/weblink.webp";
+import telegramIcon from "../assets/setup-studio/channels/telegram.svg";
+import tiktokIcon from "../assets/setup-studio/channels/tiktok.svg";
+import whatsappIcon from "../assets/setup-studio/channels/whatsapp.svg";
+import youtubeIcon from "../assets/setup-studio/channels/youtube.svg";
+import {
+  PageCanvas,
+  PageHeader,
+  Section,
+  Surface,
+} from "../components/ui/AppShellPrimitives.jsx";
+import Badge from "../components/ui/Badge.jsx";
+import Button from "../components/ui/Button.jsx";
+import { InputGroup } from "../components/ui/Input.jsx";
+import { cx } from "../lib/cx.js";
 
-const TABS = [
-  { id: "all", label: "All" },
-  { id: "messaging", label: "Business Messaging" },
-  { id: "calls", label: "Calls" },
-  { id: "email", label: "Email" },
-  { id: "live_chat", label: "Live Chat" },
-  { id: "sources", label: "Sources" },
+const FILTERS = [
+  { id: "all", label: "All surfaces" },
+  { id: "active", label: "Launch now" },
+  { id: "ready", label: "Planned / limited" },
+  { id: "context", label: "Context and setup" },
 ];
 
-const CHANNELS = [
+const STATUS_META = {
+  live: {
+    label: "Launch now",
+    tone: "success",
+    summary: "This loop is real in the current launch slice.",
+  },
+  connected: {
+    label: "Limited",
+    tone: "info",
+    summary: "Some real support exists, but this is not a primary launch promise.",
+  },
+  ready: {
+    label: "Planned",
+    tone: "neutral",
+    summary: "Visible future scope, not a current product loop.",
+  },
+  setup: {
+    label: "Planned",
+    tone: "warn",
+    summary: "Future-facing surface that should not read as launch-ready.",
+  },
+  source: {
+    label: "Setup input",
+    tone: "neutral",
+    summary: "Supports approved business context instead of acting as a live customer loop.",
+  },
+};
+
+const SURFACES = [
+  {
+    id: "instagram-inbox",
+    name: "Instagram Inbox",
+    category: "active",
+    status: "live",
+    icon: instagramIcon,
+    iconAlt: "Instagram Inbox",
+    headline: "Meta social inbox is part of the real launch slice.",
+    description:
+      "Inbound Instagram messages, AI-assisted reply flow, and operator queue handling are real product work today.",
+    actionLabel: "Open Inbox",
+    actionTo: "/inbox",
+    secondaryLabel: "Review settings",
+    secondaryTo: "/settings",
+  },
+  {
+    id: "messenger-inbox",
+    name: "Messenger Inbox",
+    category: "active",
+    status: "connected",
+    icon: messengerIcon,
+    iconAlt: "Messenger Inbox",
+    headline: "Facebook messaging is supported, but not the center of the launch story.",
+    description:
+      "Messenger uses the same Meta inbox path, but the product is not presented as broad omnichannel coverage.",
+    actionLabel: "Open Inbox",
+    actionTo: "/inbox",
+    secondaryLabel: "Review settings",
+    secondaryTo: "/settings",
+  },
+  {
+    id: "instagram-comments",
+    name: "Instagram Comments",
+    category: "active",
+    status: "live",
+    iconComponent: MessageCircleMore,
+    iconAlt: "Instagram Comments",
+    headline: "AI-assisted comment moderation and reply handling are real product work.",
+    description:
+      "Comment ingest, review, reply actions, retry visibility, and operator moderation are part of the current launch slice.",
+    actionLabel: "Open Comments",
+    actionTo: "/comments",
+    secondaryLabel: "Review policies",
+    secondaryTo: "/settings",
+  },
+  {
+    id: "voice-receptionist",
+    name: "Twilio Voice Receptionist",
+    category: "active",
+    status: "live",
+    iconComponent: PhoneCall,
+    iconAlt: "Twilio Voice Receptionist",
+    headline: "Inbound AI receptionist and live call control are real product work.",
+    description:
+      "Inbound calls, runtime resolution, transcripts, operator handoff, and call control are part of the current launch slice.",
+    actionLabel: "Open Voice",
+    actionTo: "/voice",
+    secondaryLabel: "Review voice settings",
+    secondaryTo: "/settings",
+  },
+  {
+    id: "website-chatbot",
+    name: "Website Chatbot",
+    category: "ready",
+    status: "ready",
+    icon: webIcon,
+    iconAlt: "Website Chatbot",
+    headline: "Planned scope, not a real launch loop.",
+    description:
+      "Website chat infrastructure exists in parts, but the installable website chatbot product loop is not honestly built yet.",
+    actionLabel: "Open setup",
+    actionTo: "/setup",
+    secondaryLabel: "Review launch scope",
+    secondaryTo: "/channels",
+  },
   {
     id: "whatsapp",
-    category: "messaging",
-    title: "WhatsApp Business",
-    description:
-      "Connect WhatsApp Business messaging for direct customer conversations and automation.",
-    badge: "Popular",
-    badgeTone: "popular",
-    accent: "green",
-    iconType: "image",
+    name: "WhatsApp",
+    category: "ready",
+    status: "connected",
     icon: whatsappIcon,
-    action: "Connect",
+    iconAlt: "WhatsApp",
+    headline: "Limited scope only.",
+    description:
+      "Some Meta-adjacent support exists, but this is not framed as a complete or customer-ready launch loop.",
+    actionLabel: "Review settings",
+    actionTo: "/settings",
+    secondaryLabel: "Open setup",
+    secondaryTo: "/setup",
   },
   {
-    id: "messenger",
-    category: "messaging",
-    title: "Facebook Messenger",
+    id: "telegram",
+    name: "Telegram",
+    category: "ready",
+    status: "ready",
+    icon: telegramIcon,
+    iconAlt: "Telegram",
+    headline: "Future scope only.",
     description:
-      "Connect Messenger to manage customer chats inside one shared operational flow.",
-    badge: "Popular",
-    badgeTone: "popular",
-    accent: "blue",
-    iconType: "image",
-    icon: messengerIcon,
-    action: "Connect",
+      "Visible as planned expansion, not as a current capability the product can honestly claim.",
+    actionLabel: "Open setup",
+    actionTo: "/setup",
+    secondaryLabel: "Review launch scope",
+    secondaryTo: "/channels",
   },
   {
-    id: "instagram",
-    category: "messaging",
-    title: "Instagram",
+    id: "tiktok",
+    name: "TikTok",
+    category: "ready",
+    status: "setup",
+    icon: tiktokIcon,
+    iconAlt: "TikTok",
+    headline: "Planned, not live.",
     description:
-      "Connect Instagram for private messages, comment flows, and business profile context.",
-    badge: "Setup",
-    badgeTone: "setup",
-    accent: "pink",
-    iconType: "image",
-    icon: instagramIcon,
-    action: "Continue",
+      "There is no honest basis for presenting TikTok as a current product loop. Keep it clearly future-facing.",
+    actionLabel: "Open setup",
+    actionTo: "/setup",
+    secondaryLabel: "Review launch scope",
+    secondaryTo: "/channels",
   },
   {
-    id: "website-chat",
-    category: "live_chat",
-    title: "Website Chat",
+    id: "youtube",
+    name: "YouTube",
+    category: "ready",
+    status: "setup",
+    icon: youtubeIcon,
+    iconAlt: "YouTube",
+    headline: "Planned, not live.",
     description:
-      "Add live website messaging with AI assist, handoff, and operator visibility.",
-    badge: "Live",
-    badgeTone: "live",
-    accent: "sky",
-    iconType: "image",
-    icon: websiteIcon,
-    action: "Manage",
+      "YouTube should read as future channel ambition rather than as something the current product can actually operate.",
+    actionLabel: "Open setup",
+    actionTo: "/setup",
+    secondaryLabel: "Review launch scope",
+    secondaryTo: "/channels",
   },
   {
-    id: "email",
-    category: "email",
-    title: "Email",
+    id: "gmail",
+    name: "Gmail",
+    category: "context",
+    status: "source",
+    icon: gmailIcon,
+    iconAlt: "Gmail",
+    headline: "Setup and memory input, not a live launch channel.",
     description:
-      "Connect shared email intake for response drafting, assignment, and tracking.",
-    badge: "Connected",
-    badgeTone: "connected",
-    accent: "slate",
-    iconType: "lucide",
-    icon: Mail,
-    action: "Manage",
+      "Use email as source material and business context that strengthens the real launch loops behind the scenes.",
+    actionLabel: "Open setup",
+    actionTo: "/setup",
+    secondaryLabel: "Review settings",
+    secondaryTo: "/settings",
   },
   {
-    id: "voice",
-    category: "calls",
-    title: "Voice Calls",
+    id: "drive",
+    name: "Google Drive",
+    category: "context",
+    status: "source",
+    icon: googleDriveIcon,
+    iconAlt: "Google Drive",
+    headline: "Bring documents into setup and approved memory.",
     description:
-      "Connect call routing, transcript-aware assistance, and operator control workflows.",
-    badge: "Connected",
-    badgeTone: "connected",
-    accent: "graphite",
-    iconType: "lucide",
-    icon: PhoneCall,
-    action: "Manage",
-  },
-  {
-    id: "facebook-page",
-    category: "sources",
-    title: "Facebook Page",
-    description:
-      "Use Facebook Page identity and context as a business signal layer for operations.",
-    badge: "Source",
-    badgeTone: "neutral",
-    accent: "blue",
-    iconType: "image",
-    icon: facebookIcon,
-    action: "Connect",
-  },
-  {
-    id: "google-business",
-    category: "sources",
-    title: "Google Business",
-    description:
-      "Bring in Google Business profile, review, and location signals for the business graph.",
-    badge: "Source",
-    badgeTone: "neutral",
-    accent: "amber",
-    iconType: "image",
-    icon: googleMapsIcon,
-    action: "Connect",
-  },
-  {
-    id: "linkedin",
-    category: "sources",
-    title: "LinkedIn",
-    description:
-      "Connect professional company identity and audience context as additional business input.",
-    badge: "Source",
-    badgeTone: "neutral",
-    accent: "blue",
-    iconType: "image",
-    icon: linkedinIcon,
-    action: "Connect",
-  },
-  {
-    id: "knowledge-source",
-    category: "sources",
-    title: "Business Knowledge",
-    description:
-      "Use approved business information as a structured source for channel behavior.",
-    badge: "Internal",
-    badgeTone: "neutral",
-    accent: "violet",
-    iconType: "lucide",
-    icon: Building2,
-    action: "Review",
-  },
-  {
-    id: "site-presence",
-    category: "live_chat",
-    title: "Website Presence",
-    description:
-      "Connect your primary site presence as the surface where chat, forms, and discovery meet.",
-    badge: "Ready",
-    badgeTone: "connected",
-    accent: "sky",
-    iconType: "lucide",
-    icon: Globe,
-    action: "Open",
+      "Useful for business context, review, and approved memory rather than as a customer-facing channel.",
+    actionLabel: "Open setup",
+    actionTo: "/setup",
+    secondaryLabel: "Review memory",
+    secondaryTo: "/truth",
   },
 ];
 
-function resolveSectionTitle(activeTab) {
-  switch (activeTab) {
-    case "messaging":
-      return "Business Messaging";
-    case "calls":
-      return "Calls";
-    case "email":
-      return "Email";
-    case "live_chat":
-      return "Live Chat";
-    case "sources":
-      return "Sources";
-    default:
-      return "Channel Catalog";
-  }
+function matchesFilter(channel, filterId) {
+  if (filterId === "all") return true;
+  if (filterId === "active") return channel.category === "active";
+  if (filterId === "ready") return channel.category === "ready";
+  if (filterId === "context") return channel.category === "context";
+  return true;
 }
 
-function ChannelIcon({ item }) {
-  if (item.iconType === "image") {
-    return <img src={item.icon} alt="" className="channels-page__icon-image" />;
-  }
+function matchesSearch(channel, query) {
+  if (!query) return true;
+  const haystack = [
+    channel.name,
+    channel.headline,
+    channel.description,
+    STATUS_META[channel.status]?.label,
+  ]
+    .join(" ")
+    .toLowerCase();
 
-  const Icon = item.icon;
-  return <Icon size={25} strokeWidth={2.1} />;
+  return haystack.includes(query.toLowerCase());
 }
 
-function ChannelCard({ item }) {
+function ChannelIcon({ channel, className = "h-6 w-6 object-contain" }) {
+  if (channel.iconComponent) {
+    const Icon = channel.iconComponent;
+    return <Icon className={className.replace("object-contain", "").trim()} />;
+  }
+
+  return <img src={channel.icon} alt={channel.iconAlt} className={className} />;
+}
+
+function FeatureCard({ channel, onNavigate }) {
+  const status = STATUS_META[channel.status];
+
   return (
-    <article
-      className={[
-        "channels-page__card",
-        `channels-page__card--${item.accent}`,
-      ].join(" ")}
-    >
-      <div className="channels-page__card-glow" />
-
-      <div className="channels-page__card-top">
-        <span
-          className={[
-            "channels-page__badge",
-            `channels-page__badge--${item.badgeTone}`,
-          ].join(" ")}
-        >
-          {item.badge}
-        </span>
-
-        <div className="channels-page__icon-shell">
-          <ChannelIcon item={item} />
+    <Surface className="flex h-full flex-col gap-4 p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-md border border-line-soft bg-surface-muted">
+            <ChannelIcon channel={channel} />
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-text">{channel.name}</div>
+            <div className="mt-1 text-sm text-text-muted">{channel.headline}</div>
+          </div>
         </div>
+        <Badge tone={status.tone} dot>
+          {status.label}
+        </Badge>
       </div>
-
-      <div className="channels-page__card-body">
-        <h3>{item.title}</h3>
-        <p>{item.description}</p>
+      <p className="text-sm leading-6 text-text-muted">{channel.description}</p>
+      <div className="mt-auto flex flex-wrap items-center gap-2">
+        <Button
+          onClick={() => onNavigate(channel.actionTo)}
+          rightIcon={<ArrowRight className="h-4 w-4" />}
+        >
+          {channel.actionLabel}
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() => onNavigate(channel.secondaryTo)}
+          rightIcon={<ArrowRight className="h-4 w-4" />}
+        >
+          {channel.secondaryLabel}
+        </Button>
       </div>
-
-      <div className="channels-page__card-footer">
-        <button type="button" className="channels-page__action">
-          <span>{item.action}</span>
-          <ArrowUpRight size={15} strokeWidth={2.15} />
-        </button>
-      </div>
-    </article>
+    </Surface>
   );
 }
 
-export default function Channels() {
-  const [activeTab, setActiveTab] = useState("all");
-  const [query, setQuery] = useState("");
-
-  const visibleChannels = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
-    return CHANNELS.filter((item) => {
-      const matchesTab = activeTab === "all" ? true : item.category === activeTab;
-      const matchesQuery =
-        !normalizedQuery ||
-        item.title.toLowerCase().includes(normalizedQuery) ||
-        item.description.toLowerCase().includes(normalizedQuery) ||
-        item.badge.toLowerCase().includes(normalizedQuery);
-
-      return matchesTab && matchesQuery;
-    });
-  }, [activeTab, query]);
+function CatalogRow({ channel, onNavigate }) {
+  const status = STATUS_META[channel.status];
 
   return (
-    <>
-      <style>{`
-        .channels-page {
-          width: 100%;
-          padding: 2px 0 24px;
-          background: transparent;
-        }
-
-        .channels-page__toolbar {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 18px;
-          margin-bottom: 24px;
-        }
-
-        .channels-page__tabs {
-          display: flex;
-          align-items: center;
-          flex-wrap: wrap;
-          gap: 28px;
-          min-width: 0;
-        }
-
-        .channels-page__tab {
-          position: relative;
-          border: 0;
-          background: transparent;
-          padding: 0 0 12px;
-          font-size: 15px;
-          font-weight: 600;
-          color: #687484;
-          cursor: pointer;
-          transition: color 160ms ease;
-          white-space: nowrap;
-        }
-
-        .channels-page__tab:hover {
-          color: #2563eb;
-        }
-
-        .channels-page__tab--active {
-          color: #2563eb;
-        }
-
-        .channels-page__tab--active::after {
-          content: "";
-          position: absolute;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          height: 4px;
-          border-radius: 999px;
-          background: #2563eb;
-        }
-
-        .channels-page__search {
-          flex: 0 0 328px;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          height: 48px;
-          padding: 0 14px;
-          border-radius: 14px;
-          border: 1px solid rgba(15, 23, 42, 0.10);
-          background: rgba(255, 255, 255, 0.96);
-          box-shadow:
-            0 8px 24px rgba(15, 23, 42, 0.04),
-            inset 0 1px 0 rgba(255, 255, 255, 0.86);
-          color: #6b7280;
-        }
-
-        .channels-page__search input {
-          width: 100%;
-          border: 0;
-          outline: none;
-          background: transparent;
-          font-size: 14px;
-          color: #111827;
-        }
-
-        .channels-page__search input::placeholder {
-          color: #9aa3b0;
-        }
-
-        .channels-page__section-title {
-          margin: 0 0 16px;
-          font-size: 15px;
-          font-weight: 600;
-          color: #202632;
-          letter-spacing: -0.02em;
-        }
-
-        .channels-page__grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-          gap: 18px;
-        }
-
-        .channels-page__card {
-          position: relative;
-          min-height: 240px;
-          display: flex;
-          flex-direction: column;
-          padding: 16px 16px 12px;
-          border-radius: 20px;
-          border: 1px solid rgba(15, 23, 42, 0.08);
-          background: rgba(255, 255, 255, 0.96);
-          box-shadow:
-            0 14px 34px rgba(15, 23, 42, 0.05),
-            inset 0 1px 0 rgba(255, 255, 255, 0.84);
-          overflow: hidden;
-          transition:
-            transform 180ms ease,
-            border-color 180ms ease,
-            box-shadow 180ms ease;
-        }
-
-        .channels-page__card:hover {
-          transform: translateY(-4px);
-          border-color: rgba(15, 23, 42, 0.12);
-          box-shadow:
-            0 22px 44px rgba(15, 23, 42, 0.08),
-            inset 0 1px 0 rgba(255, 255, 255, 0.88);
-        }
-
-        .channels-page__card::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-          background: linear-gradient(135deg, rgba(255,255,255,0.18), transparent 46%);
-        }
-
-        .channels-page__card-glow {
-          position: absolute;
-          right: -18px;
-          top: -18px;
-          width: 170px;
-          height: 170px;
-          border-radius: 999px;
-          filter: blur(16px);
-          opacity: 0.9;
-          pointer-events: none;
-        }
-
-        .channels-page__card--green .channels-page__card-glow {
-          background: radial-gradient(circle, rgba(34, 197, 94, 0.10), transparent 72%);
-        }
-
-        .channels-page__card--blue .channels-page__card-glow {
-          background: radial-gradient(circle, rgba(59, 130, 246, 0.10), transparent 72%);
-        }
-
-        .channels-page__card--pink .channels-page__card-glow {
-          background: radial-gradient(circle, rgba(236, 72, 153, 0.10), transparent 72%);
-        }
-
-        .channels-page__card--amber .channels-page__card-glow {
-          background: radial-gradient(circle, rgba(245, 158, 11, 0.10), transparent 72%);
-        }
-
-        .channels-page__card--sky .channels-page__card-glow {
-          background: radial-gradient(circle, rgba(14, 165, 233, 0.10), transparent 72%);
-        }
-
-        .channels-page__card--slate .channels-page__card-glow {
-          background: radial-gradient(circle, rgba(100, 116, 139, 0.09), transparent 72%);
-        }
-
-        .channels-page__card--graphite .channels-page__card-glow {
-          background: radial-gradient(circle, rgba(71, 85, 105, 0.09), transparent 72%);
-        }
-
-        .channels-page__card--violet .channels-page__card-glow {
-          background: radial-gradient(circle, rgba(139, 92, 246, 0.09), transparent 72%);
-        }
-
-        .channels-page__card-top {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 12px;
-          margin-bottom: 18px;
-        }
-
-        .channels-page__badge {
-          display: inline-flex;
-          align-items: center;
-          min-height: 28px;
-          padding: 0 10px;
-          border-radius: 999px;
-          font-size: 12px;
-          font-weight: 700;
-          letter-spacing: -0.01em;
-          border: 1px solid transparent;
-        }
-
-        .channels-page__badge--popular {
-          color: #16a34a;
-          background: rgba(34, 197, 94, 0.10);
-          border-color: rgba(34, 197, 94, 0.16);
-        }
-
-        .channels-page__badge--setup {
-          color: #b86814;
-          background: rgba(245, 158, 11, 0.10);
-          border-color: rgba(245, 158, 11, 0.16);
-        }
-
-        .channels-page__badge--live {
-          color: #0f9a72;
-          background: rgba(16, 185, 129, 0.10);
-          border-color: rgba(16, 185, 129, 0.16);
-        }
-
-        .channels-page__badge--connected {
-          color: #2563eb;
-          background: rgba(37, 99, 235, 0.10);
-          border-color: rgba(37, 99, 235, 0.16);
-        }
-
-        .channels-page__badge--neutral {
-          color: #6b7280;
-          background: rgba(107, 114, 128, 0.08);
-          border-color: rgba(107, 114, 128, 0.13);
-        }
-
-        .channels-page__icon-shell {
-          width: 58px;
-          height: 58px;
-          flex: 0 0 58px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 18px;
-          background:
-            linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(249,250,251,0.92) 100%);
-          border: 1px solid rgba(15, 23, 42, 0.08);
-          box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.9),
-            0 10px 22px rgba(15, 23, 42, 0.05);
-          color: #18212d;
-        }
-
-        .channels-page__icon-image {
-          width: 36px;
-          height: 36px;
-          object-fit: contain;
-          display: block;
-        }
-
-        .channels-page__card-body {
-          flex: 1 1 auto;
-          min-height: 0;
-        }
-
-        .channels-page__card-body h3 {
-          margin: 0;
-          font-size: 21px;
-          line-height: 1.12;
-          letter-spacing: -0.04em;
-          color: #202632;
-          font-weight: 700;
-        }
-
-        .channels-page__card-body p {
-          margin: 12px 0 0;
-          max-width: 92%;
-          font-size: 14px;
-          line-height: 1.58;
-          color: #697586;
-          display: -webkit-box;
-          -webkit-line-clamp: 3;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-
-        .channels-page__card-footer {
-          display: flex;
-          justify-content: flex-end;
-          margin-top: 16px;
-          padding-top: 14px;
-          border-top: 1px solid rgba(15, 23, 42, 0.07);
-        }
-
-        .channels-page__action {
-          height: 38px;
-          padding: 0 14px;
-          border-radius: 12px;
-          border: 1px solid rgba(15, 23, 42, 0.10);
-          background:
-            linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(249,250,251,0.94) 100%);
-          color: #202632;
-          font-size: 13px;
-          font-weight: 700;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          cursor: pointer;
-          transition:
-            transform 160ms ease,
-            border-color 160ms ease,
-            box-shadow 160ms ease;
-        }
-
-        .channels-page__action:hover {
-          transform: translateY(-1px);
-          border-color: rgba(15, 23, 42, 0.15);
-          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-        }
-
-        .channels-page__empty {
-          min-height: 180px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 18px;
-          border: 1px solid rgba(15, 23, 42, 0.08);
-          background: rgba(255, 255, 255, 0.92);
-          color: #6b7280;
-          font-size: 14px;
-        }
-
-        @media (max-width: 1100px) {
-          .channels-page__toolbar {
-            flex-direction: column;
-            align-items: stretch;
-          }
-
-          .channels-page__search {
-            flex: 0 0 auto;
-            width: 100%;
-          }
-        }
-
-        @media (max-width: 720px) {
-          .channels-page {
-            padding: 2px 0 20px;
-          }
-
-          .channels-page__tabs {
-            gap: 18px;
-          }
-
-          .channels-page__tab {
-            font-size: 14px;
-            padding-bottom: 10px;
-          }
-
-          .channels-page__grid {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
-
-      <div className="channels-page">
-        <div className="channels-page__toolbar">
-          <div className="channels-page__tabs">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                className={[
-                  "channels-page__tab",
-                  activeTab === tab.id ? "channels-page__tab--active" : "",
-                ].join(" ")}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-              </button>
-            ))}
+    <div className="flex flex-col gap-4 border-b border-line-soft py-4 last:border-b-0 md:flex-row md:items-center md:justify-between">
+      <div className="flex min-w-0 items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-line-soft bg-surface-muted">
+          <ChannelIcon channel={channel} className="h-5 w-5 object-contain" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-text">{channel.name}</h3>
+            <Badge tone={status.tone} size="sm">
+              {status.label}
+            </Badge>
           </div>
+          <p className="mt-1 text-sm text-text">{channel.headline}</p>
+          <p className="mt-1 text-sm leading-6 text-text-muted">{channel.description}</p>
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onNavigate(channel.secondaryTo)}
+          rightIcon={<ArrowRight className="h-4 w-4" />}
+        >
+          {channel.secondaryLabel}
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => onNavigate(channel.actionTo)}
+          rightIcon={<ArrowRight className="h-4 w-4" />}
+        >
+          {channel.actionLabel}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
-          <label className="channels-page__search">
-            <Search size={20} strokeWidth={2} />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search Channel Catalog"
-            />
-          </label>
+function FilterPill({ active, children, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        "inline-flex h-9 items-center rounded-pill border px-3 text-sm font-medium transition-colors",
+        active
+          ? "border-brand bg-brand text-white"
+          : "border-line bg-surface text-text-muted hover:border-line-strong hover:text-text"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+export default function ChannelCatalog() {
+  const navigate = useNavigate();
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [query, setQuery] = useState("");
+
+  const filteredChannels = useMemo(
+    () =>
+      SURFACES.filter(
+        (channel) =>
+          matchesFilter(channel, activeFilter) && matchesSearch(channel, query)
+      ),
+    [activeFilter, query]
+  );
+
+  const featuredChannels = filteredChannels.filter((channel) =>
+    ["live", "connected"].includes(channel.status)
+  );
+  const readyChannels = filteredChannels.filter(
+    (channel) => channel.category === "ready"
+  );
+  const contextChannels = filteredChannels.filter(
+    (channel) => channel.category === "context"
+  );
+
+  const totalActive = SURFACES.filter((channel) =>
+    ["live", "connected"].includes(channel.status)
+  ).length;
+  const totalReady = SURFACES.filter((channel) => channel.category === "ready").length;
+  const totalContext = SURFACES.filter((channel) => channel.category === "context").length;
+
+  return (
+    <PageCanvas className="px-4 py-6 md:px-6 md:py-8">
+      <div className="space-y-8">
+        <PageHeader
+          eyebrow="Launch scope"
+          title="What is real in the current launch slice"
+          description="This product is currently centered on Meta social inbox, Meta auto-comment, and Twilio voice receptionist. Everything else on this page should read as planned, limited, or setup-only."
+          actions={
+            <>
+              <Button variant="secondary" onClick={() => navigate("/settings")}>
+                Manage settings
+              </Button>
+              <Button onClick={() => navigate("/workspace")}>Open workspace</Button>
+            </>
+          }
+        />
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.9fr)]">
+          <Surface className="space-y-5">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 text-sm font-medium text-text-muted">
+                <Waypoints className="h-4 w-4" />
+                Product surfaces
+              </div>
+              <div className="space-y-2">
+                <h2 className="font-display text-[2rem] font-semibold tracking-[-0.03em] text-text">
+                  Lead with the loops that are actually built.
+                </h2>
+                <p className="max-w-[56ch] text-[15px] leading-7 text-text-muted">
+                  The launch story is narrower than the infrastructure. Treat social inbox, auto-comment, and voice receptionist as the real product. Treat the rest as planned or limited scope.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-[0.08em] text-text-muted">
+                  Launch now
+                </div>
+                <div className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-text">
+                  {totalActive}
+                </div>
+                <div className="mt-1 text-sm text-text-muted">
+                  Surfaces that belong to the current launch slice.
+                </div>
+              </div>
+              <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-[0.08em] text-text-muted">
+                  Planned / limited
+                </div>
+                <div className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-text">
+                  {totalReady}
+                </div>
+                <div className="mt-1 text-sm text-text-muted">
+                  Future-facing or incomplete surfaces that should not be sold as live.
+                </div>
+              </div>
+              <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-3">
+                <div className="text-xs font-medium uppercase tracking-[0.08em] text-text-muted">
+                  Setup inputs
+                </div>
+                <div className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-text">
+                  {totalContext}
+                </div>
+                <div className="mt-1 text-sm text-text-muted">
+                  Source and memory inputs that support the launch loops.
+                </div>
+              </div>
+            </div>
+          </Surface>
+
+          <Surface subdued className="space-y-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-text-muted">
+              <ShieldCheck className="h-4 w-4" />
+              How to read this page
+            </div>
+            <div className="space-y-3 text-sm leading-6 text-text-muted">
+              <p>
+                Launch now means the loop is real enough to sit inside the
+                current product story. Limited means some support exists, but it
+                should not be framed as broad channel coverage.
+              </p>
+              <p>
+                Planned means future scope only. Setup input means the surface
+                strengthens business context instead of acting as a live
+                customer-facing loop.
+              </p>
+            </div>
+            <div className="rounded-md border border-line-soft bg-surface px-4 py-3 text-sm text-text-muted">
+              This page is intentionally narrower than the repo. It exists to
+              stop planned channels and partial infrastructure from reading like
+              finished product coverage.
+            </div>
+          </Surface>
         </div>
 
-        <h2 className="channels-page__section-title">
-          {resolveSectionTitle(activeTab)}
-        </h2>
+        <Surface className="space-y-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              {FILTERS.map((filter) => (
+                <FilterPill
+                  key={filter.id}
+                  active={activeFilter === filter.id}
+                  onClick={() => setActiveFilter(filter.id)}
+                >
+                  {filter.label}
+                </FilterPill>
+              ))}
+            </div>
+            <div className="w-full max-w-[360px]">
+              <InputGroup
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search channels"
+                prefix={<Search className="h-4 w-4" />}
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-text-muted">
+            <Filter className="h-4 w-4" />
+            <span>
+              {filteredChannels.length} surface{filteredChannels.length === 1 ? "" : "s"} shown
+            </span>
+          </div>
+        </Surface>
 
-        {visibleChannels.length ? (
-          <div className="channels-page__grid">
-            {visibleChannels.map((item) => (
-              <ChannelCard key={item.id} item={item} />
-            ))}
+        <Section
+          eyebrow="Launch now"
+          title="Real launch surfaces"
+          description="These are the loops the product can honestly center today."
+        >
+          {featuredChannels.length ? (
+            <div className="grid gap-4 xl:grid-cols-2">
+              {featuredChannels.map((channel) => (
+                <FeatureCard
+                  key={channel.id}
+                  channel={channel}
+                  onNavigate={navigate}
+                />
+              ))}
+            </div>
+          ) : (
+            <Surface subdued className="text-sm text-text-muted">
+              No launch surfaces match the current filter.
+            </Surface>
+          )}
+        </Section>
+
+        <div className="grid gap-6 xl:grid-cols-2">
+          <Section
+            eyebrow="Planned / limited"
+            title="Visible future scope"
+            description="Keep these surfaces visible only as honest future scope, not as claims about what the launch product already does."
+          >
+            <Surface padded="sm">
+              {readyChannels.length ? (
+                readyChannels.map((channel) => (
+                  <CatalogRow
+                    key={channel.id}
+                    channel={channel}
+                    onNavigate={navigate}
+                  />
+                ))
+              ) : (
+                <div className="py-2 text-sm text-text-muted">
+                  No planned or limited surfaces match this view.
+                </div>
+              )}
+            </Surface>
+          </Section>
+
+          <Section
+            eyebrow="Context and setup"
+            title="Support surfaces behind the launch loops"
+            description="These inputs matter because they strengthen setup and approved business context, not because they are launch channels."
+          >
+            <Surface padded="sm">
+              {contextChannels.length ? (
+                contextChannels.map((channel) => (
+                  <CatalogRow
+                    key={channel.id}
+                    channel={channel}
+                    onNavigate={navigate}
+                  />
+                ))
+              ) : (
+                <div className="py-2 text-sm text-text-muted">
+                  No context surfaces match this view.
+                </div>
+              )}
+            </Surface>
+          </Section>
+        </div>
+
+        <Section
+          eyebrow="Launch posture"
+          title="Keep the product tighter than the infrastructure"
+          description="The repo reaches further than the product should claim. Keep launch copy centered on the loops that are actually operable."
+        >
+          <div className="grid gap-3 lg:grid-cols-4">
+            <Surface subdued className="space-y-3">
+              <Globe className="h-5 w-5 text-text-muted" />
+              <div>
+                <div className="text-sm font-semibold text-text">Do not sell website chat yet</div>
+                <p className="mt-1 text-sm leading-6 text-text-muted">
+                  Website chatbot work should stay outside the launch promise until the installable loop is real.
+                </p>
+              </div>
+            </Surface>
+            <Surface subdued className="space-y-3">
+              <Database className="h-5 w-5 text-text-muted" />
+              <div>
+                <div className="text-sm font-semibold text-text">Use setup as support, not headline</div>
+                <p className="mt-1 text-sm leading-6 text-text-muted">
+                  Setup, memory, and review matter because they strengthen inbox, comments, and voice behavior behind the scenes.
+                </p>
+              </div>
+            </Surface>
+            <Surface subdued className="space-y-3">
+              <CircleDot className="h-5 w-5 text-text-muted" />
+              <div>
+                <div className="text-sm font-semibold text-text">Demote future channels visibly</div>
+                <p className="mt-1 text-sm leading-6 text-text-muted">
+                  Telegram, TikTok, YouTube, and similar surfaces should read as planned instead of quietly implying readiness.
+                </p>
+              </div>
+            </Surface>
+            <Surface subdued className="space-y-3">
+              <MessageSquareText className="h-5 w-5 text-text-muted" />
+              <div>
+                <div className="text-sm font-semibold text-text">Make the real loops feel intentional</div>
+                <p className="mt-1 text-sm leading-6 text-text-muted">
+                  Social inbox, auto-comment, and voice receptionist should feel like one focused operator product.
+                </p>
+              </div>
+            </Surface>
           </div>
-        ) : (
-          <div className="channels-page__empty">
-            Nothing matched your search.
+        </Section>
+
+        <Surface className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="max-w-[640px]">
+            <div className="flex items-center gap-2 text-sm font-medium text-text-muted">
+              <Sparkles className="h-4 w-4" />
+              Next path
+            </div>
+            <h2 className="mt-2 font-display text-[1.65rem] font-semibold tracking-[-0.03em] text-text">
+              Open the surfaces that define the launch product.
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-text-muted">
+              Use Inbox for Meta messaging, Comments for auto-comment work, Voice for receptionist handling, and Setup only when the launch loops need stronger business context.
+            </p>
           </div>
-        )}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" onClick={() => navigate("/comments")}>
+              Open Comments
+            </Button>
+            <Button variant="secondary" onClick={() => navigate("/voice")}>
+              Open Voice
+            </Button>
+            <Button onClick={() => navigate("/inbox")}>Open Inbox</Button>
+          </div>
+        </Surface>
       </div>
-    </>
+    </PageCanvas>
   );
 }

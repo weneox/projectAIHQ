@@ -62,10 +62,14 @@ function pickActorName(auth = {}, bootstrap = {}) {
 
 function pickViewerRole(auth = {}, bootstrap = {}) {
   const authUser = obj(auth?.user);
+  const authMembership = obj(auth?.membership);
+  const authWorkspace = obj(auth?.workspace);
 
   return pickFirst(
     bootstrap?.viewerRole,
     bootstrap?.role,
+    authMembership?.role,
+    authWorkspace?.role,
     authUser?.role,
     auth?.role
   ).toLowerCase();
@@ -76,6 +80,8 @@ function buildSessionContext(auth = {}, bootstrap = {}) {
     tenantKey: pickTenantKey(auth, bootstrap),
     actorName: pickActorName(auth, bootstrap),
     viewerRole: pickViewerRole(auth, bootstrap),
+    bootstrapAvailable:
+      !!(bootstrap && typeof bootstrap === "object" && Object.keys(bootstrap).length),
     auth,
     bootstrap,
   };
@@ -88,6 +94,9 @@ let sessionContextPromise = null;
 let authContextValue = null;
 let bootstrapContextValue = null;
 let sessionContextValue = null;
+let lastAuthContextValue = null;
+let lastBootstrapContextValue = null;
+let lastSessionContextValue = null;
 
 let authContextAt = 0;
 let bootstrapContextAt = 0;
@@ -110,6 +119,7 @@ async function loadAppBootstrapContext() {
 export function clearAppAuthContext() {
   authContextPromise = null;
   authContextValue = null;
+  lastAuthContextValue = null;
   authContextAt = 0;
   resetSessionCompositionCache();
 }
@@ -117,6 +127,7 @@ export function clearAppAuthContext() {
 export function clearAppBootstrapContext() {
   bootstrapContextPromise = null;
   bootstrapContextValue = null;
+  lastBootstrapContextValue = null;
   bootstrapContextAt = 0;
   resetSessionCompositionCache();
 }
@@ -129,10 +140,25 @@ export function clearAppSessionContext() {
   authContextValue = null;
   bootstrapContextValue = null;
   sessionContextValue = null;
+  lastAuthContextValue = null;
+  lastBootstrapContextValue = null;
+  lastSessionContextValue = null;
 
   authContextAt = 0;
   bootstrapContextAt = 0;
   sessionContextAt = 0;
+}
+
+export function peekAppAuthContext() {
+  return authContextValue || lastAuthContextValue;
+}
+
+export function peekAppBootstrapContext() {
+  return bootstrapContextValue || lastBootstrapContextValue;
+}
+
+export function peekAppSessionContext() {
+  return sessionContextValue || lastSessionContextValue;
 }
 
 export async function getAppAuthContext({ force = false } = {}) {
@@ -150,6 +176,7 @@ export async function getAppAuthContext({ force = false } = {}) {
     authContextPromise = loadAppAuthContext()
       .then((value) => {
         authContextValue = value;
+        lastAuthContextValue = value;
         authContextAt = Date.now();
         return value;
       })
@@ -182,6 +209,7 @@ export async function getAppBootstrapContext({ force = false } = {}) {
     bootstrapContextPromise = loadAppBootstrapContext()
       .then((value) => {
         bootstrapContextValue = value;
+        lastBootstrapContextValue = value;
         bootstrapContextAt = Date.now();
         return value;
       })
@@ -214,13 +242,21 @@ export async function getAppSessionContext({ force = false } = {}) {
       bootstrapContextAt = 0;
     }
 
-    sessionContextPromise = Promise.all([
-      getAppAuthContext({ force }),
-      getAppBootstrapContext({ force }),
-    ])
-      .then(([auth, bootstrap]) => {
+    sessionContextPromise = getAppAuthContext({ force })
+      .then(async (auth) => {
+        let bootstrap = {};
+
+        if (auth?.authenticated) {
+          try {
+            bootstrap = await getAppBootstrapContext({ force });
+          } catch {
+            bootstrap = {};
+          }
+        }
+
         const value = buildSessionContext(auth, bootstrap);
         sessionContextValue = value;
+        lastSessionContextValue = value;
         sessionContextAt = Date.now();
         return value;
       })

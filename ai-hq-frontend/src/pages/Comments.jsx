@@ -54,8 +54,8 @@ export default function Comments() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="premium-panel p-5">
-          <div className="flex flex-col gap-4 border-b premium-divider pb-4">
+        <div className="rounded-lg border border-line bg-surface p-5">
+          <div className="flex flex-col gap-4 border-b border-line-soft pb-4">
             <div>
               <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-950">Comment Stream</div>
               <div className="mt-1 text-sm text-slate-500">Post comments, sentiment, and reply workflow.</div>
@@ -68,7 +68,7 @@ export default function Comments() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Author, text, post..."
-                  className="premium-input h-11 w-full rounded-2xl pl-10 pr-4 text-sm outline-none focus:border-sky-300/90"
+                  className="h-10 w-full rounded-md border border-line bg-surface pl-10 pr-4 text-sm text-text outline-none transition focus:border-brand"
                 />
               </div>
 
@@ -78,10 +78,10 @@ export default function Comments() {
                     key={status}
                     type="button"
                     onClick={() => setStatusFilter(status)}
-                    className={`premium-pill ${
+                    className={`inline-flex h-8 items-center rounded-md border px-3 text-sm transition ${
                       statusFilter === status
-                        ? "is-active"
-                        : "hover:text-slate-900"
+                        ? "border-line-strong bg-surface text-text"
+                        : "border-line bg-surface-muted text-text-muted hover:border-line-strong hover:bg-surface hover:text-text"
                     }`}
                   >
                     {status}
@@ -101,16 +101,16 @@ export default function Comments() {
             </div>
 
             {surface.loading ? (
-              <div className="premium-empty px-4 py-10 text-center">
+              <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-10 text-center">
                 <div className="text-sm font-medium text-slate-700">Loading comments...</div>
               </div>
             ) : surface.unavailable ? (
-              <div className="premium-empty border-rose-200 bg-rose-50/90 px-4 py-10 text-center">
+              <div className="rounded-md border border-rose-200 bg-rose-50/90 px-4 py-10 text-center">
                 <div className="text-sm font-medium text-rose-700">Failed to load comments</div>
                 <div className="mt-2 text-sm leading-6 text-rose-600">{surface.error}</div>
               </div>
             ) : filtered.length === 0 ? (
-              <div className="premium-empty px-4 py-10 text-center">
+              <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-10 text-center">
                 <div className="text-sm font-medium text-slate-700">No comments</div>
                 <div className="mt-2 text-sm leading-6 text-slate-500">No comments matched the current filters.</div>
               </div>
@@ -123,7 +123,7 @@ export default function Comments() {
         </div>
 
         <div className="space-y-6">
-          <div className="premium-panel p-5">
+          <div className="rounded-lg border border-line bg-surface p-5">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/80 bg-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_-18px_rgba(15,23,42,0.18)]">
                 <MessageCircle className="h-4 w-4 text-slate-600" />
@@ -134,7 +134,7 @@ export default function Comments() {
               </div>
             </div>
 
-            <div className="premium-panel-subtle mt-5 p-4">
+            <div className="mt-5 rounded-md border border-line-soft bg-surface-muted p-4">
               {!selected ? (
                 <div className="px-2 py-8 text-center">
                   <div className="text-sm font-medium text-slate-700">No comment selected</div>
@@ -158,7 +158,7 @@ export default function Comments() {
                     </div>
                   </div>
 
-                  <div className="premium-panel-subtle mt-5 px-4 py-3">
+                  <div className="mt-5 rounded-md border border-line-soft bg-surface-muted px-4 py-3">
                     <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Original Comment</div>
                     <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{selected.text || "—"}</div>
                   </div>
@@ -174,7 +174,7 @@ export default function Comments() {
                     <CommentMiniInfo label="Moderation update" value={fmtRelative(selected.moderationUpdatedAt)} icon={Clock3} />
                   </div>
 
-                  <div className="premium-panel-subtle mt-4 px-4 py-3">
+                  <div className="mt-4 rounded-md border border-line-soft bg-surface-muted px-4 py-3">
                     <div className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
                       <Bot className="h-3.5 w-3.5" />
                       Suggested Reply
@@ -185,12 +185,12 @@ export default function Comments() {
                       onChange={(e) => setReplyDraft(e.target.value)}
                       rows={5}
                       placeholder="Reply draft..."
-                      className="premium-textarea w-full resize-none rounded-2xl px-4 py-3 text-sm leading-6 outline-none focus:border-sky-300/90"
+                      className="w-full resize-none rounded-md border border-line bg-surface px-4 py-3 text-sm leading-6 text-text outline-none transition focus:border-brand"
                     />
                   </div>
 
                   {!!selected.moderationNote && (
-                    <div className="premium-panel-subtle mt-4 px-4 py-3">
+                    <div className="mt-4 rounded-md border border-line-soft bg-surface-muted px-4 py-3">
                       <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Moderation Note</div>
                       <div className="mt-2 text-sm leading-6 text-slate-700">{selected.moderationNote}</div>
                     </div>
@@ -211,7 +211,7 @@ export default function Comments() {
                       type="button"
                       onClick={() => handleReview("manual_review")}
                       disabled={actionLoading === "review:manual_review"}
-                      className="premium-panel-subtle inline-flex h-11 items-center justify-center gap-2 px-4 text-sm font-medium text-slate-700 transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-surface px-4 text-sm font-medium text-text transition hover:border-line-strong hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <ShieldAlert className="h-4 w-4" />
                       {actionLoading === "review:manual_review" ? "Saving..." : "Manual Review"}
@@ -242,9 +242,9 @@ export default function Comments() {
             </div>
           </div>
 
-          <div className="premium-panel p-5">
+          <div className="rounded-lg border border-line bg-surface p-5">
             <div className="text-[16px] font-semibold tracking-[-0.03em] text-slate-950">System Note</div>
-            <div className="premium-panel-subtle mt-4 px-4 py-4 text-sm leading-6 text-slate-600">
+            <div className="mt-4 rounded-md border border-line-soft bg-surface-muted px-4 py-4 text-sm leading-6 text-slate-600">
               This page reads from the real comments backend and drives review, reply, and ignore actions.
             </div>
           </div>

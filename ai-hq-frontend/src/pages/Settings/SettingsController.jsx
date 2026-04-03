@@ -1,22 +1,13 @@
 import React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   BellRing,
-  Bot,
-  Building2,
-  MapPin,
+  PhoneCall,
   RefreshCw,
   ShieldCheck,
-  Sparkles,
   Users,
-  BrainCircuit,
-  Contact2,
-  ListTree,
-  Database,
-  SearchCheck,
-  PhoneCall,
-  ScrollText,
+  Waypoints,
 } from "lucide-react";
 
 import Button from "../../components/ui/Button.jsx";
@@ -24,7 +15,6 @@ import Badge from "../../components/ui/Badge.jsx";
 
 import SettingsShell from "../../components/settings/SettingsShell.jsx";
 import ChannelsPanel from "../../components/settings/ChannelsPanel.jsx";
-import AgentsPanel from "../../components/settings/AgentsPanel.jsx";
 import TeamPanel from "../../components/settings/TeamPanel.jsx";
 import SettingsSaveBar from "../../components/settings/SettingsSaveBar.jsx";
 
@@ -35,52 +25,38 @@ import {
 } from "../../lib/pushClient.js";
 
 import { useSettingsWorkspace } from "./hooks/useSettingsWorkspace.js";
-import { useBusinessBrain } from "./hooks/useBusinessBrain.js";
 import { useOperationalSettings } from "./hooks/useOperationalSettings.js";
-import { useSourceIntelligence } from "./hooks/useSourceIntelligence.js";
-import { useTrustSurface } from "./hooks/useTrustSurface.js";
-import { useAuditHistory } from "./hooks/useAuditHistory.js";
-import GeneralSection from "./sections/GeneralSection.jsx";
-import BrandSection from "./sections/BrandSection.jsx";
 import AiPolicySection from "./sections/AiPolicySection.jsx";
-import SourcesSection from "./sections/SourcesSection.jsx";
-import KnowledgeReviewSection from "./sections/KnowledgeReviewSection.jsx";
-import TrustMaintenanceSection from "./sections/TrustMaintenanceSection.jsx";
-import TrustKnowledgeReviewSection from "./sections/TrustKnowledgeReviewSection.jsx";
-import SyncRunsModal from "./sections/SyncRunsModal.jsx";
-import AutoContentSection from "./sections/AutoContentSection.jsx";
 import NotificationsSection from "./sections/NotificationsSection.jsx";
-import BusinessFactsSection from "./sections/BusinessFactsSection.jsx";
-import ChannelPoliciesSection from "./sections/ChannelPoliciesSection.jsx";
-import LocationsSection from "./sections/LocationsSection.jsx";
-import ContactsSection from "./sections/ContactsSection.jsx";
 import OperationalSection from "./sections/OperationalSection.jsx";
-import ChangeHistorySection from "./sections/ChangeHistorySection.jsx";
-import {
-  createNewBusinessFact,
-  createNewChannelPolicy,
-  createNewContact,
-  createNewLocation,
-} from "./settingsShared.js";
-import { createNewSource } from "./sections/trustSurfaceShared.jsx";
 import { getControlPlanePermissions } from "../../lib/controlPlanePermissions.js";
-import { GovernanceSignalStrip } from "../../components/governance/GovernanceCockpit.jsx";
 
 const SETTINGS_SECTION_ALIASES = Object.freeze({
-  general: "general",
-  brand: "brand",
   "ai-policy": "ai_policy",
   ai_policy: "ai_policy",
+  "channel-policies": "ai_policy",
+  channel_policies: "ai_policy",
+
+  channels: "channels",
+  channel: "channels",
+  integrations: "channels",
+  integration: "channels",
+
+  operational: "operational",
+  "runtime-operations": "operational",
+  runtime_operations: "operational",
+
+  team: "team",
+  notifications: "notifications",
+
+  general: "general",
+  brand: "brand",
 
   sources: "sources",
   source: "sources",
   truth: "sources",
   "truth-governance": "sources",
   truth_governance: "sources",
-  "truth-maintenance": "sources",
-  truth_maintenance: "sources",
-  "source-sync": "sources",
-  source_sync: "sources",
 
   knowledge: "knowledge_review",
   "knowledge-review": "knowledge_review",
@@ -89,26 +65,27 @@ const SETTINGS_SECTION_ALIASES = Object.freeze({
   "review-queue": "knowledge_review",
   review_queue: "knowledge_review",
 
-  operational: "operational",
-  "runtime-operations": "operational",
-  runtime_operations: "operational",
-
   "change-history": "change_history",
   change_history: "change_history",
 
   "business-facts": "business_facts",
   business_facts: "business_facts",
 
-  "channel-policies": "channel_policies",
-  channel_policies: "channel_policies",
-  channels: "channels",
-  channel: "channels",
-
   locations: "locations",
   contacts: "contacts",
   agents: "agents",
-  team: "team",
-  notifications: "notifications",
+});
+
+const SETTINGS_SECTION_REDIRECTS = Object.freeze({
+  general: "/setup",
+  brand: "/setup",
+  sources: "/truth",
+  knowledge_review: "/truth",
+  change_history: "/truth",
+  business_facts: "/setup",
+  locations: "/setup",
+  contacts: "/setup",
+  agents: "/workspace",
 });
 
 function normalizeSectionToken(value = "") {
@@ -124,12 +101,7 @@ function resolveSectionAlias(value = "") {
   return SETTINGS_SECTION_ALIASES[normalized] || normalized.replace(/-/g, "_");
 }
 
-function resolveRequestedSection({
-  searchParams,
-  locationState,
-  hash,
-  navItems,
-}) {
+function resolveRequestedSectionToken({ searchParams, locationState, hash }) {
   const candidates = [
     locationState?.settingsSection,
     locationState?.section,
@@ -141,71 +113,36 @@ function resolveRequestedSection({
     String(hash || "").replace(/^#/, ""),
   ];
 
-  const available = new Set(navItems.map((item) => item.key));
-
   for (const candidate of candidates) {
     const resolved = resolveSectionAlias(candidate);
-    if (resolved && available.has(resolved)) {
-      return resolved;
-    }
+    if (resolved) return resolved;
   }
 
   return "";
 }
 
-function SectionContractCopy({ activeSection }) {
-  if (activeSection === "sources") {
-    return (
-      <div
-        data-testid="settings-section-contract-copy"
-        data-section="sources"
-        className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300"
-      >
-        <div>
-          Refresh evidence, review what is weak or conflicting.
-        </div>
-        <div className="mt-1">
-          Source-derived truth changes are reviewed, conflicted, quarantined,
-          approved, or rejected here.
-        </div>
-        <div className="mt-1">
-          Source-derived changes do not become approved business data until they
-          are reviewed here.
-        </div>
-      </div>
-    );
-  }
+function countEnabledAiRules(aiPolicy = {}) {
+  const keys = [
+    "auto_reply_enabled",
+    "mark_seen_enabled",
+    "typing_indicator_enabled",
+    "create_lead_enabled",
+    "suppress_ai_during_handoff",
+    "quiet_hours_enabled",
+  ];
 
-  if (activeSection === "knowledge_review") {
-    return (
-      <div
-        data-testid="settings-section-contract-copy"
-        data-section="knowledge_review"
-        className="rounded-[20px] border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-sm leading-6 text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300"
-      >
-        <div>
-          Source-derived truth changes are reviewed, conflicted, quarantined,
-          approved, or rejected here.
-        </div>
-        <div className="mt-1">
-          Refresh evidence, review what is weak or conflicting.
-        </div>
-      </div>
-    );
-  }
-
-  return null;
+  return keys.filter((key) => aiPolicy?.[key]).length;
 }
 
 export default function SettingsController({
   shellEyebrow = "Settings",
-  shellTitle = "Business settings",
-  shellSubtitle = "Manage business details, connected sources, runtime health, and workspace controls in one place.",
-  navTitle = "Navigation",
-  navSubtitle = "Settings sections",
-  showSectionContractCopy = true,
+  shellTitle = "Operator settings",
+  shellSubtitle = "Policy, runtime, integrations, team access, and alerts for the live operator stack.",
+  navTitle = "Control Areas",
+  navSubtitle = "Live launch configuration",
 } = {}) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [perm, setPerm] = useState("default");
   const [pushBusy, setPushBusy] = useState(false);
@@ -213,27 +150,22 @@ export default function SettingsController({
 
   const env = useMemo(() => {
     const VAPID = String(import.meta.env?.VITE_VAPID_PUBLIC_KEY || "").trim();
-    return { VAPID };
+    const API_BASE = String(import.meta.env?.VITE_API_BASE || "").trim();
+    return { VAPID, API_BASE };
   }, []);
 
   const workspaceState = useSettingsWorkspace();
   const {
     surface: workspaceSurface,
     workspace,
-    setWorkspace,
-    agents,
     dirty,
     dirtyMap,
     canManageSettings,
     tenantKey,
-    patchTenant,
-    patchProfile,
     patchAi,
     refreshWorkspace,
     onSaveWorkspace,
     onResetWorkspace,
-    saveAgent,
-    setInitialWorkspace,
   } = workspaceState;
 
   const viewerRole = String(workspace?.viewerRole || "member").toLowerCase();
@@ -246,33 +178,6 @@ export default function SettingsController({
     typeof workspaceEntitlements.capabilities === "object"
       ? workspaceEntitlements.capabilities
       : {};
-
-  const businessBrain = useBusinessBrain({
-    canManageSettings,
-    setWorkspace,
-    setInitialWorkspace,
-  });
-
-  const {
-    surface: businessBrainSurface,
-    businessFacts,
-    setBusinessFacts,
-    channelPolicies,
-    setChannelPolicies,
-    locations,
-    setLocations,
-    contacts,
-    setContacts,
-    refreshBusinessBrain,
-    handleSaveBusinessFact,
-    handleDeleteBusinessFact,
-    handleSaveChannelPolicy,
-    handleDeleteChannelPolicy,
-    handleSaveLocation,
-    handleDeleteLocation,
-    handleSaveContact,
-    handleDeleteContact,
-  } = businessBrain;
 
   const {
     surface: operationalSurface,
@@ -295,189 +200,109 @@ export default function SettingsController({
     controlPlanePermissions.operationalSettingsWrite.allowed;
   const canManageChannels =
     canManageSettings && planCapabilities?.metaChannelConnect?.allowed !== false;
-  const canManageAgents =
-    canManageSettings && planCapabilities?.agentConfigMutation?.allowed !== false;
 
-  const { trust, refreshTrust } = useTrustSurface({ tenantKey });
-  const {
-    auditHistory,
-    surface: auditHistorySurface,
-    refreshAuditHistory,
-  } = useAuditHistory();
-
-  const sourceIntelligence = useSourceIntelligence({
-    tenantKey,
-    canManageSettings,
-    setWorkspace,
-    setInitialWorkspace,
-    onRefreshBusinessBrain: refreshBusinessBrain,
-    onRefreshTrust: refreshTrust,
-  });
-
-  const {
-    sources,
-    setSources,
-    knowledgeReview,
-    knowledgeReviewSummary,
-    setKnowledgeReview,
-    syncRunsOpen,
-    setSyncRunsOpen,
-    syncRunsSource,
-    syncRunsItems,
-    surface: sourceSurface,
-    refreshSourceIntelligence,
-    handleSaveSource,
-    handleStartSourceSync,
-    handleViewSourceSyncRuns,
-    handleApproveKnowledge,
-    handleRejectKnowledge,
-    handleMarkKnowledgeFollowUp,
-    handleKeepKnowledgeQuarantined,
-  } = sourceIntelligence;
+  const aiRuleCount = countEnabledAiRules(workspace.aiPolicy);
+  const voiceReady = operationalData?.voice?.operational?.ready === true;
+  const metaReady = operationalData?.channels?.meta?.operational?.ready === true;
+  const metaConnected = !!operationalData?.channels?.meta?.channel;
 
   const navItems = useMemo(
     () => [
       {
-        key: "general",
-        label: "General",
-        description: "Workspace identity, region, language",
-        dirty: !!dirtyMap.general,
-        icon: Building2,
-      },
-      {
-        key: "brand",
-        label: "Brand",
-        description: "Voice, audience, services, CTA",
-        dirty: !!dirtyMap.brand,
-        icon: Sparkles,
-      },
-      {
         key: "ai_policy",
         label: "AI Policy",
-        description: "Auto reply, approvals, quiet hours",
+        meta:
+          aiRuleCount > 0
+            ? `${aiRuleCount} live rule${aiRuleCount === 1 ? "" : "s"}`
+            : "No automation rules active",
+        status: aiRuleCount > 0 ? "Active" : "Idle",
         dirty: !!dirtyMap.ai_policy,
         icon: ShieldCheck,
       },
       {
-        key: "sources",
-        label: "Truth Governance",
-        description:
-          "Connected evidence, source trust, runtime repair, finalize impact",
-        dirty: !!dirtyMap.sources,
-        icon: Database,
-      },
-      {
-        key: "knowledge_review",
-        label: "Review Queue",
-        description: "Pending, conflicting, and quarantined candidate changes",
-        dirty: !!dirtyMap.knowledge_review,
-        icon: SearchCheck,
-      },
-      {
         key: "operational",
-        label: "Runtime Operations",
-        description: "Projection-backed voice and channel readiness",
+        label: "Operational",
+        meta: voiceReady ? "Voice line ready" : "Voice line needs attention",
+        status: voiceReady ? "Ready" : "Check",
         dirty: false,
         icon: PhoneCall,
       },
-      ...(controlPlanePermissions.auditHistoryRead.allowed
-        ? [
-            {
-              key: "change_history",
-              label: "Governance History",
-              description:
-                "Approval, repair, and control-plane mutation timeline",
-              dirty: false,
-              icon: ScrollText,
-            },
-          ]
-        : []),
-      {
-        key: "business_facts",
-        label: "Business Facts",
-        description: "Structured company facts for AI",
-        dirty: !!dirtyMap.business_facts,
-        icon: BrainCircuit,
-      },
-      {
-        key: "channel_policies",
-        label: "Channel Policies",
-        description: "Per-channel reply behavior rules",
-        dirty: !!dirtyMap.channel_policies,
-        icon: ListTree,
-      },
       {
         key: "channels",
-        label: "Channels",
-        description: "Meta connection state and channel repair access",
+        label: "Integrations",
+        meta: metaConnected
+          ? metaReady
+            ? "Meta connected and aligned"
+            : "Meta connected, runtime blocked"
+          : "Meta connection required",
+        status: metaConnected ? (metaReady ? "Ready" : "Repair") : "Offline",
         dirty: !!dirtyMap.channels,
-        icon: RefreshCw,
-      },
-      {
-        key: "locations",
-        label: "Locations",
-        description: "Branches, address, working hours",
-        dirty: !!dirtyMap.locations,
-        icon: MapPin,
-      },
-      {
-        key: "contacts",
-        label: "Contacts",
-        description: "Phone, email, WhatsApp, public lines",
-        dirty: !!dirtyMap.contacts,
-        icon: Contact2,
-      },
-      {
-        key: "agents",
-        label: "Agents",
-        description: "Agent status, model, enable/disable",
-        dirty: !!dirtyMap.agents,
-        icon: Bot,
+        icon: Waypoints,
       },
       {
         key: "team",
         label: "Team",
-        description: "Workspace users, roles, access",
+        meta: canManageSettings ? "Access can be managed here" : "Read only",
+        status: canManageSettings ? "Write" : "View",
         dirty: !!dirtyMap.team,
         icon: Users,
       },
       {
         key: "notifications",
         label: "Notifications",
-        description: "Push subscription and browser status",
+        meta:
+          perm === "granted"
+            ? "Browser delivery enabled"
+            : perm === "denied"
+              ? "Browser permission blocked"
+              : "Browser permission pending",
+        status:
+          perm === "granted" ? "Ready" : perm === "denied" ? "Blocked" : "Setup",
         dirty: !!dirtyMap.notifications,
         icon: BellRing,
       },
     ],
-    [controlPlanePermissions.auditHistoryRead.allowed, dirtyMap]
+    [aiRuleCount, canManageSettings, dirtyMap, metaConnected, metaReady, perm, voiceReady]
   );
 
-  const requestedSection = useMemo(
+  const requestedSectionToken = useMemo(
     () =>
-      resolveRequestedSection({
+      resolveRequestedSectionToken({
         searchParams,
         locationState: location?.state,
         hash: location?.hash,
-        navItems,
       }),
-    [searchParams, location?.state, location?.hash, navItems]
+    [searchParams, location?.state, location?.hash]
   );
 
+  const requestedRedirect =
+    SETTINGS_SECTION_REDIRECTS[requestedSectionToken] || "";
+  const requestedSection = navItems.some(
+    (item) => item.key === requestedSectionToken
+  )
+    ? requestedSectionToken
+    : "";
+
   const [activeSection, setActiveSection] = useState(
-    () => requestedSection || "general"
+    () => requestedSection || "ai_policy"
   );
 
   const appliedDeepLinkRef = useRef("");
 
   useEffect(() => {
+    if (!requestedRedirect) return;
+    navigate(requestedRedirect, { replace: true });
+  }, [navigate, requestedRedirect]);
+
+  useEffect(() => {
     const available = new Set(navItems.map((item) => item.key));
     if (!available.has(activeSection)) {
-      setActiveSection("general");
+      setActiveSection("ai_policy");
     }
   }, [activeSection, navItems]);
 
   useEffect(() => {
-    if (!requestedSection) return;
+    if (!requestedSection || requestedRedirect) return;
 
     const marker = [
       searchParams.toString(),
@@ -496,7 +321,7 @@ export default function SettingsController({
     setActiveSection((current) =>
       current === requestedSection ? current : requestedSection
     );
-  }, [requestedSection, searchParams, location]);
+  }, [requestedRedirect, requestedSection, searchParams, location]);
 
   useEffect(() => {
     setSearchParams(
@@ -504,13 +329,13 @@ export default function SettingsController({
         const current = String(prev.get("section") || "").trim().toLowerCase();
         const desired = String(activeSection || "").trim().toLowerCase();
 
-        if (current === desired || (!current && desired === "general")) {
+        if (current === desired || (!current && desired === "ai_policy")) {
           return prev;
         }
 
         const next = new URLSearchParams(prev);
 
-        if (desired && desired !== "general") {
+        if (desired && desired !== "ai_policy") {
           next.set("section", desired);
         } else {
           next.delete("section");
@@ -534,13 +359,7 @@ export default function SettingsController({
         const base = await refreshWorkspace();
         if (!mounted) return;
 
-        await Promise.all([
-          refreshBusinessBrain(),
-          refreshOperationalSettings(base?.tenantKey),
-          refreshSourceIntelligence(base?.tenantKey),
-          refreshTrust(base?.tenantKey),
-          refreshAuditHistory(),
-        ]);
+        await refreshOperationalSettings(base?.tenantKey);
       } catch {}
     }
 
@@ -549,50 +368,26 @@ export default function SettingsController({
     return () => {
       mounted = false;
     };
-  }, [
-    refreshWorkspace,
-    refreshBusinessBrain,
-    refreshOperationalSettings,
-    refreshSourceIntelligence,
-    refreshTrust,
-    refreshAuditHistory,
-  ]);
-
-  function handleResetWorkspace() {
-    const reset = onResetWorkspace();
-
-    setBusinessFacts(
-      Array.isArray(reset?.businessFacts) ? reset.businessFacts : []
-    );
-    setChannelPolicies(
-      Array.isArray(reset?.channelPolicies) ? reset.channelPolicies : []
-    );
-    setLocations(Array.isArray(reset?.locations) ? reset.locations : []);
-    setContacts(Array.isArray(reset?.contacts) ? reset.contacts : []);
-    setSources(Array.isArray(reset?.sources) ? reset.sources : []);
-    setKnowledgeReview(
-      Array.isArray(reset?.knowledgeReview) ? reset.knowledgeReview : []
-    );
-  }
+  }, [refreshOperationalSettings, refreshWorkspace]);
 
   async function enableNotifications() {
     setPushBusy(true);
     setPushMessage("");
 
     try {
-      const p = await askPermission();
-      setPerm(p);
+      const permission = await askPermission();
+      setPerm(permission);
 
-      if (p !== "granted") {
+      if (permission !== "granted") {
         setPushMessage(
-          "Notification icaz?si verilm?di. Browser settings-d?n icaz? ver."
+          "Browser notification permission is still required for operator alerts."
         );
         return;
       }
 
       if (!env.VAPID) {
         setPushMessage(
-          "VITE_VAPID_PUBLIC_KEY yoxdur. .env.local yoxla v? Vite restart et."
+          "Push delivery is not configured in this environment."
         );
         return;
       }
@@ -605,13 +400,13 @@ export default function SettingsController({
       if (!res?.ok) {
         const err =
           res?.json?.error || res?.error || res?.status || "unknown";
-        setPushMessage(`Subscription u?ursuz oldu: ${err}`);
+        setPushMessage(`Subscription failed: ${err}`);
         return;
       }
 
-      setPushMessage("? Push notifications aktiv edildi.");
-    } catch (e) {
-      setPushMessage(String(e?.message || e));
+      setPushMessage("Push notifications enabled.");
+    } catch (error) {
+      setPushMessage(String(error?.message || error));
     } finally {
       setPushBusy(false);
     }
@@ -619,28 +414,6 @@ export default function SettingsController({
 
   function renderSection() {
     switch (activeSection) {
-      case "general":
-        return (
-          <GeneralSection
-            tenantKey={workspace.tenantKey}
-            tenant={workspace.tenant}
-            entitlements={workspaceEntitlements}
-            patchTenant={patchTenant}
-            canManage={canManageSettings}
-            surface={workspaceSurface}
-          />
-        );
-
-      case "brand":
-        return (
-          <BrandSection
-            profile={workspace.profile}
-            patchProfile={patchProfile}
-            canManage={canManageSettings}
-            surface={workspaceSurface}
-          />
-        );
-
       case "ai_policy":
         return (
           <AiPolicySection
@@ -648,45 +421,6 @@ export default function SettingsController({
             patchAi={patchAi}
             canManage={canManageSettings}
             surface={workspaceSurface}
-            autoContent={
-              <AutoContentSection
-                aiPolicy={workspace.aiPolicy}
-                patchAi={patchAi}
-                canManage={canManageSettings}
-              />
-            }
-          />
-        );
-
-      case "business_facts":
-        return (
-          <BusinessFactsSection
-            items={businessFacts}
-            canManage={canManageSettings}
-            surface={businessBrainSurface}
-            onCreate={() => {
-              const next = [createNewBusinessFact(), ...businessFacts];
-              setBusinessFacts(next);
-              setWorkspace((prev) => ({ ...prev, businessFacts: next }));
-            }}
-            onSave={handleSaveBusinessFact}
-            onDelete={handleDeleteBusinessFact}
-          />
-        );
-
-      case "channel_policies":
-        return (
-          <ChannelPoliciesSection
-            items={channelPolicies}
-            canManage={canManageSettings}
-            surface={businessBrainSurface}
-            onCreate={() => {
-              const next = [createNewChannelPolicy(), ...channelPolicies];
-              setChannelPolicies(next);
-              setWorkspace((prev) => ({ ...prev, channelPolicies: next }));
-            }}
-            onSave={handleSaveChannelPolicy}
-            onDelete={handleDeleteChannelPolicy}
           />
         );
 
@@ -696,105 +430,27 @@ export default function SettingsController({
             data={operationalData}
             surface={operationalSurface}
             savingVoice={savingVoice}
-            savingChannel={savingChannel}
             canManage={canManageOperational}
             permissionState={controlPlanePermissions}
             onSaveVoice={saveVoiceSettings}
-            onSaveChannel={saveChannelSettings}
-          />
-        );
-
-      case "locations":
-        return (
-          <LocationsSection
-            items={locations}
-            canManage={canManageSettings}
-            surface={businessBrainSurface}
-            onCreate={() => {
-              const next = [createNewLocation(), ...locations];
-              setLocations(next);
-              setWorkspace((prev) => ({ ...prev, locations: next }));
-            }}
-            onSave={handleSaveLocation}
-            onDelete={handleDeleteLocation}
-          />
-        );
-
-      case "contacts":
-        return (
-          <ContactsSection
-            items={contacts}
-            canManage={canManageSettings}
-            surface={businessBrainSurface}
-            onCreate={() => {
-              const next = [createNewContact(), ...contacts];
-              setContacts(next);
-              setWorkspace((prev) => ({ ...prev, contacts: next }));
-            }}
-            onSave={handleSaveContact}
-            onDelete={handleDeleteContact}
-          />
-        );
-
-      case "sources":
-        return (
-          <SourcesSection>
-            <TrustMaintenanceSection
-              items={sources}
-              canManage={canManageSettings}
-              onCreate={(draft = createNewSource()) => {
-                const next = [draft, ...sources];
-                setSources(next);
-                setWorkspace((prev) => ({ ...prev, sources: next }));
-              }}
-              onSave={handleSaveSource}
-              onStartSync={handleStartSourceSync}
-              onViewSyncRuns={handleViewSourceSyncRuns}
-              trust={trust}
-              sourceSurface={sourceSurface}
-            />
-          </SourcesSection>
-        );
-
-      case "knowledge_review":
-        return (
-          <KnowledgeReviewSection>
-            <TrustKnowledgeReviewSection
-              workbench={{
-                viewerRole,
-                summary: knowledgeReviewSummary,
-                items: knowledgeReview,
-              }}
-              canManage={canManageSettings}
-              onApprove={handleApproveKnowledge}
-              onReject={handleRejectKnowledge}
-              onMarkForFollowUp={handleMarkKnowledgeFollowUp}
-              onKeepQuarantined={handleKeepKnowledgeQuarantined}
-              trust={trust}
-              sourceSurface={sourceSurface}
-            />
-          </KnowledgeReviewSection>
-        );
-
-      case "change_history":
-        return (
-          <ChangeHistorySection
-            history={auditHistory}
-            surface={auditHistorySurface}
-            viewerRole={viewerRole}
           />
         );
 
       case "channels":
-        return <ChannelsPanel canManage={canManageChannels} />;
-
-      case "agents":
         return (
-          <AgentsPanel
-            agents={agents}
-            surface={workspaceSurface}
-            canManage={canManageAgents}
-            onSaveAgent={saveAgent}
+          <ChannelsPanel
+            canManage={canManageChannels}
+            canManageIdentifiers={canManageOperational}
+            metaOperational={operationalData?.channels?.meta}
+            voiceStatus={{
+              ready: operationalData?.voice?.operational?.ready === true,
+              reasonCode: operationalData?.voice?.operational?.reasonCode || "",
+              phoneNumber: operationalData?.voice?.settings?.twilioPhoneNumber || "",
+              callerId:
+                operationalData?.voice?.settings?.twilioConfig?.callerId || "",
+            }}
+            savingChannel={savingChannel}
+            onSaveChannel={saveChannelSettings}
           />
         );
 
@@ -817,113 +473,82 @@ export default function SettingsController({
     }
   }
 
-  const saveWorkspaceWithSlices = () =>
-    onSaveWorkspace({
-      businessFacts,
-      channelPolicies,
-      locations,
-      contacts,
-      sources,
-      knowledgeReview,
-    });
-
   return (
-    <>
-      <SettingsShell
-        eyebrow={shellEyebrow}
-        title={shellTitle}
-        subtitle={shellSubtitle}
-        navTitle={navTitle}
-        navSubtitle={navSubtitle}
-        items={navItems}
-        activeKey={activeSection}
-        onChange={setActiveSection}
-      >
-        <div className="space-y-5">
-          <GovernanceSignalStrip
-            truth={trust?.view?.summary?.truth || {}}
-            trust={trust?.view || {}}
-            onJump={setActiveSection}
-          />
+    <SettingsShell
+      eyebrow={shellEyebrow}
+      title={shellTitle}
+      subtitle={shellSubtitle}
+      navTitle={navTitle}
+      navSubtitle={navSubtitle}
+      items={navItems}
+      activeKey={activeSection}
+      onChange={setActiveSection}
+    >
+      <div className="space-y-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              tone={
+                canManageSettings || canManageOperational ? "success" : "warn"
+              }
+              variant="subtle"
+              dot={canManageSettings || canManageOperational}
+            >
+              {canManageSettings
+                ? "Owner / Admin Access"
+                : canManageOperational
+                  ? "Operational Write Access"
+                  : "Read Only Access"}
+            </Badge>
 
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                tone={
-                  canManageSettings || canManageOperational ? "success" : "warn"
-                }
-                variant="subtle"
-                dot={canManageSettings || canManageOperational}
-              >
-                {canManageSettings
-                  ? "Owner / Admin Access"
-                  : canManageOperational
-                    ? "Operational Write Access"
-                    : "Read Only Access"}
-              </Badge>
-
-              <Badge
-                tone={dirty ? "info" : "neutral"}
-                variant="subtle"
-                dot={dirty}
-              >
-                {dirty ? "Unsaved Workspace Edits" : "Workspace Synced"}
-              </Badge>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                onClick={() => window.location.reload()}
-                leftIcon={<RefreshCw className="h-4 w-4" />}
-              >
-                Refresh
-              </Button>
-
-              <Button
-                onClick={saveWorkspaceWithSlices}
-                disabled={
-                  workspaceSurface.loading ||
-                  workspaceSurface.saving ||
-                  !canManageSettings
-                }
-              >
-                {workspaceSurface.saving ? "Saving..." : "Save Workspace"}
-              </Button>
-            </div>
+            <Badge
+              tone={dirty ? "info" : "neutral"}
+              variant="subtle"
+              dot={dirty}
+            >
+              {dirty ? "Unsaved Settings Changes" : "Settings Synced"}
+            </Badge>
           </div>
 
-          {!canManageSettings ? (
-            <div className="rounded-[24px] border border-amber-200/80 bg-amber-50/90 px-4 py-4 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
-              {canManageOperational
-                ? "This account can manage operational records, but broader workspace settings remain read-only."
-                : "This workspace is read-only here. Sensitive control-plane changes remain limited to owner/admin."}
-            </div>
-          ) : null}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => window.location.reload()}
+              leftIcon={<RefreshCw className="h-4 w-4" />}
+            >
+              Refresh
+            </Button>
 
-          {showSectionContractCopy ? (
-            <SectionContractCopy activeSection={activeSection} />
-          ) : null}
-
-          {renderSection()}
-
-          <SettingsSaveBar
-            dirty={dirty && canManageSettings}
-            surface={workspaceSurface}
-            onReset={handleResetWorkspace}
-            onSave={saveWorkspaceWithSlices}
-          />
+            <Button
+              onClick={() => onSaveWorkspace()}
+              disabled={
+                workspaceSurface.loading ||
+                workspaceSurface.saving ||
+                !canManageSettings
+              }
+            >
+              {workspaceSurface.saving ? "Saving..." : "Save Settings"}
+            </Button>
+          </div>
         </div>
-      </SettingsShell>
 
-      <SyncRunsModal
-        open={syncRunsOpen}
-        source={syncRunsSource}
-        items={syncRunsItems}
-        onClose={() => {
-          setSyncRunsOpen(false);
-        }}
-      />
-    </>
+        {!canManageSettings ? (
+          <div className="rounded-[24px] border border-amber-200/80 bg-amber-50/90 px-4 py-4 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
+            {canManageOperational
+              ? "This account can manage operational records, but broader workspace settings remain read-only."
+              : "This workspace is read-only here. Sensitive operational changes remain limited to owner/admin."}
+          </div>
+        ) : null}
+
+        {renderSection()}
+
+        <SettingsSaveBar
+          dirty={dirty && canManageSettings}
+          surface={workspaceSurface}
+          onReset={onResetWorkspace}
+          onSave={onSaveWorkspace}
+        />
+      </div>
+    </SettingsShell>
   );
 }

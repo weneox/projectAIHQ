@@ -17,17 +17,17 @@ export default function SettingsSection({
   return (
     <section
       className={cx(
-        "group relative border-t transition-all duration-300",
+        "group relative overflow-hidden rounded-[28px] border transition-all duration-300",
         tone === "default" &&
-          "border-slate-200/75 bg-transparent dark:border-white/10 dark:bg-transparent",
+          "border-slate-200/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.72),rgba(255,255,255,0.38))] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]",
         tone === "soft" &&
-          "border-slate-200/70 bg-transparent dark:border-white/10 dark:bg-transparent",
+          "border-slate-200/70 bg-[linear-gradient(180deg,rgba(248,250,252,0.88),rgba(255,255,255,0.4))] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]",
         tone === "accent" &&
-          "border-blue-200/60 bg-transparent dark:border-blue-400/20 dark:bg-transparent"
+          "border-blue-200/60 bg-[linear-gradient(180deg,rgba(239,246,255,0.78),rgba(255,255,255,0.38))] dark:border-blue-400/20 dark:bg-[linear-gradient(180deg,rgba(59,130,246,0.08),rgba(255,255,255,0.01))]"
       )}
     >
       <div className="relative">
-        <div className="flex flex-col gap-4 border-b border-slate-200/70 px-6 py-5 dark:border-white/10 sm:px-7">
+        <div className="flex flex-col gap-4 border-b border-slate-200/70 px-5 py-5 dark:border-white/10 sm:px-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0 space-y-2">
               <div className="text-[11px] font-medium uppercase tracking-[0.24em] text-slate-400 dark:text-slate-500">
@@ -55,7 +55,7 @@ export default function SettingsSection({
 
         <div
           className={cx(
-            padded ? "px-6 py-6 sm:px-7 sm:py-7" : "",
+            padded ? "px-5 py-5 sm:px-6 sm:py-6" : "",
             contentClassName
           )}
         >

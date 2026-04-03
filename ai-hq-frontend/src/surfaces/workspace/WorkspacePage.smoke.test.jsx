@@ -15,23 +15,44 @@ vi.mock("../../view-models/workspaceIntents.js", () => ({
 
 import WorkspacePage from "./WorkspacePage.jsx";
 
+function buildWorkspaceState(overrides = {}) {
+  return {
+    loading: false,
+    isFetching: false,
+    refetch: vi.fn(),
+    error: "",
+    availabilityNotice: {
+      title: "",
+      description: "",
+      partial: false,
+      tone: "neutral",
+    },
+    suggestedActions: [],
+    nextBestAction: null,
+    actionItems: [],
+    postureItems: [],
+    outcomeItems: [],
+    systemBrief: {
+      changed: "Business memory was updated.",
+      mattersMost: "One item needs review.",
+      safeToIgnore: "No urgent capability issues.",
+    },
+    setupGuidance: { visible: false },
+    businessMemory: { visible: false },
+    decisions: [],
+    capabilities: [],
+    recentOutcomes: [],
+    ...overrides,
+  };
+}
+
 describe("WorkspacePage smoke", () => {
   it("renders the workspace loading surface instead of inline loading text", () => {
-    useWorkspaceNarration.mockReturnValue({
-      loading: true,
-      error: "",
-      suggestedActions: [],
-      systemBrief: {
-        changed: "",
-        mattersMost: "",
-        safeToIgnore: "",
-      },
-      setupGuidance: { visible: false },
-      businessMemory: { visible: false },
-      decisions: [],
-      capabilities: [],
-      recentOutcomes: [],
-    });
+    useWorkspaceNarration.mockReturnValue(
+      buildWorkspaceState({
+        loading: true,
+      })
+    );
 
     render(
       <MemoryRouter>
@@ -45,33 +66,43 @@ describe("WorkspacePage smoke", () => {
     expect(screen.queryByText(/loading workspace brief/i)).not.toBeInTheDocument();
   });
 
-  it("renders the primary workspace operating surface", () => {
-    useWorkspaceNarration.mockReturnValue({
-      loading: false,
-      error: "",
-      suggestedActions: [],
-      systemBrief: {
-        changed: "Business memory was updated.",
-        mattersMost: "One item needs review.",
-        safeToIgnore: "No urgent capability issues.",
-      },
-      setupGuidance: {
-        visible: false,
-      },
-      businessMemory: {
-        visible: true,
-        headline: "Business memory is mostly stable",
-        description: "Current approved business memory and review pressure.",
-        currentKnown: "Core facts are approved.",
-        mayHaveChanged: "Weekend hours may have changed.",
-        needsConfirmation: "One candidate needs review.",
-        blocked: "Nothing is blocked.",
-        recentlyReliable: "Latest synced facts are now reliable.",
-      },
-      decisions: [],
-      capabilities: [],
-      recentOutcomes: [],
-    });
+  it("renders the operator workspace layout", () => {
+    useWorkspaceNarration.mockReturnValue(
+      buildWorkspaceState({
+        nextBestAction: {
+          id: "setup-follow-up",
+          title: "Finish setup to stabilize the workspace.",
+          impact: "Setup still needs a few details.",
+          action: {
+            label: "Continue setup",
+            path: "/setup",
+          },
+        },
+        actionItems: [
+          {
+            id: "setup-follow-up",
+            status: "Continue setup",
+            tone: "info",
+            title: "Finish setup to stabilize the workspace.",
+            impact: "Setup still needs a few details.",
+            action: {
+              label: "Continue setup",
+              path: "/setup",
+            },
+          },
+        ],
+        postureItems: [
+          {
+            id: "posture-business-memory",
+            label: "Business memory",
+            statusLabel: "Stable",
+            tone: "success",
+            summary: "Approved business memory is currently anchored to version v3.",
+            action: null,
+          },
+        ],
+      })
+    );
 
     render(
       <MemoryRouter>
@@ -79,8 +110,44 @@ describe("WorkspacePage smoke", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText(/command workspace/i)).toBeInTheDocument();
-    expect(screen.getByText(/what matters right now/i)).toBeInTheDocument();
-    expect(screen.getByText(/business memory is mostly stable/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /operator workspace/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /what needs action now/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /system posture/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/finish setup to stabilize the workspace\./i).length
+    ).toBeGreaterThan(0);
+  });
+
+  it("renders partial-signal messaging without collapsing the page", () => {
+    useWorkspaceNarration.mockReturnValue(
+      buildWorkspaceState({
+        availabilityNotice: {
+          title: "Workspace is showing partial signal",
+          description: "Inbox is unavailable. The rest of the workspace is still live.",
+          partial: true,
+          tone: "warn",
+        },
+      })
+    );
+
+    render(
+      <MemoryRouter>
+        <WorkspacePage />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText(/workspace is showing partial signal/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /what needs action now/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /recent outcomes/i })
+    ).toBeInTheDocument();
   });
 });

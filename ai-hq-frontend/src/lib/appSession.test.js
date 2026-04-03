@@ -18,6 +18,9 @@ import {
   getAppAuthContext,
   getAppBootstrapContext,
   getAppSessionContext,
+  peekAppAuthContext,
+  peekAppBootstrapContext,
+  peekAppSessionContext,
 } from "./appSession.js";
 
 describe("appSession", () => {
@@ -63,6 +66,7 @@ describe("appSession", () => {
 
     expect(session.tenantKey).toBe("acme");
     expect(session.actorName).toBe("Owner");
+    expect(session.bootstrapAvailable).toBe(true);
     expect(getAuthMe).toHaveBeenCalledTimes(1);
     expect(getAppBootstrap).toHaveBeenCalledTimes(1);
 
@@ -95,5 +99,35 @@ describe("appSession", () => {
     getAppBootstrap.mockRejectedValueOnce(new Error("bootstrap offline"));
 
     await expect(getAppBootstrapContext()).rejects.toThrow("bootstrap offline");
+  });
+
+  it("keeps authenticated session context available when bootstrap loading fails", async () => {
+    getAppBootstrap.mockRejectedValueOnce(new Error("bootstrap offline"));
+
+    const session = await getAppSessionContext();
+
+    expect(session.auth.authenticated).toBe(true);
+    expect(session.viewerRole).toBe("owner");
+    expect(session.bootstrapAvailable).toBe(false);
+    expect(session.bootstrap).toEqual({});
+    expect(getAuthMe).toHaveBeenCalledTimes(1);
+    expect(getAppBootstrap).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains last known auth, bootstrap, and session context after a forced auth refresh failure", async () => {
+    const session = await getAppSessionContext();
+
+    expect(session.viewerRole).toBe("owner");
+    expect(peekAppAuthContext()?.authenticated).toBe(true);
+    expect(peekAppBootstrapContext()?.workspace?.tenantKey).toBe("acme");
+    expect(peekAppSessionContext()?.viewerRole).toBe("owner");
+
+    getAuthMe.mockRejectedValueOnce(new Error("auth offline"));
+
+    await expect(getAppAuthContext({ force: true })).rejects.toThrow("auth offline");
+
+    expect(peekAppAuthContext()?.authenticated).toBe(true);
+    expect(peekAppBootstrapContext()?.workspace?.tenantKey).toBe("acme");
+    expect(peekAppSessionContext()?.viewerRole).toBe("owner");
   });
 });

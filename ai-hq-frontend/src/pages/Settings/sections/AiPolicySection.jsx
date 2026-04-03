@@ -5,7 +5,6 @@ export default function AiPolicySection({
   aiPolicy,
   patchAi,
   canManage,
-  autoContent,
   surface,
 }) {
   return (
@@ -19,7 +18,6 @@ export default function AiPolicySection({
         patchAi={patchAi}
         canManage={canManage}
       />
-      {autoContent}
     </div>
   );
 }

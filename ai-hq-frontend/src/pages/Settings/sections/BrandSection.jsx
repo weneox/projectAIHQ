@@ -1,7 +1,14 @@
 import SettingsSurfaceBanner from "../../../components/settings/SettingsSurfaceBanner.jsx";
 import BrandProfileForm from "../../../components/settings/BrandProfileForm.jsx";
 
-export default function BrandSection({ profile, patchProfile, canManage, surface }) {
+export default function BrandSection({
+  profile,
+  patchProfile,
+  canManage,
+  canDirectEdit,
+  governance,
+  surface,
+}) {
   return (
     <div className="space-y-4">
       <SettingsSurfaceBanner
@@ -12,6 +19,8 @@ export default function BrandSection({ profile, patchProfile, canManage, surface
         profile={profile}
         patchProfile={patchProfile}
         canManage={canManage}
+        canDirectEdit={canDirectEdit}
+        governance={governance}
       />
     </div>
   );

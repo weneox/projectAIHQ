@@ -28,6 +28,11 @@ describe("useSettingsWorkspace", () => {
       tenant: { tenant_key: "tenant-a" },
       profile: {},
       aiPolicy: {},
+      governance: {
+        directWorkspaceWritesBlocked: true,
+        governedSections: ["tenant", "profile"],
+        directlyEditableSections: ["aiPolicy"],
+      },
       entitlements: {
         plan: { key: "starter", normalizedKey: "starter", managed: true },
         capabilities: {
@@ -51,26 +56,39 @@ describe("useSettingsWorkspace", () => {
       false
     );
     expect(result.current.agents).toHaveLength(1);
+    expect(result.current.canDirectEditGovernedWorkspace).toBe(false);
     expect(typeof result.current.surface.refresh).toBe("function");
   });
 
-  it("uses the shared save-state vocabulary for workspace saves and agent saves", async () => {
+  it("saves only operational workspace settings directly and keeps governed profile fields blocked", async () => {
     saveWorkspaceSettings.mockResolvedValue({
       tenantKey: "tenant-a",
       viewerRole: "owner",
       tenant: { tenant_key: "tenant-a" },
       profile: {},
       aiPolicy: {},
+      governance: {
+        directWorkspaceWritesBlocked: true,
+        governedSections: ["tenant", "profile"],
+        directlyEditableSections: ["aiPolicy"],
+      },
     });
     saveWorkspaceAgent.mockResolvedValue({ ok: true });
     getWorkspaceAgents.mockResolvedValue([{ agent_key: "closer", enabled: true }]);
 
     const { result } = renderHook(() => useSettingsWorkspace());
 
+    result.current.patchTenant("company_name", "Blocked company");
+    expect(result.current.workspace.tenant.company_name || "").toBe("");
+
     await result.current.onSaveWorkspace();
 
     await waitFor(() => {
-      expect(result.current.surface.saveSuccess).toMatch(/workspace settings saved/i);
+      expect(result.current.surface.saveSuccess).toMatch(/operational settings saved/i);
+    });
+
+    expect(saveWorkspaceSettings).toHaveBeenCalledWith({
+      aiPolicy: expect.any(Object),
     });
 
     await result.current.saveAgent("closer", {

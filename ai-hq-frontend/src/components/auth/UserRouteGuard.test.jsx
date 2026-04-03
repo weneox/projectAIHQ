@@ -131,6 +131,28 @@ describe("UserRouteGuard", () => {
     expect(screen.queryByTestId("navigate")).not.toBeInTheDocument();
   });
 
+  it("keeps login redirects out of inbox when auth is valid but bootstrap fails", async () => {
+    getAppAuthContext.mockResolvedValue({
+      authenticated: true,
+      user: { email: "owner@acme.test" },
+    });
+    getAppBootstrapContext.mockRejectedValue(new Error("bootstrap offline"));
+
+    render(
+      <MemoryRouter initialEntries={["/inbox"]}>
+        <UserRouteGuard>
+          <div>Inbox route</div>
+        </UserRouteGuard>
+      </MemoryRouter>
+    );
+
+    expect(
+      await screen.findByText((content) => content.includes("Workspace unavailable"))
+    ).toBeInTheDocument();
+
+    expect(screen.queryByTestId("navigate")).not.toBeInTheDocument();
+  });
+
   it("redirects authenticated users into setup when the active workspace is incomplete", async () => {
     getAppAuthContext.mockResolvedValue({
       authenticated: true,
@@ -149,6 +171,33 @@ describe("UserRouteGuard", () => {
       <MemoryRouter initialEntries={["/workspace"]}>
         <UserRouteGuard>
           <div>Protected workspace</div>
+        </UserRouteGuard>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId("navigate")).toHaveTextContent("/setup");
+    });
+  });
+
+  it("routes inbox traffic into setup instead of login when workspace setup is incomplete", async () => {
+    getAppAuthContext.mockResolvedValue({
+      authenticated: true,
+      user: { email: "owner@acme.test" },
+    });
+    getAppBootstrapContext.mockResolvedValue({
+      workspace: {
+        setupCompleted: false,
+        setupRequired: true,
+        workspaceReady: false,
+        destination: { path: "/setup" },
+      },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/inbox"]}>
+        <UserRouteGuard>
+          <div>Inbox route</div>
         </UserRouteGuard>
       </MemoryRouter>
     );

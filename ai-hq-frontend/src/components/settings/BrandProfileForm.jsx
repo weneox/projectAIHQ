@@ -13,6 +13,7 @@ import {
   PenSquare,
   ShieldBan,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import Card from "../ui/Card.jsx";
 import Input from "../ui/Input.jsx";
@@ -125,7 +126,10 @@ export default function BrandProfileForm({
   profile = {},
   patchProfile,
   canManage = true,
+  canDirectEdit = true,
+  governance = {},
 }) {
+  const canEdit = canManage && canDirectEdit;
   const brandName = profile.brand_name || "Untitled Brand";
   const website = profile.website_url || "No website set";
   const bannedCount = phraseCount(profile.banned_phrases);
@@ -138,6 +142,34 @@ export default function BrandProfileForm({
       tone="default"
     >
       <div className="space-y-6">
+        {!canDirectEdit ? (
+          <Card variant="subtle" padded="lg" className="rounded-[28px]">
+            <div className="space-y-3">
+              <Badge tone="warn" variant="subtle" dot>
+                Governed through review
+              </Badge>
+              <div className="text-sm leading-6 text-slate-600 dark:text-slate-300">
+                Brand identity, public contact, narrative, and tone are governed fields now.
+                They stay visible here, but changes must be staged through setup review instead of direct settings saves.
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  to={governance?.setupRoute || "/setup"}
+                  className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+                >
+                  Open setup review
+                </Link>
+                <Link
+                  to={governance?.truthRoute || "/truth"}
+                  className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+                >
+                  View approved truth
+                </Link>
+              </div>
+            </div>
+          </Card>
+        ) : null}
+
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
           <Card variant="surface" padded="lg" className="rounded-[28px]">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -246,7 +278,7 @@ export default function BrandProfileForm({
                   <Input
                     value={profile.brand_name || ""}
                     placeholder="Neox"
-                    disabled={!canManage}
+                    disabled={!canEdit}
                     onChange={(e) => patchProfile("brand_name", e.target.value)}
                   />
                 </Field>
@@ -255,7 +287,7 @@ export default function BrandProfileForm({
                   <Input
                     value={profile.website_url || ""}
                     placeholder="https://example.com"
-                    disabled={!canManage}
+                    disabled={!canEdit}
                     onChange={(e) => patchProfile("website_url", e.target.value)}
                   />
                 </Field>
@@ -264,7 +296,7 @@ export default function BrandProfileForm({
                   <Input
                     value={profile.public_email || ""}
                     placeholder="hello@example.com"
-                    disabled={!canManage}
+                    disabled={!canEdit}
                     onChange={(e) => patchProfile("public_email", e.target.value)}
                   />
                 </Field>
@@ -273,7 +305,7 @@ export default function BrandProfileForm({
                   <Input
                     value={profile.public_phone || ""}
                     placeholder="+994 ..."
-                    disabled={!canManage}
+                    disabled={!canEdit}
                     onChange={(e) => patchProfile("public_phone", e.target.value)}
                   />
                 </Field>
@@ -306,7 +338,7 @@ export default function BrandProfileForm({
                   <Input
                     value={profile.tone_of_voice || ""}
                     placeholder="premium, confident, clear"
-                    disabled={!canManage}
+                    disabled={!canEdit}
                     onChange={(e) =>
                       patchProfile("tone_of_voice", e.target.value)
                     }
@@ -320,7 +352,7 @@ export default function BrandProfileForm({
                   <Input
                     value={profile.preferred_cta || ""}
                     placeholder="Book a strategy call"
-                    disabled={!canManage}
+                    disabled={!canEdit}
                     onChange={(e) =>
                       patchProfile("preferred_cta", e.target.value)
                     }
@@ -334,7 +366,7 @@ export default function BrandProfileForm({
                   >
                     <SurfaceTextArea
                       min={120}
-                      disabled={!canManage}
+                      disabled={!canEdit}
                       value={profile.audience_summary || ""}
                       placeholder="Primary audience, buyer intent, expectations..."
                       onChange={(e) =>
@@ -373,7 +405,7 @@ export default function BrandProfileForm({
                 >
                   <SurfaceTextArea
                     min={132}
-                    disabled={!canManage}
+                      disabled={!canEdit}
                     value={profile.services_summary || ""}
                     placeholder="What the company does, core services, delivery shape..."
                     onChange={(e) =>
@@ -388,7 +420,7 @@ export default function BrandProfileForm({
                 >
                   <SurfaceTextArea
                     min={132}
-                    disabled={!canManage}
+                      disabled={!canEdit}
                     value={profile.value_proposition || ""}
                     placeholder="Why this brand matters, why buyers should choose it..."
                     onChange={(e) =>
@@ -424,7 +456,7 @@ export default function BrandProfileForm({
                 >
                   <SurfaceTextArea
                     min={160}
-                    disabled={!canManage}
+                    disabled={!canEdit}
                     value={profile.brand_summary || ""}
                     placeholder="Brand story, positioning, worldview, authority..."
                     onChange={(e) =>

@@ -258,6 +258,46 @@ export function normalizeWorkspace(raw) {
         },
       },
     },
+    governance:
+      raw?.governance &&
+      typeof raw.governance === "object" &&
+      !Array.isArray(raw.governance)
+        ? raw.governance
+        : {
+            directWorkspaceWritesBlocked: true,
+            governedSections: ["tenant", "profile"],
+            directlyEditableSections: ["aiPolicy"],
+            governedFields: {
+              tenant: [
+                "company_name",
+                "legal_name",
+                "industry_key",
+                "country_code",
+                "timezone",
+                "default_language",
+                "enabled_languages",
+                "market_region",
+              ],
+              profile: [
+                "brand_name",
+                "website_url",
+                "public_email",
+                "public_phone",
+                "audience_summary",
+                "services_summary",
+                "value_proposition",
+                "brand_summary",
+                "tone_of_voice",
+                "preferred_cta",
+                "banned_phrases",
+                "communication_rules",
+                "visual_style",
+                "extra_context",
+              ],
+            },
+            setupRoute: "/setup",
+            truthRoute: "/truth",
+          },
     agents: Array.isArray(raw?.agents) ? raw.agents : [],
     businessFacts: Array.isArray(raw?.businessFacts) ? raw.businessFacts : [],
     channelPolicies: Array.isArray(raw?.channelPolicies) ? raw.channelPolicies : [],
@@ -296,51 +336,6 @@ export function buildSafeWorkspaceSavePayload(workspace) {
     typeof automation.enabled === "boolean" ? automation.enabled : safeMode === "full_auto";
 
   return {
-    tenant: {
-      company_name: workspace?.tenant?.company_name || "",
-      legal_name: workspace?.tenant?.legal_name || "",
-      industry_key: workspace?.tenant?.industry_key || "generic_business",
-      country_code: workspace?.tenant?.country_code || "AZ",
-      timezone: workspace?.tenant?.timezone || "Asia/Baku",
-      default_language: workspace?.tenant?.default_language || "az",
-      enabled_languages: Array.isArray(workspace?.tenant?.enabled_languages)
-        ? workspace.tenant.enabled_languages
-        : ["az"],
-      market_region: workspace?.tenant?.market_region || "",
-    },
-    profile: {
-      brand_name: workspace?.profile?.brand_name || "",
-      website_url: workspace?.profile?.website_url || "",
-      public_email: workspace?.profile?.public_email || "",
-      public_phone: workspace?.profile?.public_phone || "",
-      audience_summary: workspace?.profile?.audience_summary || "",
-      services_summary: workspace?.profile?.services_summary || "",
-      value_proposition: workspace?.profile?.value_proposition || "",
-      brand_summary: workspace?.profile?.brand_summary || "",
-      tone_of_voice: workspace?.profile?.tone_of_voice || "professional",
-      preferred_cta: workspace?.profile?.preferred_cta || "",
-      banned_phrases: Array.isArray(workspace?.profile?.banned_phrases)
-        ? workspace.profile.banned_phrases
-        : [],
-      communication_rules:
-        workspace?.profile &&
-        typeof workspace.profile.communication_rules === "object" &&
-        !Array.isArray(workspace.profile.communication_rules)
-          ? workspace.profile.communication_rules
-          : {},
-      visual_style:
-        workspace?.profile &&
-        typeof workspace.profile.visual_style === "object" &&
-        !Array.isArray(workspace.profile.visual_style)
-          ? workspace.profile.visual_style
-          : {},
-      extra_context:
-        workspace?.profile &&
-        typeof workspace.profile.extra_context === "object" &&
-        !Array.isArray(workspace.profile.extra_context)
-          ? workspace.profile.extra_context
-          : {},
-    },
     aiPolicy: {
       auto_reply_enabled: !!workspace?.aiPolicy?.auto_reply_enabled,
       suppress_ai_during_handoff: !!workspace?.aiPolicy?.suppress_ai_during_handoff,

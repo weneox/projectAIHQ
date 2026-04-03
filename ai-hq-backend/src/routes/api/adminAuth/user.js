@@ -52,6 +52,15 @@ function buildRateLimitScope(email, tenantKey = "") {
   return `user:${s(tenantKey).toLowerCase() || "any"}:${lower(email)}`;
 }
 
+function shouldInvalidateUserCookie(session = {}) {
+  const reason = s(session?.error).toLowerCase();
+  return (
+    reason === "missing session cookie" ||
+    reason === "session not found" ||
+    reason === "user inactive"
+  );
+}
+
 async function resolveCompatibleMemberships(db, identity, memberships = []) {
   const resolved = [];
 
@@ -656,11 +665,19 @@ export function userLoginRoutes({ db, resolveWorkspaceState = loadActiveWorkspac
 
     const session = await loadUserSessionFromRequest(req, { db, touch: false });
     if (!session?.ok || !session?.payload) {
-      clearUserCookie(res);
-      return res.status(401).json({
+      if (shouldInvalidateUserCookie(session)) {
+        clearUserCookie(res);
+        return res.status(401).json({
+          ok: false,
+          error: "Unauthorized",
+          reason: session?.error || "invalid_session",
+        });
+      }
+
+      return res.status(503).json({
         ok: false,
-        error: "Unauthorized",
-        reason: session?.error || "invalid_session",
+        error: "Auth session unavailable",
+        reason: session?.error || "session_lookup_unavailable",
       });
     }
 
@@ -744,7 +761,7 @@ export function userLoginRoutes({ db, resolveWorkspaceState = loadActiveWorkspac
       });
     }
 
-    const sessionToken = getSessionCookieTokens(req, getUserCookieName())[0] || "";
+    const sessionToken = s(session?.token);
     const switched = await switchUserSessionWorkspaceByToken(db, sessionToken, {
       tenantId: selectedChoice.tenant_id,
       membershipId: selectedChoice.membership_id,

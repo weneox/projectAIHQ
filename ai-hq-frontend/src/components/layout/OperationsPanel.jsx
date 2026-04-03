@@ -1,8 +1,6 @@
 import {
   Activity,
-  AudioLines,
   FileStack,
-  MessageCircleMore,
   Send,
   Siren,
   Users,
@@ -25,28 +23,16 @@ const OPERATIONS_ITEMS = [
     description: "Operational follow-up and lead management workspace.",
   },
   {
-    label: "Comments",
-    to: "/comments",
-    icon: MessageCircleMore,
-    description: "Moderation, reply review, and operator intervention.",
-  },
-  {
     label: "Proposals",
     to: "/proposals",
     icon: FileStack,
-    description: "Operational proposal review and publishing flow.",
+    description: "Internal proposal and content workflow.",
   },
   {
     label: "Executions",
     to: "/executions",
     icon: Activity,
     description: "Durable runtime inspection and manual retry controls.",
-  },
-  {
-    label: "Voice",
-    to: "/voice",
-    icon: AudioLines,
-    description: "Live voice sessions, calls, and operator controls.",
   },
 ];
 
@@ -120,8 +106,8 @@ export default function OperationsPanel({ open = false, onClose, onNavigate }) {
                 Operations
               </div>
               <div className="mt-1 text-sm leading-6 text-white/46">
-                Secondary operator tools that support runtime triage,
-                moderation, follow-up, and operational interventions.
+                Internal and backoffice tools that stay available without competing
+                with inbox, comments, and voice in the main product path.
               </div>
             </div>
           </div>

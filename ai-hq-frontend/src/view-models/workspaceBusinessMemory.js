@@ -23,7 +23,7 @@ function formatDate(value = "") {
 export function buildWorkspaceBusinessMemory({
   trust = null,
   workbench = null,
-  setupGuidance = null,
+  setupState = null,
 } = {}) {
   const truth = obj(trust?.summary?.truth);
   const reviewQueue = obj(trust?.summary?.reviewQueue);
@@ -38,57 +38,55 @@ export function buildWorkspaceBusinessMemory({
     candidates.length
   );
   const hasSetupFollowUp =
-    setupGuidance?.visible &&
-    (setupGuidance?.meta?.pendingCandidateCount > 0 ||
-      setupGuidance?.meta?.reviewRequired === true);
+    setupState?.needsReview === true;
 
   const currentKnown = truth?.latestVersionId
     ? approvedAt
-      ? `Approved business memory is currently anchored to version ${truth.latestVersionId}, last confirmed on ${approvedAt}.`
-      : `Approved business memory is currently anchored to version ${truth.latestVersionId}.`
-    : "The workspace does not yet have a stable approved business memory snapshot.";
+      ? `Approved snapshot ${truth.latestVersionId} was last confirmed on ${approvedAt}.`
+      : `Approved snapshot ${truth.latestVersionId} is active.`
+    : "No approved business-memory snapshot is available yet.";
 
   const mayHaveChanged = pendingCount
     ? candidates.length
       ? `${pendingCount} proposed business change${
           pendingCount === 1 ? "" : "s"
-        } are waiting, including ${candidates
+        } ${pendingCount === 1 ? "is" : "are"} waiting, including ${candidates
           .slice(0, 2)
           .map((item) => s(item?.title || item?.valueText || "an update"))
           .filter(Boolean)
           .join(" and ")}.`
       : `${pendingCount} proposed business change${
           pendingCount === 1 ? "" : "s"
-        } may need review.`
-    : "No meaningful business change pressure is visible in the current review summary.";
+        } ${pendingCount === 1 ? "needs" : "need"} review.`
+    : "No business changes are waiting.";
 
   const needsConfirmation = pendingCount
     ? candidates.length
       ? `${candidates.filter((item) => s(item?.approvalPolicy?.requiredRole)).length || pendingCount} item${
           pendingCount === 1 ? "" : "s"
-        } still need human confirmation before approved business memory changes.`
+        } still ${pendingCount === 1 ? "needs" : "need"} confirmation before the approved snapshot changes.`
       : `${pendingCount} business memory item${
           pendingCount === 1 ? "" : "s"
-        } still need confirmation.`
+        } still ${pendingCount === 1 ? "needs" : "need"} confirmation.`
     : hasSetupFollowUp
-      ? "Setup still has unresolved imported details that should be confirmed before business memory is treated as complete."
-      : "No immediate confirmation work is visible right now.";
+      ? "Setup review is still open, so business memory should be treated cautiously."
+      : "No confirmation work is waiting.";
 
   const blocked = blockedItems.length
     ? blockedItems
         .map((item) => s(item?.title || item?.reasonCode || "A memory blocker"))
         .filter(Boolean)
         .join(" | ")
-    : "No active blockers are currently stopping business memory from being relied on.";
+    : "No active blockers are visible.";
 
   const recentlyReliable =
     truth?.latestVersionId && approvedAt
-      ? `The latest approved memory snapshot became reliable on ${approvedAt}.`
+      ? `The approved snapshot became reliable on ${approvedAt}.`
       : latestRun?.sourceDisplayName
         ? latestRun?.reviewRequired
-          ? `${latestRun.sourceDisplayName} refreshed recently, but its new evidence still needs review.`
-          : `${latestRun.sourceDisplayName} refreshed recently and is now contributing reliable evidence.`
-        : "Recent reliability changes will appear here when new evidence or approvals arrive.";
+          ? `${latestRun.sourceDisplayName} refreshed and opened review work.`
+          : `${latestRun.sourceDisplayName} refreshed successfully.`
+        : "No recent business-memory activity is available.";
 
   return {
     visible: !!(
@@ -112,16 +110,16 @@ export function buildWorkspaceBusinessMemory({
     },
     primaryAction: pendingCount
       ? {
-          label: "Open business changes review",
+          label: "Review business changes",
           path: "/truth",
         }
       : {
-          label: "Open business data",
+          label: "View business memory",
           path: "/truth",
         },
     secondaryAction: hasSetupFollowUp
       ? {
-          label: "Continue setup",
+          label: setupState?.action?.label || "Review setup",
           path: "/setup",
         }
       : null,

@@ -1,7 +1,8 @@
 import { validateRealtimeEnvelope } from "@aihq/shared-contracts/realtime";
+import { getApiBase, __test__ as apiClientTest } from "../api/client.js";
 
-const RAW_API_BASE = String(import.meta.env.VITE_API_BASE || "").trim();
 const RAW_WS_URL = String(import.meta.env.VITE_WS_URL || "").trim();
+const IS_DEV = Boolean(import.meta.env?.DEV);
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -28,6 +29,10 @@ function isAbsoluteWsUrl(value = "") {
   return /^wss?:\/\//i.test(s(value));
 }
 
+function isLoopbackHostname(value = "") {
+  return apiClientTest.isLoopbackHostname(value);
+}
+
 function getBrowserHttpOrigin() {
   if (typeof window === "undefined") return "http://localhost:5173";
   return `${window.location.protocol}//${window.location.host}`;
@@ -37,6 +42,27 @@ function getBrowserWsOrigin() {
   if (typeof window === "undefined") return "ws://localhost:5173";
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${window.location.host}`;
+}
+
+function shouldUseDevProxyWs(
+  value = "",
+  { dev = IS_DEV, browserOrigin = getBrowserHttpOrigin() } = {}
+) {
+  if (!dev) return false;
+  if (!value) return false;
+
+  try {
+    const configured = new URL(value);
+    const browser = new URL(browserOrigin);
+
+    return (
+      isLoopbackHostname(configured.hostname) &&
+      isLoopbackHostname(browser.hostname) &&
+      configured.origin !== browser.origin
+    );
+  } catch {
+    return false;
+  }
 }
 
 function absolutizeWsBase(value = "") {
@@ -63,9 +89,7 @@ function absolutizeWsBase(value = "") {
 }
 
 function resolveApiBase() {
-  const raw = trimTrailingSlash(RAW_API_BASE);
-  if (!raw) return "/api";
-  return raw;
+  return getApiBase() || "/api";
 }
 
 function buildRealtimeSessionEndpoint() {
@@ -79,6 +103,10 @@ function buildRealtimeSessionEndpoint() {
 }
 
 function buildFallbackWsUrl() {
+  if (shouldUseDevProxyWs(RAW_WS_URL)) {
+    return `${getBrowserWsOrigin()}/ws`;
+  }
+
   const configuredWs = absolutizeWsBase(RAW_WS_URL);
   if (configuredWs) return configuredWs;
 
@@ -388,3 +416,9 @@ export function createWsClient({ onEvent, onStatus, maxDelayMs = 12000 } = {}) {
     },
   };
 }
+
+export const __test__ = {
+  buildFallbackWsUrl,
+  buildRealtimeSessionEndpoint,
+  shouldUseDevProxyWs,
+};

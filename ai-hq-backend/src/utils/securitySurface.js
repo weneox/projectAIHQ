@@ -86,16 +86,42 @@ export function isAllowedOrigin(origin, allowedOrigins = [], env = cfg.app.env) 
 
 export function buildAllowedCorsOrigins(raw = cfg.urls.corsOrigin, env = cfg.app.env) {
   const value = s(raw, "");
-  if (!value) return [];
+  const origins = [];
+
+  if (!value) {
+    if (!isProductionLikeEnv(env)) {
+      return [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+      ];
+    }
+
+    return [];
+  }
 
   if (value === "*") {
     return isProductionLikeEnv(env) ? [] : ["*"];
   }
 
-  return value
+  origins.push(
+    ...value
     .split(",")
     .map((x) => x.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+  );
+
+  if (!isProductionLikeEnv(env)) {
+    origins.push(
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+      "http://localhost:4173",
+      "http://127.0.0.1:4173"
+    );
+  }
+
+  return Array.from(new Set(origins));
 }
 
 export function shouldAllowDiagnosticsRequest(req, env = cfg.app.env) {

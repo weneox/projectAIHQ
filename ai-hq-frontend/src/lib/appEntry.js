@@ -42,6 +42,7 @@ function hasWorkspaceSignal(workspace = {}) {
 }
 
 export const CORE_APP_ROUTES = Object.freeze([
+  "/home",
   "/workspace",
   "/truth",
   "/publish",
@@ -49,6 +50,8 @@ export const CORE_APP_ROUTES = Object.freeze([
   "/settings",
   "/inbox",
 ]);
+
+export const PRODUCT_HOME_ROUTE = "/home";
 
 export const INTERNAL_ONLY_APP_ROUTES = Object.freeze([
   "/command-demo",
@@ -209,5 +212,5 @@ export function resolveAuthenticatedLanding({
     return WORKSPACE_SELECTION_ROUTE;
   }
 
-  return resolveWorkspaceContractRoute(bootstrap);
+  return PRODUCT_HOME_ROUTE;
 }

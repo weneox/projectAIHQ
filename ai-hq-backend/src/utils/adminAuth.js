@@ -242,6 +242,130 @@ function normalizeAdminSessionPayload(row = {}) {
   };
 }
 
+function isRecoverableSessionLookupError(err) {
+  const code = s(err?.code).toUpperCase();
+  return code === "AUTH_DB_UNAVAILABLE" || code === "AUTH_DB_TIMEOUT";
+}
+
+async function loadUserSessionByToken(db, token = "", { touch = true } = {}) {
+  try {
+    const result = await authQuery(
+      db,
+      `
+      select
+        s.id as session_id,
+        s.identity_id,
+        s.active_membership_id,
+        s.active_tenant_id as tenant_id,
+        s.session_version,
+        s.expires_at,
+        s.created_at,
+        s.last_seen_at,
+        i.primary_email as user_email,
+        m.id as membership_id,
+        m.role,
+        m.status,
+        t.tenant_key,
+        t.company_name,
+        tu.id as tenant_user_id,
+        tu.id as user_id,
+        tu.full_name,
+        tu.status as user_status
+      from auth_identity_sessions s
+      join auth_identities i on i.id = s.identity_id
+      join auth_identity_memberships m
+        on m.id = s.active_membership_id
+       and m.identity_id = s.identity_id
+       and m.tenant_id = s.active_tenant_id
+      join tenants t on t.id = s.active_tenant_id
+      left join lateral (
+        select
+          tu.id,
+          tu.full_name,
+          tu.status
+        from tenant_users tu
+        where tu.tenant_id = s.active_tenant_id
+          and lower(tu.user_email) = lower(i.normalized_email)
+        order by tu.created_at asc, tu.id asc
+        limit 1
+      ) tu on true
+      where s.session_token_hash = $1
+        and s.revoked_at is null
+        and s.expires_at > now()
+        and i.status in ('active', 'invited')
+        and m.status = 'active'
+      limit 1
+      `,
+      [hashSessionToken(token)],
+      3000
+    );
+
+    const row = result?.rows?.[0] || null;
+    if (!row) {
+      return { ok: false, error: "session not found" };
+    }
+
+    if (s(row.user_status) && s(row.user_status) !== "active") {
+      return { ok: false, error: "user inactive" };
+    }
+
+    const payload = normalizeUserSessionPayload(row);
+    if (touch) {
+      await touchUserSession(db, payload?.sessionId);
+    }
+
+    return { ok: true, payload, token };
+  } catch (err) {
+    return {
+      ok: false,
+      error: isRecoverableSessionLookupError(err)
+        ? "auth db unavailable"
+        : "session lookup failed",
+      code: s(err?.code),
+      recoverable: isRecoverableSessionLookupError(err),
+    };
+  }
+}
+
+async function loadAdminSessionByToken(db, token = "", { touch = true } = {}) {
+  try {
+    const result = await authQuery(
+      db,
+      `
+      select id, expires_at, created_at, last_seen_at
+      from admin_auth_sessions
+      where session_token_hash = $1
+        and revoked_at is null
+        and expires_at > now()
+      limit 1
+      `,
+      [hashSessionToken(token)],
+      2500
+    );
+
+    const row = result?.rows?.[0] || null;
+    if (!row) {
+      return { ok: false, error: "session not found" };
+    }
+
+    const payload = normalizeAdminSessionPayload(row);
+    if (touch) {
+      await touchAdminSession(db, payload?.sessionId);
+    }
+
+    return { ok: true, payload, token };
+  } catch (err) {
+    return {
+      ok: false,
+      error: isRecoverableSessionLookupError(err)
+        ? "auth db unavailable"
+        : "session lookup failed",
+      code: s(err?.code),
+      recoverable: isRecoverableSessionLookupError(err),
+    };
+  }
+}
+
 async function touchUserSession(db, sessionId = "") {
   const id = s(sessionId);
   if (!id || !db) return;
@@ -1070,8 +1194,8 @@ export async function revokeAdminSessionByToken(db, token = "") {
 }
 
 export async function loadUserSessionFromRequest(req, { db, touch = true } = {}) {
-  const token = getSessionCookieToken(req, getUserCookieName());
-  if (!token) {
+  const tokens = getSessionCookieTokens(req, getUserCookieName());
+  if (!tokens.length) {
     return { ok: false, error: "missing session cookie" };
   }
 
@@ -1079,85 +1203,27 @@ export async function loadUserSessionFromRequest(req, { db, touch = true } = {})
     return { ok: false, error: "auth db unavailable" };
   }
 
-  try {
-    const result = await authQuery(
-      db,
-      `
-      select
-        s.id as session_id,
-        s.identity_id,
-        s.active_membership_id,
-        s.active_tenant_id as tenant_id,
-        s.session_version,
-        s.expires_at,
-        s.created_at,
-        s.last_seen_at,
-        i.primary_email as user_email,
-        m.id as membership_id,
-        m.role,
-        m.status,
-        t.tenant_key,
-        t.company_name,
-        tu.id as tenant_user_id,
-        tu.id as user_id,
-        tu.full_name,
-        tu.status as user_status
-      from auth_identity_sessions s
-      join auth_identities i on i.id = s.identity_id
-      join auth_identity_memberships m
-        on m.id = s.active_membership_id
-       and m.identity_id = s.identity_id
-       and m.tenant_id = s.active_tenant_id
-      join tenants t on t.id = s.active_tenant_id
-      left join lateral (
-        select
-          tu.id,
-          tu.full_name,
-          tu.status
-        from tenant_users tu
-        where tu.tenant_id = s.active_tenant_id
-          and lower(tu.user_email) = lower(i.normalized_email)
-        order by tu.created_at asc, tu.id asc
-        limit 1
-      ) tu on true
-      where s.session_token_hash = $1
-        and s.revoked_at is null
-        and s.expires_at > now()
-        and i.status in ('active', 'invited')
-        and m.status = 'active'
-      limit 1
-      `,
-      [hashSessionToken(token)],
-      3000
-    );
+  let lastFailure = { ok: false, error: "session not found" };
 
-    const row = result?.rows?.[0] || null;
-    if (!row) {
-      return { ok: false, error: "session not found" };
+  for (const token of tokens) {
+    const session = await loadUserSessionByToken(db, token, { touch });
+    if (session?.ok) {
+      return session;
     }
 
-    if (s(row.user_status) && s(row.user_status) !== "active") {
-      return { ok: false, error: "user inactive" };
+    if (session?.recoverable) {
+      return session;
     }
 
-    const payload = normalizeUserSessionPayload(row);
-    if (touch) {
-      await touchUserSession(db, payload?.sessionId);
-    }
-
-    return { ok: true, payload };
-  } catch (err) {
-    return {
-      ok: false,
-      error: s(err?.code) === "AUTH_DB_UNAVAILABLE" ? "auth db unavailable" : "session lookup failed",
-      code: s(err?.code),
-    };
+    lastFailure = session || lastFailure;
   }
+
+  return lastFailure;
 }
 
 export async function loadAdminSessionFromRequest(req, { db, touch = true } = {}) {
-  const token = getSessionCookieToken(req, getAdminCookieName());
-  if (!token) {
+  const tokens = getSessionCookieTokens(req, getAdminCookieName());
+  if (!tokens.length) {
     return { ok: false, error: "missing session cookie" };
   }
 
@@ -1165,39 +1231,22 @@ export async function loadAdminSessionFromRequest(req, { db, touch = true } = {}
     return { ok: false, error: "auth db unavailable" };
   }
 
-  try {
-    const result = await authQuery(
-      db,
-      `
-      select id, expires_at, created_at, last_seen_at
-      from admin_auth_sessions
-      where session_token_hash = $1
-        and revoked_at is null
-        and expires_at > now()
-      limit 1
-      `,
-      [hashSessionToken(token)],
-      2500
-    );
+  let lastFailure = { ok: false, error: "session not found" };
 
-    const row = result?.rows?.[0] || null;
-    if (!row) {
-      return { ok: false, error: "session not found" };
+  for (const token of tokens) {
+    const session = await loadAdminSessionByToken(db, token, { touch });
+    if (session?.ok) {
+      return session;
     }
 
-    const payload = normalizeAdminSessionPayload(row);
-    if (touch) {
-      await touchAdminSession(db, payload?.sessionId);
+    if (session?.recoverable) {
+      return session;
     }
 
-    return { ok: true, payload };
-  } catch (err) {
-    return {
-      ok: false,
-      error: "session lookup failed",
-      code: s(err?.code),
-    };
+    lastFailure = session || lastFailure;
   }
+
+  return lastFailure;
 }
 
 export async function checkLoginRateLimit(

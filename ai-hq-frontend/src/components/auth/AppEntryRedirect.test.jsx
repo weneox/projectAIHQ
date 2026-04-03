@@ -33,7 +33,7 @@ describe("AppEntryRedirect", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     hasMultipleWorkspaceChoices.mockReturnValue(false);
-    resolveAuthenticatedLanding.mockReturnValue("/workspace");
+    resolveAuthenticatedLanding.mockReturnValue("/home");
   });
 
   it("sends an unauthenticated user to login", async () => {
@@ -78,7 +78,7 @@ describe("AppEntryRedirect", () => {
     );
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith("/workspace", { replace: true });
+      expect(navigate).toHaveBeenCalledWith("/home", { replace: true });
     });
 
     expect(resolveAuthenticatedLanding).toHaveBeenCalledTimes(1);
@@ -96,5 +96,22 @@ describe("AppEntryRedirect", () => {
     expect(
       await screen.findByText((content) => content.includes("Account unavailable"))
     ).toBeInTheDocument();
+  });
+
+  it("does not send an authenticated user to login when bootstrap fails", async () => {
+    getAppAuthContext.mockResolvedValue({ authenticated: true });
+    getAppBootstrapContext.mockRejectedValue(new Error("bootstrap offline"));
+
+    render(
+      <MemoryRouter>
+        <AppEntryRedirect />
+      </MemoryRouter>
+    );
+
+    expect(
+      await screen.findByText((content) => content.includes("Account unavailable"))
+    ).toBeInTheDocument();
+
+    expect(navigate).not.toHaveBeenCalledWith("/login", { replace: true });
   });
 });

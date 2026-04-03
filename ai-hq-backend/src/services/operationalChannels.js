@@ -321,12 +321,13 @@ export async function buildOperationalChannels({
   db,
   tenantId = "",
   tenantRow = null,
-  voiceSettings = null,
+  voiceSettings,
   matchedChannel = null,
 } = {}) {
   const resolvedVoiceSettings =
-    voiceSettings ||
-    (await loadVoiceOperationalSettings({ db, tenantId, tenantRow }));
+    voiceSettings !== undefined
+      ? voiceSettings
+      : await loadVoiceOperationalSettings({ db, tenantId, tenantRow });
 
   const voice = buildVoiceOperationalFromSettings(
     resolvedVoiceSettings,

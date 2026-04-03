@@ -35,7 +35,7 @@ function NotificationButton({ notifications }) {
         size="large"
         aria-label="Open notifications"
         className={cx(
-          "!flex !h-11 !w-11 !items-center !justify-center !rounded-[16px] !border !border-line !bg-surface !p-0 !text-text-muted !shadow-none",
+          "!flex !h-10 !w-10 !items-center !justify-center !rounded-md !border !border-line !bg-surface !p-0 !text-text-muted !shadow-none",
           notifications?.open
             ? "!border-line-strong !bg-surface-muted !text-text"
             : "hover:!border-line-strong hover:!bg-surface-muted hover:!text-text"
@@ -88,7 +88,7 @@ function WorkspaceIdentity() {
     <button
       type="button"
       onClick={() => navigate("/settings")}
-      className="flex items-center gap-3 rounded-[18px] border border-line bg-surface px-3 py-2 text-left shadow-none transition hover:border-line-strong hover:bg-surface-muted"
+      className="flex items-center gap-3 rounded-md border border-line bg-surface px-3 py-2 text-left transition hover:border-line-strong hover:bg-surface-muted"
       aria-label="Open account settings"
     >
       <Avatar className="!bg-brand !text-white">{initials}</Avatar>
@@ -108,10 +108,17 @@ export default function Header({
   shellSection,
   activeContextItem,
 }) {
+  const headerKicker =
+    shellSection?.id === "home"
+      ? "Product home"
+      : activeContextItem?.label || shellSection?.kicker || "Workspace";
+  const headerTitle =
+    shellSection?.id === "home" ? "Overview" : shellSection?.label || "Workspace";
+
   return (
     <>
       <header
-        className="sticky top-0 z-[60] border-b border-line-soft bg-canvas/80 backdrop-blur-xl"
+        className="sticky top-0 z-[60] border-b border-line-soft bg-canvas"
         style={{ height: SHELL_TOPBAR_HEIGHT }}
       >
         <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-4 px-4 md:px-6 xl:px-8">
@@ -120,18 +127,18 @@ export default function Header({
               type="text"
               size="large"
               onClick={onMenuClick}
-              className="!flex !h-11 !w-11 !items-center !justify-center !rounded-[16px] !border !border-line !bg-surface !p-0 !text-text-muted !shadow-none hover:!border-line-strong hover:!bg-surface-muted hover:!text-text md:!hidden"
+              className="!flex !h-10 !w-10 !items-center !justify-center !rounded-md !border !border-line !bg-surface !p-0 !text-text-muted !shadow-none hover:!border-line-strong hover:!bg-surface-muted hover:!text-text md:!hidden"
               aria-label="Open navigation"
             >
               <Menu className="h-5 w-5" strokeWidth={1.9} />
             </Button>
 
             <div className="min-w-0">
-              <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-text-subtle">
-                {activeContextItem?.label || shellSection?.kicker || "Workspace"}
+              <div className="text-sm text-text-muted">
+                {headerKicker}
               </div>
-              <div className="truncate font-display text-[1.45rem] font-semibold tracking-[-0.045em] text-text">
-                {shellSection?.label || "Workspace"}
+              <div className="truncate font-display text-[1.75rem] font-semibold tracking-[-0.03em] text-text">
+                {headerTitle}
               </div>
             </div>
           </div>

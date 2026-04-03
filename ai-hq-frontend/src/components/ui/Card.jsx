@@ -15,8 +15,8 @@ export default function Card({
       : padded === "sm"
       ? "p-4"
       : padded === "lg"
-      ? "p-6 md:p-7"
-      : "p-5 md:p-6";
+      ? "p-6"
+      : "p-5";
 
   const toneClass =
     tone === "info"
@@ -35,19 +35,19 @@ export default function Card({
       : variant === "subtle"
       ? "bg-surface-muted shadow-none"
       : variant === "elevated"
-      ? "bg-surface shadow-panel-strong"
-      : "bg-surface shadow-panel";
+      ? "border-line bg-surface shadow-panel"
+      : "bg-surface shadow-none";
 
   return (
     <div
       className={cx(
-        "min-w-0 rounded-panel border transition-[transform,box-shadow,border-color,background-color] duration-200",
+        "min-w-0 rounded-panel border transition-[border-color,background-color] duration-150",
         clip ? "overflow-hidden" : "overflow-visible",
         pad,
         toneClass,
         variantClass,
         interactive &&
-          "cursor-pointer hover:-translate-y-[1px] hover:border-line-strong hover:shadow-panel-strong",
+          "cursor-pointer hover:border-line-strong",
         className
       )}
     >

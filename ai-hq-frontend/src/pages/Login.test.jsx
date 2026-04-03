@@ -26,6 +26,7 @@ vi.mock("../lib/appSession.js", () => ({
 }));
 
 vi.mock("../lib/appEntry.js", () => ({
+  PRODUCT_HOME_ROUTE: "/home",
   WORKSPACE_SELECTION_ROUTE: "/select-workspace",
   hasMultipleWorkspaceChoices: (...args) => hasMultipleWorkspaceChoices(...args),
   resolveAuthenticatedLanding: (...args) => resolveAuthenticatedLanding(...args),
@@ -65,8 +66,8 @@ describe("Login auth entry", () => {
     vi.clearAllMocks();
     getAppAuthContext.mockResolvedValue({ authenticated: false });
     hasMultipleWorkspaceChoices.mockReturnValue(false);
-    resolveAuthenticatedLanding.mockReturnValue("/workspace");
-    resolveWorkspaceContractRoute.mockReturnValue("/setup");
+    resolveAuthenticatedLanding.mockReturnValue("/home");
+    resolveWorkspaceContractRoute.mockReturnValue("/home");
     clearAppSessionContext.mockImplementation(() => {});
     getAppBootstrapContext.mockResolvedValue({
       workspace: { setupCompleted: true, workspaceReady: true },
@@ -83,7 +84,11 @@ describe("Login auth entry", () => {
 
     authCheck.resolve({ authenticated: false });
 
-    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", {
+        name: "Sign in to continue through one calm product home for sources, memory, channels, and operator work.",
+      })
+    ).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Email address")).toBeInTheDocument();
   });
 
@@ -156,7 +161,7 @@ describe("Login auth entry", () => {
     });
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith("/setup", { replace: true });
+      expect(navigate).toHaveBeenCalledWith("/home", { replace: true });
     });
   });
 

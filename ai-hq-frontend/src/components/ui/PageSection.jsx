@@ -1,6 +1,7 @@
 import { cx } from "../../lib/cx.js";
 import {
   PageHeader as ShellPageHeader,
+  Section as ShellSection,
   Surface,
 } from "./AppShellPrimitives.jsx";
 
@@ -10,9 +11,9 @@ export function PageHeader(props) {
 
 export function PageSection({ children, className = "", divider = true }) {
   return (
-    <section className={cx(divider ? "border-t border-line-soft pt-6" : "", className)}>
+    <ShellSection className={cx(divider ? "border-t border-line-soft pt-6" : "", className)}>
       {children}
-    </section>
+    </ShellSection>
   );
 }
 

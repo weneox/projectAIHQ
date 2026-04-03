@@ -6,6 +6,21 @@ import { s } from "../utils.js";
 import { getCommentById, listComments } from "../repository.js";
 import { ensureCommentsDb } from "./shared.js";
 
+function isMissingSchemaError(error) {
+  const code = s(error?.code).toUpperCase();
+  const message = s(error?.message).toLowerCase();
+
+  if (code === "42P01" || code === "42703") {
+    return true;
+  }
+
+  return (
+    message.includes("does not exist") ||
+    message.includes("undefined column") ||
+    message.includes("undefined table")
+  );
+}
+
 export function listCommentsHandler({ db, list = listComments }) {
   return async function listCommentsRoute(req, res) {
     const tenantKey = resolveTenantKeyFromReq(req);
@@ -41,6 +56,17 @@ export function listCommentsHandler({ db, list = listComments }) {
         comments,
       });
     } catch (e) {
+      if (isMissingSchemaError(e)) {
+        return okJson(res, {
+          ok: true,
+          tenantKey,
+          count: 0,
+          comments: [],
+          degraded: true,
+          reasonCode: "comments_schema_unavailable",
+        });
+      }
+
       return okJson(res, {
         ok: false,
         error: "Error",

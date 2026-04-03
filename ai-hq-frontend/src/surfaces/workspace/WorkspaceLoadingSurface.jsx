@@ -1,16 +1,16 @@
 function Shimmer({ className = "" }) {
-  return <div className={`lux-loading-shimmer ${className}`.trim()} />;
+  return <div className={`animate-pulse rounded-md bg-surface-subtle ${className}`.trim()} />;
 }
 
 function SurfaceCard({ className = "", children }) {
   return (
     <div
       className={[
-        "relative border-t border-[#e8ddd0] px-1 py-6",
+        "rounded-lg border border-line bg-surface px-4 py-4",
         className,
       ].join(" ")}
     >
-      <div className="relative">{children}</div>
+      {children}
     </div>
   );
 }
@@ -19,97 +19,94 @@ export default function WorkspaceLoadingSurface() {
   return (
     <div
       aria-label="Preparing workspace brief"
-      className="mx-auto max-w-[1080px] px-4 py-12 sm:px-6 lg:px-8"
+      className="mx-auto max-w-[1480px] px-4 py-6 sm:px-6 sm:py-8"
     >
-      <div className="space-y-8">
-        <div className="space-y-3 px-1">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-400">
-            Preparing workspace
-          </div>
-          <Shimmer className="h-10 w-64 rounded-full bg-[#f1e8dc]" />
-          <Shimmer className="h-4 w-[28rem] max-w-full rounded-full bg-[#f3ebdf]" />
+      <div className="space-y-6">
+        <div className="space-y-2 px-1">
+          <div className="text-sm text-text-muted">Preparing workspace</div>
+          <Shimmer className="h-8 w-56" />
+          <Shimmer className="h-4 w-[34rem] max-w-full" />
         </div>
 
         <SurfaceCard>
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Shimmer className="h-3 w-28 rounded-full bg-[#f1e8dc]" />
-              <Shimmer className="h-8 w-56 rounded-full bg-[#f3ebdf]" />
-              <Shimmer className="h-4 w-[34rem] max-w-full rounded-full bg-[#f4ede2]" />
+              <Shimmer className="h-4 w-28" />
+              <Shimmer className="h-7 w-72 max-w-full" />
+              <Shimmer className="h-4 w-[30rem] max-w-full" />
             </div>
 
-            <Shimmer className="h-14 rounded-[22px] bg-[#f3ebdf]" />
-
-            <div className="flex flex-wrap gap-2">
-              <Shimmer className="h-10 w-32 rounded-full bg-[#f1e8dc]" />
-              <Shimmer className="h-10 w-28 rounded-full bg-[#f1e8dc]" />
-              <Shimmer className="h-10 w-36 rounded-full bg-[#f1e8dc]" />
-            </div>
-          </div>
-        </SurfaceCard>
-
-        <SurfaceCard>
-          <div className="space-y-5">
-            <div className="space-y-2">
-              <Shimmer className="h-3 w-24 rounded-full bg-[#f1e8dc]" />
-              <Shimmer className="h-8 w-64 rounded-full bg-[#f3ebdf]" />
-            </div>
+            <Shimmer className="h-10 rounded-md" />
 
             <div className="grid gap-3 md:grid-cols-3">
               {Array.from({ length: 3 }).map((_, index) => (
-                <div
-                  key={index}
-                  className="border-b border-[#efe6d7] px-0 py-4 last:border-b-0"
-                >
-                  <Shimmer className="h-3 w-24 rounded-full bg-[#f1e8dc]" />
-                  <Shimmer className="mt-3 h-4 w-full rounded-full bg-[#f3ebdf]" />
-                  <Shimmer className="mt-2 h-4 w-[82%] rounded-full bg-[#f4ede2]" />
+                <div key={index} className="space-y-2">
+                  <Shimmer className="h-3 w-20" />
+                  <Shimmer className="h-4 w-full" />
+                  <Shimmer className="h-4 w-[78%]" />
                 </div>
               ))}
             </div>
           </div>
         </SurfaceCard>
 
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-          <SurfaceCard>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Shimmer className="h-3 w-32 rounded-full bg-[#f1e8dc]" />
-                <Shimmer className="h-8 w-52 rounded-full bg-[#f3ebdf]" />
-              </div>
+        <SurfaceCard>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Shimmer className="h-4 w-24" />
+              <Shimmer className="h-7 w-64 max-w-full" />
+            </div>
 
-              {Array.from({ length: 3 }).map((_, index) => (
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div
+                key={index}
+                className="space-y-2 rounded-md border border-line-soft bg-surface-muted p-4"
+              >
+                <Shimmer className="h-6 w-24" />
+                <Shimmer className="h-5 w-64 max-w-full" />
+                <Shimmer className="h-4 w-full" />
+              </div>
+            ))}
+          </div>
+        </SurfaceCard>
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <SurfaceCard>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Shimmer className="h-4 w-28" />
+                <Shimmer className="h-7 w-48" />
+              </div>
+              {Array.from({ length: 4 }).map((_, index) => (
                 <div
                   key={index}
-                  className="border-b border-[#efe6d7] px-0 py-4 last:border-b-0"
+                  className="space-y-2 rounded-md border border-line-soft bg-surface-muted p-4"
                 >
-                  <div className="flex flex-wrap gap-2">
-                    <Shimmer className="h-7 w-20 rounded-full bg-[#f1e8dc]" />
-                    <Shimmer className="h-7 w-24 rounded-full bg-[#f1e8dc]" />
+                  <div className="flex gap-2">
+                    <Shimmer className="h-6 w-20" />
+                    <Shimmer className="h-6 w-16" />
                   </div>
-                  <Shimmer className="mt-4 h-5 w-40 rounded-full bg-[#f3ebdf]" />
-                  <Shimmer className="mt-3 h-4 w-full rounded-full bg-[#f4ede2]" />
-                  <Shimmer className="mt-2 h-4 w-[72%] rounded-full bg-[#f4ede2]" />
+                  <Shimmer className="h-4 w-full" />
+                  <Shimmer className="h-4 w-[74%]" />
                 </div>
               ))}
             </div>
           </SurfaceCard>
 
           <SurfaceCard>
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div className="space-y-2">
-                <Shimmer className="h-3 w-28 rounded-full bg-[#f1e8dc]" />
-                <Shimmer className="h-8 w-48 rounded-full bg-[#f3ebdf]" />
+                <Shimmer className="h-4 w-28" />
+                <Shimmer className="h-7 w-48" />
               </div>
-
-              {Array.from({ length: 4 }).map((_, index) => (
+              {Array.from({ length: 2 }).map((_, index) => (
                 <div
                   key={index}
-                  className="border-b border-[#efe6d7] px-0 py-4 last:border-b-0"
+                  className="space-y-2 rounded-md border border-line-soft bg-surface-muted p-4"
                 >
-                  <Shimmer className="h-4 w-32 rounded-full bg-[#f3ebdf]" />
-                  <Shimmer className="mt-3 h-4 w-full rounded-full bg-[#f4ede2]" />
-                  <Shimmer className="mt-2 h-4 w-[68%] rounded-full bg-[#f4ede2]" />
+                  <Shimmer className="h-6 w-20" />
+                  <Shimmer className="h-4 w-full" />
+                  <Shimmer className="h-4 w-[68%]" />
                 </div>
               ))}
             </div>

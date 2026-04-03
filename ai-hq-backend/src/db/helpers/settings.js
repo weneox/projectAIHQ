@@ -3,6 +3,37 @@
 
 import { buildTenantEntitlements } from "../../services/tenantEntitlements.js";
 
+function isMissingSchemaError(error) {
+  const code = cleanString(error?.code).toUpperCase();
+  const message = cleanString(error?.message).toLowerCase();
+
+  if (code === "42P01" || code === "42703") {
+    return true;
+  }
+
+  return (
+    message.includes("does not exist") ||
+    message.includes("undefined column") ||
+    message.includes("undefined table")
+  );
+}
+
+async function queryOptionalWorkspaceSlice(db, query, params, fallback, label) {
+  try {
+    return await db.query(query, params);
+  } catch (error) {
+    if (!isMissingSchemaError(error)) {
+      throw error;
+    }
+
+    console.warn(`[settings] optional workspace slice unavailable: ${label}`, {
+      code: error?.code || null,
+      message: error?.message || String(error),
+    });
+    return fallback;
+  }
+}
+
 function rowOrNull(r) {
   return r?.rows?.[0] || null;
 }
@@ -219,44 +250,58 @@ export async function dbGetWorkspaceSettings(db, tenantKey) {
   const tenant = normalizeTenantRow(tenantRaw);
   if (!tenant?.id) return null;
 
+  const emptyResult = { rows: [] };
   const [profileQ, policyQ, channelsQ, agentsQ, usersQ] = await Promise.all([
-    db.query(
+    queryOptionalWorkspaceSlice(
+      db,
       `
         select *
         from tenant_profiles
         where tenant_id = $1
         limit 1
       `,
-      [tenant.id]
+      [tenant.id],
+      emptyResult,
+      "tenant_profiles"
     ),
-    db.query(
+    queryOptionalWorkspaceSlice(
+      db,
       `
         select *
         from tenant_ai_policies
         where tenant_id = $1
         limit 1
       `,
-      [tenant.id]
+      [tenant.id],
+      emptyResult,
+      "tenant_ai_policies"
     ),
-    db.query(
+    queryOptionalWorkspaceSlice(
+      db,
       `
         select *
         from tenant_channels
         where tenant_id = $1
         order by channel_type asc, created_at asc
       `,
-      [tenant.id]
+      [tenant.id],
+      emptyResult,
+      "tenant_channels"
     ),
-    db.query(
+    queryOptionalWorkspaceSlice(
+      db,
       `
         select *
         from tenant_agent_configs
         where tenant_id = $1
         order by agent_key asc
       `,
-      [tenant.id]
+      [tenant.id],
+      emptyResult,
+      "tenant_agent_configs"
     ),
-    db.query(
+    queryOptionalWorkspaceSlice(
+      db,
       `
         select
           id,
@@ -274,7 +319,9 @@ export async function dbGetWorkspaceSettings(db, tenantKey) {
         where tenant_id = $1
         order by created_at asc
       `,
-      [tenant.id]
+      [tenant.id],
+      emptyResult,
+      "tenant_users"
     ),
   ]);
 

@@ -61,6 +61,15 @@ function toWsOrigin(origin = "") {
     .replace(/^http:/i, "ws:");
 }
 
+function shouldInvalidateUserCookie(session = {}) {
+  const reason = s(session?.error).toLowerCase();
+  return (
+    reason === "missing session cookie" ||
+    reason === "session not found" ||
+    reason === "user inactive"
+  );
+}
+
 function buildCanonicalWorkspaceChoice(choice = {}) {
   const membershipId = s(choice.membership_id || choice.id);
 
@@ -222,13 +231,24 @@ export function adminSessionRoutes({
     const runtime = buildAuthRuntimeInfo(db, null);
 
     if (!userSession?.ok) {
-      clearUserCookie(res);
+      if (shouldInvalidateUserCookie(userSession)) {
+        clearUserCookie(res);
+        return res.status(200).json({
+          ok: true,
+          authenticated: false,
+          error: null,
+          reason: userSession?.error || "invalid_session",
+          user: null,
+          runtime,
+          marker: "AUTH_ME_DEBUG_V4",
+        });
+      }
 
-      return res.status(200).json({
-        ok: true,
+      return res.status(503).json({
+        ok: false,
         authenticated: false,
-        error: null,
-        reason: userSession?.error || "invalid_session",
+        error: "Auth session unavailable",
+        reason: userSession?.error || "session_lookup_unavailable",
         user: null,
         runtime,
         marker: "AUTH_ME_DEBUG_V4",
@@ -299,11 +319,19 @@ export function adminSessionRoutes({
 
     const userSession = await loadUserSessionFromRequest(req, { db });
     if (!userSession?.ok || !userSession?.payload) {
-      clearUserCookie(res);
-      return res.status(401).json({
+      if (shouldInvalidateUserCookie(userSession)) {
+        clearUserCookie(res);
+        return res.status(401).json({
+          ok: false,
+          error: "Unauthorized",
+          reason: userSession?.error || "invalid_session",
+        });
+      }
+
+      return res.status(503).json({
         ok: false,
-        error: "Unauthorized",
-        reason: userSession?.error || "invalid_session",
+        error: "Auth session unavailable",
+        reason: userSession?.error || "session_lookup_unavailable",
       });
     }
 

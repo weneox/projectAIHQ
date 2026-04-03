@@ -17,17 +17,17 @@ export function PageHeader({
   return (
     <div
       className={cx(
-        "flex flex-col gap-6 border-b border-line-soft pb-6 md:flex-row md:items-end md:justify-between",
+        "flex flex-col gap-5 border-b border-line-soft pb-5 md:flex-row md:items-end md:justify-between",
         className
       )}
     >
       <div className="max-w-[760px]">
         {eyebrow ? (
-          <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.24em] text-text-subtle">
+          <div className="mb-2 text-sm font-medium text-text-muted">
             {eyebrow}
           </div>
         ) : null}
-        <h1 className="font-display text-4xl font-semibold tracking-[-0.05em] text-text md:text-[2.75rem]">
+        <h1 className="font-display text-3xl font-semibold tracking-[-0.03em] text-text md:text-[2.5rem]">
           {title}
         </h1>
         {description ? (
@@ -49,14 +49,14 @@ export function SectionHeader({
   className,
 }) {
   return (
-    <div className={cx("flex flex-col gap-4 md:flex-row md:items-start md:justify-between", className)}>
+    <div className={cx("flex flex-col gap-3 md:flex-row md:items-start md:justify-between", className)}>
       <div className="max-w-[720px]">
         {eyebrow ? (
-          <div className="mb-2 text-[11px] font-bold uppercase tracking-[0.22em] text-text-subtle">
+          <div className="mb-1.5 text-sm font-medium text-text-muted">
             {eyebrow}
           </div>
         ) : null}
-        <h2 className="font-display text-[1.75rem] font-semibold tracking-[-0.045em] text-text">
+        <h2 className="font-display text-[1.5rem] font-semibold tracking-[-0.03em] text-text">
           {title}
         </h2>
         {description ? (
@@ -76,17 +76,17 @@ export function Surface({
 }) {
   const paddingClass =
     padded === "lg"
-      ? "p-6 md:p-8"
+      ? "p-6"
       : padded === "sm"
       ? "p-4"
       : padded === false
       ? "p-0"
-      : "p-5 md:p-6";
+      : "p-5";
 
   return (
     <div
       className={cx(
-        "rounded-panel border shadow-panel",
+        "rounded-panel border",
         subdued
           ? "border-line-soft bg-surface-muted"
           : "border-line bg-surface",
@@ -128,6 +128,29 @@ export function LoadingSurface({ title = "Loading", description, className }) {
         <Skeleton active paragraph={{ rows: 3 }} title={false} />
       </div>
     </Surface>
+  );
+}
+
+export function Section({
+  title,
+  description,
+  eyebrow,
+  actions,
+  className,
+  children,
+}) {
+  return (
+    <section className={cx("space-y-4", className)}>
+      {(title || description || eyebrow || actions) ? (
+        <SectionHeader
+          eyebrow={eyebrow}
+          title={title}
+          description={description}
+          actions={actions}
+        />
+      ) : null}
+      {children}
+    </section>
   );
 }
 

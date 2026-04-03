@@ -50,6 +50,8 @@ export default function Shell() {
 
   const isImmersiveRoute =
     location.pathname.startsWith("/inbox") ||
+    location.pathname.startsWith("/comments") ||
+    location.pathname.startsWith("/voice") ||
     location.pathname.startsWith("/channels");
 
   const loadShellStats = useCallback(async () => {
@@ -197,12 +199,12 @@ export default function Shell() {
           className={
             isImmersiveRoute
               ? "min-h-[calc(100vh-76px)] px-0 py-0"
-              : "min-h-[calc(100vh-76px)] px-4 py-5 md:px-6 md:py-6 xl:px-8 xl:py-8"
+              : "min-h-[calc(100vh-76px)] px-4 py-4 md:px-6 md:py-5 xl:px-8 xl:py-6"
           }
         >
           <div className={isImmersiveRoute ? "h-full w-full" : "mx-auto max-w-shell-content"}>
             {!isImmersiveRoute && shellStats?.message ? (
-              <div className="mb-5 rounded-[18px] border border-line bg-surface px-4 py-3 text-sm text-text-muted shadow-panel">
+              <div className="mb-5 rounded-md border border-line bg-surface px-4 py-3 text-sm text-text-muted">
                 {shellStats.message}
               </div>
             ) : null}

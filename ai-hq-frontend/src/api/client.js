@@ -4,6 +4,7 @@
 const RAW = String(import.meta.env?.VITE_API_BASE ?? "").trim();
 const API_BASE = RAW ? RAW.replace(/\/+$/, "") : "";
 const DEFAULT_TIMEOUT_MS = 12000;
+const IS_DEV = Boolean(import.meta.env?.DEV);
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -37,23 +38,71 @@ function looksLikeHtmlDocument(value = "") {
   );
 }
 
+function isLoopbackHostname(value = "") {
+  const host = s(value).toLowerCase();
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host === "[::1]" ||
+    host.endsWith(".localhost")
+  );
+}
+
+function getBrowserOrigin() {
+  if (typeof window === "undefined") return "";
+  return s(window.location?.origin);
+}
+
+function shouldUseDevProxyBase(
+  rawBase = API_BASE,
+  { dev = IS_DEV, browserOrigin = getBrowserOrigin() } = {}
+) {
+  if (!dev) return false;
+  if (!isAbsoluteUrl(rawBase)) return false;
+
+  if (!browserOrigin) return false;
+
+  try {
+    const api = new URL(rawBase);
+    const browser = new URL(browserOrigin);
+
+    return (
+      isLoopbackHostname(api.hostname) &&
+      isLoopbackHostname(browser.hostname) &&
+      api.origin !== browser.origin
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function getApiBase() {
+  if (shouldUseDevProxyBase()) {
+    return "/api";
+  }
+
   return API_BASE;
 }
 
 export function apiUrl(path) {
   const cleanPath = s(path);
-  if (!cleanPath) return API_BASE || "";
+  const base = getApiBase();
+  if (!cleanPath) return base || "";
 
   if (isAbsoluteUrl(cleanPath)) {
     return cleanPath;
   }
 
-  if (!API_BASE) {
+  if (!base) {
     return cleanPath;
   }
 
-  return `${API_BASE}${cleanPath}`;
+  if (cleanPath === base || cleanPath.startsWith(`${base}/`)) {
+    return cleanPath;
+  }
+
+  return `${base}${cleanPath}`;
 }
 
 async function readPayload(response) {
@@ -253,3 +302,9 @@ export async function apiPatch(path, body, options = {}) {
 export async function apiDelete(path, options = {}) {
   return apiRequest(path, { ...options, method: "DELETE" });
 }
+
+export const __test__ = {
+  getBrowserOrigin,
+  isLoopbackHostname,
+  shouldUseDevProxyBase,
+};

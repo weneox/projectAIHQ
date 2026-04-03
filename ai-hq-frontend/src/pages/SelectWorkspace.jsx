@@ -12,10 +12,9 @@ import {
 import { switchWorkspaceUser } from "../api/auth.js";
 import { clearAppSessionContext, getAppAuthContext } from "../lib/appSession.js";
 import {
+  PRODUCT_HOME_ROUTE,
   getAuthWorkspaceChoices,
-  getActiveAuthWorkspace,
   hasMultipleWorkspaceChoices,
-  resolveWorkspaceContractRoute,
 } from "../lib/appEntry.js";
 
 function s(value, fallback = "") {
@@ -42,10 +41,6 @@ function formatWorkspaceName(choice = {}) {
   );
 }
 
-function getWorkspaceActionLabel(choice = {}) {
-  return choice.workspaceReady ? "Open workspace" : "Continue setup";
-}
-
 function getWorkspaceStatusLabel(choice = {}) {
   if (choice.active) return "Current";
   if (choice.workspaceReady) return "Ready";
@@ -59,7 +54,6 @@ function SelectWorkspaceCard({
   onSelect,
 }) {
   const active = !!choice.active;
-  const label = getWorkspaceActionLabel(choice);
   const status = getWorkspaceStatusLabel(choice);
 
   return (
@@ -137,7 +131,7 @@ function SelectWorkspaceCard({
               active ? "text-white" : "text-slate-700"
             )}
           >
-            {choice.workspaceReady ? "Workspace" : "Setup Studio"}
+            Product home
           </div>
         </div>
 
@@ -147,7 +141,7 @@ function SelectWorkspaceCard({
             active ? "text-white" : "text-[#0b5b60]"
           )}
         >
-          <span>{busy ? "Opening..." : label}</span>
+          <span>{busy ? "Opening..." : "Open home"}</span>
           <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
         </div>
       </div>
@@ -197,13 +191,9 @@ export default function SelectWorkspace() {
         }
 
         const nextChoices = getAuthWorkspaceChoices(auth);
-        const activeWorkspace = getActiveAuthWorkspace(auth);
-        const activeRoute = resolveWorkspaceContractRoute(
-          activeWorkspace || auth?.workspace || auth
-        );
 
         if (!hasMultipleWorkspaceChoices(auth)) {
-          navigate(activeRoute, { replace: true });
+          navigate(PRODUCT_HOME_ROUTE, { replace: true });
           return;
         }
 
@@ -239,11 +229,7 @@ export default function SelectWorkspace() {
       const nextChoices = getAuthWorkspaceChoices(auth);
 
       if (!hasMultipleWorkspaceChoices(auth)) {
-        const activeWorkspace = getActiveAuthWorkspace(auth);
-        navigate(
-          resolveWorkspaceContractRoute(activeWorkspace || auth?.workspace || auth),
-          { replace: true }
-        );
+        navigate(PRODUCT_HOME_ROUTE, { replace: true });
         return;
       }
 
@@ -265,10 +251,9 @@ export default function SelectWorkspace() {
     if (!choice || switchingMembershipId) return;
 
     const membershipId = s(choice.membershipId);
-    const destination = resolveWorkspaceContractRoute(choice);
 
     if (choice.active) {
-      navigate(destination, { replace: true });
+      navigate(PRODUCT_HOME_ROUTE, { replace: true });
       return;
     }
 
@@ -281,12 +266,12 @@ export default function SelectWorkspace() {
       setSwitchingMembershipId(membershipId);
       setError("");
 
-      const response = await switchWorkspaceUser({
+      await switchWorkspaceUser({
         switchToken: choice.switchToken,
       });
 
       clearAppSessionContext();
-      navigate(resolveWorkspaceContractRoute(response?.workspace || response), {
+      navigate(PRODUCT_HOME_ROUTE, {
         replace: true,
       });
     } catch (switchError) {
@@ -319,8 +304,8 @@ export default function SelectWorkspace() {
 
                 <p className="mt-2 max-w-2xl text-[15px] leading-7 text-slate-600">
                   {s(viewer?.fullName || viewer?.email)
-                    ? `${s(viewer?.fullName || viewer?.email)}, select the workspace you want to continue with.`
-                    : "Select the workspace you want to continue with."}
+                    ? `${s(viewer?.fullName || viewer?.email)}, select the business you want to continue with.`
+                    : "Select the business you want to continue with."}
                 </p>
               </div>
 

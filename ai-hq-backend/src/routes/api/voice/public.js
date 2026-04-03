@@ -76,6 +76,21 @@ function recordVoiceRouteFailure({
   });
 }
 
+function isMissingSchemaError(error) {
+  const code = s(error?.code).toUpperCase();
+  const message = s(error?.message).toLowerCase();
+
+  if (code === "42P01" || code === "42703") {
+    return true;
+  }
+
+  return (
+    message.includes("does not exist") ||
+    message.includes("undefined column") ||
+    message.includes("undefined table")
+  );
+}
+
 const TERMINAL_SESSION_STATUSES = new Set(["completed", "failed"]);
 
 function lower(v, d = "") {
@@ -520,6 +535,23 @@ export function voiceRoutes({ db, dbDisabled = false, audit, wsHub = null } = {}
         defaultLanguage,
       });
     } catch (err) {
+      if (isMissingSchemaError(err)) {
+        return ok(res, {
+          overview: {
+            liveCalls: 0,
+            totalCalls: 0,
+            totalMinutes: 0,
+            defaultLanguage: "en",
+          },
+          liveCalls: 0,
+          totalCalls: 0,
+          totalMinutes: 0,
+          defaultLanguage: "en",
+          degraded: true,
+          reasonCode: "voice_schema_unavailable",
+        });
+      }
+
       logger.error("voice.overview.failed", err);
       recordVoiceRouteFailure({
         route: "voice.overview",
@@ -552,6 +584,14 @@ export function voiceRoutes({ db, dbDisabled = false, audit, wsHub = null } = {}
 
       return ok(res, { calls });
     } catch (err) {
+      if (isMissingSchemaError(err)) {
+        return ok(res, {
+          calls: [],
+          degraded: true,
+          reasonCode: "voice_schema_unavailable",
+        });
+      }
+
       logger.error("voice.calls.list.failed", err);
       recordVoiceRouteFailure({
         route: "voice.calls.list",
@@ -989,6 +1029,14 @@ export function voiceRoutes({ db, dbDisabled = false, audit, wsHub = null } = {}
 
       return ok(res, { sessions });
     } catch (err) {
+      if (isMissingSchemaError(err)) {
+        return ok(res, {
+          sessions: [],
+          degraded: true,
+          reasonCode: "voice_schema_unavailable",
+        });
+      }
+
       logger.error("voice.live.list.failed", err);
       recordVoiceRouteFailure({
         route: "voice.live.list",

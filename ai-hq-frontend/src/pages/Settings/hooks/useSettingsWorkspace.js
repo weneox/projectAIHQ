@@ -57,22 +57,31 @@ export function useSettingsWorkspace() {
 
   const viewerRole = String(workspace?.viewerRole || "owner").toLowerCase();
   const canManageSettings = viewerRole === "owner" || viewerRole === "admin";
+  const governedWorkspace = useMemo(
+    () =>
+      workspace?.governance && typeof workspace.governance === "object"
+        ? workspace.governance
+        : {},
+    [workspace]
+  );
+  const canDirectEditGovernedWorkspace =
+    !governedWorkspace?.directWorkspaceWritesBlocked;
   const tenantKey = String(workspace?.tenantKey || initialWorkspace?.tenantKey || "neox").trim() || "neox";
 
   const patchTenant = useCallback(
     (key, value) => {
-      if (!canManageSettings) return;
+      if (!canManageSettings || !canDirectEditGovernedWorkspace) return;
       setWorkspace((prev) => ({ ...prev, tenant: { ...prev.tenant, [key]: value } }));
     },
-    [canManageSettings, setWorkspace]
+    [canDirectEditGovernedWorkspace, canManageSettings, setWorkspace]
   );
 
   const patchProfile = useCallback(
     (key, value) => {
-      if (!canManageSettings) return;
+      if (!canManageSettings || !canDirectEditGovernedWorkspace) return;
       setWorkspace((prev) => ({ ...prev, profile: { ...prev.profile, [key]: value } }));
     },
-    [canManageSettings, setWorkspace]
+    [canDirectEditGovernedWorkspace, canManageSettings, setWorkspace]
   );
 
   const patchAi = useCallback(
@@ -143,7 +152,7 @@ export function useSettingsWorkspace() {
         setInitialWorkspace(normalized);
         succeedSave({
           nextData: normalized,
-          message: "Workspace settings saved.",
+          message: "Operational settings saved.",
         });
         return normalized;
       } catch (error) {
@@ -227,6 +236,8 @@ export function useSettingsWorkspace() {
     dirty,
     dirtyMap,
     canManageSettings,
+    canDirectEditGovernedWorkspace,
+    governedWorkspace,
     tenantKey,
     patchTenant,
     patchProfile,

@@ -7,6 +7,8 @@ export default function GeneralSection({
   entitlements,
   patchTenant,
   canManage,
+  canDirectEdit,
+  governance,
   surface,
 }) {
   return (
@@ -21,6 +23,8 @@ export default function GeneralSection({
         entitlements={entitlements}
         patchTenant={patchTenant}
         canManage={canManage}
+        canDirectEdit={canDirectEdit}
+        governance={governance}
       />
     </div>
   );

@@ -78,6 +78,9 @@ vi.mock("./pages/Inbox.jsx", () => ({
 vi.mock("./surfaces/workspace/WorkspacePage.jsx", () => ({
   default: () => <div>Workspace Page</div>,
 }));
+vi.mock("./surfaces/home/ProductHomePage.jsx", () => ({
+  default: () => <div>Product Home Page</div>,
+}));
 vi.mock("./pages/Leads.jsx", () => ({
   default: () => <div>Leads Page</div>,
 }));
@@ -95,6 +98,9 @@ vi.mock("./pages/Login.jsx", () => ({
 }));
 vi.mock("./pages/Truth/TruthViewerPage.jsx", () => ({
   default: () => <div>Truth Page</div>,
+}));
+vi.mock("./pages/ChannelCatalog.jsx", () => ({
+  default: () => <div>Channels Page</div>,
 }));
 vi.mock("./pages/AdminLogin.jsx", () => ({
   default: () => <div>Admin Login Page</div>,
@@ -128,9 +134,12 @@ describe("App primary product route smoke", () => {
 
   it.each([
     ["/", "App Entry Redirect"],
+    ["/home", "Product Home Page"],
     ["/workspace", "Workspace Page"],
     ["/design-lab", "Design Lab Page"],
     ["/inbox", "Inbox Page"],
+    ["/voice", "Voice Page"],
+    ["/channels", "Channels Page"],
     ["/publish", "Publish Page"],
     ["/expert", "Expert Page"],
   ])("loads %s through the authenticated shell", async (path, text) => {
@@ -156,10 +165,10 @@ describe("App primary product route smoke", () => {
     ["/analytics"],
     ["/agents"],
     ["/threads"],
-  ])("redirects internal-only route %s back to workspace", async (path) => {
+  ])("redirects internal-only route %s back to product home", async (path) => {
     window.history.pushState({}, "", path);
     render(<App />);
-    expect(await screen.findByText("Workspace Page")).toBeInTheDocument();
+    expect(await screen.findByText("Product Home Page")).toBeInTheDocument();
   });
 
   it("keeps setup studio reachable when local workspace entry is enabled", async () => {

@@ -15,6 +15,7 @@ const Executions = lazy(() => import("./pages/Executions.jsx"));
 const Expert = lazy(() => import("./pages/Expert.jsx"));
 const Settings = lazy(() => import("./pages/Settings.jsx"));
 const Inbox = lazy(() => import("./pages/Inbox.jsx"));
+const ProductHomePage = lazy(() => import("./surfaces/home/ProductHomePage.jsx"));
 const WorkspacePage = lazy(() => import("./surfaces/workspace/WorkspacePage.jsx"));
 const Leads = lazy(() => import("./pages/Leads.jsx"));
 const Comments = lazy(() => import("./pages/Comments.jsx"));
@@ -56,7 +57,7 @@ function renderInternalRouteRedirects() {
         <Route
           key={path}
           path={path.slice(1)}
-          element={<Navigate to="/workspace" replace />}
+          element={<Navigate to="/home" replace />}
         />
       ))}
     </>
@@ -121,6 +122,7 @@ export default function App() {
             </UserRouteGuard>
           }
         >
+          <Route path="home" element={withSuspense(<ProductHomePage />)} />
           <Route path="workspace" element={withSuspense(<WorkspacePage />)} />
           <Route path="design-lab" element={withSuspense(<DesignLab />)} />
 
@@ -129,7 +131,7 @@ export default function App() {
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Publish brings together outgoing content, moderation pressure, approvals, and recent publishing outcomes for operational roles."
+                description="Content and publishing remain internal workflow surfaces. They are not positioned as the primary launch product."
               >
                 {withSuspense(<Publish />)}
               </OperatorRouteGuard>
@@ -141,7 +143,7 @@ export default function App() {
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Proposals remains a detailed operational workspace. The primary product surfaces stay centered on Workspace, Inbox, Publish, and Expert."
+                description="Proposals remains an internal operational workspace. The launch product stays centered on social inbox, comments, and voice."
               >
                 {withSuspense(<Proposals />)}
               </OperatorRouteGuard>
@@ -168,7 +170,7 @@ export default function App() {
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Comments remains the detailed moderation workspace. The primary product surfaces stay centered on Workspace, Inbox, Publish, and Expert."
+                description="Comments is part of the launch product and covers Meta comment moderation, AI reply review, and operator intervention."
               >
                 {withSuspense(<Comments />)}
               </OperatorRouteGuard>
@@ -192,29 +194,59 @@ export default function App() {
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Voice sessions and live call controls remain detailed operational surfaces for owner, admin, and operator roles."
+                description="Voice is part of the launch product and covers Twilio receptionist sessions, live call controls, and operator handoff."
               >
                 {withSuspense(<Voice />)}
               </OperatorRouteGuard>
             }
           />
 
-          <Route path="truth" element={withSuspense(<TruthViewerPage />)} />
-          <Route path="expert" element={withSuspense(<Expert />)} />
+          <Route
+            path="truth"
+            element={
+              <OperatorRouteGuard
+                title="Operator access required"
+                description="Truth remains an internal review surface behind the launch product."
+              >
+                {withSuspense(<TruthViewerPage />)}
+              </OperatorRouteGuard>
+            }
+          />
+          <Route
+            path="expert"
+            element={
+              <OperatorRouteGuard
+                title="Operator access required"
+                description="Expert remains an advanced internal surface and is not part of the primary operating path."
+              >
+                {withSuspense(<Expert />)}
+              </OperatorRouteGuard>
+            }
+          />
 
           <Route
             path="executions"
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Execution traces remain an advanced operator inspection surface. The primary product surfaces stay centered on Workspace, Inbox, Publish, and Expert."
+                description="Execution traces remain an advanced internal inspection surface rather than a primary launch product area."
               >
                 {withSuspense(<Executions />)}
               </OperatorRouteGuard>
             }
           />
 
-          <Route path="settings" element={withSuspense(<Settings />)} />
+          <Route
+            path="settings"
+            element={
+              <OperatorRouteGuard
+                title="Operator access required"
+                description="Settings is a narrow launch-slice configuration area for policy, Meta integration, voice readiness, team access, and notifications."
+              >
+                {withSuspense(<Settings />)}
+              </OperatorRouteGuard>
+            }
+          />
           {renderInternalRouteRedirects()}
         </Route>
 

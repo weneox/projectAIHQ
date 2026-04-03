@@ -3,14 +3,12 @@ import {
   Loader2,
   Mail,
   Search,
-  Shield,
   Trash2,
   UserPlus,
   Users,
   KeyRound,
 } from "lucide-react";
 
-import Card from "../ui/Card.jsx";
 import Input from "../ui/Input.jsx";
 import Button from "../ui/Button.jsx";
 import Badge from "../ui/Badge.jsx";
@@ -51,14 +49,6 @@ function Select({ className = "", children, ...props }) {
         className
       )}
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.20),transparent_44%)] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent_38%)]"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent dark:via-white/10"
-      />
       <select
         {...props}
         className="relative z-10 h-12 w-full appearance-none bg-transparent px-4 text-[14px] text-slate-900 outline-none dark:text-slate-100"
@@ -88,23 +78,46 @@ function statusTone(status) {
   return "neutral";
 }
 
+function toneClassForChip(tone = "neutral") {
+  if (tone === "success") {
+    return "bg-emerald-50 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-200";
+  }
+
+  if (tone === "warn") {
+    return "bg-amber-50 text-amber-800 dark:bg-amber-400/10 dark:text-amber-200";
+  }
+
+  if (tone === "info") {
+    return "bg-sky-50 text-sky-800 dark:bg-sky-400/10 dark:text-sky-200";
+  }
+
+  if (tone === "danger") {
+    return "bg-rose-50 text-rose-800 dark:bg-rose-400/10 dark:text-rose-200";
+  }
+
+  return "bg-slate-100 text-slate-700 dark:bg-white/[0.06] dark:text-slate-200";
+}
+
 function StatTile({ label, value, hint, tone = "neutral" }) {
   return (
-    <Card variant="subtle" padded="md" tone={tone} className="rounded-[24px]">
-      <div className="space-y-1.5">
-        <div className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
-          {label}
-        </div>
-        <div className="text-[20px] font-semibold tracking-[-0.02em] text-slate-950 dark:text-white">
-          {value}
-        </div>
-        {hint ? (
-          <div className="text-xs leading-5 text-slate-500 dark:text-slate-400">
-            {hint}
-          </div>
-        ) : null}
+    <div className="space-y-1">
+      <div className="text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+        {label}
       </div>
-    </Card>
+      <div className="text-lg font-semibold tracking-[-0.02em] text-slate-950 dark:text-white">
+        {value}
+      </div>
+      {hint ? (
+        <div
+          className={cx(
+            "inline-flex rounded-full px-2.5 py-1 text-[11px] font-medium",
+            toneClassForChip(tone)
+          )}
+        >
+          {hint}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -142,9 +155,14 @@ export default function TeamPanel({ canManage = false }) {
     deleteSelectedUser,
   } = useTeamSurface({ canManage });
 
-  const activeCount = items.filter((item) => String(item?.status).toLowerCase() === "active").length;
-  const invitedCount = items.filter((item) => String(item?.status).toLowerCase() === "invited").length;
-  const uniqueRoleCount = [...new Set(items.map((item) => item?.role).filter(Boolean))].length;
+  const activeCount = items.filter(
+    (item) => String(item?.status).toLowerCase() === "active"
+  ).length;
+  const invitedCount = items.filter(
+    (item) => String(item?.status).toLowerCase() === "invited"
+  ).length;
+  const uniqueRoleCount = [...new Set(items.map((item) => item?.role).filter(Boolean))]
+    .length;
 
   async function handleDelete() {
     if (!selected?.id) return;
@@ -161,126 +179,51 @@ export default function TeamPanel({ canManage = false }) {
     <SettingsSection
       eyebrow="Team"
       title="Team"
-      subtitle="Workspace users, roles, and status are managed here."
+      subtitle="Workspace access, roles, and status updates."
       tone="default"
     >
-      <div className="space-y-6">
+      <div className="space-y-5">
         <SettingsSurfaceBanner
           surface={surface}
           unavailableMessage="Team management is temporarily unavailable."
           refreshLabel="Refresh Team"
         />
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-          <Card variant="surface" padded="lg" className="rounded-[28px]">
-            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0 space-y-3">
-                <div className="inline-flex flex-wrap items-center gap-2">
-                  <Badge tone="info" variant="subtle" dot>
-                    Workspace Team
-                  </Badge>
-                  <Badge
-                    tone={activeCount > 0 ? "success" : "neutral"}
-                    variant="subtle"
-                    dot={activeCount > 0}
-                  >
-                    {activeCount} active
-                  </Badge>
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="text-[26px] font-semibold tracking-[-0.03em] text-slate-950 dark:text-white">
-                    Team Access Control
-                  </div>
-                  <div className="max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
-                    Manage workspace members, roles, and status updates here.
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3 lg:w-[360px]">
-                <StatTile label="Members" value={items.length} hint="Total users" tone="info" />
-                <StatTile
-                  label="Active"
-                  value={activeCount}
-                  hint="Enabled members"
-                  tone={activeCount > 0 ? "success" : "neutral"}
-                />
-                <StatTile
-                  label="Invited"
-                  value={invitedCount}
-                  hint="Pending access"
-                  tone={invitedCount > 0 ? "warn" : "neutral"}
-                />
-              </div>
-            </div>
-          </Card>
-
-          <Card variant="subtle" padded="lg" className="rounded-[28px]">
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
-                  Access State
-                </div>
-                <div className="text-lg font-semibold tracking-[-0.02em] text-slate-950 dark:text-white">
-                  Management Access
-                </div>
-                <div className="text-sm leading-6 text-slate-500 dark:text-slate-400">
-                  Team changes remain restricted to permitted operators.
-                </div>
-              </div>
-
-              {canManage ? (
-                <div className="rounded-[24px] border border-emerald-200/80 bg-emerald-50/90 px-4 py-4 text-sm text-emerald-800 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200">
-                  Owner/admin access is active. You can create users and update roles.
-                </div>
-              ) : (
-                <div className="rounded-[24px] border border-amber-200/80 bg-amber-50/90 px-4 py-4 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200">
-                  This team surface is read-only for your role.
-                </div>
-              )}
-
-              <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                <StatTile
-                  label="Permission"
-                  value={canManage ? "Write" : "Read Only"}
-                  hint="Current operator mode"
-                  tone={canManage ? "success" : "warn"}
-                />
-                <StatTile
-                  label="Roles"
-                  value={uniqueRoleCount}
-                  hint="Unique role types"
-                  tone="info"
-                />
-                <StatTile
-                  label="Directory"
-                  value={items.length ? "Ready" : "Empty"}
-                  hint="Team registry state"
-                  tone={items.length ? "neutral" : "warn"}
-                />
-              </div>
-            </div>
-          </Card>
+        <div className="grid gap-3 rounded-[26px] border border-slate-200/80 bg-white/72 p-4 dark:border-white/10 dark:bg-white/[0.03] md:grid-cols-4">
+          <StatTile label="Members" value={items.length} hint="Workspace people" tone="info" />
+          <StatTile
+            label="Active"
+            value={activeCount}
+            hint="Enabled"
+            tone={activeCount > 0 ? "success" : "neutral"}
+          />
+          <StatTile
+            label="Invited"
+            value={invitedCount}
+            hint="Pending access"
+            tone={invitedCount > 0 ? "warn" : "neutral"}
+          />
+          <StatTile
+            label="Access"
+            value={canManage ? "Write" : "Read only"}
+            hint={canManage ? "Owner/admin" : "Restricted"}
+            tone={canManage ? "success" : "warn"}
+          />
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
-          <Card variant="surface" padded="lg" className="rounded-[28px]">
-            <div className="space-y-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-lg font-semibold tracking-[-0.02em] text-slate-950 dark:text-white">
-                    Team Directory
+        <div className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(248,250,252,0.72))] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.02))]">
+          <div className="grid gap-0 xl:grid-cols-[360px_minmax(0,1fr)]">
+            <div className="border-b border-slate-200/80 px-5 py-5 dark:border-white/10 xl:border-b-0 xl:border-r sm:px-6">
+              <div className="space-y-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-lg font-semibold tracking-[-0.02em] text-slate-950 dark:text-white">
+                      Directory
+                    </div>
+                    <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      Filter, scan, and select people quickly.
+                    </div>
                   </div>
-                  <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    Search, filter, and select users.
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Badge tone="neutral" variant="subtle">
-                    {items.length} people
-                  </Badge>
 
                   {canManage ? (
                     <Button
@@ -292,130 +235,133 @@ export default function TeamPanel({ canManage = false }) {
                     </Button>
                   ) : null}
                 </div>
-              </div>
 
-              <div className="space-y-3">
-                <Input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search name, email, role..."
-                  leftIcon={<Search className="h-4 w-4" />}
-                />
+                <div className="space-y-3">
+                  <Input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search name, email, role..."
+                    leftIcon={<Search className="h-4 w-4" />}
+                  />
 
-                <div className="grid grid-cols-2 gap-3">
-                  <Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
-                    <option value="">All roles</option>
-                    <option value="owner">Owner</option>
-                    <option value="admin">Admin</option>
-                    <option value="operator">Operator</option>
-                    <option value="marketer">Marketer</option>
-                    <option value="analyst">Analyst</option>
-                    <option value="member">Member</option>
-                  </Select>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+                      <option value="">All roles</option>
+                      <option value="owner">Owner</option>
+                      <option value="admin">Admin</option>
+                      <option value="operator">Operator</option>
+                      <option value="marketer">Marketer</option>
+                      <option value="analyst">Analyst</option>
+                      <option value="member">Member</option>
+                    </Select>
 
-                  <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-                    <option value="">All statuses</option>
-                    <option value="active">Active</option>
-                    <option value="invited">Invited</option>
-                    <option value="disabled">Disabled</option>
-                    <option value="removed">Removed</option>
-                  </Select>
+                    <Select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                    >
+                      <option value="">All statuses</option>
+                      <option value="active">Active</option>
+                      <option value="invited">Invited</option>
+                      <option value="disabled">Disabled</option>
+                      <option value="removed">Removed</option>
+                    </Select>
+                  </div>
                 </div>
-              </div>
 
-              <div className="max-h-[620px] space-y-2 overflow-auto pr-1">
-                {surface.loading ? (
-                  <Card variant="subtle" padded="md" className="rounded-[22px]">
-                    <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Loading team...
+                <div className="max-h-[620px] space-y-2 overflow-auto pr-1">
+                  {surface.loading ? (
+                    <div className="rounded-[22px] border border-slate-200/80 bg-white/70 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                      <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Loading team...
+                      </div>
                     </div>
-                  </Card>
-                ) : filtered.length ? (
-                  filtered.map((user) => {
-                    const active = user.id === selectedId;
-                    return (
-                      <button
-                        key={user.id}
-                        type="button"
-                        onClick={() => setSelectedId(user.id)}
-                        className={cx(
-                          "w-full rounded-[22px] border p-3.5 text-left transition-all duration-200",
-                          active
-                            ? "border-sky-300/80 bg-sky-50/90 shadow-[0_12px_28px_rgba(14,165,233,0.08)] dark:border-sky-400/20 dark:bg-sky-400/10"
-                            : "border-slate-200/80 bg-white/70 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.05]"
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-slate-950 dark:text-white">
-                              {user.full_name || "Unnamed user"}
+                  ) : filtered.length ? (
+                    filtered.map((user) => {
+                      const active = user.id === selectedId;
+                      return (
+                        <button
+                          key={user.id}
+                          type="button"
+                          onClick={() => setSelectedId(user.id)}
+                          className={cx(
+                            "w-full rounded-[22px] border p-3.5 text-left transition-all duration-200",
+                            active
+                              ? "border-slate-300/80 bg-slate-950 text-white shadow-[0_14px_28px_rgba(15,23,42,0.14)] dark:border-white/12 dark:bg-white/[0.08]"
+                              : "border-slate-200/80 bg-white/70 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/[0.05]"
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div
+                                className={cx(
+                                  "truncate text-sm font-semibold",
+                                  active
+                                    ? "text-white"
+                                    : "text-slate-950 dark:text-white"
+                                )}
+                              >
+                                {user.full_name || "Unnamed user"}
+                              </div>
+                              <div
+                                className={cx(
+                                  "mt-1 truncate text-xs",
+                                  active
+                                    ? "text-white/70"
+                                    : "text-slate-500 dark:text-slate-400"
+                                )}
+                              >
+                                {user.user_email}
+                              </div>
                             </div>
-                            <div className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
-                              {user.user_email}
-                            </div>
-                          </div>
 
-                          <div className="flex flex-col items-end gap-1">
-                            <Badge tone={roleTone(user.role)} variant="subtle" size="sm">
-                              {user.role}
-                            </Badge>
-                            <Badge tone={statusTone(user.status)} variant="subtle" size="sm" dot>
-                              {user.status}
-                            </Badge>
+                            <div className="flex flex-col items-end gap-1">
+                              <Badge tone={roleTone(user.role)} variant="subtle" size="sm">
+                                {user.role}
+                              </Badge>
+                              <Badge tone={statusTone(user.status)} variant="subtle" size="sm" dot>
+                                {user.status}
+                              </Badge>
+                            </div>
                           </div>
-                        </div>
-                      </button>
-                    );
-                  })
-                ) : (
-                  <Card variant="subtle" padded="md" className="rounded-[22px]">
-                    <div className="text-sm text-slate-500 dark:text-slate-400">
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-[22px] border border-dashed border-slate-200/80 bg-white/60 p-4 text-sm text-slate-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400">
                       No users matched the current filters.
                     </div>
-                  </Card>
-                )}
+                  )}
+                </div>
               </div>
             </div>
-          </Card>
 
-          <Card variant="surface" padded="lg" className="rounded-[28px]">
-            <div className="space-y-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="text-lg font-semibold tracking-[-0.02em] text-slate-950 dark:text-white">
-                    {selected ? "User Detail" : "New Team User"}
+            <div className="px-5 py-5 sm:px-6">
+              <div className="space-y-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-lg font-semibold tracking-[-0.02em] text-slate-950 dark:text-white">
+                      {selected ? "User detail" : "New team user"}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      Identity, role, status, and access lifecycle.
+                    </div>
                   </div>
-                  <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    Manage roles, update status, or create a new user.
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={statusTone(form.status)} variant="subtle" dot>
+                      {form.status || "invited"}
+                    </Badge>
+                    {!canManage ? (
+                      <Badge tone="warn" variant="subtle">
+                        Read Only
+                      </Badge>
+                    ) : null}
                   </div>
                 </div>
 
-                {!canManage ? (
-                  <Badge tone="warn" variant="subtle">
-                    Read Only
-                  </Badge>
-                ) : null}
-              </div>
-
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-                <Card variant="subtle" padded="lg" className="rounded-[24px]">
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
                   <div className="space-y-5">
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] border border-slate-200/80 bg-white/80 text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200">
-                        <Users className="h-[18px] w-[18px]" strokeWidth={1.9} />
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="text-lg font-semibold tracking-[-0.02em] text-slate-950 dark:text-white">
-                          Identity & Role
-                        </div>
-                        <div className="text-sm leading-6 text-slate-500 dark:text-slate-400">
-                          User identity and workspace access values.
-                        </div>
-                      </div>
-                    </div>
-
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="md:col-span-2">
                         <Field label="Email" hint="Unique workspace email.">
@@ -440,13 +386,14 @@ export default function TeamPanel({ canManage = false }) {
                             }
                             placeholder="Operator name"
                             disabled={!canManage}
+                            leftIcon={<Users className="h-4 w-4" />}
                           />
                         </Field>
                       </div>
 
                       {!selected ? (
                         <div className="md:col-span-2">
-                          <Field label="Password" hint="Optional. Can be set for local login access.">
+                          <Field label="Password" hint="Optional local login password.">
                             <Input
                               type="password"
                               value={form.password}
@@ -493,37 +440,79 @@ export default function TeamPanel({ canManage = false }) {
                         </Select>
                       </Field>
                     </div>
+
+                    <div className="flex flex-wrap gap-3 border-t border-slate-200/70 pt-5 dark:border-white/10">
+                      {!selected ? (
+                        <Button
+                          onClick={createUser}
+                          disabled={!canManage || surface.saving || !form.user_email}
+                          leftIcon={<UserPlus className="h-4 w-4" />}
+                        >
+                          {pendingAction === "create" ? "Creating..." : "Create User"}
+                        </Button>
+                      ) : (
+                        <>
+                          <Button
+                            onClick={saveSelectedUser}
+                            disabled={!canManage || surface.saving || !dirty}
+                          >
+                            {pendingAction === "save" ? "Saving..." : "Save Changes"}
+                          </Button>
+
+                          <Button
+                            variant="secondary"
+                            onClick={() => updateSelectedStatus("active")}
+                            disabled={!canManage || surface.saving}
+                          >
+                            Activate
+                          </Button>
+
+                          <Button
+                            variant="secondary"
+                            onClick={() => updateSelectedStatus("disabled")}
+                            disabled={!canManage || surface.saving}
+                          >
+                            Disable
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            onClick={() => updateSelectedStatus("removed")}
+                            disabled={!canManage || surface.saving}
+                          >
+                            Remove
+                          </Button>
+
+                          <Button
+                            variant="destructive"
+                            onClick={handleDelete}
+                            disabled={!canManage || surface.saving}
+                            leftIcon={<Trash2 className="h-4 w-4" />}
+                            className="ml-auto"
+                          >
+                            Delete
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </Card>
 
-                <Card variant="subtle" padded="lg" className="rounded-[24px]">
-                  <div className="space-y-5">
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] border border-slate-200/80 bg-white/80 text-slate-700 shadow-[0_10px_24px_rgba(15,23,42,0.06)] dark:border-white/10 dark:bg-white/[0.05] dark:text-slate-200">
-                        <Shield className="h-[18px] w-[18px]" strokeWidth={1.9} />
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="text-lg font-semibold tracking-[-0.02em] text-slate-950 dark:text-white">
-                          Access Snapshot
-                        </div>
-                        <div className="text-sm leading-6 text-slate-500 dark:text-slate-400">
-                          Status and time metadata for the selected user.
-                        </div>
-                      </div>
+                  <div className="space-y-4 rounded-[24px] border border-slate-200/80 bg-white/72 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                    <div className="text-sm font-semibold tracking-[-0.01em] text-slate-950 dark:text-white">
+                      Access snapshot
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+                    <div className="grid gap-3">
                       <StatTile
                         label="Mode"
                         value={selected ? "Edit" : "Create"}
-                        hint="Current form context"
+                        hint="Current form"
                         tone={selected ? "info" : "success"}
                       />
                       <StatTile
                         label="Role"
                         value={form.role || "member"}
-                        hint="Permission assignment"
+                        hint={`${uniqueRoleCount} role types`}
                         tone={roleTone(form.role)}
                       />
                       <StatTile
@@ -535,8 +524,8 @@ export default function TeamPanel({ canManage = false }) {
                     </div>
 
                     {selected ? (
-                      <div className="grid gap-3">
-                        <div className="rounded-[22px] border border-slate-200/80 bg-white/70 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                      <div className="space-y-3 border-t border-slate-200/80 pt-4 dark:border-white/10">
+                        <div className="rounded-[20px] border border-slate-200/80 bg-white/76 p-4 dark:border-white/10 dark:bg-white/[0.03]">
                           <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
                             <CalendarClock className="h-3.5 w-3.5" />
                             Created
@@ -546,7 +535,7 @@ export default function TeamPanel({ canManage = false }) {
                           </div>
                         </div>
 
-                        <div className="rounded-[22px] border border-slate-200/80 bg-white/70 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+                        <div className="rounded-[20px] border border-slate-200/80 bg-white/76 p-4 dark:border-white/10 dark:bg-white/[0.03]">
                           <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
                             <CalendarClock className="h-3.5 w-3.5" />
                             Last Seen
@@ -557,70 +546,15 @@ export default function TeamPanel({ canManage = false }) {
                         </div>
                       </div>
                     ) : (
-                      <div className="rounded-[22px] border border-dashed border-slate-200/80 bg-white/60 p-4 text-sm text-slate-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400">
+                      <div className="rounded-[20px] border border-dashed border-slate-200/80 bg-white/60 p-4 text-sm text-slate-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400">
                         Select a user from the directory or create a new one.
                       </div>
                     )}
                   </div>
-                </Card>
-              </div>
-
-              <div className="flex flex-wrap gap-3 border-t border-slate-200/70 pt-5 dark:border-white/10">
-                {!selected ? (
-                  <Button
-                    onClick={createUser}
-                    disabled={!canManage || surface.saving || !form.user_email}
-                    leftIcon={<UserPlus className="h-4 w-4" />}
-                  >
-                    {pendingAction === "create" ? "Creating..." : "Create User"}
-                  </Button>
-                ) : (
-                  <>
-                    <Button
-                      onClick={saveSelectedUser}
-                      disabled={!canManage || surface.saving || !dirty}
-                    >
-                      {pendingAction === "save" ? "Saving..." : "Save Changes"}
-                    </Button>
-
-                    <Button
-                      variant="secondary"
-                      onClick={() => updateSelectedStatus("active")}
-                      disabled={!canManage || surface.saving}
-                    >
-                      Activate
-                    </Button>
-
-                    <Button
-                      variant="secondary"
-                      onClick={() => updateSelectedStatus("disabled")}
-                      disabled={!canManage || surface.saving}
-                    >
-                      Disable
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      onClick={() => updateSelectedStatus("removed")}
-                      disabled={!canManage || surface.saving}
-                    >
-                      Remove
-                    </Button>
-
-                    <Button
-                      variant="destructive"
-                      onClick={handleDelete}
-                      disabled={!canManage || surface.saving}
-                      leftIcon={<Trash2 className="h-4 w-4" />}
-                      className="ml-auto"
-                    >
-                      Delete
-                    </Button>
-                  </>
-                )}
+                </div>
               </div>
             </div>
-          </Card>
+          </div>
         </div>
       </div>
     </SettingsSection>

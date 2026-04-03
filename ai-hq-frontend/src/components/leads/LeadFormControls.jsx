@@ -3,7 +3,7 @@ import React from "react";
 export function LeadField({ label, children }) {
   return (
     <label className="block">
-      <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
+      <div className="mb-2 text-sm font-medium text-text-muted">
         {label}
       </div>
       {children}
@@ -18,7 +18,7 @@ export function LeadInput({ value, onChange, placeholder = "", type = "text" }) 
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className="premium-input w-full rounded-2xl px-4 py-3 text-sm outline-none focus:border-sky-300/90"
+      className="h-10 w-full rounded-md border border-line bg-surface px-3 text-sm text-text outline-none transition focus:border-brand"
     />
   );
 }
@@ -28,7 +28,7 @@ export function LeadSelect({ value, onChange, children }) {
     <select
       value={value}
       onChange={onChange}
-      className="premium-select w-full rounded-2xl px-4 py-3 text-sm outline-none focus:border-sky-300/90"
+      className="h-10 w-full rounded-md border border-line bg-surface px-3 text-sm text-text outline-none transition focus:border-brand"
     >
       {children}
     </select>
@@ -42,7 +42,7 @@ export function LeadTextArea({ value, onChange, rows = 4, placeholder = "" }) {
       value={value}
       onChange={onChange}
       placeholder={placeholder}
-      className="premium-textarea w-full resize-none rounded-2xl px-4 py-3 text-sm leading-6 outline-none focus:border-sky-300/90"
+      className="w-full resize-none rounded-md border border-line bg-surface px-3 py-3 text-sm leading-6 text-text outline-none transition focus:border-brand"
     />
   );
 }

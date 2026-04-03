@@ -9,6 +9,21 @@ function trimTrailingSlash(value = "") {
   return s(value).replace(/\/+$/, "");
 }
 
+function toProxyTarget(value = "") {
+  const raw = trimTrailingSlash(value);
+  if (!raw) return "";
+
+  try {
+    const parsed = new URL(raw);
+    if (parsed.pathname === "/api") {
+      parsed.pathname = "";
+    }
+    return trimTrailingSlash(parsed.toString());
+  } catch {
+    return raw.replace(/\/api$/i, "");
+  }
+}
+
 function toWsTarget(value = "") {
   const raw = trimTrailingSlash(value);
   if (!raw) return "";
@@ -21,10 +36,12 @@ function toWsTarget(value = "") {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
 
-  const apiProxyTarget = trimTrailingSlash(
+  const apiProxyTarget = toProxyTarget(
     env.VITE_DEV_PROXY_TARGET ||
       env.DEV_PROXY_TARGET ||
-      "https://api.hq.weneox.com"
+      env.VITE_API_BASE ||
+      env.API_BASE ||
+      "http://localhost:8080"
   );
 
   const wsProxyTarget = toWsTarget(
@@ -85,15 +102,13 @@ export default defineConfig(({ mode }) => {
         "/api": {
           target: apiProxyTarget,
           changeOrigin: true,
-          secure: true,
-          cookieDomainRewrite: "localhost",
-          cookiePathRewrite: "/",
+          secure: false,
         },
         "/ws": {
           target: wsProxyTarget,
           ws: true,
           changeOrigin: true,
-          secure: true,
+          secure: false,
         },
       },
     },

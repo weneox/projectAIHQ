@@ -98,10 +98,10 @@ export default function Leads() {
   const score = Number(sel?.score || 0);
 
   return (
-    <div className="premium-page px-6 pb-8 pt-3 md:px-8">
+    <div className="px-6 pb-8 pt-3 md:px-8">
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <div className="premium-kicker">Revenue Workspace</div>
+          <div className="text-sm text-text-muted">Revenue workspace</div>
           <div className="mt-2 text-[32px] font-semibold tracking-[-0.055em] text-slate-950">
             Leads
           </div>
@@ -111,12 +111,12 @@ export default function Leads() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="premium-pill">
+          <div className="inline-flex h-8 items-center rounded-md border border-line bg-surface-muted px-3 text-sm text-text-muted">
             WS: {wsState}
           </div>
 
           {dbDisabled ? (
-            <div className="premium-pill border-amber-200 bg-amber-50 text-amber-700">
+            <div className="inline-flex h-8 items-center rounded-md border border-amber-200 bg-amber-50 px-3 text-sm text-amber-700">
               DB disabled
             </div>
           ) : null}
@@ -124,7 +124,7 @@ export default function Leads() {
           <button
             type="button"
             onClick={loadLeadsData}
-            className="ui-button-secondary"
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-surface px-4 text-sm font-medium text-text transition hover:border-line-strong hover:bg-surface-muted"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
@@ -152,7 +152,7 @@ export default function Leads() {
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
         <div className="border-t border-slate-200/80 px-1 py-5">
-          <div className="flex flex-col gap-4 border-b premium-divider pb-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-4 border-b border-line-soft pb-4 md:flex-row md:items-center md:justify-between">
             <div>
               <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
                 Lead Pipeline
@@ -168,11 +168,11 @@ export default function Leads() {
                   key={stage}
                   type="button"
                   onClick={() => setStageFilter(stage)}
-                  className={`premium-pill ${
+                  className={`inline-flex h-8 items-center rounded-md border px-3 text-sm transition ${
                     stageFilter === stage
-                      ? "is-active"
-                      : "hover:text-slate-900"
-                  }`}
+                      ? "border-line-strong bg-surface text-text"
+                      : "border-line bg-surface-muted text-text-muted hover:border-line-strong hover:bg-surface hover:text-text"
+                    }`}
                 >
                   {stage}
                 </button>
@@ -191,11 +191,11 @@ export default function Leads() {
             </div>
 
             {loading ? (
-              <div className="premium-empty px-4 py-10 text-center text-sm text-slate-500">
+              <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-10 text-center text-sm text-slate-500">
                 Loading leads...
               </div>
             ) : filteredLeads.length === 0 ? (
-              <div className="premium-empty px-4 py-10 text-center">
+              <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-10 text-center">
                 <div className="text-sm font-medium text-slate-700">No leads yet</div>
                 <div className="mt-2 text-sm leading-6 text-slate-500">
                   Inbox və satış axını bağlandıqca lead-lər burada görünəcək.
@@ -280,7 +280,7 @@ export default function Leads() {
                       type="button"
                       onClick={openInboxThread}
                       disabled={!sel?.inbox_thread_id}
-                      className="premium-pill disabled:cursor-not-allowed disabled:opacity-40"
+                      className="inline-flex items-center gap-2 rounded-md border border-line bg-surface px-3 py-2 text-sm font-medium text-text transition hover:border-line-strong hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <ArrowUpRight className="h-3.5 w-3.5" />
                       Open Inbox Thread
@@ -290,7 +290,7 @@ export default function Leads() {
                       type="button"
                       onClick={() => quickSetStage("contacted")}
                       disabled={savingField === "stage"}
-                      className="premium-pill"
+                      className="inline-flex items-center gap-2 rounded-md border border-line bg-surface px-3 py-2 text-sm font-medium text-text transition hover:border-line-strong hover:bg-surface-muted"
                     >
                       <CircleDot className="h-3.5 w-3.5" />
                       Mark Contacted
@@ -300,7 +300,7 @@ export default function Leads() {
                       type="button"
                       onClick={() => quickSetStage("qualified")}
                       disabled={savingField === "stage"}
-                      className="premium-pill"
+                      className="inline-flex items-center gap-2 rounded-md border border-line bg-surface px-3 py-2 text-sm font-medium text-text transition hover:border-line-strong hover:bg-surface-muted"
                     >
                       <Target className="h-3.5 w-3.5" />
                       Move to Qualified
@@ -556,15 +556,15 @@ export default function Leads() {
 
             <div className="mt-5 space-y-3">
               {!sel ? (
-                <div className="premium-empty px-4 py-8 text-center text-sm text-slate-500">
+                <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-8 text-center text-sm text-slate-500">
                   Select a lead to see activity.
                 </div>
               ) : eventsLoading ? (
-                <div className="premium-empty px-4 py-8 text-center text-sm text-slate-500">
+                <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-8 text-center text-sm text-slate-500">
                   Loading activity...
                 </div>
               ) : events.length === 0 ? (
-                <div className="premium-empty px-4 py-8 text-center text-sm text-slate-500">
+                <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-8 text-center text-sm text-slate-500">
                   No events yet.
                 </div>
               ) : (

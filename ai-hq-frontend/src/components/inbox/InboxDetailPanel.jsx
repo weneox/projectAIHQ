@@ -437,15 +437,15 @@ export default function InboxDetailPanel({
         <div className="border-b border-slate-200/70 bg-[#f6f6f7] px-5 py-4">
           <div className="flex items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="lux-loading-shimmer h-11 w-11 rounded-full bg-slate-100" />
+              <div className="h-11 w-11 animate-pulse rounded-full bg-surface-subtle" />
               <div className="min-w-0 space-y-2">
-                <div className="lux-loading-shimmer h-4 w-36 rounded-full bg-slate-100" />
-                <div className="lux-loading-shimmer h-3 w-24 rounded-full bg-slate-100/80" />
+                <div className="h-4 w-36 animate-pulse rounded-md bg-surface-subtle" />
+                <div className="h-3 w-24 animate-pulse rounded-md bg-surface-subtle" />
               </div>
             </div>
             <div className="flex gap-2">
-              <div className="lux-loading-shimmer h-10 w-10 rounded-full bg-slate-100" />
-              <div className="lux-loading-shimmer h-10 w-10 rounded-full bg-slate-100" />
+              <div className="h-10 w-10 animate-pulse rounded-full bg-surface-subtle" />
+              <div className="h-10 w-10 animate-pulse rounded-full bg-surface-subtle" />
             </div>
           </div>
         </div>

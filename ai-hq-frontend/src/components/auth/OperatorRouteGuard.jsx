@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { ShieldAlert } from "lucide-react";
-import { getAppSessionContext } from "../../lib/appSession.js";
+import {
+  getAppAuthContext,
+  getAppSessionContext,
+  peekAppAuthContext,
+  peekAppSessionContext,
+} from "../../lib/appSession.js";
+import { isLocalWorkspaceEntryEnabled } from "../../lib/appEntry.js";
 import AppBootSurface from "../loading/AppBootSurface.jsx";
 
 const DEFAULT_ALLOWED_ROLES = new Set(["owner", "admin", "operator"]);
@@ -12,6 +18,27 @@ function normalizeRole(value) {
 
 function hasRequiredRole(role, allowedRoles = DEFAULT_ALLOWED_ROLES) {
   return allowedRoles.has(normalizeRole(role));
+}
+
+function pickAuthRole(auth = {}) {
+  return normalizeRole(
+    auth?.membership?.role ||
+      auth?.workspace?.role ||
+      auth?.user?.role ||
+      auth?.role
+  );
+}
+
+function deriveGuardState(auth = {}, session = {}, allowedRoles = DEFAULT_ALLOWED_ROLES) {
+  const authenticated = !!(session?.auth?.authenticated ?? auth?.authenticated);
+  const role = normalizeRole(session?.viewerRole) || pickAuthRole(auth);
+
+  return {
+    loading: false,
+    authenticated,
+    allowed: authenticated && hasRequiredRole(role, allowedRoles),
+    unavailable: false,
+  };
 }
 
 function AccessDeniedState({ title = "Operator access required", description }) {
@@ -63,43 +90,121 @@ export default function OperatorRouteGuard({
   allowedRoles = DEFAULT_ALLOWED_ROLES,
 }) {
   const location = useLocation();
-  const [state, setState] = useState({
-    loading: true,
-    authenticated: false,
-    allowed: false,
+  const localWorkspaceEntry = isLocalWorkspaceEntryEnabled();
+  const [state, setState] = useState(() => {
+    if (localWorkspaceEntry) {
+      return {
+        loading: false,
+        authenticated: true,
+        allowed: true,
+        unavailable: false,
+      };
+    }
+
+    const cachedAuth = peekAppAuthContext();
+    const cachedSession = peekAppSessionContext();
+
+    if (
+      cachedAuth?.authenticated ||
+      cachedSession?.auth?.authenticated
+    ) {
+      return deriveGuardState(cachedAuth, cachedSession, allowedRoles);
+    }
+
+    return {
+      loading: true,
+      authenticated: false,
+      allowed: false,
+      unavailable: false,
+    };
   });
 
   useEffect(() => {
     let alive = true;
 
-    getAppSessionContext()
-      .then((session) => {
-        if (!alive) return;
-        const authenticated = !!session?.auth?.authenticated;
-        const role = normalizeRole(session?.viewerRole);
-
+    async function run() {
+      if (localWorkspaceEntry) {
         setState({
           loading: false,
-          authenticated,
-          allowed: authenticated && hasRequiredRole(role, allowedRoles),
+          authenticated: true,
+          allowed: true,
+          unavailable: false,
         });
-      })
-      .catch(() => {
+        return;
+      }
+
+      const cachedAuth = peekAppAuthContext();
+      const cachedSession = peekAppSessionContext();
+
+      try {
+        const auth = await getAppAuthContext();
         if (!alive) return;
+
+        const authenticated = !!auth?.authenticated;
+        if (!authenticated) {
+          setState({
+            loading: false,
+            authenticated: false,
+            allowed: false,
+            unavailable: false,
+          });
+          return;
+        }
+
+        let role = pickAuthRole(auth);
+
+        try {
+          const session = await getAppSessionContext();
+          if (!alive) return;
+          role = normalizeRole(session?.viewerRole) || role;
+        } catch {}
+
+        if (!alive) return;
+
+        setState({
+          ...deriveGuardState(auth, { viewerRole: role, auth }, allowedRoles),
+        });
+      } catch {
+        if (!alive) return;
+
+        const fallbackAuth = peekAppAuthContext() || cachedAuth;
+        const fallbackSession = peekAppSessionContext() || cachedSession;
+
+        if (
+          fallbackAuth?.authenticated ||
+          fallbackSession?.auth?.authenticated
+        ) {
+          setState(deriveGuardState(fallbackAuth, fallbackSession, allowedRoles));
+          return;
+        }
+
         setState({
           loading: false,
           authenticated: false,
           allowed: false,
+          unavailable: true,
         });
-      });
+      }
+    }
+
+    run();
 
     return () => {
       alive = false;
     };
-  }, [allowedRoles]);
+  }, [allowedRoles, localWorkspaceEntry]);
 
   if (state.loading) {
     return <AppBootSurface label="Preparing workspace" detail="Loading operator access" />;
+  }
+
+  if (state.unavailable) {
+    return (
+      <AppBootSurface
+        label="Operator surface unavailable"
+        detail="We could not verify operator access right now."
+      />
+    );
   }
 
   if (!state.authenticated) {

@@ -29,6 +29,21 @@ import {
 
 import { broadcastLead, broadcastLeadEvent, createLeadEvent, emitLeadChange, emitLeadCreated } from "./events.js";
 
+function isMissingSchemaError(error) {
+  const code = s(error?.code).toUpperCase();
+  const message = s(error?.message).toLowerCase();
+
+  if (code === "42P01" || code === "42703") {
+    return true;
+  }
+
+  return (
+    message.includes("does not exist") ||
+    message.includes("undefined column") ||
+    message.includes("undefined table")
+  );
+}
+
 export function createLeadHandlers({ db, wsHub }) {
   async function ingestLead(req, res) {
     const internalAuth = getInternalTokenAuthResult(req);
@@ -165,6 +180,16 @@ export function createLeadHandlers({ db, wsHub }) {
 
       return okJson(res, { ok: true, tenantKey, leads });
     } catch (e) {
+      if (isMissingSchemaError(e)) {
+        return okJson(res, {
+          ok: true,
+          tenantKey,
+          leads: [],
+          degraded: true,
+          reasonCode: "leads_schema_unavailable",
+        });
+      }
+
       return okJson(res, {
         ok: false,
         error: "Error",
@@ -220,6 +245,16 @@ export function createLeadHandlers({ db, wsHub }) {
       const lead = await findActiveLeadByInboxThreadId(db, tenantKey, inboxThreadId);
       return okJson(res, { ok: true, lead });
     } catch (e) {
+      if (isMissingSchemaError(e)) {
+        return okJson(res, {
+          ok: true,
+          tenantKey,
+          leads: [],
+          degraded: true,
+          reasonCode: "leads_schema_unavailable",
+        });
+      }
+
       return okJson(res, {
         ok: false,
         error: "Error",
@@ -252,6 +287,16 @@ export function createLeadHandlers({ db, wsHub }) {
       const events = await fetchLeadEvents(db, id, limit);
       return okJson(res, { ok: true, leadId: id, events });
     } catch (e) {
+      if (isMissingSchemaError(e)) {
+        return okJson(res, {
+          ok: true,
+          leadId: id,
+          events: [],
+          degraded: true,
+          reasonCode: "lead_events_schema_unavailable",
+        });
+      }
+
       return okJson(res, {
         ok: false,
         error: "Error",

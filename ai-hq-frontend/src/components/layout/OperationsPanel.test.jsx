@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import OperationsPanel from "./OperationsPanel.jsx";
 
 describe("OperationsPanel", () => {
-  it("renders secondary operator surfaces and closes on navigation", () => {
+  it("keeps backoffice tools accessible without mixing in the primary launch loops", () => {
     const onNavigate = vi.fn();
 
     render(
@@ -14,11 +14,16 @@ describe("OperationsPanel", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText(/secondary operator tools/i)).toBeTruthy();
+    expect(screen.getByText(/internal and backoffice tools/i)).toBeTruthy();
     expect(screen.getByRole("link", { name: /incidents/i })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /voice/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /leads/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /proposals/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /executions/i })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("link", { name: /comments/i }));
+    expect(screen.queryByRole("link", { name: /^comments$/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^voice$/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole("link", { name: /incidents/i }));
     expect(onNavigate).toHaveBeenCalled();
   });
 });

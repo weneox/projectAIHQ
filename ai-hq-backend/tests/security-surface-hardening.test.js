@@ -25,6 +25,16 @@ test("production CORS policy denies wildcard origin defaults", () => {
   );
 });
 
+test("development CORS policy always includes standard local browser origins", () => {
+  const allowed = buildAllowedCorsOrigins("https://hq.weneox.com", "development");
+
+  assert.equal(allowed.includes("https://hq.weneox.com"), true);
+  assert.equal(allowed.includes("http://localhost:5173"), true);
+  assert.equal(allowed.includes("http://127.0.0.1:5173"), true);
+  assert.equal(isAllowedOrigin("http://localhost:5173", allowed, "development"), true);
+  assert.equal(isAllowedOrigin("http://127.0.0.1:5173", allowed, "development"), true);
+});
+
 test("wildcard preview origin patterns stay explicit to the configured Pages project", () => {
   const allowed = buildAllowedCorsOrigins(
     "https://hq.weneox.com, https://*.hq.pages.dev",

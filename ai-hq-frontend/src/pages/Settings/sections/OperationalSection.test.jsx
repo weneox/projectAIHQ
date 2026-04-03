@@ -2,105 +2,75 @@
 
 import React from "react";
 import { cleanup, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import OperationalSection from "./OperationalSection.jsx";
 
 globalThis.React = React;
 
-vi.mock("../../../api/settings.js", () => ({
-  getMetaConnectUrl: vi.fn(async () => ({ ok: true })),
-}));
-
 afterEach(() => {
   cleanup();
 });
 
 describe("OperationalSection", () => {
-  it("renders retention and backup honesty posture", () => {
+  it("keeps the normal settings surface focused on launch-slice runtime controls", () => {
     render(
-      <OperationalSection
-        canManage
-        savingVoice={false}
-        savingChannel={false}
-        onSaveVoice={vi.fn()}
-        onSaveChannel={vi.fn()}
-        surface={{
-          loading: false,
-          error: "",
-          unavailable: false,
-          ready: true,
-          refresh: vi.fn(),
-        }}
-        permissionState={{
-          operationalSettingsWrite: { allowed: true, message: "" },
-          providerSecretsMutation: { allowed: true, message: "" },
-        }}
-        data={{
-          voice: {
-            settings: {},
-            operational: { ready: true, reasonCode: "" },
-            missingFields: [],
-            repair: { blocked: false, reasonCode: "", nextAction: null },
-          },
-          channels: {
-            meta: {
-              operational: { ready: true, reasonCode: "" },
-              missingFields: [],
-              repair: { blocked: false, reasonCode: "", nextAction: null },
-              providerSecrets: {
-                ready: true,
-                presentSecretKeys: ["page_access_token"],
-                missingSecretKeys: [],
+      <MemoryRouter>
+        <OperationalSection
+          canManage
+          savingVoice={false}
+          onSaveVoice={vi.fn()}
+          surface={{
+            loading: false,
+            error: "",
+            unavailable: false,
+            ready: true,
+            refresh: vi.fn(),
+          }}
+          permissionState={{
+            operationalSettingsWrite: { allowed: true, message: "" },
+          }}
+          data={{
+            voice: {
+              settings: {
+                enabled: true,
+                defaultLanguage: "en",
+                supportedLanguages: ["en", "az"],
+                twilioPhoneNumber: "+15550001111",
+                operatorPhone: "+15550002222",
+                twilioConfig: {
+                  callerId: "+15550001111",
+                },
+                instructions: "Handle receptionist calls politely.",
               },
-              channel: {},
+              operational: { ready: false, reasonCode: "voice_phone_number_missing" },
             },
-          },
-          readiness: {
-            status: "ready",
-            blockers: [],
-          },
-          dataGovernance: {
-            retention: {
-              items: [
-                {
-                  key: "runtime_incidents",
-                  label: "Runtime incident trail",
-                  status: "bounded",
-                  retainDays: 14,
-                  maxRows: 5000,
-                  pruneIntervalHours: 6,
-                  message: "Recent runtime incidents are pruned automatically.",
+            channels: {
+              meta: {
+                operational: {
+                  ready: false,
+                  reasonCode: "channel_identifiers_missing",
                 },
-                {
-                  key: "audit_log",
-                  label: "Control-plane audit history",
-                  status: "unbounded_in_repo",
-                  message: "No repo-enforced retention window is currently defined for audit_log rows.",
-                },
-              ],
+              },
             },
-            backupRestore: {
-              status: "runbook_only",
-              message:
-                "This repo does not create backups or provide self-serve restore.",
-              runbooks: [
-                "docs/runbooks/schema-migration-safety.md",
-                "docs/runbooks/production-rollback.md",
-              ],
-            },
-          },
-        }}
-      />
+          }}
+        />
+      </MemoryRouter>
     );
 
-    expect(screen.getByText(/data retention & restore posture/i)).toBeTruthy();
-    expect(screen.getByText(/runtime incident trail/i)).toBeTruthy();
-    expect(screen.getByText(/retain 14 days · max 5000 rows · prune every 6h/i)).toBeTruthy();
-    expect(screen.getByText(/control-plane audit history/i)).toBeTruthy();
-    expect(screen.getByText(/backup and restore honesty/i)).toBeTruthy();
     expect(
-      screen.getByText(/does not create backups or provide self-serve restore/i)
+      screen.getByRole("heading", { name: /voice runtime/i })
     ).toBeTruthy();
+    expect(screen.getByText(/inbox & comments/i)).toBeTruthy();
+    expect(screen.getByText(/business line/i)).toBeTruthy();
+    expect(screen.getByText(/open integrations/i)).toBeTruthy();
+    expect(screen.getByText(/voice runtime controls/i)).toBeTruthy();
+    expect(screen.getByText(/receptionist instructions/i)).toBeTruthy();
+
+    expect(screen.queryByText(/data retention & restore posture/i)).toBeNull();
+    expect(screen.queryByText(/provider secret readiness/i)).toBeNull();
+    expect(screen.queryByText(/backup and restore honesty/i)).toBeNull();
+    expect(screen.queryByText(/save channel identifiers/i)).toBeNull();
   });
 });

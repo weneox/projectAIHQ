@@ -33,7 +33,7 @@ describe("resolveAuthenticatedLanding", () => {
       },
     });
 
-    expect(target).toBe("/setup");
+    expect(target).toBe("/home");
   });
 
   it("routes completed workspaces into backend-provided core route", () => {
@@ -48,7 +48,7 @@ describe("resolveAuthenticatedLanding", () => {
       },
     });
 
-    expect(target).toBe("/expert");
+    expect(target).toBe("/home");
   });
 
   it("prefers explicit workspace destination paths from bootstrap", () => {
@@ -65,7 +65,7 @@ describe("resolveAuthenticatedLanding", () => {
       },
     });
 
-    expect(target).toBe("/setup");
+    expect(target).toBe("/home");
   });
 
   it("falls back to workspace when completed workspace points at non-product root", () => {
@@ -79,7 +79,7 @@ describe("resolveAuthenticatedLanding", () => {
       },
     });
 
-    expect(target).toBe("/workspace");
+    expect(target).toBe("/home");
   });
 
   it("refuses internal-only routes as authenticated landing targets", () => {
@@ -93,11 +93,12 @@ describe("resolveAuthenticatedLanding", () => {
       },
     });
 
-    expect(target).toBe("/workspace");
+    expect(target).toBe("/home");
   });
 
   it("defines a bounded production route list and a separate internal-only route list", () => {
     expect(CORE_APP_ROUTES).toEqual([
+      "/home",
       "/workspace",
       "/truth",
       "/publish",
@@ -136,7 +137,7 @@ describe("resolveAuthenticatedLanding", () => {
       },
     });
 
-    expect(target).toBe("/workspace");
+    expect(target).toBe("/home");
   });
 
   it("promotes workspace as the default completed landing when no better core route is provided", () => {
@@ -150,7 +151,7 @@ describe("resolveAuthenticatedLanding", () => {
       },
     });
 
-    expect(target).toBe("/workspace");
+    expect(target).toBe("/home");
   });
 
   it("accepts expert as a first-class authenticated route", () => {
@@ -164,7 +165,7 @@ describe("resolveAuthenticatedLanding", () => {
       },
     });
 
-    expect(target).toBe("/expert");
+    expect(target).toBe("/home");
   });
 
   it("trusts the canonical backend setup route for incomplete workspaces", () => {
@@ -180,7 +181,7 @@ describe("resolveAuthenticatedLanding", () => {
       },
     });
 
-    expect(target).toBe("/setup");
+    expect(target).toBe("/home");
   });
 });
 

@@ -30,6 +30,13 @@ export async function saveRuntimePreferences({
     throw new Error("saveRuntimePreferences: tenant scope is required");
   }
 
+  const blocked = new Error(
+    "Direct runtime preference writes are no longer allowed here because they can mutate governed business truth. Use setup review staging for governed changes and operational settings routes for direct runtime controls."
+  );
+  blocked.code = "GOVERNED_RUNTIME_PREFERENCES_WRITE_BLOCKED";
+  blocked.statusCode = 409;
+  throw blocked;
+
   const { normalized, provided, providedKeys } =
     normalizeRuntimePreferencesInput(body);
 

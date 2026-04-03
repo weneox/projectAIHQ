@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import Card from "../ui/Card.jsx";
 import Input from "../ui/Input.jsx";
@@ -120,7 +121,10 @@ export default function WorkspaceGeneralForm({
   entitlements = {},
   patchTenant,
   canManage = true,
+  canDirectEdit = true,
+  governance = {},
 }) {
+  const canEdit = canManage && canDirectEdit;
   const companyName = tenant.company_name || "Untitled Workspace";
   const enabledLanguages = tenant.enabled_languages || [];
   const activeText = tenant.active ? "Enabled" : "Disabled";
@@ -142,6 +146,34 @@ export default function WorkspaceGeneralForm({
       tone="default"
     >
       <div className="space-y-6">
+        {!canDirectEdit ? (
+          <Card variant="subtle" padded="lg" className="rounded-[28px]">
+            <div className="space-y-3">
+              <Badge tone="warn" variant="subtle" dot>
+                Governed through review
+              </Badge>
+              <div className="text-sm leading-6 text-slate-600 dark:text-slate-300">
+                Workspace identity and localization no longer save directly from Settings.
+                Stage those changes through setup review so approved truth and runtime projection stay aligned.
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  to={governance?.setupRoute || "/setup"}
+                  className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+                >
+                  Open setup review
+                </Link>
+                <Link
+                  to={governance?.truthRoute || "/truth"}
+                  className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100"
+                >
+                  View approved truth
+                </Link>
+              </div>
+            </div>
+          </Card>
+        ) : null}
+
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
           <Card
             variant="surface"
@@ -283,7 +315,7 @@ export default function WorkspaceGeneralForm({
                   <Input
                     value={tenant.company_name || ""}
                     placeholder="Neox Company"
-                    disabled={!canManage}
+                    disabled={!canEdit}
                     onChange={(e) => patchTenant("company_name", e.target.value)}
                   />
                 </Field>
@@ -295,7 +327,7 @@ export default function WorkspaceGeneralForm({
                   <Input
                     value={tenant.legal_name || ""}
                     placeholder="Neox Company LLC"
-                    disabled={!canManage}
+                    disabled={!canEdit}
                     onChange={(e) => patchTenant("legal_name", e.target.value)}
                   />
                 </Field>
@@ -307,7 +339,7 @@ export default function WorkspaceGeneralForm({
                   <Input
                     value={tenant.industry_key || ""}
                     placeholder="technology"
-                    disabled={!canManage}
+                    disabled={!canEdit}
                     onChange={(e) => patchTenant("industry_key", e.target.value)}
                   />
                 </Field>
@@ -347,7 +379,7 @@ export default function WorkspaceGeneralForm({
                   <Input
                     value={tenant.timezone || ""}
                     placeholder="Asia/Baku"
-                    disabled={!canManage}
+                    disabled={!canEdit}
                     onChange={(e) => patchTenant("timezone", e.target.value)}
                   />
                 </Field>
@@ -359,7 +391,7 @@ export default function WorkspaceGeneralForm({
                   <Input
                     value={tenant.default_language || ""}
                     placeholder="az"
-                    disabled={!canManage}
+                    disabled={!canEdit}
                     onChange={(e) =>
                       patchTenant("default_language", e.target.value)
                     }
@@ -373,7 +405,7 @@ export default function WorkspaceGeneralForm({
                   <Input
                     value={tenant.country_code || ""}
                     placeholder="AZ"
-                    disabled={!canManage}
+                    disabled={!canEdit}
                     onChange={(e) => patchTenant("country_code", e.target.value)}
                   />
                 </Field>
@@ -385,7 +417,7 @@ export default function WorkspaceGeneralForm({
                   <Input
                     value={tenant.market_region || ""}
                     placeholder="CIS"
-                    disabled={!canManage}
+                    disabled={!canEdit}
                     onChange={(e) => patchTenant("market_region", e.target.value)}
                   />
                 </Field>
@@ -398,7 +430,7 @@ export default function WorkspaceGeneralForm({
                     <Input
                       value={stringifyCsv(enabledLanguages)}
                       placeholder="az, en"
-                      disabled={!canManage}
+                      disabled={!canEdit}
                       onChange={(e) =>
                         patchTenant("enabled_languages", parseCsv(e.target.value))
                       }

@@ -108,6 +108,7 @@ class FakeLoginDb {
     this.users = new Map();
     this.authSessions = new Map();
     this.loginAttempts = new Map();
+    this.failUserSessionLookupWith = null;
   }
 
   seedTenant(tenant) {
@@ -245,6 +246,12 @@ class FakeLoginDb {
     }
 
     if (text.includes("from auth_identity_sessions s") && text.includes("join auth_identities i")) {
+      if (this.failUserSessionLookupWith) {
+        const error = new Error(this.failUserSessionLookupWith.message || "session lookup failed");
+        error.code = this.failUserSessionLookupWith.code || "AUTH_DB_TIMEOUT";
+        throw error;
+      }
+
       const row = this.authSessions.get(String(values[0])) || null;
       if (!row || row.revoked_at) return { rowCount: 0, rows: [] };
       if (new Date(row.expires_at).getTime() <= Date.now()) return { rowCount: 0, rows: [] };
@@ -938,6 +945,124 @@ test("logout revokes the active session even when duplicate user cookies are pre
     headers: { cookie: duplicateCookieHeader },
   });
   assert.equal(meAfter.res.body?.authenticated, false);
+});
+
+test("auth me ignores stale duplicate user cookies when a valid session cookie is also present", async () => {
+  const db = new FakeLoginDb();
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "owner@acme.test",
+    password: "secret-pass",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    companyName: "Acme Clinic",
+    membershipId: "membership-1",
+    userId: "user-1",
+  });
+
+  const loginRouter = createLoginRouter(db);
+  const sessionRouter = createSessionRouter(db);
+  const login = await invokeRoute(loginRouter, "post", "/auth/login", {
+    body: { email: "owner@acme.test", password: "secret-pass" },
+  });
+  const sessionCookie = login.res.cookies.find((cookie) => cookie.name === "aihq_user");
+  const duplicateCookieHeader = `aihq_user=stale-shadow-token; aihq_user=${sessionCookie.value}`;
+
+  const me = await invokeRoute(sessionRouter, "get", "/auth/me", {
+    headers: { cookie: duplicateCookieHeader },
+  });
+
+  assert.equal(me.res.statusCode, 200);
+  assert.equal(me.res.body?.authenticated, true);
+  assert.equal(me.res.body?.user?.tenantKey, "acme");
+  assert.equal(me.res.cookiesCleared.length, 0);
+});
+
+test("auth me does not clear the user cookie on transient session lookup failure", async () => {
+  const db = new FakeLoginDb();
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "owner@acme.test",
+    password: "secret-pass",
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+    companyName: "Acme Clinic",
+    membershipId: "membership-1",
+    userId: "user-1",
+  });
+
+  const loginRouter = createLoginRouter(db);
+  const sessionRouter = createSessionRouter(db);
+  const login = await invokeRoute(loginRouter, "post", "/auth/login", {
+    body: { email: "owner@acme.test", password: "secret-pass" },
+  });
+  const sessionCookie = login.res.cookies.find((cookie) => cookie.name === "aihq_user");
+
+  db.failUserSessionLookupWith = {
+    code: "AUTH_DB_TIMEOUT",
+    message: "auth lookup timed out",
+  };
+
+  const me = await invokeRoute(sessionRouter, "get", "/auth/me", {
+    headers: { cookie: `aihq_user=${sessionCookie.value}` },
+  });
+
+  assert.equal(me.res.statusCode, 503);
+  assert.equal(me.res.body?.ok, false);
+  assert.equal(me.res.body?.reason, "auth db unavailable");
+  assert.equal(me.res.cookiesCleared.length, 0);
+});
+
+test("workspace switch uses the validated session cookie even when a stale duplicate cookie is present", async () => {
+  const db = new FakeLoginDb();
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
+    tenantId: "tenant-1",
+    tenantKey: "dental",
+    companyName: "Dental HQ",
+    membershipId: "membership-1",
+    userId: "user-1",
+    role: "owner",
+  });
+  seedIdentityWithMembership(db, {
+    identityId: "identity-1",
+    email: "shared@company.test",
+    password: "shared-pass",
+    tenantId: "tenant-2",
+    tenantKey: "hotel",
+    companyName: "Hotel HQ",
+    membershipId: "membership-2",
+    userId: "user-2",
+    role: "member",
+  });
+
+  const loginRouter = createLoginRouter(db);
+  const sessionRouter = createSessionRouter(db);
+  const login = await invokeRoute(loginRouter, "post", "/auth/login", {
+    body: { email: "shared@company.test", password: "shared-pass", tenantKey: "dental" },
+    headers: { host: "localhost:5173" },
+  });
+  const sessionCookie = login.res.cookies.find((cookie) => cookie.name === "aihq_user");
+
+  const meBefore = await invokeRoute(sessionRouter, "get", "/auth/me", {
+    headers: { cookie: `aihq_user=stale-shadow-token; aihq_user=${sessionCookie.value}` },
+  });
+  const hotelWorkspace = meBefore.res.body?.workspaces?.find(
+    (workspace) => workspace.tenantKey === "hotel"
+  );
+
+  const switched = await invokeRoute(loginRouter, "post", "/auth/switch-workspace", {
+    headers: {
+      cookie: `aihq_user=stale-shadow-token; aihq_user=${sessionCookie.value}`,
+      host: "localhost:5173",
+    },
+    body: { switchToken: hotelWorkspace?.switchToken },
+  });
+
+  assert.equal(switched.res.statusCode, 200);
+  assert.equal(switched.res.body?.user?.tenantKey, "hotel");
 });
 
 test("auth me loads canonical active workspace state and available workspaces", async () => {

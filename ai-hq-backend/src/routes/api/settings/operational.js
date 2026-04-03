@@ -33,6 +33,37 @@ import {
   buildVoiceOperationalSaveInput,
 } from "./builders.js";
 
+function isMissingSchemaError(error) {
+  const code = s(error?.code).toUpperCase();
+  const message = s(error?.message).toLowerCase();
+
+  if (code === "42P01" || code === "42703") {
+    return true;
+  }
+
+  return (
+    message.includes("does not exist") ||
+    message.includes("undefined column") ||
+    message.includes("undefined table")
+  );
+}
+
+async function runOptionalOperatorRead(step, work, fallbackValue) {
+  try {
+    return await work();
+  } catch (error) {
+    if (!isMissingSchemaError(error)) {
+      throw error;
+    }
+
+    console.warn(`[settings.operational] optional read unavailable: ${step}`, {
+      code: error?.code || null,
+      message: error?.message || String(error),
+    });
+    return fallbackValue;
+  }
+}
+
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
@@ -105,6 +136,71 @@ function buildDataGovernancePosture() {
         "docs/runbooks/production-rollback.md",
       ],
     },
+  };
+}
+
+function buildDegradedOperationalChannelsPayload() {
+  return {
+    version: "operational_channels_v1",
+    generatedAt: new Date().toISOString(),
+    voice: {
+      available: false,
+      ready: false,
+      reasonCode: "voice_settings_missing",
+      provider: "twilio",
+      mode: "assistant",
+      displayName: "",
+      defaultLanguage: "en",
+      supportedLanguages: [],
+      operator: {
+        enabled: false,
+        phone: "",
+        callerId: "",
+        label: "",
+        mode: "manual",
+      },
+      operatorRouting: {
+        mode: "manual",
+        defaultDepartment: "",
+        departments: {},
+      },
+      realtime: {
+        model: "",
+        voice: "",
+        instructions: "",
+      },
+      telephony: {
+        phoneNumber: "",
+        phoneSid: "",
+      },
+      callback: {
+        enabled: false,
+        mode: "",
+      },
+      transfer: {
+        strategy: "",
+      },
+      limits: {},
+      source: "missing",
+      updatedAt: "",
+    },
+    meta: {
+      available: false,
+      ready: false,
+      reasonCode: "channel_not_connected",
+      provider: "meta",
+      channelType: "",
+      pageId: "",
+      igUserId: "",
+      accountId: "",
+      username: "",
+      status: "",
+      isPrimary: false,
+      isConnected: false,
+      source: "",
+      updatedAt: "",
+    },
+    contractHash: "",
   };
 }
 
@@ -334,21 +430,39 @@ export function operationalSettingsRoutes({ db }) {
         return res.status(404).json({ ok: false, error: "Tenant not found" });
       }
 
-      const voiceSettings = await getTenantVoiceSettings(db, tenant.id);
-      const channels = await dbListTenantChannels(db, tenant.id);
+      const voiceSettings = await runOptionalOperatorRead(
+        "tenant_voice_settings",
+        () => getTenantVoiceSettings(db, tenant.id),
+        null
+      );
+      const channels = await runOptionalOperatorRead(
+        "tenant_channels",
+        () => dbListTenantChannels(db, tenant.id),
+        []
+      );
       const matchedChannel = pickPrimaryMetaChannel(channels);
       const viewerRole = isInternalServiceRequest(req) ? "internal" : getUserRole(req);
-      const operationalChannels = await buildOperationalChannels({
-        db,
-        tenantId: tenant.id,
-        tenantRow: tenant,
-        voiceSettings,
-        matchedChannel,
-      });
-      const metaSecretRows = await dbListTenantSecrets(
-        db,
-        tenant.id,
-        lower(matchedChannel?.provider || "meta")
+      const operationalChannels = await runOptionalOperatorRead(
+        "operational_channels",
+        () =>
+          buildOperationalChannels({
+            db,
+            tenantId: tenant.id,
+            tenantRow: tenant,
+            voiceSettings,
+            matchedChannel,
+          }),
+        buildDegradedOperationalChannelsPayload()
+      );
+      const metaSecretRows = await runOptionalOperatorRead(
+        "tenant_secrets",
+        () =>
+          dbListTenantSecrets(
+            db,
+            tenant.id,
+            lower(matchedChannel?.provider || "meta")
+          ),
+        []
       );
 
       return ok(res, {

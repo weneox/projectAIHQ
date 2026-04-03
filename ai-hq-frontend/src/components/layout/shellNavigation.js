@@ -1,7 +1,9 @@
 import {
   BellDot,
   BriefcaseBusiness,
+  Home,
   LayoutGrid,
+  MessageCircleMore,
   MessageSquareText,
   Radar,
   Settings2,
@@ -12,20 +14,21 @@ import {
 
 const PRIMARY_SECTIONS = [
   {
-    id: "workspace",
-    label: "Workspace",
-    kicker: "Operator console",
-    description: "Business state, system brief, and the main command surface.",
-    icon: LayoutGrid,
-    to: "/workspace",
-    paths: ["/workspace"],
+    id: "home",
+    label: "Home",
+    kicker: "Launch slice",
+    description: "Focused overview of the real operating product and the next operator action.",
+    icon: Home,
+    to: "/home",
+    paths: ["/home"],
     contextGroups: [
       {
-        title: "Overview",
+        title: "Start here",
         items: [
-          { label: "Workspace overview", to: "/workspace" },
-          { label: "Truth viewer", to: "/truth" },
-          { label: "Settings controller", to: "/settings" },
+          { label: "Product home", to: "/home" },
+          { label: "Social inbox", to: "/inbox" },
+          { label: "Comment queue", to: "/comments" },
+          { label: "Voice receptionist", to: "/voice" },
         ],
       },
     ],
@@ -33,61 +36,109 @@ const PRIMARY_SECTIONS = [
   {
     id: "inbox",
     label: "Inbox",
-    kicker: "Conversation ops",
-    description: "Customer conversations, queue triage, and operator handling.",
+    kicker: "Primary",
+    description: "Meta messaging, operator triage, and live conversation handling.",
     icon: MessageSquareText,
     to: "/inbox",
     badgeKey: "inboxUnread",
-    paths: ["/inbox", "/comments", "/incidents"],
+    paths: ["/inbox"],
     contextGroups: [
       {
-        title: "Queue",
+        title: "Messaging",
         items: [
-          { label: "All conversations", to: "/inbox" },
-          { label: "Comments", to: "/comments" },
+          { label: "Social inbox", to: "/inbox" },
           { label: "Incidents", to: "/incidents" },
         ],
       },
+    ],
+  },
+  {
+    id: "comments",
+    label: "Comments",
+    kicker: "Primary",
+    description: "Meta comment moderation, reply review, and operator intervention.",
+    icon: MessageCircleMore,
+    to: "/comments",
+    paths: ["/comments"],
+    contextGroups: [
       {
-        title: "Operator views",
+        title: "Moderation",
         items: [
-          { label: "Mine", hint: "Assigned queue" },
-          { label: "Unassigned", hint: "Intake queue" },
-          { label: "Voice queue", to: "/voice" },
+          { label: "Comment queue", to: "/comments" },
+          { label: "Social inbox", to: "/inbox" },
+        ],
+      },
+    ],
+  },
+  {
+    id: "voice",
+    label: "Voice",
+    kicker: "Primary",
+    description: "Twilio voice operations, handoffs, transcripts, and live call controls.",
+    icon: Waves,
+    to: "/voice",
+    paths: ["/voice"],
+    contextGroups: [
+      {
+        title: "Calls",
+        items: [
+          { label: "Voice receptionist", to: "/voice" },
+          { label: "Social inbox", to: "/inbox" },
+        ],
+      },
+    ],
+  },
+];
+
+const SECONDARY_SECTIONS = [
+  {
+    id: "workspace",
+    label: "Workspace",
+    kicker: "Support",
+    description: "Cross-surface operator brief, posture, and internal control views.",
+    icon: LayoutGrid,
+    to: "/workspace",
+    paths: ["/workspace"],
+    contextGroups: [
+      {
+        title: "Support",
+        items: [
+          { label: "Workspace overview", to: "/workspace" },
+          { label: "Launch scope", to: "/channels" },
         ],
       },
     ],
   },
   {
     id: "channels",
-    label: "Channels",
-    kicker: "Distribution",
-    description: "Connected channels, catalog structure, and surface coverage.",
+    label: "Launch Scope",
+    kicker: "Reference",
+    description: "Honest map of what is live now versus planned, limited, or setup-only.",
     icon: Waypoints,
     to: "/channels",
     paths: ["/channels"],
     contextGroups: [
       {
-        title: "Catalog",
+        title: "Scope",
         items: [
-          { label: "Channel catalog", to: "/channels" },
-          { label: "Settings surface", to: "/settings" },
+          { label: "Launch scope", to: "/channels" },
+          { label: "Settings", to: "/settings" },
         ],
       },
     ],
   },
   {
     id: "contacts",
-    label: "Contacts",
-    kicker: "Pipeline",
-    description: "Lead pipeline, proposals, and conversion follow-through.",
+    label: "Pipeline",
+    kicker: "Backoffice",
+    description: "Lead follow-through and proposal work that supports the business but is not part of the launch product.",
     icon: BriefcaseBusiness,
     to: "/leads",
     badgeKey: "leadsOpen",
     paths: ["/leads", "/proposals"],
     contextGroups: [
       {
-        title: "Pipeline",
+        title: "Backoffice",
         items: [
           { label: "Lead pipeline", to: "/leads" },
           { label: "Proposals", to: "/proposals" },
@@ -97,15 +148,15 @@ const PRIMARY_SECTIONS = [
   },
   {
     id: "publish",
-    label: "Publish",
-    kicker: "Outbound",
-    description: "Publishing queue, execution state, and delivery outcomes.",
+    label: "Content",
+    kicker: "Backoffice",
+    description: "Internal content and publishing workflow, kept available without reading like a launch promise.",
     icon: BellDot,
     to: "/publish",
     paths: ["/publish", "/executions"],
     contextGroups: [
       {
-        title: "Execution",
+        title: "Backoffice",
         items: [
           { label: "Publish queue", to: "/publish" },
           { label: "Executions", to: "/executions" },
@@ -114,38 +165,19 @@ const PRIMARY_SECTIONS = [
     ],
   },
   {
-    id: "voice",
-    label: "Calls",
-    kicker: "Realtime",
-    description: "Voice operations, handoffs, and callback handling.",
-    icon: Waves,
-    to: "/voice",
-    paths: ["/voice"],
-    contextGroups: [
-      {
-        title: "Calls",
-        items: [
-          { label: "Call workspace", to: "/voice" },
-          { label: "Inbox bridge", to: "/inbox" },
-        ],
-      },
-    ],
-  },
-  {
     id: "intelligence",
-    label: "Intelligence",
-    kicker: "Governance",
-    description: "Truth, review history, and business intelligence controls.",
+    label: "Truth",
+    kicker: "Internal",
+    description: "Approved business memory, review history, and control-plane visibility behind the launch loops.",
     icon: ShieldCheck,
     to: "/truth",
     paths: ["/truth"],
     contextGroups: [
       {
-        title: "Truth",
+        title: "Internal",
         items: [
           { label: "Truth viewer", to: "/truth" },
           { label: "Expert control", to: "/expert" },
-          { label: "Executions", to: "/executions" },
         ],
       },
     ],
@@ -154,16 +186,31 @@ const PRIMARY_SECTIONS = [
 
 const UTILITY_SECTIONS = [
   {
+    id: "setup",
+    label: "Setup",
+    kicker: "Configuration",
+    description: "Source intake and business setup that support the launch slice.",
+    icon: Waypoints,
+    to: "/setup",
+    paths: ["/setup"],
+    contextGroups: [
+      {
+        title: "Setup",
+        items: [{ label: "Setup studio", to: "/setup" }],
+      },
+    ],
+  },
+  {
     id: "expert",
     label: "Expert",
-    kicker: "Advanced control",
-    description: "Deep review, diagnostics, and advanced operator tooling.",
+    kicker: "Advanced",
+    description: "Deep diagnostics and advanced internal tooling.",
     icon: Radar,
     to: "/expert",
     paths: ["/expert"],
     contextGroups: [
       {
-        title: "Control",
+        title: "Advanced",
         items: [{ label: "Expert surface", to: "/expert" }],
       },
     ],
@@ -172,20 +219,24 @@ const UTILITY_SECTIONS = [
     id: "settings",
     label: "Settings",
     kicker: "Configuration",
-    description: "Business details, integrations, channels, and team setup.",
+    description: "Launch-slice policy, Meta integration, team access, and operator notifications.",
     icon: Settings2,
     to: "/settings",
     paths: ["/settings"],
     contextGroups: [
       {
         title: "Configuration",
-        items: [{ label: "General settings", to: "/settings" }],
+        items: [{ label: "Operator settings", to: "/settings" }],
       },
     ],
   },
 ];
 
-const ALL_SECTIONS = [...PRIMARY_SECTIONS, ...UTILITY_SECTIONS];
+const ALL_SECTIONS = [
+  ...PRIMARY_SECTIONS,
+  ...SECONDARY_SECTIONS,
+  ...UTILITY_SECTIONS,
+];
 
 function pathMatches(pathname = "", candidate = "") {
   return pathname === candidate || pathname.startsWith(`${candidate}/`);
@@ -213,6 +264,7 @@ function getActiveContextItem(section, pathname = "/") {
 export {
   ALL_SECTIONS,
   PRIMARY_SECTIONS,
+  SECONDARY_SECTIONS,
   UTILITY_SECTIONS,
   getActiveContextItem,
   getActiveShellSection,

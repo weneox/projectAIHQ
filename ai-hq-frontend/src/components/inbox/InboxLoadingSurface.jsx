@@ -1,5 +1,5 @@
 function Shimmer({ className = "" }) {
-  return <div className={`lux-loading-shimmer ${className}`.trim()} />;
+  return <div className={`animate-pulse rounded-md bg-surface-subtle ${className}`.trim()} />;
 }
 
 export function InboxThreadListSkeleton() {

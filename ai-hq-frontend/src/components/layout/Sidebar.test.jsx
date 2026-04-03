@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import Sidebar from "./Sidebar.jsx";
 
 describe("Sidebar", () => {
-  it("renders the command rail and inbox contextual rail without exposing old dashboard navigation", () => {
+  it("makes the launch product primary and keeps support surfaces secondary", () => {
     render(
       <MemoryRouter initialEntries={["/inbox"]}>
         <Sidebar
@@ -16,23 +16,20 @@ describe("Sidebar", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByLabelText("Workspace")).toBeInTheDocument();
-    expect(screen.getByLabelText("Inbox")).toBeInTheDocument();
-    expect(screen.getByLabelText("Contacts")).toBeInTheDocument();
-    expect(screen.getByLabelText("Publish")).toBeInTheDocument();
-    expect(screen.getByLabelText("Calls")).toBeInTheDocument();
-    expect(screen.getByLabelText("Intelligence")).toBeInTheDocument();
-    expect(screen.getByLabelText("Expert")).toBeInTheDocument();
-    expect(screen.getByLabelText("Settings")).toBeInTheDocument();
+    expect(screen.getByText("Launch product")).toBeInTheDocument();
+    expect(screen.getByText("Support and backoffice")).toBeInTheDocument();
 
-    expect(screen.getByText("Conversation ops")).toBeInTheDocument();
-    expect(screen.getByText("All conversations")).toBeInTheDocument();
-    expect(screen.getByText("Voice queue")).toBeInTheDocument();
-    expect(screen.getByText("Mine")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^home$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^inbox/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^comments$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^voice$/i })).toBeInTheDocument();
 
-    expect(screen.queryByText("İdarə Mərkəzi")).not.toBeInTheDocument();
-    expect(screen.queryByText("Yazışmalar")).not.toBeInTheDocument();
-    expect(screen.queryByText("Yayım Mərkəzi")).not.toBeInTheDocument();
-    expect(screen.queryByText("Dərin İdarə")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^workspace$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /launch scope/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^pipeline/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^content$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^truth$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^expert$/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /^settings$/i })).toBeInTheDocument();
   });
 });
