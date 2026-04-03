@@ -5,27 +5,58 @@ import {
   Surface,
 } from "./AppShellPrimitives.jsx";
 
+function normalizeTone(tone = "default") {
+  const value = String(tone || "default").toLowerCase();
+  if (value === "warn") return "warning";
+  if (value === "error") return "danger";
+  return value;
+}
+
+function toneClass(tone = "default") {
+  switch (normalizeTone(tone)) {
+    case "info":
+      return "border-line bg-brand-soft";
+    case "success":
+      return "border-line bg-success-soft";
+    case "warning":
+      return "border-line bg-warning-soft";
+    case "danger":
+      return "border-line bg-danger-soft";
+    default:
+      return "";
+  }
+}
+
 export function PageHeader(props) {
   return <ShellPageHeader {...props} />;
 }
 
-export function PageSection({ children, className = "", divider = true }) {
+export function PageSection({
+  children,
+  className = "",
+  divider = true,
+}) {
   return (
-    <ShellSection className={cx(divider ? "border-t border-line-soft pt-6" : "", className)}>
+    <ShellSection
+      className={cx(divider ? "border-t border-line-soft pt-6" : "", className)}
+    >
       {children}
     </ShellSection>
   );
 }
 
-export function SurfaceBlock({ children, className = "", tone = "default" }) {
+export function SurfaceBlock({
+  children,
+  className = "",
+  tone = "default",
+  padded = "md",
+  shadow = "none",
+}) {
   return (
     <Surface
-      className={cx(
-        tone === "info" && "border-brand/15 bg-brand-soft/40",
-        tone === "warn" && "border-warning/20 bg-warning/10",
-        tone === "success" && "border-success/20 bg-success/10",
-        className
-      )}
+      padded={padded}
+      shadow={shadow}
+      className={cx(toneClass(tone), className)}
     >
       {children}
     </Surface>
@@ -40,10 +71,7 @@ export function InlineCallout({
   className = "",
 }) {
   return (
-    <SurfaceBlock
-      tone={tone}
-      className={cx("rounded-[20px] p-4", className)}
-    >
+    <SurfaceBlock tone={tone} className={cx("rounded-[20px] p-4", className)}>
       {title ? <div className="text-sm font-semibold text-text">{title}</div> : null}
       {body ? <div className="mt-1 text-sm leading-6 text-text-muted">{body}</div> : null}
       {action ? <div className="mt-3">{action}</div> : null}

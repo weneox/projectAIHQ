@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { apiGet } from "../../api/client.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
+import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
 import Sidebar, { SIDEBAR_WIDTH, SHELL_TOPBAR_HEIGHT } from "./Sidebar.jsx";
 import Header from "./Header.jsx";
 import AskAIWidget from "./AskAIWidget.jsx";
@@ -10,6 +11,35 @@ import {
   getActiveContextItem,
   getActiveShellSection,
 } from "./shellNavigation.js";
+
+const INITIAL_SHELL_STATS = {
+  inboxUnread: null,
+  inboxOpen: null,
+  leadsOpen: null,
+  dbDisabled: false,
+  wsState: "idle",
+  availability: "loading",
+  message: "",
+};
+
+const SHELL_REFRESH_EVENT_TYPES = new Set([
+  "inbox.message.created",
+  "inbox.thread.updated",
+  "inbox.thread.read",
+  "inbox.thread.created",
+  "lead.created",
+  "lead.updated",
+]);
+
+function isImmersivePath(pathname = "") {
+  const path = String(pathname || "");
+  return (
+    path.startsWith("/inbox") ||
+    path.startsWith("/comments") ||
+    path.startsWith("/voice") ||
+    path.startsWith("/channels")
+  );
+}
 
 async function fetchShellResource(path) {
   try {
@@ -26,15 +56,60 @@ async function fetchShellResource(path) {
   }
 }
 
-const INITIAL_SHELL_STATS = {
-  inboxUnread: null,
-  inboxOpen: null,
-  leadsOpen: null,
-  dbDisabled: false,
-  wsState: "idle",
-  availability: "loading",
-  message: "",
-};
+function buildShellStatsFromResponses(inboxRes, leadsRes) {
+  const failedResponse = [inboxRes, leadsRes].find((entry) => !entry?.ok);
+
+  if (failedResponse) {
+    return {
+      inboxUnread: null,
+      inboxOpen: null,
+      leadsOpen: null,
+      dbDisabled: false,
+      availability: "unavailable",
+      message:
+        failedResponse.message ||
+        "Shared workspace stats are temporarily unavailable.",
+    };
+  }
+
+  const inboxData = inboxRes?.data;
+  const leadsData = leadsRes?.data;
+
+  const threads = Array.isArray(inboxData?.threads) ? inboxData.threads : [];
+  const leads = Array.isArray(leadsData?.leads) ? leadsData.leads : [];
+
+  const inboxUnread = threads.reduce(
+    (sum, thread) => sum + Number(thread?.unread_count || 0),
+    0
+  );
+
+  const leadsOpen = leads.filter(
+    (lead) => String(lead?.status || "open").toLowerCase() === "open"
+  ).length;
+
+  return {
+    inboxUnread,
+    inboxOpen: threads.length,
+    leadsOpen,
+    dbDisabled: Boolean(inboxData?.dbDisabled || leadsData?.dbDisabled),
+    availability: "ready",
+    message: "",
+  };
+}
+
+function SharedStatsNotice({ message }) {
+  if (!message) return null;
+
+  return (
+    <InlineNotice
+      tone="warning"
+      title="Shared workspace stats unavailable"
+      description={message}
+      className="mb-4"
+      compact
+    />
+  );
+}
 
 export default function Shell() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -49,11 +124,18 @@ export default function Shell() {
   const shellSection = getActiveShellSection(location.pathname);
   const activeContextItem = getActiveContextItem(shellSection, location.pathname);
 
-  const isImmersiveRoute =
-    location.pathname.startsWith("/inbox") ||
-    location.pathname.startsWith("/comments") ||
-    location.pathname.startsWith("/voice") ||
-    location.pathname.startsWith("/channels");
+  const immersive = useMemo(
+    () => isImmersivePath(location.pathname),
+    [location.pathname]
+  );
+
+  const shellPaddingClass = immersive
+    ? "px-0 py-0"
+    : "px-3 py-3 md:px-4 md:py-4 xl:px-6 xl:py-5";
+
+  const shellContentClass = immersive
+    ? "h-full w-full"
+    : "mx-auto max-w-shell-content";
 
   const loadShellStats = useCallback(async () => {
     if (statsRequestRef.current) return statsRequestRef.current;
@@ -63,45 +145,11 @@ export default function Shell() {
       fetchShellResource("/api/leads"),
     ])
       .then(([inboxRes, leadsRes]) => {
-        const failedResponse = [inboxRes, leadsRes].find((entry) => !entry?.ok);
-
-        if (failedResponse) {
-          setShellStats((prev) => ({
-            ...prev,
-            inboxUnread: null,
-            inboxOpen: null,
-            leadsOpen: null,
-            dbDisabled: false,
-            availability: "unavailable",
-            message:
-              failedResponse.message ||
-              "Shared workspace stats are temporarily unavailable.",
-          }));
-          return;
-        }
-
-        const inboxData = inboxRes.data;
-        const leadsData = leadsRes.data;
-        const threads = Array.isArray(inboxData?.threads) ? inboxData.threads : [];
-        const leads = Array.isArray(leadsData?.leads) ? leadsData.leads : [];
-
-        const inboxUnread = threads.reduce(
-          (sum, thread) => sum + Number(thread?.unread_count || 0),
-          0
-        );
-
-        const leadsOpen = leads.filter(
-          (lead) => String(lead?.status || "open").toLowerCase() === "open"
-        ).length;
+        const nextStats = buildShellStatsFromResponses(inboxRes, leadsRes);
 
         setShellStats((prev) => ({
           ...prev,
-          inboxUnread,
-          inboxOpen: threads.length,
-          leadsOpen,
-          dbDisabled: Boolean(inboxData?.dbDisabled || leadsData?.dbDisabled),
-          availability: "ready",
-          message: "",
+          ...nextStats,
         }));
       })
       .finally(() => {
@@ -117,7 +165,7 @@ export default function Shell() {
   const scheduleShellRefresh = useCallback(
     (delay = 180) => {
       clearTimeout(refreshTimerRef.current);
-      refreshTimerRef.current = setTimeout(() => {
+      refreshTimerRef.current = window.setTimeout(() => {
         loadShellStats();
       }, delay);
     },
@@ -148,15 +196,7 @@ export default function Shell() {
 
     const unsubscribeEvents = realtimeStore.subscribeEvents((event) => {
       const type = String(event?.type || "");
-
-      if (
-        type === "inbox.message.created" ||
-        type === "inbox.thread.updated" ||
-        type === "inbox.thread.read" ||
-        type === "inbox.thread.created" ||
-        type === "lead.created" ||
-        type === "lead.updated"
-      ) {
+      if (SHELL_REFRESH_EVENT_TYPES.has(type)) {
         scheduleShellRefresh(120);
       }
     });
@@ -195,24 +235,14 @@ export default function Shell() {
         />
 
         <main
-          className={
-            isImmersiveRoute
-              ? "bg-canvas px-0 py-0"
-              : "bg-canvas px-3 py-3 md:px-4 md:py-4 xl:px-6 xl:py-5"
-          }
+          className={shellPaddingClass}
           style={{
             minHeight: `calc(100vh - ${SHELL_TOPBAR_HEIGHT}px)`,
           }}
         >
-          <div
-            className={
-              isImmersiveRoute ? "h-full w-full" : "mx-auto max-w-shell-content"
-            }
-          >
-            {!isImmersiveRoute && shellStats?.message ? (
-              <div className="mb-4 rounded-md border border-line bg-surface px-4 py-3 text-sm text-text-muted">
-                {shellStats.message}
-              </div>
+          <div className={shellContentClass}>
+            {!immersive ? (
+              <SharedStatsNotice message={shellStats?.message} />
             ) : null}
 
             <Outlet />

@@ -2,12 +2,47 @@ import { forwardRef } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { cx } from "../../lib/cx.js";
 
+function resolveAppearance(appearance = "default") {
+  switch (appearance) {
+    case "product":
+      return {
+        shell: "rounded-[18px]",
+        row: "min-h-[56px] gap-3 px-4",
+        input: "h-[56px] text-[15px] font-medium",
+        textareaWrap: "px-4 py-4",
+        textarea: "min-h-[160px] text-[15px] leading-7",
+        selectWrap: "px-4",
+        select: "h-[56px] pr-8 text-[15px] font-medium",
+      };
+    case "quiet":
+      return {
+        shell: "rounded-soft",
+        row: "min-h-[44px] gap-2 px-3.5",
+        input: "h-11 text-[14px]",
+        textareaWrap: "px-4 py-3",
+        textarea: "min-h-[120px] text-[14px] leading-6",
+        selectWrap: "px-3.5",
+        select: "h-11 pr-8 text-[14px]",
+      };
+    default:
+      return {
+        shell: "rounded-panel",
+        row: "min-h-[46px] gap-2 px-3.5",
+        input: "h-11 text-[14px]",
+        textareaWrap: "px-4 py-3",
+        textarea: "min-h-[140px] text-[14px] leading-7",
+        selectWrap: "px-3.5",
+        select: "h-11 pr-8 text-[14px]",
+      };
+  }
+}
+
 function surfaceClass({ disabled, readOnly, invalid }) {
   if (disabled) {
     return "border-line-soft bg-surface-subtle text-text-subtle opacity-70";
   }
   if (invalid) {
-    return "border-danger/35 bg-surface";
+    return "border-danger bg-surface";
   }
   if (readOnly) {
     return "border-line-soft bg-surface-muted";
@@ -21,11 +56,15 @@ function FieldShell({
   disabled = false,
   readOnly = false,
   invalid = false,
+  appearance = "default",
 }) {
+  const view = resolveAppearance(appearance);
+
   return (
     <div
       className={cx(
-        "relative w-full overflow-hidden rounded-panel border transition-[border-color,background-color,box-shadow] duration-base ease-premium",
+        "relative w-full overflow-hidden border transition-[border-color,background-color,box-shadow] duration-200 ease-premium",
+        view.shell,
         surfaceClass({ disabled, readOnly, invalid }),
         className
       )}
@@ -46,8 +85,11 @@ export function InputGroup({
   disabled,
   readOnly,
   invalid = false,
+  appearance = "default",
   ...props
 }) {
+  const view = resolveAppearance(appearance);
+
   const showClear =
     typeof onClear === "function" &&
     !disabled &&
@@ -60,18 +102,21 @@ export function InputGroup({
       disabled={disabled}
       readOnly={readOnly}
       invalid={invalid}
+      appearance={appearance}
     >
-      <div className="flex min-h-[46px] items-center gap-2 px-3.5">
-        {leftIcon ? <span className="text-text-subtle">{leftIcon}</span> : null}
+      <div className={cx("flex items-center", view.row)}>
+        {leftIcon ? <span className="shrink-0 text-text-subtle">{leftIcon}</span> : null}
 
         <input
           value={value}
           disabled={disabled}
           readOnly={readOnly}
           placeholder={placeholder}
+          aria-invalid={invalid || undefined}
           className={cx(
-            "h-11 w-full border-0 bg-transparent p-0 text-[14px] text-text outline-none placeholder:text-text-subtle",
+            "w-full border-0 bg-transparent p-0 text-text outline-none placeholder:text-text-subtle",
             disabled && "cursor-not-allowed",
+            view.input,
             inputClassName
           )}
           {...props}
@@ -81,7 +126,7 @@ export function InputGroup({
           <button
             type="button"
             onClick={onClear}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-soft text-text-subtle transition-[background-color,color] duration-fast ease-premium hover:bg-surface-muted hover:text-text"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-soft text-text-subtle transition-[background-color,color] duration-200 ease-premium hover:bg-surface-muted hover:text-text"
             aria-label="Clear"
           >
             <X className="h-4 w-4" />
@@ -95,29 +140,46 @@ export function InputGroup({
 }
 
 const Input = forwardRef(function Input(
-  { className, inputClassName, disabled, readOnly, invalid = false, leftIcon, right, ...props },
+  {
+    className,
+    inputClassName,
+    disabled,
+    readOnly,
+    invalid = false,
+    leftIcon,
+    right,
+    appearance = "default",
+    ...props
+  },
   ref
 ) {
+  const view = resolveAppearance(appearance);
+
   return (
     <FieldShell
       className={className}
       disabled={disabled}
       readOnly={readOnly}
       invalid={invalid}
+      appearance={appearance}
     >
-      <div className="flex min-h-[46px] items-center gap-2 px-3.5">
-        {leftIcon ? <span className="text-text-subtle">{leftIcon}</span> : null}
+      <div className={cx("flex items-center", view.row)}>
+        {leftIcon ? <span className="shrink-0 text-text-subtle">{leftIcon}</span> : null}
+
         <input
           ref={ref}
           disabled={disabled}
           readOnly={readOnly}
+          aria-invalid={invalid || undefined}
           className={cx(
-            "h-11 w-full border-0 bg-transparent p-0 text-[14px] text-text outline-none placeholder:text-text-subtle",
+            "w-full border-0 bg-transparent p-0 text-text outline-none placeholder:text-text-subtle",
             disabled && "cursor-not-allowed",
+            view.input,
             inputClassName
           )}
           {...props}
         />
+
         {right ? <div className="shrink-0">{right}</div> : null}
       </div>
     </FieldShell>
@@ -127,25 +189,39 @@ const Input = forwardRef(function Input(
 export default Input;
 
 export const Textarea = forwardRef(function Textarea(
-  { className, textClassName, disabled, readOnly, invalid = false, rows = 5, ...props },
+  {
+    className,
+    textClassName,
+    disabled,
+    readOnly,
+    invalid = false,
+    rows = 5,
+    appearance = "default",
+    ...props
+  },
   ref
 ) {
+  const view = resolveAppearance(appearance);
+
   return (
     <FieldShell
       className={className}
       disabled={disabled}
       readOnly={readOnly}
       invalid={invalid}
+      appearance={appearance}
     >
-      <div className="px-4 py-3">
+      <div className={view.textareaWrap}>
         <textarea
           ref={ref}
           rows={rows}
           disabled={disabled}
           readOnly={readOnly}
+          aria-invalid={invalid || undefined}
           className={cx(
-            "min-h-[140px] w-full resize-none border-0 bg-transparent p-0 text-[14px] leading-7 text-text outline-none placeholder:text-text-subtle",
+            "w-full resize-none border-0 bg-transparent p-0 text-text outline-none placeholder:text-text-subtle",
             disabled && "cursor-not-allowed",
+            view.textarea,
             textClassName
           )}
           {...props}
@@ -156,29 +232,44 @@ export const Textarea = forwardRef(function Textarea(
 });
 
 export const Select = forwardRef(function Select(
-  { className, selectClassName, disabled, readOnly, invalid = false, children, ...props },
+  {
+    className,
+    selectClassName,
+    disabled,
+    readOnly,
+    invalid = false,
+    children,
+    appearance = "default",
+    ...props
+  },
   ref
 ) {
+  const view = resolveAppearance(appearance);
+
   return (
     <FieldShell
       className={className}
       disabled={disabled}
       readOnly={readOnly}
       invalid={invalid}
+      appearance={appearance}
     >
-      <div className="relative px-3.5">
+      <div className={cx("relative", view.selectWrap)}>
         <select
           ref={ref}
           disabled={disabled || readOnly}
+          aria-invalid={invalid || undefined}
           className={cx(
-            "h-11 w-full appearance-none border-0 bg-transparent p-0 pr-8 text-[14px] text-text outline-none",
+            "w-full appearance-none border-0 bg-transparent p-0 text-text outline-none",
             (disabled || readOnly) && "cursor-not-allowed",
+            view.select,
             selectClassName
           )}
           {...props}
         >
           {children}
         </select>
+
         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-subtle" />
       </div>
     </FieldShell>
