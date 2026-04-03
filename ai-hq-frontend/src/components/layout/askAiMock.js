@@ -1,23 +1,11 @@
 import { ALL_SECTIONS } from "./shellNavigation.js";
 
 const ASK_AI_SUGGESTIONS = [
-  { id: "inbox", label: "Open inbox", prompt: "open inbox" },
-  {
-    id: "workspace-status",
-    label: "Workspace status",
-    prompt: "summarize workspace status",
-  },
-  {
-    id: "attention",
-    label: "Needs attention",
-    prompt: "what needs attention",
-  },
+  { id: "inbox", label: "Open Inbox", prompt: "open inbox" },
+  { id: "brief", label: "Workspace brief", prompt: "summarize workspace status" },
+  { id: "attention", label: "Needs attention", prompt: "what needs attention" },
   { id: "reply", label: "Draft reply", prompt: "draft reply" },
-  {
-    id: "blocked-channels",
-    label: "Blocked channels",
-    prompt: "show blocked channels",
-  },
+  { id: "channels", label: "Blocked channels", prompt: "show blocked channels" },
   { id: "setup", label: "Continue setup", prompt: "continue setup" },
 ];
 
@@ -36,9 +24,9 @@ function wait(ms) {
   });
 }
 
-function formatCount(value, label) {
+function formatCount(value, singular) {
   if (typeof value !== "number" || value <= 0) return null;
-  return `${value} ${label}${value === 1 ? "" : "s"}`;
+  return `${value} ${singular}${value === 1 ? "" : "s"}`;
 }
 
 function formatWsState(value) {
@@ -63,8 +51,9 @@ function findSectionForPath(pathname = "/") {
   );
 }
 
-function getFocusLabel({ shellSection, activeContextItem, pathname }) {
+function getFocusLabel({ pathname, shellSection, activeContextItem }) {
   const routeSection = findSectionForPath(pathname);
+
   return (
     activeContextItem?.label ||
     shellSection?.label ||
@@ -74,14 +63,13 @@ function getFocusLabel({ shellSection, activeContextItem, pathname }) {
 }
 
 function getRouteAction(prompt) {
-  const normalized = String(prompt || "").toLowerCase();
+  const normalized = String(prompt || "").trim().toLowerCase();
   const match = ROUTE_RESPONSES.find((entry) => entry.matcher.test(normalized));
+
   if (!match) return null;
 
   const section = findSectionForPath(match.to);
-  const autoNavigate = /^(open|show|continue|go to|take me)/.test(
-    normalized.trim()
-  );
+  const autoNavigate = /^(open|show|continue|go to|take me)/.test(normalized);
 
   return {
     to: match.to,
@@ -92,31 +80,33 @@ function getRouteAction(prompt) {
 
 function buildStatusSummary(shellStats = {}) {
   const parts = [
-    formatCount(shellStats.inboxUnread, "unread inbox item"),
+    formatCount(shellStats.inboxUnread, "unread item"),
     formatCount(shellStats.leadsOpen, "open lead"),
     formatWsState(shellStats.wsState),
   ].filter(Boolean);
 
-  return parts.length ? parts.join(" | ") : "No urgent operator signals detected.";
+  return parts.length ? parts.join(" · ") : "Operator context ready";
 }
 
 function buildWorkspaceReply({ shellStats, focusLabel }) {
+  const hot =
+    (typeof shellStats?.inboxUnread === "number" && shellStats.inboxUnread > 0) ||
+    (typeof shellStats?.leadsOpen === "number" && shellStats.leadsOpen > 0);
+
   return {
-    title: "Workspace brief is ready",
+    kicker: "Workspace brief",
+    title: "Current operator snapshot",
     summary: buildStatusSummary(shellStats),
     bullets: [
-      `${focusLabel} is the active operator surface right now.`,
+      `${focusLabel} is the active surface right now.`,
       shellStats?.inboxUnread > 0
-        ? "Inbox attention is the fastest path to reduce active work."
-        : "Inbox load looks calm enough to shift into review or setup work.",
+        ? "Inbox is still the fastest path to reduce active load."
+        : "Inbox looks calm enough to shift into setup or review work.",
       shellStats?.leadsOpen > 0
-        ? "Pipeline still has open follow-through waiting."
+        ? "Pipeline still has follow-through waiting."
         : "Pipeline follow-through looks stable at the moment.",
     ],
-    tone:
-      shellStats?.inboxUnread > 0 || shellStats?.leadsOpen > 0
-        ? "warning"
-        : "neutral",
+    tone: hot ? "warning" : "brand",
     action: {
       to: "/workspace",
       label: "Open Workspace",
@@ -126,51 +116,69 @@ function buildWorkspaceReply({ shellStats, focusLabel }) {
 }
 
 function buildAttentionReply({ shellStats }) {
-  const topAction =
-    shellStats?.inboxUnread > 0
-      ? {
-          summary: `${shellStats.inboxUnread} unread inbox items are still waiting on review.`,
-          action: { to: "/inbox", label: "Open Inbox", autoNavigate: false },
-        }
-      : shellStats?.leadsOpen > 0
-        ? {
-            summary: `${shellStats.leadsOpen} pipeline items still need follow-through.`,
-            action: { to: "/leads", label: "Open Pipeline", autoNavigate: false },
-          }
-        : {
-            summary: "No obvious backlog spike is showing in shared shell signals.",
-            action: {
-              to: "/workspace",
-              label: "Open Workspace",
-              autoNavigate: false,
-            },
-          };
+  if (shellStats?.inboxUnread > 0) {
+    return {
+      kicker: "Attention",
+      title: "Inbox should be handled first",
+      summary: `${shellStats.inboxUnread} unread items are still waiting.`,
+      bullets: [
+        formatWsState(shellStats?.wsState),
+        "Reduce active queue pressure before switching to deeper planning.",
+      ],
+      tone: "warning",
+      action: {
+        to: "/inbox",
+        label: "Open Inbox",
+        autoNavigate: false,
+      },
+    };
+  }
+
+  if (shellStats?.leadsOpen > 0) {
+    return {
+      kicker: "Attention",
+      title: "Pipeline follow-through is pending",
+      summary: `${shellStats.leadsOpen} open leads still need movement.`,
+      bullets: [
+        formatWsState(shellStats?.wsState),
+        "Move the highest-signal lead next.",
+      ],
+      tone: "warning",
+      action: {
+        to: "/leads",
+        label: "Open Pipeline",
+        autoNavigate: false,
+      },
+    };
+  }
 
   return {
-    title: "Top attention area",
-    summary: topAction.summary,
+    kicker: "Attention",
+    title: "No urgent spike detected",
+    summary: "Shared shell signals do not show an obvious backlog spike right now.",
     bullets: [
       formatWsState(shellStats?.wsState),
-      shellStats?.dbDisabled
-        ? "Some shared data surfaces are degraded, so treat counts carefully."
-        : "Shared workspace data is reporting normally.",
-      "If you want, ask for a deeper brief on a specific surface next.",
+      "You can move into setup, review, or planning without clear queue pressure.",
     ],
-    tone:
-      shellStats?.inboxUnread > 0 || shellStats?.dbDisabled ? "warning" : "neutral",
-    action: topAction.action,
+    tone: "brand",
+    action: {
+      to: "/workspace",
+      label: "Open Workspace",
+      autoNavigate: false,
+    },
   };
 }
 
 function buildReplyDraft({ focusLabel }) {
   return {
-    title: "Draft reply direction",
+    kicker: "Reply assist",
+    title: "Use a calm operational answer",
     summary:
-      "Lead with a calm answer, confirm the next step, and keep the reply operationally clear.",
+      "Acknowledge briefly, state the next step clearly, and keep the reply lean.",
     bullets: [
-      "Acknowledge the customer or teammate in one sentence.",
-      "State the next action or decision without adding extra apology language.",
-      `Use ${focusLabel} context before sending if the thread has recent changes.`,
+      "Start with one direct acknowledgment sentence.",
+      "State the next action without extra apology language.",
+      `Check ${focusLabel} context before sending if the thread changed recently.`,
     ],
     tone: "brand",
     action: {
@@ -183,13 +191,13 @@ function buildReplyDraft({ focusLabel }) {
 
 function buildChannelsReply() {
   return {
-    title: "Blocked channel review",
+    kicker: "Launch scope",
+    title: "Verify channel availability",
     summary:
-      "Launch scope is the right place to verify what is live, limited, or still setup-only.",
+      "Use launch scope to separate what is live, limited, blocked, or still setup-only.",
     bullets: [
-      "Check launch scope before promising channel coverage.",
-      "Use setup status to separate blocked from not-yet-configured surfaces.",
-      "Treat this as an operator truth source, not marketing copy.",
+      "Do not promise channel coverage before checking readiness.",
+      "Treat launch scope as the operator source of truth for availability.",
     ],
     tone: "neutral",
     action: {
@@ -202,13 +210,13 @@ function buildChannelsReply() {
 
 function buildSetupReply() {
   return {
+    kicker: "Setup",
     title: "Setup path resumed",
     summary:
-      "Setup Studio is the fastest route to continue source intake and review pending configuration work.",
+      "Setup Studio is the fastest route to continue source intake and unfinished review work.",
     bullets: [
-      "Pick up the current stage rather than restarting the flow.",
-      "Review unresolved source or policy gaps before finalizing.",
-      "Return to the operator shell after setup changes land.",
+      "Continue from the current stage instead of restarting.",
+      "Resolve source or policy gaps before finalizing.",
     ],
     tone: "brand",
     action: {
@@ -219,21 +227,23 @@ function buildSetupReply() {
   };
 }
 
-function buildDirectRouteReply({ prompt, action, focusLabel }) {
+function buildDirectRouteReply({ prompt, focusLabel, action }) {
   const section = findSectionForPath(action?.to);
+
   return {
+    kicker: "Navigation",
     title: `${section?.label || "Surface"} ready`,
     summary: `Routing from ${focusLabel} into ${section?.label || "the requested surface"}.`,
     bullets: [
-      "The command matched a direct operator navigation request.",
-      "You can keep asking for a brief, draft, or next action from here.",
+      "The command matched a direct navigation request.",
+      "You can ask for a brief, next action, or draft from there too.",
     ],
     tone: "brand",
     action: {
       ...action,
       label: section ? `Open ${section.label}` : action.label,
       autoNavigate: /^(open|show|continue|go to|take me)/.test(
-        String(prompt || "").toLowerCase().trim()
+        String(prompt || "").trim().toLowerCase()
       ),
     },
   };
@@ -241,12 +251,13 @@ function buildDirectRouteReply({ prompt, action, focusLabel }) {
 
 function buildFallbackReply({ focusLabel }) {
   return {
-    title: "Ask refined",
-    summary: `I can help from ${focusLabel} with navigation, triage, quick summaries, and reply support.`,
+    kicker: "Ask AI",
+    title: "Route, brief, or next action",
+    summary: `I can help from ${focusLabel} with navigation, triage, short summaries, and reply support.`,
     bullets: [
-      "Try a direct action like open inbox or continue setup.",
-      "Try a brief like summarize workspace status.",
-      "Try a focused assist like draft reply.",
+      "Try open inbox.",
+      "Try summarize workspace status.",
+      "Try draft reply.",
     ],
     tone: "neutral",
     action: null,
@@ -261,14 +272,20 @@ function createReply({
   shellStats,
 }) {
   const normalized = String(prompt || "").trim().toLowerCase();
-  const focusLabel = getFocusLabel({ shellSection, activeContextItem, pathname });
+  const focusLabel = getFocusLabel({ pathname, shellSection, activeContextItem });
   const routeAction = getRouteAction(normalized);
 
   let baseReply;
 
-  if (normalized.includes("summarize workspace status")) {
+  if (
+    normalized.includes("summarize workspace status") ||
+    /workspace brief|workspace status/.test(normalized)
+  ) {
     baseReply = buildWorkspaceReply({ shellStats, focusLabel });
-  } else if (normalized.includes("what needs attention")) {
+  } else if (
+    normalized.includes("what needs attention") ||
+    /needs attention|attention/.test(normalized)
+  ) {
     baseReply = buildAttentionReply({ shellStats });
   } else if (normalized.includes("draft reply")) {
     baseReply = buildReplyDraft({ focusLabel });
@@ -277,7 +294,11 @@ function createReply({
   } else if (normalized.includes("continue setup")) {
     baseReply = buildSetupReply();
   } else if (routeAction) {
-    baseReply = buildDirectRouteReply({ prompt, action: routeAction, focusLabel });
+    baseReply = buildDirectRouteReply({
+      prompt,
+      focusLabel,
+      action: routeAction,
+    });
   } else {
     baseReply = buildFallbackReply({ focusLabel });
   }
@@ -299,7 +320,7 @@ async function runAskAiMock(context) {
     throw new Error("Enter a prompt for Ask AI.");
   }
 
-  await wait(320);
+  await wait(420);
 
   if (/simulate error|force error|test error/.test(prompt.toLowerCase())) {
     throw new Error("Ask AI is temporarily unavailable. Try again in a moment.");

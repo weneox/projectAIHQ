@@ -1,5 +1,10 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowUpRight, LoaderCircle, Sparkles, X } from "lucide-react";
+import {
+  ArrowUpRight,
+  LoaderCircle,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cx } from "../../lib/cx.js";
@@ -11,27 +16,30 @@ function toneClasses(tone = "neutral") {
     case "brand":
       return {
         dot: "bg-brand",
-        chip: "bg-brand-soft text-brand border-brand/15",
+        badge: "border-brand/15 bg-brand/8 text-brand",
         action:
-          "bg-brand text-white shadow-[0_14px_28px_rgba(37,99,235,0.24)] hover:translate-y-[-1px]",
+          "bg-brand text-white shadow-[0_18px_36px_rgba(37,99,235,0.24)] hover:translate-y-[-1px]",
       };
     case "warning":
       return {
         dot: "bg-warning",
-        chip: "bg-warning-soft text-warning border-warning/15",
-        action: "bg-warning text-white",
+        badge: "border-warning/15 bg-warning/10 text-warning",
+        action:
+          "bg-warning text-white shadow-[0_18px_36px_rgba(245,158,11,0.24)] hover:translate-y-[-1px]",
       };
     case "danger":
       return {
         dot: "bg-danger",
-        chip: "bg-danger-soft text-danger border-danger/15",
-        action: "bg-danger text-white",
+        badge: "border-danger/15 bg-danger/10 text-danger",
+        action:
+          "bg-danger text-white shadow-[0_18px_36px_rgba(239,68,68,0.22)] hover:translate-y-[-1px]",
       };
     default:
       return {
         dot: "bg-text-subtle",
-        chip: "bg-surface-muted text-text-muted border-line-soft",
-        action: "bg-surface-muted text-text hover:bg-canvas",
+        badge: "border-line/80 bg-canvas text-text-muted",
+        action:
+          "bg-canvas text-text shadow-[0_12px_24px_rgba(15,23,42,0.08)] hover:bg-surface-muted hover:translate-y-[-1px]",
       };
   }
 }
@@ -41,7 +49,19 @@ function SuggestionChip({ label, prompt, onClick }) {
     <button
       type="button"
       onClick={() => onClick(prompt)}
-      className="rounded-full border border-line/75 bg-canvas px-3 py-1.5 text-[11px] font-semibold tracking-[-0.01em] text-text-muted transition hover:border-line-strong hover:bg-surface hover:text-text"
+      className="inline-flex items-center rounded-full border border-line/70 bg-white/88 px-3.5 py-2 text-[11px] font-medium tracking-[-0.01em] text-text-muted transition hover:border-brand/25 hover:bg-brand/5 hover:text-text"
+    >
+      {label}
+    </button>
+  );
+}
+
+function HistoryChip({ label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="truncate rounded-full border border-line/60 bg-surface-muted/70 px-3 py-1.5 text-[10px] font-semibold text-text-muted transition hover:border-line-strong hover:bg-canvas hover:text-text"
     >
       {label}
     </button>
@@ -50,22 +70,22 @@ function SuggestionChip({ label, prompt, onClick }) {
 
 function EmptyState({ focusLabel, statusLine }) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <AskAIPresence compact className="h-12 w-12" />
-        <div className="min-w-0">
-          <div className="text-[15px] font-semibold tracking-[-0.03em] text-text">
-            Ask for a route, brief, or next action.
-          </div>
-          <div className="mt-1 text-[12px] leading-5 text-text-muted">
-            Keep it short. This should feel like an operator copilot, not a
-            chat room.
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div className="inline-flex items-center gap-2 rounded-full border border-brand/12 bg-brand/6 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand">
+        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-brand shadow-[0_0_0_5px_rgba(37,99,235,0.10)]" />
+        Live copilot
       </div>
 
-      <div className="text-[11px] leading-5 text-text-subtle">
-        <span className="font-semibold text-text">{focusLabel}</span>
+      <div className="max-w-[15ch] text-[34px] font-semibold leading-[0.94] tracking-[-0.08em] text-text">
+        Route, brief, or next action.
+      </div>
+
+      <div className="max-w-[38ch] text-[13px] leading-6 text-text-muted">
+        Compact, premium, and useful. No floating junk. No oversized hover card.
+      </div>
+
+      <div className="text-[11px] text-text-subtle">
+        <span className="font-medium text-text">{focusLabel}</span>
         <span className="mx-1.5 text-line-strong">·</span>
         {statusLine}
       </div>
@@ -80,12 +100,12 @@ function LoadingState() {
         <LoaderCircle className="h-4.5 w-4.5 animate-spin" strokeWidth={2} />
       </div>
 
-      <div className="min-w-0">
-        <div className="text-[14px] font-semibold tracking-[-0.02em] text-text">
-          Reviewing operator context
+      <div>
+        <div className="text-[15px] font-semibold tracking-[-0.03em] text-text">
+          Reviewing context
         </div>
-        <div className="mt-1 text-[11px] leading-5 text-text-muted">
-          Building a compact answer.
+        <div className="mt-1 text-[12px] leading-5 text-text-muted">
+          Building the shortest useful answer.
         </div>
       </div>
     </div>
@@ -94,18 +114,25 @@ function LoadingState() {
 
 function ErrorState({ message, onRetry }) {
   return (
-    <div className="space-y-2">
-      <div className="text-[14px] font-semibold tracking-[-0.02em] text-danger">
-        Ask AI is temporarily unavailable
+    <div className="space-y-3">
+      <div className="inline-flex items-center gap-2 rounded-full border border-danger/12 bg-danger/8 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-danger">
+        Temporary issue
       </div>
-      <div className="text-[11px] leading-5 text-danger/80">{message}</div>
+
+      <div className="text-[22px] font-semibold leading-none tracking-[-0.05em] text-text">
+        Ask AI is unavailable
+      </div>
+
+      <div className="max-w-[36ch] text-[12px] leading-6 text-text-muted">
+        {message}
+      </div>
 
       <button
         type="button"
         onClick={onRetry}
-        className="inline-flex h-8 items-center rounded-full border border-danger/20 bg-white px-3 text-[11px] font-semibold text-danger transition hover:border-danger/35"
+        className="inline-flex h-9 items-center rounded-full border border-danger/15 bg-white px-3.5 text-[11px] font-semibold text-danger transition hover:border-danger/30 hover:bg-danger/5"
       >
-        Retry last prompt
+        Retry
       </button>
     </div>
   );
@@ -115,44 +142,54 @@ function ResponseView({ response, onAction }) {
   const tone = toneClasses(response?.tone);
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className={cx("h-1.5 w-1.5 rounded-full", tone.dot)} />
-            <div className="truncate text-[15px] font-semibold tracking-[-0.03em] text-text">
-              {response.title}
-            </div>
-          </div>
-
-          <div className="mt-1.5 text-[12px] leading-5 text-text-muted">
-            {response.summary}
-          </div>
-        </div>
-
-        <div
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span
           className={cx(
-            "shrink-0 rounded-full border px-2.5 py-[5px] text-[9px] font-semibold uppercase tracking-[0.16em]",
-            tone.chip
+            "inline-flex items-center rounded-full border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em]",
+            tone.badge
           )}
         >
+          {response.kicker || "Ask AI"}
+        </span>
+
+        <span className="text-[10px] uppercase tracking-[0.16em] text-text-subtle">
           {response.focusLabel}
-        </div>
+        </span>
       </div>
 
-      {Array.isArray(response.bullets) && response.bullets.length ? (
-        <div className="space-y-2">
-          {response.bullets.slice(0, 2).map((bullet) => (
-            <div
-              key={bullet}
-              className="flex items-start gap-2 text-[11px] leading-5 text-text-muted"
-            >
-              <span className="mt-[8px] h-1 w-1 rounded-full bg-text-subtle" />
-              <span>{bullet}</span>
+      <div className="space-y-3">
+        <div className="flex items-start gap-3">
+          <span
+            className={cx(
+              "mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full",
+              tone.dot
+            )}
+          />
+          <div className="min-w-0">
+            <div className="text-[28px] font-semibold leading-[0.95] tracking-[-0.07em] text-text">
+              {response.title}
             </div>
-          ))}
+            <div className="mt-3 max-w-[38ch] text-[13px] leading-6 text-text-muted">
+              {response.summary}
+            </div>
+          </div>
         </div>
-      ) : null}
+
+        {Array.isArray(response.bullets) && response.bullets.length ? (
+          <div className="space-y-2.5 pl-[14px]">
+            {response.bullets.slice(0, 2).map((bullet) => (
+              <div
+                key={bullet}
+                className="flex items-start gap-2.5 text-[12px] leading-6 text-text-muted"
+              >
+                <span className="mt-[10px] h-1 w-1 rounded-full bg-text-subtle" />
+                <span>{bullet}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       <div className="flex items-center justify-between gap-3">
         <div className="truncate text-[10px] text-text-subtle">
@@ -164,12 +201,12 @@ function ResponseView({ response, onAction }) {
             type="button"
             onClick={() => onAction(response.action)}
             className={cx(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold transition",
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-[11px] font-semibold transition",
               tone.action
             )}
           >
             {response.action.label}
-            <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2} />
+            <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.1} />
           </button>
         ) : null}
       </div>
@@ -183,6 +220,7 @@ export default function AskAIWidget({
   shellStats,
 }) {
   const [open, setOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -197,7 +235,7 @@ export default function AskAIWidget({
   const lastPromptRef = useRef("");
 
   const suggestions = useMemo(
-    () => getAskAiSuggestions(location.pathname),
+    () => getAskAiSuggestions(location.pathname).slice(0, 3),
     [location.pathname]
   );
 
@@ -232,6 +270,10 @@ export default function AskAIWidget({
   }, [open]);
 
   useEffect(() => {
+    setOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
     function handleOutside(event) {
       if (!open) return;
       if (rootRef.current?.contains(event.target)) return;
@@ -260,11 +302,10 @@ export default function AskAIWidget({
 
   useEffect(() => {
     if (!textareaRef.current) return;
-
     textareaRef.current.style.height = "0px";
     textareaRef.current.style.height = `${Math.min(
       textareaRef.current.scrollHeight,
-      128
+      124
     )}px`;
   }, [input, open]);
 
@@ -286,9 +327,9 @@ export default function AskAIWidget({
       });
 
       setResponses((current) =>
-        [response, ...current.filter((entry) => entry.id !== response.id)].slice(
+        [response, ...current.filter((entry) => entry.prompt !== response.prompt)].slice(
           0,
-          4
+          5
         )
       );
 
@@ -322,7 +363,7 @@ export default function AskAIWidget({
 
   const panelInitial = reduceMotion
     ? { opacity: 0 }
-    : { opacity: 0, y: 16, scale: 0.96 };
+    : { opacity: 0, y: 16, scale: 0.985 };
 
   const panelAnimate = reduceMotion
     ? { opacity: 1 }
@@ -331,58 +372,74 @@ export default function AskAIWidget({
   return (
     <div
       ref={rootRef}
-      className="pointer-events-none fixed bottom-4 right-4 z-[85] md:bottom-5 md:right-5"
+      className="pointer-events-none fixed z-[140]"
+      style={{
+        right: "max(16px, env(safe-area-inset-right))",
+        bottom: "max(16px, env(safe-area-inset-bottom))",
+      }}
     >
       <AnimatePresence initial={false}>
         {open ? (
-          <motion.section
+          <motion.div
             key="ask-ai-panel"
             initial={panelInitial}
             animate={panelAnimate}
             exit={panelInitial}
             transition={{
-              duration: reduceMotion ? 0 : 0.22,
+              duration: reduceMotion ? 0 : 0.24,
               ease: [0.22, 1, 0.36, 1],
             }}
-            role="dialog"
-            aria-label="Ask AI"
-            className="pointer-events-auto absolute bottom-[84px] right-0 w-[min(372px,calc(100vw-24px))] overflow-hidden rounded-[28px] border border-line/80 bg-surface shadow-[0_28px_84px_rgba(15,23,42,0.16)]"
+            className="pointer-events-none absolute bottom-[92px] right-0"
           >
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.12),transparent_72%)]" />
+            <motion.section
+              role="dialog"
+              aria-label="Ask AI"
+              className="pointer-events-auto relative flex max-h-[min(740px,calc(100vh-120px))] w-[min(460px,calc(100vw-24px))] flex-col overflow-hidden rounded-[34px] border border-line/75 bg-[linear-gradient(180deg,rgba(255,255,255,0.985),rgba(248,250,254,0.985))] shadow-[0_28px_90px_rgba(15,23,42,0.16)] backdrop-blur-xl"
+            >
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.08),transparent_72%)]" />
+              <div className="pointer-events-none absolute right-[-40px] top-[-30px] h-[140px] w-[140px] rounded-full bg-brand/8 blur-3xl" />
+              <div className="pointer-events-none absolute left-[-30px] bottom-[-44px] h-[120px] w-[120px] rounded-full bg-brand/6 blur-3xl" />
 
-            <div className="relative p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <AskAIPresence compact active className="h-12 w-12" />
+              <div className="relative border-b border-line/70 px-6 pb-5 pt-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-3.5">
+                    <AskAIPresence
+                      compact
+                      active
+                      pulse
+                      className="h-[62px] w-[62px] shrink-0"
+                    />
 
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 text-[15px] font-semibold tracking-[-0.03em] text-text">
-                      Ask AI
-                      <Sparkles
-                        className="h-3.5 w-3.5 text-brand"
-                        strokeWidth={2}
-                      />
-                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-[18px] font-semibold tracking-[-0.05em] text-text">
+                        Ask AI
+                        <Sparkles
+                          className="h-3.5 w-3.5 text-brand"
+                          strokeWidth={2}
+                        />
+                      </div>
 
-                    <div className="mt-1 text-[11px] leading-5 text-text-muted">
-                      {focusLabel}
-                      <span className="mx-1.5 text-line-strong">·</span>
-                      {statusLine}
+                      <div className="mt-1 flex items-center gap-2 text-[11px] text-text-subtle">
+                        <span className="inline-flex h-1.5 w-1.5 rounded-full bg-brand" />
+                        <span>Premium operator layer</span>
+                        <span className="text-line-strong">·</span>
+                        <span>{focusLabel}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-text-muted transition hover:bg-canvas hover:text-text"
-                  aria-label="Close Ask AI"
-                >
-                  <X className="h-4 w-4" strokeWidth={2} />
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="flex h-10 w-10 items-center justify-center rounded-full text-text-muted transition hover:bg-canvas hover:text-text"
+                    aria-label="Close Ask AI"
+                  >
+                    <X className="h-4 w-4" strokeWidth={2} />
+                  </button>
+                </div>
               </div>
 
-              <div className="mt-4 rounded-[24px] border border-line/75 bg-canvas px-4 py-4">
+              <div className="relative flex-1 overflow-y-auto px-6 py-5">
                 {error ? (
                   <ErrorState
                     message={error}
@@ -391,108 +448,125 @@ export default function AskAIWidget({
                 ) : pending ? (
                   <LoadingState />
                 ) : responses[0] ? (
-                  <ResponseView response={responses[0]} onAction={handleAction} />
+                  <ResponseView
+                    response={responses[0]}
+                    onAction={handleAction}
+                  />
                 ) : (
                   <EmptyState focusLabel={focusLabel} statusLine={statusLine} />
                 )}
-              </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                {suggestions.map((suggestion) => (
-                  <SuggestionChip
-                    key={suggestion.id}
-                    label={suggestion.label}
-                    prompt={suggestion.prompt}
-                    onClick={(prompt) => {
-                      setInput(prompt);
-                      submitPrompt(prompt);
-                    }}
-                  />
-                ))}
-              </div>
-
-              <div className="mt-3 rounded-[24px] border border-line/80 bg-surface px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.34)]">
-                <textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={(event) => setInput(event.target.value)}
-                  onKeyDown={handleTextareaKeyDown}
-                  placeholder="Ask for a route, brief, or action"
-                  rows={1}
-                  className="max-h-[128px] min-h-[24px] w-full resize-none border-0 bg-transparent p-0 text-[13px] leading-6 text-text outline-none placeholder:text-text-subtle"
-                />
-
-                <div className="mt-3 flex items-center justify-between gap-3">
-                  <div className="truncate text-[10px] text-text-subtle">
-                    Enter sends · Shift+Enter adds a line
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => submitPrompt(input)}
-                    disabled={pending || !String(input).trim()}
-                    className={cx(
-                      "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition",
-                      pending || !String(input).trim()
-                        ? "cursor-not-allowed bg-surface-muted text-text-subtle"
-                        : "bg-brand text-white shadow-[0_16px_32px_rgba(37,99,235,0.26)] hover:translate-y-[-1px]"
-                    )}
-                    aria-label="Send Ask AI prompt"
-                  >
-                    {pending ? (
-                      <LoaderCircle
-                        className="h-4 w-4 animate-spin"
-                        strokeWidth={2}
-                      />
-                    ) : (
-                      <ArrowUpRight className="h-4 w-4" strokeWidth={2.2} />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {responses.length > 1 ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {responses.slice(1).map((response) => (
-                    <button
-                      key={response.id}
-                      type="button"
-                      onClick={() =>
-                        setResponses((current) => [
-                          response,
-                          ...current.filter((entry) => entry.id !== response.id),
-                        ])
-                      }
-                      className="truncate rounded-full border border-line/70 bg-canvas px-3 py-1.5 text-[10px] font-semibold text-text-muted transition hover:border-line-strong hover:bg-surface hover:text-text"
-                    >
-                      {response.prompt}
-                    </button>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {suggestions.map((suggestion) => (
+                    <SuggestionChip
+                      key={suggestion.id}
+                      label={suggestion.label}
+                      prompt={suggestion.prompt}
+                      onClick={submitPrompt}
+                    />
                   ))}
                 </div>
-              ) : null}
-            </div>
-          </motion.section>
+
+                {responses.length > 1 ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {responses.slice(1).map((response) => (
+                      <HistoryChip
+                        key={response.id}
+                        label={response.prompt}
+                        onClick={() =>
+                          setResponses((current) => [
+                            response,
+                            ...current.filter((entry) => entry.id !== response.id),
+                          ])
+                        }
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="relative border-t border-line/70 px-5 py-5">
+                <div className="rounded-[28px] border border-line/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(246,248,252,0.92))] px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_16px_32px_rgba(15,23,42,0.06)]">
+                  <textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(event) => {
+                      setInput(event.target.value);
+                      if (error) setError("");
+                    }}
+                    onKeyDown={handleTextareaKeyDown}
+                    placeholder="Ask for a route, brief, or action"
+                    rows={1}
+                    className="max-h-[124px] min-h-[28px] w-full resize-none border-0 bg-transparent p-0 text-[14px] leading-6 text-text outline-none placeholder:text-text-subtle"
+                  />
+
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <div className="truncate text-[10px] text-text-subtle">
+                      Enter sends · Shift+Enter adds a line
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => submitPrompt(input)}
+                      disabled={pending || !String(input).trim()}
+                      className={cx(
+                        "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition",
+                        pending || !String(input).trim()
+                          ? "cursor-not-allowed bg-surface-muted text-text-subtle"
+                          : "bg-brand text-white shadow-[0_18px_36px_rgba(37,99,235,0.24)] hover:translate-y-[-1px]"
+                      )}
+                      aria-label="Send Ask AI prompt"
+                    >
+                      {pending ? (
+                        <LoaderCircle
+                          className="h-4.5 w-4.5 animate-spin"
+                          strokeWidth={2}
+                        />
+                      ) : (
+                        <ArrowUpRight className="h-4.5 w-4.5" strokeWidth={2.2} />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.section>
+          </motion.div>
         ) : null}
       </AnimatePresence>
 
       <motion.button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        initial={panelInitial}
-        animate={panelAnimate}
-        transition={{
-          duration: reduceMotion ? 0 : 0.18,
-          ease: [0.22, 1, 0.36, 1],
-        }}
-        className="pointer-events-auto group relative flex h-[68px] w-[68px] items-center justify-center rounded-full transition active:scale-[0.98]"
-        aria-label={open ? "Close Ask AI" : "Open Ask AI"}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        whileTap={reduceMotion ? undefined : { scale: 0.98 }}
+        className="pointer-events-auto group relative flex h-[82px] w-[82px] items-center justify-center rounded-full"
+        aria-label="Open Ask AI"
       >
-        <div className="pointer-events-none absolute inset-0 rounded-full opacity-0 transition duration-200 group-hover:opacity-100 group-hover:shadow-[0_0_0_10px_rgba(37,99,235,0.08)]" />
+        <motion.div
+          className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle_at_50%_50%,rgba(37,99,235,0.16),rgba(37,99,235,0.08)_45%,transparent_70%)] blur-xl"
+          animate={
+            reduceMotion
+              ? { opacity: hovered || open ? 0.95 : 0.7, scale: 1 }
+              : {
+                  opacity: hovered || open ? [0.5, 0.95, 0.5] : [0.28, 0.5, 0.28],
+                  scale: hovered || open ? [1, 1.08, 1] : [1, 1.04, 1],
+                }
+          }
+          transition={{
+            duration: 2.2,
+            repeat: reduceMotion ? 0 : Infinity,
+            ease: "easeInOut",
+          }}
+        />
+
+        <div className="pointer-events-none absolute inset-0 rounded-full opacity-0 transition duration-200 group-hover:opacity-100 group-hover:shadow-[0_0_0_12px_rgba(37,99,235,0.08)]" />
+
         <AskAIPresence
           compact
-          pulse={!open}
-          active={open}
-          className="h-[62px] w-[62px] transition duration-200 group-hover:scale-[1.03]"
+          pulse
+          active={hovered || open}
+          className="h-[70px] w-[70px] transition duration-200 group-hover:scale-[1.03]"
         />
       </motion.button>
     </div>
