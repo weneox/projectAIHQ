@@ -5,8 +5,8 @@ import {
   markOutboundAttemptDead,
   resendOutboundAttempt,
 } from "../../../api/inbox.js";
-import { useSurfaceActionState } from "../../settings/hooks/useSurfaceActionState.js";
-import { useSettingsSurfaceState } from "../../../pages/Settings/hooks/useSettingsSurfaceState.js";
+import { useActionState } from "../../../hooks/useActionState.js";
+import { useAsyncSurfaceState } from "../../../hooks/useAsyncSurfaceState.js";
 
 const EMPTY_ATTEMPTS = [];
 
@@ -19,7 +19,7 @@ function getErrorMessage(error, fallback) {
 }
 
 export function useThreadOutboundAttemptsSurface({ threadId = "", actor = "operator" } = {}) {
-  const actionState = useSurfaceActionState();
+  const actionState = useActionState();
   const {
     data: attempts,
     setData,
@@ -31,7 +31,7 @@ export function useThreadOutboundAttemptsSurface({ threadId = "", actor = "opera
     succeedSave,
     failSave,
     clearSaveState,
-  } = useSettingsSurfaceState({
+  } = useAsyncSurfaceState({
     initialData: EMPTY_ATTEMPTS,
   });
 

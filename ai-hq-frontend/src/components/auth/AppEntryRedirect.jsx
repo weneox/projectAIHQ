@@ -6,6 +6,7 @@ import {
   hasMultipleWorkspaceChoices,
   resolveAuthenticatedLanding,
 } from "../../lib/appEntry.js";
+import { isWelcomeIdentityComplete } from "../../lib/welcomeIdentity.js";
 import AppBootSurface from "../loading/AppBootSurface.jsx";
 
 export default function AppEntryRedirect() {
@@ -33,6 +34,12 @@ export default function AppEntryRedirect() {
 
         const bootstrap = await getAppBootstrapContext();
         if (!alive) return;
+
+        if (!isWelcomeIdentityComplete({ auth, bootstrap })) {
+          setFailed(false);
+          navigate("/welcome", { replace: true });
+          return;
+        }
 
         setFailed(false);
         navigate(resolveAuthenticatedLanding({ auth, bootstrap }), {

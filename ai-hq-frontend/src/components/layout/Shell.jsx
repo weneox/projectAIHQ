@@ -6,7 +6,6 @@ import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
 import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
 import Sidebar, { SIDEBAR_WIDTH, SHELL_TOPBAR_HEIGHT } from "./Sidebar.jsx";
 import Header from "./Header.jsx";
-import AskAIWidget from "./AskAIWidget.jsx";
 import {
   getActiveContextItem,
   getActiveShellSection,
@@ -249,12 +248,6 @@ export default function Shell() {
           </div>
         </main>
       </div>
-
-      <AskAIWidget
-        shellSection={shellSection}
-        activeContextItem={activeContextItem}
-        shellStats={shellStats}
-      />
     </div>
   );
 }

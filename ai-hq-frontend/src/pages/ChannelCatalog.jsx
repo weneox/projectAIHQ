@@ -82,8 +82,8 @@ const SURFACES = [
       "Inbound Instagram messages, AI-assisted reply flow, and operator queue handling are real product work today.",
     actionLabel: "Open Inbox",
     actionTo: "/inbox",
-    secondaryLabel: "Review settings",
-    secondaryTo: "/settings",
+    secondaryLabel: "Open workspace",
+    secondaryTo: "/workspace",
   },
   {
     id: "messenger-inbox",
@@ -97,8 +97,8 @@ const SURFACES = [
       "Messenger uses the same Meta inbox path, but the product is not presented as broad omnichannel coverage.",
     actionLabel: "Open Inbox",
     actionTo: "/inbox",
-    secondaryLabel: "Review settings",
-    secondaryTo: "/settings",
+    secondaryLabel: "Open workspace",
+    secondaryTo: "/workspace",
   },
   {
     id: "instagram-comments",
@@ -112,8 +112,8 @@ const SURFACES = [
       "Comment ingest, review, reply actions, retry visibility, and operator moderation are part of the current launch slice.",
     actionLabel: "Open Comments",
     actionTo: "/comments",
-    secondaryLabel: "Review policies",
-    secondaryTo: "/settings",
+    secondaryLabel: "Open truth",
+    secondaryTo: "/truth",
   },
   {
     id: "voice-receptionist",
@@ -127,8 +127,8 @@ const SURFACES = [
       "Inbound calls, runtime resolution, transcripts, operator handoff, and call control are part of the current launch slice.",
     actionLabel: "Open Voice",
     actionTo: "/voice",
-    secondaryLabel: "Review voice settings",
-    secondaryTo: "/settings",
+    secondaryLabel: "Open workspace",
+    secondaryTo: "/workspace?focus=capabilities",
   },
   {
     id: "website-chatbot",
@@ -140,8 +140,8 @@ const SURFACES = [
     headline: "Planned scope, not a real launch loop.",
     description:
       "Website chat infrastructure exists in parts, but the installable website chatbot product loop is not honestly built yet.",
-    actionLabel: "Open setup",
-    actionTo: "/setup",
+    actionLabel: "Open setup assistant",
+    actionTo: "/home?assistant=setup",
     secondaryLabel: "Review launch scope",
     secondaryTo: "/channels",
   },
@@ -155,10 +155,10 @@ const SURFACES = [
     headline: "Limited scope only.",
     description:
       "Some Meta-adjacent support exists, but this is not framed as a complete or customer-ready launch loop.",
-    actionLabel: "Review settings",
-    actionTo: "/settings",
-    secondaryLabel: "Open setup",
-    secondaryTo: "/setup",
+    actionLabel: "Open workspace",
+    actionTo: "/workspace",
+    secondaryLabel: "Open setup assistant",
+    secondaryTo: "/home?assistant=setup",
   },
   {
     id: "telegram",
@@ -170,8 +170,8 @@ const SURFACES = [
     headline: "Future scope only.",
     description:
       "Visible as planned expansion, not as a current capability the product can honestly claim.",
-    actionLabel: "Open setup",
-    actionTo: "/setup",
+    actionLabel: "Open setup assistant",
+    actionTo: "/home?assistant=setup",
     secondaryLabel: "Review launch scope",
     secondaryTo: "/channels",
   },
@@ -185,8 +185,8 @@ const SURFACES = [
     headline: "Planned, not live.",
     description:
       "There is no honest basis for presenting TikTok as a current product loop. Keep it clearly future-facing.",
-    actionLabel: "Open setup",
-    actionTo: "/setup",
+    actionLabel: "Open setup assistant",
+    actionTo: "/home?assistant=setup",
     secondaryLabel: "Review launch scope",
     secondaryTo: "/channels",
   },
@@ -200,8 +200,8 @@ const SURFACES = [
     headline: "Planned, not live.",
     description:
       "YouTube should read as future channel ambition rather than as something the current product can actually operate.",
-    actionLabel: "Open setup",
-    actionTo: "/setup",
+    actionLabel: "Open setup assistant",
+    actionTo: "/home?assistant=setup",
     secondaryLabel: "Review launch scope",
     secondaryTo: "/channels",
   },
@@ -215,10 +215,10 @@ const SURFACES = [
     headline: "Setup and memory input, not a live launch channel.",
     description:
       "Use email as source material and business context that strengthens the real launch loops behind the scenes.",
-    actionLabel: "Open setup",
-    actionTo: "/setup",
-    secondaryLabel: "Review settings",
-    secondaryTo: "/settings",
+    actionLabel: "Open setup assistant",
+    actionTo: "/home?assistant=setup",
+    secondaryLabel: "Open truth",
+    secondaryTo: "/truth",
   },
   {
     id: "drive",
@@ -230,8 +230,8 @@ const SURFACES = [
     headline: "Bring documents into setup and approved memory.",
     description:
       "Useful for business context, review, and approved memory rather than as a customer-facing channel.",
-    actionLabel: "Open setup",
-    actionTo: "/setup",
+    actionLabel: "Open setup assistant",
+    actionTo: "/home?assistant=setup",
     secondaryLabel: "Review memory",
     secondaryTo: "/truth",
   },
@@ -405,8 +405,8 @@ export default function ChannelCatalog() {
           description="This product is currently centered on Meta social inbox, Meta auto-comment, and Twilio voice receptionist. Everything else on this page should read as planned, limited, or setup-only."
           actions={
             <>
-              <Button variant="secondary" onClick={() => navigate("/settings")}>
-                Manage settings
+              <Button variant="secondary" onClick={() => navigate("/truth")}>
+                Open truth
               </Button>
               <Button onClick={() => navigate("/workspace")}>Open workspace</Button>
             </>

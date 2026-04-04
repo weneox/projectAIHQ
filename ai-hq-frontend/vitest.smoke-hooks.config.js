@@ -12,16 +12,9 @@ export default mergeConfig(
   defineConfig({
     test: {
       include: [
-        "src/pages/Settings/hooks/useSettingsSurfaceState.test.jsx",
-        "src/pages/Settings/hooks/useTrustSurface.test.jsx",
-        "src/pages/Settings/hooks/useOperationalSettings.test.jsx",
-        "src/pages/Settings/hooks/useSourceIntelligence.contract.test.jsx",
-        "src/pages/Settings/hooks/useSettingsWorkspace.test.jsx",
-        "src/pages/Settings/hooks/useBusinessBrain.test.jsx",
-        "src/components/settings/hooks/useSurfaceActionState.test.jsx",
-        "src/components/settings/hooks/useChannelsSurface.test.jsx",
-        "src/components/settings/hooks/useSecretsSurface.test.jsx",
-        "src/components/settings/hooks/useTeamSurface.test.jsx",
+        "src/hooks/useAsyncSurfaceState.test.jsx",
+        "src/hooks/useActionState.test.jsx",
+        "src/components/admin/hooks/useProviderSecretsSurface.test.jsx",
         "src/pages/hooks/useAdminTenantsSurface.test.jsx",
         "src/pages/hooks/useAdminTeamSurface.test.jsx",
         "src/pages/hooks/useExecutionsSurface.test.jsx",

@@ -12,8 +12,6 @@ import { INTERNAL_ONLY_APP_ROUTES } from "./lib/appEntry.js";
 const Proposals = lazy(() => import("./pages/Proposals.jsx"));
 const Publish = lazy(() => import("./pages/Publish.jsx"));
 const Executions = lazy(() => import("./pages/Executions.jsx"));
-const Expert = lazy(() => import("./pages/Expert.jsx"));
-const Settings = lazy(() => import("./pages/Settings.jsx"));
 const Inbox = lazy(() => import("./pages/Inbox.jsx"));
 const ProductHomePage = lazy(() => import("./surfaces/home/ProductHomePage.jsx"));
 const WorkspacePage = lazy(() => import("./surfaces/workspace/WorkspacePage.jsx"));
@@ -21,6 +19,7 @@ const Leads = lazy(() => import("./pages/Leads.jsx"));
 const Comments = lazy(() => import("./pages/Comments.jsx"));
 const Incidents = lazy(() => import("./pages/Incidents.jsx"));
 const Voice = lazy(() => import("./pages/Voice.jsx"));
+const Welcome = lazy(() => import("./pages/Welcome.jsx"));
 const Login = lazy(() => import("./pages/Login.jsx"));
 const Signup = lazy(() => import("./pages/Signup.jsx"));
 const VerifyEmail = lazy(() => import("./pages/Auth/VerifyEmailPage.jsx"));
@@ -30,9 +29,7 @@ const AdminLogin = lazy(() => import("./pages/AdminLogin.jsx"));
 const AdminTenants = lazy(() => import("./pages/AdminTenants.jsx"));
 const AdminTeam = lazy(() => import("./pages/AdminTeam.jsx"));
 const AdminSecrets = lazy(() => import("./pages/AdminSecrets.jsx"));
-const SetupStudioRoute = lazy(() => import("./pages/SetupStudio/index.jsx"));
 const SelectWorkspace = lazy(() => import("./pages/SelectWorkspace.jsx"));
-const DesignLab = lazy(() => import("./pages/DesignLab.jsx"));
 
 function RouteFallback() {
   return (
@@ -65,13 +62,9 @@ function renderInternalRouteRedirects() {
 }
 
 export default function App() {
-  const setupEntryElement = (
-    <UserRouteGuard>{withSuspense(<SetupStudioRoute />)}</UserRouteGuard>
-  );
-
   const setupLegacyEntryElement = (
     <UserRouteGuard>
-      <Navigate to="/setup" replace />
+      <Navigate to="/home?assistant=setup" replace />
     </UserRouteGuard>
   );
 
@@ -109,7 +102,6 @@ export default function App() {
         </Route>
 
         <Route path="/setup/studio" element={setupLegacyEntryElement} />
-        <Route path="/setup" element={setupEntryElement} />
 
         <Route path="/select-workspace" element={selectWorkspaceEntryElement} />
         <Route path="/" element={rootEntryElement} />
@@ -123,8 +115,12 @@ export default function App() {
           }
         >
           <Route path="home" element={withSuspense(<ProductHomePage />)} />
+          <Route path="welcome" element={withSuspense(<Welcome />)} />
           <Route path="workspace" element={withSuspense(<WorkspacePage />)} />
-          <Route path="design-lab" element={withSuspense(<DesignLab />)} />
+          <Route
+            path="setup"
+            element={<Navigate to="/home?assistant=setup" replace />}
+          />
 
           <Route
             path="publish"
@@ -213,18 +209,6 @@ export default function App() {
             }
           />
           <Route
-            path="expert"
-            element={
-              <OperatorRouteGuard
-                title="Operator access required"
-                description="Expert remains an advanced internal surface and is not part of the primary operating path."
-              >
-                {withSuspense(<Expert />)}
-              </OperatorRouteGuard>
-            }
-          />
-
-          <Route
             path="executions"
             element={
               <OperatorRouteGuard
@@ -236,17 +220,6 @@ export default function App() {
             }
           />
 
-          <Route
-            path="settings"
-            element={
-              <OperatorRouteGuard
-                title="Operator access required"
-                description="Settings is a narrow launch-slice configuration area for policy, Meta integration, voice readiness, team access, and notifications."
-              >
-                {withSuspense(<Settings />)}
-              </OperatorRouteGuard>
-            }
-          />
           {renderInternalRouteRedirects()}
         </Route>
 

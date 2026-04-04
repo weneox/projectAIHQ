@@ -11,7 +11,7 @@ import {
   leadName,
   prettyLeadSource,
 } from "../../lib/inbox-ui.js";
-import SettingsSurfaceBanner from "../settings/SettingsSurfaceBanner.jsx";
+import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
 import { InboxLeadSkeleton } from "./InboxLoadingSurface.jsx";
 
 function s(value, fallback = "") {
@@ -299,7 +299,7 @@ export default function InboxLeadPanel({
 
             {showSurfaceBanner ? (
               <div className="px-5 pb-2">
-                <SettingsSurfaceBanner
+                <SurfaceBanner
                   surface={surface}
                   unavailableMessage="Related context is temporarily unavailable."
                   refreshLabel="Refresh context"

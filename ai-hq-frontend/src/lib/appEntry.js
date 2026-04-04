@@ -13,11 +13,11 @@ function arr(value) {
 function normalizeSetupRoute(target = "") {
   const value = s(target);
 
-  if (!value) return "/setup";
-  if (value === "/setup" || value === "/setup/studio") return "/setup";
-  if (value.startsWith("/setup/")) return "/setup";
+  if (!value) return "/home?assistant=setup";
+  if (value === "/setup" || value === "/setup/studio") return "/home?assistant=setup";
+  if (value.startsWith("/setup/")) return "/home?assistant=setup";
 
-  return "/setup";
+  return "/home?assistant=setup";
 }
 
 function normalizeRoute(target = "", fallback = "/workspace") {
@@ -46,9 +46,10 @@ export const CORE_APP_ROUTES = Object.freeze([
   "/workspace",
   "/truth",
   "/publish",
-  "/expert",
-  "/settings",
   "/inbox",
+  "/comments",
+  "/voice",
+  "/channels",
 ]);
 
 export const PRODUCT_HOME_ROUTE = "/home";
@@ -182,15 +183,9 @@ export function resolveWorkspaceContractRoute(payload = {}) {
   const nextSetupRoute = workspace.nextSetupRoute;
 
   if (!setupCompleted) {
-    return isSetupPath(nextSetupRoute) ? normalizeSetupRoute(nextSetupRoute) : "/setup";
-  }
-
-  if (nextRoute === "/settings") {
-    return "/expert";
-  }
-
-  if (nextRoute === "/expert") {
-    return "/expert";
+    return isSetupPath(nextSetupRoute)
+      ? normalizeSetupRoute(nextSetupRoute)
+      : "/home?assistant=setup";
   }
 
   if (nextRoute === "/workspace") {

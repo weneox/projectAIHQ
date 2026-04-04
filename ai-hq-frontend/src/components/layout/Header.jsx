@@ -5,8 +5,6 @@ import {
   LayoutGrid,
   LogOut,
   Menu,
-  Radar,
-  Settings2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -197,19 +195,6 @@ function WorkspaceControl({ notifications }) {
           onClick={() => closeThen(() => navigate("/workspace"))}
         />
 
-        <HeaderMenuRow
-          icon={Settings2}
-          label="Settings"
-          sublabel="Manage workspace settings"
-          onClick={() => closeThen(() => navigate("/settings"))}
-        />
-
-        <HeaderMenuRow
-          icon={Radar}
-          label="Expert"
-          sublabel="Open expert tools"
-          onClick={() => closeThen(() => navigate("/expert"))}
-        />
       </div>
 
       <div className="my-2 h-px bg-line-soft" />

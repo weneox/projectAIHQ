@@ -77,16 +77,6 @@ export default defineConfig(({ mode }) => {
             if (id.includes("framer-motion")) return "motion";
             if (id.includes("lucide-react")) return "icons";
             if (id.includes("recharts")) return "charts";
-            if (
-              id.includes("/three/") ||
-              id.includes("@react-three") ||
-              id.includes("@react-spring/three") ||
-              id.includes("maath") ||
-              id.includes("postprocessing")
-            ) {
-              return "three-stack";
-            }
-            if (id.includes("@radix-ui")) return "radix";
             if (id.includes("node_modules")) return "vendor";
 
             return undefined;

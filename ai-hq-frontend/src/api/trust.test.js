@@ -262,7 +262,7 @@ it("normalizeTrustViewResponse produces a stable trust view-model", () => {
                   label: "Open repair controls",
                   allowed: true,
                   target: {
-                    path: "/settings?section=sources&trustFocus=repair_hub&historyFilter=runtime&runtimeProjectionId=projection-1&eventId=decision-1",
+                    path: "/truth?trustFocus=repair_hub&historyFilter=runtime&runtimeProjectionId=projection-1&eventId=decision-1",
                   },
                 },
               ],

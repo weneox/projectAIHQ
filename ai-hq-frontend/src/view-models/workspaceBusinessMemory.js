@@ -119,8 +119,8 @@ export function buildWorkspaceBusinessMemory({
         },
     secondaryAction: hasSetupFollowUp
       ? {
-          label: setupState?.action?.label || "Review setup",
-          path: "/setup",
+          label: setupState?.action?.label || "Open setup assistant",
+          path: "/home?assistant=setup",
         }
       : null,
   };

@@ -7,6 +7,7 @@ const getAppAuthContext = vi.fn();
 const getAppBootstrapContext = vi.fn();
 const hasMultipleWorkspaceChoices = vi.fn();
 const resolveAuthenticatedLanding = vi.fn();
+const isWelcomeIdentityComplete = vi.fn();
 
 vi.mock("../../lib/appSession.js", () => ({
   getAppAuthContext: (...args) => getAppAuthContext(...args),
@@ -17,6 +18,10 @@ vi.mock("../../lib/appEntry.js", () => ({
   WORKSPACE_SELECTION_ROUTE: "/select-workspace",
   hasMultipleWorkspaceChoices: (...args) => hasMultipleWorkspaceChoices(...args),
   resolveAuthenticatedLanding: (...args) => resolveAuthenticatedLanding(...args),
+}));
+
+vi.mock("../../lib/welcomeIdentity.js", () => ({
+  isWelcomeIdentityComplete: (...args) => isWelcomeIdentityComplete(...args),
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -34,6 +39,7 @@ describe("AppEntryRedirect", () => {
     vi.clearAllMocks();
     hasMultipleWorkspaceChoices.mockReturnValue(false);
     resolveAuthenticatedLanding.mockReturnValue("/home");
+    isWelcomeIdentityComplete.mockReturnValue(true);
   });
 
   it("sends an unauthenticated user to login", async () => {
@@ -82,6 +88,24 @@ describe("AppEntryRedirect", () => {
     });
 
     expect(resolveAuthenticatedLanding).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends authenticated users without welcome identity to the welcome step", async () => {
+    getAppAuthContext.mockResolvedValue({ authenticated: true });
+    getAppBootstrapContext.mockResolvedValue({
+      workspace: { setupCompleted: false, workspaceReady: false },
+    });
+    isWelcomeIdentityComplete.mockReturnValue(false);
+
+    render(
+      <MemoryRouter>
+        <AppEntryRedirect />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith("/welcome", { replace: true });
+    });
   });
 
   it("shows a controlled unavailable surface on load failure", async () => {

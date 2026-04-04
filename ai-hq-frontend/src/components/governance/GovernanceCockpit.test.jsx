@@ -91,7 +91,7 @@ describe("GovernanceCockpit", () => {
                 kind: "route",
                 label: "Inspect runtime health",
                 allowed: true,
-                target: { path: "/settings?section=sources&trustFocus=runtime_health" },
+                target: { path: "/truth?trustFocus=runtime_health" },
               },
               affectedSurfaces: ["voice", "meta"],
               reasons: ["runtime:stale", "truth:review_required"],
@@ -116,7 +116,7 @@ describe("GovernanceCockpit", () => {
                     kind: "route",
                     label: "View channel restrictions",
                     allowed: true,
-                    target: { path: "/settings?section=operational&channel=inbox" },
+                    target: { path: "/workspace?focus=capabilities&channel=inbox" },
                   },
                 },
                 {
@@ -237,7 +237,7 @@ describe("GovernanceCockpit", () => {
                         label: "Open repair controls",
                         allowed: true,
                         target: {
-                          path: "/settings?section=sources&trustFocus=repair_hub&historyFilter=runtime&eventId=decision-1",
+                          path: "/truth?trustFocus=repair_hub&historyFilter=runtime&eventId=decision-1",
                         },
                       },
                     ],

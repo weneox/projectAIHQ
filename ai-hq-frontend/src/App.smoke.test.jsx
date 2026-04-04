@@ -47,12 +47,6 @@ vi.mock("./components/auth/OperatorRouteGuard.jsx", () => ({
   },
 }));
 
-vi.mock("./components/guards/GuestRouteGuard.jsx", () => ({
-  default: function GuestRouteGuardMock({ children }) {
-    return children;
-  },
-}));
-
 vi.mock("./components/auth/AppEntryRedirect.jsx", () => ({
   default: () => <div>App Entry Redirect</div>,
 }));
@@ -65,12 +59,6 @@ vi.mock("./pages/Publish.jsx", () => ({
 }));
 vi.mock("./pages/Executions.jsx", () => ({
   default: () => <div>Executions Page</div>,
-}));
-vi.mock("./pages/Expert.jsx", () => ({
-  default: () => <div>Expert Page</div>,
-}));
-vi.mock("./pages/Settings.jsx", () => ({
-  default: () => <div>Settings Page</div>,
 }));
 vi.mock("./pages/Inbox.jsx", () => ({
   default: () => <div>Inbox Page</div>,
@@ -96,6 +84,9 @@ vi.mock("./pages/Voice.jsx", () => ({
 vi.mock("./pages/Login.jsx", () => ({
   default: () => <div>Login Page</div>,
 }));
+vi.mock("./pages/Welcome.jsx", () => ({
+  default: () => <div>Welcome Page</div>,
+}));
 vi.mock("./pages/Truth/TruthViewerPage.jsx", () => ({
   default: () => <div>Truth Page</div>,
 }));
@@ -114,13 +105,6 @@ vi.mock("./pages/AdminTeam.jsx", () => ({
 vi.mock("./pages/AdminSecrets.jsx", () => ({
   default: () => <div>Admin Secrets Page</div>,
 }));
-vi.mock("./pages/SetupStudio/index.jsx", () => ({
-  default: () => <div>Setup Studio Route</div>,
-}));
-vi.mock("./pages/DesignLab.jsx", () => ({
-  default: () => <div>Design Lab Page</div>,
-}));
-
 import App from "./App.jsx";
 
 afterEach(() => {
@@ -135,13 +119,12 @@ describe("App primary product route smoke", () => {
   it.each([
     ["/", "App Entry Redirect"],
     ["/home", "Product Home Page"],
+    ["/welcome", "Welcome Page"],
     ["/workspace", "Workspace Page"],
-    ["/design-lab", "Design Lab Page"],
     ["/inbox", "Inbox Page"],
     ["/voice", "Voice Page"],
     ["/channels", "Channels Page"],
     ["/publish", "Publish Page"],
-    ["/expert", "Expert Page"],
   ])("loads %s through the authenticated shell", async (path, text) => {
     window.history.pushState({}, "", path);
     render(<App />);
@@ -150,10 +133,9 @@ describe("App primary product route smoke", () => {
 
   it.each([
     ["/truth", "Truth Page"],
-    ["/settings", "Settings Page"],
     ["/comments", "Comments Page"],
     ["/proposals", "Proposals Page"],
-    ["/setup", "Setup Studio Route"],
+    ["/setup", "Product Home Page"],
   ])("keeps legacy route %s available", async (path, text) => {
     window.history.pushState({}, "", path);
     render(<App />);
@@ -171,13 +153,13 @@ describe("App primary product route smoke", () => {
     expect(await screen.findByText("Product Home Page")).toBeInTheDocument();
   });
 
-  it("keeps setup studio reachable when local workspace entry is enabled", async () => {
+  it("keeps setup compatibility routed into product home when local workspace entry is enabled", async () => {
     isLocalWorkspaceEntryEnabled.mockReturnValue(true);
     window.history.pushState({}, "", "/setup");
 
     render(<App />);
 
-    expect(await screen.findByText("Setup Studio Route")).toBeInTheDocument();
+    expect(await screen.findByText("Product Home Page")).toBeInTheDocument();
   });
 });
 

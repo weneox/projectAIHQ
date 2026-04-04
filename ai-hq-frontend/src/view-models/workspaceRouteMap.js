@@ -10,22 +10,22 @@ export function resolveWorkspaceTarget(targetKind = "") {
     case "setup":
       return {
         destinationSurface: "workspace",
-        path: "/setup",
+        path: "/home?assistant=setup",
       };
     case "source_governance":
       return {
-        destinationSurface: "expert",
-        path: "/expert?section=sources",
+        destinationSurface: "workspace",
+        path: "/truth",
       };
     case "policy_controls":
       return {
-        destinationSurface: "expert",
-        path: "/expert?section=operational",
+        destinationSurface: "workspace",
+        path: "/workspace?focus=capabilities",
       };
     case "voice_settings":
       return {
-        destinationSurface: "expert",
-        path: "/expert?section=operational",
+        destinationSurface: "voice",
+        path: "/voice",
       };
     case "inbox":
       return {

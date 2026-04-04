@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { listRuntimeIncidents } from "../../api/incidents.js";
-import { useSettingsSurfaceState } from "../Settings/hooks/useSettingsSurfaceState.js";
+import { useAsyncSurfaceState } from "../../hooks/useAsyncSurfaceState.js";
 
 const DEFAULT_FILTERS = {
   service: "",
@@ -23,7 +23,7 @@ export function useAdminIncidentsSurface() {
     beginRefresh,
     succeedRefresh,
     failRefresh,
-  } = useSettingsSurfaceState({
+  } = useAsyncSurfaceState({
     initialData: () => ({
       incidents: [],
       summary: null,

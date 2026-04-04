@@ -5,7 +5,6 @@ import {
   LayoutGrid,
   MessageCircleMore,
   MessageSquareText,
-  Radar,
   ShieldCheck,
   Waves,
   Waypoints,
@@ -121,7 +120,7 @@ const SECONDARY_SECTIONS = [
         title: "Scope",
         items: [
           { label: "Launch scope", to: "/channels" },
-          { label: "Settings", to: "/settings" },
+          { label: "Workspace overview", to: "/workspace" },
         ],
       },
     ],
@@ -176,67 +175,18 @@ const SECONDARY_SECTIONS = [
         title: "Internal",
         items: [
           { label: "Truth viewer", to: "/truth" },
-          { label: "Expert control", to: "/expert" },
+          { label: "Workspace overview", to: "/workspace" },
         ],
       },
     ],
   },
 ];
-
-const SETTINGS_SECTION = {
-  id: "settings",
-  label: "Settings",
-  kicker: "Configuration",
-  description: "Launch-slice policy, Meta integration, team access, and operator notifications.",
-  icon: LayoutGrid,
-  to: "/settings",
-  paths: ["/settings"],
-  contextGroups: [
-    {
-      title: "Configuration",
-      items: [{ label: "Operator settings", to: "/settings" }],
-    },
-  ],
-};
-
-const UTILITY_SECTIONS = [
-  {
-    id: "setup",
-    label: "Setup",
-    kicker: "Configuration",
-    description: "Source intake and business setup that support the launch slice.",
-    icon: Waypoints,
-    to: "/setup",
-    paths: ["/setup"],
-    contextGroups: [
-      {
-        title: "Setup",
-        items: [{ label: "Setup studio", to: "/setup" }],
-      },
-    ],
-  },
-  {
-    id: "expert",
-    label: "Expert",
-    kicker: "Advanced",
-    description: "Deep diagnostics and advanced internal tooling.",
-    icon: Radar,
-    to: "/expert",
-    paths: ["/expert"],
-    contextGroups: [
-      {
-        title: "Advanced",
-        items: [{ label: "Expert surface", to: "/expert" }],
-      },
-    ],
-  },
-];
+const UTILITY_SECTIONS = [];
 
 const ALL_SECTIONS = [
   ...PRIMARY_SECTIONS,
   ...SECONDARY_SECTIONS,
   ...UTILITY_SECTIONS,
-  SETTINGS_SECTION,
 ];
 
 function pathMatches(pathname = "", candidate = "") {
@@ -267,7 +217,6 @@ export {
   PRIMARY_SECTIONS,
   SECONDARY_SECTIONS,
   UTILITY_SECTIONS,
-  SETTINGS_SECTION,
   getActiveContextItem,
   getActiveShellSection,
 };

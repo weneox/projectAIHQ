@@ -1,7 +1,7 @@
 import Card from "../components/ui/Card.jsx";
 import Button from "../components/ui/Button.jsx";
 import Input from "../components/ui/Input.jsx";
-import SettingsSurfaceBanner from "../components/settings/SettingsSurfaceBanner.jsx";
+import SurfaceBanner from "../components/feedback/SurfaceBanner.jsx";
 import { useAdminTenantsSurface } from "./hooks/useAdminTenantsSurface.js";
 
 function cx(...arr) {
@@ -69,7 +69,7 @@ export default function AdminTenants() {
         </div>
       </Card>
 
-      <SettingsSurfaceBanner
+      <SurfaceBanner
         surface={surface}
         unavailableMessage="Tenant administration is temporarily unavailable."
         refreshLabel="Refresh Tenants"

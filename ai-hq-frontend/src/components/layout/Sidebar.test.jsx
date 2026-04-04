@@ -29,7 +29,5 @@ describe("Sidebar", () => {
     expect(screen.getByRole("link", { name: /^pipeline/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^content$/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^truth$/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^expert$/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /^settings$/i })).toBeInTheDocument();
   });
 });

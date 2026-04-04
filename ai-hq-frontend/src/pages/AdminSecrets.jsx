@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import Card from "../components/ui/Card.jsx";
-import SecretsPanel from "../components/settings/SecretsPanel.jsx";
+import ProviderSecretsPanel from "../components/admin/ProviderSecretsPanel.jsx";
 import { getAppSessionContext } from "../lib/appSession.js";
 import { getControlPlanePermissions } from "../lib/controlPlanePermissions.js";
 
@@ -39,7 +39,7 @@ export default function AdminSecrets() {
         </div>
       </Card>
 
-      <SecretsPanel
+      <ProviderSecretsPanel
         canManage={permissionState.providerSecretsMutation.allowed}
         permissionMessage={permissionState.providerSecretsMutation.message}
       />

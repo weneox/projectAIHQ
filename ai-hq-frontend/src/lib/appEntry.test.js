@@ -42,8 +42,8 @@ describe("resolveAuthenticatedLanding", () => {
         workspace: {
           setupCompleted: true,
           workspaceReady: true,
-          routeHint: "/settings",
-          destination: { path: "/settings" },
+          routeHint: "/workspace",
+          destination: { path: "/workspace" },
         },
       },
     });
@@ -102,9 +102,10 @@ describe("resolveAuthenticatedLanding", () => {
       "/workspace",
       "/truth",
       "/publish",
-      "/expert",
-      "/settings",
       "/inbox",
+      "/comments",
+      "/voice",
+      "/channels",
     ]);
 
     expect(INTERNAL_ONLY_APP_ROUTES).toEqual([
@@ -154,13 +155,13 @@ describe("resolveAuthenticatedLanding", () => {
     expect(target).toBe("/home");
   });
 
-  it("accepts expert as a first-class authenticated route", () => {
+  it("accepts workspace as a first-class authenticated route", () => {
     const target = resolveAuthenticatedLanding({
       bootstrap: {
         workspace: {
           setupCompleted: true,
           workspaceReady: true,
-          routeHint: "/expert",
+          routeHint: "/workspace",
         },
       },
     });

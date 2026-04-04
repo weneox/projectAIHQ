@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react";
 import { apiGet, apiPost } from "../api/client.js";
 import { getLeadByThreadId } from "../api/leads.js";
-import { useSurfaceActionState } from "../components/settings/hooks/useSurfaceActionState.js";
-import { useSettingsSurfaceState } from "../pages/Settings/hooks/useSettingsSurfaceState.js";
+import { useActionState } from "./useActionState.js";
+import { useAsyncSurfaceState } from "./useAsyncSurfaceState.js";
 
 const inboxInflightRequests = new Map();
 
@@ -42,7 +42,7 @@ function clearSharedInboxRequests(prefix = "") {
 
 export function useInboxData({ operatorName, navigate }) {
   const actorName = String(operatorName || "").trim() || "operator";
-  const actionState = useSurfaceActionState();
+  const actionState = useActionState();
   const [messages, setMessages] = useState([]);
   const [selectedThread, setSelectedThread] = useState(null);
   const [relatedLead, setRelatedLead] = useState(null);
@@ -64,7 +64,7 @@ export function useInboxData({ operatorName, navigate }) {
     succeedSave,
     failSave,
     clearSaveState,
-  } = useSettingsSurfaceState({
+  } = useAsyncSurfaceState({
     initialData: {
       threads: [],
       dbDisabled: false,

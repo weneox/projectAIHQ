@@ -74,10 +74,8 @@ describe("OperatorRouteGuard", () => {
   });
 
   it.each([
-    ["/settings", "Settings route"],
     ["/comments", "Comments route"],
     ["/voice", "Voice route"],
-    ["/expert", "Expert route"],
   ])(
     "keeps %s reachable when auth is valid but session composition fails",
     async (path, label) => {
@@ -100,7 +98,6 @@ describe("OperatorRouteGuard", () => {
   );
 
   it.each([
-    ["/settings", "Settings route"],
     ["/comments", "Comments route"],
     ["/voice", "Voice route"],
   ])(
@@ -139,9 +136,9 @@ describe("OperatorRouteGuard", () => {
     getAppSessionContext.mockRejectedValue(new Error("session unavailable"));
 
     render(
-      <MemoryRouter initialEntries={["/settings"]}>
+      <MemoryRouter initialEntries={["/voice"]}>
         <OperatorRouteGuard>
-          <div>Settings route</div>
+          <div>Voice route</div>
         </OperatorRouteGuard>
       </MemoryRouter>
     );
@@ -153,10 +150,8 @@ describe("OperatorRouteGuard", () => {
   });
 
   it.each([
-    ["/settings", "Settings route"],
     ["/comments", "Comments route"],
     ["/voice", "Voice route"],
-    ["/expert", "Expert route"],
   ])(
     "keeps %s reachable from cached operator auth when live auth refresh fails",
     async (path, label) => {
@@ -222,10 +217,8 @@ describe("OperatorRouteGuard", () => {
   });
 
   it.each([
-    ["/settings", "Settings route"],
     ["/comments", "Comments route"],
     ["/voice", "Voice route"],
-    ["/expert", "Expert route"],
     ["/leads", "Leads route"],
     ["/publish", "Publish route"],
     ["/proposals", "Proposals route"],

@@ -1,5 +1,5 @@
 import { Bot, Plus, Send, Smile, Sparkles } from "lucide-react";
-import SettingsSurfaceBanner from "../settings/SettingsSurfaceBanner.jsx";
+import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
 
 function shouldRenderSurfaceBanner(surface) {
   return Boolean(
@@ -99,7 +99,7 @@ function ComposerBody({
   return (
     <div className="space-y-3">
       {showBanner ? (
-        <SettingsSurfaceBanner
+        <SurfaceBanner
           surface={surface}
           unavailableMessage="Operator reply controls are temporarily unavailable."
           refreshLabel="Refresh reply controls"

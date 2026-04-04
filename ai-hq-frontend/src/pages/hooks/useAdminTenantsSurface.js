@@ -7,8 +7,8 @@ import {
   exportTenantCsvBundle,
   downloadTenantZip,
 } from "../../api/tenants.js";
-import { useSettingsSurfaceState } from "../Settings/hooks/useSettingsSurfaceState.js";
-import { useSurfaceActionState } from "../../components/settings/hooks/useSurfaceActionState.js";
+import { useAsyncSurfaceState } from "../../hooks/useAsyncSurfaceState.js";
+import { useActionState } from "../../hooks/useActionState.js";
 
 const EMPTY_FORM = {
   tenant_key: "",
@@ -43,11 +43,11 @@ export function useAdminTenantsSurface() {
     succeedSave,
     failSave,
     clearSaveState,
-  } = useSettingsSurfaceState({
+  } = useAsyncSurfaceState({
     initialData: () => [],
     initialLoading: true,
   });
-  const actionState = useSurfaceActionState();
+  const actionState = useActionState();
 
   const refreshTenants = useCallback(async () => {
     beginRefresh();

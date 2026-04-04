@@ -6,8 +6,8 @@ import {
   listDurableExecutions,
   retryDurableExecution,
 } from "../../api/executions.js";
-import { useSurfaceActionState } from "../../components/settings/hooks/useSurfaceActionState.js";
-import { useSettingsSurfaceState } from "../Settings/hooks/useSettingsSurfaceState.js";
+import { useActionState } from "../../hooks/useActionState.js";
+import { useAsyncSurfaceState } from "../../hooks/useAsyncSurfaceState.js";
 
 const EMPTY_SURFACE = {
   items: [],
@@ -31,7 +31,7 @@ export function useExecutionsSurface() {
   const [channelFilter, setChannelFilter] = useState("");
   const [tenantFilter, setTenantFilter] = useState("");
   const [selectedId, setSelectedId] = useState("");
-  const actionState = useSurfaceActionState();
+  const actionState = useActionState();
 
   const {
     data,
@@ -43,7 +43,7 @@ export function useExecutionsSurface() {
     succeedSave,
     failSave,
     clearSaveState,
-  } = useSettingsSurfaceState({
+  } = useAsyncSurfaceState({
     initialData: EMPTY_SURFACE,
   });
 
@@ -53,7 +53,7 @@ export function useExecutionsSurface() {
     beginRefresh: beginDetailRefresh,
     succeedRefresh: succeedDetailRefresh,
     failRefresh: failDetailRefresh,
-  } = useSettingsSurfaceState({
+  } = useAsyncSurfaceState({
     initialData: EMPTY_DETAIL,
     initialLoading: false,
   });

@@ -8,7 +8,7 @@ import InboxDetailPanel from "../components/inbox/InboxDetailPanel.jsx";
 import InboxLeadPanel from "../components/inbox/InboxLeadPanel.jsx";
 import InboxThreadListPanel from "../components/inbox/InboxThreadListPanel.jsx";
 import { useThreadOutboundAttemptsSurface } from "../components/inbox/hooks/useThreadOutboundAttemptsSurface.js";
-import SettingsSurfaceBanner from "../components/settings/SettingsSurfaceBanner.jsx";
+import SurfaceBanner from "../components/feedback/SurfaceBanner.jsx";
 import { useInboxData } from "../hooks/useInboxData.js";
 import { useInboxRealtime } from "../hooks/useInboxRealtime.js";
 import { getAppSessionContext } from "../lib/appSession.js";
@@ -177,7 +177,7 @@ export default function Inbox() {
       {showTopBanner ? (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center px-4 pt-4">
           <div className="pointer-events-auto w-full max-w-[920px]">
-            <SettingsSurfaceBanner
+            <SurfaceBanner
               surface={surface}
               unavailableMessage="Inbox operations are temporarily unavailable."
               refreshLabel="Refresh inbox"

@@ -138,8 +138,8 @@ function buildStatePresentation(status, meta = {}) {
             ? `${meta.pendingCandidateCount} imported ${meta.pendingCandidateCount === 1 ? "item needs" : "items need"} review before setup can be trusted.`
             : "Imported setup details still need operator review.",
         action: {
-          label: "Review setup",
-          path: "/setup",
+          label: "Open setup assistant",
+          path: "/home?assistant=setup",
         },
       };
     case "ready_to_continue":
@@ -151,8 +151,8 @@ function buildStatePresentation(status, meta = {}) {
           ? `${missingStep} is still missing.`
           : "Setup still needs a few details before the workspace is complete.",
         action: {
-          label: "Continue setup",
-          path: "/setup",
+          label: "Open setup assistant",
+          path: "/home?assistant=setup",
         },
       };
     case "completed":

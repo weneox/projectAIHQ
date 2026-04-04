@@ -12,7 +12,7 @@ function buildActionLabel(targetKind = "") {
     case "truth":
       return "Open Truth";
     case "setup":
-      return "Open Setup Studio";
+      return "Open Setup Assistant";
     case "source_governance":
       return "Open Source Governance";
     case "policy_controls":

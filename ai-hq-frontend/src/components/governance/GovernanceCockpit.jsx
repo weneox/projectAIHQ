@@ -242,7 +242,7 @@ export function GovernanceSignalStrip({
             Approved truth, runtime health, and repair stay in one operator loop.
           </div>
           <div className="max-w-3xl text-sm leading-6 text-slate-600 dark:text-slate-400">
-            The main control path is approved truth to runtime projection to controlled operations. Review pressure, projection health, and repair guidance stay visible even while you work in other settings sections.
+            The main control path is approved truth to runtime projection to controlled operations. Review pressure, projection health, and repair guidance stay visible even while you work in other operator surfaces.
           </div>
         </div>
 

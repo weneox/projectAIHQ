@@ -98,14 +98,14 @@ function resolveToLocation(currentLocation, to, stateOverride) {
       to.search != null
         ? normalizeSearch(to.search)
         : to.pathname != null
-        ? ""
-        : currentLocation.search;
+          ? ""
+          : currentLocation.search;
     const nextHash =
       to.hash != null
         ? normalizeHash(to.hash)
         : to.pathname != null
-        ? ""
-        : currentLocation.hash;
+          ? ""
+          : currentLocation.hash;
 
     return {
       pathname: nextPathname || "/",
@@ -115,8 +115,8 @@ function resolveToLocation(currentLocation, to, stateOverride) {
         stateOverride !== undefined
           ? stateOverride
           : to.state !== undefined
-          ? to.state
-          : currentLocation.state ?? null,
+            ? to.state
+            : currentLocation.state ?? null,
       key: buildKey(),
     };
   }

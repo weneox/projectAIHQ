@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiGet, apiPost } from "../api/client.js";
-import { useSurfaceActionState } from "../components/settings/hooks/useSurfaceActionState.js";
+import { useActionState } from "./useActionState.js";
 import { mapCommentToUi, s } from "../features/comments/comment-utils.js";
 import { getAppSessionContext } from "../lib/appSession.js";
-import { useSettingsSurfaceState } from "../pages/Settings/hooks/useSettingsSurfaceState.js";
+import { useAsyncSurfaceState } from "./useAsyncSurfaceState.js";
 
 export function useCommentsData() {
   const [statusFilter, setStatusFilter] = useState("all");
@@ -14,7 +14,7 @@ export function useCommentsData() {
     tenantKey: "",
     actorName: "operator",
   });
-  const actionState = useSurfaceActionState();
+  const actionState = useActionState();
   const {
     data: items,
     setData: setItems,
@@ -26,7 +26,7 @@ export function useCommentsData() {
     succeedSave,
     failSave,
     clearSaveState,
-  } = useSettingsSurfaceState({
+  } = useAsyncSurfaceState({
     initialData: [],
   });
 

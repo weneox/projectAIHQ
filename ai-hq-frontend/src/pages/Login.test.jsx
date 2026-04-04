@@ -11,7 +11,7 @@ const getAppBootstrapContext = vi.fn();
 const clearAppSessionContext = vi.fn();
 const hasMultipleWorkspaceChoices = vi.fn();
 const resolveAuthenticatedLanding = vi.fn();
-const resolveWorkspaceContractRoute = vi.fn();
+const isWelcomeIdentityComplete = vi.fn();
 
 vi.mock("../api/auth.js", () => ({
   loginUser: (...args) => loginUser(...args),
@@ -30,7 +30,10 @@ vi.mock("../lib/appEntry.js", () => ({
   WORKSPACE_SELECTION_ROUTE: "/select-workspace",
   hasMultipleWorkspaceChoices: (...args) => hasMultipleWorkspaceChoices(...args),
   resolveAuthenticatedLanding: (...args) => resolveAuthenticatedLanding(...args),
-  resolveWorkspaceContractRoute: (...args) => resolveWorkspaceContractRoute(...args),
+}));
+
+vi.mock("../lib/welcomeIdentity.js", () => ({
+  isWelcomeIdentityComplete: (...args) => isWelcomeIdentityComplete(...args),
 }));
 
 vi.mock("react-router-dom", async () => {
@@ -67,7 +70,7 @@ describe("Login auth entry", () => {
     getAppAuthContext.mockResolvedValue({ authenticated: false });
     hasMultipleWorkspaceChoices.mockReturnValue(false);
     resolveAuthenticatedLanding.mockReturnValue("/home");
-    resolveWorkspaceContractRoute.mockReturnValue("/home");
+    isWelcomeIdentityComplete.mockReturnValue(true);
     clearAppSessionContext.mockImplementation(() => {});
     getAppBootstrapContext.mockResolvedValue({
       workspace: { setupCompleted: true, workspaceReady: true },
@@ -86,23 +89,23 @@ describe("Login auth entry", () => {
 
     expect(
       await screen.findByRole("heading", {
-        name: "Sign in to continue through one calm product home for sources, memory, channels, and operator work.",
+        name: "Log in",
       })
     ).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Email address")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Enter email address")).toBeInTheDocument();
   });
 
-  it("redirects an existing authenticated user to the resolved landing route", async () => {
+  it("redirects an existing authenticated user without welcome identity to the welcome step", async () => {
     getAppAuthContext.mockResolvedValue({ authenticated: true });
     getAppBootstrapContext.mockResolvedValue({
       workspace: { setupCompleted: false, workspaceReady: false },
     });
-    resolveAuthenticatedLanding.mockReturnValue("/setup");
+    isWelcomeIdentityComplete.mockReturnValue(false);
 
     renderRoute("/login");
 
     await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith("/setup", { replace: true });
+      expect(navigate).toHaveBeenCalledWith("/welcome", { replace: true });
     });
   });
 
@@ -132,21 +135,21 @@ describe("Login auth entry", () => {
     );
     selectWorkspaceUser.mockResolvedValueOnce({
       ok: true,
-      destination: { path: "/setup" },
+      destination: { path: "/home?assistant=setup" },
     });
 
     renderRoute("/login");
 
-    fireEvent.change(await screen.findByPlaceholderText("Email address"), {
+    fireEvent.change(await screen.findByPlaceholderText("Enter email address"), {
       target: { name: "email", value: "shared@company.test" },
     });
-    fireEvent.change(screen.getByPlaceholderText("Password"), {
+    fireEvent.change(screen.getByPlaceholderText("Enter password"), {
       target: { name: "password", value: "secret-pass" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
 
-    expect(await screen.findByText("Select your workspace to continue.")).toBeInTheDocument();
+    expect(await screen.findByText("Choose workspace")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /globex/i }));
     fireEvent.click(screen.getByRole("button", { name: /open selected workspace/i }));
@@ -165,6 +168,35 @@ describe("Login auth entry", () => {
     });
   });
 
+  it("sends a newly authenticated user to welcome before home when welcome identity is incomplete", async () => {
+    getAppAuthContext.mockResolvedValue({ authenticated: false });
+    loginUser.mockResolvedValueOnce({ ok: true });
+    getAppAuthContext.mockResolvedValueOnce({ authenticated: false });
+    getAppAuthContext.mockResolvedValueOnce({
+      authenticated: true,
+      user: { email: "owner@acme.com" },
+    });
+    getAppBootstrapContext.mockResolvedValueOnce({
+      workspace: { setupCompleted: false, workspaceReady: false },
+    });
+    isWelcomeIdentityComplete.mockReturnValue(false);
+
+    renderRoute("/login");
+
+    fireEvent.change(await screen.findByPlaceholderText("Enter email address"), {
+      target: { name: "email", value: "owner@acme.com" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("Enter password"), {
+      target: { name: "password", value: "secret-pass" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+
+    await waitFor(() => {
+      expect(navigate).toHaveBeenCalledWith("/welcome", { replace: true });
+    });
+  });
+
   it("creates an account from the signup route and sends the user to verify email", async () => {
     getAppAuthContext.mockResolvedValue({ authenticated: false });
     signupUser.mockResolvedValue({ ok: true });
@@ -174,17 +206,17 @@ describe("Login auth entry", () => {
     fireEvent.change(await screen.findByPlaceholderText("Full name"), {
       target: { name: "fullName", value: "Jane Doe" },
     });
-    fireEvent.change(screen.getByPlaceholderText("Business name"), {
+    fireEvent.change(screen.getByPlaceholderText("Workspace name"), {
       target: { name: "companyName", value: "Acme Clinic" },
     });
-    fireEvent.change(screen.getByPlaceholderText("Email address"), {
+    fireEvent.change(screen.getByPlaceholderText("Enter email address"), {
       target: { name: "email", value: "owner@acme.com" },
     });
-    fireEvent.change(screen.getByPlaceholderText("Password"), {
+    fireEvent.change(screen.getByPlaceholderText("Enter password"), {
       target: { name: "password", value: "secret-pass" },
     });
 
-    const submitButton = screen.getByRole("button", { name: "Create account" });
+    const submitButton = screen.getByRole("button", { name: "Create workspace" });
 
     await waitFor(() => {
       expect(submitButton).not.toBeDisabled();

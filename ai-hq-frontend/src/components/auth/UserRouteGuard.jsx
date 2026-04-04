@@ -1,24 +1,16 @@
 import { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import {
-  getCanonicalWorkspaceContract,
   isLocalWorkspaceEntryEnabled,
   isWorkspaceSelectionPath,
 } from "../../lib/appEntry.js";
-import { getAppAuthContext, getAppBootstrapContext } from "../../lib/appSession.js";
+import { getAppAuthContext } from "../../lib/appSession.js";
 import AppBootSurface from "../loading/AppBootSurface.jsx";
-
-function isSetupPath(pathname = "") {
-  return pathname === "/setup" || pathname.startsWith("/setup/");
-}
 
 export default function UserRouteGuard({ children }) {
   const location = useLocation();
   const localWorkspaceEntry = isLocalWorkspaceEntryEnabled();
   const onWorkspaceSelection = isWorkspaceSelectionPath(location.pathname);
-  const allowSetupBypass =
-    location.pathname === "/workspace" &&
-    location.state?.allowSetupBypass === true;
 
   const [state, setState] = useState({
     loading: true,
@@ -65,56 +57,16 @@ export default function UserRouteGuard({ children }) {
           return;
         }
 
-        const onSetup = isSetupPath(location.pathname);
-
-        if (onSetup) {
-          setState({
-            loading: false,
-            ok: true,
-            redirectTo: "",
-            failed: false,
-          });
-        }
-
-        const bootstrap = await getAppBootstrapContext();
-        if (!alive) return;
-
-        const workspace = getCanonicalWorkspaceContract(bootstrap);
-        const setupCompleted = workspace.workspaceReady;
-        const setupRoute = workspace.nextSetupRoute || "/setup";
-        let redirectTo = "";
-
-        if (!setupCompleted && !onSetup && !allowSetupBypass) {
-          redirectTo = setupRoute;
-        } else if (setupCompleted && onSetup) {
-          redirectTo = "/workspace";
-        } else if (
-          location.pathname === "/setup" ||
-          (onSetup && location.pathname !== setupRoute)
-        ) {
-          redirectTo = setupRoute;
-        }
-
         if (!alive) return;
 
         setState({
           loading: false,
           ok: true,
-          redirectTo,
+          redirectTo: "",
           failed: false,
         });
       } catch {
         if (!alive) return;
-
-        if (isSetupPath(location.pathname)) {
-          setState({
-            loading: false,
-            ok: true,
-            redirectTo: "",
-            failed: false,
-          });
-          return;
-        }
 
         setState({
           loading: false,
@@ -131,9 +83,7 @@ export default function UserRouteGuard({ children }) {
       alive = false;
     };
   }, [
-    allowSetupBypass,
     localWorkspaceEntry,
-    location.pathname,
     onWorkspaceSelection,
   ]);
 

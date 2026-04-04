@@ -82,12 +82,11 @@ export function toSurfaceFromPath(path = "", fallback = "workspace") {
     return "publish";
   }
   if (
-    next.startsWith("/settings") ||
     next.startsWith("/executions") ||
     next.startsWith("/voice") ||
     next.startsWith("/incidents")
   ) {
-    return "expert";
+    return "workspace";
   }
   if (next.startsWith("/setup") || next.startsWith("/truth") || next === "/workspace") {
     return "workspace";

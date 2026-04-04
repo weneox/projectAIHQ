@@ -9,9 +9,9 @@ function normalize(value = "") {
 const INTENT_DEFINITIONS = [
   {
     id: "continue-setup",
-    label: "Continue setup",
+    label: "Open setup assistant",
     phrases: ["continue setup", "finish setup", "open setup", "setup intake"],
-    route: "/setup",
+    route: "/home?assistant=setup",
     destinationSurface: "workspace",
   },
   {

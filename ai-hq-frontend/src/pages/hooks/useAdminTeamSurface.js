@@ -9,8 +9,8 @@ import {
   setTenantUserPassword,
   deleteTenantUser,
 } from "../../api/tenants.js";
-import { useSettingsSurfaceState } from "../Settings/hooks/useSettingsSurfaceState.js";
-import { useSurfaceActionState } from "../../components/settings/hooks/useSurfaceActionState.js";
+import { useAsyncSurfaceState } from "../../hooks/useAsyncSurfaceState.js";
+import { useActionState } from "../../hooks/useActionState.js";
 
 const EMPTY_CREATE = {
   email: "",
@@ -53,11 +53,11 @@ export function useAdminTeamSurface() {
     succeedSave,
     failSave,
     clearSaveState,
-  } = useSettingsSurfaceState({
+  } = useAsyncSurfaceState({
     initialData: createEmptyData,
     initialLoading: true,
   });
-  const actionState = useSurfaceActionState();
+  const actionState = useActionState();
 
   const tenants = data.tenants || [];
   const users = data.users || [];

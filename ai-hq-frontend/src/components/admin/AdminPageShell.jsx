@@ -1,5 +1,5 @@
 import Button from "../ui/Button.jsx";
-import SettingsSurfaceBanner from "../settings/SettingsSurfaceBanner.jsx";
+import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
 
 export default function AdminPageShell({
   eyebrow = "",
@@ -40,7 +40,7 @@ export default function AdminPageShell({
           </div>
         </div>
 
-        <SettingsSurfaceBanner
+        <SurfaceBanner
           surface={surface}
           unavailableMessage={unavailableMessage}
           refreshLabel={refreshLabel}

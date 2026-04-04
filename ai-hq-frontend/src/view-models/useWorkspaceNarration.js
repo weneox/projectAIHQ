@@ -773,8 +773,8 @@ function buildFallbackOutcomeItems(payloads = {}) {
         tone: "warn",
         label: "Pending review",
         nextAction: {
-          label: "Review setup",
-          path: "/setup",
+          label: "Open setup assistant",
+          path: "/home?assistant=setup",
         },
       },
     ];

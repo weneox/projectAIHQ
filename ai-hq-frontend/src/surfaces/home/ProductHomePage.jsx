@@ -1,21 +1,28 @@
 import {
   ArrowRight,
   ChevronRight,
+  Globe2,
   MessageSquareText,
+  Link2,
+  Loader2,
   Settings2,
   Sparkles,
   Waypoints,
   Waves,
 } from "lucide-react";
-import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import Input, { Textarea } from "../../components/ui/Input.jsx";
 import Badge from "../../components/ui/Badge.jsx";
 import Button from "../../components/ui/Button.jsx";
 import {
   InlineNotice,
   LoadingSurface,
   PageCanvas,
+  Surface,
 } from "../../components/ui/AppShellPrimitives.jsx";
+import { saveBusinessProfile } from "../../api/setup.js";
+import { clearAppBootstrapContext } from "../../lib/appSession.js";
 import useProductHome from "../../view-models/useProductHome.js";
 
 const LIVE_ICONS = {
@@ -356,6 +363,160 @@ function ProductHomeLoadingSurface() {
   );
 }
 
+function SetupAssistantCard({ home, onNavigate }) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [mode, setMode] = useState(() =>
+    searchParams.get("assistant") === "setup" ? "website" : ""
+  );
+  const [website, setWebsite] = useState("");
+  const [description, setDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const visible = !home.setupState?.isComplete || searchParams.get("assistant") === "setup";
+  if (!visible) return null;
+
+  async function handleSave() {
+    if (saving) return;
+
+    const payload = {
+      companyName: home.companyName || "",
+      websiteUrl: compactText(website),
+      description: compactText(description),
+    };
+
+    if (!payload.websiteUrl && !payload.description) {
+      setError("Add a website or a short business description.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await saveBusinessProfile(payload);
+      clearAppBootstrapContext();
+      await home.refetch?.();
+      setMessage("Saved to workspace foundation.");
+      const next = new URLSearchParams(searchParams);
+      next.delete("assistant");
+      setSearchParams(next, { replace: true });
+    } catch (saveError) {
+      setError(
+        compactText(
+          saveError?.message,
+          "We could not save those business details right now."
+        )
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="overflow-hidden rounded-[28px] border border-line bg-[linear-gradient(180deg,rgba(var(--color-surface),0.98),rgba(var(--color-surface-muted),0.98))]">
+      <div className="flex flex-col gap-4 border-b border-line-soft px-5 py-5 md:px-6 md:py-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-[700px]">
+          <div className="inline-flex items-center gap-2 rounded-pill border border-line-soft bg-surface px-3 py-1.5 text-[12px] font-medium text-text-muted">
+            <Sparkles className="h-3.5 w-3.5 text-brand" />
+            <span>AI setup assistant</span>
+          </div>
+          <div className="mt-4 text-[1.55rem] font-semibold tracking-[-0.04em] text-text">
+            Want AI to gather the basics?
+          </div>
+          <div className="mt-2 text-sm leading-6 text-text-muted">
+            Add a website, drop in one short business description, or open source connections when you want deeper setup.
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant={mode === "website" ? "primary" : "secondary"} size="sm" onClick={() => setMode("website")}>
+            Website
+          </Button>
+          <Button type="button" variant={mode === "description" ? "primary" : "secondary"} size="sm" onClick={() => setMode("description")}>
+            Description
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => onNavigate({ path: "/channels" })}
+            leftIcon={<Link2 className="h-4 w-4" />}
+          >
+            Connect sources
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-5 px-5 py-5 md:px-6 md:py-6 lg:grid-cols-[minmax(0,1fr)_260px]">
+        <div className="space-y-4">
+          {mode === "website" ? (
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-text">Website</div>
+              <Input
+                value={website}
+                onChange={(event) => setWebsite(event.target.value)}
+                placeholder="yourbusiness.com"
+                leftIcon={<Globe2 className="h-4 w-4" />}
+                appearance="product"
+              />
+            </div>
+          ) : null}
+
+          {mode === "description" ? (
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-text">Business description</div>
+              <Textarea
+                rows={4}
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Premium dental clinic in Baku focused on implants, whitening, and family care."
+                appearance="product"
+              />
+            </div>
+          ) : null}
+
+          {!mode ? (
+            <div className="rounded-[22px] border border-dashed border-line px-4 py-4 text-sm leading-6 text-text-muted">
+              Choose one path and keep it short. Setup stays optional and lightweight.
+            </div>
+          ) : null}
+
+          {message ? (
+            <InlineNotice tone="success" title="Saved" description={message} compact />
+          ) : null}
+
+          {error ? (
+            <InlineNotice tone="danger" title="Unable to save" description={error} compact />
+          ) : null}
+        </div>
+
+        <div className="flex flex-col justify-between gap-4">
+          <Surface subdued padded="sm" className="space-y-2">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-text-subtle">Current posture</div>
+            <div className="text-sm font-medium text-text">{home.setupState?.status === "completed" ? "Complete" : "Optional setup available"}</div>
+            <div className="text-sm leading-6 text-text-muted">
+              {home.setupState?.summary || "The workspace can run now. Add business context only when useful."}
+            </div>
+          </Surface>
+
+          <Button
+            type="button"
+            size="hero"
+            disabled={saving || (!compactText(website) && !compactText(description))}
+            onClick={handleSave}
+            rightIcon={saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+          >
+            {saving ? "Saving..." : "Save basics"}
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function buildSupportItems(home, secondaryEntryPoints) {
   const setupSignal = home.heroStats?.find((item) => item.id === "setup");
   const truthSignal = home.heroStats?.find((item) => item.id === "memory");
@@ -371,7 +532,7 @@ function buildSupportItems(home, secondaryEntryPoints) {
           status: setupSignal.status,
           action: setupSignal.action,
         }
-      : { id: "setup", title: "Setup", status: "Support", action: { label: "Open setup", path: "/setup" } },
+      : { id: "setup", title: "Setup", status: "Support", action: { label: "Open setup assistant", path: "/home?assistant=setup" } },
     truthSignal
       ? {
           id: "truth",
@@ -398,6 +559,7 @@ function buildSupportItems(home, secondaryEntryPoints) {
 
 export default function ProductHomePage() {
   const navigate = useNavigate();
+  const [, setSearchParams] = useSearchParams();
   const home = useProductHome();
 
   const featuredEntryPoints = useMemo(
@@ -436,6 +598,22 @@ export default function ProductHomePage() {
         home={home}
         liveItems={featuredEntryPoints}
         onNavigate={navigateFromAction}
+      />
+
+      <SetupAssistantCard
+        home={home}
+        onNavigate={(action) => {
+          if (!action?.path) return;
+          if (action.path === "/home?assistant=setup") {
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              next.set("assistant", "setup");
+              return next;
+            });
+            return;
+          }
+          navigateFromAction(action);
+        }}
       />
 
       <LiveLane items={featuredEntryPoints} onNavigate={navigateFromAction} />

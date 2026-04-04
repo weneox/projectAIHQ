@@ -38,12 +38,6 @@ vi.mock("./Header.jsx", () => ({
   },
 }));
 
-vi.mock("./AskAIWidget.jsx", () => ({
-  default: function AskAIWidgetMock() {
-    return <div>ask-ai-widget</div>;
-  },
-}));
-
 vi.mock("../../lib/realtime/realtimeStore.js", () => ({
   realtimeStore: {
     subscribeStatus: () => () => {},
@@ -82,14 +76,4 @@ describe("Shell", () => {
     });
   });
 
-  it("mounts the ask ai widget inside the shell", async () => {
-    pathname = "/workspace";
-    apiGet.mockResolvedValueOnce({ threads: [] }).mockResolvedValueOnce({ leads: [] });
-
-    const view = render(<Shell />);
-
-    await waitFor(() => {
-      expect(view.getByText("ask-ai-widget")).toBeInTheDocument();
-    });
-  });
 });

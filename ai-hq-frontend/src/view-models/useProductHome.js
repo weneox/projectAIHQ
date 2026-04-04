@@ -337,7 +337,11 @@ export function useProductHome() {
                 ? "Unavailable"
                 : "Not started",
         summary: setupState.summary,
-        action: setupState.action || { label: "Open setup", path: "/setup" },
+        action:
+          setupState.action || {
+            label: "Open setup assistant",
+            path: "/home?assistant=setup",
+          },
       },
       {
         id: "memory",
@@ -465,7 +469,11 @@ export function useProductHome() {
         label: "Setup",
         status: heroStats[0].status,
         summary: setupState.summary,
-        action: setupState.action || { label: "Open setup", path: "/setup" },
+        action:
+          setupState.action || {
+            label: "Open setup assistant",
+            path: "/home?assistant=setup",
+          },
       },
       {
         id: "memory-support",

@@ -362,11 +362,6 @@ export default function WorkspacePage() {
         title="Operator workspace"
         description="Cross-surface brief and control view behind the primary inbox, comments, and voice operating path."
         className="gap-4 pb-4"
-        actions={
-          <Button variant="secondary" onClick={() => navigate("/settings")}>
-            Open settings
-          </Button>
-        }
       />
 
       <WorkspaceNotice

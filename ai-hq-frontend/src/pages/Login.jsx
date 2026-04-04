@@ -22,6 +22,7 @@ import {
   hasMultipleWorkspaceChoices,
   resolveAuthenticatedLanding,
 } from "../lib/appEntry.js";
+import { isWelcomeIdentityComplete } from "../lib/welcomeIdentity.js";
 import AppBootSurface from "../components/loading/AppBootSurface.jsx";
 
 import AIVisual from "../assets/setup-studio/channels/AI.png";
@@ -398,6 +399,11 @@ export default function Login() {
 
         if (!alive) return;
 
+        if (!isWelcomeIdentityComplete({ auth, bootstrap })) {
+          navigate("/welcome", { replace: true });
+          return;
+        }
+
         navigate(
           resolveAuthenticatedLanding({
             auth,
@@ -455,6 +461,7 @@ export default function Login() {
     }
 
     let auth = null;
+    let bootstrap = null;
 
     try {
       auth = await getAppAuthContext({ force: true });
@@ -463,12 +470,19 @@ export default function Login() {
         navigate(WORKSPACE_SELECTION_ROUTE, { replace: true });
         return;
       }
+
+      bootstrap = await getAppBootstrapContext({ force: true }).catch(() => ({}));
     } catch {}
+
+    if (!isWelcomeIdentityComplete({ auth, bootstrap })) {
+      navigate("/welcome", { replace: true });
+      return;
+    }
 
     navigate(
       resolvePostAuthTarget({
         auth,
-        payload: response,
+        payload: bootstrap && Object.keys(bootstrap).length ? bootstrap : response,
       }),
       { replace: true }
     );

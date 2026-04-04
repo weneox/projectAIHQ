@@ -10,7 +10,7 @@ import {
   XCircle,
 } from "lucide-react";
 
-import SettingsSurfaceBanner from "../settings/SettingsSurfaceBanner.jsx";
+import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
 import InboxMessageBubble from "./InboxMessageBubble.jsx";
 import { InboxDetailSkeleton } from "./InboxLoadingSurface.jsx";
 import { indexAttemptsByMessageCorrelation } from "./outboundAttemptTruth.js";
@@ -460,7 +460,7 @@ export default function InboxDetailPanel({
       {showSurfaceBanner ? (
         <div className="pointer-events-none absolute inset-x-0 top-[78px] z-20 flex justify-center px-4 pt-3">
           <div className="pointer-events-auto w-full max-w-[760px]">
-            <SettingsSurfaceBanner
+            <SurfaceBanner
               surface={surface}
               unavailableMessage="Conversation detail is temporarily unavailable."
               refreshLabel="Refresh conversation"

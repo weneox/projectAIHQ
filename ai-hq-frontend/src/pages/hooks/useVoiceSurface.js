@@ -13,8 +13,8 @@ import {
   requestVoiceHandoff,
   takeoverVoiceSession,
 } from "../../api/voice.js";
-import { useSurfaceActionState } from "../../components/settings/hooks/useSurfaceActionState.js";
-import { useSettingsSurfaceState } from "../Settings/hooks/useSettingsSurfaceState.js";
+import { useActionState } from "../../hooks/useActionState.js";
+import { useAsyncSurfaceState } from "../../hooks/useAsyncSurfaceState.js";
 
 const EMPTY_SURFACE = {
   overview: null,
@@ -104,7 +104,7 @@ export function useVoiceSurface() {
   const selectedIdRef = useRef("");
   const selectedLiveSessionIdRef = useRef("");
   const liveSessionsRef = useRef([]);
-  const actionState = useSurfaceActionState();
+  const actionState = useActionState();
 
   const {
     data,
@@ -117,7 +117,7 @@ export function useVoiceSurface() {
     succeedSave,
     failSave,
     clearSaveState,
-  } = useSettingsSurfaceState({
+  } = useAsyncSurfaceState({
     initialData: EMPTY_SURFACE,
   });
 
@@ -128,7 +128,7 @@ export function useVoiceSurface() {
     beginRefresh: beginDetailRefresh,
     succeedRefresh: succeedDetailRefresh,
     failRefresh: failDetailRefresh,
-  } = useSettingsSurfaceState({
+  } = useAsyncSurfaceState({
     initialData: EMPTY_DETAIL,
     initialLoading: false,
   });
