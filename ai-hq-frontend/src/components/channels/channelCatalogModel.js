@@ -11,7 +11,7 @@ import youtubeIcon from "../../assets/channels/youtube.svg";
 
 export const CHANNEL_STATUS_META = {
   connected: {
-    label: "Connected",
+    label: "Live",
     tone: "success",
   },
   limited: {
@@ -19,24 +19,24 @@ export const CHANNEL_STATUS_META = {
     tone: "info",
   },
   "needs-attention": {
-    label: "Needs attention",
+    label: "Setup",
     tone: "warning",
   },
   "not-connected": {
-    label: "Not connected",
+    label: "Planned",
     tone: "neutral",
   },
   context: {
-    label: "Context only",
+    label: "Context",
     tone: "neutral",
   },
 };
 
 export const CHANNEL_FILTERS = [
-  { id: "all", label: "All lanes" },
-  { id: "connected", label: "Live now" },
+  { id: "all", label: "All" },
+  { id: "connected", label: "Live" },
   { id: "limited", label: "Limited" },
-  { id: "attention", label: "Needs setup" },
+  { id: "attention", label: "Setup" },
   { id: "context", label: "Context" },
 ];
 
@@ -47,13 +47,8 @@ export const CHANNELS = [
     status: "connected",
     icon: instagramIcon,
     iconAlt: "Instagram",
-    aliases: [
-      "instagram inbox",
-      "instagram comments",
-      "moderation",
-      "dm",
-    ],
-    summary: "Messages and comments run in one live lane.",
+    aliases: ["instagram inbox", "instagram comments", "moderation", "dm"],
+    summary: "Live messages and comments in one lane.",
     capabilities: ["Inbox", "Comments", "Moderation"],
     primaryAction: {
       label: "Open",
@@ -61,29 +56,28 @@ export const CHANNELS = [
     },
     quickActions: [
       {
-        label: "Open inbox",
-        hint: "Live DM queue and handoff.",
+        label: "Inbox",
+        hint: "Live DM queue.",
         path: "/inbox",
       },
       {
-        label: "Open comments",
-        hint: "Moderation and reply review.",
+        label: "Comments",
+        hint: "Moderation queue.",
         path: "/comments",
       },
       {
-        label: "Open truth",
-        hint: "Approved memory behind the lane.",
+        label: "Truth",
+        hint: "Approved memory.",
         path: "/truth",
       },
     ],
-    detailSummary: "Instagram is the clearest live social lane in the product.",
+    detailSummary: "Primary live social lane with inbox and moderation.",
     detailNote: "Use Inbox for conversations and Comments for moderation.",
     advanced: {
-      note:
-        "Inbound messages, AI-assisted replies, comment moderation, and retry visibility are part of the current launch slice.",
+      note: "Covers inbound messages, AI review, moderation, and retry visibility.",
       items: [
         { label: "Coverage", value: "Messages + comments" },
-        { label: "Position", value: "Live now" },
+        { label: "State", value: "Live now" },
       ],
     },
   },
@@ -102,29 +96,28 @@ export const CHANNELS = [
     },
     quickActions: [
       {
-        label: "Open voice",
-        hint: "Live receptionist desk.",
+        label: "Voice",
+        hint: "Live call desk.",
         path: "/voice",
       },
       {
-        label: "Open workspace",
-        hint: "Capabilities and operator context.",
+        label: "Workspace",
+        hint: "Operator posture.",
         path: "/workspace?focus=capabilities",
       },
       {
-        label: "Open truth",
-        hint: "Approved memory behind calls.",
+        label: "Truth",
+        hint: "Approved memory.",
         path: "/truth",
       },
     ],
-    detailSummary: "Voice stays inside the live operating product.",
-    detailNote: "Receptionist sessions, call control, and handoff all stay here.",
+    detailSummary: "Live voice desk for receptionist, transfer, and transcripts.",
+    detailNote: "Keep call control and handoff inside the same surface.",
     advanced: {
-      note:
-        "Inbound calls, runtime resolution, transcripts, and operator handoff remain part of the current launch slice.",
+      note: "Covers inbound calls, runtime resolution, transcripts, and handoff.",
       items: [
         { label: "Coverage", value: "Twilio receptionist" },
-        { label: "Position", value: "Live now" },
+        { label: "State", value: "Live now" },
       ],
     },
   },
@@ -135,37 +128,36 @@ export const CHANNELS = [
     icon: messengerIcon,
     iconAlt: "Messenger",
     aliases: ["facebook messenger", "meta inbox"],
-    summary: "Meta messaging support exists, but stays secondary.",
-    capabilities: ["Shared inbox path"],
+    summary: "Meta messaging exists, but stays secondary.",
+    capabilities: ["Shared inbox"],
     primaryAction: {
-      label: "Manage",
+      label: "Review",
       path: "/inbox",
     },
     quickActions: [
       {
-        label: "Open inbox",
-        hint: "Shared Meta messaging lane.",
+        label: "Inbox",
+        hint: "Shared Meta queue.",
         path: "/inbox",
       },
       {
-        label: "Open workspace",
-        hint: "Cross-surface operator view.",
+        label: "Workspace",
+        hint: "Operator overview.",
         path: "/workspace",
       },
       {
-        label: "Open setup",
-        hint: "Tighten supporting setup.",
+        label: "Setup",
+        hint: "Supporting config.",
         path: "/home?assistant=setup",
       },
     ],
-    detailSummary: "Messenger uses the live Meta lane without becoming the headline.",
-    detailNote: "Keep the promise narrow and routed through the shared inbox path.",
+    detailSummary: "Shared Meta routing without a broad omnichannel promise.",
+    detailNote: "Keep Messenger routed through the core inbox lane.",
     advanced: {
-      note:
-        "Messenger support exists through the same Meta inbox path, but it should not read as broad omnichannel coverage.",
+      note: "Supported through the shared Meta inbox, not as a headline lane.",
       items: [
         { label: "Coverage", value: "Shared Meta inbox" },
-        { label: "Position", value: "Limited support" },
+        { label: "State", value: "Limited" },
       ],
     },
   },
@@ -176,37 +168,36 @@ export const CHANNELS = [
     icon: whatsappIcon,
     iconAlt: "WhatsApp",
     aliases: ["meta adjacent", "whatsapp support"],
-    summary: "Partial support exists, not a full live lane.",
-    capabilities: ["Partial Meta support"],
+    summary: "Partial support exists, not a full lane.",
+    capabilities: ["Partial support"],
     primaryAction: {
-      label: "Manage",
+      label: "Review",
       path: "/workspace",
     },
     quickActions: [
       {
-        label: "Open workspace",
-        hint: "Check the wider operator surface.",
+        label: "Workspace",
+        hint: "Operator overview.",
         path: "/workspace",
       },
       {
-        label: "Open inbox",
-        hint: "Use the live Meta queue.",
+        label: "Inbox",
+        hint: "Meta queue path.",
         path: "/inbox",
       },
       {
-        label: "Open setup",
-        hint: "Prepare the supporting path.",
+        label: "Setup",
+        hint: "Supporting path.",
         path: "/home?assistant=setup",
       },
     ],
-    detailSummary: "WhatsApp remains visible, but not as a complete launch promise.",
-    detailNote: "Keep it secondary until the lane is truly complete.",
+    detailSummary: "Visible as support coverage, not a complete launch surface.",
+    detailNote: "Keep it secondary until the lane is complete.",
     advanced: {
-      note:
-        "Some Meta-adjacent support exists, but this is not framed as a complete or customer-ready live loop.",
+      note: "Some support exists, but this is not a complete customer-ready loop.",
       items: [
-        { label: "Coverage", value: "Partial Meta support" },
-        { label: "Position", value: "Limited support" },
+        { label: "Coverage", value: "Partial support" },
+        { label: "State", value: "Limited" },
       ],
     },
   },
@@ -217,37 +208,36 @@ export const CHANNELS = [
     icon: webIcon,
     iconAlt: "Web Chat",
     aliases: ["website chatbot", "site chat", "web chat"],
-    summary: "The installable site loop still needs product work.",
-    capabilities: ["Website install", "Setup path"],
+    summary: "The site loop still needs product work.",
+    capabilities: ["Website install", "Setup"],
     primaryAction: {
-      label: "Fix",
+      label: "Setup",
       path: "/home?assistant=setup",
     },
     quickActions: [
       {
-        label: "Open setup",
-        hint: "Work through the remaining setup path.",
+        label: "Setup",
+        hint: "Remaining setup work.",
         path: "/home?assistant=setup",
       },
       {
-        label: "Open workspace",
-        hint: "Check supporting operator context.",
+        label: "Workspace",
+        hint: "Operator context.",
         path: "/workspace",
       },
       {
-        label: "Open truth",
-        hint: "Review approved business context.",
+        label: "Truth",
+        hint: "Approved memory.",
         path: "/truth",
       },
     ],
-    detailSummary: "Web Chat needs more product work before it reads as live.",
-    detailNote: "Keep it in setup, not inside the first-layer promise.",
+    detailSummary: "Website chat remains a setup track, not a live promise.",
+    detailNote: "Keep it in setup until the install loop is complete.",
     advanced: {
-      note:
-        "Website chat infrastructure exists in parts, but the full installable website loop is not honestly built yet.",
+      note: "Infrastructure exists in parts, but the full installable loop is not ready.",
       items: [
         { label: "Coverage", value: "Website chat" },
-        { label: "Position", value: "Needs product work" },
+        { label: "State", value: "Needs work" },
       ],
     },
   },
@@ -263,34 +253,33 @@ export const CHANNELS = [
     summary: "Approved context feeds the live lanes behind the scenes.",
     capabilities: ["Gmail", "Drive"],
     primaryAction: {
-      label: "Open",
+      label: "Setup",
       path: "/home?assistant=setup",
     },
     quickActions: [
       {
-        label: "Open setup",
-        hint: "Bring in source context.",
+        label: "Setup",
+        hint: "Bring in context.",
         path: "/home?assistant=setup",
       },
       {
-        label: "Open truth",
-        hint: "Review approved memory.",
+        label: "Truth",
+        hint: "Approved memory.",
         path: "/truth",
       },
       {
-        label: "Open workspace",
-        hint: "Return to the operator overview.",
+        label: "Workspace",
+        hint: "Operator overview.",
         path: "/workspace",
       },
     ],
-    detailSummary: "Context tools stay behind the live lanes, not in front of them.",
-    detailNote: "Use them to strengthen setup and approved memory.",
+    detailSummary: "Context sources strengthen setup and truth, not customer routing.",
+    detailNote: "Use them to improve approved memory and operator context.",
     advanced: {
-      note:
-        "Email and documents act as approved source material and business context rather than as customer-facing channels.",
+      note: "Email and documents act as source material rather than live channels.",
       items: [
         { label: "Coverage", value: "Gmail + Drive" },
-        { label: "Position", value: "Context only" },
+        { label: "State", value: "Context only" },
       ],
     },
   },
@@ -307,29 +296,28 @@ export const CHANNELS = [
     summary: "Planned lanes stay visible without reading as live.",
     capabilities: ["Telegram", "TikTok", "YouTube"],
     primaryAction: {
-      label: "Connect",
+      label: "Setup",
       path: "/home?assistant=setup",
     },
     quickActions: [
       {
-        label: "Open setup",
-        hint: "Prepare future rollout work.",
+        label: "Setup",
+        hint: "Future rollout work.",
         path: "/home?assistant=setup",
       },
       {
-        label: "Open truth",
-        hint: "Check approved rollout context.",
+        label: "Truth",
+        hint: "Approved rollout context.",
         path: "/truth",
       },
     ],
-    detailSummary: "Future channels stay grouped and clearly secondary.",
-    detailNote: "Keep them visible as plan, not promise.",
+    detailSummary: "Future surfaces stay grouped as plan, not promise.",
+    detailNote: "Keep them visible for rollout planning only.",
     advanced: {
-      note:
-        "Telegram, TikTok, and YouTube remain future-facing surfaces rather than current product lanes the app can honestly claim.",
+      note: "Telegram, TikTok, and YouTube stay future-facing rather than current lanes.",
       items: [
         { label: "Coverage", value: "Telegram, TikTok, YouTube" },
-        { label: "Position", value: "Planning only" },
+        { label: "State", value: "Planned" },
       ],
     },
   },
@@ -363,8 +351,12 @@ export function matchesChannelSearch(channel, query) {
     channel.summary,
     channel.detailSummary,
     channel.detailNote,
+    channel.primaryAction?.label,
     ...(channel.capabilities || []),
     ...(channel.aliases || []),
+    ...((channel.quickActions || []).flatMap((action) => [action.label, action.hint])),
+    channel.advanced?.note,
+    ...((channel.advanced?.items || []).flatMap((item) => [item.label, item.value])),
     getChannelStatusMeta(channel.status).label,
   ]
     .join(" ")
