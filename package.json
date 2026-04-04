@@ -37,8 +37,10 @@
     "antd": "^6.3.5",
     "cmdk": "^1.1.1",
     "embla-carousel-react": "^8.6.0",
+    "i18next": "^26.0.3",
     "react-dropzone": "^15.0.0",
     "react-error-boundary": "^6.1.1",
+    "react-i18next": "^17.0.2",
     "react-resizable-panels": "^4.9.0"
   },
   "devDependencies": {

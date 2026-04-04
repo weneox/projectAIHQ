@@ -4,6 +4,7 @@ import { apiGet } from "../../api/client.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
 import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
+import FloatingAiWidget from "../layout/FloatingAiWidget.jsx";
 import Sidebar, { SIDEBAR_WIDTH, SHELL_TOPBAR_HEIGHT } from "./Sidebar.jsx";
 import Header from "./Header.jsx";
 import {
@@ -247,6 +248,12 @@ export default function Shell() {
             <Outlet />
           </div>
         </main>
+
+        <FloatingAiWidget
+          onClick={() => {
+            console.log("open ai widget");
+          }}
+        />
       </div>
     </div>
   );
