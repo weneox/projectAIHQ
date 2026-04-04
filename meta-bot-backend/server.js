@@ -68,6 +68,7 @@ app.use(
     },
   })
 );
+app.use(express.urlencoded({ extended: false }));
 
 app.get("/", (_req, res) => {
   return res.status(200).send("Meta Bot Backend is working");

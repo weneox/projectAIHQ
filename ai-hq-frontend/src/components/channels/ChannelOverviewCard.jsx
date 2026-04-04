@@ -67,7 +67,7 @@ export default function ChannelOverviewCard({
             />
 
             <ChannelActionButton
-              onClick={() => onRunPrimaryAction?.(channel.primaryAction.path)}
+              onClick={() => onRunPrimaryAction?.(channel)}
               ariaLabel={`${channel.primaryAction.label} ${channel.name}`}
             >
               {channel.primaryAction.label}

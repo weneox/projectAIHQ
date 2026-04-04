@@ -20,6 +20,15 @@ import {
   buildOperationalRepairGuidance,
   buildReadinessSurface,
 } from "../../../services/operationalReadiness.js";
+import {
+  buildInstagramLifecycleChannelPayload,
+  markInstagramSourceDisconnected,
+} from "../channelConnect/meta.js";
+import {
+  auditSafe,
+  deleteMetaSecretKeys,
+  markInstagramDisconnected,
+} from "../channelConnect/repository.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -424,6 +433,73 @@ function buildInternalProjectedRuntime({
   }
 }
 
+function normalizeMetaDeauthorizeSignal(body = {}) {
+  const payload = obj(body);
+  return {
+    metaUserId: cleanNullableString(
+      payload.metaUserId || payload.meta_user_id || payload.user_id
+    ),
+    pageId: cleanNullableString(payload.pageId || payload.page_id),
+    igUserId: cleanNullableString(
+      payload.igUserId ||
+        payload.ig_user_id ||
+        payload.instagram_business_account_id
+    ),
+    reasonCode: s(payload.reasonCode || payload.reason_code || "meta_app_deauthorized"),
+    occurredAt: s(payload.occurredAt || payload.occurred_at || new Date().toISOString()),
+    signedRequestMeta: obj(payload.signedRequestMeta || payload.signed_request_meta),
+  };
+}
+
+async function resolveInstagramLifecycleChannelByIds(
+  db,
+  { metaUserId = "", pageId = "", igUserId = "" } = {}
+) {
+  if (!db?.query) return null;
+
+  const safeMetaUserId = cleanNullableString(metaUserId);
+  const safePageId = cleanNullableString(pageId);
+  const safeIgUserId = cleanNullableString(igUserId);
+
+  if (!safeMetaUserId && !safePageId && !safeIgUserId) {
+    return null;
+  }
+
+  const result = await db.query(
+    `
+      select
+        tc.*,
+        t.tenant_key,
+        t.company_name,
+        t.plan_key,
+        t.status as tenant_status,
+        t.active as tenant_active
+      from tenant_channels tc
+      join tenants t on t.id = tc.tenant_id
+      where tc.channel_type = 'instagram'
+        and (
+          ($1::text is not null and (
+            nullif(btrim(coalesce(tc.config->>'meta_user_id', '')), '') = $1
+            or nullif(btrim(coalesce(tc.health->>'meta_user_id', '')), '') = $1
+          ))
+          or ($2::text is not null and (
+            tc.external_page_id = $2
+            or nullif(btrim(coalesce(tc.config->>'last_known_page_id', '')), '') = $2
+          ))
+          or ($3::text is not null and (
+            tc.external_user_id = $3
+            or nullif(btrim(coalesce(tc.config->>'last_known_ig_user_id', '')), '') = $3
+          ))
+        )
+      order by tc.is_primary desc, tc.updated_at desc, tc.created_at desc
+      limit 1
+    `,
+    [safeMetaUserId, safePageId, safeIgUserId]
+  );
+
+  return result?.rows?.[0] || null;
+}
+
 export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime }) {
   const router = express.Router();
   const requireMetaTenantResolve = createInternalTokenGuard({
@@ -433,6 +509,10 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
   const requireMetaProviderAccess = createInternalTokenGuard({
     allowedServices: ["meta-bot-backend"],
     allowedAudiences: ["aihq-backend.providers.meta-channel-access"],
+  });
+  const requireMetaChannelLifecycle = createInternalTokenGuard({
+    allowedServices: ["meta-bot-backend"],
+    allowedAudiences: ["aihq-backend.channels.meta-deauthorize"],
   });
 
   router.get("/tenants/resolve-channel", requireMetaTenantResolve, async (req, res) => {
@@ -797,6 +877,118 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
           res,
           err?.message || "Failed to resolve provider channel access"
         );
+      }
+    }
+  );
+
+  router.post(
+    "/internal/channels/meta/deauthorize",
+    requireMetaChannelLifecycle,
+    async (req, res) => {
+      const log = createSafeLogger(req.log);
+
+      try {
+        if (!db?.query) {
+          return res.status(500).json({
+            ok: false,
+            error: "Database is not available",
+          });
+        }
+
+        const signal = normalizeMetaDeauthorizeSignal(req.body || {});
+        if (!signal.metaUserId && !signal.pageId && !signal.igUserId) {
+          return bad(res, "meta_deauthorize_identity_missing");
+        }
+
+        const matchedChannel = await resolveInstagramLifecycleChannelByIds(db, signal);
+        if (!matchedChannel?.tenant_id) {
+          return res.status(404).json({
+            ok: false,
+            error: "tenant_channel_not_found",
+            reasonCode: signal.reasonCode,
+          });
+        }
+
+        const actor = s(req?.internalAuth?.service || "meta-bot-backend");
+        const occurredAt = s(signal.occurredAt || new Date().toISOString());
+        const tenant = {
+          id: matchedChannel.tenant_id,
+          tenant_key: matchedChannel.tenant_key,
+          company_name: matchedChannel.company_name,
+        };
+
+        await deleteMetaSecretKeys(db, matchedChannel.tenant_id, [
+          "page_access_token",
+          "access_token",
+          "meta_page_access_token",
+          "page_id",
+          "ig_user_id",
+        ]);
+
+        await markInstagramDisconnected(
+          db,
+          matchedChannel.tenant_id,
+          buildInstagramLifecycleChannelPayload({
+            channel: matchedChannel,
+            transition: "deauthorized",
+            reasonCode: signal.reasonCode || "meta_app_deauthorized",
+            occurredAt,
+          })
+        );
+
+        const capabilityGovernance = await markInstagramSourceDisconnected({
+          db,
+          tenant,
+          actor,
+          authStatus: "revoked",
+        });
+
+        await auditSafe(
+          db,
+          actor,
+          tenant,
+          "settings.channel.meta.deauthorized",
+          "tenant_channel",
+          "instagram",
+          {
+            reasonCode: signal.reasonCode || "meta_app_deauthorized",
+            occurredAt,
+            metaUserId: signal.metaUserId,
+            pageId: signal.pageId,
+            igUserId: signal.igUserId,
+            signedRequestMeta: signal.signedRequestMeta,
+            capabilityGovernance: {
+              publishStatus: s(capabilityGovernance?.publishStatus),
+              reviewRequired: !!capabilityGovernance?.reviewRequired,
+              maintenanceSessionId: s(
+                capabilityGovernance?.maintenanceSession?.id
+              ),
+              blockedReason: s(capabilityGovernance?.blockedReason),
+            },
+          }
+        );
+
+        log.info("internal.meta_channel_deauthorize.processed", {
+          tenantKey: matchedChannel.tenant_key,
+          tenantId: matchedChannel.tenant_id,
+          metaUserId: signal.metaUserId,
+          pageId: signal.pageId,
+          igUserId: signal.igUserId,
+          reasonCode: signal.reasonCode,
+        });
+
+        return ok(res, {
+          tenantKey: matchedChannel.tenant_key,
+          tenantId: matchedChannel.tenant_id,
+          channel: "instagram",
+          processed: true,
+          reasonCode: signal.reasonCode || "meta_app_deauthorized",
+          occurredAt,
+          capabilityGovernance,
+        });
+      } catch (err) {
+        log.error("internal.meta_channel_deauthorize.failed", err);
+        return serverErr(res, err?.message || "Failed to process Meta deauthorize");
       }
     }
   );

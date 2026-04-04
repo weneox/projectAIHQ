@@ -1,15 +1,14 @@
 # meta-bot-backend
 
-Instagram/WhatsApp (Meta) webhook gateway → n8n workflow forwarding.
-Includes Meta compliance endpoints: Privacy Policy, Terms, Deauthorize, Data Deletion.
+Meta webhook gateway for tenant-aware Instagram messaging runtime.
 
 ## Features
-- GET `/webhook` — Meta webhook verification
-- POST `/webhook` — Receive Meta events, extract first text message, forward to n8n
-- GET `/privacy` — Privacy Policy page (Meta requirement)
-- GET `/terms` — Terms of Service page (Meta requirement)
-- GET/POST `/instagram/deauthorize` — Deauthorize callback
-- GET/POST `/instagram/data-deletion` — Data deletion endpoint + status page
+- `GET /webhook` - Meta webhook verification
+- `POST /webhook` - Receive Meta events, resolve the tenant through AIHQ, and continue the DM runtime flow
+- `GET /privacy` - Privacy Policy page
+- `GET /terms` - Terms of Service page
+- `GET/POST /instagram/deauthorize` - Deauthorize callback bridged into AIHQ tenant channel state
+- `GET/POST /instagram/data-deletion` - Data deletion acknowledgement and status page
 
 ## Requirements
 - Node.js 18+ (recommended 20+)
@@ -17,3 +16,4 @@ Includes Meta compliance endpoints: Privacy Policy, Terms, Deauthorize, Data Del
 ## Install
 ```bash
 npm install
+```

@@ -106,6 +106,11 @@ export default function ChannelCatalog() {
     navigate(path);
   }
 
+  function handlePrimaryAction(channel) {
+    if (!channel?.id) return;
+    updateSelectedChannel(channel.id);
+  }
+
   return (
     <PageCanvas className="px-3 py-3 md:px-4 md:py-4">
       <div className="space-y-4">
@@ -164,7 +169,7 @@ export default function ChannelCatalog() {
                   channel={channel}
                   selected={selectedChannel?.id === channel.id}
                   onInspect={updateSelectedChannel}
-                  onRunPrimaryAction={handleNavigate}
+                  onRunPrimaryAction={handlePrimaryAction}
                 />
               ))}
             </div>

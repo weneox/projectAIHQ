@@ -4,13 +4,33 @@ import telegramIcon from "../../assets/channels/telegram.svg";
 import whatsappIcon from "../../assets/channels/whatsapp.svg";
 
 export const CHANNEL_STATUS_META = {
-  available: {
+  ready: {
     label: "Ready",
     tone: "info",
   },
   connected: {
     label: "Connected",
     tone: "success",
+  },
+  reconnect_required: {
+    label: "Reconnect",
+    tone: "warning",
+  },
+  deauthorized: {
+    label: "Reconnect",
+    tone: "warning",
+  },
+  disconnected: {
+    label: "Disconnected",
+    tone: "neutral",
+  },
+  blocked: {
+    label: "Blocked",
+    tone: "warning",
+  },
+  phase2: {
+    label: "Phase 2",
+    tone: "neutral",
   },
 };
 
@@ -33,8 +53,8 @@ function connector({
   detailSummary,
   detailNote,
   highlights,
-  path,
-  status = "available",
+  status = "phase2",
+  primaryActionLabel = "Details",
 }) {
   return {
     id,
@@ -51,8 +71,7 @@ function connector({
     detailNote,
     highlights,
     primaryAction: {
-      label: "Connect",
-      path,
+      label: primaryActionLabel,
     },
   };
 }
@@ -62,125 +81,125 @@ export const CHANNELS = [
     id: "instagram",
     name: "Instagram",
     group: "social",
-    status: "available",
+    status: "ready",
     icon: instagramIcon,
     iconAlt: "Instagram",
-    eyebrow: "DMs · Comments · Moderation",
+    eyebrow: "DM-first / Instagram Business",
     summary:
-      "Bring Instagram conversations and public interactions into one refined operating surface.",
-    capabilities: ["Direct messages", "Comments", "Moderation"],
+      "Connect one Instagram Business or Professional account per tenant and run inbound DM automation with tenant-specific runtime.",
+    capabilities: ["Direct messages", "Tenant-aware routing", "Reconnect flow"],
     aliases: [
       "instagram",
       "dm",
-      "comments",
       "meta",
       "social",
       "inbox",
-      "moderation",
+      "direct messages",
+      "tenant",
     ],
     detailSummary:
-      "Instagram is the strongest connector for brands that handle both private conversation flow and public comment activity every day.",
+      "Instagram is the launch connector. It is the only self-serve path that is being hardened for a DM-first production release.",
     detailNote:
-      "Connect it when your team wants faster response handling without splitting inbox work and moderation across separate tools.",
+      "The launch story is inbound customer conversations only. Comments and content publish stay out of the launch promise until they have matching permissions and operational proof.",
     highlights: [
-      "Unify DMs and comment activity in one workspace.",
-      "Move faster on moderation without losing conversation context.",
-      "Keep operator review, handoff, and response flow cleaner from day one.",
+      "One tenant, one Instagram Business connection, one truthful runtime state.",
+      "Inbound DM automation stays fail-closed when tokens or channel identifiers go missing.",
+      "Reconnect, disconnect, and deauthorize all map to explicit tenant channel state.",
     ],
-    path: "/home?assistant=setup&channel=instagram",
+    primaryActionLabel: "Open",
   }),
 
   connector({
     id: "whatsapp",
     name: "WhatsApp",
     group: "social",
-    status: "available",
+    status: "phase2",
     icon: whatsappIcon,
     iconAlt: "WhatsApp",
-    eyebrow: "Support chat · Direct customer flow",
+    eyebrow: "Phase 2 / Not self-serve",
     summary:
-      "Add WhatsApp as a direct customer line for support, follow-up, and everyday messaging.",
-    capabilities: ["Customer chat", "Support replies", "Follow-up flow"],
+      "WhatsApp remains a future expansion surface. It is not part of the Instagram DM-first launch promise.",
+    capabilities: ["Planned channel", "Future onboarding", "Not in launch scope"],
     aliases: [
       "whatsapp",
       "wa",
       "chat",
       "support",
       "messages",
-      "customer service",
+      "phase 2",
     ],
     detailSummary:
-      "WhatsApp works best when customers expect quick, direct replies and your business depends on ongoing message-based support.",
+      "WhatsApp should stay behind the launch line until onboarding, runtime behavior, and review story match the same standard as Instagram.",
     detailNote:
-      "It is the right connector for teams that want a more reliable customer chat flow than scattered phone-based handling.",
+      "This connector is intentionally demoted from self-serve launch status so the product story stays honest.",
     highlights: [
-      "Bring direct customer conversations into the main operating workspace.",
-      "Reduce reply chaos across personal devices and separate accounts.",
-      "Create a cleaner support handoff path as message volume grows.",
+      "Not available as a launch-ready self-serve connection.",
+      "Do not treat this as production-ready automation yet.",
+      "Keep it as a planned expansion after DM-first launch stabilizes.",
     ],
-    path: "/home?assistant=setup&channel=whatsapp",
+    primaryActionLabel: "Details",
   }),
 
   connector({
     id: "telegram",
     name: "Telegram",
     group: "social",
-    status: "available",
+    status: "phase2",
     icon: telegramIcon,
     iconAlt: "Telegram",
-    eyebrow: "Community touchpoint · Fast messaging",
+    eyebrow: "Phase 2 / Not self-serve",
     summary:
-      "Use Telegram for lightweight conversation flow, updates, and community-facing messaging.",
-    capabilities: ["Direct chat", "Community touchpoint", "Fast updates"],
+      "Telegram is not part of the current production launch path and should not be presented as a live self-serve connector.",
+    capabilities: ["Planned channel", "Future expansion", "Not in launch scope"],
     aliases: [
       "telegram",
       "community",
       "channel",
       "support",
       "chat",
-      "messages",
+      "phase 2",
     ],
     detailSummary:
-      "Telegram is a strong fit when your audience already lives in fast, community-style messaging rather than slower traditional support channels.",
+      "Telegram can return later, but right now it should not compete with the one real launch path.",
     detailNote:
-      "Connect it when your brand runs on speed, repeat interaction, or audience groups that expect a more informal message rhythm.",
+      "The current priority is a coherent Instagram DM platform, not connector breadth.",
     highlights: [
-      "Open a cleaner Telegram path directly from the connector catalog.",
-      "Support audience messaging without turning it into tool sprawl.",
-      "Keep Telegram inside the same operational layer as your other channels.",
+      "Hidden from the DM-first launch promise.",
+      "No self-serve connect path is exposed here.",
+      "Use this as roadmap context only.",
     ],
-    path: "/home?assistant=setup&channel=telegram",
+    primaryActionLabel: "Details",
   }),
 
   connector({
     id: "gmail",
     name: "Gmail",
     group: "business",
-    status: "available",
+    status: "phase2",
     icon: gmailIcon,
     iconAlt: "Gmail",
-    eyebrow: "Email intake · Follow-up · Business requests",
+    eyebrow: "Phase 2 / Not self-serve",
     summary:
-      "Connect Gmail to pull email-based customer work into the same system as your live channels.",
-    capabilities: ["Business email", "Customer requests", "Email context"],
+      "Gmail remains outside the current launch path while Instagram DM automation is being hardened.",
+    capabilities: ["Planned intake", "Future support surface", "Not in launch scope"],
     aliases: [
       "gmail",
       "email",
       "mail",
       "google mail",
       "business inbox",
-      "support email",
+      "phase 2",
     ],
     detailSummary:
-      "Gmail is the right connector when customer communication, approvals, requests, or follow-ups still arrive through email.",
+      "Email intake may become useful later, but it is not part of the launch system being prepared for Meta review.",
     detailNote:
-      "Use it to stop treating email like a disconnected world and bring more of your business flow into one place.",
+      "Keeping this connector clearly marked as phase 2 avoids fake readiness signals in the product.",
     highlights: [
-      "Bring business email into the same operating surface as chat.",
-      "Reduce context switching between inbox tools and internal follow-up.",
-      "Keep more history, responsibility, and customer continuity in one system.",
+      "Not available for DM-first self-serve onboarding.",
+      "Not part of the Meta review story.",
+      "Treat as roadmap only until a dedicated launch pass exists.",
     ],
-    path: "/home?assistant=setup&channel=gmail",
+    primaryActionLabel: "Details",
   }),
 ];
 
@@ -189,7 +208,7 @@ function normalizeQuery(value = "") {
 }
 
 export function getChannelStatusMeta(status) {
-  return CHANNEL_STATUS_META[status] || CHANNEL_STATUS_META.available;
+  return CHANNEL_STATUS_META[status] || CHANNEL_STATUS_META.ready;
 }
 
 export function matchesChannelFilter(channel, filterId) {

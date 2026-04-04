@@ -195,33 +195,33 @@ function buildPrimaryAction({ setupState, businessMemory, inboxState }) {
 
   if (setupState.needsReview) {
     return {
-      title: "The launch loops are usable, but setup review is still waiting in support surfaces.",
+      title: "Instagram DM launch is usable, but setup review still needs follow-through.",
       detail: setupState.summary,
-      action: { label: "Open comments", path: "/comments" },
+      action: { label: "Open channels", path: "/channels?channel=instagram" },
     };
   }
 
   if (setupState.isActionable) {
     return {
-      title: "Operate the launch slice now, then finish setup from support surfaces.",
+      title: "Finish the Instagram connection path before expanding the launch story.",
       detail: setupState.summary,
-      action: { label: "Open voice", path: "/voice" },
+      action: { label: "Open channels", path: "/channels?channel=instagram" },
     };
   }
 
   if (businessMemory.stats.pendingCount > 0) {
     return {
-      title: "Business memory review is pending, but the main operating path is still the launch slice.",
+      title: "Business memory review is pending, but the main operating path is still Instagram DMs.",
       detail: businessMemory.needsConfirmation,
-      action: { label: "Open comments", path: "/comments" },
+      action: { label: "Open channels", path: "/channels?channel=instagram" },
     };
   }
 
   return {
-    title: "The launch slice is quiet enough to start from active operator work.",
+    title: "Start from the Instagram channel control plane.",
     detail:
-      "Use inbox, comments, or voice as the primary path. Workspace, setup, and truth remain support surfaces.",
-    action: { label: "Open comments", path: "/comments" },
+      "Connect Instagram first, then operate inbox as the real launch path. Other surfaces stay secondary until they are review-aligned.",
+    action: { label: "Open channels", path: "/channels?channel=instagram" },
   };
 }
 
@@ -380,20 +380,20 @@ export function useProductHome() {
       {
         id: "comments",
         title: "Comments",
-        status:
-          primaryAction.action?.path === "/comments" ? "Start here" : "Launch now",
-        summary: "Review Meta comments, approve or intervene on replies, and keep moderation work moving.",
+        status: "Phase 2",
+        summary:
+          "Comments stay outside the launch promise until the permission model and runtime path are hardened to the same standard as DMs.",
         detail:
-          "Comments is one of the real launch loops and should stay in the front row of the product.",
+          "Keep comment automation out of the Meta review story for the DM-first launch.",
         action: { label: "Open comments", path: "/comments" },
       },
       {
         id: "voice",
         title: "Voice Receptionist",
-        status:
-          primaryAction.action?.path === "/voice" ? "Start here" : "Launch now",
-        summary: "Run the live Twilio receptionist loop from one call control surface.",
-        detail: "Voice is part of the actual launch slice and should read that way across the product.",
+        status: "Separate surface",
+        summary: "Voice remains a separate product surface and is not part of the Instagram DM-first launch promise.",
+        detail:
+          "Do not mix voice readiness into the Meta review story for the DM-first release.",
         action: { label: "Open voice", path: "/voice" },
       },
       {
@@ -408,10 +408,12 @@ export function useProductHome() {
       {
         id: "launch",
         title: "Channels",
-        status: "Operational view",
-        summary: "See what is live, limited, setup-only, or context-only at a glance.",
-        detail: "Use Channels as the quick control layer instead of a long settings document.",
-        action: { label: "Open channels", path: "/channels" },
+        status: "Start here",
+        summary:
+          "Use Channels as the real connect-and-status surface for Instagram DM launch readiness.",
+        detail:
+          "This is where the product now tells the truth about connect, reconnect, disconnect, and phase 2 connectors.",
+        action: { label: "Open channels", path: "/channels?channel=instagram" },
       },
       {
         id: "memory",
@@ -436,23 +438,27 @@ export function useProductHome() {
     const benefits = [
       {
         id: "focus",
-        title: "A tighter launch story",
-        summary: "The product is easier to trust when it leads with the loops that are actually operable today.",
+        title: "A coherent DM-first launch story",
+        summary:
+          "The product is easier to trust when it leads with the one connector and runtime path that are actually ready for review.",
       },
       {
         id: "oversight",
         title: "Cleaner operator oversight",
-        summary: "See messaging, comments, and voice pressure without dressing up unfinished channels as equal product surfaces.",
+        summary:
+          "See Instagram messaging readiness without dressing unfinished channels up as equal launch surfaces.",
       },
       {
         id: "control",
         title: "Internal control without product inflation",
-        summary: "Business changes stay reviewable before they affect the live launch loops, without forcing internal architecture into the customer story.",
+        summary:
+          "Business changes stay reviewable before they affect the live DM runtime, without forcing internal architecture into the customer story.",
       },
       {
         id: "voice",
-        title: "One operator product for the real loops",
-        summary: "Keep social inbox, auto-comment, and voice receptionist connected instead of pretending the launch product already spans every channel.",
+        title: "One launch promise",
+        summary:
+          "Keep the launch promise narrow: tenant-aware Instagram DMs first, then expand only when the next surface is equally real.",
       },
     ];
 
@@ -503,7 +509,7 @@ export function useProductHome() {
       primaryAction.action,
       secondaryAction,
       inboxState.action,
-      { label: "Open comments", path: "/comments" },
+      { label: "Open channels", path: "/channels?channel=instagram" },
       { label: "Open voice", path: "/voice" },
       { label: "Open workspace", path: "/workspace" },
     ]).slice(0, 4);

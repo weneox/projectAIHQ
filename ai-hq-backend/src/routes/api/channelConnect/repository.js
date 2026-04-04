@@ -30,8 +30,23 @@ export async function saveMetaPageAccessToken(
   );
 }
 
+export async function deleteMetaSecretKeys(
+  db,
+  tenantId,
+  secretKeys = ["page_access_token"]
+) {
+  let deleted = 0;
+
+  for (const secretKey of Array.isArray(secretKeys) ? secretKeys : []) {
+    const ok = await dbDeleteTenantSecret(db, tenantId, "meta", secretKey);
+    if (ok) deleted += 1;
+  }
+
+  return deleted;
+}
+
 export async function deleteMetaPageAccessToken(db, tenantId) {
-  return dbDeleteTenantSecret(db, tenantId, "meta", "page_access_token");
+  return deleteMetaSecretKeys(db, tenantId, ["page_access_token"]);
 }
 
 export async function getMetaSecrets(db, tenantId) {
@@ -58,24 +73,32 @@ export async function getPrimaryInstagramChannel(db, tenantId) {
   return q?.rows?.[0] || null;
 }
 
-export async function markInstagramDisconnected(db, tenantId) {
-  return db.query(
-    `
-      update tenant_channels
-      set
-        status = 'disconnected',
-        display_name = 'Instagram',
-        external_page_id = null,
-        external_user_id = null,
-        external_username = null,
-        secrets_ref = null,
-        health = '{}'::jsonb,
-        last_sync_at = null
-      where tenant_id = $1
-        and channel_type = 'instagram'
-    `,
-    [tenantId]
-  );
+export async function markInstagramDisconnected(
+  db,
+  tenantId,
+  {
+    displayName = "Instagram",
+    status = "disconnected",
+    config = {},
+    health = {},
+    isPrimary = true,
+    lastSyncAt = null,
+  } = {}
+) {
+  return dbUpsertTenantChannel(db, tenantId, "instagram", {
+    provider: "meta",
+    display_name: s(displayName, "Instagram"),
+    external_account_id: null,
+    external_page_id: null,
+    external_user_id: null,
+    external_username: null,
+    status: s(status, "disconnected"),
+    is_primary: Boolean(isPrimary),
+    config,
+    secrets_ref: null,
+    health,
+    last_sync_at: lastSyncAt,
+  });
 }
 
 export async function auditSafe(
