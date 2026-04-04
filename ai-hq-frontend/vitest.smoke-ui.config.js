@@ -46,7 +46,7 @@ export default mergeConfig(
         "src/test/surfaces/workspace/WorkspacePage.smoke.test.jsx",
       ],
 
-      exclude: ["playwright/**", "dist/**", "node_modules/**"],
+      exclude: ["dist/**", "node_modules/**"],
       passWithNoTests: false,
 
       pool: "forks",

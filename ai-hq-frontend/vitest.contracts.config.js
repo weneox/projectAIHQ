@@ -9,7 +9,7 @@ export default defineConfig({
         "src/test/api/trust.test.js",
         "src/test/lib/appEntry.test.js",
       ],
-    exclude: ["playwright/**", "dist/**", "node_modules/**"],
+    exclude: ["dist/**", "node_modules/**"],
     setupFiles: [],
     pool: "vmThreads",
     fileParallelism: false,

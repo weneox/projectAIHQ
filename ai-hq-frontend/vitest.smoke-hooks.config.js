@@ -25,7 +25,7 @@ export default mergeConfig(
         "src/test/components/inbox/hooks/useInboxThreadListSurface.test.jsx",
         "src/test/components/inbox/hooks/useThreadOutboundAttemptsSurface.test.jsx",
       ],
-      exclude: ["playwright/**", "dist/**", "node_modules/**"],
+      exclude: ["dist/**", "node_modules/**"],
       passWithNoTests: false,
     },
   })

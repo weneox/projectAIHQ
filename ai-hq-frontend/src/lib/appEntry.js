@@ -14,8 +14,9 @@ function normalizeSetupRoute(target = "") {
   const value = s(target);
 
   if (!value) return "/home?assistant=setup";
-  if (value === "/setup" || value === "/setup/studio") return "/home?assistant=setup";
-  if (value.startsWith("/setup/")) return "/home?assistant=setup";
+  if (value === "/setup" || value.startsWith("/setup/")) {
+    return "/home?assistant=setup";
+  }
 
   return "/home?assistant=setup";
 }
