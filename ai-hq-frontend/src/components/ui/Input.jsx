@@ -6,31 +6,31 @@ function resolveAppearance(appearance = "default") {
   switch (appearance) {
     case "product":
       return {
-        shell: "rounded-[18px]",
-        row: "min-h-[56px] gap-3 px-4",
-        input: "h-[56px] text-[15px] font-medium",
+        shell: "rounded-[12px]",
+        row: "min-h-[52px] gap-3 px-4",
+        input: "h-[52px] text-[15px] font-medium",
         textareaWrap: "px-4 py-4",
-        textarea: "min-h-[160px] text-[15px] leading-7",
+        textarea: "min-h-[152px] text-[15px] leading-7",
         selectWrap: "px-4",
-        select: "h-[56px] pr-8 text-[15px] font-medium",
+        select: "h-[52px] pr-8 text-[15px] font-medium",
       };
     case "quiet":
       return {
-        shell: "rounded-soft",
-        row: "min-h-[44px] gap-2 px-3.5",
+        shell: "rounded-[10px]",
+        row: "min-h-[44px] gap-2.5 px-3.5",
         input: "h-11 text-[14px]",
-        textareaWrap: "px-4 py-3",
-        textarea: "min-h-[120px] text-[14px] leading-6",
+        textareaWrap: "px-3.5 py-3",
+        textarea: "min-h-[116px] text-[14px] leading-6",
         selectWrap: "px-3.5",
         select: "h-11 pr-8 text-[14px]",
       };
     default:
       return {
-        shell: "rounded-panel",
-        row: "min-h-[46px] gap-2 px-3.5",
+        shell: "rounded-[10px]",
+        row: "min-h-[46px] gap-2.5 px-3.5",
         input: "h-11 text-[14px]",
-        textareaWrap: "px-4 py-3",
-        textarea: "min-h-[140px] text-[14px] leading-7",
+        textareaWrap: "px-3.5 py-3",
+        textarea: "min-h-[132px] text-[14px] leading-6",
         selectWrap: "px-3.5",
         select: "h-11 pr-8 text-[14px]",
       };
@@ -45,7 +45,7 @@ function surfaceClass({ disabled, readOnly, invalid }) {
     return "border-danger bg-surface";
   }
   if (readOnly) {
-    return "border-line-soft bg-surface-muted";
+    return "border-line bg-surface-muted";
   }
   return "border-line bg-surface hover:border-line-strong focus-within:border-brand focus-within:shadow-[var(--focus-ring)]";
 }
@@ -105,7 +105,7 @@ export function InputGroup({
       appearance={appearance}
     >
       <div className={cx("flex items-center", view.row)}>
-        {leftIcon ? <span className="shrink-0 text-text-subtle">{leftIcon}</span> : null}
+        {leftIcon ? <span className="shrink-0 text-text-muted">{leftIcon}</span> : null}
 
         <input
           value={value}
@@ -126,7 +126,7 @@ export function InputGroup({
           <button
             type="button"
             onClick={onClear}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-soft text-text-subtle transition-[background-color,color] duration-200 ease-premium hover:bg-surface-muted hover:text-text"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-text-subtle transition-[background-color,color] duration-200 ease-premium hover:bg-surface-muted hover:text-text"
             aria-label="Clear"
           >
             <X className="h-4 w-4" />
@@ -164,7 +164,7 @@ const Input = forwardRef(function Input(
       appearance={appearance}
     >
       <div className={cx("flex items-center", view.row)}>
-        {leftIcon ? <span className="shrink-0 text-text-subtle">{leftIcon}</span> : null}
+        {leftIcon ? <span className="shrink-0 text-text-muted">{leftIcon}</span> : null}
 
         <input
           ref={ref}

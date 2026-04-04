@@ -104,7 +104,7 @@ function SharedStatsNotice({ message }) {
       tone="warning"
       title="Shared workspace stats unavailable"
       description={message}
-      className="mb-4"
+      className="mb-3"
       compact
     />
   );
@@ -130,11 +130,11 @@ export default function Shell() {
 
   const shellPaddingClass = immersive
     ? "px-0 py-0"
-    : "px-3 py-3 md:px-4 md:py-4 xl:px-6 xl:py-5";
+    : "px-4 py-4 md:px-5 md:py-5 xl:px-6 xl:py-6";
 
   const shellContentClass = immersive
     ? "h-full w-full"
-    : "mx-auto max-w-shell-content";
+    : "mx-auto w-full max-w-shell-content";
 
   const loadShellStats = useCallback(async () => {
     if (statsRequestRef.current) return statsRequestRef.current;

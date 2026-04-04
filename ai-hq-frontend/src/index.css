@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -7,43 +7,43 @@
 :root {
   color-scheme: light;
 
-  --color-canvas: 245 247 250;
-  --color-canvas-muted: 238 242 247;
+  --color-canvas: 241 244 248;
+  --color-canvas-muted: 235 239 245;
 
   --color-surface: 255 255 255;
-  --color-surface-muted: 249 250 252;
-  --color-surface-subtle: 244 247 250;
-  --color-surface-inverse: 11 18 32;
+  --color-surface-muted: 247 249 252;
+  --color-surface-subtle: 242 245 249;
+  --color-surface-inverse: 13 18 28;
 
-  --color-text: 10 18 34;
-  --color-text-muted: 68 82 102;
-  --color-text-subtle: 100 115 135;
+  --color-text: 15 23 38;
+  --color-text-muted: 79 92 110;
+  --color-text-subtle: 111 124 141;
   --color-text-inverse: 248 250 252;
 
-  --color-line: 217 225 235;
-  --color-line-strong: 196 207 220;
+  --color-line: 220 226 234;
+  --color-line-strong: 196 205 217;
   --color-line-soft: 232 237 243;
 
-  --color-brand: 37 99 235;
-  --color-brand-strong: 29 78 216;
-  --color-brand-soft: 239 244 255;
+  --color-brand: 36 72 154;
+  --color-brand-strong: 27 55 121;
+  --color-brand-soft: 236 241 249;
 
-  --color-info: 37 99 235;
-  --color-info-soft: 239 244 255;
+  --color-info: 36 72 154;
+  --color-info-soft: 236 241 249;
 
-  --color-success: 5 150 105;
-  --color-success-soft: 236 253 245;
+  --color-success: 21 112 87;
+  --color-success-soft: 239 249 244;
 
-  --color-warning: 202 138 4;
-  --color-warning-soft: 254 249 195;
+  --color-warning: 154 89 30;
+  --color-warning-soft: 251 245 235;
 
-  --color-danger: 225 29 72;
-  --color-danger-soft: 255 241 242;
+  --color-danger: 170 43 52;
+  --color-danger-soft: 253 241 242;
 
-  --color-overlay: 10 18 34;
+  --color-overlay: 12 16 24;
 
   --font-sans:
-    "Inter",
+    "Manrope",
     ui-sans-serif,
     system-ui,
     -apple-system,
@@ -52,8 +52,8 @@
     sans-serif;
 
   --font-display:
-    "Sora",
-    "Inter",
+    "Plus Jakarta Sans",
+    "Manrope",
     ui-sans-serif,
     system-ui,
     -apple-system,
@@ -61,31 +61,31 @@
     "Segoe UI",
     sans-serif;
 
-  --radius-xs: 8px;
-  --radius-sm: 12px;
-  --radius-md: 16px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
-  --radius-pill: 999px;
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 12px;
 
-  --shadow-xs: 0 1px 2px rgba(10, 18, 34, 0.03);
-  --shadow-sm: 0 10px 30px rgba(10, 18, 34, 0.06);
-  --shadow-md: 0 22px 54px rgba(10, 18, 34, 0.09);
-  --shadow-lg: 0 34px 80px rgba(10, 18, 34, 0.12);
+  --shadow-xs: 0 1px 2px rgba(15, 23, 38, 0.04);
+  --shadow-sm: 0 10px 26px rgba(15, 23, 38, 0.05);
+  --shadow-md: 0 18px 42px rgba(15, 23, 38, 0.08);
+  --shadow-lg: 0 28px 64px rgba(15, 23, 38, 0.1);
 
-  --focus-ring: 0 0 0 4px rgba(37, 99, 235, 0.12);
+  --focus-ring: 0 0 0 4px rgba(36, 72, 154, 0.14);
 
-  --control-sm: 38px;
-  --control-md: 44px;
-  --control-lg: 52px;
+  --control-sm: 36px;
+  --control-md: 40px;
+  --control-lg: 46px;
 
   --motion-fast: 140ms;
-  --motion-base: 220ms;
-  --motion-slow: 320ms;
+  --motion-base: 200ms;
+  --motion-slow: 280ms;
   --motion-premium: cubic-bezier(0.22, 1, 0.36, 1);
 
   --page-max: 1320px;
-  --page-wide: 1480px;
+  --page-wide: 1460px;
 }
 
 html,
@@ -105,20 +105,20 @@ body {
   overflow-x: hidden;
   background:
     radial-gradient(
-      1200px circle at 0% 0%,
-      rgba(37, 99, 235, 0.045),
-      transparent 32%
+      960px circle at 50% -12%,
+      rgba(36, 72, 154, 0.06),
+      transparent 42%
     ),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(245, 247, 250, 1));
+    linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(241, 244, 248, 1));
   color: rgb(var(--color-text));
   font-family: var(--font-sans);
-  font-size: 15px;
-  line-height: 1.55;
-  letter-spacing: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.01em;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: "liga" 1, "calt" 1, "ss01" 1, "cv05" 1, "cv11" 1;
+  font-feature-settings: "liga" 1, "calt" 1, "ss01" 1;
   font-kerning: normal;
   font-synthesis-weight: none;
 }
@@ -134,7 +134,7 @@ body {
 }
 
 ::selection {
-  background: rgba(37, 99, 235, 0.12);
+  background: rgba(36, 72, 154, 0.14);
   color: rgb(var(--color-text));
 }
 
@@ -152,7 +152,7 @@ h6 {
   margin: 0;
   color: rgb(var(--color-text));
   font-family: var(--font-display);
-  letter-spacing: -0.04em;
+  letter-spacing: -0.05em;
 }
 
 p {
@@ -219,7 +219,7 @@ table {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(111, 125, 145, 0.42) rgba(232, 237, 243, 0.82);
+  scrollbar-color: rgba(111, 124, 141, 0.42) rgba(232, 237, 243, 0.88);
 }
 
 *::-webkit-scrollbar {
@@ -228,18 +228,18 @@ table {
 }
 
 *::-webkit-scrollbar-track {
-  background: rgba(232, 237, 243, 0.82);
+  background: rgba(232, 237, 243, 0.88);
 }
 
 *::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
-  border-radius: 999px;
-  background: rgba(111, 125, 145, 0.42);
+  border-radius: 10px;
+  background: rgba(111, 124, 141, 0.42);
   background-clip: padding-box;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(88, 102, 120, 0.56);
+  background: rgba(88, 101, 117, 0.56);
 }
 
 #app-boot {
@@ -291,17 +291,17 @@ table {
 .ant-select-dropdown,
 .ant-picker-dropdown .ant-picker-panel-container {
   border: 1px solid rgb(var(--color-line-soft));
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-md);
 }
 
 .ant-tooltip .ant-tooltip-inner {
-  border-radius: 12px !important;
+  border-radius: 10px !important;
   padding: 6px 10px !important;
   min-height: 28px !important;
-  font-size: 12px !important;
+  font-size: 11px !important;
   font-weight: 700 !important;
-  letter-spacing: 0 !important;
+  letter-spacing: 0.04em !important;
   line-height: 1.1 !important;
   text-shadow: none !important;
 }
@@ -312,13 +312,13 @@ table {
 
 .ant-table-wrapper .ant-table {
   border: 1px solid rgb(var(--color-line-soft));
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
 .ant-modal .ant-modal-content,
 .ant-drawer .ant-drawer-content {
-  border-radius: var(--radius-xl);
+  border-radius: 20px;
   box-shadow: var(--shadow-lg);
 }
 
@@ -331,7 +331,7 @@ table {
   border: 1px solid rgb(var(--color-line)) !important;
   background: rgb(var(--color-surface)) !important;
   color: rgb(var(--color-text)) !important;
-  border-radius: var(--radius-md) !important;
+  border-radius: 12px !important;
   box-shadow: var(--shadow-md) !important;
 }
 
@@ -349,7 +349,7 @@ table {
 
 .cmdk-group-heading {
   padding: 0 12px 8px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -360,19 +360,19 @@ table {
   .app-surface {
     border: 1px solid rgb(var(--color-line));
     background: rgb(var(--color-surface));
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-xl);
   }
 
   .app-surface-muted {
-    border: 1px solid rgb(var(--color-line-soft));
+    border: 1px solid rgb(var(--color-line));
     background: rgb(var(--color-surface-muted));
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-xl);
   }
 
   .app-surface-subtle {
     border: 1px solid rgb(var(--color-line-soft));
     background: rgb(var(--color-surface-subtle));
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-xl);
   }
 
   .app-divider {
@@ -385,7 +385,7 @@ table {
     height: var(--control-md);
     width: 100%;
     border: 1px solid rgb(var(--color-line));
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
     background: rgb(var(--color-surface));
     padding: 0 14px;
     color: rgb(var(--color-text));
@@ -519,11 +519,11 @@ table {
   }
 
   .rounded-panel {
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-xl);
   }
 
   .rounded-soft {
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-lg);
   }
 
   .rounded-pill {

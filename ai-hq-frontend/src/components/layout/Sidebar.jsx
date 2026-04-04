@@ -13,19 +13,32 @@ import {
   UTILITY_SECTIONS,
 } from "./shellNavigation.js";
 
-const SIDEBAR_WIDTH = 52;
-const EXPANDED_SIDEBAR_WIDTH = 220;
-const SHELL_TOPBAR_HEIGHT = 52;
+const SIDEBAR_WIDTH = 84;
+const EXPANDED_SIDEBAR_WIDTH = 248;
+const SHELL_TOPBAR_HEIGHT = 64;
 
-const RAIL_ITEMS = [
-  ...PRIMARY_SECTIONS,
-  ...SECONDARY_SECTIONS,
-  ...UTILITY_SECTIONS,
+const NAV_GROUPS = [
+  { id: "operate", label: "Operate", items: PRIMARY_SECTIONS },
+  {
+    id: "support",
+    label: "Support",
+    items: [...SECONDARY_SECTIONS, ...UTILITY_SECTIONS],
+  },
 ];
 
 function formatBadgeCount(count) {
   if (typeof count !== "number" || count <= 0) return null;
   return count > 99 ? "99+" : String(count);
+}
+
+function SectionLabel({ expanded, children }) {
+  if (!expanded) return null;
+
+  return (
+    <div className="px-2 pb-2 pt-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+      {children}
+    </div>
+  );
 }
 
 function NavRailItem({
@@ -42,43 +55,46 @@ function NavRailItem({
       {({ isActive }) => (
         <div
           className={cx(
-            "relative flex items-center transition-all duration-200",
+            "relative transition-all duration-200 ease-premium",
             expanded
-              ? "h-10 w-full gap-3 rounded-[14px] px-3"
-              : "h-9 w-9 justify-center rounded-[12px]",
+              ? "flex h-11 w-full items-center gap-3 rounded-[12px] border px-3"
+              : "flex h-12 w-12 items-center justify-center rounded-[12px] border",
             isActive
-              ? "bg-brand-soft text-brand shadow-[inset_0_0_0_1px_rgba(37,99,235,0.08)]"
-              : "text-text-muted hover:bg-surface-muted hover:text-text"
+              ? "border-[rgba(var(--color-brand),0.16)] bg-[rgba(var(--color-brand),0.08)] text-brand"
+              : "border-transparent text-text-muted hover:border-line hover:bg-surface-muted hover:text-text"
           )}
         >
-          {isActive ? (
-            <span
-              className={cx(
-                "absolute top-1/2 -translate-y-1/2 rounded-r-full bg-brand",
-                expanded ? "left-0 h-5 w-[2px]" : "left-0 h-4 w-[2px]"
-              )}
-            />
-          ) : null}
-
-          <Icon
-            className={cx("shrink-0", expanded ? "h-4 w-4" : "h-4 w-4")}
-            strokeWidth={1.95}
-          />
+          <span
+            className={cx(
+              "inline-flex shrink-0 items-center justify-center rounded-[10px] border",
+              expanded ? "h-8 w-8" : "h-9 w-9",
+              isActive
+                ? "border-[rgba(var(--color-brand),0.14)] bg-surface text-brand"
+                : "border-line bg-surface text-text-muted"
+            )}
+          >
+            <Icon className="h-4 w-4" strokeWidth={1.9} />
+          </span>
 
           {expanded ? (
             <>
-              <div className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-[-0.02em]">
-                {item.label}
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13px] font-semibold tracking-[-0.02em]">
+                  {item.label}
+                </div>
+                <div className="truncate text-[10px] uppercase tracking-[0.14em] text-text-subtle">
+                  {item.kicker}
+                </div>
               </div>
 
               {badgeCount ? (
-                <div className="min-w-[18px] rounded-full bg-brand px-1.5 py-[3px] text-center text-[9px] font-semibold leading-none text-white shadow-sm">
+                <div className="min-w-[22px] rounded-[8px] border border-line bg-surface px-1.5 py-1 text-center text-[10px] font-semibold leading-none text-text">
                   {badgeCount}
                 </div>
               ) : null}
             </>
           ) : badgeCount ? (
-            <div className="absolute -right-1 -top-1 min-w-[15px] rounded-full bg-brand px-1 py-[2px] text-center text-[8px] font-semibold leading-none text-white shadow-sm">
+            <div className="absolute -right-1 -top-1 min-w-[18px] rounded-[7px] bg-brand px-1.5 py-1 text-center text-[9px] font-semibold leading-none text-white">
               {badgeCount}
             </div>
           ) : null}
@@ -101,15 +117,15 @@ function BrandMark({ expanded = false }) {
     <NavLink
       to="/home"
       className={cx(
-        "flex items-center rounded-[14px] transition hover:bg-surface-muted",
+        "flex items-center transition",
         expanded
-          ? "w-full gap-3 px-2 py-1.5"
-          : "justify-center p-1"
+          ? "w-full gap-3 rounded-[12px] border border-line bg-surface px-3 py-3 hover:border-line-strong"
+          : "rounded-[12px] border border-line bg-surface p-2 hover:border-line-strong"
       )}
       aria-label="AI HQ Home"
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-line bg-surface-muted shadow-sm">
-        <Building2 className="h-4 w-4 text-brand" strokeWidth={1.95} />
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-brand text-white">
+        <Building2 className="h-4 w-4" strokeWidth={1.9} />
       </div>
 
       {expanded ? (
@@ -117,8 +133,8 @@ function BrandMark({ expanded = false }) {
           <div className="truncate text-[13px] font-semibold tracking-[-0.02em] text-text">
             AI HQ
           </div>
-          <div className="truncate text-[11px] text-text-subtle">
-            Operator shell
+          <div className="truncate text-[10px] uppercase tracking-[0.14em] text-text-subtle">
+            Operating system
           </div>
         </div>
       ) : null}
@@ -132,24 +148,24 @@ function ExpandToggle({ expanded, onToggle }) {
       type="button"
       onClick={onToggle}
       className={cx(
-        "flex items-center text-text-muted transition hover:bg-surface-muted hover:text-text",
+        "flex items-center border border-transparent text-text-muted transition hover:border-line hover:bg-surface-muted hover:text-text",
         expanded
-          ? "h-10 w-full gap-3 rounded-[14px] px-3"
-          : "h-9 w-9 justify-center rounded-[12px]"
+          ? "h-11 w-full gap-3 rounded-[12px] px-3"
+          : "h-12 w-12 justify-center rounded-[12px]"
       )}
       aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
     >
       {expanded ? (
         <>
-          <PanelLeftClose className="h-4 w-4 shrink-0" strokeWidth={1.95} />
-          <span className="truncate text-[13px] font-medium tracking-[-0.02em]">
+          <PanelLeftClose className="h-4 w-4 shrink-0" strokeWidth={1.9} />
+          <span className="truncate text-[13px] font-semibold tracking-[-0.02em]">
             Collapse
           </span>
         </>
       ) : (
         <Tooltip title="Expand" placement="right">
           <div className="flex h-full w-full items-center justify-center">
-            <PanelLeftOpen className="h-4 w-4" strokeWidth={1.95} />
+            <PanelLeftOpen className="h-4 w-4" strokeWidth={1.9} />
           </div>
         </Tooltip>
       )}
@@ -166,7 +182,7 @@ function SidebarContent({
   return (
     <div
       className={cx(
-        "flex h-full flex-col px-1.5 py-2",
+        "flex h-full flex-col px-3 py-4",
         expanded ? "items-stretch" : "items-center"
       )}
     >
@@ -174,24 +190,43 @@ function SidebarContent({
 
       <div
         className={cx(
-          "mt-2 flex flex-1 flex-col gap-1",
+          "mt-4 flex flex-1 flex-col",
           expanded ? "items-stretch" : "items-center"
         )}
       >
-        {RAIL_ITEMS.map((item) => (
-          <NavRailItem
-            key={item.id}
-            item={item}
-            shellStats={shellStats}
-            onNavigate={onNavigate}
-            expanded={expanded}
-          />
+        {NAV_GROUPS.map((group) => (
+          <div
+            key={group.id}
+            className={cx(
+              "w-full",
+              group.id === "support" ? "mt-4 border-t border-line-soft pt-2" : ""
+            )}
+          >
+            <SectionLabel expanded={expanded}>{group.label}</SectionLabel>
+
+            <div
+              className={cx(
+                "flex flex-col gap-1",
+                expanded ? "items-stretch" : "items-center"
+              )}
+            >
+              {group.items.map((item) => (
+                <NavRailItem
+                  key={item.id}
+                  item={item}
+                  shellStats={shellStats}
+                  onNavigate={onNavigate}
+                  expanded={expanded}
+                />
+              ))}
+            </div>
+          </div>
         ))}
       </div>
 
       <div
         className={cx(
-          "mt-2 border-t border-line-soft pt-2",
+          "mt-4 border-t border-line-soft pt-3",
           expanded ? "w-full" : "w-auto"
         )}
       >
@@ -212,7 +247,7 @@ export default function Sidebar({
   return (
     <>
       <aside
-        className="fixed inset-y-0 left-0 z-[70] hidden border-r border-line bg-surface transition-[width] duration-200 md:block"
+        className="fixed inset-y-0 left-0 z-[70] hidden border-r border-line bg-[rgba(250,251,253,0.94)] backdrop-blur-[10px] transition-[width] duration-200 md:block"
         style={{ width: sidebarWidth }}
       >
         <SidebarContent
@@ -229,7 +264,10 @@ export default function Sidebar({
         width={sidebarWidth}
         closeIcon={null}
         styles={{
-          body: { padding: 0 },
+          body: {
+            padding: 0,
+            background: "rgb(var(--color-surface))",
+          },
           header: { display: "none" },
           content: {
             background: "rgb(var(--color-surface))",
