@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { cx } from "../lib/cx.js";
 import ChannelDetailDrawer from "../components/channels/ChannelDetailDrawer.jsx";
 import ChannelOverviewCard from "../components/channels/ChannelOverviewCard.jsx";
 import {
@@ -10,38 +9,38 @@ import {
   findChannelById,
   matchesChannelFilter,
   matchesChannelSearch,
-  pickHeroChannel,
 } from "../components/channels/channelCatalogModel.js";
+import { ChannelActionButton } from "../components/channels/ChannelPrimitives.jsx";
 import { PageCanvas } from "../components/ui/AppShellPrimitives.jsx";
 import Input from "../components/ui/Input.jsx";
-import { ChannelActionButton } from "../components/channels/ChannelPrimitives.jsx";
+import { cx } from "../lib/cx.js";
 
-function buildResultsLabel(filteredCount, totalCount) {
-  if (filteredCount === totalCount) {
-    return `${totalCount} total`;
-  }
-
-  return `Showing ${filteredCount} of ${totalCount}`;
+function buildResultsLabel(filteredCount, totalCount, isFiltered) {
+  if (!isFiltered) return `${totalCount} connectors`;
+  return `${filteredCount} of ${totalCount}`;
 }
 
-function FilterControl({ filter, active, onSelect }) {
+function FilterTab({ label, count, active, onClick }) {
   return (
     <button
       type="button"
-      onClick={() => onSelect(filter.id)}
+      onClick={onClick}
       aria-pressed={active}
       className={cx(
-        "flex min-h-[72px] flex-col justify-between bg-surface px-3 py-3 text-left transition duration-fast ease-premium",
+        "inline-flex h-11 items-center gap-3 rounded-[15px] border px-4 text-[11px] font-semibold uppercase tracking-[0.14em] transition duration-fast ease-premium",
         active
-          ? "bg-[rgba(var(--color-brand),0.05)] text-text"
-          : "text-text-muted hover:bg-surface-subtle hover:text-text"
+          ? "border-brand bg-brand text-white shadow-[0_14px_28px_-18px_rgba(37,99,235,0.45)]"
+          : "border-line bg-surface text-text-subtle hover:border-line-strong hover:bg-surface-muted hover:text-text"
       )}
     >
-      <span className="text-[10px] font-semibold uppercase tracking-[0.16em]">
-        {filter.label}
-      </span>
-      <span className="mt-3 text-[18px] font-semibold tracking-[-0.05em] text-text">
-        {filter.count}
+      <span>{label}</span>
+      <span
+        className={cx(
+          "inline-flex min-w-[20px] items-center justify-center text-[13px] font-semibold tracking-[-0.03em]",
+          active ? "text-white" : "text-text"
+        )}
+      >
+        {count}
       </span>
     </button>
   );
@@ -53,8 +52,8 @@ export default function ChannelCatalog() {
   const [activeFilter, setActiveFilter] = useState("all");
   const [query, setQuery] = useState("");
 
-  const heroChannel = pickHeroChannel();
   const selectedChannelId = searchParams.get("channel") || "";
+
   const selectedChannel = useMemo(
     () => findChannelById(selectedChannelId),
     [selectedChannelId]
@@ -79,9 +78,12 @@ export default function ChannelCatalog() {
     [activeFilter, query]
   );
 
-  const activeFilterMeta =
-    filterCounts.find((filter) => filter.id === activeFilter) || filterCounts[0];
-  const resultsLabel = buildResultsLabel(filteredChannels.length, CHANNELS.length);
+  const isFiltered = activeFilter !== "all" || String(query).trim().length > 0;
+  const resultsLabel = buildResultsLabel(
+    filteredChannels.length,
+    CHANNELS.length,
+    isFiltered
+  );
 
   function updateSelectedChannel(channelId = "") {
     const nextParams = new URLSearchParams(searchParams);
@@ -95,131 +97,124 @@ export default function ChannelCatalog() {
     setSearchParams(nextParams);
   }
 
+  function handleResetView() {
+    setActiveFilter("all");
+    setQuery("");
+  }
+
   function handleNavigate(path) {
     navigate(path);
   }
 
   return (
-    <>
-      <PageCanvas className="px-3 py-3 md:px-4 md:py-4">
-        <section className="overflow-hidden border border-line bg-surface">
-          <div className="px-4 py-4 md:px-5 md:py-5">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-              <div className="max-w-[760px]">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-                  Operational matrix
-                </div>
-
-                <div className="mt-2 flex flex-wrap items-end gap-x-3 gap-y-2">
-                  <h1 className="text-[1.75rem] font-semibold tracking-[-0.06em] text-text md:text-[2rem]">
-                    Channels
-                  </h1>
-                  <div className="pb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-                    {resultsLabel}
-                  </div>
-                </div>
-
-                <p className="mt-3 max-w-[42rem] text-[13px] leading-6 text-text-muted">
-                  Live lanes, limited coverage, setup pressure, and context sources in
-                  one compact routing matrix.
-                </p>
-              </div>
-
-              <ChannelActionButton
-                onClick={() => navigate(heroChannel.primaryAction.path)}
-                ariaLabel="Open live inbox"
-                className="self-start"
-              >
-                Open inbox
-              </ChannelActionButton>
+    <PageCanvas className="px-3 py-3 md:px-4 md:py-4">
+      <div className="space-y-4">
+        <section className="rounded-[26px] border border-line bg-[linear-gradient(180deg,#ffffff_0%,#fbfcff_100%)] px-4 py-4 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.18)] md:px-5 md:py-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {filterCounts.map((filter) => (
+                <FilterTab
+                  key={filter.id}
+                  label={filter.label}
+                  count={filter.count}
+                  active={activeFilter === filter.id}
+                  onClick={() => setActiveFilter(filter.id)}
+                />
+              ))}
             </div>
 
-            <div className="mt-4 grid gap-3 border-t border-line-soft pt-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="grid gap-px border border-line-soft bg-line-soft sm:grid-cols-3 xl:grid-cols-5">
-                {filterCounts.map((filter) => (
-                  <FilterControl
-                    key={filter.id}
-                    filter={filter}
-                    active={activeFilter === filter.id}
-                    onSelect={setActiveFilter}
-                  />
-                ))}
+            <div className="flex w-full items-center justify-end gap-3 xl:max-w-[460px]">
+              <div className="hidden text-[13px] text-text-muted xl:block">
+                {resultsLabel}
               </div>
 
-              <div className="border border-line-soft bg-surface px-3 py-3">
-                <div className="flex items-center justify-between gap-3 pb-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-                    {activeFilterMeta.label} view
-                  </div>
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-                    {resultsLabel}
-                  </div>
-                </div>
+              {isFiltered ? (
+                <ChannelActionButton quiet showArrow={false} onClick={handleResetView}>
+                  Reset
+                </ChannelActionButton>
+              ) : null}
 
+              <div className="w-full xl:max-w-[340px]">
                 <Input
-                  aria-label="Search channels"
+                  aria-label="Search connectors"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search name, capability, or state"
+                  placeholder="Search connector or use case"
                   leftIcon={<Search className="h-4 w-4" />}
                   appearance="quiet"
-                  className="!rounded-none"
+                  className="!rounded-[16px]"
                   inputClassName="!text-[13px]"
                 />
               </div>
             </div>
           </div>
+        </section>
 
-          <div className="border-t border-line-soft">
-            {filteredChannels.length ? (
-              <div className="grid bg-line-soft md:grid-cols-2 md:gap-px xl:grid-cols-3 2xl:grid-cols-4">
-                {filteredChannels.map((channel) => (
-                  <ChannelOverviewCard
-                    key={channel.id}
-                    channel={channel}
-                    selected={selectedChannel?.id === channel.id}
-                    onInspect={updateSelectedChannel}
-                    onRunPrimaryAction={handleNavigate}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="grid min-h-[280px] place-items-center px-5 py-10">
-                <div className="max-w-[360px] text-center">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-                    No matches
-                  </div>
-                  <div className="mt-3 text-[18px] font-semibold tracking-[-0.04em] text-text">
-                    No channels match this view.
-                  </div>
-                  <p className="mt-2 text-[13px] leading-6 text-text-muted">
-                    Clear the search or reset the filter to return to the full matrix.
-                  </p>
-                  <div className="mt-5 flex justify-center">
-                    <ChannelActionButton
-                      quiet
-                      showArrow={false}
-                      onClick={() => {
-                        setActiveFilter("all");
-                        setQuery("");
-                      }}
-                    >
-                      Reset view
-                    </ChannelActionButton>
+        {filteredChannels.length ? (
+          <section className="relative min-h-[440px]">
+            <div
+              className={cx(
+                "grid gap-4 md:grid-cols-2 xl:grid-cols-3 transition duration-fast ease-premium",
+                selectedChannel && "scale-[0.995] opacity-[0.54]"
+              )}
+            >
+              {filteredChannels.map((channel) => (
+                <ChannelOverviewCard
+                  key={channel.id}
+                  channel={channel}
+                  selected={selectedChannel?.id === channel.id}
+                  onInspect={updateSelectedChannel}
+                  onRunPrimaryAction={handleNavigate}
+                />
+              ))}
+            </div>
+
+            {selectedChannel ? (
+              <div className="absolute inset-0 z-30">
+                <button
+                  type="button"
+                  aria-label="Close connector details"
+                  className="absolute inset-0 rounded-[32px] bg-[linear-gradient(90deg,rgba(255,255,255,0.06)_0%,rgba(255,255,255,0.16)_52%,rgba(255,255,255,0.02)_100%)]"
+                  onClick={() => updateSelectedChannel("")}
+                />
+
+                <div className="absolute inset-y-0 right-0 flex w-full justify-end p-2 md:p-3">
+                  <div className="w-full max-w-[492px]">
+                    <ChannelDetailDrawer
+                      channel={selectedChannel}
+                      open={Boolean(selectedChannel)}
+                      onClose={() => updateSelectedChannel("")}
+                      onNavigate={handleNavigate}
+                    />
                   </div>
                 </div>
               </div>
-            )}
-          </div>
-        </section>
-      </PageCanvas>
+            ) : null}
+          </section>
+        ) : (
+          <div className="grid min-h-[320px] place-items-center rounded-[26px] border border-dashed border-line bg-surface px-5 py-10">
+            <div className="max-w-[360px] text-center">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+                No matches
+              </div>
 
-      <ChannelDetailDrawer
-        channel={selectedChannel}
-        open={Boolean(selectedChannel)}
-        onClose={() => updateSelectedChannel("")}
-        onNavigate={handleNavigate}
-      />
-    </>
+              <div className="mt-3 text-[22px] font-semibold tracking-[-0.05em] text-text">
+                No connectors matched this search.
+              </div>
+
+              <p className="mt-3 text-[13px] leading-6 text-text-muted">
+                Clear the search or change the filter to bring the full catalog back.
+              </p>
+
+              <div className="mt-5 flex justify-center">
+                <ChannelActionButton quiet showArrow={false} onClick={handleResetView}>
+                  Reset view
+                </ChannelActionButton>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </PageCanvas>
   );
 }

@@ -6,33 +6,33 @@ function resolveAppearance(appearance = "default") {
   switch (appearance) {
     case "product":
       return {
-        shell: "rounded-[12px]",
-        row: "min-h-[52px] gap-3 px-4",
-        input: "h-[52px] text-[15px] font-medium",
+        shell: "rounded-[16px]",
+        row: "min-h-[54px] gap-3 px-4",
+        input: "h-[54px] text-[15px] font-medium",
         textareaWrap: "px-4 py-4",
-        textarea: "min-h-[152px] text-[15px] leading-7",
+        textarea: "min-h-[156px] text-[15px] leading-7",
         selectWrap: "px-4",
-        select: "h-[52px] pr-8 text-[15px] font-medium",
+        select: "h-[54px] pr-8 text-[15px] font-medium",
       };
     case "quiet":
       return {
-        shell: "rounded-[10px]",
-        row: "min-h-[44px] gap-2.5 px-3.5",
-        input: "h-11 text-[14px]",
+        shell: "rounded-[14px]",
+        row: "min-h-[46px] gap-2.5 px-3.5",
+        input: "h-[46px] text-[14px]",
         textareaWrap: "px-3.5 py-3",
-        textarea: "min-h-[116px] text-[14px] leading-6",
+        textarea: "min-h-[118px] text-[14px] leading-6",
         selectWrap: "px-3.5",
-        select: "h-11 pr-8 text-[14px]",
+        select: "h-[46px] pr-8 text-[14px]",
       };
     default:
       return {
-        shell: "rounded-[10px]",
-        row: "min-h-[46px] gap-2.5 px-3.5",
-        input: "h-11 text-[14px]",
-        textareaWrap: "px-3.5 py-3",
-        textarea: "min-h-[132px] text-[14px] leading-6",
+        shell: "rounded-[15px]",
+        row: "min-h-[48px] gap-2.5 px-3.5",
+        input: "h-[48px] text-[14px]",
+        textareaWrap: "px-3.5 py-3.5",
+        textarea: "min-h-[136px] text-[14px] leading-6",
         selectWrap: "px-3.5",
-        select: "h-11 pr-8 text-[14px]",
+        select: "h-[48px] pr-8 text-[14px]",
       };
   }
 }
@@ -42,12 +42,18 @@ function surfaceClass({ disabled, readOnly, invalid }) {
     return "border-line-soft bg-surface-subtle text-text-subtle opacity-70";
   }
   if (invalid) {
-    return "border-danger bg-surface";
+    return "border-danger bg-surface shadow-none";
   }
   if (readOnly) {
     return "border-line bg-surface-muted";
   }
-  return "border-line bg-surface hover:border-line-strong focus-within:border-brand focus-within:shadow-[var(--focus-ring)]";
+  return [
+    "border-line bg-surface",
+    "hover:border-line-strong",
+    "focus-within:border-[rgba(var(--color-brand),0.34)]",
+    "focus-within:bg-white",
+    "focus-within:shadow-[0_0_0_4px_rgba(var(--color-brand),0.08)]",
+  ].join(" ");
 }
 
 function FieldShell({
@@ -105,7 +111,9 @@ export function InputGroup({
       appearance={appearance}
     >
       <div className={cx("flex items-center", view.row)}>
-        {leftIcon ? <span className="shrink-0 text-text-muted">{leftIcon}</span> : null}
+        {leftIcon ? (
+          <span className="shrink-0 text-text-subtle">{leftIcon}</span>
+        ) : null}
 
         <input
           value={value}
@@ -126,7 +134,7 @@ export function InputGroup({
           <button
             type="button"
             onClick={onClear}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-text-subtle transition-[background-color,color] duration-200 ease-premium hover:bg-surface-muted hover:text-text"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] text-text-subtle transition-[background-color,color] duration-200 ease-premium hover:bg-surface-muted hover:text-text"
             aria-label="Clear"
           >
             <X className="h-4 w-4" />
@@ -164,7 +172,9 @@ const Input = forwardRef(function Input(
       appearance={appearance}
     >
       <div className={cx("flex items-center", view.row)}>
-        {leftIcon ? <span className="shrink-0 text-text-muted">{leftIcon}</span> : null}
+        {leftIcon ? (
+          <span className="shrink-0 text-text-subtle">{leftIcon}</span>
+        ) : null}
 
         <input
           ref={ref}

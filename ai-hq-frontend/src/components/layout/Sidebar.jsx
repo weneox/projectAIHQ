@@ -13,9 +13,9 @@ import {
   UTILITY_SECTIONS,
 } from "./shellNavigation.js";
 
-const SIDEBAR_WIDTH = 84;
-const EXPANDED_SIDEBAR_WIDTH = 248;
-const SHELL_TOPBAR_HEIGHT = 64;
+const SIDEBAR_WIDTH = 76;
+const EXPANDED_SIDEBAR_WIDTH = 228;
+const SHELL_TOPBAR_HEIGHT = 60;
 
 const NAV_GROUPS = [
   { id: "operate", label: "Operate", items: PRIMARY_SECTIONS },
@@ -35,7 +35,7 @@ function SectionLabel({ expanded, children }) {
   if (!expanded) return null;
 
   return (
-    <div className="px-2 pb-2 pt-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+    <div className="px-3 pb-2 pt-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
       {children}
     </div>
   );
@@ -57,24 +57,14 @@ function NavRailItem({
           className={cx(
             "relative transition-all duration-200 ease-premium",
             expanded
-              ? "flex h-11 w-full items-center gap-3 rounded-[12px] border px-3"
-              : "flex h-12 w-12 items-center justify-center rounded-[12px] border",
+              ? "flex h-11 w-full items-center gap-3 rounded-[13px] px-3"
+              : "flex h-11 w-11 items-center justify-center rounded-[13px]",
             isActive
-              ? "border-[rgba(var(--color-brand),0.16)] bg-[rgba(var(--color-brand),0.08)] text-brand"
-              : "border-transparent text-text-muted hover:border-line hover:bg-surface-muted hover:text-text"
+              ? "bg-[rgba(var(--color-brand),0.09)] text-brand"
+              : "text-text-muted hover:bg-surface-muted hover:text-text"
           )}
         >
-          <span
-            className={cx(
-              "inline-flex shrink-0 items-center justify-center rounded-[10px] border",
-              expanded ? "h-8 w-8" : "h-9 w-9",
-              isActive
-                ? "border-[rgba(var(--color-brand),0.14)] bg-surface text-brand"
-                : "border-line bg-surface text-text-muted"
-            )}
-          >
-            <Icon className="h-4 w-4" strokeWidth={1.9} />
-          </span>
+          <Icon className="h-4.5 w-4.5 shrink-0" strokeWidth={1.9} />
 
           {expanded ? (
             <>
@@ -88,7 +78,7 @@ function NavRailItem({
               </div>
 
               {badgeCount ? (
-                <div className="min-w-[22px] rounded-[8px] border border-line bg-surface px-1.5 py-1 text-center text-[10px] font-semibold leading-none text-text">
+                <div className="min-w-[20px] rounded-[8px] bg-surface px-1.5 py-1 text-center text-[10px] font-semibold leading-none text-text">
                   {badgeCount}
                 </div>
               ) : null}
@@ -117,15 +107,15 @@ function BrandMark({ expanded = false }) {
     <NavLink
       to="/home"
       className={cx(
-        "flex items-center transition",
+        "flex items-center text-text transition",
         expanded
-          ? "w-full gap-3 rounded-[12px] border border-line bg-surface px-3 py-3 hover:border-line-strong"
-          : "rounded-[12px] border border-line bg-surface p-2 hover:border-line-strong"
+          ? "w-full gap-3 rounded-[14px] px-3 py-3 hover:bg-surface-muted"
+          : "rounded-[14px] p-2 hover:bg-surface-muted"
       )}
       aria-label="AI HQ Home"
     >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-brand text-white">
-        <Building2 className="h-4 w-4" strokeWidth={1.9} />
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-brand text-white">
+        <Building2 className="h-4.5 w-4.5" strokeWidth={1.9} />
       </div>
 
       {expanded ? (
@@ -143,15 +133,15 @@ function BrandMark({ expanded = false }) {
 }
 
 function ExpandToggle({ expanded, onToggle }) {
-  return (
+  const button = (
     <button
       type="button"
       onClick={onToggle}
       className={cx(
-        "flex items-center border border-transparent text-text-muted transition hover:border-line hover:bg-surface-muted hover:text-text",
+        "flex items-center text-text-muted transition hover:bg-surface-muted hover:text-text",
         expanded
-          ? "h-11 w-full gap-3 rounded-[12px] px-3"
-          : "h-12 w-12 justify-center rounded-[12px]"
+          ? "h-11 w-full gap-3 rounded-[13px] px-3"
+          : "h-11 w-11 justify-center rounded-[13px]"
       )}
       aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
     >
@@ -163,13 +153,17 @@ function ExpandToggle({ expanded, onToggle }) {
           </span>
         </>
       ) : (
-        <Tooltip title="Expand" placement="right">
-          <div className="flex h-full w-full items-center justify-center">
-            <PanelLeftOpen className="h-4 w-4" strokeWidth={1.9} />
-          </div>
-        </Tooltip>
+        <PanelLeftOpen className="h-4 w-4" strokeWidth={1.9} />
       )}
     </button>
+  );
+
+  if (expanded) return button;
+
+  return (
+    <Tooltip title="Expand" placement="right">
+      {button}
+    </Tooltip>
   );
 }
 
@@ -247,7 +241,7 @@ export default function Sidebar({
   return (
     <>
       <aside
-        className="fixed inset-y-0 left-0 z-[70] hidden border-r border-line bg-[rgba(250,251,253,0.94)] backdrop-blur-[10px] transition-[width] duration-200 md:block"
+        className="fixed inset-y-0 left-0 z-[70] hidden border-r border-line bg-[#fbfcfe] transition-[width] duration-200 md:block"
         style={{ width: sidebarWidth }}
       >
         <SidebarContent

@@ -14,19 +14,19 @@ const PRIMARY_SECTIONS = [
   {
     id: "home",
     label: "Home",
-    kicker: "Launch slice",
-    description: "Focused overview of the real operating product and the next operator action.",
+    kicker: "Overview",
+    description: "The main operating surface.",
     icon: Home,
     to: "/home",
     paths: ["/home"],
     contextGroups: [
       {
-        title: "Start here",
+        title: "Start",
         items: [
-          { label: "Product home", to: "/home" },
-          { label: "Social inbox", to: "/inbox" },
-          { label: "Comment queue", to: "/comments" },
-          { label: "Voice receptionist", to: "/voice" },
+          { label: "Home", to: "/home" },
+          { label: "Inbox", to: "/inbox" },
+          { label: "Comments", to: "/comments" },
+          { label: "Voice", to: "/voice" },
         ],
       },
     ],
@@ -34,8 +34,8 @@ const PRIMARY_SECTIONS = [
   {
     id: "inbox",
     label: "Inbox",
-    kicker: "Primary",
-    description: "Meta messaging, operator triage, and live conversation handling.",
+    kicker: "Live",
+    description: "Messages and active conversations.",
     icon: MessageSquareText,
     to: "/inbox",
     badgeKey: "inboxUnread",
@@ -44,7 +44,7 @@ const PRIMARY_SECTIONS = [
       {
         title: "Messaging",
         items: [
-          { label: "Social inbox", to: "/inbox" },
+          { label: "Inbox", to: "/inbox" },
           { label: "Incidents", to: "/incidents" },
         ],
       },
@@ -53,8 +53,8 @@ const PRIMARY_SECTIONS = [
   {
     id: "comments",
     label: "Comments",
-    kicker: "Primary",
-    description: "Meta comment moderation, reply review, and operator intervention.",
+    kicker: "Live",
+    description: "Comment review and moderation.",
     icon: MessageCircleMore,
     to: "/comments",
     paths: ["/comments"],
@@ -62,8 +62,8 @@ const PRIMARY_SECTIONS = [
       {
         title: "Moderation",
         items: [
-          { label: "Comment queue", to: "/comments" },
-          { label: "Social inbox", to: "/inbox" },
+          { label: "Comments", to: "/comments" },
+          { label: "Inbox", to: "/inbox" },
         ],
       },
     ],
@@ -71,8 +71,8 @@ const PRIMARY_SECTIONS = [
   {
     id: "voice",
     label: "Voice",
-    kicker: "Primary",
-    description: "Twilio voice operations, handoffs, transcripts, and live call controls.",
+    kicker: "Live",
+    description: "Calls, handoff, and transcripts.",
     icon: Waves,
     to: "/voice",
     paths: ["/voice"],
@@ -80,8 +80,8 @@ const PRIMARY_SECTIONS = [
       {
         title: "Calls",
         items: [
-          { label: "Voice receptionist", to: "/voice" },
-          { label: "Social inbox", to: "/inbox" },
+          { label: "Voice", to: "/voice" },
+          { label: "Inbox", to: "/inbox" },
         ],
       },
     ],
@@ -92,16 +92,16 @@ const SECONDARY_SECTIONS = [
   {
     id: "workspace",
     label: "Workspace",
-    kicker: "Support",
-    description: "Cross-surface operator brief, posture, and internal control views.",
+    kicker: "Control",
+    description: "Operator overview and internal control.",
     icon: LayoutGrid,
     to: "/workspace",
     paths: ["/workspace"],
     contextGroups: [
       {
-        title: "Support",
+        title: "Control",
         items: [
-          { label: "Workspace overview", to: "/workspace" },
+          { label: "Workspace", to: "/workspace" },
           { label: "Channels", to: "/channels" },
         ],
       },
@@ -110,8 +110,8 @@ const SECONDARY_SECTIONS = [
   {
     id: "channels",
     label: "Channels",
-    kicker: "Control",
-    description: "Fast channel overview for live, limited, setup, and context surfaces.",
+    kicker: "Catalog",
+    description: "Connect and manage channels.",
     icon: Waypoints,
     to: "/channels",
     paths: ["/channels"],
@@ -119,8 +119,8 @@ const SECONDARY_SECTIONS = [
       {
         title: "Channels",
         items: [
-          { label: "Channels overview", to: "/channels" },
-          { label: "Workspace overview", to: "/workspace" },
+          { label: "Channels", to: "/channels" },
+          { label: "Workspace", to: "/workspace" },
         ],
       },
     ],
@@ -129,7 +129,7 @@ const SECONDARY_SECTIONS = [
     id: "contacts",
     label: "Pipeline",
     kicker: "Backoffice",
-    description: "Lead follow-through and proposal work that supports the business but is not part of the launch product.",
+    description: "Leads and proposal flow.",
     icon: BriefcaseBusiness,
     to: "/leads",
     badgeKey: "leadsOpen",
@@ -138,7 +138,7 @@ const SECONDARY_SECTIONS = [
       {
         title: "Backoffice",
         items: [
-          { label: "Lead pipeline", to: "/leads" },
+          { label: "Leads", to: "/leads" },
           { label: "Proposals", to: "/proposals" },
         ],
       },
@@ -148,7 +148,7 @@ const SECONDARY_SECTIONS = [
     id: "publish",
     label: "Content",
     kicker: "Backoffice",
-    description: "Internal content and publishing workflow, kept available without reading like a launch promise.",
+    description: "Publishing and execution flow.",
     icon: BellDot,
     to: "/publish",
     paths: ["/publish", "/executions"],
@@ -156,7 +156,7 @@ const SECONDARY_SECTIONS = [
       {
         title: "Backoffice",
         items: [
-          { label: "Publish queue", to: "/publish" },
+          { label: "Publish", to: "/publish" },
           { label: "Executions", to: "/executions" },
         ],
       },
@@ -164,9 +164,9 @@ const SECONDARY_SECTIONS = [
   },
   {
     id: "intelligence",
-    label: "Truth",
+    label: "Knowledge",
     kicker: "Internal",
-    description: "Approved business memory, review history, and control-plane visibility behind the launch loops.",
+    description: "Approved business memory and review history.",
     icon: ShieldCheck,
     to: "/truth",
     paths: ["/truth"],
@@ -174,13 +174,14 @@ const SECONDARY_SECTIONS = [
       {
         title: "Internal",
         items: [
-          { label: "Truth viewer", to: "/truth" },
-          { label: "Workspace overview", to: "/workspace" },
+          { label: "Knowledge", to: "/truth" },
+          { label: "Workspace", to: "/workspace" },
         ],
       },
     ],
   },
 ];
+
 const UTILITY_SECTIONS = [];
 
 const ALL_SECTIONS = [

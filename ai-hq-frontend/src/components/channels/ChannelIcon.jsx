@@ -2,45 +2,85 @@ import { cx } from "../../lib/cx.js";
 
 const SIZE_MAP = {
   sm: {
-    slot: "h-10 w-10",
-    icon: "h-4.5 w-4.5",
-    stackIcon: "h-3.5 w-3.5",
+    slot: "h-10 w-10 rounded-[14px]",
+    icon: "h-5 w-5",
+    stackWrap: "h-10 w-10",
+    stackPrimary: "h-5 w-5",
+    stackSecondary: "h-4 w-4",
   },
   md: {
-    slot: "h-11 w-11",
-    icon: "h-5 w-5",
-    stackIcon: "h-4 w-4",
+    slot: "h-11 w-11 rounded-[16px]",
+    icon: "h-5.5 w-5.5",
+    stackWrap: "h-11 w-11",
+    stackPrimary: "h-5.5 w-5.5",
+    stackSecondary: "h-4.5 w-4.5",
   },
   lg: {
-    slot: "h-14 w-14",
-    icon: "h-5.5 w-5.5",
-    stackIcon: "h-4.5 w-4.5",
+    slot: "h-[52px] w-[52px] rounded-[18px]",
+    icon: "h-6 w-6",
+    stackWrap: "h-[52px] w-[52px]",
+    stackPrimary: "h-6 w-6",
+    stackSecondary: "h-5 w-5",
   },
 };
 
-function normalizeIconClassName(className = "") {
-  return className.replace("object-contain", "").trim();
+function cleanClassName(className = "") {
+  return String(className).replace("object-contain", "").trim();
 }
 
-function IconItem({ item, className }) {
+function RenderIcon({ item, className }) {
   if (item.iconComponent) {
     const Icon = item.iconComponent;
-
-    return (
-      <span className="inline-flex items-center justify-center text-text">
-        <Icon className={normalizeIconClassName(className)} />
-      </span>
-    );
+    return <Icon className={cleanClassName(className)} />;
   }
 
   return (
     <img
       src={item.icon}
-      alt={item.iconAlt}
+      alt={item.iconAlt || ""}
       className={cx("object-contain", className)}
       loading="lazy"
       decoding="async"
     />
+  );
+}
+
+function StackedChannelIcon({ channel, view }) {
+  const stack = Array.isArray(channel.iconStack) ? channel.iconStack.slice(0, 3) : [];
+  if (!stack.length) return null;
+
+  const primary = stack[0];
+  const secondary = stack[1];
+  const tertiary = stack[2];
+
+  return (
+    <span
+      className={cx(
+        "relative inline-flex shrink-0 items-center justify-center",
+        view.stackWrap
+      )}
+      aria-hidden="true"
+    >
+      <span className="absolute inset-0 rounded-[inherit] bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)]" />
+
+      <span className="relative z-[1] inline-flex h-full w-full items-center justify-center">
+        <span className="inline-flex h-[72%] w-[72%] items-center justify-center rounded-[14px] bg-white shadow-[0_10px_24px_-18px_rgba(15,23,42,0.24)]">
+          <RenderIcon item={primary} className={view.stackPrimary} />
+        </span>
+      </span>
+
+      {secondary ? (
+        <span className="absolute bottom-[8%] right-[6%] z-[2] inline-flex h-[42%] w-[42%] items-center justify-center rounded-[12px] bg-white shadow-[0_10px_20px_-16px_rgba(15,23,42,0.22)]">
+          <RenderIcon item={secondary} className={view.stackSecondary} />
+        </span>
+      ) : null}
+
+      {tertiary ? (
+        <span className="absolute left-[6%] top-[8%] z-[2] inline-flex h-[34%] w-[34%] items-center justify-center rounded-[10px] bg-white shadow-[0_8px_18px_-14px_rgba(15,23,42,0.2)]">
+          <RenderIcon item={tertiary} className="h-3.5 w-3.5" />
+        </span>
+      ) : null}
+    </span>
   );
 }
 
@@ -51,47 +91,37 @@ export default function ChannelIcon({
   slotClassName = "",
 }) {
   const view = SIZE_MAP[size] || SIZE_MAP.md;
-  const stack = Array.isArray(channel.iconStack) ? channel.iconStack.slice(0, 3) : [];
-  const hasStack = stack.length > 0;
+  const hasStack = Array.isArray(channel.iconStack) && channel.iconStack.length > 0;
   const SingleIcon = channel.iconComponent;
+
+  if (hasStack) {
+    return (
+      <StackedChannelIcon
+        channel={channel}
+        view={view}
+        className={className}
+        slotClassName={slotClassName}
+      />
+    );
+  }
 
   return (
     <span
       className={cx(
-        "inline-flex shrink-0 items-center justify-center overflow-hidden border border-line bg-surface-subtle text-text",
+        "inline-flex shrink-0 items-center justify-center bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)] text-text",
         view.slot,
         slotClassName
       )}
       aria-hidden="true"
     >
-      {hasStack ? (
-        <span
-          className={cx(
-            "grid h-full w-full gap-px bg-line-soft",
-            stack.length === 1 && "grid-cols-1",
-            stack.length === 2 && "grid-cols-2",
-            stack.length >= 3 && "grid-cols-2 [&>span:last-child]:col-span-2"
-          )}
-        >
-          {stack.map((item, index) => (
-            <span
-              key={`${channel.id}-icon-${index}`}
-              className="inline-flex items-center justify-center bg-surface-subtle"
-            >
-              <IconItem item={item} className={view.stackIcon} />
-            </span>
-          ))}
-        </span>
-      ) : SingleIcon ? (
-        <span
-          className={cx("inline-flex items-center justify-center text-text", className)}
-        >
-          <SingleIcon className={normalizeIconClassName(view.icon)} />
+      {SingleIcon ? (
+        <span className={cx("inline-flex items-center justify-center text-text", className)}>
+          <SingleIcon className={cleanClassName(view.icon)} />
         </span>
       ) : (
         <img
           src={channel.icon}
-          alt={channel.iconAlt}
+          alt={channel.iconAlt || ""}
           className={cx("object-contain", view.icon, className)}
           loading="lazy"
           decoding="async"

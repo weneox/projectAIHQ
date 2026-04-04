@@ -39,18 +39,16 @@ function HeaderMenuRow({
       type="button"
       onClick={onClick}
       className={cx(
-        "flex w-full items-center gap-3 rounded-[10px] border px-3 py-3 text-left transition",
+        "flex w-full items-center gap-3 rounded-[12px] px-3 py-3 text-left transition",
         danger
-          ? "border-[rgba(var(--color-danger),0.14)] bg-[rgba(var(--color-danger),0.04)] text-danger hover:bg-[rgba(var(--color-danger),0.08)]"
-          : "border-transparent text-text hover:border-line hover:bg-surface-muted"
+          ? "text-danger hover:bg-[rgba(var(--color-danger),0.06)]"
+          : "text-text hover:bg-surface-muted"
       )}
     >
       <div
         className={cx(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] border",
-          danger
-            ? "border-[rgba(var(--color-danger),0.12)] bg-[rgba(var(--color-danger),0.08)] text-danger"
-            : "border-line bg-surface text-text-muted"
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]",
+          danger ? "bg-[rgba(var(--color-danger),0.08)] text-danger" : "bg-surface-muted text-text-muted"
         )}
       >
         <Icon className="h-[14px] w-[14px]" strokeWidth={1.9} />
@@ -147,10 +145,10 @@ function WorkspaceControl({ notifications }) {
   const initials = useMemo(() => getInitials(displayName) || "W", [displayName]);
 
   const overlay = (
-    <div className="w-[296px] rounded-[14px] border border-line bg-surface p-2 shadow-[0_18px_48px_rgba(15,23,38,0.08)]">
-      <div className="rounded-[12px] border border-line bg-surface-muted px-3 py-3">
+    <div className="w-[292px] rounded-[16px] border border-line bg-surface p-2 shadow-[0_24px_56px_-30px_rgba(15,23,42,0.24)]">
+      <div className="rounded-[14px] bg-surface-muted px-3 py-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[10px] bg-brand text-[12px] font-semibold text-white">
+          <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-brand text-[12px] font-semibold text-white">
             {initials}
           </div>
 
@@ -164,7 +162,7 @@ function WorkspaceControl({ notifications }) {
           </div>
 
           {unread > 0 ? (
-            <div className="rounded-[8px] border border-line bg-surface px-2 py-1 text-[10px] font-semibold text-text">
+            <div className="rounded-[8px] bg-surface px-2 py-1 text-[10px] font-semibold text-text">
               {unread > 99 ? "99+" : unread}
             </div>
           ) : null}
@@ -188,7 +186,7 @@ function WorkspaceControl({ notifications }) {
         <HeaderMenuRow
           icon={LayoutGrid}
           label="Workspace"
-          sublabel="Open the full operator workspace"
+          sublabel="Open the operator workspace"
           onClick={() => closeThen(() => navigate("/workspace"))}
         />
       </div>
@@ -215,7 +213,7 @@ function WorkspaceControl({ notifications }) {
     >
       <button
         type="button"
-        className="group flex h-10 items-center gap-3 rounded-[12px] border border-line bg-surface px-2.5 pr-3 transition hover:border-line-strong hover:bg-surface-muted"
+        className="group flex h-10 items-center gap-2 rounded-[13px] border border-line bg-surface px-2.5 pr-3 transition hover:border-line-strong hover:bg-surface-muted"
         aria-label={displayName}
       >
         <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-brand text-[11px] font-semibold text-white">
@@ -230,12 +228,6 @@ function WorkspaceControl({ notifications }) {
             {roleLabel}
           </div>
         </div>
-
-        {unread > 0 ? (
-          <div className="hidden rounded-[8px] border border-line bg-surface px-1.5 py-1 text-[10px] font-semibold text-text md:inline-flex">
-            {unread > 99 ? "99+" : unread}
-          </div>
-        ) : null}
 
         <ChevronDown
           className={cx(
@@ -264,7 +256,7 @@ export default function Header({
   return (
     <>
       <header
-        className="sticky top-0 z-[60] border-b border-line bg-[rgba(255,255,255,0.86)] backdrop-blur-[10px]"
+        className="sticky top-0 z-[60] border-b border-line bg-[rgba(255,255,255,0.94)]"
         style={{ height: SHELL_TOPBAR_HEIGHT }}
       >
         <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-4 px-4 md:px-5 xl:px-6">
@@ -272,26 +264,22 @@ export default function Header({
             <button
               type="button"
               onClick={onMenuClick}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] border border-line bg-surface text-text-muted transition hover:border-line-strong hover:bg-surface-muted hover:text-text md:hidden"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] border border-line bg-surface text-text-muted transition hover:border-line-strong hover:bg-surface-muted hover:text-text md:hidden"
               aria-label="Open navigation"
             >
               <Menu className="h-[15px] w-[15px]" strokeWidth={2} />
             </button>
 
             <div className="min-w-0">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-                {shellSection?.kicker || "Workspace"}
+              <div className="truncate text-[15px] font-semibold tracking-[-0.03em] text-text">
+                {shellSection?.label || "AI HQ"}
               </div>
-              <div className="mt-1 flex min-w-0 items-center gap-2">
-                <div className="truncate text-[15px] font-semibold tracking-[-0.03em] text-text">
-                  {shellSection?.label || "AI HQ"}
+
+              {subtitle ? (
+                <div className="mt-0.5 hidden truncate text-[12px] text-text-subtle md:block">
+                  {subtitle}
                 </div>
-                {subtitle ? (
-                  <div className="hidden truncate text-[12px] text-text-muted md:block">
-                    {subtitle}
-                  </div>
-                ) : null}
-              </div>
+              ) : null}
             </div>
           </div>
 

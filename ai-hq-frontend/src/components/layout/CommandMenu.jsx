@@ -5,33 +5,48 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ALL_SECTIONS } from "./shellNavigation.js";
 
-function flattenItems() {
-  const items = [];
+function buildCommandGroups() {
+  return ALL_SECTIONS.map((section) => {
+    const seen = new Set();
+    const items = [];
 
-  for (const section of ALL_SECTIONS) {
+    const primaryValue = `${section.label} ${section.kicker || ""} ${section.description || ""}`
+      .trim()
+      .toLowerCase();
+
     items.push({
       id: section.id,
       label: section.label,
       description: section.description,
-      value: `${section.label} ${section.kicker} ${section.description}`,
+      value: primaryValue,
       to: section.to,
     });
 
+    seen.add(section.to);
+
     for (const group of section.contextGroups || []) {
       for (const item of group.items || []) {
-        if (!item.to) continue;
+        if (!item.to || seen.has(item.to)) continue;
+
+        seen.add(item.to);
         items.push({
           id: `${section.id}-${item.to}`,
           label: item.label,
           description: group.title,
-          value: `${item.label} ${group.title} ${section.label}`,
+          value: `${item.label} ${group.title} ${section.label}`
+            .trim()
+            .toLowerCase(),
           to: item.to,
         });
       }
     }
-  }
 
-  return items;
+    return {
+      id: section.id,
+      label: section.label,
+      items,
+    };
+  }).filter((group) => group.items.length > 0);
 }
 
 export default function CommandMenu() {
@@ -39,7 +54,7 @@ export default function CommandMenu() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const items = useMemo(() => flattenItems(), []);
+  const groups = useMemo(() => buildCommandGroups(), []);
 
   useEffect(() => {
     function onKeyDown(event) {
@@ -62,25 +77,26 @@ export default function CommandMenu() {
     <>
       <Button
         size="large"
-        className="hidden !h-11 !rounded-[14px] !border-line !bg-surface !px-4 !text-text-muted !shadow-none hover:!border-line-strong hover:!bg-surface-muted hover:!text-text md:!inline-flex"
+        className="hidden !h-10 !rounded-[13px] !border-line !bg-surface !px-4 !text-text-muted !shadow-none hover:!border-line-strong hover:!bg-surface-muted hover:!text-text md:!inline-flex"
         icon={<Search className="h-4 w-4" />}
         onClick={() => setOpen(true)}
       >
-        Search or jump
-        <span className="ml-3 rounded-[10px] border border-line bg-canvas px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+        Search
+        <span className="ml-3 rounded-[9px] border border-line bg-canvas px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
           Ctrl K
         </span>
       </Button>
 
       <Command.Dialog open={open} onOpenChange={setOpen} label="Command menu">
-        <div className="fixed inset-0 z-[140] bg-overlay/60 backdrop-blur-[8px]" />
-        <div className="fixed left-1/2 top-[16vh] z-[150] w-[min(680px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-[28px] border border-line bg-surface shadow-panel-strong">
+        <div className="fixed inset-0 z-[140] bg-[rgba(15,23,42,0.18)] backdrop-blur-[6px]" />
+
+        <div className="fixed left-1/2 top-[14vh] z-[150] w-[min(640px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-[26px] border border-line bg-surface shadow-[0_36px_90px_-40px_rgba(15,23,42,0.34)]">
           <Command className="w-full">
             <div className="border-b border-line-soft px-4 py-4">
-              <div className="flex items-center gap-3 rounded-[16px] border border-line bg-surface-muted px-4">
+              <div className="flex items-center gap-3 rounded-[16px] bg-surface-muted px-4">
                 <Search className="h-4 w-4 text-text-subtle" />
                 <Command.Input
-                  placeholder="Search pages, tools, and workspaces"
+                  placeholder="Search pages and tools"
                   className="h-12 w-full border-0 bg-transparent p-0 text-[15px] text-text outline-none placeholder:text-text-subtle"
                 />
               </div>
@@ -91,37 +107,40 @@ export default function CommandMenu() {
                 No matching destinations found.
               </Command.Empty>
 
-              {ALL_SECTIONS.map((section) => (
+              {groups.map((group) => (
                 <Command.Group
-                  key={section.id}
-                  heading={section.label}
-                  className="mb-2 overflow-hidden rounded-[20px] border border-transparent p-1 text-text"
+                  key={group.id}
+                  heading={group.label}
+                  className="mb-3 overflow-hidden rounded-[18px] p-1 text-text"
                 >
-                  {items
-                    .filter(
-                      (item) =>
-                        item.id === section.id ||
-                        (section.contextGroups || []).some((group) =>
-                          (group.items || []).some((groupItem) => groupItem.to === item.to)
-                        )
-                    )
-                    .map((item) => (
-                      <Command.Item
-                        key={item.id}
-                        value={item.value}
-                        onSelect={() => {
-                          navigate(item.to);
-                          setOpen(false);
-                        }}
-                        className="group flex cursor-pointer items-center justify-between rounded-[16px] px-3 py-3 text-sm outline-none data-[selected=true]:bg-brand-soft"
-                      >
-                        <div>
-                          <div className="font-semibold text-text">{item.label}</div>
-                          <div className="text-xs text-text-muted">{item.description}</div>
+                  <div className="px-3 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+                    {group.label}
+                  </div>
+
+                  {group.items.map((item) => (
+                    <Command.Item
+                      key={item.id}
+                      value={item.value}
+                      onSelect={() => {
+                        navigate(item.to);
+                        setOpen(false);
+                      }}
+                      className="group flex cursor-pointer items-center justify-between rounded-[14px] px-3 py-3 text-sm outline-none data-[selected=true]:bg-surface-muted"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold text-text">
+                          {item.label}
                         </div>
-                        <ArrowRight className="h-4 w-4 text-text-subtle transition group-data-[selected=true]:text-brand" />
-                      </Command.Item>
-                    ))}
+                        {item.description ? (
+                          <div className="truncate text-xs text-text-muted">
+                            {item.description}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <ArrowRight className="h-4 w-4 shrink-0 text-text-subtle transition group-data-[selected=true]:translate-x-[1px] group-data-[selected=true]:text-brand" />
+                    </Command.Item>
+                  ))}
                 </Command.Group>
               ))}
             </Command.List>

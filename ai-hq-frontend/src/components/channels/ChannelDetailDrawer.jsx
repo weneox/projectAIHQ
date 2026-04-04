@@ -1,178 +1,80 @@
-import { ArrowUpRight, X } from "lucide-react";
 import { cx } from "../../lib/cx.js";
-import FocusDialog from "../ui/FocusDialog.jsx";
 import ChannelIcon from "./ChannelIcon.jsx";
 import {
   ChannelActionButton,
-  ChannelCapabilityLine,
+  ChannelInspectButton,
   ChannelStatus,
 } from "./ChannelPrimitives.jsx";
 
-function DrawerSection({ label, className, children }) {
-  return (
-    <section className={cx("border-t border-line-soft px-5 py-5", className)}>
-      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-        {label}
-      </div>
-      <div className="mt-3">{children}</div>
-    </section>
-  );
-}
-
-function QuickActionRow({ action, onNavigate, channelName, bordered = false }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onNavigate?.(action.path)}
-      className={cx(
-        "flex w-full items-start justify-between gap-4 bg-surface px-4 py-3 text-left transition duration-fast ease-premium hover:bg-surface-subtle",
-        bordered && "border-t border-line-soft"
-      )}
-      aria-label={`${action.label} for ${channelName}`}
-    >
-      <span className="min-w-0 flex-1">
-        <span className="block text-[13px] font-semibold tracking-[-0.02em] text-text">
-          {action.label}
-        </span>
-        {action.hint ? (
-          <span className="mt-1 block text-[12px] leading-5 text-text-muted">
-            {action.hint}
-          </span>
-        ) : null}
-      </span>
-
-      <ArrowUpRight className="mt-0.5 h-4 w-4 shrink-0 text-text-subtle" />
-    </button>
-  );
-}
-
-function MetaGrid({ items = [] }) {
-  if (!items.length) return null;
-
-  return (
-    <div className="grid gap-px overflow-hidden border border-line-soft bg-line-soft sm:grid-cols-2">
-      {items.map((item) => (
-        <div key={item.label} className="bg-surface px-4 py-3">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-            {item.label}
-          </div>
-          <div className="mt-1 text-[13px] font-semibold tracking-[-0.02em] text-text">
-            {item.value}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export default function ChannelDetailDrawer({
+export default function ChannelOverviewCard({
   channel,
-  open = false,
-  onClose,
-  onNavigate,
+  selected = false,
+  onInspect,
+  onRunPrimaryAction,
 }) {
-  if (!channel) return null;
-
-  const secondaryActions = (channel.quickActions || [])
-    .filter((action) => action.path !== channel.primaryAction.path)
-    .slice(0, 3);
-
   return (
-    <FocusDialog
-      open={open}
-      onClose={onClose}
-      title={channel.name}
-      backdropClassName="bg-overlay/72"
-      panelClassName="ml-auto h-full w-full max-w-[520px] px-0 py-0"
+    <article
+      className={cx(
+        "group relative overflow-hidden rounded-[28px] border bg-[linear-gradient(180deg,#ffffff_0%,#fbfcff_100%)] px-5 py-5 transition duration-fast ease-premium",
+        selected
+          ? "border-brand/30 shadow-[0_24px_54px_-36px_rgba(37,99,235,0.24)]"
+          : "border-line shadow-[0_18px_42px_-36px_rgba(15,23,42,0.18)] hover:-translate-y-[1px] hover:border-line-strong hover:shadow-[0_26px_52px_-34px_rgba(15,23,42,0.22)]"
+      )}
     >
-      <div className="flex h-full flex-col border-l border-line bg-surface">
-        <div className="border-b border-line-soft px-5 py-5">
-          <div className="flex items-start gap-4">
-            <ChannelIcon channel={channel} size="lg" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(37,99,235,0.24),transparent)] opacity-0 transition duration-fast ease-premium group-hover:opacity-100" />
 
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-                    Channel panel
-                  </div>
-
-                  <h2 className="mt-2 text-[1.8rem] font-semibold leading-[0.95] tracking-[-0.06em] text-text">
-                    {channel.name}
-                  </h2>
-                </div>
-
-                <ChannelStatus status={channel.status} className="shrink-0 pt-1" />
-              </div>
-
-              <div className="mt-3">
-                <ChannelCapabilityLine capabilities={channel.capabilities} />
-              </div>
-
-              <p className="mt-4 text-[13px] leading-6 text-text-muted">
-                {channel.summary}
-              </p>
+      <div className="flex min-h-[236px] flex-col">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="shrink-0">
+              <ChannelIcon channel={channel} size="md" />
             </div>
 
-            <button
-              type="button"
-              onClick={() => onClose?.()}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center border border-line-soft bg-surface text-text-muted transition duration-fast ease-premium hover:border-line hover:bg-surface-subtle hover:text-text"
-              aria-label="Close channel details"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="min-w-0">
+              <div className="truncate text-[18px] font-semibold tracking-[-0.055em] text-text">
+                {channel.name}
+              </div>
+
+              <div className="mt-2 truncate text-[11px] font-semibold uppercase tracking-[0.13em] text-text-subtle">
+                {channel.eyebrow}
+              </div>
+            </div>
+          </div>
+
+          <div className="shrink-0 pt-1">
+            <ChannelStatus status={channel.status} />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <DrawerSection label="Primary route" className="border-t-0">
+        <p
+          className="mt-5 text-[14px] leading-8 text-text-muted"
+          style={{
+            minHeight: "92px",
+            display: "-webkit-box",
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {channel.summary}
+        </p>
+
+        <div className="mt-auto border-t border-line-soft pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <ChannelInspectButton
+              onClick={() => onInspect?.(channel.id)}
+              aria-label={`Details for ${channel.name}`}
+            />
+
             <ChannelActionButton
-              fullWidth
-              onClick={() => onNavigate?.(channel.primaryAction.path)}
+              onClick={() => onRunPrimaryAction?.(channel.primaryAction.path)}
               ariaLabel={`${channel.primaryAction.label} ${channel.name}`}
             >
               {channel.primaryAction.label}
             </ChannelActionButton>
-          </DrawerSection>
-
-          <DrawerSection label="Position">
-            <div className="text-[14px] leading-7 text-text">{channel.detailSummary}</div>
-            {channel.detailNote ? (
-              <div className="mt-3 text-[12px] leading-6 text-text-subtle">
-                {channel.detailNote}
-              </div>
-            ) : null}
-          </DrawerSection>
-
-          {secondaryActions.length ? (
-            <DrawerSection label="Quick controls">
-              <div className="overflow-hidden border border-line-soft bg-line-soft">
-                {secondaryActions.map((action, index) => (
-                  <QuickActionRow
-                    key={`${channel.id}-${action.label}`}
-                    action={action}
-                    onNavigate={onNavigate}
-                    channelName={channel.name}
-                    bordered={index > 0}
-                  />
-                ))}
-              </div>
-            </DrawerSection>
-          ) : null}
-
-          {channel.advanced?.items?.length ? (
-            <DrawerSection label="Operational data">
-              <MetaGrid items={channel.advanced.items} />
-              {channel.advanced?.note ? (
-                <div className="mt-3 text-[12px] leading-6 text-text-subtle">
-                  {channel.advanced.note}
-                </div>
-              ) : null}
-            </DrawerSection>
-          ) : null}
+          </div>
         </div>
       </div>
-    </FocusDialog>
+    </article>
   );
 }

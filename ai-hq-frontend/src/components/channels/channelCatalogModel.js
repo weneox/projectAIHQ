@@ -1,326 +1,187 @@
-import { PhoneCall } from "lucide-react";
-import webIcon from "../../assets/channels/web.svg";
 import gmailIcon from "../../assets/channels/gmail.svg";
-import googleDriveIcon from "../../assets/channels/google-drive.svg";
 import instagramIcon from "../../assets/channels/instagram.svg";
-import messengerIcon from "../../assets/channels/messenger.svg";
 import telegramIcon from "../../assets/channels/telegram.svg";
-import tiktokIcon from "../../assets/channels/tiktok.svg";
 import whatsappIcon from "../../assets/channels/whatsapp.svg";
-import youtubeIcon from "../../assets/channels/youtube.svg";
 
 export const CHANNEL_STATUS_META = {
-  connected: {
-    label: "Live",
-    tone: "success",
-  },
-  limited: {
-    label: "Limited",
+  available: {
+    label: "Ready",
     tone: "info",
   },
-  "needs-attention": {
-    label: "Setup",
-    tone: "warning",
-  },
-  "not-connected": {
-    label: "Planned",
-    tone: "neutral",
-  },
-  context: {
-    label: "Context",
-    tone: "neutral",
+  connected: {
+    label: "Connected",
+    tone: "success",
   },
 };
 
 export const CHANNEL_FILTERS = [
   { id: "all", label: "All" },
-  { id: "connected", label: "Live" },
-  { id: "limited", label: "Limited" },
-  { id: "attention", label: "Setup" },
-  { id: "context", label: "Context" },
+  { id: "social", label: "Social" },
+  { id: "business", label: "Business" },
 ];
 
+function connector({
+  id,
+  name,
+  group,
+  icon,
+  iconAlt,
+  eyebrow,
+  summary,
+  capabilities,
+  aliases,
+  detailSummary,
+  detailNote,
+  highlights,
+  path,
+  status = "available",
+}) {
+  return {
+    id,
+    name,
+    group,
+    status,
+    icon,
+    iconAlt,
+    eyebrow,
+    summary,
+    capabilities,
+    aliases,
+    detailSummary,
+    detailNote,
+    highlights,
+    primaryAction: {
+      label: "Connect",
+      path,
+    },
+  };
+}
+
 export const CHANNELS = [
-  {
+  connector({
     id: "instagram",
     name: "Instagram",
-    status: "connected",
+    group: "social",
+    status: "available",
     icon: instagramIcon,
     iconAlt: "Instagram",
-    aliases: ["instagram inbox", "instagram comments", "moderation", "dm"],
-    summary: "Live messages and comments in one lane.",
-    capabilities: ["Inbox", "Comments", "Moderation"],
-    primaryAction: {
-      label: "Open",
-      path: "/inbox",
-    },
-    quickActions: [
-      {
-        label: "Inbox",
-        hint: "Live DM queue.",
-        path: "/inbox",
-      },
-      {
-        label: "Comments",
-        hint: "Moderation queue.",
-        path: "/comments",
-      },
-      {
-        label: "Truth",
-        hint: "Approved memory.",
-        path: "/truth",
-      },
+    eyebrow: "DMs · Comments · Moderation",
+    summary:
+      "Bring Instagram conversations and public interactions into one refined operating surface.",
+    capabilities: ["Direct messages", "Comments", "Moderation"],
+    aliases: [
+      "instagram",
+      "dm",
+      "comments",
+      "meta",
+      "social",
+      "inbox",
+      "moderation",
     ],
-    detailSummary: "Primary live social lane with inbox and moderation.",
-    detailNote: "Use Inbox for conversations and Comments for moderation.",
-    advanced: {
-      note: "Covers inbound messages, AI review, moderation, and retry visibility.",
-      items: [
-        { label: "Coverage", value: "Messages + comments" },
-        { label: "State", value: "Live now" },
-      ],
-    },
-  },
-  {
-    id: "voice",
-    name: "Voice",
-    status: "connected",
-    iconComponent: PhoneCall,
-    iconAlt: "Voice",
-    aliases: ["twilio", "voice receptionist", "calls", "handoff", "transcripts"],
-    summary: "Receptionist, handoff, and transcripts are live.",
-    capabilities: ["Receptionist", "Handoff", "Transcripts"],
-    primaryAction: {
-      label: "Open",
-      path: "/voice",
-    },
-    quickActions: [
-      {
-        label: "Voice",
-        hint: "Live call desk.",
-        path: "/voice",
-      },
-      {
-        label: "Workspace",
-        hint: "Operator posture.",
-        path: "/workspace?focus=capabilities",
-      },
-      {
-        label: "Truth",
-        hint: "Approved memory.",
-        path: "/truth",
-      },
+    detailSummary:
+      "Instagram is the strongest connector for brands that handle both private conversation flow and public comment activity every day.",
+    detailNote:
+      "Connect it when your team wants faster response handling without splitting inbox work and moderation across separate tools.",
+    highlights: [
+      "Unify DMs and comment activity in one workspace.",
+      "Move faster on moderation without losing conversation context.",
+      "Keep operator review, handoff, and response flow cleaner from day one.",
     ],
-    detailSummary: "Live voice desk for receptionist, transfer, and transcripts.",
-    detailNote: "Keep call control and handoff inside the same surface.",
-    advanced: {
-      note: "Covers inbound calls, runtime resolution, transcripts, and handoff.",
-      items: [
-        { label: "Coverage", value: "Twilio receptionist" },
-        { label: "State", value: "Live now" },
-      ],
-    },
-  },
-  {
-    id: "messenger",
-    name: "Messenger",
-    status: "limited",
-    icon: messengerIcon,
-    iconAlt: "Messenger",
-    aliases: ["facebook messenger", "meta inbox"],
-    summary: "Meta messaging exists, but stays secondary.",
-    capabilities: ["Shared inbox"],
-    primaryAction: {
-      label: "Review",
-      path: "/inbox",
-    },
-    quickActions: [
-      {
-        label: "Inbox",
-        hint: "Shared Meta queue.",
-        path: "/inbox",
-      },
-      {
-        label: "Workspace",
-        hint: "Operator overview.",
-        path: "/workspace",
-      },
-      {
-        label: "Setup",
-        hint: "Supporting config.",
-        path: "/home?assistant=setup",
-      },
-    ],
-    detailSummary: "Shared Meta routing without a broad omnichannel promise.",
-    detailNote: "Keep Messenger routed through the core inbox lane.",
-    advanced: {
-      note: "Supported through the shared Meta inbox, not as a headline lane.",
-      items: [
-        { label: "Coverage", value: "Shared Meta inbox" },
-        { label: "State", value: "Limited" },
-      ],
-    },
-  },
-  {
+    path: "/home?assistant=setup&channel=instagram",
+  }),
+
+  connector({
     id: "whatsapp",
     name: "WhatsApp",
-    status: "limited",
+    group: "social",
+    status: "available",
     icon: whatsappIcon,
     iconAlt: "WhatsApp",
-    aliases: ["meta adjacent", "whatsapp support"],
-    summary: "Partial support exists, not a full lane.",
-    capabilities: ["Partial support"],
-    primaryAction: {
-      label: "Review",
-      path: "/workspace",
-    },
-    quickActions: [
-      {
-        label: "Workspace",
-        hint: "Operator overview.",
-        path: "/workspace",
-      },
-      {
-        label: "Inbox",
-        hint: "Meta queue path.",
-        path: "/inbox",
-      },
-      {
-        label: "Setup",
-        hint: "Supporting path.",
-        path: "/home?assistant=setup",
-      },
+    eyebrow: "Support chat · Direct customer flow",
+    summary:
+      "Add WhatsApp as a direct customer line for support, follow-up, and everyday messaging.",
+    capabilities: ["Customer chat", "Support replies", "Follow-up flow"],
+    aliases: [
+      "whatsapp",
+      "wa",
+      "chat",
+      "support",
+      "messages",
+      "customer service",
     ],
-    detailSummary: "Visible as support coverage, not a complete launch surface.",
-    detailNote: "Keep it secondary until the lane is complete.",
-    advanced: {
-      note: "Some support exists, but this is not a complete customer-ready loop.",
-      items: [
-        { label: "Coverage", value: "Partial support" },
-        { label: "State", value: "Limited" },
-      ],
-    },
-  },
-  {
-    id: "web-chat",
-    name: "Web Chat",
-    status: "needs-attention",
-    icon: webIcon,
-    iconAlt: "Web Chat",
-    aliases: ["website chatbot", "site chat", "web chat"],
-    summary: "The site loop still needs product work.",
-    capabilities: ["Website install", "Setup"],
-    primaryAction: {
-      label: "Setup",
-      path: "/home?assistant=setup",
-    },
-    quickActions: [
-      {
-        label: "Setup",
-        hint: "Remaining setup work.",
-        path: "/home?assistant=setup",
-      },
-      {
-        label: "Workspace",
-        hint: "Operator context.",
-        path: "/workspace",
-      },
-      {
-        label: "Truth",
-        hint: "Approved memory.",
-        path: "/truth",
-      },
+    detailSummary:
+      "WhatsApp works best when customers expect quick, direct replies and your business depends on ongoing message-based support.",
+    detailNote:
+      "It is the right connector for teams that want a more reliable customer chat flow than scattered phone-based handling.",
+    highlights: [
+      "Bring direct customer conversations into the main operating workspace.",
+      "Reduce reply chaos across personal devices and separate accounts.",
+      "Create a cleaner support handoff path as message volume grows.",
     ],
-    detailSummary: "Website chat remains a setup track, not a live promise.",
-    detailNote: "Keep it in setup until the install loop is complete.",
-    advanced: {
-      note: "Infrastructure exists in parts, but the full installable loop is not ready.",
-      items: [
-        { label: "Coverage", value: "Website chat" },
-        { label: "State", value: "Needs work" },
-      ],
-    },
-  },
-  {
-    id: "business-context",
-    name: "Business Context",
-    status: "context",
-    iconStack: [
-      { icon: gmailIcon, iconAlt: "Gmail" },
-      { icon: googleDriveIcon, iconAlt: "Google Drive" },
+    path: "/home?assistant=setup&channel=whatsapp",
+  }),
+
+  connector({
+    id: "telegram",
+    name: "Telegram",
+    group: "social",
+    status: "available",
+    icon: telegramIcon,
+    iconAlt: "Telegram",
+    eyebrow: "Community touchpoint · Fast messaging",
+    summary:
+      "Use Telegram for lightweight conversation flow, updates, and community-facing messaging.",
+    capabilities: ["Direct chat", "Community touchpoint", "Fast updates"],
+    aliases: [
+      "telegram",
+      "community",
+      "channel",
+      "support",
+      "chat",
+      "messages",
     ],
-    aliases: ["gmail", "google drive", "drive", "email", "documents", "memory"],
-    summary: "Approved context feeds the live lanes behind the scenes.",
-    capabilities: ["Gmail", "Drive"],
-    primaryAction: {
-      label: "Setup",
-      path: "/home?assistant=setup",
-    },
-    quickActions: [
-      {
-        label: "Setup",
-        hint: "Bring in context.",
-        path: "/home?assistant=setup",
-      },
-      {
-        label: "Truth",
-        hint: "Approved memory.",
-        path: "/truth",
-      },
-      {
-        label: "Workspace",
-        hint: "Operator overview.",
-        path: "/workspace",
-      },
+    detailSummary:
+      "Telegram is a strong fit when your audience already lives in fast, community-style messaging rather than slower traditional support channels.",
+    detailNote:
+      "Connect it when your brand runs on speed, repeat interaction, or audience groups that expect a more informal message rhythm.",
+    highlights: [
+      "Open a cleaner Telegram path directly from the connector catalog.",
+      "Support audience messaging without turning it into tool sprawl.",
+      "Keep Telegram inside the same operational layer as your other channels.",
     ],
-    detailSummary: "Context sources strengthen setup and truth, not customer routing.",
-    detailNote: "Use them to improve approved memory and operator context.",
-    advanced: {
-      note: "Email and documents act as source material rather than live channels.",
-      items: [
-        { label: "Coverage", value: "Gmail + Drive" },
-        { label: "State", value: "Context only" },
-      ],
-    },
-  },
-  {
-    id: "future-channels",
-    name: "Future Channels",
-    status: "not-connected",
-    iconStack: [
-      { icon: telegramIcon, iconAlt: "Telegram" },
-      { icon: tiktokIcon, iconAlt: "TikTok" },
-      { icon: youtubeIcon, iconAlt: "YouTube" },
+    path: "/home?assistant=setup&channel=telegram",
+  }),
+
+  connector({
+    id: "gmail",
+    name: "Gmail",
+    group: "business",
+    status: "available",
+    icon: gmailIcon,
+    iconAlt: "Gmail",
+    eyebrow: "Email intake · Follow-up · Business requests",
+    summary:
+      "Connect Gmail to pull email-based customer work into the same system as your live channels.",
+    capabilities: ["Business email", "Customer requests", "Email context"],
+    aliases: [
+      "gmail",
+      "email",
+      "mail",
+      "google mail",
+      "business inbox",
+      "support email",
     ],
-    aliases: ["telegram", "tiktok", "youtube", "planned", "future"],
-    summary: "Planned lanes stay visible without reading as live.",
-    capabilities: ["Telegram", "TikTok", "YouTube"],
-    primaryAction: {
-      label: "Setup",
-      path: "/home?assistant=setup",
-    },
-    quickActions: [
-      {
-        label: "Setup",
-        hint: "Future rollout work.",
-        path: "/home?assistant=setup",
-      },
-      {
-        label: "Truth",
-        hint: "Approved rollout context.",
-        path: "/truth",
-      },
+    detailSummary:
+      "Gmail is the right connector when customer communication, approvals, requests, or follow-ups still arrive through email.",
+    detailNote:
+      "Use it to stop treating email like a disconnected world and bring more of your business flow into one place.",
+    highlights: [
+      "Bring business email into the same operating surface as chat.",
+      "Reduce context switching between inbox tools and internal follow-up.",
+      "Keep more history, responsibility, and customer continuity in one system.",
     ],
-    detailSummary: "Future surfaces stay grouped as plan, not promise.",
-    detailNote: "Keep them visible for rollout planning only.",
-    advanced: {
-      note: "Telegram, TikTok, and YouTube stay future-facing rather than current lanes.",
-      items: [
-        { label: "Coverage", value: "Telegram, TikTok, YouTube" },
-        { label: "State", value: "Planned" },
-      ],
-    },
-  },
+    path: "/home?assistant=setup&channel=gmail",
+  }),
 ];
 
 function normalizeQuery(value = "") {
@@ -328,18 +189,12 @@ function normalizeQuery(value = "") {
 }
 
 export function getChannelStatusMeta(status) {
-  return CHANNEL_STATUS_META[status] || CHANNEL_STATUS_META.context;
+  return CHANNEL_STATUS_META[status] || CHANNEL_STATUS_META.available;
 }
 
 export function matchesChannelFilter(channel, filterId) {
   if (filterId === "all") return true;
-  if (filterId === "connected") return channel.status === "connected";
-  if (filterId === "limited") return channel.status === "limited";
-  if (filterId === "attention") {
-    return ["needs-attention", "not-connected"].includes(channel.status);
-  }
-  if (filterId === "context") return channel.status === "context";
-  return true;
+  return channel.group === filterId;
 }
 
 export function matchesChannelSearch(channel, query) {
@@ -348,16 +203,14 @@ export function matchesChannelSearch(channel, query) {
 
   const haystack = [
     channel.name,
+    channel.group,
+    channel.eyebrow,
     channel.summary,
     channel.detailSummary,
     channel.detailNote,
-    channel.primaryAction?.label,
     ...(channel.capabilities || []),
     ...(channel.aliases || []),
-    ...((channel.quickActions || []).flatMap((action) => [action.label, action.hint])),
-    channel.advanced?.note,
-    ...((channel.advanced?.items || []).flatMap((item) => [item.label, item.value])),
-    getChannelStatusMeta(channel.status).label,
+    ...(channel.highlights || []),
   ]
     .join(" ")
     .toLowerCase();
@@ -365,15 +218,6 @@ export function matchesChannelSearch(channel, query) {
   return haystack.includes(normalized);
 }
 
-export function countChannels(filterId) {
-  return CHANNELS.filter((channel) => matchesChannelFilter(channel, filterId))
-    .length;
-}
-
 export function findChannelById(channelId) {
   return CHANNELS.find((channel) => channel.id === channelId) || null;
-}
-
-export function pickHeroChannel() {
-  return CHANNELS.find((channel) => channel.id === "instagram") || CHANNELS[0];
 }

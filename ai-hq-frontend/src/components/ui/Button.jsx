@@ -14,14 +14,14 @@ function Spinner({ className }) {
         r="9"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2.25"
+        strokeWidth="2.2"
         className="opacity-20"
       />
       <path
         d="M21 12a9 9 0 0 0-9-9"
         fill="none"
         stroke="currentColor"
-        strokeWidth="2.25"
+        strokeWidth="2.2"
         strokeLinecap="round"
       />
     </svg>
@@ -29,33 +29,63 @@ function Spinner({ className }) {
 }
 
 const SIZE = {
-  sm: "h-9 rounded-[10px] px-3.5 text-[12px]",
-  md: "h-10 rounded-[10px] px-4 text-[13px]",
-  lg: "h-11 rounded-[10px] px-4.5 text-[14px]",
-  pill: "h-11 rounded-[10px] px-5 text-[14px]",
-  hero: "h-11 rounded-[10px] px-5 text-[14px]",
-  icon: "h-10 w-10 rounded-[10px] px-0",
+  sm: "h-9 rounded-[12px] px-3.5 text-[12px]",
+  md: "h-10 rounded-[13px] px-4 text-[13px]",
+  lg: "h-11 rounded-[14px] px-4.5 text-[14px]",
+  pill: "h-11 rounded-[14px] px-5 text-[14px]",
+  hero: "h-12 rounded-[15px] px-5 text-[14px]",
+  icon: "h-10 w-10 rounded-[13px] px-0",
 };
 
 function variantClass(variant = "primary") {
   switch (variant) {
     case "brand":
     case "primary":
-      return "border-brand bg-brand text-white hover:border-brand-strong hover:bg-brand-strong";
+      return [
+        "border-transparent text-white",
+        "bg-[linear-gradient(180deg,#2f5ccf_0%,#274cae_100%)]",
+        "shadow-[0_14px_28px_-18px_rgba(37,99,235,0.46)]",
+        "hover:-translate-y-[1px] hover:shadow-[0_18px_34px_-18px_rgba(37,99,235,0.56)]",
+        "active:translate-y-0 active:shadow-[0_10px_22px_-16px_rgba(37,99,235,0.42)]",
+      ].join(" ");
     case "surface":
     case "secondary":
-      return "border-line bg-surface text-text hover:border-line-strong hover:bg-surface-muted";
+      return [
+        "border-line bg-surface text-text",
+        "hover:border-line-strong hover:bg-surface-muted",
+      ].join(" ");
     case "soft":
-      return "border-[rgba(var(--color-brand),0.18)] bg-[rgba(var(--color-brand),0.08)] text-brand hover:border-[rgba(var(--color-brand),0.26)] hover:bg-[rgba(var(--color-brand),0.12)]";
+      return [
+        "border-[rgba(var(--color-brand),0.16)]",
+        "bg-[rgba(var(--color-brand),0.06)] text-brand",
+        "hover:border-[rgba(var(--color-brand),0.24)]",
+        "hover:bg-[rgba(var(--color-brand),0.10)]",
+      ].join(" ");
     case "quiet":
     case "ghost":
-      return "border-transparent bg-transparent text-text-muted hover:bg-surface-muted hover:text-text";
+      return [
+        "border-transparent bg-transparent text-text-muted shadow-none",
+        "hover:bg-surface-muted hover:text-text",
+      ].join(" ");
     case "outline":
-      return "border-line bg-transparent text-text hover:border-line-strong hover:bg-surface";
+      return [
+        "border-line bg-transparent text-text shadow-none",
+        "hover:border-line-strong hover:bg-surface",
+      ].join(" ");
     case "destructive":
-      return "border-danger bg-danger text-white hover:border-[rgba(var(--color-danger),0.88)] hover:bg-[rgba(var(--color-danger),0.92)]";
+      return [
+        "border-transparent text-white",
+        "bg-[linear-gradient(180deg,rgba(var(--color-danger),1)_0%,rgba(var(--color-danger),0.9)_100%)]",
+        "shadow-[0_14px_28px_-18px_rgba(220,38,38,0.42)]",
+        "hover:-translate-y-[1px] hover:shadow-[0_18px_34px_-18px_rgba(220,38,38,0.5)]",
+      ].join(" ");
     default:
-      return "border-brand bg-brand text-white hover:border-brand-strong hover:bg-brand-strong";
+      return [
+        "border-transparent text-white",
+        "bg-[linear-gradient(180deg,#2f5ccf_0%,#274cae_100%)]",
+        "shadow-[0_14px_28px_-18px_rgba(37,99,235,0.46)]",
+        "hover:-translate-y-[1px] hover:shadow-[0_18px_34px_-18px_rgba(37,99,235,0.56)]",
+      ].join(" ");
   }
 }
 
@@ -86,8 +116,8 @@ const Button = React.forwardRef(function Button(
       aria-busy={isLoading || undefined}
       className={cx(
         "inline-flex items-center justify-center gap-2 whitespace-nowrap border font-semibold tracking-[-0.02em]",
-        "transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-premium",
-        "active:translate-y-px disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60",
+        "transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-200 ease-premium",
+        "disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none",
         "focus-visible:outline-none",
         fullWidth && "w-full",
         SIZE[size] || SIZE.md,
@@ -102,7 +132,9 @@ const Button = React.forwardRef(function Button(
       ) : leftIcon ? (
         <span className="shrink-0">{leftIcon}</span>
       ) : null}
+
       {children ? <span>{children}</span> : null}
+
       {!isLoading && rightIcon ? <span className="shrink-0">{rightIcon}</span> : null}
     </button>
   );
