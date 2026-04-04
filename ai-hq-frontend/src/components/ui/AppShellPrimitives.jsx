@@ -64,7 +64,17 @@ function surfaceToneClass({ tone = "default", subdued = false }) {
 }
 
 export function PageCanvas({ className, children }) {
-  return <div className={cx("mx-auto w-full max-w-shell-content", className)}>{children}</div>;
+  return (
+    <div
+      className={cx(
+        "mx-auto w-full max-w-shell-content",
+        "space-y-6 md:space-y-7",
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
 }
 
 export function PageHeader({
@@ -77,13 +87,15 @@ export function PageHeader({
   return (
     <div
       className={cx(
-        "flex flex-col gap-5 border-b border-line-soft pb-5 md:flex-row md:items-end md:justify-between",
+        "relative overflow-hidden rounded-[28px] border border-line bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] px-5 py-5 shadow-panel md:px-6 md:py-6",
+        "flex flex-col gap-5 md:flex-row md:items-end md:justify-between",
         className
       )}
     >
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(720px_circle_at_0%_0%,rgba(37,99,235,0.07),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.42),transparent_26%)]" />
       <div className="max-w-[820px]">
         {eyebrow ? (
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+          <div className="mb-3 inline-flex items-center rounded-full border border-line bg-surface px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-subtle shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]">
             {eyebrow}
           </div>
         ) : null}
@@ -99,9 +111,7 @@ export function PageHeader({
         ) : null}
       </div>
 
-      {actions ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-3">{actions}</div>
-      ) : null}
+      {actions ? <div className="relative flex shrink-0 flex-wrap items-center gap-3">{actions}</div> : null}
     </div>
   );
 }
@@ -154,15 +164,51 @@ export function Surface({
   return (
     <div
       className={cx(
-        "rounded-panel border",
+        "rounded-panel border bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] shadow-panel",
         surfaceToneClass({ tone, subdued }),
         paddedClass(padded),
         shadow === "sm" && "shadow-panel",
         shadow === "md" && "shadow-panel-strong",
+        shadow === "none" && "shadow-none",
         className
       )}
     >
       {children}
+    </div>
+  );
+}
+
+export function MetricCard({
+  label,
+  value,
+  hint,
+  className,
+  tone = "default",
+}) {
+  const toneClass =
+    tone === "brand"
+      ? "border-brand/15 bg-brand-soft"
+      : tone === "success"
+        ? "border-success/20 bg-success-soft"
+        : tone === "warning"
+          ? "border-warning/20 bg-warning-soft"
+          : "border-line bg-surface";
+
+  return (
+    <div
+      className={cx(
+        "rounded-[24px] border px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]",
+        toneClass,
+        className
+      )}
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
+        {label}
+      </div>
+      <div className="mt-2 text-[1.7rem] font-semibold tracking-[-0.04em] text-text">
+        {value}
+      </div>
+      {hint ? <div className="mt-1 text-sm leading-6 text-text-muted">{hint}</div> : null}
     </div>
   );
 }
@@ -329,6 +375,33 @@ export function EmptyState({
 
         {action ? <div className="pt-1">{action}</div> : null}
       </div>
+    </Surface>
+  );
+}
+
+export function AuthFrame({ className, children, aside }) {
+  return (
+    <div className={cx("min-h-screen bg-canvas px-4 py-6 md:px-6 md:py-8", className)}>
+      <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(860px_circle_at_0%_0%,rgba(37,99,235,0.08),transparent_30%),radial-gradient(640px_circle_at_100%_0%,rgba(148,163,184,0.12),transparent_24%),linear-gradient(180deg,rgba(255,255,255,0.56),rgba(244,247,251,0.98))]" />
+      <div className="mx-auto grid min-h-[calc(100vh-3rem)] max-w-[1240px] gap-6 xl:grid-cols-[minmax(0,1.05fr)_380px]">
+        <div className="flex items-center">{children}</div>
+        {aside ? <div className="hidden xl:flex xl:items-stretch">{aside}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+export function AuthPanel({ className, children, padded = "xl" }) {
+  return (
+    <Surface
+      padded={padded}
+      shadow="md"
+      className={cx(
+        "w-full rounded-[32px] border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,250,252,0.95))]",
+        className
+      )}
+    >
+      {children}
     </Surface>
   );
 }

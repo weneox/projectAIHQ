@@ -4,10 +4,10 @@ import { useNavigate } from "react-router-dom";
 import Button from "../components/ui/Button.jsx";
 import Input from "../components/ui/Input.jsx";
 import {
+  AuthFrame,
+  AuthPanel,
   LoadingSurface,
-  PageCanvas,
-  PageHeader,
-  Surface,
+  MetricCard,
 } from "../components/ui/AppShellPrimitives.jsx";
 import { saveBusinessProfile } from "../api/setup.js";
 import {
@@ -132,28 +132,36 @@ export default function Welcome() {
 
   if (loading) {
     return (
-      <PageCanvas className="px-4 py-5 md:px-6 md:py-7 xl:px-0">
+      <div className="mx-auto max-w-[720px] px-4 py-5 md:px-6 md:py-7 xl:px-0">
         <LoadingSurface
           title="Preparing welcome"
           description="Loading the workspace identity step."
         />
-      </PageCanvas>
+      </div>
     );
   }
 
   return (
-    <PageCanvas className="space-y-6 px-4 py-5 md:px-6 md:py-7 xl:px-0">
-      <PageHeader
-        eyebrow="Welcome"
-        title="A quick identity pass."
-        description="Just the essentials, then the real product."
-      />
+    <AuthFrame
+      aside={
+        <div className="grid w-full gap-3 self-center">
+          <MetricCard label="Step" value="1" tone="brand" hint="Identity first." />
+          <MetricCard label="Outcome" value="Home" hint="Then straight into the product." />
+        </div>
+      }
+    >
+      <AuthPanel className="max-w-[760px]">
+        <div className="inline-flex items-center rounded-full border border-line bg-surface px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
+          Welcome
+        </div>
+        <h1 className="mt-4 text-[2.35rem] font-semibold tracking-[-0.05em] text-text">
+          A quick identity pass.
+        </h1>
+        <p className="mt-2 text-[15px] leading-7 text-text-muted">
+          Just the essentials, then the real product.
+        </p>
 
-      <div className="mx-auto max-w-[760px]">
-        <Surface
-          shadow="sm"
-          className="rounded-[30px] bg-[linear-gradient(180deg,rgba(var(--color-surface),0.98),rgba(var(--color-surface-muted),0.96))] p-6 sm:p-8"
-        >
+        <div className="mt-8">
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="grid gap-4 md:grid-cols-2">
               <WelcomeField
@@ -197,8 +205,8 @@ export default function Welcome() {
               </Button>
             </div>
           </form>
-        </Surface>
-      </div>
-    </PageCanvas>
+        </div>
+      </AuthPanel>
+    </AuthFrame>
   );
 }

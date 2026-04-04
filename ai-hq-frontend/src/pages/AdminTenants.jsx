@@ -2,23 +2,26 @@ import Card from "../components/ui/Card.jsx";
 import Button from "../components/ui/Button.jsx";
 import Input from "../components/ui/Input.jsx";
 import SurfaceBanner from "../components/feedback/SurfaceBanner.jsx";
+import {
+  PageCanvas,
+  PageHeader,
+} from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
 import { useAdminTenantsSurface } from "./hooks/useAdminTenantsSurface.js";
 
 function statusTone(status) {
   const normalized = String(status || "").toLowerCase();
-  if (normalized === "active") return "border-emerald-400/20 bg-emerald-500/10 text-emerald-200";
-  if (normalized === "disabled") return "border-rose-400/20 bg-rose-500/10 text-rose-200";
-  if (normalized === "draft") return "border-amber-400/20 bg-amber-500/10 text-amber-200";
-  return "border-white/10 bg-white/[0.04] text-slate-200";
+  if (normalized === "active") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (normalized === "disabled") return "border-rose-200 bg-rose-50 text-rose-700";
+  if (normalized === "draft") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-line bg-surface-muted text-text-muted";
 }
 
 function planTone(plan) {
   const normalized = String(plan || "").toLowerCase();
-  if (normalized === "enterprise") return "border-violet-400/20 bg-violet-500/10 text-violet-200";
-  if (normalized === "growth") return "border-sky-400/20 bg-sky-500/10 text-sky-200";
-  if (normalized === "starter") return "border-white/10 bg-white/[0.04] text-slate-200";
-  return "border-white/10 bg-white/[0.04] text-slate-200";
+  if (normalized === "enterprise") return "border-violet-200 bg-violet-50 text-violet-700";
+  if (normalized === "growth") return "border-sky-200 bg-sky-50 text-sky-700";
+  return "border-line bg-surface-muted text-text-muted";
 }
 
 function Chip({ children, className = "" }) {
@@ -31,6 +34,17 @@ function Chip({ children, className = "" }) {
     >
       {children}
     </span>
+  );
+}
+
+function DetailTile({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-line bg-surface-muted p-4">
+      <div className="text-[11px] uppercase tracking-[0.18em] text-text-subtle">
+        {label}
+      </div>
+      <div className="mt-2 text-sm text-text">{value}</div>
+    </div>
   );
 }
 
@@ -54,85 +68,78 @@ export default function AdminTenants() {
   } = useAdminTenantsSurface();
 
   return (
-    <div className="space-y-6">
-      <Card className="p-6">
-        <div className="space-y-1">
-          <div className="text-xl font-semibold text-slate-900 dark:text-white">
-            Admin · Tenants
-          </div>
-          <div className="text-sm text-slate-500 dark:text-slate-400">
-            Create, inspect, and export platform tenants.
-          </div>
-        </div>
-      </Card>
+    <PageCanvas className="space-y-6">
+      <PageHeader
+        eyebrow="Admin workspace"
+        title="Tenant control"
+        description="Create, inspect, and export customer workspaces without leaving the core product language."
+      />
 
       <SurfaceBanner
         surface={surface}
         unavailableMessage="Tenant administration is temporarily unavailable."
-        refreshLabel="Refresh Tenants"
+        refreshLabel="Refresh tenants"
       />
 
       <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
         <section className="space-y-5">
           <Card className="p-5">
             <div className="mb-4">
-              <div className="text-base font-semibold text-slate-900 dark:text-white">
-                Create Tenant
-              </div>
-              <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              <div className="text-base font-semibold text-text">Create tenant</div>
+              <div className="mt-1 text-sm text-text-muted">
                 Provision a new customer workspace.
               </div>
             </div>
 
             <div className="space-y-4">
-              <div>
-                <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                  Tenant Key
-                </label>
+              <label>
+                <div className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-text-subtle">
+                  Tenant key
+                </div>
                 <Input
                   value={form.tenant_key}
                   onChange={(e) => patchForm("tenant_key", e.target.value)}
                   placeholder="customer1"
                 />
-              </div>
+              </label>
 
-              <div>
-                <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                  Company Name
-                </label>
+              <label>
+                <div className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-text-subtle">
+                  Company name
+                </div>
                 <Input
                   value={form.company_name}
                   onChange={(e) => patchForm("company_name", e.target.value)}
                   placeholder="Company LLC"
                 />
-              </div>
+              </label>
 
-              <div>
-                <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                  Owner Email
-                </label>
+              <label>
+                <div className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-text-subtle">
+                  Owner email
+                </div>
                 <Input
                   value={form.owner_email}
                   onChange={(e) => patchForm("owner_email", e.target.value)}
                   placeholder="owner@company.com"
                 />
-              </div>
+              </label>
 
-              <div>
-                <label className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                  Owner Password
-                </label>
+              <label>
+                <div className="mb-2 block text-xs font-medium uppercase tracking-[0.18em] text-text-subtle">
+                  Owner password
+                </div>
                 <Input
                   type="password"
                   value={form.owner_password}
                   onChange={(e) => patchForm("owner_password", e.target.value)}
                   placeholder="minimum 8 characters"
                 />
-              </div>
+              </label>
 
-              <div className="flex justify-end">
+              <div className="flex justify-end pt-1">
                 <Button onClick={createTenantRecord} disabled={surface.saving}>
-                  {actionState.isActionPending("create") ? "Creating..." : "Create Tenant"}
+                  {actionState.isActionPending("create") ? "Creating..." : "Create tenant"}
                 </Button>
               </div>
             </div>
@@ -141,17 +148,13 @@ export default function AdminTenants() {
           <Card className="p-5">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <div className="text-base font-semibold text-slate-900 dark:text-white">
-                  Tenant List
-                </div>
-                <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                <div className="text-base font-semibold text-text">Tenant list</div>
+                <div className="mt-1 text-sm text-text-muted">
                   Existing customer workspaces
                 </div>
               </div>
 
-              <Chip className="border-white/10 bg-white/[0.04] text-slate-200">
-                {items.length}
-              </Chip>
+              <Chip className="border-line bg-surface text-text-muted">{items.length}</Chip>
             </div>
 
             <div className="mb-4">
@@ -164,7 +167,7 @@ export default function AdminTenants() {
 
             <div className="max-h-[620px] space-y-2 overflow-auto pr-1">
               {surface.loading ? (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">
+                <div className="rounded-2xl border border-line bg-surface-muted p-4 text-sm text-text-muted">
                   Loading tenants...
                 </div>
               ) : filtered.length ? (
@@ -179,16 +182,16 @@ export default function AdminTenants() {
                       className={cx(
                         "w-full rounded-2xl border p-3 text-left transition",
                         active
-                          ? "border-sky-400/35 bg-sky-500/10"
-                          : "border-white/10 bg-white/[0.03] hover:bg-white/[0.05]"
+                          ? "border-brand/15 bg-brand-soft"
+                          : "border-line bg-surface hover:border-line-strong hover:bg-surface-muted"
                       )}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-white">
+                          <div className="truncate text-sm font-medium text-text">
                             {tenant.company_name || tenant.tenant_key}
                           </div>
-                          <div className="mt-1 truncate text-xs text-slate-400">
+                          <div className="mt-1 truncate text-xs text-text-subtle">
                             {tenant.tenant_key}
                           </div>
                         </div>
@@ -206,7 +209,7 @@ export default function AdminTenants() {
                   );
                 })
               ) : (
-                <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-4 text-sm text-slate-400">
+                <div className="rounded-2xl border border-dashed border-line bg-surface-muted p-4 text-sm text-text-muted">
                   No tenants matched the current search.
                 </div>
               )}
@@ -216,77 +219,32 @@ export default function AdminTenants() {
 
         <section className="space-y-5">
           <Card className="p-6">
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div>
-                <div className="text-base font-semibold text-slate-900 dark:text-white">
-                  Tenant Detail
-                </div>
-                <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  Summary data and export operations for the selected tenant
-                </div>
+            <div className="mb-5">
+              <div className="text-base font-semibold text-text">Tenant detail</div>
+              <div className="mt-1 text-sm text-text-muted">
+                Summary data and export operations for the selected tenant.
               </div>
             </div>
 
             {!selected ? (
-              <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] p-5 text-sm text-slate-400">
+              <div className="rounded-2xl border border-dashed border-line bg-surface-muted p-5 text-sm text-text-muted">
                 Select a tenant from the list.
               </div>
             ) : (
               <div className="space-y-6">
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                      Company
-                    </div>
-                    <div className="mt-2 text-sm font-medium text-white">
-                      {selected.company_name || "-"}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                      Tenant Key
-                    </div>
-                    <div className="mt-2 text-sm font-medium text-white">
-                      {selected.tenant_key || "-"}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                      Region
-                    </div>
-                    <div className="mt-2 text-sm text-slate-200">
-                      {selected.country_code || "-"} · {selected.timezone || "-"}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                      Language
-                    </div>
-                    <div className="mt-2 text-sm text-slate-200">
-                      {selected.default_language || "-"}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                      Industry
-                    </div>
-                    <div className="mt-2 text-sm text-slate-200">
-                      {selected.industry_key || "-"}
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="text-[11px] uppercase tracking-[0.18em] text-slate-500">
-                      Created
-                    </div>
-                    <div className="mt-2 text-sm text-slate-200">
-                      {selected.created_at ? new Date(selected.created_at).toLocaleString() : "-"}
-                    </div>
-                  </div>
+                  <DetailTile label="Company" value={selected.company_name || "-"} />
+                  <DetailTile label="Tenant key" value={selected.tenant_key || "-"} />
+                  <DetailTile
+                    label="Region"
+                    value={`${selected.country_code || "-"} · ${selected.timezone || "-"}`}
+                  />
+                  <DetailTile label="Language" value={selected.default_language || "-"} />
+                  <DetailTile label="Industry" value={selected.industry_key || "-"} />
+                  <DetailTile
+                    label="Created"
+                    value={selected.created_at ? new Date(selected.created_at).toLocaleString() : "-"}
+                  />
                 </div>
 
                 <div className="flex flex-wrap gap-3">
@@ -319,6 +277,6 @@ export default function AdminTenants() {
           </Card>
         </section>
       </div>
-    </div>
+    </PageCanvas>
   );
 }

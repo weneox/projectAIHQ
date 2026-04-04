@@ -156,32 +156,29 @@ function SurfaceMessage({
   action,
 }) {
   const toneStyles = {
-    neutral:
-      "bg-[linear-gradient(180deg,rgba(8,14,26,0.92),rgba(5,10,18,0.84))]",
-    danger:
-      "bg-[linear-gradient(180deg,rgba(58,12,20,0.34),rgba(24,8,14,0.28))]",
-    info:
-      "bg-[linear-gradient(180deg,rgba(8,20,34,0.92),rgba(5,10,18,0.84))]",
+    neutral: "border-line bg-surface",
+    danger: "border-rose-200 bg-rose-50",
+    info: "border-brand/15 bg-brand-soft",
   };
 
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-[30px] px-5 py-5 shadow-[0_24px_80px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.04)] backdrop-blur-2xl md:px-6 md:py-6",
+        "relative overflow-hidden rounded-[30px] border px-5 py-5 shadow-panel md:px-6 md:py-6",
         toneStyles[tone]
       )}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_circle_at_0%_0%,rgba(255,255,255,0.03),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_44%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_circle_at_0%_0%,rgba(37,99,235,0.06),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.26),transparent_44%)]" />
       <div className="relative flex items-start gap-4">
-        <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.05] text-white/84 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+        <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-line bg-white text-text shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
           {icon}
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="text-[15px] font-semibold tracking-[-0.02em] text-white">
+          <div className="text-[15px] font-semibold tracking-[-0.02em] text-text">
             {title}
           </div>
-          <p className="mt-1 text-[13px] leading-6 text-white/50">{desc}</p>
+          <p className="mt-1 text-[13px] leading-6 text-text-muted">{desc}</p>
           {action ? <div className="mt-4">{action}</div> : null}
         </div>
       </div>

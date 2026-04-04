@@ -1,27 +1,22 @@
 import { Activity, AlertTriangle, Clock3, Filter, RefreshCcw } from "lucide-react";
 
 import AdminPageShell from "../components/admin/AdminPageShell.jsx";
+import { MetricCard, Surface } from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
 import { useAdminIncidentsSurface } from "./hooks/useAdminIncidentsSurface.js";
 
 function severityTone(severity = "") {
   const normalized = String(severity || "").toLowerCase();
-  if (normalized === "error") return "border-rose-400/18 bg-rose-500/12 text-rose-200";
-  if (normalized === "warn") return "border-amber-400/18 bg-amber-500/12 text-amber-200";
-  return "border-sky-400/18 bg-sky-500/12 text-sky-200";
-}
-
-function prettyService(service = "") {
-  const normalized = String(service || "").trim();
-  if (!normalized) return "Unknown service";
-  return normalized;
+  if (normalized === "error") return "border-rose-200 bg-rose-50 text-rose-700";
+  if (normalized === "warn") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-sky-200 bg-sky-50 text-sky-700";
 }
 
 function postureTone(status = "") {
   const normalized = String(status || "").toLowerCase();
-  if (normalized === "degraded") return "border-rose-400/18 text-rose-100";
-  if (normalized === "attention") return "border-amber-400/18 text-amber-100";
-  return "border-emerald-400/18 text-emerald-100";
+  if (normalized === "degraded") return "danger";
+  if (normalized === "attention") return "warning";
+  return "success";
 }
 
 function postureLabel(status = "") {
@@ -34,7 +29,7 @@ function postureLabel(status = "") {
 function FilterField({ label, children }) {
   return (
     <label className="space-y-2">
-      <div className="text-[11px] uppercase tracking-[0.18em] text-white/42">{label}</div>
+      <div className="text-[11px] uppercase tracking-[0.18em] text-text-subtle">{label}</div>
       {children}
     </label>
   );
@@ -45,8 +40,8 @@ function Control({ className = "", ...props }) {
     <input
       {...props}
       className={cx(
-        "h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition",
-        "placeholder:text-white/30 focus:border-cyan-400/28 focus:bg-white/[0.06] focus:ring-4 focus:ring-cyan-500/10",
+        "h-11 w-full rounded-2xl border border-line bg-surface px-4 text-sm text-text outline-none transition",
+        "placeholder:text-text-subtle focus:border-brand focus:ring-4 focus:ring-brand/10",
         className
       )}
     />
@@ -57,7 +52,7 @@ function Select(props) {
   return (
     <select
       {...props}
-      className="h-11 w-full rounded-2xl border border-white/10 bg-[#09121c] px-4 text-sm text-white outline-none transition focus:border-cyan-400/28 focus:ring-4 focus:ring-cyan-500/10"
+      className="h-11 w-full rounded-2xl border border-line bg-surface px-4 text-sm text-text outline-none transition focus:border-brand focus:ring-4 focus:ring-brand/10"
     />
   );
 }
@@ -77,20 +72,20 @@ export default function Incidents() {
   return (
     <AdminPageShell
       eyebrow="Operational review"
-      title="Incident Trail"
-      description="Recent durable runtime incidents across AI HQ, Meta, and Twilio. Filter by service, severity, and reason code to inspect the latest production-critical events."
+      title="Incident trail"
+      description="Recent durable runtime incidents across AI HQ, Meta, and Twilio."
       surface={surface}
       refreshLabel="Refresh incidents"
       unavailableMessage="Incident history is temporarily unavailable."
       actions={
-        <div className="flex flex-wrap items-center gap-3 text-xs text-white/48">
+        <div className="flex flex-wrap items-center gap-3 text-xs text-text-muted">
           {retentionPolicy ? (
             <>
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2">
+              <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-2">
                 <Clock3 className="h-3.5 w-3.5" />
                 Retain {retentionPolicy.retainDays} days
               </span>
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2">
+              <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-2">
                 <Activity className="h-3.5 w-3.5" />
                 Max {retentionPolicy.maxRows} incidents
               </span>
@@ -99,39 +94,25 @@ export default function Incidents() {
         </div>
       }
     >
-      <section className="border-t border-white/10 px-1 py-5">
-        {summary ? (
-          <div className={cx("mb-5 border-l-2 pl-4", postureTone(summary.status))}>
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <div className="text-[11px] uppercase tracking-[0.18em] text-white/58">
-                  Current incident posture
-                </div>
-                <div className="mt-2 text-sm font-semibold text-white">
-                  {postureLabel(summary.status)} over the last {summary.sinceHours || filters.sinceHours}h
-                </div>
-                <div className="mt-2 text-sm text-white/72">
-                  {summary.total || 0} recent incident{Number(summary.total || 0) === 1 ? "" : "s"}.{" "}
-                  {summary.errorCount || 0} error, {summary.warnCount || 0} warn.
-                </div>
-              </div>
+      {summary ? (
+        <div className="grid gap-3 md:grid-cols-4">
+          <MetricCard label="Incident posture" value={postureLabel(summary.status)} tone={postureTone(summary.status)} />
+          <MetricCard label="Recent incidents" value={summary.total || 0} />
+          <MetricCard label="Errors" value={summary.errorCount || 0} />
+          <MetricCard label="Warnings" value={summary.warnCount || 0} />
+        </div>
+      ) : null}
 
-              <div className="grid gap-2 text-xs text-white/64">
-                <div>Latest: {summary.latestOccurredAt ? new Date(summary.latestOccurredAt).toLocaleString() : "-"}</div>
-                <div>Services: {summary.services?.length ? summary.services.join(", ") : "-"}</div>
-                <div>Reasons: {summary.reasonCodes?.length ? summary.reasonCodes.join(", ") : "-"}</div>
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="mb-5 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/[0.05] text-cyan-300">
+      <Surface className="space-y-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-line bg-brand-soft text-brand">
             <Filter className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-sm font-semibold text-white">Filters</div>
-            <div className="text-xs text-white/48">Filter the recent incident trail without leaving this page.</div>
+            <div className="text-sm font-semibold text-text">Filters</div>
+            <div className="text-xs text-text-muted">
+              Filter the recent incident trail without leaving this page.
+            </div>
           </div>
         </div>
 
@@ -153,7 +134,7 @@ export default function Incidents() {
             </Select>
           </FilterField>
 
-          <FilterField label="Reason Code">
+          <FilterField label="Reason code">
             <Control
               value={filters.reasonCode}
               onChange={(e) => patchFilter("reasonCode", e.target.value)}
@@ -161,7 +142,7 @@ export default function Incidents() {
             />
           </FilterField>
 
-          <FilterField label="Window (hours)">
+          <FilterField label="Window">
             <Select value={filters.sinceHours} onChange={(e) => patchFilter("sinceHours", e.target.value)}>
               <option value="6">Last 6h</option>
               <option value="24">Last 24h</option>
@@ -179,12 +160,12 @@ export default function Incidents() {
           </FilterField>
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3">
           <button
             type="button"
             onClick={applyFilters}
             disabled={surface.loading}
-            className="inline-flex h-11 items-center justify-center rounded-2xl border border-cyan-400/24 bg-cyan-400 px-4 text-sm font-medium text-slate-950 transition hover:brightness-110 disabled:opacity-50"
+            className="inline-flex h-11 items-center justify-center rounded-2xl border border-brand bg-brand px-4 text-sm font-medium text-white transition hover:border-brand-strong hover:bg-brand-strong disabled:opacity-50"
           >
             <RefreshCcw className="mr-2 h-4 w-4" />
             Apply filters
@@ -193,83 +174,76 @@ export default function Incidents() {
             type="button"
             onClick={clearFilters}
             disabled={surface.loading}
-            className="inline-flex h-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-white/80 transition hover:bg-white/[0.08] disabled:opacity-50"
+            className="inline-flex h-11 items-center justify-center rounded-2xl border border-line bg-surface px-4 text-sm font-medium text-text transition hover:border-line-strong hover:bg-surface-muted disabled:opacity-50"
           >
             Clear
           </button>
         </div>
-      </section>
+      </Surface>
 
-      <section className="border-t border-white/10 px-1 py-5">
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <div>
-            <div className="text-sm font-semibold text-white">Recent durable incidents</div>
-            <div className="text-xs text-white/48">
-              {incidents.length} incident{incidents.length === 1 ? "" : "s"} matched the current filter set.
-            </div>
+      <Surface className="space-y-4">
+        <div>
+          <div className="text-sm font-semibold text-text">Recent durable incidents</div>
+          <div className="text-xs text-text-muted">
+            {incidents.length} incident{incidents.length === 1 ? "" : "s"} matched the current filter set.
           </div>
         </div>
 
-        <div className="space-y-4">
-          {!surface.loading && !incidents.length ? (
-            <div className="border-l-2 border-dashed border-white/15 pl-4 text-sm text-white/48">
-              No recent durable incidents matched the current filters.
-            </div>
-          ) : null}
+        {!surface.loading && !incidents.length ? (
+          <div className="rounded-[22px] border border-dashed border-line bg-surface-muted px-4 py-5 text-sm text-text-muted">
+            No recent durable incidents matched the current filters.
+          </div>
+        ) : null}
 
-          {incidents.map((incident) => (
-            <article
-              key={incident.id}
-              className="border-t border-white/10 px-1 py-5"
-            >
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={cx(
-                        "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]",
-                        severityTone(incident.severity)
-                      )}
-                    >
-                      {incident.severity || "info"}
+        {incidents.map((incident) => (
+          <article key={incident.id} className="rounded-[24px] border border-line bg-surface-muted px-5 py-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={cx(
+                      "inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]",
+                      severityTone(incident.severity)
+                    )}
+                  >
+                    {incident.severity || "info"}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-line bg-white px-3 py-1 text-[11px] text-text-muted">
+                    {incident.service || "Unknown service"}
+                  </span>
+                  {incident.area ? (
+                    <span className="inline-flex items-center rounded-full border border-line bg-white px-3 py-1 text-[11px] text-text-muted">
+                      {incident.area}
                     </span>
-                    <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-white/62">
-                      {prettyService(incident.service)}
-                    </span>
-                    {incident.area ? (
-                      <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-white/62">
-                        {incident.area}
-                      </span>
+                  ) : null}
+                </div>
+
+                <div className="mt-4 flex items-start gap-3">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-text">{incident.code || "runtime_signal"}</div>
+                    {incident.reasonCode ? (
+                      <div className="mt-1 text-xs uppercase tracking-[0.16em] text-text-subtle">
+                        {incident.reasonCode}
+                      </div>
+                    ) : null}
+                    {incident.detailSummary ? (
+                      <p className="mt-3 text-sm leading-6 text-text-muted">{incident.detailSummary}</p>
                     ) : null}
                   </div>
-
-                  <div className="mt-3 flex items-start gap-3">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-white">{incident.code || "runtime_signal"}</div>
-                      {incident.reasonCode ? (
-                        <div className="mt-1 text-xs uppercase tracking-[0.16em] text-white/42">
-                          {incident.reasonCode}
-                        </div>
-                      ) : null}
-                      {incident.detailSummary ? (
-                        <p className="mt-3 text-sm leading-6 text-white/68">{incident.detailSummary}</p>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-2 text-xs text-white/46 lg:min-w-[260px]">
-                  <div>Occurred: {incident.occurredAt ? new Date(incident.occurredAt).toLocaleString() : "-"}</div>
-                  <div>Tenant: {incident.tenantKey || "-"}</div>
-                  <div>Request ID: {incident.requestId || "-"}</div>
-                  <div>Correlation ID: {incident.correlationId || "-"}</div>
                 </div>
               </div>
-            </article>
-          ))}
-        </div>
-      </section>
+
+              <div className="grid gap-2 text-xs text-text-subtle lg:min-w-[260px]">
+                <div>Occurred: {incident.occurredAt ? new Date(incident.occurredAt).toLocaleString() : "-"}</div>
+                <div>Tenant: {incident.tenantKey || "-"}</div>
+                <div>Request ID: {incident.requestId || "-"}</div>
+                <div>Correlation ID: {incident.correlationId || "-"}</div>
+              </div>
+            </div>
+          </article>
+        ))}
+      </Surface>
     </AdminPageShell>
   );
 }

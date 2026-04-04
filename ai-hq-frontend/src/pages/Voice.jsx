@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import AdminPageShell from "../components/admin/AdminPageShell.jsx";
+import { MetricCard, Surface } from "../components/ui/AppShellPrimitives.jsx";
 import { useVoiceSurface } from "./hooks/useVoiceSurface.js";
 
 function s(v, d = "") {
@@ -83,22 +84,6 @@ function pickOperatorName(x) {
   return s(x?.operatorName || x?.operator_name || x?.operatorLabel || "-");
 }
 
-function statCard(icon, label, value, hint) {
-  const Icon = icon;
-  return (
-    <div className="border-t border-white/10 p-4">
-      <div className="mb-3 flex items-center gap-3">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-2">
-          <Icon className="h-4 w-4 text-white/80" />
-        </div>
-        <div className="text-xs uppercase tracking-[0.24em] text-white/45">{label}</div>
-      </div>
-      <div className="text-2xl font-semibold text-white">{value}</div>
-      <div className="mt-1 text-xs text-white/45">{hint}</div>
-    </div>
-  );
-}
-
 function StatusPill({ status }) {
   const x = s(status || "unknown").toLowerCase();
   const live = ["live", "active", "in_progress", "ongoing", "ringing", "queued", "bridged"].includes(x);
@@ -106,18 +91,13 @@ function StatusPill({ status }) {
   return (
     <div
       className={[
-        "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium",
+        "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium",
         live
-          ? "border border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
-          : "border border-white/10 bg-white/5 text-white/70",
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-line bg-surface text-text-muted",
       ].join(" ")}
     >
-      <span
-        className={[
-          "h-2 w-2 rounded-full",
-          live ? "bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.9)]" : "bg-white/30",
-        ].join(" ")}
-      />
+      <span className={["h-2 w-2 rounded-full", live ? "bg-emerald-500" : "bg-text-subtle"].join(" ")} />
       {x || "unknown"}
     </div>
   );
@@ -126,46 +106,42 @@ function StatusPill({ status }) {
 function CallRow({ item, active, onClick }) {
   const id = pickCallId(item);
   const status = pickStatus(item);
-  const from = pickFrom(item);
-  const lang = pickLang(item);
-  const startedAt = pickStartedAt(item);
-  const duration = pickDuration(item);
 
   return (
     <button
       type="button"
       onClick={() => onClick?.(item)}
       className={[
-        "w-full border-t p-4 text-left transition",
+        "w-full rounded-[22px] border p-4 text-left transition",
         active
-          ? "border-cyan-400/40 bg-cyan-400/10"
-          : "border-white/10 bg-transparent hover:border-white/20 hover:bg-white/[0.03]",
+          ? "border-brand/15 bg-brand-soft"
+          : "border-line bg-surface hover:border-line-strong hover:bg-surface-muted",
       ].join(" ")}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-white">{from}</div>
-          <div className="mt-1 text-xs text-white/45">{id || "No call id"}</div>
+          <div className="truncate text-sm font-semibold text-text">{pickFrom(item)}</div>
+          <div className="mt-1 text-xs text-text-subtle">{id || "No call id"}</div>
         </div>
         <StatusPill status={status} />
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-3 text-xs text-white/60">
+      <div className="mt-4 grid grid-cols-3 gap-3 text-xs text-text-muted">
         <div>
-          <div className="text-white/35">Direction</div>
-          <div className="mt-1 text-white/80">{pickDirection(item)}</div>
+          <div className="text-text-subtle">Direction</div>
+          <div className="mt-1 text-text">{pickDirection(item)}</div>
         </div>
         <div>
-          <div className="text-white/35">Language</div>
-          <div className="mt-1 text-white/80">{lang}</div>
+          <div className="text-text-subtle">Language</div>
+          <div className="mt-1 text-text">{pickLang(item)}</div>
         </div>
         <div>
-          <div className="text-white/35">Duration</div>
-          <div className="mt-1 text-white/80">{shortDur(duration)}</div>
+          <div className="text-text-subtle">Duration</div>
+          <div className="mt-1 text-text">{shortDur(pickDuration(item))}</div>
         </div>
       </div>
 
-      <div className="mt-3 text-xs text-white/40">{dt(startedAt)}</div>
+      <div className="mt-3 text-xs text-text-subtle">{dt(pickStartedAt(item))}</div>
     </button>
   );
 }
@@ -184,12 +160,12 @@ function EventRow({ item }) {
   const at = item?.createdAt || item?.created_at || item?.timestamp || item?.time || null;
 
   return (
-    <div className="border-t border-white/10 p-3">
+    <div className="rounded-[18px] border border-line bg-surface-muted p-3">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-medium text-white">{type}</div>
-        <div className="text-[11px] text-white/40">{dt(at)}</div>
+        <div className="text-sm font-medium text-text">{type}</div>
+        <div className="text-[11px] text-text-subtle">{dt(at)}</div>
       </div>
-      <div className="mt-2 text-sm text-white/65">{text || "-"}</div>
+      <div className="mt-2 text-sm text-text-muted">{text || "-"}</div>
     </div>
   );
 }
@@ -201,22 +177,22 @@ function SessionRow({ item }) {
   const label = s(item?.label || item?.participantName || item?.identity || item?.userId || role);
 
   return (
-    <div className="border-t border-white/10 p-3">
+    <div className="rounded-[18px] border border-line bg-surface-muted p-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-sm font-medium text-white">{label}</div>
-          <div className="mt-1 text-xs text-white/45">{role}</div>
+          <div className="text-sm font-medium text-text">{label}</div>
+          <div className="mt-1 text-xs text-text-subtle">{role}</div>
         </div>
-        <BadgeCheck className="h-4 w-4 text-white/45" />
+        <BadgeCheck className="h-4 w-4 text-text-subtle" />
       </div>
       <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
         <div>
-          <div className="text-white/35">Joined</div>
-          <div className="mt-1 text-white/75">{dt(joined)}</div>
+          <div className="text-text-subtle">Joined</div>
+          <div className="mt-1 text-text">{dt(joined)}</div>
         </div>
         <div>
-          <div className="text-white/35">Left</div>
-          <div className="mt-1 text-white/75">{dt(left)}</div>
+          <div className="text-text-subtle">Left</div>
+          <div className="mt-1 text-text">{dt(left)}</div>
         </div>
       </div>
     </div>
@@ -225,36 +201,29 @@ function SessionRow({ item }) {
 
 function InfoTile({ label, value }) {
   return (
-    <div className="border-t border-white/10 p-3">
-      <div className="text-[11px] uppercase tracking-[0.18em] text-white/35">{label}</div>
-      <div className="mt-2 text-sm text-white/80">{value}</div>
+    <div className="rounded-[18px] border border-line bg-surface-muted p-3">
+      <div className="text-[11px] uppercase tracking-[0.18em] text-text-subtle">{label}</div>
+      <div className="mt-2 text-sm text-text">{value}</div>
     </div>
   );
 }
 
 function InfoRow({ label, value }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-t border-white/10 px-3 py-3">
-      <span>{label}</span>
-      <span className="truncate text-white/90">{value}</span>
+    <div className="flex items-center justify-between gap-3 rounded-[18px] border border-line bg-surface-muted px-3 py-3 text-sm">
+      <span className="text-text-muted">{label}</span>
+      <span className="truncate text-text">{value}</span>
     </div>
   );
 }
 
-function ControlButton({
-  icon: Icon,
-  label,
-  onClick,
-  disabled = false,
-  pending = false,
-  tone = "neutral",
-}) {
+function ControlButton({ icon: Icon, label, onClick, disabled = false, pending = false, tone = "neutral" }) {
   const toneClass =
     tone === "danger"
-      ? "border-rose-400/20 bg-rose-400/12 text-rose-100 hover:bg-rose-400/18"
+      ? "border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300"
       : tone === "accent"
-        ? "border-cyan-400/20 bg-cyan-400/15 text-cyan-100 hover:bg-cyan-400/20"
-        : "border-white/10 bg-white/[0.05] text-white/82 hover:bg-white/[0.08]";
+        ? "border-brand/15 bg-brand-soft text-brand hover:border-brand/25"
+        : "border-line bg-surface text-text hover:border-line-strong";
 
   return (
     <button
@@ -300,239 +269,233 @@ export default function Voice() {
   } = useVoiceSurface();
 
   return (
-    <div className="min-h-screen bg-[#07111f] text-white">
-      <div className="mx-auto max-w-[1600px] px-6 py-6 lg:px-8">
-        <AdminPageShell
-          eyebrow="Voice"
-          title="Voice Center"
-          description="Active calls, live events, session timeline, and live call controls."
-          surface={surface}
-          refreshLabel="Refresh voice surface"
-          unavailableMessage="Voice operations are temporarily unavailable."
-          actions={
-            <button
-              type="button"
-              disabled={!selectedId || surface.saving || !selectedLive}
-              onClick={joinSelectedCall}
-              className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/15 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              <PhoneCall className="h-4 w-4" />
-              {actionState.isActionPending("join") ? "Joining..." : "Join call"}
-            </button>
-          }
+    <AdminPageShell
+      eyebrow="Voice"
+      title="Voice center"
+      description="Active calls, live events, session timeline, and live intervention controls."
+      surface={surface}
+      refreshLabel="Refresh voice surface"
+      unavailableMessage="Voice operations are temporarily unavailable."
+      actions={
+        <button
+          type="button"
+          disabled={!selectedId || surface.saving || !selectedLive}
+          onClick={joinSelectedCall}
+          className="inline-flex items-center gap-2 rounded-2xl border border-brand/15 bg-brand-soft px-4 py-3 text-sm text-brand transition hover:border-brand/25 disabled:cursor-not-allowed disabled:opacity-45"
         >
-          <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {statCard(Activity, "Live calls", surface.loading ? "..." : String(overviewData?.liveCalls ?? liveCount), "Currently active calls")}
-            {statCard(Phone, "Total calls", surface.loading ? "..." : String(overviewData?.totalCalls ?? totalCount), "Latest loaded call list")}
-            {statCard(Clock3, "Talk minutes", surface.loading ? "..." : String(overviewData?.totalMinutes ?? totalMinutes), "Total tracked duration")}
-            {statCard(Languages, "Default language", s(overviewData?.defaultLanguage || overviewData?.language || "-"), "Tenant voice overview")}
-          </div>
-
-          <section className="mb-6 border-t border-white/10 px-1 py-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
-                <div className="text-lg font-semibold text-white">Live session controls</div>
-                <div className="mt-1 text-sm text-white/45">
-                  Live session state and intervention controls.
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/50">
-                {surface.loading ? "Loading..." : `${liveSessions.length} live session${liveSessions.length === 1 ? "" : "s"}`}
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-              <div className="grid gap-3 md:grid-cols-2">
-                <InfoTile label="Selected live session" value={pickSessionId(selectedLiveSession) || "No live session selected"} />
-                <InfoTile label="Live session state" value={selectedLiveSessionStatus || "-"} />
-                <InfoTile label="Operator" value={pickOperatorName(selectedLiveSession)} />
-                <InfoTile label="Call link" value={pickSessionCallId(selectedLiveSession) || selectedId || "-"} />
-              </div>
-
-              <div className="border-l-2 border-cyan-400/30 pl-4">
-                {surface.saveError ? (
-                  <div className="mb-3 border-l-2 border-rose-400/40 pl-3 text-sm text-rose-100">
-                    {surface.saveError}
-                  </div>
-                ) : null}
-                {surface.saveSuccess ? (
-                  <div className="mb-3 border-l-2 border-emerald-400/40 pl-3 text-sm text-emerald-100">
-                    {surface.saveSuccess}
-                  </div>
-                ) : null}
-
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <ControlButton
-                    icon={ArrowRightLeft}
-                    label="Request handoff"
-                    onClick={requestSelectedLiveHandoff}
-                    disabled={!canRequestHandoff}
-                    pending={actionState.isActionPending("handoff")}
-                  />
-                  <ControlButton
-                    icon={PhoneCall}
-                    label="Takeover"
-                    onClick={takeoverSelectedLiveSession}
-                    disabled={!canTakeover}
-                    pending={actionState.isActionPending("takeover")}
-                    tone="accent"
-                  />
-                  <ControlButton
-                    icon={Ban}
-                    label="End"
-                    onClick={endSelectedLiveSession}
-                    disabled={!canEnd}
-                    pending={actionState.isActionPending("end")}
-                    tone="danger"
-                  />
-                </div>
-
-                {!canControlSelectedLiveSession ? (
-                  <div className="mt-3 text-xs text-white/42">
-                    No live session is selected for this call, so live controls are unavailable.
-                  </div>
-                ) : (
-                  <div className="mt-3 text-xs text-white/42">
-                    Live session state refreshes automatically while active sessions exist.
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
-            <section className="border-t border-white/10 px-1 py-4">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-lg font-semibold text-white">Call list</div>
-                  <div className="text-sm text-white/45">Active and recent calls</div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/50">
-                  {surface.loading ? "Loading..." : `${calls.length} items`}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {surface.loading ? (
-                  <div className="border-l-2 border-white/10 pl-4 text-sm text-white/50">Loading calls...</div>
-                ) : calls.length ? (
-                  calls.map((item, i) => {
-                    const id = pickCallId(item);
-                    const key = id || `call-${i}`;
-                    return <CallRow key={key} item={item} active={id === selectedId} onClick={() => setSelectedId(id)} />;
-                  })
-                ) : (
-                  <div className="border-l-2 border-dashed border-white/15 pl-4">
-                    <PhoneOff className="h-8 w-8 text-white/25" />
-                    <div className="mt-3 text-sm text-white/65">No calls found.</div>
-                  </div>
-                )}
-              </div>
-            </section>
-
-            <section className="border-t border-white/10 px-1 py-4">
-              {!detailSurface.unavailable && detailSurface.error ? (
-                <div className="mb-5 border-l-2 border-rose-400/40 pl-4 text-sm text-rose-100">
-                  {detailSurface.error}
-                </div>
-              ) : null}
-
-              <div className="mb-5 flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-start lg:justify-between">
-                <div className="min-w-0">
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <StatusPill status={selectedStatus} />
-                    <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/55">
-                      {pickDirection(selectedCall)}
-                    </div>
-                  </div>
-
-                  <div className="truncate text-2xl font-semibold text-white">{pickFrom(selectedCall) || "No selected call"}</div>
-                  <div className="mt-2 text-sm text-white/45">{selectedId || "No call selected"}</div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 lg:min-w-[320px]">
-                  <InfoTile label="Started" value={dt(pickStartedAt(selectedCall))} />
-                  <InfoTile label="Ended" value={dt(pickEndedAt(selectedCall))} />
-                  <InfoTile label="Language" value={pickLang(selectedCall)} />
-                  <InfoTile label="Duration" value={shortDur(pickDuration(selectedCall))} />
-                </div>
-              </div>
-
-              <div className="grid gap-6 2xl:grid-cols-[1.15fr_0.85fr]">
-                <div className="min-w-0">
-                  <div className="mb-3 flex items-center gap-2">
-                    <Mic className="h-4 w-4 text-white/55" />
-                    <div className="text-sm font-medium text-white">Live transcript and events</div>
-                  </div>
-
-                  <div className="max-h-[620px] space-y-3 overflow-auto pr-1">
-                    {detailSurface.loading ? (
-                      <div className="border-l-2 border-white/10 pl-4 text-sm text-white/50">
-                        Loading call detail...
-                      </div>
-                    ) : events.length ? (
-                      events.map((item, i) => <EventRow key={s(item?.id || item?.event || item?.name || `event-${i}`)} item={item} />)
-                    ) : (
-                      <div className="border-l-2 border-dashed border-white/15 pl-4 text-sm text-white/50">
-                        No call events recorded.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="min-w-0">
-                  <div className="mb-3 flex items-center gap-2">
-                    <UserRound className="h-4 w-4 text-white/55" />
-                    <div className="text-sm font-medium text-white">Sessions</div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {detailSurface.loading ? (
-                      <div className="border-l-2 border-white/10 pl-4 text-sm text-white/50">
-                        Loading sessions...
-                      </div>
-                    ) : sessions.length ? (
-                      sessions.map((item, i) => <SessionRow key={pickSessionId(item) || `session-${i}`} item={item} />)
-                    ) : (
-                      <div className="border-l-2 border-dashed border-white/15 pl-4 text-sm text-white/50">
-                        No sessions recorded.
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-6 border-l-2 border-cyan-400/30 pl-4">
-                    <div className="mb-3 flex items-center gap-2">
-                      <Settings2 className="h-4 w-4 text-cyan-200" />
-                      <div className="text-sm font-medium text-white">Join call</div>
-                    </div>
-
-                    <div className="space-y-3 text-sm text-white/65">
-                      <InfoRow label="Selected call" value={selectedId || "-"} />
-                      <InfoRow label="Call state" value={selectedStatus || "-"} />
-                      <InfoRow label="Session" value={pickSessionId(sessions?.[0]) || "-"} />
-
-                      <button
-                        type="button"
-                        disabled={!selectedId || surface.saving || !selectedLive}
-                        onClick={joinSelectedCall}
-                        className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-400/20 bg-cyan-400/15 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-45"
-                      >
-                        <PhoneCall className="h-4 w-4" />
-                        {actionState.isActionPending("join") ? "Joining..." : "Join selected call"}
-                      </button>
-
-                      {!selectedLive ? (
-                        <div className="text-xs text-white/40">Join is only enabled for live or in-progress calls.</div>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-          </div>
-        </AdminPageShell>
+          <PhoneCall className="h-4 w-4" />
+          {actionState.isActionPending("join") ? "Joining..." : "Join call"}
+        </button>
+      }
+    >
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Live calls" value={surface.loading ? "..." : String(overviewData?.liveCalls ?? liveCount)} hint="Currently active calls" tone="brand" />
+        <MetricCard label="Total calls" value={surface.loading ? "..." : String(overviewData?.totalCalls ?? totalCount)} hint="Latest loaded call list" />
+        <MetricCard label="Talk minutes" value={surface.loading ? "..." : String(overviewData?.totalMinutes ?? totalMinutes)} hint="Total tracked duration" />
+        <MetricCard label="Default language" value={s(overviewData?.defaultLanguage || overviewData?.language || "-")} hint="Tenant voice overview" />
       </div>
-    </div>
+
+      <Surface className="space-y-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="text-lg font-semibold text-text">Live session controls</div>
+            <div className="mt-1 text-sm text-text-muted">
+              Live session state and intervention controls.
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-line bg-surface px-3 py-2 text-xs text-text-muted">
+            {surface.loading ? "Loading..." : `${liveSessions.length} live session${liveSessions.length === 1 ? "" : "s"}`}
+          </div>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+          <div className="grid gap-3 md:grid-cols-2">
+            <InfoTile label="Selected live session" value={pickSessionId(selectedLiveSession) || "No live session selected"} />
+            <InfoTile label="Live session state" value={selectedLiveSessionStatus || "-"} />
+            <InfoTile label="Operator" value={pickOperatorName(selectedLiveSession)} />
+            <InfoTile label="Call link" value={pickSessionCallId(selectedLiveSession) || selectedId || "-"} />
+          </div>
+
+          <Surface className="space-y-3 border-brand/15 bg-brand-soft">
+            {surface.saveError ? (
+              <div className="rounded-[18px] border border-rose-200 bg-rose-50 px-3 py-3 text-sm text-rose-700">
+                {surface.saveError}
+              </div>
+            ) : null}
+            {surface.saveSuccess ? (
+              <div className="rounded-[18px] border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-700">
+                {surface.saveSuccess}
+              </div>
+            ) : null}
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <ControlButton
+                icon={ArrowRightLeft}
+                label="Request handoff"
+                onClick={requestSelectedLiveHandoff}
+                disabled={!canRequestHandoff}
+                pending={actionState.isActionPending("handoff")}
+              />
+              <ControlButton
+                icon={PhoneCall}
+                label="Takeover"
+                onClick={takeoverSelectedLiveSession}
+                disabled={!canTakeover}
+                pending={actionState.isActionPending("takeover")}
+                tone="accent"
+              />
+              <ControlButton
+                icon={Ban}
+                label="End"
+                onClick={endSelectedLiveSession}
+                disabled={!canEnd}
+                pending={actionState.isActionPending("end")}
+                tone="danger"
+              />
+            </div>
+
+            <div className="text-xs text-text-muted">
+              {!canControlSelectedLiveSession
+                ? "No live session is selected for this call, so live controls are unavailable."
+                : "Live session state refreshes automatically while active sessions exist."}
+            </div>
+          </Surface>
+        </div>
+      </Surface>
+
+      <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+        <Surface className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-lg font-semibold text-text">Call list</div>
+              <div className="text-sm text-text-muted">Active and recent calls</div>
+            </div>
+            <div className="rounded-2xl border border-line bg-surface px-3 py-2 text-xs text-text-muted">
+              {surface.loading ? "Loading..." : `${calls.length} items`}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {surface.loading ? (
+              <div className="rounded-[22px] border border-line bg-surface-muted px-4 py-5 text-sm text-text-muted">Loading calls...</div>
+            ) : calls.length ? (
+              calls.map((item, i) => {
+                const id = pickCallId(item);
+                const key = id || `call-${i}`;
+                return <CallRow key={key} item={item} active={id === selectedId} onClick={() => setSelectedId(id)} />;
+              })
+            ) : (
+              <div className="rounded-[22px] border border-dashed border-line bg-surface-muted px-4 py-6">
+                <PhoneOff className="h-8 w-8 text-text-subtle" />
+                <div className="mt-3 text-sm text-text-muted">No calls found.</div>
+              </div>
+            )}
+          </div>
+        </Surface>
+
+        <Surface className="space-y-5">
+          {!detailSurface.unavailable && detailSurface.error ? (
+            <div className="rounded-[20px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {detailSurface.error}
+            </div>
+          ) : null}
+
+          <div className="flex flex-col gap-4 border-b border-line-soft pb-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <StatusPill status={selectedStatus} />
+                <div className="rounded-full border border-line bg-surface px-3 py-1 text-xs text-text-muted">
+                  {pickDirection(selectedCall)}
+                </div>
+              </div>
+
+              <div className="truncate text-2xl font-semibold text-text">{pickFrom(selectedCall) || "No selected call"}</div>
+              <div className="mt-2 text-sm text-text-muted">{selectedId || "No call selected"}</div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 lg:min-w-[320px]">
+              <InfoTile label="Started" value={dt(pickStartedAt(selectedCall))} />
+              <InfoTile label="Ended" value={dt(pickEndedAt(selectedCall))} />
+              <InfoTile label="Language" value={pickLang(selectedCall)} />
+              <InfoTile label="Duration" value={shortDur(pickDuration(selectedCall))} />
+            </div>
+          </div>
+
+          <div className="grid gap-6 2xl:grid-cols-[1.15fr_0.85fr]">
+            <div className="min-w-0">
+              <div className="mb-3 flex items-center gap-2">
+                <Mic className="h-4 w-4 text-text-subtle" />
+                <div className="text-sm font-medium text-text">Live transcript and events</div>
+              </div>
+
+              <div className="max-h-[620px] space-y-3 overflow-auto pr-1">
+                {detailSurface.loading ? (
+                  <div className="rounded-[22px] border border-line bg-surface-muted px-4 py-5 text-sm text-text-muted">
+                    Loading call detail...
+                  </div>
+                ) : events.length ? (
+                  events.map((item, i) => <EventRow key={s(item?.id || item?.event || item?.name || `event-${i}`)} item={item} />)
+                ) : (
+                  <div className="rounded-[22px] border border-dashed border-line bg-surface-muted px-4 py-5 text-sm text-text-muted">
+                    No call events recorded.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="min-w-0 space-y-6">
+              <div>
+                <div className="mb-3 flex items-center gap-2">
+                  <UserRound className="h-4 w-4 text-text-subtle" />
+                  <div className="text-sm font-medium text-text">Sessions</div>
+                </div>
+
+                <div className="space-y-3">
+                  {detailSurface.loading ? (
+                    <div className="rounded-[22px] border border-line bg-surface-muted px-4 py-5 text-sm text-text-muted">
+                      Loading sessions...
+                    </div>
+                  ) : sessions.length ? (
+                    sessions.map((item, i) => <SessionRow key={pickSessionId(item) || `session-${i}`} item={item} />)
+                  ) : (
+                    <div className="rounded-[22px] border border-dashed border-line bg-surface-muted px-4 py-5 text-sm text-text-muted">
+                      No sessions recorded.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Surface className="space-y-3 border-brand/15 bg-brand-soft">
+                <div className="mb-1 flex items-center gap-2">
+                  <Settings2 className="h-4 w-4 text-brand" />
+                  <div className="text-sm font-medium text-text">Join call</div>
+                </div>
+
+                <div className="space-y-3 text-sm text-text-muted">
+                  <InfoRow label="Selected call" value={selectedId || "-"} />
+                  <InfoRow label="Call state" value={selectedStatus || "-"} />
+                  <InfoRow label="Session" value={pickSessionId(sessions?.[0]) || "-"} />
+
+                  <button
+                    type="button"
+                    disabled={!selectedId || surface.saving || !selectedLive}
+                    onClick={joinSelectedCall}
+                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-brand bg-brand px-4 py-3 text-sm text-white transition hover:border-brand-strong hover:bg-brand-strong disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <PhoneCall className="h-4 w-4" />
+                    {actionState.isActionPending("join") ? "Joining..." : "Join selected call"}
+                  </button>
+
+                  {!selectedLive ? (
+                    <div className="text-xs text-text-muted">Join is only enabled for live or in-progress calls.</div>
+                  ) : null}
+                </div>
+              </Surface>
+            </div>
+          </div>
+        </Surface>
+      </div>
+    </AdminPageShell>
   );
 }

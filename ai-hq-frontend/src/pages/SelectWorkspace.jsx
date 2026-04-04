@@ -16,6 +16,14 @@ import {
   getAuthWorkspaceChoices,
   hasMultipleWorkspaceChoices,
 } from "../lib/appEntry.js";
+import Button from "../components/ui/Button.jsx";
+import {
+  AuthFrame,
+  AuthPanel,
+  InlineNotice,
+  MetricCard,
+  Surface,
+} from "../components/ui/AppShellPrimitives.jsx";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -23,10 +31,6 @@ function s(value, fallback = "") {
 
 function arr(value) {
   return Array.isArray(value) ? value : [];
-}
-
-function cn(...classes) {
-  return classes.filter(Boolean).join(" ");
 }
 
 function formatWorkspaceName(choice = {}) {
@@ -48,11 +52,7 @@ function getWorkspaceStatusLabel(choice = {}) {
   return "Select";
 }
 
-function SelectWorkspaceCard({
-  choice,
-  busy = false,
-  onSelect,
-}) {
+function WorkspaceCard({ choice, busy = false, onSelect }) {
   const active = !!choice.active;
   const status = getWorkspaceStatusLabel(choice);
 
@@ -61,87 +61,43 @@ function SelectWorkspaceCard({
       type="button"
       disabled={busy}
       onClick={() => onSelect(choice)}
-      className={cn(
-        "group w-full rounded-[22px] border p-5 text-left transition-all duration-200",
+      className={[
+        "group w-full rounded-[28px] border px-5 py-5 text-left transition-all duration-200",
         active
-          ? "border-[#0b5b60] bg-[#0b5b60] text-white shadow-[0_24px_80px_rgba(11,91,96,.22)]"
-          : "border-[#d8dfde] bg-white text-slate-900 hover:-translate-y-0.5 hover:border-[#aebfbd] hover:shadow-[0_20px_60px_rgba(15,23,42,.08)]",
-        busy && "cursor-not-allowed opacity-70"
-      )}
+          ? "border-brand/20 bg-brand-soft shadow-[0_18px_40px_-30px_rgba(37,99,235,0.28)]"
+          : "border-line bg-surface hover:-translate-y-0.5 hover:border-line-strong hover:shadow-panel",
+        busy ? "cursor-not-allowed opacity-70" : "",
+      ].join(" ")}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <div
-            className={cn(
-              "inline-flex h-10 w-10 items-center justify-center rounded-2xl border",
-              active
-                ? "border-white/18 bg-white/10 text-white"
-                : "border-[#dfe7e5] bg-[#f7f9f8] text-[#0b5b60]"
-            )}
-          >
+          <div className="inline-flex h-11 w-11 items-center justify-center rounded-[18px] border border-line bg-white text-brand">
             <BriefcaseBusiness className="h-4 w-4" />
           </div>
 
-          <div className="mt-4 text-[17px] font-semibold leading-7">
+          <div className="mt-4 text-[18px] font-semibold tracking-[-0.03em] text-text">
             {formatWorkspaceName(choice)}
           </div>
 
-          <div
-            className={cn(
-              "mt-1 text-[13px] leading-6",
-              active ? "text-white/72" : "text-slate-500"
-            )}
-          >
+          <div className="mt-1 text-[13px] leading-6 text-text-muted">
             {s(choice.tenantKey)} · {s(choice.role || "member")}
           </div>
         </div>
 
-        <div
-          className={cn(
-            "shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]",
-            active
-              ? "border-white/15 bg-white/10 text-white/84"
-              : "border-[#e1e8e6] bg-[#f8faf9] text-slate-500"
-          )}
-        >
+        <div className="shrink-0 rounded-full border border-line bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
           {status}
         </div>
       </div>
 
-      <div
-        className={cn(
-          "mt-5 flex items-center justify-between rounded-2xl border px-4 py-3",
-          active
-            ? "border-white/12 bg-white/8"
-            : "border-[#e8efed] bg-[#fbfcfb]"
-        )}
-      >
-        <div className="min-w-0">
-          <div
-            className={cn(
-              "text-[12px] font-semibold uppercase tracking-[0.16em]",
-              active ? "text-white/68" : "text-slate-400"
-            )}
-          >
+      <div className="mt-5 flex items-center justify-between rounded-[20px] border border-line-soft bg-surface-muted px-4 py-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
             Destination
           </div>
-          <div
-            className={cn(
-              "mt-1 text-[14px] leading-6",
-              active ? "text-white" : "text-slate-700"
-            )}
-          >
-            Product home
-          </div>
+          <div className="mt-1 text-sm text-text">Product home</div>
         </div>
-
-        <div
-          className={cn(
-            "inline-flex items-center gap-2 text-[13px] font-medium",
-            active ? "text-white" : "text-[#0b5b60]"
-          )}
-        >
-          <span>{busy ? "Opening..." : "Open home"}</span>
+        <div className="inline-flex items-center gap-2 text-sm font-medium text-brand">
+          <span>{busy ? "Opening..." : "Open"}</span>
           <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
         </div>
       </div>
@@ -165,11 +121,9 @@ export default function SelectWorkspace() {
         if (Number(right.active) !== Number(left.active)) {
           return Number(right.active) - Number(left.active);
         }
-
         if (Number(right.workspaceReady) !== Number(left.workspaceReady)) {
           return Number(right.workspaceReady) - Number(left.workspaceReady);
         }
-
         return formatWorkspaceName(left).localeCompare(formatWorkspaceName(right));
       });
   }, [choices]);
@@ -202,10 +156,7 @@ export default function SelectWorkspace() {
       } catch (loadError) {
         if (!alive) return;
         setError(
-          s(
-            loadError?.message ||
-              "We could not load your businesses right now."
-          )
+          s(loadError?.message || "We could not load your businesses right now.")
         );
       } finally {
         if (alive) setLoading(false);
@@ -237,10 +188,7 @@ export default function SelectWorkspace() {
       setChoices(nextChoices);
     } catch (refreshError) {
       setError(
-        s(
-          refreshError?.message ||
-            "We could not refresh your businesses right now."
-        )
+        s(refreshError?.message || "We could not refresh your businesses right now.")
       );
     } finally {
       setLoading(false);
@@ -265,21 +213,12 @@ export default function SelectWorkspace() {
     try {
       setSwitchingMembershipId(membershipId);
       setError("");
-
-      await switchWorkspaceUser({
-        switchToken: choice.switchToken,
-      });
-
+      await switchWorkspaceUser({ switchToken: choice.switchToken });
       clearAppSessionContext();
-      navigate(PRODUCT_HOME_ROUTE, {
-        replace: true,
-      });
+      navigate(PRODUCT_HOME_ROUTE, { replace: true });
     } catch (switchError) {
       setError(
-        s(
-          switchError?.message ||
-            "We could not switch to that business right now."
-        )
+        s(switchError?.message || "We could not switch to that business right now.")
       );
     } finally {
       setSwitchingMembershipId("");
@@ -287,83 +226,100 @@ export default function SelectWorkspace() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f7f6] px-6 py-8 text-slate-950 sm:px-8 lg:px-10">
-      <div className="mx-auto w-full max-w-6xl">
-        <div className="overflow-hidden rounded-[30px] border border-[#dde4e2] bg-white shadow-[0_30px_100px_rgba(15,23,42,.06)]">
-          <div className="border-b border-[#e7eceb] px-6 py-5 sm:px-8">
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <div className="min-w-0">
-                <div className="inline-flex items-center gap-2 rounded-full border border-[#dfe6e4] bg-[#f8faf9] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#0b5b60]">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Business selector
-                </div>
-
-                <h1 className="mt-4 text-[28px] font-semibold tracking-[-0.04em] text-slate-950 sm:text-[32px]">
-                  Choose the business you want to open
-                </h1>
-
-                <p className="mt-2 max-w-2xl text-[15px] leading-7 text-slate-600">
-                  {s(viewer?.fullName || viewer?.email)
-                    ? `${s(viewer?.fullName || viewer?.email)}, select the business you want to continue with.`
-                    : "Select the business you want to continue with."}
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleRefresh}
-                disabled={loading}
-                className="inline-flex h-[44px] items-center justify-center gap-2 rounded-[14px] border border-[#d8dfde] bg-white px-4 text-[14px] font-medium text-slate-700 transition hover:border-[#bcc9c7] hover:text-slate-950 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCcw className="h-4 w-4" />
-                )}
-                Refresh
-              </button>
+    <AuthFrame
+      aside={
+        <Surface className="flex w-full flex-col justify-between rounded-[32px] border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(239,244,255,0.94))] p-8">
+          <div>
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-[18px] border border-line bg-brand-soft text-brand">
+              <CheckCircle2 className="h-5 w-5" />
             </div>
+            <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-text-subtle">
+              Workspace selection
+            </div>
+            <h2 className="mt-3 text-[2rem] font-semibold tracking-[-0.05em] text-text">
+              Step into the right business without leaving the product language.
+            </h2>
+            <p className="mt-3 text-[15px] leading-7 text-text-muted">
+              Use the same calm light system to choose where you want to work, then land directly inside the product shell.
+            </p>
           </div>
 
-          <div className="px-6 py-6 sm:px-8">
-            {error ? (
-              <div className="mb-5 flex items-start gap-3 rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-rose-900">
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                <div className="min-w-0 text-[14px] leading-6">{error}</div>
-              </div>
-            ) : null}
-
-            {loading ? (
-              <div className="flex min-h-[320px] items-center justify-center">
-                <div className="inline-flex items-center gap-3 rounded-full border border-[#dde4e2] bg-[#f8faf9] px-4 py-2 text-sm text-slate-600">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading your businesses...
-                </div>
-              </div>
-            ) : (
-              <div className="grid gap-4 lg:grid-cols-2">
-                {sortedChoices.map((choice) => {
-                  const busy =
-                    switchingMembershipId &&
-                    switchingMembershipId === s(choice.membershipId);
-
-                  return (
-                    <SelectWorkspaceCard
-                      key={
-                        s(choice.membershipId) ||
-                        `${s(choice.tenantKey)}-${s(choice.role)}`
-                      }
-                      choice={choice}
-                      busy={busy}
-                      onSelect={handleSelect}
-                    />
-                  );
-                })}
-              </div>
-            )}
+          <div className="grid gap-3">
+            <MetricCard label="Businesses" value={sortedChoices.length} />
+            <MetricCard
+              label="Ready now"
+              value={sortedChoices.filter((item) => item.workspaceReady).length}
+              tone="brand"
+            />
           </div>
+        </Surface>
+      }
+    >
+      <AuthPanel className="max-w-[860px]">
+        <div className="flex flex-col gap-4 border-b border-line-soft pb-6 md:flex-row md:items-end md:justify-between">
+          <div className="min-w-0">
+            <div className="inline-flex items-center rounded-full border border-line bg-surface px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
+              Business selector
+            </div>
+            <h1 className="mt-4 text-[2.35rem] font-semibold tracking-[-0.05em] text-text">
+              Choose the business you want to open.
+            </h1>
+            <p className="mt-2 max-w-2xl text-[15px] leading-7 text-text-muted">
+              {s(viewer?.fullName || viewer?.email)
+                ? `${s(viewer?.fullName || viewer?.email)}, select the business you want to continue with.`
+                : "Select the business you want to continue with."}
+            </p>
+          </div>
+
+          <Button
+            variant="secondary"
+            onClick={handleRefresh}
+            disabled={loading}
+            leftIcon={loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
+          >
+            Refresh
+          </Button>
         </div>
-      </div>
-    </div>
+
+        {error ? (
+          <div className="mt-5">
+            <InlineNotice
+              tone="danger"
+              title="Workspace selection failed"
+              description={error}
+              icon={AlertCircle}
+            />
+          </div>
+        ) : null}
+
+        <div className="mt-6">
+          {loading ? (
+            <div className="flex min-h-[320px] items-center justify-center">
+              <div className="inline-flex items-center gap-3 rounded-full border border-line bg-surface px-4 py-2 text-sm text-text-muted">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading your businesses...
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2">
+              {sortedChoices.map((choice) => {
+                const busy =
+                  switchingMembershipId &&
+                  switchingMembershipId === s(choice.membershipId);
+
+                return (
+                  <WorkspaceCard
+                    key={s(choice.membershipId) || `${s(choice.tenantKey)}-${s(choice.role)}`}
+                    choice={choice}
+                    busy={busy}
+                    onSelect={handleSelect}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </AuthPanel>
+    </AuthFrame>
   );
 }

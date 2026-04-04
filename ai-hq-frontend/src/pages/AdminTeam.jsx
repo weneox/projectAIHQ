@@ -19,7 +19,7 @@ function Surface({ className = "", children }) {
   return (
     <section
       className={cx(
-        "overflow-hidden rounded-[32px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(10,14,24,0.82),rgba(5,8,16,0.94))] shadow-[0_24px_80px_rgba(0,0,0,0.34)] backdrop-blur-2xl",
+        "overflow-hidden rounded-[32px] border border-line bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] shadow-panel",
         className
       )}
     >
@@ -30,7 +30,7 @@ function Surface({ className = "", children }) {
 
 function Label({ children }) {
   return (
-    <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+    <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
       {children}
     </label>
   );
@@ -45,10 +45,10 @@ function Field({ icon: Icon, className = "", ...props }) {
       <input
         {...props}
         className={cx(
-          "w-full rounded-[22px] border border-white/[0.08] bg-white/[0.03] px-4 py-3.5 text-[15px] text-white outline-none transition",
-          "placeholder:text-slate-500",
-          "focus:border-cyan-400/30 focus:bg-white/[0.05] focus:ring-4 focus:ring-cyan-500/10",
-          props.disabled && "cursor-not-allowed bg-white/[0.02] text-slate-500",
+          "w-full rounded-[22px] border border-line bg-surface px-4 py-3.5 text-[15px] text-text outline-none transition",
+          "placeholder:text-text-subtle",
+          "focus:border-brand focus:bg-white focus:ring-4 focus:ring-brand/10",
+          props.disabled && "cursor-not-allowed bg-surface-subtle text-text-subtle",
           Icon && "pl-11"
         )}
       />
@@ -61,9 +61,9 @@ function Select({ className = "", ...props }) {
     <select
       {...props}
       className={cx(
-        "w-full rounded-[22px] border border-white/[0.08] bg-white/[0.03] px-4 py-3.5 text-[15px] text-white outline-none transition",
-        "focus:border-cyan-400/30 focus:bg-white/[0.05] focus:ring-4 focus:ring-cyan-500/10",
-        props.disabled && "cursor-not-allowed bg-white/[0.02] text-slate-500",
+        "w-full rounded-[22px] border border-line bg-surface px-4 py-3.5 text-[15px] text-text outline-none transition",
+        "focus:border-brand focus:bg-white focus:ring-4 focus:ring-brand/10",
+        props.disabled && "cursor-not-allowed bg-surface-subtle text-text-subtle",
         className
       )}
     />
@@ -73,12 +73,12 @@ function Select({ className = "", ...props }) {
 function Btn({ children, variant = "secondary", className = "", ...props }) {
   const tone =
     variant === "primary"
-      ? "border border-cyan-400/24 bg-cyan-400 text-slate-950 hover:brightness-110"
+      ? "border border-brand bg-brand text-white hover:border-brand-strong hover:bg-brand-strong"
       : variant === "danger"
-        ? "border border-rose-400/16 bg-rose-500/16 text-rose-200 hover:bg-rose-500/22"
+        ? "border border-danger/20 bg-danger-soft text-danger hover:border-danger/30"
         : variant === "ghost"
-          ? "border border-transparent bg-transparent text-slate-400 hover:bg-white/[0.04] hover:text-white"
-          : "border border-white/[0.08] bg-white/[0.04] text-slate-200 hover:bg-white/[0.07]";
+          ? "border border-transparent bg-transparent text-text-muted hover:bg-surface-muted hover:text-text"
+          : "border border-line bg-surface text-text hover:border-line-strong hover:bg-surface-muted";
 
   return (
     <button
@@ -111,21 +111,21 @@ function Chip({ children, className = "" }) {
 
 function roleTone(role) {
   const normalized = String(role || "").toLowerCase();
-  if (normalized === "owner") return "border-violet-400/16 bg-violet-400/10 text-violet-200";
-  if (normalized === "admin") return "border-sky-400/16 bg-sky-400/10 text-sky-200";
-  if (normalized === "operator") return "border-emerald-400/16 bg-emerald-400/10 text-emerald-200";
-  if (normalized === "marketer") return "border-fuchsia-400/16 bg-fuchsia-400/10 text-fuchsia-200";
-  if (normalized === "analyst") return "border-amber-400/16 bg-amber-400/10 text-amber-200";
-  return "border-white/10 bg-white/[0.04] text-slate-200";
+  if (normalized === "owner") return "border-violet-200 bg-violet-50 text-violet-700";
+  if (normalized === "admin") return "border-sky-200 bg-sky-50 text-sky-700";
+  if (normalized === "operator") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (normalized === "marketer") return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700";
+  if (normalized === "analyst") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-line bg-surface-muted text-text-muted";
 }
 
 function statusTone(status) {
   const normalized = String(status || "").toLowerCase();
-  if (normalized === "active") return "border-emerald-400/16 bg-emerald-400/10 text-emerald-200";
-  if (normalized === "invited") return "border-amber-400/16 bg-amber-400/10 text-amber-200";
-  if (normalized === "disabled") return "border-rose-400/16 bg-rose-400/10 text-rose-200";
-  if (normalized === "removed") return "border-slate-400/16 bg-slate-400/10 text-slate-300";
-  return "border-white/10 bg-white/[0.04] text-slate-200";
+  if (normalized === "active") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (normalized === "invited") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (normalized === "disabled") return "border-rose-200 bg-rose-50 text-rose-700";
+  if (normalized === "removed") return "border-slate-200 bg-slate-100 text-slate-600";
+  return "border-line bg-surface-muted text-text-muted";
 }
 
 function roleLabel(role) {
@@ -191,18 +191,18 @@ export default function AdminTeam() {
         <Surface className="sticky top-5">
           <div className="px-7 py-7">
             <div className="mb-8 flex items-start gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[24px] bg-[linear-gradient(180deg,rgba(18,24,42,0.96),rgba(10,14,28,0.98))] text-cyan-300 shadow-[0_18px_40px_rgba(0,0,0,0.35)]">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[24px] border border-line bg-brand-soft text-brand">
                 <UserPlus className="h-6 w-6" />
               </div>
 
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.20em] text-slate-500">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.20em] text-text-subtle">
                   Access studio
                 </div>
-                <div className="mt-1 text-[30px] font-semibold tracking-[-0.04em] text-white">
+                <div className="mt-1 text-[30px] font-semibold tracking-[-0.04em] text-text">
                   Identity control
                 </div>
-                <div className="mt-3 text-[15px] leading-7 text-slate-400">
+                <div className="mt-3 text-[15px] leading-7 text-text-muted">
                   Create workspace logins, update access, and assign credentials from one place.
                 </div>
               </div>
@@ -213,7 +213,7 @@ export default function AdminTeam() {
                 <Label>Workspace</Label>
 
                 {surface.loading ? (
-                  <div className="rounded-[22px] border border-white/[0.08] bg-white/[0.03] px-4 py-3.5 text-sm text-slate-400">
+                  <div className="rounded-[22px] border border-line bg-surface-muted px-4 py-3.5 text-sm text-text-muted">
                     Loading workspaces...
                   </div>
                 ) : (
@@ -228,17 +228,17 @@ export default function AdminTeam() {
                 )}
 
                 {selectedWorkspace ? (
-                  <div className="rounded-[24px] border border-white/[0.08] bg-white/[0.03] px-5 py-4">
-                    <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  <div className="rounded-[24px] border border-line bg-surface-muted px-5 py-4">
+                    <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
                       <Building2 className="h-3.5 w-3.5" />
                       Active workspace
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3">
-                      <div className="text-base font-semibold text-white">
+                      <div className="text-base font-semibold text-text">
                         {selectedWorkspace.company_name || selectedWorkspace.tenant_key}
                       </div>
-                      <Chip className="border-cyan-400/16 bg-cyan-400/10 text-cyan-200">
+                      <Chip className="border-brand/15 bg-brand-soft text-brand">
                         {selectedWorkspace.tenant_key}
                       </Chip>
                     </div>
@@ -246,7 +246,7 @@ export default function AdminTeam() {
                 ) : null}
               </div>
 
-              <div className="h-px bg-white/[0.08]" />
+              <div className="h-px bg-line-soft" />
 
               <div className="space-y-4">
                 <Label>Create user access</Label>
@@ -310,7 +310,7 @@ export default function AdminTeam() {
               <div className="h-px bg-white/[0.08]" />
 
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
                   <PencilLine className="h-3.5 w-3.5" />
                   Edit access
                 </div>
@@ -368,10 +368,10 @@ export default function AdminTeam() {
                 </div>
               </div>
 
-              <div className="h-px bg-white/[0.08]" />
+              <div className="h-px bg-line-soft" />
 
               <div className="space-y-4">
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
                   <ShieldCheck className="h-3.5 w-3.5" />
                   Password reset
                 </div>
@@ -412,20 +412,20 @@ export default function AdminTeam() {
       </div>
 
       <Surface>
-        <div className="border-b border-white/[0.08] px-7 py-7">
+        <div className="border-b border-line-soft px-7 py-7">
           <div className="mb-6 flex items-start gap-4">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[24px] bg-[linear-gradient(180deg,rgba(18,24,42,0.96),rgba(10,14,28,0.98))] text-cyan-300 shadow-[0_18px_40px_rgba(0,0,0,0.35)]">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[24px] border border-line bg-brand-soft text-brand">
               <Users className="h-6 w-6" />
             </div>
 
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.20em] text-slate-500">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.20em] text-text-subtle">
                 Member wall
               </div>
-              <div className="mt-1 text-[30px] font-semibold tracking-[-0.04em] text-white">
+              <div className="mt-1 text-[30px] font-semibold tracking-[-0.04em] text-text">
                 Team members
               </div>
-              <div className="mt-3 text-[15px] leading-7 text-slate-400">
+              <div className="mt-3 text-[15px] leading-7 text-text-muted">
                 {selectedWorkspace
                   ? `Users in ${selectedWorkspace.company_name || selectedWorkspace.tenant_key}`
                   : "Select a workspace to view and manage members"}
@@ -435,16 +435,16 @@ export default function AdminTeam() {
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="relative max-w-xl flex-1">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-text-subtle" />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search by email, name, role, or status"
-                className="w-full rounded-[22px] border border-white/[0.08] bg-white/[0.03] py-3.5 pl-11 pr-4 text-[15px] text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/30 focus:bg-white/[0.05] focus:ring-4 focus:ring-cyan-500/10"
+                className="w-full rounded-[22px] border border-line bg-surface py-3.5 pl-11 pr-4 text-[15px] text-text outline-none transition placeholder:text-text-subtle focus:border-brand focus:bg-white focus:ring-4 focus:ring-brand/10"
               />
             </div>
 
-            <Chip className="border-white/[0.08] bg-white/[0.03] text-slate-300">
+            <Chip className="border-line bg-surface text-text-muted">
               {users.length} total
             </Chip>
           </div>
@@ -453,14 +453,14 @@ export default function AdminTeam() {
         <div className="px-7 py-7">
           <div className="space-y-4">
             {surface.loading ? (
-              <div className="rounded-[24px] border border-white/[0.08] bg-white/[0.03] px-5 py-5 text-sm text-slate-400">
-                Loading users...
-              </div>
-            ) : !tenantKey ? (
-              <div className="rounded-[24px] border border-dashed border-white/[0.08] bg-white/[0.02] px-5 py-5 text-sm text-slate-400">
-                Select a workspace to view users.
-              </div>
-            ) : filteredUsers.length ? (
+                <div className="rounded-[24px] border border-line bg-surface-muted px-5 py-5 text-sm text-text-muted">
+                  Loading users...
+                </div>
+              ) : !tenantKey ? (
+                <div className="rounded-[24px] border border-dashed border-line bg-surface-muted px-5 py-5 text-sm text-text-muted">
+                  Select a workspace to view users.
+                </div>
+              ) : filteredUsers.length ? (
               filteredUsers.map((user) => {
                 const activeEdit = editForm.id === user.id;
                 const activePassword = passwordUserId === user.id;
@@ -471,22 +471,22 @@ export default function AdminTeam() {
                     className={cx(
                       "rounded-[30px] border px-5 py-5 transition-all duration-300",
                       activeEdit || activePassword
-                        ? "border-cyan-400/20 bg-cyan-500/[0.08] shadow-[0_18px_40px_rgba(8,145,178,0.10)]"
-                        : "border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05]"
+                        ? "border-brand/15 bg-brand-soft shadow-[0_18px_40px_-28px_rgba(37,99,235,0.18)]"
+                        : "border-line bg-surface hover:border-line-strong hover:bg-surface-muted"
                     )}
                   >
                     <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start gap-4">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[20px] bg-white/[0.05] text-base font-semibold text-slate-200">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[20px] border border-line bg-surface-muted text-base font-semibold text-text">
                             {(user.full_name || user.user_email || "U").trim().charAt(0).toUpperCase()}
                           </div>
 
                           <div className="min-w-0">
-                            <div className="truncate text-[22px] font-semibold tracking-[-0.04em] text-white">
+                            <div className="truncate text-[22px] font-semibold tracking-[-0.04em] text-text">
                               {user.full_name || "-"}
                             </div>
-                            <div className="mt-1 truncate text-[15px] text-slate-400">
+                            <div className="mt-1 truncate text-[15px] text-text-muted">
                               {user.user_email}
                             </div>
 
@@ -495,7 +495,7 @@ export default function AdminTeam() {
                               <Chip className={statusTone(user.status)}>{statusLabel(user.status)}</Chip>
                             </div>
 
-                            <div className="mt-4 text-sm text-slate-500">
+                            <div className="mt-4 text-sm text-text-subtle">
                               Created on{" "}
                               {user.created_at ? new Date(user.created_at).toLocaleString() : "-"}
                             </div>
@@ -549,7 +549,7 @@ export default function AdminTeam() {
                     </div>
 
                     {activeEdit || activePassword ? (
-                      <div className="mt-5 flex items-center gap-2 border-t border-white/[0.08] pt-4 text-sm text-cyan-200">
+                      <div className="mt-5 flex items-center gap-2 border-t border-line-soft pt-4 text-sm text-brand">
                         <ChevronRight className="h-4 w-4" />
                         {activeEdit
                           ? "This member is selected for editing."
@@ -560,10 +560,10 @@ export default function AdminTeam() {
                 );
               })
             ) : (
-              <div className="rounded-[24px] border border-dashed border-white/[0.08] bg-white/[0.02] px-5 py-5 text-sm text-slate-400">
-                No users found.
-              </div>
-            )}
+                <div className="rounded-[24px] border border-dashed border-line bg-surface-muted px-5 py-5 text-sm text-text-muted">
+                  No users found.
+                </div>
+              )}
           </div>
         </div>
       </Surface>

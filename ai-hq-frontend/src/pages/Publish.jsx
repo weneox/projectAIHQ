@@ -263,34 +263,34 @@ function summarizePublishingPosture(trust = {}) {
 function sectionClasses(highlighted = false) {
   return [
     "relative overflow-hidden rounded-[32px] px-6 py-6 sm:px-7 sm:py-7",
-    "border bg-[#fffdf9]/92 shadow-[0_18px_44px_rgba(120,102,73,0.08),inset_0_1px_0_rgba(255,255,255,0.78)]",
-    highlighted ? "border-[#dbc8aa]" : "border-[#ece2d3]",
+    "border bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] shadow-panel",
+    highlighted ? "border-brand/15" : "border-line",
   ].join(" ");
 }
 
 function rowClasses(highlighted = false) {
   return [
-    "rounded-[22px] border px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]",
+    "rounded-[22px] border px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)]",
     highlighted
-      ? "border-[#dbc8aa] bg-[#faf5eb]"
-      : "border-[#efe6d7] bg-[#fffdfa]",
+      ? "border-brand/15 bg-brand-soft"
+      : "border-line bg-surface-muted",
   ].join(" ");
 }
 
 function Section({ id, eyebrow, title, description = "", highlighted = false, children }) {
   return (
     <section id={id} className={sectionClasses(highlighted)}>
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(520px_circle_at_0%_0%,rgba(229,211,180,0.14),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.34),transparent_26%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(520px_circle_at_0%_0%,rgba(37,99,235,0.08),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.34),transparent_26%)]" />
       <div className="relative space-y-5">
         <div className="space-y-2">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-400">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-text-subtle">
             {eyebrow}
           </div>
-          <div className="text-[23px] font-semibold tracking-[-0.045em] text-stone-900">
+          <div className="text-[23px] font-semibold tracking-[-0.045em] text-text">
             {title}
           </div>
           {description ? (
-            <div className="max-w-3xl text-sm leading-6 text-stone-600">
+            <div className="max-w-3xl text-sm leading-6 text-text-muted">
               {description}
             </div>
           ) : null}
@@ -303,15 +303,15 @@ function Section({ id, eyebrow, title, description = "", highlighted = false, ch
 
 function SummaryMetric({ label, value, tone = "neutral" }) {
   const tones = {
-    neutral: "border-[#ece2d3] bg-[#fffdfa]",
-    warm: "border-[#e7d7ba] bg-[#faf3e6]",
-    soft: "border-[#dde8df] bg-[#f5faf5]",
+    neutral: "border-line bg-surface",
+    warm: "border-amber-200 bg-amber-50",
+    soft: "border-emerald-200 bg-emerald-50",
   };
 
   return (
     <div className={`rounded-[22px] border px-4 py-4 ${tones[tone] || tones.neutral}`}>
-      <div className="text-[11px] uppercase tracking-[0.2em] text-stone-400">{label}</div>
-      <div className="mt-2 text-[28px] font-semibold tracking-[-0.04em] text-stone-900">
+      <div className="text-[11px] uppercase tracking-[0.2em] text-text-subtle">{label}</div>
+      <div className="mt-2 text-[28px] font-semibold tracking-[-0.04em] text-text">
         {value}
       </div>
     </div>
@@ -321,10 +321,10 @@ function SummaryMetric({ label, value, tone = "neutral" }) {
 function SummaryLine({ label, text, highlighted = false }) {
   return (
     <div className={rowClasses(highlighted)}>
-      <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-400">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-text-subtle">
         {label}
       </div>
-      <div className="mt-2 text-sm leading-6 text-stone-600">
+      <div className="mt-2 text-sm leading-6 text-text-muted">
         {text}
       </div>
     </div>
@@ -359,15 +359,15 @@ function outcomeTone(kind = "") {
   }
   if (value === "queued" || value === "running") {
     return {
-      border: "border-stone-200",
-      bg: "bg-stone-50",
-      pill: "bg-stone-200 text-stone-700",
+      border: "border-line",
+      bg: "bg-surface",
+      pill: "bg-surface-muted text-text-muted",
       label: value === "running" ? "In progress" : "Queued",
     };
   }
   return {
-    border: "border-emerald-200",
-    bg: "bg-emerald-50",
+      border: "border-emerald-200",
+      bg: "bg-emerald-50",
     pill: "bg-emerald-100 text-emerald-700",
     label: "Confirmed",
   };
@@ -384,7 +384,7 @@ function OutcomeRow({ item, highlighted = false }) {
       ].join(" ")}
     >
       <div className="flex flex-wrap items-center gap-3">
-        <div className="text-[16px] font-semibold tracking-[-0.03em] text-stone-900">
+        <div className="text-[16px] font-semibold tracking-[-0.03em] text-text">
           {item.title}
         </div>
         {item?.kind ? (
@@ -393,7 +393,7 @@ function OutcomeRow({ item, highlighted = false }) {
           </span>
         ) : null}
       </div>
-      <div className="mt-2 text-sm leading-6 text-stone-600">
+      <div className="mt-2 text-sm leading-6 text-text-muted">
         {item.summary}
       </div>
     </div>
@@ -596,7 +596,7 @@ export default function PublishPage() {
   if (state.loading) {
     return (
       <div className="mx-auto max-w-[1080px] px-4 py-12 sm:px-6 lg:px-8">
-        <div className="rounded-[32px] border border-[#ece2d3] bg-[#fffdf9]/90 px-6 py-6 text-sm leading-6 text-stone-500 shadow-[0_18px_44px_rgba(120,102,73,0.08)]">
+        <div className="rounded-[32px] border border-line bg-surface px-6 py-6 text-sm leading-6 text-text-muted shadow-panel">
           Loading publish overview...
         </div>
       </div>
@@ -607,16 +607,16 @@ export default function PublishPage() {
     <div className="mx-auto max-w-[1080px] px-4 py-12 sm:px-6 lg:px-8">
       <div className="space-y-8">
         <section className={sectionClasses()}>
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(640px_circle_at_0%_0%,rgba(233,217,188,0.16),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.38),transparent_24%)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(640px_circle_at_0%_0%,rgba(37,99,235,0.08),transparent_36%),linear-gradient(180deg,rgba(255,255,255,0.38),transparent_24%)]" />
           <div className="relative space-y-6">
             <div className="space-y-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-400">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-text-subtle">
                 Publish
               </div>
-              <div className="text-[34px] font-semibold tracking-[-0.055em] text-stone-950">
+              <div className="text-[34px] font-semibold tracking-[-0.055em] text-text">
                 Publish Workspace
               </div>
-              <div className="max-w-3xl text-[15px] leading-7 text-stone-600">
+              <div className="max-w-3xl text-[15px] leading-7 text-text-muted">
                 A publish operator surface for moderation, upstream draft pressure, blocked posture, and the latest execution-backed publish outcomes.
               </div>
               {state.error ? (
@@ -648,10 +648,10 @@ export default function PublishPage() {
             </div>
 
             <div className={rowClasses()}>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-stone-400">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-text-subtle">
                 What this surface is for
               </div>
-              <div className="mt-2 text-sm leading-6 text-stone-600">
+              <div className="mt-2 text-sm leading-6 text-text-muted">
                 Start here to separate upstream approval pressure from actual publish execution state before you go deeper into proposal or moderation detail.
               </div>
             </div>
@@ -681,13 +681,13 @@ export default function PublishPage() {
           <div className="flex flex-wrap gap-3 pt-1">
             <Link
               to="/proposals"
-              className="inline-flex items-center rounded-full border border-[#dfcfb2] bg-[#efe0c0] px-4 py-2 text-sm font-medium text-stone-900 transition hover:border-[#d4bf99] hover:bg-[#ead7b2]"
+              className="inline-flex items-center rounded-full border border-brand/15 bg-brand-soft px-4 py-2 text-sm font-medium text-brand transition hover:border-brand/25 hover:bg-brand-soft"
             >
               Open proposal details
             </Link>
             <Link
               to="/comments"
-              className="inline-flex items-center rounded-full border border-[#e8decf] bg-[#fffaf4] px-4 py-2 text-sm font-medium text-stone-700 transition hover:border-[#d9c8ac] hover:bg-white hover:text-stone-950"
+              className="inline-flex items-center rounded-full border border-line bg-surface px-4 py-2 text-sm font-medium text-text-muted transition hover:border-line-strong hover:bg-white hover:text-text"
             >
               Open moderation details
             </Link>

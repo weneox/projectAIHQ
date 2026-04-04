@@ -8,53 +8,53 @@ export function statusMeta(status) {
   if (s === "in_progress") {
     return {
       label: "In Progress",
-      badge: "border-cyan-400/20 bg-cyan-400/10 text-cyan-100",
-      tone: "text-cyan-100/80",
-      panel: "border-cyan-400/12 bg-cyan-400/[0.06]",
+      badge: "border-sky-200 bg-sky-50 text-sky-700",
+      tone: "text-sky-700",
+      panel: "border-sky-200 bg-sky-50",
     };
   }
 
   if (s === "retryable") {
     return {
       label: "Retryable",
-      badge: "border-amber-400/20 bg-amber-400/10 text-amber-100",
-      tone: "text-amber-100/80",
-      panel: "border-amber-400/12 bg-amber-400/[0.06]",
+      badge: "border-amber-200 bg-amber-50 text-amber-700",
+      tone: "text-amber-700",
+      panel: "border-amber-200 bg-amber-50",
     };
   }
 
   if (s === "dead_lettered") {
     return {
       label: "Dead Lettered",
-      badge: "border-rose-400/20 bg-rose-400/10 text-rose-100",
-      tone: "text-rose-100/80",
-      panel: "border-rose-400/12 bg-rose-400/[0.06]",
+      badge: "border-rose-200 bg-rose-50 text-rose-700",
+      tone: "text-rose-700",
+      panel: "border-rose-200 bg-rose-50",
     };
   }
 
   if (s === "terminal") {
     return {
       label: "Terminal",
-      badge: "border-fuchsia-400/20 bg-fuchsia-400/10 text-fuchsia-100",
-      tone: "text-fuchsia-100/80",
-      panel: "border-fuchsia-400/12 bg-fuchsia-400/[0.06]",
+      badge: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700",
+      tone: "text-fuchsia-700",
+      panel: "border-fuchsia-200 bg-fuchsia-50",
     };
   }
 
   if (s === "succeeded") {
     return {
       label: "Succeeded",
-      badge: "border-emerald-400/20 bg-emerald-400/10 text-emerald-100",
-      tone: "text-emerald-100/80",
-      panel: "border-emerald-400/12 bg-emerald-400/[0.06]",
+      badge: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      tone: "text-emerald-700",
+      panel: "border-emerald-200 bg-emerald-50",
     };
   }
 
   return {
     label: "Pending",
-    badge: "border-white/12 bg-white/[0.05] text-white/86",
-    tone: "text-white/70",
-    panel: "border-white/10 bg-white/[0.04]",
+    badge: "border-line bg-surface-muted text-text-muted",
+    tone: "text-text-muted",
+    panel: "border-line bg-surface-muted",
   };
 }
 
