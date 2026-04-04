@@ -1,23 +1,23 @@
-import { ArrowRight, Circle } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { cx } from "../../lib/cx.js";
 import { getChannelStatusMeta } from "./channelCatalogModel.js";
 
 const STATUS_STYLES = {
   success: {
-    dot: "fill-emerald-500 text-emerald-500",
-    text: "text-emerald-700",
+    dot: "bg-emerald-500",
+    pill: "border-emerald-500/16 bg-emerald-500/[0.06] text-emerald-700",
   },
   info: {
-    dot: "fill-brand text-brand",
-    text: "text-brand",
+    dot: "bg-[#2563eb]",
+    pill: "border-[#2563eb]/16 bg-[#2563eb]/[0.06] text-[#2563eb]",
   },
   warning: {
-    dot: "fill-amber-500 text-amber-500",
-    text: "text-amber-700",
+    dot: "bg-amber-500",
+    pill: "border-amber-500/16 bg-amber-500/[0.07] text-amber-700",
   },
   neutral: {
-    dot: "fill-slate-400 text-slate-400",
-    text: "text-text-muted",
+    dot: "bg-slate-400",
+    pill: "border-black/[0.08] bg-black/[0.03] text-text-muted",
   },
 };
 
@@ -28,12 +28,15 @@ export function ChannelStatus({ status, className }) {
   return (
     <div
       className={cx(
-        "inline-flex items-center gap-1.5 text-[12px] font-medium tracking-[-0.01em]",
-        palette.text,
+        "inline-flex h-8 items-center gap-2 rounded-[8px] border px-3 text-[10px] font-semibold uppercase tracking-[0.18em]",
+        palette.pill,
         className
       )}
     >
-      <Circle className={cx("h-2.5 w-2.5", palette.dot)} />
+      <span
+        aria-hidden="true"
+        className={cx("h-1.5 w-1.5 shrink-0 rounded-full", palette.dot)}
+      />
       <span>{meta.label}</span>
     </div>
   );
@@ -45,22 +48,41 @@ export function ChannelActionButton({
   quiet = false,
   showArrow = true,
   type = "button",
+  ariaLabel,
+  fullWidth = false,
   ...props
 }) {
   return (
     <button
       type={type}
+      aria-label={ariaLabel}
       className={cx(
-        "inline-flex items-center justify-center gap-2 rounded-full text-[13px] font-semibold tracking-[-0.02em] transition-[background-color,border-color,color,box-shadow,transform] duration-200 ease-premium focus-visible:outline-none",
+        "relative inline-flex items-center justify-center gap-2.5 whitespace-nowrap border text-[13px] font-semibold tracking-[-0.02em] transition-all duration-200 ease-premium focus-visible:outline-none focus-visible:ring-4",
+        fullWidth && "w-full",
         quiet
-          ? "h-10 border border-line/80 bg-white/80 px-4 text-text shadow-[0_10px_28px_-24px_rgba(15,23,42,0.55)] hover:border-line hover:bg-white"
-          : "h-10 bg-text px-4.5 text-white shadow-[0_18px_36px_-24px_rgba(15,23,42,0.85)] hover:-translate-y-[1px] hover:bg-slate-900",
+          ? [
+              "h-10 rounded-[8px] border-black/[0.08] bg-white px-4 text-text",
+              "shadow-[0_10px_24px_-22px_rgba(15,23,42,0.22)]",
+              "hover:border-black/[0.14] hover:bg-black/[0.02]",
+              "focus-visible:ring-black/5",
+            ]
+          : [
+              "h-11 overflow-hidden rounded-[8px] border-[#1f5eff] px-4 text-white",
+              "bg-[linear-gradient(180deg,#3f7cff_0%,#2563eb_100%)]",
+              "shadow-[0_14px_28px_-18px_rgba(37,99,235,0.38)]",
+              "hover:-translate-y-[1px] hover:border-[#1c55da] hover:bg-[linear-gradient(180deg,#4b84ff_0%,#1f5eff_100%)]",
+              "hover:shadow-[0_18px_30px_-16px_rgba(37,99,235,0.44)]",
+              "focus-visible:ring-[#2563eb]/14",
+              "before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-1/2 before:bg-[linear-gradient(180deg,rgba(255,255,255,0.16),transparent)]",
+            ],
         className
       )}
       {...props}
     >
-      <span>{children}</span>
-      {showArrow ? <ArrowRight className="h-3.5 w-3.5" /> : null}
+      <span className="relative z-[1]">{children}</span>
+      {showArrow ? (
+        <ArrowRight className="relative z-[1] h-3.5 w-3.5 shrink-0 opacity-90" />
+      ) : null}
     </button>
   );
 }
@@ -71,14 +93,16 @@ export function ChannelCapabilityLine({ capabilities = [], className }) {
   return (
     <div
       className={cx(
-        "flex flex-wrap items-center gap-x-2 text-[11px] font-medium uppercase tracking-[0.16em] text-text-subtle",
+        "flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-text-subtle",
         className
       )}
     >
       {capabilities.map((item, index) => (
-        <span key={`${item}-${index}`} className="inline-flex items-center gap-x-2">
-          {index ? <span className="h-1 w-1 rounded-full bg-text-subtle" /> : null}
-          <span>{item}</span>
+        <span
+          key={`${item}-${index}`}
+          className="inline-flex h-7 items-center rounded-[7px] border border-black/[0.07] bg-black/[0.025] px-2.5"
+        >
+          {item}
         </span>
       ))}
     </div>

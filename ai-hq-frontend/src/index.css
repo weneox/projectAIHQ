@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -7,70 +7,73 @@
 :root {
   color-scheme: light;
 
-  --color-canvas: 244 247 251;
-  --color-canvas-muted: 236 241 247;
+  --color-canvas: 245 247 250;
+  --color-canvas-muted: 238 242 247;
 
   --color-surface: 255 255 255;
-  --color-surface-muted: 248 250 252;
-  --color-surface-subtle: 242 245 249;
-  --color-surface-inverse: 15 23 42;
+  --color-surface-muted: 249 250 252;
+  --color-surface-subtle: 244 247 250;
+  --color-surface-inverse: 11 18 32;
 
-  --color-text: 12 20 36;
-  --color-text-muted: 78 93 112;
-  --color-text-subtle: 112 128 148;
+  --color-text: 10 18 34;
+  --color-text-muted: 68 82 102;
+  --color-text-subtle: 100 115 135;
   --color-text-inverse: 248 250 252;
 
-  --color-line: 216 224 234;
-  --color-line-strong: 192 203 216;
-  --color-line-soft: 231 236 242;
+  --color-line: 217 225 235;
+  --color-line-strong: 196 207 220;
+  --color-line-soft: 232 237 243;
 
   --color-brand: 37 99 235;
   --color-brand-strong: 29 78 216;
-  --color-brand-soft: 238 244 255;
+  --color-brand-soft: 239 244 255;
 
   --color-info: 37 99 235;
-  --color-info-soft: 238 244 255;
+  --color-info-soft: 239 244 255;
 
-  --color-success: 15 118 110;
-  --color-success-soft: 240 253 250;
+  --color-success: 5 150 105;
+  --color-success-soft: 236 253 245;
 
-  --color-warning: 180 83 9;
-  --color-warning-soft: 255 251 235;
+  --color-warning: 202 138 4;
+  --color-warning-soft: 254 249 195;
 
-  --color-danger: 190 24 93;
+  --color-danger: 225 29 72;
   --color-danger-soft: 255 241 242;
 
-  --color-overlay: 12 20 36;
+  --color-overlay: 10 18 34;
 
   --font-sans:
-    "Manrope",
+    "Inter",
     ui-sans-serif,
     system-ui,
     -apple-system,
+    BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
+
   --font-display:
-    "Plus Jakarta Sans",
-    "Manrope",
+    "Sora",
+    "Inter",
     ui-sans-serif,
     system-ui,
     -apple-system,
+    BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
 
   --radius-xs: 8px;
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
-  --radius-xl: 24px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
   --radius-pill: 999px;
 
-  --shadow-xs: 0 1px 2px rgba(12, 20, 36, 0.04);
-  --shadow-sm: 0 10px 28px rgba(12, 20, 36, 0.06);
-  --shadow-md: 0 20px 48px rgba(12, 20, 36, 0.10);
-  --shadow-lg: 0 30px 72px rgba(12, 20, 36, 0.12);
+  --shadow-xs: 0 1px 2px rgba(10, 18, 34, 0.03);
+  --shadow-sm: 0 10px 30px rgba(10, 18, 34, 0.06);
+  --shadow-md: 0 22px 54px rgba(10, 18, 34, 0.09);
+  --shadow-lg: 0 34px 80px rgba(10, 18, 34, 0.12);
 
-  --focus-ring: 0 0 0 4px rgba(37, 99, 235, 0.14);
+  --focus-ring: 0 0 0 4px rgba(37, 99, 235, 0.12);
 
   --control-sm: 38px;
   --control-md: 44px;
@@ -100,16 +103,24 @@ body {
   margin: 0;
   min-height: 100%;
   overflow-x: hidden;
-  background: rgb(var(--color-canvas));
+  background:
+    radial-gradient(
+      1200px circle at 0% 0%,
+      rgba(37, 99, 235, 0.045),
+      transparent 32%
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(245, 247, 250, 1));
   color: rgb(var(--color-text));
   font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.5;
-  letter-spacing: -0.01em;
+  font-size: 15px;
+  line-height: 1.55;
+  letter-spacing: 0;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-feature-settings: "ss01" 1, "cv11" 1;
+  font-feature-settings: "liga" 1, "calt" 1, "ss01" 1, "cv05" 1, "cv11" 1;
+  font-kerning: normal;
+  font-synthesis-weight: none;
 }
 
 #root {
@@ -123,7 +134,7 @@ body {
 }
 
 ::selection {
-  background: rgba(29, 78, 216, 0.12);
+  background: rgba(37, 99, 235, 0.12);
   color: rgb(var(--color-text));
 }
 
@@ -141,7 +152,7 @@ h6 {
   margin: 0;
   color: rgb(var(--color-text));
   font-family: var(--font-display);
-  letter-spacing: -0.035em;
+  letter-spacing: -0.04em;
 }
 
 p {
@@ -208,7 +219,7 @@ table {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(115, 129, 147, 0.46) rgba(231, 236, 242, 0.8);
+  scrollbar-color: rgba(111, 125, 145, 0.42) rgba(232, 237, 243, 0.82);
 }
 
 *::-webkit-scrollbar {
@@ -217,18 +228,18 @@ table {
 }
 
 *::-webkit-scrollbar-track {
-  background: rgba(231, 236, 242, 0.8);
+  background: rgba(232, 237, 243, 0.82);
 }
 
 *::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
-  background: rgba(115, 129, 147, 0.46);
+  background: rgba(111, 125, 145, 0.42);
   background-clip: padding-box;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(91, 104, 120, 0.58);
+  background: rgba(88, 102, 120, 0.56);
 }
 
 #app-boot {
@@ -284,26 +295,17 @@ table {
   box-shadow: var(--shadow-md);
 }
 
-/* ✅ PREMIUM TOOLTIP FIX (compact + balanced) */
 .ant-tooltip .ant-tooltip-inner {
-  /* shape */
-  border-radius: 10px !important;
-
-  /* sizing: stop the “big bubble for small text” */
-  padding: 5px 10px !important;
-  min-height: 26px !important;
-
-  /* typography: make it feel like a premium label */
+  border-radius: 12px !important;
+  padding: 6px 10px !important;
+  min-height: 28px !important;
   font-size: 12px !important;
   font-weight: 700 !important;
-  letter-spacing: -0.01em !important;
-  line-height: 1 !important;
-
-  /* keep it crisp */
+  letter-spacing: 0 !important;
+  line-height: 1.1 !important;
   text-shadow: none !important;
 }
 
-/* arrow should not add weird shadow */
 .ant-tooltip .ant-tooltip-arrow::before {
   box-shadow: none !important;
 }
@@ -316,13 +318,13 @@ table {
 
 .ant-modal .ant-modal-content,
 .ant-drawer .ant-drawer-content {
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
 }
 
 .ant-modal-root .ant-modal-mask,
 .ant-drawer-mask {
-  background: rgba(var(--color-overlay), 0.48) !important;
+  background: rgba(var(--color-overlay), 0.42) !important;
 }
 
 .sonner-toast {
@@ -349,7 +351,7 @@ table {
   padding: 0 12px 8px;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
   color: rgb(var(--color-text-subtle));
 }
