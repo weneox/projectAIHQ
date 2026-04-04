@@ -20,19 +20,16 @@ afterEach(() => {
 });
 
 describe("ChannelCatalog", () => {
-  it("renders the channels framing and active runtime section", () => {
+  it("renders the compact channels overview", () => {
     render(
       <MemoryRouter>
         <ChannelCatalog />
       </MemoryRouter>
     );
 
-    expect(
-      screen.getByText("What is real in the current launch slice")
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Real launch surfaces")
-    ).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Channels" })).toBeInTheDocument();
+    expect(screen.getByText("Instagram")).toBeInTheDocument();
+    expect(screen.getByText("Voice")).toBeInTheDocument();
   });
 
   it("filters channels by search query", () => {
@@ -50,17 +47,34 @@ describe("ChannelCatalog", () => {
     expect(screen.queryByText("Instagram")).not.toBeInTheDocument();
   });
 
-  it("switches catalog groups through filter pills", () => {
+  it("switches channel groups through the overview filters", () => {
     render(
       <MemoryRouter>
         <ChannelCatalog />
       </MemoryRouter>
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Context and setup" }));
+    fireEvent.change(screen.getByLabelText("Filter channels"), {
+      target: { value: "context" },
+    });
 
-    expect(screen.getByText("Google Drive")).toBeInTheDocument();
+    expect(screen.getByText("Business Context")).toBeInTheDocument();
     expect(screen.queryByText("Instagram")).not.toBeInTheDocument();
+  });
+
+  it("opens the focused detail drawer", () => {
+    render(
+      <MemoryRouter>
+        <ChannelCatalog />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Inspect Instagram" }));
+
+    expect(screen.getByText("Quick controls")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Close channel details" })
+    ).toBeInTheDocument();
   });
 
   it("navigates when a channel action is selected", () => {
@@ -70,7 +84,7 @@ describe("ChannelCatalog", () => {
       </MemoryRouter>
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Open Inbox" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Open Instagram" }));
 
     expect(navigate).toHaveBeenCalledWith("/inbox");
   });

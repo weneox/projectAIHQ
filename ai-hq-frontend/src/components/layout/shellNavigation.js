@@ -102,24 +102,24 @@ const SECONDARY_SECTIONS = [
         title: "Support",
         items: [
           { label: "Workspace overview", to: "/workspace" },
-          { label: "Launch scope", to: "/channels" },
+          { label: "Channels", to: "/channels" },
         ],
       },
     ],
   },
   {
     id: "channels",
-    label: "Launch Scope",
-    kicker: "Reference",
-    description: "Honest map of what is live now versus planned, limited, or setup-only.",
+    label: "Channels",
+    kicker: "Control",
+    description: "Fast channel overview for live, limited, setup, and context surfaces.",
     icon: Waypoints,
     to: "/channels",
     paths: ["/channels"],
     contextGroups: [
       {
-        title: "Scope",
+        title: "Channels",
         items: [
-          { label: "Launch scope", to: "/channels" },
+          { label: "Channels overview", to: "/channels" },
           { label: "Workspace overview", to: "/workspace" },
         ],
       },

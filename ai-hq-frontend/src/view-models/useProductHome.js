@@ -407,11 +407,11 @@ export function useProductHome() {
       },
       {
         id: "launch",
-        title: "Launch scope",
-        status: "Honest framing",
-        summary: "See what is truly live versus planned, limited, or setup-only.",
-        detail: "Keep the visible product tighter than the infrastructure and future roadmap.",
-        action: { label: "Review launch scope", path: "/channels" },
+        title: "Channels",
+        status: "Operational view",
+        summary: "See what is live, limited, setup-only, or context-only at a glance.",
+        detail: "Use Channels as the quick control layer instead of a long settings document.",
+        action: { label: "Open channels", path: "/channels" },
       },
       {
         id: "memory",
