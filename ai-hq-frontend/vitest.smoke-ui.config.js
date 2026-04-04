@@ -3,7 +3,7 @@ import { defineConfig, mergeConfig } from "vitest/config";
 import baseConfig from "./vite.config.js";
 
 const routerMockPath = fileURLToPath(
-  new URL("./src/test/react-router-dom.smoke-mock.jsx", import.meta.url)
+  new URL("./src/test/mocks/react-router-dom.smoke-mock.jsx", import.meta.url)
 );
 
 const resolvedBaseConfig =
@@ -26,26 +26,24 @@ export default mergeConfig(
       globals: true,
 
       include: [
-        "src/components/settings/SettingsSurfaceBanner.test.jsx",
-        "src/components/settings/ChannelsPanel.test.jsx",
-        "src/components/settings/SecretsPanel.test.jsx",
-        "src/components/settings/TeamPanel.test.jsx",
-        "src/components/admin/AdminPageShell.test.jsx",
-        "src/components/inbox/InboxComposer.test.jsx",
-        "src/components/inbox/InboxThreadListPanel.test.jsx",
-        "src/components/inbox/RetryQueuePanel.test.jsx",
-        "src/components/inbox/ThreadOutboundAttemptsPanel.test.jsx",
-        "src/components/inbox/InboxDetailPanel.test.jsx",
-        "src/components/inbox/InboxLeadPanel.test.jsx",
-        "src/pages/AdminTenants.test.jsx",
-        "src/pages/AdminTeam.test.jsx",
-        "src/pages/Executions.smoke.test.jsx",
-        "src/pages/Voice.test.jsx",
-        "src/pages/Comments.test.jsx",
-        "src/pages/Inbox.test.jsx",
-        "src/pages/Truth/TruthViewerPage.smoke.test.jsx",
-        "src/pages/Settings/SettingsController.smoke.test.jsx",
-        "src/pages/Settings/sections/TrustMaintenanceSection.test.jsx",
+        "src/test/App.smoke.test.jsx",
+        "src/test/components/admin/AdminPageShell.test.jsx",
+        "src/test/components/admin/ProviderSecretsPanel.test.jsx",
+        "src/test/components/feedback/SurfaceBanner.test.jsx",
+        "src/test/components/inbox/InboxComposer.test.jsx",
+        "src/test/components/inbox/InboxThreadListPanel.test.jsx",
+        "src/test/components/inbox/InboxDetailPanel.test.jsx",
+        "src/test/components/inbox/InboxLeadPanel.test.jsx",
+        "src/test/components/layout/Sidebar.test.jsx",
+        "src/test/pages/AdminTenants.test.jsx",
+        "src/test/pages/AdminTeam.test.jsx",
+        "src/test/pages/Executions.smoke.test.jsx",
+        "src/test/pages/Voice.test.jsx",
+        "src/test/pages/Comments.test.jsx",
+        "src/test/pages/Inbox.test.jsx",
+        "src/test/pages/Publish.test.jsx",
+        "src/test/pages/Truth/TruthViewerPage.smoke.test.jsx",
+        "src/test/surfaces/workspace/WorkspacePage.smoke.test.jsx",
       ],
 
       exclude: ["playwright/**", "dist/**", "node_modules/**"],

@@ -54,7 +54,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     test: {
       environment: "jsdom",
-      setupFiles: "./src/test/vitest.setup.js",
+      setupFiles: "./src/test/setup/vitest.setup.js",
       css: true,
       pool: "vmThreads",
       fileParallelism: false,

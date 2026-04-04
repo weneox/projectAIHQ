@@ -1,17 +1,14 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  test: {
-    environment: "node",
-    include: [
-      "src/env/validation.test.js",
-      "src/api/truth.test.js",
-      "src/api/trust.test.js",
-      "src/lib/appEntry.test.js",
-      "src/pages/Settings/hooks/useSourceIntelligence.test.js",
-      "src/pages/SetupStudio/hooks/setupStudioActionShared.test.js",
-      "src/pages/SetupStudio/state/shared.test.js",
-    ],
+    test: {
+      environment: "node",
+      include: [
+        "src/test/env/validation.test.js",
+        "src/test/api/truth.test.js",
+        "src/test/api/trust.test.js",
+        "src/test/lib/appEntry.test.js",
+      ],
     exclude: ["playwright/**", "dist/**", "node_modules/**"],
     setupFiles: [],
     pool: "vmThreads",
