@@ -1,11 +1,8 @@
 import { Activity, AlertTriangle, Clock3, Filter, RefreshCcw } from "lucide-react";
 
 import AdminPageShell from "../components/admin/AdminPageShell.jsx";
+import { cx } from "../lib/cx.js";
 import { useAdminIncidentsSurface } from "./hooks/useAdminIncidentsSurface.js";
-
-function cx(...items) {
-  return items.filter(Boolean).join(" ");
-}
 
 function severityTone(severity = "") {
   const normalized = String(severity || "").toLowerCase();

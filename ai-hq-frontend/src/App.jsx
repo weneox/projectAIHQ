@@ -21,7 +21,6 @@ const Incidents = lazy(() => import("./pages/Incidents.jsx"));
 const Voice = lazy(() => import("./pages/Voice.jsx"));
 const Welcome = lazy(() => import("./pages/Welcome.jsx"));
 const Login = lazy(() => import("./pages/Login.jsx"));
-const Signup = lazy(() => import("./pages/Signup.jsx"));
 const VerifyEmail = lazy(() => import("./pages/Auth/VerifyEmailPage.jsx"));
 const TruthViewerPage = lazy(() => import("./pages/Truth/TruthViewerPage.jsx"));
 const ChannelCatalog = lazy(() => import("./pages/ChannelCatalog.jsx"));
@@ -62,12 +61,6 @@ function renderInternalRouteRedirects() {
 }
 
 export default function App() {
-  const setupLegacyEntryElement = (
-    <UserRouteGuard>
-      <Navigate to="/home?assistant=setup" replace />
-    </UserRouteGuard>
-  );
-
   const rootEntryElement = (
     <UserRouteGuard>
       <AppEntryRedirect />
@@ -82,7 +75,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={withSuspense(<Login />)} />
-        <Route path="/signup" element={withSuspense(<Signup />)} />
+        <Route path="/signup" element={withSuspense(<Login />)} />
         <Route path="/verify-email" element={withSuspense(<VerifyEmail />)} />
 
         <Route path="/admin/login" element={withSuspense(<AdminLogin />)} />
@@ -100,8 +93,6 @@ export default function App() {
           <Route path="team" element={withSuspense(<AdminTeam />)} />
           <Route path="secrets" element={withSuspense(<AdminSecrets />)} />
         </Route>
-
-        <Route path="/setup/studio" element={setupLegacyEntryElement} />
 
         <Route path="/select-workspace" element={selectWorkspaceEntryElement} />
         <Route path="/" element={rootEntryElement} />

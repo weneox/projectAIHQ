@@ -12,11 +12,8 @@ import {
 } from "lucide-react";
 
 import SurfaceBanner from "../components/feedback/SurfaceBanner.jsx";
+import { cx } from "../lib/cx.js";
 import { useAdminTeamSurface } from "./hooks/useAdminTeamSurface.js";
-
-function cx(...arr) {
-  return arr.filter(Boolean).join(" ");
-}
 
 function Surface({ className = "", children }) {
   return (

@@ -25,9 +25,9 @@ import {
 import { isWelcomeIdentityComplete } from "../lib/welcomeIdentity.js";
 import AppBootSurface from "../components/loading/AppBootSurface.jsx";
 
-import AIVisual from "../assets/setup-studio/channels/AI.png";
-import GmailIconAsset from "../assets/setup-studio/channels/gmail.svg";
-import AppleIconAsset from "../assets/setup-studio/channels/apple.svg";
+import AIVisual from "../assets/channels/AI.png";
+import GmailIconAsset from "../assets/channels/gmail.svg";
+import AppleIconAsset from "../assets/channels/apple.svg";
 
 const RESERVED_SUBDOMAINS = new Set([
   "www",

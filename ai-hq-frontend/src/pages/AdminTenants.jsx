@@ -2,11 +2,8 @@ import Card from "../components/ui/Card.jsx";
 import Button from "../components/ui/Button.jsx";
 import Input from "../components/ui/Input.jsx";
 import SurfaceBanner from "../components/feedback/SurfaceBanner.jsx";
+import { cx } from "../lib/cx.js";
 import { useAdminTenantsSurface } from "./hooks/useAdminTenantsSurface.js";
-
-function cx(...arr) {
-  return arr.filter(Boolean).join(" ");
-}
 
 function statusTone(status) {
   const normalized = String(status || "").toLowerCase();

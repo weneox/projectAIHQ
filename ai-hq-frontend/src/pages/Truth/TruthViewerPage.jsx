@@ -20,7 +20,7 @@ import TruthHistoryPanel from "../../components/truth/TruthHistoryPanel.jsx";
 import TruthVersionComparePanel from "../../components/truth/TruthVersionComparePanel.jsx";
 import RepairHub from "../../components/readiness/RepairHub.jsx";
 import { dispatchRepairAction } from "../../components/readiness/dispatchRepairAction.js";
-import { createReadinessViewModel } from "../../components/readiness/readinessViewModel.js";
+import { createReadinessViewModel } from "../../lib/readinessViewModel.js";
 import GovernanceCockpit from "../../components/governance/GovernanceCockpit.jsx";
 import TruthReviewWorkbench from "../../components/governance/TruthReviewWorkbench.jsx";
 

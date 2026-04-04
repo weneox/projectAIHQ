@@ -14,15 +14,15 @@ import {
   Sparkles,
   Waypoints,
 } from "lucide-react";
-import webIcon from "../assets/setup-studio/channels/web.svg";
-import gmailIcon from "../assets/setup-studio/channels/gmail.svg";
-import googleDriveIcon from "../assets/setup-studio/channels/google-drive.svg";
-import instagramIcon from "../assets/setup-studio/channels/instagram.svg";
-import messengerIcon from "../assets/setup-studio/channels/messenger.svg";
-import telegramIcon from "../assets/setup-studio/channels/telegram.svg";
-import tiktokIcon from "../assets/setup-studio/channels/tiktok.svg";
-import whatsappIcon from "../assets/setup-studio/channels/whatsapp.svg";
-import youtubeIcon from "../assets/setup-studio/channels/youtube.svg";
+import webIcon from "../assets/channels/web.svg";
+import gmailIcon from "../assets/channels/gmail.svg";
+import googleDriveIcon from "../assets/channels/google-drive.svg";
+import instagramIcon from "../assets/channels/instagram.svg";
+import messengerIcon from "../assets/channels/messenger.svg";
+import telegramIcon from "../assets/channels/telegram.svg";
+import tiktokIcon from "../assets/channels/tiktok.svg";
+import whatsappIcon from "../assets/channels/whatsapp.svg";
+import youtubeIcon from "../assets/channels/youtube.svg";
 import {
   PageCanvas,
   PageHeader,

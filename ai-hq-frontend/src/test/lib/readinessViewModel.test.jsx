@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createReadinessViewModel } from "../../../components/readiness/readinessViewModel.js";
+import { createReadinessViewModel } from "../../lib/readinessViewModel.js";
 
 describe("createReadinessViewModel", () => {
   it("normalizes array and nested blocker shapes into one stable model", () => {

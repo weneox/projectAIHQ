@@ -1,7 +1,7 @@
 import Button from "../ui/Button.jsx";
 import Badge from "../ui/Badge.jsx";
 import { InlineNotice, Surface } from "../ui/AppShellPrimitives.jsx";
-import { createReadinessViewModel } from "./readinessViewModel.js";
+import { createReadinessViewModel } from "../../lib/readinessViewModel.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
