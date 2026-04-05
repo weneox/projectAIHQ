@@ -234,48 +234,91 @@ class FakeChannelConnectDb {
   }
 }
 
-async function seedPendingSelection(db) {
+function buildPageEnrichmentLookup(pages = []) {
+  const pageMap = new Map(
+    pages.map((page) => [String(page?.id || "").trim(), page])
+  );
+
+  return async (pageId) => pageMap.get(String(pageId || "").trim()) || { id: pageId };
+}
+
+async function invokeMetaCallbackWithPages(
+  db,
+  {
+    code = "meta-code-1",
+    actor = "owner@acme.test",
+    userAccessToken = "user-token-1",
+    metaUserProfile = {
+      id: "meta-user-1",
+      name: "Acme Owner",
+    },
+    pages = [],
+    getMetaPageInstagramContextForUserTokenFn = buildPageEnrichmentLookup(pages),
+    getMetaPageAccessContextForUserTokenFn,
+    syncInstagramSourceLayerFn = async ({ selected = {} } = {}) => ({
+      source: {
+        id: "source-1",
+        source_key: `instagram:${selected.igUserId || "ig-1"}`,
+      },
+      capabilityGovernance: {
+        publishStatus: "ready",
+        reviewRequired: false,
+        maintenanceSession: { id: "session-1" },
+        blockedReason: "",
+      },
+    }),
+  } = {}
+) {
   return handleMetaCallback({
     db,
     req: {
       query: {
-        code: "meta-code-1",
+        code,
         state: signState({
           tenantKey: "acme",
-          actor: "owner@acme.test",
+          actor,
           exp: Date.now() + 60_000,
         }),
       },
     },
     exchangeCodeForUserTokenFn: async () => ({
-      access_token: "user-token-1",
+      access_token: userAccessToken,
       token_type: "bearer",
       expires_in: 3600,
     }),
-    getMetaUserProfileFn: async () => ({
-      id: "meta-user-1",
-      name: "Acme Owner",
-    }),
-    getPagesForUserTokenFn: async () => [
-      {
-        id: "page-1",
-        name: "Acme One",
-        access_token: "page-token-1",
-        instagram_business_account: {
-          id: "ig-1",
-          username: "acme.one",
-        },
+    getMetaUserProfileFn: async () => metaUserProfile,
+    getPagesForUserTokenFn: async () => pages,
+    getMetaPageInstagramContextForUserTokenFn,
+    getMetaPageAccessContextForUserTokenFn,
+    syncInstagramSourceLayerFn,
+  });
+}
+
+async function seedPendingSelection(db) {
+  const pages = [
+    {
+      id: "page-1",
+      name: "Acme One",
+      access_token: "page-token-1",
+      instagram_business_account: {
+        id: "ig-1",
+        username: "acme.one",
       },
-      {
-        id: "page-2",
-        name: "Acme Two",
-        access_token: "page-token-2",
-        instagram_business_account: {
-          id: "ig-2",
-          username: "acme.two",
-        },
+    },
+    {
+      id: "page-2",
+      name: "Acme Two",
+      access_token: "page-token-2",
+      instagram_business_account: {
+        id: "ig-2",
+        username: "acme.two",
       },
-    ],
+    },
+  ];
+
+  return invokeMetaCallbackWithPages(db, {
+    pages,
+    getMetaPageInstagramContextForUserTokenFn: buildPageEnrichmentLookup(pages),
   });
 }
 
@@ -287,6 +330,7 @@ async function invokeSingleAccountCallback(
     pageAccessToken = "page-token-1",
     igUserId = "ig-1",
     igUsername = "acme.primary",
+    getMetaPageInstagramContextForUserTokenFn,
     getMetaPageAccessContextForUserTokenFn,
   } = {}
 ) {
@@ -302,41 +346,14 @@ async function invokeSingleAccountCallback(
     page.access_token = pageAccessToken;
   }
 
-  return handleMetaCallback({
-    db,
-    req: {
-      query: {
-        code: "meta-code-single",
-        state: signState({
-          tenantKey: "acme",
-          actor: "owner@acme.test",
-          exp: Date.now() + 60_000,
-        }),
-      },
-    },
-    exchangeCodeForUserTokenFn: async () => ({
-      access_token: "user-token-single",
-      token_type: "bearer",
-      expires_in: 3600,
-    }),
-    getMetaUserProfileFn: async () => ({
-      id: "meta-user-1",
-      name: "Acme Owner",
-    }),
-    getPagesForUserTokenFn: async () => [page],
+  return invokeMetaCallbackWithPages(db, {
+    code: "meta-code-single",
+    userAccessToken: "user-token-single",
+    pages: [page],
+    getMetaPageInstagramContextForUserTokenFn:
+      getMetaPageInstagramContextForUserTokenFn ||
+      buildPageEnrichmentLookup([page]),
     getMetaPageAccessContextForUserTokenFn,
-    syncInstagramSourceLayerFn: async () => ({
-      source: {
-        id: "source-1",
-        source_key: `instagram:${igUserId}`,
-      },
-      capabilityGovernance: {
-        publishStatus: "ready",
-        reviewRequired: false,
-        maintenanceSession: { id: "session-1" },
-        blockedReason: "",
-      },
-    }),
   });
 }
 
@@ -452,7 +469,130 @@ test("instagram candidate listing only requires page and Instagram identities", 
   assert.equal(candidates[1].pageAccessToken, "");
 });
 
-test("single-account callback connects immediately through one coherent success path", async () => {
+test("callback discovers a single Instagram candidate after second-step page enrichment", async () => {
+  const db = new FakeChannelConnectDb();
+
+  const callbackResult = await invokeMetaCallbackWithPages(db, {
+    code: "meta-code-enriched-single",
+    userAccessToken: "user-token-enriched-single",
+    pages: [
+      {
+        id: "page-1",
+        name: "Acme Primary",
+        access_token: "page-token-1",
+      },
+    ],
+    getMetaPageInstagramContextForUserTokenFn: async (pageId, userAccessToken) => {
+      assert.equal(pageId, "page-1");
+      assert.equal(userAccessToken, "user-token-enriched-single");
+      return {
+        id: "page-1",
+        name: "Acme Primary",
+        access_token: "page-token-1",
+        instagram_business_account: {
+          id: "ig-1",
+          username: "acme.primary",
+        },
+      };
+    },
+  });
+
+  assert.equal(callbackResult.type, "success");
+  assert.equal(callbackResult.payload?.pageId, "page-1");
+  assert.equal(callbackResult.payload?.igUserId, "ig-1");
+
+  const status = await readMetaStatus(db);
+  assert.equal(status.connected, true);
+  assert.equal(status.account.pageId, "page-1");
+  assert.equal(status.account.igUserId, "ig-1");
+});
+
+test("callback keeps the selection flow when multiple pages need second-step enrichment", async () => {
+  const db = new FakeChannelConnectDb();
+
+  const callbackResult = await invokeMetaCallbackWithPages(db, {
+    code: "meta-code-enriched-multi",
+    userAccessToken: "user-token-enriched-multi",
+    pages: [
+      {
+        id: "page-1",
+        name: "Acme One",
+      },
+      {
+        id: "page-2",
+        name: "Acme Two",
+        access_token: "page-token-2",
+      },
+    ],
+    getMetaPageInstagramContextForUserTokenFn: async (pageId, userAccessToken) => {
+      assert.equal(userAccessToken, "user-token-enriched-multi");
+      if (pageId === "page-1") {
+        return {
+          id: "page-1",
+          name: "Acme One",
+          instagram_business_account: {
+            id: "ig-1",
+            username: "acme.one",
+          },
+        };
+      }
+
+      return {
+        id: "page-2",
+        name: "Acme Two",
+        access_token: "page-token-2",
+        connected_instagram_account: {
+          id: "ig-2",
+          username: "acme.two",
+        },
+      };
+    },
+  });
+
+  assert.equal(callbackResult.type, "selection_required");
+
+  const status = await readMetaStatus(db);
+  assert.equal(status.pendingSelection?.required, true);
+  assert.equal(status.pendingSelection?.candidateCount, 2);
+  assert.equal(status.actions.selectionAvailable, true);
+});
+
+test("callback still fails truthfully when no Instagram linkage exists after enrichment", async () => {
+  const db = new FakeChannelConnectDb();
+
+  await assert.rejects(
+    () =>
+      invokeMetaCallbackWithPages(db, {
+        code: "meta-code-no-candidate",
+        userAccessToken: "user-token-no-candidate",
+        pages: [
+          {
+            id: "page-1",
+            name: "Acme Primary",
+            access_token: "page-token-1",
+          },
+        ],
+        getMetaPageInstagramContextForUserTokenFn: async (pageId, userAccessToken) => {
+          assert.equal(pageId, "page-1");
+          assert.equal(userAccessToken, "user-token-no-candidate");
+          return {
+            id: "page-1",
+            name: "Acme Primary",
+            access_token: "page-token-1",
+          };
+        },
+      }),
+    (error) => {
+      assert.equal(
+        error?.message,
+        "No Instagram Business page found on connected Meta account"
+      );
+      return true;
+    }
+  );
+});
+
+test("single-account callback still connects when /me/accounts already includes Instagram linkage", async () => {
   const db = new FakeChannelConnectDb();
 
   const callbackResult = await invokeSingleAccountCallback(db);
@@ -575,47 +715,31 @@ test("explicit account selection finalizes binding and clears the pending choose
 
 test("pending selection can resolve a deferred page access token when the operator completes the chooser", async () => {
   const db = new FakeChannelConnectDb();
-
-  await handleMetaCallback({
-    db,
-    req: {
-      query: {
-        code: "meta-code-multi",
-        state: signState({
-          tenantKey: "acme",
-          actor: "owner@acme.test",
-          exp: Date.now() + 60_000,
-        }),
+  const pages = [
+    {
+      id: "page-1",
+      name: "Acme One",
+      instagram_business_account: {
+        id: "ig-1",
+        username: "acme.one",
       },
     },
-    exchangeCodeForUserTokenFn: async () => ({
-      access_token: "user-token-multi",
-      token_type: "bearer",
-      expires_in: 3600,
-    }),
-    getMetaUserProfileFn: async () => ({
-      id: "meta-user-1",
-      name: "Acme Owner",
-    }),
-    getPagesForUserTokenFn: async () => [
-      {
-        id: "page-1",
-        name: "Acme One",
-        instagram_business_account: {
-          id: "ig-1",
-          username: "acme.one",
-        },
+    {
+      id: "page-2",
+      name: "Acme Two",
+      access_token: "page-token-2",
+      instagram_business_account: {
+        id: "ig-2",
+        username: "acme.two",
       },
-      {
-        id: "page-2",
-        name: "Acme Two",
-        access_token: "page-token-2",
-        instagram_business_account: {
-          id: "ig-2",
-          username: "acme.two",
-        },
-      },
-    ],
+    },
+  ];
+
+  await invokeMetaCallbackWithPages(db, {
+    code: "meta-code-multi",
+    userAccessToken: "user-token-multi",
+    pages,
+    getMetaPageInstagramContextForUserTokenFn: buildPageEnrichmentLookup(pages),
   });
 
   const statusBefore = await readMetaStatus(db);

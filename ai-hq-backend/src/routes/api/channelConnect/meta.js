@@ -625,12 +625,87 @@ export async function getPagesForUserToken(userAccessToken) {
   return Array.isArray(json?.data) ? json.data : [];
 }
 
+async function getMetaPageInstagramContextForUserToken(pageId, userAccessToken) {
+  const url = new URL(`${metaGraphBase()}/${s(pageId)}`);
+  url.searchParams.set(
+    "fields",
+    "id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}"
+  );
+  url.searchParams.set("access_token", s(userAccessToken));
+
+  return fetchJson(url.toString());
+}
+
 async function getMetaPageAccessContextForUserToken(pageId, userAccessToken) {
   const url = new URL(`${metaGraphBase()}/${s(pageId)}`);
   url.searchParams.set("fields", "id,name,access_token");
   url.searchParams.set("access_token", s(userAccessToken));
 
   return fetchJson(url.toString());
+}
+
+async function enrichMetaPageForCandidateDiscovery({
+  page = {},
+  userAccessToken = "",
+  getMetaPageInstagramContextForUserTokenFn = getMetaPageInstagramContextForUserToken,
+} = {}) {
+  const basePage = obj(page);
+  const pageId = s(basePage?.id);
+  if (!pageId || !s(userAccessToken)) {
+    return basePage;
+  }
+
+  try {
+    const enrichedPage = obj(
+      await getMetaPageInstagramContextForUserTokenFn(pageId, userAccessToken)
+    );
+    const mergedPage = {
+      ...basePage,
+      ...enrichedPage,
+    };
+
+    const enrichedAccessToken = s(enrichedPage?.access_token);
+    const baseAccessToken = s(basePage?.access_token);
+    if (enrichedAccessToken || baseAccessToken) {
+      mergedPage.access_token = enrichedAccessToken || baseAccessToken;
+    }
+
+    const enrichedBusiness = obj(enrichedPage?.instagram_business_account);
+    const baseBusiness = obj(basePage?.instagram_business_account);
+    if (s(enrichedBusiness?.id) || s(enrichedBusiness?.username)) {
+      mergedPage.instagram_business_account = enrichedBusiness;
+    } else if (s(baseBusiness?.id) || s(baseBusiness?.username)) {
+      mergedPage.instagram_business_account = baseBusiness;
+    }
+
+    const enrichedConnected = obj(enrichedPage?.connected_instagram_account);
+    const baseConnected = obj(basePage?.connected_instagram_account);
+    if (s(enrichedConnected?.id) || s(enrichedConnected?.username)) {
+      mergedPage.connected_instagram_account = enrichedConnected;
+    } else if (s(baseConnected?.id) || s(baseConnected?.username)) {
+      mergedPage.connected_instagram_account = baseConnected;
+    }
+
+    return mergedPage;
+  } catch {
+    return basePage;
+  }
+}
+
+async function enrichMetaPagesForCandidateDiscovery({
+  pages = [],
+  userAccessToken = "",
+  getMetaPageInstagramContextForUserTokenFn = getMetaPageInstagramContextForUserToken,
+} = {}) {
+  return Promise.all(
+    arr(pages).map((page) =>
+      enrichMetaPageForCandidateDiscovery({
+        page,
+        userAccessToken,
+        getMetaPageInstagramContextForUserTokenFn,
+      })
+    )
+  );
 }
 
 async function readMetaVerificationPayload(res) {
@@ -1655,6 +1730,7 @@ export async function handleMetaCallback({
   exchangeCodeForUserTokenFn = exchangeCodeForUserToken,
   getMetaUserProfileFn = getMetaUserProfile,
   getPagesForUserTokenFn = getPagesForUserToken,
+  getMetaPageInstagramContextForUserTokenFn = getMetaPageInstagramContextForUserToken,
   getMetaPageAccessContextForUserTokenFn = getMetaPageAccessContextForUserToken,
   syncInstagramSourceLayerFn = syncInstagramSourceLayer,
 } = {}) {
@@ -1737,7 +1813,12 @@ export async function handleMetaCallback({
     throw new Error("Meta app user id missing");
   }
 
-  const candidates = listInstagramPageCandidates(pages);
+  const enrichedPages = await enrichMetaPagesForCandidateDiscovery({
+    pages,
+    userAccessToken,
+    getMetaPageInstagramContextForUserTokenFn,
+  });
+  const candidates = listInstagramPageCandidates(enrichedPages);
   if (!candidates.length) {
     throw new Error("No Instagram Business page found on connected Meta account");
   }
