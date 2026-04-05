@@ -4,6 +4,10 @@ import { clamp, s, toInt } from "../shared.js";
 import { lower, normalizeObj } from "./shared.js";
 import { isControlMessageType, normalizeInboxMessageType } from "./execution.js";
 
+function defaultProviderForChannel(channel = "") {
+  return lower(channel) === "telegram" ? "telegram" : "meta";
+}
+
 export function parseIngestRequest(req) {
   const tenantKey = resolveTenantKeyFromReq(req);
   const channel = s(req.body?.channel || "instagram").toLowerCase() || "instagram";
@@ -111,7 +115,9 @@ export function parseOutboundRequest(req, existingThread) {
   const text = fixText(s(req.body?.text || ""));
   const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : [];
   const meta = normalizeObj(req.body?.meta);
-  const provider = s(req.body?.provider || "meta") || "meta";
+  const provider =
+    s(req.body?.provider || defaultProviderForChannel(channel)) ||
+    defaultProviderForChannel(channel);
   const maxAttempts = clamp(toInt(req.body?.maxAttempts, 5), 1, 20);
   const isControlMessage = isControlMessageType(requestedMessageType);
 

@@ -16,6 +16,11 @@ import {
   getMetaStatus,
   disconnectMeta,
 } from "./meta.js";
+import {
+  connectTelegram,
+  disconnectTelegram,
+  getTelegramStatus,
+} from "./telegram.js";
 
 export function channelConnectRoutes({ db }) {
   const r = express.Router();
@@ -115,5 +120,59 @@ export function channelConnectRoutes({ db }) {
     }
   });
 
+  r.post("/channels/telegram/connect", requireUserSession, async (req, res) => {
+    try {
+      const payload = await connectTelegram({ db, req });
+      return ok(res, payload);
+    } catch (err) {
+      const status = Number(err?.status || 500);
+      if (status === 401) return unauth(res, err?.message || "Unauthorized");
+      if (status === 400) return bad(res, err?.message || "Bad request");
+      if (status === 409) {
+        return res.status(409).json({
+          ok: false,
+          error: err?.message || "Conflict",
+          reasonCode: err?.reasonCode || null,
+        });
+      }
+      return serverErr(res, err?.message || "Failed to connect Telegram", {
+        reasonCode: err?.reasonCode || null,
+      });
+    }
+  });
+
+  r.get("/channels/telegram/status", requireUserSession, async (req, res) => {
+    try {
+      const payload = await getTelegramStatus({ db, req });
+      return ok(res, payload);
+    } catch (err) {
+      const status = Number(err?.status || 500);
+      if (status === 401) return unauth(res, err?.message || "Unauthorized");
+      if (status === 400) return bad(res, err?.message || "Bad request");
+      return serverErr(res, err?.message || "Failed to load Telegram status");
+    }
+  });
+
+  r.post(
+    "/channels/telegram/disconnect",
+    requireUserSession,
+    async (req, res) => {
+      try {
+        const payload = await disconnectTelegram({ db, req });
+        return ok(res, payload);
+      } catch (err) {
+        const status = Number(err?.status || 500);
+        if (status === 401) return unauth(res, err?.message || "Unauthorized");
+        if (status === 400) return bad(res, err?.message || "Bad request");
+        return serverErr(
+          res,
+          err?.message || "Failed to disconnect Telegram"
+        );
+      }
+    }
+  );
+
   return r;
 }
+
+export { channelConnectPublicRoutes } from "./public.js";

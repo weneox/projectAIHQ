@@ -3,13 +3,12 @@ import {
   buildExecutionIdempotencyKey,
   buildExecutionRetryPlan,
   buildVoiceSyncIdempotencyKey,
+  classifyTelegramDeliveryFailure,
   classifyMetaGatewayFailure,
   classifyVoiceSyncFailure,
 } from "./durableExecutionCore.js";
-import {
-  sendCommentActionsViaMetaGateway,
-  sendOutboundViaMetaGateway,
-} from "./metaGatewayClient.js";
+import { sendCommentActionsViaMetaGateway } from "./metaGatewayClient.js";
+import { deliverChannelOutbound } from "./channelDelivery.js";
 import {
   getMessageById,
   getThreadById,
@@ -64,19 +63,48 @@ export function buildMetaOutboundExecutionInput({
   correlationIds = {},
   maxAttempts = 5,
 } = {}) {
+  return buildChannelOutboundExecutionInput({
+    tenantId,
+    tenantKey,
+    channel,
+    provider,
+    threadId,
+    messageId,
+    targetId,
+    payload,
+    safeMetadata,
+    correlationIds,
+    maxAttempts,
+  });
+}
+
+export function buildChannelOutboundExecutionInput({
+  tenantId = "",
+  tenantKey = "",
+  channel = "instagram",
+  provider = "meta",
+  threadId = "",
+  messageId = "",
+  targetId = "",
+  payload = {},
+  safeMetadata = {},
+  correlationIds = {},
+  maxAttempts = 5,
+} = {}) {
+  const actionType = `${s(provider || "meta")}.outbound.send`;
   return {
     tenantId,
     tenantKey,
     channel,
     provider,
-    actionType: "meta.outbound.send",
+    actionType,
     targetType: "thread",
     targetId: targetId || threadId || messageId,
     threadId,
     messageId,
     idempotencyKey: buildExecutionIdempotencyKey({
       provider,
-      actionType: "meta.outbound.send",
+      actionType,
       messageId,
       threadId,
     }),
@@ -101,9 +129,37 @@ export async function enqueueMetaOutboundExecution({
   correlationIds = {},
   maxAttempts = 5,
 }) {
+  return enqueueChannelOutboundExecution({
+    db,
+    tenantId,
+    tenantKey,
+    channel,
+    provider,
+    threadId,
+    messageId,
+    payload,
+    safeMetadata,
+    correlationIds,
+    maxAttempts,
+  });
+}
+
+export async function enqueueChannelOutboundExecution({
+  db,
+  tenantId = "",
+  tenantKey = "",
+  channel = "instagram",
+  provider = "meta",
+  threadId = "",
+  messageId = "",
+  payload = {},
+  safeMetadata = {},
+  correlationIds = {},
+  maxAttempts = 5,
+}) {
   const helpers = createDurableExecutionHelpers({ db });
   return helpers.enqueueExecution(
-    buildMetaOutboundExecutionInput({
+    buildChannelOutboundExecutionInput({
       tenantId,
       tenantKey,
       channel,

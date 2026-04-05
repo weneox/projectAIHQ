@@ -66,8 +66,48 @@ export async function getMetaSecrets(db, tenantId) {
   return dbGetTenantProviderSecrets(db, tenantId, "meta");
 }
 
+export async function saveTelegramSecretValue(
+  db,
+  tenantId,
+  secretKey,
+  value,
+  actor = "system"
+) {
+  return dbUpsertTenantSecret(
+    db,
+    tenantId,
+    "telegram",
+    s(secretKey),
+    value,
+    actor
+  );
+}
+
+export async function deleteTelegramSecretKeys(
+  db,
+  tenantId,
+  secretKeys = []
+) {
+  let deleted = 0;
+
+  for (const secretKey of Array.isArray(secretKeys) ? secretKeys : []) {
+    const ok = await dbDeleteTenantSecret(db, tenantId, "telegram", secretKey);
+    if (ok) deleted += 1;
+  }
+
+  return deleted;
+}
+
+export async function getTelegramSecrets(db, tenantId) {
+  return dbGetTenantProviderSecrets(db, tenantId, "telegram");
+}
+
 export async function upsertInstagramChannel(db, tenantId, payload) {
   return dbUpsertTenantChannel(db, tenantId, "instagram", payload);
+}
+
+export async function upsertTelegramChannel(db, tenantId, payload) {
+  return dbUpsertTenantChannel(db, tenantId, "telegram", payload);
 }
 
 export async function getPrimaryInstagramChannel(db, tenantId) {
@@ -77,6 +117,22 @@ export async function getPrimaryInstagramChannel(db, tenantId) {
       from tenant_channels
       where tenant_id = $1
         and channel_type = 'instagram'
+      order by is_primary desc, updated_at desc
+      limit 1
+    `,
+    [tenantId]
+  );
+
+  return q?.rows?.[0] || null;
+}
+
+export async function getPrimaryTelegramChannel(db, tenantId) {
+  const q = await db.query(
+    `
+      select *
+      from tenant_channels
+      where tenant_id = $1
+        and channel_type = 'telegram'
       order by is_primary desc, updated_at desc
       limit 1
     `,
@@ -109,6 +165,36 @@ export async function markInstagramDisconnected(
     is_primary: Boolean(isPrimary),
     config,
     secrets_ref: null,
+    health,
+    last_sync_at: lastSyncAt,
+  });
+}
+
+export async function markTelegramDisconnected(
+  db,
+  tenantId,
+  {
+    displayName = "Telegram",
+    status = "disconnected",
+    externalUserId = null,
+    externalUsername = null,
+    config = {},
+    health = {},
+    isPrimary = true,
+    lastSyncAt = null,
+  } = {}
+) {
+  return dbUpsertTenantChannel(db, tenantId, "telegram", {
+    provider: "telegram",
+    display_name: s(displayName, "Telegram"),
+    external_account_id: null,
+    external_page_id: null,
+    external_user_id: externalUserId,
+    external_username: externalUsername,
+    status: s(status, "disconnected"),
+    is_primary: Boolean(isPrimary),
+    config,
+    secrets_ref: "telegram",
     health,
     last_sync_at: lastSyncAt,
   });

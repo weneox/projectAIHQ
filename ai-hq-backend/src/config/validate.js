@@ -452,28 +452,32 @@ export function getConfigIssues() {
   }
 
   if (cfg?.telegram?.enabled) {
-    if (!isNonEmpty(cfg?.telegram?.botToken)) {
+    if (!isNonEmpty(cfg?.telegram?.apiBaseUrl)) {
       pushIssue(
         issues,
         "error",
-        "telegram.botToken",
-        "TELEGRAM_ENABLED=true but TELEGRAM_BOT_TOKEN is missing.",
+        "telegram.apiBaseUrl",
+        "TELEGRAM_ENABLED=true but TELEGRAM_API_BASE_URL is missing.",
         {
           category: "providers",
-          envKeys: ["TELEGRAM_ENABLED", "TELEGRAM_BOT_TOKEN"],
+          envKeys: ["TELEGRAM_ENABLED", "TELEGRAM_API_BASE_URL"],
         }
       );
     }
 
-    if (!isNonEmpty(cfg?.telegram?.chatId)) {
+    if (!isNonEmpty(cfg?.telegram?.webhookBaseUrl)) {
       pushIssue(
         issues,
         "warning",
-        "telegram.chatId",
-        "TELEGRAM_ENABLED=true but TELEGRAM_CHAT_ID is missing.",
+        "telegram.webhookBaseUrl",
+        "TELEGRAM_ENABLED=true but TELEGRAM_WEBHOOK_BASE_URL/PUBLIC_BASE_URL is missing. Telegram connect will fail closed until a public HTTPS base URL is configured.",
         {
           category: "providers",
-          envKeys: ["TELEGRAM_ENABLED", "TELEGRAM_CHAT_ID"],
+          envKeys: [
+            "TELEGRAM_ENABLED",
+            "TELEGRAM_WEBHOOK_BASE_URL",
+            "PUBLIC_BASE_URL",
+          ],
         }
       );
     }

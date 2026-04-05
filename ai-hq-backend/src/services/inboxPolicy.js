@@ -42,6 +42,7 @@ export function normalizeInboxChannel(v) {
   if (!ch) return "";
   if (ch === "ig") return "instagram";
   if (ch === "insta") return "instagram";
+  if (ch === "tg") return "telegram";
   if (ch === "fb") return "facebook";
   if (ch === "messenger") return "facebook";
   if (ch === "wa") return "whatsapp";
@@ -307,12 +308,19 @@ export function getInboxPolicy({ tenantKey, channel, tenant = null } = {}) {
     tenantKey || tenant?.tenant_key,
     getDefaultTenantKey()
   );
+  const channelAllowed =
+    !ch || policy.allowedChannels.includes(ch) || ch === "telegram";
+  const telegramControlsDisabled = ch === "telegram";
 
   return {
     ...policy,
+    markSeenEnabled: telegramControlsDisabled ? false : policy.markSeenEnabled,
+    typingIndicatorEnabled: telegramControlsDisabled
+      ? false
+      : policy.typingIndicatorEnabled,
     tenantKey: resolvedTenantKey,
     channel: ch,
     timezone,
-    channelAllowed: !ch || policy.allowedChannels.includes(ch),
+    channelAllowed,
   };
 }

@@ -78,6 +78,35 @@ export function classifyVoiceSyncFailure(result = {}) {
   };
 }
 
+export function classifyTelegramDeliveryFailure(result = {}) {
+  const status = n(result?.status, 0);
+  const text = lower(result?.error || result?.json?.description || "");
+  const reasonCode = s(result?.reasonCode || status || "");
+  const retryable =
+    status === 0 ||
+    status === 429 ||
+    status >= 500 ||
+    text.includes("timeout") ||
+    text.includes("temporar") ||
+    text.includes("network") ||
+    reasonCode === "telegram_rate_limited" ||
+    reasonCode === "telegram_upstream_unavailable" ||
+    reasonCode === "telegram_network_error" ||
+    reasonCode === "telegram_request_timeout";
+
+  return {
+    retryable,
+    status,
+    errorCode: reasonCode,
+    classification: retryable
+      ? "retryable_telegram_delivery_failure"
+      : "terminal_telegram_delivery_failure",
+    errorMessage: s(
+      result?.error || result?.json?.description || "telegram delivery failed"
+    ),
+  };
+}
+
 export function buildExecutionRetryPlan({
   attemptCount = 0,
   maxAttempts = 5,

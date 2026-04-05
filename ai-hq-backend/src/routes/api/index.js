@@ -35,7 +35,10 @@ import { incidentsRoutes } from "./incidents/index.js";
 import { settingsRoutes } from "./settings/index.js";
 import { teamRoutes } from "./team/index.js";
 import { voiceRoutes, voiceInternalRoutes } from "./voice/index.js";
-import { channelConnectRoutes } from "./channelConnect/index.js";
+import {
+  channelConnectPublicRoutes,
+  channelConnectRoutes,
+} from "./channelConnect/index.js";
 import { workspaceRoutes } from "./workspace/index.js";
 
 function s(v, d = "") {
@@ -136,6 +139,7 @@ export function apiRouter({ db, wsHub, audit, dbDisabled = false }) {
   r.use("/", healthRoutes({ db }));
   r.use("/", inboxInternalRoutes({ db, wsHub }));
   r.use("/", voiceInternalRoutes({ db, wsHub }));
+  r.use("/", channelConnectPublicRoutes({ db, wsHub }));
 
   // Browser cookie-authenticated writes must prove a trusted same-site/origin request.
   r.use(requireTrustedBrowserOriginForCookieAuth);

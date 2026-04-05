@@ -51,7 +51,10 @@ export function getProviderState() {
     },
 
     telegram: {
-      enabled: cfg.telegram.enabled && has(cfg.telegram.botToken),
+      enabled:
+        cfg.telegram.enabled &&
+        has(cfg.telegram.apiBaseUrl) &&
+        has(cfg.telegram.webhookBaseUrl),
     },
 
     push: {

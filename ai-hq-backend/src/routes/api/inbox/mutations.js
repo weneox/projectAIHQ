@@ -46,7 +46,11 @@ function normalizePriority(v) {
 
 function normalizeChannel(v) {
   const x = s(v).toLowerCase();
-  if (["instagram", "facebook", "whatsapp", "web", "email", "other"].includes(x)) {
+  if (
+    ["instagram", "facebook", "whatsapp", "telegram", "web", "email", "other"].includes(
+      x
+    )
+  ) {
     return x;
   }
   return x || "instagram";

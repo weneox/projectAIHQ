@@ -263,9 +263,15 @@ export const cfg = {
   },
 
   telegram: {
-    enabled: b(process.env.TELEGRAM_ENABLED, false),
-    botToken: s(process.env.TELEGRAM_BOT_TOKEN, ""),
-    chatId: s(process.env.TELEGRAM_CHAT_ID, ""),
+    enabled: b(process.env.TELEGRAM_ENABLED, true),
+    apiBaseUrl: s(process.env.TELEGRAM_API_BASE_URL, "https://api.telegram.org"),
+    webhookBaseUrl: s(
+      process.env.TELEGRAM_WEBHOOK_BASE_URL,
+      process.env.PUBLIC_BASE_URL || ""
+    ),
+    connectTimeoutMs: n(process.env.TELEGRAM_CONNECT_TIMEOUT_MS, 15_000),
+    statusTimeoutMs: n(process.env.TELEGRAM_STATUS_TIMEOUT_MS, 10_000),
+    sendTimeoutMs: n(process.env.TELEGRAM_SEND_TIMEOUT_MS, 15_000),
   },
 
   push: {
