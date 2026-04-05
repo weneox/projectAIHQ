@@ -336,6 +336,26 @@ async function invokeSingleAccountCallback(
   });
 }
 
+async function readMetaStatus(
+  db,
+  {
+    verifyMetaChannelAccessFn = async () => ({
+      ok: true,
+      revoked: false,
+    }),
+    ...overrides
+  } = {}
+) {
+  return getMetaStatus({
+    db,
+    req: {
+      auth: buildAuth(),
+    },
+    verifyMetaChannelAccessFn,
+    ...overrides,
+  });
+}
+
 test("dm-first launch scopes drop business-management assumptions", () => {
   assert.deepEqual(META_DM_LAUNCH_SCOPES, [
     "pages_show_list",
@@ -443,12 +463,7 @@ test("single-account callback connects immediately through one coherent success 
     false
   );
 
-  const status = await getMetaStatus({
-    db,
-    req: {
-      auth: buildAuth(),
-    },
-  });
+  const status = await readMetaStatus(db);
 
   assert.equal(status.connected, true);
   assert.equal(status.state, "connected");
@@ -467,12 +482,7 @@ test("multi-account callback persists a pending selection and keeps tenant statu
   assert.match(callbackResult.redirectUrl || "", /meta_selection=1/);
   assert.equal(db.channel, null);
 
-  const status = await getMetaStatus({
-    db,
-    req: {
-      auth: buildAuth(),
-    },
-  });
+  const status = await readMetaStatus(db);
 
   assert.equal(status.state, "not_connected");
   assert.equal(status.connected, false);
@@ -488,12 +498,7 @@ test("explicit account selection finalizes binding and clears the pending choose
   const db = new FakeChannelConnectDb();
   await seedPendingSelection(db);
 
-  const statusBefore = await getMetaStatus({
-    db,
-    req: {
-      auth: buildAuth(),
-    },
-  });
+  const statusBefore = await readMetaStatus(db);
 
   const result = await completeMetaSelection({
     db,
@@ -522,12 +527,7 @@ test("explicit account selection finalizes binding and clears the pending choose
   assert.equal(result.pageId, "page-2");
   assert.equal(result.igUserId, "ig-2");
 
-  const statusAfter = await getMetaStatus({
-    db,
-    req: {
-      auth: buildAuth(),
-    },
-  });
+  const statusAfter = await readMetaStatus(db);
 
   assert.equal(statusAfter.state, "connected");
   assert.equal(statusAfter.pendingSelection, null);
@@ -547,12 +547,7 @@ test("expired pending selection is cleaned up instead of lingering as a pseudo-c
 
     Date.now = () => Date.parse("2026-04-05T00:20:00.000Z");
 
-    const status = await getMetaStatus({
-      db,
-      req: {
-        auth: buildAuth(),
-      },
-    });
+    const status = await readMetaStatus(db);
 
     assert.equal(status.state, "not_connected");
     assert.equal(status.pendingSelection, null);
@@ -594,16 +589,88 @@ test("connected rows do not override reconnect-required lifecycle truth", async 
   };
   await seedMetaPageAccessToken(db);
 
-  const status = await getMetaStatus({
-    db,
-    req: {
-      auth: buildAuth(),
-    },
-  });
+  const status = await readMetaStatus(db);
 
   assert.equal(status.connected, false);
   assert.equal(status.state, "reconnect_required");
   assert.equal(status.reasonCode, "channel_reconnect_required");
+});
+
+test("status refresh deauthorizes a previously connected channel when Meta rejects the stored token", async () => {
+  const db = new FakeChannelConnectDb();
+  db.channel = {
+    id: "channel-1",
+    tenant_id: "tenant-1",
+    channel_type: "instagram",
+    provider: "meta",
+    display_name: "Instagram @acme",
+    external_account_id: "",
+    external_page_id: "page-1",
+    external_user_id: "ig-1",
+    external_username: "acme",
+    status: "connected",
+    is_primary: true,
+    config: {
+      requested_scopes: META_DM_LAUNCH_SCOPES,
+      granted_scopes: META_DM_LAUNCH_SCOPES,
+      meta_user_id: "meta-user-1",
+      meta_user_name: "Acme Owner",
+      last_connected_page_name: "Acme",
+      last_connected_username: "acme",
+      last_known_page_id: "page-1",
+      last_known_ig_user_id: "ig-1",
+    },
+    secrets_ref: "meta",
+    health: {
+      connection_state: "connected",
+      auth_status: "authorized",
+      token_type: "bearer",
+    },
+    last_sync_at: "2026-04-05T03:00:00.000Z",
+    created_at: "2026-04-05T00:00:00.000Z",
+    updated_at: "2026-04-05T00:00:00.000Z",
+  };
+  await seedMetaPageAccessToken(db);
+
+  const status = await readMetaStatus(db, {
+    verifyMetaChannelAccessFn: async () => ({
+      ok: false,
+      revoked: true,
+      reasonCode: "meta_app_deauthorized",
+      metaError: {
+        status: 401,
+        code: 190,
+        subcode: 0,
+        type: "OAuthException",
+        message: "Error validating access token",
+      },
+    }),
+  });
+
+  assert.equal(status.connected, false);
+  assert.equal(status.state, "deauthorized");
+  assert.equal(status.reasonCode, "meta_app_deauthorized");
+  assert.equal(status.lifecycle.authStatus, "revoked");
+  assert.equal(status.lifecycle.disconnectReason, "meta_app_deauthorized");
+  assert.match(status.lifecycle.deauthorizedAt || "", /^2026-|^20\d\d-/);
+  assert.equal(status.runtime.hasPageAccessToken, false);
+  assert.equal(status.actions.reconnectAvailable, true);
+
+  assert.equal(db.channel?.status, "error");
+  assert.equal(db.channel?.external_page_id, null);
+  assert.equal(db.channel?.external_user_id, null);
+  assert.equal(db.channel?.health?.connection_state, "deauthorized");
+  assert.equal(db.channel?.health?.auth_status, "revoked");
+  assert.equal(db.channel?.health?.manual_reconnect_required, true);
+  assert.equal(db.channel?.health?.disconnect_reason, "meta_app_deauthorized");
+  assert.match(db.channel?.health?.deauthorized_at || "", /^2026-|^20\d\d-/);
+  assert.equal(db.secretRows.has("tenant-1:meta:page_access_token"), false);
+
+  const auditEntry = db.auditEntries.find(
+    (entry) => entry.action === "settings.channel.meta.deauthorized"
+  );
+  assert.ok(auditEntry);
+  assert.equal(auditEntry?.meta?.reasonCode, "meta_app_deauthorized");
 });
 
 test("missing page token keeps a seemingly connected channel fail-closed", async () => {
@@ -636,12 +703,7 @@ test("missing page token keeps a seemingly connected channel fail-closed", async
     updated_at: "2026-04-05T00:00:00.000Z",
   };
 
-  const status = await getMetaStatus({
-    db,
-    req: {
-      auth: buildAuth(),
-    },
-  });
+  const status = await readMetaStatus(db);
 
   assert.equal(status.connected, false);
   assert.equal(status.state, "reconnect_required");
@@ -687,12 +749,7 @@ test("connected status stays truthful while expired user tokens trigger reconnec
   try {
     Date.now = () => Date.parse("2026-04-05T04:10:00.000Z");
 
-    const status = await getMetaStatus({
-      db,
-      req: {
-        auth: buildAuth(),
-      },
-    });
+    const status = await readMetaStatus(db);
 
     assert.equal(status.connected, true);
     assert.equal(status.state, "connected");
@@ -719,12 +776,7 @@ test("disconnect clears a pending chooser session without fabricating a disconne
   assert.equal(result.clearedPendingSelection, true);
   assert.equal(db.channel, null);
 
-  const statusAfter = await getMetaStatus({
-    db,
-    req: {
-      auth: buildAuth(),
-    },
-  });
+  const statusAfter = await readMetaStatus(db);
 
   assert.equal(statusAfter.state, "not_connected");
   assert.equal(statusAfter.pendingSelection, null);
@@ -772,12 +824,7 @@ test("canceling a pending chooser preserves an existing reconnect-required chann
   assert.equal(db.channel?.status, "error");
   assert.equal(db.channel?.health?.connection_state, "deauthorized");
 
-  const statusAfter = await getMetaStatus({
-    db,
-    req: {
-      auth: buildAuth(),
-    },
-  });
+  const statusAfter = await readMetaStatus(db);
 
   assert.equal(statusAfter.state, "deauthorized");
   assert.equal(statusAfter.pendingSelection, null);

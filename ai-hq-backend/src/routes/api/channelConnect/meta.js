@@ -291,6 +291,14 @@ function buildUserTokenExpiresAt(tokenJson = {}) {
     : null;
 }
 
+function readMetaPageAccessToken(secrets = {}) {
+  return s(
+    secrets?.page_access_token ||
+      secrets?.meta_page_access_token ||
+      secrets?.access_token
+  );
+}
+
 function readMetaChannelSnapshot(channel = {}) {
   const config = obj(channel?.config);
   const health = obj(channel?.health);
@@ -615,6 +623,107 @@ export async function getPagesForUserToken(userAccessToken) {
   return Array.isArray(json?.data) ? json.data : [];
 }
 
+async function readMetaVerificationPayload(res) {
+  const text = await res.text().catch(() => "");
+  if (!text) return {};
+
+  try {
+    return obj(JSON.parse(text));
+  } catch {
+    return { raw: text };
+  }
+}
+
+function classifyMetaVerificationFailure({ status = 0, payload = {} } = {}) {
+  const error = obj(payload?.error);
+  const code = Number(error.code || payload.code || 0);
+  const subcode = Number(error.error_subcode || payload.error_subcode || 0);
+  const type = s(error.type || payload.type);
+  const message = s(error.message || payload.message || payload.raw);
+  const lowerMessage = lower(message);
+  const isAuthLikeMessage =
+    lowerMessage.includes("access token") ||
+    lowerMessage.includes("oauth") ||
+    lowerMessage.includes("session") ||
+    lowerMessage.includes("deauthorized") ||
+    lowerMessage.includes("revoked");
+  const revoked =
+    code === 190 ||
+    lower(type) === "oauthexception" ||
+    (status === 401 && isAuthLikeMessage);
+
+  return {
+    revoked,
+    reasonCode: revoked ? "meta_app_deauthorized" : "",
+    metaError: {
+      status: Number.isFinite(status) ? status : 0,
+      code: Number.isFinite(code) ? code : 0,
+      subcode: Number.isFinite(subcode) ? subcode : 0,
+      type: type || null,
+      message: message || null,
+    },
+  };
+}
+
+async function verifyLiveMetaChannelAccess({
+  channel = null,
+  secrets = {},
+  fetchFn = fetch,
+} = {}) {
+  const snapshot = readMetaChannelSnapshot(channel || {});
+  const pageAccessToken = readMetaPageAccessToken(secrets);
+  const pageId = s(channel?.external_page_id || snapshot.lastKnownPageId);
+  const igUserId = s(channel?.external_user_id || snapshot.lastKnownIgUserId);
+  const targetId = s(pageId || igUserId);
+
+  if (!pageAccessToken || !targetId) {
+    return {
+      ok: false,
+      skipped: true,
+      revoked: false,
+    };
+  }
+
+  const url = new URL(`${metaGraphBase()}/${targetId}`);
+  url.searchParams.set(
+    "fields",
+    pageId ? "id,instagram_business_account{id}" : "id"
+  );
+  url.searchParams.set("access_token", pageAccessToken);
+
+  let res = null;
+  try {
+    res = await fetchFn(url.toString());
+  } catch (error) {
+    return {
+      ok: false,
+      skipped: true,
+      revoked: false,
+      transient: true,
+      error,
+    };
+  }
+
+  const payload = await readMetaVerificationPayload(res);
+  if (res.ok) {
+    return {
+      ok: true,
+      revoked: false,
+      payload,
+    };
+  }
+
+  return {
+    ok: false,
+    skipped: false,
+    ...classifyMetaVerificationFailure({
+      status: res.status,
+      payload,
+    }),
+    payload,
+  };
+}
+
 export function listInstagramPageCandidates(pages = []) {
   return arr(pages)
     .map((page) => {
@@ -826,6 +935,165 @@ async function connectInstagramChannel({
     source,
     capabilityGovernance,
     payload,
+  };
+}
+
+async function persistMetaStatusDeauthorization({
+  db,
+  tenant,
+  actor = "system",
+  channel = null,
+  reasonCode = "meta_app_deauthorized",
+  verification = null,
+  occurredAt = new Date().toISOString(),
+  markInstagramSourceDisconnectedFn = markInstagramSourceDisconnected,
+} = {}) {
+  const snapshot = readMetaChannelSnapshot(channel || {});
+  const safeReasonCode = s(reasonCode || "meta_app_deauthorized");
+
+  await deleteMetaSecretKeys(db, tenant.id, [
+    META_CONNECT_SELECTION_SECRET_KEY,
+    "page_access_token",
+    "access_token",
+    "meta_page_access_token",
+    "page_id",
+    "ig_user_id",
+  ]);
+
+  const updatedChannel = await markInstagramDisconnected(
+    db,
+    tenant.id,
+    buildInstagramLifecycleChannelPayload({
+      channel,
+      transition: "deauthorized",
+      reasonCode: safeReasonCode,
+      occurredAt,
+    })
+  );
+
+  let capabilityGovernance = null;
+  try {
+    capabilityGovernance = await markInstagramSourceDisconnectedFn({
+      db,
+      tenant,
+      actor,
+      authStatus: "revoked",
+    });
+  } catch {}
+
+  await auditSafe(
+    db,
+    actor,
+    tenant,
+    "settings.channel.meta.deauthorized",
+    "tenant_channel",
+    "instagram",
+    {
+      reasonCode: safeReasonCode,
+      occurredAt,
+      metaUserId: snapshot.metaUserId || null,
+      pageId: snapshot.lastKnownPageId || null,
+      igUserId: snapshot.lastKnownIgUserId || null,
+      verification: verification?.metaError
+        ? {
+            status: verification.metaError.status,
+            code: verification.metaError.code,
+            subcode: verification.metaError.subcode,
+            type: verification.metaError.type,
+            message: verification.metaError.message,
+          }
+        : null,
+      capabilityGovernance: {
+        publishStatus: s(capabilityGovernance?.publishStatus),
+        reviewRequired: !!capabilityGovernance?.reviewRequired,
+        maintenanceSessionId: s(capabilityGovernance?.maintenanceSession?.id),
+        blockedReason: s(capabilityGovernance?.blockedReason),
+      },
+    }
+  );
+
+  return updatedChannel;
+}
+
+function shouldVerifyLiveMetaStatus({ channel = null, secrets = {} } = {}) {
+  if (!channel) return false;
+  if (lower(channel?.status) !== "connected") return false;
+
+  const snapshot = readMetaChannelSnapshot(channel);
+  if (snapshot.connectionState && snapshot.connectionState !== "connected") {
+    return false;
+  }
+  if (snapshot.authStatus && snapshot.authStatus !== "authorized") {
+    return false;
+  }
+
+  return Boolean(
+    readMetaPageAccessToken(secrets) &&
+      s(channel?.external_page_id || snapshot.lastKnownPageId)
+  );
+}
+
+async function refreshMetaStatusFromLiveVerification({
+  db,
+  tenant,
+  actor = "system",
+  channel = null,
+  secrets = {},
+  verifyMetaChannelAccessFn = verifyLiveMetaChannelAccess,
+  markInstagramSourceDisconnectedFn = markInstagramSourceDisconnected,
+} = {}) {
+  if (!shouldVerifyLiveMetaStatus({ channel, secrets })) {
+    return {
+      channel,
+      secrets,
+    };
+  }
+
+  let verification = null;
+  try {
+    verification = await verifyMetaChannelAccessFn({
+      channel,
+      secrets,
+    });
+  } catch {
+    return {
+      channel,
+      secrets,
+    };
+  }
+
+  if (!verification?.revoked) {
+    return {
+      channel,
+      secrets,
+    };
+  }
+
+  const updatedChannel = await persistMetaStatusDeauthorization({
+    db,
+    tenant,
+    actor,
+    channel,
+    reasonCode: verification.reasonCode || "meta_app_deauthorized",
+    verification,
+    markInstagramSourceDisconnectedFn,
+  });
+
+  const nextSecrets = { ...secrets };
+  for (const key of [
+    META_CONNECT_SELECTION_SECRET_KEY,
+    "page_access_token",
+    "access_token",
+    "meta_page_access_token",
+    "page_id",
+    "ig_user_id",
+  ]) {
+    delete nextSecrets[key];
+  }
+
+  return {
+    channel: updatedChannel,
+    secrets: nextSecrets,
   };
 }
 
@@ -1587,7 +1855,12 @@ export async function completeMetaSelection({
   return connectResult?.payload;
 }
 
-export async function getMetaStatus({ db, req }) {
+export async function getMetaStatus({
+  db,
+  req,
+  verifyMetaChannelAccessFn = verifyLiveMetaChannelAccess,
+  markInstagramSourceDisconnectedFn = markInstagramSourceDisconnected,
+} = {}) {
   const tenantKey = getReqTenantKey(req);
   if (!tenantKey) {
     const err = new Error("Missing tenant context");
@@ -1606,12 +1879,23 @@ export async function getMetaStatus({ db, req }) {
     getPrimaryInstagramChannel(db, tenant.id),
     loadMetaSecretsContext(db, tenant.id),
   ]);
+  const refreshed = await refreshMetaStatusFromLiveVerification({
+    db,
+    tenant,
+    actor: getReqActor(req),
+    channel,
+    secrets: secretsContext.secrets,
+    verifyMetaChannelAccessFn,
+    markInstagramSourceDisconnectedFn,
+  });
 
   return buildMetaStatusPayload({
     tenant,
-    channel,
-    secrets: secretsContext.secrets,
-    pendingSelection: secretsContext.pendingSelection,
+    channel: refreshed.channel,
+    secrets: refreshed.secrets,
+    pendingSelection:
+      readPendingMetaSelection(refreshed.secrets) ||
+      secretsContext.pendingSelection,
   });
 }
 
