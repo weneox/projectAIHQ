@@ -17,9 +17,14 @@ describe("Sidebar", () => {
     );
 
     expect(screen.getByRole("link", { name: /ai hq home/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /expand sidebar/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "3" })).toHaveAttribute("href", "/inbox");
-    expect(screen.getByRole("link", { name: "5" })).toHaveAttribute("href", "/leads");
+    expect(screen.getByRole("link", { name: /inbox 3/i })).toHaveAttribute(
+      "href",
+      "/inbox"
+    );
+    expect(screen.getByRole("link", { name: /pipeline 5/i })).toHaveAttribute(
+      "href",
+      "/leads"
+    );
 
     for (const href of [
       "/home",
@@ -32,5 +37,12 @@ describe("Sidebar", () => {
     ]) {
       expect(document.querySelector(`a[href="${href}"]`)).toBeTruthy();
     }
+
+    const linkOrder = Array.from(document.querySelectorAll('a[href]')).map(
+      (link) => link.getAttribute("href")
+    );
+
+    expect(linkOrder.indexOf("/inbox")).toBeLessThan(linkOrder.indexOf("/workspace"));
+    expect(linkOrder.indexOf("/voice")).toBeLessThan(linkOrder.indexOf("/channels"));
   });
 });
