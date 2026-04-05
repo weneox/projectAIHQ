@@ -56,6 +56,16 @@ export const META_USER_TOKEN_EXPIRING_SOON_MS = 10 * 60 * 1000;
 export const META_DM_LAUNCH_REVIEW_STORY =
   "Businesses connect their own Instagram Business / Professional account and the platform helps them manage inbound customer conversations using tenant-specific business settings and runtime.";
 
+const META_PAGE_DISCOVERY_FIELDS = [
+  "id",
+  "name",
+  "access_token",
+  "instagram_business_account{id,username}",
+  "connected_instagram_account{id,username}",
+  "instagram_accounts{id,username}",
+  "page_backed_instagram_accounts{id,username}",
+].join(",");
+
 function lower(v, d = "") {
   return s(v, d).toLowerCase();
 }
@@ -315,13 +325,17 @@ function readMetaChannelSnapshot(channel = {}) {
       channel?.external_page_id || config.last_known_page_id || config.page_id
     ),
     lastKnownIgUserId: s(
-      channel?.external_user_id || config.last_known_ig_user_id || config.ig_user_id
+      channel?.external_user_id ||
+        config.last_known_ig_user_id ||
+        config.ig_user_id
     ),
     metaUserId: s(config.meta_user_id || health.meta_user_id),
     metaUserName: s(config.meta_user_name),
     requestedScopes: buildRequestedScopeList(config.requested_scopes),
     grantedScopes: buildRequestedScopeList(
-      arr(config.granted_scopes).length ? config.granted_scopes : config.requested_scopes
+      arr(config.granted_scopes).length
+        ? config.granted_scopes
+        : config.requested_scopes
     ),
     excludedScopes: uniqStrings(
       arr(config.excluded_scopes).length
@@ -434,7 +448,9 @@ export function buildInstagramLifecycleChannelPayload({
       phase_two_capabilities: snapshot.phaseTwoCapabilities,
       review_story: snapshot.reviewStory || META_DM_LAUNCH_REVIEW_STORY,
       launch_surface: snapshot.launchSurface || "instagram_direct_messages",
-      last_connected_display_name: cleanNullable(snapshot.displayName || "Instagram"),
+      last_connected_display_name: cleanNullable(
+        snapshot.displayName || "Instagram"
+      ),
       last_connected_page_name: cleanNullable(snapshot.pageName),
       last_connected_username: cleanNullable(snapshot.igUsername),
       last_known_page_id: cleanNullable(snapshot.lastKnownPageId),
@@ -547,11 +563,12 @@ async function syncInstagramSourceLayer({
     updatedBy: actor || "system",
   });
 
-  const capabilityGovernance = await knowledge.refreshChannelCapabilitiesFromSources({
-    tenantId: tenant.id,
-    tenantKey: tenant.tenant_key,
-    approvedBy: actor || "system",
-  });
+  const capabilityGovernance =
+    await knowledge.refreshChannelCapabilitiesFromSources({
+      tenantId: tenant.id,
+      tenantKey: tenant.tenant_key,
+      approvedBy: actor || "system",
+    });
 
   return {
     source,
@@ -614,24 +631,35 @@ export async function getMetaUserProfile(userAccessToken) {
 }
 
 export async function getPagesForUserToken(userAccessToken) {
-  const url = new URL(`${metaGraphBase()}/me/accounts`);
-  url.searchParams.set(
-    "fields",
-    "id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}"
-  );
-  url.searchParams.set("access_token", s(userAccessToken));
+  const pages = [];
+  let nextUrl = new URL(`${metaGraphBase()}/me/accounts`);
+  nextUrl.searchParams.set("fields", META_PAGE_DISCOVERY_FIELDS);
+  nextUrl.searchParams.set("access_token", s(userAccessToken));
 
-  const json = await fetchJson(url.toString());
-  return Array.isArray(json?.data) ? json.data : [];
+  while (nextUrl) {
+    const json = await fetchJson(nextUrl.toString());
+    const batch = Array.isArray(json?.data) ? json.data : [];
+    pages.push(...batch);
+
+    const next = s(json?.paging?.next);
+    nextUrl = next ? new URL(next) : null;
+  }
+
+  return pages;
 }
 
 async function getMetaPageInstagramContextForUserToken(pageId, userAccessToken) {
   const url = new URL(`${metaGraphBase()}/${s(pageId)}`);
-  url.searchParams.set(
-    "fields",
-    "id,name,access_token,instagram_business_account{id,username},connected_instagram_account{id,username}"
-  );
+  url.searchParams.set("fields", META_PAGE_DISCOVERY_FIELDS);
   url.searchParams.set("access_token", s(userAccessToken));
+
+  return fetchJson(url.toString());
+}
+
+async function getMetaPageInstagramContextForPageToken(pageId, pageAccessToken) {
+  const url = new URL(`${metaGraphBase()}/${s(pageId)}`);
+  url.searchParams.set("fields", META_PAGE_DISCOVERY_FIELDS);
+  url.searchParams.set("access_token", s(pageAccessToken));
 
   return fetchJson(url.toString());
 }
@@ -644,58 +672,157 @@ async function getMetaPageAccessContextForUserToken(pageId, userAccessToken) {
   return fetchJson(url.toString());
 }
 
+function firstInstagramNodeFromCollection(value) {
+  return (
+    arr(value?.data).find((item) => s(item?.id) || s(item?.username)) || null
+  );
+}
+
+function extractInstagramAccountFromPage(page = {}) {
+  const directBusiness = obj(page?.instagram_business_account);
+  if (s(directBusiness?.id) || s(directBusiness?.username)) {
+    return {
+      id: s(directBusiness.id),
+      username: s(directBusiness.username),
+      source: "instagram_business_account",
+    };
+  }
+
+  const directConnected = obj(page?.connected_instagram_account);
+  if (s(directConnected?.id) || s(directConnected?.username)) {
+    return {
+      id: s(directConnected.id),
+      username: s(directConnected.username),
+      source: "connected_instagram_account",
+    };
+  }
+
+  const collectionInstagram = firstInstagramNodeFromCollection(
+    page?.instagram_accounts
+  );
+  if (collectionInstagram) {
+    return {
+      id: s(collectionInstagram.id),
+      username: s(collectionInstagram.username),
+      source: "instagram_accounts",
+    };
+  }
+
+  const pageBackedInstagram = firstInstagramNodeFromCollection(
+    page?.page_backed_instagram_accounts
+  );
+  if (pageBackedInstagram) {
+    return {
+      id: s(pageBackedInstagram.id),
+      username: s(pageBackedInstagram.username),
+      source: "page_backed_instagram_accounts",
+    };
+  }
+
+  return null;
+}
+
+function hasInstagramAccountOnPage(page = {}) {
+  return Boolean(extractInstagramAccountFromPage(page)?.id);
+}
+
+function mergeMetaPageDiscoveryPayload(basePage = {}, enrichedPage = {}) {
+  const merged = {
+    ...basePage,
+    ...enrichedPage,
+  };
+
+  const accessToken = s(enrichedPage?.access_token || basePage?.access_token);
+  if (accessToken) {
+    merged.access_token = accessToken;
+  }
+
+  for (const field of [
+    "instagram_business_account",
+    "connected_instagram_account",
+  ]) {
+    const enrichedValue = obj(enrichedPage?.[field]);
+    const baseValue = obj(basePage?.[field]);
+    if (s(enrichedValue?.id) || s(enrichedValue?.username)) {
+      merged[field] = enrichedValue;
+    } else if (s(baseValue?.id) || s(baseValue?.username)) {
+      merged[field] = baseValue;
+    }
+  }
+
+  for (const field of [
+    "instagram_accounts",
+    "page_backed_instagram_accounts",
+  ]) {
+    const enrichedCollection = arr(enrichedPage?.[field]?.data);
+    const baseCollection = arr(basePage?.[field]?.data);
+
+    if (enrichedCollection.length) {
+      merged[field] = { data: enrichedCollection };
+    } else if (baseCollection.length) {
+      merged[field] = { data: baseCollection };
+    }
+  }
+
+  return merged;
+}
+
 async function enrichMetaPageForCandidateDiscovery({
   page = {},
   userAccessToken = "",
   getMetaPageInstagramContextForUserTokenFn = getMetaPageInstagramContextForUserToken,
+  getMetaPageInstagramContextForPageTokenFn = getMetaPageInstagramContextForPageToken,
 } = {}) {
   const basePage = obj(page);
   const pageId = s(basePage?.id);
-  if (!pageId || !s(userAccessToken)) {
+  const pageAccessToken = s(basePage?.access_token);
+
+  if (!pageId) {
     return basePage;
   }
 
-  try {
-    const enrichedPage = obj(
-      await getMetaPageInstagramContextForUserTokenFn(pageId, userAccessToken)
-    );
-    const mergedPage = {
-      ...basePage,
-      ...enrichedPage,
-    };
+  let mergedPage = basePage;
 
-    const enrichedAccessToken = s(enrichedPage?.access_token);
-    const baseAccessToken = s(basePage?.access_token);
-    if (enrichedAccessToken || baseAccessToken) {
-      mergedPage.access_token = enrichedAccessToken || baseAccessToken;
-    }
-
-    const enrichedBusiness = obj(enrichedPage?.instagram_business_account);
-    const baseBusiness = obj(basePage?.instagram_business_account);
-    if (s(enrichedBusiness?.id) || s(enrichedBusiness?.username)) {
-      mergedPage.instagram_business_account = enrichedBusiness;
-    } else if (s(baseBusiness?.id) || s(baseBusiness?.username)) {
-      mergedPage.instagram_business_account = baseBusiness;
-    }
-
-    const enrichedConnected = obj(enrichedPage?.connected_instagram_account);
-    const baseConnected = obj(basePage?.connected_instagram_account);
-    if (s(enrichedConnected?.id) || s(enrichedConnected?.username)) {
-      mergedPage.connected_instagram_account = enrichedConnected;
-    } else if (s(baseConnected?.id) || s(baseConnected?.username)) {
-      mergedPage.connected_instagram_account = baseConnected;
-    }
-
+  if (hasInstagramAccountOnPage(mergedPage) && pageAccessToken) {
     return mergedPage;
-  } catch {
-    return basePage;
   }
+
+  if (pageAccessToken) {
+    try {
+      const enrichedByPageToken = obj(
+        await getMetaPageInstagramContextForPageTokenFn(pageId, pageAccessToken)
+      );
+      mergedPage = mergeMetaPageDiscoveryPayload(
+        mergedPage,
+        enrichedByPageToken
+      );
+    } catch {}
+  }
+
+  if (hasInstagramAccountOnPage(mergedPage) && s(mergedPage?.access_token)) {
+    return mergedPage;
+  }
+
+  if (s(userAccessToken)) {
+    try {
+      const enrichedByUserToken = obj(
+        await getMetaPageInstagramContextForUserTokenFn(pageId, userAccessToken)
+      );
+      mergedPage = mergeMetaPageDiscoveryPayload(
+        mergedPage,
+        enrichedByUserToken
+      );
+    } catch {}
+  }
+
+  return mergedPage;
 }
 
 async function enrichMetaPagesForCandidateDiscovery({
   pages = [],
   userAccessToken = "",
   getMetaPageInstagramContextForUserTokenFn = getMetaPageInstagramContextForUserToken,
+  getMetaPageInstagramContextForPageTokenFn = getMetaPageInstagramContextForPageToken,
 } = {}) {
   return Promise.all(
     arr(pages).map((page) =>
@@ -703,6 +830,7 @@ async function enrichMetaPagesForCandidateDiscovery({
         page,
         userAccessToken,
         getMetaPageInstagramContextForUserTokenFn,
+        getMetaPageInstagramContextForPageTokenFn,
       })
     )
   );
@@ -812,11 +940,7 @@ async function verifyLiveMetaChannelAccess({
 export function listInstagramPageCandidates(pages = []) {
   return arr(pages)
     .map((page) => {
-      const ig =
-        page?.instagram_business_account ||
-        page?.connected_instagram_account ||
-        null;
-
+      const ig = extractInstagramAccountFromPage(page);
       if (!page?.id || !ig?.id) return null;
 
       return {
@@ -825,6 +949,7 @@ export function listInstagramPageCandidates(pages = []) {
         pageAccessToken: s(page.access_token),
         igUserId: s(ig.id),
         igUsername: s(ig.username),
+        igSource: s(ig.source),
       };
     })
     .filter(Boolean);
@@ -1260,8 +1385,11 @@ function buildMetaStatusBlockers({
 
   if (pendingSelection?.required) {
     blockers.push({
-      title: "Choose which Instagram Business account to bind to this tenant.",
-      subtitle: `Meta returned ${pendingSelection.candidateCount} eligible Instagram Business / Professional asset${pendingSelection.candidateCount === 1 ? "" : "s"}. The tenant remains unbound until one account is explicitly selected.`,
+      title:
+        "Choose which Instagram Business account to bind to this tenant.",
+      subtitle: `Meta returned ${pendingSelection.candidateCount} eligible Instagram Business / Professional asset${
+        pendingSelection.candidateCount === 1 ? "" : "s"
+      }. The tenant remains unbound until one account is explicitly selected.`,
       reasonCode: "instagram_account_selection_required",
       candidateCount: pendingSelection.candidateCount,
       expiresAt: pendingSelection.expiresAt,
@@ -1492,7 +1620,9 @@ function buildMetaStatusPayload({
     reasonCode = s(snapshot.disconnectReason || "meta_app_deauthorized");
   } else if (explicitDisconnected) {
     state = oauthEnvReady ? "disconnected" : "blocked";
-    reasonCode = oauthEnvReady ? "user_disconnect" : "meta_oauth_env_missing";
+    reasonCode = oauthEnvReady
+      ? "user_disconnect"
+      : "meta_oauth_env_missing";
   } else if (explicitReconnectRequired) {
     state = oauthEnvReady ? "reconnect_required" : "blocked";
     reasonCode = oauthEnvReady
@@ -1516,7 +1646,8 @@ function buildMetaStatusPayload({
   }
 
   const webhookReady = state === "connected" && hasIds;
-  const deliveryReady = state === "connected" && hasIds && hasToken && gatewayReady;
+  const deliveryReady =
+    state === "connected" && hasIds && hasToken && gatewayReady;
   const blockers = buildMetaStatusBlockers({
     state,
     reasonCode,
@@ -1540,7 +1671,6 @@ function buildMetaStatusPayload({
     userToken.reconnectRecommended;
 
   return {
-    deploymentMarker: "meta-status-2026-04-05-v1",
     connected: state === "connected",
     state,
     reasonCode,
@@ -1563,7 +1693,8 @@ function buildMetaStatusPayload({
     account: {
       displayName: snapshot.displayName || "Instagram",
       pageName: snapshot.pageName || null,
-      username: snapshot.igUsername || cleanNullable(channel?.external_username),
+      username:
+        snapshot.igUsername || cleanNullable(channel?.external_username),
       pageId: cleanNullable(
         channel?.external_page_id || snapshot.lastKnownPageId
       ),
@@ -1618,14 +1749,13 @@ function buildMetaStatusPayload({
       items: attentionItems,
     },
     actions: {
-      primary:
-        selectionRequired
-          ? "select_account"
-          : state === "connected"
-          ? "open_inbox"
-          : state === "blocked"
-          ? "resolve_blocker"
-          : "connect",
+      primary: selectionRequired
+        ? "select_account"
+        : state === "connected"
+        ? "open_inbox"
+        : state === "blocked"
+        ? "resolve_blocker"
+        : "connect",
       connectAvailable:
         capability?.allowed !== false && oauthEnvReady && !selectionRequired,
       reconnectAvailable:
@@ -1637,16 +1767,15 @@ function buildMetaStatusPayload({
           : "",
       selectionAvailable: selectionRequired,
       disconnectAvailable: Boolean(channel) || selectionRequired,
-      nextAction:
-        selectionRequired
-          ? "select_account"
-          : state === "connected"
-          ? "open_inbox"
-          : capability?.allowed === false
-          ? "upgrade_plan"
-          : !oauthEnvReady
-          ? "configure_oauth"
-          : "connect",
+      nextAction: selectionRequired
+        ? "select_account"
+        : state === "connected"
+        ? "open_inbox"
+        : capability?.allowed === false
+        ? "upgrade_plan"
+        : !oauthEnvReady
+        ? "configure_oauth"
+        : "connect",
     },
     review: buildMetaReviewPayload(),
     readiness: buildReadinessSurface({
@@ -1731,6 +1860,7 @@ export async function handleMetaCallback({
   getMetaUserProfileFn = getMetaUserProfile,
   getPagesForUserTokenFn = getPagesForUserToken,
   getMetaPageInstagramContextForUserTokenFn = getMetaPageInstagramContextForUserToken,
+  getMetaPageInstagramContextForPageTokenFn = getMetaPageInstagramContextForPageToken,
   getMetaPageAccessContextForUserTokenFn = getMetaPageAccessContextForUserToken,
   syncInstagramSourceLayerFn = syncInstagramSourceLayer,
 } = {}) {
@@ -1804,7 +1934,7 @@ export async function handleMetaCallback({
     throw new Error("Meta user access token missing");
   }
 
-  const [metaUserProfile, pages] = await Promise.all([
+  const [metaUserProfile, rawPages] = await Promise.all([
     getMetaUserProfileFn(userAccessToken),
     getPagesForUserTokenFn(userAccessToken),
   ]);
@@ -1813,14 +1943,25 @@ export async function handleMetaCallback({
     throw new Error("Meta app user id missing");
   }
 
+  if (!rawPages.length) {
+    throw new Error(
+      "No Facebook Pages were returned by the connected Meta account"
+    );
+  }
+
   const enrichedPages = await enrichMetaPagesForCandidateDiscovery({
-    pages,
+    pages: rawPages,
     userAccessToken,
     getMetaPageInstagramContextForUserTokenFn,
+    getMetaPageInstagramContextForPageTokenFn,
   });
+
   const candidates = listInstagramPageCandidates(enrichedPages);
+
   if (!candidates.length) {
-    throw new Error("No Instagram Business page found on connected Meta account");
+    throw new Error(
+      "Facebook Pages were returned, but no linked Instagram Business account could be found"
+    );
   }
 
   if (candidates.length > 1) {
@@ -1852,6 +1993,7 @@ export async function handleMetaCallback({
           pageName: candidate.pageName,
           igUserId: candidate.igUserId,
           igUsername: candidate.igUsername || null,
+          igSource: candidate.igSource || null,
         })),
         metaUserId: metaUserProfile.id || null,
       }
@@ -1932,10 +2074,8 @@ export async function completeMetaSelection({
     throw err;
   }
 
-  const {
-    pendingSelection,
-    pendingSelectionExpired,
-  } = await loadMetaSecretsContext(db, tenant.id);
+  const { pendingSelection, pendingSelectionExpired } =
+    await loadMetaSecretsContext(db, tenant.id);
 
   if (pendingSelectionExpired) {
     const err = new Error("Instagram selection expired. Start connect again.");
@@ -1950,14 +2090,18 @@ export async function completeMetaSelection({
   }
 
   if (pendingSelection.selectionId !== checked.selectionId) {
-    const err = new Error("Instagram selection has been replaced by a newer connect attempt");
+    const err = new Error(
+      "Instagram selection has been replaced by a newer connect attempt"
+    );
     err.status = 409;
     throw err;
   }
 
   const selected = findSelectionCandidate(pendingSelection, candidateId);
   if (!selected) {
-    const err = new Error("Selected Instagram account was not found in the pending connect session");
+    const err = new Error(
+      "Selected Instagram account was not found in the pending connect session"
+    );
     err.status = 400;
     throw err;
   }

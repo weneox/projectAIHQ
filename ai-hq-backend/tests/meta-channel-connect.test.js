@@ -239,7 +239,8 @@ function buildPageEnrichmentLookup(pages = []) {
     pages.map((page) => [String(page?.id || "").trim(), page])
   );
 
-  return async (pageId) => pageMap.get(String(pageId || "").trim()) || { id: pageId };
+  return async (pageId) =>
+    pageMap.get(String(pageId || "").trim()) || { id: pageId };
 }
 
 async function invokeMetaCallbackWithPages(
@@ -254,6 +255,10 @@ async function invokeMetaCallbackWithPages(
     },
     pages = [],
     getMetaPageInstagramContextForUserTokenFn = buildPageEnrichmentLookup(pages),
+    getMetaPageInstagramContextForPageTokenFn = async (
+      pageId,
+      pageAccessToken
+    ) => getMetaPageInstagramContextForUserTokenFn(pageId, pageAccessToken),
     getMetaPageAccessContextForUserTokenFn,
     syncInstagramSourceLayerFn = async ({ selected = {} } = {}) => ({
       source: {
@@ -289,6 +294,7 @@ async function invokeMetaCallbackWithPages(
     getMetaUserProfileFn: async () => metaUserProfile,
     getPagesForUserTokenFn: async () => pages,
     getMetaPageInstagramContextForUserTokenFn,
+    getMetaPageInstagramContextForPageTokenFn,
     getMetaPageAccessContextForUserTokenFn,
     syncInstagramSourceLayerFn,
   });
@@ -331,6 +337,7 @@ async function invokeSingleAccountCallback(
     igUserId = "ig-1",
     igUsername = "acme.primary",
     getMetaPageInstagramContextForUserTokenFn,
+    getMetaPageInstagramContextForPageTokenFn,
     getMetaPageAccessContextForUserTokenFn,
   } = {}
 ) {
@@ -353,6 +360,13 @@ async function invokeSingleAccountCallback(
     getMetaPageInstagramContextForUserTokenFn:
       getMetaPageInstagramContextForUserTokenFn ||
       buildPageEnrichmentLookup([page]),
+    getMetaPageInstagramContextForPageTokenFn:
+      getMetaPageInstagramContextForPageTokenFn ||
+      (async (pageId, pageAccessToken) =>
+        (
+          getMetaPageInstagramContextForUserTokenFn ||
+          buildPageEnrichmentLookup([page])
+        )(pageId, pageAccessToken)),
     getMetaPageAccessContextForUserTokenFn,
   });
 }
@@ -469,6 +483,23 @@ test("instagram candidate listing only requires page and Instagram identities", 
   assert.equal(candidates[1].pageAccessToken, "");
 });
 
+test("candidate discovery supports instagram_accounts collection fallback", () => {
+  const candidates = listInstagramPageCandidates([
+    {
+      id: "page-1",
+      name: "Acme",
+      instagram_accounts: {
+        data: [{ id: "ig-1", username: "acme" }],
+      },
+    },
+  ]);
+
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].pageId, "page-1");
+  assert.equal(candidates[0].igUserId, "ig-1");
+  assert.equal(candidates[0].igUsername, "acme");
+});
+
 test("callback discovers a single Instagram candidate after second-step page enrichment", async () => {
   const db = new FakeChannelConnectDb();
 
@@ -505,6 +536,43 @@ test("callback discovers a single Instagram candidate after second-step page enr
   assert.equal(status.connected, true);
   assert.equal(status.account.pageId, "page-1");
   assert.equal(status.account.igUserId, "ig-1");
+});
+
+test("callback uses page-token enrichment when raw /me/accounts lacks instagram linkage", async () => {
+  const db = new FakeChannelConnectDb();
+
+  const callbackResult = await invokeMetaCallbackWithPages(db, {
+    code: "meta-code-page-token-fallback",
+    userAccessToken: "user-token-page-token-fallback",
+    pages: [
+      {
+        id: "page-1",
+        name: "Acme Primary",
+        access_token: "page-token-1",
+      },
+    ],
+    getMetaPageInstagramContextForUserTokenFn: async () => ({
+      id: "page-1",
+      name: "Acme Primary",
+    }),
+    getMetaPageInstagramContextForPageTokenFn: async (pageId, pageAccessToken) => {
+      assert.equal(pageId, "page-1");
+      assert.equal(pageAccessToken, "page-token-1");
+      return {
+        id: "page-1",
+        name: "Acme Primary",
+        access_token: "page-token-1",
+        connected_instagram_account: {
+          id: "ig-1",
+          username: "acme.primary",
+        },
+      };
+    },
+  });
+
+  assert.equal(callbackResult.type, "success");
+  assert.equal(callbackResult.payload?.pageId, "page-1");
+  assert.equal(callbackResult.payload?.igUserId, "ig-1");
 });
 
 test("callback keeps the selection flow when multiple pages need second-step enrichment", async () => {
@@ -581,11 +649,16 @@ test("callback still fails truthfully when no Instagram linkage exists after enr
             access_token: "page-token-1",
           };
         },
+        getMetaPageInstagramContextForPageTokenFn: async () => ({
+          id: "page-1",
+          name: "Acme Primary",
+          access_token: "page-token-1",
+        }),
       }),
     (error) => {
       assert.equal(
         error?.message,
-        "No Instagram Business page found on connected Meta account"
+        "Facebook Pages were returned, but no linked Instagram Business account could be found"
       );
       return true;
     }
@@ -908,7 +981,10 @@ test("status refresh deauthorizes a previously connected channel when Meta rejec
   assert.equal(db.channel?.health?.connection_state, "deauthorized");
   assert.equal(db.channel?.health?.auth_status, "revoked");
   assert.equal(db.channel?.health?.manual_reconnect_required, true);
-  assert.equal(db.channel?.health?.disconnect_reason, "meta_app_deauthorized");
+  assert.equal(
+    db.channel?.health?.disconnect_reason,
+    "meta_app_deauthorized"
+  );
   assert.match(db.channel?.health?.deauthorized_at || "", /^2026-|^20\d\d-/);
   assert.equal(db.secretRows.has("tenant-1:meta:page_access_token"), false);
 
@@ -974,10 +1050,6 @@ test("single-account callback fails with a precise error when the page asset exi
       assert.equal(
         error?.message,
         "Instagram/Page asset found, but page access token could not be obtained"
-      );
-      assert.notEqual(
-        error?.message,
-        "No Instagram Business page found on connected Meta account"
       );
       return true;
     }
