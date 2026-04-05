@@ -15,6 +15,7 @@ const utilsModule = await import("../src/routes/api/channelConnect/utils.js");
 const tenantSecretsModule = await import("../src/db/helpers/tenantSecrets.js");
 
 const {
+  META_CONNECT_DIAGNOSTIC_SECRET_KEY,
   META_DM_LAUNCH_SCOPES,
   buildMetaOAuthUrl,
   buildInstagramLifecycleChannelPayload,
@@ -25,7 +26,7 @@ const {
   listInstagramPageCandidates,
 } = metaModule;
 const { signState } = utilsModule;
-const { dbUpsertTenantSecret } = tenantSecretsModule;
+const { dbGetTenantProviderSecrets, dbUpsertTenantSecret } = tenantSecretsModule;
 
 function buildAuth() {
   return {
@@ -51,6 +52,71 @@ async function seedMetaPageAccessToken(
     token,
     actor
   );
+}
+
+async function readMetaSecrets(db, tenantId = "tenant-1") {
+  return dbGetTenantProviderSecrets(db, tenantId, "meta");
+}
+
+function buildGrantedPermissionPayload(
+  scopes = META_DM_LAUNCH_SCOPES,
+  { overrides = {} } = {}
+) {
+  return {
+    data: scopes.map((scope) => ({
+      permission: scope,
+      status: overrides[scope] || "granted",
+    })),
+  };
+}
+
+function buildDebugTokenPayload({
+  scopes = META_DM_LAUNCH_SCOPES,
+  userId = "meta-user-1",
+  granularScopes = [],
+} = {}) {
+  return {
+    data: {
+      is_valid: true,
+      app_id: "meta-app-id",
+      user_id: userId,
+      scopes,
+      granular_scopes: granularScopes,
+    },
+  };
+}
+
+function createFakeReqLogger(sharedEntries = [], context = {}) {
+  function push(level, event, payload = {}) {
+    sharedEntries.push({
+      level,
+      event,
+      context,
+      payload,
+    });
+  }
+
+  return {
+    entries: sharedEntries,
+    child(nextContext = {}) {
+      return createFakeReqLogger(sharedEntries, {
+        ...context,
+        ...nextContext,
+      });
+    },
+    debug(event, payload) {
+      push("debug", event, payload);
+    },
+    info(event, payload) {
+      push("info", event, payload);
+    },
+    warn(event, payload) {
+      push("warn", event, payload);
+    },
+    error(event, payload) {
+      push("error", event, payload);
+    },
+  };
 }
 
 class FakeChannelConnectDb {
@@ -243,6 +309,49 @@ function buildPageEnrichmentLookup(pages = []) {
     pageMap.get(String(pageId || "").trim()) || { id: pageId };
 }
 
+function buildDeauthorizedChannel({
+  pageId = "page-old",
+  igUserId = "ig-old",
+  username = "acme.old",
+  displayName = "Instagram @acme.old",
+} = {}) {
+  return {
+    id: "channel-1",
+    tenant_id: "tenant-1",
+    channel_type: "instagram",
+    provider: "meta",
+    display_name: displayName,
+    external_account_id: "",
+    external_page_id: "",
+    external_user_id: "",
+    external_username: "",
+    status: "error",
+    is_primary: true,
+    config: {
+      requested_scopes: META_DM_LAUNCH_SCOPES,
+      granted_scopes: META_DM_LAUNCH_SCOPES,
+      meta_user_id: "meta-user-1",
+      meta_user_name: "Acme Owner",
+      last_connected_page_name: "Acme Old",
+      last_connected_username: username,
+      last_known_page_id: pageId,
+      last_known_ig_user_id: igUserId,
+      disconnect_reason: "meta_app_deauthorized",
+    },
+    secrets_ref: null,
+    health: {
+      connection_state: "deauthorized",
+      auth_status: "revoked",
+      disconnect_reason: "meta_app_deauthorized",
+      deauthorized_at: "2026-04-05T10:00:00.000Z",
+      manual_reconnect_required: true,
+    },
+    last_sync_at: null,
+    created_at: "2026-04-05T00:00:00.000Z",
+    updated_at: "2026-04-05T00:00:00.000Z",
+  };
+}
+
 async function invokeMetaCallbackWithPages(
   db,
   {
@@ -254,12 +363,22 @@ async function invokeMetaCallbackWithPages(
       name: "Acme Owner",
     },
     pages = [],
+    assignedPages = [],
+    getMetaPermissionsForUserTokenFn = async () =>
+      buildGrantedPermissionPayload(META_DM_LAUNCH_SCOPES),
+    debugMetaUserTokenFn = async () =>
+      buildDebugTokenPayload({
+        scopes: META_DM_LAUNCH_SCOPES,
+        userId: metaUserProfile?.id || "meta-user-1",
+      }),
     getMetaPageInstagramContextForUserTokenFn = buildPageEnrichmentLookup(pages),
     getMetaPageInstagramContextForPageTokenFn = async (
       pageId,
       pageAccessToken
     ) => getMetaPageInstagramContextForUserTokenFn(pageId, pageAccessToken),
+    getAssignedPagesForUserTokenFn = async () => assignedPages,
     getMetaPageAccessContextForUserTokenFn,
+    reqLog,
     syncInstagramSourceLayerFn = async ({ selected = {} } = {}) => ({
       source: {
         id: "source-1",
@@ -285,6 +404,7 @@ async function invokeMetaCallbackWithPages(
           exp: Date.now() + 60_000,
         }),
       },
+      log: reqLog || undefined,
     },
     exchangeCodeForUserTokenFn: async () => ({
       access_token: userAccessToken,
@@ -292,7 +412,10 @@ async function invokeMetaCallbackWithPages(
       expires_in: 3600,
     }),
     getMetaUserProfileFn: async () => metaUserProfile,
+    getMetaPermissionsForUserTokenFn,
+    debugMetaUserTokenFn,
     getPagesForUserTokenFn: async () => pages,
+    getAssignedPagesForUserTokenFn,
     getMetaPageInstagramContextForUserTokenFn,
     getMetaPageInstagramContextForPageTokenFn,
     getMetaPageAccessContextForUserTokenFn,
@@ -415,6 +538,36 @@ test("oauth connect url requests only the live DM-first Meta scopes", async () =
     parsed.searchParams.get("scope"),
     META_DM_LAUNCH_SCOPES.join(",")
   );
+});
+
+test("starting a new reconnect clears stale pending selection and diagnostics first", async () => {
+  const db = new FakeChannelConnectDb();
+  await seedPendingSelection(db);
+  await dbUpsertTenantSecret(
+    db,
+    "tenant-1",
+    "meta",
+    META_CONNECT_DIAGNOSTIC_SECRET_KEY,
+    JSON.stringify({
+      diagnosticId: "diag-1",
+      reasonCode: "meta_pages_not_returned",
+      message: "stale diagnostic",
+      createdAt: "2026-04-05T00:00:00.000Z",
+      expiresAt: "2026-04-05T00:15:00.000Z",
+    }),
+    "test"
+  );
+
+  await buildMetaOAuthUrl({
+    db,
+    req: {
+      auth: buildAuth(),
+    },
+  });
+
+  const secrets = await readMetaSecrets(db);
+  assert.equal(secrets.connect_selection_pending, undefined);
+  assert.equal(secrets.connect_diagnostic_pending, undefined);
 });
 
 test("instagram lifecycle patch preserves reconnect metadata while clearing live runtime identifiers", () => {
@@ -663,6 +816,132 @@ test("callback still fails truthfully when no Instagram linkage exists after enr
       return true;
     }
   );
+
+  const status = await readMetaStatus(db);
+  assert.equal(status.state, "not_connected");
+  assert.equal(status.reasonCode, "meta_no_instagram_business_account");
+  assert.equal(
+    status.lastConnectFailure?.reasonCode,
+    "meta_no_instagram_business_account"
+  );
+});
+
+test("callback falls back to assigned pages when /me/accounts is empty after reconnect", async () => {
+  const db = new FakeChannelConnectDb();
+
+  const callbackResult = await invokeMetaCallbackWithPages(db, {
+    pages: [],
+    assignedPages: [
+      {
+        id: "page-7",
+        name: "Assigned Acme",
+        access_token: "assigned-page-token",
+        instagram_business_account: {
+          id: "ig-7",
+          username: "assigned.acme",
+        },
+      },
+    ],
+  });
+
+  assert.equal(callbackResult.type, "success");
+  assert.equal(callbackResult.payload?.pageId, "page-7");
+  assert.equal(callbackResult.payload?.igUserId, "ig-7");
+
+  const status = await readMetaStatus(db);
+  assert.equal(status.state, "connected");
+  assert.equal(status.account.pageId, "page-7");
+  assert.equal(status.account.igUserId, "ig-7");
+});
+
+test("callback records a precise reconnect diagnostic when Meta grants no page assets after deauthorize", async () => {
+  const db = new FakeChannelConnectDb();
+  db.channel = buildDeauthorizedChannel();
+
+  await assert.rejects(
+    () =>
+      invokeMetaCallbackWithPages(db, {
+        userAccessToken: "user-token-empty-pages",
+        pages: [],
+        debugMetaUserTokenFn: async () =>
+          buildDebugTokenPayload({
+            scopes: META_DM_LAUNCH_SCOPES,
+            userId: "meta-user-1",
+            granularScopes: [
+              {
+                scope: "pages_show_list",
+                target_ids: [],
+              },
+            ],
+          }),
+      }),
+    (error) => {
+      assert.equal(error?.reasonCode, "meta_pages_not_returned");
+      assert.match(
+        error?.message || "",
+        /zero selected Facebook Pages|page discovery returned nothing/i
+      );
+      return true;
+    }
+  );
+
+  const status = await readMetaStatus(db);
+  assert.equal(status.state, "deauthorized");
+  assert.equal(status.reasonCode, "meta_app_deauthorized");
+  assert.equal(status.lastConnectFailure?.reasonCode, "meta_pages_not_returned");
+  assert.match(
+    status.readiness?.message || "",
+    /latest Instagram connect attempt failed/i
+  );
+  assert.ok(
+    status.readiness?.blockers?.some(
+      (item) => item.reasonCode === "meta_pages_not_returned"
+    )
+  );
+});
+
+test("callback fails closed when Meta omits a required granted permission", async () => {
+  const db = new FakeChannelConnectDb();
+
+  await assert.rejects(
+    () =>
+      invokeMetaCallbackWithPages(db, {
+        pages: [
+          {
+            id: "page-1",
+            name: "Acme Primary",
+            access_token: "page-token-1",
+            instagram_business_account: {
+              id: "ig-1",
+              username: "acme.primary",
+            },
+          },
+        ],
+        getMetaPermissionsForUserTokenFn: async () =>
+          buildGrantedPermissionPayload(META_DM_LAUNCH_SCOPES, {
+            overrides: {
+              instagram_manage_messages: "declined",
+            },
+          }),
+        debugMetaUserTokenFn: async () =>
+          buildDebugTokenPayload({
+            scopes: ["pages_show_list", "instagram_basic"],
+            userId: "meta-user-1",
+          }),
+      }),
+    (error) => {
+      assert.equal(error?.reasonCode, "meta_missing_granted_permissions");
+      assert.match(error?.message || "", /instagram_manage_messages/);
+      return true;
+    }
+  );
+
+  const status = await readMetaStatus(db);
+  assert.equal(status.state, "not_connected");
+  assert.equal(status.reasonCode, "meta_missing_granted_permissions");
+  assert.deepEqual(status.lastConnectFailure?.missingGrantedScopes, [
+    "instagram_manage_messages",
+  ]);
 });
 
 test("single-account callback still connects when /me/accounts already includes Instagram linkage", async () => {
@@ -696,6 +975,42 @@ test("single-account callback still connects when /me/accounts already includes 
   assert.equal(status.account.igUserId, "ig-1");
   assert.equal(status.runtime.hasPageAccessToken, true);
   assert.equal(status.runtime.hasOperationalIds, true);
+});
+
+test("reconnect cleanly rebinds a stale deauthorized channel to the newly selected page and instagram account", async () => {
+  const db = new FakeChannelConnectDb();
+  db.channel = buildDeauthorizedChannel({
+    pageId: "page-old",
+    igUserId: "ig-old",
+    username: "acme.old",
+  });
+  await seedMetaPageAccessToken(db, {
+    token: "page-token-old",
+  });
+
+  const callbackResult = await invokeSingleAccountCallback(db, {
+    pageId: "page-new",
+    pageName: "Acme Rebound",
+    pageAccessToken: "page-token-new",
+    igUserId: "ig-new",
+    igUsername: "acme.rebound",
+  });
+
+  assert.equal(callbackResult.type, "success");
+  assert.equal(db.channel?.status, "connected");
+  assert.equal(db.channel?.external_page_id, "page-new");
+  assert.equal(db.channel?.external_user_id, "ig-new");
+  assert.equal(db.channel?.external_username, "acme.rebound");
+
+  const secrets = await readMetaSecrets(db);
+  assert.equal(secrets.page_access_token, "page-token-new");
+  assert.equal(secrets[META_CONNECT_DIAGNOSTIC_SECRET_KEY], undefined);
+
+  const status = await readMetaStatus(db);
+  assert.equal(status.state, "connected");
+  assert.equal(status.account.pageId, "page-new");
+  assert.equal(status.account.igUserId, "ig-new");
+  assert.equal(status.lastConnectFailure, null);
 });
 
 test("single-account callback resolves a missing page access token after candidate discovery", async () => {
@@ -1056,6 +1371,58 @@ test("single-account callback fails with a precise error when the page asset exi
   );
 });
 
+test("connect diagnostics and logs stay redacted even when reconnect fails", async () => {
+  const db = new FakeChannelConnectDb();
+  const logEntries = [];
+  const reqLog = createFakeReqLogger(logEntries);
+
+  await assert.rejects(
+    () =>
+      invokeMetaCallbackWithPages(db, {
+        userAccessToken: "user-token-secret-value",
+        pages: [
+          {
+            id: "page-1",
+            name: "Acme Primary",
+            access_token: "page-token-secret-value",
+            instagram_business_account: {
+              id: "ig-1",
+              username: "acme.primary",
+            },
+          },
+        ],
+        getMetaPermissionsForUserTokenFn: async () =>
+          buildGrantedPermissionPayload(META_DM_LAUNCH_SCOPES, {
+            overrides: {
+              instagram_manage_messages: "declined",
+            },
+          }),
+        debugMetaUserTokenFn: async () =>
+          buildDebugTokenPayload({
+            scopes: ["pages_show_list", "instagram_basic"],
+            userId: "meta-user-1",
+          }),
+        reqLog,
+      }),
+    (error) => {
+      assert.equal(error?.reasonCode, "meta_missing_granted_permissions");
+      return true;
+    }
+  );
+
+  const serializedLogs = JSON.stringify(logEntries);
+  assert.equal(serializedLogs.includes("user-token-secret-value"), false);
+  assert.equal(serializedLogs.includes("page-token-secret-value"), false);
+
+  const secrets = await readMetaSecrets(db);
+  const diagnostic = JSON.parse(
+    secrets[META_CONNECT_DIAGNOSTIC_SECRET_KEY] || "{}"
+  );
+  assert.equal(diagnostic.userAccessToken, undefined);
+  assert.equal(diagnostic.pageAccessToken, undefined);
+  assert.equal(diagnostic.reasonCode, "meta_missing_granted_permissions");
+});
+
 test("connected status stays truthful while expired user tokens trigger reconnect guidance", async () => {
   const db = new FakeChannelConnectDb();
   const realDateNow = Date.now;
@@ -1124,6 +1491,46 @@ test("disconnect clears a pending chooser session without fabricating a disconne
 
   assert.equal(statusAfter.state, "not_connected");
   assert.equal(statusAfter.pendingSelection, null);
+});
+
+test("disconnect clears a failed reconnect diagnostic without fabricating a disconnected channel row", async () => {
+  const db = new FakeChannelConnectDb();
+
+  await assert.rejects(
+    () =>
+      invokeMetaCallbackWithPages(db, {
+        pages: [],
+        debugMetaUserTokenFn: async () =>
+          buildDebugTokenPayload({
+            scopes: META_DM_LAUNCH_SCOPES,
+            userId: "meta-user-1",
+            granularScopes: [
+              {
+                scope: "pages_show_list",
+                target_ids: [],
+              },
+            ],
+          }),
+      }),
+    (error) => {
+      assert.equal(error?.reasonCode, "meta_pages_not_returned");
+      return true;
+    }
+  );
+
+  const result = await disconnectMeta({
+    db,
+    req: {
+      auth: buildAuth(),
+    },
+  });
+
+  assert.equal(result.clearedConnectDiagnostic, true);
+  assert.equal(db.channel, null);
+
+  const statusAfter = await readMetaStatus(db);
+  assert.equal(statusAfter.state, "not_connected");
+  assert.equal(statusAfter.lastConnectFailure, null);
 });
 
 test("canceling a pending chooser preserves an existing reconnect-required channel state", async () => {

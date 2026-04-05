@@ -51,6 +51,9 @@ export const META_PHASE_TWO_CAPABILITIES = Object.freeze([
 export const META_CONNECT_SELECTION_SECRET_KEY = "connect_selection_pending";
 export const META_CONNECT_SELECTION_KIND = "meta_connect_selection";
 export const META_CONNECT_SELECTION_TTL_MS = 15 * 60 * 1000;
+export const META_CONNECT_DIAGNOSTIC_SECRET_KEY = "connect_diagnostic_pending";
+export const META_CONNECT_DIAGNOSTIC_KIND = "meta_connect_diagnostic";
+export const META_CONNECT_DIAGNOSTIC_TTL_MS = 15 * 60 * 1000;
 export const META_USER_TOKEN_EXPIRING_SOON_MS = 10 * 60 * 1000;
 
 export const META_DM_LAUNCH_REVIEW_STORY =
@@ -82,6 +85,10 @@ function uniqStrings(values = []) {
   return [...new Set(arr(values).map((value) => s(value)).filter(Boolean))];
 }
 
+function normalizeScopeList(values = []) {
+  return uniqStrings(values);
+}
+
 function asIsoIfPresent(value) {
   const text = s(value);
   return text || null;
@@ -103,6 +110,73 @@ function parseJsonObject(value) {
   } catch {
     return {};
   }
+}
+
+function epochSecondsToIso(value) {
+  const seconds = Number(value || 0);
+  return Number.isFinite(seconds) && seconds > 0
+    ? new Date(seconds * 1000).toISOString()
+    : null;
+}
+
+function createSafeLogger(baseLogger, childContext = null) {
+  const root = baseLogger && typeof baseLogger === "object" ? baseLogger : null;
+
+  let active = root;
+  if (childContext && root && typeof root.child === "function") {
+    try {
+      active = root.child(childContext) || root;
+    } catch {
+      active = root;
+    }
+  }
+
+  function call(method, ...args) {
+    try {
+      const fn =
+        (active && typeof active[method] === "function" && active[method]) ||
+        (root && typeof root[method] === "function" && root[method]) ||
+        null;
+      if (fn) {
+        return fn.apply(active || root, args);
+      }
+    } catch {
+      // noop
+    }
+    return undefined;
+  }
+
+  return {
+    child(context = {}) {
+      return createSafeLogger(active || root, context);
+    },
+    debug(...args) {
+      return call("debug", ...args);
+    },
+    info(...args) {
+      return call("info", ...args);
+    },
+    warn(...args) {
+      return call("warn", ...args);
+    },
+    error(...args) {
+      return call("error", ...args);
+    },
+  };
+}
+
+function buildMetaConnectFailureError(
+  reasonCode = "meta_connect_failed",
+  message = "Meta connect failed",
+  { status = 409, details = null } = {}
+) {
+  const err = new Error(message);
+  err.status = Number(status || 409);
+  err.reasonCode = s(reasonCode || "meta_connect_failed");
+  if (details && typeof details === "object") {
+    err.details = details;
+  }
+  return err;
 }
 
 function buildConnectedInstagramDisplayName(selected = {}) {
@@ -148,7 +222,7 @@ function buildPendingMetaSelectionPayload({
   metaUserProfile = {},
   tokenJson = {},
   requestedScopes = META_DM_LAUNCH_SCOPES,
-  grantedScopes = META_DM_LAUNCH_SCOPES,
+  grantedScopes = [],
   candidates = [],
 } = {}) {
   const normalizedCandidates = arr(candidates)
@@ -170,7 +244,7 @@ function buildPendingMetaSelectionPayload({
     tokenType: s(tokenJson?.token_type),
     userTokenExpiresAt: buildUserTokenExpiresAt(tokenJson),
     requestedScopes: buildRequestedScopeList(requestedScopes),
-    grantedScopes: buildRequestedScopeList(grantedScopes),
+    grantedScopes: normalizeScopeList(grantedScopes),
     candidates: normalizedCandidates,
   };
 }
@@ -197,13 +271,104 @@ export function readPendingMetaSelection(secrets = {}) {
     tokenType: s(parsed.tokenType),
     userTokenExpiresAt: asIsoIfPresent(parsed.userTokenExpiresAt),
     requestedScopes: buildRequestedScopeList(parsed.requestedScopes),
-    grantedScopes: buildRequestedScopeList(parsed.grantedScopes),
+    grantedScopes: normalizeScopeList(parsed.grantedScopes),
     candidates,
+  };
+}
+
+function buildPendingMetaConnectDiagnosticPayload({
+  actor = "system",
+  stage = "callback",
+  reasonCode = "meta_connect_failed",
+  message = "Meta connect failed",
+  createdAt = new Date().toISOString(),
+  expiresAt = new Date(Date.now() + META_CONNECT_DIAGNOSTIC_TTL_MS).toISOString(),
+  metaUserProfile = {},
+  requestedScopes = META_DM_LAUNCH_SCOPES,
+  grantedScopes = [],
+  missingGrantedScopes = [],
+  declinedScopes = [],
+  expiredScopes = [],
+  permissionSummary = {},
+  pageDiscovery = {},
+  candidateCount = 0,
+} = {}) {
+  return {
+    diagnosticId: crypto.randomUUID(),
+    actor: s(actor || "system"),
+    stage: s(stage || "callback"),
+    reasonCode: s(reasonCode || "meta_connect_failed"),
+    message: s(message || "Meta connect failed"),
+    createdAt,
+    expiresAt,
+    metaUserId: s(metaUserProfile?.id),
+    metaUserName: s(metaUserProfile?.name),
+    requestedScopes: buildRequestedScopeList(requestedScopes),
+    grantedScopes: normalizeScopeList(
+      arr(grantedScopes).length
+        ? grantedScopes
+        : permissionSummary?.grantedScopes || []
+    ),
+    missingGrantedScopes: normalizeScopeList(
+      arr(missingGrantedScopes).length
+        ? missingGrantedScopes
+        : permissionSummary?.missingRequiredScopes || []
+    ),
+    declinedScopes: normalizeScopeList(
+      arr(declinedScopes).length
+        ? declinedScopes
+        : permissionSummary?.declinedScopes || []
+    ),
+    expiredScopes: normalizeScopeList(
+      arr(expiredScopes).length
+        ? expiredScopes
+        : permissionSummary?.expiredScopes || []
+    ),
+    permissionVerificationStatus: s(permissionSummary?.verificationStatus),
+    permissionSource: s(permissionSummary?.source),
+    pageDiscovery: obj(pageDiscovery),
+    candidateCount: Math.max(0, Number(candidateCount || 0)),
+  };
+}
+
+export function readPendingMetaConnectDiagnostic(secrets = {}) {
+  const parsed = parseJsonObject(secrets?.[META_CONNECT_DIAGNOSTIC_SECRET_KEY]);
+  const diagnosticId = s(parsed.diagnosticId);
+  const reasonCode = s(parsed.reasonCode);
+
+  if (!diagnosticId || !reasonCode) {
+    return null;
+  }
+
+  return {
+    diagnosticId,
+    actor: s(parsed.actor || "system"),
+    stage: s(parsed.stage || "callback"),
+    reasonCode,
+    message: s(parsed.message || "Meta connect failed"),
+    createdAt: asIsoIfPresent(parsed.createdAt),
+    expiresAt: asIsoIfPresent(parsed.expiresAt),
+    metaUserId: s(parsed.metaUserId),
+    metaUserName: s(parsed.metaUserName),
+    requestedScopes: buildRequestedScopeList(parsed.requestedScopes),
+    grantedScopes: normalizeScopeList(parsed.grantedScopes),
+    missingGrantedScopes: normalizeScopeList(parsed.missingGrantedScopes),
+    declinedScopes: normalizeScopeList(parsed.declinedScopes),
+    expiredScopes: normalizeScopeList(parsed.expiredScopes),
+    permissionVerificationStatus: s(parsed.permissionVerificationStatus),
+    permissionSource: s(parsed.permissionSource),
+    pageDiscovery: obj(parsed.pageDiscovery),
+    candidateCount: Math.max(0, Number(parsed.candidateCount || 0)),
   };
 }
 
 function hasPendingMetaSelectionExpired(pendingSelection = {}) {
   const expiresAtMs = asTimestamp(pendingSelection?.expiresAt);
+  return Boolean(expiresAtMs && expiresAtMs <= Date.now());
+}
+
+function hasPendingMetaConnectDiagnosticExpired(connectDiagnostic = {}) {
+  const expiresAtMs = asTimestamp(connectDiagnostic?.expiresAt);
   return Boolean(expiresAtMs && expiresAtMs <= Date.now());
 }
 
@@ -242,6 +407,32 @@ function buildPendingMetaSelectionView({
       igUserId: candidate.igUserId,
       igUsername: candidate.igUsername || null,
     })),
+  };
+}
+
+function buildPendingMetaConnectDiagnosticView(connectDiagnostic = null) {
+  if (!connectDiagnostic?.diagnosticId) return null;
+
+  return {
+    diagnosticId: connectDiagnostic.diagnosticId,
+    stage: connectDiagnostic.stage,
+    reasonCode: connectDiagnostic.reasonCode,
+    message: connectDiagnostic.message,
+    createdAt: cleanNullable(connectDiagnostic.createdAt),
+    expiresAt: cleanNullable(connectDiagnostic.expiresAt),
+    metaUserId: cleanNullable(connectDiagnostic.metaUserId),
+    metaUserName: cleanNullable(connectDiagnostic.metaUserName),
+    requestedScopes: connectDiagnostic.requestedScopes,
+    grantedScopes: connectDiagnostic.grantedScopes,
+    missingGrantedScopes: connectDiagnostic.missingGrantedScopes,
+    declinedScopes: connectDiagnostic.declinedScopes,
+    expiredScopes: connectDiagnostic.expiredScopes,
+    permissionVerificationStatus: cleanNullable(
+      connectDiagnostic.permissionVerificationStatus
+    ),
+    permissionSource: cleanNullable(connectDiagnostic.permissionSource),
+    pageDiscovery: obj(connectDiagnostic.pageDiscovery),
+    candidateCount: connectDiagnostic.candidateCount,
   };
 }
 
@@ -287,7 +478,7 @@ function hasMetaGatewayEnv() {
 }
 
 function buildRequestedScopeList(values = []) {
-  const requested = uniqStrings(values);
+  const requested = normalizeScopeList(values);
   return requested.length ? requested : [...META_DM_LAUNCH_SCOPES];
 }
 
@@ -332,11 +523,13 @@ function readMetaChannelSnapshot(channel = {}) {
     metaUserId: s(config.meta_user_id || health.meta_user_id),
     metaUserName: s(config.meta_user_name),
     requestedScopes: buildRequestedScopeList(config.requested_scopes),
-    grantedScopes: buildRequestedScopeList(
-      arr(config.granted_scopes).length
-        ? config.granted_scopes
-        : config.requested_scopes
-    ),
+    grantedScopes: normalizeScopeList(config.granted_scopes),
+    missingGrantedScopes: normalizeScopeList(config.missing_granted_scopes),
+    declinedScopes: normalizeScopeList(config.declined_scopes),
+    expiredScopes: normalizeScopeList(config.expired_scopes),
+    permissionVerificationStatus: s(config.permission_verification_status),
+    permissionScopeSource: s(config.permission_scope_source),
+    permissionVerifiedAt: s(config.permission_verified_at),
     excludedScopes: uniqStrings(
       arr(config.excluded_scopes).length
         ? config.excluded_scopes
@@ -364,7 +557,8 @@ function readMetaChannelSnapshot(channel = {}) {
 function buildConnectedChannelConfig({
   selected = {},
   requestedScopes = META_DM_LAUNCH_SCOPES,
-  grantedScopes = META_DM_LAUNCH_SCOPES,
+  grantedScopes = [],
+  permissionSummary = {},
   metaUserProfile = {},
   connectedAt = new Date().toISOString(),
 } = {}) {
@@ -374,7 +568,17 @@ function buildConnectedChannelConfig({
     meta_user_id: cleanNullable(metaUserProfile?.id),
     meta_user_name: cleanNullable(metaUserProfile?.name),
     requested_scopes: buildRequestedScopeList(requestedScopes),
-    granted_scopes: buildRequestedScopeList(grantedScopes),
+    granted_scopes: normalizeScopeList(grantedScopes),
+    missing_granted_scopes: normalizeScopeList(
+      permissionSummary?.missingRequiredScopes
+    ),
+    declined_scopes: normalizeScopeList(permissionSummary?.declinedScopes),
+    expired_scopes: normalizeScopeList(permissionSummary?.expiredScopes),
+    permission_verification_status: cleanNullable(
+      permissionSummary?.verificationStatus
+    ),
+    permission_scope_source: cleanNullable(permissionSummary?.source),
+    permission_verified_at: cleanNullable(permissionSummary?.verifiedAt),
     excluded_scopes: [...META_DM_EXCLUDED_SCOPES],
     phase_two_capabilities: [...META_PHASE_TWO_CAPABILITIES],
     review_story: META_DM_LAUNCH_REVIEW_STORY,
@@ -630,6 +834,22 @@ export async function getMetaUserProfile(userAccessToken) {
   };
 }
 
+export async function getMetaPermissionsForUserToken(userAccessToken) {
+  const url = new URL(`${metaGraphBase()}/me/permissions`);
+  url.searchParams.set("access_token", s(userAccessToken));
+  return fetchJson(url.toString());
+}
+
+export async function debugMetaUserToken(userAccessToken) {
+  const url = new URL(`${metaGraphBase()}/debug_token`);
+  url.searchParams.set("input_token", s(userAccessToken));
+  url.searchParams.set(
+    "access_token",
+    `${s(cfg.meta.appId)}|${s(cfg.meta.appSecret)}`
+  );
+  return fetchJson(url.toString());
+}
+
 export async function getPagesForUserToken(userAccessToken) {
   const pages = [];
   let nextUrl = new URL(`${metaGraphBase()}/me/accounts`);
@@ -646,6 +866,235 @@ export async function getPagesForUserToken(userAccessToken) {
   }
 
   return pages;
+}
+
+export async function getAssignedPagesForUserToken(userAccessToken) {
+  const pages = [];
+  let nextUrl = new URL(`${metaGraphBase()}/me/assigned_pages`);
+  nextUrl.searchParams.set("fields", META_PAGE_DISCOVERY_FIELDS);
+  nextUrl.searchParams.set("access_token", s(userAccessToken));
+
+  while (nextUrl) {
+    const json = await fetchJson(nextUrl.toString());
+    const batch = Array.isArray(json?.data) ? json.data : [];
+    pages.push(...batch);
+
+    const next = s(json?.paging?.next);
+    nextUrl = next ? new URL(next) : null;
+  }
+
+  return pages;
+}
+
+function normalizeMetaPermissionEntry(entry = {}) {
+  const permission = s(entry?.permission);
+  const status = lower(entry?.status);
+
+  if (!permission || !status) return null;
+
+  return {
+    permission,
+    status,
+  };
+}
+
+function summarizeMetaDebugGranularScope(entry = {}) {
+  const scope = s(entry?.scope);
+  if (!scope) return null;
+
+  return {
+    scope,
+    targetCount: arr(entry?.target_ids).length,
+  };
+}
+
+function buildMetaPermissionSummary({
+  requestedScopes = META_DM_LAUNCH_SCOPES,
+  permissionsPayload = {},
+  debugTokenPayload = {},
+  permissionsError = null,
+  debugTokenError = null,
+  verifiedAt = new Date().toISOString(),
+} = {}) {
+  const requested = buildRequestedScopeList(requestedScopes);
+  const permissionRows = arr(permissionsPayload?.data)
+    .map((entry) => normalizeMetaPermissionEntry(entry))
+    .filter(Boolean);
+  const permissionStatusByName = new Map(
+    permissionRows.map((entry) => [entry.permission, entry.status])
+  );
+
+  const debugData = obj(debugTokenPayload?.data);
+  const debugScopes = normalizeScopeList(debugData?.scopes);
+  const debugGranularScopes = arr(debugData?.granular_scopes)
+    .map((entry) => summarizeMetaDebugGranularScope(entry))
+    .filter(Boolean);
+
+  const grantedScopes = requested.filter((scope) => {
+    const explicit = permissionStatusByName.get(scope);
+    if (explicit) return explicit === "granted";
+    return debugScopes.includes(scope);
+  });
+  const declinedScopes = requested.filter(
+    (scope) => permissionStatusByName.get(scope) === "declined"
+  );
+  const expiredScopes = requested.filter(
+    (scope) => permissionStatusByName.get(scope) === "expired"
+  );
+
+  const verificationAvailable =
+    permissionRows.length > 0 || debugScopes.length > 0;
+  const missingRequiredScopes = verificationAvailable
+    ? requested.filter((scope) => !grantedScopes.includes(scope))
+    : [];
+
+  let source = "unavailable";
+  if (permissionRows.length && debugScopes.length) {
+    source = "me_permissions_and_debug_token";
+  } else if (permissionRows.length) {
+    source = "me_permissions";
+  } else if (debugScopes.length) {
+    source = "debug_token";
+  }
+
+  let verificationStatus = "unverified";
+  if (verificationAvailable && missingRequiredScopes.length) {
+    verificationStatus = "missing_required_scopes";
+  } else if (verificationAvailable) {
+    verificationStatus = "verified";
+  }
+
+  return {
+    requestedScopes: requested,
+    grantedScopes,
+    missingRequiredScopes,
+    declinedScopes,
+    expiredScopes,
+    verificationAvailable,
+    verificationStatus,
+    source,
+    verifiedAt: verificationAvailable ? verifiedAt : null,
+    permissions: {
+      available: permissionRows.length > 0,
+      error: s(permissionsError?.message),
+      rows: requested.map((scope) => ({
+        scope,
+        status: s(permissionStatusByName.get(scope)),
+      })),
+    },
+    debugToken: {
+      available:
+        Boolean(debugData?.is_valid === true) ||
+        debugScopes.length > 0 ||
+        debugGranularScopes.length > 0,
+      error: s(debugTokenError?.message),
+      isValid: debugData?.is_valid === true,
+      appId: s(debugData?.app_id),
+      userId: s(debugData?.user_id),
+      expiresAt: epochSecondsToIso(debugData?.expires_at),
+      dataAccessExpiresAt: epochSecondsToIso(debugData?.data_access_expires_at),
+      scopes: debugScopes,
+      granularScopes: debugGranularScopes,
+    },
+  };
+}
+
+function summarizeMetaDiscoveredPage(page = {}) {
+  const ig = extractInstagramAccountFromPage(page);
+
+  return {
+    pageId: s(page?.id),
+    pageName: s(page?.name),
+    hasPageAccessToken: Boolean(s(page?.access_token)),
+    hasInstagramAccount: Boolean(s(ig?.id)),
+    instagramSource: cleanNullable(ig?.source),
+  };
+}
+
+function buildMetaPageDiscoverySummary({
+  sourceResults = [],
+  pages = [],
+  enrichedPages = [],
+  candidates = [],
+} = {}) {
+  const combinedPages = arr(pages);
+  const enriched = arr(enrichedPages);
+
+  return {
+    sources: arr(sourceResults).map((source) => ({
+      source: s(source?.source),
+      count: arr(source?.pages).length,
+      error: cleanNullable(source?.error?.message),
+      sample: arr(source?.pages).slice(0, 5).map((page) => summarizeMetaDiscoveredPage(page)),
+    })),
+    pageCount: combinedPages.length,
+    withAccessTokenCount: combinedPages.filter((page) => s(page?.access_token)).length,
+    withInstagramAccountCount: enriched.filter((page) => hasInstagramAccountOnPage(page)).length,
+    candidateCount: arr(candidates).length,
+    samplePages: enriched.slice(0, 5).map((page) => summarizeMetaDiscoveredPage(page)),
+  };
+}
+
+function mergeMetaDiscoveredPages(existingPages = [], nextPages = []) {
+  const byPageId = new Map();
+
+  for (const page of arr(existingPages)) {
+    const pageId = s(page?.id);
+    if (!pageId) continue;
+    byPageId.set(pageId, obj(page));
+  }
+
+  for (const page of arr(nextPages)) {
+    const pageId = s(page?.id);
+    if (!pageId) continue;
+
+    const current = byPageId.get(pageId);
+    byPageId.set(
+      pageId,
+      current
+        ? mergeMetaPageDiscoveryPayload(current, obj(page))
+        : obj(page)
+    );
+  }
+
+  return [...byPageId.values()];
+}
+
+async function discoverMetaPagesForUserToken({
+  userAccessToken = "",
+  getPagesForUserTokenFn = getPagesForUserToken,
+  getAssignedPagesForUserTokenFn = getAssignedPagesForUserToken,
+} = {}) {
+  const accountsPages = await getPagesForUserTokenFn(userAccessToken);
+  const sourceResults = [
+    {
+      source: "me/accounts",
+      pages: accountsPages,
+    },
+  ];
+  let combinedPages = arr(accountsPages);
+
+  if (!combinedPages.length) {
+    try {
+      const assignedPages = await getAssignedPagesForUserTokenFn(userAccessToken);
+      sourceResults.push({
+        source: "me/assigned_pages",
+        pages: assignedPages,
+      });
+      combinedPages = mergeMetaDiscoveredPages(accountsPages, assignedPages);
+    } catch (error) {
+      sourceResults.push({
+        source: "me/assigned_pages",
+        pages: [],
+        error,
+      });
+    }
+  }
+
+  return {
+    pages: combinedPages,
+    sourceResults,
+  };
 }
 
 async function getMetaPageInstagramContextForUserToken(pageId, userAccessToken) {
@@ -772,6 +1221,7 @@ async function enrichMetaPageForCandidateDiscovery({
   userAccessToken = "",
   getMetaPageInstagramContextForUserTokenFn = getMetaPageInstagramContextForUserToken,
   getMetaPageInstagramContextForPageTokenFn = getMetaPageInstagramContextForPageToken,
+  log = createSafeLogger(),
 } = {}) {
   const basePage = obj(page);
   const pageId = s(basePage?.id);
@@ -784,10 +1234,22 @@ async function enrichMetaPageForCandidateDiscovery({
   let mergedPage = basePage;
 
   if (hasInstagramAccountOnPage(mergedPage) && pageAccessToken) {
+    log.info("meta.connect.page_enrichment.skipped", {
+      pageId,
+      strategy: "raw_page_has_instagram_and_token",
+      hasInstagramAccount: true,
+      hasPageAccessToken: true,
+    });
     return mergedPage;
   }
 
   if (pageAccessToken) {
+    log.info("meta.connect.page_enrichment.attempt", {
+      pageId,
+      strategy: "page_token",
+      hasInstagramAccount: hasInstagramAccountOnPage(mergedPage),
+      hasPageAccessToken: true,
+    });
     try {
       const enrichedByPageToken = obj(
         await getMetaPageInstagramContextForPageTokenFn(pageId, pageAccessToken)
@@ -796,7 +1258,21 @@ async function enrichMetaPageForCandidateDiscovery({
         mergedPage,
         enrichedByPageToken
       );
-    } catch {}
+      log.info("meta.connect.page_enrichment.result", {
+        pageId,
+        strategy: "page_token",
+        success: true,
+        hasInstagramAccount: hasInstagramAccountOnPage(mergedPage),
+        hasPageAccessToken: Boolean(s(mergedPage?.access_token)),
+      });
+    } catch (error) {
+      log.warn("meta.connect.page_enrichment.result", {
+        pageId,
+        strategy: "page_token",
+        success: false,
+        error: cleanNullable(error?.message),
+      });
+    }
   }
 
   if (hasInstagramAccountOnPage(mergedPage) && s(mergedPage?.access_token)) {
@@ -804,6 +1280,12 @@ async function enrichMetaPageForCandidateDiscovery({
   }
 
   if (s(userAccessToken)) {
+    log.info("meta.connect.page_enrichment.attempt", {
+      pageId,
+      strategy: "user_token",
+      hasInstagramAccount: hasInstagramAccountOnPage(mergedPage),
+      hasPageAccessToken: Boolean(s(mergedPage?.access_token)),
+    });
     try {
       const enrichedByUserToken = obj(
         await getMetaPageInstagramContextForUserTokenFn(pageId, userAccessToken)
@@ -812,7 +1294,21 @@ async function enrichMetaPageForCandidateDiscovery({
         mergedPage,
         enrichedByUserToken
       );
-    } catch {}
+      log.info("meta.connect.page_enrichment.result", {
+        pageId,
+        strategy: "user_token",
+        success: true,
+        hasInstagramAccount: hasInstagramAccountOnPage(mergedPage),
+        hasPageAccessToken: Boolean(s(mergedPage?.access_token)),
+      });
+    } catch (error) {
+      log.warn("meta.connect.page_enrichment.result", {
+        pageId,
+        strategy: "user_token",
+        success: false,
+        error: cleanNullable(error?.message),
+      });
+    }
   }
 
   return mergedPage;
@@ -823,6 +1319,7 @@ async function enrichMetaPagesForCandidateDiscovery({
   userAccessToken = "",
   getMetaPageInstagramContextForUserTokenFn = getMetaPageInstagramContextForUserToken,
   getMetaPageInstagramContextForPageTokenFn = getMetaPageInstagramContextForPageToken,
+  log = createSafeLogger(),
 } = {}) {
   return Promise.all(
     arr(pages).map((page) =>
@@ -831,6 +1328,7 @@ async function enrichMetaPagesForCandidateDiscovery({
         userAccessToken,
         getMetaPageInstagramContextForUserTokenFn,
         getMetaPageInstagramContextForPageTokenFn,
+        log,
       })
     )
   );
@@ -956,11 +1454,11 @@ export function listInstagramPageCandidates(pages = []) {
 }
 
 function buildMissingMetaPageAccessTokenError() {
-  const err = new Error(
-    "Instagram/Page asset found, but page access token could not be obtained"
+  return buildMetaConnectFailureError(
+    "meta_page_access_token_missing",
+    "Instagram/Page asset found, but page access token could not be obtained",
+    { status: 409 }
   );
-  err.status = 409;
-  return err;
 }
 
 async function resolveInstagramPageAccessToken({
@@ -1058,10 +1556,153 @@ async function savePendingMetaSelection(
   );
 }
 
+async function savePendingMetaConnectDiagnostic(
+  db,
+  tenantId,
+  connectDiagnostic,
+  actor = "system"
+) {
+  if (!connectDiagnostic?.diagnosticId) return null;
+
+  return saveMetaSecretValue(
+    db,
+    tenantId,
+    META_CONNECT_DIAGNOSTIC_SECRET_KEY,
+    JSON.stringify(connectDiagnostic),
+    actor
+  );
+}
+
+function findMetaDebugGranularScope(permissionSummary = {}, scope = "") {
+  return (
+    arr(permissionSummary?.debugToken?.granularScopes).find(
+      (entry) => s(entry?.scope) === s(scope)
+    ) || null
+  );
+}
+
+function buildMissingPermissionsMessage(permissionSummary = {}) {
+  const missing = normalizeScopeList(permissionSummary?.missingRequiredScopes);
+  const granted = normalizeScopeList(permissionSummary?.grantedScopes);
+  const missingText = missing.length ? missing.join(", ") : "unknown";
+  const grantedText = granted.length ? granted.join(", ") : "none";
+
+  return `Meta login succeeded, but the app was not granted every required permission. Missing: ${missingText}. Granted: ${grantedText}.`;
+}
+
+function buildMetaNoPagesReturnedMessage(permissionSummary = {}) {
+  const pageScopeGrant = findMetaDebugGranularScope(
+    permissionSummary,
+    "pages_show_list"
+  );
+
+  if (pageScopeGrant && Number(pageScopeGrant.targetCount || 0) === 0) {
+    return "Meta login succeeded, but the current app authorization contains zero selected Facebook Pages, so page discovery returned nothing. Reconnect and reselect the correct Page in Facebook Business Integrations.";
+  }
+
+  return "Meta login succeeded, but Meta returned no Facebook Pages for this app/user grant. Reconnect and make sure the correct Facebook Page is selected for this app.";
+}
+
+function buildMetaVerificationUnavailableMessage(permissionSummary = {}) {
+  const permissionsError = s(permissionSummary?.permissions?.error);
+  const debugError = s(permissionSummary?.debugToken?.error);
+  const sources = [permissionsError, debugError].filter(Boolean);
+
+  return sources.length
+    ? `Meta login succeeded, but granted permissions could not be verified. ${sources.join(" | ")}`
+    : "Meta login succeeded, but granted permissions could not be verified.";
+}
+
+async function recordMetaConnectFailure({
+  db,
+  tenant = {},
+  actor = "system",
+  reasonCode = "meta_connect_failed",
+  message = "Meta connect failed",
+  status = 409,
+  stage = "callback",
+  metaUserProfile = {},
+  requestedScopes = META_DM_LAUNCH_SCOPES,
+  grantedScopes = [],
+  permissionSummary = {},
+  pageDiscovery = {},
+  candidateCount = 0,
+  log = createSafeLogger(),
+} = {}) {
+  const connectDiagnostic = buildPendingMetaConnectDiagnosticPayload({
+    actor,
+    stage,
+    reasonCode,
+    message,
+    metaUserProfile,
+    requestedScopes,
+    grantedScopes,
+    permissionSummary,
+    pageDiscovery,
+    candidateCount,
+  });
+
+  await savePendingMetaConnectDiagnostic(
+    db,
+    tenant.id,
+    connectDiagnostic,
+    actor || "system"
+  );
+
+  await auditSafe(
+    db,
+    actor,
+    tenant,
+    "settings.channel.meta.connect_failed",
+    "tenant_channel",
+    "instagram",
+    {
+      reasonCode: connectDiagnostic.reasonCode,
+      stage: connectDiagnostic.stage,
+      message: connectDiagnostic.message,
+      metaUserId: connectDiagnostic.metaUserId || null,
+      requestedScopes: connectDiagnostic.requestedScopes,
+      grantedScopes: connectDiagnostic.grantedScopes,
+      missingGrantedScopes: connectDiagnostic.missingGrantedScopes,
+      declinedScopes: connectDiagnostic.declinedScopes,
+      expiredScopes: connectDiagnostic.expiredScopes,
+      permissionVerificationStatus:
+        connectDiagnostic.permissionVerificationStatus || null,
+      permissionSource: connectDiagnostic.permissionSource || null,
+      pageDiscovery: connectDiagnostic.pageDiscovery,
+      candidateCount: connectDiagnostic.candidateCount,
+    }
+  );
+
+  log.warn("meta.connect.failed", {
+    tenantKey: s(tenant?.tenant_key),
+    reasonCode: connectDiagnostic.reasonCode,
+    stage: connectDiagnostic.stage,
+    metaUserId: connectDiagnostic.metaUserId || null,
+    requestedScopes: connectDiagnostic.requestedScopes,
+    grantedScopes: connectDiagnostic.grantedScopes,
+    missingGrantedScopes: connectDiagnostic.missingGrantedScopes,
+    permissionVerificationStatus:
+      connectDiagnostic.permissionVerificationStatus || null,
+    permissionSource: connectDiagnostic.permissionSource || null,
+    pageDiscovery: connectDiagnostic.pageDiscovery,
+    candidateCount: connectDiagnostic.candidateCount,
+  });
+
+  throw buildMetaConnectFailureError(reasonCode, message, {
+    status,
+    details: {
+      stage,
+    },
+  });
+}
+
 async function loadMetaSecretsContext(db, tenantId) {
   const secrets = await getMetaSecrets(db, tenantId);
   let pendingSelection = readPendingMetaSelection(secrets);
   let pendingSelectionExpired = false;
+  let connectDiagnostic = readPendingMetaConnectDiagnostic(secrets);
+  let connectDiagnosticExpired = false;
 
   if (pendingSelection && hasPendingMetaSelectionExpired(pendingSelection)) {
     await deleteMetaSecretKeys(db, tenantId, [META_CONNECT_SELECTION_SECRET_KEY]);
@@ -1070,10 +1711,22 @@ async function loadMetaSecretsContext(db, tenantId) {
     pendingSelectionExpired = true;
   }
 
+  if (
+    connectDiagnostic &&
+    hasPendingMetaConnectDiagnosticExpired(connectDiagnostic)
+  ) {
+    await deleteMetaSecretKeys(db, tenantId, [META_CONNECT_DIAGNOSTIC_SECRET_KEY]);
+    delete secrets[META_CONNECT_DIAGNOSTIC_SECRET_KEY];
+    connectDiagnostic = null;
+    connectDiagnosticExpired = true;
+  }
+
   return {
     secrets,
     pendingSelection,
     pendingSelectionExpired,
+    connectDiagnostic,
+    connectDiagnosticExpired,
   };
 }
 
@@ -1116,9 +1769,11 @@ async function connectInstagramChannel({
   tokenJson = {},
   userAccessToken = "",
   requestedScopes = META_DM_LAUNCH_SCOPES,
-  grantedScopes = META_DM_LAUNCH_SCOPES,
+  grantedScopes = [],
+  permissionSummary = {},
   getMetaPageAccessContextForUserTokenFn = getMetaPageAccessContextForUserToken,
   syncInstagramSourceLayerFn = syncInstagramSourceLayer,
+  log = createSafeLogger(),
 } = {}) {
   const connectedAt = new Date().toISOString();
   const resolvedSelected = await resolveInstagramPageAccessToken({
@@ -1127,15 +1782,36 @@ async function connectInstagramChannel({
     getMetaPageAccessContextForUserTokenFn,
   });
 
-  await deleteMetaSecretKeys(db, tenant.id, [META_CONNECT_SELECTION_SECRET_KEY]);
-  await saveMetaPageAccessToken(
+  log.info("meta.connect.page_access_token.resolved", {
+    tenantKey: s(tenant?.tenant_key),
+    pageId: resolvedSelected.pageId,
+    igUserId: resolvedSelected.igUserId,
+    pageAccessTokenPresent: Boolean(s(resolvedSelected.pageAccessToken)),
+  });
+
+  await deleteMetaSecretKeys(db, tenant.id, [
+    META_CONNECT_SELECTION_SECRET_KEY,
+    META_CONNECT_DIAGNOSTIC_SECRET_KEY,
+  ]);
+  const savedPageToken = await saveMetaPageAccessToken(
     db,
     tenant.id,
     resolvedSelected.pageAccessToken,
     actor || "system"
   );
+  log.info("meta.connect.secret_saved", {
+    tenantKey: s(tenant?.tenant_key),
+    secretKey: "page_access_token",
+    saved: Boolean(savedPageToken),
+  });
+  await deleteMetaSecretKeys(db, tenant.id, [
+    "access_token",
+    "meta_page_access_token",
+    "page_id",
+    "ig_user_id",
+  ]);
 
-  await upsertInstagramChannel(db, tenant.id, {
+  const channel = await upsertInstagramChannel(db, tenant.id, {
     provider: "meta",
     display_name: buildConnectedInstagramDisplayName(resolvedSelected),
     external_page_id: resolvedSelected.pageId,
@@ -1147,6 +1823,7 @@ async function connectInstagramChannel({
       selected: resolvedSelected,
       requestedScopes,
       grantedScopes,
+      permissionSummary,
       metaUserProfile,
       connectedAt,
     }),
@@ -1157,6 +1834,13 @@ async function connectInstagramChannel({
       connectedAt,
     }),
     last_sync_at: connectedAt,
+  });
+  log.info("meta.connect.channel_upserted", {
+    tenantKey: s(tenant?.tenant_key),
+    channelId: s(channel?.id),
+    pageId: resolvedSelected.pageId,
+    igUserId: resolvedSelected.igUserId,
+    grantedScopes: normalizeScopeList(grantedScopes),
   });
 
   const syncResult = await syncInstagramSourceLayerFn({
@@ -1189,7 +1873,11 @@ async function connectInstagramChannel({
       metaUserId: metaUserProfile.id || null,
       scopeModel: "instagram_dm_page_access",
       requestedScopes: buildRequestedScopeList(requestedScopes),
-      grantedScopes: buildRequestedScopeList(grantedScopes),
+      grantedScopes: normalizeScopeList(grantedScopes),
+      missingGrantedScopes: normalizeScopeList(
+        permissionSummary?.missingRequiredScopes
+      ),
+      permissionVerificationStatus: s(permissionSummary?.verificationStatus),
       phaseTwoCapabilities: [...META_PHASE_TWO_CAPABILITIES],
       sourceId: source?.id || null,
       sourceKey: source?.source_key || null,
@@ -1203,6 +1891,7 @@ async function connectInstagramChannel({
   );
 
   return {
+    channel,
     source,
     capabilityGovernance,
     payload,
@@ -1224,6 +1913,7 @@ async function persistMetaStatusDeauthorization({
 
   await deleteMetaSecretKeys(db, tenant.id, [
     META_CONNECT_SELECTION_SECRET_KEY,
+    META_CONNECT_DIAGNOSTIC_SECRET_KEY,
     "page_access_token",
     "access_token",
     "meta_page_access_token",
@@ -1353,6 +2043,7 @@ async function refreshMetaStatusFromLiveVerification({
   const nextSecrets = { ...secrets };
   for (const key of [
     META_CONNECT_SELECTION_SECRET_KEY,
+    META_CONNECT_DIAGNOSTIC_SECRET_KEY,
     "page_access_token",
     "access_token",
     "meta_page_access_token",
@@ -1377,6 +2068,7 @@ function buildMetaStatusBlockers({
   gatewayReady = false,
   capability = {},
   pendingSelection = null,
+  connectDiagnostic = null,
 } = {}) {
   const blockers = [];
   const hasIds = Boolean(
@@ -1393,6 +2085,59 @@ function buildMetaStatusBlockers({
       reasonCode: "instagram_account_selection_required",
       candidateCount: pendingSelection.candidateCount,
       expiresAt: pendingSelection.expiresAt,
+    });
+  }
+
+  if (connectDiagnostic?.reasonCode) {
+    const missingScopes = normalizeScopeList(
+      connectDiagnostic?.missingGrantedScopes
+    );
+    const grantedScopes = normalizeScopeList(connectDiagnostic?.grantedScopes);
+    const discoveredPageCount = Number(
+      connectDiagnostic?.pageDiscovery?.pageCount || 0
+    );
+
+    let title = "The latest Instagram connect attempt failed.";
+    let subtitle = s(connectDiagnostic?.message);
+
+    if (connectDiagnostic.reasonCode === "meta_missing_granted_permissions") {
+      title = "Meta did not grant every required permission for the latest connect attempt.";
+      subtitle = `Missing: ${
+        missingScopes.length ? missingScopes.join(", ") : "unknown"
+      }. Granted: ${grantedScopes.length ? grantedScopes.join(", ") : "none"}.`;
+    } else if (
+      connectDiagnostic.reasonCode === "meta_permissions_verification_failed"
+    ) {
+      title =
+        "Meta login succeeded, but the app could not verify which permissions were granted.";
+    } else if (connectDiagnostic.reasonCode === "meta_pages_not_returned") {
+      title = "Meta authorized the user, but page discovery returned zero Facebook Pages.";
+      if (
+        s(connectDiagnostic?.permissionVerificationStatus) === "verified" &&
+        discoveredPageCount === 0
+      ) {
+        subtitle =
+          "The latest reconnect produced no page assets for this app grant. Reconnect and reselect the correct Facebook Page in Business Integrations.";
+      }
+    } else if (
+      connectDiagnostic.reasonCode === "meta_no_instagram_business_account"
+    ) {
+      title =
+        "Meta returned Facebook Pages, but none exposed a linked Instagram Business account.";
+    } else if (
+      connectDiagnostic.reasonCode === "meta_page_access_token_missing"
+    ) {
+      title =
+        "Meta exposed the page/Instagram asset, but page access token resolution failed.";
+    }
+
+    blockers.push({
+      title,
+      subtitle: subtitle || "Inspect the latest connect diagnostic and retry.",
+      reasonCode: connectDiagnostic.reasonCode,
+      createdAt: connectDiagnostic.createdAt,
+      expiresAt: connectDiagnostic.expiresAt,
+      missingGrantedScopes: missingScopes,
     });
   }
 
@@ -1542,9 +2287,14 @@ function buildMetaReadyMessage({
   selectionRequired = false,
   blockers = [],
   attentionItems = [],
+  connectDiagnostic = null,
 } = {}) {
   if (selectionRequired) {
     return "Instagram connect is waiting for an explicit account selection before this tenant can be bound.";
+  }
+
+  if (connectDiagnostic?.reasonCode) {
+    return "The latest Instagram connect attempt failed before this tenant could be rebound.";
   }
 
   if (blockers.length) {
@@ -1563,6 +2313,7 @@ function buildMetaStatusPayload({
   channel = null,
   secrets = {},
   pendingSelection = null,
+  connectDiagnostic = null,
 } = {}) {
   const capability = getTenantCapability(tenant, "metaChannelConnect");
   const oauthEnvReady = hasMetaOauthEnv();
@@ -1572,6 +2323,9 @@ function buildMetaStatusPayload({
     pendingSelection: pendingSelection || readPendingMetaSelection(secrets),
     tenantKey: tenant?.tenant_key,
   });
+  const connectDiagnosticView = buildPendingMetaConnectDiagnosticView(
+    connectDiagnostic || readPendingMetaConnectDiagnostic(secrets)
+  );
   const selectionRequired = pendingSelectionView?.required === true;
   const hasToken = Boolean(s(secrets?.page_access_token));
   const hasIds = Boolean(
@@ -1605,6 +2359,9 @@ function buildMetaStatusPayload({
     if (selectionRequired) {
       state = "not_connected";
       reasonCode = "instagram_account_selection_required";
+    } else if (connectDiagnosticView?.reasonCode) {
+      state = "not_connected";
+      reasonCode = connectDiagnosticView.reasonCode;
     } else if (capability?.allowed === false) {
       state = "blocked";
       reasonCode = "plan_capability_restricted";
@@ -1657,6 +2414,7 @@ function buildMetaStatusPayload({
     gatewayReady,
     capability,
     pendingSelection: pendingSelectionView,
+    connectDiagnostic: connectDiagnosticView,
   });
   const userToken = buildMetaUserTokenLifecycle(snapshot.userTokenExpiresAt);
   const attentionItems = buildMetaStatusAttentionItems({
@@ -1705,6 +2463,7 @@ function buildMetaStatusPayload({
       metaUserName: cleanNullable(snapshot.metaUserName),
     },
     pendingSelection: pendingSelectionView,
+    lastConnectFailure: connectDiagnosticView,
     runtime: {
       ready: deliveryReady,
       webhookReady,
@@ -1724,6 +2483,14 @@ function buildMetaStatusPayload({
       authModel: "instagram_dm_page_access",
       requestedScopes: snapshot.requestedScopes,
       grantedScopes: snapshot.grantedScopes,
+      missingGrantedScopes: snapshot.missingGrantedScopes,
+      declinedScopes: snapshot.declinedScopes,
+      expiredScopes: snapshot.expiredScopes,
+      permissionVerificationStatus: cleanNullable(
+        snapshot.permissionVerificationStatus
+      ),
+      permissionScopeSource: cleanNullable(snapshot.permissionScopeSource),
+      permissionVerifiedAt: cleanNullable(snapshot.permissionVerifiedAt),
       excludedScopes: snapshot.excludedScopes,
       phaseTwoCapabilities: snapshot.phaseTwoCapabilities,
       manualReconnectMode: "oauth",
@@ -1784,6 +2551,7 @@ function buildMetaStatusPayload({
         selectionRequired,
         blockers,
         attentionItems,
+        connectDiagnostic: connectDiagnosticView,
       }),
       blockers,
     }),
@@ -1792,6 +2560,12 @@ function buildMetaStatusPayload({
 
 export async function buildMetaOAuthUrl({ db, req }) {
   const tenantKey = getReqTenantKey(req);
+  const actor = getReqActor(req);
+  const log = createSafeLogger(req?.log, {
+    flow: "meta_connect",
+    stage: "build_oauth_url",
+    tenantKey,
+  });
   if (!tenantKey) {
     const err = new Error("Missing tenant context");
     err.status = 401;
@@ -1835,11 +2609,14 @@ export async function buildMetaOAuthUrl({ db, req }) {
     throw err;
   }
 
-  await deleteMetaSecretKeys(db, tenant.id, [META_CONNECT_SELECTION_SECRET_KEY]);
+  await deleteMetaSecretKeys(db, tenant.id, [
+    META_CONNECT_SELECTION_SECRET_KEY,
+    META_CONNECT_DIAGNOSTIC_SECRET_KEY,
+  ]);
 
   const state = signState({
     tenantKey,
-    actor: getReqActor(req),
+    actor,
     exp: Date.now() + 10 * 60 * 1000,
   });
 
@@ -1850,6 +2627,16 @@ export async function buildMetaOAuthUrl({ db, req }) {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", META_DM_LAUNCH_SCOPES.join(","));
 
+  log.info("meta.connect.oauth_url_built", {
+    tenantKey,
+    actor,
+    requestedScopes: [...META_DM_LAUNCH_SCOPES],
+    clearedTransientSecrets: [
+      META_CONNECT_SELECTION_SECRET_KEY,
+      META_CONNECT_DIAGNOSTIC_SECRET_KEY,
+    ],
+  });
+
   return url.toString();
 }
 
@@ -1858,7 +2645,10 @@ export async function handleMetaCallback({
   req,
   exchangeCodeForUserTokenFn = exchangeCodeForUserToken,
   getMetaUserProfileFn = getMetaUserProfile,
+  getMetaPermissionsForUserTokenFn = getMetaPermissionsForUserToken,
+  debugMetaUserTokenFn = debugMetaUserToken,
   getPagesForUserTokenFn = getPagesForUserToken,
+  getAssignedPagesForUserTokenFn = getAssignedPagesForUserToken,
   getMetaPageInstagramContextForUserTokenFn = getMetaPageInstagramContextForUserToken,
   getMetaPageInstagramContextForPageTokenFn = getMetaPageInstagramContextForPageToken,
   getMetaPageAccessContextForUserTokenFn = getMetaPageAccessContextForUserToken,
@@ -1869,15 +2659,31 @@ export async function handleMetaCallback({
   const errorCode = s(req.query.error_code);
   const errorMessage = s(req.query.error_message);
   const stateRaw = s(req.query.state);
+  const callbackLog = createSafeLogger(req?.log, {
+    flow: "meta_connect",
+    stage: "callback",
+  });
+
+  callbackLog.info("meta.connect.callback_entered", {
+    hasCode: Boolean(code),
+    hasErrorQuery: Boolean(error || errorCode || errorMessage),
+    errorCode: cleanNullable(errorCode),
+  });
 
   if (error || errorCode || errorMessage) {
+    callbackLog.warn("meta.connect.callback_meta_error", {
+      error: cleanNullable(error || errorMessage),
+      errorCode: cleanNullable(errorCode),
+    });
     return {
       type: "redirect_or_error",
       redirectUrl: buildRedirectUrl({
         section: "channels",
         meta_error: errorMessage || error || "Meta connect failed",
+        meta_reason: "meta_oauth_error",
       }),
       error: errorMessage || error || "Meta connect failed",
+      reasonCode: "meta_oauth_error",
     };
   }
 
@@ -1926,42 +2732,215 @@ export async function handleMetaCallback({
     throw err;
   }
 
-  await deleteMetaSecretKeys(db, tenant.id, [META_CONNECT_SELECTION_SECRET_KEY]);
+  const actorLog = createSafeLogger(req?.log, {
+    flow: "meta_connect",
+    stage: "callback",
+    tenantKey: state.tenantKey,
+    actor,
+  });
+
+  await deleteMetaSecretKeys(db, tenant.id, [
+    META_CONNECT_SELECTION_SECRET_KEY,
+    META_CONNECT_DIAGNOSTIC_SECRET_KEY,
+  ]);
 
   const tokenJson = await exchangeCodeForUserTokenFn(code);
   const userAccessToken = s(tokenJson?.access_token);
+  actorLog.info("meta.connect.token_exchanged", {
+    tenantKey: tenant.tenant_key,
+    hasUserAccessToken: Boolean(userAccessToken),
+    tokenType: cleanNullable(tokenJson?.token_type),
+    expiresIn:
+      Number.isFinite(Number(tokenJson?.expires_in))
+        ? Number(tokenJson?.expires_in)
+        : null,
+  });
+
   if (!userAccessToken) {
-    throw new Error("Meta user access token missing");
+    await recordMetaConnectFailure({
+      db,
+      tenant,
+      actor,
+      reasonCode: "meta_user_access_token_missing",
+      message: "Meta user access token missing",
+      status: 409,
+      stage: "token_exchange",
+      requestedScopes: META_DM_LAUNCH_SCOPES,
+      log: actorLog,
+    });
   }
 
-  const [metaUserProfile, rawPages] = await Promise.all([
+  const permissionCheckedAt = new Date().toISOString();
+  const [
+    metaUserProfile,
+    permissionsResult,
+    debugTokenResult,
+    pageDiscoveryResult,
+  ] = await Promise.all([
     getMetaUserProfileFn(userAccessToken),
-    getPagesForUserTokenFn(userAccessToken),
+    getMetaPermissionsForUserTokenFn(userAccessToken)
+      .then((payload) => ({ payload }))
+      .catch((error) => ({ error })),
+    debugMetaUserTokenFn(userAccessToken)
+      .then((payload) => ({ payload }))
+      .catch((error) => ({ error })),
+    discoverMetaPagesForUserToken({
+      userAccessToken,
+      getPagesForUserTokenFn,
+      getAssignedPagesForUserTokenFn,
+    }),
   ]);
+  const permissionSummary = buildMetaPermissionSummary({
+    requestedScopes: META_DM_LAUNCH_SCOPES,
+    permissionsPayload: permissionsResult?.payload,
+    debugTokenPayload: debugTokenResult?.payload,
+    permissionsError: permissionsResult?.error,
+    debugTokenError: debugTokenResult?.error,
+    verifiedAt: permissionCheckedAt,
+  });
+  const rawPageDiscovery = buildMetaPageDiscoverySummary({
+    sourceResults: pageDiscoveryResult?.sourceResults,
+    pages: pageDiscoveryResult?.pages,
+  });
+
+  actorLog.info("meta.connect.permissions_verified", {
+    tenantKey: tenant.tenant_key,
+    requestedScopes: permissionSummary.requestedScopes,
+    grantedScopes: permissionSummary.grantedScopes,
+    missingGrantedScopes: permissionSummary.missingRequiredScopes,
+    declinedScopes: permissionSummary.declinedScopes,
+    expiredScopes: permissionSummary.expiredScopes,
+    verificationStatus: permissionSummary.verificationStatus,
+    permissionSource: permissionSummary.source,
+    debugToken: {
+      available: permissionSummary.debugToken.available,
+      isValid: permissionSummary.debugToken.isValid,
+      appId: permissionSummary.debugToken.appId || null,
+      userId: permissionSummary.debugToken.userId || null,
+      scopes: permissionSummary.debugToken.scopes,
+      granularScopes: permissionSummary.debugToken.granularScopes,
+    },
+  });
+  actorLog.info("meta.connect.meta_user_loaded", {
+    tenantKey: tenant.tenant_key,
+    metaUserId: cleanNullable(metaUserProfile?.id),
+    metaUserName: cleanNullable(metaUserProfile?.name),
+  });
+  actorLog.info("meta.connect.page_discovery.completed", {
+    tenantKey: tenant.tenant_key,
+    pageDiscovery: rawPageDiscovery,
+  });
 
   if (!s(metaUserProfile?.id)) {
-    throw new Error("Meta app user id missing");
+    await recordMetaConnectFailure({
+      db,
+      tenant,
+      actor,
+      reasonCode: "meta_user_profile_missing",
+      message: "Meta app user id missing",
+      status: 409,
+      stage: "profile",
+      metaUserProfile,
+      requestedScopes: META_DM_LAUNCH_SCOPES,
+      grantedScopes: permissionSummary.grantedScopes,
+      permissionSummary,
+      pageDiscovery: rawPageDiscovery,
+      log: actorLog,
+    });
   }
 
-  if (!rawPages.length) {
-    throw new Error(
-      "No Facebook Pages were returned by the connected Meta account"
-    );
+  if (!permissionSummary.verificationAvailable) {
+    await recordMetaConnectFailure({
+      db,
+      tenant,
+      actor,
+      reasonCode: "meta_permissions_verification_failed",
+      message: buildMetaVerificationUnavailableMessage(permissionSummary),
+      status: 409,
+      stage: "permissions",
+      metaUserProfile,
+      requestedScopes: META_DM_LAUNCH_SCOPES,
+      grantedScopes: permissionSummary.grantedScopes,
+      permissionSummary,
+      pageDiscovery: rawPageDiscovery,
+      log: actorLog,
+    });
+  }
+
+  if (permissionSummary.missingRequiredScopes.length) {
+    await recordMetaConnectFailure({
+      db,
+      tenant,
+      actor,
+      reasonCode: "meta_missing_granted_permissions",
+      message: buildMissingPermissionsMessage(permissionSummary),
+      status: 409,
+      stage: "permissions",
+      metaUserProfile,
+      requestedScopes: META_DM_LAUNCH_SCOPES,
+      grantedScopes: permissionSummary.grantedScopes,
+      permissionSummary,
+      pageDiscovery: rawPageDiscovery,
+      log: actorLog,
+    });
+  }
+
+  if (!arr(pageDiscoveryResult?.pages).length) {
+    await recordMetaConnectFailure({
+      db,
+      tenant,
+      actor,
+      reasonCode: "meta_pages_not_returned",
+      message: buildMetaNoPagesReturnedMessage(permissionSummary),
+      status: 409,
+      stage: "page_discovery",
+      metaUserProfile,
+      requestedScopes: META_DM_LAUNCH_SCOPES,
+      grantedScopes: permissionSummary.grantedScopes,
+      permissionSummary,
+      pageDiscovery: rawPageDiscovery,
+      log: actorLog,
+    });
   }
 
   const enrichedPages = await enrichMetaPagesForCandidateDiscovery({
-    pages: rawPages,
+    pages: pageDiscoveryResult.pages,
     userAccessToken,
     getMetaPageInstagramContextForUserTokenFn,
     getMetaPageInstagramContextForPageTokenFn,
+    log: actorLog,
   });
 
   const candidates = listInstagramPageCandidates(enrichedPages);
+  const enrichedPageDiscovery = buildMetaPageDiscoverySummary({
+    sourceResults: pageDiscoveryResult?.sourceResults,
+    pages: pageDiscoveryResult?.pages,
+    enrichedPages,
+    candidates,
+  });
+  actorLog.info("meta.connect.page_enrichment.completed", {
+    tenantKey: tenant.tenant_key,
+    pageDiscovery: enrichedPageDiscovery,
+  });
 
   if (!candidates.length) {
-    throw new Error(
-      "Facebook Pages were returned, but no linked Instagram Business account could be found"
-    );
+    await recordMetaConnectFailure({
+      db,
+      tenant,
+      actor,
+      reasonCode: "meta_no_instagram_business_account",
+      message:
+        "Facebook Pages were returned, but no linked Instagram Business account could be found",
+      status: 409,
+      stage: "page_enrichment",
+      metaUserProfile,
+      requestedScopes: META_DM_LAUNCH_SCOPES,
+      grantedScopes: permissionSummary.grantedScopes,
+      permissionSummary,
+      pageDiscovery: enrichedPageDiscovery,
+      candidateCount: 0,
+      log: actorLog,
+    });
   }
 
   if (candidates.length > 1) {
@@ -1970,11 +2949,12 @@ export async function handleMetaCallback({
       metaUserProfile,
       tokenJson,
       requestedScopes: META_DM_LAUNCH_SCOPES,
-      grantedScopes: META_DM_LAUNCH_SCOPES,
+      grantedScopes: permissionSummary.grantedScopes,
       candidates,
     });
 
     await savePendingMetaSelection(db, tenant.id, pendingSelection, actor);
+    await deleteMetaSecretKeys(db, tenant.id, [META_CONNECT_DIAGNOSTIC_SECRET_KEY]);
 
     await auditSafe(
       db,
@@ -1998,6 +2978,11 @@ export async function handleMetaCallback({
         metaUserId: metaUserProfile.id || null,
       }
     );
+    actorLog.info("meta.connect.selection_required", {
+      tenantKey: tenant.tenant_key,
+      candidateCount: candidates.length,
+      grantedScopes: permissionSummary.grantedScopes,
+    });
 
     return {
       type: "selection_required",
@@ -2016,18 +3001,46 @@ export async function handleMetaCallback({
   }
 
   const selected = candidates[0];
-  const connectResult = await connectInstagramChannel({
-    db,
-    tenant,
-    actor,
-    selected,
-    metaUserProfile,
-    tokenJson,
-    userAccessToken,
-    requestedScopes: META_DM_LAUNCH_SCOPES,
-    grantedScopes: META_DM_LAUNCH_SCOPES,
-    getMetaPageAccessContextForUserTokenFn,
-    syncInstagramSourceLayerFn,
+  let connectResult = null;
+  try {
+    connectResult = await connectInstagramChannel({
+      db,
+      tenant,
+      actor,
+      selected,
+      metaUserProfile,
+      tokenJson,
+      userAccessToken,
+      requestedScopes: META_DM_LAUNCH_SCOPES,
+      grantedScopes: permissionSummary.grantedScopes,
+      permissionSummary,
+      getMetaPageAccessContextForUserTokenFn,
+      syncInstagramSourceLayerFn,
+      log: actorLog,
+    });
+  } catch (error) {
+    await recordMetaConnectFailure({
+      db,
+      tenant,
+      actor,
+      reasonCode: s(error?.reasonCode || "meta_connect_persistence_failed"),
+      message: s(error?.message || "Failed to complete Meta connect"),
+      status: Number(error?.status || 409),
+      stage: "connect",
+      metaUserProfile,
+      requestedScopes: META_DM_LAUNCH_SCOPES,
+      grantedScopes: permissionSummary.grantedScopes,
+      permissionSummary,
+      pageDiscovery: enrichedPageDiscovery,
+      candidateCount: candidates.length,
+      log: actorLog,
+    });
+  }
+
+  actorLog.info("meta.connect.redirecting", {
+    tenantKey: tenant.tenant_key,
+    outcome: "success",
+    reasonCode: null,
   });
 
   return {
@@ -2048,6 +3061,13 @@ export async function completeMetaSelection({
   syncInstagramSourceLayerFn = syncInstagramSourceLayer,
 } = {}) {
   const tenantKey = getReqTenantKey(req);
+  const actor = getReqActor(req);
+  const log = createSafeLogger(req?.log, {
+    flow: "meta_connect",
+    stage: "selection_complete",
+    tenantKey,
+    actor,
+  });
   if (!tenantKey) {
     const err = new Error("Missing tenant context");
     err.status = 401;
@@ -2060,7 +3080,6 @@ export async function completeMetaSelection({
     err.status = 400;
     throw err;
   }
-  const actor = getReqActor(req);
 
   const selectionToken = s(
     req.body?.selectionToken || req.body?.selection_token
@@ -2111,22 +3130,87 @@ export async function completeMetaSelection({
     name: pendingSelection.metaUserName,
   };
 
-  const connectResult = await connectInstagramChannel({
-    db,
-    tenant,
-    actor,
-    selected,
-    metaUserProfile,
-    tokenJson: {
-      token_type: pendingSelection.tokenType,
-      userTokenExpiresAt: pendingSelection.userTokenExpiresAt,
-    },
-    userAccessToken: pendingSelection.userAccessToken,
-    requestedScopes: pendingSelection.requestedScopes,
-    grantedScopes: pendingSelection.grantedScopes,
-    getMetaPageAccessContextForUserTokenFn,
-    syncInstagramSourceLayerFn,
-  });
+  let connectResult = null;
+  try {
+    connectResult = await connectInstagramChannel({
+      db,
+      tenant,
+      actor,
+      selected,
+      metaUserProfile,
+      tokenJson: {
+        token_type: pendingSelection.tokenType,
+        userTokenExpiresAt: pendingSelection.userTokenExpiresAt,
+      },
+      userAccessToken: pendingSelection.userAccessToken,
+      requestedScopes: pendingSelection.requestedScopes,
+      grantedScopes: pendingSelection.grantedScopes,
+      permissionSummary: {
+        grantedScopes: pendingSelection.grantedScopes,
+        missingRequiredScopes: [],
+        declinedScopes: [],
+        expiredScopes: [],
+        verificationStatus: "verified",
+        source: "pending_selection",
+        verifiedAt: pendingSelection.createdAt,
+      },
+      getMetaPageAccessContextForUserTokenFn,
+      syncInstagramSourceLayerFn,
+      log,
+    });
+  } catch (error) {
+    await recordMetaConnectFailure({
+      db,
+      tenant,
+      actor,
+      reasonCode: s(error?.reasonCode || "meta_selection_connect_failed"),
+      message: s(
+        error?.message || "Failed to finalize Instagram account selection"
+      ),
+      status: Number(error?.status || 409),
+      stage: "selection_connect",
+      metaUserProfile,
+      requestedScopes: pendingSelection.requestedScopes,
+      grantedScopes: pendingSelection.grantedScopes,
+      permissionSummary: {
+        grantedScopes: pendingSelection.grantedScopes,
+        verificationStatus: "verified",
+        source: "pending_selection",
+        verifiedAt: pendingSelection.createdAt,
+      },
+      pageDiscovery: {
+        sources: [
+          {
+            source: "pending_selection",
+            count: pendingSelection.candidates.length,
+            error: null,
+            sample: pendingSelection.candidates.slice(0, 5).map((candidate) => ({
+              pageId: candidate.pageId,
+              pageName: candidate.pageName,
+              hasPageAccessToken: Boolean(s(candidate.pageAccessToken)),
+              hasInstagramAccount: true,
+              instagramSource: null,
+            })),
+          },
+        ],
+        pageCount: pendingSelection.candidates.length,
+        withAccessTokenCount: pendingSelection.candidates.filter((candidate) =>
+          s(candidate.pageAccessToken)
+        ).length,
+        withInstagramAccountCount: pendingSelection.candidates.length,
+        candidateCount: pendingSelection.candidates.length,
+        samplePages: pendingSelection.candidates.slice(0, 5).map((candidate) => ({
+          pageId: candidate.pageId,
+          pageName: candidate.pageName,
+          hasPageAccessToken: Boolean(s(candidate.pageAccessToken)),
+          hasInstagramAccount: true,
+          instagramSource: null,
+        })),
+      },
+      candidateCount: pendingSelection.candidates.length,
+      log,
+    });
+  }
   const source = connectResult?.source || null;
   const capabilityGovernance = connectResult?.capabilityGovernance || null;
 
@@ -2154,6 +3238,12 @@ export async function completeMetaSelection({
       },
     }
   );
+  log.info("meta.connect.selection_completed", {
+    tenantKey: tenant.tenant_key,
+    selectionId: pendingSelection.selectionId,
+    candidateId: selected.id,
+    sourceId: source?.id || null,
+  });
 
   return connectResult?.payload;
 }
@@ -2199,6 +3289,9 @@ export async function getMetaStatus({
     pendingSelection:
       readPendingMetaSelection(refreshed.secrets) ||
       secretsContext.pendingSelection,
+    connectDiagnostic:
+      readPendingMetaConnectDiagnostic(refreshed.secrets) ||
+      secretsContext.connectDiagnostic,
   });
 }
 
@@ -2219,11 +3312,15 @@ export async function disconnectMeta({ db, req }) {
 
   const actor = getReqActor(req);
   const currentChannel = await getPrimaryInstagramChannel(db, tenant.id);
-  const { pendingSelection } = await loadMetaSecretsContext(db, tenant.id);
+  const { pendingSelection, connectDiagnostic } = await loadMetaSecretsContext(
+    db,
+    tenant.id
+  );
   const disconnectedAt = new Date().toISOString();
 
   await deleteMetaSecretKeys(db, tenant.id, [
     META_CONNECT_SELECTION_SECRET_KEY,
+    META_CONNECT_DIAGNOSTIC_SECRET_KEY,
     "page_access_token",
     "access_token",
     "meta_page_access_token",
@@ -2256,6 +3353,36 @@ export async function disconnectMeta({ db, req }) {
       channel: "instagram",
       disconnectedAt,
       preservedState: cleanNullable(currentChannel?.status) || "not_connected",
+      review: buildMetaReviewPayload(),
+      capabilityGovernance: null,
+    };
+  }
+
+  if (!currentChannel?.id) {
+    if (connectDiagnostic?.diagnosticId) {
+      await auditSafe(
+        db,
+        actor,
+        tenant,
+        "settings.channel.meta.diagnostic_cleared",
+        "tenant_channel",
+        "instagram",
+        {
+          diagnosticId: connectDiagnostic.diagnosticId,
+          reasonCode: connectDiagnostic.reasonCode,
+          clearedAt: disconnectedAt,
+          preservedState: "not_connected",
+        }
+      );
+    }
+
+    return {
+      disconnected: true,
+      clearedPendingSelection: Boolean(pendingSelection?.selectionId),
+      clearedConnectDiagnostic: Boolean(connectDiagnostic?.diagnosticId),
+      channel: "instagram",
+      disconnectedAt,
+      preservedState: "not_connected",
       review: buildMetaReviewPayload(),
       capabilityGovernance: null,
     };

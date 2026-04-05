@@ -68,6 +68,7 @@ export function channelConnectRoutes({ db }) {
       const redirectUrl = buildRedirectUrl({
         section: "channels",
         meta_error: s(err?.message || "Meta callback failed"),
+        meta_reason: s(err?.reasonCode || ""),
       });
 
       if (redirectUrl) return res.redirect(redirectUrl);
