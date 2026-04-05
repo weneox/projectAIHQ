@@ -110,7 +110,7 @@ function normalizeSelectionCandidate(candidate = {}) {
   const igUserId = s(candidate?.igUserId);
   const pageAccessToken = s(candidate?.pageAccessToken);
 
-  if (!pageId || !igUserId || !pageAccessToken) {
+  if (!pageId || !igUserId) {
     return null;
   }
 
@@ -156,6 +156,7 @@ function buildPendingMetaSelectionPayload({
     expiresAt,
     metaUserId: s(metaUserProfile?.id),
     metaUserName: s(metaUserProfile?.name),
+    userAccessToken: s(tokenJson?.access_token),
     tokenType: s(tokenJson?.token_type),
     userTokenExpiresAt: buildUserTokenExpiresAt(tokenJson),
     requestedScopes: buildRequestedScopeList(requestedScopes),
@@ -182,6 +183,7 @@ export function readPendingMetaSelection(secrets = {}) {
     expiresAt: asIsoIfPresent(parsed.expiresAt),
     metaUserId: s(parsed.metaUserId),
     metaUserName: s(parsed.metaUserName),
+    userAccessToken: s(parsed.userAccessToken),
     tokenType: s(parsed.tokenType),
     userTokenExpiresAt: asIsoIfPresent(parsed.userTokenExpiresAt),
     requestedScopes: buildRequestedScopeList(parsed.requestedScopes),
@@ -623,6 +625,14 @@ export async function getPagesForUserToken(userAccessToken) {
   return Array.isArray(json?.data) ? json.data : [];
 }
 
+async function getMetaPageAccessContextForUserToken(pageId, userAccessToken) {
+  const url = new URL(`${metaGraphBase()}/${s(pageId)}`);
+  url.searchParams.set("fields", "id,name,access_token");
+  url.searchParams.set("access_token", s(userAccessToken));
+
+  return fetchJson(url.toString());
+}
+
 async function readMetaVerificationPayload(res) {
   const text = await res.text().catch(() => "");
   if (!text) return {};
@@ -732,7 +742,7 @@ export function listInstagramPageCandidates(pages = []) {
         page?.connected_instagram_account ||
         null;
 
-      if (!page?.id || !ig?.id || !page?.access_token) return null;
+      if (!page?.id || !ig?.id) return null;
 
       return {
         pageId: s(page.id),
@@ -743,6 +753,60 @@ export function listInstagramPageCandidates(pages = []) {
       };
     })
     .filter(Boolean);
+}
+
+function buildMissingMetaPageAccessTokenError() {
+  const err = new Error(
+    "Instagram/Page asset found, but page access token could not be obtained"
+  );
+  err.status = 409;
+  return err;
+}
+
+async function resolveInstagramPageAccessToken({
+  selected = {},
+  userAccessToken = "",
+  getMetaPageAccessContextForUserTokenFn = getMetaPageAccessContextForUserToken,
+} = {}) {
+  const normalized = normalizeSelectionCandidate(selected);
+  if (!normalized) {
+    throw new Error("Instagram/Page asset is incomplete");
+  }
+
+  if (normalized.pageAccessToken) {
+    return normalized;
+  }
+
+  if (!s(userAccessToken)) {
+    throw buildMissingMetaPageAccessTokenError();
+  }
+
+  let page = null;
+  try {
+    page = await getMetaPageAccessContextForUserTokenFn(
+      normalized.pageId,
+      userAccessToken
+    );
+  } catch {
+    throw buildMissingMetaPageAccessTokenError();
+  }
+
+  const pageAccessToken = s(page?.accessToken || page?.access_token);
+  if (!pageAccessToken) {
+    throw buildMissingMetaPageAccessTokenError();
+  }
+
+  const pageName = normalized.pageName || s(page?.name);
+
+  return {
+    ...normalized,
+    pageName,
+    pageAccessToken,
+    displayName: buildConnectedInstagramDisplayName({
+      pageName,
+      igUsername: normalized.igUsername,
+    }),
+  };
 }
 
 function buildMetaReviewPayload() {
@@ -850,30 +914,37 @@ async function connectInstagramChannel({
   selected = {},
   metaUserProfile = {},
   tokenJson = {},
+  userAccessToken = "",
   requestedScopes = META_DM_LAUNCH_SCOPES,
   grantedScopes = META_DM_LAUNCH_SCOPES,
+  getMetaPageAccessContextForUserTokenFn = getMetaPageAccessContextForUserToken,
   syncInstagramSourceLayerFn = syncInstagramSourceLayer,
 } = {}) {
   const connectedAt = new Date().toISOString();
+  const resolvedSelected = await resolveInstagramPageAccessToken({
+    selected,
+    userAccessToken,
+    getMetaPageAccessContextForUserTokenFn,
+  });
 
   await deleteMetaSecretKeys(db, tenant.id, [META_CONNECT_SELECTION_SECRET_KEY]);
   await saveMetaPageAccessToken(
     db,
     tenant.id,
-    selected.pageAccessToken,
+    resolvedSelected.pageAccessToken,
     actor || "system"
   );
 
   await upsertInstagramChannel(db, tenant.id, {
     provider: "meta",
-    display_name: buildConnectedInstagramDisplayName(selected),
-    external_page_id: selected.pageId,
-    external_user_id: selected.igUserId,
-    external_username: cleanNullable(selected.igUsername),
+    display_name: buildConnectedInstagramDisplayName(resolvedSelected),
+    external_page_id: resolvedSelected.pageId,
+    external_user_id: resolvedSelected.igUserId,
+    external_username: cleanNullable(resolvedSelected.igUsername),
     status: "connected",
     is_primary: true,
     config: buildConnectedChannelConfig({
-      selected,
+      selected: resolvedSelected,
       requestedScopes,
       grantedScopes,
       metaUserProfile,
@@ -892,13 +963,13 @@ async function connectInstagramChannel({
     db,
     tenant,
     actor,
-    selected,
+    selected: resolvedSelected,
     oauthScopes: requestedScopes,
   });
   const source = syncResult?.source || null;
   const capabilityGovernance = syncResult?.capabilityGovernance || null;
   const payload = buildMetaConnectSuccessPayload({
-    selected,
+    selected: resolvedSelected,
     metaUserProfile,
     source,
     capabilityGovernance,
@@ -912,9 +983,9 @@ async function connectInstagramChannel({
     "tenant_channel",
     "instagram",
     {
-      pageId: selected.pageId,
-      igUserId: selected.igUserId,
-      igUsername: selected.igUsername || null,
+      pageId: resolvedSelected.pageId,
+      igUserId: resolvedSelected.igUserId,
+      igUsername: resolvedSelected.igUsername || null,
       metaUserId: metaUserProfile.id || null,
       scopeModel: "instagram_dm_page_access",
       requestedScopes: buildRequestedScopeList(requestedScopes),
@@ -1583,6 +1654,7 @@ export async function handleMetaCallback({
   exchangeCodeForUserTokenFn = exchangeCodeForUserToken,
   getMetaUserProfileFn = getMetaUserProfile,
   getPagesForUserTokenFn = getPagesForUserToken,
+  getMetaPageAccessContextForUserTokenFn = getMetaPageAccessContextForUserToken,
   syncInstagramSourceLayerFn = syncInstagramSourceLayer,
 } = {}) {
   const code = s(req.query.code);
@@ -1727,8 +1799,10 @@ export async function handleMetaCallback({
     selected,
     metaUserProfile,
     tokenJson,
+    userAccessToken,
     requestedScopes: META_DM_LAUNCH_SCOPES,
     grantedScopes: META_DM_LAUNCH_SCOPES,
+    getMetaPageAccessContextForUserTokenFn,
     syncInstagramSourceLayerFn,
   });
 
@@ -1746,6 +1820,7 @@ export async function handleMetaCallback({
 export async function completeMetaSelection({
   db,
   req,
+  getMetaPageAccessContextForUserTokenFn = getMetaPageAccessContextForUserToken,
   syncInstagramSourceLayerFn = syncInstagramSourceLayer,
 } = {}) {
   const tenantKey = getReqTenantKey(req);
@@ -1820,8 +1895,10 @@ export async function completeMetaSelection({
       token_type: pendingSelection.tokenType,
       userTokenExpiresAt: pendingSelection.userTokenExpiresAt,
     },
+    userAccessToken: pendingSelection.userAccessToken,
     requestedScopes: pendingSelection.requestedScopes,
     grantedScopes: pendingSelection.grantedScopes,
+    getMetaPageAccessContextForUserTokenFn,
     syncInstagramSourceLayerFn,
   });
   const source = connectResult?.source || null;

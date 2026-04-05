@@ -287,8 +287,21 @@ async function invokeSingleAccountCallback(
     pageAccessToken = "page-token-1",
     igUserId = "ig-1",
     igUsername = "acme.primary",
+    getMetaPageAccessContextForUserTokenFn,
   } = {}
 ) {
+  const page = {
+    id: pageId,
+    name: pageName,
+    instagram_business_account: {
+      id: igUserId,
+      username: igUsername,
+    },
+  };
+  if (pageAccessToken != null) {
+    page.access_token = pageAccessToken;
+  }
+
   return handleMetaCallback({
     db,
     req: {
@@ -310,17 +323,8 @@ async function invokeSingleAccountCallback(
       id: "meta-user-1",
       name: "Acme Owner",
     }),
-    getPagesForUserTokenFn: async () => [
-      {
-        id: pageId,
-        name: pageName,
-        access_token: pageAccessToken,
-        instagram_business_account: {
-          id: igUserId,
-          username: igUsername,
-        },
-      },
-    ],
+    getPagesForUserTokenFn: async () => [page],
+    getMetaPageAccessContextForUserTokenFn,
     syncInstagramSourceLayerFn: async () => ({
       source: {
         id: "source-1",
@@ -415,7 +419,7 @@ test("instagram lifecycle patch preserves reconnect metadata while clearing live
   assert.equal(patch.health.deauthorized_at, "2026-04-05T11:00:00.000Z");
 });
 
-test("instagram candidate listing only returns pages with both page and Instagram identities", () => {
+test("instagram candidate listing only requires page and Instagram identities", () => {
   const candidates = listInstagramPageCandidates([
     {
       id: "page-1",
@@ -428,17 +432,24 @@ test("instagram candidate listing only returns pages with both page and Instagra
     },
     {
       id: "page-2",
-      name: "Missing token",
+      name: "Deferred token",
       instagram_business_account: {
         id: "ig-2",
-        username: "broken",
+        username: "acme.two",
       },
+    },
+    {
+      id: "page-3",
+      name: "No Instagram",
     },
   ]);
 
-  assert.equal(candidates.length, 1);
+  assert.equal(candidates.length, 2);
   assert.equal(candidates[0].pageId, "page-1");
   assert.equal(candidates[0].igUserId, "ig-1");
+  assert.equal(candidates[1].pageId, "page-2");
+  assert.equal(candidates[1].igUserId, "ig-2");
+  assert.equal(candidates[1].pageAccessToken, "");
 });
 
 test("single-account callback connects immediately through one coherent success path", async () => {
@@ -472,6 +483,31 @@ test("single-account callback connects immediately through one coherent success 
   assert.equal(status.account.igUserId, "ig-1");
   assert.equal(status.runtime.hasPageAccessToken, true);
   assert.equal(status.runtime.hasOperationalIds, true);
+});
+
+test("single-account callback resolves a missing page access token after candidate discovery", async () => {
+  const db = new FakeChannelConnectDb();
+
+  const callbackResult = await invokeSingleAccountCallback(db, {
+    pageAccessToken: null,
+    getMetaPageAccessContextForUserTokenFn: async (pageId, userAccessToken) => {
+      assert.equal(pageId, "page-1");
+      assert.equal(userAccessToken, "user-token-single");
+      return {
+        id: "page-1",
+        name: "Acme Primary",
+        access_token: "page-token-fetched",
+      };
+    },
+  });
+
+  assert.equal(callbackResult.type, "success");
+  assert.equal(callbackResult.payload?.pageId, "page-1");
+  assert.equal(callbackResult.payload?.igUserId, "ig-1");
+
+  const status = await readMetaStatus(db);
+  assert.equal(status.connected, true);
+  assert.equal(status.runtime.hasPageAccessToken, true);
 });
 
 test("multi-account callback persists a pending selection and keeps tenant status honest", async () => {
@@ -535,6 +571,92 @@ test("explicit account selection finalizes binding and clears the pending choose
   assert.equal(statusAfter.account.igUserId, "ig-2");
   assert.equal(statusAfter.lifecycle.tokenType, "bearer");
   assert.match(statusAfter.lifecycle.userTokenExpiresAt || "", /^2026-|^20\d\d-/);
+});
+
+test("pending selection can resolve a deferred page access token when the operator completes the chooser", async () => {
+  const db = new FakeChannelConnectDb();
+
+  await handleMetaCallback({
+    db,
+    req: {
+      query: {
+        code: "meta-code-multi",
+        state: signState({
+          tenantKey: "acme",
+          actor: "owner@acme.test",
+          exp: Date.now() + 60_000,
+        }),
+      },
+    },
+    exchangeCodeForUserTokenFn: async () => ({
+      access_token: "user-token-multi",
+      token_type: "bearer",
+      expires_in: 3600,
+    }),
+    getMetaUserProfileFn: async () => ({
+      id: "meta-user-1",
+      name: "Acme Owner",
+    }),
+    getPagesForUserTokenFn: async () => [
+      {
+        id: "page-1",
+        name: "Acme One",
+        instagram_business_account: {
+          id: "ig-1",
+          username: "acme.one",
+        },
+      },
+      {
+        id: "page-2",
+        name: "Acme Two",
+        access_token: "page-token-2",
+        instagram_business_account: {
+          id: "ig-2",
+          username: "acme.two",
+        },
+      },
+    ],
+  });
+
+  const statusBefore = await readMetaStatus(db);
+  const result = await completeMetaSelection({
+    db,
+    req: {
+      auth: buildAuth(),
+      body: {
+        selectionToken: statusBefore.pendingSelection?.selectionToken,
+        candidateId: "page-1",
+      },
+    },
+    getMetaPageAccessContextForUserTokenFn: async (pageId, userAccessToken) => {
+      assert.equal(pageId, "page-1");
+      assert.equal(userAccessToken, "user-token-multi");
+      return {
+        id: "page-1",
+        name: "Acme One",
+        access_token: "page-token-fetched",
+      };
+    },
+    syncInstagramSourceLayerFn: async ({ selected }) => ({
+      source: {
+        id: "source-1",
+        source_key: `instagram:${selected.igUserId}`,
+      },
+      capabilityGovernance: {
+        publishStatus: "ready",
+        reviewRequired: false,
+        maintenanceSession: { id: "session-1" },
+        blockedReason: "",
+      },
+    }),
+  });
+
+  assert.equal(result.connected, true);
+  assert.equal(result.pageId, "page-1");
+
+  const statusAfter = await readMetaStatus(db);
+  assert.equal(statusAfter.connected, true);
+  assert.equal(statusAfter.runtime.hasPageAccessToken, true);
 });
 
 test("expired pending selection is cleaned up instead of lingering as a pseudo-connected state", async () => {
@@ -710,6 +832,32 @@ test("missing page token keeps a seemingly connected channel fail-closed", async
   assert.equal(status.reasonCode, "provider_secret_missing");
   assert.equal(status.runtime.deliveryReady, false);
   assert.equal(status.runtime.hasPageAccessToken, false);
+});
+
+test("single-account callback fails with a precise error when the page asset exists but no page token can be obtained", async () => {
+  const db = new FakeChannelConnectDb();
+
+  await assert.rejects(
+    () =>
+      invokeSingleAccountCallback(db, {
+        pageAccessToken: null,
+        getMetaPageAccessContextForUserTokenFn: async () => ({
+          id: "page-1",
+          name: "Acme Primary",
+        }),
+      }),
+    (error) => {
+      assert.equal(
+        error?.message,
+        "Instagram/Page asset found, but page access token could not be obtained"
+      );
+      assert.notEqual(
+        error?.message,
+        "No Instagram Business page found on connected Meta account"
+      );
+      return true;
+    }
+  );
 });
 
 test("connected status stays truthful while expired user tokens trigger reconnect guidance", async () => {
