@@ -278,6 +278,63 @@ async function seedPendingSelection(db) {
   });
 }
 
+async function invokeSingleAccountCallback(
+  db,
+  {
+    pageId = "page-1",
+    pageName = "Acme Primary",
+    pageAccessToken = "page-token-1",
+    igUserId = "ig-1",
+    igUsername = "acme.primary",
+  } = {}
+) {
+  return handleMetaCallback({
+    db,
+    req: {
+      query: {
+        code: "meta-code-single",
+        state: signState({
+          tenantKey: "acme",
+          actor: "owner@acme.test",
+          exp: Date.now() + 60_000,
+        }),
+      },
+    },
+    exchangeCodeForUserTokenFn: async () => ({
+      access_token: "user-token-single",
+      token_type: "bearer",
+      expires_in: 3600,
+    }),
+    getMetaUserProfileFn: async () => ({
+      id: "meta-user-1",
+      name: "Acme Owner",
+    }),
+    getPagesForUserTokenFn: async () => [
+      {
+        id: pageId,
+        name: pageName,
+        access_token: pageAccessToken,
+        instagram_business_account: {
+          id: igUserId,
+          username: igUsername,
+        },
+      },
+    ],
+    syncInstagramSourceLayerFn: async () => ({
+      source: {
+        id: "source-1",
+        source_key: `instagram:${igUserId}`,
+      },
+      capabilityGovernance: {
+        publishStatus: "ready",
+        reviewRequired: false,
+        maintenanceSession: { id: "session-1" },
+        blockedReason: "",
+      },
+    }),
+  });
+}
+
 test("dm-first launch scopes drop business-management assumptions", () => {
   assert.deepEqual(META_DM_LAUNCH_SCOPES, [
     "pages_show_list",
@@ -345,6 +402,44 @@ test("instagram candidate listing only returns pages with both page and Instagra
   assert.equal(candidates.length, 1);
   assert.equal(candidates[0].pageId, "page-1");
   assert.equal(candidates[0].igUserId, "ig-1");
+});
+
+test("single-account callback connects immediately through one coherent success path", async () => {
+  const db = new FakeChannelConnectDb();
+
+  const callbackResult = await invokeSingleAccountCallback(db);
+
+  assert.equal(callbackResult.type, "success");
+  assert.match(callbackResult.redirectUrl || "", /meta_connected=1/);
+  assert.equal(callbackResult.payload?.connected, true);
+  assert.equal(callbackResult.payload?.pageId, "page-1");
+  assert.equal(callbackResult.payload?.igUserId, "ig-1");
+  assert.equal(callbackResult.payload?.sourceId, "source-1");
+  assert.equal(db.channel?.status, "connected");
+
+  const connectedAudits = db.auditEntries.filter(
+    (entry) => entry.action === "settings.channel.meta.connected"
+  );
+  assert.equal(connectedAudits.length, 1);
+  assert.equal(
+    db.secretRows.has("tenant-1:meta:connect_selection_pending"),
+    false
+  );
+
+  const status = await getMetaStatus({
+    db,
+    req: {
+      auth: buildAuth(),
+    },
+  });
+
+  assert.equal(status.connected, true);
+  assert.equal(status.state, "connected");
+  assert.equal(status.pendingSelection, null);
+  assert.equal(status.account.pageId, "page-1");
+  assert.equal(status.account.igUserId, "ig-1");
+  assert.equal(status.runtime.hasPageAccessToken, true);
+  assert.equal(status.runtime.hasOperationalIds, true);
 });
 
 test("multi-account callback persists a pending selection and keeps tenant status honest", async () => {
@@ -492,6 +587,50 @@ test("connected rows do not override reconnect-required lifecycle truth", async 
   assert.equal(status.connected, false);
   assert.equal(status.state, "reconnect_required");
   assert.equal(status.reasonCode, "channel_reconnect_required");
+});
+
+test("missing page token keeps a seemingly connected channel fail-closed", async () => {
+  const db = new FakeChannelConnectDb();
+  db.channel = {
+    id: "channel-1",
+    tenant_id: "tenant-1",
+    channel_type: "instagram",
+    provider: "meta",
+    display_name: "Instagram @acme",
+    external_account_id: "",
+    external_page_id: "page-1",
+    external_user_id: "ig-1",
+    external_username: "acme",
+    status: "connected",
+    is_primary: true,
+    config: {
+      requested_scopes: META_DM_LAUNCH_SCOPES,
+      granted_scopes: META_DM_LAUNCH_SCOPES,
+      last_connected_page_name: "Acme",
+      last_connected_username: "acme",
+    },
+    secrets_ref: "meta",
+    health: {
+      connection_state: "connected",
+      auth_status: "authorized",
+    },
+    last_sync_at: "2026-04-05T03:00:00.000Z",
+    created_at: "2026-04-05T00:00:00.000Z",
+    updated_at: "2026-04-05T00:00:00.000Z",
+  };
+
+  const status = await getMetaStatus({
+    db,
+    req: {
+      auth: buildAuth(),
+    },
+  });
+
+  assert.equal(status.connected, false);
+  assert.equal(status.state, "reconnect_required");
+  assert.equal(status.reasonCode, "provider_secret_missing");
+  assert.equal(status.runtime.deliveryReady, false);
+  assert.equal(status.runtime.hasPageAccessToken, false);
 });
 
 test("connected status stays truthful while expired user tokens trigger reconnect guidance", async () => {

@@ -637,10 +637,6 @@ export function listInstagramPageCandidates(pages = []) {
     .filter(Boolean);
 }
 
-export function pickBestInstagramPage(pages = []) {
-  return listInstagramPageCandidates(pages)[0] || null;
-}
-
 function buildMetaReviewPayload() {
   return {
     authModel: "instagram_dm_page_access",
@@ -650,6 +646,26 @@ function buildMetaReviewPayload() {
     excludedScopes: [...META_DM_EXCLUDED_SCOPES],
     phaseTwoCapabilities: [...META_PHASE_TWO_CAPABILITIES],
     story: META_DM_LAUNCH_REVIEW_STORY,
+  };
+}
+
+function buildMetaConnectSuccessPayload({
+  selected = {},
+  metaUserProfile = {},
+  source = null,
+  capabilityGovernance = null,
+} = {}) {
+  return {
+    connected: true,
+    channel: "instagram",
+    pageId: selected.pageId,
+    igUserId: selected.igUserId,
+    igUsername: selected.igUsername || null,
+    metaUserId: metaUserProfile.id || null,
+    review: buildMetaReviewPayload(),
+    sourceId: source?.id || null,
+    sourceKey: source?.source_key || null,
+    capabilityGovernance,
   };
 }
 
@@ -773,6 +789,12 @@ async function connectInstagramChannel({
   });
   const source = syncResult?.source || null;
   const capabilityGovernance = syncResult?.capabilityGovernance || null;
+  const payload = buildMetaConnectSuccessPayload({
+    selected,
+    metaUserProfile,
+    source,
+    capabilityGovernance,
+  });
 
   await auditSafe(
     db,
@@ -802,9 +824,9 @@ async function connectInstagramChannel({
   );
 
   return {
-    connectedAt,
     source,
     capabilityGovernance,
+    payload,
   };
 }
 
@@ -1319,6 +1341,7 @@ export async function handleMetaCallback({
     err.status = 400;
     throw err;
   }
+  const actor = s(state.actor || "system");
 
   if (!code) {
     const err = new Error("Missing code");
@@ -1337,7 +1360,7 @@ export async function handleMetaCallback({
   if (capability?.allowed === false) {
     await auditSafe(
       db,
-      state.actor || "system",
+      actor,
       tenant,
       "settings.channel.meta.connected",
       "tenant_channel",
@@ -1381,7 +1404,7 @@ export async function handleMetaCallback({
 
   if (candidates.length > 1) {
     const pendingSelection = buildPendingMetaSelectionPayload({
-      actor: state.actor || "system",
+      actor,
       metaUserProfile,
       tokenJson,
       requestedScopes: META_DM_LAUNCH_SCOPES,
@@ -1389,16 +1412,11 @@ export async function handleMetaCallback({
       candidates,
     });
 
-    await savePendingMetaSelection(
-      db,
-      tenant.id,
-      pendingSelection,
-      state.actor || "system"
-    );
+    await savePendingMetaSelection(db, tenant.id, pendingSelection, actor);
 
     await auditSafe(
       db,
-      state.actor || "system",
+      actor,
       tenant,
       "settings.channel.meta.selection_required",
       "tenant_channel",
@@ -1435,10 +1453,10 @@ export async function handleMetaCallback({
   }
 
   const selected = candidates[0];
-  const syncResult = await connectInstagramChannel({
+  const connectResult = await connectInstagramChannel({
     db,
     tenant,
-    actor: state.actor || "system",
+    actor,
     selected,
     metaUserProfile,
     tokenJson,
@@ -1446,9 +1464,6 @@ export async function handleMetaCallback({
     grantedScopes: META_DM_LAUNCH_SCOPES,
     syncInstagramSourceLayerFn,
   });
-  const connectedSource = syncResult?.source || null;
-  const connectedCapabilityGovernance =
-    syncResult?.capabilityGovernance || null;
 
   return {
     type: "success",
@@ -1457,18 +1472,7 @@ export async function handleMetaCallback({
       meta_connected: "1",
       channel: "instagram",
     }),
-    payload: {
-      connected: true,
-      channel: "instagram",
-      pageId: selected.pageId,
-      igUserId: selected.igUserId,
-      igUsername: selected.igUsername || null,
-      metaUserId: metaUserProfile.id || null,
-      review: buildMetaReviewPayload(),
-      sourceId: connectedSource?.id || null,
-      sourceKey: connectedSource?.source_key || null,
-      capabilityGovernance: connectedCapabilityGovernance,
-    },
+    payload: connectResult?.payload,
   };
 }
 
@@ -1490,6 +1494,7 @@ export async function completeMetaSelection({
     err.status = 400;
     throw err;
   }
+  const actor = getReqActor(req);
 
   const selectionToken = s(
     req.body?.selectionToken || req.body?.selection_token
@@ -1538,10 +1543,10 @@ export async function completeMetaSelection({
     name: pendingSelection.metaUserName,
   };
 
-  const syncResult = await connectInstagramChannel({
+  const connectResult = await connectInstagramChannel({
     db,
     tenant,
-    actor: getReqActor(req),
+    actor,
     selected,
     metaUserProfile,
     tokenJson: {
@@ -1552,12 +1557,12 @@ export async function completeMetaSelection({
     grantedScopes: pendingSelection.grantedScopes,
     syncInstagramSourceLayerFn,
   });
-  const source = syncResult?.source || null;
-  const capabilityGovernance = syncResult?.capabilityGovernance || null;
+  const source = connectResult?.source || null;
+  const capabilityGovernance = connectResult?.capabilityGovernance || null;
 
   await auditSafe(
     db,
-    getReqActor(req),
+    actor,
     tenant,
     "settings.channel.meta.selection_completed",
     "tenant_channel",
@@ -1580,18 +1585,7 @@ export async function completeMetaSelection({
     }
   );
 
-  return {
-    connected: true,
-    channel: "instagram",
-    pageId: selected.pageId,
-    igUserId: selected.igUserId,
-    igUsername: selected.igUsername || null,
-    metaUserId: pendingSelection.metaUserId || null,
-    review: buildMetaReviewPayload(),
-    sourceId: source?.id || null,
-    sourceKey: source?.source_key || null,
-    capabilityGovernance,
-  };
+  return connectResult?.payload;
 }
 
 export async function getMetaStatus({ db, req }) {

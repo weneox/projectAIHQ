@@ -62,10 +62,6 @@ export async function deleteMetaSecretKeys(
   return deleted;
 }
 
-export async function deleteMetaPageAccessToken(db, tenantId) {
-  return deleteMetaSecretKeys(db, tenantId, ["page_access_token"]);
-}
-
 export async function getMetaSecrets(db, tenantId) {
   return dbGetTenantProviderSecrets(db, tenantId, "meta");
 }
