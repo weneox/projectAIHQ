@@ -25,12 +25,23 @@ import {
   saveTelegramSecretValue,
   upsertTelegramChannel,
 } from "./repository.js";
-import { cleanNullable, getReqActor, getReqTenantKey, lower, s } from "./utils.js";
+import {
+  cleanNullable,
+  getReqActor,
+  getReqTenantKey,
+  lower,
+  s,
+} from "./utils.js";
 
 export const TELEGRAM_BOT_TOKEN_SECRET_KEY = "bot_token";
 export const TELEGRAM_WEBHOOK_ROUTE_TOKEN_SECRET_KEY = "webhook_route_token";
 export const TELEGRAM_WEBHOOK_SECRET_TOKEN_SECRET_KEY = "webhook_secret_token";
 export const TELEGRAM_ALLOWED_UPDATES = Object.freeze(["message"]);
+
+const TELEGRAM_PROVIDER = "telegram";
+const TELEGRAM_CHANNEL_TYPE = "telegram";
+const TELEGRAM_DEFAULT_NAME = "Telegram";
+const TELEGRAM_AUTH_MODEL = "telegram_bot_token";
 
 function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
@@ -85,12 +96,21 @@ function hasUsableTelegramWebhookBaseUrl() {
   }
 }
 
-function buildTelegramDisplayName(bot = {}, fallback = "Telegram") {
+function buildTelegramError(message, status = 500, reasonCode = "") {
+  const err = new Error(s(message || "Telegram operation failed"));
+  err.status = Number(status || 500);
+  err.reasonCode = s(reasonCode);
+  return err;
+}
+
+function buildTelegramDisplayName(bot = {}, fallback = TELEGRAM_DEFAULT_NAME) {
   const username = s(bot?.username);
   if (username) return `Telegram @${username}`;
+
   const firstName = s(bot?.first_name);
   if (firstName) return `Telegram ${firstName}`;
-  return s(fallback || "Telegram");
+
+  return s(fallback || TELEGRAM_DEFAULT_NAME);
 }
 
 function buildTelegramLastConnectFailure({
@@ -106,18 +126,29 @@ function buildTelegramLastConnectFailure({
     reasonCode: safeReasonCode,
     message: s(message),
     stage: s(stage),
-    occurredAt,
+    occurredAt: s(occurredAt || nowIso()),
+  };
+}
+
+function sanitizeLastConnectFailure(value = null) {
+  const failure = obj(value);
+  if (!s(failure.reasonCode)) return null;
+
+  return {
+    reasonCode: s(failure.reasonCode),
+    message: s(failure.message),
+    stage: s(failure.stage),
+    occurredAt: s(failure.occurredAt),
   };
 }
 
 function getTelegramSnapshot(channel = {}) {
   const config = obj(channel?.config);
   const health = obj(channel?.health);
-  const failure = obj(health?.last_connect_failure);
 
   return {
     displayName: s(
-      channel?.display_name || config.last_connected_display_name || "Telegram"
+      channel?.display_name || config.last_connected_display_name || TELEGRAM_DEFAULT_NAME
     ),
     botUserId: s(channel?.external_user_id || config.bot_user_id),
     botUsername: s(channel?.external_username || config.bot_username),
@@ -134,14 +165,7 @@ function getTelegramSnapshot(channel = {}) {
     disconnectReason: s(config.disconnect_reason || health.disconnect_reason),
     disconnectedAt: s(health.disconnected_at),
     lastVerifiedAt: s(health.last_verified_at),
-    lastConnectFailure: failure?.reasonCode
-      ? {
-          reasonCode: s(failure.reasonCode),
-          message: s(failure.message),
-          stage: s(failure.stage),
-          occurredAt: s(failure.occurredAt),
-        }
-      : null,
+    lastConnectFailure: sanitizeLastConnectFailure(health?.last_connect_failure),
   };
 }
 
@@ -161,14 +185,19 @@ function buildTelegramChannelPayload({
 } = {}) {
   const snapshot = getTelegramSnapshot(channel);
   const liveBot = obj(bot);
+
   const botUserId = s(liveBot?.id || snapshot.botUserId) || null;
   const botUsername = s(liveBot?.username || snapshot.botUsername) || null;
   const displayName = buildTelegramDisplayName(liveBot, snapshot.displayName);
   const resolvedWebhookUrl =
     s(webhookUrl || snapshot.expectedWebhookUrl) || null;
+  const resolvedConnectedAt = s(connectedAt || snapshot.lastConnectedAt) || null;
+  const resolvedDisconnectedAt =
+    s(disconnectedAt || snapshot.disconnectedAt) || null;
+  const resolvedLastConnectFailure = sanitizeLastConnectFailure(lastConnectFailure);
 
   return {
-    provider: "telegram",
+    provider: TELEGRAM_PROVIDER,
     display_name: displayName,
     external_account_id: null,
     external_page_id: null,
@@ -178,7 +207,7 @@ function buildTelegramChannelPayload({
     is_primary: true,
     config: {
       connected_via: "bot_token",
-      auth_model: "telegram_bot_token",
+      auth_model: TELEGRAM_AUTH_MODEL,
       bot_user_id: cleanNullable(botUserId),
       bot_username: cleanNullable(botUsername),
       bot_first_name: cleanNullable(liveBot?.first_name || snapshot.botFirstName),
@@ -192,12 +221,14 @@ function buildTelegramChannelPayload({
         liveBot?.supports_inline_queries === true ||
         snapshot.botSupportsInlineQueries,
       last_connected_display_name: cleanNullable(displayName),
-      last_connected_at: cleanNullable(connectedAt || snapshot.lastConnectedAt),
+      last_connected_at: cleanNullable(resolvedConnectedAt),
       expected_webhook_url: cleanNullable(resolvedWebhookUrl),
       allowed_updates: [...TELEGRAM_ALLOWED_UPDATES],
-      disconnect_reason: cleanNullable(disconnectReason || reasonCode || snapshot.disconnectReason),
+      disconnect_reason: cleanNullable(
+        disconnectReason || reasonCode || snapshot.disconnectReason
+      ),
     },
-    secrets_ref: "telegram",
+    secrets_ref: TELEGRAM_PROVIDER,
     health: {
       connection_state: s(connectionState || status || "disconnected"),
       auth_status: s(
@@ -212,12 +243,16 @@ function buildTelegramChannelPayload({
       ),
       reason_code: cleanNullable(reasonCode),
       last_verified_at: nowIso(),
-      last_connected_at: cleanNullable(connectedAt || snapshot.lastConnectedAt),
-      disconnected_at: cleanNullable(disconnectedAt || snapshot.disconnectedAt),
+      last_connected_at: cleanNullable(resolvedConnectedAt),
+      disconnected_at: cleanNullable(resolvedDisconnectedAt),
       disconnect_reason: cleanNullable(
         disconnectReason || reasonCode || snapshot.disconnectReason
       ),
-      webhook_registered: status === "connected" && Boolean(resolvedWebhookUrl),
+      webhook_registered:
+        status === "connected" &&
+        Boolean(resolvedWebhookUrl) &&
+        normalizeUrlForCompare(resolvedWebhookUrl) ===
+          normalizeUrlForCompare(webhookInfo?.url || resolvedWebhookUrl),
       webhook_url: cleanNullable(resolvedWebhookUrl),
       webhook_pending_update_count: Number(
         webhookInfo?.pending_update_count || 0
@@ -229,9 +264,7 @@ function buildTelegramChannelPayload({
         webhookInfo?.last_error_message
       ),
       webhook_ip_address: cleanNullable(webhookInfo?.ip_address),
-      last_connect_failure:
-        lastConnectFailure ||
-        buildTelegramLastConnectFailure(snapshot.lastConnectFailure),
+      last_connect_failure: resolvedLastConnectFailure,
     },
     last_sync_at: nowIso(),
   };
@@ -256,16 +289,12 @@ export function buildTelegramWebhookUrl({
 async function getScopedTelegramTenant(db, req) {
   const tenantKey = getReqTenantKey(req);
   if (!tenantKey) {
-    const err = new Error("Missing tenant context");
-    err.status = 401;
-    throw err;
+    throw buildTelegramError("Missing tenant context", 401);
   }
 
   const tenant = await getTenantByKey(db, tenantKey);
   if (!tenant?.id) {
-    const err = new Error("Tenant not found");
-    err.status = 400;
-    throw err;
+    throw buildTelegramError("Tenant not found", 400);
   }
 
   return tenant;
@@ -280,6 +309,22 @@ async function loadTelegramStatusContext(db, tenantId = "") {
   return {
     channel,
     secrets,
+  };
+}
+
+function getTelegramFeatureState() {
+  const enabled = Boolean(cfg.telegram.enabled);
+  const webhookBaseReady = hasUsableTelegramWebhookBaseUrl();
+
+  return {
+    enabled,
+    webhookBaseReady,
+    ready: enabled && webhookBaseReady,
+    reasonCode: !enabled
+      ? "telegram_disabled"
+      : !webhookBaseReady
+      ? "telegram_webhook_base_url_missing"
+      : "",
   };
 }
 
@@ -307,7 +352,7 @@ async function getTelegramRuntimeSurface({ db, tenantKey = "" } = {}) {
     const policy = tenant
       ? getInboxPolicy({
           tenantKey,
-          channel: "telegram",
+          channel: TELEGRAM_CHANNEL_TYPE,
           tenant,
         })
       : null;
@@ -339,7 +384,7 @@ async function getTelegramRuntimeSurface({ db, tenantKey = "" } = {}) {
 }
 
 function buildTelegramStatusBlockers({
-  featureReady = true,
+  feature = null,
   channel = null,
   botToken = "",
   routeToken = "",
@@ -351,8 +396,21 @@ function buildTelegramStatusBlockers({
   runtime = null,
 } = {}) {
   const blockers = [];
+  const featureState = feature || getTelegramFeatureState();
 
-  if (!featureReady) {
+  if (!featureState.enabled) {
+    blockers.push(
+      buildOperationalRepairGuidance({
+        reasonCode: "telegram_disabled",
+        title: "Telegram integration is disabled",
+        subtitle:
+          "Enable TELEGRAM_ENABLED before relying on Telegram channel operations.",
+        missingFields: ["TELEGRAM_ENABLED"],
+      })
+    );
+  }
+
+  if (featureState.enabled && !featureState.webhookBaseReady) {
     blockers.push(
       buildOperationalRepairGuidance({
         reasonCode: "telegram_webhook_base_url_missing",
@@ -497,16 +555,16 @@ function buildTelegramStatusPayload({
     routeToken,
   });
   const actualWebhookUrl = s(webhookResult?.result?.url);
+
   const webhookUrlMatches =
     Boolean(expectedWebhookUrl) &&
     Boolean(actualWebhookUrl) &&
     normalizeUrlForCompare(expectedWebhookUrl) ===
       normalizeUrlForCompare(actualWebhookUrl);
-  const featureReady =
-    Boolean(cfg.telegram.enabled) && hasUsableTelegramWebhookBaseUrl();
+
+  const feature = getTelegramFeatureState();
   const botIdentity = botResult?.ok ? obj(botResult.result) : {};
-  const lastConnectFailure =
-    buildTelegramLastConnectFailure(snapshot.lastConnectFailure) || null;
+  const lastConnectFailure = sanitizeLastConnectFailure(snapshot.lastConnectFailure);
 
   const connected =
     Boolean(channel?.id) &&
@@ -534,8 +592,8 @@ function buildTelegramStatusPayload({
   const connectionReasonCode = connected
     ? ""
     : s(
-        !featureReady
-          ? "telegram_webhook_base_url_missing"
+        !feature.ready
+          ? feature.reasonCode
           : !channel?.id && botToken
           ? "tenant_channel_missing"
           : !botToken
@@ -556,7 +614,7 @@ function buildTelegramStatusPayload({
       );
 
   const blockers = buildTelegramStatusBlockers({
-    featureReady,
+    feature,
     channel,
     botToken,
     routeToken,
@@ -646,11 +704,16 @@ function buildTelegramStatusPayload({
       lastConnectFailure,
     },
     actions: {
-      connectAvailable: !connected,
-      reconnectAvailable: !connected && Boolean(channel?.id || botToken),
-      disconnectAvailable: Boolean(channel?.id || botToken || routeToken || secretToken),
+      connectAvailable: !connected && feature.enabled,
+      reconnectAvailable: !connected && Boolean(channel?.id || botToken) && feature.enabled,
+      disconnectAvailable: Boolean(
+        channel?.id || botToken || routeToken || secretToken
+      ),
       webhookRetryAvailable:
-        Boolean(botToken) && botResult?.ok === true && connected === false,
+        Boolean(botToken) &&
+        botResult?.ok === true &&
+        connected === false &&
+        feature.ready,
     },
     readiness: buildReadinessSurface({
       status: blockers.length ? "blocked" : "ready",
@@ -673,92 +736,169 @@ function getIncomingTelegramBotToken(req) {
   );
 }
 
+async function persistTelegramConnectFailure({
+  db,
+  tenant,
+  actor,
+  channel = null,
+  bot = null,
+  botToken = "",
+  routeToken = "",
+  secretToken = "",
+  webhookUrl = "",
+  webhookInfo = null,
+  status = "error",
+  connectionState = "reconnect_required",
+  authStatus = "reconnect_required",
+  reasonCode = "",
+  message = "",
+  stage = "",
+  auditAction = "settings.channel.telegram.connect_failed",
+  auditMeta = {},
+} = {}) {
+  const failure = buildTelegramLastConnectFailure({
+    reasonCode,
+    message,
+    stage,
+  });
+
+  const savedChannel = await upsertTelegramChannel(
+    db,
+    tenant.id,
+    buildTelegramChannelPayload({
+      channel,
+      bot,
+      status,
+      connectionState,
+      authStatus,
+      reasonCode,
+      webhookUrl,
+      webhookInfo,
+      lastConnectFailure: failure,
+    })
+  );
+
+  await auditSafe(
+    db,
+    actor,
+    tenant,
+    auditAction,
+    "tenant_channel",
+    TELEGRAM_CHANNEL_TYPE,
+    {
+      reasonCode: cleanNullable(reasonCode),
+      message: cleanNullable(message),
+      stage: cleanNullable(stage),
+      botTokenMasked: cleanNullable(maskTelegramToken(botToken)),
+      webhookUrl: cleanNullable(redactTelegramWebhookUrl(webhookUrl)),
+      ...auditMeta,
+    }
+  );
+
+  return savedChannel;
+}
+
+function isTelegramBotIdentityValid(meResult = null) {
+  if (!meResult?.ok) return false;
+  const result = obj(meResult.result);
+  return Boolean(result?.id && result?.is_bot !== false);
+}
+
+async function rotateOldTelegramWebhookIfNeeded({
+  existingBotToken = "",
+  incomingBotToken = "",
+} = {}) {
+  const previousToken = s(existingBotToken);
+  const nextToken = s(incomingBotToken);
+
+  if (!previousToken || !nextToken || previousToken === nextToken) return;
+  await deleteTelegramWebhook({
+    botToken: previousToken,
+    dropPendingUpdates: false,
+    timeoutMs: cfg.telegram.connectTimeoutMs,
+  }).catch(() => {});
+}
+
 export async function connectTelegram({ db, req } = {}) {
   const tenant = await getScopedTelegramTenant(db, req);
   const actor = getReqActor(req);
   const botToken = getIncomingTelegramBotToken(req);
+  const feature = getTelegramFeatureState();
 
-  if (!cfg.telegram.enabled) {
-    const err = new Error("Telegram integration is disabled");
-    err.status = 409;
-    err.reasonCode = "telegram_disabled";
-    throw err;
+  if (!feature.enabled) {
+    throw buildTelegramError(
+      "Telegram integration is disabled",
+      409,
+      "telegram_disabled"
+    );
   }
 
   if (!botToken) {
-    const err = new Error("Telegram bot token is required");
-    err.status = 400;
-    err.reasonCode = "telegram_bot_token_missing";
-    throw err;
+    throw buildTelegramError(
+      "Telegram bot token is required",
+      400,
+      "telegram_bot_token_missing"
+    );
   }
 
-  if (!hasUsableTelegramWebhookBaseUrl()) {
-    await upsertTelegramChannel(
+  const existing = await loadTelegramStatusContext(db, tenant.id);
+
+  if (!feature.webhookBaseReady) {
+    await persistTelegramConnectFailure({
       db,
-      tenant.id,
-      buildTelegramChannelPayload({
-        status: "error",
-        connectionState: "reconnect_required",
-        authStatus: "configuration_invalid",
-        reasonCode: "telegram_webhook_base_url_missing",
-        lastConnectFailure: buildTelegramLastConnectFailure({
-          reasonCode: "telegram_webhook_base_url_missing",
-          message:
-            "A public HTTPS TELEGRAM_WEBHOOK_BASE_URL or PUBLIC_BASE_URL is required before connecting Telegram.",
-          stage: "configuration",
-        }),
-      })
-    );
+      tenant,
+      actor,
+      channel: existing.channel,
+      botToken,
+      status: "error",
+      connectionState: "reconnect_required",
+      authStatus: "configuration_invalid",
+      reasonCode: "telegram_webhook_base_url_missing",
+      message:
+        "A public HTTPS TELEGRAM_WEBHOOK_BASE_URL or PUBLIC_BASE_URL is required before connecting Telegram.",
+      stage: "configuration",
+    });
 
-    const err = new Error(
-      "A public HTTPS TELEGRAM_WEBHOOK_BASE_URL or PUBLIC_BASE_URL is required before connecting Telegram"
+    throw buildTelegramError(
+      "A public HTTPS TELEGRAM_WEBHOOK_BASE_URL or PUBLIC_BASE_URL is required before connecting Telegram",
+      409,
+      "telegram_webhook_base_url_missing"
     );
-    err.status = 409;
-    err.reasonCode = "telegram_webhook_base_url_missing";
-    throw err;
   }
+
+  await rotateOldTelegramWebhookIfNeeded({
+    existingBotToken: existing.secrets?.[TELEGRAM_BOT_TOKEN_SECRET_KEY],
+    incomingBotToken: botToken,
+  });
 
   const meResult = await getTelegramBotMe({
     botToken,
     timeoutMs: cfg.telegram.connectTimeoutMs,
   });
 
-  if (!meResult.ok) {
-    await upsertTelegramChannel(
+  if (!isTelegramBotIdentityValid(meResult)) {
+    await persistTelegramConnectFailure({
       db,
-      tenant.id,
-      buildTelegramChannelPayload({
-        status: "error",
-        connectionState: "reconnect_required",
-        authStatus: "invalid",
-        reasonCode: meResult.reasonCode || "telegram_bot_token_invalid",
-        lastConnectFailure: buildTelegramLastConnectFailure({
-          reasonCode: meResult.reasonCode || "telegram_bot_token_invalid",
-          message: s(meResult.error || "Telegram rejected the supplied bot token."),
-          stage: "get_me",
-        }),
-      })
-    );
-    await auditSafe(
-      db,
-      actor,
       tenant,
-      "settings.channel.telegram.connect_failed",
-      "tenant_channel",
-      "telegram",
-      {
-        reasonCode: s(meResult.reasonCode || "telegram_bot_token_invalid"),
-        status: Number(meResult.status || 0),
-        botTokenMasked: maskTelegramToken(botToken),
-      }
-    );
+      actor,
+      channel: existing.channel,
+      botToken,
+      status: "error",
+      connectionState: "reconnect_required",
+      authStatus: "invalid",
+      reasonCode: meResult?.reasonCode || "telegram_bot_token_invalid",
+      message: s(meResult?.error || "Telegram rejected the supplied bot token."),
+      stage: "get_me",
+      auditMeta: {
+        status: Number(meResult?.status || 0),
+      },
+    });
 
-    const err = new Error(
-      s(meResult.error || "Telegram bot token validation failed")
+    throw buildTelegramError(
+      s(meResult?.error || "Telegram bot token validation failed"),
+      409,
+      s(meResult?.reasonCode || "telegram_bot_token_invalid")
     );
-    err.status = 409;
-    err.reasonCode = s(meResult.reasonCode || "telegram_bot_token_invalid");
-    throw err;
   }
 
   const routeToken = randomHex(24);
@@ -794,11 +934,13 @@ export async function connectTelegram({ db, req } = {}) {
     db,
     tenant.id,
     buildTelegramChannelPayload({
+      channel: existing.channel,
       bot: meResult.result,
       status: "connecting",
       connectionState: "connecting",
       authStatus: "authorized",
       webhookUrl,
+      lastConnectFailure: null,
     })
   );
 
@@ -812,131 +954,102 @@ export async function connectTelegram({ db, req } = {}) {
   });
 
   if (!webhookSetResult.ok) {
-    await upsertTelegramChannel(
+    await persistTelegramConnectFailure({
       db,
-      tenant.id,
-      buildTelegramChannelPayload({
-        bot: meResult.result,
-        status: "error",
-        connectionState: "reconnect_required",
-        authStatus: "authorized",
-        reasonCode: webhookSetResult.reasonCode || "telegram_webhook_invalid",
-        webhookUrl,
-        lastConnectFailure: buildTelegramLastConnectFailure({
-          reasonCode: webhookSetResult.reasonCode || "telegram_webhook_invalid",
-          message: s(
-            webhookSetResult.error || "Telegram webhook registration failed"
-          ),
-          stage: "set_webhook",
-        }),
-      })
-    );
-    await auditSafe(
-      db,
-      actor,
       tenant,
-      "settings.channel.telegram.connect_failed",
-      "tenant_channel",
-      "telegram",
-      {
-        reasonCode: s(webhookSetResult.reasonCode || "telegram_webhook_invalid"),
+      actor,
+      channel: existing.channel,
+      bot: meResult.result,
+      botToken,
+      routeToken,
+      secretToken,
+      webhookUrl,
+      status: "error",
+      connectionState: "reconnect_required",
+      authStatus: "authorized",
+      reasonCode: webhookSetResult.reasonCode || "telegram_webhook_invalid",
+      message: s(
+        webhookSetResult.error || "Telegram webhook registration failed"
+      ),
+      stage: "set_webhook",
+      auditMeta: {
         status: Number(webhookSetResult.status || 0),
-        webhookUrl: redactTelegramWebhookUrl(webhookUrl),
         botUserId: cleanNullable(meResult.result?.id),
         botUsername: cleanNullable(meResult.result?.username),
-      }
-    );
+      },
+    });
 
-    const err = new Error(
-      s(webhookSetResult.error || "Telegram webhook registration failed")
+    throw buildTelegramError(
+      s(webhookSetResult.error || "Telegram webhook registration failed"),
+      409,
+      s(webhookSetResult.reasonCode || "telegram_webhook_invalid")
     );
-    err.status = 409;
-    err.reasonCode = s(
-      webhookSetResult.reasonCode || "telegram_webhook_invalid"
-    );
-    throw err;
   }
 
   const webhookInfoResult = await getTelegramWebhookInfo({
     botToken,
     timeoutMs: cfg.telegram.statusTimeoutMs,
   });
+
   const webhookUrlMatches =
     webhookInfoResult.ok &&
     normalizeUrlForCompare(webhookInfoResult?.result?.url) ===
       normalizeUrlForCompare(webhookUrl);
 
   if (!webhookInfoResult.ok || !webhookUrlMatches) {
-    await upsertTelegramChannel(
+    await persistTelegramConnectFailure({
       db,
-      tenant.id,
-      buildTelegramChannelPayload({
-        bot: meResult.result,
-        status: "error",
-        connectionState: "reconnect_required",
-        authStatus: "authorized",
-        reasonCode:
-          webhookInfoResult.ok === false
-            ? webhookInfoResult.reasonCode || "telegram_webhook_invalid"
-            : "telegram_webhook_mismatch",
-        webhookUrl,
-        webhookInfo: webhookInfoResult.result,
-        lastConnectFailure: buildTelegramLastConnectFailure({
-          reasonCode:
-            webhookInfoResult.ok === false
-              ? webhookInfoResult.reasonCode || "telegram_webhook_invalid"
-              : "telegram_webhook_mismatch",
-          message:
-            webhookInfoResult.ok === false
-              ? s(
-                  webhookInfoResult.error ||
-                    "Telegram webhook verification failed after registration"
-                )
-              : "Telegram reported a different webhook URL than the expected tenant route",
-          stage: "get_webhook_info",
-        }),
-      })
-    );
-    await auditSafe(
-      db,
-      actor,
       tenant,
-      "settings.channel.telegram.connect_failed",
-      "tenant_channel",
-      "telegram",
-      {
-        reasonCode:
-          webhookInfoResult.ok === false
-            ? s(webhookInfoResult.reasonCode || "telegram_webhook_invalid")
-            : "telegram_webhook_mismatch",
+      actor,
+      channel: existing.channel,
+      bot: meResult.result,
+      botToken,
+      routeToken,
+      secretToken,
+      webhookUrl,
+      webhookInfo: webhookInfoResult.result,
+      status: "error",
+      connectionState: "reconnect_required",
+      authStatus: "authorized",
+      reasonCode:
+        webhookInfoResult.ok === false
+          ? webhookInfoResult.reasonCode || "telegram_webhook_invalid"
+          : "telegram_webhook_mismatch",
+      message:
+        webhookInfoResult.ok === false
+          ? s(
+              webhookInfoResult.error ||
+                "Telegram webhook verification failed after registration"
+            )
+          : "Telegram reported a different webhook URL than the expected tenant route",
+      stage: "get_webhook_info",
+      auditMeta: {
         status: Number(webhookInfoResult.status || 0),
-        expectedWebhookUrl: redactTelegramWebhookUrl(webhookUrl),
         actualWebhookUrl: cleanNullable(
           redactTelegramWebhookUrl(webhookInfoResult?.result?.url)
         ),
-      }
-    );
+      },
+    });
 
-    const err = new Error(
+    throw buildTelegramError(
       webhookInfoResult.ok === false
         ? s(
             webhookInfoResult.error ||
               "Telegram webhook verification failed after registration"
           )
-        : "Telegram reported a webhook URL that does not match the expected tenant route"
-    );
-    err.status = 409;
-    err.reasonCode =
+        : "Telegram reported a webhook URL that does not match the expected tenant route",
+      409,
       webhookInfoResult.ok === false
         ? s(webhookInfoResult.reasonCode || "telegram_webhook_invalid")
-        : "telegram_webhook_mismatch";
-    throw err;
+        : "telegram_webhook_mismatch"
+    );
   }
 
   const savedChannel = await upsertTelegramChannel(
     db,
     tenant.id,
     buildTelegramChannelPayload({
+      channel: existing.channel,
       bot: meResult.result,
       status: "connected",
       connectionState: "connected",
@@ -944,6 +1057,8 @@ export async function connectTelegram({ db, req } = {}) {
       webhookUrl,
       webhookInfo: webhookInfoResult.result,
       connectedAt: nowIso(),
+      disconnectedAt: null,
+      disconnectReason: "",
       lastConnectFailure: null,
     })
   );
@@ -954,11 +1069,12 @@ export async function connectTelegram({ db, req } = {}) {
     tenant,
     "settings.channel.telegram.connected",
     "tenant_channel",
-    "telegram",
+    TELEGRAM_CHANNEL_TYPE,
     {
       botUserId: cleanNullable(meResult.result?.id),
       botUsername: cleanNullable(meResult.result?.username),
-      webhookUrl: redactTelegramWebhookUrl(webhookUrl),
+      botTokenMasked: cleanNullable(maskTelegramToken(botToken)),
+      webhookUrl: cleanNullable(redactTelegramWebhookUrl(webhookUrl)),
     }
   );
 
@@ -1021,6 +1137,7 @@ export async function disconnectTelegram({ db, req } = {}) {
   const snapshot = getTelegramSnapshot(channel);
   const disconnectedAt = nowIso();
   const botToken = s(secrets?.[TELEGRAM_BOT_TOKEN_SECRET_KEY]);
+
   let remoteWebhookRemoved = false;
   let remoteReasonCode = "";
   let remoteError = "";
@@ -1043,13 +1160,13 @@ export async function disconnectTelegram({ db, req } = {}) {
   ]);
 
   const savedChannel = await markTelegramDisconnected(db, tenant.id, {
-    displayName: snapshot.displayName || "Telegram",
+    displayName: snapshot.displayName || TELEGRAM_DEFAULT_NAME,
     status: "disconnected",
     externalUserId: cleanNullable(snapshot.botUserId),
     externalUsername: cleanNullable(snapshot.botUsername),
     config: {
       connected_via: "bot_token",
-      auth_model: "telegram_bot_token",
+      auth_model: TELEGRAM_AUTH_MODEL,
       bot_user_id: cleanNullable(snapshot.botUserId),
       bot_username: cleanNullable(snapshot.botUsername),
       bot_first_name: cleanNullable(snapshot.botFirstName),
@@ -1064,7 +1181,9 @@ export async function disconnectTelegram({ db, req } = {}) {
       connection_state: "disconnected",
       auth_status: "disconnected",
       reason_code: cleanNullable(
-        remoteWebhookRemoved ? "" : remoteReasonCode || "telegram_webhook_delete_unverified"
+        remoteWebhookRemoved
+          ? ""
+          : remoteReasonCode || "telegram_webhook_delete_unverified"
       ),
       last_verified_at: disconnectedAt,
       last_connected_at: cleanNullable(snapshot.lastConnectedAt),
@@ -1086,7 +1205,7 @@ export async function disconnectTelegram({ db, req } = {}) {
     tenant,
     "settings.channel.telegram.disconnected",
     "tenant_channel",
-    "telegram",
+    TELEGRAM_CHANNEL_TYPE,
     {
       disconnectedAt,
       remoteWebhookRemoved,
@@ -1097,7 +1216,7 @@ export async function disconnectTelegram({ db, req } = {}) {
 
   return {
     disconnected: true,
-    channel: "telegram",
+    channel: TELEGRAM_CHANNEL_TYPE,
     disconnectedAt,
     remoteWebhookRemoved,
     remoteReasonCode: cleanNullable(remoteReasonCode),

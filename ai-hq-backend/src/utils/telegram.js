@@ -1,5 +1,8 @@
 import { cfg } from "../config.js";
 
+const TELEGRAM_DEFAULT_API_BASE = "https://api.telegram.org";
+const TELEGRAM_DEFAULT_ALLOWED_UPDATES = Object.freeze(["message"]);
+
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
@@ -18,6 +21,31 @@ function trimSlash(v) {
 
 function isAbortError(error) {
   return lower(error?.name) === "aborterror";
+}
+
+function clampTimeoutMs(value, fallback = 15_000) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.max(1_000, parsed);
+}
+
+function buildTelegramApiUrl({ apiBaseUrl = "", botToken = "", method = "" } = {}) {
+  const baseUrl = trimSlash(apiBaseUrl || TELEGRAM_DEFAULT_API_BASE);
+  const token = s(botToken);
+  const methodName = s(method);
+
+  if (!baseUrl || !token || !methodName) return "";
+  return `${baseUrl}/bot${token}/${methodName}`;
+}
+
+function sanitizeAllowedUpdates(value) {
+  const input = Array.isArray(value) ? value : TELEGRAM_DEFAULT_ALLOWED_UPDATES;
+  const normalized = [...new Set(input.map((item) => lower(item)).filter(Boolean))];
+  return normalized.length ? normalized : [...TELEGRAM_DEFAULT_ALLOWED_UPDATES];
+}
+
+function sanitizeMessageText(text = "") {
+  return s(text);
 }
 
 async function readJsonSafe(res) {
@@ -55,26 +83,47 @@ export function getTelegramResponseReasonCode(result = {}) {
   );
 
   if (status === 401) return "telegram_bot_token_invalid";
+
   if (status === 403 && description.includes("blocked")) {
     return "telegram_bot_blocked_by_user";
   }
+
+  if (status === 403 && description.includes("forbidden")) {
+    return "telegram_forbidden";
+  }
+
   if (status === 403) return "telegram_forbidden";
+
   if (status === 404) return "telegram_resource_not_found";
+
   if (status === 400 && description.includes("chat not found")) {
     return "telegram_chat_not_found";
   }
+
   if (status === 400 && description.includes("message is too long")) {
     return "telegram_message_too_long";
   }
+
+  if (status === 400 && description.includes("message text is empty")) {
+    return "telegram_message_empty";
+  }
+
   if (status === 400 && description.includes("secret token")) {
     return "telegram_webhook_secret_invalid";
   }
+
   if (status === 400 && description.includes("bad webhook")) {
     return "telegram_webhook_invalid";
   }
+
+  if (status === 400 && description.includes("can't parse entities")) {
+    return "telegram_message_invalid";
+  }
+
   if (status === 429) return "telegram_rate_limited";
   if (status >= 500) return "telegram_upstream_unavailable";
   if (status === 0) return "telegram_network_error";
+
   return "telegram_request_failed";
 }
 
@@ -87,7 +136,12 @@ export async function callTelegramBotApi({
 } = {}) {
   const token = s(botToken);
   const methodName = s(method);
-  const baseUrl = trimSlash(apiBaseUrl);
+  const baseUrl = trimSlash(apiBaseUrl || TELEGRAM_DEFAULT_API_BASE);
+  const requestUrl = buildTelegramApiUrl({
+    apiBaseUrl: baseUrl,
+    botToken: token,
+    method: methodName,
+  });
 
   if (!token) {
     return {
@@ -97,6 +151,7 @@ export async function callTelegramBotApi({
       reasonCode: "telegram_bot_token_missing",
       json: null,
       result: null,
+      method: methodName,
     };
   }
 
@@ -108,6 +163,7 @@ export async function callTelegramBotApi({
       reasonCode: "telegram_method_missing",
       json: null,
       result: null,
+      method: "",
     };
   }
 
@@ -119,17 +175,30 @@ export async function callTelegramBotApi({
       reasonCode: "telegram_api_base_url_missing",
       json: null,
       result: null,
+      method: methodName,
+    };
+  }
+
+  if (!requestUrl) {
+    return {
+      ok: false,
+      status: 0,
+      error: "telegram request url could not be built",
+      reasonCode: "telegram_request_url_invalid",
+      json: null,
+      result: null,
+      method: methodName,
     };
   }
 
   const controller = new AbortController();
   const timer = setTimeout(
     () => controller.abort(),
-    Math.max(1_000, Number(timeoutMs || 15_000))
+    clampTimeoutMs(timeoutMs, 15_000)
   );
 
   try {
-    const res = await fetch(`${baseUrl}/bot${token}/${methodName}`, {
+    const res = await fetch(requestUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json; charset=utf-8",
@@ -144,20 +213,26 @@ export async function callTelegramBotApi({
     const error = ok
       ? ""
       : s(
-          json?.description || json?.error || json?.message || `Telegram ${res.status}`
+          json?.description ||
+            json?.error ||
+            json?.message ||
+            `Telegram ${res.status}`
         );
 
     return {
       ok,
       status: Number(res.status || 0),
       error,
-      reasonCode: ok ? "" : getTelegramResponseReasonCode({
-        status: res.status,
-        json,
-        error,
-      }),
+      reasonCode: ok
+        ? ""
+        : getTelegramResponseReasonCode({
+            status: res.status,
+            json,
+            error,
+          }),
       json,
       result: obj(json?.result),
+      method: methodName,
     };
   } catch (error) {
     const message = isAbortError(error)
@@ -173,6 +248,7 @@ export async function callTelegramBotApi({
         : "telegram_request_failed",
       json: null,
       result: null,
+      method: methodName,
     };
   } finally {
     clearTimeout(timer);
@@ -207,18 +283,32 @@ export async function setTelegramWebhook({
   botToken = "",
   url = "",
   secretToken = "",
-  allowedUpdates = ["message"],
+  allowedUpdates = TELEGRAM_DEFAULT_ALLOWED_UPDATES,
   dropPendingUpdates = false,
   maxConnections = 40,
   timeoutMs = cfg.telegram.connectTimeoutMs,
 } = {}) {
+  const webhookUrl = s(url);
+
+  if (!webhookUrl) {
+    return {
+      ok: false,
+      status: 0,
+      error: "telegram webhook url missing",
+      reasonCode: "telegram_webhook_invalid",
+      json: null,
+      result: null,
+      method: "setWebhook",
+    };
+  }
+
   return callTelegramBotApi({
     botToken,
     method: "setWebhook",
     body: {
-      url: s(url),
+      url: webhookUrl,
       secret_token: s(secretToken) || undefined,
-      allowed_updates: Array.isArray(allowedUpdates) ? allowedUpdates : ["message"],
+      allowed_updates: sanitizeAllowedUpdates(allowedUpdates),
       drop_pending_updates: Boolean(dropPendingUpdates),
       max_connections: Number(maxConnections || 40),
     },
@@ -245,14 +335,53 @@ export async function sendTelegramMessage({
   botToken = "",
   chatId = "",
   text = "",
+  parseMode = "",
+  disableWebPagePreview = false,
   timeoutMs = cfg.telegram.sendTimeoutMs,
 } = {}) {
+  const resolvedChatId = s(chatId);
+  const resolvedText = sanitizeMessageText(text);
+
+  if (!resolvedChatId) {
+    return {
+      ok: false,
+      status: 0,
+      error: "telegram chat id missing",
+      reasonCode: "telegram_chat_not_found",
+      json: null,
+      result: null,
+      method: "sendMessage",
+    };
+  }
+
+  if (!resolvedText) {
+    return {
+      ok: false,
+      status: 0,
+      error: "telegram message text missing",
+      reasonCode: "telegram_message_empty",
+      json: null,
+      result: null,
+      method: "sendMessage",
+    };
+  }
+
+  const mode = s(parseMode);
+
   return callTelegramBotApi({
     botToken,
     method: "sendMessage",
     body: {
-      chat_id: s(chatId),
-      text: s(text),
+      chat_id: resolvedChatId,
+      text: resolvedText,
+      ...(mode ? { parse_mode: mode } : {}),
+      ...(disableWebPagePreview
+        ? {
+            link_preview_options: {
+              is_disabled: true,
+            },
+          }
+        : {}),
     },
     timeoutMs,
   });
@@ -264,12 +393,39 @@ export async function sendTelegramChatAction({
   action = "typing",
   timeoutMs = cfg.telegram.sendTimeoutMs,
 } = {}) {
+  const resolvedChatId = s(chatId);
+  const resolvedAction = s(action || "typing");
+
+  if (!resolvedChatId) {
+    return {
+      ok: false,
+      status: 0,
+      error: "telegram chat id missing",
+      reasonCode: "telegram_chat_not_found",
+      json: null,
+      result: null,
+      method: "sendChatAction",
+    };
+  }
+
+  if (!resolvedAction) {
+    return {
+      ok: false,
+      status: 0,
+      error: "telegram chat action missing",
+      reasonCode: "telegram_request_failed",
+      json: null,
+      result: null,
+      method: "sendChatAction",
+    };
+  }
+
   return callTelegramBotApi({
     botToken,
     method: "sendChatAction",
     body: {
-      chat_id: s(chatId),
-      action: s(action || "typing"),
+      chat_id: resolvedChatId,
+      action: resolvedAction,
     },
     timeoutMs,
   });

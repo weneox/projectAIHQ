@@ -10,8 +10,71 @@ import {
 import { dbAudit } from "../../../db/helpers/audit.js";
 import { s } from "./utils.js";
 
+const META_PROVIDER = "meta";
+const TELEGRAM_PROVIDER = "telegram";
+const INSTAGRAM_CHANNEL = "instagram";
+const TELEGRAM_CHANNEL = "telegram";
+
 export async function getTenantByKey(db, tenantKey) {
   return dbGetTenantByKey(db, tenantKey);
+}
+
+async function saveProviderSecretValue(
+  db,
+  tenantId,
+  provider,
+  secretKey,
+  value,
+  actor = "system"
+) {
+  return dbUpsertTenantSecret(
+    db,
+    tenantId,
+    provider,
+    s(secretKey),
+    value,
+    actor
+  );
+}
+
+async function deleteProviderSecretKeys(
+  db,
+  tenantId,
+  provider,
+  secretKeys = []
+) {
+  let deleted = 0;
+
+  for (const secretKey of Array.isArray(secretKeys) ? secretKeys : []) {
+    const ok = await dbDeleteTenantSecret(db, tenantId, provider, secretKey);
+    if (ok) deleted += 1;
+  }
+
+  return deleted;
+}
+
+async function getProviderSecrets(db, tenantId, provider) {
+  return dbGetTenantProviderSecrets(db, tenantId, provider);
+}
+
+async function upsertChannel(db, tenantId, channelType, payload) {
+  return dbUpsertTenantChannel(db, tenantId, channelType, payload);
+}
+
+async function getPrimaryChannel(db, tenantId, channelType) {
+  const q = await db.query(
+    `
+      select *
+      from tenant_channels
+      where tenant_id = $1
+        and channel_type = $2
+      order by is_primary desc, updated_at desc
+      limit 1
+    `,
+    [tenantId, channelType]
+  );
+
+  return q?.rows?.[0] || null;
 }
 
 export async function saveMetaPageAccessToken(
@@ -20,10 +83,10 @@ export async function saveMetaPageAccessToken(
   token,
   actor = "system"
 ) {
-  return dbUpsertTenantSecret(
+  return saveProviderSecretValue(
     db,
     tenantId,
-    "meta",
+    META_PROVIDER,
     "page_access_token",
     token,
     actor
@@ -37,11 +100,11 @@ export async function saveMetaSecretValue(
   value,
   actor = "system"
 ) {
-  return dbUpsertTenantSecret(
+  return saveProviderSecretValue(
     db,
     tenantId,
-    "meta",
-    s(secretKey),
+    META_PROVIDER,
+    secretKey,
     value,
     actor
   );
@@ -52,18 +115,16 @@ export async function deleteMetaSecretKeys(
   tenantId,
   secretKeys = ["page_access_token"]
 ) {
-  let deleted = 0;
-
-  for (const secretKey of Array.isArray(secretKeys) ? secretKeys : []) {
-    const ok = await dbDeleteTenantSecret(db, tenantId, "meta", secretKey);
-    if (ok) deleted += 1;
-  }
-
-  return deleted;
+  return deleteProviderSecretKeys(
+    db,
+    tenantId,
+    META_PROVIDER,
+    secretKeys
+  );
 }
 
 export async function getMetaSecrets(db, tenantId) {
-  return dbGetTenantProviderSecrets(db, tenantId, "meta");
+  return getProviderSecrets(db, tenantId, META_PROVIDER);
 }
 
 export async function saveTelegramSecretValue(
@@ -73,11 +134,11 @@ export async function saveTelegramSecretValue(
   value,
   actor = "system"
 ) {
-  return dbUpsertTenantSecret(
+  return saveProviderSecretValue(
     db,
     tenantId,
-    "telegram",
-    s(secretKey),
+    TELEGRAM_PROVIDER,
+    secretKey,
     value,
     actor
   );
@@ -88,58 +149,32 @@ export async function deleteTelegramSecretKeys(
   tenantId,
   secretKeys = []
 ) {
-  let deleted = 0;
-
-  for (const secretKey of Array.isArray(secretKeys) ? secretKeys : []) {
-    const ok = await dbDeleteTenantSecret(db, tenantId, "telegram", secretKey);
-    if (ok) deleted += 1;
-  }
-
-  return deleted;
+  return deleteProviderSecretKeys(
+    db,
+    tenantId,
+    TELEGRAM_PROVIDER,
+    secretKeys
+  );
 }
 
 export async function getTelegramSecrets(db, tenantId) {
-  return dbGetTenantProviderSecrets(db, tenantId, "telegram");
+  return getProviderSecrets(db, tenantId, TELEGRAM_PROVIDER);
 }
 
 export async function upsertInstagramChannel(db, tenantId, payload) {
-  return dbUpsertTenantChannel(db, tenantId, "instagram", payload);
+  return upsertChannel(db, tenantId, INSTAGRAM_CHANNEL, payload);
 }
 
 export async function upsertTelegramChannel(db, tenantId, payload) {
-  return dbUpsertTenantChannel(db, tenantId, "telegram", payload);
+  return upsertChannel(db, tenantId, TELEGRAM_CHANNEL, payload);
 }
 
 export async function getPrimaryInstagramChannel(db, tenantId) {
-  const q = await db.query(
-    `
-      select *
-      from tenant_channels
-      where tenant_id = $1
-        and channel_type = 'instagram'
-      order by is_primary desc, updated_at desc
-      limit 1
-    `,
-    [tenantId]
-  );
-
-  return q?.rows?.[0] || null;
+  return getPrimaryChannel(db, tenantId, INSTAGRAM_CHANNEL);
 }
 
 export async function getPrimaryTelegramChannel(db, tenantId) {
-  const q = await db.query(
-    `
-      select *
-      from tenant_channels
-      where tenant_id = $1
-        and channel_type = 'telegram'
-      order by is_primary desc, updated_at desc
-      limit 1
-    `,
-    [tenantId]
-  );
-
-  return q?.rows?.[0] || null;
+  return getPrimaryChannel(db, tenantId, TELEGRAM_CHANNEL);
 }
 
 export async function markInstagramDisconnected(
@@ -154,8 +189,8 @@ export async function markInstagramDisconnected(
     lastSyncAt = null,
   } = {}
 ) {
-  return dbUpsertTenantChannel(db, tenantId, "instagram", {
-    provider: "meta",
+  return upsertChannel(db, tenantId, INSTAGRAM_CHANNEL, {
+    provider: META_PROVIDER,
     display_name: s(displayName, "Instagram"),
     external_account_id: null,
     external_page_id: null,
@@ -184,8 +219,8 @@ export async function markTelegramDisconnected(
     lastSyncAt = null,
   } = {}
 ) {
-  return dbUpsertTenantChannel(db, tenantId, "telegram", {
-    provider: "telegram",
+  return upsertChannel(db, tenantId, TELEGRAM_CHANNEL, {
+    provider: TELEGRAM_PROVIDER,
     display_name: s(displayName, "Telegram"),
     external_account_id: null,
     external_page_id: null,
@@ -194,7 +229,7 @@ export async function markTelegramDisconnected(
     status: s(status, "disconnected"),
     is_primary: Boolean(isPrimary),
     config,
-    secrets_ref: "telegram",
+    secrets_ref: TELEGRAM_PROVIDER,
     health,
     last_sync_at: lastSyncAt,
   });

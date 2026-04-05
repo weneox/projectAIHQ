@@ -29,6 +29,12 @@ import {
   emitIngestRealtime,
 } from "./responses.js";
 
+function resolveExecutionProviderForChannel(channel = "") {
+  return String(channel || "").trim().toLowerCase() === "telegram"
+    ? "telegram"
+    : "meta";
+}
+
 export function createInboxIngestHandler({
   db,
   wsHub,
@@ -64,9 +70,11 @@ export function createInboxIngestHandler({
 
       const tenantRow = await resolveTenantRow(client, input.tenantKey);
       const tenantId = String(tenantRow?.id || "").trim();
+
       if (!tenantId) {
         await rollbackAndRelease(client);
         client = null;
+
         return okJson(res, {
           ok: false,
           error: "tenant not found",
@@ -137,12 +145,14 @@ export function createInboxIngestHandler({
 
       const recentMessages = await loadRecentMessages(client, thread.id);
       const priorThreadState = await getInboxThreadState(client, thread.id);
+
       const runtimeState = await loadStrictInboxRuntime({
         client,
         getRuntime,
         tenantKey: input.tenantKey,
         threadState: priorThreadState,
         service: "inbox.ingest",
+        channelType: input.channel,
       });
 
       if (!runtimeState.ok) {
@@ -152,6 +162,7 @@ export function createInboxIngestHandler({
       }
 
       const { tenant, runtime } = runtimeState;
+
       const brain = await buildActions({
         text: input.text,
         channel: input.channel,
@@ -177,6 +188,7 @@ export function createInboxIngestHandler({
       });
 
       const proposedActions = Array.isArray(brain?.actions) ? brain.actions : [];
+
       const executionPolicy = applyExecutionPolicyToActions({
         runtime,
         actions: proposedActions,
@@ -189,6 +201,7 @@ export function createInboxIngestHandler({
             thread?.handoff_active,
         },
       });
+
       const actions = executionPolicy.actions.length
         ? executionPolicy.actions
         : executionPolicy.summary.strictestOutcome === "allowed_with_human_review" ||
@@ -206,6 +219,7 @@ export function createInboxIngestHandler({
             },
           ]
         : [];
+
       const brainWithPolicy = {
         ...brain,
         proposedActions,
@@ -311,10 +325,12 @@ export function createInboxIngestHandler({
         tenantId: String(tenant?.id || tenantId),
         tenantKey: input.tenantKey,
         channel: input.channel,
+        provider: resolveExecutionProviderForChannel(input.channel),
         actions,
       });
 
       const normalizedThread = await refreshThread(client, thread?.id, thread);
+
       const nextThreadState = await upsertInboxThreadState(
         client,
         buildThreadStateForDecision({

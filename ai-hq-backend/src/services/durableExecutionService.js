@@ -46,8 +46,70 @@ function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
+function lower(v, d = "") {
+  return s(v, d).toLowerCase();
+}
+
 function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+
+function resolveExecutionProvider(execution = {}) {
+  return (
+    lower(execution?.provider) ||
+    lower(s(execution?.action_type).split(".")[0]) ||
+    "meta"
+  );
+}
+
+function classifyChannelOutboundFailure({ execution = {}, delivery = {} } = {}) {
+  const provider = resolveExecutionProvider(execution);
+
+  let classified = null;
+  try {
+    classified =
+      provider === "telegram"
+        ? classifyTelegramDeliveryFailure(delivery)
+        : classifyMetaGatewayFailure(delivery);
+  } catch {
+    classified = null;
+  }
+
+  const status = Number(classified?.status ?? delivery?.status ?? 0);
+  const reasonCode = s(
+    classified?.errorCode ||
+      delivery?.reasonCode ||
+      delivery?.status ||
+      "delivery_failed"
+  );
+  const errorMessage = s(
+    classified?.errorMessage || delivery?.error || "delivery failed"
+  );
+
+  let retryable = Boolean(classified?.retryable);
+  if (classified?.retryable == null) {
+    retryable =
+      status === 0 ||
+      status === 429 ||
+      status >= 500 ||
+      reasonCode === "telegram_rate_limited" ||
+      reasonCode === "telegram_request_timeout" ||
+      reasonCode === "telegram_network_error" ||
+      reasonCode === "telegram_upstream_unavailable";
+  }
+
+  return {
+    retryable,
+    status,
+    errorCode: reasonCode,
+    errorMessage,
+    classification: s(
+      classified?.classification ||
+        (provider === "telegram"
+          ? "telegram_delivery_failure"
+          : "meta_gateway_failure")
+    ),
+  };
 }
 
 export function buildMetaOutboundExecutionInput({
@@ -92,6 +154,7 @@ export function buildChannelOutboundExecutionInput({
   maxAttempts = 5,
 } = {}) {
   const actionType = `${s(provider || "meta")}.outbound.send`;
+
   return {
     tenantId,
     tenantKey,
@@ -158,6 +221,7 @@ export async function enqueueChannelOutboundExecution({
   maxAttempts = 5,
 }) {
   const helpers = createDurableExecutionHelpers({ db });
+
   return helpers.enqueueExecution(
     buildChannelOutboundExecutionInput({
       tenantId,
@@ -201,6 +265,7 @@ export function buildMetaCommentReplyExecutionInput({
   maxAttempts = 5,
 } = {}) {
   const safeChannel = normalizeCommentReplyChannel(channel);
+
   const action = {
     type: "reply_comment",
     channel: safeChannel,
@@ -282,6 +347,7 @@ export async function enqueueMetaCommentReplyExecution({
   maxAttempts = 5,
 }) {
   const helpers = createDurableExecutionHelpers({ db });
+
   return helpers.enqueueExecution(
     buildMetaCommentReplyExecutionInput({
       tenantId,
@@ -311,13 +377,12 @@ export async function enqueueVoiceSyncExecution({
   correlationIds = {},
 }) {
   const helpers = createDurableExecutionHelpers({ db });
+
   return helpers.enqueueExecution({
     tenantId,
     tenantKey,
     channel: "voice",
     provider: "twilio",
-    // Durable execution is the primary control plane for voice sync.
-    // Duplicate Twilio-side requests collapse through ledger idempotency.
     actionType,
     targetType: "voice_call",
     targetId: providerCallSid,
@@ -334,20 +399,20 @@ export async function enqueueVoiceSyncExecution({
   });
 }
 
-async function processMetaOutboundExecution({ db, wsHub, execution, logger }) {
+async function processChannelOutboundExecution({ db, wsHub, execution, logger }) {
   const metadata = obj(execution.safe_metadata);
   const payload = obj(execution.payload_summary);
-  // Durable execution drives control decisions. The inbox attempt row is only
-  // compatibility/history state for thread tooling and provider breadcrumbs.
   const attemptId = s(metadata.inboxOutboundAttemptId);
   const messageId = s(execution.message_id || metadata.messageId);
   const threadId = s(execution.thread_id || metadata.threadId);
+  const provider = resolveExecutionProvider(execution);
 
   const message = await getMessageById(db, messageId);
   const thread = await getThreadById(db, threadId);
 
   if (!message || !thread) {
     const missing = !message ? "message_missing" : "thread_missing";
+
     if (attemptId) {
       await markOutboundAttemptFailed({
         db,
@@ -358,6 +423,7 @@ async function processMetaOutboundExecution({ db, wsHub, execution, logger }) {
         retryDelaySeconds: 300,
       });
     }
+
     if (messageId) {
       await updateOutboundMessageDeliveryFailure({
         db,
@@ -373,15 +439,26 @@ async function processMetaOutboundExecution({ db, wsHub, execution, logger }) {
       ok: false,
       retryable: true,
       errorCode: missing,
-      errorMessage: missing === "message_missing" ? "message not found" : "thread not found",
+      errorMessage:
+        missing === "message_missing" ? "message not found" : "thread not found",
       classification: "runtime_missing",
       resultSummary: {},
     };
   }
 
-  const gateway = await sendOutboundViaMetaGateway(payload);
-  if (!gateway.ok) {
-    const failure = classifyMetaGatewayFailure(gateway);
+  const delivery = await deliverChannelOutbound({
+    db,
+    execution,
+    payload,
+    message,
+    thread,
+  });
+
+  if (!delivery.ok) {
+    const failure = classifyChannelOutboundFailure({
+      execution,
+      delivery,
+    });
 
     if (attemptId) {
       if (failure.retryable) {
@@ -390,25 +467,44 @@ async function processMetaOutboundExecution({ db, wsHub, execution, logger }) {
           attemptId,
           error: failure.errorMessage,
           errorCode: failure.errorCode,
-          providerResponse: gateway.json || {},
+          providerResponse: delivery.providerResponse || delivery.json || {},
           retryDelaySeconds: 120,
         });
       } else {
         await markOutboundAttemptDead(db, attemptId);
       }
     }
+
     await updateOutboundMessageDeliveryFailure({
       db,
       messageId: message.id,
       status: failure.retryable ? "failed" : "dead",
       error: failure.errorMessage,
       errorCode: failure.errorCode,
-      providerResponse: gateway.json || {},
+      providerResponse: delivery.providerResponse || delivery.json || {},
     });
 
-    logger.warn("durable_execution.meta.failed", {
+    try {
+      await writeAudit(db, {
+        actor: "system",
+        action: `durable_execution.${provider}_failed`,
+        objectType: "durable_execution",
+        objectId: execution.id,
+        meta: {
+          threadId,
+          messageId,
+          provider,
+          errorCode: failure.errorCode,
+          error: failure.errorMessage,
+          providerStatus: failure.status,
+        },
+      });
+    } catch {}
+
+    logger.warn("durable_execution.channel.failed", {
       executionId: execution.id,
-      gatewayStatus: failure.status,
+      provider,
+      status: failure.status,
       retryable: failure.retryable,
       errorCode: failure.errorCode,
     });
@@ -420,20 +516,14 @@ async function processMetaOutboundExecution({ db, wsHub, execution, logger }) {
       errorMessage: failure.errorMessage,
       classification: failure.classification,
       resultSummary: {
-        gatewayStatus: failure.status,
+        provider,
+        providerStatus: failure.status,
       },
     };
   }
 
-  const providerResult = gateway?.json?.result || gateway?.json || {};
-  const providerResponse =
-    providerResult?.response || providerResult?.json || providerResult || {};
-  const providerMessageId =
-    s(
-      providerResponse?.message_id ||
-        providerResponse?.messageId ||
-        providerResponse?.id
-    ) || null;
+  const providerResponse = obj(delivery.providerResponse);
+  const providerMessageId = s(delivery.providerMessageId) || null;
 
   if (attemptId) {
     await markOutboundAttemptSent({
@@ -454,12 +544,13 @@ async function processMetaOutboundExecution({ db, wsHub, execution, logger }) {
   try {
     await writeAudit(db, {
       actor: "system",
-      action: "durable_execution.meta_succeeded",
+      action: `durable_execution.${provider}_succeeded`,
       objectType: "durable_execution",
       objectId: execution.id,
       meta: {
         threadId,
         messageId,
+        provider,
         providerMessageId: s(providerMessageId),
       },
     });
@@ -469,7 +560,10 @@ async function processMetaOutboundExecution({ db, wsHub, execution, logger }) {
     emitRealtimeEvent(wsHub, {
       type: "inbox.message.updated",
       audience: "operator",
-      tenantKey: updatedMessage?.tenant_key || message?.tenant_key || execution.tenant_key,
+      tenantKey:
+        updatedMessage?.tenant_key ||
+        message?.tenant_key ||
+        execution.tenant_key,
       threadId: String(updatedMessage?.thread_id || message.thread_id || ""),
       message: updatedMessage || message,
     });
@@ -479,8 +573,9 @@ async function processMetaOutboundExecution({ db, wsHub, execution, logger }) {
     ok: true,
     retryable: false,
     resultSummary: {
+      provider,
       providerMessageId: s(providerMessageId),
-      gatewayStatus: Number(gateway?.status || 0),
+      providerStatus: Number(delivery?.status || 0),
     },
   };
 }
@@ -587,6 +682,7 @@ export async function processMetaCommentReplyExecution({
   if (!gateway.ok) {
     const failure = classifyMetaGatewayFailure(gateway);
     const deliveryStatus = failure.retryable ? "failed" : "dead";
+
     const nextClassification = mergeClassificationForReply(comment.classification, {
       replyText,
       actor,
@@ -598,6 +694,7 @@ export async function processMetaCommentReplyExecution({
       deliveryStatus,
       executionId: execution.id,
     });
+
     const nextRaw = buildReplyRaw(comment, {
       replyText,
       actor,
@@ -609,6 +706,7 @@ export async function processMetaCommentReplyExecution({
       deliveryStatus,
       executionId: execution.id,
     });
+
     const updatedComment = await updateCommentState(
       db,
       comment.id,
@@ -617,6 +715,7 @@ export async function processMetaCommentReplyExecution({
     );
 
     emitCommentUpdatedRealtime(wsHub, updatedComment || comment);
+
     await writeAudit(db, {
       actor: "system",
       action:
@@ -677,6 +776,7 @@ export async function processMetaCommentReplyExecution({
     executionId: execution.id,
     providerMessageId,
   });
+
   const nextRaw = buildReplyRaw(comment, {
     replyText,
     actor,
@@ -689,6 +789,7 @@ export async function processMetaCommentReplyExecution({
     executionId: execution.id,
     providerMessageId,
   });
+
   const updatedComment = await updateCommentState(
     db,
     comment.id,
@@ -697,6 +798,7 @@ export async function processMetaCommentReplyExecution({
   );
 
   emitCommentUpdatedRealtime(wsHub, updatedComment || comment);
+
   await writeAudit(db, {
     actor: "system",
     action: "comment.reply_delivery_sent",
@@ -776,11 +878,13 @@ export async function requeueMetaCommentReplyExecution({
     s(payload?.actions?.[0]?.text) ||
     s(comment?.classification?.reply?.text) ||
     s(comment?.raw?.reply?.text);
+
   const actor =
     s(metadata.actor) ||
     s(comment?.classification?.reply?.actor) ||
     s(comment?.raw?.reply?.actor) ||
     "operator";
+
   const approved = metadata.approved !== false;
 
   const nextClassification = mergeClassificationForReplyPending(
@@ -792,12 +896,14 @@ export async function requeueMetaCommentReplyExecution({
       executionId: execution.id,
     }
   );
+
   const nextRaw = buildReplyPendingRaw(comment, {
     replyText,
     actor,
     approved,
     executionId: execution.id,
   });
+
   const updatedComment = await updateCommentState(
     db,
     comment.id,
@@ -806,6 +912,7 @@ export async function requeueMetaCommentReplyExecution({
   );
 
   emitCommentUpdatedRealtime(wsHub, updatedComment || comment);
+
   await writeAudit(db, {
     actor: s(requestedBy || "system"),
     action: "comment.reply_delivery_requeued",
@@ -826,11 +933,7 @@ export async function requeueMetaCommentReplyExecution({
   };
 }
 
-export async function processDurableExecution({
-  db,
-  wsHub,
-  execution,
-}) {
+export async function processDurableExecution({ db, wsHub, execution }) {
   const logger = createLogger({
     service: "ai-hq-backend",
     component: "durable-execution-runner",
@@ -843,8 +946,8 @@ export async function processDurableExecution({
     conversationId: s(execution?.conversation_id),
   });
 
-  if (execution?.action_type === "meta.outbound.send") {
-    return processMetaOutboundExecution({ db, wsHub, execution, logger });
+  if (s(execution?.action_type).endsWith(".outbound.send")) {
+    return processChannelOutboundExecution({ db, wsHub, execution, logger });
   }
 
   if (execution?.action_type === "meta.comment.reply") {
@@ -865,11 +968,7 @@ export async function processDurableExecution({
   };
 }
 
-export async function finalizeDurableExecution({
-  db,
-  execution,
-  result,
-}) {
+export async function finalizeDurableExecution({ db, execution, result }) {
   const helpers = createDurableExecutionHelpers({ db });
   const attemptNumber = Number(execution?.attempt_count || 0);
 

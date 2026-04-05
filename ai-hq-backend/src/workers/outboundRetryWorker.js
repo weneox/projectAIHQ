@@ -1,5 +1,9 @@
 import { cfg } from "../config.js";
-import { sendOutboundViaMetaGateway } from "../services/metaGatewayClient.js";
+import { deliverChannelOutbound } from "../services/channelDelivery.js";
+import {
+  classifyMetaGatewayFailure,
+  classifyTelegramDeliveryFailure,
+} from "../services/durableExecutionCore.js";
 import {
   getMessageById,
   getThreadById,
@@ -16,13 +20,15 @@ import { withMessageOutboundAttemptCorrelation } from "../routes/api/inbox/share
 import { writeAudit } from "../utils/auditLog.js";
 import { createLogger } from "../utils/logger.js";
 import { emitRealtimeEvent } from "../realtime/events.js";
-import { validateMetaGatewayOutboundResponse } from "@aihq/shared-contracts/critical";
 import {
   markWorkerStarted,
   markWorkerStopped,
   recordRuntimeSignal,
   touchWorkerHeartbeat,
 } from "../observability/runtimeSignals.js";
+
+const META_PROVIDER = "meta";
+const TELEGRAM_PROVIDER = "telegram";
 
 function s(v) {
   return String(v ?? "").trim();
@@ -31,6 +37,10 @@ function s(v) {
 function n(v, d = 0) {
   const x = Number(v);
   return Number.isFinite(x) ? x : d;
+}
+
+function obj(v) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
 }
 
 function sleep(ms) {
@@ -46,25 +56,120 @@ function getWorkerConfig() {
   };
 }
 
-function classifyGatewayFailure(gateway = {}) {
-  const status = Number(gateway?.status || gateway?.json?.status || 0);
-  const text = s(gateway?.error || "").toLowerCase();
-  const retryable =
-    status === 0 ||
-    status >= 500 ||
-    text.includes("timeout") ||
-    text.includes("temporar") ||
-    text.includes("network");
+function resolveAttemptProvider({ attempt = {}, thread = {}, message = {} } = {}) {
+  const explicit =
+    s(attempt?.provider || attempt?.delivery_provider).toLowerCase() ||
+    s(message?.provider).toLowerCase() ||
+    s(thread?.provider).toLowerCase();
+
+  if (explicit) return explicit;
+  if (s(attempt?.channel || thread?.channel).toLowerCase() === "telegram") {
+    return TELEGRAM_PROVIDER;
+  }
+  return META_PROVIDER;
+}
+
+function resolveRecipientId({ attempt = {}, thread = {}, message = {} } = {}) {
+  const messageMeta = obj(message?.meta);
+  return (
+    s(attempt?.recipient_id) ||
+    s(messageMeta?.recipientId) ||
+    s(messageMeta?.recipient_id) ||
+    s(messageMeta?.chatId) ||
+    s(messageMeta?.chat_id) ||
+    s(thread?.external_thread_id) ||
+    s(thread?.external_user_id) ||
+    ""
+  );
+}
+
+function classifyDeliveryFailure({ provider = "", delivery = {} } = {}) {
+  try {
+    if (provider === TELEGRAM_PROVIDER) {
+      const failure = classifyTelegramDeliveryFailure(delivery);
+      return {
+        retryable: Boolean(failure?.retryable),
+        status: Number(failure?.status ?? delivery?.status ?? 0),
+        errorCode: s(
+          failure?.errorCode || delivery?.reasonCode || "telegram_delivery_failed"
+        ),
+        errorMessage: s(failure?.errorMessage || delivery?.error || "telegram send failed"),
+        classification: s(failure?.classification || "telegram_delivery_failure"),
+      };
+    }
+
+    const failure = classifyMetaGatewayFailure(delivery);
+    return {
+      retryable: Boolean(failure?.retryable),
+      status: Number(failure?.status ?? delivery?.status ?? 0),
+      errorCode: s(
+        failure?.errorCode || delivery?.reasonCode || String(delivery?.status || "")
+      ),
+      errorMessage: s(failure?.errorMessage || delivery?.error || "gateway send failed"),
+      classification: s(failure?.classification || "meta_gateway_failure"),
+    };
+  } catch {
+    const status = Number(delivery?.status || 0);
+    const reasonCode = s(delivery?.reasonCode || "delivery_failed");
+    const errorMessage = s(delivery?.error || "delivery failed");
+    const retryable =
+      status === 0 ||
+      status === 429 ||
+      status >= 500 ||
+      reasonCode === "telegram_rate_limited" ||
+      reasonCode === "telegram_request_timeout" ||
+      reasonCode === "telegram_network_error" ||
+      reasonCode === "telegram_upstream_unavailable";
+
+    return {
+      retryable,
+      status,
+      errorCode: reasonCode,
+      errorMessage,
+      classification: "delivery_failure",
+    };
+  }
+}
+
+function buildLegacyOutboundPayload({
+  attempt = {},
+  thread = {},
+  message = {},
+  provider = META_PROVIDER,
+  defaultTenantKey = "default",
+} = {}) {
+  const tenantKey =
+    attempt?.tenant_key || message?.tenant_key || s(defaultTenantKey || "default");
+  const channel = attempt?.channel || thread?.channel || "instagram";
+  const recipientId = resolveRecipientId({ attempt, thread, message });
 
   return {
-    retryable,
-    status,
-    reason: retryable ? "retryable_gateway_failure" : "terminal_gateway_failure",
+    tenantKey,
+    provider,
+    channel,
+    threadId: attempt?.thread_id,
+    recipientId,
+    text: message?.text || "",
+    senderType: message?.sender_type || "ai",
+    messageType: message?.message_type || "text",
+    attachments: Array.isArray(message?.attachments) ? message.attachments : [],
+    meta: {
+      ...(message?.meta && typeof message.meta === "object" ? message.meta : {}),
+      skipOutboundAck: true,
+      internalOutbound: true,
+      alreadyTrackedInAiHq: true,
+      resendAttemptId: attempt?.id,
+      threadId: attempt?.thread_id,
+      tenantKey,
+      worker: "outbound_retry",
+      provider,
+    },
   };
 }
 
-async function processAttempt({ db, wsHub, attempt }) {
+async function processAttempt({ db, wsHub, attempt, workerCfg }) {
   if (!attempt?.id) return;
+
   const logger = createLogger({
     service: "ai-hq-backend",
     component: "outbound-retry-worker",
@@ -116,6 +221,7 @@ async function processAttempt({ db, wsHub, attempt }) {
     return;
   }
 
+  const provider = resolveAttemptProvider({ attempt, thread, message });
   const sending = await markOutboundAttemptSending(db, attempt.id);
   if (!sending?.id) return;
 
@@ -128,56 +234,50 @@ async function processAttempt({ db, wsHub, attempt }) {
     });
   } catch {}
 
-  const payload = {
-    tenantKey:
-      attempt.tenant_key ||
-      message.tenant_key ||
-      s(cfg?.tenant?.defaultTenantKey || "default"),
-    channel: attempt.channel || thread.channel || "instagram",
-    threadId: attempt.thread_id,
-    recipientId:
-      attempt.recipient_id ||
-      message?.meta?.recipientId ||
-      thread.external_user_id ||
-      "",
-    text: message.text || "",
-    senderType: message.sender_type || "ai",
-    messageType: message.message_type || "text",
-    attachments: Array.isArray(message.attachments) ? message.attachments : [],
-    meta: {
-      ...(message?.meta && typeof message.meta === "object" ? message.meta : {}),
-      skipOutboundAck: true,
-      internalOutbound: true,
-      alreadyTrackedInAiHq: true,
-      resendAttemptId: attempt.id,
-      threadId: attempt.thread_id,
-      tenantKey: attempt.tenant_key || message.tenant_key || "",
-      worker: "outbound_retry",
+  const payload = buildLegacyOutboundPayload({
+    attempt,
+    thread,
+    message,
+    provider,
+    defaultTenantKey: workerCfg?.defaultTenantKey,
+  });
+
+  const delivery = await deliverChannelOutbound({
+    db,
+    execution: {
+      provider,
+      tenant_id: thread?.tenant_id || message?.tenant_id || "",
+      tenant_key: attempt?.tenant_key || message?.tenant_key || "",
+      channel: attempt?.channel || thread?.channel || "",
+      thread_id: attempt?.thread_id || "",
+      message_id: attempt?.message_id || "",
     },
-  };
+    payload,
+    message,
+    thread,
+  });
 
-  const gateway = await sendOutboundViaMetaGateway(payload);
-  const checkedGateway = validateMetaGatewayOutboundResponse(gateway?.json || { ok: false });
+  if (!delivery.ok) {
+    const failure = classifyDeliveryFailure({ provider, delivery });
 
-  if (!gateway.ok || !checkedGateway.ok) {
-    const failure = classifyGatewayFailure(gateway);
     const failed = failure.retryable
       ? await markOutboundAttemptFailed({
           db,
           attemptId: attempt.id,
-          error: gateway.error || checkedGateway.error || "gateway send failed",
-          errorCode: String(gateway.status || ""),
-          providerResponse: gateway.json || {},
+          error: failure.errorMessage,
+          errorCode: failure.errorCode,
+          providerResponse: delivery.providerResponse || delivery.json || {},
           retryDelaySeconds: 120,
         })
       : await markOutboundAttemptDead(db, attempt.id);
+
     await updateOutboundMessageDeliveryFailure({
       db,
       messageId: message.id,
       status: failure.retryable ? "failed" : "dead",
-      error: gateway.error || checkedGateway.error || "gateway send failed",
-      errorCode: String(gateway.status || ""),
-      providerResponse: gateway.json || {},
+      error: failure.errorMessage,
+      errorCode: failure.errorCode,
+      providerResponse: delivery.providerResponse || delivery.json || {},
     });
 
     try {
@@ -187,20 +287,24 @@ async function processAttempt({ db, wsHub, attempt }) {
         objectType: "inbox_outbound_attempt",
         objectId: String(attempt.id),
         meta: {
+          provider,
           threadId: String(attempt.thread_id || ""),
           messageId: String(attempt.message_id || ""),
           status: String(failed?.status || ""),
-          gatewayStatus: Number(gateway?.status || 0),
-          error: String(gateway?.error || ""),
+          gatewayStatus: Number(delivery?.status || 0),
+          error: String(failure.errorMessage || ""),
+          errorCode: String(failure.errorCode || ""),
         },
       });
     } catch {}
 
     logger.warn("outbound_retry.attempt_failed", {
+      provider,
       status: failure.status,
       retryable: failure.retryable,
-      reason: failure.reason,
-      error: s(gateway?.error || checkedGateway.error || ""),
+      classification: failure.classification,
+      error: s(failure.errorMessage || ""),
+      errorCode: s(failure.errorCode || ""),
     });
 
     try {
@@ -215,17 +319,8 @@ async function processAttempt({ db, wsHub, attempt }) {
     return;
   }
 
-  const providerResult = gateway?.json?.result || gateway?.json || {};
-  const providerResponse =
-    providerResult?.response || providerResult?.json || providerResult || {};
-
-  const providerMessageId =
-    s(
-      providerResponse?.message_id ||
-        providerResponse?.messageId ||
-        providerResponse?.id ||
-        ""
-    ) || null;
+  const providerResponse = obj(delivery.providerResponse);
+  const providerMessageId = s(delivery.providerMessageId) || null;
 
   const sent = await markOutboundAttemptSent({
     db,
@@ -243,19 +338,22 @@ async function processAttempt({ db, wsHub, attempt }) {
 
   try {
     logger.info("outbound_retry.attempt_sent", {
+      provider,
       providerMessageId: s(providerMessageId),
-      gatewayStatus: Number(gateway?.status || 0),
+      providerStatus: Number(delivery?.status || 0),
     });
+
     await writeAudit(db, {
       actor: "system",
       action: "inbox.outbound.worker_sent",
       objectType: "inbox_outbound_attempt",
       objectId: String(attempt.id),
       meta: {
+        provider,
         threadId: String(attempt.thread_id || ""),
         messageId: String(attempt.message_id || ""),
         providerMessageId: String(providerMessageId || ""),
-        gatewayStatus: Number(gateway?.status || 0),
+        providerStatus: Number(delivery?.status || 0),
       },
     });
   } catch {}
@@ -269,25 +367,27 @@ async function processAttempt({ db, wsHub, attempt }) {
     });
   } catch {}
 
-    try {
-      const correlations = await listOutboundAttemptCorrelationsByMessageIds(
-        db,
-        [message.id],
-        { threadId: message.thread_id }
-      );
-      const correlatedMessage = withMessageOutboundAttemptCorrelation(
-        updatedMessage || message,
-        correlations.get(message.id) || null
-      );
-      emitRealtimeEvent(wsHub, {
-        type: "inbox.message.updated",
-        audience: "operator",
-        tenantKey:
-          correlatedMessage?.tenant_key || message?.tenant_key || attempt?.tenant_key,
-        threadId: String(correlatedMessage?.thread_id || message.thread_id || ""),
-        message: correlatedMessage,
-      });
-    } catch {}
+  try {
+    const correlations = await listOutboundAttemptCorrelationsByMessageIds(
+      db,
+      [message.id],
+      { threadId: message.thread_id }
+    );
+    const correlatedMessage = withMessageOutboundAttemptCorrelation(
+      updatedMessage || message,
+      correlations.get(message.id) || null
+    );
+    emitRealtimeEvent(wsHub, {
+      type: "inbox.message.updated",
+      audience: "operator",
+      tenantKey:
+        correlatedMessage?.tenant_key ||
+        message?.tenant_key ||
+        attempt?.tenant_key,
+      threadId: String(correlatedMessage?.thread_id || message.thread_id || ""),
+      message: correlatedMessage,
+    });
+  } catch {}
 }
 
 export function startOutboundRetryWorker({ db, wsHub }) {
@@ -322,6 +422,7 @@ export function startOutboundRetryWorker({ db, wsHub }) {
 
   const tick = async () => {
     if (stopped || running) return;
+
     running = true;
     lastHeartbeatAt = new Date().toISOString();
     touchWorkerHeartbeat("outbound-retry-worker", getState());
@@ -333,7 +434,7 @@ export function startOutboundRetryWorker({ db, wsHub }) {
         if (stopped) break;
 
         try {
-          await processAttempt({ db, wsHub, attempt });
+          await processAttempt({ db, wsHub, attempt, workerCfg });
           lastCompletedAt = new Date().toISOString();
           lastOutcome = "processed";
           lastHeartbeatAt = lastCompletedAt;
@@ -378,6 +479,7 @@ export function startOutboundRetryWorker({ db, wsHub }) {
       running = false;
       lastHeartbeatAt = new Date().toISOString();
       touchWorkerHeartbeat("outbound-retry-worker", getState());
+
       if (!stopped && started) {
         timer = setTimeout(tick, workerCfg.intervalMs);
       }
@@ -398,6 +500,7 @@ export function startOutboundRetryWorker({ db, wsHub }) {
       startedAt = new Date().toISOString();
       lastHeartbeatAt = startedAt;
       timer = setTimeout(tick, workerCfg.intervalMs);
+
       markWorkerStarted("outbound-retry-worker", getState());
       logger.info("outbound_retry.worker.started", {
         intervalMs: workerCfg.intervalMs,

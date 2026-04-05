@@ -22,6 +22,36 @@ import {
   getTelegramStatus,
 } from "./telegram.js";
 
+function respondRouteError(res, err, fallbackMessage, extra = {}) {
+  const status = Number(err?.status || 500);
+
+  if (status === 401) {
+    return unauth(res, err?.message || "Unauthorized", extra);
+  }
+
+  if (status === 400) {
+    return bad(res, err?.message || "Bad request", extra);
+  }
+
+  if (status === 403) {
+    return res.status(403).json({
+      ok: false,
+      error: err?.message || "Forbidden",
+      ...extra,
+    });
+  }
+
+  if (status === 409) {
+    return res.status(409).json({
+      ok: false,
+      error: err?.message || "Conflict",
+      ...extra,
+    });
+  }
+
+  return serverErr(res, err?.message || fallbackMessage, extra);
+}
+
 export function channelConnectRoutes({ db }) {
   const r = express.Router();
 
@@ -30,15 +60,10 @@ export function channelConnectRoutes({ db }) {
       const url = await buildMetaOAuthUrl({ db, req });
       return ok(res, { url });
     } catch (err) {
-      const status = Number(err?.status || 500);
-      if (status === 401) return unauth(res, err?.message || "Unauthorized");
-      if (status === 403) {
-        return res.status(403).json({ ok: false, error: err?.message || "Forbidden" });
-      }
-      if (status === 400) return bad(res, err?.message || "Bad request");
-      return serverErr(
+      return respondRouteError(
         res,
-        err?.message || "Failed to build Meta connect URL"
+        err,
+        "Failed to build Meta connect URL"
       );
     }
   });
@@ -48,13 +73,7 @@ export function channelConnectRoutes({ db }) {
       const url = await buildMetaOAuthUrl({ db, req });
       return res.redirect(url);
     } catch (err) {
-      const status = Number(err?.status || 500);
-      if (status === 401) return unauth(res, err?.message || "Unauthorized");
-      if (status === 403) {
-        return res.status(403).json({ ok: false, error: err?.message || "Forbidden" });
-      }
-      if (status === 400) return bad(res, err?.message || "Bad request");
-      return serverErr(res, err?.message || "Failed to start Meta connect");
+      return respondRouteError(res, err, "Failed to start Meta connect");
     }
   });
 
@@ -77,7 +96,15 @@ export function channelConnectRoutes({ db }) {
       });
 
       if (redirectUrl) return res.redirect(redirectUrl);
-      return serverErr(res, err?.message || "Failed to complete Meta connect");
+
+      return respondRouteError(
+        res,
+        err,
+        "Failed to complete Meta connect",
+        {
+          reasonCode: err?.reasonCode || null,
+        }
+      );
     }
   });
 
@@ -86,13 +113,11 @@ export function channelConnectRoutes({ db }) {
       const payload = await completeMetaSelection({ db, req });
       return ok(res, payload);
     } catch (err) {
-      const status = Number(err?.status || 500);
-      if (status === 401) return unauth(res, err?.message || "Unauthorized");
-      if (status === 400) return bad(res, err?.message || "Bad request");
-      if (status === 409) {
-        return res.status(409).json({ ok: false, error: err?.message || "Conflict" });
-      }
-      return serverErr(res, err?.message || "Failed to complete Meta selection");
+      return respondRouteError(
+        res,
+        err,
+        "Failed to complete Meta selection"
+      );
     }
   });
 
@@ -101,10 +126,7 @@ export function channelConnectRoutes({ db }) {
       const payload = await getMetaStatus({ db, req });
       return ok(res, payload);
     } catch (err) {
-      const status = Number(err?.status || 500);
-      if (status === 401) return unauth(res, err?.message || "Unauthorized");
-      if (status === 400) return bad(res, err?.message || "Bad request");
-      return serverErr(res, err?.message || "Failed to load Meta status");
+      return respondRouteError(res, err, "Failed to load Meta status");
     }
   });
 
@@ -113,10 +135,7 @@ export function channelConnectRoutes({ db }) {
       const payload = await disconnectMeta({ db, req });
       return ok(res, payload);
     } catch (err) {
-      const status = Number(err?.status || 500);
-      if (status === 401) return unauth(res, err?.message || "Unauthorized");
-      if (status === 400) return bad(res, err?.message || "Bad request");
-      return serverErr(res, err?.message || "Failed to disconnect Meta");
+      return respondRouteError(res, err, "Failed to disconnect Meta");
     }
   });
 
@@ -125,17 +144,7 @@ export function channelConnectRoutes({ db }) {
       const payload = await connectTelegram({ db, req });
       return ok(res, payload);
     } catch (err) {
-      const status = Number(err?.status || 500);
-      if (status === 401) return unauth(res, err?.message || "Unauthorized");
-      if (status === 400) return bad(res, err?.message || "Bad request");
-      if (status === 409) {
-        return res.status(409).json({
-          ok: false,
-          error: err?.message || "Conflict",
-          reasonCode: err?.reasonCode || null,
-        });
-      }
-      return serverErr(res, err?.message || "Failed to connect Telegram", {
+      return respondRouteError(res, err, "Failed to connect Telegram", {
         reasonCode: err?.reasonCode || null,
       });
     }
@@ -146,10 +155,9 @@ export function channelConnectRoutes({ db }) {
       const payload = await getTelegramStatus({ db, req });
       return ok(res, payload);
     } catch (err) {
-      const status = Number(err?.status || 500);
-      if (status === 401) return unauth(res, err?.message || "Unauthorized");
-      if (status === 400) return bad(res, err?.message || "Bad request");
-      return serverErr(res, err?.message || "Failed to load Telegram status");
+      return respondRouteError(res, err, "Failed to load Telegram status", {
+        reasonCode: err?.reasonCode || null,
+      });
     }
   });
 
@@ -161,12 +169,13 @@ export function channelConnectRoutes({ db }) {
         const payload = await disconnectTelegram({ db, req });
         return ok(res, payload);
       } catch (err) {
-        const status = Number(err?.status || 500);
-        if (status === 401) return unauth(res, err?.message || "Unauthorized");
-        if (status === 400) return bad(res, err?.message || "Bad request");
-        return serverErr(
+        return respondRouteError(
           res,
-          err?.message || "Failed to disconnect Telegram"
+          err,
+          "Failed to disconnect Telegram",
+          {
+            reasonCode: err?.reasonCode || null,
+          }
         );
       }
     }

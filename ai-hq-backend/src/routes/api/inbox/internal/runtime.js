@@ -5,31 +5,50 @@ import {
 import { buildExecutionPolicySurfaceSummary } from "../../../../services/executionPolicy.js";
 import { s } from "../shared.js";
 
-export function buildRuntimePayload(runtimePack) {
-  const serviceCatalog = Array.isArray(runtimePack?.serviceCatalog)
-    ? runtimePack.serviceCatalog
-    : Array.isArray(runtimePack?.servicesDetailed)
-      ? runtimePack.servicesDetailed
-      : [];
+function arr(v) {
+  return Array.isArray(v) ? v : [];
+}
 
-  const services = Array.isArray(runtimePack?.services)
+function resolveRuntimeChannelType(runtimePack = {}, explicitChannelType = "") {
+  return (
+    s(explicitChannelType) ||
+    s(runtimePack?.channelType) ||
+    s(runtimePack?.threadState?.channelType) ||
+    s(runtimePack?.threadState?.channel) ||
+    s(runtimePack?.thread_state?.channelType) ||
+    s(runtimePack?.thread_state?.channel) ||
+    "inbox"
+  )
+    .toLowerCase()
+    .trim();
+}
+
+export function buildRuntimePayload(runtimePack, options = {}) {
+  const channelType = resolveRuntimeChannelType(
+    runtimePack,
+    options?.channelType
+  );
+
+  const serviceCatalog = arr(runtimePack?.serviceCatalog).length
+    ? runtimePack.serviceCatalog
+    : arr(runtimePack?.servicesDetailed);
+
+  const services = arr(runtimePack?.services).length
     ? runtimePack.services
     : serviceCatalog
         .map((item) => s(item?.title || item?.name || item?.service_key || item))
         .filter(Boolean);
 
-  const disabledServices = Array.isArray(runtimePack?.disabledServices)
+  const disabledServices = arr(runtimePack?.disabledServices).length
     ? runtimePack.disabledServices
     : serviceCatalog
         .filter(
           (item) =>
             item &&
-            (
-              item.enabled === false ||
+            (item.enabled === false ||
               item.active === false ||
               item.visible_in_ai === false ||
-              item.visibleInAi === false
-            )
+              item.visibleInAi === false)
         )
         .map((item) => s(item?.title || item?.name || item?.service_key || ""))
         .filter(Boolean);
@@ -39,8 +58,9 @@ export function buildRuntimePayload(runtimePack) {
       inbox: buildExecutionPolicySurfaceSummary({
         runtime: runtimePack,
         surface: "inbox",
-        channelType: "inbox",
-        currentState: runtimePack?.threadState || runtimePack?.thread_state || null,
+        channelType,
+        currentState:
+          runtimePack?.threadState || runtimePack?.thread_state || null,
       }),
       comments: buildExecutionPolicySurfaceSummary({
         runtime: runtimePack,
@@ -54,16 +74,13 @@ export function buildRuntimePayload(runtimePack) {
       }),
     },
     ...runtimePack,
+    channelType,
     tenant: runtimePack?.tenant || null,
     serviceCatalog,
     services,
     disabledServices,
-    knowledgeEntries: Array.isArray(runtimePack?.knowledgeEntries)
-      ? runtimePack.knowledgeEntries
-      : [],
-    responsePlaybooks: Array.isArray(runtimePack?.responsePlaybooks)
-      ? runtimePack.responsePlaybooks
-      : [],
+    knowledgeEntries: arr(runtimePack?.knowledgeEntries),
+    responsePlaybooks: arr(runtimePack?.responsePlaybooks),
     aiPolicy:
       runtimePack?.aiPolicy ||
       runtimePack?.ai_policy ||
@@ -94,21 +111,16 @@ export function buildRuntimePayload(runtimePack) {
       s(runtimePack?.preferredCta) ||
       s(runtimePack?.tenant?.profile?.preferred_cta) ||
       "",
-    bannedPhrases: Array.isArray(runtimePack?.bannedPhrases)
+    bannedPhrases: arr(runtimePack?.bannedPhrases).length
       ? runtimePack.bannedPhrases
-      : Array.isArray(runtimePack?.forbiddenClaims)
-        ? runtimePack.forbiddenClaims
-        : [],
+      : arr(runtimePack?.forbiddenClaims),
     language:
       s(runtimePack?.language) ||
       s(runtimePack?.defaultLanguage) ||
       s(runtimePack?.outputLanguage) ||
       s(runtimePack?.tenant?.default_language) ||
       "az",
-    threadState:
-      runtimePack?.threadState ||
-      runtimePack?.thread_state ||
-      null,
+    threadState: runtimePack?.threadState || runtimePack?.thread_state || null,
     raw: runtimePack?.raw || {},
   };
 }
@@ -119,6 +131,7 @@ export async function loadStrictInboxRuntime({
   tenantKey,
   threadState,
   service,
+  channelType = "",
 }) {
   try {
     const runtimePack = await getRuntime({
@@ -129,6 +142,7 @@ export async function loadStrictInboxRuntime({
     });
 
     const tenant = runtimePack?.tenant || null;
+
     if (!tenant?.id && !tenant?.tenant_key) {
       return {
         ok: false,
@@ -149,11 +163,20 @@ export async function loadStrictInboxRuntime({
       ok: true,
       tenant,
       runtimePack,
-      runtime: buildRuntimePayload({
-        ...runtimePack,
-        tenant,
-        threadState: threadState || runtimePack?.threadState || null,
-      }),
+      runtime: buildRuntimePayload(
+        {
+          ...runtimePack,
+          tenant,
+          threadState: threadState || runtimePack?.threadState || null,
+          channelType:
+            s(channelType) ||
+            s(runtimePack?.channelType) ||
+            s(runtimePack?.threadState?.channelType) ||
+            s(runtimePack?.threadState?.channel) ||
+            "",
+        },
+        { channelType }
+      ),
     };
   } catch (error) {
     if (isRuntimeAuthorityError(error)) {

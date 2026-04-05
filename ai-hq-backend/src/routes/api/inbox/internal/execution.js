@@ -1,7 +1,12 @@
-import { enqueueMetaOutboundExecution } from "../../../../services/durableExecutionService.js";
+import {
+  enqueueChannelOutboundExecution,
+} from "../../../../services/durableExecutionService.js";
 import { createOutboundAttempt } from "../repository.js";
 import { normalizeMessage, s } from "../shared.js";
 import { lower, normalizeArr, normalizeObj, nowIso } from "./shared.js";
+
+const META_PROVIDER = "meta";
+const TELEGRAM_PROVIDER = "telegram";
 
 const STORED_INBOX_MESSAGE_TYPES = new Set([
   "text",
@@ -37,20 +42,45 @@ export function normalizeInboxMessageType(value, fallback = "text") {
   if (["attachment", "attachments", "doc"].includes(x)) return "file";
   if (["voice_note", "voice-message", "voice_message"].includes(x)) return "voice";
   if (["story-reply", "storyreply"].includes(x)) return "story_reply";
-  if (["template", "template_message", "template-message", "quick_reply", "quick-reply", "carousel", "list"].includes(x)) {
+  if (
+    [
+      "template",
+      "template_message",
+      "template-message",
+      "quick_reply",
+      "quick-reply",
+      "carousel",
+      "list",
+    ].includes(x)
+  ) {
     return "interactive";
   }
   if (isControlMessageType(x)) return "system";
   if (["typing", "typing_start", "typing-start", "typingon", "typing-on"].includes(x)) {
     return "system";
   }
-  if (["typing_stop", "typing-stop", "typingoff", "typing-off", "seen", "read", "markseen", "mark-seen"].includes(x)) {
+  if (
+    ["typing_stop", "typing-stop", "typingoff", "typing-off", "seen", "read", "markseen", "mark-seen"].includes(
+      x
+    )
+  ) {
     return "system";
   }
   if (["unknown", "unsupported"].includes(x)) {
     return STORED_INBOX_MESSAGE_TYPES.has(fb) ? fb : "other";
   }
   return STORED_INBOX_MESSAGE_TYPES.has(fb) ? fb : "text";
+}
+
+function resolveExecutionProvider({ provider = "", channel = "", action = {} } = {}) {
+  const explicit =
+    lower(provider) ||
+    lower(action?.provider) ||
+    lower(action?.meta?.provider);
+
+  if (explicit) return explicit;
+  if (lower(channel) === TELEGRAM_PROVIDER) return TELEGRAM_PROVIDER;
+  return META_PROVIDER;
 }
 
 export function supportedExecutionAction(action = {}) {
@@ -60,27 +90,30 @@ export function supportedExecutionAction(action = {}) {
 
 export function mapActionToMessageType(action = {}) {
   const type = lower(action?.type);
+
   if (type === "send_message") {
-    return lower(action?.messageType || action?.meta?.messageType || "text") || "text";
+    return lower(action?.messageType || action?.message_type || action?.meta?.messageType || "text") || "text";
   }
   if (type === "typing_on") return "typing_on";
   if (type === "typing_off") return "typing_off";
   if (type === "mark_seen") return "mark_seen";
+
   return "text";
 }
 
 export function mapActionToSenderType(action = {}) {
   const type = lower(action?.type);
   if (type === "send_message") {
-    return lower(action?.senderType || action?.meta?.senderType || "ai") || "ai";
+    return lower(action?.senderType || action?.sender_type || action?.meta?.senderType || "ai") || "ai";
   }
-  return lower(action?.senderType || action?.meta?.senderType || "system") || "system";
+  return lower(action?.senderType || action?.sender_type || action?.meta?.senderType || "system") || "system";
 }
 
 export function buildOutboundAttemptPayload({
   threadId,
   tenantKey,
   channel,
+  provider,
   recipientId,
   senderType,
   messageType,
@@ -98,6 +131,7 @@ export function buildOutboundAttemptPayload({
   return {
     threadId: s(threadId || ""),
     tenantKey: s(tenantKey || ""),
+    provider: lower(provider || META_PROVIDER) || META_PROVIDER,
     channel: s(channel || "instagram").toLowerCase() || "instagram",
     recipientId: s(recipientId || "") || null,
     senderType: s(senderType || "ai").toLowerCase() || "ai",
@@ -123,26 +157,28 @@ export async function persistOutboundMessage({
   text = "",
   attachments = [],
   meta = {},
-  provider = "meta",
+  provider = "",
   maxAttempts = 5,
   enqueueExecution = true,
   createAttempt = createOutboundAttempt,
-  enqueueOutboundExecution = enqueueMetaOutboundExecution,
+  enqueueOutboundExecution = enqueueChannelOutboundExecution,
 }) {
+  const resolvedProvider = resolveExecutionProvider({ provider, channel });
   const messageType = normalizeInboxMessageType(
     storageMessageType || requestedMessageType || "text",
     "text"
   );
   const deliveryStatus = externalMessageId ? "sent" : "pending";
+
   const mergedMeta = {
     ...normalizeObj(meta),
     recipientId,
-    provider,
+    provider: resolvedProvider,
     originalMessageType: requestedMessageType,
     storageMessageType: messageType,
     delivery: {
       status: deliveryStatus,
-      provider,
+      provider: resolvedProvider,
       pending: !externalMessageId,
       failed: false,
       providerMessageId: s(externalMessageId || "") || null,
@@ -220,6 +256,7 @@ export async function persistOutboundMessage({
     threadId: thread.id,
     tenantKey,
     channel,
+    provider: resolvedProvider,
     recipientId,
     senderType,
     messageType: requestedMessageType,
@@ -235,7 +272,7 @@ export async function persistOutboundMessage({
     threadId: thread.id,
     tenantKey,
     channel,
-    provider,
+    provider: resolvedProvider,
     recipientId,
     payload: attemptPayload,
     status: externalMessageId ? "sent" : "queued",
@@ -249,11 +286,12 @@ export async function persistOutboundMessage({
       tenantId,
       tenantKey,
       channel,
-      provider,
+      provider: resolvedProvider,
       threadId: thread.id,
       messageId: message.id,
       payload: attemptPayload,
       safeMetadata: {
+        provider: resolvedProvider,
         inboxOutboundAttemptId: s(attempt?.id),
         threadId: thread.id,
         messageId: message.id,
@@ -273,6 +311,7 @@ export async function persistOutboundMessage({
     attempt,
     mergedMeta,
     messageType,
+    provider: resolvedProvider,
   };
 }
 
@@ -283,14 +322,21 @@ export async function queueOutboundAction({
   tenantKey,
   channel,
   action,
-  provider = "meta",
+  provider = "",
   createAttempt,
   enqueueOutboundExecution,
 }) {
   if (!client || !thread?.id || !supportedExecutionAction(action)) return null;
 
   const actionType = lower(action?.type);
-  const recipientId = s(action?.recipientId || thread?.external_user_id || "") || null;
+  const resolvedProvider = resolveExecutionProvider({
+    provider,
+    channel,
+    action,
+  });
+  const recipientId =
+    s(action?.recipientId || action?.recipient_id || thread?.external_user_id || thread?.external_thread_id || "") ||
+    null;
   const senderType = mapActionToSenderType(action);
   const requestedMessageType = mapActionToMessageType(action);
   const text = actionType === "send_message" ? s(action?.text || "") : "";
@@ -300,6 +346,7 @@ export async function queueOutboundAction({
       : [];
   const meta = {
     ...normalizeObj(action?.meta),
+    provider: resolvedProvider,
     actionType,
     internalExecution: true,
   };
@@ -316,7 +363,7 @@ export async function queueOutboundAction({
     text,
     attachments,
     meta,
-    provider,
+    provider: resolvedProvider,
     maxAttempts: 5,
     enqueueExecution: true,
     createAttempt,
@@ -325,6 +372,7 @@ export async function queueOutboundAction({
 
   return {
     actionType,
+    provider: resolvedProvider,
     message: delivery.message,
     attempt: delivery.attempt,
   };
@@ -336,6 +384,7 @@ export async function queueExecutionActions({
   tenantId,
   tenantKey,
   channel,
+  provider = "",
   actions,
   createAttempt,
   enqueueOutboundExecution,
@@ -344,6 +393,7 @@ export async function queueExecutionActions({
 
   for (const action of normalizeArr(actions)) {
     if (!supportedExecutionAction(action)) continue;
+
     const queued = await queueOutboundAction({
       client,
       thread,
@@ -351,9 +401,11 @@ export async function queueExecutionActions({
       tenantKey,
       channel,
       action,
+      provider,
       createAttempt,
       enqueueOutboundExecution,
     });
+
     if (queued) results.push(queued);
   }
 
