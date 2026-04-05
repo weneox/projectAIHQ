@@ -19,7 +19,6 @@ Why:
 
 Requested for DM-first launch:
 - `pages_show_list`
-- `pages_manage_metadata`
 - `instagram_basic`
 - `instagram_manage_messages`
 

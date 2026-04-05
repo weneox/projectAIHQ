@@ -26,6 +26,12 @@ vi.mock("../../api/channelConnect.js", () => ({
 
 import ChannelCatalog from "../../pages/ChannelCatalog.jsx";
 
+const DM_FIRST_REQUESTED_SCOPES = [
+  "pages_show_list",
+  "instagram_basic",
+  "instagram_manage_messages",
+];
+
 function renderCatalog(initialEntries = ["/channels"]) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -64,12 +70,7 @@ beforeEach(() => {
     review: {
       story:
         "Businesses connect their own Instagram Business / Professional account and the platform helps them manage inbound customer conversations using tenant-specific business settings and runtime.",
-      requestedScopes: [
-        "pages_show_list",
-        "pages_manage_metadata",
-        "instagram_basic",
-        "instagram_manage_messages",
-      ],
+      requestedScopes: DM_FIRST_REQUESTED_SCOPES,
       excludedScopes: [
         "business_management",
         "instagram_manage_comments",
@@ -120,14 +121,12 @@ describe("ChannelCatalog", () => {
     expect(screen.getAllByText("Phase 2").length).toBeGreaterThan(0);
   });
 
-  it("filters connectors by search query", () => {
+  it("filters connectors by active group tab", () => {
     renderCatalog();
 
-    fireEvent.change(screen.getByPlaceholderText("Search connector or use case"), {
-      target: { value: "telegram" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: /business/i }));
 
-    expect(screen.getByText("Telegram")).toBeInTheDocument();
+    expect(screen.getByText("Gmail")).toBeInTheDocument();
     expect(screen.queryByText("Instagram")).not.toBeInTheDocument();
   });
 
@@ -177,12 +176,7 @@ describe("ChannelCatalog", () => {
       review: {
         story:
           "Businesses connect their own Instagram Business / Professional account and the platform helps them manage inbound customer conversations using tenant-specific business settings and runtime.",
-        requestedScopes: [
-          "pages_show_list",
-          "pages_manage_metadata",
-          "instagram_basic",
-          "instagram_manage_messages",
-        ],
+        requestedScopes: DM_FIRST_REQUESTED_SCOPES,
         excludedScopes: [
           "business_management",
           "instagram_manage_comments",
@@ -209,7 +203,7 @@ describe("ChannelCatalog", () => {
     expect(
       await screen.findByText("The stored Meta user token has expired.")
     ).toBeInTheDocument();
-    expect(screen.getByText("User token status:")).toBeInTheDocument();
+    expect(screen.getByText("User token status")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reconnect" })).toBeInTheDocument();
   });
 
@@ -227,12 +221,7 @@ describe("ChannelCatalog", () => {
       review: {
         story:
           "Businesses connect their own Instagram Business / Professional account and the platform helps them manage inbound customer conversations using tenant-specific business settings and runtime.",
-        requestedScopes: [
-          "pages_show_list",
-          "pages_manage_metadata",
-          "instagram_basic",
-          "instagram_manage_messages",
-        ],
+        requestedScopes: DM_FIRST_REQUESTED_SCOPES,
         excludedScopes: [
           "business_management",
           "instagram_manage_comments",

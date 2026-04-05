@@ -16,6 +16,7 @@ const tenantSecretsModule = await import("../src/db/helpers/tenantSecrets.js");
 
 const {
   META_DM_LAUNCH_SCOPES,
+  buildMetaOAuthUrl,
   buildInstagramLifecycleChannelPayload,
   completeMetaSelection,
   disconnectMeta,
@@ -338,11 +339,27 @@ async function invokeSingleAccountCallback(
 test("dm-first launch scopes drop business-management assumptions", () => {
   assert.deepEqual(META_DM_LAUNCH_SCOPES, [
     "pages_show_list",
-    "pages_manage_metadata",
     "instagram_basic",
     "instagram_manage_messages",
   ]);
   assert.equal(META_DM_LAUNCH_SCOPES.includes("business_management"), false);
+});
+
+test("oauth connect url requests only the live DM-first Meta scopes", async () => {
+  const db = new FakeChannelConnectDb();
+
+  const url = await buildMetaOAuthUrl({
+    db,
+    req: {
+      auth: buildAuth(),
+    },
+  });
+
+  const parsed = new URL(url);
+  assert.equal(
+    parsed.searchParams.get("scope"),
+    META_DM_LAUNCH_SCOPES.join(",")
+  );
 });
 
 test("instagram lifecycle patch preserves reconnect metadata while clearing live runtime identifiers", () => {
