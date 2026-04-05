@@ -120,7 +120,7 @@ describe("ChannelCatalog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open Instagram" }));
 
     expect(await screen.findByText("Review-aligned permission model")).toBeInTheDocument();
-    expect(screen.getByText("instagram_manage_messages")).toBeInTheDocument();
+    expect(await screen.findByText("instagram_manage_messages")).toBeInTheDocument();
     expect(screen.getByText("Instagram is connected for this tenant.")).toBeInTheDocument();
   });
 
@@ -201,10 +201,13 @@ describe("ChannelCatalog", () => {
     );
 
     await waitFor(() =>
-      expect(selectMetaChannelCandidate).toHaveBeenCalledWith({
-        selectionToken: "selection-token-1",
-        candidateId: "page-2",
-      })
+      expect(selectMetaChannelCandidate).toHaveBeenCalledWith(
+        {
+          selectionToken: "selection-token-1",
+          candidateId: "page-2",
+        },
+        expect.anything()
+      )
     );
   });
 

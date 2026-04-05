@@ -172,7 +172,28 @@ class FakeChannelConnectDb {
       return { rows: [row] };
     }
 
+    if (sql.startsWith("delete from tenant_secrets")) {
+      const tenantId = String(values[0] || "").trim();
+      const provider = String(values[1] || "").trim().toLowerCase();
+      const secretKey = String(values[2] || "").trim().toLowerCase();
+      let deleted = 0;
+
+      for (const [mapKey, row] of this.secretRows.entries()) {
+        if (
+          row.tenant_id === tenantId &&
+          String(row.provider || "").trim().toLowerCase() === provider &&
+          String(row.secret_key || "").trim().toLowerCase() === secretKey
+        ) {
+          this.secretRows.delete(mapKey);
+          deleted += 1;
+        }
+      }
+
+      return { rowCount: deleted, rows: [] };
+    }
+
     if (
+      sql.startsWith("select") &&
       sql.includes("from tenant_secrets") &&
       sql.includes("where tenant_id = $1") &&
       sql.includes("provider = $2")
@@ -180,13 +201,6 @@ class FakeChannelConnectDb {
       return {
         rows: this._listSecretRows(values[0], values[1]),
       };
-    }
-
-    if (sql.startsWith("delete from tenant_secrets")) {
-      const deleted = this.secretRows.delete(
-        this._secretMapKey(values[0], values[1], values[2])
-      );
-      return { rowCount: deleted ? 1 : 0, rows: [] };
     }
 
     if (sql.includes("insert into audit_log")) {
@@ -417,5 +431,58 @@ test("disconnect clears a pending chooser session without fabricating a disconne
   });
 
   assert.equal(statusAfter.state, "not_connected");
+  assert.equal(statusAfter.pendingSelection, null);
+});
+
+test("canceling a pending chooser preserves an existing reconnect-required channel state", async () => {
+  const db = new FakeChannelConnectDb();
+  db.channel = {
+    id: "channel-1",
+    tenant_id: "tenant-1",
+    channel_type: "instagram",
+    provider: "meta",
+    display_name: "Instagram @acme",
+    external_account_id: "",
+    external_page_id: "",
+    external_user_id: "",
+    external_username: "",
+    status: "error",
+    is_primary: true,
+    config: {
+      disconnect_reason: "meta_app_deauthorized",
+    },
+    secrets_ref: null,
+    health: {
+      connection_state: "deauthorized",
+      disconnect_reason: "meta_app_deauthorized",
+      deauthorized_at: "2026-04-05T10:00:00.000Z",
+    },
+    last_sync_at: null,
+    created_at: "2026-04-05T00:00:00.000Z",
+    updated_at: "2026-04-05T00:00:00.000Z",
+  };
+
+  await seedPendingSelection(db);
+
+  const result = await disconnectMeta({
+    db,
+    req: {
+      auth: buildAuth(),
+    },
+  });
+
+  assert.equal(result.clearedPendingSelection, true);
+  assert.equal(result.preservedState, "error");
+  assert.equal(db.channel?.status, "error");
+  assert.equal(db.channel?.health?.connection_state, "deauthorized");
+
+  const statusAfter = await getMetaStatus({
+    db,
+    req: {
+      auth: buildAuth(),
+    },
+  });
+
+  assert.equal(statusAfter.state, "deauthorized");
   assert.equal(statusAfter.pendingSelection, null);
 });

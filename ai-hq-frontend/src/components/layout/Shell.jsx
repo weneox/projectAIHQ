@@ -134,7 +134,7 @@ export default function Shell() {
     : "px-5 py-5 md:px-6 md:py-6 xl:px-8 xl:py-7";
 
   const shellContentClass = immersive
-    ? "h-full w-full"
+    ? "h-full w-full overflow-hidden"
     : "mx-auto w-full max-w-shell-content";
 
   const loadShellStats = useCallback(async () => {
@@ -235,17 +235,27 @@ export default function Shell() {
         />
 
         <main
-          className={shellPaddingClass}
+          className={immersive ? "overflow-hidden" : shellPaddingClass}
           style={{
-            minHeight: `calc(100vh - ${SHELL_TOPBAR_HEIGHT}px)`,
+            height: immersive
+              ? `calc(100vh - ${SHELL_TOPBAR_HEIGHT}px)`
+              : "auto",
+            minHeight: immersive
+              ? `calc(100vh - ${SHELL_TOPBAR_HEIGHT}px)`
+              : `calc(100vh - ${SHELL_TOPBAR_HEIGHT}px)`,
           }}
         >
           <div className={shellContentClass}>
             {!immersive ? (
-              <SharedStatsNotice message={shellStats?.message} />
-            ) : null}
-
-            <Outlet />
+              <>
+                <SharedStatsNotice message={shellStats?.message} />
+                <div className={shellPaddingClass}>
+                  <Outlet />
+                </div>
+              </>
+            ) : (
+              <Outlet />
+            )}
           </div>
         </main>
 

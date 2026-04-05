@@ -39,22 +39,19 @@ function HeaderMenuRow({
       type="button"
       onClick={onClick}
       className={cx(
-        "flex w-full items-center gap-3 rounded-[14px] px-3 py-3 text-left transition",
+        "flex w-full items-center gap-3 rounded-[13px] px-3 py-3 text-left transition",
         danger
           ? "text-danger hover:bg-[rgba(var(--color-danger),0.06)]"
           : "text-text hover:bg-surface-muted"
       )}
     >
-      <div
+      <Icon
         className={cx(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px]",
-          danger
-            ? "bg-[rgba(var(--color-danger),0.08)] text-danger"
-            : "bg-[rgba(15,23,42,0.04)] text-text-subtle"
+          "h-[15px] w-[15px] shrink-0",
+          danger ? "text-danger" : "text-text-subtle"
         )}
-      >
-        <Icon className="h-[14px] w-[14px]" strokeWidth={1.9} />
-      </div>
+        strokeWidth={1.9}
+      />
 
       <div className="min-w-0 flex-1">
         <div
@@ -150,7 +147,7 @@ function WorkspaceControl({ notifications }) {
     <div className="w-[296px] rounded-[18px] border border-line-soft bg-surface p-2 shadow-[0_30px_60px_-36px_rgba(15,23,42,0.22)]">
       <div className="rounded-[15px] bg-surface-subtle px-3 py-3">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-brand text-[12px] font-semibold text-white">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand text-[12px] font-semibold text-white">
             {initials}
           </div>
 
@@ -164,7 +161,7 @@ function WorkspaceControl({ notifications }) {
           </div>
 
           {unread > 0 ? (
-            <div className="rounded-[9px] bg-surface px-2 py-1 text-[10px] font-semibold text-text">
+            <div className="text-[11px] font-semibold text-text-subtle">
               {unread > 99 ? "99+" : unread}
             </div>
           ) : null}
@@ -215,18 +212,18 @@ function WorkspaceControl({ notifications }) {
     >
       <button
         type="button"
-        className="group flex h-11 items-center gap-2 rounded-[14px] border border-line-soft bg-surface px-2.5 pr-3 transition hover:bg-surface-muted"
+        className="group flex items-center gap-2 rounded-[14px] px-2 py-1.5 transition hover:bg-surface-muted"
         aria-label={displayName}
       >
-        <div className="flex h-8 w-8 items-center justify-center rounded-[11px] bg-brand text-[11px] font-semibold text-white">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-[11px] font-semibold text-white">
           {initials}
         </div>
 
-        <div className="hidden min-w-0 md:block">
+        <div className="hidden min-w-0 text-left md:block">
           <div className="truncate text-[12px] font-semibold tracking-[-0.02em] text-text">
             {displayName}
           </div>
-          <div className="truncate text-[10px] uppercase tracking-[0.14em] text-text-subtle">
+          <div className="truncate text-[10px] text-text-subtle">
             {roleLabel}
           </div>
         </div>
@@ -267,7 +264,7 @@ export default function Header({
             <button
               type="button"
               onClick={onMenuClick}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] border border-line-soft bg-surface text-text-muted transition hover:bg-surface-muted hover:text-text md:hidden"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] text-text-muted transition hover:bg-surface-muted hover:text-text md:hidden"
               aria-label="Open navigation"
             >
               <Menu className="h-[15px] w-[15px]" strokeWidth={2} />
@@ -286,7 +283,7 @@ export default function Header({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <CommandMenu />
             <WorkspaceControl notifications={notifications} />
           </div>

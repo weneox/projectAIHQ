@@ -1557,7 +1557,10 @@ export async function disconnectMeta({ db, req }) {
     "ig_user_id",
   ]);
 
-  if (!currentChannel && pendingSelection?.selectionId) {
+  if (
+    pendingSelection?.selectionId &&
+    lower(currentChannel?.status) !== "connected"
+  ) {
     await auditSafe(
       db,
       actor,
@@ -1569,6 +1572,7 @@ export async function disconnectMeta({ db, req }) {
         selectionId: pendingSelection.selectionId,
         clearedAt: disconnectedAt,
         reasonCode: "user_disconnect",
+        preservedState: cleanNullable(currentChannel?.status),
       }
     );
 
@@ -1577,6 +1581,7 @@ export async function disconnectMeta({ db, req }) {
       clearedPendingSelection: true,
       channel: "instagram",
       disconnectedAt,
+      preservedState: cleanNullable(currentChannel?.status) || "not_connected",
       review: buildMetaReviewPayload(),
       capabilityGovernance: null,
     };

@@ -9,9 +9,9 @@ import {
   UTILITY_SECTIONS,
 } from "./shellNavigation.js";
 
-const SIDEBAR_WIDTH = 236;
-const MOBILE_DRAWER_WIDTH = 292;
-const SHELL_TOPBAR_HEIGHT = 68;
+const SIDEBAR_WIDTH = 226;
+const MOBILE_DRAWER_WIDTH = 286;
+const SHELL_TOPBAR_HEIGHT = 64;
 
 function formatBadgeCount(count) {
   if (typeof count !== "number" || count <= 0) return null;
@@ -23,16 +23,17 @@ function BrandBlock({ onNavigate }) {
     <NavLink
       to="/home"
       onClick={onNavigate}
-      className="block rounded-[18px] transition hover:bg-surface-subtle"
+      className="block rounded-[14px] px-2 py-2 transition hover:bg-surface-subtle"
       aria-label="AI HQ Home"
     >
-      <div className="flex items-center gap-3 px-3 py-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] bg-brand text-white shadow-[0_16px_28px_-22px_rgba(var(--color-brand),0.7)]">
-          <Building2 className="h-[18px] w-[18px]" strokeWidth={1.9} />
-        </div>
+      <div className="flex items-center gap-3">
+        <Building2
+          className="h-[18px] w-[18px] shrink-0 text-brand"
+          strokeWidth={1.9}
+        />
 
         <div className="min-w-0">
-          <div className="truncate text-[15px] font-semibold tracking-[-0.03em] text-text">
+          <div className="truncate text-[14px] font-semibold tracking-[-0.03em] text-text">
             AI HQ
           </div>
           <div className="mt-0.5 truncate text-[11px] text-text-subtle">
@@ -57,28 +58,22 @@ function NavItem({ item, shellStats = {}, onNavigate }) {
       {({ isActive }) => (
         <div
           className={cx(
-            "group flex h-12 items-center gap-3 rounded-[15px] px-3 transition-all duration-200 ease-premium",
+            "group flex h-11 items-center gap-3 rounded-[14px] px-3 transition-all duration-200 ease-premium",
             isActive
-              ? "bg-[rgba(var(--color-brand),0.08)] text-text ring-1 ring-[rgba(var(--color-brand),0.1)]"
+              ? "bg-brand text-white shadow-[0_18px_34px_-24px_rgba(var(--color-brand),0.72)]"
               : "text-text-muted hover:bg-surface-muted hover:text-text"
           )}
         >
-          <div
-            className={cx(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] transition-all duration-200",
-              isActive
-                ? "bg-brand text-white shadow-[0_16px_28px_-22px_rgba(var(--color-brand),0.72)]"
-                : "bg-[rgba(15,23,42,0.035)] text-text-subtle group-hover:bg-surface group-hover:text-text"
-            )}
-          >
-            <Icon className="h-[16px] w-[16px]" strokeWidth={1.9} />
-          </div>
+          <Icon
+            className="h-[18px] w-[18px] shrink-0"
+            strokeWidth={1.9}
+          />
 
           <div className="min-w-0 flex-1">
             <div
               className={cx(
                 "truncate text-[13.5px] tracking-[-0.02em]",
-                isActive ? "font-semibold text-text" : "font-medium"
+                isActive ? "font-semibold text-white" : "font-medium"
               )}
             >
               {item.label}
@@ -88,10 +83,8 @@ function NavItem({ item, shellStats = {}, onNavigate }) {
           {badgeCount ? (
             <div
               className={cx(
-                "min-w-[22px] rounded-[9px] px-1.5 py-1 text-center text-[10px] font-semibold leading-none",
-                isActive
-                  ? "bg-white text-brand"
-                  : "bg-surface text-text-subtle group-hover:text-text"
+                "min-w-[18px] text-right text-[11px] font-semibold leading-none",
+                isActive ? "text-white/88" : "text-text-subtle"
               )}
             >
               {badgeCount}
@@ -111,7 +104,7 @@ function NavItem({ item, shellStats = {}, onNavigate }) {
 
 function SidebarSection({ items, shellStats, onNavigate }) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       {items.map((item) => (
         <NavItem
           key={item.id}
