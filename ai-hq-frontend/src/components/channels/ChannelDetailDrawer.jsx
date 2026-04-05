@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, RefreshCw, ShieldAlert, X } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
@@ -6,6 +6,7 @@ import {
   disconnectMetaChannel,
   getMetaChannelStatus,
   getMetaConnectUrl,
+  selectMetaChannelCandidate,
 } from "../../api/channelConnect.js";
 import { cx } from "../../lib/cx.js";
 import ChannelIcon from "./ChannelIcon.jsx";
@@ -28,6 +29,14 @@ function isInstagramChannel(channel = {}) {
 }
 
 function buildInstagramStateCopy(status = {}) {
+  if (status?.pendingSelection?.required === true) {
+    return {
+      title: "Instagram account selection is required before this tenant can connect.",
+      body:
+        "Meta returned more than one eligible Instagram Business or Professional asset. The tenant stays unbound until one account is explicitly selected below.",
+    };
+  }
+
   switch (s(status?.state)) {
     case "connected":
       return {
@@ -100,6 +109,8 @@ function FeedbackBanner({ tone = "success", children }) {
         "rounded-[18px] border px-4 py-3 text-[13px] leading-6",
         tone === "danger"
           ? "border-[rgba(var(--color-danger),0.2)] bg-[rgba(var(--color-danger),0.08)] text-danger"
+          : tone === "warning"
+          ? "border-[rgba(var(--color-warning),0.22)] bg-[rgba(var(--color-warning),0.08)] text-warning"
           : "border-[rgba(var(--color-success),0.22)] bg-[rgba(var(--color-success),0.08)] text-success"
       )}
     >
@@ -135,6 +146,73 @@ function BlockerList({ items = [] }) {
   );
 }
 
+function PendingSelectionPanel({
+  pendingSelection = null,
+  isLoading = false,
+  selectingCandidateId = "",
+  onSelect,
+}) {
+  const candidates = arr(pendingSelection?.candidates);
+  if (pendingSelection?.required !== true || !candidates.length) return null;
+
+  return (
+    <section className="rounded-[22px] border border-line bg-surface px-4 py-4">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+        Account selection
+      </div>
+      <div className="mt-3 text-[18px] font-semibold tracking-[-0.04em] text-text">
+        Choose which Instagram Business account belongs to this tenant.
+      </div>
+      <p className="mt-3 text-[13px] leading-7 text-text-muted">
+        The tenant is still not connected. Final binding only happens after you choose one
+        account from the Meta callback results.
+      </p>
+      <div className="mt-4 space-y-3">
+        {candidates.map((candidate) => {
+          const isSelecting = selectingCandidateId === s(candidate?.id);
+
+          return (
+            <div
+              key={s(candidate?.id)}
+              className="rounded-[18px] border border-line bg-white px-4 py-4"
+            >
+              <div className="text-[15px] font-semibold text-text">
+                {s(candidate?.displayName, "Instagram")}
+              </div>
+              <div className="mt-2 space-y-1 text-[12px] leading-6 text-text-muted">
+                <div>
+                  <span className="font-semibold text-text">Page:</span>{" "}
+                  {s(candidate?.pageName, "Not available")}
+                </div>
+                <div>
+                  <span className="font-semibold text-text">Instagram handle:</span>{" "}
+                  {s(candidate?.igUsername, "Not available")}
+                </div>
+                <div>
+                  <span className="font-semibold text-text">Instagram user id:</span>{" "}
+                  {s(candidate?.igUserId, "Not available")}
+                </div>
+              </div>
+              <div className="mt-4">
+                <ChannelActionButton
+                  fullWidth
+                  showArrow={false}
+                  onClick={() => onSelect?.(candidate)}
+                  isLoading={isLoading && isSelecting}
+                  disabled={isLoading}
+                  ariaLabel={`Select ${s(candidate?.displayName, "Instagram")}`}
+                >
+                  Select this account
+                </ChannelActionButton>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default function ChannelDetailDrawer({
   channel,
   open = false,
@@ -144,6 +222,7 @@ export default function ChannelDetailDrawer({
   const isInstagram = isInstagramChannel(channel);
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [selectingCandidateId, setSelectingCandidateId] = useState("");
 
   const metaStatusQuery = useQuery({
     queryKey: ["meta-channel-status"],
@@ -170,9 +249,28 @@ export default function ChannelDetailDrawer({
     },
   });
 
+  const selectionMutation = useMutation({
+    mutationFn: selectMetaChannelCandidate,
+    async onSuccess() {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set("meta_connected", "1");
+      nextParams.delete("meta_selection");
+      nextParams.delete("meta_error");
+      nextParams.set("section", "channels");
+      nextParams.set("channel", "instagram");
+      setSearchParams(nextParams);
+      await queryClient.invalidateQueries({ queryKey: ["meta-channel-status"] });
+      setSelectingCandidateId("");
+    },
+    onError() {
+      setSelectingCandidateId("");
+    },
+  });
+
   function clearFeedbackParams() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("meta_connected");
+    nextParams.delete("meta_selection");
     nextParams.delete("meta_error");
     nextParams.delete("section");
     setSearchParams(nextParams);
@@ -186,6 +284,10 @@ export default function ChannelDetailDrawer({
   function handlePrimaryAction() {
     if (!isInstagram) return;
 
+    if (metaStatusQuery.data?.pendingSelection?.required === true) {
+      return;
+    }
+
     if (s(metaStatusQuery.data?.state) === "connected") {
       onNavigate?.("/inbox");
       return;
@@ -196,10 +298,13 @@ export default function ChannelDetailDrawer({
 
   const feedback = {
     connected: searchParams.get("meta_connected") === "1",
+    selection: searchParams.get("meta_selection") === "1",
     error: s(searchParams.get("meta_error")),
   };
   const actionError = s(
-    connectMutation.error?.message || disconnectMutation.error?.message
+    connectMutation.error?.message ||
+      selectionMutation.error?.message ||
+      disconnectMutation.error?.message
   );
 
   const effectiveStatus = isInstagram
@@ -209,15 +314,30 @@ export default function ChannelDetailDrawer({
   const instagramCopy = buildInstagramStateCopy(metaStatusQuery.data || {});
   const blockers = arr(metaStatusQuery.data?.readiness?.blockers);
   const reviewScopes = arr(metaStatusQuery.data?.review?.requestedScopes);
+  const pendingSelection = metaStatusQuery.data?.pendingSelection || null;
+  const pendingSelectionRequired = pendingSelection?.required === true;
 
   const primaryLabel = useMemo(() => {
     if (!isInstagram) return "Phase 2";
+    if (pendingSelectionRequired) return "Choose account below";
     if (s(metaStatusQuery.data?.state) === "connected") return "Open inbox";
     if (s(metaStatusQuery.data?.state) === "reconnect_required") return "Reconnect Instagram";
     if (s(metaStatusQuery.data?.state) === "deauthorized") return "Reconnect Instagram";
     if (s(metaStatusQuery.data?.state) === "disconnected") return "Reconnect Instagram";
     return "Connect Instagram";
-  }, [isInstagram, metaStatusQuery.data]);
+  }, [isInstagram, metaStatusQuery.data, pendingSelectionRequired]);
+
+  function handleCandidateSelect(candidate) {
+    const selectionToken = s(pendingSelection?.selectionToken);
+    const candidateId = s(candidate?.id);
+    if (!selectionToken || !candidateId) return;
+
+    setSelectingCandidateId(candidateId);
+    selectionMutation.mutate({
+      selectionToken,
+      candidateId,
+    });
+  }
 
   return (
     <aside
@@ -254,6 +374,14 @@ export default function ChannelDetailDrawer({
         {feedback.connected ? (
           <FeedbackBanner>
             Instagram connected successfully. The tenant channel is now bound to the selected account and the status below reflects the live runtime state.
+          </FeedbackBanner>
+        ) : null}
+
+        {(pendingSelectionRequired ||
+          (feedback.selection && metaStatusQuery.isLoading)) ? (
+          <FeedbackBanner tone="warning">
+            Meta found more than one eligible Instagram Business or Professional asset. Choose
+            the correct account below before this tenant becomes connected.
           </FeedbackBanner>
         ) : null}
 
@@ -352,6 +480,13 @@ export default function ChannelDetailDrawer({
               </div>
             </section>
 
+            <PendingSelectionPanel
+              pendingSelection={pendingSelection}
+              isLoading={selectionMutation.isPending}
+              selectingCandidateId={selectingCandidateId}
+              onSelect={handleCandidateSelect}
+            />
+
             <BlockerList items={blockers} />
           </>
         ) : (
@@ -366,10 +501,16 @@ export default function ChannelDetailDrawer({
           <ChannelActionButton
             fullWidth
             onClick={handlePrimaryAction}
-            isLoading={connectMutation.isPending || metaStatusQuery.isFetching}
+            isLoading={
+              connectMutation.isPending ||
+              selectionMutation.isPending ||
+              metaStatusQuery.isFetching
+            }
             disabled={
               !isInstagram ||
               connectMutation.isPending ||
+              selectionMutation.isPending ||
+              pendingSelectionRequired ||
               (s(metaStatusQuery.data?.state) !== "connected" &&
                 metaStatusQuery.data?.actions?.connectAvailable === false)
             }
@@ -387,7 +528,7 @@ export default function ChannelDetailDrawer({
                 isLoading={disconnectMutation.isPending}
                 disabled={!metaStatusQuery.data?.actions?.disconnectAvailable}
               >
-                Disconnect
+                {pendingSelectionRequired ? "Cancel selection" : "Disconnect"}
               </ChannelActionButton>
             ) : null}
 

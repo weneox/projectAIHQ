@@ -1,3 +1,5 @@
+import crypto from "crypto";
+
 import { cfg } from "../../../config.js";
 import { createTenantSourcesHelpers } from "../../../db/helpers/tenantSources.js";
 import { createTenantKnowledgeHelpers } from "../../../db/helpers/tenantKnowledge.js";
@@ -19,6 +21,7 @@ import {
 import {
   getTenantByKey,
   saveMetaPageAccessToken,
+  saveMetaSecretValue,
   deleteMetaSecretKeys,
   getMetaSecrets,
   upsertInstagramChannel,
@@ -39,6 +42,10 @@ export const META_PHASE_TWO_CAPABILITIES = Object.freeze([
   "comments",
   "content_publish",
 ]);
+
+export const META_CONNECT_SELECTION_SECRET_KEY = "connect_selection_pending";
+export const META_CONNECT_SELECTION_KIND = "meta_connect_selection";
+export const META_CONNECT_SELECTION_TTL_MS = 15 * 60 * 1000;
 
 export const META_DM_LAUNCH_REVIEW_STORY =
   "Businesses connect their own Instagram Business / Professional account and the platform helps them manage inbound customer conversations using tenant-specific business settings and runtime.";
@@ -64,6 +71,183 @@ function asIsoIfPresent(value) {
   return text || null;
 }
 
+function asTimestamp(value) {
+  const text = s(value);
+  if (!text) return 0;
+  const parsed = Date.parse(text);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseJsonObject(value) {
+  const text = s(value);
+  if (!text) return {};
+
+  try {
+    return obj(JSON.parse(text));
+  } catch {
+    return {};
+  }
+}
+
+function buildSelectionCandidateId(candidate = {}) {
+  return s(candidate?.pageId || candidate?.igUserId);
+}
+
+function normalizeSelectionCandidate(candidate = {}) {
+  const pageId = s(candidate?.pageId);
+  const igUserId = s(candidate?.igUserId);
+  const pageAccessToken = s(candidate?.pageAccessToken);
+
+  if (!pageId || !igUserId || !pageAccessToken) {
+    return null;
+  }
+
+  const pageName = s(candidate?.pageName);
+  const igUsername = s(candidate?.igUsername);
+
+  return {
+    id: buildSelectionCandidateId({ pageId, igUserId }),
+    pageId,
+    pageName,
+    pageAccessToken,
+    igUserId,
+    igUsername,
+    displayName: igUsername
+      ? `Instagram · @${igUsername}`
+      : pageName || "Instagram",
+  };
+}
+
+function buildPendingMetaSelectionPayload({
+  actor = "system",
+  createdAt = new Date().toISOString(),
+  expiresAt = new Date(Date.now() + META_CONNECT_SELECTION_TTL_MS).toISOString(),
+  metaUserProfile = {},
+  tokenJson = {},
+  requestedScopes = META_DM_LAUNCH_SCOPES,
+  grantedScopes = META_DM_LAUNCH_SCOPES,
+  candidates = [],
+} = {}) {
+  const normalizedCandidates = arr(candidates)
+    .map((candidate) => normalizeSelectionCandidate(candidate))
+    .filter(Boolean);
+
+  if (!normalizedCandidates.length) {
+    return null;
+  }
+
+  return {
+    selectionId: crypto.randomUUID(),
+    actor: s(actor || "system"),
+    createdAt,
+    expiresAt,
+    metaUserId: s(metaUserProfile?.id),
+    metaUserName: s(metaUserProfile?.name),
+    tokenType: s(tokenJson?.token_type),
+    userTokenExpiresAt: buildUserTokenExpiresAt(tokenJson),
+    requestedScopes: buildRequestedScopeList(requestedScopes),
+    grantedScopes: buildRequestedScopeList(grantedScopes),
+    candidates: normalizedCandidates,
+  };
+}
+
+export function readPendingMetaSelection(secrets = {}) {
+  const parsed = parseJsonObject(secrets?.[META_CONNECT_SELECTION_SECRET_KEY]);
+  const selectionId = s(parsed.selectionId);
+  const candidates = arr(parsed.candidates)
+    .map((candidate) => normalizeSelectionCandidate(candidate))
+    .filter(Boolean);
+
+  if (!selectionId || !candidates.length) {
+    return null;
+  }
+
+  return {
+    selectionId,
+    actor: s(parsed.actor || "system"),
+    createdAt: asIsoIfPresent(parsed.createdAt),
+    expiresAt: asIsoIfPresent(parsed.expiresAt),
+    metaUserId: s(parsed.metaUserId),
+    metaUserName: s(parsed.metaUserName),
+    tokenType: s(parsed.tokenType),
+    userTokenExpiresAt: asIsoIfPresent(parsed.userTokenExpiresAt),
+    requestedScopes: buildRequestedScopeList(parsed.requestedScopes),
+    grantedScopes: buildRequestedScopeList(parsed.grantedScopes),
+    candidates,
+  };
+}
+
+function hasPendingMetaSelectionExpired(pendingSelection = {}) {
+  const expiresAtMs = asTimestamp(pendingSelection?.expiresAt);
+  return Boolean(expiresAtMs && expiresAtMs <= Date.now());
+}
+
+function buildPendingMetaSelectionView({
+  pendingSelection = null,
+  tenantKey = "",
+} = {}) {
+  if (!pendingSelection?.selectionId) return null;
+
+  const expiryMs = asTimestamp(pendingSelection.expiresAt);
+  const tokenExp = expiryMs
+    ? Math.min(expiryMs, Date.now() + 10 * 60 * 1000)
+    : Date.now() + 10 * 60 * 1000;
+
+  return {
+    required: true,
+    selectionId: pendingSelection.selectionId,
+    createdAt: cleanNullable(pendingSelection.createdAt),
+    expiresAt: cleanNullable(pendingSelection.expiresAt),
+    candidateCount: arr(pendingSelection.candidates).length,
+    metaUserId: cleanNullable(pendingSelection.metaUserId),
+    metaUserName: cleanNullable(pendingSelection.metaUserName),
+    requestedScopes: pendingSelection.requestedScopes,
+    grantedScopes: pendingSelection.grantedScopes,
+    selectionToken: signState({
+      kind: META_CONNECT_SELECTION_KIND,
+      tenantKey,
+      selectionId: pendingSelection.selectionId,
+      exp: tokenExp,
+    }),
+    candidates: arr(pendingSelection.candidates).map((candidate) => ({
+      id: candidate.id,
+      displayName: candidate.displayName,
+      pageId: candidate.pageId,
+      pageName: candidate.pageName,
+      igUserId: candidate.igUserId,
+      igUsername: candidate.igUsername || null,
+    })),
+  };
+}
+
+function verifyPendingMetaSelectionToken(raw = "", tenantKey = "") {
+  const checked = verifyState(raw);
+  if (!checked || s(checked.kind) !== META_CONNECT_SELECTION_KIND) {
+    return null;
+  }
+
+  if (s(checked.tenantKey).toLowerCase() !== s(tenantKey).toLowerCase()) {
+    return null;
+  }
+
+  if (!s(checked.selectionId)) {
+    return null;
+  }
+
+  return checked;
+}
+
+function findSelectionCandidate(pendingSelection = {}, candidateId = "") {
+  const safeCandidateId = s(candidateId);
+  if (!safeCandidateId) return null;
+
+  return (
+    arr(pendingSelection?.candidates).find(
+      (candidate) => s(candidate.id) === safeCandidateId
+    ) || null
+  );
+}
+
 function hasMetaOauthEnv() {
   return Boolean(
     s(cfg?.meta?.appId) && s(cfg?.meta?.appSecret) && s(cfg?.meta?.redirectUri)
@@ -80,6 +264,18 @@ function hasMetaGatewayEnv() {
 function buildRequestedScopeList(values = []) {
   const requested = uniqStrings(values);
   return requested.length ? requested : [...META_DM_LAUNCH_SCOPES];
+}
+
+function buildUserTokenExpiresAt(tokenJson = {}) {
+  const explicit = asIsoIfPresent(
+    tokenJson?.userTokenExpiresAt || tokenJson?.user_token_expires_at
+  );
+  if (explicit) return explicit;
+
+  const expiresIn = Number(tokenJson?.expires_in || 0);
+  return Number.isFinite(expiresIn) && expiresIn > 0
+    ? new Date(Date.now() + expiresIn * 1000).toISOString()
+    : null;
 }
 
 function readMetaChannelSnapshot(channel = {}) {
@@ -157,11 +353,7 @@ function buildConnectedChannelHealth({
   metaUserProfile = {},
   connectedAt = new Date().toISOString(),
 } = {}) {
-  const expiresIn = Number(tokenJson?.expires_in || 0);
-  const userTokenExpiresAt =
-    Number.isFinite(expiresIn) && expiresIn > 0
-      ? new Date(Date.now() + expiresIn * 1000).toISOString()
-      : null;
+  const userTokenExpiresAt = buildUserTokenExpiresAt(tokenJson);
 
   return {
     oauth_connected: true,
@@ -436,6 +628,114 @@ function buildMetaReviewPayload() {
   };
 }
 
+async function savePendingMetaSelection(
+  db,
+  tenantId,
+  pendingSelection,
+  actor = "system"
+) {
+  if (!pendingSelection?.selectionId) return null;
+
+  return saveMetaSecretValue(
+    db,
+    tenantId,
+    META_CONNECT_SELECTION_SECRET_KEY,
+    JSON.stringify(pendingSelection),
+    actor
+  );
+}
+
+async function connectInstagramChannel({
+  db,
+  tenant,
+  actor = "system",
+  selected = {},
+  metaUserProfile = {},
+  tokenJson = {},
+  requestedScopes = META_DM_LAUNCH_SCOPES,
+  grantedScopes = META_DM_LAUNCH_SCOPES,
+  syncInstagramSourceLayerFn = syncInstagramSourceLayer,
+} = {}) {
+  const connectedAt = new Date().toISOString();
+
+  await deleteMetaSecretKeys(db, tenant.id, [META_CONNECT_SELECTION_SECRET_KEY]);
+  await saveMetaPageAccessToken(
+    db,
+    tenant.id,
+    selected.pageAccessToken,
+    actor || "system"
+  );
+
+  await upsertInstagramChannel(db, tenant.id, {
+    provider: "meta",
+    display_name: selected.igUsername
+      ? `Instagram · @${selected.igUsername}`
+      : selected.pageName || "Instagram",
+    external_page_id: selected.pageId,
+    external_user_id: selected.igUserId,
+    external_username: cleanNullable(selected.igUsername),
+    status: "connected",
+    is_primary: true,
+    config: buildConnectedChannelConfig({
+      selected,
+      requestedScopes,
+      grantedScopes,
+      metaUserProfile,
+      connectedAt,
+    }),
+    secrets_ref: "meta",
+    health: buildConnectedChannelHealth({
+      tokenJson,
+      metaUserProfile,
+      connectedAt,
+    }),
+    last_sync_at: connectedAt,
+  });
+
+  const syncResult = await syncInstagramSourceLayerFn({
+    db,
+    tenant,
+    actor,
+    selected,
+    oauthScopes: requestedScopes,
+  });
+  const source = syncResult?.source || null;
+  const capabilityGovernance = syncResult?.capabilityGovernance || null;
+
+  await auditSafe(
+    db,
+    actor,
+    tenant,
+    "settings.channel.meta.connected",
+    "tenant_channel",
+    "instagram",
+    {
+      pageId: selected.pageId,
+      igUserId: selected.igUserId,
+      igUsername: selected.igUsername || null,
+      metaUserId: metaUserProfile.id || null,
+      scopeModel: "instagram_dm_page_access",
+      requestedScopes: buildRequestedScopeList(requestedScopes),
+      grantedScopes: buildRequestedScopeList(grantedScopes),
+      phaseTwoCapabilities: [...META_PHASE_TWO_CAPABILITIES],
+      sourceId: source?.id || null,
+      sourceKey: source?.source_key || null,
+      capabilityGovernance: {
+        publishStatus: s(capabilityGovernance?.publishStatus),
+        reviewRequired: !!capabilityGovernance?.reviewRequired,
+        maintenanceSessionId: s(capabilityGovernance?.maintenanceSession?.id),
+        blockedReason: s(capabilityGovernance?.blockedReason),
+      },
+    }
+  );
+
+  return {
+    connectedAt,
+    source,
+    capabilityGovernance,
+  };
+}
+
 function buildMetaStatusBlockers({
   state = "",
   reasonCode = "",
@@ -444,11 +744,22 @@ function buildMetaStatusBlockers({
   oauthEnvReady = false,
   gatewayReady = false,
   capability = {},
+  pendingSelection = null,
 } = {}) {
   const blockers = [];
   const hasIds = Boolean(
     s(channel?.external_page_id) || s(channel?.external_user_id)
   );
+
+  if (pendingSelection?.required) {
+    blockers.push({
+      title: "Choose which Instagram Business account to bind to this tenant.",
+      subtitle: `Meta returned ${pendingSelection.candidateCount} eligible Instagram Business / Professional asset${pendingSelection.candidateCount === 1 ? "" : "s"}. The tenant remains unbound until one account is explicitly selected.`,
+      reasonCode: "instagram_account_selection_required",
+      candidateCount: pendingSelection.candidateCount,
+      expiresAt: pendingSelection.expiresAt,
+    });
+  }
 
   if (state === "blocked" && reasonCode === "plan_capability_restricted") {
     blockers.push({
@@ -550,6 +861,10 @@ function buildMetaStatusPayload({ tenant = {}, channel = null, secrets = {} } = 
   const oauthEnvReady = hasMetaOauthEnv();
   const gatewayReady = hasMetaGatewayEnv();
   const snapshot = readMetaChannelSnapshot(channel || {});
+  const pendingSelection = buildPendingMetaSelectionView({
+    pendingSelection: readPendingMetaSelection(secrets),
+    tenantKey: tenant?.tenant_key,
+  });
   const hasToken = Boolean(s(secrets?.page_access_token));
   const hasIds = Boolean(
     s(channel?.external_page_id) || s(channel?.external_user_id)
@@ -610,7 +925,10 @@ function buildMetaStatusPayload({ tenant = {}, channel = null, secrets = {} } = 
     oauthEnvReady,
     gatewayReady,
     capability,
+    pendingSelection,
   });
+
+  const selectionRequired = pendingSelection?.required === true;
 
   return {
     connected: state === "connected",
@@ -645,6 +963,7 @@ function buildMetaStatusPayload({ tenant = {}, channel = null, secrets = {} } = 
       metaUserId: cleanNullable(snapshot.metaUserId),
       metaUserName: cleanNullable(snapshot.metaUserName),
     },
+    pendingSelection,
     runtime: {
       ready: deliveryReady,
       webhookReady,
@@ -676,16 +995,23 @@ function buildMetaStatusPayload({ tenant = {}, channel = null, secrets = {} } = 
     },
     actions: {
       primary:
-        state === "connected"
+        selectionRequired
+          ? "select_account"
+          : state === "connected"
           ? "open_inbox"
           : state === "blocked"
           ? "resolve_blocker"
           : "connect",
-      connectAvailable: capability?.allowed !== false && oauthEnvReady,
-      reconnectAvailable: capability?.allowed !== false && oauthEnvReady,
-      disconnectAvailable: Boolean(channel),
+      connectAvailable:
+        capability?.allowed !== false && oauthEnvReady && !selectionRequired,
+      reconnectAvailable:
+        capability?.allowed !== false && oauthEnvReady && !selectionRequired,
+      selectionAvailable: selectionRequired,
+      disconnectAvailable: Boolean(channel) || selectionRequired,
       nextAction:
-        state === "connected"
+        selectionRequired
+          ? "select_account"
+          : state === "connected"
           ? "open_inbox"
           : capability?.allowed === false
           ? "upgrade_plan"
@@ -696,7 +1022,9 @@ function buildMetaStatusPayload({ tenant = {}, channel = null, secrets = {} } = 
     review: buildMetaReviewPayload(),
     readiness: buildReadinessSurface({
       status: blockers.length ? "blocked" : "ready",
-      message: blockers.length
+      message: selectionRequired
+        ? "Instagram connect is waiting for an explicit account selection before this tenant can be bound."
+        : blockers.length
         ? "Instagram DM automation is blocked until the tenant connection and runtime prerequisites are repaired."
         : "Instagram DM automation is ready.",
       blockers,
@@ -749,6 +1077,8 @@ export async function buildMetaOAuthUrl({ db, req }) {
     throw err;
   }
 
+  await deleteMetaSecretKeys(db, tenant.id, [META_CONNECT_SELECTION_SECRET_KEY]);
+
   const state = signState({
     tenantKey,
     actor: getReqActor(req),
@@ -765,7 +1095,14 @@ export async function buildMetaOAuthUrl({ db, req }) {
   return url.toString();
 }
 
-export async function handleMetaCallback({ db, req }) {
+export async function handleMetaCallback({
+  db,
+  req,
+  exchangeCodeForUserTokenFn = exchangeCodeForUserToken,
+  getMetaUserProfileFn = getMetaUserProfile,
+  getPagesForUserTokenFn = getPagesForUserToken,
+  syncInstagramSourceLayerFn = syncInstagramSourceLayer,
+} = {}) {
   const code = s(req.query.code);
   const error = s(req.query.error);
   const errorCode = s(req.query.error_code);
@@ -827,15 +1164,17 @@ export async function handleMetaCallback({ db, req }) {
     throw err;
   }
 
-  const tokenJson = await exchangeCodeForUserToken(code);
+  await deleteMetaSecretKeys(db, tenant.id, [META_CONNECT_SELECTION_SECRET_KEY]);
+
+  const tokenJson = await exchangeCodeForUserTokenFn(code);
   const userAccessToken = s(tokenJson?.access_token);
   if (!userAccessToken) {
     throw new Error("Meta user access token missing");
   }
 
   const [metaUserProfile, pages] = await Promise.all([
-    getMetaUserProfile(userAccessToken),
-    getPagesForUserToken(userAccessToken),
+    getMetaUserProfileFn(userAccessToken),
+    getPagesForUserTokenFn(userAccessToken),
   ]);
 
   if (!s(metaUserProfile?.id)) {
@@ -848,16 +1187,33 @@ export async function handleMetaCallback({ db, req }) {
   }
 
   if (candidates.length > 1) {
+    const pendingSelection = buildPendingMetaSelectionPayload({
+      actor: state.actor || "system",
+      metaUserProfile,
+      tokenJson,
+      requestedScopes: META_DM_LAUNCH_SCOPES,
+      grantedScopes: META_DM_LAUNCH_SCOPES,
+      candidates,
+    });
+
+    await savePendingMetaSelection(
+      db,
+      tenant.id,
+      pendingSelection,
+      state.actor || "system"
+    );
+
     await auditSafe(
       db,
       state.actor || "system",
       tenant,
-      "settings.channel.meta.connected",
+      "settings.channel.meta.selection_required",
       "tenant_channel",
       "instagram",
       {
-        outcome: "blocked",
-        reasonCode: "multiple_instagram_business_pages_found",
+        outcome: "selection_required",
+        reasonCode: "instagram_account_selection_required",
+        selectionId: pendingSelection?.selectionId || null,
         candidateCount: candidates.length,
         candidates: candidates.slice(0, 5).map((candidate) => ({
           pageId: candidate.pageId,
@@ -865,17 +1221,63 @@ export async function handleMetaCallback({ db, req }) {
           igUserId: candidate.igUserId,
           igUsername: candidate.igUsername || null,
         })),
+        metaUserId: metaUserProfile.id || null,
       }
     );
 
-    const err = new Error(
-      "Multiple Instagram Business pages were found on this Meta account. The connect flow is intentionally blocked until one clear business asset is selected."
-    );
-    err.status = 409;
-    throw err;
+    return {
+      type: "selection_required",
+      redirectUrl: buildRedirectUrl({
+        section: "channels",
+        channel: "instagram",
+        meta_selection: "1",
+      }),
+      payload: {
+        connected: false,
+        selectionRequired: true,
+        channel: "instagram",
+        review: buildMetaReviewPayload(),
+      },
+    };
   }
 
   const selected = candidates[0];
+  const syncResult = await connectInstagramChannel({
+    db,
+    tenant,
+    actor: state.actor || "system",
+    selected,
+    metaUserProfile,
+    tokenJson,
+    requestedScopes: META_DM_LAUNCH_SCOPES,
+    grantedScopes: META_DM_LAUNCH_SCOPES,
+    syncInstagramSourceLayerFn,
+  });
+  const connectedSource = syncResult?.source || null;
+  const connectedCapabilityGovernance =
+    syncResult?.capabilityGovernance || null;
+
+  return {
+    type: "success",
+    redirectUrl: buildRedirectUrl({
+      section: "channels",
+      meta_connected: "1",
+      channel: "instagram",
+    }),
+    payload: {
+      connected: true,
+      channel: "instagram",
+      pageId: selected.pageId,
+      igUserId: selected.igUserId,
+      igUsername: selected.igUsername || null,
+      metaUserId: metaUserProfile.id || null,
+      review: buildMetaReviewPayload(),
+      sourceId: connectedSource?.id || null,
+      sourceKey: connectedSource?.source_key || null,
+      capabilityGovernance: connectedCapabilityGovernance,
+    },
+  };
+
   const connectedAt = new Date().toISOString();
 
   await saveMetaPageAccessToken(
@@ -911,15 +1313,16 @@ export async function handleMetaCallback({ db, req }) {
     last_sync_at: connectedAt,
   });
 
-  const syncResult = await syncInstagramSourceLayer({
+  const legacySyncResult = await syncInstagramSourceLayer({
     db,
     tenant,
     actor: state.actor || "system",
     selected,
     oauthScopes: META_DM_LAUNCH_SCOPES,
   });
-  const source = syncResult?.source || null;
-  const capabilityGovernance = syncResult?.capabilityGovernance || null;
+  const legacySource = legacySyncResult?.source || null;
+  const legacyCapabilityGovernance =
+    legacySyncResult?.capabilityGovernance || null;
 
   await auditSafe(
     db,
@@ -936,13 +1339,15 @@ export async function handleMetaCallback({ db, req }) {
       scopeModel: "instagram_dm_page_access",
       requestedScopes: [...META_DM_LAUNCH_SCOPES],
       phaseTwoCapabilities: [...META_PHASE_TWO_CAPABILITIES],
-      sourceId: source?.id || null,
-      sourceKey: source?.source_key || null,
+      sourceId: legacySource?.id || null,
+      sourceKey: legacySource?.source_key || null,
       capabilityGovernance: {
-        publishStatus: s(capabilityGovernance?.publishStatus),
-        reviewRequired: !!capabilityGovernance?.reviewRequired,
-        maintenanceSessionId: s(capabilityGovernance?.maintenanceSession?.id),
-        blockedReason: s(capabilityGovernance?.blockedReason),
+        publishStatus: s(legacyCapabilityGovernance?.publishStatus),
+        reviewRequired: !!legacyCapabilityGovernance?.reviewRequired,
+        maintenanceSessionId: s(
+          legacyCapabilityGovernance?.maintenanceSession?.id
+        ),
+        blockedReason: s(legacyCapabilityGovernance?.blockedReason),
       },
     }
   );
@@ -962,10 +1367,130 @@ export async function handleMetaCallback({ db, req }) {
       igUsername: selected.igUsername || null,
       metaUserId: metaUserProfile.id || null,
       review: buildMetaReviewPayload(),
+      sourceId: legacySource?.id || null,
+      sourceKey: legacySource?.source_key || null,
+      capabilityGovernance: legacyCapabilityGovernance,
+    },
+  };
+}
+
+export async function completeMetaSelection({
+  db,
+  req,
+  syncInstagramSourceLayerFn = syncInstagramSourceLayer,
+} = {}) {
+  const tenantKey = getReqTenantKey(req);
+  if (!tenantKey) {
+    const err = new Error("Missing tenant context");
+    err.status = 401;
+    throw err;
+  }
+
+  const tenant = await getTenantByKey(db, tenantKey);
+  if (!tenant?.id) {
+    const err = new Error("Tenant not found");
+    err.status = 400;
+    throw err;
+  }
+
+  const selectionToken = s(
+    req.body?.selectionToken || req.body?.selection_token
+  );
+  const candidateId = s(req.body?.candidateId || req.body?.candidate_id);
+
+  const checked = verifyPendingMetaSelectionToken(selectionToken, tenantKey);
+  if (!checked?.selectionId) {
+    const err = new Error("Invalid Instagram selection token");
+    err.status = 400;
+    throw err;
+  }
+
+  const secrets = await getMetaSecrets(db, tenant.id);
+  const pendingSelection = readPendingMetaSelection(secrets);
+  if (!pendingSelection?.selectionId) {
+    const err = new Error("Instagram selection is no longer available");
+    err.status = 409;
+    throw err;
+  }
+
+  if (pendingSelection.selectionId !== checked.selectionId) {
+    const err = new Error("Instagram selection has been replaced by a newer connect attempt");
+    err.status = 409;
+    throw err;
+  }
+
+  if (hasPendingMetaSelectionExpired(pendingSelection)) {
+    await deleteMetaSecretKeys(db, tenant.id, [META_CONNECT_SELECTION_SECRET_KEY]);
+    const err = new Error("Instagram selection expired. Start connect again.");
+    err.status = 409;
+    throw err;
+  }
+
+  const selected = findSelectionCandidate(pendingSelection, candidateId);
+  if (!selected) {
+    const err = new Error("Selected Instagram account was not found in the pending connect session");
+    err.status = 400;
+    throw err;
+  }
+
+  const metaUserProfile = {
+    id: pendingSelection.metaUserId,
+    name: pendingSelection.metaUserName,
+  };
+
+  const syncResult = await connectInstagramChannel({
+    db,
+    tenant,
+    actor: getReqActor(req),
+    selected,
+    metaUserProfile,
+    tokenJson: {
+      token_type: pendingSelection.tokenType,
+      userTokenExpiresAt: pendingSelection.userTokenExpiresAt,
+    },
+    requestedScopes: pendingSelection.requestedScopes,
+    grantedScopes: pendingSelection.grantedScopes,
+    syncInstagramSourceLayerFn,
+  });
+  const source = syncResult?.source || null;
+  const capabilityGovernance = syncResult?.capabilityGovernance || null;
+
+  await auditSafe(
+    db,
+    getReqActor(req),
+    tenant,
+    "settings.channel.meta.selection_completed",
+    "tenant_channel",
+    "instagram",
+    {
+      selectionId: pendingSelection.selectionId,
+      candidateId: selected.id,
+      pageId: selected.pageId,
+      igUserId: selected.igUserId,
+      igUsername: selected.igUsername || null,
+      metaUserId: pendingSelection.metaUserId || null,
       sourceId: source?.id || null,
       sourceKey: source?.source_key || null,
-      capabilityGovernance,
-    },
+      capabilityGovernance: {
+        publishStatus: s(capabilityGovernance?.publishStatus),
+        reviewRequired: !!capabilityGovernance?.reviewRequired,
+        maintenanceSessionId: s(capabilityGovernance?.maintenanceSession?.id),
+        blockedReason: s(capabilityGovernance?.blockedReason),
+      },
+    }
+  );
+
+  return {
+    connected: true,
+    channel: "instagram",
+    pageId: selected.pageId,
+    igUserId: selected.igUserId,
+    igUsername: selected.igUsername || null,
+    metaUserId: pendingSelection.metaUserId || null,
+    review: buildMetaReviewPayload(),
+    sourceId: source?.id || null,
+    sourceKey: source?.source_key || null,
+    capabilityGovernance,
   };
 }
 
@@ -988,6 +1513,12 @@ export async function getMetaStatus({ db, req }) {
     getPrimaryInstagramChannel(db, tenant.id),
     getMetaSecrets(db, tenant.id),
   ]);
+
+  const pendingSelection = readPendingMetaSelection(secrets);
+  if (pendingSelection && hasPendingMetaSelectionExpired(pendingSelection)) {
+    await deleteMetaSecretKeys(db, tenant.id, [META_CONNECT_SELECTION_SECRET_KEY]);
+    delete secrets[META_CONNECT_SELECTION_SECRET_KEY];
+  }
 
   return buildMetaStatusPayload({
     tenant,
@@ -1013,15 +1544,43 @@ export async function disconnectMeta({ db, req }) {
 
   const actor = getReqActor(req);
   const currentChannel = await getPrimaryInstagramChannel(db, tenant.id);
+  const secrets = await getMetaSecrets(db, tenant.id);
+  const pendingSelection = readPendingMetaSelection(secrets);
   const disconnectedAt = new Date().toISOString();
 
   await deleteMetaSecretKeys(db, tenant.id, [
+    META_CONNECT_SELECTION_SECRET_KEY,
     "page_access_token",
     "access_token",
     "meta_page_access_token",
     "page_id",
     "ig_user_id",
   ]);
+
+  if (!currentChannel && pendingSelection?.selectionId) {
+    await auditSafe(
+      db,
+      actor,
+      tenant,
+      "settings.channel.meta.selection_cleared",
+      "tenant_channel",
+      "instagram",
+      {
+        selectionId: pendingSelection.selectionId,
+        clearedAt: disconnectedAt,
+        reasonCode: "user_disconnect",
+      }
+    );
+
+    return {
+      disconnected: true,
+      clearedPendingSelection: true,
+      channel: "instagram",
+      disconnectedAt,
+      review: buildMetaReviewPayload(),
+      capabilityGovernance: null,
+    };
+  }
 
   await markInstagramDisconnected(
     db,

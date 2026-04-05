@@ -11,3 +11,7 @@ export async function getMetaConnectUrl() {
 export async function disconnectMetaChannel() {
   return apiPost("/api/channels/meta/disconnect", {});
 }
+
+export async function selectMetaChannelCandidate(payload = {}) {
+  return apiPost("/api/channels/meta/select", payload);
+}

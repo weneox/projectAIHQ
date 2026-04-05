@@ -4,6 +4,8 @@
 
 Businesses connect their own Instagram Business / Professional account and the platform helps them manage inbound customer conversations using tenant-specific business settings and runtime.
 
+If Meta returns more than one eligible page / Instagram asset, the product must pause in a truthful selection-required state until the tenant explicitly chooses the correct business account.
+
 ## Forced architectural decision
 
 Keep and harden the existing page/token-based Meta connect flow for launch.

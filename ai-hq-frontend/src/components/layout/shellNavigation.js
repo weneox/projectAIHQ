@@ -1,22 +1,21 @@
 import {
-  BellDot,
   BriefcaseBusiness,
-  Home,
+  House,
+  Inbox,
   LayoutGrid,
   MessageCircleMore,
-  MessageSquareText,
+  PhoneCall,
+  PlugZap,
   ShieldCheck,
-  Waves,
-  Waypoints,
+  Sparkles,
 } from "lucide-react";
 
 const PRIMARY_SECTIONS = [
   {
     id: "home",
     label: "Home",
-    kicker: "Overview",
     description: "The main operating surface.",
-    icon: Home,
+    icon: House,
     to: "/home",
     paths: ["/home"],
     contextGroups: [
@@ -34,9 +33,8 @@ const PRIMARY_SECTIONS = [
   {
     id: "inbox",
     label: "Inbox",
-    kicker: "Live",
     description: "Messages and active conversations.",
-    icon: MessageSquareText,
+    icon: Inbox,
     to: "/inbox",
     badgeKey: "inboxUnread",
     paths: ["/inbox"],
@@ -53,7 +51,6 @@ const PRIMARY_SECTIONS = [
   {
     id: "comments",
     label: "Comments",
-    kicker: "Live",
     description: "Comment review and moderation.",
     icon: MessageCircleMore,
     to: "/comments",
@@ -71,9 +68,8 @@ const PRIMARY_SECTIONS = [
   {
     id: "voice",
     label: "Voice",
-    kicker: "Live",
     description: "Calls, handoff, and transcripts.",
-    icon: Waves,
+    icon: PhoneCall,
     to: "/voice",
     paths: ["/voice"],
     contextGroups: [
@@ -92,7 +88,6 @@ const SECONDARY_SECTIONS = [
   {
     id: "workspace",
     label: "Workspace",
-    kicker: "Control",
     description: "Operator overview and internal control.",
     icon: LayoutGrid,
     to: "/workspace",
@@ -110,9 +105,8 @@ const SECONDARY_SECTIONS = [
   {
     id: "channels",
     label: "Channels",
-    kicker: "Catalog",
     description: "Connect and manage channels.",
-    icon: Waypoints,
+    icon: PlugZap,
     to: "/channels",
     paths: ["/channels"],
     contextGroups: [
@@ -128,7 +122,6 @@ const SECONDARY_SECTIONS = [
   {
     id: "contacts",
     label: "Pipeline",
-    kicker: "Backoffice",
     description: "Leads and proposal flow.",
     icon: BriefcaseBusiness,
     to: "/leads",
@@ -147,9 +140,8 @@ const SECONDARY_SECTIONS = [
   {
     id: "publish",
     label: "Content",
-    kicker: "Backoffice",
     description: "Publishing and execution flow.",
-    icon: BellDot,
+    icon: Sparkles,
     to: "/publish",
     paths: ["/publish", "/executions"],
     contextGroups: [
@@ -165,7 +157,6 @@ const SECONDARY_SECTIONS = [
   {
     id: "intelligence",
     label: "Knowledge",
-    kicker: "Internal",
     description: "Approved business memory and review history.",
     icon: ShieldCheck,
     to: "/truth",

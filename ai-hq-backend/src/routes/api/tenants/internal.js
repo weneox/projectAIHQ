@@ -22,7 +22,9 @@ import {
 } from "../../../services/operationalReadiness.js";
 import {
   buildInstagramLifecycleChannelPayload,
+  META_CONNECT_SELECTION_SECRET_KEY,
   markInstagramSourceDisconnected,
+  readPendingMetaSelection,
 } from "../channelConnect/meta.js";
 import {
   auditSafe,
@@ -500,6 +502,79 @@ async function resolveInstagramLifecycleChannelByIds(
   return result?.rows?.[0] || null;
 }
 
+function pendingSelectionMatchesSignal(
+  pendingSelection = {},
+  { metaUserId = "", pageId = "", igUserId = "" } = {}
+) {
+  const safeMetaUserId = cleanNullableString(metaUserId);
+  const safePageId = cleanNullableString(pageId);
+  const safeIgUserId = cleanNullableString(igUserId);
+
+  if (
+    safeMetaUserId &&
+    cleanNullableString(pendingSelection?.metaUserId) === safeMetaUserId
+  ) {
+    return true;
+  }
+
+  return arr(pendingSelection?.candidates).some((candidate) => {
+    if (safePageId && cleanNullableString(candidate?.pageId) === safePageId) {
+      return true;
+    }
+
+    if (safeIgUserId && cleanNullableString(candidate?.igUserId) === safeIgUserId) {
+      return true;
+    }
+
+    return false;
+  });
+}
+
+async function resolvePendingInstagramSelectionByIds(
+  db,
+  { metaUserId = "", pageId = "", igUserId = "" } = {}
+) {
+  if (!db?.query) return null;
+  if (!cleanNullableString(metaUserId) && !cleanNullableString(pageId) && !cleanNullableString(igUserId)) {
+    return null;
+  }
+
+  const result = await db.query(
+    `
+      select distinct
+        ts.tenant_id,
+        t.tenant_key,
+        t.company_name
+      from tenant_secrets ts
+      join tenants t on t.id = ts.tenant_id
+      where ts.provider = 'meta'
+        and ts.secret_key = $1
+        and ts.is_active = true
+      order by ts.tenant_id asc
+      limit 200
+    `,
+    [META_CONNECT_SELECTION_SECRET_KEY]
+  );
+
+  for (const row of arr(result?.rows)) {
+    const secrets = await dbGetTenantProviderSecrets(db, row.tenant_id, "meta");
+    const pendingSelection = readPendingMetaSelection(secrets);
+    if (!pendingSelection?.selectionId) continue;
+    if (!pendingSelectionMatchesSignal(pendingSelection, { metaUserId, pageId, igUserId })) {
+      continue;
+    }
+
+    return {
+      tenant_id: row.tenant_id,
+      tenant_key: row.tenant_key,
+      company_name: row.company_name,
+      pendingSelection,
+    };
+  }
+
+  return null;
+}
+
 export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime }) {
   const router = express.Router();
   const requireMetaTenantResolve = createInternalTokenGuard({
@@ -901,7 +976,11 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         }
 
         const matchedChannel = await resolveInstagramLifecycleChannelByIds(db, signal);
-        if (!matchedChannel?.tenant_id) {
+        const matchedPendingSelection = matchedChannel?.tenant_id
+          ? null
+          : await resolvePendingInstagramSelectionByIds(db, signal);
+
+        if (!matchedChannel?.tenant_id && !matchedPendingSelection?.tenant_id) {
           return res.status(404).json({
             ok: false,
             error: "tenant_channel_not_found",
@@ -911,11 +990,57 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
 
         const actor = s(req?.internalAuth?.service || "meta-bot-backend");
         const occurredAt = s(signal.occurredAt || new Date().toISOString());
+        const matchedTenant = matchedChannel?.tenant_id
+          ? matchedChannel
+          : matchedPendingSelection;
         const tenant = {
-          id: matchedChannel.tenant_id,
-          tenant_key: matchedChannel.tenant_key,
-          company_name: matchedChannel.company_name,
+          id: matchedTenant.tenant_id,
+          tenant_key: matchedTenant.tenant_key,
+          company_name: matchedTenant.company_name,
         };
+
+        await deleteMetaSecretKeys(db, matchedTenant.tenant_id, [
+          META_CONNECT_SELECTION_SECRET_KEY,
+        ]);
+
+        if (!matchedChannel?.tenant_id) {
+          await auditSafe(
+            db,
+            actor,
+            tenant,
+            "settings.channel.meta.selection_deauthorized",
+            "tenant_channel",
+            "instagram",
+            {
+              reasonCode: signal.reasonCode || "meta_app_deauthorized",
+              occurredAt,
+              metaUserId: signal.metaUserId,
+              pageId: signal.pageId,
+              igUserId: signal.igUserId,
+              signedRequestMeta: signal.signedRequestMeta,
+              selectionId: s(matchedPendingSelection?.pendingSelection?.selectionId),
+            }
+          );
+
+          log.info("internal.meta_channel_deauthorize.selection_cleared", {
+            tenantKey: tenant.tenant_key,
+            tenantId: tenant.id,
+            metaUserId: signal.metaUserId,
+            pageId: signal.pageId,
+            igUserId: signal.igUserId,
+            reasonCode: signal.reasonCode,
+          });
+
+          return ok(res, {
+            tenantKey: tenant.tenant_key,
+            tenantId: tenant.id,
+            channel: "instagram",
+            processed: true,
+            pendingSelectionCleared: true,
+            reasonCode: signal.reasonCode || "meta_app_deauthorized",
+            occurredAt,
+          });
+        }
 
         await deleteMetaSecretKeys(db, matchedChannel.tenant_id, [
           "page_access_token",
@@ -969,8 +1094,8 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         );
 
         log.info("internal.meta_channel_deauthorize.processed", {
-          tenantKey: matchedChannel.tenant_key,
-          tenantId: matchedChannel.tenant_id,
+          tenantKey: tenant.tenant_key,
+          tenantId: tenant.id,
           metaUserId: signal.metaUserId,
           pageId: signal.pageId,
           igUserId: signal.igUserId,
@@ -978,8 +1103,8 @@ export function tenantInternalRoutes({ db, getRuntime = getTenantBrainRuntime })
         });
 
         return ok(res, {
-          tenantKey: matchedChannel.tenant_key,
-          tenantId: matchedChannel.tenant_id,
+          tenantKey: tenant.tenant_key,
+          tenantId: tenant.id,
           channel: "instagram",
           processed: true,
           reasonCode: signal.reasonCode || "meta_app_deauthorized",

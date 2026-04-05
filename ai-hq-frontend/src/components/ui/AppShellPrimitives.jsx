@@ -9,22 +9,22 @@ import { cx } from "../../lib/cx.js";
 
 const NOTICE_TONES = {
   info: {
-    container: "border-line bg-surface text-text",
+    container: "border-line-soft bg-surface text-text",
     icon: "bg-[rgba(var(--color-brand),0.08)] text-brand",
   },
   success: {
     container:
-      "border-[rgba(var(--color-success),0.16)] bg-[rgba(var(--color-success),0.05)] text-text",
+      "border-[rgba(var(--color-success),0.14)] bg-[rgba(var(--color-success),0.05)] text-text",
     icon: "bg-[rgba(var(--color-success),0.1)] text-success",
   },
   warning: {
     container:
-      "border-[rgba(var(--color-warning),0.16)] bg-[rgba(var(--color-warning),0.05)] text-text",
+      "border-[rgba(var(--color-warning),0.15)] bg-[rgba(var(--color-warning),0.05)] text-text",
     icon: "bg-[rgba(var(--color-warning),0.1)] text-warning",
   },
   danger: {
     container:
-      "border-[rgba(var(--color-danger),0.16)] bg-[rgba(var(--color-danger),0.05)] text-text",
+      "border-[rgba(var(--color-danger),0.15)] bg-[rgba(var(--color-danger),0.05)] text-text",
     icon: "bg-[rgba(var(--color-danger),0.1)] text-danger",
   },
 };
@@ -55,15 +55,15 @@ function paddedClass(padded) {
 
 function surfaceToneClass({ tone = "default", subdued = false }) {
   if (subdued || tone === "muted") {
-    return "border-line bg-surface-muted";
-  }
-  if (tone === "subtle") {
     return "border-line-soft bg-surface-subtle";
   }
-  if (tone === "brand-soft") {
-    return "border-[rgba(var(--color-brand),0.16)] bg-[rgba(var(--color-brand),0.05)]";
+  if (tone === "subtle") {
+    return "border-line-soft bg-surface";
   }
-  return "border-line bg-surface";
+  if (tone === "brand-soft") {
+    return "border-[rgba(var(--color-brand),0.15)] bg-[rgba(var(--color-brand),0.045)]";
+  }
+  return "border-line-soft bg-surface";
 }
 
 export function PageCanvas({ className, children }) {
@@ -71,7 +71,7 @@ export function PageCanvas({ className, children }) {
     <div
       className={cx(
         "mx-auto w-full max-w-shell-content",
-        "space-y-3 md:space-y-4",
+        "space-y-4 md:space-y-5",
         className
       )}
     >
@@ -90,7 +90,7 @@ export function PageHeader({
   return (
     <div
       className={cx(
-        "flex flex-col gap-4 rounded-[22px] border border-line bg-surface px-5 py-5 md:flex-row md:items-end md:justify-between md:px-6 md:py-6",
+        "flex flex-col gap-4 rounded-[24px] border border-line-soft bg-surface px-6 py-6 md:flex-row md:items-end md:justify-between md:px-7 md:py-7",
         className
       )}
     >
@@ -101,7 +101,7 @@ export function PageHeader({
           </div>
         ) : null}
 
-        <h1 className="font-display text-[1.7rem] font-semibold leading-[0.96] tracking-[-0.055em] text-text md:text-[2.2rem]">
+        <h1 className="font-display text-[1.7rem] font-semibold leading-[0.96] tracking-[-0.055em] text-text md:text-[2.15rem]">
           {title}
         </h1>
 
@@ -113,7 +113,9 @@ export function PageHeader({
       </div>
 
       {actions ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-3">{actions}</div>
+        <div className="flex shrink-0 flex-wrap items-center gap-3">
+          {actions}
+        </div>
       ) : null}
     </div>
   );
@@ -140,17 +142,21 @@ export function SectionHeader({
           </div>
         ) : null}
 
-        <h2 className="font-display text-[1.2rem] font-semibold leading-[0.98] tracking-[-0.05em] text-text md:text-[1.4rem]">
+        <h2 className="font-display text-[1.18rem] font-semibold leading-[1] tracking-[-0.05em] text-text md:text-[1.36rem]">
           {title}
         </h2>
 
         {description ? (
-          <p className="mt-2 text-[14px] leading-7 text-text-muted">{description}</p>
+          <p className="mt-2 text-[14px] leading-7 text-text-muted">
+            {description}
+          </p>
         ) : null}
       </div>
 
       {actions ? (
-        <div className="flex shrink-0 flex-wrap items-center gap-3">{actions}</div>
+        <div className="flex shrink-0 flex-wrap items-center gap-3">
+          {actions}
+        </div>
       ) : null}
     </div>
   );
@@ -167,11 +173,11 @@ export function Surface({
   return (
     <div
       className={cx(
-        "rounded-[18px] border",
+        "rounded-[20px] border",
         surfaceToneClass({ tone, subdued }),
         paddedClass(padded),
-        shadow === "sm" && "shadow-[0_16px_34px_-30px_rgba(15,23,42,0.18)]",
-        shadow === "md" && "shadow-[0_26px_54px_-34px_rgba(15,23,42,0.22)]",
+        shadow === "sm" && "shadow-[0_18px_36px_-34px_rgba(15,23,42,0.18)]",
+        shadow === "md" && "shadow-[0_26px_54px_-40px_rgba(15,23,42,0.2)]",
         shadow === "none" && "shadow-none",
         className
       )}
@@ -190,22 +196,24 @@ export function MetricCard({
 }) {
   const toneClass =
     tone === "brand"
-      ? "border-[rgba(var(--color-brand),0.16)] bg-[rgba(var(--color-brand),0.05)]"
+      ? "border-[rgba(var(--color-brand),0.15)] bg-[rgba(var(--color-brand),0.045)]"
       : tone === "success"
-        ? "border-[rgba(var(--color-success),0.18)] bg-[rgba(var(--color-success),0.05)]"
+        ? "border-[rgba(var(--color-success),0.16)] bg-[rgba(var(--color-success),0.05)]"
         : tone === "warning"
-          ? "border-[rgba(var(--color-warning),0.18)] bg-[rgba(var(--color-warning),0.05)]"
-          : "border-line bg-surface";
+          ? "border-[rgba(var(--color-warning),0.16)] bg-[rgba(var(--color-warning),0.05)]"
+          : "border-line-soft bg-surface";
 
   return (
-    <div className={cx("rounded-[16px] border px-4 py-4", toneClass, className)}>
+    <div className={cx("rounded-[18px] border px-4 py-4", toneClass, className)}>
       <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
         {label}
       </div>
-      <div className="mt-2 text-[1.45rem] font-semibold tracking-[-0.05em] text-text">
+      <div className="mt-2 text-[1.4rem] font-semibold tracking-[-0.05em] text-text">
         {value}
       </div>
-      {hint ? <div className="mt-1 text-sm leading-6 text-text-muted">{hint}</div> : null}
+      {hint ? (
+        <div className="mt-1 text-sm leading-6 text-text-muted">{hint}</div>
+      ) : null}
     </div>
   );
 }
@@ -247,7 +255,7 @@ export function InlineNotice({
   return (
     <div
       className={cx(
-        "rounded-[14px] border",
+        "rounded-[16px] border",
         palette.container,
         compact ? "px-3.5 py-3" : "px-4 py-3.5",
         className
@@ -257,7 +265,7 @@ export function InlineNotice({
         <span
           aria-hidden="true"
           className={cx(
-            "inline-flex shrink-0 items-center justify-center rounded-[9px]",
+            "inline-flex shrink-0 items-center justify-center rounded-[10px]",
             compact ? "mt-0.5 h-7 w-7" : "mt-0.5 h-8 w-8",
             palette.icon
           )}
@@ -267,7 +275,9 @@ export function InlineNotice({
 
         <div className="min-w-0 flex-1">
           {title ? (
-            <div className="text-sm font-semibold leading-5 text-text">{title}</div>
+            <div className="text-sm font-semibold leading-5 text-text">
+              {title}
+            </div>
           ) : null}
 
           {description ? (
@@ -298,14 +308,16 @@ export function SectionLoading({
   return (
     <Surface className={className} tone="muted">
       <div className="flex items-center gap-3">
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-surface text-text-subtle">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-surface text-text-subtle">
           <Spin size="small" />
         </span>
 
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-text">{title}</div>
           {description ? (
-            <div className="text-sm leading-6 text-text-muted">{description}</div>
+            <div className="text-sm leading-6 text-text-muted">
+              {description}
+            </div>
           ) : null}
         </div>
       </div>
@@ -357,7 +369,7 @@ export function EmptyState({
   return (
     <Surface className={cx("text-center", className)} tone="muted">
       <div className="mx-auto flex max-w-[460px] flex-col items-center gap-3 py-4">
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] bg-surface text-text-subtle">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] bg-surface text-text-subtle">
           <Info className="h-4 w-4" />
         </span>
 
@@ -393,7 +405,7 @@ export function AuthPanel({ className, children, padded = "xl" }) {
     <Surface
       padded={padded}
       shadow="md"
-      className={cx("w-full rounded-[20px] bg-surface", className)}
+      className={cx("w-full rounded-[22px] bg-surface", className)}
     >
       {children}
     </Surface>

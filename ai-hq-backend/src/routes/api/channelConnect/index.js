@@ -12,6 +12,7 @@ import {
 import {
   buildMetaOAuthUrl,
   handleMetaCallback,
+  completeMetaSelection,
   getMetaStatus,
   disconnectMeta,
 } from "./meta.js";
@@ -71,6 +72,21 @@ export function channelConnectRoutes({ db }) {
 
       if (redirectUrl) return res.redirect(redirectUrl);
       return serverErr(res, err?.message || "Failed to complete Meta connect");
+    }
+  });
+
+  r.post("/channels/meta/select", requireUserSession, async (req, res) => {
+    try {
+      const payload = await completeMetaSelection({ db, req });
+      return ok(res, payload);
+    } catch (err) {
+      const status = Number(err?.status || 500);
+      if (status === 401) return unauth(res, err?.message || "Unauthorized");
+      if (status === 400) return bad(res, err?.message || "Bad request");
+      if (status === 409) {
+        return res.status(409).json({ ok: false, error: err?.message || "Conflict" });
+      }
+      return serverErr(res, err?.message || "Failed to complete Meta selection");
     }
   });
 

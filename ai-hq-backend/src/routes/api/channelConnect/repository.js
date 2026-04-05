@@ -30,6 +30,23 @@ export async function saveMetaPageAccessToken(
   );
 }
 
+export async function saveMetaSecretValue(
+  db,
+  tenantId,
+  secretKey,
+  value,
+  actor = "system"
+) {
+  return dbUpsertTenantSecret(
+    db,
+    tenantId,
+    "meta",
+    s(secretKey),
+    value,
+    actor
+  );
+}
+
 export async function deleteMetaSecretKeys(
   db,
   tenantId,

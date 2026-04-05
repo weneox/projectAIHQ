@@ -39,7 +39,7 @@ function HeaderMenuRow({
       type="button"
       onClick={onClick}
       className={cx(
-        "flex w-full items-center gap-3 rounded-[12px] px-3 py-3 text-left transition",
+        "flex w-full items-center gap-3 rounded-[14px] px-3 py-3 text-left transition",
         danger
           ? "text-danger hover:bg-[rgba(var(--color-danger),0.06)]"
           : "text-text hover:bg-surface-muted"
@@ -47,8 +47,10 @@ function HeaderMenuRow({
     >
       <div
         className={cx(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]",
-          danger ? "bg-[rgba(var(--color-danger),0.08)] text-danger" : "bg-surface-muted text-text-muted"
+          "flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px]",
+          danger
+            ? "bg-[rgba(var(--color-danger),0.08)] text-danger"
+            : "bg-[rgba(15,23,42,0.04)] text-text-subtle"
         )}
       >
         <Icon className="h-[14px] w-[14px]" strokeWidth={1.9} />
@@ -57,8 +59,8 @@ function HeaderMenuRow({
       <div className="min-w-0 flex-1">
         <div
           className={cx(
-            "truncate text-[13px] font-semibold tracking-[-0.02em]",
-            danger ? "text-danger" : "text-text"
+            "truncate text-[13px] tracking-[-0.02em]",
+            danger ? "font-semibold text-danger" : "font-medium text-text"
           )}
         >
           {label}
@@ -145,8 +147,8 @@ function WorkspaceControl({ notifications }) {
   const initials = useMemo(() => getInitials(displayName) || "W", [displayName]);
 
   const overlay = (
-    <div className="w-[292px] rounded-[16px] border border-line bg-surface p-2 shadow-[0_24px_56px_-30px_rgba(15,23,42,0.24)]">
-      <div className="rounded-[14px] bg-surface-muted px-3 py-3">
+    <div className="w-[296px] rounded-[18px] border border-line-soft bg-surface p-2 shadow-[0_30px_60px_-36px_rgba(15,23,42,0.22)]">
+      <div className="rounded-[15px] bg-surface-subtle px-3 py-3">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-brand text-[12px] font-semibold text-white">
             {initials}
@@ -156,13 +158,13 @@ function WorkspaceControl({ notifications }) {
             <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
               {displayName}
             </div>
-            <div className="mt-0.5 truncate text-[10px] uppercase tracking-[0.14em] text-text-subtle">
+            <div className="mt-0.5 truncate text-[11px] text-text-subtle">
               {roleLabel}
             </div>
           </div>
 
           {unread > 0 ? (
-            <div className="rounded-[8px] bg-surface px-2 py-1 text-[10px] font-semibold text-text">
+            <div className="rounded-[9px] bg-surface px-2 py-1 text-[10px] font-semibold text-text">
               {unread > 99 ? "99+" : unread}
             </div>
           ) : null}
@@ -213,10 +215,10 @@ function WorkspaceControl({ notifications }) {
     >
       <button
         type="button"
-        className="group flex h-10 items-center gap-2 rounded-[13px] border border-line bg-surface px-2.5 pr-3 transition hover:border-line-strong hover:bg-surface-muted"
+        className="group flex h-11 items-center gap-2 rounded-[14px] border border-line-soft bg-surface px-2.5 pr-3 transition hover:bg-surface-muted"
         aria-label={displayName}
       >
-        <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-brand text-[11px] font-semibold text-white">
+        <div className="flex h-8 w-8 items-center justify-center rounded-[11px] bg-brand text-[11px] font-semibold text-white">
           {initials}
         </div>
 
@@ -247,24 +249,25 @@ export default function Header({
   shellSection,
   activeContextItem,
 }) {
+  const title = activeContextItem?.label || shellSection?.label || "AI HQ";
   const subtitle =
     activeContextItem?.label &&
     activeContextItem.label !== shellSection?.label
-      ? activeContextItem.label
+      ? shellSection?.label
       : shellSection?.description;
 
   return (
     <>
       <header
-        className="sticky top-0 z-[60] border-b border-line bg-[rgba(255,255,255,0.94)]"
+        className="sticky top-0 z-[60] border-b border-line-soft bg-surface"
         style={{ height: SHELL_TOPBAR_HEIGHT }}
       >
-        <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-4 px-4 md:px-5 xl:px-6">
+        <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-4 px-5 md:px-6 xl:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
               onClick={onMenuClick}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] border border-line bg-surface text-text-muted transition hover:border-line-strong hover:bg-surface-muted hover:text-text md:hidden"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] border border-line-soft bg-surface text-text-muted transition hover:bg-surface-muted hover:text-text md:hidden"
               aria-label="Open navigation"
             >
               <Menu className="h-[15px] w-[15px]" strokeWidth={2} />
@@ -272,7 +275,7 @@ export default function Header({
 
             <div className="min-w-0">
               <div className="truncate text-[15px] font-semibold tracking-[-0.03em] text-text">
-                {shellSection?.label || "AI HQ"}
+                {title}
               </div>
 
               {subtitle ? (

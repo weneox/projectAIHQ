@@ -28,6 +28,10 @@ export const CHANNEL_STATUS_META = {
     label: "Blocked",
     tone: "warning",
   },
+  not_connected: {
+    label: "Not connected",
+    tone: "neutral",
+  },
   phase2: {
     label: "Phase 2",
     tone: "neutral",
