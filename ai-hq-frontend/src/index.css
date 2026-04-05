@@ -7,29 +7,29 @@
 :root {
   color-scheme: light;
 
-  --color-canvas: 241 244 248;
-  --color-canvas-muted: 235 239 245;
+  --color-canvas: 244 246 250;
+  --color-canvas-muted: 238 242 247;
 
   --color-surface: 255 255 255;
-  --color-surface-muted: 247 249 252;
-  --color-surface-subtle: 242 245 249;
+  --color-surface-muted: 250 252 254;
+  --color-surface-subtle: 246 248 251;
   --color-surface-inverse: 13 18 28;
 
-  --color-text: 15 23 38;
-  --color-text-muted: 79 92 110;
-  --color-text-subtle: 111 124 141;
+  --color-text: 16 24 40;
+  --color-text-muted: 71 84 103;
+  --color-text-subtle: 102 112 133;
   --color-text-inverse: 248 250 252;
 
-  --color-line: 220 226 234;
-  --color-line-strong: 196 205 217;
-  --color-line-soft: 232 237 243;
+  --color-line: 214 221 230;
+  --color-line-strong: 194 204 216;
+  --color-line-soft: 228 233 240;
 
-  --color-brand: 36 72 154;
-  --color-brand-strong: 27 55 121;
-  --color-brand-soft: 236 241 249;
+  --color-brand: 38 76 165;
+  --color-brand-strong: 29 61 136;
+  --color-brand-soft: 237 242 251;
 
-  --color-info: 36 72 154;
-  --color-info-soft: 236 241 249;
+  --color-info: 38 76 165;
+  --color-info-soft: 237 242 251;
 
   --color-success: 21 112 87;
   --color-success-soft: 239 249 244;
@@ -65,19 +65,25 @@
   --radius-sm: 8px;
   --radius-md: 10px;
   --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-pill: 12px;
+  --radius-xl: 14px;
+  --radius-pill: 999px;
 
   --shadow-xs: 0 1px 2px rgba(15, 23, 38, 0.04);
-  --shadow-sm: 0 10px 26px rgba(15, 23, 38, 0.05);
-  --shadow-md: 0 18px 42px rgba(15, 23, 38, 0.08);
-  --shadow-lg: 0 28px 64px rgba(15, 23, 38, 0.1);
+  --shadow-sm:
+    0 6px 18px -10px rgba(15, 23, 38, 0.12),
+    0 2px 6px -4px rgba(15, 23, 38, 0.06);
+  --shadow-md:
+    0 14px 30px -16px rgba(15, 23, 38, 0.14),
+    0 6px 14px -10px rgba(15, 23, 38, 0.08);
+  --shadow-lg:
+    0 24px 48px -24px rgba(15, 23, 38, 0.16),
+    0 10px 24px -16px rgba(15, 23, 38, 0.1);
 
-  --focus-ring: 0 0 0 4px rgba(36, 72, 154, 0.14);
+  --focus-ring: 0 0 0 3px rgba(38, 76, 165, 0.12);
 
-  --control-sm: 36px;
-  --control-md: 40px;
-  --control-lg: 46px;
+  --control-sm: 34px;
+  --control-md: 38px;
+  --control-lg: 42px;
 
   --motion-fast: 140ms;
   --motion-base: 200ms;
@@ -105,11 +111,11 @@ body {
   overflow-x: hidden;
   background:
     radial-gradient(
-      960px circle at 50% -12%,
-      rgba(36, 72, 154, 0.06),
-      transparent 42%
+      960px circle at 50% -18%,
+      rgba(38, 76, 165, 0.05),
+      transparent 40%
     ),
-    linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(241, 244, 248, 1));
+    linear-gradient(180deg, rgba(250, 252, 254, 0.98), rgba(244, 246, 250, 1));
   color: rgb(var(--color-text));
   font-family: var(--font-sans);
   font-size: 14px;
@@ -134,7 +140,7 @@ body {
 }
 
 ::selection {
-  background: rgba(36, 72, 154, 0.14);
+  background: rgba(38, 76, 165, 0.14);
   color: rgb(var(--color-text));
 }
 
@@ -219,7 +225,7 @@ table {
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(111, 124, 141, 0.42) rgba(232, 237, 243, 0.88);
+  scrollbar-color: rgba(102, 112, 133, 0.42) rgba(228, 233, 240, 0.88);
 }
 
 *::-webkit-scrollbar {
@@ -228,18 +234,18 @@ table {
 }
 
 *::-webkit-scrollbar-track {
-  background: rgba(232, 237, 243, 0.88);
+  background: rgba(228, 233, 240, 0.88);
 }
 
 *::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 10px;
-  background: rgba(111, 124, 141, 0.42);
+  background: rgba(102, 112, 133, 0.42);
   background-clip: padding-box;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(88, 101, 117, 0.56);
+  background: rgba(84, 94, 113, 0.56);
 }
 
 #app-boot {
@@ -318,7 +324,7 @@ table {
 
 .ant-modal .ant-modal-content,
 .ant-drawer .ant-drawer-content {
-  border-radius: 20px;
+  border-radius: 18px;
   box-shadow: var(--shadow-lg);
 }
 

@@ -2,25 +2,31 @@ import { cx } from "../../lib/cx.js";
 
 const SIZE_MAP = {
   sm: {
-    slot: "h-10 w-10 rounded-[14px]",
-    icon: "h-5 w-5",
-    stackWrap: "h-10 w-10",
-    stackPrimary: "h-5 w-5",
-    stackSecondary: "h-4 w-4",
+    wrap: "h-8 w-8",
+    icon: "h-8 w-8",
+    component: "h-5 w-5",
+    stackWrap: "h-8 w-8",
+    stackPrimary: "h-4.5 w-4.5",
+    stackSecondary: "h-3.5 w-3.5",
+    stackTertiary: "h-3 w-3",
   },
   md: {
-    slot: "h-11 w-11 rounded-[16px]",
-    icon: "h-5.5 w-5.5",
-    stackWrap: "h-11 w-11",
-    stackPrimary: "h-5.5 w-5.5",
-    stackSecondary: "h-4.5 w-4.5",
+    wrap: "h-9 w-9",
+    icon: "h-9 w-9",
+    component: "h-5.5 w-5.5",
+    stackWrap: "h-9 w-9",
+    stackPrimary: "h-5 w-5",
+    stackSecondary: "h-4 w-4",
+    stackTertiary: "h-3 w-3",
   },
   lg: {
-    slot: "h-[52px] w-[52px] rounded-[18px]",
-    icon: "h-6 w-6",
-    stackWrap: "h-[52px] w-[52px]",
-    stackPrimary: "h-6 w-6",
-    stackSecondary: "h-5 w-5",
+    wrap: "h-10 w-10",
+    icon: "h-10 w-10",
+    component: "h-6 w-6",
+    stackWrap: "h-10 w-10",
+    stackPrimary: "h-5.5 w-5.5",
+    stackSecondary: "h-4.5 w-4.5",
+    stackTertiary: "h-3.5 w-3.5",
   },
 };
 
@@ -46,7 +52,10 @@ function RenderIcon({ item, className }) {
 }
 
 function StackedChannelIcon({ channel, view }) {
-  const stack = Array.isArray(channel.iconStack) ? channel.iconStack.slice(0, 3) : [];
+  const stack = Array.isArray(channel.iconStack)
+    ? channel.iconStack.slice(0, 3)
+    : [];
+
   if (!stack.length) return null;
 
   const primary = stack[0];
@@ -61,23 +70,19 @@ function StackedChannelIcon({ channel, view }) {
       )}
       aria-hidden="true"
     >
-      <span className="absolute inset-0 rounded-[inherit] bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)]" />
-
-      <span className="relative z-[1] inline-flex h-full w-full items-center justify-center">
-        <span className="inline-flex h-[72%] w-[72%] items-center justify-center rounded-[14px] bg-white shadow-[0_10px_24px_-18px_rgba(15,23,42,0.24)]">
-          <RenderIcon item={primary} className={view.stackPrimary} />
-        </span>
+      <span className="relative z-[1] inline-flex h-[70%] w-[70%] items-center justify-center rounded-[10px] border border-[#e6ebf2] bg-white shadow-[0_8px_16px_-12px_rgba(15,23,42,0.14)]">
+        <RenderIcon item={primary} className={view.stackPrimary} />
       </span>
 
       {secondary ? (
-        <span className="absolute bottom-[8%] right-[6%] z-[2] inline-flex h-[42%] w-[42%] items-center justify-center rounded-[12px] bg-white shadow-[0_10px_20px_-16px_rgba(15,23,42,0.22)]">
+        <span className="absolute bottom-0 right-0 z-[2] inline-flex h-[42%] w-[42%] items-center justify-center rounded-[8px] border border-[#e8edf3] bg-white shadow-[0_6px_12px_-10px_rgba(15,23,42,0.12)]">
           <RenderIcon item={secondary} className={view.stackSecondary} />
         </span>
       ) : null}
 
       {tertiary ? (
-        <span className="absolute left-[6%] top-[8%] z-[2] inline-flex h-[34%] w-[34%] items-center justify-center rounded-[10px] bg-white shadow-[0_8px_18px_-14px_rgba(15,23,42,0.2)]">
-          <RenderIcon item={tertiary} className="h-3.5 w-3.5" />
+        <span className="absolute left-0 top-0 z-[2] inline-flex h-[34%] w-[34%] items-center justify-center rounded-[7px] border border-[#e8edf3] bg-white shadow-[0_5px_10px_-9px_rgba(15,23,42,0.10)]">
+          <RenderIcon item={tertiary} className={view.stackTertiary} />
         </span>
       ) : null}
     </span>
@@ -88,35 +93,27 @@ export default function ChannelIcon({
   channel,
   size = "md",
   className = "",
-  slotClassName = "",
 }) {
   const view = SIZE_MAP[size] || SIZE_MAP.md;
-  const hasStack = Array.isArray(channel.iconStack) && channel.iconStack.length > 0;
+  const hasStack =
+    Array.isArray(channel.iconStack) && channel.iconStack.length > 0;
   const SingleIcon = channel.iconComponent;
 
   if (hasStack) {
-    return (
-      <StackedChannelIcon
-        channel={channel}
-        view={view}
-        className={className}
-        slotClassName={slotClassName}
-      />
-    );
+    return <StackedChannelIcon channel={channel} view={view} />;
   }
 
   return (
     <span
       className={cx(
-        "inline-flex shrink-0 items-center justify-center bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)] text-text",
-        view.slot,
-        slotClassName
+        "inline-flex shrink-0 items-center justify-center",
+        view.wrap
       )}
       aria-hidden="true"
     >
       {SingleIcon ? (
-        <span className={cx("inline-flex items-center justify-center text-text", className)}>
-          <SingleIcon className={cleanClassName(view.icon)} />
+        <span className="inline-flex items-center justify-center text-text">
+          <SingleIcon className={cleanClassName(cx(view.component, className))} />
         </span>
       ) : (
         <img

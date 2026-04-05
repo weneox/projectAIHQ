@@ -6,33 +6,33 @@ function resolveAppearance(appearance = "default") {
   switch (appearance) {
     case "product":
       return {
-        shell: "rounded-[16px]",
-        row: "min-h-[54px] gap-3 px-4",
-        input: "h-[54px] text-[15px] font-medium",
+        shell: "rounded-[13px]",
+        row: "min-h-[46px] gap-3 px-4",
+        input: "h-[46px] text-[15px] font-medium",
         textareaWrap: "px-4 py-4",
-        textarea: "min-h-[156px] text-[15px] leading-7",
+        textarea: "min-h-[144px] text-[15px] leading-7",
         selectWrap: "px-4",
-        select: "h-[54px] pr-8 text-[15px] font-medium",
+        select: "h-[46px] pr-8 text-[15px] font-medium",
       };
     case "quiet":
       return {
-        shell: "rounded-[14px]",
-        row: "min-h-[46px] gap-2.5 px-3.5",
-        input: "h-[46px] text-[14px]",
+        shell: "rounded-[11px]",
+        row: "min-h-[40px] gap-2.5 px-3.5",
+        input: "h-[40px] text-[14px]",
         textareaWrap: "px-3.5 py-3",
-        textarea: "min-h-[118px] text-[14px] leading-6",
+        textarea: "min-h-[112px] text-[14px] leading-6",
         selectWrap: "px-3.5",
-        select: "h-[46px] pr-8 text-[14px]",
+        select: "h-[40px] pr-8 text-[14px]",
       };
     default:
       return {
-        shell: "rounded-[15px]",
-        row: "min-h-[48px] gap-2.5 px-3.5",
-        input: "h-[48px] text-[14px]",
+        shell: "rounded-[12px]",
+        row: "min-h-[42px] gap-2.5 px-3.5",
+        input: "h-[42px] text-[14px]",
         textareaWrap: "px-3.5 py-3.5",
-        textarea: "min-h-[136px] text-[14px] leading-6",
+        textarea: "min-h-[128px] text-[14px] leading-6",
         selectWrap: "px-3.5",
-        select: "h-[48px] pr-8 text-[14px]",
+        select: "h-[42px] pr-8 text-[14px]",
       };
   }
 }
@@ -42,17 +42,18 @@ function surfaceClass({ disabled, readOnly, invalid }) {
     return "border-line-soft bg-surface-subtle text-text-subtle opacity-70";
   }
   if (invalid) {
-    return "border-danger bg-surface shadow-none";
+    return "border-danger bg-white shadow-none";
   }
   if (readOnly) {
     return "border-line bg-surface-muted";
   }
   return [
-    "border-line bg-surface",
+    "border-line bg-white",
+    "shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]",
     "hover:border-line-strong",
     "focus-within:border-[rgba(var(--color-brand),0.34)]",
     "focus-within:bg-white",
-    "focus-within:shadow-[0_0_0_4px_rgba(var(--color-brand),0.08)]",
+    "focus-within:shadow-[0_0_0_3px_rgba(var(--color-brand),0.10)]",
   ].join(" ");
 }
 
@@ -134,10 +135,10 @@ export function InputGroup({
           <button
             type="button"
             onClick={onClear}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] text-text-subtle transition-[background-color,color] duration-200 ease-premium hover:bg-surface-muted hover:text-text"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-[9px] text-text-subtle transition-[background-color,color] duration-200 ease-premium hover:bg-surface-muted hover:text-text"
             aria-label="Clear"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5" />
           </button>
         ) : null}
 

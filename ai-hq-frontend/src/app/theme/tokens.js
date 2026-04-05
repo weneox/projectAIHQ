@@ -1,29 +1,29 @@
 export const APP_TOKENS = {
   color: {
-    canvas: "#f1f4f8",
-    canvasMuted: "#ebeff5",
+    canvas: "#f4f6fa",
+    canvasMuted: "#eef2f7",
 
     surface: "#ffffff",
-    surfaceMuted: "#f7f9fc",
-    surfaceSubtle: "#f2f5f9",
+    surfaceMuted: "#fafcfe",
+    surfaceSubtle: "#f6f8fb",
     surfaceInverse: "#0d121c",
 
-    text: "#0f1726",
-    textMuted: "#4f5c6e",
-    textSubtle: "#6f7c8d",
+    text: "#101828",
+    textMuted: "#475467",
+    textSubtle: "#667085",
     textInverse: "#f8fafc",
 
-    line: "#dce2ea",
-    lineStrong: "#c4cdd9",
-    lineSoft: "#e8edf3",
+    line: "#d6dde6",
+    lineStrong: "#c2ccd8",
+    lineSoft: "#e4e9f0",
 
-    brand: "#24489a",
-    brandStrong: "#1b3779",
-    brandEmphasis: "#24489a",
-    brandSoft: "#ecf1f9",
+    brand: "#264ca5",
+    brandStrong: "#1d3d88",
+    brandEmphasis: "#264ca5",
+    brandSoft: "#edf2fb",
 
-    info: "#24489a",
-    infoSoft: "#ecf1f9",
+    info: "#264ca5",
+    infoSoft: "#edf2fb",
 
     success: "#157057",
     successSoft: "#eff9f4",
@@ -34,15 +34,15 @@ export const APP_TOKENS = {
     danger: "#aa2b34",
     dangerSoft: "#fdf1f2",
 
-    focus: "rgba(36, 72, 154, 0.14)",
+    focus: "rgba(38, 76, 165, 0.12)",
     overlay: "rgba(12, 16, 24, 0.46)",
   },
 
   shadow: {
     xs: "0 1px 2px rgba(15, 23, 38, 0.04)",
-    sm: "0 10px 26px rgba(15, 23, 38, 0.05)",
-    md: "0 18px 42px rgba(15, 23, 38, 0.08)",
-    lg: "0 28px 64px rgba(15, 23, 38, 0.10)",
+    sm: "0 6px 18px -10px rgba(15, 23, 38, 0.12), 0 2px 6px -4px rgba(15, 23, 38, 0.06)",
+    md: "0 14px 30px -16px rgba(15, 23, 38, 0.14), 0 6px 14px -10px rgba(15, 23, 38, 0.08)",
+    lg: "0 24px 48px -24px rgba(15, 23, 38, 0.16), 0 10px 24px -16px rgba(15, 23, 38, 0.10)",
   },
 
   radius: {
@@ -50,8 +50,8 @@ export const APP_TOKENS = {
     sm: 8,
     md: 10,
     lg: 12,
-    xl: 16,
-    pill: 12,
+    xl: 14,
+    pill: 999,
   },
 
   font: {
@@ -75,8 +75,8 @@ export const APP_TOKENS = {
   },
 
   control: {
-    height: 40,
-    heightLarge: 46,
+    height: 38,
+    heightLarge: 42,
   },
 
   motion: {
@@ -174,12 +174,12 @@ export function getAntdTheme() {
         rowHoverBg: APP_TOKENS.color.surfaceMuted,
       },
       Modal: {
-        borderRadiusLG: 20,
+        borderRadiusLG: 18,
         contentBg: APP_TOKENS.color.surface,
         headerBg: APP_TOKENS.color.surface,
       },
       Drawer: {
-        borderRadiusLG: 20,
+        borderRadiusLG: 18,
         colorBgElevated: APP_TOKENS.color.surface,
       },
       Tabs: {
@@ -189,7 +189,7 @@ export function getAntdTheme() {
         inkBarColor: APP_TOKENS.color.brand,
       },
       Menu: {
-        itemHeight: 40,
+        itemHeight: 38,
         itemMarginBlock: 2,
         itemBorderRadius: APP_TOKENS.radius.lg,
         itemSelectedBg: APP_TOKENS.color.brandSoft,

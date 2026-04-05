@@ -4,10 +4,10 @@ import Button from "../ui/Button.jsx";
 import { getChannelStatusMeta } from "./channelCatalogModel.js";
 
 const STATUS_TONES = {
-  success: "text-success",
-  info: "text-brand",
-  warning: "text-warning",
-  neutral: "text-text-subtle",
+  success: "text-[#264ca5]",
+  info: "text-[#264ca5]",
+  warning: "text-[#667085]",
+  neutral: "text-[#667085]",
 };
 
 export function ChannelStatus({ status, className }) {
@@ -16,12 +16,15 @@ export function ChannelStatus({ status, className }) {
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-2 text-[11px] font-semibold tracking-[0.01em]",
+        "inline-flex items-center gap-2 text-[12px] font-semibold tracking-[-0.01em]",
         STATUS_TONES[meta.tone] || STATUS_TONES.info,
         className
       )}
     >
-      <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />
+      <span
+        aria-hidden="true"
+        className="h-1.5 w-1.5 rounded-full bg-current opacity-95"
+      />
       <span>{meta.label}</span>
     </span>
   );
@@ -44,13 +47,13 @@ export function ChannelActionButton({
       variant={quiet ? "secondary" : "primary"}
       size="sm"
       fullWidth={fullWidth}
-      rightIcon={showArrow ? <ArrowRight className="h-4 w-4" /> : undefined}
+      rightIcon={showArrow ? <ArrowRight className="h-4 w-4" strokeWidth={2.3} /> : undefined}
       className={cx(
-        "!h-12 !rounded-[15px] !px-5 !text-[11px] !font-semibold !uppercase !tracking-[0.14em] !shadow-none transition duration-fast ease-premium",
+        "!h-[34px] !rounded-[8px] !px-3.5 !text-[10px] !font-bold !uppercase !tracking-[0.12em] !shadow-none transition duration-fast ease-premium",
         fullWidth && "!justify-between",
         quiet
-          ? "!border-line !bg-surface !text-text-muted hover:!border-line-strong hover:!bg-surface-subtle hover:!text-text"
-          : "!border-0 !bg-[linear-gradient(180deg,#2f5ccf_0%,#274cae_100%)] !text-white hover:-translate-y-[1px] hover:!opacity-100 hover:shadow-[0_16px_30px_-18px_rgba(37,99,235,0.5)]",
+          ? "!border-line !bg-white !text-[#667085] hover:!border-line-strong hover:!bg-surface-muted hover:!text-[#101828]"
+          : "!border-0 !bg-[linear-gradient(180deg,#355ebc_0%,#264ca5_100%)] !text-white hover:-translate-y-[1px] hover:shadow-[0_10px_20px_-12px_rgba(38,76,165,0.38)]",
         className
       )}
       {...props}
@@ -69,13 +72,13 @@ export function ChannelInspectButton({
     <button
       type="button"
       className={cx(
-        "inline-flex items-center gap-2 px-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle transition duration-fast ease-premium hover:text-text",
+        "inline-flex items-center gap-2 px-0 text-[10px] font-bold uppercase tracking-[0.11em] text-[#667085] transition duration-fast ease-premium hover:text-[#101828]",
         className
       )}
       {...props}
     >
       <span>{children}</span>
-      <ArrowUpRight className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+      <ArrowUpRight className="h-[15px] w-[15px] shrink-0" strokeWidth={2.35} />
     </button>
   );
 }
@@ -89,7 +92,7 @@ export function ChannelCapabilityLine({ capabilities = [], className }) {
     <div
       title={label}
       className={cx(
-        "truncate text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle",
+        "truncate text-[11px] font-bold uppercase tracking-[0.09em] text-[#667085]",
         className
       )}
     >

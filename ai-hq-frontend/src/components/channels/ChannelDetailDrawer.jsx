@@ -1,6 +1,13 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, RefreshCw, ShieldAlert, X } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronRight,
+  RefreshCw,
+  ShieldAlert,
+  X,
+} from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import {
   disconnectMetaChannel,
@@ -10,11 +17,8 @@ import {
 } from "../../api/channelConnect.js";
 import { cx } from "../../lib/cx.js";
 import ChannelIcon from "./ChannelIcon.jsx";
-import {
-  ChannelActionButton,
-  ChannelCapabilityLine,
-  ChannelStatus,
-} from "./ChannelPrimitives.jsx";
+import { ChannelActionButton } from "./ChannelPrimitives.jsx";
+import { getChannelStatusMeta } from "./channelCatalogModel.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -42,13 +46,13 @@ function buildInstagramStateCopy(status = {}) {
       return {
         title: "Instagram is connected for this tenant.",
         body:
-          "Inbound DMs can resolve against the tenant runtime, and AI replies are allowed only when the runtime stays ready.",
+          "Inbound DMs can resolve against the tenant runtime, and AI replies are allowed only while the runtime stays ready.",
       };
     case "reconnect_required":
       return {
         title: "Instagram needs reconnect before automation can resume.",
         body:
-          "The tenant record exists, but a critical identifier or page access token is missing, so the system stays fail-closed.",
+          "The tenant record exists, but a critical identifier or delivery token is missing, so the system stays fail-closed until reconnect completes.",
       };
     case "deauthorized":
       return {
@@ -90,28 +94,47 @@ function buildUserTokenStatusCopy(userToken = {}) {
   }
 }
 
-function RuntimePill({ ready, label }) {
+function DrawerStatus({ status }) {
+  const meta = getChannelStatusMeta(status);
+
+  const toneClass =
+    meta?.tone === "success" || meta?.tone === "info"
+      ? "text-[#264ca5]"
+      : meta?.tone === "warning"
+        ? "text-[#9a591e]"
+        : "text-[#667085]";
+
   return (
-    <div
-      className={cx(
-        "rounded-[16px] border px-3 py-3",
-        ready
-          ? "border-[rgba(var(--color-success),0.22)] bg-[rgba(var(--color-success),0.08)]"
-          : "border-[rgba(var(--color-warning),0.22)] bg-[rgba(var(--color-warning),0.08)]"
-      )}
-    >
-      <div className="flex items-center gap-2 text-[12px] font-semibold text-text">
-        {ready ? (
-          <CheckCircle2 className="h-4 w-4 text-success" />
-        ) : (
-          <ShieldAlert className="h-4 w-4 text-warning" />
-        )}
-        <span>{label}</span>
-      </div>
-      <div className="mt-1 text-[12px] leading-6 text-text-muted">
-        {ready ? "Ready" : "Blocked"}
-      </div>
+    <div className={cx("inline-flex items-center gap-2 text-[13px] font-semibold", toneClass)}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current" />
+      <span>{meta?.label || "Unknown"}</span>
     </div>
+  );
+}
+
+function SectionBlock({ eyebrow, title, description, children, last = false }) {
+  return (
+    <section className={cx(!last && "border-b border-[#e8edf3] pb-7", last && "pb-0")}>
+      {eyebrow ? (
+        <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#667085]">
+          {eyebrow}
+        </div>
+      ) : null}
+
+      {title ? (
+        <div className="mt-3 text-[18px] font-semibold tracking-[-0.04em] text-[#101828]">
+          {title}
+        </div>
+      ) : null}
+
+      {description ? (
+        <p className="mt-3 max-w-[640px] text-[14px] leading-8 text-[#5f6c80]">
+          {description}
+        </p>
+      ) : null}
+
+      {children ? <div className="mt-4">{children}</div> : null}
+    </section>
   );
 }
 
@@ -119,12 +142,12 @@ function FeedbackBanner({ tone = "success", children }) {
   return (
     <div
       className={cx(
-        "rounded-[18px] border px-4 py-3 text-[13px] leading-6",
+        "rounded-[10px] border px-4 py-3 text-[13px] leading-6",
         tone === "danger"
-          ? "border-[rgba(var(--color-danger),0.2)] bg-[rgba(var(--color-danger),0.08)] text-danger"
+          ? "border-[rgba(var(--color-danger),0.18)] bg-[rgba(var(--color-danger),0.05)] text-danger"
           : tone === "warning"
-          ? "border-[rgba(var(--color-warning),0.22)] bg-[rgba(var(--color-warning),0.08)] text-warning"
-          : "border-[rgba(var(--color-success),0.22)] bg-[rgba(var(--color-success),0.08)] text-success"
+            ? "border-[rgba(var(--color-warning),0.18)] bg-[rgba(var(--color-warning),0.05)] text-warning"
+            : "border-[rgba(var(--color-success),0.18)] bg-[rgba(var(--color-success),0.05)] text-success"
       )}
     >
       {children}
@@ -132,30 +155,77 @@ function FeedbackBanner({ tone = "success", children }) {
   );
 }
 
-function BlockerList({ items = [] }) {
-  if (!items.length) return null;
-
+function CapabilityPill({ children }) {
   return (
-    <div className="space-y-3">
-      {items.map((item, index) => (
-        <div
-          key={`${s(item?.reasonCode) || "blocker"}-${index}`}
-          className="rounded-[18px] border border-[rgba(var(--color-warning),0.18)] bg-[rgba(var(--color-warning),0.08)] px-4 py-3"
-        >
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-            <div className="min-w-0">
-              <div className="text-[13px] font-semibold text-text">
-                {s(item?.title, "Runtime blocker")}
-              </div>
-              <div className="mt-1 text-[12px] leading-6 text-text-muted">
-                {s(item?.subtitle || item?.message || item?.description)}
-              </div>
-            </div>
+    <span className="inline-flex items-center rounded-[8px] border border-[#e4eaf1] bg-[#fafbfd] px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#667085]">
+      {children}
+    </span>
+  );
+}
+
+function RuntimeRow({ ready, label, description }) {
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 border-b border-[#eef2f6] py-4 last:border-b-0">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          {ready ? (
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
+          ) : (
+            <ShieldAlert className="h-4 w-4 shrink-0 text-warning" />
+          )}
+
+          <div className="truncate text-[15px] font-semibold tracking-[-0.02em] text-[#101828]">
+            {label}
           </div>
         </div>
-      ))}
+
+        {description ? (
+          <div className="mt-1 pl-6 text-[13px] leading-6 text-[#667085]">
+            {description}
+          </div>
+        ) : null}
+      </div>
+
+      <div
+        className={cx(
+          "rounded-[8px] border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em]",
+          ready
+            ? "border-[rgba(var(--color-success),0.18)] bg-[rgba(var(--color-success),0.05)] text-success"
+            : "border-[rgba(var(--color-warning),0.18)] bg-[rgba(var(--color-warning),0.05)] text-warning"
+        )}
+      >
+        {ready ? "Ready" : "Blocked"}
+      </div>
     </div>
+  );
+}
+
+function DataRow({ label, value }) {
+  return (
+    <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-4 border-b border-[#eef2f6] py-3 last:border-b-0">
+      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#667085]">
+        {label}
+      </div>
+
+      <div className="min-w-0 text-[13px] font-medium leading-6 text-[#101828]">
+        {value || "Not available"}
+      </div>
+    </div>
+  );
+}
+
+function ScopePill({ children, muted = false }) {
+  return (
+    <span
+      className={cx(
+        "inline-flex items-center rounded-[8px] border px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em]",
+        muted
+          ? "border-[#e5eaf1] bg-[#f8fafc] text-[#667085]"
+          : "border-[rgba(var(--color-brand),0.14)] bg-[rgba(var(--color-brand),0.05)] text-[#264ca5]"
+      )}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -169,20 +239,15 @@ function PendingSelectionPanel({
   if (pendingSelection?.required !== true || !candidates.length) return null;
 
   return (
-    <section className="rounded-[22px] border border-line bg-surface px-4 py-4">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-        Account selection
-      </div>
-      <div className="mt-3 text-[18px] font-semibold tracking-[-0.04em] text-text">
-        Choose which Instagram Business account belongs to this tenant.
-      </div>
-      <p className="mt-3 text-[13px] leading-7 text-text-muted">
-        The tenant is still not connected. Final binding only happens after you choose one
-        account from the Meta callback results.
-      </p>
-      <div className="mt-3 text-[12px] leading-6 text-text-muted">
+    <SectionBlock
+      eyebrow="Account selection"
+      title="Choose which Instagram Business account belongs to this tenant."
+      description="The tenant is still not connected. Final binding only happens after you choose one account from the Meta callback results."
+    >
+      <div className="text-[12px] leading-6 text-[#667085]">
         Selection session expires at: {s(pendingSelection?.expiresAt, "Not available")}
       </div>
+
       <div className="mt-4 space-y-3">
         {candidates.map((candidate) => {
           const isSelecting = selectingCandidateId === s(candidate?.id);
@@ -190,25 +255,21 @@ function PendingSelectionPanel({
           return (
             <div
               key={s(candidate?.id)}
-              className="rounded-[18px] border border-line bg-white px-4 py-4"
+              className="rounded-[10px] border border-[#e6ebf2] bg-[#fbfcfe] px-4 py-4"
             >
-              <div className="text-[15px] font-semibold text-text">
+              <div className="text-[16px] font-semibold tracking-[-0.03em] text-[#101828]">
                 {s(candidate?.displayName, "Instagram")}
               </div>
-              <div className="mt-2 space-y-1 text-[12px] leading-6 text-text-muted">
-                <div>
-                  <span className="font-semibold text-text">Page:</span>{" "}
-                  {s(candidate?.pageName, "Not available")}
-                </div>
-                <div>
-                  <span className="font-semibold text-text">Instagram handle:</span>{" "}
-                  {s(candidate?.igUsername, "Not available")}
-                </div>
-                <div>
-                  <span className="font-semibold text-text">Instagram user id:</span>{" "}
-                  {s(candidate?.igUserId, "Not available")}
-                </div>
+
+              <div className="mt-3">
+                <DataRow label="Page" value={s(candidate?.pageName, "Not available")} />
+                <DataRow label="Handle" value={s(candidate?.igUsername, "Not available")} />
+                <DataRow
+                  label="Instagram user id"
+                  value={s(candidate?.igUserId, "Not available")}
+                />
               </div>
+
               <div className="mt-4">
                 <ChannelActionButton
                   fullWidth
@@ -217,6 +278,7 @@ function PendingSelectionPanel({
                   isLoading={isLoading && isSelecting}
                   disabled={isLoading}
                   ariaLabel={`Select ${s(candidate?.displayName, "Instagram")}`}
+                  className="!h-[38px] !rounded-[9px] !text-[10px]"
                 >
                   Select this account
                 </ChannelActionButton>
@@ -225,7 +287,36 @@ function PendingSelectionPanel({
           );
         })}
       </div>
-    </section>
+    </SectionBlock>
+  );
+}
+
+function BlockerList({ items = [] }) {
+  if (!items.length) return null;
+
+  return (
+    <SectionBlock eyebrow="Blockers" last>
+      <div className="space-y-3">
+        {items.map((item, index) => (
+          <div
+            key={`${s(item?.reasonCode) || "blocker"}-${index}`}
+            className="rounded-[10px] border border-[rgba(var(--color-warning),0.18)] bg-[rgba(var(--color-warning),0.05)] px-4 py-3"
+          >
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <div className="min-w-0">
+                <div className="text-[13px] font-semibold text-[#101828]">
+                  {s(item?.title, "Runtime blocker")}
+                </div>
+                <div className="mt-1 text-[12px] leading-6 text-[#667085]">
+                  {s(item?.subtitle || item?.message || item?.description)}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </SectionBlock>
   );
 }
 
@@ -317,6 +408,7 @@ export default function ChannelDetailDrawer({
     selection: searchParams.get("meta_selection") === "1",
     error: s(searchParams.get("meta_error")),
   };
+
   const actionError = s(
     connectMutation.error?.message ||
       selectionMutation.error?.message ||
@@ -335,6 +427,7 @@ export default function ChannelDetailDrawer({
   const pendingSelectionRequired = pendingSelection?.required === true;
   const attentionItems = arr(metaStatusQuery.data?.attention?.items);
   const userToken = metaStatusQuery.data?.lifecycle?.userToken || {};
+  const capabilities = arr(channel?.capabilities);
   const showReconnectButton =
     isInstagram &&
     s(metaStatusQuery.data?.state) === "connected" &&
@@ -366,201 +459,187 @@ export default function ChannelDetailDrawer({
   return (
     <aside
       aria-hidden={!open}
-      className={cx(
-        "flex h-full flex-col overflow-hidden rounded-[30px] border border-line bg-white shadow-[0_28px_64px_-38px_rgba(15,23,42,0.28)] transition duration-fast ease-premium",
-        open ? "translate-x-0 opacity-100" : "translate-x-4 opacity-0"
-      )}
+      className="flex h-full w-full flex-col border-l border-[#dbe3ec] bg-white shadow-[-18px_0_40px_-26px_rgba(15,23,42,0.16)]"
     >
-      <div className="flex items-center justify-between gap-4 border-b border-line-soft px-5 py-4">
-        <div className="flex min-w-0 items-center gap-4">
-          <ChannelIcon channel={channel} size="lg" />
-          <div className="min-w-0">
-            <div className="truncate text-[20px] font-semibold tracking-[-0.05em] text-text">
+      <div className="border-b border-[#e8edf3] px-7 py-5">
+        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1">
+          <div className="row-span-2 shrink-0 pt-0.5">
+            <ChannelIcon channel={channel} size="lg" />
+          </div>
+
+          <div className="min-w-0 self-center">
+            <div className="truncate text-[30px] font-semibold leading-none tracking-[-0.06em] text-[#101828]">
               {channel?.name}
             </div>
-            <div className="mt-2">
-              <ChannelStatus status={effectiveStatus} />
-            </div>
+          </div>
+
+          <button
+            type="button"
+            aria-label="Close channel details"
+            onClick={handleClose}
+            className="row-span-2 inline-flex h-11 w-11 items-center justify-center rounded-[12px] border border-[#dbe3ec] bg-white text-[#667085] transition duration-fast ease-premium hover:border-[#c8d2df] hover:text-[#101828]"
+          >
+            <X className="h-4.5 w-4.5" strokeWidth={2.35} />
+          </button>
+
+          <div className="min-w-0 self-start pt-1">
+            <DrawerStatus status={effectiveStatus} />
           </div>
         </div>
-
-        <button
-          type="button"
-          aria-label="Close channel details"
-          onClick={handleClose}
-          className="inline-flex h-11 w-11 items-center justify-center rounded-[14px] border border-line bg-surface text-text-muted transition duration-fast ease-premium hover:border-line-strong hover:bg-surface-muted hover:text-text"
-        >
-          <X className="h-4 w-4" />
-        </button>
       </div>
 
-      <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
-        {feedback.connected ? (
-          <FeedbackBanner>
-            Instagram connected successfully. The tenant channel is now bound to the selected account and the status below reflects the live runtime state.
-          </FeedbackBanner>
-        ) : null}
+      <div className="flex-1 overflow-y-auto px-7 py-6">
+        <div className="space-y-7">
+          {feedback.connected ? (
+            <FeedbackBanner>
+              Instagram connected successfully. The tenant channel is now bound to the selected account and the status below reflects the live runtime state.
+            </FeedbackBanner>
+          ) : null}
 
-        {(pendingSelectionRequired ||
-          (feedback.selection && metaStatusQuery.isLoading)) ? (
-          <FeedbackBanner tone="warning">
-            Meta found more than one eligible Instagram Business or Professional asset. Choose
-            the correct account below before this tenant becomes connected.
-          </FeedbackBanner>
-        ) : null}
+          {(pendingSelectionRequired || (feedback.selection && metaStatusQuery.isLoading)) ? (
+            <FeedbackBanner tone="warning">
+              Meta found more than one eligible Instagram Business or Professional asset. Choose
+              the correct account below before this tenant becomes connected.
+            </FeedbackBanner>
+          ) : null}
 
-        {feedback.error ? (
-          <FeedbackBanner tone="danger">{feedback.error}</FeedbackBanner>
-        ) : null}
+          {feedback.error ? <FeedbackBanner tone="danger">{feedback.error}</FeedbackBanner> : null}
+          {actionError ? <FeedbackBanner tone="danger">{actionError}</FeedbackBanner> : null}
 
-        {actionError ? (
-          <FeedbackBanner tone="danger">{actionError}</FeedbackBanner>
-        ) : null}
+          {attentionItems.map((item, index) => (
+            <FeedbackBanner
+              key={`${s(item?.reasonCode) || "attention"}-${index}`}
+              tone="warning"
+            >
+              <span className="font-semibold">{s(item?.title, "Reconnect recommended")}</span>{" "}
+              {s(item?.subtitle)}
+            </FeedbackBanner>
+          ))}
 
-        {attentionItems.map((item, index) => (
-          <FeedbackBanner
-            key={`${s(item?.reasonCode) || "attention"}-${index}`}
-            tone="warning"
+          <SectionBlock
+            eyebrow="Summary"
+            title={isInstagram ? instagramCopy.title : channel?.detailSummary}
+            description={isInstagram ? instagramCopy.body : channel?.detailNote}
           >
-            <span className="font-semibold">{s(item?.title, "Reconnect recommended")}</span>{" "}
-            {s(item?.subtitle)}
-          </FeedbackBanner>
-        ))}
-
-        <section className="rounded-[22px] border border-line bg-[linear-gradient(180deg,#ffffff_0%,#fbfcff_100%)] px-4 py-4">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-            Summary
-          </div>
-          <div className="mt-3 text-[20px] font-semibold tracking-[-0.05em] text-text">
-            {isInstagram ? instagramCopy.title : channel?.detailSummary}
-          </div>
-          <p className="mt-3 text-[13px] leading-7 text-text-muted">
-            {isInstagram ? instagramCopy.body : channel?.detailNote}
-          </p>
-          <div className="mt-4">
-            <ChannelCapabilityLine capabilities={channel?.capabilities || []} />
-          </div>
-        </section>
-
-        {isInstagram ? (
-          <>
-            <section className="rounded-[22px] border border-line bg-surface px-4 py-4">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-                Runtime
+            {capabilities.length ? (
+              <div className="flex flex-wrap gap-2">
+                {capabilities.map((capability) => (
+                  <CapabilityPill key={capability}>{capability}</CapabilityPill>
+                ))}
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <RuntimePill
-                  ready={metaStatusQuery.data?.runtime?.webhookReady === true}
-                  label="Webhook intake"
-                />
-                <RuntimePill
-                  ready={metaStatusQuery.data?.runtime?.deliveryReady === true}
-                  label="AI reply delivery"
-                />
-              </div>
-              <div className="mt-4 text-[12px] leading-6 text-text-muted">
-                {metaStatusQuery.isLoading
-                  ? "Loading tenant runtime state..."
-                  : s(
-                      metaStatusQuery.data?.readiness?.message,
-                      "Runtime state unavailable."
+            ) : null}
+          </SectionBlock>
+
+          {isInstagram ? (
+            <>
+              <SectionBlock eyebrow="Runtime">
+                <div className="space-y-0">
+                  <RuntimeRow
+                    ready={metaStatusQuery.data?.runtime?.webhookReady === true}
+                    label="Webhook intake"
+                    description="Inbound events for this tenant."
+                  />
+                  <RuntimeRow
+                    ready={metaStatusQuery.data?.runtime?.deliveryReady === true}
+                    label="AI reply delivery"
+                    description="Outbound DM delivery path."
+                  />
+                </div>
+
+                <div className="mt-4 text-[12px] leading-6 text-[#667085]">
+                  {metaStatusQuery.isLoading
+                    ? "Loading tenant runtime state..."
+                    : s(
+                        metaStatusQuery.data?.readiness?.message,
+                        "Runtime state unavailable."
+                      )}
+                </div>
+              </SectionBlock>
+
+              <SectionBlock eyebrow="Connected account">
+                <div className="space-y-0">
+                  <DataRow
+                    label="Display"
+                    value={s(metaStatusQuery.data?.account?.displayName, "Not connected")}
+                  />
+                  <DataRow
+                    label="Instagram handle"
+                    value={s(metaStatusQuery.data?.account?.username, "Not available")}
+                  />
+                  <DataRow
+                    label="Instagram user id"
+                    value={s(metaStatusQuery.data?.account?.igUserId, "Not available")}
+                  />
+                  <DataRow
+                    label="Meta app user id"
+                    value={s(metaStatusQuery.data?.account?.metaUserId, "Not available")}
+                  />
+                  <DataRow
+                    label="User token status"
+                    value={buildUserTokenStatusCopy(userToken)}
+                  />
+                  <DataRow
+                    label="Token expires"
+                    value={s(
+                      userToken?.expiresAt ||
+                        metaStatusQuery.data?.lifecycle?.userTokenExpiresAt,
+                      "Not available"
                     )}
-              </div>
-            </section>
+                  />
+                </div>
+              </SectionBlock>
 
-            <section className="rounded-[22px] border border-line bg-surface px-4 py-4">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-                Connected account
-              </div>
-              <div className="mt-4 space-y-3 text-[13px] leading-6 text-text-muted">
-                <div>
-                  <span className="font-semibold text-text">Display:</span>{" "}
-                  {s(metaStatusQuery.data?.account?.displayName, "Not connected")}
-                </div>
-                <div>
-                  <span className="font-semibold text-text">Instagram handle:</span>{" "}
-                  {s(metaStatusQuery.data?.account?.username, "Not available")}
-                </div>
-                <div>
-                  <span className="font-semibold text-text">Instagram user id:</span>{" "}
-                  {s(metaStatusQuery.data?.account?.igUserId, "Not available")}
-                </div>
-                <div>
-                  <span className="font-semibold text-text">Meta app user id:</span>{" "}
-                  {s(metaStatusQuery.data?.account?.metaUserId, "Not available")}
-                </div>
-                <div>
-                  <span className="font-semibold text-text">User token status:</span>{" "}
-                  {buildUserTokenStatusCopy(userToken)}
-                </div>
-                <div>
-                  <span className="font-semibold text-text">User token expires at:</span>{" "}
-                  {s(
-                    userToken?.expiresAt ||
-                      metaStatusQuery.data?.lifecycle?.userTokenExpiresAt,
-                    "Not available"
-                  )}
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-[22px] border border-line bg-surface px-4 py-4">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-                Review-aligned permission model
-              </div>
-              <div className="mt-3 text-[13px] leading-7 text-text-muted">
-                {s(
+              <SectionBlock
+                eyebrow="Review-aligned permission model"
+                description={s(
                   metaStatusQuery.data?.review?.story,
                   "Businesses connect their own Instagram account and the platform manages inbound customer conversations."
                 )}
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {reviewScopes.map((scope) => (
-                  <span
-                    key={scope}
-                    className="rounded-full border border-line bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle"
-                  >
-                    {scope}
-                  </span>
-                ))}
-              </div>
-              {reviewExcludedScopes.length ? (
-                <>
-                  <div className="mt-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-                    Explicitly out of launch scope
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {reviewExcludedScopes.map((scope) => (
-                      <span
-                        key={scope}
-                        className="rounded-full border border-line bg-[rgba(148,163,184,0.08)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle"
-                      >
-                        {scope}
-                      </span>
-                    ))}
-                  </div>
-                </>
-              ) : null}
-            </section>
+              >
+                <div className="flex flex-wrap gap-2">
+                  {reviewScopes.map((scope) => (
+                    <ScopePill key={scope}>{scope}</ScopePill>
+                  ))}
+                </div>
 
-            <PendingSelectionPanel
-              pendingSelection={pendingSelection}
-              isLoading={selectionMutation.isPending}
-              selectingCandidateId={selectingCandidateId}
-              onSelect={handleCandidateSelect}
+                {reviewExcludedScopes.length ? (
+                  <>
+                    <div className="mt-5 text-[10px] font-bold uppercase tracking-[0.16em] text-[#667085]">
+                      Explicitly out of launch scope
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {reviewExcludedScopes.map((scope) => (
+                        <ScopePill key={scope} muted>
+                          {scope}
+                        </ScopePill>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+              </SectionBlock>
+
+              <PendingSelectionPanel
+                pendingSelection={pendingSelection}
+                isLoading={selectionMutation.isPending}
+                selectingCandidateId={selectingCandidateId}
+                onSelect={handleCandidateSelect}
+              />
+
+              <BlockerList items={blockers} />
+            </>
+          ) : (
+            <SectionBlock
+              eyebrow="Availability"
+              description="This connector is intentionally marked as phase 2. It stays visible as roadmap context, but it is not part of the DM-first launch path and does not expose a self-serve connect flow."
+              last
             />
-
-            <BlockerList items={blockers} />
-          </>
-        ) : (
-          <section className="rounded-[22px] border border-line bg-surface px-4 py-4 text-[13px] leading-7 text-text-muted">
-            This connector is intentionally marked as phase 2. It stays visible as roadmap context, but it is not part of the DM-first launch path and does not expose a self-serve connect flow.
-          </section>
-        )}
+          )}
+        </div>
       </div>
 
-      <div className="border-t border-line-soft px-5 py-4">
-        <div className="flex flex-col gap-3">
+      <div className="border-t border-[#e8edf3] bg-white px-7 py-4">
+        <div className="space-y-3">
           <ChannelActionButton
             fullWidth
             onClick={handlePrimaryAction}
@@ -577,24 +656,12 @@ export default function ChannelDetailDrawer({
               (s(metaStatusQuery.data?.state) !== "connected" &&
                 metaStatusQuery.data?.actions?.connectAvailable === false)
             }
+            className="!h-[40px] !rounded-[10px] !text-[10px]"
           >
             {primaryLabel}
           </ChannelActionButton>
 
-          <div className="flex gap-3">
-            {showReconnectButton ? (
-              <ChannelActionButton
-                quiet
-                fullWidth
-                showArrow={false}
-                onClick={() => connectMutation.mutate()}
-                isLoading={connectMutation.isPending}
-                disabled={connectMutation.isPending || selectionMutation.isPending}
-              >
-                Reconnect
-              </ChannelActionButton>
-            ) : null}
-
+          <div className="grid grid-cols-2 gap-3">
             {isInstagram ? (
               <ChannelActionButton
                 quiet
@@ -603,10 +670,13 @@ export default function ChannelDetailDrawer({
                 onClick={() => disconnectMutation.mutate()}
                 isLoading={disconnectMutation.isPending}
                 disabled={!metaStatusQuery.data?.actions?.disconnectAvailable}
+                className="!h-[38px] !rounded-[10px] !text-[10px]"
               >
                 {pendingSelectionRequired ? "Cancel selection" : "Disconnect"}
               </ChannelActionButton>
-            ) : null}
+            ) : (
+              <div />
+            )}
 
             <ChannelActionButton
               quiet
@@ -615,11 +685,27 @@ export default function ChannelDetailDrawer({
               onClick={() => metaStatusQuery.refetch?.()}
               disabled={!isInstagram}
               isLoading={metaStatusQuery.isFetching}
-              leftIcon={<RefreshCw className="h-4 w-4" />}
+              leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.2} />}
+              className="!h-[38px] !rounded-[10px] !text-[10px]"
             >
               Refresh
             </ChannelActionButton>
           </div>
+
+          {showReconnectButton ? (
+            <ChannelActionButton
+              quiet
+              fullWidth
+              showArrow={false}
+              onClick={() => connectMutation.mutate()}
+              isLoading={connectMutation.isPending}
+              disabled={connectMutation.isPending || selectionMutation.isPending}
+              leftIcon={<ChevronRight className="h-4 w-4" strokeWidth={2.25} />}
+              className="!h-[38px] !rounded-[10px] !text-[10px]"
+            >
+              Reconnect
+            </ChannelActionButton>
+          ) : null}
         </div>
       </div>
     </aside>
