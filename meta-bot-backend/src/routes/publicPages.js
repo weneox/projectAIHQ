@@ -4,6 +4,12 @@ import { CONTACT_EMAIL, META_APP_SECRET } from "../config.js";
 import { createAihqMetaChannelLifecycleClient } from "../services/aihqMetaChannelLifecycleClient.js";
 import { getBaseUrl, safeStr } from "../utils/http.js";
 
+const META_DM_LAUNCH_REVIEW_STORY =
+  "Businesses connect their own Instagram Business / Professional account and the platform helps them manage inbound customer conversations using tenant-specific business settings and runtime.";
+
+const META_DM_LAUNCH_SCOPE_NOTE =
+  "The current launch and review scope is Instagram direct messaging only. WhatsApp, Instagram comment automation, and content publishing are intentionally outside this submission.";
+
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
@@ -89,7 +95,7 @@ export function registerPublicPages(
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Privacy Policy - NEOX Automation</title>
+  <title>Privacy Policy - AI HQ Instagram DM Service</title>
   <style>
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;max-width:900px;margin:40px auto;padding:0 16px;line-height:1.6}
     code{background:#f2f2f2;padding:2px 6px;border-radius:6px}
@@ -97,26 +103,30 @@ export function registerPublicPages(
 </head>
 <body>
   <h1>Privacy Policy</h1>
-  <p>This service receives Instagram/WhatsApp webhook events so connected businesses can automate customer replies with tenant-specific runtime and settings.</p>
+  <p>${META_DM_LAUNCH_REVIEW_STORY}</p>
+
+  <h2>Current integration scope</h2>
+  <p>${META_DM_LAUNCH_SCOPE_NOTE}</p>
 
   <h2>Data we process</h2>
   <ul>
-    <li>Message text (only when a message is received)</li>
-    <li>Sender/user identifier (platform user id / wa_id)</li>
-    <li>Timestamp and minimal metadata</li>
+    <li>Instagram direct-message text and lightweight delivery metadata for connected business conversations</li>
+    <li>Instagram sender/user identifiers and the connected Instagram Business or Professional account identifiers</li>
+    <li>Timestamps and the minimum operational metadata needed for routing, reliability, auditability, and support</li>
   </ul>
 
   <h2>How we use data</h2>
   <ul>
     <li>Deliver tenant-specific automation and operator workflows for inbound customer conversations.</li>
+    <li>Apply tenant-specific business settings and runtime controls before generating or routing replies.</li>
     <li>We do not sell personal data.</li>
   </ul>
 
   <h2>Data retention</h2>
-  <p>We keep only the minimum records required for reliability, auditability, and customer support. You may request deletion.</p>
+  <p>We keep only the minimum records required for reliability, auditability, customer support, and lawful business operation. You may request deletion.</p>
 
   <h2>Data deletion request</h2>
-  <p>Deletion URL: <code>${b}/instagram/data-deletion</code></p>
+  <p>Deletion URL for Instagram direct-message data: <code>${b}/instagram/data-deletion</code></p>
 
   <h2>Contact</h2>
   <p>Email: <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a></p>
@@ -133,16 +143,18 @@ export function registerPublicPages(
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Terms of Service - NEOX Automation</title>
+  <title>Terms of Service - AI HQ Instagram DM Service</title>
   <style>
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;max-width:900px;margin:40px auto;padding:0 16px;line-height:1.6}
   </style>
 </head>
 <body>
   <h1>Terms of Service</h1>
-  <p>This service processes inbound customer conversations for connected businesses.</p>
+  <p>${META_DM_LAUNCH_REVIEW_STORY}</p>
+  <p>${META_DM_LAUNCH_SCOPE_NOTE}</p>
   <ul>
-    <li>You agree that supported messages may be processed to generate replies and trigger workflows.</li>
+    <li>You agree that supported Instagram direct messages may be processed to generate replies and trigger workflows for the connected business.</li>
+    <li>You are responsible for connecting the correct Instagram Business or Professional account for your tenant.</li>
     <li>We do not sell personal data.</li>
     <li>You can request deletion of your data using the data deletion endpoint.</li>
   </ul>
@@ -204,8 +216,9 @@ export function registerPublicPages(
   <title>Data Deletion</title>
 </head>
 <body style="font-family:system-ui;padding:24px;line-height:1.6">
-  <h2>Data deletion requests</h2>
-  <p>Submit a POST request to <code>${b}/instagram/data-deletion</code> to receive a confirmation code.</p>
+  <h2>Instagram data deletion requests</h2>
+  <p>${META_DM_LAUNCH_SCOPE_NOTE}</p>
+  <p>Submit a POST request to <code>${b}/instagram/data-deletion</code> to receive a confirmation code for Instagram DM data deletion handling.</p>
   <p>Requests are acknowledged immediately and processed through support/compliance handling.</p>
 </body>
 </html>`);

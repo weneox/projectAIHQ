@@ -148,3 +148,19 @@ test("instagram deauthorize rejects invalid signed requests", async () => {
   assert.equal(res.body?.ok, false);
   assert.match(String(res.body?.error || ""), /invalid_signed_request/i);
 });
+
+test("privacy page stays aligned to the Instagram DM-first review story", async () => {
+  const app = express();
+  registerPublicPages(app, {
+    lifecycleClient: {
+      signalDeauthorize: async () => ({ ok: true, status: 200, json: { ok: true } }),
+    },
+  });
+
+  const { res } = await invokeHandler(app, "get", "/privacy");
+
+  assert.equal(res.statusCode, 200);
+  assert.match(String(res.body || ""), /Instagram Business \/ Professional account/i);
+  assert.match(String(res.body || ""), /Instagram direct messaging only/i);
+  assert.doesNotMatch(String(res.body || ""), /Instagram\/WhatsApp webhook events/i);
+});

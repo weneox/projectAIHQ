@@ -12,6 +12,7 @@ process.env.CHANNELS_RETURN_URL =
 
 const metaModule = await import("../src/routes/api/channelConnect/meta.js");
 const utilsModule = await import("../src/routes/api/channelConnect/utils.js");
+const tenantSecretsModule = await import("../src/db/helpers/tenantSecrets.js");
 
 const {
   META_DM_LAUNCH_SCOPES,
@@ -23,6 +24,7 @@ const {
   listInstagramPageCandidates,
 } = metaModule;
 const { signState } = utilsModule;
+const { dbUpsertTenantSecret } = tenantSecretsModule;
 
 function buildAuth() {
   return {
@@ -34,6 +36,20 @@ function buildAuth() {
     tenantKey: "acme",
     role: "owner",
   };
+}
+
+async function seedMetaPageAccessToken(
+  db,
+  { tenantId = "tenant-1", token = "page-token", actor = "test" } = {}
+) {
+  await dbUpsertTenantSecret(
+    db,
+    tenantId,
+    "meta",
+    "page_access_token",
+    token,
+    actor
+  );
 }
 
 class FakeChannelConnectDb {
@@ -407,6 +423,130 @@ test("explicit account selection finalizes binding and clears the pending choose
   assert.equal(statusAfter.account.igUserId, "ig-2");
   assert.equal(statusAfter.lifecycle.tokenType, "bearer");
   assert.match(statusAfter.lifecycle.userTokenExpiresAt || "", /^2026-|^20\d\d-/);
+});
+
+test("expired pending selection is cleaned up instead of lingering as a pseudo-connected state", async () => {
+  const db = new FakeChannelConnectDb();
+  const realDateNow = Date.now;
+
+  try {
+    Date.now = () => Date.parse("2026-04-05T00:00:00.000Z");
+    await seedPendingSelection(db);
+
+    Date.now = () => Date.parse("2026-04-05T00:20:00.000Z");
+
+    const status = await getMetaStatus({
+      db,
+      req: {
+        auth: buildAuth(),
+      },
+    });
+
+    assert.equal(status.state, "not_connected");
+    assert.equal(status.pendingSelection, null);
+    assert.equal(db.secretRows.size, 0);
+  } finally {
+    Date.now = realDateNow;
+  }
+});
+
+test("connected rows do not override reconnect-required lifecycle truth", async () => {
+  const db = new FakeChannelConnectDb();
+  db.channel = {
+    id: "channel-1",
+    tenant_id: "tenant-1",
+    channel_type: "instagram",
+    provider: "meta",
+    display_name: "Instagram @acme",
+    external_account_id: "",
+    external_page_id: "page-1",
+    external_user_id: "ig-1",
+    external_username: "acme",
+    status: "connected",
+    is_primary: true,
+    config: {
+      requested_scopes: META_DM_LAUNCH_SCOPES,
+      granted_scopes: META_DM_LAUNCH_SCOPES,
+      disconnect_reason: "channel_reconnect_required",
+    },
+    secrets_ref: "meta",
+    health: {
+      connection_state: "reconnect_required",
+      auth_status: "reconnect_required",
+      manual_reconnect_required: true,
+      disconnect_reason: "channel_reconnect_required",
+    },
+    last_sync_at: null,
+    created_at: "2026-04-05T00:00:00.000Z",
+    updated_at: "2026-04-05T00:00:00.000Z",
+  };
+  await seedMetaPageAccessToken(db);
+
+  const status = await getMetaStatus({
+    db,
+    req: {
+      auth: buildAuth(),
+    },
+  });
+
+  assert.equal(status.connected, false);
+  assert.equal(status.state, "reconnect_required");
+  assert.equal(status.reasonCode, "channel_reconnect_required");
+});
+
+test("connected status stays truthful while expired user tokens trigger reconnect guidance", async () => {
+  const db = new FakeChannelConnectDb();
+  const realDateNow = Date.now;
+
+  db.channel = {
+    id: "channel-1",
+    tenant_id: "tenant-1",
+    channel_type: "instagram",
+    provider: "meta",
+    display_name: "Instagram @acme",
+    external_account_id: "",
+    external_page_id: "page-1",
+    external_user_id: "ig-1",
+    external_username: "acme",
+    status: "connected",
+    is_primary: true,
+    config: {
+      requested_scopes: META_DM_LAUNCH_SCOPES,
+      granted_scopes: META_DM_LAUNCH_SCOPES,
+      last_connected_page_name: "Acme",
+      last_connected_username: "acme",
+    },
+    secrets_ref: "meta",
+    health: {
+      connection_state: "connected",
+      auth_status: "authorized",
+      user_token_expires_at: "2026-04-05T04:00:00.000Z",
+    },
+    last_sync_at: "2026-04-05T03:00:00.000Z",
+    created_at: "2026-04-05T00:00:00.000Z",
+    updated_at: "2026-04-05T00:00:00.000Z",
+  };
+  await seedMetaPageAccessToken(db);
+
+  try {
+    Date.now = () => Date.parse("2026-04-05T04:10:00.000Z");
+
+    const status = await getMetaStatus({
+      db,
+      req: {
+        auth: buildAuth(),
+      },
+    });
+
+    assert.equal(status.connected, true);
+    assert.equal(status.state, "connected");
+    assert.equal(status.lifecycle.userToken.status, "expired");
+    assert.equal(status.attention.reconnectRecommended, true);
+    assert.equal(status.actions.reconnectRecommended, true);
+    assert.equal(status.attention.items[0]?.reasonCode, "user_token_expired");
+  } finally {
+    Date.now = realDateNow;
+  }
 });
 
 test("disconnect clears a pending chooser session without fabricating a disconnected channel row", async () => {

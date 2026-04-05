@@ -38,6 +38,15 @@ Tenant Instagram connection state must be explicit:
 - `deauthorized`
 - `blocked`
 
+Selection-required is not a fake connected state. When Meta returns more than one eligible asset, the tenant stays `not_connected` until one account is explicitly chosen.
+
+## Freeze posture
+
+- Public Meta-facing privacy, terms, and deletion pages must describe the Instagram Business / Professional DM-first launch story only.
+- The review story must not imply WhatsApp, Instagram comments, content publish, or broader Meta-family onboarding for this launch.
+- Pending multi-account selections expire after 15 minutes and are cleaned up instead of lingering as stale pseudo-connections.
+- The system does not auto-refresh Meta user tokens. If the stored user-token window is expired or nearly expired, the product should stay truthful and recommend an explicit reconnect without pretending to renew auth automatically.
+
 ## Phase 2 surfaces
 
 These remain outside the launch story until permissions and production paths match:

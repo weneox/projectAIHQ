@@ -70,6 +70,21 @@ beforeEach(() => {
         "instagram_basic",
         "instagram_manage_messages",
       ],
+      excludedScopes: [
+        "business_management",
+        "instagram_manage_comments",
+        "instagram_content_publish",
+      ],
+    },
+    lifecycle: {
+      userToken: {
+        status: "valid",
+        expiresAt: "2026-04-05T06:00:00.000Z",
+      },
+    },
+    attention: {
+      items: [],
+      reconnectRecommended: false,
     },
     readiness: {
       message: "Instagram DM automation is ready.",
@@ -77,6 +92,8 @@ beforeEach(() => {
     },
     actions: {
       connectAvailable: true,
+      reconnectAvailable: true,
+      reconnectRecommended: false,
       disconnectAvailable: true,
     },
   });
@@ -121,7 +138,79 @@ describe("ChannelCatalog", () => {
 
     expect(await screen.findByText("Review-aligned permission model")).toBeInTheDocument();
     expect(await screen.findByText("instagram_manage_messages")).toBeInTheDocument();
+    expect(await screen.findByText("business_management")).toBeInTheDocument();
     expect(screen.getByText("Instagram is connected for this tenant.")).toBeInTheDocument();
+  });
+
+  it("shows reconnect guidance when the stored Meta user token is expired", async () => {
+    getMetaChannelStatus.mockResolvedValueOnce({
+      ok: true,
+      state: "connected",
+      account: {
+        displayName: "Instagram @acme",
+        username: "acme",
+        igUserId: "ig-1",
+        metaUserId: "meta-user-1",
+      },
+      runtime: {
+        webhookReady: true,
+        deliveryReady: true,
+      },
+      lifecycle: {
+        userToken: {
+          status: "expired",
+          expiresAt: "2026-04-05T04:00:00.000Z",
+          reconnectRecommended: true,
+        },
+      },
+      attention: {
+        items: [
+          {
+            reasonCode: "user_token_expired",
+            title: "The stored Meta user token has expired.",
+            subtitle:
+              "Current page-backed DM delivery can remain live, but this launch path does not auto-refresh user tokens. Reconnect this tenant to renew the operator-granted auth context.",
+          },
+        ],
+        reconnectRecommended: true,
+      },
+      review: {
+        story:
+          "Businesses connect their own Instagram Business / Professional account and the platform helps them manage inbound customer conversations using tenant-specific business settings and runtime.",
+        requestedScopes: [
+          "pages_show_list",
+          "pages_manage_metadata",
+          "instagram_basic",
+          "instagram_manage_messages",
+        ],
+        excludedScopes: [
+          "business_management",
+          "instagram_manage_comments",
+          "instagram_content_publish",
+        ],
+      },
+      readiness: {
+        message:
+          "Instagram DM automation is currently live, but reconnect is recommended soon because the stored Meta user token is no longer comfortably fresh.",
+        blockers: [],
+      },
+      actions: {
+        connectAvailable: true,
+        reconnectAvailable: true,
+        reconnectRecommended: true,
+        disconnectAvailable: true,
+      },
+    });
+
+    renderCatalog();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Instagram" }));
+
+    expect(
+      await screen.findByText("The stored Meta user token has expired.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("User token status:")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reconnect" })).toBeInTheDocument();
   });
 
   it("shows the multi-account chooser and only connects after explicit selection", async () => {
@@ -143,6 +232,11 @@ describe("ChannelCatalog", () => {
           "pages_manage_metadata",
           "instagram_basic",
           "instagram_manage_messages",
+        ],
+        excludedScopes: [
+          "business_management",
+          "instagram_manage_comments",
+          "instagram_content_publish",
         ],
       },
       readiness: {

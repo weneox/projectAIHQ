@@ -77,6 +77,19 @@ function buildInstagramStateCopy(status = {}) {
   }
 }
 
+function buildUserTokenStatusCopy(userToken = {}) {
+  switch (s(userToken?.status)) {
+    case "expired":
+      return "Expired";
+    case "expiring_soon":
+      return "Expires soon";
+    case "valid":
+      return "Valid";
+    default:
+      return "Unknown";
+  }
+}
+
 function RuntimePill({ ready, label }) {
   return (
     <div
@@ -167,6 +180,9 @@ function PendingSelectionPanel({
         The tenant is still not connected. Final binding only happens after you choose one
         account from the Meta callback results.
       </p>
+      <div className="mt-3 text-[12px] leading-6 text-text-muted">
+        Selection session expires at: {s(pendingSelection?.expiresAt, "Not available")}
+      </div>
       <div className="mt-4 space-y-3">
         {candidates.map((candidate) => {
           const isSelecting = selectingCandidateId === s(candidate?.id);
@@ -314,8 +330,16 @@ export default function ChannelDetailDrawer({
   const instagramCopy = buildInstagramStateCopy(metaStatusQuery.data || {});
   const blockers = arr(metaStatusQuery.data?.readiness?.blockers);
   const reviewScopes = arr(metaStatusQuery.data?.review?.requestedScopes);
+  const reviewExcludedScopes = arr(metaStatusQuery.data?.review?.excludedScopes);
   const pendingSelection = metaStatusQuery.data?.pendingSelection || null;
   const pendingSelectionRequired = pendingSelection?.required === true;
+  const attentionItems = arr(metaStatusQuery.data?.attention?.items);
+  const userToken = metaStatusQuery.data?.lifecycle?.userToken || {};
+  const showReconnectButton =
+    isInstagram &&
+    s(metaStatusQuery.data?.state) === "connected" &&
+    metaStatusQuery.data?.actions?.reconnectAvailable === true &&
+    metaStatusQuery.data?.actions?.reconnectRecommended === true;
 
   const primaryLabel = useMemo(() => {
     if (!isInstagram) return "Phase 2";
@@ -393,6 +417,16 @@ export default function ChannelDetailDrawer({
           <FeedbackBanner tone="danger">{actionError}</FeedbackBanner>
         ) : null}
 
+        {attentionItems.map((item, index) => (
+          <FeedbackBanner
+            key={`${s(item?.reasonCode) || "attention"}-${index}`}
+            tone="warning"
+          >
+            <span className="font-semibold">{s(item?.title, "Reconnect recommended")}</span>{" "}
+            {s(item?.subtitle)}
+          </FeedbackBanner>
+        ))}
+
         <section className="rounded-[22px] border border-line bg-[linear-gradient(180deg,#ffffff_0%,#fbfcff_100%)] px-4 py-4">
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
             Summary
@@ -455,6 +489,18 @@ export default function ChannelDetailDrawer({
                   <span className="font-semibold text-text">Meta app user id:</span>{" "}
                   {s(metaStatusQuery.data?.account?.metaUserId, "Not available")}
                 </div>
+                <div>
+                  <span className="font-semibold text-text">User token status:</span>{" "}
+                  {buildUserTokenStatusCopy(userToken)}
+                </div>
+                <div>
+                  <span className="font-semibold text-text">User token expires at:</span>{" "}
+                  {s(
+                    userToken?.expiresAt ||
+                      metaStatusQuery.data?.lifecycle?.userTokenExpiresAt,
+                    "Not available"
+                  )}
+                </div>
               </div>
             </section>
 
@@ -478,6 +524,23 @@ export default function ChannelDetailDrawer({
                   </span>
                 ))}
               </div>
+              {reviewExcludedScopes.length ? (
+                <>
+                  <div className="mt-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+                    Explicitly out of launch scope
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {reviewExcludedScopes.map((scope) => (
+                      <span
+                        key={scope}
+                        className="rounded-full border border-line bg-[rgba(148,163,184,0.08)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle"
+                      >
+                        {scope}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              ) : null}
             </section>
 
             <PendingSelectionPanel
@@ -519,6 +582,19 @@ export default function ChannelDetailDrawer({
           </ChannelActionButton>
 
           <div className="flex gap-3">
+            {showReconnectButton ? (
+              <ChannelActionButton
+                quiet
+                fullWidth
+                showArrow={false}
+                onClick={() => connectMutation.mutate()}
+                isLoading={connectMutation.isPending}
+                disabled={connectMutation.isPending || selectionMutation.isPending}
+              >
+                Reconnect
+              </ChannelActionButton>
+            ) : null}
+
             {isInstagram ? (
               <ChannelActionButton
                 quiet

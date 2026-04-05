@@ -38,6 +38,12 @@ export const META_DM_LAUNCH_SCOPES = Object.freeze([
   "instagram_manage_messages",
 ]);
 
+export const META_DM_EXCLUDED_SCOPES = Object.freeze([
+  "business_management",
+  "instagram_manage_comments",
+  "instagram_content_publish",
+]);
+
 export const META_PHASE_TWO_CAPABILITIES = Object.freeze([
   "comments",
   "content_publish",
@@ -46,6 +52,7 @@ export const META_PHASE_TWO_CAPABILITIES = Object.freeze([
 export const META_CONNECT_SELECTION_SECRET_KEY = "connect_selection_pending";
 export const META_CONNECT_SELECTION_KIND = "meta_connect_selection";
 export const META_CONNECT_SELECTION_TTL_MS = 15 * 60 * 1000;
+export const META_USER_TOKEN_EXPIRING_SOON_MS = 10 * 60 * 1000;
 
 export const META_DM_LAUNCH_REVIEW_STORY =
   "Businesses connect their own Instagram Business / Professional account and the platform helps them manage inbound customer conversations using tenant-specific business settings and runtime.";
@@ -89,6 +96,12 @@ function parseJsonObject(value) {
   }
 }
 
+function buildConnectedInstagramDisplayName(selected = {}) {
+  const username = s(selected?.igUsername);
+  if (username) return `Instagram @${username}`;
+  return s(selected?.pageName) || "Instagram";
+}
+
 function buildSelectionCandidateId(candidate = {}) {
   return s(candidate?.pageId || candidate?.igUserId);
 }
@@ -112,9 +125,10 @@ function normalizeSelectionCandidate(candidate = {}) {
     pageAccessToken,
     igUserId,
     igUsername,
-    displayName: igUsername
-      ? `Instagram · @${igUsername}`
-      : pageName || "Instagram",
+    displayName: buildConnectedInstagramDisplayName({
+      pageName,
+      igUsername,
+    }),
   };
 }
 
@@ -300,12 +314,18 @@ function readMetaChannelSnapshot(channel = {}) {
     grantedScopes: buildRequestedScopeList(
       arr(config.granted_scopes).length ? config.granted_scopes : config.requested_scopes
     ),
+    excludedScopes: uniqStrings(
+      arr(config.excluded_scopes).length
+        ? config.excluded_scopes
+        : META_DM_EXCLUDED_SCOPES
+    ),
     phaseTwoCapabilities: uniqStrings(
       arr(config.phase_two_capabilities).length
         ? config.phase_two_capabilities
         : META_PHASE_TWO_CAPABILITIES
     ),
     reviewStory: s(config.review_story || META_DM_LAUNCH_REVIEW_STORY),
+    launchSurface: s(config.launch_surface || "instagram_direct_messages"),
     lastOauthExchangeAt: s(health.last_oauth_exchange_at),
     userTokenExpiresAt: s(health.user_token_expires_at),
     tokenType: s(health.token_type),
@@ -332,12 +352,12 @@ function buildConnectedChannelConfig({
     meta_user_name: cleanNullable(metaUserProfile?.name),
     requested_scopes: buildRequestedScopeList(requestedScopes),
     granted_scopes: buildRequestedScopeList(grantedScopes),
+    excluded_scopes: [...META_DM_EXCLUDED_SCOPES],
     phase_two_capabilities: [...META_PHASE_TWO_CAPABILITIES],
     review_story: META_DM_LAUNCH_REVIEW_STORY,
+    launch_surface: "instagram_direct_messages",
     last_connected_display_name: cleanNullable(
-      selected?.igUsername
-        ? `Instagram · @${selected.igUsername}`
-        : s(selected?.pageName) || "Instagram"
+      buildConnectedInstagramDisplayName(selected)
     ),
     last_connected_page_name: cleanNullable(selected?.pageName),
     last_connected_username: cleanNullable(selected?.igUsername),
@@ -401,8 +421,10 @@ export function buildInstagramLifecycleChannelPayload({
       meta_user_name: cleanNullable(snapshot.metaUserName),
       requested_scopes: snapshot.requestedScopes,
       granted_scopes: snapshot.grantedScopes,
+      excluded_scopes: snapshot.excludedScopes,
       phase_two_capabilities: snapshot.phaseTwoCapabilities,
       review_story: snapshot.reviewStory || META_DM_LAUNCH_REVIEW_STORY,
+      launch_surface: snapshot.launchSurface || "instagram_direct_messages",
       last_connected_display_name: cleanNullable(snapshot.displayName || "Instagram"),
       last_connected_page_name: cleanNullable(snapshot.pageName),
       last_connected_username: cleanNullable(snapshot.igUsername),
@@ -453,9 +475,7 @@ function buildInstagramSourcePayload(
       : pageId
       ? `instagram:page:${pageId}`
       : "instagram",
-    displayName: igUsername
-      ? `Instagram · @${igUsername}`
-      : s(selected?.pageName) || "Instagram",
+    displayName: buildConnectedInstagramDisplayName(selected),
     status: "connected",
     authStatus: "authorized",
     syncStatus: "idle",
@@ -488,7 +508,9 @@ function buildInstagramSourcePayload(
       channel_type: "instagram",
       connected_via: "oauth",
       authModel: "instagram_dm_page_access",
+      launchSurface: "instagram_direct_messages",
       reviewStory: META_DM_LAUNCH_REVIEW_STORY,
+      excludedScopes: [...META_DM_EXCLUDED_SCOPES],
       phaseTwoCapabilities: [...META_PHASE_TWO_CAPABILITIES],
       pageName: s(selected?.pageName),
       oauthScopes: buildRequestedScopeList(oauthScopes),
@@ -622,7 +644,10 @@ export function pickBestInstagramPage(pages = []) {
 function buildMetaReviewPayload() {
   return {
     authModel: "instagram_dm_page_access",
+    launchMode: "dm_first",
+    launchSurface: "instagram_direct_messages",
     requestedScopes: [...META_DM_LAUNCH_SCOPES],
+    excludedScopes: [...META_DM_EXCLUDED_SCOPES],
     phaseTwoCapabilities: [...META_PHASE_TWO_CAPABILITIES],
     story: META_DM_LAUNCH_REVIEW_STORY,
   };
@@ -643,6 +668,55 @@ async function savePendingMetaSelection(
     JSON.stringify(pendingSelection),
     actor
   );
+}
+
+async function loadMetaSecretsContext(db, tenantId) {
+  const secrets = await getMetaSecrets(db, tenantId);
+  let pendingSelection = readPendingMetaSelection(secrets);
+  let pendingSelectionExpired = false;
+
+  if (pendingSelection && hasPendingMetaSelectionExpired(pendingSelection)) {
+    await deleteMetaSecretKeys(db, tenantId, [META_CONNECT_SELECTION_SECRET_KEY]);
+    delete secrets[META_CONNECT_SELECTION_SECRET_KEY];
+    pendingSelection = null;
+    pendingSelectionExpired = true;
+  }
+
+  return {
+    secrets,
+    pendingSelection,
+    pendingSelectionExpired,
+  };
+}
+
+function buildMetaUserTokenLifecycle(expiresAt = "") {
+  const normalizedExpiresAt = asIsoIfPresent(expiresAt);
+  const expiresAtMs = asTimestamp(normalizedExpiresAt);
+
+  if (!normalizedExpiresAt || !expiresAtMs) {
+    return {
+      known: false,
+      status: "unknown",
+      expiresAt: null,
+      expired: false,
+      expiresSoon: false,
+      reconnectRecommended: false,
+    };
+  }
+
+  const remainingMs = expiresAtMs - Date.now();
+  const expired = remainingMs <= 0;
+  const expiresSoon =
+    !expired && remainingMs <= META_USER_TOKEN_EXPIRING_SOON_MS;
+
+  return {
+    known: true,
+    status: expired ? "expired" : expiresSoon ? "expiring_soon" : "valid",
+    expiresAt: normalizedExpiresAt,
+    expired,
+    expiresSoon,
+    reconnectRecommended: expired || expiresSoon,
+  };
 }
 
 async function connectInstagramChannel({
@@ -668,9 +742,7 @@ async function connectInstagramChannel({
 
   await upsertInstagramChannel(db, tenant.id, {
     provider: "meta",
-    display_name: selected.igUsername
-      ? `Instagram · @${selected.igUsername}`
-      : selected.pageName || "Instagram",
+    display_name: buildConnectedInstagramDisplayName(selected),
     external_page_id: selected.pageId,
     external_user_id: selected.igUserId,
     external_username: cleanNullable(selected.igUsername),
@@ -829,6 +901,23 @@ function buildMetaStatusBlockers({
     });
   }
 
+  if (
+    state === "reconnect_required" &&
+    !blockers.some(
+      (item) =>
+        s(item?.reasonCode) === "channel_identifiers_missing" ||
+        s(item?.reasonCode) === "provider_secret_missing" ||
+        s(item?.reasonCode) === "meta_oauth_env_missing"
+    )
+  ) {
+    blockers.push({
+      title: "Instagram reconnect is required for this tenant.",
+      subtitle:
+        "The tenant mapping still exists, but the DM-first launch path needs an explicit reconnect before this connection should be trusted again.",
+      reasonCode: reasonCode || "channel_reconnect_required",
+    });
+  }
+
   if (state === "connected" && !gatewayReady) {
     blockers.push({
       title: "Meta gateway delivery is not configured.",
@@ -856,30 +945,104 @@ function buildMetaStatusBlockers({
   return blockers.filter(Boolean);
 }
 
-function buildMetaStatusPayload({ tenant = {}, channel = null, secrets = {} } = {}) {
+function buildMetaStatusAttentionItems({ state = "", userToken = {} } = {}) {
+  if (state !== "connected") return [];
+
+  if (userToken?.status === "expired") {
+    return [
+      {
+        title: "The stored Meta user token has expired.",
+        subtitle:
+          "Current page-backed DM delivery can remain live, but this launch path does not auto-refresh user tokens. Reconnect this tenant to renew the operator-granted auth context.",
+        reasonCode: "user_token_expired",
+        expiresAt: cleanNullable(userToken?.expiresAt),
+      },
+    ];
+  }
+
+  if (userToken?.status === "expiring_soon") {
+    return [
+      {
+        title: "The stored Meta user token will expire soon.",
+        subtitle:
+          "This launch path does not auto-refresh user tokens. Reconnect this tenant soon so recovery stays explicit and operator-initiated.",
+        reasonCode: "user_token_expiring_soon",
+        expiresAt: cleanNullable(userToken?.expiresAt),
+      },
+    ];
+  }
+
+  return [];
+}
+
+function buildMetaReadyMessage({
+  selectionRequired = false,
+  blockers = [],
+  attentionItems = [],
+} = {}) {
+  if (selectionRequired) {
+    return "Instagram connect is waiting for an explicit account selection before this tenant can be bound.";
+  }
+
+  if (blockers.length) {
+    return "Instagram DM automation is blocked until the tenant connection and runtime prerequisites are repaired.";
+  }
+
+  if (attentionItems.length) {
+    return "Instagram DM automation is currently live, but reconnect is recommended soon because the stored Meta user token is no longer comfortably fresh.";
+  }
+
+  return "Instagram DM automation is ready.";
+}
+
+function buildMetaStatusPayload({
+  tenant = {},
+  channel = null,
+  secrets = {},
+  pendingSelection = null,
+} = {}) {
   const capability = getTenantCapability(tenant, "metaChannelConnect");
   const oauthEnvReady = hasMetaOauthEnv();
   const gatewayReady = hasMetaGatewayEnv();
   const snapshot = readMetaChannelSnapshot(channel || {});
-  const pendingSelection = buildPendingMetaSelectionView({
-    pendingSelection: readPendingMetaSelection(secrets),
+  const pendingSelectionView = buildPendingMetaSelectionView({
+    pendingSelection: pendingSelection || readPendingMetaSelection(secrets),
     tenantKey: tenant?.tenant_key,
   });
+  const selectionRequired = pendingSelectionView?.required === true;
   const hasToken = Boolean(s(secrets?.page_access_token));
   const hasIds = Boolean(
     s(channel?.external_page_id) || s(channel?.external_user_id)
   );
+  const explicitDeauthorized =
+    Boolean(snapshot.deauthorizedAt) ||
+    snapshot.connectionState === "deauthorized" ||
+    snapshot.authStatus === "revoked";
+  const explicitDisconnected =
+    snapshot.disconnectReason === "user_disconnect" ||
+    lower(channel?.status) === "disconnected" ||
+    snapshot.connectionState === "disconnected" ||
+    snapshot.authStatus === "disconnected";
+  const explicitReconnectRequired =
+    snapshot.manualReconnectRequired ||
+    snapshot.connectionState === "reconnect_required" ||
+    snapshot.authStatus === "reconnect_required";
   const connectedByRow =
     Boolean(channel) &&
     lower(channel?.status) === "connected" &&
     hasIds &&
-    hasToken;
+    hasToken &&
+    !explicitReconnectRequired &&
+    !explicitDeauthorized;
 
   let state = "not_connected";
   let reasonCode = "channel_not_connected";
 
   if (!channel) {
-    if (capability?.allowed === false) {
+    if (selectionRequired) {
+      state = "not_connected";
+      reasonCode = "instagram_account_selection_required";
+    } else if (capability?.allowed === false) {
       state = "blocked";
       reasonCode = "plan_capability_restricted";
     } else if (!oauthEnvReady) {
@@ -889,15 +1052,17 @@ function buildMetaStatusPayload({ tenant = {}, channel = null, secrets = {} } = 
   } else if (connectedByRow) {
     state = "connected";
     reasonCode = "";
-  } else if (snapshot.deauthorizedAt || snapshot.connectionState === "deauthorized") {
+  } else if (explicitDeauthorized) {
     state = "deauthorized";
     reasonCode = s(snapshot.disconnectReason || "meta_app_deauthorized");
-  } else if (
-    snapshot.disconnectReason === "user_disconnect" ||
-    lower(channel?.status) === "disconnected"
-  ) {
+  } else if (explicitDisconnected) {
     state = oauthEnvReady ? "disconnected" : "blocked";
     reasonCode = oauthEnvReady ? "user_disconnect" : "meta_oauth_env_missing";
+  } else if (explicitReconnectRequired) {
+    state = oauthEnvReady ? "reconnect_required" : "blocked";
+    reasonCode = oauthEnvReady
+      ? s(snapshot.disconnectReason || "channel_reconnect_required")
+      : "meta_oauth_env_missing";
   } else if (!hasIds) {
     state = oauthEnvReady ? "reconnect_required" : "blocked";
     reasonCode = oauthEnvReady
@@ -925,10 +1090,19 @@ function buildMetaStatusPayload({ tenant = {}, channel = null, secrets = {} } = 
     oauthEnvReady,
     gatewayReady,
     capability,
-    pendingSelection,
+    pendingSelection: pendingSelectionView,
   });
-
-  const selectionRequired = pendingSelection?.required === true;
+  const userToken = buildMetaUserTokenLifecycle(snapshot.userTokenExpiresAt);
+  const attentionItems = buildMetaStatusAttentionItems({
+    state,
+    userToken,
+  });
+  const reconnectRecommended =
+    state === "connected" &&
+    capability?.allowed !== false &&
+    oauthEnvReady &&
+    !selectionRequired &&
+    userToken.reconnectRecommended;
 
   return {
     connected: state === "connected",
@@ -963,7 +1137,7 @@ function buildMetaStatusPayload({ tenant = {}, channel = null, secrets = {} } = 
       metaUserId: cleanNullable(snapshot.metaUserId),
       metaUserName: cleanNullable(snapshot.metaUserName),
     },
-    pendingSelection,
+    pendingSelection: pendingSelectionView,
     runtime: {
       ready: deliveryReady,
       webhookReady,
@@ -983,6 +1157,7 @@ function buildMetaStatusPayload({ tenant = {}, channel = null, secrets = {} } = 
       authModel: "instagram_dm_page_access",
       requestedScopes: snapshot.requestedScopes,
       grantedScopes: snapshot.grantedScopes,
+      excludedScopes: snapshot.excludedScopes,
       phaseTwoCapabilities: snapshot.phaseTwoCapabilities,
       manualReconnectMode: "oauth",
       lastOauthExchangeAt: cleanNullable(snapshot.lastOauthExchangeAt),
@@ -992,6 +1167,19 @@ function buildMetaStatusPayload({ tenant = {}, channel = null, secrets = {} } = 
       disconnectedAt: cleanNullable(snapshot.disconnectedAt),
       disconnectReason: cleanNullable(snapshot.disconnectReason),
       authStatus: cleanNullable(snapshot.authStatus),
+      userToken: {
+        known: userToken.known,
+        status: userToken.status,
+        expiresAt: cleanNullable(userToken.expiresAt),
+        expired: userToken.expired,
+        expiresSoon: userToken.expiresSoon,
+        reconnectRecommended: userToken.reconnectRecommended,
+      },
+    },
+    attention: {
+      hasItems: attentionItems.length > 0,
+      reconnectRecommended,
+      items: attentionItems,
     },
     actions: {
       primary:
@@ -1006,6 +1194,11 @@ function buildMetaStatusPayload({ tenant = {}, channel = null, secrets = {} } = 
         capability?.allowed !== false && oauthEnvReady && !selectionRequired,
       reconnectAvailable:
         capability?.allowed !== false && oauthEnvReady && !selectionRequired,
+      reconnectRecommended,
+      reconnectReasonCode:
+        reconnectRecommended && attentionItems[0]?.reasonCode
+          ? attentionItems[0].reasonCode
+          : "",
       selectionAvailable: selectionRequired,
       disconnectAvailable: Boolean(channel) || selectionRequired,
       nextAction:
@@ -1022,11 +1215,11 @@ function buildMetaStatusPayload({ tenant = {}, channel = null, secrets = {} } = 
     review: buildMetaReviewPayload(),
     readiness: buildReadinessSurface({
       status: blockers.length ? "blocked" : "ready",
-      message: selectionRequired
-        ? "Instagram connect is waiting for an explicit account selection before this tenant can be bound."
-        : blockers.length
-        ? "Instagram DM automation is blocked until the tenant connection and runtime prerequisites are repaired."
-        : "Instagram DM automation is ready.",
+      message: buildMetaReadyMessage({
+        selectionRequired,
+        blockers,
+        attentionItems,
+      }),
       blockers,
     }),
   };
@@ -1277,101 +1470,6 @@ export async function handleMetaCallback({
       capabilityGovernance: connectedCapabilityGovernance,
     },
   };
-
-  const connectedAt = new Date().toISOString();
-
-  await saveMetaPageAccessToken(
-    db,
-    tenant.id,
-    selected.pageAccessToken,
-    state.actor || "system"
-  );
-
-  await upsertInstagramChannel(db, tenant.id, {
-    provider: "meta",
-    display_name: selected.igUsername
-      ? `Instagram · @${selected.igUsername}`
-      : selected.pageName || "Instagram",
-    external_page_id: selected.pageId,
-    external_user_id: selected.igUserId,
-    external_username: cleanNullable(selected.igUsername),
-    status: "connected",
-    is_primary: true,
-    config: buildConnectedChannelConfig({
-      selected,
-      requestedScopes: META_DM_LAUNCH_SCOPES,
-      grantedScopes: META_DM_LAUNCH_SCOPES,
-      metaUserProfile,
-      connectedAt,
-    }),
-    secrets_ref: "meta",
-    health: buildConnectedChannelHealth({
-      tokenJson,
-      metaUserProfile,
-      connectedAt,
-    }),
-    last_sync_at: connectedAt,
-  });
-
-  const legacySyncResult = await syncInstagramSourceLayer({
-    db,
-    tenant,
-    actor: state.actor || "system",
-    selected,
-    oauthScopes: META_DM_LAUNCH_SCOPES,
-  });
-  const legacySource = legacySyncResult?.source || null;
-  const legacyCapabilityGovernance =
-    legacySyncResult?.capabilityGovernance || null;
-
-  await auditSafe(
-    db,
-    state.actor || "system",
-    tenant,
-    "settings.channel.meta.connected",
-    "tenant_channel",
-    "instagram",
-    {
-      pageId: selected.pageId,
-      igUserId: selected.igUserId,
-      igUsername: selected.igUsername || null,
-      metaUserId: metaUserProfile.id || null,
-      scopeModel: "instagram_dm_page_access",
-      requestedScopes: [...META_DM_LAUNCH_SCOPES],
-      phaseTwoCapabilities: [...META_PHASE_TWO_CAPABILITIES],
-      sourceId: legacySource?.id || null,
-      sourceKey: legacySource?.source_key || null,
-      capabilityGovernance: {
-        publishStatus: s(legacyCapabilityGovernance?.publishStatus),
-        reviewRequired: !!legacyCapabilityGovernance?.reviewRequired,
-        maintenanceSessionId: s(
-          legacyCapabilityGovernance?.maintenanceSession?.id
-        ),
-        blockedReason: s(legacyCapabilityGovernance?.blockedReason),
-      },
-    }
-  );
-
-  return {
-    type: "success",
-    redirectUrl: buildRedirectUrl({
-      section: "channels",
-      meta_connected: "1",
-      channel: "instagram",
-    }),
-    payload: {
-      connected: true,
-      channel: "instagram",
-      pageId: selected.pageId,
-      igUserId: selected.igUserId,
-      igUsername: selected.igUsername || null,
-      metaUserId: metaUserProfile.id || null,
-      review: buildMetaReviewPayload(),
-      sourceId: legacySource?.id || null,
-      sourceKey: legacySource?.source_key || null,
-      capabilityGovernance: legacyCapabilityGovernance,
-    },
-  };
 }
 
 export async function completeMetaSelection({
@@ -1405,8 +1503,17 @@ export async function completeMetaSelection({
     throw err;
   }
 
-  const secrets = await getMetaSecrets(db, tenant.id);
-  const pendingSelection = readPendingMetaSelection(secrets);
+  const {
+    pendingSelection,
+    pendingSelectionExpired,
+  } = await loadMetaSecretsContext(db, tenant.id);
+
+  if (pendingSelectionExpired) {
+    const err = new Error("Instagram selection expired. Start connect again.");
+    err.status = 409;
+    throw err;
+  }
+
   if (!pendingSelection?.selectionId) {
     const err = new Error("Instagram selection is no longer available");
     err.status = 409;
@@ -1415,13 +1522,6 @@ export async function completeMetaSelection({
 
   if (pendingSelection.selectionId !== checked.selectionId) {
     const err = new Error("Instagram selection has been replaced by a newer connect attempt");
-    err.status = 409;
-    throw err;
-  }
-
-  if (hasPendingMetaSelectionExpired(pendingSelection)) {
-    await deleteMetaSecretKeys(db, tenant.id, [META_CONNECT_SELECTION_SECRET_KEY]);
-    const err = new Error("Instagram selection expired. Start connect again.");
     err.status = 409;
     throw err;
   }
@@ -1509,21 +1609,16 @@ export async function getMetaStatus({ db, req }) {
     throw err;
   }
 
-  const [channel, secrets] = await Promise.all([
+  const [channel, secretsContext] = await Promise.all([
     getPrimaryInstagramChannel(db, tenant.id),
-    getMetaSecrets(db, tenant.id),
+    loadMetaSecretsContext(db, tenant.id),
   ]);
-
-  const pendingSelection = readPendingMetaSelection(secrets);
-  if (pendingSelection && hasPendingMetaSelectionExpired(pendingSelection)) {
-    await deleteMetaSecretKeys(db, tenant.id, [META_CONNECT_SELECTION_SECRET_KEY]);
-    delete secrets[META_CONNECT_SELECTION_SECRET_KEY];
-  }
 
   return buildMetaStatusPayload({
     tenant,
     channel,
-    secrets,
+    secrets: secretsContext.secrets,
+    pendingSelection: secretsContext.pendingSelection,
   });
 }
 
@@ -1544,8 +1639,7 @@ export async function disconnectMeta({ db, req }) {
 
   const actor = getReqActor(req);
   const currentChannel = await getPrimaryInstagramChannel(db, tenant.id);
-  const secrets = await getMetaSecrets(db, tenant.id);
-  const pendingSelection = readPendingMetaSelection(secrets);
+  const { pendingSelection } = await loadMetaSecretsContext(db, tenant.id);
   const disconnectedAt = new Date().toISOString();
 
   await deleteMetaSecretKeys(db, tenant.id, [
