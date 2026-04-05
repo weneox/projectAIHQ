@@ -294,6 +294,77 @@ describe("ChannelCatalog", () => {
     );
   });
 
+  it("shows the precise latest reconnect blocker when Meta denied a required permission", async () => {
+    getMetaChannelStatus.mockResolvedValueOnce({
+      ok: true,
+      state: "not_connected",
+      reasonCode: "meta_missing_granted_permissions",
+      account: {
+        displayName: "Instagram",
+      },
+      runtime: {
+        webhookReady: false,
+        deliveryReady: false,
+      },
+      review: {
+        story:
+          "Businesses connect their own Instagram Business / Professional account and the platform helps them manage inbound customer conversations using tenant-specific business settings and runtime.",
+        requestedScopes: DM_FIRST_REQUESTED_SCOPES,
+        excludedScopes: [
+          "business_management",
+          "instagram_manage_comments",
+          "instagram_content_publish",
+        ],
+      },
+      lastConnectFailure: {
+        reasonCode: "meta_missing_granted_permissions",
+        missingGrantedScopes: ["instagram_manage_messages"],
+      },
+      readiness: {
+        message:
+          "The latest Instagram connect attempt failed before this tenant could be rebound.",
+        blockers: [
+          {
+            reasonCode: "meta_missing_granted_permissions",
+            title:
+              "Meta did not grant every required permission for the latest connect attempt.",
+            subtitle:
+              "Missing: instagram_manage_messages. Granted: pages_show_list, instagram_basic.",
+          },
+        ],
+      },
+      lifecycle: {
+        userToken: {
+          status: "unknown",
+        },
+      },
+      attention: {
+        items: [],
+        reconnectRecommended: false,
+      },
+      actions: {
+        connectAvailable: true,
+        reconnectAvailable: true,
+        disconnectAvailable: true,
+      },
+    });
+
+    renderCatalog();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Instagram" }));
+
+    expect(
+      await screen.findByText(
+        "Meta did not grant every required permission for the latest connect attempt."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Missing: instagram_manage_messages. Granted: pages_show_list, instagram_basic."
+      )
+    ).toBeInTheDocument();
+  });
+
   it("opens phase 2 connectors as honest detail views instead of navigating to fake setup paths", () => {
     renderCatalog();
 

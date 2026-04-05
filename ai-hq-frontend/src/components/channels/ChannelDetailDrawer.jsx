@@ -363,6 +363,7 @@ export default function ChannelDetailDrawer({
       nextParams.set("meta_connected", "1");
       nextParams.delete("meta_selection");
       nextParams.delete("meta_error");
+      nextParams.delete("meta_reason");
       nextParams.set("section", "channels");
       nextParams.set("channel", "instagram");
       setSearchParams(nextParams);
@@ -379,6 +380,7 @@ export default function ChannelDetailDrawer({
     nextParams.delete("meta_connected");
     nextParams.delete("meta_selection");
     nextParams.delete("meta_error");
+    nextParams.delete("meta_reason");
     nextParams.delete("section");
     setSearchParams(nextParams);
   }
@@ -407,6 +409,7 @@ export default function ChannelDetailDrawer({
     connected: searchParams.get("meta_connected") === "1",
     selection: searchParams.get("meta_selection") === "1",
     error: s(searchParams.get("meta_error")),
+    reason: s(searchParams.get("meta_reason")),
   };
 
   const actionError = s(
