@@ -1465,6 +1465,7 @@ function buildMetaStatusPayload({
     userToken.reconnectRecommended;
 
   return {
+    deploymentMarker: "meta-status-2026-04-05-v1",
     connected: state === "connected",
     state,
     reasonCode,
