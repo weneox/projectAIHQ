@@ -48,6 +48,23 @@ function pickErrorStatus(error, fallback = 500) {
   return fallback;
 }
 
+async function runUpdateDraft(req, res, actor, updateDraft, db) {
+  try {
+    const result = await updateDraft({
+      db,
+      actor,
+      body: req.body || {},
+    });
+    return res.status(result.status).json(result.body);
+  } catch (error) {
+    return res.status(pickErrorStatus(error, 500)).json({
+      ok: false,
+      error: "OnboardingDraftUpdateFailed",
+      reason: s(error?.message || "failed to update onboarding draft"),
+    });
+  }
+}
+
 export function workspaceOnboardingRoutes({ db, services = {} } = {}) {
   const router = express.Router();
   const loadCurrentSession =
@@ -98,21 +115,13 @@ export function workspaceOnboardingRoutes({ db, services = {} } = {}) {
   router.patch("/onboarding/session/current", async (req, res) => {
     const actor = requireOnboardingActor(req, res);
     if (!actor) return;
+    return runUpdateDraft(req, res, actor, updateDraft, db);
+  });
 
-    try {
-      const result = await updateDraft({
-        db,
-        actor,
-        body: req.body || {},
-      });
-      return res.status(result.status).json(result.body);
-    } catch (error) {
-      return res.status(pickErrorStatus(error, 500)).json({
-        ok: false,
-        error: "OnboardingDraftUpdateFailed",
-        reason: s(error?.message || "failed to update onboarding draft"),
-      });
-    }
+  router.post("/onboarding/session/current/message", async (req, res) => {
+    const actor = requireOnboardingActor(req, res);
+    if (!actor) return;
+    return runUpdateDraft(req, res, actor, updateDraft, db);
   });
 
   return router;

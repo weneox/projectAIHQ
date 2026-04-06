@@ -23,3 +23,7 @@ export async function getCurrentOnboardingSession() {
 export async function updateCurrentOnboardingDraft(payload = {}) {
   return apiPatch("/api/onboarding/session/current", payload);
 }
+
+export async function sendOnboardingMessage(payload = {}) {
+  return apiPost("/api/onboarding/session/current/message", payload);
+}

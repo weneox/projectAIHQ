@@ -13,8 +13,59 @@ import {
 } from "./draftShared.js";
 import { auditSetupAction } from "./auditApp.js";
 
-const REVIEW_PLACEHOLDER_MESSAGE =
-  "Draft answers stay separate from approved truth and the strict runtime until a later approval step is completed.";
+const REVIEW_MESSAGE =
+  "Draft answers stay separate from approved truth and live automation until approval is completed.";
+
+const ONBOARDING_QUESTIONS = [
+  {
+    key: "website",
+    label: "Website",
+    prompt: "Saytın var?",
+    placeholder: "https://yourbusiness.com",
+  },
+  {
+    key: "company",
+    label: "Business",
+    prompt: "Biznes adı nədir?",
+    placeholder: "NEOX AI",
+  },
+  {
+    key: "description",
+    label: "About",
+    prompt: "Nə iş görürsən?",
+    placeholder: "Bir cümlə ilə yaz",
+  },
+  {
+    key: "services",
+    label: "Services",
+    prompt: "Əsas xidmətlərin hansılardır?",
+    placeholder: "Məs: dizayn, quraşdırma, servis",
+  },
+  {
+    key: "contact",
+    label: "Contact",
+    prompt: "Müştəri sənə necə çatsın?",
+    placeholder: "Telefon, WhatsApp, email və s.",
+  },
+  {
+    key: "hours",
+    label: "Hours",
+    prompt: "İş saatların necədir?",
+    placeholder: "Məs: Hər gün 09:00-19:00",
+  },
+  {
+    key: "pricing",
+    label: "Pricing",
+    prompt: "Qiymət barədə necə cavab verək?",
+    placeholder: "Məs: qiymət üçün yazın / starting from 50 AZN",
+  },
+  {
+    key: "handoff",
+    label: "Handoff",
+    prompt: "Bot səni hansı hallarda çağırsın?",
+    placeholder: "Məs: şikayət, təcili sifariş, böyük qiymət sorğusu",
+  },
+];
 
 function nowIso() {
   return new Date().toISOString();
@@ -39,12 +90,43 @@ function normalizeStringArray(value = [], limit = 12) {
     .slice(0, limit);
 }
 
+function normalizeWebsiteUrl(value = "") {
+  const raw = s(value);
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.includes(".") && !raw.includes(" ")) {
+    return `https://${raw}`;
+  }
+  return raw;
+}
+
+function splitAnswerList(value = "", limit = 24) {
+  return String(value || "")
+    .split(/\n|,|;|\u2022|- /g)
+    .map((item) => s(item))
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function inferContactType(value = "") {
+  const text = s(value).toLowerCase();
+  if (!text) return "";
+  if (text.includes("@")) return "email";
+  if (text.includes("http") || text.includes("www.") || text.includes("instagram.com")) {
+    return "link";
+  }
+  if (/[0-9+() -]{6,}/.test(text)) return "phone";
+  return "primary";
+}
+
 function sanitizeBusinessProfile(value = {}) {
   const source = obj(value);
   return compactDraftObject({
     companyName: s(source.companyName || source.company_name),
     description: s(source.description || source.summary),
-    websiteUrl: s(source.websiteUrl || source.website_url || source.website),
+    websiteUrl: normalizeWebsiteUrl(
+      source.websiteUrl || source.website_url || source.website
+    ),
   });
 }
 
@@ -62,7 +144,9 @@ function sanitizeServiceItem(value = {}) {
   if (!title && !summary && !priceLabel && !category) return null;
 
   return compactDraftObject({
-    key: s(source.key || source.serviceKey || source.service_key) || slugify(title),
+    key:
+      s(source.key || source.serviceKey || source.service_key) ||
+      slugify(title || summary || category),
     title,
     summary,
     category,
@@ -140,13 +224,137 @@ function sanitizePricingPosture(value = {}) {
 function sanitizeHandoffRules(value = {}) {
   const source = obj(value);
   return compactDraftObject({
-    enabled: source.enabled === true,
+    enabled:
+      source.enabled === true ||
+      Boolean(
+        s(source.summary || source.description || source.notes) ||
+          arr(source.triggers).length
+      ),
     summary: s(source.summary || source.description || source.notes),
     triggers: normalizeStringArray(source.triggers, 24),
     channels: normalizeStringArray(source.channels, 12),
     escalationTarget: s(
       source.escalationTarget || source.escalation_target || source.target
     ),
+  });
+}
+
+function buildServicesFromAnswer(answer = "") {
+  return splitAnswerList(answer, 24).map((title) => ({
+    key: slugify(title),
+    title,
+  }));
+}
+
+function buildContactsFromAnswer(answer = "") {
+  const text = s(answer);
+  if (!text) return [];
+  return [
+    {
+      type: inferContactType(text),
+      label: "Primary",
+      value: text,
+      preferred: true,
+      visibility: "public",
+    },
+  ];
+}
+
+function buildHoursFromAnswer(answer = "") {
+  const text = s(answer);
+  if (!text) return [];
+  return [
+    {
+      day: "general",
+      notes: text,
+    },
+  ];
+}
+
+function patchFromAnswer(step = "", answer = "") {
+  const key = s(step).toLowerCase();
+  const text = s(answer);
+
+  if (!key || !text) return {};
+
+  switch (key) {
+    case "website":
+      return {
+        businessProfile: {
+          websiteUrl: normalizeWebsiteUrl(text),
+        },
+      };
+    case "company":
+      return {
+        businessProfile: {
+          companyName: text,
+        },
+      };
+    case "description":
+      return {
+        businessProfile: {
+          description: text,
+        },
+      };
+    case "services":
+      return {
+        services: buildServicesFromAnswer(text),
+      };
+    case "contact":
+      return {
+        contacts: buildContactsFromAnswer(text),
+      };
+    case "hours":
+      return {
+        hours: buildHoursFromAnswer(text),
+      };
+    case "pricing":
+      return {
+        pricingPosture: {
+          summary: text,
+        },
+      };
+    case "handoff":
+      return {
+        handoffRules: {
+          summary: text,
+          triggers: splitAnswerList(text, 24),
+        },
+      };
+    default:
+      return {};
+  }
+}
+
+function mergePatchObjects(left = {}, right = {}) {
+  const a = obj(left);
+  const b = obj(right);
+
+  return compactDraftObject({
+    businessProfile:
+      a.businessProfile !== undefined || b.businessProfile !== undefined
+        ? {
+            ...obj(a.businessProfile),
+            ...obj(b.businessProfile),
+          }
+        : undefined,
+    services: b.services !== undefined ? b.services : a.services,
+    contacts: b.contacts !== undefined ? b.contacts : a.contacts,
+    hours: b.hours !== undefined ? b.hours : a.hours,
+    pricingPosture:
+      a.pricingPosture !== undefined || b.pricingPosture !== undefined
+        ? {
+            ...obj(a.pricingPosture),
+            ...obj(b.pricingPosture),
+          }
+        : undefined,
+    handoffRules:
+      a.handoffRules !== undefined || b.handoffRules !== undefined
+        ? {
+            ...obj(a.handoffRules),
+            ...obj(b.handoffRules),
+          }
+        : undefined,
   });
 }
 
@@ -159,14 +367,51 @@ function deriveWebsitePrefillDraft(core = {}) {
     mode: "manual_url",
     status: websiteUrl ? "captured" : "awaiting_input",
     websiteUrl,
+    scanSuggested: Boolean(websiteUrl),
   };
 }
 
-function deriveReviewPlaceholder() {
+function buildSummary(draft = {}) {
+  const businessProfile = obj(draft.businessProfile);
+  const pricingPosture = obj(draft.pricingPosture);
+  const handoffRules = obj(draft.handoffRules);
+
+  const completed = {
+    website: Boolean(s(businessProfile.websiteUrl)),
+    company: Boolean(s(businessProfile.companyName)),
+    description: Boolean(s(businessProfile.description)),
+    services: arr(draft.services).length > 0,
+    contact: arr(draft.contacts).length > 0,
+    hours: arr(draft.hours).length > 0,
+    pricing: Boolean(Object.keys(pricingPosture).length),
+    handoff: Boolean(Object.keys(handoffRules).length),
+  };
+
+  const completedCount = Object.values(completed).filter(Boolean).length;
+  const coreComplete =
+    completed.company && completed.description && (completed.website || completed.contact);
+
   return {
-    status: "draft_only",
+    completed,
+    completedCount,
+    totalSteps: ONBOARDING_QUESTIONS.length,
+    hasAnyDraft: completedCount > 0,
+    coreComplete,
+    hasWebsite: completed.website,
+    hasServices: completed.services,
+    hasContacts: completed.contact,
+    hasHours: completed.hours,
+  };
+}
+
+function buildReviewState(draft = {}, summary = {}) {
+  return {
+    status: summary.hasAnyDraft ? "draft_in_progress" : "awaiting_input",
+    readyForReview: summary.coreComplete === true,
     readyForApproval: false,
-    message: REVIEW_PLACEHOLDER_MESSAGE,
+    message: summary.coreComplete
+      ? "Review hazırdır. Aktivləşmə sonrakı mərhələdir."
+      : REVIEW_MESSAGE,
   };
 }
 
@@ -186,10 +431,12 @@ function buildStoredOnboardingPayload(value = {}) {
     ),
   };
 
+  const summary = buildSummary(core);
+
   return {
     ...core,
     websitePrefill: deriveWebsitePrefillDraft(core),
-    review: deriveReviewPlaceholder(),
+    review: buildReviewState(core, summary),
   };
 }
 
@@ -213,12 +460,13 @@ function pickAliasedField(source = {}, aliases = []) {
   };
 }
 
-export function normalizeOnboardingDraftPatchBody(body = {}) {
+function normalizeDirectPatchBody(body = {}) {
   const root = obj(body?.draft)
     ? obj(body.draft)
     : obj(body?.onboarding)
       ? obj(body.onboarding)
       : obj(body);
+
   const out = {};
 
   const businessProfile = pickAliasedField(root, [
@@ -262,15 +510,31 @@ export function normalizeOnboardingDraftPatchBody(body = {}) {
     out.handoffRules = sanitizeHandoffRules(obj(handoffRules.value));
   }
 
-  return out;
+  return compactDraftObject(out);
+}
+
+function normalizeAnswerPatchBody(body = {}) {
+  const step = s(body.step || body.questionKey || body.field).toLowerCase();
+  const answer = s(body.answer || body.message || body.text || body.value);
+  return compactDraftObject(patchFromAnswer(step, answer));
+}
+
+export function normalizeOnboardingDraftPatchBody(body = {}) {
+  const directPatch = normalizeDirectPatchBody(body);
+  const answerPatch = normalizeAnswerPatchBody(body);
+  return mergePatchObjects(directPatch, answerPatch);
 }
 
 export function mergeOnboardingDraft(current = {}, patch = {}) {
   const existing = normalizeStoredOnboardingPayload(current);
+
   const next = {
     businessProfile:
       patch.businessProfile !== undefined
-        ? sanitizeBusinessProfile(patch.businessProfile)
+        ? sanitizeBusinessProfile({
+            ...obj(existing.businessProfile),
+            ...obj(patch.businessProfile),
+          })
         : existing.businessProfile,
     services:
       patch.services !== undefined
@@ -284,43 +548,115 @@ export function mergeOnboardingDraft(current = {}, patch = {}) {
       patch.hours !== undefined ? sanitizeHours(patch.hours) : existing.hours,
     pricingPosture:
       patch.pricingPosture !== undefined
-        ? sanitizePricingPosture(patch.pricingPosture)
+        ? sanitizePricingPosture({
+            ...obj(existing.pricingPosture),
+            ...obj(patch.pricingPosture),
+          })
         : existing.pricingPosture,
     handoffRules:
       patch.handoffRules !== undefined
-        ? sanitizeHandoffRules(patch.handoffRules)
+        ? sanitizeHandoffRules({
+            ...obj(existing.handoffRules),
+            ...obj(patch.handoffRules),
+          })
         : existing.handoffRules,
   };
 
   return buildStoredOnboardingPayload(next);
 }
 
-function buildSummary(draft = {}) {
+function isQuestionAnswered(questionKey = "", draft = {}) {
   const businessProfile = obj(draft.businessProfile);
-  const pricingPosture = obj(draft.pricingPosture);
-  const handoffRules = obj(draft.handoffRules);
 
-  const completedSections = [
-    Boolean(
-      s(businessProfile.companyName) ||
-        s(businessProfile.description) ||
-        s(businessProfile.websiteUrl)
-    ),
-    arr(draft.services).length > 0,
-    arr(draft.contacts).length > 0,
-    arr(draft.hours).length > 0,
-    Object.keys(pricingPosture).length > 0,
-    Object.keys(handoffRules).length > 0,
-  ].filter(Boolean).length;
+  switch (questionKey) {
+    case "website":
+      return Boolean(s(businessProfile.websiteUrl));
+    case "company":
+      return Boolean(s(businessProfile.companyName));
+    case "description":
+      return Boolean(s(businessProfile.description));
+    case "services":
+      return arr(draft.services).length > 0;
+    case "contact":
+      return arr(draft.contacts).length > 0;
+    case "hours":
+      return arr(draft.hours).length > 0;
+    case "pricing":
+      return Boolean(Object.keys(obj(draft.pricingPosture)).length);
+    case "handoff":
+      return Boolean(Object.keys(obj(draft.handoffRules)).length);
+    default:
+      return false;
+  }
+}
+
+function summarizeAnswer(questionKey = "", draft = {}) {
+  const businessProfile = obj(draft.businessProfile);
+
+  switch (questionKey) {
+    case "website":
+      return s(businessProfile.websiteUrl);
+    case "company":
+      return s(businessProfile.companyName);
+    case "description":
+      return s(businessProfile.description);
+    case "services":
+      return arr(draft.services)
+        .map((item) => s(item.title || item.name || item.label))
+        .filter(Boolean)
+        .slice(0, 4)
+        .join(", ");
+    case "contact":
+      return s(arr(draft.contacts)[0]?.value);
+    case "hours":
+      return s(arr(draft.hours)[0]?.notes || arr(draft.hours)[0]?.day);
+    case "pricing":
+      return s(obj(draft.pricingPosture).summary);
+    case "handoff":
+      return s(obj(draft.handoffRules).summary);
+    default:
+      return "";
+  }
+}
+
+function buildConversation(draft = {}) {
+  const items = [];
+
+  for (const question of ONBOARDING_QUESTIONS) {
+    items.push({
+      id: `q:${question.key}`,
+      role: "assistant",
+      step: question.key,
+      text: question.prompt,
+    });
+
+    if (isQuestionAnswered(question.key, draft)) {
+      items.push({
+        id: `a:${question.key}`,
+        role: "user",
+        step: question.key,
+        text: summarizeAnswer(question.key, draft),
+      });
+      continue;
+    }
+
+    break;
+  }
+
+  return items;
+}
+
+function getNextQuestion(draft = {}) {
+  const next = ONBOARDING_QUESTIONS.find(
+    (question) => !isQuestionAnswered(question.key, draft)
+  );
+  if (!next) return null;
 
   return {
-    completedSections,
-    totalSections: 6,
-    hasAnyDraft: completedSections > 0,
-    hasWebsite: Boolean(s(businessProfile.websiteUrl)),
-    hasServices: arr(draft.services).length > 0,
-    hasContacts: arr(draft.contacts).length > 0,
-    hasHours: arr(draft.hours).length > 0,
+    key: next.key,
+    label: next.label,
+    prompt: next.prompt,
+    placeholder: next.placeholder,
   };
 }
 
@@ -330,13 +666,17 @@ export function buildOnboardingSessionPayload(review = {}) {
   const draftPayload = obj(draftRow.draftPayload);
   const onboarding = normalizeStoredOnboardingPayload(draftPayload.onboarding);
   const summary = buildSummary(onboarding);
+  const nextQuestion = getNextQuestion(onboarding);
+  const conversation = buildConversation(onboarding);
 
   return {
     session: {
       id: s(session.id),
       status: s(session.status || "draft").toLowerCase(),
       mode: s(session.mode || "setup").toLowerCase(),
-      currentStep: s(session.currentStep || "onboarding").toLowerCase(),
+      currentStep: s(
+        session.currentStep || nextQuestion?.key || "onboarding"
+      ).toLowerCase(),
       startedAt: session.startedAt || session.started_at || null,
       updatedAt:
         session.updatedAt ||
@@ -355,6 +695,18 @@ export function buildOnboardingSessionPayload(review = {}) {
       summary,
       websitePrefill: obj(onboarding.websitePrefill),
       review: obj(onboarding.review),
+      assistant: {
+        mode: "qna",
+        nextQuestion,
+        conversation,
+        composer:
+          nextQuestion == null
+            ? null
+            : {
+                step: nextQuestion.key,
+                placeholder: nextQuestion.placeholder,
+              },
+      },
       draft: {
         businessProfile: obj(onboarding.businessProfile),
         services: arr(onboarding.services),
@@ -378,13 +730,11 @@ function resolveStartedBy(actor = {}) {
   );
 }
 
-export async function startOnboardingSession(
-  { db, actor },
-  deps = {}
-) {
+export async function startOnboardingSession({ db, actor }, deps = {}) {
   const getCurrentReview = deps.getCurrentSetupReview || getCurrentSetupReview;
   const getOrCreateSession =
-    deps.getOrCreateActiveSetupReviewSession || getOrCreateActiveSetupReviewSession;
+    deps.getOrCreateActiveSetupReviewSession ||
+    getOrCreateActiveSetupReviewSession;
   const audit = deps.auditSetupAction || auditSetupAction;
 
   let review = await getCurrentReview(actor.tenantId);
@@ -437,10 +787,7 @@ export async function startOnboardingSession(
   };
 }
 
-export async function loadCurrentOnboardingSession(
-  { db, actor },
-  deps = {}
-) {
+export async function loadCurrentOnboardingSession({ db, actor }, deps = {}) {
   const getCurrentReview = deps.getCurrentSetupReview || getCurrentSetupReview;
   const review = await getCurrentReview(actor.tenantId);
 
@@ -529,10 +876,16 @@ export async function updateOnboardingDraft(
     s(refreshed?.session?.id || review.session.id),
     {
       reviewSessionId: s(refreshed?.session?.id || review.session.id),
-      draftVersion: Number(refreshed?.draft?.version || review?.draft?.version || 0),
+      draftVersion: Number(
+        refreshed?.draft?.version || review?.draft?.version || 0
+      ),
       updatedFields: Object.keys(patch),
       source: "home_widget",
       draftOnly: true,
+      messageMode: Boolean(
+        s(body.step || body.questionKey || body.field) &&
+          s(body.answer || body.message || body.text || body.value)
+      ),
     }
   );
 
@@ -547,8 +900,11 @@ export async function updateOnboardingDraft(
 }
 
 export const __test__ = {
+  buildConversation,
   buildOnboardingSessionPayload,
   buildStoredOnboardingPayload,
+  getNextQuestion,
   mergeOnboardingDraft,
   normalizeOnboardingDraftPatchBody,
+  patchFromAnswer,
 };
