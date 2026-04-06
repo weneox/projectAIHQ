@@ -69,6 +69,19 @@ const STEP_META = {
   },
 };
 
+function resolveInitialStep({
+  canDraft,
+  websiteUrl = "",
+  companyName = "",
+  description = "",
+} = {}) {
+  if (!canDraft) return "shortcut";
+  if (!s(websiteUrl)) return "website";
+  if (!s(companyName)) return "company";
+  if (!s(description)) return "description";
+  return "review";
+}
+
 function nextStep(step = "website") {
   const index = STEP_ORDER.indexOf(step);
   if (index < 0) return "review";
