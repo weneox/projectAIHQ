@@ -1,18 +1,18 @@
 import {
   ArrowRight,
+  Bot,
+  CheckCircle2,
   Globe2,
   LayoutGrid,
   Link2,
-  Loader2,
   MessageSquareText,
-  Settings2,
+  ShieldCheck,
   Sparkles,
   Waypoints,
   Waves,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import Input, { Textarea } from "../../components/ui/Input.jsx";
 import Badge from "../../components/ui/Badge.jsx";
 import Button from "../../components/ui/Button.jsx";
 import {
@@ -20,8 +20,6 @@ import {
   LoadingSurface,
   PageCanvas,
 } from "../../components/ui/AppShellPrimitives.jsx";
-import { saveBusinessProfile } from "../../api/setup.js";
-import { clearAppBootstrapContext } from "../../lib/appSession.js";
 import useProductHome from "../../view-models/useProductHome.js";
 
 const ENTRY_ICONS = {
@@ -31,8 +29,8 @@ const ENTRY_ICONS = {
 };
 
 const SUPPORT_ICONS = {
-  setup: Settings2,
-  truth: Sparkles,
+  channels: Link2,
+  truth: ShieldCheck,
   workspace: LayoutGrid,
 };
 
@@ -47,7 +45,8 @@ function resolveTone(value = "") {
     text.includes("attention") ||
     text.includes("pending") ||
     text.includes("review") ||
-    text.includes("progress")
+    text.includes("blocked") ||
+    text.includes("waiting")
   ) {
     return "warning";
   }
@@ -56,8 +55,7 @@ function resolveTone(value = "") {
     text.includes("ready") ||
     text.includes("active") ||
     text.includes("stable") ||
-    text.includes("complete") ||
-    text.includes("start")
+    text.includes("connected")
   ) {
     return "info";
   }
@@ -194,7 +192,7 @@ function SupportCard({ items, onNavigate }) {
               Support layer
             </div>
             <div className="mt-2 text-[18px] font-semibold tracking-[-0.04em] text-text">
-              Setup, truth, workspace
+              Channels, truth, workspace
             </div>
           </div>
 
@@ -296,7 +294,7 @@ function HeroSection({ home, items, supportItems, onNavigate }) {
               Operating lanes
             </div>
             <div className="mt-1 text-[14px] font-semibold tracking-[-0.02em] text-text">
-              Three live surfaces, one support layer
+              Core work plus governed support surfaces
             </div>
           </div>
 
@@ -317,241 +315,114 @@ function HeroSection({ home, items, supportItems, onNavigate }) {
   );
 }
 
-function SetupAssistantSection({
+function DraftSnapshot({ label, value, icon }) {
+  const Icon = icon;
+
+  return (
+    <div className="rounded-[16px] border border-line bg-surface px-4 py-4 shadow-[0_10px_22px_-18px_rgba(15,23,42,0.18)]">
+      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+        <Icon className="h-3.5 w-3.5 text-brand" strokeWidth={1.9} />
+        <span>{label}</span>
+      </div>
+      <div className="mt-3 text-[14px] font-semibold tracking-[-0.03em] text-text">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function OnboardingAssistantSection({
   home,
-  supportItems,
   assistantOpen,
-  searchParams,
-  setSearchParams,
   onNavigate,
 }) {
-  const [mode, setMode] = useState(() => (assistantOpen ? "website" : ""));
-  const [website, setWebsite] = useState("");
-  const [description, setDescription] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (assistantOpen && !mode) {
-      setMode("website");
-    }
-  }, [assistantOpen, mode]);
-
-  const visible = !home.setupState?.isComplete || assistantOpen;
-  if (!visible) return null;
-
-  async function handleSave() {
-    if (saving) return;
-
-    const payload = {
-      companyName: home.companyName || "",
-      websiteUrl: compactText(website),
-      description: compactText(description),
-    };
-
-    if (!payload.websiteUrl && !payload.description) {
-      setError("Add a website or a short business description.");
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-    setMessage("");
-
-    try {
-      await saveBusinessProfile(payload);
-      clearAppBootstrapContext();
-      await home.refetch?.();
-      setMessage("Saved to workspace foundation.");
-      const next = new URLSearchParams(searchParams);
-      next.delete("assistant");
-      setSearchParams(next, { replace: true });
-    } catch (saveError) {
-      setError(
-        compactText(
-          saveError?.message,
-          "We could not save those business details right now."
-        )
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
+  const draft = home.onboardingState?.draft || {};
+  const profile = draft.businessProfile || {};
+  const servicesCount = home.onboardingState?.servicesCount || 0;
+  const contactsCount = home.onboardingState?.contactsCount || 0;
+  const hoursCount = home.onboardingState?.hoursCount || 0;
 
   return (
     <section className="overflow-hidden rounded-[18px] border border-line bg-surface shadow-panel">
-      <div className="grid xl:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="px-5 py-5 md:px-7 md:py-7">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-[540px]">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-                Setup assistant
-              </div>
-              <div className="mt-2 text-[1.8rem] font-semibold tracking-[-0.055em] text-text">
-                Add the minimum business context.
-              </div>
-              <div className="mt-2 text-[14px] leading-6 text-text-muted">
-                A website or one short description is enough.
-              </div>
-            </div>
+      <div className="grid xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="border-b border-line-soft px-5 py-5 md:px-7 md:py-7 xl:border-b-0 xl:border-r">
+          <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+            <Sparkles className="h-3.5 w-3.5 text-brand" strokeWidth={1.9} />
+            <span>AI onboarding shell</span>
+            {assistantOpen ? <Badge tone="info">Assistant open</Badge> : null}
+          </div>
 
-            <div className="flex flex-wrap gap-2">
+          <div className="mt-4 max-w-[40rem]">
+            <div className="text-[1.9rem] font-semibold tracking-[-0.055em] text-text">
+              {home.onboardingState?.title}
+            </div>
+            <div className="mt-2 text-[14px] leading-6 text-text-muted">
+              {home.onboardingState?.summary}
+            </div>
+            <div className="mt-2 text-[12px] leading-6 text-text-subtle">
+              {home.onboardingState?.detail}
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            {home.onboardingState?.action?.path ? (
               <Button
                 type="button"
-                size="sm"
-                variant={mode === "website" ? "primary" : "secondary"}
-                onClick={() => setMode("website")}
+                size="hero"
+                onClick={() => onNavigate(home.onboardingState.action)}
+                rightIcon={<ArrowRight className="h-4 w-4" />}
               >
-                Website
+                {home.onboardingState.action.label}
               </Button>
+            ) : null}
+
+            {home.onboardingState?.secondaryAction?.path ? (
               <Button
                 type="button"
-                size="sm"
-                variant={mode === "description" ? "primary" : "secondary"}
-                onClick={() => setMode("description")}
-              >
-                Description
-              </Button>
-              <Button
-                type="button"
-                size="sm"
+                size="hero"
                 variant="secondary"
-                onClick={() => onNavigate({ path: "/channels" })}
-                leftIcon={<Link2 className="h-4 w-4" />}
+                onClick={() => onNavigate(home.onboardingState.secondaryAction)}
               >
-                Connect sources
+                {home.onboardingState.secondaryAction.label}
               </Button>
-            </div>
-          </div>
-
-          <div className="mt-8 max-w-[720px]">
-            {mode === "website" ? (
-              <div className="space-y-3">
-                <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                  Website
-                </div>
-                <Input
-                  value={website}
-                  onChange={(event) => setWebsite(event.target.value)}
-                  placeholder="yourbusiness.com"
-                  leftIcon={<Globe2 className="h-4 w-4" />}
-                  appearance="product"
-                />
-              </div>
-            ) : null}
-
-            {mode === "description" ? (
-              <div className="space-y-3">
-                <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                  Business description
-                </div>
-                <Textarea
-                  rows={4}
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  placeholder="Premium dental clinic in Baku focused on implants, whitening, and family care."
-                  appearance="product"
-                />
-              </div>
-            ) : null}
-
-            {!mode ? (
-              <div className="flex min-h-[140px] items-center justify-center rounded-[14px] border border-dashed border-line bg-surface-muted px-5 text-center text-[13px] leading-6 text-text-muted">
-                Choose one path and keep it short.
-              </div>
-            ) : null}
-
-            {message ? (
-              <InlineNotice
-                tone="success"
-                title="Saved"
-                description={message}
-                compact
-                className="mt-4"
-              />
-            ) : null}
-
-            {error ? (
-              <InlineNotice
-                tone="danger"
-                title="Unable to save"
-                description={error}
-                compact
-                className="mt-4"
-              />
             ) : null}
           </div>
 
-          <div className="mt-6 flex flex-col gap-4 border-t border-line-soft pt-4 md:flex-row md:items-center md:justify-between">
-            <div className="text-[13px] text-text-muted">
-              {home.setupState?.summary ||
-                "The workspace can run now. Add business context only when useful."}
+          <div className="mt-6 rounded-[16px] border border-dashed border-line bg-[rgba(var(--color-brand),0.04)] px-4 py-4">
+            <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
+              Safety boundary
             </div>
-
-            <Button
-              type="button"
-              size="hero"
-              disabled={saving || (!compactText(website) && !compactText(description))}
-              onClick={handleSave}
-              rightIcon={
-                saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ArrowRight className="h-4 w-4" />
-                )
-              }
-            >
-              {saving ? "Saving..." : "Save basics"}
-            </Button>
+            <div className="mt-2 text-[13px] leading-6 text-text-muted">
+              {home.onboardingState?.review?.message ||
+                "Website or chat answers stay draft-only here. Nothing in this batch publishes directly into approved truth or the strict runtime."}
+            </div>
           </div>
         </div>
 
-        <div className="border-t border-line-soft bg-surface-muted px-5 py-5 md:px-7 md:py-7 xl:border-l xl:border-t-0">
+        <div className="bg-surface-muted px-5 py-5 md:px-7 md:py-7">
           <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
-            Current posture
-          </div>
-          <div className="mt-2 text-[18px] font-semibold tracking-[-0.04em] text-text">
-            {home.setupState?.status === "completed"
-              ? "Foundation is in place"
-              : "Foundation is still optional"}
-          </div>
-          <div className="mt-2 text-[13px] leading-6 text-text-muted">
-            {home.setupState?.summary ||
-              "The workspace can run now. Add context only when it improves the operating path."}
+            Draft snapshot
           </div>
 
-          <div className="mt-6 overflow-hidden rounded-[12px] border border-line bg-surface">
-            {supportItems.map((item, index) => {
-              const Icon = SUPPORT_ICONS[item.id] || Sparkles;
-
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onNavigate(item.action)}
-                  className={[
-                    "flex w-full items-center gap-3 px-4 py-3 text-left transition duration-fast hover:bg-surface-muted",
-                    index < supportItems.length - 1 ? "border-b border-line-soft" : "",
-                  ].join(" ")}
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-[9px] border border-line bg-surface-muted text-text-muted">
-                    <Icon className="h-4 w-4" strokeWidth={1.9} />
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-semibold tracking-[-0.02em] text-text">
-                      {item.title}
-                    </div>
-                    <div className="truncate text-[11px] text-text-subtle">
-                      {item.status}
-                    </div>
-                  </div>
-
-                  <ArrowRight className="h-4 w-4 text-text-subtle" strokeWidth={1.9} />
-                </button>
-              );
-            })}
+          <div className="mt-4 space-y-3">
+            <DraftSnapshot
+              label="Website"
+              value={compactText(
+                profile.websiteUrl,
+                home.onboardingState?.websiteUrl || "Awaiting website"
+              )}
+              icon={Globe2}
+            />
+            <DraftSnapshot
+              label="Company"
+              value={compactText(profile.companyName, "Awaiting company name")}
+              icon={Bot}
+            />
+            <DraftSnapshot
+              label="Coverage"
+              value={`${servicesCount} services • ${contactsCount} contacts • ${hoursCount} hours`}
+              icon={CheckCircle2}
+            />
           </div>
         </div>
       </div>
@@ -571,53 +442,20 @@ function ProductHomeLoadingSurface() {
 }
 
 function buildSupportItems(home, secondaryEntryPoints) {
-  const setupSignal = home.heroStats?.find((item) => item.id === "setup");
-  const truthSignal = home.heroStats?.find((item) => item.id === "memory");
-  const workspaceSignal =
+  const channels = home.entryPoints?.find((item) => item.id === "channels");
+  const truth = home.entryPoints?.find((item) => item.id === "truth");
+  const workspace =
     secondaryEntryPoints.find((item) => item.id === "workspace") ||
     home.entryPoints?.find((item) => item.id === "workspace");
 
-  return [
-    setupSignal
-      ? {
-          id: "setup",
-          title: "Setup",
-          status: setupSignal.status,
-          action: setupSignal.action,
-        }
-      : {
-          id: "setup",
-          title: "Setup",
-          status: "Support",
-          action: { label: "Open setup assistant", path: "/home?assistant=setup" },
-        },
-    truthSignal
-      ? {
-          id: "truth",
-          title: "Truth",
-          status: truthSignal.status,
-          action: truthSignal.action,
-        }
-      : {
-          id: "truth",
-          title: "Truth",
-          status: "Support",
-          action: { label: "Open truth", path: "/truth" },
-        },
-    workspaceSignal
-      ? {
-          id: "workspace",
-          title: "Workspace",
-          status: workspaceSignal.status,
-          action: workspaceSignal.action,
-        }
-      : {
-          id: "workspace",
-          title: "Workspace",
-          status: "Support",
-          action: { label: "Open workspace", path: "/workspace" },
-        },
-  ].filter((item) => item.action?.path);
+  return [channels, truth, workspace]
+    .filter((item) => item?.action?.path)
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      status: item.status,
+      action: item.action,
+    }));
 }
 
 export default function ProductHomePage() {
@@ -640,7 +478,9 @@ export default function ProductHomePage() {
     [home, secondaryEntryPoints]
   );
 
-  const assistantOpen = searchParams.get("assistant") === "setup";
+  const assistantOpen = ["setup", "onboarding"].includes(
+    searchParams.get("assistant")
+  );
 
   function navigateFromAction(action = null) {
     if (!action?.path) return;
@@ -676,12 +516,9 @@ export default function ProductHomePage() {
         onNavigate={navigateFromAction}
       />
 
-      <SetupAssistantSection
+      <OnboardingAssistantSection
         home={home}
-        supportItems={supportItems}
         assistantOpen={assistantOpen}
-        searchParams={searchParams}
-        setSearchParams={setSearchParams}
         onNavigate={navigateFromAction}
       />
     </PageCanvas>

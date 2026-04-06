@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { apiGet } from "../../api/client.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
+import useProductHome from "../../view-models/useProductHome.js";
 import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
 import FloatingAiWidget from "../layout/FloatingAiWidget.jsx";
 import Sidebar, { SIDEBAR_WIDTH, SHELL_TOPBAR_HEIGHT } from "./Sidebar.jsx";
@@ -39,6 +40,10 @@ function isImmersivePath(pathname = "") {
     path.startsWith("/voice") ||
     path.startsWith("/channels")
   );
+}
+
+function s(value, fallback = "") {
+  return String(value ?? fallback).trim();
 }
 
 async function fetchShellResource(path) {
@@ -113,13 +118,20 @@ function SharedStatsNotice({ message }) {
 
 export default function Shell() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [widgetOpen, setWidgetOpen] = useState(false);
   const [shellStats, setShellStats] = useState(INITIAL_SHELL_STATS);
 
   const location = useLocation();
+  const navigate = useNavigate();
   const notifications = useNotificationsSurface();
+  const homeRouteActive = location.pathname === "/home";
+  const home = useProductHome({
+    enabled: homeRouteActive,
+  });
 
   const refreshTimerRef = useRef(0);
   const statsRequestRef = useRef(null);
+  const autoOpenedRef = useRef("");
 
   const shellSection = getActiveShellSection(location.pathname);
   const activeContextItem = getActiveContextItem(shellSection, location.pathname);
@@ -136,6 +148,115 @@ export default function Shell() {
   const shellContentClass = immersive
     ? "h-full w-full overflow-hidden"
     : "mx-auto w-full max-w-shell-content";
+
+  const assistantRequested = useMemo(() => {
+    const params = new URLSearchParams(location.search || "");
+    const assistant = s(params.get("assistant")).toLowerCase();
+    return assistant === "setup" || assistant === "onboarding";
+  }, [location.search]);
+
+  const shortcutAssistant = useMemo(
+    () => ({
+      mode: "shortcut",
+      title: "AI onboarding lives on Home",
+      statusLabel: "Home shortcut",
+      summary:
+        "Use Home to connect Telegram, continue the structured onboarding draft, and inspect strict runtime readiness.",
+      primaryAction: {
+        label: "Open home assistant",
+        path: "/home?assistant=setup",
+      },
+      secondaryAction: {
+        label: "Open channels",
+        path: "/channels?channel=telegram",
+      },
+      messages: [
+        {
+          id: "shortcut",
+          role: "assistant",
+          title: "Open Home",
+          body:
+            "The onboarding shell is available on Home, where Telegram connect and runtime posture are already composed together.",
+        },
+      ],
+      review: {
+        message:
+          "Draft-only onboarding remains intentionally separate from truth approval and runtime activation in this batch.",
+      },
+      launchPosture: "shortcut",
+      onboardingNeeded: false,
+      session: {},
+      draft: {
+        businessProfile: {},
+        services: [],
+        contacts: [],
+        hours: [],
+        pricingPosture: {},
+        handoffRules: {},
+        version: 0,
+        updatedAt: null,
+      },
+      websitePrefill: {
+        supported: true,
+        status: "awaiting_input",
+        websiteUrl: "",
+      },
+      launchChannel: {},
+      truthRuntime: {},
+    }),
+    []
+  );
+
+  const loadingAssistant = useMemo(
+    () => ({
+      ...shortcutAssistant,
+      mode: "onboarding",
+      title: "Loading AI onboarding",
+      statusLabel: "Loading",
+      summary:
+        "Preparing Telegram, draft, and strict runtime posture for the onboarding shell.",
+      primaryAction: {
+        label: "Open channels",
+        path: "/channels?channel=telegram",
+      },
+      secondaryAction: {
+        label: "Open home",
+        path: "/home",
+      },
+      messages: [
+        {
+          id: "loading",
+          role: "assistant",
+          title: "Loading onboarding posture",
+          body:
+            "The assistant is waiting for the current Home state before it suggests the next step.",
+        },
+      ],
+    }),
+    [shortcutAssistant]
+  );
+
+  const assistantModel = useMemo(() => {
+    if (!homeRouteActive) return shortcutAssistant;
+    if (home.loading) return loadingAssistant;
+    return home.assistant || loadingAssistant;
+  }, [homeRouteActive, home.loading, home.assistant, loadingAssistant, shortcutAssistant]);
+
+  const autoOpenKey = useMemo(() => {
+    if (!homeRouteActive || !home.onboardingState?.autoOpen) return "";
+
+    return [
+      s(home.onboardingState.launchPosture),
+      s(home.onboardingState.sessionId, "no-session"),
+      String(home.onboardingState.draftVersion || 0),
+    ].join(":");
+  }, [
+    homeRouteActive,
+    home.onboardingState?.autoOpen,
+    home.onboardingState?.launchPosture,
+    home.onboardingState?.sessionId,
+    home.onboardingState?.draftVersion,
+  ]);
 
   const loadShellStats = useCallback(async () => {
     if (statsRequestRef.current) return statsRequestRef.current;
@@ -179,12 +300,29 @@ export default function Shell() {
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    document.body.style.overflow = mobileOpen || widgetOpen ? "hidden" : "";
 
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [mobileOpen]);
+  }, [mobileOpen, widgetOpen]);
+
+  useEffect(() => {
+    if (assistantRequested) {
+      setWidgetOpen(true);
+    }
+  }, [assistantRequested]);
+
+  useEffect(() => {
+    if (!homeRouteActive || !home.onboardingState?.autoOpen || !autoOpenKey) {
+      return;
+    }
+
+    if (autoOpenedRef.current === autoOpenKey) return;
+
+    autoOpenedRef.current = autoOpenKey;
+    setWidgetOpen(true);
+  }, [autoOpenKey, homeRouteActive, home.onboardingState?.autoOpen]);
 
   useEffect(() => {
     const unsubscribeStatus = realtimeStore.subscribeStatus((status) => {
@@ -214,6 +352,36 @@ export default function Shell() {
       unsubscribeStatus();
     };
   }, [scheduleShellRefresh]);
+
+  const handleWidgetOpenChange = useCallback(
+    (nextOpen) => {
+      setWidgetOpen(Boolean(nextOpen));
+
+      if (!nextOpen && assistantRequested) {
+        const params = new URLSearchParams(location.search || "");
+        params.delete("assistant");
+        navigate(
+          {
+            pathname: location.pathname,
+            search: params.toString() ? `?${params.toString()}` : "",
+          },
+          { replace: true }
+        );
+      }
+    },
+    [assistantRequested, location.pathname, location.search, navigate]
+  );
+
+  const handleAssistantNavigate = useCallback(
+    (path = "") => {
+      const target = s(path);
+      if (!target) return;
+
+      setWidgetOpen(false);
+      navigate(target);
+    },
+    [navigate]
+  );
 
   return (
     <div
@@ -260,9 +428,10 @@ export default function Shell() {
         </main>
 
         <FloatingAiWidget
-          onClick={() => {
-            console.log("open ai widget");
-          }}
+          open={widgetOpen}
+          onOpenChange={handleWidgetOpenChange}
+          onNavigate={handleAssistantNavigate}
+          assistant={assistantModel}
         />
       </div>
     </div>
