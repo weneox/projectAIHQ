@@ -1,28 +1,40 @@
+// ai-hq-frontend/src/pages/Truth/TruthViewerPage.jsx
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
+import {
+  Building2,
+  Clock3,
+  Globe,
+  History,
+  Mail,
+  MapPin,
+  Phone,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
 
 import {
-  approveTruthReviewCandidate,
   getCanonicalTruthSnapshot,
-  getTruthReviewWorkbench,
   getTruthVersionDetail,
-  keepTruthReviewCandidateQuarantined,
-  markTruthReviewCandidateForFollowUp,
-  rejectTruthReviewCandidate,
   rollbackTruthVersion,
 } from "../../api/truth.js";
-import { getSettingsTrustView } from "../../api/trust.js";
-import TruthHeader from "../../components/truth/TruthHeader.jsx";
-import TruthFieldTable from "../../components/truth/TruthFieldTable.jsx";
-import TruthBehaviorCard from "../../components/truth/TruthBehaviorCard.jsx";
-import TruthProvenancePanel from "../../components/truth/TruthProvenancePanel.jsx";
-import TruthHistoryPanel from "../../components/truth/TruthHistoryPanel.jsx";
+import Badge from "../../components/ui/Badge.jsx";
+import Button from "../../components/ui/Button.jsx";
+import Card from "../../components/ui/Card.jsx";
 import TruthVersionComparePanel from "../../components/truth/TruthVersionComparePanel.jsx";
-import RepairHub from "../../components/readiness/RepairHub.jsx";
-import { dispatchRepairAction } from "../../components/readiness/dispatchRepairAction.js";
-import { createReadinessViewModel } from "../../lib/readinessViewModel.js";
-import GovernanceCockpit from "../../components/governance/GovernanceCockpit.jsx";
-import TruthReviewWorkbench from "../../components/governance/TruthReviewWorkbench.jsx";
+
+function s(v, d = "") {
+  return String(v ?? d).trim();
+}
+
+function arr(v, d = []) {
+  return Array.isArray(v) ? v : d;
+}
+
+function obj(v, d = {}) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : d;
+}
 
 function initialState() {
   return {
@@ -41,15 +53,26 @@ function initialState() {
       metadata: {},
       governance: {},
       finalizeImpact: {},
-      trustView: null,
-      trustUnavailable: false,
-      reviewWorkbench: { summary: {}, items: [] },
     },
   };
 }
 
 function normalizeTruthToken(value = "") {
   return String(value ?? "").trim();
+}
+
+function formatWhen(value = "") {
+  const raw = s(value);
+  if (!raw) return "—";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleString();
+}
+
+function titleize(value = "") {
+  return s(value)
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (x) => x.toUpperCase());
 }
 
 function resolveRequestedVersionId(searchParams, location) {
@@ -76,18 +99,7 @@ function resolveRequestedVersionId(searchParams, location) {
   );
 }
 
-function resolveRequestedFocus(searchParams, location) {
-  return String(location?.state?.focus || searchParams.get("focus") || "")
-    .trim()
-    .toLowerCase();
-}
-
-function findRequestedHistoryItem({
-  history,
-  requestedVersionId,
-  approval,
-  truthView,
-}) {
+function findRequestedHistoryItem({ history, requestedVersionId, approval }) {
   const requested = normalizeTruthToken(requestedVersionId);
   if (!requested) return null;
 
@@ -95,15 +107,8 @@ function findRequestedHistoryItem({
     return history[0] || null;
   }
 
-  const truthSummary = truthView?.summary?.truth || {};
   const aliases = new Set(
-    [
-      requested,
-      approval?.version,
-      truthSummary?.latestVersionId,
-      truthSummary?.version,
-      truthSummary?.currentVersionId,
-    ]
+    [requested, approval?.version]
       .map((value) => normalizeTruthToken(value))
       .filter(Boolean)
   );
@@ -128,11 +133,213 @@ function findRequestedHistoryItem({
   );
 }
 
+function findField(fields = [], key = "") {
+  return arr(fields).find((field) => s(field.key) === s(key)) || null;
+}
+
+function compactUrl(value = "") {
+  const text = s(value);
+  if (!text) return "";
+  return text.replace(/^https?:\/\//i, "").replace(/\/$/, "");
+}
+
+function resolveRuntimeStatus(readiness = {}, approvedTruthUnavailable = false) {
+  if (approvedTruthUnavailable) {
+    return {
+      label: "Unavailable",
+      tone: "warning",
+    };
+  }
+
+  const status = s(readiness?.status).toLowerCase();
+  if (status === "ready") {
+    return {
+      label: "Ready",
+      tone: "success",
+    };
+  }
+  if (status === "blocked") {
+    return {
+      label: "Blocked",
+      tone: "warning",
+    };
+  }
+  if (status) {
+    return {
+      label: titleize(status),
+      tone: "neutral",
+    };
+  }
+
+  return {
+    label: "Unknown",
+    tone: "neutral",
+  };
+}
+
+function resolveSourceLine(sourceSummary = {}) {
+  const current = obj(sourceSummary);
+  const latestImport = obj(current.latestImport);
+
+  const label = s(
+    latestImport.sourceLabel ||
+      latestImport.sourceType ||
+      current.primarySourceType ||
+      current.primaryLabel ||
+      current.primarySourceLabel
+  );
+  const url = s(
+    latestImport.sourceUrl ||
+      current.primarySourceUrl ||
+      current.primaryUrl ||
+      current.url
+  );
+
+  const bits = [label ? titleize(label) : "", compactUrl(url)].filter(Boolean);
+  return bits.join(" · ");
+}
+
+function resolveHeroTitle(fields = []) {
+  return (
+    s(findField(fields, "companyName")?.value) ||
+    s(findField(fields, "displayName")?.value) ||
+    "Approved business data"
+  );
+}
+
+function resolveHeroSummary(fields = []) {
+  return (
+    s(findField(fields, "description")?.value) ||
+    s(findField(fields, "shortDescription")?.value) ||
+    s(findField(fields, "summaryShort")?.value)
+  );
+}
+
+function buildSections(fields = []) {
+  const groups = [
+    {
+      id: "identity",
+      title: "Identity",
+      icon: Building2,
+      keys: ["companyName", "description", "mainLanguage"],
+    },
+    {
+      id: "contact",
+      title: "Contact",
+      icon: Phone,
+      keys: ["primaryPhone", "primaryEmail", "primaryAddress"],
+    },
+    {
+      id: "presence",
+      title: "Presence",
+      icon: Globe,
+      keys: ["websiteUrl", "socialLinks"],
+    },
+    {
+      id: "offering",
+      title: "Offering",
+      icon: Sparkles,
+      keys: ["services", "products", "pricingHints"],
+    },
+  ];
+
+  return groups
+    .map((group) => ({
+      ...group,
+      rows: group.keys
+        .map((key) => findField(fields, key))
+        .filter(Boolean)
+        .map((field) => ({
+          key: s(field.key),
+          label: s(field.label),
+          value: s(field.value),
+          provenance: s(field.provenance),
+        })),
+    }))
+    .filter((group) => group.rows.length > 0);
+}
+
+function InfoPill({ label, value, compact = false }) {
+  if (!s(value)) return null;
+
+  return (
+    <div
+      className={[
+        "rounded-[18px] border border-slate-200/80 bg-white/88 px-4 py-3",
+        compact ? "min-h-[72px]" : "min-h-[84px]",
+      ].join(" ")}
+    >
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+        {label}
+      </div>
+      <div
+        className={[
+          "mt-2 text-sm font-medium text-slate-900",
+          compact ? "leading-5" : "leading-6",
+        ].join(" ")}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function TruthRow({ label, value, provenance = "", showProvenance = false }) {
+  if (!s(value)) return null;
+
+  return (
+    <div className="border-t border-slate-200/80 py-4 first:border-t-0 first:pt-0 last:pb-0">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+        {label}
+      </div>
+      <div className="mt-2 text-[15px] leading-7 text-slate-900 whitespace-pre-wrap break-words">
+        {value}
+      </div>
+
+      {showProvenance && s(provenance) ? (
+        <div className="mt-2 text-[12px] leading-5 text-slate-500">
+          {provenance}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function TruthSection({ title, icon: Icon, rows = [], showProvenance = false }) {
+  if (!rows.length) return null;
+
+  return (
+    <div className="rounded-[22px] border border-slate-200/80 bg-white/82 p-5">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-[14px] border border-slate-200/80 bg-slate-50 text-slate-700">
+          <Icon className="h-4.5 w-4.5" />
+        </div>
+        <div className="text-[16px] font-semibold tracking-[-0.02em] text-slate-950">
+          {title}
+        </div>
+      </div>
+
+      <div className="mt-5">
+        {rows.map((row) => (
+          <TruthRow
+            key={row.key}
+            label={row.label}
+            value={row.value}
+            provenance={row.provenance}
+            showProvenance={showProvenance}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function TruthViewerPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
   const [state, setState] = useState(initialState);
+  const [showProvenance, setShowProvenance] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareState, setCompareState] = useState({
     loading: false,
@@ -145,74 +352,91 @@ export default function TruthViewerPage() {
       rollbackReceipt: null,
     },
   });
-  const [reviewSurface, setReviewSurface] = useState({
-    saving: false,
-    error: "",
-    saveSuccess: "",
-    publishReceipt: null,
-  });
 
-  const historyRef = useRef(null);
   const deepLinkHandledRef = useRef("");
-
-  const truthReadiness = createReadinessViewModel(state.data.readiness);
 
   const requestedVersionId = useMemo(
     () => resolveRequestedVersionId(searchParams, location),
     [searchParams, location]
   );
 
-  const requestedFocus = useMemo(
-    () => resolveRequestedFocus(searchParams, location),
-    [searchParams, location]
+  const sections = useMemo(
+    () => buildSections(state.data.fields),
+    [state.data.fields]
   );
+
+  const heroTitle = useMemo(
+    () => resolveHeroTitle(state.data.fields),
+    [state.data.fields]
+  );
+
+  const heroSummary = useMemo(
+    () => resolveHeroSummary(state.data.fields),
+    [state.data.fields]
+  );
+
+  const runtimeState = useMemo(
+    () =>
+      resolveRuntimeStatus(
+        state.data.readiness,
+        state.data.approvedTruthUnavailable
+      ),
+    [state.data.readiness, state.data.approvedTruthUnavailable]
+  );
+
+  const sourceLine = useMemo(
+    () => resolveSourceLine(state.data.sourceSummary),
+    [state.data.sourceSummary]
+  );
+
+  async function refreshTruthSnapshot() {
+    const truthData = await getCanonicalTruthSnapshot();
+
+    setState({
+      loading: false,
+      error: "",
+      data: {
+        fields: truthData.fields || [],
+        approval: truthData.approval || {},
+        behavior:
+          truthData.behavior || { rows: [], summary: "", hasBehavior: false },
+        history: truthData.history || [],
+        notices: truthData.notices || [],
+        hasProvenance: !!truthData.hasProvenance,
+        approvedTruthUnavailable: !!truthData.approvedTruthUnavailable,
+        readiness: truthData.readiness || {},
+        sourceSummary: truthData.sourceSummary || {},
+        metadata: truthData.metadata || {},
+        governance: truthData.governance || {},
+        finalizeImpact: truthData.finalizeImpact || {},
+      },
+    });
+  }
 
   useEffect(() => {
     let alive = true;
 
-    Promise.allSettled([
-      getCanonicalTruthSnapshot(),
-      getSettingsTrustView(),
-      getTruthReviewWorkbench({ limit: 100 }),
-    ])
-      .then((results) => {
+    getCanonicalTruthSnapshot()
+      .then((truthData) => {
         if (!alive) return;
-
-        const truthResult = results[0];
-        const trustResult = results[1];
-        const reviewResult = results[2];
-
-        if (truthResult.status !== "fulfilled") {
-          throw truthResult.reason;
-        }
-
-        const data = truthResult.value || {};
 
         setState({
           loading: false,
           error: "",
           data: {
-            fields: data.fields || [],
-            approval: data.approval || {},
-            behavior: data.behavior || { rows: [], summary: "", hasBehavior: false },
-            history: data.history || [],
-            notices: data.notices || [],
-            hasProvenance: !!data.hasProvenance,
-            approvedTruthUnavailable: !!data.approvedTruthUnavailable,
-            readiness: data.readiness || {},
-            sourceSummary: data.sourceSummary || {},
-            metadata: data.metadata || {},
-            governance: data.governance || {},
-            finalizeImpact: data.finalizeImpact || {},
-            trustView:
-              trustResult.status === "fulfilled"
-                ? trustResult.value || null
-                : null,
-            trustUnavailable: trustResult.status !== "fulfilled",
-            reviewWorkbench:
-              reviewResult.status === "fulfilled"
-                ? reviewResult.value || { summary: {}, items: [] }
-                : { summary: {}, items: [] },
+            fields: truthData.fields || [],
+            approval: truthData.approval || {},
+            behavior:
+              truthData.behavior || { rows: [], summary: "", hasBehavior: false },
+            history: truthData.history || [],
+            notices: truthData.notices || [],
+            hasProvenance: !!truthData.hasProvenance,
+            approvedTruthUnavailable: !!truthData.approvedTruthUnavailable,
+            readiness: truthData.readiness || {},
+            sourceSummary: truthData.sourceSummary || {},
+            metadata: truthData.metadata || {},
+            governance: truthData.governance || {},
+            finalizeImpact: truthData.finalizeImpact || {},
           },
         });
       })
@@ -341,7 +565,7 @@ export default function TruthViewerPage() {
         },
       });
 
-      await refreshTruthReviewSurface();
+      await refreshTruthSnapshot();
 
       const refreshed = await getTruthVersionDetail(versionId, {
         compareTo: detail?.comparedVersion?.id || "",
@@ -359,8 +583,8 @@ export default function TruthViewerPage() {
           error: "",
           saveSuccess:
             result?.rollbackReceipt?.rollbackStatus === "success"
-              ? "Governed rollback completed and verification is now available."
-              : "Governed rollback completed with follow-up telemetry attached.",
+              ? "Rollback completed."
+              : "Rollback completed with follow-up telemetry.",
           rollbackReceipt: result.rollbackReceipt || null,
         },
       });
@@ -377,118 +601,6 @@ export default function TruthViewerPage() {
     }
   }
 
-  async function refreshTruthReviewSurface() {
-    const [truthData, trustData, reviewData] = await Promise.all([
-      getCanonicalTruthSnapshot(),
-      getSettingsTrustView().catch(() => null),
-      getTruthReviewWorkbench({ limit: 100 }).catch(() => ({
-        summary: {},
-        items: [],
-      })),
-    ]);
-
-    setState((prev) => ({
-      ...prev,
-      loading: false,
-      error: "",
-      data: {
-        ...prev.data,
-        fields: truthData.fields || [],
-        approval: truthData.approval || {},
-        behavior:
-          truthData.behavior || { rows: [], summary: "", hasBehavior: false },
-        history: truthData.history || [],
-        notices: truthData.notices || [],
-        hasProvenance: !!truthData.hasProvenance,
-        approvedTruthUnavailable: !!truthData.approvedTruthUnavailable,
-        readiness: truthData.readiness || {},
-        sourceSummary: truthData.sourceSummary || {},
-        metadata: truthData.metadata || {},
-        governance: truthData.governance || {},
-        finalizeImpact: truthData.finalizeImpact || {},
-        trustView: trustData || null,
-        trustUnavailable: !trustData,
-        reviewWorkbench: reviewData || { summary: {}, items: [] },
-      },
-    }));
-  }
-
-  async function handleWorkbenchAction(item, action) {
-    const actionType = String(action?.actionType || "").trim().toLowerCase();
-    const candidateId = String(item?.id || item?.candidateId || "").trim();
-
-    if (!candidateId || !actionType) return;
-
-    setReviewSurface({
-      saving: true,
-      error: "",
-      saveSuccess: "",
-      publishReceipt:
-        actionType === "approve" ? reviewSurface.publishReceipt : null,
-    });
-
-    try {
-      let actionResult = null;
-
-      if (actionType === "approve") {
-        actionResult = await approveTruthReviewCandidate(candidateId, {
-          reason: "Approved from Truth Review Workbench",
-          metadataJson: {
-            publishPreview: item?.publishPreview || {},
-          },
-        });
-      } else if (actionType === "reject") {
-        await rejectTruthReviewCandidate(candidateId, {
-          reason: "Rejected from Truth Review Workbench",
-        });
-      } else if (actionType === "mark_follow_up") {
-        await markTruthReviewCandidateForFollowUp(candidateId, {
-          reason: "Marked for follow-up from Truth Review Workbench",
-        });
-      } else if (actionType === "keep_quarantined") {
-        await keepTruthReviewCandidateQuarantined(candidateId, {
-          reason: "Kept quarantined from Truth Review Workbench",
-        });
-      }
-
-      await refreshTruthReviewSurface();
-
-      setReviewSurface({
-        saving: false,
-        error: "",
-        saveSuccess:
-          actionType === "approve"
-            ? String(actionResult?.publishReceipt?.publishStatus || "").trim().toLowerCase() ===
-              "review_required"
-              ? "Candidate approved into a governed maintenance draft. Published truth and runtime remain unchanged until that review is finalized."
-              : "Candidate approved and truth/runtime surfaces refreshed."
-            : actionType === "reject"
-              ? "Candidate rejected. Approved truth remains unchanged."
-              : actionType === "keep_quarantined"
-                ? "Candidate remains quarantined pending stronger evidence."
-                : "Candidate marked for follow-up review.",
-        publishReceipt:
-          actionType === "approve" ? actionResult?.publishReceipt || null : null,
-      });
-    } catch (error) {
-      setReviewSurface({
-        saving: false,
-        error: String(error?.message || error || "Truth review action failed."),
-        saveSuccess: "",
-        publishReceipt: null,
-      });
-    }
-  }
-
-  useEffect(() => {
-    if (requestedFocus !== "history" || !historyRef.current) return;
-
-    historyRef.current.scrollIntoView?.({
-      behavior: "smooth",
-      block: "start",
-    });
-  }, [requestedFocus, state.loading]);
-
   useEffect(() => {
     if (!requestedVersionId || state.loading || compareOpen) return;
 
@@ -496,7 +608,6 @@ export default function TruthViewerPage() {
       requestedVersionId,
       state.data.history.length,
       state.data.approval?.version || "",
-      state.data.trustView?.summary?.truth?.latestVersionId || "",
       location?.key || "",
     ].join("|");
 
@@ -506,7 +617,6 @@ export default function TruthViewerPage() {
       history: state.data.history || [],
       requestedVersionId,
       approval: state.data.approval || {},
-      truthView: state.data.trustView || {},
     });
 
     deepLinkHandledRef.current = marker;
@@ -527,7 +637,6 @@ export default function TruthViewerPage() {
     requestedVersionId,
     state.data.approval,
     state.data.history,
-    state.data.trustView,
     state.loading,
     location?.key,
   ]);
@@ -542,83 +651,161 @@ export default function TruthViewerPage() {
     );
   }
 
+  const latestHistoryItem = state.data.history?.[0] || null;
+  const notice = s(state.data.notices?.[0]);
+  const hasSections = sections.length > 0;
+  const versionCount = arr(state.data.history).length;
+  const approvedVersion = s(state.data.approval?.version);
+  const approvedAt = s(state.data.approval?.approvedAt);
+  const approvedBy = s(state.data.approval?.approvedBy);
+  const reviewSensitive = state.data.governance?.quarantine === true;
+
   return (
     <div className="mx-auto max-w-[1120px] px-4 py-10 sm:px-6 lg:px-8">
-      <TruthHeader
-        approval={state.data.approval}
-        notices={state.data.notices}
-      />
+      <Card
+        variant="elevated"
+        className="overflow-hidden rounded-[30px] border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(248,250,252,0.88)_100%)] p-0"
+      >
+        <div className="border-b border-slate-200/80 px-6 py-6 sm:px-7 sm:py-7">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+                Business data
+              </div>
+              <h1 className="mt-2 text-[32px] font-semibold tracking-[-0.05em] text-slate-950 sm:text-[38px]">
+                Approved business data
+              </h1>
+              <div className="mt-4 text-[24px] font-semibold tracking-[-0.04em] text-slate-900">
+                {heroTitle}
+              </div>
+              {heroSummary ? (
+                <div className="mt-2 max-w-[760px] text-[15px] leading-7 text-slate-600">
+                  {heroSummary}
+                </div>
+              ) : null}
+            </div>
 
-      {!state.error ? (
-        <div className="mt-8">
-          <GovernanceCockpit
-            truth={state.data}
-            trust={state.data.trustView || {}}
-            title="Business data review"
-            subtitle={
-              state.data.trustUnavailable
-                ? "Approved business data is still shown, but live runtime health and repair details are temporarily unavailable."
-                : "Approval status, runtime health, rollback impact, and repair details are shown together here."
-            }
-            onRunAction={(action) => dispatchRepairAction(action)}
-          />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="secondary"
+                size="md"
+                leftIcon={<History className="h-4 w-4" />}
+                onClick={() => latestHistoryItem && handleOpenVersion(latestHistoryItem)}
+                disabled={!latestHistoryItem}
+              >
+                History
+              </Button>
+
+              <Button
+                variant={showProvenance ? "soft" : "outline"}
+                size="md"
+                leftIcon={<ShieldCheck className="h-4 w-4" />}
+                onClick={() => setShowProvenance((value) => !value)}
+              >
+                {showProvenance ? "Hide evidence" : "Show evidence"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Badge
+              tone={state.data.approvedTruthUnavailable ? "warning" : "success"}
+              variant="subtle"
+              dot
+            >
+              {state.data.approvedTruthUnavailable
+                ? "Approved truth unavailable"
+                : "Approved truth active"}
+            </Badge>
+
+            <Badge tone={runtimeState.tone} variant="subtle" dot>
+              Runtime {runtimeState.label}
+            </Badge>
+
+            {reviewSensitive ? (
+              <Badge tone="warning" variant="subtle" dot>
+                Review-sensitive
+              </Badge>
+            ) : null}
+
+            <Badge tone="neutral" variant="subtle">
+              {versionCount} version{versionCount === 1 ? "" : "s"}
+            </Badge>
+          </div>
+
+          {state.error ? (
+            <div className="mt-5 rounded-[16px] border border-rose-200 bg-rose-50/80 px-4 py-3 text-sm leading-6 text-rose-700">
+              {state.error}
+            </div>
+          ) : null}
+
+          {!state.error && notice ? (
+            <div className="mt-5 rounded-[16px] border border-slate-200/80 bg-white/78 px-4 py-3 text-sm leading-6 text-slate-600">
+              {notice}
+            </div>
+          ) : null}
         </div>
-      ) : null}
 
-      {state.error ? (
-        <div className="mt-6 border-l-2 border-rose-300 pl-5 text-sm leading-6 text-rose-700">
-          {state.error}
+        <div className="px-6 py-6 sm:px-7 sm:py-7">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <InfoPill label="Version" value={approvedVersion || "Pending"} compact />
+            <InfoPill label="Approved at" value={approvedAt ? formatWhen(approvedAt) : ""} compact />
+            <InfoPill label="Approved by" value={approvedBy} compact />
+            <InfoPill
+              label="Source"
+              value={sourceLine || compactUrl(findField(state.data.fields, "websiteUrl")?.value)}
+              compact
+            />
+          </div>
+
+          <div className="mt-6 grid gap-4 xl:grid-cols-2">
+            {hasSections ? (
+              sections.map((section) => (
+                <TruthSection
+                  key={section.id}
+                  title={section.title}
+                  icon={section.icon}
+                  rows={section.rows}
+                  showProvenance={showProvenance}
+                />
+              ))
+            ) : (
+              <div className="xl:col-span-2">
+                <div className="rounded-[22px] border border-slate-200/80 bg-white/82 px-5 py-6 text-sm leading-6 text-slate-500">
+                  No approved business fields were returned by the backend.
+                </div>
+              </div>
+            )}
+          </div>
+
+          {(sourceLine || approvedAt || versionCount > 0) && !state.error ? (
+            <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-[12px] leading-5 text-slate-500">
+              {sourceLine ? (
+                <div className="inline-flex items-center gap-2">
+                  <Globe className="h-3.5 w-3.5" />
+                  <span>{sourceLine}</span>
+                </div>
+              ) : null}
+
+              {approvedAt ? (
+                <div className="inline-flex items-center gap-2">
+                  <Clock3 className="h-3.5 w-3.5" />
+                  <span>{formatWhen(approvedAt)}</span>
+                </div>
+              ) : null}
+
+              {versionCount > 0 ? (
+                <div className="inline-flex items-center gap-2">
+                  <History className="h-3.5 w-3.5" />
+                  <span>
+                    {versionCount} saved version{versionCount === 1 ? "" : "s"}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
-      ) : null}
-
-      <div className="mt-8">
-        <TruthFieldTable fields={state.data.fields} />
-      </div>
-
-      <div className="mt-6">
-        <TruthBehaviorCard
-          title="Approved behavior profile"
-          subtitle="This is the operator-facing behavior layer the approved truth carries into governed runtime."
-          rows={state.data.behavior?.rows || []}
-        />
-      </div>
-
-      <div className="mt-8">
-        <TruthReviewWorkbench
-          workbench={state.data.reviewWorkbench}
-          surface={reviewSurface}
-          canManage={["owner", "admin"].includes(
-            String(state.data.trustView?.viewerRole || "")
-              .trim()
-              .toLowerCase()
-          )}
-          onRunAction={handleWorkbenchAction}
-        />
-      </div>
-
-      <div className="mt-6">
-        <RepairHub
-          title="Truth Readiness"
-          readiness={truthReadiness}
-          blockers={truthReadiness.blockers}
-          canManage
-          emptyMessage="Approved truth is available. No draft or fallback profile data is being substituted here."
-          unavailableMessage={
-            state.data.approvedTruthUnavailable
-              ? "Approved truth is currently unavailable. Setup drafts or saved profile data are not being shown here as a fallback."
-              : ""
-          }
-          onRunAction={(action) => dispatchRepairAction(action)}
-        />
-      </div>
-
-      <div ref={historyRef} className="mt-8 grid gap-6 lg:grid-cols-2">
-        <TruthProvenancePanel hasProvenance={state.data.hasProvenance} />
-        <TruthHistoryPanel
-          history={state.data.history}
-          onOpenVersion={handleOpenVersion}
-        />
-      </div>
+      </Card>
 
       {compareOpen ? (
         <>
