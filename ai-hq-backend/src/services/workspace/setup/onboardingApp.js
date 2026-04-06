@@ -14,7 +14,7 @@ import {
 import { auditSetupAction } from "./auditApp.js";
 
 const REVIEW_MESSAGE =
-  "Draft answers stay separate from approved truth and live automation until approval is completed.";
+  "Draft answers stay separate from approved truth and the strict runtime until a later approval step is completed.";
 
 const ONBOARDING_QUESTIONS = [
   {
