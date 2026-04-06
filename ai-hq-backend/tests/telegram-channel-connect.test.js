@@ -21,6 +21,7 @@ const {
   TELEGRAM_BOT_TOKEN_SECRET_KEY,
   TELEGRAM_WEBHOOK_ROUTE_TOKEN_SECRET_KEY,
   TELEGRAM_WEBHOOK_SECRET_TOKEN_SECRET_KEY,
+  __test__: telegramChannelTest,
   buildTelegramWebhookUrl,
   connectTelegram,
   disconnectTelegram,
@@ -673,6 +674,93 @@ test("telegram status stays fail-closed when the stored webhook no longer matche
   } finally {
     global.fetch = previousFetch;
   }
+});
+
+test("telegram runtime surface repairs a missing projection when approved truth is available", async () => {
+  let runtimeCalls = 0;
+  let refreshInput = null;
+
+  const runtime = await telegramChannelTest.getTelegramRuntimeSurface({
+    db: { query() {} },
+    tenantKey: "acme",
+    allowRepair: true,
+    repairTrigger: "telegram_connect",
+    requestedBy: "owner@acme.test",
+    getRuntime: async () => {
+      runtimeCalls += 1;
+      if (runtimeCalls === 1) {
+        const error = new Error("Approved runtime authority is unavailable because no fresh runtime projection exists.");
+        error.code = "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE";
+        error.runtimeAuthority = {
+          reasonCode: "runtime_projection_missing",
+          reason: "runtime_projection_missing",
+          available: false,
+        };
+        throw error;
+      }
+
+      return {
+        authority: {
+          available: true,
+          reasonCode: "",
+        },
+        tenant: {
+          id: "tenant-1",
+          tenant_key: "acme",
+        },
+      };
+    },
+    refreshRuntimeProjection: async (input) => {
+      refreshInput = input;
+      return {
+        projection: {
+          id: "projection-1",
+          status: "ready",
+        },
+        freshness: {
+          stale: false,
+          reasons: [],
+        },
+      };
+    },
+    getInboxPolicyFn: () => ({
+      channelAllowed: true,
+    }),
+  });
+
+  assert.equal(runtime.authorityAvailable, true);
+  assert.equal(runtime.deliveryReady, true);
+  assert.equal(runtime.reasonCode, "");
+  assert.equal(refreshInput?.tenantKey, "acme");
+  assert.equal(refreshInput?.triggerType, "channel_connect_telegram");
+  assert.equal(refreshInput?.metadata?.repairTrigger, "telegram_connect");
+});
+
+test("telegram runtime surface preserves approved-truth blocker truth when governed repair cannot run", async () => {
+  const runtime = await telegramChannelTest.getTelegramRuntimeSurface({
+    db: { query() {} },
+    tenantKey: "acme",
+    allowRepair: true,
+    repairTrigger: "telegram_connect",
+    requestedBy: "owner@acme.test",
+    getRuntime: async () => {
+      const error = new Error("Approved runtime authority is unavailable because approved canonical truth is not available yet.");
+      error.code = "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE";
+      error.runtimeAuthority = {
+        reasonCode: "approved_truth_unavailable",
+        reason: "approved_truth_unavailable",
+        available: false,
+      };
+      throw error;
+    },
+    refreshRuntimeProjection: async () => {
+      throw new Error("not expected");
+    },
+  });
+
+  assert.equal(runtime.authorityAvailable, false);
+  assert.equal(runtime.deliveryReady, false);
+  assert.equal(runtime.reasonCode, "approved_truth_unavailable");
 });
 
 test("telegram disconnect removes tenant secrets, deletes the webhook, and preserves bot identity truthfully", async () => {

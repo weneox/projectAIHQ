@@ -173,6 +173,86 @@ test("review finalize composition audits finalized session and truth version cre
   assert.equal(auditCalls[1][2], "truth.version.created");
 });
 
+test("review finalize composition surfaces the strict runtime projection in the finalize response", async () => {
+  const result = await finalizeSetupReviewComposition(
+    {
+      db: {},
+      actor: {
+        tenantId: "tenant-1",
+        tenantKey: "alpha",
+        role: "owner",
+        tenant: null,
+        user: {
+          email: "ops@example.com",
+          name: "Ops",
+        },
+      },
+      body: { reason: "ship it" },
+    },
+    {
+      async getCurrentSetupReview() {
+        return {
+          session: { id: "session-1", status: "ready" },
+          draft: { version: 9 },
+        };
+      },
+      async finalizeSetupReviewSession(input) {
+        await input.projectDraftToCanonical({
+          client: { name: "tx" },
+          tenantId: "tenant-1",
+          session: { id: "session-1", status: "ready" },
+          draft: { version: 9 },
+          sources: [],
+        });
+        return {
+          session: { id: "session-1", status: "finalized" },
+          reviewSessionId: "session-1",
+          runtimeProjection: {
+            id: "runtime-1",
+            status: "ready",
+          },
+          runtimeProjectionFreshness: {
+            stale: false,
+            reasons: [],
+          },
+        };
+      },
+      async projectSetupReviewDraftToCanonical() {
+        return {
+          truthVersionCreated: false,
+          truthVersion: {
+            id: "version-existing-1",
+          },
+          runtimeProjection: null,
+        };
+      },
+      async buildSetupStatus() {
+        return { progress: { nextRoute: "/inbox" } };
+      },
+      async auditSetupAction() {},
+      buildReviewConcurrencyInfo() {
+        return {};
+      },
+      buildFinalizeProtectionInfo() {
+        return {};
+      },
+    }
+  );
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.projectionSummary.truthVersion.id, "version-existing-1");
+  assert.equal(result.body.projectionSummary.runtimeProjection.id, "runtime-1");
+  assert.equal(
+    result.body.projectionSummary.verification.runtimeProjectionRefreshed,
+    true
+  );
+  assert.equal(
+    result.body.projectionSummary.verification.truthVersionCreated,
+    false
+  );
+  assert.equal(validateSetupFinalizeResponse(result.body).ok, true);
+});
+
 test("review finalize composition audits failed finalize attempts with outcome metadata", async () => {
   const auditCalls = [];
 

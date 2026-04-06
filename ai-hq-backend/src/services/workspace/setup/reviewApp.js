@@ -325,6 +325,33 @@ export async function finalizeSetupReviewComposition(
       },
     });
 
+    const finalizedRuntimeProjection = obj(finalized?.runtimeProjection);
+    const finalizedRuntimeFreshness = obj(finalized?.runtimeProjectionFreshness);
+    const summaryRuntimeProjection = obj(projectionSummary?.runtimeProjection);
+
+    projectionSummary = {
+      ...obj(projectionSummary),
+      runtimeProjection:
+        s(summaryRuntimeProjection?.id) || !s(finalizedRuntimeProjection?.id)
+          ? projectionSummary?.runtimeProjection || null
+          : finalizedRuntimeProjection,
+      verification: {
+        truthVersionCreated:
+          projectionSummary?.truthVersionCreated === true,
+        runtimeProjectionRefreshed: Boolean(
+          s(summaryRuntimeProjection?.id || finalizedRuntimeProjection?.id)
+        ),
+        runtimeProjectionFreshness: Object.keys(finalizedRuntimeFreshness).length
+          ? finalizedRuntimeFreshness
+          : null,
+      },
+    };
+    const truthVersionCreated =
+      projectionSummary?.truthVersionCreated === true ||
+      (projectionSummary?.truthVersionCreated !== false &&
+        Boolean(s(obj(projectionSummary?.truthVersion).id)));
+    projectionSummary.verification.truthVersionCreated = truthVersionCreated;
+
     const setup = await buildStatus({
       db,
       tenantId: actor.tenantId,
@@ -348,7 +375,7 @@ export async function finalizeSetupReviewComposition(
       }
     );
 
-    if (projectionSummary?.truthVersion?.id) {
+    if (truthVersionCreated) {
       await auditSetupAction(
         db,
         actor,
@@ -372,7 +399,12 @@ export async function finalizeSetupReviewComposition(
       source: "workspace.setup.review.finalize",
       surface: "tenant",
       policyOutcome: "approved",
-      reasonCodes: ["setup_review_finalized", "truth_version_created"],
+      reasonCodes: [
+        "setup_review_finalized",
+        truthVersionCreated
+          ? "truth_version_created"
+          : "truth_version_reused",
+      ],
       approvalPosture: {
         outcome: s(projectionSummary?.approvalPolicy?.strictestOutcome || "approved").toLowerCase(),
         requiredRole: s(

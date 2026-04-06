@@ -99,11 +99,27 @@ export function registerSetupReviewRoutes(
       return res.status(result.status).json(result.body);
     } catch (err) {
       current = err?.currentReview || current;
-      return res.status(400).json({
+      const authority = obj(err?.runtimeAuthority || err?.authority);
+      const freshness = obj(err?.freshness);
+      const statusCode = Number.isFinite(Number(err?.statusCode))
+        ? Number(err.statusCode)
+        : s(err?.code) === "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE"
+          ? 409
+          : 400;
+
+      return res.status(statusCode).json({
         ok: false,
         error: "SetupReviewFinalizeFailed",
         reason: err?.message || "failed to finalize setup review",
         code: s(err?.code),
+        reasonCode: s(
+          err?.reasonCode ||
+            authority?.reasonCode ||
+            authority?.reason ||
+            err?.reason
+        ),
+        authority,
+        freshness,
         baseline: obj(err?.baseline),
         current: obj(err?.current),
         concurrency: current ? buildReviewConcurrencyInfo(current) : {},

@@ -750,6 +750,7 @@ export async function projectSetupReviewDraftToCanonical(
   let projectedCapabilities = false;
   let savedProfile = currentProfile;
   let savedCapabilities = currentCapabilities;
+  let createdTruthVersion = null;
   let truthVersion = null;
   let publishedServices = [];
   let publishedContacts = [];
@@ -896,7 +897,7 @@ export async function projectSetupReviewDraftToCanonical(
       s(currentProfile?.approved_by) ||
       requestedBy;
 
-    truthVersion = await truthVersionHelper.createVersion({
+    createdTruthVersion = await truthVersionHelper.createVersion({
       tenantId: actor.tenantId,
       tenantKey: actor.tenantKey,
       businessProfileId,
@@ -921,6 +922,17 @@ export async function projectSetupReviewDraftToCanonical(
         finalizeImpact: impactSummary,
         approvalPolicy,
       }),
+    });
+    truthVersion = createdTruthVersion;
+  }
+
+  if (
+    !s(truthVersion?.id) &&
+    typeof truthVersionHelper?.getLatestVersion === "function"
+  ) {
+    truthVersion = await truthVersionHelper.getLatestVersion({
+      tenantId: actor.tenantId,
+      tenantKey: actor.tenantKey,
     });
   }
 
@@ -982,6 +994,7 @@ export async function projectSetupReviewDraftToCanonical(
   return {
     projectedProfile,
     projectedCapabilities,
+    truthVersionCreated: Boolean(s(createdTruthVersion?.id)),
     truthVersion,
     runtimeProjection: Object.keys(runtimeProjection).length ? runtimeProjection : null,
     serviceProjection,

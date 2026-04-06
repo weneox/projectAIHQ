@@ -1431,6 +1431,106 @@ test("Case Z: finalize projection writes a truth version snapshot from canonical
     assert.deepEqual(versionInput.services, []);
     });
 
+test("Case Z1: finalize projection reuses the latest approved truth version when no new version is required", async () => {
+  const projected = await setupTest.projectSetupReviewDraftToCanonical(
+    {
+      db: {
+        async query(sql) {
+          if (sql.includes("from tenant_setup_review_sessions")) {
+            return {
+              rows: [{ id: "session-1" }],
+            };
+          }
+          if (sql.includes("from tenants")) {
+            return {
+              rows: [
+                {
+                  id: "tenant-1",
+                  tenant_key: "alpha",
+                  company_name: "Alpha Studio",
+                },
+              ],
+            };
+          }
+          if (sql.includes("from tenant_services")) {
+            return {
+              rows: [],
+            };
+          }
+          return { rows: [] };
+        },
+      },
+      actor: {
+        tenantId: "tenant-1",
+        tenantKey: "alpha",
+        user: {
+          name: "Reviewer",
+        },
+      },
+      session: {
+        id: "session-1",
+        primarySourceType: "website",
+      },
+      draft: {
+        version: 4,
+        businessProfile: {
+          companyName: "Alpha Studio",
+          description: "Brand strategy and design",
+        },
+        capabilities: {
+          supportsWhatsapp: true,
+          primaryLanguage: "en",
+        },
+        services: [],
+        knowledgeItems: [],
+      },
+      sources: [],
+    },
+    {
+      knowledgeHelper: {
+        async getBusinessProfile() {
+          return null;
+        },
+        async getBusinessCapabilities() {
+          return null;
+        },
+        async upsertBusinessProfile(input) {
+          return {
+            id: "profile-1",
+            profile_status: "approved",
+            approved_by: "Reviewer",
+            approved_at: "2026-03-25T02:00:00.000Z",
+            profile_json: input.profileJson,
+            source_summary_json: input.sourceSummaryJson,
+          };
+        },
+        async upsertBusinessCapabilities(input) {
+          return {
+            id: "capabilities-1",
+            approved_by: "Reviewer",
+            capabilities_json: input.capabilitiesJson,
+          };
+        },
+      },
+      truthVersionHelper: {
+        async createVersion() {
+          return null;
+        },
+        async getLatestVersion() {
+          return {
+            id: "version-existing-1",
+            approved_at: "2026-03-25T02:00:00.000Z",
+            approved_by: "Reviewer",
+          };
+        },
+      },
+    }
+  );
+
+  assert.equal(projected.truthVersionCreated, false);
+  assert.equal(projected.truthVersion.id, "version-existing-1");
+});
+
 test("Case Z2: finalize preserves niche-aware behavior into approved truth and runtime", async () => {
   let versionInput = null;
   let savedProfile = null;

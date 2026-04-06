@@ -83,8 +83,13 @@ function buildAuthorityScopeSummary({
   const freshnessValue = obj(freshness);
   const reasons = arr(freshnessValue.reasons);
 
+  const resolvedReason = s(
+    reason || reasons[0] || "tenant_runtime_authority_unavailable"
+  );
+
   return {
-    reason: s(reason || reasons[0] || "tenant_runtime_authority_unavailable"),
+    reason: resolvedReason,
+    reasonCode: resolvedReason,
     tenantId: s(
       graphTenantScope.tenantId ||
         tenantScope.tenantId ||
@@ -141,10 +146,37 @@ export function createTenantRuntimeAuthorityUnavailableError({
   );
 
   error.code = "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE";
+  error.statusCode = 409;
   error.reason = s(
     authority.reason || reason || "tenant_runtime_authority_unavailable"
   );
+  error.reasonCode = s(
+    authority.reasonCode || authority.reason || reason || "tenant_runtime_authority_unavailable"
+  );
   error.authority = authority;
+  error.runtimeAuthority = {
+    mode: "strict",
+    required: true,
+    available: false,
+    source: "",
+    tenantId: s(authority.tenantId),
+    tenantKey: s(authority.tenantKey),
+    runtimeProjectionId: s(authority.runtimeProjectionId),
+    runtimeProjectionStatus: s(authority.runtimeStatus),
+    projectionHash: s(authority.currentProjectionHash),
+    sourceSnapshotId: s(authority.currentSources?.sourceSnapshotId),
+    sourceProfileId: s(authority.currentSources?.sourceProfileId),
+    sourceCapabilitiesId: s(authority.currentSources?.sourceCapabilitiesId),
+    stale: Boolean(obj(freshness).stale),
+    freshnessReasons: arr(obj(freshness).reasons),
+    health: obj(obj(freshness).health),
+    reasonCode: s(
+      authority.reasonCode || authority.reason || reason || "tenant_runtime_authority_unavailable"
+    ),
+    reason: s(
+      authority.reason || authority.reasonCode || reason || "tenant_runtime_authority_unavailable"
+    ),
+  };
 
   if (freshness && typeof freshness === "object") {
     error.freshness = {

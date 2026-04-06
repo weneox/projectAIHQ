@@ -6,6 +6,7 @@ import {
 } from "../../../services/operationalReadiness.js";
 import { getTenantBrainRuntime } from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import { getInboxPolicy } from "../../../services/inboxPolicy.js";
+import { refreshTenantRuntimeProjectionStrict } from "../../../db/helpers/tenantRuntimeProjection.js";
 import { cfg } from "../../../config.js";
 import {
   deleteTelegramWebhook,
@@ -328,7 +329,76 @@ function getTelegramFeatureState() {
   };
 }
 
-async function getTelegramRuntimeSurface({ db, tenantKey = "" } = {}) {
+function extractTelegramRuntimeAuthorityPayload(error = {}) {
+  const authority = obj(error?.runtimeAuthority || error?.authority);
+  const reasonCode = s(
+    authority?.reasonCode ||
+      authority?.reason ||
+      error?.reasonCode ||
+      error?.reason ||
+      "runtime_authority_unavailable"
+  );
+
+  return {
+    reasonCode,
+    authority: Object.keys(authority).length ? authority : null,
+    error: s(error?.message || error),
+  };
+}
+
+function shouldAttemptTelegramRuntimeRepair(reasonCode = "", error = {}) {
+  const reason = s(reasonCode).toLowerCase();
+  const code = s(error?.code).toUpperCase();
+
+  return (
+    reason === "runtime_projection_missing" ||
+    reason === "runtime_projection_stale" ||
+    reason === "runtime_status_not_ready" ||
+    code === "TENANT_RUNTIME_PROJECTION_STALE"
+  );
+}
+
+function buildTelegramRuntimeSurfaceFromRuntime({
+  runtime = null,
+  tenantKey = "",
+  getInboxPolicyFn = getInboxPolicy,
+} = {}) {
+  const authority = runtime?.authority || null;
+  const tenant = runtime?.tenant || null;
+  const authorityAvailable = Boolean(authority?.available !== false && tenant);
+  const policy = tenant
+    ? getInboxPolicyFn({
+        tenantKey,
+        channel: TELEGRAM_CHANNEL_TYPE,
+        tenant,
+      })
+    : null;
+  const channelAllowed = Boolean(policy?.channelAllowed);
+
+  return {
+    ready: authorityAvailable,
+    authorityAvailable,
+    channelAllowed,
+    deliveryReady: authorityAvailable && channelAllowed,
+    reasonCode: authorityAvailable
+      ? channelAllowed
+        ? ""
+        : "channel_not_allowed"
+      : s(authority?.reasonCode || authority?.reason || "runtime_authority_unavailable"),
+    authority,
+  };
+}
+
+async function getTelegramRuntimeSurface({
+  db,
+  tenantKey = "",
+  allowRepair = false,
+  repairTrigger = "telegram_status",
+  requestedBy = "system",
+  getRuntime = getTenantBrainRuntime,
+  refreshRuntimeProjection = refreshTenantRuntimeProjectionStrict,
+  getInboxPolicyFn = getInboxPolicy,
+} = {}) {
   if (!db?.query || !tenantKey) {
     return {
       ready: false,
@@ -341,44 +411,75 @@ async function getTelegramRuntimeSurface({ db, tenantKey = "" } = {}) {
   }
 
   try {
-    const runtime = await getTenantBrainRuntime({
+    const runtime = await getRuntime({
       db,
       tenantKey,
       authorityMode: "strict",
     });
-    const authority = runtime?.authority || null;
-    const tenant = runtime?.tenant || null;
-    const authorityAvailable = Boolean(authority?.available !== false && tenant);
-    const policy = tenant
-      ? getInboxPolicy({
-          tenantKey,
-          channel: TELEGRAM_CHANNEL_TYPE,
-          tenant,
-        })
-      : null;
-    const channelAllowed = Boolean(policy?.channelAllowed);
-
-    return {
-      ready: authorityAvailable,
-      authorityAvailable,
-      channelAllowed,
-      deliveryReady: authorityAvailable && channelAllowed,
-      reasonCode: authorityAvailable
-        ? channelAllowed
-          ? ""
-          : "channel_not_allowed"
-        : s(authority?.reasonCode || "runtime_authority_unavailable"),
-      authority,
-    };
+    return buildTelegramRuntimeSurfaceFromRuntime({
+      runtime,
+      tenantKey,
+      getInboxPolicyFn,
+    });
   } catch (error) {
+    const failure = extractTelegramRuntimeAuthorityPayload(error);
+
+    if (
+      allowRepair &&
+      shouldAttemptTelegramRuntimeRepair(failure.reasonCode, error) &&
+      typeof refreshRuntimeProjection === "function"
+    ) {
+      try {
+        await refreshRuntimeProjection(
+          {
+            tenantKey,
+            triggerType: "channel_connect_telegram",
+            requestedBy: s(requestedBy || "system"),
+            runnerKey: "channelConnect.telegram.runtimeRepair",
+            generatedBy: s(requestedBy || "system"),
+            metadata: {
+              source: "channelConnect.telegram",
+              repairTrigger: s(repairTrigger || "telegram_status"),
+              previousReasonCode: failure.reasonCode,
+            },
+          },
+          db
+        );
+
+        const runtime = await getRuntime({
+          db,
+          tenantKey,
+          authorityMode: "strict",
+        });
+
+        return buildTelegramRuntimeSurfaceFromRuntime({
+          runtime,
+          tenantKey,
+          getInboxPolicyFn,
+        });
+      } catch (repairError) {
+        const repairFailure = extractTelegramRuntimeAuthorityPayload(repairError);
+
+        return {
+          ready: false,
+          authorityAvailable: false,
+          channelAllowed: false,
+          deliveryReady: false,
+          reasonCode: repairFailure.reasonCode,
+          authority: repairFailure.authority,
+          error: repairFailure.error,
+        };
+      }
+    }
+
     return {
       ready: false,
       authorityAvailable: false,
       channelAllowed: false,
       deliveryReady: false,
-      reasonCode: s(error?.reasonCode || "runtime_authority_unavailable"),
-      authority: null,
-      error: s(error?.message || error),
+      reasonCode: failure.reasonCode,
+      authority: failure.authority,
+      error: failure.error,
     };
   }
 }
@@ -1091,6 +1192,9 @@ export async function connectTelegram({ db, req } = {}) {
     runtime: await getTelegramRuntimeSurface({
       db,
       tenantKey: tenant.tenant_key,
+      allowRepair: true,
+      repairTrigger: "telegram_connect",
+      requestedBy: actor,
     }),
   });
 }
@@ -1241,3 +1345,9 @@ export async function disconnectTelegram({ db, req } = {}) {
     }),
   };
 }
+
+export const __test__ = {
+  extractTelegramRuntimeAuthorityPayload,
+  getTelegramRuntimeSurface,
+  shouldAttemptTelegramRuntimeRepair,
+};

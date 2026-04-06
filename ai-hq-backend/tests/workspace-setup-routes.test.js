@@ -346,6 +346,87 @@ test("setup finalize failure keeps concurrency and finalize protection fail-clos
   });
 });
 
+test("setup finalize runtime authority failure returns a truthful 409 payload", async () => {
+  const router = createRouter();
+
+  registerSetupReviewRoutes(router, {
+    db: {},
+    requireSetupActor() {
+      return {
+        tenantId: "tenant-1",
+        tenantKey: "alpha",
+      };
+    },
+    handleSetupAnalyze() {
+      throw new Error("not expected");
+    },
+    async applySetupReviewPatch() {
+      throw new Error("not expected");
+    },
+    async discardSetupReview() {
+      throw new Error("not expected");
+    },
+    async finalizeSetupReview() {
+      const err = new Error("approved truth is required before runtime can refresh");
+      err.code = "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE";
+      err.statusCode = 409;
+      err.reasonCode = "approved_truth_unavailable";
+      err.runtimeAuthority = {
+        mode: "strict",
+        required: true,
+        available: false,
+        tenantId: "tenant-1",
+        tenantKey: "alpha",
+        reasonCode: "approved_truth_unavailable",
+        reason: "approved_truth_unavailable",
+      };
+      err.freshness = {
+        stale: true,
+        reasons: ["approved_truth_unavailable"],
+      };
+      err.currentReview = {
+        session: { id: "session-1", status: "ready" },
+        draft: { version: 11 },
+      };
+      throw err;
+    },
+    s(value) {
+      return String(value ?? "").trim();
+    },
+    obj(value) {
+      return value && typeof value === "object" ? value : {};
+    },
+    buildReviewConcurrencyInfo(current) {
+      return {
+        sessionId: current?.session?.id || null,
+        draftVersion: current?.draft?.version || 0,
+      };
+    },
+    buildFinalizeProtectionInfo(current) {
+      return {
+        sessionStatus: current?.session?.status || "unknown",
+      };
+    },
+  });
+
+  const handler = getRoute(router, "POST", "/setup/review/current/finalize");
+  const req = createReq({ body: { reason: "ship it" } });
+  const res = createRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.body.ok, false);
+  assert.equal(res.body.code, "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE");
+  assert.equal(res.body.reasonCode, "approved_truth_unavailable");
+  assert.equal(res.body.authority?.reasonCode, "approved_truth_unavailable");
+  assert.deepEqual(res.body.freshness?.reasons, ["approved_truth_unavailable"]);
+  assert.deepEqual(res.body.concurrency, {
+    sessionId: "session-1",
+    draftVersion: 11,
+  });
+});
+
 test("setup discard route preserves discard response composition", async () => {
   const router = createRouter();
 
