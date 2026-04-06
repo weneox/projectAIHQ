@@ -1,5 +1,4 @@
-// src/services/workspace/import/draft.js
-// FINAL v7.1 — multilingual-safe draft shaping + website artifact fallback strengthening
+// ai-hq-backend/src/services/workspace/import/draft.js
 
 import {
   arr,
@@ -194,6 +193,28 @@ function keywordHitCount(text = "", dictionary = new Set()) {
     if (value.includes(lower(token))) count += 1;
   }
   return count;
+}
+
+function uniqBy(list = [], getKey = (item) => item) {
+  const seen = new Set();
+  const out = [];
+
+  for (const item of arr(list)) {
+    const rawKey =
+      typeof getKey === "function" ? getKey(item) : item?.[getKey];
+    const key =
+      typeof rawKey === "string"
+        ? rawKey
+        : rawKey == null
+          ? ""
+          : JSON.stringify(rawKey);
+
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+
+  return out;
 }
 
 function looksLikeGoogleMapsPlaceholder(text = "") {
@@ -935,6 +956,14 @@ function collectFallbackServices(siteObjects = [], pages = [], companyName = "")
   );
 }
 
+function firstNonEmpty(values = []) {
+  for (const value of arr(values)) {
+    const cleaned = cleanDisplayText(value, 1200);
+    if (cleaned) return cleaned;
+  }
+  return "";
+}
+
 function buildArtifactProfileFromResult(result = {}, sourceType = "", sourceUrl = "") {
   const siteObjects = collectSiteObjects(result);
   const pages = collectPages(result);
@@ -1089,14 +1118,6 @@ function buildArtifactProfileFromResult(result = {}, sourceType = "", sourceUrl 
     googleMapsSeedUrl:
       sourceType === "google_maps" ? cleanDisplayText(sourceUrl, 320) : "",
   });
-}
-
-function firstNonEmpty(values = []) {
-  for (const value of arr(values)) {
-    const cleaned = cleanDisplayText(value, 1200);
-    if (cleaned) return cleaned;
-  }
-  return "";
 }
 
 function mergeBusinessProfiles(primary = {}, fallback = {}) {

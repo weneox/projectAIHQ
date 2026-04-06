@@ -1,3 +1,5 @@
+// ai-hq-backend/src/routes/api/workspace/setupRoutesImports.js
+
 export function registerSetupImportRoutes(
   router,
   {
@@ -14,7 +16,8 @@ export function registerSetupImportRoutes(
     s,
   }
 ) {
-  const SUPPORTED_SOURCE_TYPES = ["website", "google_maps", "instagram"];
+  const PRIMARY_SUPPORTED_SOURCE_TYPES = ["website", "google_maps"];
+  const BUNDLE_SUPPORTED_SOURCE_TYPES = ["website", "google_maps", "instagram"];
 
   function normalizeSourceTypeForRoute(value = "") {
     const normalized = s(normalizeIncomingSourceType(value)).trim();
@@ -24,8 +27,18 @@ export function registerSetupImportRoutes(
     if (raw === "instagram" || raw === "ig" || raw === "insta") {
       return "instagram";
     }
+    if (raw === "google maps" || raw === "google_maps" || raw === "maps") {
+      return "google_maps";
+    }
+    if (raw === "website" || raw === "site" || raw === "web") {
+      return "website";
+    }
 
     return "";
+  }
+
+  function isPrimarySupportedSourceType(sourceType = "") {
+    return PRIMARY_SUPPORTED_SOURCE_TYPES.includes(s(sourceType).trim());
   }
 
   function buildImportErrorBody(errorCode, reason, extra = {}) {
@@ -146,7 +159,20 @@ export function registerSetupImportRoutes(
           "SourceImportFailed",
           "supported sourceType is required",
           {
-            supportedSourceTypes: SUPPORTED_SOURCE_TYPES,
+            supportedSourceTypes: PRIMARY_SUPPORTED_SOURCE_TYPES,
+          }
+        )
+      );
+    }
+
+    if (!isPrimarySupportedSourceType(sourceType)) {
+      return res.status(400).json(
+        buildImportErrorBody(
+          "SourceImportFailed",
+          "unsupported source type",
+          {
+            sourceType,
+            supportedSourceTypes: PRIMARY_SUPPORTED_SOURCE_TYPES,
           }
         )
       );
@@ -156,7 +182,7 @@ export function registerSetupImportRoutes(
       return res.status(400).json(
         buildImportErrorBody("SourceImportFailed", "source url is required", {
           sourceType,
-          supportedSourceTypes: SUPPORTED_SOURCE_TYPES,
+          supportedSourceTypes: PRIMARY_SUPPORTED_SOURCE_TYPES,
         })
       );
     }
@@ -189,7 +215,7 @@ export function registerSetupImportRoutes(
           return {
             ...resultBody,
             sourceType,
-            supportedSourceTypes: SUPPORTED_SOURCE_TYPES,
+            supportedSourceTypes: PRIMARY_SUPPORTED_SOURCE_TYPES,
           };
         },
       });
@@ -206,7 +232,7 @@ export function registerSetupImportRoutes(
           err?.message || "failed to import source",
           {
             sourceType,
-            supportedSourceTypes: SUPPORTED_SOURCE_TYPES,
+            supportedSourceTypes: PRIMARY_SUPPORTED_SOURCE_TYPES,
           }
         )
       );
@@ -227,7 +253,10 @@ export function registerSetupImportRoutes(
       return res.status(400).json(
         buildImportErrorBody(
           "SetupBundleImportFailed",
-          "website url is required"
+          "website url is required",
+          {
+            supportedSourceTypes: BUNDLE_SUPPORTED_SOURCE_TYPES,
+          }
         )
       );
     }
@@ -256,6 +285,12 @@ export function registerSetupImportRoutes(
           errorCode: "SetupBundleImportFailed",
           errorMessage: "setup bundle import failed",
         },
+        responseBody(resultBody) {
+          return {
+            ...resultBody,
+            supportedSourceTypes: BUNDLE_SUPPORTED_SOURCE_TYPES,
+          };
+        },
       });
 
       return res.status(result.status).json(result.body);
@@ -267,7 +302,10 @@ export function registerSetupImportRoutes(
       return res.status(400).json(
         buildImportErrorBody(
           "SetupBundleImportFailed",
-          err?.message || "failed to import setup bundle"
+          err?.message || "failed to import setup bundle",
+          {
+            supportedSourceTypes: BUNDLE_SUPPORTED_SOURCE_TYPES,
+          }
         )
       );
     }

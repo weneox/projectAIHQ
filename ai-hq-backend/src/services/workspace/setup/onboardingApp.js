@@ -1,3 +1,5 @@
+// ai-hq-backend/src/services/workspace/setup/onboardingApp.js
+
 import {
   getCurrentSetupReview,
   getOrCreateActiveSetupReviewSession,
@@ -16,6 +18,10 @@ import { auditSetupAction } from "./auditApp.js";
 
 const REVIEW_MESSAGE =
   "Draft answers stay separate from approved truth and the strict runtime until a later approval step is completed.";
+
+const ONBOARDING_NAMESPACE = "onboarding";
+const ONBOARDING_SOURCE_TYPE = "onboarding";
+const ONBOARDING_CURRENT_STEP = "onboarding";
 
 const ONBOARDING_QUESTIONS = [
   {
@@ -474,6 +480,8 @@ function buildStoredOnboardingPayload(value = {}) {
     progress: sanitizeProgress(value.progress),
     websitePrefill: deriveWebsitePrefillDraft(core),
     review: buildReviewState(core, summary),
+    namespace: ONBOARDING_NAMESPACE,
+    sourceType: ONBOARDING_SOURCE_TYPE,
   };
 }
 
@@ -560,6 +568,7 @@ function normalizeAnswerPatchBody(body = {}) {
       progress: {
         skippedQuestions: [step],
         lastAnsweredStep: step,
+        currentQuestionKey: step,
         updatedAt: nowIso(),
       },
     };
@@ -572,6 +581,7 @@ function normalizeAnswerPatchBody(body = {}) {
     ...answerPatch,
     progress: {
       lastAnsweredStep: step,
+      currentQuestionKey: step,
       updatedAt: nowIso(),
     },
   });
@@ -625,6 +635,11 @@ export function mergeOnboardingDraft(current = {}, patch = {}) {
   );
 
   const normalizedSkipped = removeSkippedIfAnswered(mergedSkipped, patch);
+  const nextQuestionKey =
+    s(patchProgress.currentQuestionKey) ||
+    s(existingProgress.currentQuestionKey) ||
+    s(patchProgress.lastAnsweredStep) ||
+    s(existingProgress.lastAnsweredStep);
 
   const next = {
     businessProfile:
@@ -662,6 +677,7 @@ export function mergeOnboardingDraft(current = {}, patch = {}) {
       ...existingProgress,
       ...patchProgress,
       skippedQuestions: normalizedSkipped,
+      currentQuestionKey: nextQuestionKey,
       updatedAt: nowIso(),
     }),
   };
@@ -783,6 +799,24 @@ function getNextQuestion(draft = {}) {
   };
 }
 
+function resolveSessionCurrentStep(review = {}, onboarding = {}, nextQuestion = null) {
+  const storedSession = obj(review.session);
+
+  return s(
+    storedSession.currentStep ||
+      obj(onboarding.progress).currentQuestionKey ||
+      nextQuestion?.key ||
+      ONBOARDING_CURRENT_STEP
+  )
+    ? ONBOARDING_CURRENT_STEP
+    : ONBOARDING_CURRENT_STEP;
+}
+
+function safeDraftVersion(draftRow = {}) {
+  const version = Number(draftRow.version || 1);
+  return Number.isFinite(version) && version > 0 ? version : 1;
+}
+
 export function buildOnboardingSessionPayload(review = {}) {
   const session = obj(review.session);
   const draftRow = obj(review.draft);
@@ -797,7 +831,7 @@ export function buildOnboardingSessionPayload(review = {}) {
       id: s(session.id),
       status: s(session.status || "draft").toLowerCase(),
       mode: s(session.mode || "setup").toLowerCase(),
-      currentStep: s(nextQuestion?.key || session.currentStep || "review").toLowerCase(),
+      currentStep: resolveSessionCurrentStep(review, onboarding, nextQuestion),
       startedAt: session.startedAt || session.started_at || null,
       updatedAt:
         session.updatedAt ||
@@ -805,14 +839,18 @@ export function buildOnboardingSessionPayload(review = {}) {
         draftRow.updatedAt ||
         draftRow.updated_at ||
         null,
-      draftVersion: Number(draftRow.version || 1),
+      draftVersion: safeDraftVersion(draftRow),
       reviewSessionId: s(session.id),
       draftOnly: true,
       storageModel: "tenant_setup_review",
+      sourceType: ONBOARDING_SOURCE_TYPE,
+      namespace: ONBOARDING_NAMESPACE,
     },
     onboarding: {
       status: summary.hasAnyDraft ? "draft_in_progress" : "awaiting_input",
       draftOnly: true,
+      sourceType: ONBOARDING_SOURCE_TYPE,
+      namespace: ONBOARDING_NAMESPACE,
       summary,
       websitePrefill: obj(onboarding.websitePrefill),
       review: obj(onboarding.review),
@@ -836,7 +874,7 @@ export function buildOnboardingSessionPayload(review = {}) {
         pricingPosture: obj(onboarding.pricingPosture),
         handoffRules: obj(onboarding.handoffRules),
         progress: obj(onboarding.progress),
-        version: Number(draftRow.version || 1),
+        version: safeDraftVersion(draftRow),
         updatedAt: draftRow.updatedAt || draftRow.updated_at || null,
       },
     },
@@ -850,6 +888,39 @@ function resolveStartedBy(actor = {}) {
     safeUuidOrNull(actor?.user?.user_id) ||
     null
   );
+}
+
+function isDatabaseNotInitializedError(error) {
+  const message = s(error?.message).toLowerCase();
+  return message.includes("database is not initialized");
+}
+
+async function maybeUpdateReviewSessionStep({
+  reviewSessionId,
+  nextQuestion,
+  deps = {},
+}) {
+  const injectedUpdateSession = deps.updateSetupReviewSession;
+  const updateSession =
+    typeof injectedUpdateSession === "function"
+      ? injectedUpdateSession
+      : updateSetupReviewSession;
+
+  if (typeof updateSession !== "function" || !s(reviewSessionId)) return;
+
+  try {
+    await updateSession(reviewSessionId, {
+      currentStep: s(nextQuestion?.key || ONBOARDING_CURRENT_STEP).toLowerCase(),
+    });
+  } catch (error) {
+    if (
+      typeof injectedUpdateSession !== "function" &&
+      isDatabaseNotInitializedError(error)
+    ) {
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function startOnboardingSession({ db, actor }, deps = {}) {
@@ -866,7 +937,7 @@ export async function startOnboardingSession({ db, actor }, deps = {}) {
     await getOrCreateSession({
       tenantId: actor.tenantId,
       mode: "setup",
-      currentStep: "website",
+      currentStep: ONBOARDING_CURRENT_STEP,
       startedBy: resolveStartedBy(actor),
       title: "AI onboarding",
       notes: "",
@@ -876,12 +947,16 @@ export async function startOnboardingSession({ db, actor }, deps = {}) {
         onboardingDraftOnly: true,
         runtimeActivationDeferred: true,
         truthApprovalDeferred: true,
+        sourceType: ONBOARDING_SOURCE_TYPE,
+        namespace: ONBOARDING_NAMESPACE,
       },
       ensureDraft: true,
     });
     review = await getCurrentReview(actor.tenantId);
     created = true;
   }
+
+  const payload = buildOnboardingSessionPayload(review);
 
   await audit(
     db,
@@ -891,8 +966,11 @@ export async function startOnboardingSession({ db, actor }, deps = {}) {
     s(review?.session?.id),
     {
       reviewSessionId: s(review?.session?.id),
-      currentStep: s(review?.session?.currentStep || "website"),
+      currentStep: s(payload?.session?.currentStep || ONBOARDING_CURRENT_STEP),
       source: "home_widget",
+      sourceType: ONBOARDING_SOURCE_TYPE,
+      namespace: ONBOARDING_NAMESPACE,
+      draftOnly: true,
     }
   );
 
@@ -904,7 +982,7 @@ export async function startOnboardingSession({ db, actor }, deps = {}) {
       message: created
         ? "Onboarding session started"
         : "Onboarding session loaded",
-      ...buildOnboardingSessionPayload(review),
+      ...payload,
     },
   };
 }
@@ -920,6 +998,8 @@ export async function loadCurrentOnboardingSession({ db, actor }, deps = {}) {
         ok: false,
         error: "OnboardingSessionNotFound",
         reason: "no active onboarding session was found",
+        session: null,
+        onboarding: null,
       },
     };
   }
@@ -938,8 +1018,10 @@ export async function updateOnboardingDraft(
   deps = {}
 ) {
   const getCurrentReview = deps.getCurrentSetupReview || getCurrentSetupReview;
-  const patchReviewDraft = deps.patchSetupReviewDraft || patchSetupReviewDraft;
-  const updateSession = deps.updateSetupReviewSession || updateSetupReviewSession;
+  const patchReviewDraft =
+    deps.patchSetupReviewDraft ||
+    deps.patchReview ||
+    patchSetupReviewDraft;
   const audit = deps.auditSetupAction || auditSetupAction;
 
   const review = await getCurrentReview(actor.tenantId);
@@ -979,6 +1061,8 @@ export async function updateOnboardingDraft(
     onboarding: {
       ...mergedOnboarding,
       updatedAt: nowIso(),
+      namespace: ONBOARDING_NAMESPACE,
+      sourceType: ONBOARDING_SOURCE_TYPE,
     },
   });
 
@@ -991,12 +1075,11 @@ export async function updateOnboardingDraft(
     bumpVersion: true,
   });
 
-  await updateSession(
-    review.session.id,
-    {
-      currentStep: s(nextQuestion?.key || "review"),
-    }
-  );
+  await maybeUpdateReviewSessionStep({
+    reviewSessionId: review.session.id,
+    nextQuestion,
+    deps,
+  });
 
   const refreshed = await getCurrentReview(actor.tenantId);
 
@@ -1013,6 +1096,8 @@ export async function updateOnboardingDraft(
       ),
       updatedFields: Object.keys(patch),
       source: "home_widget",
+      sourceType: ONBOARDING_SOURCE_TYPE,
+      namespace: ONBOARDING_NAMESPACE,
       draftOnly: true,
       messageMode: Boolean(
         s(body.step || body.questionKey || body.field) &&
