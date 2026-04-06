@@ -15,6 +15,10 @@ function bool(value, fallback = false) {
   return fallback;
 }
 
+function lower(value, fallback = "") {
+  return s(value, fallback).toLowerCase();
+}
+
 async function defaultGetCurrentSetupReview(tenantId) {
   const reviewHelper = await import("../../../db/helpers/tenantSetupReview.js");
   return reviewHelper.getCurrentSetupReview(tenantId);
@@ -25,6 +29,53 @@ async function defaultListSetupReviewEvents(input) {
   return reviewHelper.listSetupReviewEvents(input);
 }
 
+function sanitizeReviewRecord(review = {}, events = []) {
+  const session = review?.session || null;
+  const draft = review?.draft ? sanitizeSetupReviewDraft(review.draft) : null;
+  const sources = arr(review?.sources);
+  const safeEvents = arr(events);
+
+  return {
+    session,
+    draft,
+    sources,
+    events: safeEvents,
+    review: buildFrontendReviewShape({
+      session,
+      draft,
+      sources,
+      events: safeEvents,
+    }),
+    profile: draft
+      ? sanitizeSetupBusinessProfile(obj(draft?.businessProfile))
+      : {},
+  };
+}
+
+function buildFallbackFrontendReview(data = {}) {
+  const reviewSessionId = s(data?.reviewSessionId);
+  const draft = data?.draft ? sanitizeSetupReviewDraft(data.draft) : null;
+
+  if (!reviewSessionId && !draft) return null;
+
+  const session = reviewSessionId
+    ? {
+        id: reviewSessionId,
+        status: s(data?.reviewSessionStatus || "processing"),
+        mode: "setup",
+        currentStep: s(data?.stage || "source_sync"),
+        metadata: {},
+      }
+    : null;
+
+  return buildFrontendReviewShape({
+    session,
+    draft,
+    sources: [],
+    events: [],
+  });
+}
+
 export function buildImportResponse({
   data,
   successMessage,
@@ -33,16 +84,18 @@ export function buildImportResponse({
   errorCode,
   errorMessage,
 }) {
-  const mode = String(data?.mode || (data?.ok === false ? "error" : "success"))
+  const mode = String(
+    data?.mode || (data?.ok === false ? "error" : "success")
+  )
     .trim()
     .toLowerCase();
+
   const isError = data?.ok === false || mode === "error";
-  const isPartial = mode === "partial";
+  const isPartial = data?.partial === true || mode === "partial";
   const isAccepted =
     data?.accepted === true ||
-    mode === "accepted" ||
-    mode === "queued" ||
-    mode === "running";
+    data?.pending === true ||
+    ["accepted", "queued", "running", "processing"].includes(mode);
 
   if (isError) {
     return {
@@ -62,7 +115,7 @@ export function buildImportResponse({
       body: {
         ok: true,
         accepted: true,
-        partial: false,
+        partial: isPartial,
         message: acceptedMessage || successMessage,
         ...data,
       },
@@ -118,25 +171,42 @@ export function buildImportArgs({ actor, body = {}, requestId = "" }) {
         body?.resume_existing_session,
       false
     ),
+    waitForCompletion: bool(
+      body?.waitForCompletion ??
+        body?.wait_for_completion ??
+        body?.inline ??
+        body?.runInline,
+      false
+    ),
   };
 }
 
 export async function enrichImportDataWithReview({ actor, data }, deps = {}) {
-  const sanitizedData = data?.draft
-    ? {
-        ...data,
-        draft: sanitizeSetupReviewDraft(data.draft),
-        profile: sanitizeSetupBusinessProfile(
-          obj(data.profile || data.draft?.businessProfile)
-        ),
-      }
-    : data;
+  const safeData = obj(data);
+  const sanitizedDraft = safeData?.draft
+    ? sanitizeSetupReviewDraft(safeData.draft)
+    : null;
 
-  if (!s(sanitizedData?.reviewSessionId) && !sanitizedData?.draft) return sanitizedData;
+  const sanitizedProfile = sanitizeSetupBusinessProfile(
+    obj(safeData.profile || sanitizedDraft?.businessProfile)
+  );
+
+  const sanitizedData = {
+    ...safeData,
+    draft: sanitizedDraft || safeData.draft || null,
+    profile: sanitizedProfile,
+    partial:
+      safeData.partial === true || lower(safeData.mode) === "partial",
+  };
+
+  if (!s(sanitizedData?.reviewSessionId) && !sanitizedData?.draft) {
+    return sanitizedData;
+  }
 
   try {
     const getReview = deps.getCurrentSetupReview || defaultGetCurrentSetupReview;
     const listEvents = deps.listSetupReviewEvents || defaultListSetupReviewEvents;
+
     const review = await getReview(actor.tenantId);
     const events = s(review?.session?.id)
       ? await listEvents({
@@ -145,18 +215,24 @@ export async function enrichImportDataWithReview({ actor, data }, deps = {}) {
         })
       : [];
 
+    const normalizedReview = sanitizeReviewRecord(review, events);
+
     return {
       ...sanitizedData,
-      review: buildFrontendReviewShape({
-        session: review?.session || null,
-        draft: review?.draft || null,
-        sources: arr(review?.sources),
-        events,
-      }),
+      draft: sanitizedData.draft || normalizedReview.draft || null,
+      profile:
+        Object.keys(obj(sanitizedData.profile)).length
+          ? sanitizedData.profile
+          : normalizedReview.profile,
+      review: normalizedReview.review,
     };
   } catch (err) {
     return {
       ...sanitizedData,
+      review:
+        buildFallbackFrontendReview(sanitizedData) ||
+        sanitizedData.review ||
+        null,
       reviewError: err?.message || "failed to load current review",
     };
   }

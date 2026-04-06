@@ -1,6 +1,5 @@
 // src/services/workspace/import.js
-// FINAL v6.1 — session-aware source import orchestration + instagram support
-// modularized root entry, original import path preserved
+// FINAL v6.2 — session-aware source import orchestration + website partial-review hardening
 
 import { runSourceSync } from "../sourceSync/index.js";
 import { buildSetupStatus } from "./setup.js";
@@ -79,7 +78,9 @@ function normalizeSourceSeed(item = {}) {
   );
 
   const url =
-    sourceType === "website" || sourceType === "google_maps" || sourceType === "instagram"
+    sourceType === "website" ||
+    sourceType === "google_maps" ||
+    sourceType === "instagram"
       ? normalizeUrl(rawUrl)
       : rawUrl;
 
@@ -225,8 +226,7 @@ function recomputeDraftFromContributions({
     ...items.map((item) => obj(item.capabilities))
   );
   const services = items.reduce(
-    (acc, item) =>
-      mergeDraftItems(acc, arr(item.services), ["key", "title"]),
+    (acc, item) => mergeDraftItems(acc, arr(item.services), ["key", "title"]),
     []
   );
   const knowledgeItems = items.reduce(
@@ -438,6 +438,83 @@ function hasMeaningfulDraftContent(draft = {}) {
   );
 }
 
+function hasDraftIdentityCoverage(draft = {}) {
+  const profile = obj(draft?.businessProfile);
+  return !!(
+    s(profile.companyName) ||
+    s(profile.displayName) ||
+    s(profile.legalName) ||
+    s(profile.description) ||
+    s(profile.summary)
+  );
+}
+
+function hasDraftContactCoverage(draft = {}) {
+  const profile = obj(draft?.businessProfile);
+  return !!(
+    s(profile.primaryEmail) ||
+    s(profile.primaryPhone) ||
+    arr(profile.emails).length ||
+    arr(profile.phones).length ||
+    arr(profile.whatsappLinks).length ||
+    arr(profile.bookingLinks).length ||
+    arr(profile.socialLinks).length ||
+    arr(draft?.contacts).length
+  );
+}
+
+function hasDraftServiceCoverage(draft = {}) {
+  const profile = obj(draft?.businessProfile);
+  return !!(
+    arr(draft?.services).length ||
+    arr(profile.services).length
+  );
+}
+
+function hasDraftKnowledgeCoverage(draft = {}) {
+  const profile = obj(draft?.businessProfile);
+  return !!(
+    arr(draft?.knowledgeItems).length ||
+    arr(profile.faqItems).length
+  );
+}
+
+function buildWeakWebsiteDraftWarnings(draft = {}) {
+  const warnings = [];
+
+  if (!hasMeaningfulDraftContent(draft)) {
+    warnings.push("website_review_data_partially_available");
+  }
+
+  if (!hasDraftIdentityCoverage(draft)) {
+    warnings.push("website_identity_signals_weak");
+  }
+
+  if (!hasDraftContactCoverage(draft)) {
+    warnings.push("website_contact_signals_weak");
+  }
+
+  if (!hasDraftServiceCoverage(draft)) {
+    warnings.push("website_service_signals_weak");
+  }
+
+  if (!hasDraftKnowledgeCoverage(draft)) {
+    warnings.push("website_faq_signals_weak");
+  }
+
+  return uniqStrings(warnings);
+}
+
+function shouldForcePartialModeFromWarnings(warnings = []) {
+  const codes = new Set(arr(warnings).map((item) => s(item)));
+  return (
+    codes.has("website_review_data_partially_available") ||
+    codes.has("website_identity_signals_weak") ||
+    codes.has("website_contact_signals_weak") ||
+    codes.has("website_service_signals_weak")
+  );
+}
+
 function extractExistingIntakeContext(review = {}) {
   return obj(review?.session?.metadata?.lastIntakeContext);
 }
@@ -490,7 +567,8 @@ function buildMergedIntakeContext({
     {
       sourceType: incomingType,
       url: incomingUrl,
-      isPrimary: sourceSeedKey(nextIntakeContext?.primarySource) ===
+      isPrimary:
+        sourceSeedKey(nextIntakeContext?.primarySource) ===
         sourceSeedKey({ sourceType: incomingType, url: incomingUrl }),
     },
   ]);
@@ -807,6 +885,7 @@ async function completeImportSourceByType({
     tenantKey: scope?.tenantKey,
     sourceType: normalizedType,
   });
+
   const result = await runSourceSync({
     db,
     source: ensured.source,
@@ -839,10 +918,10 @@ async function completeImportSourceByType({
     }),
   });
 
-  const warnings = arr(result?.warnings).map((x) => s(x)).filter(Boolean);
-  const mode = s(result?.mode || "success");
-  const partial = lower(mode) === "partial";
-  const errorLike =
+  let warnings = arr(result?.warnings).map((x) => s(x)).filter(Boolean);
+  let mode = s(result?.mode || "success");
+  let partial = lower(mode) === "partial";
+  const rawErrorLike =
     result?.ok === false ||
     lower(mode) === "error" ||
     !!s(result?.error);
@@ -873,12 +952,56 @@ async function completeImportSourceByType({
       })
     : importedPatch;
 
-  const draft = await patchSetupReviewDraft({
+  let draft = await patchSetupReviewDraft({
     sessionId: session.id,
     tenantId: scope.tenantId,
     patch: draftPatch,
     bumpVersion: true,
   });
+
+  if (normalizedType === "website") {
+    const websiteWeakWarnings = buildWeakWebsiteDraftWarnings(draft);
+    const mergedWarnings = uniqStrings([
+      ...warnings,
+      ...arr(draft?.warnings),
+      ...websiteWeakWarnings,
+    ]);
+
+    const warningsChanged =
+      JSON.stringify(uniqStrings(arr(draft?.warnings))) !==
+      JSON.stringify(mergedWarnings);
+
+    if (warningsChanged) {
+      draft = await patchSetupReviewDraft({
+        sessionId: session.id,
+        tenantId: scope.tenantId,
+        patch: {
+          warnings: mergedWarnings,
+          completeness: calculateCompleteness({
+            businessProfile: obj(draft?.businessProfile),
+            services: arr(draft?.services),
+            knowledgeItems: arr(draft?.knowledgeItems),
+            warnings: mergedWarnings,
+          }),
+          confidenceSummary: calculateConfidenceSummary({
+            services: arr(draft?.services),
+            knowledgeItems: arr(draft?.knowledgeItems),
+          }),
+        },
+        bumpVersion: false,
+      });
+    }
+
+    warnings = mergedWarnings;
+    if (!rawErrorLike && shouldForcePartialModeFromWarnings(warnings)) {
+      partial = true;
+      if (lower(mode) !== "error") {
+        mode = "partial";
+      }
+    }
+  } else {
+    warnings = uniqStrings([...warnings, ...arr(draft?.warnings)]);
+  }
 
   const responseProfile = obj(draft?.businessProfile);
   const responseDraftPayload = obj(draft?.draftPayload);
@@ -933,7 +1056,7 @@ async function completeImportSourceByType({
 
   session = await updateSetupReviewSession(session.id, {
     metadata: nextSessionMetadata,
-    currentStep: errorLike
+    currentStep: rawErrorLike
       ? deferFailureStatus
         ? "source_sync"
         : "failed"
@@ -943,13 +1066,14 @@ async function completeImportSourceByType({
     notes: s(note) || session.notes || "",
   });
 
-  if (errorLike) {
+  if (rawErrorLike) {
     logger.warn("setup_import.complete.failed", {
       stage: s(result?.stage),
       mode,
       warningCount: warnings.length,
       deferFailureStatus,
     });
+
     if (!deferFailureStatus) {
       session = await failSetupReviewSession(
         session.id,
@@ -1072,6 +1196,7 @@ async function completeImportSourceByType({
     ),
     warningCount: warnings.length,
   });
+
   return {
     ok: result?.ok !== false,
     mode,
@@ -1203,6 +1328,7 @@ async function importSourceByType({
       sourceType: normalizedType,
       url: normalizedUrl,
     });
+
   const logger = createLogger({
     component: "workspace-import",
     requestId,
@@ -1448,6 +1574,7 @@ async function importSourceByType({
       sourceId: s(ensured?.source?.id),
       reuseExistingSession,
     });
+
     return await buildAcceptedImportResult({
       db,
       scope,
@@ -1470,6 +1597,7 @@ async function importSourceByType({
       runId: s(createdRun?.run?.id),
       sourceId: s(ensured?.source?.id),
     });
+
     if (session?.id) {
       try {
         await failSetupReviewSession(session.id, error, {
@@ -1557,6 +1685,7 @@ export async function resumeAcceptedImportRun({
     tenantId: s(run.tenant_id),
     tenantKey: s(run.tenant_key),
   });
+
   const actorMeta = obj(run.metadata_json?.actor);
   const normalizedType = normalizeSourceType(
     run.input_summary_json?.sourceType || run.source_type
@@ -1703,7 +1832,8 @@ export async function importSourceBundle({
     mode:
       lower(instagramResult?.mode) === "error" || lower(websiteResult?.mode) === "error"
         ? "error"
-        : lower(instagramResult?.mode) === "partial" || lower(websiteResult?.mode) === "partial"
+        : lower(instagramResult?.mode) === "partial" ||
+            lower(websiteResult?.mode) === "partial"
           ? "partial"
           : accepted
             ? "accepted"
@@ -1745,4 +1875,10 @@ export const __test__ = {
   shouldReuseSessionForImport,
   mergeImportedDraftPatch,
   isPollutedFailedReviewDraft,
+  buildWeakWebsiteDraftWarnings,
+  hasDraftIdentityCoverage,
+  hasDraftContactCoverage,
+  hasDraftServiceCoverage,
+  hasDraftKnowledgeCoverage,
+  shouldForcePartialModeFromWarnings,
 };

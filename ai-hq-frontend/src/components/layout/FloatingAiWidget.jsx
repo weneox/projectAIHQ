@@ -69,19 +69,6 @@ const STEP_META = {
   },
 };
 
-function resolveInitialStep({
-  canDraft,
-  websiteUrl = "",
-  companyName = "",
-  description = "",
-} = {}) {
-  if (!canDraft) return "shortcut";
-  if (!s(websiteUrl)) return "website";
-  if (!s(companyName)) return "company";
-  if (!s(description)) return "description";
-  return "review";
-}
-
 function nextStep(step = "website") {
   const index = STEP_ORDER.indexOf(step);
   if (index < 0) return "review";
@@ -92,6 +79,18 @@ function prevStep(step = "review") {
   const index = STEP_ORDER.indexOf(step);
   if (index <= 0) return "website";
   return STEP_ORDER[index - 1];
+}
+
+function getBackStepFromConversation(conversation = []) {
+  const items = arr(conversation)
+    .filter((item) => s(item?.step))
+    .map((item) => s(item.step).toLowerCase());
+
+  if (!items.length) return "website";
+
+  const lastStep = items[items.length - 1];
+  if (lastStep === "review") return "handoff";
+  return prevStep(lastStep);
 }
 
 function buildDefaultAssistant() {
@@ -112,9 +111,11 @@ function buildDefaultAssistant() {
       hours: [],
       pricingPosture: {},
       handoffRules: {},
+      progress: {},
       version: 0,
       updatedAt: null,
     },
+    review: {},
     websitePrefill: {
       supported: true,
       status: "awaiting_input",
@@ -127,7 +128,196 @@ function buildDefaultAssistant() {
         placeholder: "https://yourbusiness.com",
       },
       conversation: [],
+      composer: {
+        step: "website",
+        placeholder: "https://yourbusiness.com",
+      },
     },
+  };
+}
+
+function buildFallbackNextQuestion({ draft, websitePrefill }) {
+  const businessProfile = obj(draft.businessProfile);
+  const checks = [
+    {
+      key: "website",
+      answered: Boolean(
+        s(businessProfile.websiteUrl || websitePrefill.websiteUrl)
+      ),
+    },
+    {
+      key: "company",
+      answered: Boolean(s(businessProfile.companyName)),
+    },
+    {
+      key: "description",
+      answered: Boolean(s(businessProfile.description)),
+    },
+    {
+      key: "services",
+      answered: arr(draft.services).length > 0,
+    },
+    {
+      key: "contact",
+      answered: arr(draft.contacts).length > 0,
+    },
+    {
+      key: "hours",
+      answered: arr(draft.hours).length > 0,
+    },
+    {
+      key: "pricing",
+      answered: Boolean(s(obj(draft.pricingPosture).summary)),
+    },
+    {
+      key: "handoff",
+      answered: Boolean(
+        s(obj(draft.handoffRules).summary) ||
+          arr(obj(draft.handoffRules).triggers).length
+      ),
+    },
+  ];
+
+  const next = checks.find((item) => !item.answered);
+  if (!next) return null;
+
+  return {
+    key: next.key,
+    prompt: STEP_META[next.key]?.question || "Davam edək?",
+    placeholder: STEP_META[next.key]?.placeholder || "",
+  };
+}
+
+function buildFallbackConversation({ draft, websitePrefill, nextQuestion }) {
+  const items = [];
+  const businessProfile = obj(draft.businessProfile);
+  const website = s(businessProfile.websiteUrl || websitePrefill.websiteUrl);
+  const company = s(businessProfile.companyName);
+  const description = s(businessProfile.description);
+
+  items.push({
+    id: "q:website",
+    role: "assistant",
+    step: "website",
+    text: STEP_META.website.question,
+  });
+
+  if (website) {
+    items.push({
+      id: "a:website",
+      role: "user",
+      step: "website",
+      text: website,
+    });
+  }
+
+  if (company || nextQuestion?.key !== "website") {
+    items.push({
+      id: "q:company",
+      role: "assistant",
+      step: "company",
+      text: STEP_META.company.question,
+    });
+  }
+
+  if (company) {
+    items.push({
+      id: "a:company",
+      role: "user",
+      step: "company",
+      text: company,
+    });
+  }
+
+  if (
+    description ||
+    (nextQuestion?.key !== "website" && nextQuestion?.key !== "company")
+  ) {
+    items.push({
+      id: "q:description",
+      role: "assistant",
+      step: "description",
+      text: STEP_META.description.question,
+    });
+  }
+
+  if (description) {
+    items.push({
+      id: "a:description",
+      role: "user",
+      step: "description",
+      text: description,
+    });
+  }
+
+  if (!nextQuestion) {
+    items.push({
+      id: "q:review",
+      role: "assistant",
+      step: "review",
+      text: "Topladıqlarım bunlardır.",
+    });
+  }
+
+  return items;
+}
+
+function normalizeAssistantState(input = null) {
+  const source = input || buildDefaultAssistant();
+  const nestedAssistant = obj(source.assistant);
+  const draft = obj(source.draft);
+  const websitePrefill = obj(source.websitePrefill);
+
+  const nextQuestion =
+    obj(nestedAssistant.nextQuestion).key
+      ? obj(nestedAssistant.nextQuestion)
+      : buildFallbackNextQuestion({ draft, websitePrefill });
+
+  const conversation = arr(nestedAssistant.conversation).length
+    ? arr(nestedAssistant.conversation).map((item, index) => ({
+        id: s(item.id, String(index)),
+        role: s(item.role, "assistant"),
+        text: s(item.text || item.prompt),
+        step: s(item.step),
+      }))
+    : buildFallbackConversation({
+        draft,
+        websitePrefill,
+        nextQuestion,
+      });
+
+  return {
+    mode: s(source.mode, "shortcut"),
+    title: s(source.title, "Setup"),
+    summary: s(source.summary),
+    statusLabel: s(source.statusLabel),
+    primaryAction: obj(source.primaryAction),
+    secondaryAction: source.secondaryAction ? obj(source.secondaryAction) : null,
+    session: obj(source.session),
+    review: obj(source.review),
+    websitePrefill,
+    draft: {
+      businessProfile: obj(draft.businessProfile),
+      services: arr(draft.services),
+      contacts: arr(draft.contacts),
+      hours: arr(draft.hours),
+      pricingPosture: obj(draft.pricingPosture),
+      handoffRules: obj(draft.handoffRules),
+      progress: obj(draft.progress),
+      version: Number(draft.version || 0),
+      updatedAt: draft.updatedAt || null,
+    },
+    nextQuestion,
+    composer:
+      nestedAssistant.composer && obj(nestedAssistant.composer).step
+        ? obj(nestedAssistant.composer)
+        : nextQuestion
+          ? {
+              step: s(nextQuestion.key),
+              placeholder: s(nextQuestion.placeholder),
+            }
+          : null,
+    conversation,
   };
 }
 
@@ -309,121 +499,6 @@ function AnswerRow({ label, value }) {
   );
 }
 
-function localQuestionFallback({ step, draft, websitePrefill }) {
-  const businessProfile = obj(draft.businessProfile);
-
-  const checks = [
-    {
-      key: "website",
-      answered: Boolean(s(businessProfile.websiteUrl || websitePrefill.websiteUrl)),
-    },
-    {
-      key: "company",
-      answered: Boolean(s(businessProfile.companyName)),
-    },
-    {
-      key: "description",
-      answered: Boolean(s(businessProfile.description)),
-    },
-    {
-      key: "services",
-      answered: arr(draft.services).length > 0,
-    },
-    {
-      key: "contact",
-      answered: arr(draft.contacts).length > 0,
-    },
-    {
-      key: "hours",
-      answered: arr(draft.hours).length > 0,
-    },
-    {
-      key: "pricing",
-      answered: Boolean(s(obj(draft.pricingPosture).summary)),
-    },
-    {
-      key: "handoff",
-      answered: Boolean(
-        s(obj(draft.handoffRules).summary) || arr(obj(draft.handoffRules).triggers).length
-      ),
-    },
-  ];
-
-  const next = checks.find((item) => !item.answered);
-  if (!next) return null;
-
-  const meta = STEP_META[next.key] || {
-    question: "Davam edək?",
-    placeholder: "",
-  };
-
-  return {
-    key: next.key,
-    prompt: meta.question,
-    placeholder: meta.placeholder,
-  };
-}
-
-function buildFallbackConversation({ step, websiteUrl, companyName, description }) {
-  const items = [];
-
-  items.push({
-    id: "q-website",
-    role: "assistant",
-    text: STEP_META.website.question,
-  });
-
-  if (s(websiteUrl)) {
-    items.push({
-      id: "a-website",
-      role: "user",
-      text: s(websiteUrl),
-    });
-  }
-
-  if (step !== "website") {
-    items.push({
-      id: "q-company",
-      role: "assistant",
-      text: STEP_META.company.question,
-    });
-  }
-
-  if (s(companyName)) {
-    items.push({
-      id: "a-company",
-      role: "user",
-      text: s(companyName),
-    });
-  }
-
-  if (step === "description" || step === "review") {
-    items.push({
-      id: "q-description",
-      role: "assistant",
-      text: STEP_META.description.question,
-    });
-  }
-
-  if (s(description)) {
-    items.push({
-      id: "a-description",
-      role: "user",
-      text: s(description),
-    });
-  }
-
-  if (step === "review") {
-    items.push({
-      id: "q-review",
-      role: "assistant",
-      text: "Topladıqlarım bunlardır.",
-    });
-  }
-
-  return items;
-}
-
 export default function FloatingAiWidget({
   hidden = false,
   open = false,
@@ -436,80 +511,21 @@ export default function FloatingAiWidget({
   const rootRef = useRef(null);
   const composerRef = useRef(null);
 
-  const resolvedAssistant = assistant || buildDefaultAssistant();
-  const draft = obj(resolvedAssistant.draft);
-  const profile = obj(draft.businessProfile);
-  const websitePrefill = obj(resolvedAssistant.websitePrefill);
-  const assistantState = obj(resolvedAssistant.assistant);
-
-  const shortcutMode = resolvedAssistant.mode === "shortcut";
-  const canDraft = !shortcutMode;
-
-  const [websiteUrl, setWebsiteUrl] = useState(
-    s(profile.websiteUrl || websitePrefill.websiteUrl)
+  const resolvedAssistant = useMemo(
+    () => normalizeAssistantState(assistant),
+    [assistant]
   );
-  const [companyName, setCompanyName] = useState(s(profile.companyName));
-  const [description, setDescription] = useState(s(profile.description));
-  const [sessionId, setSessionId] = useState(s(resolvedAssistant.session?.id));
-  const [step, setStep] = useState(
-    resolveInitialStep({
-      canDraft,
-      websiteUrl: s(profile.websiteUrl || websitePrefill.websiteUrl),
-      companyName: s(profile.companyName),
-      description: s(profile.description),
-    })
-  );
+
+  const [clientAssistant, setClientAssistant] = useState(resolvedAssistant);
   const [composer, setComposer] = useState("");
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState(null);
 
   useEffect(() => {
-    setWebsiteUrl(s(profile.websiteUrl || websitePrefill.websiteUrl));
-    setCompanyName(s(profile.companyName));
-    setDescription(s(profile.description));
-    setSessionId(s(resolvedAssistant.session?.id));
+    setClientAssistant(resolvedAssistant);
+  }, [resolvedAssistant]);
 
-    const nextQuestion = obj(resolvedAssistant.assistant?.nextQuestion);
-    if (s(nextQuestion.key)) {
-      setStep(s(nextQuestion.key));
-      return;
-    }
-
-    setStep(
-      resolveInitialStep({
-        canDraft: resolvedAssistant.mode !== "shortcut",
-        websiteUrl: s(profile.websiteUrl || websitePrefill.websiteUrl),
-        companyName: s(profile.companyName),
-        description: s(profile.description),
-      })
-    );
-  }, [
-    resolvedAssistant.mode,
-    s(resolvedAssistant.session?.id),
-    s(resolvedAssistant.assistant?.nextQuestion?.key),
-    s(profile.websiteUrl),
-    s(websitePrefill.websiteUrl),
-    s(profile.companyName),
-    s(profile.description),
-  ]);
-
-  useEffect(() => {
-    const backendPlaceholder = s(assistantState?.nextQuestion?.placeholder);
-    const localPlaceholder = s(STEP_META[step]?.placeholder);
-    if (step === "review") {
-      setComposer("");
-      return;
-    }
-
-    if (step === "website") setComposer(s(websiteUrl));
-    else if (step === "company") setComposer(s(companyName));
-    else if (step === "description") setComposer(s(description));
-    else setComposer("");
-
-    if (!backendPlaceholder && !localPlaceholder) {
-      setComposer("");
-    }
-  }, [step, websiteUrl, companyName, description, s(assistantState?.nextQuestion?.placeholder)]);
+  const shortcutMode = clientAssistant.mode === "shortcut";
 
   useEffect(() => {
     if (!open) return;
@@ -525,6 +541,19 @@ export default function FloatingAiWidget({
   }, [open, onOpenChange]);
 
   useEffect(() => {
+    if (!open || shortcutMode || !clientAssistant.nextQuestion) {
+      setComposer("");
+      return;
+    }
+    setComposer("");
+  }, [open, shortcutMode, s(clientAssistant.nextQuestion?.key)]);
+
+  useEffect(() => {
+    if (!open || shortcutMode || !clientAssistant.nextQuestion) return;
+    window.requestAnimationFrame(() => composerRef.current?.focus?.());
+  }, [open, shortcutMode, s(clientAssistant.nextQuestion?.key)]);
+
+  useEffect(() => {
     if (!open) return;
 
     const onKeyDown = (event) => {
@@ -532,8 +561,8 @@ export default function FloatingAiWidget({
       if (
         event.key === "Enter" &&
         !event.shiftKey &&
-        step !== "review" &&
         !shortcutMode &&
+        clientAssistant.nextQuestion &&
         document.activeElement === composerRef.current
       ) {
         event.preventDefault();
@@ -543,25 +572,30 @@ export default function FloatingAiWidget({
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  });
-
-  useEffect(() => {
-    if (!open || shortcutMode || step === "review") return;
-    window.requestAnimationFrame(() => composerRef.current?.focus?.());
-  }, [open, step, shortcutMode]);
+  }, [open, shortcutMode, clientAssistant.nextQuestion, composer, onOpenChange]);
 
   if (hidden) return null;
 
   async function ensureSession() {
-    if (s(sessionId)) return s(sessionId);
+    if (s(clientAssistant.session?.id)) return s(clientAssistant.session.id);
+
     const started = await startOnboardingSession();
-    const nextId = s(started?.session?.id);
-    if (nextId) setSessionId(nextId);
-    return nextId;
+
+    const nextAssistant = normalizeAssistantState({
+      ...clientAssistant,
+      draft: obj(started?.onboarding?.draft),
+      review: obj(started?.onboarding?.review),
+      websitePrefill: obj(started?.onboarding?.websitePrefill),
+      assistant: obj(started?.onboarding?.assistant),
+      session: obj(started?.session),
+    });
+
+    setClientAssistant(nextAssistant);
+    return s(nextAssistant.session?.id);
   }
 
   async function handleSubmitAnswer() {
-    if (!canDraft || saving || step === "review") return;
+    if (shortcutMode || saving || !clientAssistant.nextQuestion) return;
 
     const value = s(composer);
     if (!value) {
@@ -579,25 +613,23 @@ export default function FloatingAiWidget({
     try {
       await ensureSession();
 
-      await sendOnboardingMessage({
-        step,
+      const response = await sendOnboardingMessage({
+        step: s(clientAssistant.nextQuestion?.key),
         answer: value,
       });
 
-      if (step === "website") setWebsiteUrl(value);
-      if (step === "company") setCompanyName(value);
-      if (step === "description") setDescription(value);
+      const nextAssistant = normalizeAssistantState({
+        ...clientAssistant,
+        draft: obj(response?.onboarding?.draft),
+        review: obj(response?.onboarding?.review),
+        websitePrefill: obj(response?.onboarding?.websitePrefill),
+        assistant: obj(response?.onboarding?.assistant),
+        session: obj(response?.session),
+      });
 
-      await queryClient.invalidateQueries({ queryKey: ["product-home"] });
-
+      setClientAssistant(nextAssistant);
       setComposer("");
-
-      const backendNextStep = s(assistantState?.nextQuestion?.key);
-      if (backendNextStep) {
-        setStep(backendNextStep);
-      } else {
-        setStep(nextStep(step));
-      }
+      await queryClient.invalidateQueries({ queryKey: ["product-home"] });
     } catch (error) {
       setNotice({
         tone: "danger",
@@ -609,16 +641,92 @@ export default function FloatingAiWidget({
     }
   }
 
-  function handleSkip() {
-    if (step === "review") return;
-    setStep(nextStep(step));
+  async function handleSkip() {
+    const currentStep = s(clientAssistant.nextQuestion?.key);
+    if (!currentStep || saving) return;
+
+    setSaving(true);
     setNotice(null);
+
+    try {
+      await ensureSession();
+
+      const response = await sendOnboardingMessage({
+        step: currentStep,
+        skip: true,
+      });
+
+      const nextAssistant = normalizeAssistantState({
+        ...clientAssistant,
+        draft: obj(response?.onboarding?.draft),
+        review: obj(response?.onboarding?.review),
+        websitePrefill: obj(response?.onboarding?.websitePrefill),
+        assistant: obj(response?.onboarding?.assistant),
+        session: obj(response?.session),
+      });
+
+      setClientAssistant(nextAssistant);
+      setComposer("");
+      await queryClient.invalidateQueries({ queryKey: ["product-home"] });
+    } catch (error) {
+      setNotice({
+        tone: "danger",
+        title: "Xəta",
+        description: s(error?.message, "Skip etmək olmadı."),
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleBack() {
-    if (step === "website") return;
-    setStep(prevStep(step));
+    const currentStep = s(clientAssistant.nextQuestion?.key);
+
+    if (currentStep) {
+      if (currentStep === "website") return;
+
+      const previous = prevStep(currentStep);
+      const previousQuestion =
+        previous === "review"
+          ? null
+          : {
+              key: previous,
+              prompt: STEP_META[previous]?.question || "",
+              placeholder: STEP_META[previous]?.placeholder || "",
+            };
+
+      setClientAssistant((before) => ({
+        ...before,
+        nextQuestion: previousQuestion,
+        composer: previousQuestion
+          ? {
+              step: previousQuestion.key,
+              placeholder: previousQuestion.placeholder,
+            }
+          : null,
+      }));
+      setNotice(null);
+      setComposer("");
+      return;
+    }
+
+    const previous = getBackStepFromConversation(clientAssistant.conversation);
+    const previousQuestion = {
+      key: previous,
+      prompt: STEP_META[previous]?.question || "",
+      placeholder: STEP_META[previous]?.placeholder || "",
+    };
+
+    setClientAssistant((before) => ({
+      ...before,
+      nextQuestion: previousQuestion,
+      composer: {
+        step: previousQuestion.key,
+        placeholder: previousQuestion.placeholder,
+      },
+    }));
     setNotice(null);
+    setComposer("");
   }
 
   function handleDone() {
@@ -629,36 +737,68 @@ export default function FloatingAiWidget({
     });
   }
 
+  const conversation = arr(clientAssistant.conversation);
+  const draft = obj(clientAssistant.draft);
+  const businessProfile = obj(draft.businessProfile);
+  const nextQuestion = obj(clientAssistant.nextQuestion);
+  const inReview = !nextQuestion.key;
+
   const summaryItems = [
-    { label: "Website", value: s(websiteUrl, "—") },
-    { label: "Name", value: s(companyName, "—") },
-    { label: "About", value: s(description, "—") },
-  ];
-
-  const nextQuestion =
-    obj(assistantState.nextQuestion).key
-      ? obj(assistantState.nextQuestion)
-      : localQuestionFallback({
-          step,
-          draft,
-          websitePrefill,
-        });
-
-  const conversation = arr(assistantState.conversation).length
-    ? arr(assistantState.conversation).map((item, index) => ({
-        id: s(item.id, String(index)),
-        role: s(item.role, "assistant"),
-        text: s(item.text || item.prompt),
-      }))
-    : buildFallbackConversation({
-        step,
-        websiteUrl,
-        companyName,
-        description,
-      });
+    {
+      label: "Website",
+      value: s(
+        businessProfile.websiteUrl || clientAssistant.websitePrefill?.websiteUrl,
+        "—"
+      ),
+    },
+    {
+      label: "Name",
+      value: s(businessProfile.companyName, "—"),
+    },
+    {
+      label: "About",
+      value: s(businessProfile.description, "—"),
+    },
+    arr(draft.services).length
+      ? {
+          label: "Services",
+          value: arr(draft.services)
+            .map((item) => s(item.title || item.name || item.label))
+            .filter(Boolean)
+            .slice(0, 4)
+            .join(", "),
+        }
+      : null,
+    arr(draft.contacts).length
+      ? {
+          label: "Contact",
+          value: s(arr(draft.contacts)[0]?.value, "—"),
+        }
+      : null,
+    arr(draft.hours).length
+      ? {
+          label: "Hours",
+          value: s(arr(draft.hours)[0]?.notes || arr(draft.hours)[0]?.day, "—"),
+        }
+      : null,
+    s(obj(draft.pricingPosture).summary)
+      ? {
+          label: "Pricing",
+          value: s(obj(draft.pricingPosture).summary),
+        }
+      : null,
+    s(obj(draft.handoffRules).summary)
+      ? {
+          label: "Handoff",
+          value: s(obj(draft.handoffRules).summary),
+        }
+      : null,
+  ].filter(Boolean);
 
   const composerPlaceholder = s(
-    nextQuestion?.placeholder || STEP_META[step]?.placeholder
+    clientAssistant.composer?.placeholder ||
+      nextQuestion.placeholder ||
+      STEP_META[nextQuestion.key]?.placeholder
   );
 
   return (
@@ -680,7 +820,9 @@ export default function FloatingAiWidget({
                     AI setup
                   </div>
                   <div className="mt-2 text-[18px] font-semibold tracking-[-0.045em] text-text">
-                    {shortcutMode ? "Home-da davam et" : "Quick setup"}
+                    {shortcutMode
+                      ? "Home-da davam et"
+                      : clientAssistant.title || "Quick setup"}
                   </div>
                 </div>
 
@@ -711,32 +853,32 @@ export default function FloatingAiWidget({
                   <Bubble role="assistant" text="Home-da davam et." />
 
                   <div className="flex flex-col gap-2">
-                    {resolvedAssistant.primaryAction?.path ? (
+                    {clientAssistant.primaryAction?.path ? (
                       <Button
                         type="button"
                         size="hero"
                         onClick={() => {
-                          onNavigate?.(resolvedAssistant.primaryAction.path);
+                          onNavigate?.(clientAssistant.primaryAction.path);
                           onOpenChange?.(false);
                         }}
                         fullWidth
                       >
-                        {resolvedAssistant.primaryAction.label || "Open Home"}
+                        {clientAssistant.primaryAction.label || "Open Home"}
                       </Button>
                     ) : null}
 
-                    {resolvedAssistant.secondaryAction?.path ? (
+                    {clientAssistant.secondaryAction?.path ? (
                       <Button
                         type="button"
                         size="hero"
                         variant="secondary"
                         onClick={() => {
-                          onNavigate?.(resolvedAssistant.secondaryAction.path);
+                          onNavigate?.(clientAssistant.secondaryAction.path);
                           onOpenChange?.(false);
                         }}
                         fullWidth
                       >
-                        {resolvedAssistant.secondaryAction.label}
+                        {clientAssistant.secondaryAction.label}
                       </Button>
                     ) : null}
                   </div>
@@ -748,7 +890,7 @@ export default function FloatingAiWidget({
                       <Bubble key={item.id} role={item.role} text={item.text} />
                     ))}
 
-                    {step === "review" ? (
+                    {inReview ? (
                       <div className="space-y-3">
                         {summaryItems.map((item) => (
                           <AnswerRow
@@ -761,7 +903,7 @@ export default function FloatingAiWidget({
                     ) : null}
                   </div>
 
-                  {step !== "review" ? (
+                  {!inReview ? (
                     <>
                       <div className="rounded-[18px] border border-line bg-white px-4 py-3 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.16)]">
                         <div className="flex items-end gap-3">
@@ -791,7 +933,7 @@ export default function FloatingAiWidget({
                           size="sm"
                           variant="secondary"
                           onClick={handleBack}
-                          disabled={step === "website"}
+                          disabled={s(clientAssistant.nextQuestion?.key) === "website"}
                           leftIcon={<ArrowLeft className="h-4 w-4" />}
                           fullWidth
                         >
@@ -802,6 +944,7 @@ export default function FloatingAiWidget({
                           size="sm"
                           variant="secondary"
                           onClick={handleSkip}
+                          disabled={saving}
                           fullWidth
                         >
                           Skip
@@ -822,19 +965,19 @@ export default function FloatingAiWidget({
                           Back
                         </Button>
 
-                        {resolvedAssistant.secondaryAction?.path ? (
+                        {clientAssistant.secondaryAction?.path ? (
                           <Button
                             type="button"
                             size="hero"
                             variant="secondary"
                             onClick={() => {
-                              onNavigate?.(resolvedAssistant.secondaryAction.path);
+                              onNavigate?.(clientAssistant.secondaryAction.path);
                               onOpenChange?.(false);
                             }}
                             leftIcon={<Link2 className="h-4 w-4" />}
                             fullWidth
                           >
-                            {resolvedAssistant.secondaryAction.label}
+                            {clientAssistant.secondaryAction.label}
                           </Button>
                         ) : null}
                       </div>

@@ -1,5 +1,5 @@
 // src/db/helpers/tenantSetupReview.js
-// FINAL v1.1 — setup review session lifecycle helper
+// FINAL v1.2 — setup review session lifecycle helper
 // fixes:
 // - prevent email/text values from being written into uuid columns
 // - normalize optional uuid fields safely across session/draft/source helpers
@@ -8,6 +8,8 @@
 // - link sources to a setup session cleanly
 // - provide tx-safe read/write/discard/finalize helpers
 // - allow finalize to project draft -> canonical via injected callback
+// - preserve onboarding metadata/currentStep when reusing an active session
+// - merge nested json draft/session patch state instead of clobbering it
 
 import { db, getDb } from "../index.js";
 import {
@@ -75,6 +77,17 @@ function safeUuidOrNull(value = null) {
   return isUuid(x) ? x : null;
 }
 
+function mergeJsonState(currentValue = {}, patchValue = {}) {
+  const current = obj(currentValue);
+  const patch = obj(patchValue);
+
+  if (!Object.keys(patch).length) return current;
+  return {
+    ...current,
+    ...patch,
+  };
+}
+
 function getDbHandle() {
   if (db) return db;
   if (typeof getDb === "function") {
@@ -124,7 +137,11 @@ async function withTx(fn) {
 }
 
 function normalizeSessionStatus(v, d = "draft") {
-  return oneOf(v, ["draft", "processing", "ready", "finalized", "discarded", "failed"], d);
+  return oneOf(
+    v,
+    ["draft", "processing", "ready", "finalized", "discarded", "failed"],
+    d
+  );
 }
 
 function normalizeSessionMode(v, d = "setup") {
@@ -270,7 +287,10 @@ function normalizeBaselineMetadata(input = {}) {
   };
 }
 
-export function hasCanonicalBaselineDrift(baselineInput = {}, currentInput = {}) {
+export function hasCanonicalBaselineDrift(
+  baselineInput = {},
+  currentInput = {}
+) {
   const baseline = normalizeBaselineMetadata(baselineInput);
   const current = normalizeBaselineMetadata(currentInput);
 
@@ -326,7 +346,9 @@ async function resolveBaselineForSession(
 }
 
 async function detectCanonicalBaselineDrift(session = {}, client) {
-  const baseline = normalizeBaselineMetadata(obj(session.metadata).canonicalBaseline);
+  const baseline = normalizeBaselineMetadata(
+    obj(session.metadata).canonicalBaseline
+  );
   if (!baseline.capturedAt) {
     return {
       drifted: false,
@@ -348,12 +370,7 @@ async function detectCanonicalBaselineDrift(session = {}, client) {
 
 async function insertSetupReviewEvent(
   client,
-  {
-    sessionId,
-    tenantId,
-    eventType,
-    payload = {},
-  } = {},
+  { sessionId, tenantId, eventType, payload = {} } = {}
 ) {
   const sid = s(sessionId);
   const tid = s(tenantId);
@@ -401,7 +418,7 @@ export async function getSetupReviewSessionById(sessionId, client = null) {
 export async function listSetupReviewSessionsByTenant(
   tenantId,
   { limit = 20, includeFinished = true } = {},
-  client = null,
+  client = null
 ) {
   const tid = s(tenantId);
   if (!tid) return [];
@@ -467,7 +484,7 @@ export async function createSetupReviewSession(
     metadata = {},
     ensureDraft = true,
   } = {},
-  client = null,
+  client = null
 ) {
   const tid = s(tenantId);
   if (!tid) {
@@ -534,7 +551,7 @@ export async function createSetupReviewSession(
           sessionId: session.id,
           tenantId: session.tenantId,
         },
-        cx,
+        cx
       );
     }
 
@@ -573,7 +590,7 @@ export async function getOrCreateActiveSetupReviewSession(
     metadata = {},
     ensureDraft = true,
   } = {},
-  client = null,
+  client = null
 ) {
   const tid = s(tenantId);
   if (!tid) {
@@ -595,7 +612,72 @@ export async function getOrCreateActiveSetupReviewSession(
     );
 
     if (locked.rows?.[0]) {
-      const session = normalizeSessionRow(locked.rows[0]);
+      const existing = normalizeSessionRow(locked.rows[0]);
+
+      const baseline = await resolveBaselineForSession(
+        {
+          tenantId: tid,
+          baseRuntimeProjectionId:
+            existing.baseRuntimeProjectionId || baseRuntimeProjectionId,
+          metadata: {
+            ...obj(existing.metadata),
+            ...obj(metadata),
+          },
+        },
+        cx
+      );
+
+      const mergedMetadata = {
+        ...obj(existing.metadata),
+        ...obj(metadata),
+        canonicalBaseline: baseline.canonicalBaseline,
+      };
+
+      const patch = {};
+
+      if (s(mode) && normalizeSessionMode(mode, existing.mode) !== existing.mode) {
+        patch.mode = mode;
+      }
+
+      if (s(primarySourceType) && s(primarySourceType) !== existing.primarySourceType) {
+        patch.primarySourceType = primarySourceType;
+      }
+
+      const safePrimarySourceId = safeUuidOrNull(primarySourceId);
+      if (safePrimarySourceId && safePrimarySourceId !== existing.primarySourceId) {
+        patch.primarySourceId = safePrimarySourceId;
+      }
+
+      const safeStartedBy = safeUuidOrNull(startedBy);
+      if (safeStartedBy && safeStartedBy !== existing.startedBy) {
+        patch.startedBy = safeStartedBy;
+      }
+
+      if (s(currentStep) && s(currentStep) !== existing.currentStep) {
+        patch.currentStep = currentStep;
+      }
+
+      const safeBaseRuntimeProjectionId = safeUuidOrNull(
+        baseline.baseRuntimeProjectionId
+      );
+      if (
+        safeBaseRuntimeProjectionId &&
+        safeBaseRuntimeProjectionId !== existing.baseRuntimeProjectionId
+      ) {
+        patch.baseRuntimeProjectionId = safeBaseRuntimeProjectionId;
+      }
+
+      if (s(title) && s(title) !== existing.title) {
+        patch.title = title;
+      }
+
+      if (notes !== undefined && s(notes) !== existing.notes) {
+        patch.notes = notes;
+      }
+
+      patch.metadata = mergedMetadata;
+
+      const session = await updateSetupReviewSession(existing.id, patch, cx);
 
       if (bool(ensureDraft, true)) {
         await ensureSetupReviewDraft(
@@ -603,7 +685,7 @@ export async function getOrCreateActiveSetupReviewSession(
             sessionId: session.id,
             tenantId: session.tenantId,
           },
-          cx,
+          cx
         );
       }
 
@@ -625,7 +707,7 @@ export async function getOrCreateActiveSetupReviewSession(
         metadata,
         ensureDraft,
       },
-      cx,
+      cx
     );
   };
 
@@ -650,7 +732,7 @@ export async function updateSetupReviewSession(
     discardedAt,
     failedAt,
   } = {},
-  client = null,
+  client = null
 ) {
   const sid = s(sessionId);
   if (!sid) {
@@ -750,7 +832,7 @@ export async function setSetupReviewSessionStatus(
     eventType = "",
     eventPayload = {},
   } = {},
-  client = null,
+  client = null
 ) {
   const sid = s(sessionId);
   if (!sid) {
@@ -794,7 +876,7 @@ export async function setSetupReviewSessionStatus(
 export async function markSetupReviewSessionProcessing(
   sessionId,
   { currentStep = "", payload = {} } = {},
-  client = null,
+  client = null
 ) {
   return setSetupReviewSessionStatus(
     sessionId,
@@ -804,14 +886,14 @@ export async function markSetupReviewSessionProcessing(
       eventType: "processing_started",
       eventPayload: { currentStep: s(currentStep), ...obj(payload) },
     },
-    client,
+    client
   );
 }
 
 export async function markSetupReviewSessionReady(
   sessionId,
   { currentStep = "review", payload = {} } = {},
-  client = null,
+  client = null
 ) {
   return setSetupReviewSessionStatus(
     sessionId,
@@ -821,7 +903,7 @@ export async function markSetupReviewSessionReady(
       eventType: "draft_ready",
       eventPayload: { currentStep: s(currentStep), ...obj(payload) },
     },
-    client,
+    client
   );
 }
 
@@ -829,7 +911,7 @@ export async function failSetupReviewSession(
   sessionId,
   error,
   { currentStep = "", payload = {} } = {},
-  client = null,
+  client = null
 ) {
   const message =
     error?.message ||
@@ -853,7 +935,7 @@ export async function failSetupReviewSession(
         ...obj(payload),
       },
     },
-    client,
+    client
   );
 }
 
@@ -890,7 +972,7 @@ export async function attachSourceToSetupReviewSession(
     metadata = {},
     promotePrimary = false,
   } = {},
-  client = null,
+  client = null
 ) {
   const sid = s(sessionId);
   const tid = s(tenantId);
@@ -903,7 +985,9 @@ export async function attachSourceToSetupReviewSession(
     throw new Error("attachSourceToSetupReviewSession: tenantId is required.");
   }
   if (!safeSourceId) {
-    throw new Error("attachSourceToSetupReviewSession: valid sourceId is required.");
+    throw new Error(
+      "attachSourceToSetupReviewSession: valid sourceId is required."
+    );
   }
 
   const normalizedRole = normalizeSourceRole(role, "context");
@@ -953,7 +1037,7 @@ export async function attachSourceToSetupReviewSession(
           primarySourceType: linked.sourceType,
           primarySourceId: linked.sourceId,
         },
-        cx,
+        cx
       );
     }
 
@@ -977,11 +1061,8 @@ export async function attachSourceToSetupReviewSession(
 }
 
 export async function ensureSetupReviewDraft(
-  {
-    sessionId,
-    tenantId,
-  } = {},
-  client = null,
+  { sessionId, tenantId } = {},
+  client = null
 ) {
   const sid = s(sessionId);
   const tid = s(tenantId);
@@ -1017,7 +1098,7 @@ export async function ensureSetupReviewDraft(
 
 export async function readSetupReviewDraft(
   { sessionId = "", tenantId = "" } = {},
-  client = null,
+  client = null
 ) {
   const sid = s(sessionId);
   const tid = s(tenantId);
@@ -1045,10 +1126,7 @@ export async function readSetupReviewDraft(
       const active = await getActiveSetupReviewSession(tid, cx);
       if (!active?.id) return null;
 
-      return readSetupReviewDraft(
-        { sessionId: active.id, tenantId: tid },
-        cx,
-      );
+      return readSetupReviewDraft({ sessionId: active.id, tenantId: tid }, cx);
     }
 
     return null;
@@ -1075,7 +1153,7 @@ export async function writeSetupReviewDraft(
     lastSnapshotId = null,
     bumpVersion = true,
   } = {},
-  client = null,
+  client = null
 ) {
   const sid = s(sessionId);
   const tid = s(tenantId);
@@ -1090,7 +1168,7 @@ export async function writeSetupReviewDraft(
   const run = async (cx) => {
     await ensureSetupReviewDraft(
       { sessionId: sid, tenantId: tid },
-      cx,
+      cx
     );
 
     const { rows } = await cx.query(
@@ -1196,7 +1274,7 @@ export async function patchSetupReviewDraft(
     patch = {},
     bumpVersion = true,
   } = {},
-  client = null,
+  client = null
 ) {
   const sid = s(sessionId);
   const tid = s(tenantId);
@@ -1216,17 +1294,17 @@ export async function patchSetupReviewDraft(
     const next = {
       draftPayload:
         patch.draftPayload !== undefined
-          ? obj(patch.draftPayload)
+          ? mergeJsonState(current.draftPayload, patch.draftPayload)
           : current.draftPayload,
 
       businessProfile:
         patch.businessProfile !== undefined
-          ? obj(patch.businessProfile)
+          ? mergeJsonState(current.businessProfile, patch.businessProfile)
           : current.businessProfile,
 
       capabilities:
         patch.capabilities !== undefined
-          ? obj(patch.capabilities)
+          ? mergeJsonState(current.capabilities, patch.capabilities)
           : current.capabilities,
 
       services:
@@ -1246,7 +1324,7 @@ export async function patchSetupReviewDraft(
 
       sourceSummary:
         patch.sourceSummary !== undefined
-          ? obj(patch.sourceSummary)
+          ? mergeJsonState(current.sourceSummary, patch.sourceSummary)
           : current.sourceSummary,
 
       warnings:
@@ -1256,17 +1334,17 @@ export async function patchSetupReviewDraft(
 
       completeness:
         patch.completeness !== undefined
-          ? obj(patch.completeness)
+          ? mergeJsonState(current.completeness, patch.completeness)
           : current.completeness,
 
       confidenceSummary:
         patch.confidenceSummary !== undefined
-          ? obj(patch.confidenceSummary)
+          ? mergeJsonState(current.confidenceSummary, patch.confidenceSummary)
           : current.confidenceSummary,
 
       diffFromCanonical:
         patch.diffFromCanonical !== undefined
-          ? obj(patch.diffFromCanonical)
+          ? mergeJsonState(current.diffFromCanonical, patch.diffFromCanonical)
           : current.diffFromCanonical,
 
       lastSnapshotId:
@@ -1293,7 +1371,7 @@ export async function patchSetupReviewDraft(
         lastSnapshotId: next.lastSnapshotId,
         bumpVersion,
       },
-      cx,
+      cx
     );
 
     await insertSetupReviewEvent(cx, {
@@ -1350,7 +1428,7 @@ export async function discardSetupReviewSession(
     reason = "",
     metadata = {},
   } = {},
-  client = null,
+  client = null
 ) {
   const sid = s(sessionId);
   const tid = s(tenantId);
@@ -1373,7 +1451,7 @@ export async function discardSetupReviewSession(
         status: "discarded",
         discardedAt: new Date(),
       },
-      cx,
+      cx
     );
 
     await insertSetupReviewEvent(cx, {
@@ -1402,7 +1480,7 @@ export async function finalizeSetupReviewSession(
     projectDraftToCanonical,
     metadata = {},
   } = {},
-  client = null,
+  client = null
 ) {
   const sid = s(sessionId);
   const tid = s(tenantId);
@@ -1454,7 +1532,7 @@ export async function finalizeSetupReviewSession(
     const draft =
       (await readSetupReviewDraft(
         { sessionId: session.id, tenantId: session.tenantId },
-        cx,
+        cx
       )) || emptyDraftPayload(session.id, session.tenantId);
 
     const sources = await listSetupReviewSessionSources(session.id, cx);
@@ -1465,22 +1543,22 @@ export async function finalizeSetupReviewSession(
         status: "processing",
         currentStep,
       },
-      cx,
+      cx
     );
 
-      let projectionResult = null;
+    let projectionResult = null;
 
-      if (typeof projectDraftToCanonical === "function") {
-        projectionResult = await projectDraftToCanonical({
-          client: cx,
-          tenantId: session.tenantId,
-          session,
-          draft,
-          sources,
+    if (typeof projectDraftToCanonical === "function") {
+      projectionResult = await projectDraftToCanonical({
+        client: cx,
+        tenantId: session.tenantId,
+        session,
+        draft,
+        sources,
       });
     } else {
       throw new Error(
-        "finalizeSetupReviewSession: projectDraftToCanonical callback is required.",
+        "finalizeSetupReviewSession: projectDraftToCanonical callback is required."
       );
     }
 
@@ -1519,14 +1597,14 @@ export async function finalizeSetupReviewSession(
         currentStep: "finalized",
         finalizedAt: new Date(),
       },
-      cx,
+      cx
     );
 
-      await insertSetupReviewEvent(cx, {
-        sessionId: session.id,
-        tenantId: session.tenantId,
-        eventType: "session_finalized",
-        payload: {
+    await insertSetupReviewEvent(cx, {
+      sessionId: session.id,
+      tenantId: session.tenantId,
+      eventType: "session_finalized",
+      payload: {
         refreshRuntime: bool(refreshRuntime, true),
         servicesCount: arr(draft.services).length,
         knowledgeCount: arr(draft.knowledgeItems).length,
@@ -1536,24 +1614,24 @@ export async function finalizeSetupReviewSession(
         currentProjectionHash: s(baselineCheck.current?.projectionHash),
         runtimeProjectionId: s(runtimeProjection?.id),
         runtimeProjectionStatus: s(runtimeProjection?.status),
-          runtimeProjectionHash: s(runtimeProjection?.projection_hash),
-          runtimeProjectionFresh: !runtimeProjectionFreshness.stale,
-          runtimeProjectionFreshnessReasons: arr(runtimeProjectionFreshness.reasons),
-          finalizeImpact: obj(projectionResult?.impactSummary),
-          approvalPolicy: obj(projectionResult?.approvalPolicy),
-          ...obj(metadata),
-        },
-      });
-
-      return {
-        session: finalized,
-        draft,
-        sources,
-        runtimeProjection: runtimeProjection || null,
-        runtimeProjectionFreshness: runtimeProjectionFreshness || null,
-        impactSummary: obj(projectionResult?.impactSummary),
+        runtimeProjectionHash: s(runtimeProjection?.projection_hash),
+        runtimeProjectionFresh: !runtimeProjectionFreshness.stale,
+        runtimeProjectionFreshnessReasons: arr(runtimeProjectionFreshness.reasons),
+        finalizeImpact: obj(projectionResult?.impactSummary),
         approvalPolicy: obj(projectionResult?.approvalPolicy),
-      };
+        ...obj(metadata),
+      },
+    });
+
+    return {
+      session: finalized,
+      draft,
+      sources,
+      runtimeProjection: runtimeProjection || null,
+      runtimeProjectionFreshness: runtimeProjectionFreshness || null,
+      impactSummary: obj(projectionResult?.impactSummary),
+      approvalPolicy: obj(projectionResult?.approvalPolicy),
+    };
   };
 
   return client ? run(client) : withTx(run);
@@ -1565,7 +1643,7 @@ export async function listSetupReviewEvents(
     tenantId = "",
     limit = 50,
   } = {},
-  client = null,
+  client = null
 ) {
   const sid = s(sessionId);
   const tid = s(tenantId);

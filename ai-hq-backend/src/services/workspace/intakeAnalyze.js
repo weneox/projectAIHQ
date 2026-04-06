@@ -1,9 +1,10 @@
 // src/services/workspace/intakeAnalyze.js
-// FINAL v1.0 — unified setup analyze for source + manual + future voice
-// goals:
-// - allow setup to work with no source at all
-// - merge source-derived observations with manual/voice observations
-// - write a single review draft that later finalizes into canonical truth
+// FINAL v1.1 — unified setup analyze for source + manual + future voice
+// upgrades:
+// - source + manual + current review draft observations merge more safely
+// - derive services / FAQ draft items from merged business profile, not only candidates
+// - allow partial success for weak but usable analyze results
+// - keep one review draft that later finalizes into canonical truth
 
 import {
   failSetupReviewSession,
@@ -72,15 +73,6 @@ function safeUuidOrNull(value = "") {
   return isUuid(x) ? x : null;
 }
 
-function deepClone(value, fallback) {
-  if (value === undefined) return fallback;
-  try {
-    return JSON.parse(JSON.stringify(value));
-  } catch {
-    return fallback;
-  }
-}
-
 function dedupeObservationRows(rows = []) {
   const seen = new Set();
 
@@ -88,7 +80,12 @@ function dedupeObservationRows(rows = []) {
     const key = [
       lower(item.claimType || item.claim_type),
       lower(item.claimKey || item.claim_key),
-      lower(item.normalizedValueText || item.normalized_value_text || item.rawValueText || item.raw_value_text),
+      lower(
+        item.normalizedValueText ||
+          item.normalized_value_text ||
+          item.rawValueText ||
+          item.raw_value_text
+      ),
       lower(JSON.stringify(obj(item.normalizedValueJson || item.normalized_value_json))),
     ].join("|");
 
@@ -170,18 +167,16 @@ function extractSourceInfo({ session = {}, draft = {}, sources = [] } = {}) {
 
   const primarySourceType =
     s(session?.primarySourceType) ||
-    s(summary.primarySourceType) ||
+    s(summary?.primarySourceType) ||
     s(latestImport.sourceType) ||
     s(latestAnalyze.sourceType);
 
-  const latestRunId =
-    summary.latestRunId ||
-    latestImport.runId ||
-    null;
+  const latestRunId = summary.latestRunId || latestImport.runId || null;
 
   const sourceUrl =
     s(summary.primarySourceUrl) ||
     s(latestImport.sourceUrl) ||
+    s(latestAnalyze.sourceUrl) ||
     s(payload.sourceUrl);
 
   return {
@@ -540,6 +535,7 @@ function buildManualSourceLabel(sourceType = "") {
   if (sourceType === "manual") return "Manual";
   if (sourceType === "google_maps") return "Google Maps";
   if (sourceType === "website") return "Website";
+  if (sourceType === "instagram") return "Instagram";
   return "Source";
 }
 
@@ -587,6 +583,118 @@ function buildLatestAnalyzeBlock({
   };
 }
 
+function buildProfileDerivedServices(profile = {}, sourceType = "") {
+  return arr(profile?.services)
+    .map((title, index) => {
+      const cleanTitle = s(title);
+      if (!cleanTitle) return null;
+
+      return {
+        key: `derived_service_${sourceType || "manual"}_${index + 1}_${cleanTitle
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "") || "item"}`,
+        title: cleanTitle,
+        description: "",
+        category: "service",
+        sourceType: s(sourceType),
+        origin: "setup_review_candidate",
+        confidence: 0.45,
+        confidenceLabel: "derived",
+        status: "pending",
+        reviewReason: "derived_from_merged_profile",
+        evidence: [],
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildProfileDerivedKnowledge(profile = {}, sourceType = "") {
+  return arr(profile?.faqItems)
+    .map((item, index) => {
+      const question = s(item?.question);
+      const answer = s(item?.answer);
+      if (!question) return null;
+
+      return {
+        key: `derived_knowledge_${sourceType || "manual"}_${index + 1}_${question
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "") || "item"}`,
+        category: "faq",
+        title: question,
+        valueText: answer,
+        valueJson: obj(item),
+        normalizedText: answer,
+        normalizedJson: obj(item),
+        confidence: 0.45,
+        confidenceLabel: "derived",
+        status: "pending",
+        reviewReason: "derived_from_merged_profile",
+        sourceType: s(sourceType),
+        evidence: [],
+        origin: "setup_review_candidate",
+      };
+    })
+    .filter(Boolean);
+}
+
+function buildAnalyzeWarnings({
+  currentWarnings = [],
+  manualWarnings = [],
+  businessProfile = {},
+  services = [],
+  knowledgeItems = [],
+} = {}) {
+  const profile = obj(businessProfile);
+
+  const warnings = [
+    ...arr(currentWarnings),
+    ...arr(manualWarnings),
+  ];
+
+  const hasIdentity = !!(
+    s(profile.companyName) ||
+    s(profile.displayName) ||
+    s(profile.companySummaryShort) ||
+    s(profile.companySummaryLong)
+  );
+
+  const hasContact = !!(
+    s(profile.primaryPhone) ||
+    s(profile.primaryEmail) ||
+    s(profile.primaryAddress) ||
+    arr(profile.socialLinks).length ||
+    arr(profile.whatsappLinks).length ||
+    arr(profile.bookingLinks).length
+  );
+
+  const hasServices =
+    arr(services).length > 0 || arr(profile.services).length > 0;
+
+  const hasKnowledge =
+    arr(knowledgeItems).length > 0 || arr(profile.faqItems).length > 0;
+
+  if (!hasIdentity) warnings.push("setup_identity_signals_weak");
+  if (!hasContact) warnings.push("setup_contact_signals_weak");
+  if (!hasServices) warnings.push("setup_service_signals_weak");
+  if (!hasKnowledge) warnings.push("setup_knowledge_signals_weak");
+
+  return uniqStrings(warnings);
+}
+
+function shouldMarkAnalyzePartial({ completeness = {}, warnings = [] } = {}) {
+  if (Number(completeness?.score || 0) < 2) return true;
+
+  return arr(warnings).some((item) =>
+    [
+      "setup_identity_signals_weak",
+      "setup_contact_signals_weak",
+      "setup_service_signals_weak",
+    ].includes(s(item))
+  );
+}
+
 function buildIntakeDraftPayload({
   currentDraft = {},
   session = {},
@@ -600,7 +708,8 @@ function buildIntakeDraftPayload({
   sourceObservationCount = 0,
   manualObservationCount = 0,
   totalObservationCount = 0,
-} = {}) {
+  businessProfileOverride = null,
+}) {
   const currentPayload = obj(currentDraft?.draftPayload);
 
   const result = {
@@ -618,7 +727,7 @@ function buildIntakeDraftPayload({
         totalObservationCount: Number(totalObservationCount || 0),
         sourceTypes: uniqStrings([
           s(sourceType),
-          ...(arr(currentDraft?.sourceSummary?.sourceTypes)),
+          ...arr(currentDraft?.sourceSummary?.sourceTypes),
           manualInput?.hasAnyInput ? "manual" : "",
         ]),
       },
@@ -652,6 +761,7 @@ function buildIntakeDraftPayload({
       totalObservationCount: Number(totalObservationCount || 0),
     },
     collector,
+    businessProfileOverride,
   });
 
   const latestAnalyze = buildLatestAnalyzeBlock({
@@ -727,8 +837,7 @@ function buildSourceSummaryPatch({
   return mergeDeep(currentSummary, {
     primarySourceType:
       s(currentSummary.primarySourceType) || (sourceType === "manual" ? "manual" : sourceType),
-    primarySourceUrl:
-      s(currentSummary.primarySourceUrl) || s(sourceUrl),
+    primarySourceUrl: s(currentSummary.primarySourceUrl) || s(sourceUrl),
     latestAnalyze: buildLatestAnalyzeBlock({
       requestId,
       sourceType,
@@ -830,7 +939,7 @@ export async function runSetupIntakeAnalyze({
     const draftSourceType = buildAnalyzeSourceType({
       session: initialReview?.session,
       draft: initialReview?.draft,
-      manualInput,
+      manualIntake: manualInput,
     });
 
     const sourceInfo = extractSourceInfo({
@@ -914,10 +1023,8 @@ export async function runSetupIntakeAnalyze({
       observations: allObservations,
     });
 
-    const sourceIdForCandidates =
-      sourceInfo.primarySourceId || "";
-    const sourceRunIdForCandidates =
-      sourceInfo.latestRunId || "";
+    const sourceIdForCandidates = sourceInfo.primarySourceId || "";
+    const sourceRunIdForCandidates = sourceInfo.latestRunId || "";
 
     const candidateRows = buildCandidatesFromSynthesis({
       tenantId,
@@ -930,27 +1037,95 @@ export async function runSetupIntakeAnalyze({
     const derivedServices = arr(candidateRows)
       .filter((item) => isServiceLikeCandidate(item))
       .map((item) =>
-        buildDraftServiceFromCandidate(
-          item,
-          draftSourceType || "manual"
-        )
+        buildDraftServiceFromCandidate(item, draftSourceType || "manual")
       )
       .filter(Boolean);
 
     const derivedKnowledgeItems = arr(candidateRows)
       .filter((item) => !isServiceLikeCandidate(item))
       .map((item) =>
-        buildDraftKnowledgeFromCandidate(
-          item,
-          draftSourceType || "manual"
-        )
+        buildDraftKnowledgeFromCandidate(item, draftSourceType || "manual")
       )
       .filter(Boolean);
 
-    const warnings = uniqStrings([
-      ...arr(currentDraft.warnings),
-      ...manualWarnings,
-    ]);
+    const nextDraftPayloadPreview = buildDraftPayloadFromResult({
+      session: currentReview?.session || session,
+      result: {
+        mode: "success",
+        stage: "intake_analyze",
+        warnings: manualWarnings,
+        profile: obj(synthesis?.profile),
+        signals: {
+          sourceFusion: obj(synthesis),
+        },
+      },
+      requestId,
+      sourceType: draftSourceType || "manual",
+      sourceUrl: sourceInfo.sourceUrl || "",
+      intakeContext: {
+        analyzeMode: "unified_intake_analyze",
+      },
+      collector: {
+        candidateCount: candidateRows.length,
+        observationCount: allObservations.length,
+        snapshotCount: currentDraft?.lastSnapshotId ? 1 : 0,
+        lastSnapshotId: currentDraft?.lastSnapshotId || null,
+      },
+    });
+
+    const nextBusinessProfile = sanitizeSetupBusinessProfile(
+      mergeDeep(
+        obj(currentDraft.businessProfile),
+        obj(nextDraftPayloadPreview.profile)
+      )
+    );
+
+    const profileDerivedServices = buildProfileDerivedServices(
+      nextBusinessProfile,
+      draftSourceType || "manual"
+    );
+
+    const profileDerivedKnowledge = buildProfileDerivedKnowledge(
+      nextBusinessProfile,
+      draftSourceType || "manual"
+    );
+
+    const nextCapabilities = mergeDeep(
+      obj(currentDraft.capabilities),
+      obj(synthesis.capabilities)
+    );
+
+    const nextServices = mergeDraftItems(
+      arr(currentDraft.services),
+      [...derivedServices, ...profileDerivedServices],
+      ["key", "title"]
+    );
+
+    const nextKnowledgeItems = mergeDraftItems(
+      arr(currentDraft.knowledgeItems),
+      [...derivedKnowledgeItems, ...profileDerivedKnowledge],
+      ["key", "title", "category"]
+    );
+
+    const warnings = buildAnalyzeWarnings({
+      currentWarnings: currentDraft.warnings,
+      manualWarnings,
+      businessProfile: nextBusinessProfile,
+      services: nextServices,
+      knowledgeItems: nextKnowledgeItems,
+    });
+
+    const completeness = calculateCompleteness({
+      businessProfile: nextBusinessProfile,
+      services: nextServices,
+      knowledgeItems: nextKnowledgeItems,
+      warnings,
+    });
+
+    const partial = shouldMarkAnalyzePartial({
+      completeness,
+      warnings,
+    });
 
     const nextDraftPayload = buildIntakeDraftPayload({
       currentDraft,
@@ -965,29 +1140,8 @@ export async function runSetupIntakeAnalyze({
       sourceObservationCount: sourceObservations.length,
       manualObservationCount: manualObservations.length,
       totalObservationCount: allObservations.length,
+      businessProfileOverride: nextBusinessProfile,
     });
-
-    const nextBusinessProfile = mergeDeep(
-      obj(currentDraft.businessProfile),
-      sanitizeSetupBusinessProfile(obj(nextDraftPayload.profile))
-    );
-
-    const nextCapabilities = mergeDeep(
-      obj(currentDraft.capabilities),
-      obj(synthesis.capabilities)
-    );
-
-    const nextServices = mergeDraftItems(
-      arr(currentDraft.services),
-      derivedServices,
-      ["key", "title"]
-    );
-
-    const nextKnowledgeItems = mergeDraftItems(
-      arr(currentDraft.knowledgeItems),
-      derivedKnowledgeItems,
-      ["key", "title", "category"]
-    );
 
     const nextSourceSummary = buildSourceSummaryPatch({
       currentDraft,
@@ -1011,20 +1165,15 @@ export async function runSetupIntakeAnalyze({
       manualInput,
     });
 
-    const completeness = calculateCompleteness({
-      businessProfile: nextBusinessProfile,
-      services: nextServices,
-      knowledgeItems: nextKnowledgeItems,
-      warnings,
-    });
-
     const confidenceSummary = calculateConfidenceSummary({
       services: nextServices,
       knowledgeItems: nextKnowledgeItems,
     });
 
+    const activeSessionId = s(currentReview?.session?.id || session.id);
+
     const draft = await patchSetupReviewDraft({
-      sessionId: s(currentReview?.session?.id || session.id),
+      sessionId: activeSessionId,
       tenantId,
       patch: {
         draftPayload: nextDraftPayload,
@@ -1043,21 +1192,20 @@ export async function runSetupIntakeAnalyze({
       bumpVersion: true,
     });
 
-    await updateSetupReviewSession(s(currentReview?.session?.id || session.id), {
-      metadata: mergeDeep(
-        obj(currentReview?.session?.metadata),
-        {
-          lastAnalyzeRequestId: requestId,
-          lastAnalyzeMode: "unified_intake_analyze",
-          lastAnalyzeAt: nowIso(),
-          lastSourceType: draftSourceType || "manual",
-          lastSourceUrl: sourceInfo.sourceUrl || "",
-          lastManualInputPresent: !!manualInput.hasManualText,
-          lastVoiceInputPresent: !!manualInput.hasVoiceTranscript,
-          lastStructuredAnswerCount: Number(manualInput.answersCount || 0),
-          lastObservationCount: allObservations.length,
-        }
-      ),
+    await updateSetupReviewSession(activeSessionId, {
+      metadata: mergeDeep(obj(currentReview?.session?.metadata), {
+        lastAnalyzeRequestId: requestId,
+        lastAnalyzeMode: "unified_intake_analyze",
+        lastAnalyzeAt: nowIso(),
+        lastSourceType: draftSourceType || "manual",
+        lastSourceUrl: sourceInfo.sourceUrl || "",
+        lastManualInputPresent: !!manualInput.hasManualText,
+        lastVoiceInputPresent: !!manualInput.hasVoiceTranscript,
+        lastStructuredAnswerCount: Number(manualInput.answersCount || 0),
+        lastObservationCount: allObservations.length,
+        lastCandidateCount: candidateRows.length,
+        lastAnalyzePartial: partial,
+      }),
       currentStep: "review",
       notes: s(manualInput.note) || s(currentReview?.session?.notes),
       primarySourceType:
@@ -1066,7 +1214,7 @@ export async function runSetupIntakeAnalyze({
       primarySourceId: sourceInfo.primarySourceId || null,
     });
 
-    await markSetupReviewSessionReady(s(currentReview?.session?.id || session.id), {
+    await markSetupReviewSessionReady(activeSessionId, {
       currentStep: "review",
       payload: {
         requestId,
@@ -1075,42 +1223,42 @@ export async function runSetupIntakeAnalyze({
         sourceObservationCount: sourceObservations.length,
         manualObservationCount: manualObservations.length,
         totalObservationCount: allObservations.length,
+        partial,
       },
     });
 
     return {
       ok: true,
-      mode: "success",
-      partial: false,
+      mode: partial ? "partial" : "success",
+      partial,
       stage: "intake_analyze",
       requestId,
-      reviewSessionId: s(currentReview?.session?.id || session.id),
+      reviewSessionId: activeSessionId,
       reviewSessionStatus: "ready",
       sourceType: draftSourceType || "manual",
       sourceLabel: buildManualSourceLabel(draftSourceType || "manual"),
       sourceAuthorityClass:
-        draftSourceType === "manual" ? "manual" : s(nextDraftPayload.sourceAuthorityClass),
+        draftSourceType === "manual"
+          ? "manual"
+          : s(nextDraftPayload.sourceAuthorityClass),
       sourceUrl: s(sourceInfo.sourceUrl || ""),
       draft: sanitizeSetupReviewDraft(draft),
       profile: sanitizeSetupBusinessProfile(nextBusinessProfile),
-      signals: mergeDeep(
-        obj(nextDraftPayload.signals),
-        {
-          intake: {
-            latestAnalyze: buildLatestAnalyzeBlock({
-              requestId,
-              sourceType: draftSourceType || "manual",
-              sourceUrl: sourceInfo.sourceUrl || "",
-              manualInput,
-              sourceObservationCount: sourceObservations.length,
-              manualObservationCount: manualObservations.length,
-              totalObservationCount: allObservations.length,
-              candidateCount: candidateRows.length,
-              warnings,
-            }),
-          },
-        }
-      ),
+      signals: mergeDeep(obj(nextDraftPayload.signals), {
+        intake: {
+          latestAnalyze: buildLatestAnalyzeBlock({
+            requestId,
+            sourceType: draftSourceType || "manual",
+            sourceUrl: sourceInfo.sourceUrl || "",
+            manualInput,
+            sourceObservationCount: sourceObservations.length,
+            manualObservationCount: manualObservations.length,
+            totalObservationCount: allObservations.length,
+            candidateCount: candidateRows.length,
+            warnings,
+          }),
+        },
+      }),
       snapshot: obj(nextDraftPayload.snapshot),
       extracted: obj(nextDraftPayload.extracted),
       warnings,
@@ -1124,6 +1272,7 @@ export async function runSetupIntakeAnalyze({
         hasManualText: !!manualInput.hasManualText,
         hasVoiceTranscript: !!manualInput.hasVoiceTranscript,
         structuredAnswerCount: Number(manualInput.answersCount || 0),
+        partial,
       },
     };
   } catch (error) {

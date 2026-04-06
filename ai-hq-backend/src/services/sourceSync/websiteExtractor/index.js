@@ -207,14 +207,18 @@ function candidatePriorityBoost(item = {}) {
   if (source.includes("anchor")) boost += 4;
 
   if (
-    /(about|haqqimizda|haqqımızda|company|contact|elaqe|əlaqə|services|xidmet|xidmət|pricing|price|tarif|faq|support|location|locations|branch|branches|office|offices)/i.test(
+    /(about|haqqimizda|haqqımızda|company|contact|elaqe|əlaqə|services|xidmet|xidmət|pricing|price|tarif|faq|support|location|locations|branch|branches|office|offices|booking|reserve|team)/i.test(
       url
     )
   ) {
     boost += 18;
   }
 
-  if (/(privacy|policy|terms|cookie|blog|news|career|vacancy|login|register)/i.test(url)) {
+  if (
+    /(privacy|policy|terms|cookie|blog|news|career|vacancy|login|register)/i.test(
+      url
+    )
+  ) {
     boost -= 12;
   }
 
@@ -354,15 +358,17 @@ function buildBlockedSyntheticPage(url = "", warning = "entry_fetch_blocked") {
   };
 }
 
-function buildBlockedExtractionResult({
+function buildFallbackExtractionResult({
   sourceUrl,
   entry,
   startedAtMs,
   totalCrawlMs,
   finalizeReserveMs,
   warning,
+  admissionReason = "entry_fallback_placeholder",
+  extraWarnings = [],
 }) {
-  const blockedPage = buildBlockedSyntheticPage(
+  const fallbackPage = buildBlockedSyntheticPage(
     entry?.page?.url || entry?.url || sourceUrl,
     warning
   );
@@ -379,16 +385,19 @@ function buildBlockedExtractionResult({
     minStepBudgetMs: 0,
   };
 
-  const site = buildSiteRollup(blockedPage, [blockedPage], [
+  const warnings = uniq([
     warning,
-    "blocked_entry_fetch",
+    ...safeArray(extraWarnings),
     "limited_page_coverage",
+    "partial_website_extraction",
   ]);
 
+  const site = buildSiteRollup(fallbackPage, [fallbackPage], warnings);
+
   return {
-    kind: "website_raw_v7_6_modular",
+    kind: "website_raw_v7_7_modular",
     sourceUrl,
-    finalUrl: blockedPage.url,
+    finalUrl: fallbackPage.url,
     crawl: {
       fetchedAt: new Date().toISOString(),
       startedAt: new Date(startedAtMs).toISOString(),
@@ -419,7 +428,7 @@ function buildBlockedExtractionResult({
       ],
       skipped: [],
       rejected: [],
-      warnings: uniq([warning, "blocked_entry_fetch"]),
+      warnings,
       debug: {
         limitDiagnostics: {
           effectiveLimits,
@@ -446,18 +455,59 @@ function buildBlockedExtractionResult({
       },
     },
     site,
-    pages: [blockedPage],
+    pages: [fallbackPage],
     pageAdmissions: [
       {
-        url: blockedPage.url,
-        canonicalUrl: blockedPage.canonicalUrl,
+        url: fallbackPage.url,
+        canonicalUrl: fallbackPage.canonicalUrl,
         keep: true,
-        reason: "entry_blocked_placeholder",
-        pageType: blockedPage.pageType,
+        admitted: true,
+        reason: admissionReason,
+        pageType: fallbackPage.pageType,
       },
     ],
-    siteText: "",
+    siteText: s(fallbackPage.title),
   };
+}
+
+function buildBlockedExtractionResult({
+  sourceUrl,
+  entry,
+  startedAtMs,
+  totalCrawlMs,
+  finalizeReserveMs,
+  warning,
+}) {
+  return buildFallbackExtractionResult({
+    sourceUrl,
+    entry,
+    startedAtMs,
+    totalCrawlMs,
+    finalizeReserveMs,
+    warning,
+    admissionReason: "entry_blocked_placeholder",
+    extraWarnings: ["blocked_entry_fetch"],
+  });
+}
+
+function buildDegradedExtractionResult({
+  sourceUrl,
+  entry,
+  startedAtMs,
+  totalCrawlMs,
+  finalizeReserveMs,
+  warning,
+}) {
+  return buildFallbackExtractionResult({
+    sourceUrl,
+    entry,
+    startedAtMs,
+    totalCrawlMs,
+    finalizeReserveMs,
+    warning,
+    admissionReason: "entry_partial_fallback",
+    extraWarnings: ["entry_fetch_partial_fallback"],
+  });
 }
 
 function isEntryHardBlocked(entry = {}) {
@@ -475,7 +525,8 @@ function resolveCrawlLimits() {
 
 function buildPageDebugRecord(record = {}, admissions = new Map()) {
   const page = record?.page || {};
-  const admission = admissions.get(canonicalPageKey(page?.canonicalUrl || page?.url)) || null;
+  const admission =
+    admissions.get(canonicalPageKey(page?.canonicalUrl || page?.url)) || null;
 
   return {
     url: s(page?.url),
@@ -485,7 +536,7 @@ function buildPageDebugRecord(record = {}, admissions = new Map()) {
     depth: safeNum(record?.depth, 0),
     qualityBand: s(page?.quality?.band || "weak"),
     qualityScore: safeNum(page?.quality?.score, 0),
-    admitted: !!admission?.admitted,
+    admitted: !!(admission?.admitted || admission?.keep),
     admissionReason: s(admission?.reason || admission?.admissionReason),
     signals: {
       emails: safeArray(page?.emails),
@@ -500,6 +551,148 @@ function buildPageDebugRecord(record = {}, admissions = new Map()) {
       serviceHints: safeArray(page?.serviceHints),
     },
   };
+}
+
+function isThinShellPage(page = {}) {
+  const text = s(page?.text);
+  const visibleExcerpt = s(page?.visibleExcerpt);
+  const anchorCount = safeArray(page?.anchorRecords).length;
+  const linkCount = safeNum(page?.metrics?.linkCount, safeArray(page?.links).length);
+  const signalCount =
+    safeArray(page?.emails).length +
+    safeArray(page?.phones).length +
+    safeArray(page?.addresses).length +
+    safeArray(page?.hours).length +
+    safeArray(page?.socialLinks).length +
+    safeArray(page?.serviceHints).length +
+    safeArray(page?.faqItems).length;
+
+  if (pageLooksUseful(page)) return false;
+  if (safeNum(page?.quality?.score, 0) >= 32) return false;
+
+  return (
+    safeByteLength(text) < 900 &&
+    safeByteLength(visibleExcerpt) < 360 &&
+    anchorCount < 10 &&
+    linkCount < 18 &&
+    signalCount === 0
+  );
+}
+
+function shouldPreferEarlySitemap(page = {}) {
+  return (
+    isThinShellPage(page) ||
+    safeArray(page?.anchorRecords).length < 6 ||
+    safeNum(page?.quality?.score, 0) < 24
+  );
+}
+
+function ensureKeptPages({
+  admissions = {},
+  fetchedPageRecords = [],
+}) {
+  const originalKeptPages = uniqBy(
+    safeArray(admissions?.keptPages),
+    (x) => canonicalPageKey(x?.canonicalUrl || x?.url)
+  );
+
+  if (originalKeptPages.length) {
+    return {
+      keptPages: originalKeptPages,
+      pageAdmissions: safeArray(admissions?.pageAdmissions),
+      admissionWarnings: safeArray(admissions?.admissionWarnings),
+      fallbackRetained: false,
+    };
+  }
+
+  const fetchedPages = safeArray(fetchedPageRecords)
+    .map((item) => item?.page)
+    .filter(Boolean);
+
+  if (!fetchedPages.length) {
+    return {
+      keptPages: [],
+      pageAdmissions: safeArray(admissions?.pageAdmissions),
+      admissionWarnings: safeArray(admissions?.admissionWarnings),
+      fallbackRetained: false,
+    };
+  }
+
+  const usefulFallbackPages = uniqBy(
+    [
+      ...fetchedPages.filter((page) => pageLooksUseful(page)),
+      fetchedPages[0],
+    ].filter(Boolean),
+    (x) => canonicalPageKey(x?.canonicalUrl || x?.url)
+  ).slice(0, Math.max(1, Math.min(3, fetchedPages.length)));
+
+  const existingAdmissions = safeArray(admissions?.pageAdmissions);
+  const existingKeys = new Set(
+    existingAdmissions.map((item) =>
+      canonicalPageKey(item?.canonicalUrl || item?.url)
+    )
+  );
+
+  const fallbackAdmissions = [...existingAdmissions];
+  for (const page of usefulFallbackPages) {
+    const key = canonicalPageKey(page?.canonicalUrl || page?.url);
+    if (!key || existingKeys.has(key)) continue;
+    existingKeys.add(key);
+    fallbackAdmissions.push({
+      url: s(page?.url),
+      canonicalUrl: s(page?.canonicalUrl || page?.url),
+      keep: true,
+      admitted: true,
+      reason: "minimum_page_retention_fallback",
+      pageType: s(page?.pageType || "generic"),
+    });
+  }
+
+  return {
+    keptPages: usefulFallbackPages,
+    pageAdmissions: fallbackAdmissions,
+    admissionWarnings: uniq([
+      ...safeArray(admissions?.admissionWarnings),
+      "minimum_page_retention_fallback_applied",
+    ]),
+    fallbackRetained: usefulFallbackPages.length > 0,
+  };
+}
+
+async function tryFetchSitemap({
+  mainUrl,
+  robots,
+  crawlDeadlineAt,
+  sitemapFetchMs,
+  minStepBudgetMs,
+  discoveryWarnings,
+}) {
+  const sitemapBudget = remainingBudget(
+    crawlDeadlineAt,
+    sitemapFetchMs,
+    minStepBudgetMs
+  );
+
+  if (sitemapBudget <= 0) {
+    return null;
+  }
+
+  try {
+    const sitemap = await withTimeout(
+      () => fetchSitemapCandidates(mainUrl, robots),
+      sitemapBudget,
+      "sitemap_fetch"
+    );
+    if (s(sitemap?.error).startsWith("unsafe_")) {
+      discoveryWarnings.push(`sitemap_${s(sitemap.error)}`);
+    }
+    return sitemap;
+  } catch (err) {
+    discoveryWarnings.push(
+      err?.isTimeout ? "sitemap_fetch_timeout" : "sitemap_fetch_failed"
+    );
+    return null;
+  }
 }
 
 async function crawlPendingQueue({
@@ -667,22 +860,47 @@ export async function extractWebsiteSource(source) {
   );
 
   if (entryBudget <= 0) {
-    throw buildTimeoutError("entry_fetch", entryFetchMs);
+    return buildDegradedExtractionResult({
+      sourceUrl,
+      entry: {
+        url: sourceUrl,
+        error: "entry_fetch_budget_exhausted",
+      },
+      startedAtMs,
+      totalCrawlMs,
+      finalizeReserveMs,
+      warning: "entry_fetch_budget_exhausted",
+    });
   }
 
-  const entry = await fetchWebsiteEntry(sourceUrl, {
-    totalTimeoutMs: entryBudget,
-    attemptTimeoutMs: Math.max(
-      3000,
-      Math.min(
-        entryBudget,
-        n(
-          cfg?.sourceSync?.websiteEntryAttemptTimeoutMs,
-          Math.max(12000, Math.round(entryBudget * 0.8))
+  let entry = null;
+  try {
+    entry = await fetchWebsiteEntry(sourceUrl, {
+      totalTimeoutMs: entryBudget,
+      attemptTimeoutMs: Math.max(
+        3000,
+        Math.min(
+          entryBudget,
+          n(
+            cfg?.sourceSync?.websiteEntryAttemptTimeoutMs,
+            Math.max(12000, Math.round(entryBudget * 0.8))
+          )
         )
-      )
-    ),
-  });
+      ),
+    });
+  } catch (error) {
+    return buildDegradedExtractionResult({
+      sourceUrl,
+      entry: {
+        url: sourceUrl,
+        error: s(error?.label || error?.message || error?.code || "entry_fetch_failed"),
+      },
+      startedAtMs,
+      totalCrawlMs,
+      finalizeReserveMs,
+      warning: s(error?.label || error?.message || error?.code || "entry_fetch_failed"),
+    });
+  }
 
   if (isEntryHardBlocked(entry)) {
     return buildBlockedExtractionResult({
@@ -696,7 +914,14 @@ export async function extractWebsiteSource(source) {
   }
 
   if (!entry?.ok || !entry?.page?.html) {
-    throw new Error(entry?.error || "website fetch failed");
+    return buildDegradedExtractionResult({
+      sourceUrl,
+      entry,
+      startedAtMs,
+      totalCrawlMs,
+      finalizeReserveMs,
+      warning: s(entry?.error || `http_${safeNum(entry?.status, 0) || "fetch_failed"}`),
+    });
   }
 
   const mainFetch = entry.page;
@@ -708,7 +933,14 @@ export async function extractWebsiteSource(source) {
       pageUrl: mainFetch.url,
     });
   } catch (err) {
-    throw new Error(`main_page_analyze_failed: ${err?.message || "unknown error"}`);
+    return buildDegradedExtractionResult({
+      sourceUrl,
+      entry,
+      startedAtMs,
+      totalCrawlMs,
+      finalizeReserveMs,
+      warning: "main_page_analyze_failed",
+    });
   }
 
   let robotsFile = null;
@@ -749,6 +981,8 @@ export async function extractWebsiteSource(source) {
   const failed = [];
   const skipped = [];
   const seen = new Set([canonicalPageKey(mainPage.canonicalUrl || mainPage.url)]);
+  const entryThinShell = isThinShellPage(mainPage);
+  const preferEarlySitemap = shouldPreferEarlySitemap(mainPage);
 
   let pending = trimQueuedCandidates(
     [
@@ -759,10 +993,29 @@ export async function extractWebsiteSource(source) {
     maxCandidatesQueued
   );
 
-  const preSitemapTargetTotalPages = Math.min(
-    maxFetchPages,
-    Math.max(3, Math.min(maxPagesAllowed, 4))
-  );
+  let sitemap = null;
+  if (preferEarlySitemap) {
+    sitemap = await tryFetchSitemap({
+      mainUrl: mainFetch.url,
+      robots,
+      crawlDeadlineAt,
+      sitemapFetchMs,
+      minStepBudgetMs,
+      discoveryWarnings,
+    });
+
+    if (sitemap?.found) {
+      pending = trimQueuedCandidates(
+        [...pending, ...safeArray(sitemap?.candidates)],
+        seen,
+        maxCandidatesQueued
+      );
+    }
+  }
+
+  const preSitemapTargetTotalPages = preferEarlySitemap
+    ? Math.min(maxFetchPages, Math.max(2, Math.min(maxPagesAllowed, 3)))
+    : Math.min(maxFetchPages, Math.max(3, Math.min(maxPagesAllowed, 4)));
 
   pending = await crawlPendingQueue({
     pending,
@@ -780,40 +1033,28 @@ export async function extractWebsiteSource(source) {
     stopAtTotalPages: preSitemapTargetTotalPages,
   });
 
-  let sitemap = null;
-  const shouldTrySitemap =
-    fetchedPageRecords.length < maxPagesAllowed &&
+  const shouldTrySitemapLater =
+    !sitemap?.found &&
+    fetchedPageRecords.length < maxFetchPages &&
     remainingBudget(crawlDeadlineAt, sitemapFetchMs, minStepBudgetMs) > 0;
 
-  if (shouldTrySitemap) {
-    const sitemapBudget = remainingBudget(
+  if (shouldTrySitemapLater) {
+    sitemap = await tryFetchSitemap({
+      mainUrl: mainFetch.url,
+      robots,
       crawlDeadlineAt,
       sitemapFetchMs,
-      minStepBudgetMs
-    );
+      minStepBudgetMs,
+      discoveryWarnings,
+    });
 
-    try {
-      sitemap = await withTimeout(
-        () => fetchSitemapCandidates(mainFetch.url, robots),
-        sitemapBudget,
-        "sitemap_fetch"
-      );
-      if (s(sitemap?.error).startsWith("unsafe_")) {
-        discoveryWarnings.push(`sitemap_${s(sitemap.error)}`);
-      }
-    } catch (err) {
-      discoveryWarnings.push(
-        err?.isTimeout ? "sitemap_fetch_timeout" : "sitemap_fetch_failed"
+    if (sitemap?.found) {
+      pending = trimQueuedCandidates(
+        [...pending, ...safeArray(sitemap?.candidates)],
+        seen,
+        maxCandidatesQueued
       );
     }
-  }
-
-  if (sitemap?.found) {
-    pending = trimQueuedCandidates(
-      [...pending, ...safeArray(sitemap?.candidates)],
-      seen,
-      maxCandidatesQueued
-    );
   }
 
   pending = await crawlPendingQueue({
@@ -837,13 +1078,18 @@ export async function extractWebsiteSource(source) {
     maxPagesAllowed,
   });
 
+  const ensuredAdmissions = ensureKeptPages({
+    admissions,
+    fetchedPageRecords,
+  });
+
   const allPages = uniqBy(
-    safeArray(admissions?.keptPages),
+    safeArray(ensuredAdmissions?.keptPages),
     (x) => canonicalPageKey(x.canonicalUrl || x.url)
   );
 
   const admissionMap = new Map(
-    safeArray(admissions?.pageAdmissions).map((item) => [
+    safeArray(ensuredAdmissions?.pageAdmissions).map((item) => [
       canonicalPageKey(item?.canonicalUrl || item?.url),
       item,
     ])
@@ -862,10 +1108,15 @@ export async function extractWebsiteSource(source) {
     minStepBudgetMs,
   };
 
-  const rollup = buildSiteRollup(mainPage, allPages, safeArray(admissions?.admissionWarnings), {
-    fetchedPages: fetchedPageRecords.map((item) => item.page).filter(Boolean),
-    pageAdmissions: safeArray(admissions?.pageAdmissions),
-  });
+  const rollup = buildSiteRollup(
+    mainPage,
+    allPages.length ? allPages : [mainPage],
+    safeArray(ensuredAdmissions?.admissionWarnings),
+    {
+      fetchedPages: fetchedPageRecords.map((item) => item.page).filter(Boolean),
+      pageAdmissions: safeArray(ensuredAdmissions?.pageAdmissions),
+    }
+  );
 
   const usefulCoverage =
     allPages.length >= 2 ||
@@ -878,17 +1129,22 @@ export async function extractWebsiteSource(source) {
       if (warning === "sitemap_fetch_failed" && usefulCoverage) return false;
       return true;
     }),
+    ...(entryThinShell ? ["website_entry_thin_shell_detected"] : []),
+    ...(!pageLooksUseful(mainPage) ? ["entry_page_signals_weak"] : []),
     ...(robots?.disallowAll ? ["robots_disallow_all_detected"] : []),
     ...(safeArray(entry?.attempts).length > 1 ? ["entry_fetch_required_fallback"] : []),
     ...(!sitemap?.found && !usefulCoverage ? ["sitemap_not_found_or_unreadable"] : []),
     ...(allPages.length < 2 ? ["partial_website_extraction"] : []),
+    ...(safeArray(ensuredAdmissions?.admissionWarnings).length
+      ? safeArray(ensuredAdmissions.admissionWarnings)
+      : []),
     ...(safeArray(admissions?.rejectedPages).length
       ? ["some_pages_rejected_as_weak_or_placeholder"]
       : []),
   ]);
 
   return {
-    kind: "website_raw_v7_6_modular",
+    kind: "website_raw_v7_7_modular",
     sourceUrl,
     finalUrl: mainPage.url,
     crawl: {
@@ -899,7 +1155,8 @@ export async function extractWebsiteSource(source) {
       finalizeReserveMs,
       elapsedMs: Date.now() - startedAtMs,
       entryAttempts: safeArray(entry?.attempts),
-      pagesRequested: fetchedPageRecords.length + failed.length + skipped.length + pending.length,
+      pagesRequested:
+        fetchedPageRecords.length + failed.length + skipped.length + pending.length,
       pagesSucceeded: fetchedPageRecords.length,
       pagesKept: allPages.length,
       pagesRejected: safeArray(admissions?.rejectedPages).length,
@@ -946,8 +1203,8 @@ export async function extractWebsiteSource(source) {
     },
     site: rollup,
     pages: allPages,
-    pageAdmissions: safeArray(admissions?.pageAdmissions),
-    siteText: allPages
+    pageAdmissions: safeArray(ensuredAdmissions?.pageAdmissions),
+    siteText: (allPages.length ? allPages : fetchedPageRecords.map((x) => x.page))
       .map((x) => s(x?.text))
       .filter(Boolean)
       .join("\n\n")
@@ -963,4 +1220,6 @@ export function buildWebsiteKnowledgeCandidates() {
 
 export const __test__ = {
   resolveWebsiteCrawlLimits,
+  ensureKeptPages,
+  shouldPreferEarlySitemap,
 };

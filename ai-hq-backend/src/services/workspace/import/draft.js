@@ -1,12 +1,5 @@
 // src/services/workspace/import/draft.js
-// draft/session shaping helpers extracted from src/services/workspace/import.js
-// FINAL v7.0 — multilingual-safe draft shaping + stronger cleanup wall
-// fixes:
-// - remove hardcoded az language fallback
-// - stricter address/summary/service/pricing cleanup
-// - carry synthesis review metadata into session draft
-// - preserve better frontend aliases for multilingual projection
-// - reject weak social/platform-only pollution
+// FINAL v7.1 — multilingual-safe draft shaping + website artifact fallback strengthening
 
 import {
   arr,
@@ -746,7 +739,11 @@ function shouldPreferDeterministicSummary({
     lower(flag).includes("weak_summary")
   );
 
-  return weakFlag || shortScore !== null && shortScore < 0.45 || longScore !== null && longScore < 0.45;
+  return (
+    weakFlag ||
+    (shortScore !== null && shortScore < 0.45) ||
+    (longScore !== null && longScore < 0.45)
+  );
 }
 
 function buildDeterministicSummaryShort({
@@ -820,6 +817,452 @@ function buildDeterministicSummaryLong({
     companyName,
     max: 1200,
     short: false,
+  });
+}
+
+function safeObjectArray(list = []) {
+  return arr(list).filter((item) => item && typeof item === "object");
+}
+
+function uniqTextValues(list = [], max = 40) {
+  return uniqStrings(
+    arr(list)
+      .map((item) => cleanDisplayText(item, 1200))
+      .filter(Boolean)
+  ).slice(0, max);
+}
+
+function pageKey(page = {}) {
+  return lower(
+    s(page?.canonicalUrl || page?.url || page?.title || JSON.stringify(page))
+  );
+}
+
+function collectSiteObjects(result = {}) {
+  const extracted = obj(result?.extracted);
+  const snapshot = obj(result?.snapshot);
+  const signals = obj(result?.signals);
+
+  return [
+    obj(result?.site),
+    obj(extracted?.site),
+    obj(snapshot?.site),
+    obj(signals?.site),
+    obj(extracted?.rollup),
+    obj(snapshot?.rollup),
+  ].filter((item) => Object.keys(item).length);
+}
+
+function collectPages(result = {}) {
+  const extracted = obj(result?.extracted);
+  const snapshot = obj(result?.snapshot);
+
+  return uniqBy(
+    [
+      ...safeObjectArray(result?.pages),
+      ...safeObjectArray(extracted?.pages),
+      ...safeObjectArray(snapshot?.pages),
+    ],
+    (page) => pageKey(page)
+  );
+}
+
+function collectSiteStrings(siteObjects = [], keys = []) {
+  return uniqTextValues(
+    siteObjects.flatMap((site) => keys.map((key) => site?.[key]))
+  );
+}
+
+function collectSiteArrays(siteObjects = [], keys = []) {
+  return siteObjects.flatMap((site) =>
+    keys.flatMap((key) => arr(site?.[key]))
+  );
+}
+
+function collectPageStrings(pages = [], keys = []) {
+  return uniqTextValues(
+    pages.flatMap((page) => keys.map((key) => page?.[key]))
+  );
+}
+
+function collectPageArrayValues(pages = [], keys = []) {
+  return pages.flatMap((page) =>
+    keys.flatMap((key) => arr(page?.[key]))
+  );
+}
+
+function collectPageSectionValues(pages = [], keys = []) {
+  return uniqTextValues(
+    pages.flatMap((page) => {
+      const sections = obj(page?.sections);
+      return keys.map((key) => sections?.[key]);
+    })
+  );
+}
+
+function collectStructuredNames(pages = []) {
+  return uniqTextValues(
+    pages.flatMap((page) => [
+      ...arr(page?.structured?.names),
+      ...arr(page?.headings).slice(0, 4),
+      page?.title,
+    ])
+  );
+}
+
+function collectFallbackSocialLinks(siteObjects = [], pages = []) {
+  return normalizeDraftSocialLinks([
+    ...collectSiteArrays(siteObjects, ["socialLinks", "sameAs"]),
+    ...collectPageArrayValues(pages, ["socialLinks"]),
+  ]);
+}
+
+function collectFallbackFaqItems(siteObjects = [], pages = []) {
+  return normalizeDraftFaqItems([
+    ...collectSiteArrays(siteObjects, ["faqItems"]),
+    ...collectPageArrayValues(pages, ["faqItems"]),
+  ]);
+}
+
+function collectFallbackServices(siteObjects = [], pages = [], companyName = "") {
+  return normalizeDraftServiceList(
+    [
+      ...collectSiteArrays(siteObjects, ["services", "products", "serviceHints"]),
+      ...collectPageArrayValues(pages, ["serviceHints"]),
+      ...collectPageSectionValues(pages, ["hero", "about", "pricing"]),
+    ],
+    companyName
+  );
+}
+
+function buildArtifactProfileFromResult(result = {}, sourceType = "", sourceUrl = "") {
+  const siteObjects = collectSiteObjects(result);
+  const pages = collectPages(result);
+
+  const companyNameCandidates = uniqTextValues([
+    ...collectSiteStrings(siteObjects, [
+      "companyName",
+      "displayName",
+      "companyTitle",
+      "name",
+      "title",
+    ]),
+    ...collectSiteArrays(siteObjects, ["businessNames", "structuredNames", "headings"]),
+    ...collectStructuredNames(pages),
+  ]);
+
+  const companyName = pickFirstSanitized(companyNameCandidates, sanitizeCompanyName);
+
+  const primaryPhone = pickFirstSanitized(
+    [
+      ...collectSiteStrings(siteObjects, ["primaryPhone", "phone"]),
+      ...collectSiteArrays(siteObjects, ["phones"]),
+      ...collectPageArrayValues(pages, ["phones"]),
+    ],
+    sanitizePhoneText
+  );
+
+  const primaryEmail = pickFirstSanitized(
+    [
+      ...collectSiteStrings(siteObjects, ["primaryEmail", "email"]),
+      ...collectSiteArrays(siteObjects, ["emails"]),
+      ...collectPageArrayValues(pages, ["emails"]),
+    ],
+    sanitizeEmailText
+  );
+
+  const primaryAddress = pickFirstSanitized(
+    [
+      ...collectSiteStrings(siteObjects, ["primaryAddress", "address"]),
+      ...collectSiteArrays(siteObjects, ["addresses"]),
+      ...collectPageArrayValues(pages, ["addresses"]),
+    ],
+    sanitizeAddressText
+  );
+
+  const services = collectFallbackServices(siteObjects, pages, companyName);
+
+  const summaryShort = pickFirstSanitized(
+    [
+      ...collectSiteStrings(siteObjects, [
+        "companySummaryShort",
+        "summaryShort",
+        "shortDescription",
+        "description",
+        "aboutSection",
+        "heroText",
+        "metaDescription",
+      ]),
+      ...collectPageStrings(pages, ["metaDescription", "visibleExcerpt"]),
+      ...collectPageSectionValues(pages, ["hero", "about"]),
+    ],
+    (value) =>
+      sanitizeSummaryText(value, {
+        companyName,
+        max: 420,
+        short: true,
+      })
+  );
+
+  const summaryLong = pickFirstSanitized(
+    [
+      ...collectSiteStrings(siteObjects, [
+        "companySummaryLong",
+        "summaryLong",
+        "description",
+        "aboutSection",
+        "heroText",
+        "metaDescription",
+      ]),
+      ...collectPageStrings(pages, ["text", "metaDescription", "visibleExcerpt"]),
+      ...collectPageSectionValues(pages, ["hero", "about", "pricing", "faq"]),
+    ],
+    (value) =>
+      sanitizeSummaryText(value, {
+        companyName,
+        max: 1200,
+        short: false,
+      })
+  );
+
+  const socialLinks = collectFallbackSocialLinks(siteObjects, pages);
+  const faqItems = collectFallbackFaqItems(siteObjects, pages);
+
+  return compactObject({
+    companyName,
+    displayName: pickFirstSanitized(companyNameCandidates, sanitizeCompanyName),
+    companyTitle: pickFirstSanitized(companyNameCandidates, sanitizeCompanyName),
+    websiteUrl: cleanDisplayText(
+      sourceType === "website"
+        ? sourceUrl
+        : firstNonEmpty([
+            ...collectSiteStrings(siteObjects, ["websiteUrl", "website", "url"]),
+            s(result?.finalUrl),
+          ]),
+      320
+    ),
+    primaryPhone,
+    primaryEmail,
+    primaryAddress,
+    companySummaryShort: summaryShort,
+    companySummaryLong: summaryLong,
+    services,
+    products: normalizeProfileArrays(
+      [
+        ...collectSiteArrays(siteObjects, ["products"]),
+      ],
+      12,
+      180
+    ),
+    pricingHints: normalizePricingHints([
+      ...collectSiteArrays(siteObjects, ["pricingHints"]),
+      ...collectPageArrayValues(pages, ["pricingHints"]),
+      ...collectPageSectionValues(pages, ["pricing"]),
+    ]),
+    pricingPolicy: pickFirstSanitized(
+      [
+        ...collectSiteStrings(siteObjects, ["pricingPolicy", "pricingText"]),
+        ...collectPageSectionValues(pages, ["pricing"]),
+      ],
+      sanitizePolicyText
+    ),
+    supportMode: cleanDisplayText(
+      firstNonEmpty(collectSiteStrings(siteObjects, ["supportMode"])),
+      220
+    ),
+    hours: normalizeProfileArrays([
+      ...collectSiteArrays(siteObjects, ["hours"]),
+      ...collectPageArrayValues(pages, ["hours"]),
+    ], 10, 180),
+    socialLinks,
+    whatsappLinks: normalizeProfileArrays([
+      ...collectSiteArrays(siteObjects, ["whatsappLinks"]),
+      ...collectPageArrayValues(pages, ["whatsappLinks"]),
+    ], 8, 260),
+    bookingLinks: normalizeProfileArrays([
+      ...collectSiteArrays(siteObjects, ["bookingLinks"]),
+      ...collectPageArrayValues(pages, ["bookingLinks"]),
+    ], 10, 260),
+    faqItems,
+    sourceType: cleanDisplayText(sourceType, 24),
+    sourceUrl: cleanDisplayText(sourceUrl, 320),
+    googleMapsSeedUrl:
+      sourceType === "google_maps" ? cleanDisplayText(sourceUrl, 320) : "",
+  });
+}
+
+function firstNonEmpty(values = []) {
+  for (const value of arr(values)) {
+    const cleaned = cleanDisplayText(value, 1200);
+    if (cleaned) return cleaned;
+  }
+  return "";
+}
+
+function mergeBusinessProfiles(primary = {}, fallback = {}) {
+  const a = obj(primary);
+  const b = obj(fallback);
+
+  const companyName = sanitizeCompanyName(
+    a.companyName ||
+      a.displayName ||
+      a.companyTitle ||
+      b.companyName ||
+      b.displayName ||
+      b.companyTitle
+  );
+
+  const services = normalizeDraftServiceList(
+    [...arr(a.services), ...arr(b.services)],
+    companyName
+  );
+
+  const faqItems = normalizeDraftFaqItems([
+    ...arr(a.faqItems),
+    ...arr(b.faqItems),
+  ]);
+
+  const socialLinks = normalizeDraftSocialLinks([
+    ...arr(a.socialLinks),
+    ...arr(b.socialLinks),
+  ]);
+
+  const whatsappLinks = normalizeProfileArrays([
+    ...arr(a.whatsappLinks),
+    ...arr(b.whatsappLinks),
+  ], 8, 260);
+
+  const bookingLinks = normalizeProfileArrays([
+    ...arr(a.bookingLinks),
+    ...arr(b.bookingLinks),
+  ], 10, 260);
+
+  const pricingHints = normalizePricingHints([
+    ...arr(a.pricingHints),
+    ...arr(b.pricingHints),
+  ]);
+
+  const hours = normalizeProfileArrays([
+    ...arr(a.hours),
+    ...arr(b.hours),
+  ], 10, 180);
+
+  const supportedLanguages = normalizeProfileArrays([
+    ...arr(a.supportedLanguages),
+    ...arr(b.supportedLanguages),
+  ], 8, 24);
+
+  const companySummaryShort =
+    sanitizeSummaryText(
+      a.companySummaryShort || a.summaryShort || b.companySummaryShort || b.summaryShort,
+      {
+        companyName,
+        max: 420,
+        short: true,
+      }
+    ) ||
+    buildDeterministicSummaryShort({
+      companyName,
+      services,
+      aboutSection: a.companySummaryLong || a.summaryLong || b.companySummaryLong || b.summaryLong,
+      primaryPhone: a.primaryPhone || b.primaryPhone,
+      primaryEmail: a.primaryEmail || b.primaryEmail,
+    });
+
+  const companySummaryLong =
+    sanitizeSummaryText(
+      a.companySummaryLong ||
+        a.summaryLong ||
+        a.description ||
+        b.companySummaryLong ||
+        b.summaryLong ||
+        b.description,
+      {
+        companyName,
+        max: 1200,
+        short: false,
+      }
+    ) ||
+    buildDeterministicSummaryLong({
+      companyName,
+      services,
+      aboutSection: a.companySummaryLong || a.summaryLong || b.companySummaryLong || b.summaryLong,
+      primaryPhone: a.primaryPhone || b.primaryPhone,
+      primaryEmail: a.primaryEmail || b.primaryEmail,
+      primaryAddress: a.primaryAddress || b.primaryAddress,
+    });
+
+  const mainLanguage =
+    resolveMainLanguage(a) ||
+    resolveMainLanguage(b);
+
+  return compactObject({
+    ...b,
+    ...a,
+    companyName,
+    displayName: sanitizeCompanyName(a.displayName || b.displayName || companyName),
+    companyTitle: sanitizeCompanyName(a.companyTitle || b.companyTitle || companyName),
+    websiteUrl: cleanDisplayText(a.websiteUrl || b.websiteUrl, 320),
+    primaryPhone: sanitizePhoneText(a.primaryPhone || b.primaryPhone || a.phone || b.phone),
+    primaryEmail: sanitizeEmailText(a.primaryEmail || b.primaryEmail || a.email || b.email),
+    primaryAddress: sanitizeAddressText(a.primaryAddress || b.primaryAddress || a.address || b.address),
+    companySummaryShort,
+    companySummaryLong,
+    summaryShort: cleanDisplayText(a.summaryShort || b.summaryShort || companySummaryShort, 420),
+    summaryLong: cleanDisplayText(a.summaryLong || b.summaryLong || companySummaryLong, 1200),
+    services,
+    products: normalizeProfileArrays([...arr(a.products), ...arr(b.products)], 12, 180),
+    pricingHints,
+    pricingPolicy: sanitizePolicyText(a.pricingPolicy || b.pricingPolicy || a.pricingText || b.pricingText),
+    supportMode: cleanDisplayText(a.supportMode || b.supportMode, 220),
+    hours,
+    socialLinks,
+    whatsappLinks,
+    bookingLinks,
+    faqItems,
+    mainLanguage,
+    primaryLanguage: cleanDisplayText(a.primaryLanguage || b.primaryLanguage || mainLanguage, 24),
+    supportedLanguages: supportedLanguages.length
+      ? supportedLanguages
+      : mainLanguage
+        ? [mainLanguage]
+        : [],
+    reviewRequired: !!(a.reviewRequired || b.reviewRequired),
+    reviewFlags: normalizeProfileArrays([...arr(a.reviewFlags), ...arr(b.reviewFlags)], 20, 80),
+    fieldConfidence:
+      isPlainObject(a.fieldConfidence) || isPlainObject(b.fieldConfidence)
+        ? mergeDeep(obj(b.fieldConfidence), obj(a.fieldConfidence))
+        : {},
+    sourceType: cleanDisplayText(a.sourceType || b.sourceType, 24),
+    sourceUrl: cleanDisplayText(a.sourceUrl || b.sourceUrl, 320),
+    googleMapsSeedUrl: cleanDisplayText(a.googleMapsSeedUrl || b.googleMapsSeedUrl, 320),
+
+    name: companyName,
+    description: companySummaryLong || companySummaryShort,
+    shortDescription: companySummaryShort,
+    website: cleanDisplayText(a.website || b.website || a.websiteUrl || b.websiteUrl, 320),
+    phone: sanitizePhoneText(a.phone || b.phone || a.primaryPhone || b.primaryPhone),
+    email: sanitizeEmailText(a.email || b.email || a.primaryEmail || b.primaryEmail),
+    address: sanitizeAddressText(a.address || b.address || a.primaryAddress || b.primaryAddress),
+    language: cleanDisplayText(a.language || b.language || mainLanguage, 24),
+    pricingText: cleanDisplayText(
+      a.pricingText ||
+        b.pricingText ||
+        a.pricingPolicy ||
+        b.pricingPolicy ||
+        pricingHints.join(" | "),
+      320
+    ),
+    social: normalizeProfileArrays([
+      ...arr(a.social),
+      ...arr(b.social),
+      ...socialLinks.map((item) => item.platform),
+    ], 10, 40),
+    socialUrls: normalizeProfileArrays([
+      ...arr(a.socialUrls),
+      ...arr(b.socialUrls),
+      ...socialLinks.map((item) => item.url),
+    ], 20, 260),
   });
 }
 
@@ -986,7 +1429,6 @@ function mapSynthesisProfileToBusinessProfile(profile = {}, sourceType = "", sou
     googleMapsSeedUrl:
       sourceType === "google_maps" ? cleanDisplayText(sourceUrl, 320) : "",
 
-    // frontend-friendly aliases
     name: companyName,
     description: companySummaryLong || companySummaryShort,
     shortDescription: companySummaryShort,
@@ -1022,7 +1464,11 @@ function sanitizeFieldSources(fieldSources = {}, businessProfile = {}) {
 function fieldObservedValue(value) {
   if (Array.isArray(value)) {
     return value
-      .map((item) => (typeof item === "object" ? cleanDisplayText(item?.url || item?.platform || item?.label || "", 260) : cleanDisplayText(item, 260)))
+      .map((item) =>
+        typeof item === "object"
+          ? cleanDisplayText(item?.url || item?.platform || item?.label || "", 260)
+          : cleanDisplayText(item, 260)
+      )
       .filter(Boolean)
       .join(", ");
   }
@@ -1072,6 +1518,9 @@ function buildDraftFieldSources(businessProfile = {}, sourceType = "", sourceUrl
     products: profile.products,
     pricingHints: profile.pricingHints,
     socialLinks: profile.socialLinks,
+    faqItems: profile.faqItems,
+    whatsappLinks: profile.whatsappLinks,
+    bookingLinks: profile.bookingLinks,
   };
 
   return Object.fromEntries(
@@ -1110,7 +1559,7 @@ export function sanitizeSetupBusinessProfile(businessProfile = {}) {
     primaryEmail: sanitizeEmailText(current.primaryEmail || current.email),
     primaryAddress: sanitizeAddressText(current.primaryAddress || current.address),
     companySummaryShort: sanitizeSummaryText(
-      current.companySummaryShort || current.summaryShort,
+      current.companySummaryShort || current.summaryShort || current.shortDescription,
       {
         companyName: safeCompanyName,
         max: 420,
@@ -1124,6 +1573,65 @@ export function sanitizeSetupBusinessProfile(businessProfile = {}) {
         max: 1200,
         short: false,
       }
+    ),
+    summaryShort: sanitizeSummaryText(
+      current.summaryShort || current.companySummaryShort || current.shortDescription,
+      {
+        companyName: safeCompanyName,
+        max: 420,
+        short: true,
+      }
+    ),
+    summaryLong: sanitizeSummaryText(
+      current.summaryLong || current.companySummaryLong || current.description,
+      {
+        companyName: safeCompanyName,
+        max: 1200,
+        short: false,
+      }
+    ),
+    description: sanitizeSummaryText(
+      current.description || current.companySummaryLong || current.summaryLong,
+      {
+        companyName: safeCompanyName,
+        max: 1200,
+        short: false,
+      }
+    ),
+    services: normalizeDraftServiceList(current.services, safeCompanyName),
+    products: normalizeProfileArrays(current.products, 12, 180),
+    pricingHints: normalizePricingHints(current.pricingHints),
+    pricingPolicy: sanitizePolicyText(current.pricingPolicy || current.pricingText),
+    hours: normalizeProfileArrays(current.hours, 10, 180),
+    socialLinks: normalizeDraftSocialLinks(current.socialLinks),
+    whatsappLinks: normalizeProfileArrays(current.whatsappLinks, 8, 260),
+    bookingLinks: normalizeProfileArrays(current.bookingLinks, 10, 260),
+    faqItems: normalizeDraftFaqItems(current.faqItems),
+    supportedLanguages: normalizeProfileArrays(current.supportedLanguages, 8, 24),
+    mainLanguage: cleanDisplayText(resolveMainLanguage(current), 24),
+    primaryLanguage: cleanDisplayText(
+      current.primaryLanguage || resolveMainLanguage(current),
+      24
+    ),
+    websiteUrl: cleanDisplayText(current.websiteUrl || current.website, 320),
+    website: cleanDisplayText(current.website || current.websiteUrl, 320),
+    phone: sanitizePhoneText(current.phone || current.primaryPhone),
+    email: sanitizeEmailText(current.email || current.primaryEmail),
+    address: sanitizeAddressText(current.address || current.primaryAddress),
+    language: cleanDisplayText(current.language || resolveMainLanguage(current), 24),
+    pricingText: cleanDisplayText(
+      current.pricingText || current.pricingPolicy || arr(current.pricingHints).join(" | "),
+      320
+    ),
+    social: normalizeProfileArrays(
+      [...arr(current.social), ...arr(current.socialLinks).map((item) => item?.platform)],
+      12,
+      40
+    ),
+    socialUrls: normalizeProfileArrays(
+      [...arr(current.socialUrls), ...arr(current.socialLinks).map((item) => item?.url)],
+      20,
+      260
     ),
   });
 
@@ -1365,6 +1873,52 @@ export function buildDraftKnowledgeFromCandidate(item = {}, sourceType = "") {
   };
 }
 
+function buildDraftServicesFromProfile(profile = {}, sourceType = "") {
+  const companyName = sanitizeCompanyName(
+    profile.companyName || profile.displayName || profile.companyTitle
+  );
+  const items = normalizeDraftServiceList(
+    [...arr(profile.services), ...arr(profile.products)],
+    companyName
+  );
+
+  return items.map((title, index) => ({
+    key: normalizeDraftKey(`${sourceType || "service"}_${title}_${index + 1}`, "service"),
+    title,
+    description: "",
+    category: "service",
+    sourceType: s(sourceType),
+    origin: "setup_review_candidate",
+    confidence: 0.45,
+    confidenceLabel: "derived",
+    status: "pending",
+    reviewReason: "derived_from_website_profile",
+    evidence: [],
+  }));
+}
+
+function buildDraftKnowledgeFromProfile(profile = {}, sourceType = "") {
+  return normalizeDraftFaqItems(arr(profile.faqItems)).map((item, index) => ({
+    key: normalizeDraftKey(
+      `${sourceType || "knowledge"}_${item.question || item.answer}_${index + 1}`,
+      "knowledge"
+    ),
+    category: "faq",
+    title: item.question,
+    valueText: cleanDisplayText(item.answer, 700),
+    valueJson: obj(item),
+    normalizedText: cleanDisplayText(item.answer, 320),
+    normalizedJson: obj(item),
+    confidence: 0.45,
+    confidenceLabel: "derived",
+    status: "pending",
+    reviewReason: "derived_from_website_profile",
+    sourceType: s(sourceType),
+    evidence: [],
+    origin: "setup_review_candidate",
+  }));
+}
+
 export function mergeDraftItems(existing = [], incoming = [], keyFields = ["key", "title"]) {
   const map = new Map();
 
@@ -1421,16 +1975,19 @@ export function buildDraftPayloadFromResult({
   sourceUrl = "",
   intakeContext = {},
   collector = {},
+  businessProfileOverride = null,
 }) {
   const warnings = uniqStrings(arr(result?.warnings).map((x) => cleanDisplayText(x, 220)));
   const snapshot = obj(result?.snapshot);
   const extracted = obj(result?.extracted);
   const signals = obj(result?.signals);
-  const profile = mapSynthesisProfileToBusinessProfile(
-    obj(result?.profile),
-    sourceType,
-    sourceUrl
-  );
+  const profile = businessProfileOverride
+    ? sanitizeSetupBusinessProfile(businessProfileOverride)
+    : mapSynthesisProfileToBusinessProfile(
+        obj(result?.profile),
+        sourceType,
+        sourceUrl
+      );
 
   return compactObject({
     draftMode: "setup_review_session",
@@ -1472,23 +2029,38 @@ export function calculateCompleteness({
   knowledgeItems = [],
   warnings = [],
 }) {
-  const profile = compactObject(businessProfile);
-  const serviceCount = arr(services).length;
-  const knowledgeCount = arr(knowledgeItems).length;
-  const profileScore = Object.keys(profile).length ? 1 : 0;
-  const serviceScore = serviceCount > 0 ? 1 : 0;
-  const knowledgeScore = knowledgeCount > 0 ? 1 : 0;
-  const totalScore = profileScore + serviceScore + knowledgeScore;
+  const profile = obj(businessProfile);
+  const hasIdentity = !!(
+    s(profile.companyName) ||
+    s(profile.displayName) ||
+    s(profile.companySummaryShort) ||
+    s(profile.companySummaryLong)
+  );
+  const hasContact = !!(
+    s(profile.primaryPhone) ||
+    s(profile.primaryEmail) ||
+    s(profile.primaryAddress) ||
+    arr(profile.socialLinks).length ||
+    arr(profile.whatsappLinks).length ||
+    arr(profile.bookingLinks).length
+  );
+  const hasServices = arr(services).length > 0 || arr(profile.services).length > 0;
+  const hasKnowledge =
+    arr(knowledgeItems).length > 0 || arr(profile.faqItems).length > 0;
+
+  const score = [hasIdentity, hasContact, hasServices, hasKnowledge].filter(Boolean).length;
 
   return {
-    hasBusinessProfile: profileScore === 1,
-    hasServices: serviceScore === 1,
-    hasKnowledge: knowledgeScore === 1,
-    serviceCount,
-    knowledgeCount,
+    hasBusinessProfile: hasIdentity || hasContact,
+    hasIdentity,
+    hasContact,
+    hasServices,
+    hasKnowledge,
+    serviceCount: Math.max(arr(services).length, arr(profile.services).length),
+    knowledgeCount: Math.max(arr(knowledgeItems).length, arr(profile.faqItems).length),
     warningCount: arr(warnings).length,
-    score: totalScore,
-    maxScore: 3,
+    score,
+    maxScore: 4,
   };
 }
 
@@ -1580,8 +2152,11 @@ export function buildDiffFromCanonical({
   sourceUrl = "",
   result = {},
   collector = {},
+  businessProfileOverride = null,
 }) {
-  const profile = obj(result?.profile);
+  const profile = businessProfileOverride
+    ? obj(businessProfileOverride)
+    : obj(result?.profile);
 
   return mergeDeep(obj(existing), {
     pendingReview: true,
@@ -1653,13 +2228,23 @@ export function deriveDraftPatch({
     sourceUrl
   );
 
-  const businessProfile = compactObject(
-    mergeDeep(
-      {},
-      obj(collector?.profilePatch),
-      sourceProfilePatch
-    )
+  const artifactProfilePatch =
+    sourceType === "website" || sourceType === "google_maps"
+      ? buildArtifactProfileFromResult(result, sourceType, sourceUrl)
+      : {};
+
+  const mergedProfile = mergeBusinessProfiles(
+    compactObject(
+      mergeDeep(
+        {},
+        obj(collector?.profilePatch),
+        sourceProfilePatch
+      )
+    ),
+    artifactProfilePatch
   );
+
+  const businessProfile = sanitizeSetupBusinessProfile(mergedProfile);
 
   if (Object.keys(businessProfile).length) {
     businessProfile.fieldSources = buildDraftFieldSources(
@@ -1686,15 +2271,27 @@ export function deriveDraftPatch({
     ? stripSourceDerivedDraftItems(arr(current.knowledgeItems))
     : [];
 
-  const services = mergeDraftItems(preservedServices, derivedServices, ["key", "title"]);
+  const fallbackServices = buildDraftServicesFromProfile(businessProfile, sourceType);
+  const fallbackKnowledge = buildDraftKnowledgeFromProfile(businessProfile, sourceType);
+
+  const services = mergeDraftItems(
+    preservedServices,
+    [...derivedServices, ...fallbackServices],
+    ["key", "title"]
+  );
 
   const knowledgeItems = mergeDraftItems(
     preservedKnowledgeItems,
-    derivedKnowledge,
+    [...derivedKnowledge, ...fallbackKnowledge],
     ["key", "title", "category"]
   );
 
-  const warnings = uniqStrings(arr(result?.warnings).map((x) => cleanDisplayText(x, 220)));
+  const warnings = uniqStrings(
+    [
+      ...(sameSourceSession ? arr(current.warnings) : []),
+      ...arr(result?.warnings).map((x) => cleanDisplayText(x, 220)),
+    ].filter(Boolean)
+  );
 
   const sourceSummary = buildSourceSummary({
     existing: sameSourceSession ? obj(current.sourceSummary) : {},
@@ -1717,6 +2314,7 @@ export function deriveDraftPatch({
     sourceUrl,
     intakeContext,
     collector,
+    businessProfileOverride: businessProfile,
   });
 
   const completeness = calculateCompleteness({
@@ -1738,6 +2336,7 @@ export function deriveDraftPatch({
     sourceUrl,
     result,
     collector,
+    businessProfileOverride: businessProfile,
   });
 
   return {
@@ -1757,10 +2356,12 @@ export function deriveDraftPatch({
 }
 
 export const __test__ = {
+  buildArtifactProfileFromResult,
   buildCompanyNameCandidates,
   buildDeterministicSummaryLong,
   buildDeterministicSummaryShort,
   mapSynthesisProfileToBusinessProfile,
+  mergeBusinessProfiles,
   pickFirstSanitized,
   readFieldConfidenceScore,
   shouldPreferDeterministicSummary,

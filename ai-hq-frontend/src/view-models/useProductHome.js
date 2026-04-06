@@ -58,7 +58,10 @@ async function loadProductHomePayloads() {
   };
 
   const settledEntries = await Promise.all(
-    Object.entries(requests).map(async ([key, promise]) => [key, await Promise.allSettled([promise])])
+    Object.entries(requests).map(async ([key, promise]) => [
+      key,
+      await Promise.allSettled([promise]),
+    ])
   );
 
   const payloads = {};
@@ -108,7 +111,12 @@ function buildInboxState({ threadsPayload, outboundPayload, sourceStatus }) {
       summary: "Conversation activity is unavailable right now.",
       detail: "Inbox and outbound activity could not be loaded.",
       action: { label: "Open inbox", path: "/inbox" },
-      counts: { unreadCount: 0, openCount: 0, handoffCount: 0, outboundPending: 0 },
+      counts: {
+        unreadCount: 0,
+        openCount: 0,
+        handoffCount: 0,
+        outboundPending: 0,
+      },
     };
   }
 
@@ -117,9 +125,13 @@ function buildInboxState({ threadsPayload, outboundPayload, sourceStatus }) {
       status: "attention",
       statusLabel: "Needs attention",
       tone: "warn",
-      summary: `${pluralize(unreadCount, "unread message")} ${unreadCount === 1 ? "is" : "are"} waiting across ${pluralize(Math.max(openCount, 1), "open conversation")}.`,
+      summary: `${pluralize(unreadCount, "unread message")} ${
+        unreadCount === 1 ? "is" : "are"
+      } waiting across ${pluralize(Math.max(openCount, 1), "open conversation")}.`,
       detail: handoffCount
-        ? `${pluralize(handoffCount, "conversation")} already ${handoffCount === 1 ? "has" : "have"} operator ownership.`
+        ? `${pluralize(handoffCount, "conversation")} already ${
+            handoffCount === 1 ? "has" : "have"
+          } operator ownership.`
         : "Open the queue to triage new activity.",
       action: { label: "Open inbox", path: "/inbox" },
       counts: { unreadCount, openCount, handoffCount, outboundPending },
@@ -133,11 +145,18 @@ function buildInboxState({ threadsPayload, outboundPayload, sourceStatus }) {
       tone: "info",
       summary:
         openCount > 0
-          ? `${pluralize(openCount, "conversation")} ${openCount === 1 ? "is" : "are"} currently active.`
-          : `${pluralize(outboundPending, "outbound follow-up")} ${outboundPending === 1 ? "is" : "are"} still in flight.`,
+          ? `${pluralize(openCount, "conversation")} ${
+              openCount === 1 ? "is" : "are"
+            } currently active.`
+          : `${pluralize(outboundPending, "outbound follow-up")} ${
+              outboundPending === 1 ? "is" : "are"
+            } still in flight.`,
       detail:
         outboundPending > 0
-          ? `${pluralize(outboundPending, "outbound follow-up")} still need a delivery outcome.`
+          ? `${pluralize(
+              outboundPending,
+              "outbound follow-up"
+            )} still need a delivery outcome.`
           : "Inbox activity is live, but nothing unread is waiting.",
       action: { label: "Open inbox", path: "/inbox" },
       counts: { unreadCount, openCount, handoffCount, outboundPending },
@@ -149,7 +168,8 @@ function buildInboxState({ threadsPayload, outboundPayload, sourceStatus }) {
     statusLabel: "Quiet",
     tone: "neutral",
     summary: "Conversation activity is quiet right now.",
-    detail: "No open queue pressure is visible from the current inbox signal.",
+    detail:
+      "No open queue pressure is visible from the current inbox signal.",
     action: { label: "Open inbox", path: "/inbox" },
     counts: { unreadCount, openCount, handoffCount, outboundPending },
   };
@@ -165,13 +185,15 @@ function buildLaunchChannelState({ telegramPayload, sourceStatus }) {
       available: false,
       status: "unavailable",
       statusLabel: "Unavailable",
-      title: "Telegram channel state is unavailable.",
-      summary: "Home cannot confirm whether the launch channel is connected right now.",
-      detail: "Open Channels to verify Telegram connection before treating onboarding as ready.",
+      title: "Launch channel state is unavailable.",
+      summary: "Home cannot confirm whether a launch channel is connected.",
+      detail:
+        "Open Channels to verify connection status before treating onboarding as ready.",
       action,
       deliveryReady: false,
+      channelLabel: "Telegram",
       botUsername: "",
-      reasonCode: "telegram_status_unavailable",
+      reasonCode: "launch_channel_status_unavailable",
     };
   }
 
@@ -197,18 +219,19 @@ function buildLaunchChannelState({ telegramPayload, sourceStatus }) {
       status: deliveryReady ? "connected" : "connected_blocked",
       statusLabel: "Connected",
       title: deliveryReady
-        ? "Telegram is connected."
-        : "Telegram is connected, but strict delivery is still gated.",
+        ? "Launch channel is connected."
+        : "Launch channel is connected, but delivery is still gated.",
       summary:
         readinessMessage ||
         (deliveryReady
-          ? "The tenant bot is attached and can use the strict runtime when approved truth stays healthy."
-          : "The bot is attached, but runtime delivery still cannot be treated as live."),
+          ? "The connected channel can use the strict runtime when approved truth stays healthy."
+          : "The channel is attached, but delivery still cannot be treated as live."),
       detail: botUsername
-        ? `Bot @${botUsername} is attached to this tenant.`
-        : "The tenant bot identity has already been verified.",
+        ? `Bot @${botUsername} is attached to this workspace.`
+        : "The launch channel identity has already been verified.",
       action,
       deliveryReady,
+      channelLabel: "Telegram",
       botUsername,
       reasonCode,
     };
@@ -220,13 +243,14 @@ function buildLaunchChannelState({ telegramPayload, sourceStatus }) {
       available: true,
       status: "connecting",
       statusLabel: "Connecting",
-      title: "Telegram connection is still in progress.",
+      title: "Launch channel connection is still in progress.",
       summary:
         readinessMessage ||
-        "Webhook or runtime checks still need to settle before the launch channel is treated as connected.",
-      detail: "Use Channels to finish the Telegram connect flow.",
+        "Webhook or runtime checks still need to settle before the channel is treated as connected.",
+      detail: "Use Channels to finish the connect flow.",
       action,
       deliveryReady: false,
+      channelLabel: "Telegram",
       botUsername,
       reasonCode,
     };
@@ -237,13 +261,14 @@ function buildLaunchChannelState({ telegramPayload, sourceStatus }) {
     available: true,
     status: "needs_connection",
     statusLabel: "Connect required",
-    title: "Connect Telegram before onboarding can start.",
+    title: "Connect a launch channel before onboarding can start.",
     summary:
       readinessMessage ||
-      "The guided onboarding lane stays locked until the tenant Telegram bot is connected.",
-    detail: "Use Channels to connect the Telegram bot for this workspace.",
+      "The guided onboarding lane stays locked until a launch channel is connected.",
+    detail: "Use Channels to connect Telegram for this workspace.",
     action,
     deliveryReady: false,
+    channelLabel: "Telegram",
     botUsername,
     reasonCode,
   };
@@ -263,7 +288,7 @@ function buildTruthRuntimeState({ trustPayload, telegramPayload, sourceStatus })
       summary:
         "Home cannot confirm approved truth or runtime projection health right now.",
       detail:
-        "Do not treat Telegram as live until approved truth and runtime readiness are visible again.",
+        "Do not treat the launch channel as live until approved truth and runtime readiness are visible again.",
       action,
       truthReady: false,
       runtimeReady: false,
@@ -289,7 +314,9 @@ function buildTruthRuntimeState({ trustPayload, telegramPayload, sourceStatus })
   const deliveryReady = telegramPayload?.runtime?.deliveryReady === true;
   const ready = truthReady && runtimeReady && deliveryReady;
   const reasonCodes = arr(
-    runtimeHealth.reasonCodes || runtimeHealth.reasons || truth.readiness?.reasonCodes
+    runtimeHealth.reasonCodes ||
+      runtimeHealth.reasons ||
+      truth.readiness?.reasonCodes
   )
     .map((item) => s(item).toLowerCase())
     .filter(Boolean);
@@ -302,7 +329,7 @@ function buildTruthRuntimeState({ trustPayload, telegramPayload, sourceStatus })
       statusLabel: "Blocked",
       title: "Approved truth is still missing.",
       summary:
-        "Telegram can stay connected, but runtime activation remains fail-closed until approved truth exists.",
+        "The launch channel can stay connected, but runtime activation remains fail-closed until approved truth exists.",
       detail:
         s(truth.readiness?.message) ||
         "No approved truth snapshot is available for strict runtime use yet.",
@@ -312,7 +339,10 @@ function buildTruthRuntimeState({ trustPayload, telegramPayload, sourceStatus })
       deliveryReady,
       truthVersionId,
       reasonCodes: [
-        s(truth.readiness?.reasonCode, "approved_truth_unavailable").toLowerCase(),
+        s(
+          truth.readiness?.reasonCode,
+          "approved_truth_unavailable"
+        ).toLowerCase(),
       ],
     };
   }
@@ -327,10 +357,10 @@ function buildTruthRuntimeState({ trustPayload, telegramPayload, sourceStatus })
       summary:
         s(runtimeProjection.readiness?.message) ||
         s(telegramPayload?.readiness?.message) ||
-        "Approved truth exists, but the strict runtime projection is not ready for Telegram yet.",
+        "Approved truth exists, but the runtime projection is not ready for live delivery yet.",
       detail:
         runtimeReady && !deliveryReady
-          ? "Telegram delivery is still blocked for this channel even though truth is approved."
+          ? "Channel delivery is still blocked even though truth is approved."
           : "Repair or refresh the runtime projection before treating the launch channel as live.",
       action,
       truthReady,
@@ -352,13 +382,13 @@ function buildTruthRuntimeState({ trustPayload, telegramPayload, sourceStatus })
   }
 
   return {
-    ready: true,
+    ready,
     available: true,
     status: "ready",
     statusLabel: "Ready",
     title: "Approved truth and runtime are aligned.",
     summary:
-      "The strict runtime projection is current, and Telegram delivery can use that approved state.",
+      "The strict runtime projection is current, and the launch channel can use that approved state.",
     detail: truthVersionId
       ? `Approved truth version ${truthVersionId} is currently backing the live runtime.`
       : "Approved truth is active for the current runtime projection.",
@@ -383,6 +413,8 @@ function buildOnboardingState({
   const review = obj(onboarding.review);
   const websitePrefill = obj(onboarding.websitePrefill);
   const summaryMeta = obj(onboarding.summary);
+  const assistantState = obj(onboarding.assistant);
+
   const hasDraft =
     summaryMeta.hasAnyDraft === true ||
     Boolean(
@@ -393,40 +425,52 @@ function buildOnboardingState({
         arr(draft.contacts).length ||
         arr(draft.hours).length
     );
+
   const needed = launchChannel.connected && !truthRuntime.ready;
+
   const launchPosture = !launchChannel.connected
     ? "connect_channel"
     : needed
       ? "onboarding_needed"
       : "normal_operation";
 
+  const assistantMode =
+    launchPosture === "onboarding_needed"
+      ? "onboarding"
+      : hasDraft && launchChannel.connected
+        ? "onboarding"
+        : "shortcut";
+
   return {
     needed,
     onboardingNeeded: needed,
     autoOpen: needed,
     launchPosture,
+    assistantMode,
     title:
       launchPosture === "connect_channel"
-        ? "Connect Telegram to unlock guided onboarding."
+        ? "Connect a launch channel first."
         : launchPosture === "onboarding_needed"
           ? hasDraft
-            ? "Telegram is connected. Continue the structured draft before runtime goes live."
-            : "Telegram is connected. Start the first structured business draft."
+            ? "Channel is connected. Continue the setup draft."
+            : "Channel is connected. Start the first setup draft."
           : hasDraft
-            ? "Live runtime is ready. Future edits can still stay draft-only."
-            : "Truth and runtime are ready.",
+            ? "Continue the setup draft."
+            : "Setup is available when you need it.",
     summary:
       launchPosture === "connect_channel"
-        ? "The onboarding assistant stays in connect-CTA posture until the tenant Telegram bot is attached."
+        ? launchChannel.summary
         : launchPosture === "onboarding_needed"
           ? truthRuntime.summary
-          : "The assistant remains available for future draft work, but it does not write directly into approved truth.",
+          : hasDraft
+            ? "Draft work stays separate from approved truth and runtime activation."
+            : "The assistant can stay available for future guided edits.",
     detail:
       launchPosture === "connect_channel"
         ? launchChannel.detail
         : hasDraft
           ? s(review.message)
-          : "Start with the website, then continue building the structured draft in the widget.",
+          : "Start with the website, then continue through short guided questions.",
     status:
       launchPosture === "connect_channel"
         ? "waiting_for_channel"
@@ -439,11 +483,11 @@ function buildOnboardingState({
             : "ready",
     statusLabel:
       launchPosture === "connect_channel"
-        ? "Waiting for Telegram"
+        ? "Waiting for channel"
         : launchPosture === "onboarding_needed"
           ? hasDraft
             ? "Draft in progress"
-            : "Start onboarding"
+            : "Start setup"
           : hasDraft
             ? "Draft available"
             : "Ready",
@@ -454,15 +498,17 @@ function buildOnboardingState({
             label:
               launchPosture === "onboarding_needed"
                 ? hasDraft
-                  ? "Continue AI onboarding"
-                  : "Start AI onboarding"
-                : "Open AI onboarding",
+                  ? "Continue AI setup"
+                  : "Start AI setup"
+                : "Open AI setup",
             path: "/home?assistant=setup",
           },
     secondaryAction:
       launchPosture === "connect_channel"
         ? { label: "Open home", path: "/home" }
-        : { label: "Open truth", path: "/truth" },
+        : launchPosture === "onboarding_needed"
+          ? { label: "Open truth", path: "/truth" }
+          : { label: "Open home", path: "/home" },
     sessionId: s(session.id),
     draftVersion: Number(session.draftVersion || draft.version || 0),
     hasDraft,
@@ -473,6 +519,7 @@ function buildOnboardingState({
     review,
     websitePrefill,
     session,
+    assistantState,
     draft: {
       businessProfile: draftBusinessProfile,
       services: arr(draft.services),
@@ -496,9 +543,9 @@ function buildAssistantMessages({
       {
         id: "assistant-connect",
         role: "assistant",
-        title: "Connect Telegram first.",
+        title: "Connect a channel first.",
         body:
-          "Once Telegram is connected, start with the website and keep everything inside a draft-only onboarding lane.",
+          "Once a launch channel is connected, continue setup through the guided draft lane.",
       },
     ];
   }
@@ -508,9 +555,9 @@ function buildAssistantMessages({
       {
         id: "assistant-continue",
         role: "assistant",
-        title: "Continue the onboarding draft.",
+        title: "Continue the setup draft.",
         body:
-          "The draft is already started. Keep collecting structured business details, but nothing goes live until a later approval step is added.",
+          "The draft is already started. Keep collecting business details, but nothing goes live until a later approval step is added.",
       },
       {
         id: "assistant-runtime-blocked",
@@ -528,7 +575,7 @@ function buildAssistantMessages({
         role: "assistant",
         title: "Start with the website.",
         body:
-          "Capture the business website first. This batch stores it as draft-only onboarding context and does not publish anything to truth or runtime.",
+          "Capture the business website first. This batch stores it as draft-only setup context and does not publish anything to truth or runtime.",
       },
       {
         id: "assistant-gate",
@@ -545,7 +592,7 @@ function buildAssistantMessages({
       role: "assistant",
       title: "Runtime is ready.",
       body:
-        "The onboarding shell can still collect a future draft, but live Telegram behavior remains tied to approved truth and the current runtime projection.",
+        "The assistant can still collect a future draft, but live behavior remains tied to approved truth and the current runtime projection.",
     },
   ];
 }
@@ -561,8 +608,13 @@ function buildAvailabilityNote({
   const details = [];
 
   if (setupState.isUnavailable) details.push("Setup progress is unavailable.");
-  if (businessMemory.stats.pendingCount > 0 && sourceStatus.trust?.available === false) {
-    details.push("Approved business memory is unavailable, but review work is still visible.");
+  if (
+    businessMemory.stats.pendingCount > 0 &&
+    sourceStatus.trust?.available === false
+  ) {
+    details.push(
+      "Approved business memory is unavailable, but review work is still visible."
+    );
   } else if (
     sourceStatus.trust?.available === false &&
     sourceStatus.workbench?.available === false
@@ -571,7 +623,7 @@ function buildAvailabilityNote({
   }
 
   if (!launchChannel.available) {
-    details.push("Telegram channel state is unavailable.");
+    details.push("Launch channel state is unavailable.");
   }
 
   if (!truthRuntime.available) {
@@ -598,7 +650,7 @@ function buildPrimaryAction({
 }) {
   if (!launchChannel.connected) {
     return {
-      title: "Connect Telegram before launching AI conversations.",
+      title: "Connect a launch channel before launching AI conversations.",
       detail: launchChannel.summary,
       action: launchChannel.action,
     };
@@ -614,7 +666,8 @@ function buildPrimaryAction({
 
   if (inboxState.status === "attention") {
     return {
-      title: "Telegram, truth, and runtime are aligned. The inbox is the next place that needs an operator.",
+      title:
+        "Launch channel, truth, and runtime are aligned. The inbox is the next place that needs an operator.",
       detail: inboxState.summary,
       action: inboxState.action,
     };
@@ -629,10 +682,10 @@ function buildPrimaryAction({
   }
 
   return {
-    title: "Telegram, approved truth, and runtime are aligned.",
+    title: "Launch channel, approved truth, and runtime are aligned.",
     detail:
       truthRuntime.detail ||
-      "The launch channel can now rely on the strict runtime projection.",
+      "The connected channel can now rely on the strict runtime projection.",
     action: { label: "Open inbox", path: "/inbox" },
   };
 }
@@ -704,6 +757,7 @@ export function useProductHome(options = {}) {
   const derived = useMemo(() => {
     const session = payloads.session || {};
     const bootstrap = session?.bootstrap || {};
+
     const setupState = buildWorkspaceSetupState({
       bootstrap,
       overview: payloads.overview,
@@ -712,35 +766,42 @@ export function useProductHome(options = {}) {
         overview: sourceStatus.overview,
       },
     });
+
     const businessMemory = buildWorkspaceBusinessMemory({
       trust: payloads.trust,
       workbench: payloads.workbench,
       setupState,
     });
+
     const inboxState = buildInboxState({
       threadsPayload: payloads.inboxThreads,
       outboundPayload: payloads.inboxOutbound,
       sourceStatus,
     });
+
     const launchChannel = buildLaunchChannelState({
       telegramPayload: payloads.telegramStatus,
       sourceStatus,
     });
+
     const truthRuntime = buildTruthRuntimeState({
       trustPayload: payloads.trust,
       telegramPayload: payloads.telegramStatus,
       sourceStatus,
     });
+
     const onboardingState = buildOnboardingState({
       launchChannel,
       truthRuntime,
       onboardingSession: payloads.onboardingSession,
     });
+
     const assistantMessages = buildAssistantMessages({
       launchChannel,
       truthRuntime,
       onboardingState,
     });
+
     const availabilityNote = buildAvailabilityNote({
       sourceStatus,
       setupState,
@@ -749,17 +810,20 @@ export function useProductHome(options = {}) {
       launchChannel,
       truthRuntime,
     });
+
     const companyName = formatWorkspaceName(session);
     const actorName = s(session?.actorName, "operator");
+
     const primaryAction = buildPrimaryAction({
       launchChannel,
       onboardingState,
       truthRuntime,
       inboxState,
     });
+
     const secondaryAction =
       !launchChannel.connected
-        ? { label: "Open AI onboarding", path: "/home?assistant=setup" }
+        ? { label: "Open AI setup", path: "/home?assistant=setup" }
         : onboardingState.needed
           ? { label: "Open truth", path: "/truth" }
           : inboxState.action?.path === "/inbox"
@@ -776,7 +840,7 @@ export function useProductHome(options = {}) {
       },
       {
         id: "onboarding",
-        label: "AI onboarding",
+        label: "AI setup",
         status: onboardingState.statusLabel,
         summary: onboardingState.summary,
         action: onboardingState.action,
@@ -802,8 +866,8 @@ export function useProductHome(options = {}) {
             : "Waiting on launch readiness",
         summary:
           onboardingState.launchPosture === "normal_operation"
-            ? "Handle live Telegram conversations and operator follow-up in one queue."
-            : "The inbox becomes the main operating surface after Telegram, approved truth, and runtime are aligned.",
+            ? "Handle live conversations and operator follow-up in one queue."
+            : "The inbox becomes the main operating surface after channel, approved truth, and runtime are aligned.",
         detail:
           onboardingState.launchPosture === "normal_operation"
             ? inboxState.detail
@@ -815,9 +879,9 @@ export function useProductHome(options = {}) {
         title: "Comments",
         status: "Separate surface",
         summary:
-          "Comments remain available, but they are not the launch channel for this onboarding batch.",
+          "Comments remain available, but they are not the launch surface for this onboarding batch.",
         detail:
-          "Keep the onboarding story narrow: Telegram connect, structured draft, approved truth, then strict runtime.",
+          "Keep the onboarding story narrow: connect a channel, complete the setup draft, approve truth, then go live.",
         action: { label: "Open comments", path: "/comments" },
       },
       {
@@ -825,9 +889,9 @@ export function useProductHome(options = {}) {
         title: "Voice Receptionist",
         status: "Separate surface",
         summary:
-          "Voice stays available as its own surface and does not drive the Telegram-first onboarding path.",
+          "Voice stays available as its own surface and does not drive this connect-first onboarding path.",
         detail:
-          "Do not mix voice readiness into the Telegram onboarding promise for this batch.",
+          "Do not mix voice readiness into the current launch promise.",
         action: { label: "Open voice", path: "/voice" },
       },
       {
@@ -835,7 +899,7 @@ export function useProductHome(options = {}) {
         title: "Channels",
         status: launchChannel.statusLabel,
         summary:
-          "Connect and inspect the tenant Telegram bot without weakening the strict runtime contract.",
+          "Connect and inspect the launch channel without weakening the strict runtime contract.",
         detail: launchChannel.detail,
         action: launchChannel.action,
       },
@@ -844,7 +908,7 @@ export function useProductHome(options = {}) {
         title: "Truth",
         status: truthRuntime.statusLabel,
         summary:
-          "Approved truth and the runtime projection stay protected. Draft onboarding does not publish automatically.",
+          "Approved truth and runtime stay protected. Draft setup does not publish automatically.",
         detail: truthRuntime.detail,
         action: truthRuntime.action,
       },
@@ -855,7 +919,7 @@ export function useProductHome(options = {}) {
         summary:
           "Use the workspace for broader operator posture once the onboarding lane is already clear.",
         detail:
-          "Workspace remains available, but /home now leads channel connect, onboarding, and runtime activation posture.",
+          "Home leads channel connect, setup, and runtime posture for this flow.",
         action: { label: "Open workspace", path: "/workspace" },
       },
     ];
@@ -872,14 +936,14 @@ export function useProductHome(options = {}) {
     const supportingStatus = [
       {
         id: "channel-support",
-        label: "Telegram",
+        label: "Launch channel",
         status: launchChannel.statusLabel,
         summary: launchChannel.summary,
         action: launchChannel.action,
       },
       {
         id: "onboarding-support",
-        label: "AI onboarding",
+        label: "AI setup",
         status: onboardingState.statusLabel,
         summary: onboardingState.summary,
         action: onboardingState.action,
@@ -903,11 +967,28 @@ export function useProductHome(options = {}) {
     ]).slice(0, 4);
 
     const assistant = {
-      mode: "onboarding",
-      title: onboardingState.title,
+      mode: onboardingState.assistantMode,
+      title:
+        onboardingState.launchPosture === "connect_channel"
+          ? "Connect channel"
+          : onboardingState.needed
+            ? "Quick setup"
+            : onboardingState.hasDraft
+              ? "Continue setup"
+              : "Setup",
       statusLabel: onboardingState.statusLabel,
-      summary: onboardingState.summary,
-      primaryAction: onboardingState.action,
+      summary:
+        onboardingState.launchPosture === "connect_channel"
+          ? "Əvvəl channel qoş."
+          : onboardingState.needed
+            ? "Qısa sual-cavab."
+            : onboardingState.hasDraft
+              ? "Draft qalır."
+              : "Hazırdır.",
+      primaryAction:
+        onboardingState.launchPosture === "connect_channel"
+          ? launchChannel.action
+          : onboardingState.action,
       secondaryAction: onboardingState.secondaryAction,
       launchPosture: onboardingState.launchPosture,
       onboardingNeeded: onboardingState.needed,
@@ -917,6 +998,7 @@ export function useProductHome(options = {}) {
       review: onboardingState.review,
       websitePrefill: onboardingState.websitePrefill,
       messages: assistantMessages,
+      assistant: onboardingState.assistantState,
       launchChannel,
       truthRuntime,
     };

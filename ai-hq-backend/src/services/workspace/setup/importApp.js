@@ -21,7 +21,8 @@ export async function executeSetupImport(
   deps = {}
 ) {
   const makeImportArgs = deps.buildImportArgs || buildImportArgs;
-  const enrichWithReview = deps.enrichImportDataWithReview || enrichImportDataWithReview;
+  const enrichWithReview =
+    deps.enrichImportDataWithReview || enrichImportDataWithReview;
   const makeImportResponse = deps.buildImportResponse || buildImportResponse;
 
   log?.info?.(logLabel, logContext);

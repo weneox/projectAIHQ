@@ -14,6 +14,29 @@ export function registerSetupImportRoutes(
     s,
   }
 ) {
+  const SUPPORTED_SOURCE_TYPES = ["website", "google_maps", "instagram"];
+
+  function normalizeSourceTypeForRoute(value = "") {
+    const normalized = s(normalizeIncomingSourceType(value)).trim();
+    if (normalized) return normalized;
+
+    const raw = s(value).trim().toLowerCase();
+    if (raw === "instagram" || raw === "ig" || raw === "insta") {
+      return "instagram";
+    }
+
+    return "";
+  }
+
+  function buildImportErrorBody(errorCode, reason, extra = {}) {
+    return {
+      ok: false,
+      error: errorCode,
+      reason: s(reason) || "request failed",
+      ...extra,
+    };
+  }
+
   router.post("/setup/import/website", async (req, res) => {
     const actor = requireSetupActor(req, res);
     if (!actor) return;
@@ -22,11 +45,9 @@ export function registerSetupImportRoutes(
     const url = resolveSourceUrlFromBody(body);
 
     if (!url) {
-      return res.status(400).json({
-        ok: false,
-        error: "WebsiteImportFailed",
-        reason: "website url is required",
-      });
+      return res.status(400).json(
+        buildImportErrorBody("WebsiteImportFailed", "website url is required")
+      );
     }
 
     try {
@@ -52,11 +73,12 @@ export function registerSetupImportRoutes(
       return res.status(result.status).json(result.body);
     } catch (err) {
       req.log?.error("setup.import.website.failed", err, { sourceUrl: url });
-      return res.status(400).json({
-        ok: false,
-        error: "WebsiteImportFailed",
-        reason: err?.message || "failed to import website",
-      });
+      return res.status(400).json(
+        buildImportErrorBody(
+          "WebsiteImportFailed",
+          err?.message || "failed to import website"
+        )
+      );
     }
   });
 
@@ -68,11 +90,12 @@ export function registerSetupImportRoutes(
     const url = resolveSourceUrlFromBody(body);
 
     if (!url) {
-      return res.status(400).json({
-        ok: false,
-        error: "GoogleMapsImportFailed",
-        reason: "google maps url is required",
-      });
+      return res.status(400).json(
+        buildImportErrorBody(
+          "GoogleMapsImportFailed",
+          "google maps url is required"
+        )
+      );
     }
 
     try {
@@ -98,11 +121,12 @@ export function registerSetupImportRoutes(
       return res.status(result.status).json(result.body);
     } catch (err) {
       req.log?.error("setup.import.google_maps.failed", err, { sourceUrl: url });
-      return res.status(400).json({
-        ok: false,
-        error: "GoogleMapsImportFailed",
-        reason: err?.message || "failed to import google maps source",
-      });
+      return res.status(400).json(
+        buildImportErrorBody(
+          "GoogleMapsImportFailed",
+          err?.message || "failed to import google maps source"
+        )
+      );
     }
   });
 
@@ -111,26 +135,30 @@ export function registerSetupImportRoutes(
     if (!actor) return;
 
     const body = req.body || {};
-    const sourceType = normalizeIncomingSourceType(
+    const sourceType = normalizeSourceTypeForRoute(
       body?.sourceType || body?.source_type || body?.type
     );
     const url = resolveSourceUrlFromBody(body);
 
     if (!sourceType) {
-      return res.status(400).json({
-        ok: false,
-        error: "SourceImportFailed",
-        reason: "supported sourceType is required",
-        supportedSourceTypes: ["website", "google_maps"],
-      });
+      return res.status(400).json(
+        buildImportErrorBody(
+          "SourceImportFailed",
+          "supported sourceType is required",
+          {
+            supportedSourceTypes: SUPPORTED_SOURCE_TYPES,
+          }
+        )
+      );
     }
 
     if (!url) {
-      return res.status(400).json({
-        ok: false,
-        error: "SourceImportFailed",
-        reason: "source url is required",
-      });
+      return res.status(400).json(
+        buildImportErrorBody("SourceImportFailed", "source url is required", {
+          sourceType,
+          supportedSourceTypes: SUPPORTED_SOURCE_TYPES,
+        })
+      );
     }
 
     try {
@@ -161,6 +189,7 @@ export function registerSetupImportRoutes(
           return {
             ...resultBody,
             sourceType,
+            supportedSourceTypes: SUPPORTED_SOURCE_TYPES,
           };
         },
       });
@@ -171,11 +200,16 @@ export function registerSetupImportRoutes(
         sourceType,
         sourceUrl: url,
       });
-      return res.status(400).json({
-        ok: false,
-        error: "SourceImportFailed",
-        reason: err?.message || "failed to import source",
-      });
+      return res.status(400).json(
+        buildImportErrorBody(
+          "SourceImportFailed",
+          err?.message || "failed to import source",
+          {
+            sourceType,
+            supportedSourceTypes: SUPPORTED_SOURCE_TYPES,
+          }
+        )
+      );
     }
   });
 
@@ -184,15 +218,18 @@ export function registerSetupImportRoutes(
     if (!actor) return;
 
     const body = req.body || {};
-    const websiteUrl = s(body?.websiteUrl || body?.website_url || resolveSourceUrlFromBody(body));
+    const websiteUrl = s(
+      body?.websiteUrl || body?.website_url || resolveSourceUrlFromBody(body)
+    );
     const instagramUrl = resolveInstagramBundleUrl(body);
 
     if (!websiteUrl) {
-      return res.status(400).json({
-        ok: false,
-        error: "SetupBundleImportFailed",
-        reason: "website url is required",
-      });
+      return res.status(400).json(
+        buildImportErrorBody(
+          "SetupBundleImportFailed",
+          "website url is required"
+        )
+      );
     }
 
     try {
@@ -227,11 +264,12 @@ export function registerSetupImportRoutes(
         websiteUrl,
         instagramUrl,
       });
-      return res.status(400).json({
-        ok: false,
-        error: "SetupBundleImportFailed",
-        reason: err?.message || "failed to import setup bundle",
-      });
+      return res.status(400).json(
+        buildImportErrorBody(
+          "SetupBundleImportFailed",
+          err?.message || "failed to import setup bundle"
+        )
+      );
     }
   });
 }

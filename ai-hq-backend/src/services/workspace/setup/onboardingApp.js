@@ -2,6 +2,7 @@ import {
   getCurrentSetupReview,
   getOrCreateActiveSetupReviewSession,
   patchSetupReviewDraft,
+  updateSetupReviewSession,
 } from "../../../db/helpers/tenantSetupReview.js";
 import {
   arr,
@@ -83,11 +84,15 @@ function slugify(value = "") {
     .slice(0, 80);
 }
 
-function normalizeStringArray(value = [], limit = 12) {
+function normalizeStringArray(value = [], limit = 24) {
   return arr(value)
     .map((item) => s(item))
     .filter(Boolean)
     .slice(0, limit);
+}
+
+function uniqueStrings(value = [], limit = 24) {
+  return Array.from(new Set(normalizeStringArray(value, limit))).slice(0, limit);
 }
 
 function normalizeWebsiteUrl(value = "") {
@@ -112,7 +117,11 @@ function inferContactType(value = "") {
   const text = s(value).toLowerCase();
   if (!text) return "";
   if (text.includes("@")) return "email";
-  if (text.includes("http") || text.includes("www.") || text.includes("instagram.com")) {
+  if (
+    text.includes("http") ||
+    text.includes("www.") ||
+    text.includes("instagram.com")
+  ) {
     return "link";
   }
   if (/[0-9+() -]{6,}/.test(text)) return "phone";
@@ -137,7 +146,10 @@ function sanitizeServiceItem(value = {}) {
     source.summary || source.description || source.detail || source.notes
   );
   const priceLabel = s(
-    source.priceLabel || source.price_label || source.price || source.priceRange
+    source.priceLabel ||
+      source.price_label ||
+      source.price ||
+      source.priceRange
   );
   const category = s(source.category);
 
@@ -231,11 +243,21 @@ function sanitizeHandoffRules(value = {}) {
           arr(source.triggers).length
       ),
     summary: s(source.summary || source.description || source.notes),
-    triggers: normalizeStringArray(source.triggers, 24),
-    channels: normalizeStringArray(source.channels, 12),
+    triggers: uniqueStrings(source.triggers, 24),
+    channels: uniqueStrings(source.channels, 12),
     escalationTarget: s(
       source.escalationTarget || source.escalation_target || source.target
     ),
+  });
+}
+
+function sanitizeProgress(value = {}) {
+  const source = obj(value);
+  return compactDraftObject({
+    skippedQuestions: uniqueStrings(source.skippedQuestions, 32),
+    lastAnsweredStep: s(source.lastAnsweredStep).toLowerCase(),
+    currentQuestionKey: s(source.currentQuestionKey).toLowerCase(),
+    updatedAt: source.updatedAt || null,
   });
 }
 
@@ -326,6 +348,10 @@ function patchFromAnswer(step = "", answer = "") {
   }
 }
 
+function isMessageSkip(body = {}) {
+  return body?.skip === true || s(body?.intent).toLowerCase() === "skip";
+}
+
 function mergePatchObjects(left = {}, right = {}) {
   const a = obj(left);
   const b = obj(right);
@@ -353,6 +379,13 @@ function mergePatchObjects(left = {}, right = {}) {
         ? {
             ...obj(a.handoffRules),
             ...obj(b.handoffRules),
+          }
+        : undefined,
+    progress:
+      a.progress !== undefined || b.progress !== undefined
+        ? {
+            ...obj(a.progress),
+            ...obj(b.progress),
           }
         : undefined,
   });
@@ -389,7 +422,9 @@ function buildSummary(draft = {}) {
 
   const completedCount = Object.values(completed).filter(Boolean).length;
   const coreComplete =
-    completed.company && completed.description && (completed.website || completed.contact);
+    completed.company &&
+    completed.description &&
+    (completed.website || completed.contact);
 
   return {
     completed,
@@ -409,9 +444,10 @@ function buildReviewState(draft = {}, summary = {}) {
     status: summary.hasAnyDraft ? "draft_in_progress" : "awaiting_input",
     readyForReview: summary.coreComplete === true,
     readyForApproval: false,
-    message: summary.coreComplete
-      ? "Review hazırdır. Aktivləşmə sonrakı mərhələdir."
-      : REVIEW_MESSAGE,
+    message:
+      summary.coreComplete === true
+        ? "Review hazırdır. Aktivləşmə sonrakı mərhələdir."
+        : REVIEW_MESSAGE,
   };
 }
 
@@ -435,6 +471,7 @@ function buildStoredOnboardingPayload(value = {}) {
 
   return {
     ...core,
+    progress: sanitizeProgress(value.progress),
     websitePrefill: deriveWebsitePrefillDraft(core),
     review: buildReviewState(core, summary),
   };
@@ -516,7 +553,28 @@ function normalizeDirectPatchBody(body = {}) {
 function normalizeAnswerPatchBody(body = {}) {
   const step = s(body.step || body.questionKey || body.field).toLowerCase();
   const answer = s(body.answer || body.message || body.text || body.value);
-  return compactDraftObject(patchFromAnswer(step, answer));
+
+  if (isMessageSkip(body)) {
+    if (!step) return {};
+    return {
+      progress: {
+        skippedQuestions: [step],
+        lastAnsweredStep: step,
+        updatedAt: nowIso(),
+      },
+    };
+  }
+
+  const answerPatch = patchFromAnswer(step, answer);
+  if (!Object.keys(answerPatch).length) return {};
+
+  return compactDraftObject({
+    ...answerPatch,
+    progress: {
+      lastAnsweredStep: step,
+      updatedAt: nowIso(),
+    },
+  });
 }
 
 export function normalizeOnboardingDraftPatchBody(body = {}) {
@@ -525,8 +583,48 @@ export function normalizeOnboardingDraftPatchBody(body = {}) {
   return mergePatchObjects(directPatch, answerPatch);
 }
 
+function removeSkippedIfAnswered(skipped = [], patch = {}) {
+  const nextSkipped = new Set(arr(skipped).map((item) => s(item).toLowerCase()));
+
+  if (patch.businessProfile?.websiteUrl) nextSkipped.delete("website");
+  if (patch.businessProfile?.companyName) nextSkipped.delete("company");
+  if (patch.businessProfile?.description) nextSkipped.delete("description");
+  if (patch.services !== undefined && arr(patch.services).length > 0)
+    nextSkipped.delete("services");
+  if (patch.contacts !== undefined && arr(patch.contacts).length > 0)
+    nextSkipped.delete("contact");
+  if (patch.hours !== undefined && arr(patch.hours).length > 0)
+    nextSkipped.delete("hours");
+  if (
+    patch.pricingPosture !== undefined &&
+    Object.keys(obj(patch.pricingPosture)).length > 0
+  ) {
+    nextSkipped.delete("pricing");
+  }
+  if (
+    patch.handoffRules !== undefined &&
+    Object.keys(obj(patch.handoffRules)).length > 0
+  ) {
+    nextSkipped.delete("handoff");
+  }
+
+  return Array.from(nextSkipped);
+}
+
 export function mergeOnboardingDraft(current = {}, patch = {}) {
   const existing = normalizeStoredOnboardingPayload(current);
+  const existingProgress = obj(existing.progress);
+  const patchProgress = obj(patch.progress);
+
+  const mergedSkipped = uniqueStrings(
+    [
+      ...arr(existingProgress.skippedQuestions),
+      ...arr(patchProgress.skippedQuestions),
+    ],
+    32
+  );
+
+  const normalizedSkipped = removeSkippedIfAnswered(mergedSkipped, patch);
 
   const next = {
     businessProfile:
@@ -560,6 +658,12 @@ export function mergeOnboardingDraft(current = {}, patch = {}) {
             ...obj(patch.handoffRules),
           })
         : existing.handoffRules,
+    progress: sanitizeProgress({
+      ...existingProgress,
+      ...patchProgress,
+      skippedQuestions: normalizedSkipped,
+      updatedAt: nowIso(),
+    }),
   };
 
   return buildStoredOnboardingPayload(next);
@@ -588,6 +692,12 @@ function isQuestionAnswered(questionKey = "", draft = {}) {
     default:
       return false;
   }
+}
+
+function isQuestionSkipped(questionKey = "", draft = {}) {
+  return arr(obj(draft.progress).skippedQuestions)
+    .map((item) => s(item).toLowerCase())
+    .includes(s(questionKey).toLowerCase());
 }
 
 function summarizeAnswer(questionKey = "", draft = {}) {
@@ -640,6 +750,16 @@ function buildConversation(draft = {}) {
       continue;
     }
 
+    if (isQuestionSkipped(question.key, draft)) {
+      items.push({
+        id: `a:${question.key}:skipped`,
+        role: "user",
+        step: question.key,
+        text: "Skip",
+      });
+      continue;
+    }
+
     break;
   }
 
@@ -648,8 +768,11 @@ function buildConversation(draft = {}) {
 
 function getNextQuestion(draft = {}) {
   const next = ONBOARDING_QUESTIONS.find(
-    (question) => !isQuestionAnswered(question.key, draft)
+    (question) =>
+      !isQuestionAnswered(question.key, draft) &&
+      !isQuestionSkipped(question.key, draft)
   );
+
   if (!next) return null;
 
   return {
@@ -674,9 +797,7 @@ export function buildOnboardingSessionPayload(review = {}) {
       id: s(session.id),
       status: s(session.status || "draft").toLowerCase(),
       mode: s(session.mode || "setup").toLowerCase(),
-      currentStep: s(
-        session.currentStep || nextQuestion?.key || "onboarding"
-      ).toLowerCase(),
+      currentStep: s(nextQuestion?.key || session.currentStep || "review").toLowerCase(),
       startedAt: session.startedAt || session.started_at || null,
       updatedAt:
         session.updatedAt ||
@@ -714,6 +835,7 @@ export function buildOnboardingSessionPayload(review = {}) {
         hours: arr(onboarding.hours),
         pricingPosture: obj(onboarding.pricingPosture),
         handoffRules: obj(onboarding.handoffRules),
+        progress: obj(onboarding.progress),
         version: Number(draftRow.version || 1),
         updatedAt: draftRow.updatedAt || draftRow.updated_at || null,
       },
@@ -744,7 +866,7 @@ export async function startOnboardingSession({ db, actor }, deps = {}) {
     await getOrCreateSession({
       tenantId: actor.tenantId,
       mode: "setup",
-      currentStep: "onboarding",
+      currentStep: "website",
       startedBy: resolveStartedBy(actor),
       title: "AI onboarding",
       notes: "",
@@ -769,7 +891,7 @@ export async function startOnboardingSession({ db, actor }, deps = {}) {
     s(review?.session?.id),
     {
       reviewSessionId: s(review?.session?.id),
-      currentStep: s(review?.session?.currentStep || "onboarding"),
+      currentStep: s(review?.session?.currentStep || "website"),
       source: "home_widget",
     }
   );
@@ -817,6 +939,7 @@ export async function updateOnboardingDraft(
 ) {
   const getCurrentReview = deps.getCurrentSetupReview || getCurrentSetupReview;
   const patchReviewDraft = deps.patchSetupReviewDraft || patchSetupReviewDraft;
+  const updateSession = deps.updateSetupReviewSession || updateSetupReviewSession;
   const audit = deps.auditSetupAction || auditSetupAction;
 
   const review = await getCurrentReview(actor.tenantId);
@@ -850,6 +973,8 @@ export async function updateOnboardingDraft(
     patch
   );
 
+  const nextQuestion = getNextQuestion(mergedOnboarding);
+
   const nextDraftPayload = mergeDraftState(existingDraftPayload, {
     onboarding: {
       ...mergedOnboarding,
@@ -865,6 +990,13 @@ export async function updateOnboardingDraft(
     },
     bumpVersion: true,
   });
+
+  await updateSession(
+    review.session.id,
+    {
+      currentStep: s(nextQuestion?.key || "review"),
+    }
+  );
 
   const refreshed = await getCurrentReview(actor.tenantId);
 
@@ -884,8 +1016,11 @@ export async function updateOnboardingDraft(
       draftOnly: true,
       messageMode: Boolean(
         s(body.step || body.questionKey || body.field) &&
-          s(body.answer || body.message || body.text || body.value)
+          (s(body.answer || body.message || body.text || body.value) ||
+            isMessageSkip(body))
       ),
+      skipped: isMessageSkip(body),
+      nextQuestion: s(nextQuestion?.key),
     }
   );
 
