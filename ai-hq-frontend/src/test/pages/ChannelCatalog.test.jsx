@@ -8,6 +8,9 @@ const getMetaChannelStatus = vi.fn();
 const getMetaConnectUrl = vi.fn();
 const disconnectMetaChannel = vi.fn();
 const selectMetaChannelCandidate = vi.fn();
+const getTelegramChannelStatus = vi.fn();
+const connectTelegramChannel = vi.fn();
+const disconnectTelegramChannel = vi.fn();
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual("react-router-dom");
@@ -22,6 +25,9 @@ vi.mock("../../api/channelConnect.js", () => ({
   getMetaConnectUrl: (...args) => getMetaConnectUrl(...args),
   disconnectMetaChannel: (...args) => disconnectMetaChannel(...args),
   selectMetaChannelCandidate: (...args) => selectMetaChannelCandidate(...args),
+  getTelegramChannelStatus: (...args) => getTelegramChannelStatus(...args),
+  connectTelegramChannel: (...args) => connectTelegramChannel(...args),
+  disconnectTelegramChannel: (...args) => disconnectTelegramChannel(...args),
 }));
 
 import ChannelCatalog from "../../pages/ChannelCatalog.jsx";
@@ -101,6 +107,54 @@ beforeEach(() => {
   getMetaConnectUrl.mockResolvedValue({ ok: true, url: "https://example.test/meta" });
   disconnectMetaChannel.mockResolvedValue({ ok: true });
   selectMetaChannelCandidate.mockResolvedValue({ ok: true, connected: true });
+  getTelegramChannelStatus.mockResolvedValue({
+    ok: true,
+    connected: true,
+    state: "connected",
+    account: {
+      displayName: "Telegram @acme_support_bot",
+      botUserId: "bot-1",
+      botUsername: "acme_support_bot",
+      botTokenMasked: "1234***abcd",
+      verified: true,
+    },
+    webhook: {
+      verified: true,
+      expectedUrl: "https://backend.example.test/api/channels/telegram/webhook/acme/[redacted]",
+      actualUrl: "https://backend.example.test/api/channels/telegram/webhook/acme/[redacted]",
+      secretHeaderConfigured: true,
+      pendingUpdateCount: 0,
+      lastErrorMessage: "",
+    },
+    runtime: {
+      ready: true,
+      authorityAvailable: true,
+      channelAllowed: true,
+      deliveryReady: true,
+    },
+    lifecycle: {
+      connectedAt: "2026-04-05T06:00:00.000Z",
+      lastVerifiedAt: "2026-04-05T06:05:00.000Z",
+    },
+    readiness: {
+      status: "ready",
+      message: "Telegram bot, webhook, and tenant runtime are ready for live delivery.",
+      blockers: [],
+    },
+    actions: {
+      connectAvailable: false,
+      reconnectAvailable: false,
+      disconnectAvailable: true,
+    },
+  });
+  connectTelegramChannel.mockResolvedValue({
+    ok: true,
+    connected: true,
+  });
+  disconnectTelegramChannel.mockResolvedValue({
+    ok: true,
+    disconnected: true,
+  });
 });
 
 afterEach(() => {
@@ -110,6 +164,9 @@ afterEach(() => {
   getMetaConnectUrl.mockReset();
   disconnectMetaChannel.mockReset();
   selectMetaChannelCandidate.mockReset();
+  getTelegramChannelStatus.mockReset();
+  connectTelegramChannel.mockReset();
+  disconnectTelegramChannel.mockReset();
 });
 
 describe("ChannelCatalog", () => {
@@ -117,8 +174,10 @@ describe("ChannelCatalog", () => {
     renderCatalog();
 
     expect(screen.getByText("Instagram")).toBeInTheDocument();
+    expect(screen.getByText("Telegram")).toBeInTheDocument();
     expect(screen.getByText("WhatsApp")).toBeInTheDocument();
     expect(screen.getAllByText("Phase 2").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Open Telegram" })).toBeInTheDocument();
   });
 
   it("filters connectors by active group tab", () => {
@@ -139,6 +198,92 @@ describe("ChannelCatalog", () => {
     expect(await screen.findByText("instagram_manage_messages")).toBeInTheDocument();
     expect(await screen.findByText("business_management")).toBeInTheDocument();
     expect(screen.getByText("Instagram is connected for this tenant.")).toBeInTheDocument();
+  });
+
+  it("opens the Telegram drawer with live bot and webhook status", async () => {
+    renderCatalog();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Telegram" }));
+
+    expect(await screen.findByText("Telegram is connected for this tenant.")).toBeInTheDocument();
+    expect(screen.getByText("Connected bot")).toBeInTheDocument();
+    expect(screen.getByText("Webhook")).toBeInTheDocument();
+    expect(screen.getByText("@acme_support_bot")).toBeInTheDocument();
+  });
+
+  it("submits a Telegram bot token and uses the real disconnect flow", async () => {
+    getTelegramChannelStatus.mockResolvedValueOnce({
+      ok: true,
+      connected: false,
+      state: "not_connected",
+      account: {
+        displayName: "Telegram",
+        verified: false,
+        botTokenMasked: "",
+      },
+      webhook: {
+        verified: false,
+        expectedUrl: "https://backend.example.test/api/channels/telegram/webhook/acme/[redacted]",
+        actualUrl: "",
+        secretHeaderConfigured: false,
+        pendingUpdateCount: 0,
+        lastErrorMessage: "",
+      },
+      runtime: {
+        ready: false,
+        authorityAvailable: false,
+        channelAllowed: false,
+        deliveryReady: false,
+      },
+      readiness: {
+        status: "blocked",
+        message:
+          "Telegram is not fully connected for this tenant. Review the blockers before relying on live delivery.",
+        blockers: [
+          {
+            reasonCode: "telegram_bot_token_missing",
+            title: "Telegram bot token is missing",
+          },
+        ],
+      },
+      actions: {
+        connectAvailable: true,
+        reconnectAvailable: false,
+        disconnectAvailable: false,
+      },
+    });
+
+    renderCatalog();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Telegram" }));
+
+    const input = await screen.findByLabelText("Telegram bot token");
+    fireEvent.change(input, {
+      target: {
+        value: "123456:ABC-telegram-bot-token",
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect Telegram" }));
+
+    await waitFor(() =>
+      expect(connectTelegramChannel).toHaveBeenCalledWith(
+        {
+          botToken: "123456:ABC-telegram-bot-token",
+        },
+        expect.anything()
+      )
+    );
+
+    expect(
+      await screen.findByText(/telegram connected successfully/i)
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+
+    await waitFor(() =>
+      expect(disconnectTelegramChannel).toHaveBeenCalledWith(undefined, expect.anything())
+    );
   });
 
   it("shows reconnect guidance when the stored Meta user token is expired", async () => {

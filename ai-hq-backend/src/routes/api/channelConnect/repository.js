@@ -62,16 +62,21 @@ async function upsertChannel(db, tenantId, channelType, payload) {
 }
 
 async function getPrimaryChannel(db, tenantId, channelType) {
+  const safeChannelType = s(channelType).toLowerCase();
+  if (!safeChannelType || !/^[a-z_]+$/.test(safeChannelType)) {
+    return null;
+  }
+
   const q = await db.query(
     `
       select *
       from tenant_channels
       where tenant_id = $1
-        and channel_type = $2
+        and channel_type = '${safeChannelType}'
       order by is_primary desc, updated_at desc
       limit 1
     `,
-    [tenantId, channelType]
+    [tenantId]
   );
 
   return q?.rows?.[0] || null;

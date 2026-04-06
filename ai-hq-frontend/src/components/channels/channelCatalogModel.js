@@ -12,6 +12,10 @@ export const CHANNEL_STATUS_META = {
     label: "Connected",
     tone: "success",
   },
+  connecting: {
+    label: "Connecting",
+    tone: "warning",
+  },
   reconnect_required: {
     label: "Reconnect",
     tone: "warning",
@@ -26,6 +30,10 @@ export const CHANNEL_STATUS_META = {
   },
   blocked: {
     label: "Blocked",
+    tone: "warning",
+  },
+  error: {
+    label: "Needs repair",
     tone: "warning",
   },
   not_connected: {
@@ -148,31 +156,32 @@ export const CHANNELS = [
     id: "telegram",
     name: "Telegram",
     group: "social",
-    status: "phase2",
+    status: "ready",
     icon: telegramIcon,
     iconAlt: "Telegram",
-    eyebrow: "Phase 2 / Not self-serve",
+    eyebrow: "Bot-first / Private chat MVP",
     summary:
-      "Telegram is not part of the current production launch path and should not be presented as a live self-serve connector.",
-    capabilities: ["Planned channel", "Future expansion", "Not in launch scope"],
+      "Connect one Telegram bot per tenant, verify the webhook, and route private text chats into the existing AI inbox runtime.",
+    capabilities: ["Private text chats", "Bot token connect", "Tenant-bound webhook"],
     aliases: [
       "telegram",
-      "community",
-      "channel",
+      "bot",
+      "private chat",
+      "webhook",
       "support",
       "chat",
-      "phase 2",
+      "tenant",
     ],
     detailSummary:
-      "Telegram can return later, but right now it should not compete with the one real launch path.",
+      "Telegram is available as a real self-serve connector for tenants that want a bot-driven private chat surface inside the same inbox and runtime pipeline.",
     detailNote:
-      "The current priority is a coherent Instagram DM platform, not connector breadth.",
+      "The current MVP supports private text messages only. Group chats, media, and unsupported control actions stay fail-closed instead of pretending they are live.",
     highlights: [
-      "Hidden from the DM-first launch promise.",
-      "No self-serve connect path is exposed here.",
-      "Use this as roadmap context only.",
+      "Connection is validated against Telegram before the tenant is marked connected.",
+      "Webhook registration is tenant-bound and secret-verified before inbound delivery is trusted.",
+      "Outbound replies reuse the same durable inbox execution path as the rest of AI HQ.",
     ],
-    primaryActionLabel: "Details",
+    primaryActionLabel: "Open",
   }),
 
   connector({

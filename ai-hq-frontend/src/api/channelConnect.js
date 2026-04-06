@@ -15,3 +15,15 @@ export async function disconnectMetaChannel() {
 export async function selectMetaChannelCandidate(payload = {}) {
   return apiPost("/api/channels/meta/select", payload);
 }
+
+export async function getTelegramChannelStatus() {
+  return apiGet("/api/channels/telegram/status");
+}
+
+export async function connectTelegramChannel(payload = {}) {
+  return apiPost("/api/channels/telegram/connect", payload);
+}
+
+export async function disconnectTelegramChannel() {
+  return apiPost("/api/channels/telegram/disconnect", {});
+}

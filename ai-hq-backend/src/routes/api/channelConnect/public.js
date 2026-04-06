@@ -347,3 +347,9 @@ export function channelConnectPublicRoutes({
 
   return router;
 }
+
+export const __test__ = {
+  normalizeTelegramWebhookUpdate,
+  safeSecretEquals,
+  buildInternalIngestRequest,
+};

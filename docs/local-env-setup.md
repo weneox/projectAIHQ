@@ -41,9 +41,17 @@ If you do not need an optional feature in local development, disable it instead 
 - Admin panel: `ADMIN_PANEL_ENABLED=0`
 - Web push: `PUSH_ENABLED=0`
 - Media worker: `MEDIA_JOB_WORKER_ENABLED=0`
-- Telegram notifications: `TELEGRAM_ENABLED=0`
+- Tenant Telegram channel connect: `TELEGRAM_ENABLED=0`
 - Draft scheduling worker: `DRAFT_SCHEDULE_WORKER_ENABLED=0`
 - Service worker in frontend: `VITE_ENABLE_SERVICE_WORKER=0`
+
+If you do want Telegram channel connect enabled locally, set:
+
+- `TELEGRAM_ENABLED=1`
+- `TELEGRAM_WEBHOOK_BASE_URL=http://localhost:8080` (or your public backend base URL)
+- `TELEGRAM_API_BASE_URL=https://api.telegram.org`
+
+The product-managed Telegram connector stores each tenant bot token in tenant secrets after the operator connects it from the Channels UI. You do not preconfigure a shared `TELEGRAM_BOT_TOKEN` or `TELEGRAM_CHAT_ID` in the backend env for this flow.
 
 ## Validation commands
 

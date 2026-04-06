@@ -1243,42 +1243,6 @@ async function enrichMetaPageForCandidateDiscovery({
     return mergedPage;
   }
 
-  if (pageAccessToken) {
-    log.info("meta.connect.page_enrichment.attempt", {
-      pageId,
-      strategy: "page_token",
-      hasInstagramAccount: hasInstagramAccountOnPage(mergedPage),
-      hasPageAccessToken: true,
-    });
-    try {
-      const enrichedByPageToken = obj(
-        await getMetaPageInstagramContextForPageTokenFn(pageId, pageAccessToken)
-      );
-      mergedPage = mergeMetaPageDiscoveryPayload(
-        mergedPage,
-        enrichedByPageToken
-      );
-      log.info("meta.connect.page_enrichment.result", {
-        pageId,
-        strategy: "page_token",
-        success: true,
-        hasInstagramAccount: hasInstagramAccountOnPage(mergedPage),
-        hasPageAccessToken: Boolean(s(mergedPage?.access_token)),
-      });
-    } catch (error) {
-      log.warn("meta.connect.page_enrichment.result", {
-        pageId,
-        strategy: "page_token",
-        success: false,
-        error: cleanNullable(error?.message),
-      });
-    }
-  }
-
-  if (hasInstagramAccountOnPage(mergedPage) && s(mergedPage?.access_token)) {
-    return mergedPage;
-  }
-
   if (s(userAccessToken)) {
     log.info("meta.connect.page_enrichment.attempt", {
       pageId,
@@ -1305,6 +1269,42 @@ async function enrichMetaPageForCandidateDiscovery({
       log.warn("meta.connect.page_enrichment.result", {
         pageId,
         strategy: "user_token",
+        success: false,
+        error: cleanNullable(error?.message),
+      });
+    }
+  }
+
+  if (hasInstagramAccountOnPage(mergedPage) && s(mergedPage?.access_token)) {
+    return mergedPage;
+  }
+
+  if (pageAccessToken) {
+    log.info("meta.connect.page_enrichment.attempt", {
+      pageId,
+      strategy: "page_token",
+      hasInstagramAccount: hasInstagramAccountOnPage(mergedPage),
+      hasPageAccessToken: true,
+    });
+    try {
+      const enrichedByPageToken = obj(
+        await getMetaPageInstagramContextForPageTokenFn(pageId, pageAccessToken)
+      );
+      mergedPage = mergeMetaPageDiscoveryPayload(
+        mergedPage,
+        enrichedByPageToken
+      );
+      log.info("meta.connect.page_enrichment.result", {
+        pageId,
+        strategy: "page_token",
+        success: true,
+        hasInstagramAccount: hasInstagramAccountOnPage(mergedPage),
+        hasPageAccessToken: Boolean(s(mergedPage?.access_token)),
+      });
+    } catch (error) {
+      log.warn("meta.connect.page_enrichment.result", {
+        pageId,
+        strategy: "page_token",
         success: false,
         error: cleanNullable(error?.message),
       });

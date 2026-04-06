@@ -10,7 +10,10 @@ import {
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import {
+  connectTelegramChannel,
+  disconnectTelegramChannel,
   disconnectMetaChannel,
+  getTelegramChannelStatus,
   getMetaChannelStatus,
   getMetaConnectUrl,
   selectMetaChannelCandidate,
@@ -19,6 +22,7 @@ import { cx } from "../../lib/cx.js";
 import ChannelIcon from "./ChannelIcon.jsx";
 import { ChannelActionButton } from "./ChannelPrimitives.jsx";
 import { getChannelStatusMeta } from "./channelCatalogModel.js";
+import Input from "../ui/Input.jsx";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -30,6 +34,10 @@ function arr(value) {
 
 function isInstagramChannel(channel = {}) {
   return s(channel?.id).toLowerCase() === "instagram";
+}
+
+function isTelegramChannel(channel = {}) {
+  return s(channel?.id).toLowerCase() === "telegram";
 }
 
 function buildInstagramStateCopy(status = {}) {
@@ -77,6 +85,47 @@ function buildInstagramStateCopy(status = {}) {
         title: "Instagram is not connected yet.",
         body:
           "Start the DM-first connection flow to bind one Instagram Business or Professional account to this tenant.",
+      };
+  }
+}
+
+function buildTelegramStateCopy(status = {}) {
+  switch (s(status?.state)) {
+    case "connected":
+      return {
+        title: "Telegram is connected for this tenant.",
+        body:
+          "Private text messages can enter the shared inbox/runtime flow, and outbound AI replies stay truthful to webhook and runtime readiness.",
+      };
+    case "connecting":
+      return {
+        title: "Telegram is finishing connection setup.",
+        body:
+          "The bot token has been accepted, but webhook verification or runtime readiness still needs to settle before the channel is treated as fully live.",
+      };
+    case "error":
+      return {
+        title: "Telegram needs repair before live delivery can resume.",
+        body:
+          "A tenant channel record exists, but bot auth, webhook verification, or runtime readiness is not healthy enough to treat this connector as fully operational.",
+      };
+    case "disconnected":
+      return {
+        title: "Telegram was intentionally disconnected.",
+        body:
+          "The stored bot token and webhook secrets were removed, so no live Telegram delivery path remains until reconnect completes.",
+      };
+    case "blocked":
+      return {
+        title: "Telegram connect is blocked.",
+        body:
+          "Environment or product policy is preventing Telegram from being used safely for this tenant.",
+      };
+    default:
+      return {
+        title: "Telegram is not connected yet.",
+        body:
+          "Paste a BotFather bot token to validate the bot, store tenant secrets, and register the tenant-bound webhook before Telegram is treated as live.",
       };
   }
 }
@@ -327,14 +376,25 @@ export default function ChannelDetailDrawer({
   onNavigate,
 }) {
   const isInstagram = isInstagramChannel(channel);
+  const isTelegram = isTelegramChannel(channel);
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectingCandidateId, setSelectingCandidateId] = useState("");
+  const [telegramBotToken, setTelegramBotToken] = useState("");
+  const [telegramFeedback, setTelegramFeedback] = useState(null);
 
   const metaStatusQuery = useQuery({
     queryKey: ["meta-channel-status"],
     queryFn: getMetaChannelStatus,
     enabled: open && isInstagram,
+    staleTime: 10_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const telegramStatusQuery = useQuery({
+    queryKey: ["telegram-channel-status"],
+    queryFn: getTelegramChannelStatus,
+    enabled: open && isTelegram,
     staleTime: 10_000,
     refetchOnWindowFocus: false,
   });
@@ -375,6 +435,32 @@ export default function ChannelDetailDrawer({
     },
   });
 
+  const telegramConnectMutation = useMutation({
+    mutationFn: connectTelegramChannel,
+    async onSuccess() {
+      setTelegramFeedback({
+        tone: "success",
+        message:
+          "Telegram connected successfully. The bot token was validated and the tenant webhook state below reflects the latest backend truth.",
+      });
+      setTelegramBotToken("");
+      await queryClient.invalidateQueries({ queryKey: ["telegram-channel-status"] });
+    },
+  });
+
+  const telegramDisconnectMutation = useMutation({
+    mutationFn: disconnectTelegramChannel,
+    async onSuccess() {
+      setTelegramFeedback({
+        tone: "warning",
+        message:
+          "Telegram was disconnected. The stored bot token and webhook secrets were removed for this tenant.",
+      });
+      setTelegramBotToken("");
+      await queryClient.invalidateQueries({ queryKey: ["telegram-channel-status"] });
+    },
+  });
+
   function clearFeedbackParams() {
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("meta_connected");
@@ -383,6 +469,7 @@ export default function ChannelDetailDrawer({
     nextParams.delete("meta_reason");
     nextParams.delete("section");
     setSearchParams(nextParams);
+    setTelegramFeedback(null);
   }
 
   function handleClose() {
@@ -391,6 +478,22 @@ export default function ChannelDetailDrawer({
   }
 
   function handlePrimaryAction() {
+    if (isTelegram) {
+      if (s(telegramStatusQuery.data?.state) === "connected") {
+        onNavigate?.("/inbox");
+        return;
+      }
+
+      const botToken = s(telegramBotToken);
+      if (!botToken) return;
+
+      setTelegramFeedback(null);
+      telegramConnectMutation.mutate({
+        botToken,
+      });
+      return;
+    }
+
     if (!isInstagram) return;
 
     if (metaStatusQuery.data?.pendingSelection?.required === true) {
@@ -412,18 +515,28 @@ export default function ChannelDetailDrawer({
     reason: s(searchParams.get("meta_reason")),
   };
 
-  const actionError = s(
+  const metaActionError = s(
     connectMutation.error?.message ||
       selectionMutation.error?.message ||
       disconnectMutation.error?.message
   );
+  const telegramActionError = s(
+    telegramConnectMutation.error?.message ||
+      telegramDisconnectMutation.error?.message ||
+      telegramStatusQuery.error?.message
+  );
 
   const effectiveStatus = isInstagram
     ? s(metaStatusQuery.data?.state || channel?.status || "ready")
-    : s(channel?.status || "phase2");
+    : isTelegram
+      ? s(telegramStatusQuery.data?.state || channel?.status || "not_connected")
+      : s(channel?.status || "phase2");
 
   const instagramCopy = buildInstagramStateCopy(metaStatusQuery.data || {});
-  const blockers = arr(metaStatusQuery.data?.readiness?.blockers);
+  const telegramCopy = buildTelegramStateCopy(telegramStatusQuery.data || {});
+  const blockers = isTelegram
+    ? arr(telegramStatusQuery.data?.readiness?.blockers)
+    : arr(metaStatusQuery.data?.readiness?.blockers);
   const reviewScopes = arr(metaStatusQuery.data?.review?.requestedScopes);
   const reviewExcludedScopes = arr(metaStatusQuery.data?.review?.excludedScopes);
   const pendingSelection = metaStatusQuery.data?.pendingSelection || null;
@@ -436,8 +549,25 @@ export default function ChannelDetailDrawer({
     s(metaStatusQuery.data?.state) === "connected" &&
     metaStatusQuery.data?.actions?.reconnectAvailable === true &&
     metaStatusQuery.data?.actions?.reconnectRecommended === true;
+  const telegramRequiresTokenInput =
+    s(telegramStatusQuery.data?.state) !== "connected";
+  const telegramConnectAllowed =
+    telegramStatusQuery.data?.actions?.connectAvailable !== false ||
+    telegramStatusQuery.data?.actions?.reconnectAvailable === true;
+  const activeStatusQuery = isInstagram
+    ? metaStatusQuery
+    : isTelegram
+      ? telegramStatusQuery
+      : null;
 
   const primaryLabel = useMemo(() => {
+    if (isTelegram) {
+      if (s(telegramStatusQuery.data?.state) === "connected") return "Open inbox";
+      if (s(telegramStatusQuery.data?.state) === "error") return "Reconnect Telegram";
+      if (s(telegramStatusQuery.data?.state) === "disconnected") return "Reconnect Telegram";
+      if (s(telegramStatusQuery.data?.state) === "connecting") return "Complete Telegram setup";
+      return "Connect Telegram";
+    }
     if (!isInstagram) return "Phase 2";
     if (pendingSelectionRequired) return "Choose account below";
     if (s(metaStatusQuery.data?.state) === "connected") return "Open inbox";
@@ -445,7 +575,13 @@ export default function ChannelDetailDrawer({
     if (s(metaStatusQuery.data?.state) === "deauthorized") return "Reconnect Instagram";
     if (s(metaStatusQuery.data?.state) === "disconnected") return "Reconnect Instagram";
     return "Connect Instagram";
-  }, [isInstagram, metaStatusQuery.data, pendingSelectionRequired]);
+  }, [
+    isInstagram,
+    isTelegram,
+    metaStatusQuery.data,
+    pendingSelectionRequired,
+    telegramStatusQuery.data,
+  ]);
 
   function handleCandidateSelect(candidate) {
     const selectionToken = s(pendingSelection?.selectionToken);
@@ -499,6 +635,10 @@ export default function ChannelDetailDrawer({
             </FeedbackBanner>
           ) : null}
 
+          {isTelegram && telegramFeedback?.message ? (
+            <FeedbackBanner tone={telegramFeedback.tone}>{telegramFeedback.message}</FeedbackBanner>
+          ) : null}
+
           {(pendingSelectionRequired || (feedback.selection && metaStatusQuery.isLoading)) ? (
             <FeedbackBanner tone="warning">
               Meta found more than one eligible Instagram Business or Professional asset. Choose
@@ -507,7 +647,10 @@ export default function ChannelDetailDrawer({
           ) : null}
 
           {feedback.error ? <FeedbackBanner tone="danger">{feedback.error}</FeedbackBanner> : null}
-          {actionError ? <FeedbackBanner tone="danger">{actionError}</FeedbackBanner> : null}
+          {metaActionError ? <FeedbackBanner tone="danger">{metaActionError}</FeedbackBanner> : null}
+          {isTelegram && telegramActionError ? (
+            <FeedbackBanner tone="danger">{telegramActionError}</FeedbackBanner>
+          ) : null}
 
           {attentionItems.map((item, index) => (
             <FeedbackBanner
@@ -521,8 +664,20 @@ export default function ChannelDetailDrawer({
 
           <SectionBlock
             eyebrow="Summary"
-            title={isInstagram ? instagramCopy.title : channel?.detailSummary}
-            description={isInstagram ? instagramCopy.body : channel?.detailNote}
+            title={
+              isInstagram
+                ? instagramCopy.title
+                : isTelegram
+                  ? telegramCopy.title
+                  : channel?.detailSummary
+            }
+            description={
+              isInstagram
+                ? instagramCopy.body
+                : isTelegram
+                  ? telegramCopy.body
+                  : channel?.detailNote
+            }
           >
             {capabilities.length ? (
               <div className="flex flex-wrap gap-2">
@@ -631,6 +786,126 @@ export default function ChannelDetailDrawer({
 
               <BlockerList items={blockers} />
             </>
+          ) : isTelegram ? (
+            <>
+              {telegramRequiresTokenInput ? (
+                <SectionBlock
+                  eyebrow="Connect"
+                  title="Validate the bot token before this tenant is marked live."
+                  description="Paste the BotFather token for the tenant bot. The backend validates the token with Telegram and only marks the connection live after webhook registration is verified."
+                >
+                  <Input
+                    value={telegramBotToken}
+                    onChange={(event) => setTelegramBotToken(event.target.value)}
+                    placeholder="123456:ABC-DEF1234ghIkl..."
+                    type="password"
+                    autoComplete="off"
+                    appearance="quiet"
+                    inputClassName="font-mono text-[13px]"
+                    aria-label="Telegram bot token"
+                  />
+
+                  <div className="mt-3 text-[12px] leading-6 text-[#667085]">
+                    Telegram MVP is private text only. Group chats, media, read receipts, and
+                    unsupported control actions stay fail-closed instead of pretending they are
+                    available.
+                  </div>
+                </SectionBlock>
+              ) : null}
+
+              <SectionBlock eyebrow="Runtime">
+                <div className="space-y-0">
+                  <RuntimeRow
+                    ready={telegramStatusQuery.data?.account?.verified === true}
+                    label="Bot authentication"
+                    description="Stored tenant bot token still validates against Telegram."
+                  />
+                  <RuntimeRow
+                    ready={telegramStatusQuery.data?.webhook?.verified === true}
+                    label="Webhook intake"
+                    description="Telegram is pointed at the tenant-bound webhook route with secret verification enabled."
+                  />
+                  <RuntimeRow
+                    ready={telegramStatusQuery.data?.runtime?.deliveryReady === true}
+                    label="AI reply delivery"
+                    description="Inbound Telegram chat can reuse the shared inbox runtime and outbound reply path."
+                  />
+                </div>
+
+                <div className="mt-4 text-[12px] leading-6 text-[#667085]">
+                  {telegramStatusQuery.isLoading
+                    ? "Loading Telegram runtime state..."
+                    : s(
+                        telegramStatusQuery.data?.readiness?.message,
+                        "Telegram runtime state unavailable."
+                      )}
+                </div>
+              </SectionBlock>
+
+              <SectionBlock eyebrow="Connected bot">
+                <div className="space-y-0">
+                  <DataRow
+                    label="Display"
+                    value={s(telegramStatusQuery.data?.account?.displayName, "Not connected")}
+                  />
+                  <DataRow
+                    label="Username"
+                    value={
+                      s(telegramStatusQuery.data?.account?.botUsername)
+                        ? `@${s(telegramStatusQuery.data?.account?.botUsername)}`
+                        : "Not available"
+                    }
+                  />
+                  <DataRow
+                    label="Bot user id"
+                    value={s(telegramStatusQuery.data?.account?.botUserId, "Not available")}
+                  />
+                  <DataRow
+                    label="Token"
+                    value={s(telegramStatusQuery.data?.account?.botTokenMasked, "Not stored")}
+                  />
+                  <DataRow
+                    label="Connected at"
+                    value={s(telegramStatusQuery.data?.lifecycle?.connectedAt, "Not available")}
+                  />
+                  <DataRow
+                    label="Last verified"
+                    value={s(telegramStatusQuery.data?.lifecycle?.lastVerifiedAt, "Not available")}
+                  />
+                </div>
+              </SectionBlock>
+
+              <SectionBlock eyebrow="Webhook">
+                <div className="space-y-0">
+                  <DataRow
+                    label="Expected URL"
+                    value={s(telegramStatusQuery.data?.webhook?.expectedUrl, "Not available")}
+                  />
+                  <DataRow
+                    label="Actual URL"
+                    value={s(telegramStatusQuery.data?.webhook?.actualUrl, "Not available")}
+                  />
+                  <DataRow
+                    label="Secret header"
+                    value={
+                      telegramStatusQuery.data?.webhook?.secretHeaderConfigured === true
+                        ? "Configured"
+                        : "Missing"
+                    }
+                  />
+                  <DataRow
+                    label="Pending updates"
+                    value={String(telegramStatusQuery.data?.webhook?.pendingUpdateCount ?? 0)}
+                  />
+                  <DataRow
+                    label="Last error"
+                    value={s(telegramStatusQuery.data?.webhook?.lastErrorMessage, "None")}
+                  />
+                </div>
+              </SectionBlock>
+
+              <BlockerList items={blockers} />
+            </>
           ) : (
             <SectionBlock
               eyebrow="Availability"
@@ -647,17 +922,27 @@ export default function ChannelDetailDrawer({
             fullWidth
             onClick={handlePrimaryAction}
             isLoading={
-              connectMutation.isPending ||
-              selectionMutation.isPending ||
-              metaStatusQuery.isFetching
+              isTelegram
+                ? telegramConnectMutation.isPending ||
+                  telegramDisconnectMutation.isPending ||
+                  telegramStatusQuery.isFetching
+                : connectMutation.isPending ||
+                  selectionMutation.isPending ||
+                  metaStatusQuery.isFetching
             }
             disabled={
-              !isInstagram ||
-              connectMutation.isPending ||
-              selectionMutation.isPending ||
-              pendingSelectionRequired ||
-              (s(metaStatusQuery.data?.state) !== "connected" &&
-                metaStatusQuery.data?.actions?.connectAvailable === false)
+              (!isInstagram && !isTelegram) ||
+              (isInstagram &&
+                (connectMutation.isPending ||
+                  selectionMutation.isPending ||
+                  pendingSelectionRequired ||
+                  (s(metaStatusQuery.data?.state) !== "connected" &&
+                    metaStatusQuery.data?.actions?.connectAvailable === false))) ||
+              (isTelegram &&
+                (telegramConnectMutation.isPending ||
+                  telegramDisconnectMutation.isPending ||
+                  (telegramRequiresTokenInput &&
+                    (!telegramConnectAllowed || !s(telegramBotToken)))))
             }
             className="!h-[40px] !rounded-[10px] !text-[10px]"
           >
@@ -677,6 +962,18 @@ export default function ChannelDetailDrawer({
               >
                 {pendingSelectionRequired ? "Cancel selection" : "Disconnect"}
               </ChannelActionButton>
+            ) : isTelegram ? (
+              <ChannelActionButton
+                quiet
+                fullWidth
+                showArrow={false}
+                onClick={() => telegramDisconnectMutation.mutate()}
+                isLoading={telegramDisconnectMutation.isPending}
+                disabled={!telegramStatusQuery.data?.actions?.disconnectAvailable}
+                className="!h-[38px] !rounded-[10px] !text-[10px]"
+              >
+                Disconnect
+              </ChannelActionButton>
             ) : (
               <div />
             )}
@@ -685,9 +982,9 @@ export default function ChannelDetailDrawer({
               quiet
               fullWidth
               showArrow={false}
-              onClick={() => metaStatusQuery.refetch?.()}
-              disabled={!isInstagram}
-              isLoading={metaStatusQuery.isFetching}
+              onClick={() => activeStatusQuery?.refetch?.()}
+              disabled={!isInstagram && !isTelegram}
+              isLoading={activeStatusQuery?.isFetching}
               leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.2} />}
               className="!h-[38px] !rounded-[10px] !text-[10px]"
             >

@@ -68,8 +68,7 @@ export function parseIngestRequest(req) {
         req.body?.threadId ||
         req.body?.chatId ||
         req.body?.customerContext?.telegram?.chatId ||
-        req.body?.customerContext?.telegram?.chat_id ||
-        externalUserId
+        req.body?.customerContext?.telegram?.chat_id
     ) || null;
 
   const externalUsername =
