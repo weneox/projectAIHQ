@@ -420,7 +420,7 @@ function OnboardingAssistantSection({
             />
             <DraftSnapshot
               label="Coverage"
-              value={`${servicesCount} services • ${contactsCount} contacts • ${hoursCount} hours`}
+              value={`${servicesCount} services | ${contactsCount} contacts | ${hoursCount} hours`}
               icon={CheckCircle2}
             />
           </div>
