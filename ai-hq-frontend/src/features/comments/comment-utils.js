@@ -4,14 +4,14 @@ export function s(v) {
 
 export function labelizeToken(value) {
   const text = s(value).replace(/[_-]+/g, " ");
-  if (!text) return "—";
+  if (!text) return "-";
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 export function fmtRelative(input) {
-  if (!input) return "—";
+  if (!input) return "-";
   const d = new Date(input);
-  if (Number.isNaN(d.getTime())) return "—";
+  if (Number.isNaN(d.getTime())) return "-";
 
   const diff = Date.now() - d.getTime();
   const sec = Math.floor(diff / 1000);

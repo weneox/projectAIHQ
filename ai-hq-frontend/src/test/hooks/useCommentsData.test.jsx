@@ -19,32 +19,46 @@ import { useCommentsData } from "../../hooks/useCommentsData.js";
 describe("useCommentsData", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getAppSessionContext.mockResolvedValue({ tenantKey: "acme", actorName: "operator" });
+    getAppSessionContext.mockResolvedValue({
+      tenantKey: "acme",
+      actorName: "operator",
+    });
     apiGet.mockResolvedValue({
       comments: [
         {
           id: "comment-1",
-          author: "Ada",
+          channel: "instagram",
+          customer_name: "Ada",
           text: "hello",
-          postTitle: "Post",
-          category: "question",
-          status: "pending",
-          sentiment: "positive",
-          priority: "medium",
-          suggestedReply: "Hi",
-          createdAt: "2026-03-26T10:00:00.000Z",
+          external_post_id: "post-1",
+          created_at: "2026-03-26T10:00:00.000Z",
+          classification: {
+            category: "question",
+            sentiment: "positive",
+            priority: "medium",
+            moderation: {
+              status: "pending",
+            },
+            reply: {
+              text: "Hi",
+            },
+          },
         },
       ],
     });
     apiPost.mockResolvedValue({ ok: true });
   });
 
-  it("exposes the shared surface contract and save success state", async () => {
+  it("groups comments into posts and preserves save success state", async () => {
     const { result } = renderHook(() => useCommentsData());
 
     await waitFor(() => {
       expect(result.current.surface.ready).toBe(true);
-      expect(result.current.filtered).toHaveLength(1);
+      expect(result.current.posts).toHaveLength(1);
+      expect(result.current.selectedPost?.externalPostId).toBe("post-1");
+      expect(result.current.postComments).toHaveLength(1);
+      expect(result.current.selected?.id).toBe("comment-1");
+      expect(result.current.replyDraft).toBe("Hi");
     });
 
     await act(async () => {

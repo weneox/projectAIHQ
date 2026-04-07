@@ -45,7 +45,7 @@ function buildMetaLine(item) {
     labelizeToken(item.priority),
   ].filter(Boolean);
 
-  return bits.join(" · ");
+  return bits.join(" / ");
 }
 
 function initial(text = "") {
@@ -101,7 +101,7 @@ export default function CommentRow({ item, selected, onSelect }) {
             <span className="truncate">{buildMetaLine(item)}</span>
             {item.suggestedReply ? (
               <>
-                <span className="text-[11px] text-text-subtle">·</span>
+                <span className="text-[11px] text-text-subtle">/</span>
                 <span className="truncate text-brand">AI draft ready</span>
               </>
             ) : null}

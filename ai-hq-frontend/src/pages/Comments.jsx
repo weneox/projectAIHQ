@@ -17,7 +17,11 @@ import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
 import Input, { Textarea } from "../components/ui/Input.jsx";
 import CommentRow from "../components/comments/CommentRow.jsx";
-import { PageCanvas, PageHeader } from "../components/ui/AppShellPrimitives.jsx";
+import {
+  PageCanvas,
+  PageHeader,
+  SaveFeedback,
+} from "../components/ui/AppShellPrimitives.jsx";
 import {
   fmtRelative,
   labelizeToken,
@@ -74,9 +78,7 @@ function FilterLink({ active, children, onClick }) {
       onClick={onClick}
       className={cx(
         "text-[13px] font-medium tracking-[-0.01em] transition duration-200 ease-premium",
-        active
-          ? "text-text"
-          : "text-text-subtle hover:text-text"
+        active ? "text-text" : "text-text-subtle hover:text-text"
       )}
     >
       {children}
@@ -172,9 +174,7 @@ function MediaStage({ post }) {
 }
 
 function SkeletonTile() {
-  return (
-    <div className="aspect-square animate-pulse bg-surface-subtle" />
-  );
+  return <div className="aspect-square animate-pulse bg-surface-subtle" />;
 }
 
 export default function Comments() {
@@ -216,7 +216,7 @@ export default function Comments() {
   const selectedPostCaption = useMemo(() => {
     const caption = String(selectedPost?.caption || "").trim();
     if (!caption) return "";
-    return caption.length > 180 ? `${caption.slice(0, 180).trim()}…` : caption;
+    return caption.length > 180 ? `${caption.slice(0, 180).trim()}...` : caption;
   }, [selectedPost?.caption]);
 
   function useAiDraft() {
@@ -264,7 +264,7 @@ export default function Comments() {
             <div className="w-full xl:max-w-[340px]">
               <Input
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search comment, post, or author..."
                 leftIcon={<Search className="h-4 w-4" />}
                 appearance="quiet"
@@ -284,9 +284,17 @@ export default function Comments() {
             ))}
 
             <div className="ml-auto text-[12px] font-medium text-text-subtle">
-              {posts.length} posts · {visibleCommentCount} comments
+              {posts.length} posts / {visibleCommentCount} comments
             </div>
           </div>
+
+          <SaveFeedback
+            success={surface.saveSuccess}
+            error={surface.saveError}
+            className="mt-4"
+            successTitle="Comment updated"
+            errorTitle="Unable to update comment"
+          />
         </div>
 
         {surface.unavailable ? (
@@ -303,7 +311,7 @@ export default function Comments() {
                 </Button>
               }
             >
-              {surface.error || "Comments are currently unavailable."}
+              {surface.error || "Comments unavailable."}
             </InlineState>
           </div>
         ) : null}
@@ -365,8 +373,8 @@ export default function Comments() {
                         {selectedPost.title}
                       </div>
                       <div className="mt-1 text-[12px] font-medium text-text-subtle">
-                        {labelizeToken(selectedPost.platform)} ·{" "}
-                        {selectedPost.totalComments} comments ·{" "}
+                        {labelizeToken(selectedPost.platform)} /{" "}
+                        {selectedPost.totalComments} comments /{" "}
                         {fmtRelative(selectedPost.latestActivityAt)}
                       </div>
                     </div>
@@ -394,7 +402,7 @@ export default function Comments() {
 
                     {selected ? (
                       <div className="text-[12px] font-medium text-text-subtle">
-                        Selected · {fmtRelative(selected.createdAt)}
+                        Selected / {fmtRelative(selected.createdAt)}
                       </div>
                     ) : null}
                   </div>
@@ -432,8 +440,8 @@ export default function Comments() {
                                 {selected.author}
                               </div>
                               <div className="mt-1 text-[12px] font-medium text-text-subtle">
-                                {labelizeToken(selected.status)} ·{" "}
-                                {labelizeToken(selected.sentiment)} ·{" "}
+                                {labelizeToken(selected.status)} /{" "}
+                                {labelizeToken(selected.sentiment)} /{" "}
                                 {labelizeToken(selected.priority)}
                               </div>
                             </div>
@@ -444,7 +452,7 @@ export default function Comments() {
                           </div>
 
                           <div className="mt-3 whitespace-pre-wrap text-[14px] leading-7 text-text">
-                            {selected.text || "—"}
+                            {selected.text || "-"}
                           </div>
                         </div>
 
@@ -468,7 +476,7 @@ export default function Comments() {
 
                         <Textarea
                           value={replyDraft}
-                          onChange={(e) => setReplyDraft(e.target.value)}
+                          onChange={(event) => setReplyDraft(event.target.value)}
                           rows={6}
                           placeholder={
                             composeMode === "ai"
