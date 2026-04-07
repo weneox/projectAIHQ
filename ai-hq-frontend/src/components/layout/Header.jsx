@@ -27,47 +27,56 @@ function getInitials(value = "") {
     .join("");
 }
 
-function HeaderMenuRow({
-  icon: Icon,
-  label,
-  sublabel,
-  onClick,
-  danger = false,
-}) {
+function resolveHeaderMeta({ shellSection, activeContextItem }) {
+  const title = activeContextItem?.label || shellSection?.label || "AI HQ";
+  const subtitle =
+    activeContextItem?.label &&
+    activeContextItem.label !== shellSection?.label
+      ? shellSection?.label
+      : shellSection?.description;
+
+  if (title === "Home") {
+    return {
+      title: "Home",
+      subtitle: "Operator overview and active surfaces",
+    };
+  }
+
+  return {
+    title,
+    subtitle: subtitle || "",
+  };
+}
+
+function HeaderMenuRow({ icon: Icon, label, onClick, danger = false }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cx(
-        "flex w-full items-center gap-3 rounded-[13px] px-3 py-3 text-left transition",
+        "group flex h-11 w-full items-center gap-3 rounded-[14px] px-3 text-left transition duration-200",
         danger
-          ? "text-danger hover:bg-[rgba(var(--color-danger),0.06)]"
-          : "text-text hover:bg-surface-muted"
+          ? "hover:bg-[rgba(var(--color-danger),0.05)]"
+          : "hover:bg-[rgba(15,23,42,0.045)]"
       )}
     >
       <Icon
         className={cx(
-          "h-[15px] w-[15px] shrink-0",
-          danger ? "text-danger" : "text-text-subtle"
+          "h-[15px] w-[15px] shrink-0 transition-colors duration-200",
+          danger
+            ? "text-danger"
+            : "text-[rgba(15,23,42,0.46)] group-hover:text-[rgba(15,23,42,0.72)]"
         )}
         strokeWidth={1.9}
       />
 
-      <div className="min-w-0 flex-1">
-        <div
-          className={cx(
-            "truncate text-[13px] tracking-[-0.02em]",
-            danger ? "font-semibold text-danger" : "font-medium text-text"
-          )}
-        >
-          {label}
-        </div>
-
-        {sublabel ? (
-          <div className="mt-0.5 truncate text-[11px] text-text-subtle">
-            {sublabel}
-          </div>
-        ) : null}
+      <div
+        className={cx(
+          "truncate text-[13px] font-semibold tracking-[-0.02em]",
+          danger ? "text-danger" : "text-[rgba(15,23,42,0.92)]"
+        )}
+      >
+        {label}
       </div>
     </button>
   );
@@ -144,39 +153,31 @@ function WorkspaceControl({ notifications }) {
   const initials = useMemo(() => getInitials(displayName) || "W", [displayName]);
 
   const overlay = (
-    <div className="w-[296px] rounded-[18px] border border-line-soft bg-surface p-2 shadow-[0_30px_60px_-36px_rgba(15,23,42,0.22)]">
-      <div className="rounded-[15px] bg-surface-subtle px-3 py-3">
+    <div className="dropdown-panel-anim relative w-[286px] overflow-hidden rounded-[20px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,0.985)_0%,rgba(248,250,253,0.995)_100%)] p-2 shadow-[0_24px_80px_-38px_rgba(15,23,42,0.28)] backdrop-blur-xl">
+      <div className="px-3 pb-2.5 pt-2">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand text-[12px] font-semibold text-white">
-            {initials}
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(135deg,#2c5ee7_0%,#467dff_55%,#8fb0ff_100%)] text-[12px] font-semibold text-white shadow-[0_14px_30px_-20px_rgba(44,94,231,0.62)]">
+            <span className="relative z-[1]">{initials}</span>
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.34),transparent_48%)]" />
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
+            <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.95)]">
               {displayName}
             </div>
-            <div className="mt-0.5 truncate text-[11px] text-text-subtle">
+            <div className="mt-0.5 truncate text-[11px] font-medium tracking-[0.08em] uppercase text-[rgba(15,23,42,0.48)]">
               {roleLabel}
             </div>
           </div>
-
-          {unread > 0 ? (
-            <div className="text-[11px] font-semibold text-text-subtle">
-              {unread > 99 ? "99+" : unread}
-            </div>
-          ) : null}
         </div>
       </div>
 
-      <div className="mt-2 space-y-1">
+      <div className="mx-3 h-px bg-[rgba(15,23,42,0.07)]" />
+
+      <div className="px-1.5 py-1.5">
         <HeaderMenuRow
           icon={Bell}
-          label="Notifications"
-          sublabel={
-            unread > 0
-              ? `${unread > 99 ? "99+" : unread} unread updates`
-              : "No unread notifications"
-          }
+          label={unread > 0 ? `Notifications (${unread > 99 ? "99+" : unread})` : "Notifications"}
           onClick={() =>
             closeThen(() => notifications?.setOpen?.(!notifications?.open))
           }
@@ -185,16 +186,16 @@ function WorkspaceControl({ notifications }) {
         <HeaderMenuRow
           icon={LayoutGrid}
           label="Workspace"
-          sublabel="Open the operator workspace"
           onClick={() => closeThen(() => navigate("/workspace"))}
         />
       </div>
 
-      <div className="mt-2 border-t border-line-soft pt-2">
+      <div className="mx-3 h-px bg-[rgba(15,23,42,0.07)]" />
+
+      <div className="px-1.5 pb-1 pt-1.5">
         <HeaderMenuRow
           icon={LogOut}
           label={loggingOut ? "Signing out..." : "Sign out"}
-          sublabel="Leave this workspace"
           onClick={handleLogout}
           danger
         />
@@ -212,25 +213,31 @@ function WorkspaceControl({ notifications }) {
     >
       <button
         type="button"
-        className="group flex items-center gap-2 rounded-[14px] px-2 py-1.5 transition hover:bg-surface-muted"
         aria-label={displayName}
+        aria-expanded={open}
+        className={cx(
+          "group flex h-11 items-center gap-3 rounded-[16px] px-3 py-2 text-left transition duration-200",
+          "hover:bg-[rgba(15,23,42,0.045)]",
+          open ? "bg-[rgba(15,23,42,0.05)]" : ""
+        )}
       >
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-[11px] font-semibold text-white">
-          {initials}
+        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(135deg,#2c5ee7_0%,#467dff_55%,#8fb0ff_100%)] text-[11px] font-semibold text-white shadow-[0_14px_30px_-20px_rgba(44,94,231,0.68)]">
+          <span className="relative z-[1]">{initials}</span>
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_25%,rgba(255,255,255,0.34),transparent_48%)]" />
         </div>
 
-        <div className="hidden min-w-0 text-left md:block">
-          <div className="truncate text-[12px] font-semibold tracking-[-0.02em] text-text">
+        <div className="hidden min-w-0 text-left lg:block">
+          <div className="truncate text-[13px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.94)]">
             {displayName}
           </div>
-          <div className="truncate text-[10px] text-text-subtle">
+          <div className="truncate text-[10px] font-medium tracking-[0.08em] uppercase text-[rgba(15,23,42,0.48)]">
             {roleLabel}
           </div>
         </div>
 
         <ChevronDown
           className={cx(
-            "h-[13px] w-[13px] text-text-subtle transition-transform duration-200",
+            "h-[13px] w-[13px] text-[rgba(15,23,42,0.42)] transition-transform duration-200",
             open ? "rotate-180" : ""
           )}
           strokeWidth={2}
@@ -246,44 +253,39 @@ export default function Header({
   shellSection,
   activeContextItem,
 }) {
-  const title = activeContextItem?.label || shellSection?.label || "AI HQ";
-  const subtitle =
-    activeContextItem?.label &&
-    activeContextItem.label !== shellSection?.label
-      ? shellSection?.label
-      : shellSection?.description;
+  const headerMeta = resolveHeaderMeta({ shellSection, activeContextItem });
 
   return (
     <>
       <header
-        className="sticky top-0 z-[60] border-b border-line-soft bg-surface"
+        className="sticky top-0 z-[60] border-b border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(249,251,255,0.97)_0%,rgba(244,247,252,0.94)_100%)] backdrop-blur-xl"
         style={{ height: SHELL_TOPBAR_HEIGHT }}
       >
-        <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-4 px-5 md:px-6 xl:px-8">
+        <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-5 px-5 md:px-6 xl:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
               onClick={onMenuClick}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-[12px] text-text-muted transition hover:bg-surface-muted hover:text-text md:hidden"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[14px] text-[rgba(15,23,42,0.54)] transition duration-200 hover:bg-[rgba(15,23,42,0.05)] hover:text-[rgba(15,23,42,0.9)] md:hidden"
               aria-label="Open navigation"
             >
-              <Menu className="h-[15px] w-[15px]" strokeWidth={2} />
+              <Menu className="h-[16px] w-[16px]" strokeWidth={2} />
             </button>
 
             <div className="min-w-0">
-              <div className="truncate text-[15px] font-semibold tracking-[-0.03em] text-text">
-                {title}
+              <div className="truncate text-[18px] font-semibold tracking-[-0.03em] text-[rgba(15,23,42,0.96)]">
+                {headerMeta.title}
               </div>
 
-              {subtitle ? (
-                <div className="mt-0.5 hidden truncate text-[12px] text-text-subtle md:block">
-                  {subtitle}
+              {headerMeta.subtitle ? (
+                <div className="mt-1 truncate text-[13px] font-medium leading-[1.45] text-[rgba(15,23,42,0.56)]">
+                  {headerMeta.subtitle}
                 </div>
               ) : null}
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <CommandMenu />
             <WorkspaceControl notifications={notifications} />
           </div>

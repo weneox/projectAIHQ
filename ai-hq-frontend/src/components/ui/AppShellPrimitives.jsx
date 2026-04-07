@@ -9,23 +9,24 @@ import { cx } from "../../lib/cx.js";
 
 const NOTICE_TONES = {
   info: {
-    container: "border-line-soft bg-surface text-text",
-    icon: "bg-[rgba(var(--color-brand),0.08)] text-brand",
+    container:
+      "border-[rgba(var(--color-brand),0.12)] bg-[linear-gradient(180deg,rgba(var(--color-brand),0.045),rgba(255,255,255,0.82))]",
+    icon: "text-brand",
   },
   success: {
     container:
-      "border-[rgba(var(--color-success),0.14)] bg-[rgba(var(--color-success),0.05)] text-text",
-    icon: "bg-[rgba(var(--color-success),0.1)] text-success",
+      "border-[rgba(var(--color-success),0.14)] bg-[linear-gradient(180deg,rgba(var(--color-success),0.045),rgba(255,255,255,0.82))]",
+    icon: "text-success",
   },
   warning: {
     container:
-      "border-[rgba(var(--color-warning),0.15)] bg-[rgba(var(--color-warning),0.05)] text-text",
-    icon: "bg-[rgba(var(--color-warning),0.1)] text-warning",
+      "border-[rgba(var(--color-warning),0.14)] bg-[linear-gradient(180deg,rgba(var(--color-warning),0.05),rgba(255,255,255,0.84))]",
+    icon: "text-warning",
   },
   danger: {
     container:
-      "border-[rgba(var(--color-danger),0.15)] bg-[rgba(var(--color-danger),0.05)] text-text",
-    icon: "bg-[rgba(var(--color-danger),0.1)] text-danger",
+      "border-[rgba(var(--color-danger),0.14)] bg-[linear-gradient(180deg,rgba(var(--color-danger),0.05),rgba(255,255,255,0.84))]",
+    icon: "text-danger",
   },
 };
 
@@ -55,15 +56,15 @@ function paddedClass(padded) {
 
 function surfaceToneClass({ tone = "default", subdued = false }) {
   if (subdued || tone === "muted") {
-    return "border-line-soft bg-surface-subtle";
+    return "border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(250,252,254,0.96)_0%,rgba(247,249,252,0.995)_100%)]";
   }
   if (tone === "subtle") {
-    return "border-line-soft bg-surface";
+    return "border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,0.97)_0%,rgba(249,251,253,0.995)_100%)]";
   }
   if (tone === "brand-soft") {
-    return "border-[rgba(var(--color-brand),0.15)] bg-[rgba(var(--color-brand),0.045)]";
+    return "border-[rgba(var(--color-brand),0.12)] bg-[linear-gradient(180deg,rgba(var(--color-brand),0.035)_0%,rgba(255,255,255,0.96)_100%)]";
   }
-  return "border-line-soft bg-surface";
+  return "border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(248,250,253,0.998)_100%)]";
 }
 
 export function PageCanvas({ className, children }) {
@@ -71,7 +72,7 @@ export function PageCanvas({ className, children }) {
     <div
       className={cx(
         "mx-auto w-full max-w-shell-content",
-        "space-y-4 md:space-y-5",
+        "space-y-3 md:space-y-4",
         className
       )}
     >
@@ -90,23 +91,23 @@ export function PageHeader({
   return (
     <div
       className={cx(
-        "flex flex-col gap-4 rounded-[24px] border border-line-soft bg-surface px-6 py-6 md:flex-row md:items-end md:justify-between md:px-7 md:py-7",
+        "flex flex-col gap-4 md:flex-row md:items-end md:justify-between",
         className
       )}
     >
       <div className="max-w-[860px]">
         {eyebrow ? (
-          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[rgba(15,23,42,0.42)]">
             {eyebrow}
           </div>
         ) : null}
 
-        <h1 className="font-display text-[1.7rem] font-semibold leading-[0.96] tracking-[-0.055em] text-text md:text-[2.15rem]">
+        <h1 className="font-display text-[1.75rem] font-semibold leading-[0.96] tracking-[-0.06em] text-[rgba(15,23,42,0.96)] md:text-[2.15rem]">
           {title}
         </h1>
 
         {description ? (
-          <p className="mt-2 max-w-[760px] text-[14px] leading-7 text-text-muted">
+          <p className="mt-2 max-w-[760px] text-[14px] font-medium leading-6 text-[rgba(15,23,42,0.6)]">
             {description}
           </p>
         ) : null}
@@ -131,23 +132,23 @@ export function SectionHeader({
   return (
     <div
       className={cx(
-        "flex flex-col gap-3 md:flex-row md:items-start md:justify-between",
+        "flex flex-col gap-3 md:flex-row md:items-end md:justify-between",
         className
       )}
     >
       <div className="max-w-[760px]">
         {eyebrow ? (
-          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[rgba(15,23,42,0.42)]">
             {eyebrow}
           </div>
         ) : null}
 
-        <h2 className="font-display text-[1.18rem] font-semibold leading-[1] tracking-[-0.05em] text-text md:text-[1.36rem]">
+        <h2 className="font-display text-[1.2rem] font-semibold leading-[1] tracking-[-0.05em] text-[rgba(15,23,42,0.96)] md:text-[1.34rem]">
           {title}
         </h2>
 
         {description ? (
-          <p className="mt-2 text-[14px] leading-7 text-text-muted">
+          <p className="mt-2 text-[13px] font-medium leading-6 text-[rgba(15,23,42,0.58)]">
             {description}
           </p>
         ) : null}
@@ -173,11 +174,11 @@ export function Surface({
   return (
     <div
       className={cx(
-        "rounded-[20px] border",
+        "rounded-[22px] border",
         surfaceToneClass({ tone, subdued }),
         paddedClass(padded),
-        shadow === "sm" && "shadow-[0_18px_36px_-34px_rgba(15,23,42,0.18)]",
-        shadow === "md" && "shadow-[0_26px_54px_-40px_rgba(15,23,42,0.2)]",
+        shadow === "sm" && "shadow-[0_16px_34px_-30px_rgba(15,23,42,0.16)]",
+        shadow === "md" && "shadow-[0_24px_50px_-36px_rgba(15,23,42,0.18)]",
         shadow === "none" && "shadow-none",
         className
       )}
@@ -196,23 +197,25 @@ export function MetricCard({
 }) {
   const toneClass =
     tone === "brand"
-      ? "border-[rgba(var(--color-brand),0.15)] bg-[rgba(var(--color-brand),0.045)]"
+      ? "border-[rgba(var(--color-brand),0.14)] bg-[rgba(var(--color-brand),0.04)]"
       : tone === "success"
-        ? "border-[rgba(var(--color-success),0.16)] bg-[rgba(var(--color-success),0.05)]"
+        ? "border-[rgba(var(--color-success),0.14)] bg-[rgba(var(--color-success),0.04)]"
         : tone === "warning"
-          ? "border-[rgba(var(--color-warning),0.16)] bg-[rgba(var(--color-warning),0.05)]"
-          : "border-line-soft bg-surface";
+          ? "border-[rgba(var(--color-warning),0.14)] bg-[rgba(var(--color-warning),0.04)]"
+          : "border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(249,251,253,0.995)_100%)]";
 
   return (
-    <div className={cx("rounded-[18px] border px-4 py-4", toneClass, className)}>
-      <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+    <div className={cx("rounded-[16px] border px-4 py-3.5", toneClass, className)}>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[rgba(15,23,42,0.42)]">
         {label}
       </div>
-      <div className="mt-2 text-[1.4rem] font-semibold tracking-[-0.05em] text-text">
+      <div className="mt-2 text-[1.32rem] font-semibold tracking-[-0.05em] text-[rgba(15,23,42,0.95)]">
         {value}
       </div>
       {hint ? (
-        <div className="mt-1 text-sm leading-6 text-text-muted">{hint}</div>
+        <div className="mt-1 text-[12px] font-medium leading-5 text-[rgba(15,23,42,0.56)]">
+          {hint}
+        </div>
       ) : null}
     </div>
   );
@@ -222,7 +225,7 @@ export function ToolbarRow({ className, children }) {
   return (
     <div
       className={cx(
-        "flex flex-col gap-3 border-b border-line-soft pb-4 md:flex-row md:items-center md:justify-between",
+        "flex flex-col gap-3 border-b border-[rgba(15,23,42,0.06)] pb-4 md:flex-row md:items-center md:justify-between",
         className
       )}
     >
@@ -255,9 +258,9 @@ export function InlineNotice({
   return (
     <div
       className={cx(
-        "rounded-[16px] border",
+        "rounded-[18px] border shadow-[0_16px_34px_-30px_rgba(15,23,42,0.16)]",
         palette.container,
-        compact ? "px-3.5 py-3" : "px-4 py-3.5",
+        compact ? "px-4 py-3.5" : "px-4 py-4",
         className
       )}
     >
@@ -265,17 +268,17 @@ export function InlineNotice({
         <span
           aria-hidden="true"
           className={cx(
-            "inline-flex shrink-0 items-center justify-center rounded-[10px]",
-            compact ? "mt-0.5 h-7 w-7" : "mt-0.5 h-8 w-8",
+            "inline-flex shrink-0 items-center justify-center",
+            compact ? "mt-[1px] h-5 w-5" : "mt-[1px] h-6 w-6",
             palette.icon
           )}
         >
-          <Icon className={compact ? "h-3.5 w-3.5" : "h-4 w-4"} />
+          <Icon className={compact ? "h-4 w-4" : "h-[18px] w-[18px]"} />
         </span>
 
         <div className="min-w-0 flex-1">
           {title ? (
-            <div className="text-sm font-semibold leading-5 text-text">
+            <div className="text-[14px] font-semibold leading-5 tracking-[-0.02em] text-[rgba(15,23,42,0.94)]">
               {title}
             </div>
           ) : null}
@@ -283,7 +286,7 @@ export function InlineNotice({
           {description ? (
             <div
               className={cx(
-                "text-sm text-text-muted",
+                "text-[13px] font-medium text-[rgba(15,23,42,0.62)]",
                 title ? "mt-1 leading-6" : "leading-5"
               )}
             >
@@ -308,21 +311,23 @@ export function SectionLoading({
   return (
     <Surface className={className} tone="muted">
       <div className="flex items-center gap-3">
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] bg-surface text-text-subtle">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.88)] text-text-subtle">
           <Spin size="small" />
         </span>
 
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-text">{title}</div>
+          <div className="text-[14px] font-semibold text-[rgba(15,23,42,0.94)]">
+            {title}
+          </div>
           {description ? (
-            <div className="text-sm leading-6 text-text-muted">
+            <div className="text-[13px] font-medium leading-6 text-[rgba(15,23,42,0.6)]">
               {description}
             </div>
           ) : null}
         </div>
       </div>
 
-      <div className={cx("mt-5 space-y-3", compact && "mt-4 space-y-2.5")}>
+      <div className={cx("mt-4 space-y-3", compact && "mt-3 space-y-2.5")}>
         <Skeleton
           active
           title={false}
@@ -346,7 +351,7 @@ export function Section({
   children,
 }) {
   return (
-    <section className={cx("space-y-4", className)}>
+    <section className={cx("space-y-3.5", className)}>
       {title || description || eyebrow || actions ? (
         <SectionHeader
           eyebrow={eyebrow}
@@ -368,15 +373,17 @@ export function EmptyState({
 }) {
   return (
     <Surface className={cx("text-center", className)} tone="muted">
-      <div className="mx-auto flex max-w-[460px] flex-col items-center gap-3 py-4">
-        <span className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] bg-surface text-text-subtle">
+      <div className="mx-auto flex max-w-[420px] flex-col items-center gap-3 py-4">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.88)] text-text-subtle">
           <Info className="h-4 w-4" />
         </span>
 
         <div>
-          <div className="text-sm font-semibold text-text">{title}</div>
+          <div className="text-[14px] font-semibold text-[rgba(15,23,42,0.94)]">
+            {title}
+          </div>
           {description ? (
-            <div className="mt-1 text-sm leading-6 text-text-muted">
+            <div className="mt-1 text-[13px] font-medium leading-6 text-[rgba(15,23,42,0.58)]">
               {description}
             </div>
           ) : null}
@@ -405,7 +412,7 @@ export function AuthPanel({ className, children, padded = "xl" }) {
     <Surface
       padded={padded}
       shadow="md"
-      className={cx("w-full rounded-[22px] bg-surface", className)}
+      className={cx("w-full rounded-[22px]", className)}
     >
       {children}
     </Surface>

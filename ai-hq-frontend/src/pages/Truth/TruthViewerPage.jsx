@@ -4,8 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import {
   Building2,
-  Clock3,
-  Eye,
   Globe,
   History,
   Mail,
@@ -21,11 +19,8 @@ import {
   getTruthVersionDetail,
   rollbackTruthVersion,
 } from "../../api/truth.js";
-import Badge from "../../components/ui/Badge.jsx";
 import Button from "../../components/ui/Button.jsx";
-import Card from "../../components/ui/Card.jsx";
 import TruthVersionComparePanel from "../../components/truth/TruthVersionComparePanel.jsx";
-import { cx } from "../../lib/cx.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -136,115 +131,23 @@ function findRequestedHistoryItem({ history, requestedVersionId, approval }) {
   );
 }
 
-function SectionBlock({ eyebrow, title, description, children, last = false }) {
-  return (
-    <section
-      className={cx(
-        "pt-7 first:pt-0",
-        !last && "border-b border-[#e8edf3] pb-7",
-        last && "pb-0"
-      )}
-    >
-      {eyebrow ? (
-        <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#8a96ab]">
-          {eyebrow}
-        </div>
-      ) : null}
-
-      {title ? (
-        <div className="mt-3 text-[22px] font-semibold tracking-[-0.045em] text-[#101828]">
-          {title}
-        </div>
-      ) : null}
-
-      {description ? (
-        <p className="mt-3 max-w-[680px] text-[14px] leading-8 text-[#667085]">
-          {description}
-        </p>
-      ) : null}
-
-      {children ? <div className="mt-5">{children}</div> : null}
-    </section>
-  );
+function findField(fields = [], key = "") {
+  return arr(fields).find((field) => s(field.key) === s(key)) || null;
 }
 
-function InfoRow({
-  icon: Icon,
-  label,
-  value,
-  provenance = "",
-  showEvidence = false,
-  multiline = false,
-}) {
-  if (!s(value)) return null;
-
-  return (
-    <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-4 border-b border-[#eef2f6] py-4 last:border-b-0">
-      <div className="pt-0.5 text-[#667085]">
-        <Icon className="h-4.5 w-4.5" strokeWidth={2.2} />
-      </div>
-
-      <div className="min-w-0">
-        <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8a96ab]">
-          {label}
-        </div>
-
-        <div
-          className={cx(
-            "mt-2 text-[15px] font-medium text-[#101828]",
-            multiline ? "leading-7 whitespace-pre-wrap break-words" : "leading-6"
-          )}
-        >
-          {value}
-        </div>
-
-        {showEvidence && s(provenance) ? (
-          <div className="mt-2 text-[12px] leading-6 text-[#667085]">
-            {provenance}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
+function fieldValue(fields = [], key = "") {
+  return s(findField(fields, key)?.value);
 }
 
-function MetaRow({ label, value }) {
-  if (!s(value)) return null;
-
-  return (
-    <div className="border-b border-[#eef2f6] py-3 last:border-b-0">
-      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8a96ab]">
-        {label}
-      </div>
-      <div className="mt-2 text-[13px] font-medium leading-6 text-[#101828]">
-        {value}
-      </div>
-    </div>
-  );
+function fieldProvenance(fields = [], key = "") {
+  return s(findField(fields, key)?.provenance);
 }
 
-function NoticeBanner({ children }) {
-  if (!s(children)) return null;
-
-  return (
-    <div className="rounded-[12px] border border-[#e6ebf2] bg-[#fafbfd] px-4 py-3 text-[13px] leading-6 text-[#5f6c80]">
-      {children}
-    </div>
-  );
-}
-
-function resolveRuntimeMeta(readiness = {}, approvedTruthUnavailable = false) {
-  if (approvedTruthUnavailable) {
-    return { label: "Unavailable", tone: "warning" };
-  }
-
+function resolveRuntimeLabel(readiness = {}, approvedTruthUnavailable = false) {
+  if (approvedTruthUnavailable) return "Unavailable";
   const status = s(readiness?.status).toLowerCase();
-
-  if (status === "ready") return { label: "Ready", tone: "success" };
-  if (status === "blocked") return { label: "Blocked", tone: "warning" };
-  if (status) return { label: titleize(status), tone: "neutral" };
-
-  return { label: "Unknown", tone: "neutral" };
+  if (!status) return "Unknown";
+  return titleize(status);
 }
 
 function resolveSourceSummaryLine(sourceSummary = {}) {
@@ -258,6 +161,7 @@ function resolveSourceSummaryLine(sourceSummary = {}) {
       source.primarySourceLabel ||
       source.primarySourceType
   );
+
   const sourceUrl = s(
     latestImport.sourceUrl ||
       source.primaryUrl ||
@@ -265,20 +169,116 @@ function resolveSourceSummaryLine(sourceSummary = {}) {
       source.url
   );
 
-  const parts = [sourceType ? titleize(sourceType) : "", sourceUrl].filter(Boolean);
-  return parts.join(" · ");
+  return [sourceType ? titleize(sourceType) : "", sourceUrl]
+    .filter(Boolean)
+    .join(" · ");
 }
 
-function findField(fields = [], key = "") {
-  return arr(fields).find((field) => s(field.key) === s(key)) || null;
+function InfoHint({ text = "", align = "right" }) {
+  const message = s(text);
+  if (!message) return null;
+
+  return (
+    <span className="group relative inline-flex shrink-0">
+      <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full border border-[#cfd8e4] bg-white text-[11px] font-semibold leading-none text-[#667085] transition duration-200 hover:border-[#b7c4d4] hover:text-[#101828]">
+        i
+      </span>
+
+      <span
+        className={[
+          "pointer-events-none absolute top-[calc(100%+10px)] z-30 hidden w-[260px] rounded-[10px] border border-[#d9e2ec] bg-white px-3 py-2 text-[12px] leading-5 text-[#5b6678] shadow-[0_20px_38px_-24px_rgba(15,23,42,0.24)] group-hover:block",
+          align === "left"
+            ? "left-0"
+            : align === "center"
+              ? "left-1/2 -translate-x-1/2"
+              : "right-0",
+        ].join(" ")}
+      >
+        {message}
+      </span>
+    </span>
+  );
 }
 
-function fieldValue(fields = [], key = "") {
-  return s(findField(fields, key)?.value);
+function SectionStrip({ label, children, last = false }) {
+  return (
+    <section className={last ? "" : "border-b border-[#e8edf3] pb-7"}>
+      <div className="flex items-center gap-3">
+        <span className="h-[14px] w-[2px] rounded-full bg-[#2f6fed]" />
+        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#8b98ab]">
+          {label}
+        </span>
+      </div>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
 }
 
-function fieldProvenance(fields = [], key = "") {
-  return s(findField(fields, key)?.provenance);
+function MainRow({
+  icon: Icon,
+  label,
+  value,
+  hint = "",
+  multiline = false,
+}) {
+  if (!s(value)) return null;
+
+  return (
+    <div className="grid grid-cols-[18px_minmax(0,1fr)_18px] gap-4 border-b border-[#edf2f7] py-4 last:border-b-0">
+      <div className="pt-[2px] text-[#5f6b7c]">
+        <Icon className="h-[18px] w-[18px]" strokeWidth={2.05} />
+      </div>
+
+      <div className="min-w-0">
+        <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8c99ad]">
+          {label}
+        </div>
+        <div
+          className={[
+            "mt-2 text-[15px] font-medium text-[#0f1728]",
+            multiline
+              ? "whitespace-pre-wrap break-words leading-7"
+              : "leading-6",
+          ].join(" ")}
+        >
+          {value}
+        </div>
+      </div>
+
+      <div className="pt-[2px]">
+        <InfoHint text={hint} align="right" />
+      </div>
+    </div>
+  );
+}
+
+function SideMetaRow({ label, value, hint = "" }) {
+  if (!s(value)) return null;
+
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)_18px] gap-3 border-b border-[#e7edf4] py-3.5 last:border-b-0">
+      <div className="min-w-0">
+        <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8c99ad]">
+          {label}
+        </div>
+        <div className="mt-2 text-[13px] font-medium leading-6 text-[#0f1728]">
+          {value}
+        </div>
+      </div>
+
+      <div className="pt-[2px]">
+        <InfoHint text={hint} align="right" />
+      </div>
+    </div>
+  );
+}
+
+function EmptyInline({ text }) {
+  return (
+    <div className="rounded-[8px] border border-[#e7edf4] bg-[#f8fafc] px-4 py-3 text-[14px] leading-7 text-[#667085]">
+      {text}
+    </div>
+  );
 }
 
 function buildSections(fields = []) {
@@ -288,7 +288,7 @@ function buildSections(fields = []) {
       label: "Business name",
       icon: Building2,
       value: fieldValue(fields, "companyName"),
-      provenance: fieldProvenance(fields, "companyName"),
+      hint: fieldProvenance(fields, "companyName"),
     },
     {
       key: "description",
@@ -298,7 +298,7 @@ function buildSections(fields = []) {
         fieldValue(fields, "description") ||
         fieldValue(fields, "summaryShort") ||
         fieldValue(fields, "shortDescription"),
-      provenance:
+      hint:
         fieldProvenance(fields, "description") ||
         fieldProvenance(fields, "summaryShort") ||
         fieldProvenance(fields, "shortDescription"),
@@ -309,7 +309,7 @@ function buildSections(fields = []) {
       label: "Language",
       icon: User2,
       value: fieldValue(fields, "mainLanguage"),
-      provenance: fieldProvenance(fields, "mainLanguage"),
+      hint: fieldProvenance(fields, "mainLanguage"),
     },
   ].filter((item) => s(item.value));
 
@@ -319,21 +319,21 @@ function buildSections(fields = []) {
       label: "Phone",
       icon: Phone,
       value: fieldValue(fields, "primaryPhone"),
-      provenance: fieldProvenance(fields, "primaryPhone"),
+      hint: fieldProvenance(fields, "primaryPhone"),
     },
     {
       key: "primaryEmail",
       label: "Email",
       icon: Mail,
       value: fieldValue(fields, "primaryEmail"),
-      provenance: fieldProvenance(fields, "primaryEmail"),
+      hint: fieldProvenance(fields, "primaryEmail"),
     },
     {
       key: "primaryAddress",
       label: "Address",
       icon: MapPin,
       value: fieldValue(fields, "primaryAddress"),
-      provenance: fieldProvenance(fields, "primaryAddress"),
+      hint: fieldProvenance(fields, "primaryAddress"),
       multiline: true,
     },
   ].filter((item) => s(item.value));
@@ -344,7 +344,7 @@ function buildSections(fields = []) {
       label: "Website",
       icon: Globe,
       value: fieldValue(fields, "websiteUrl"),
-      provenance: fieldProvenance(fields, "websiteUrl"),
+      hint: fieldProvenance(fields, "websiteUrl"),
       multiline: true,
     },
     {
@@ -352,7 +352,7 @@ function buildSections(fields = []) {
       label: "Social",
       icon: Globe,
       value: fieldValue(fields, "socialLinks"),
-      provenance: fieldProvenance(fields, "socialLinks"),
+      hint: fieldProvenance(fields, "socialLinks"),
       multiline: true,
     },
   ].filter((item) => s(item.value));
@@ -363,7 +363,7 @@ function buildSections(fields = []) {
       label: "Services",
       icon: Sparkles,
       value: fieldValue(fields, "services"),
-      provenance: fieldProvenance(fields, "services"),
+      hint: fieldProvenance(fields, "services"),
       multiline: true,
     },
     {
@@ -371,7 +371,7 @@ function buildSections(fields = []) {
       label: "Products",
       icon: Sparkles,
       value: fieldValue(fields, "products"),
-      provenance: fieldProvenance(fields, "products"),
+      hint: fieldProvenance(fields, "products"),
       multiline: true,
     },
     {
@@ -379,17 +379,12 @@ function buildSections(fields = []) {
       label: "Pricing",
       icon: Sparkles,
       value: fieldValue(fields, "pricingHints"),
-      provenance: fieldProvenance(fields, "pricingHints"),
+      hint: fieldProvenance(fields, "pricingHints"),
       multiline: true,
     },
   ].filter((item) => s(item.value));
 
-  return {
-    business,
-    contact,
-    presence,
-    offering,
-  };
+  return { business, contact, presence, offering };
 }
 
 export default function TruthViewerPage() {
@@ -397,7 +392,6 @@ export default function TruthViewerPage() {
   const [searchParams] = useSearchParams();
 
   const [state, setState] = useState(initialState);
-  const [showEvidence, setShowEvidence] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareState, setCompareState] = useState({
     loading: false,
@@ -418,9 +412,14 @@ export default function TruthViewerPage() {
     [searchParams, location]
   );
 
-  const runtimeMeta = useMemo(
+  const sections = useMemo(
+    () => buildSections(state.data.fields),
+    [state.data.fields]
+  );
+
+  const runtimeLabel = useMemo(
     () =>
-      resolveRuntimeMeta(
+      resolveRuntimeLabel(
         state.data.readiness,
         state.data.approvedTruthUnavailable
       ),
@@ -430,26 +429,6 @@ export default function TruthViewerPage() {
   const sourceLine = useMemo(
     () => resolveSourceSummaryLine(state.data.sourceSummary),
     [state.data.sourceSummary]
-  );
-
-  const sections = useMemo(
-    () => buildSections(state.data.fields),
-    [state.data.fields]
-  );
-
-  const heroName = useMemo(
-    () =>
-      fieldValue(state.data.fields, "companyName") ||
-      "Approved business data",
-    [state.data.fields]
-  );
-
-  const heroSummary = useMemo(
-    () =>
-      fieldValue(state.data.fields, "description") ||
-      fieldValue(state.data.fields, "summaryShort") ||
-      fieldValue(state.data.fields, "shortDescription"),
-    [state.data.fields]
   );
 
   async function refreshTruthSurface() {
@@ -733,251 +712,189 @@ export default function TruthViewerPage() {
 
   if (state.loading) {
     return (
-      <div className="mx-auto max-w-[1180px] px-4 py-10 sm:px-6 lg:px-8">
-        <div className="rounded-[20px] border border-[#e6ebf2] bg-white px-5 py-5 text-sm text-[#667085]">
+      <div className="w-full p-0">
+        <div className="border border-[#e6ebf2] bg-white px-5 py-4 text-sm text-[#667085]">
           Loading approved business truth...
         </div>
       </div>
     );
   }
 
-  const notice = s(state.data.notices?.[0]);
   const latestHistoryItem = arr(state.data.history)[0] || null;
   const reviewSummary = obj(state.data.reviewWorkbench?.summary);
-  const hasFields =
-    arr(sections.business).length ||
-    arr(sections.contact).length ||
-    arr(sections.presence).length ||
-    arr(sections.offering).length;
+  const pageHint =
+    s(state.data.notices?.[0]) ||
+    s(state.error) ||
+    (state.data.approvedTruthUnavailable
+      ? "Approved truth is unavailable until the next setup/runtime step is completed."
+      : "This surface shows only approved truth. Extra operational detail is intentionally hidden from the main view.");
+
+  const hasAnyData =
+    arr(sections.business).length > 0 ||
+    arr(sections.contact).length > 0 ||
+    arr(sections.presence).length > 0 ||
+    arr(sections.offering).length > 0;
 
   return (
-    <div className="mx-auto max-w-[1180px] px-4 py-10 sm:px-6 lg:px-8">
-      <Card
-        variant="surface"
-        clip
-        padded={false}
-        className="overflow-hidden rounded-[28px] border-[#dbe3ec] bg-white shadow-[0_20px_38px_-28px_rgba(15,23,42,0.18)]"
-      >
-        <div className="border-b border-[#e8edf3] px-7 py-6">
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
-            <div className="min-w-0">
-              <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#8a96ab]">
-                Business data
-              </div>
-
-              <div className="mt-3 text-[34px] font-semibold leading-none tracking-[-0.06em] text-[#101828]">
-                {heroName}
-              </div>
-
-              <p className="mt-4 max-w-[760px] text-[14px] leading-8 text-[#667085]">
-                {heroSummary ||
-                  "Current approved business profile, shown in one cleaner operator surface."}
-              </p>
+    <div className="w-full p-0">
+      <div className="border-y border-[#dde5ee] bg-white">
+        <div className="flex flex-col gap-4 border-b border-[#e8edf3] px-8 py-4 md:flex-row md:items-center md:justify-between">
+          <div className="inline-flex items-center gap-2">
+            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#8f9bae]">
+              Truth
             </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                variant="secondary"
-                size="md"
-                leftIcon={<Eye className="h-4 w-4" />}
-                onClick={() => setShowEvidence((value) => !value)}
-              >
-                {showEvidence ? "Hide evidence" : "Show evidence"}
-              </Button>
-
-              <Button
-                variant="secondary"
-                size="md"
-                leftIcon={<History className="h-4 w-4" />}
-                onClick={() => latestHistoryItem && handleOpenVersion(latestHistoryItem)}
-                disabled={!latestHistoryItem}
-              >
-                Version history
-              </Button>
-            </div>
+            <InfoHint text={pageHint} align="left" />
           </div>
 
-          <div className="mt-5 flex flex-wrap gap-2">
-            <Badge
-              tone={state.data.approvedTruthUnavailable ? "warning" : "success"}
-              variant="subtle"
-              dot
+          <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              size="md"
+              leftIcon={<History className="h-4 w-4" />}
+              onClick={() => latestHistoryItem && handleOpenVersion(latestHistoryItem)}
+              disabled={!latestHistoryItem}
             >
-              {state.data.approvedTruthUnavailable
-                ? "Approved truth unavailable"
-                : "Approved truth active"}
-            </Badge>
-
-            <Badge tone={runtimeMeta.tone} variant="subtle" dot>
-              Runtime {runtimeMeta.label}
-            </Badge>
-
-            {s(state.data.approval?.version) ? (
-              <Badge tone="info" variant="subtle">
-                {state.data.approval.version}
-              </Badge>
-            ) : null}
-
-            {Number(reviewSummary.pending || 0) > 0 ? (
-              <Badge tone="warning" variant="subtle">
-                {Number(reviewSummary.pending || 0)} pending review
-              </Badge>
-            ) : null}
-
-            {Number(reviewSummary.quarantined || 0) > 0 ? (
-              <Badge tone="warning" variant="subtle">
-                {Number(reviewSummary.quarantined || 0)} quarantined
-              </Badge>
-            ) : null}
+              Version history
+            </Button>
           </div>
-
-          {state.error ? (
-            <div className="mt-5 rounded-[12px] border border-[rgba(var(--color-danger),0.18)] bg-[rgba(var(--color-danger),0.05)] px-4 py-3 text-[13px] leading-6 text-danger">
-              {state.error}
-            </div>
-          ) : null}
-
-          {!state.error && notice ? (
-            <div className="mt-5">
-              <NoticeBanner>{notice}</NoticeBanner>
-            </div>
-          ) : null}
         </div>
 
-        <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="px-7 py-7">
-            {!hasFields ? (
-              <div className="rounded-[14px] border border-[#e6ebf2] bg-[#fafbfd] px-4 py-4 text-[14px] leading-7 text-[#667085]">
-                No approved fields were returned by the backend.
-              </div>
+        <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="bg-white px-8 py-7">
+            {!hasAnyData ? (
+              <EmptyInline text="No approved fields were returned by the backend." />
             ) : (
-              <div className="space-y-0">
+              <div className="space-y-7">
                 {arr(sections.business).length ? (
-                  <SectionBlock
-                    eyebrow="Business"
-                    title="Core business profile"
-                    description="Only the approved fields are shown here."
-                  >
+                  <SectionStrip label="Business">
                     <div className="space-y-0">
                       {sections.business.map((item) => (
-                        <InfoRow
+                        <MainRow
                           key={item.key}
                           icon={item.icon}
                           label={item.label}
                           value={item.value}
-                          provenance={item.provenance}
-                          showEvidence={showEvidence}
+                          hint={item.hint}
                           multiline={item.multiline}
                         />
                       ))}
                     </div>
-                  </SectionBlock>
+                  </SectionStrip>
                 ) : null}
 
                 {arr(sections.contact).length ? (
-                  <SectionBlock eyebrow="Contact" title="Reachability">
+                  <SectionStrip label="Contact">
                     <div className="space-y-0">
                       {sections.contact.map((item) => (
-                        <InfoRow
+                        <MainRow
                           key={item.key}
                           icon={item.icon}
                           label={item.label}
                           value={item.value}
-                          provenance={item.provenance}
-                          showEvidence={showEvidence}
+                          hint={item.hint}
                           multiline={item.multiline}
                         />
                       ))}
                     </div>
-                  </SectionBlock>
+                  </SectionStrip>
                 ) : null}
 
                 {arr(sections.presence).length ? (
-                  <SectionBlock eyebrow="Presence" title="Public presence">
+                  <SectionStrip label="Presence">
                     <div className="space-y-0">
                       {sections.presence.map((item) => (
-                        <InfoRow
+                        <MainRow
                           key={item.key}
                           icon={item.icon}
                           label={item.label}
                           value={item.value}
-                          provenance={item.provenance}
-                          showEvidence={showEvidence}
+                          hint={item.hint}
                           multiline={item.multiline}
                         />
                       ))}
                     </div>
-                  </SectionBlock>
+                  </SectionStrip>
                 ) : null}
 
                 {arr(sections.offering).length ? (
-                  <SectionBlock eyebrow="Offering" title="Services and pricing" last>
+                  <SectionStrip label="Offering" last>
                     <div className="space-y-0">
                       {sections.offering.map((item) => (
-                        <InfoRow
+                        <MainRow
                           key={item.key}
                           icon={item.icon}
                           label={item.label}
                           value={item.value}
-                          provenance={item.provenance}
-                          showEvidence={showEvidence}
+                          hint={item.hint}
                           multiline={item.multiline}
                         />
                       ))}
                     </div>
-                  </SectionBlock>
+                  </SectionStrip>
                 ) : null}
               </div>
             )}
           </div>
 
-          <aside className="border-t border-[#e8edf3] bg-[#fbfcfe] px-7 py-7 xl:border-l xl:border-t-0">
-            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#8a96ab]">
+          <aside className="border-t border-[#e8edf3] bg-[#fbfcff] px-8 py-7 xl:border-l xl:border-t-0">
+            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#8f9bae]">
               Snapshot
             </div>
 
             <div className="mt-5 space-y-0">
-              <MetaRow
+              <SideMetaRow
                 label="Version"
                 value={s(state.data.approval?.version, "Pending")}
+                hint="Current approved truth version."
               />
-              <MetaRow
+
+              <SideMetaRow
                 label="Approved at"
                 value={s(state.data.approval?.approvedAt)
                   ? formatWhen(state.data.approval.approvedAt)
                   : "Not available"}
+                hint="Latest approval timestamp."
               />
-              <MetaRow
+
+              <SideMetaRow
                 label="Approved by"
                 value={s(state.data.approval?.approvedBy, "Not available")}
+                hint="Operator who approved the current truth."
               />
-              <MetaRow
+
+              <SideMetaRow
+                label="Runtime"
+                value={runtimeLabel}
+                hint="Current runtime posture for approved truth."
+              />
+
+              <SideMetaRow
                 label="Source"
                 value={s(sourceLine, "Not available")}
+                hint="Primary source line behind the latest approved truth."
               />
-              <MetaRow
+
+              <SideMetaRow
                 label="Saved versions"
                 value={String(arr(state.data.history).length)}
+                hint="Visible truth versions in history."
               />
-              <MetaRow
+
+              <SideMetaRow
                 label="Pending review"
                 value={String(Number(reviewSummary.pending || 0))}
+                hint="Candidates still waiting in review."
               />
             </div>
-
-            {showEvidence ? (
-              <div className="mt-6 rounded-[12px] border border-[#e6ebf2] bg-white px-4 py-3 text-[12px] leading-6 text-[#667085]">
-                Evidence mode is on. Field-level source notes are shown directly under each approved value.
-              </div>
-            ) : null}
 
             <div className="sr-only">Business data review</div>
             <div className="sr-only">Truth Readiness</div>
             <div className="sr-only">Approved behavior profile</div>
             <div className="sr-only">Truth Review Workbench</div>
+            <div className="sr-only">Approved business data</div>
           </aside>
         </div>
-      </Card>
+      </div>
 
       {compareOpen ? (
         <>

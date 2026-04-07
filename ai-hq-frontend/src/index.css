@@ -111,9 +111,14 @@ body {
   overflow-x: hidden;
   background:
     radial-gradient(
-      960px circle at 50% -18%,
-      rgba(38, 76, 165, 0.05),
+      980px circle at 50% -18%,
+      rgba(38, 76, 165, 0.07),
       transparent 40%
+    ),
+    radial-gradient(
+      680px circle at 92% 10%,
+      rgba(38, 76, 165, 0.035),
+      transparent 38%
     ),
     linear-gradient(180deg, rgba(250, 252, 254, 0.98), rgba(244, 246, 250, 1));
   color: rgb(var(--color-text));
@@ -223,31 +228,6 @@ table {
   appearance: none;
 }
 
-* {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(102, 112, 133, 0.42) rgba(228, 233, 240, 0.88);
-}
-
-*::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-*::-webkit-scrollbar-track {
-  background: rgba(228, 233, 240, 0.88);
-}
-
-*::-webkit-scrollbar-thumb {
-  border: 2px solid transparent;
-  border-radius: 10px;
-  background: rgba(102, 112, 133, 0.42);
-  background-clip: padding-box;
-}
-
-*::-webkit-scrollbar-thumb:hover {
-  background: rgba(84, 94, 113, 0.56);
-}
-
 #app-boot {
   display: none !important;
 }
@@ -297,23 +277,36 @@ table {
 .ant-select-dropdown,
 .ant-picker-dropdown .ant-picker-panel-container {
   border: 1px solid rgb(var(--color-line-soft));
-  border-radius: var(--radius-xl);
+  border-radius: 16px;
   box-shadow: var(--shadow-md);
 }
 
+.ant-tooltip {
+  --antd-arrow-background-color: rgba(14, 20, 31, 0.96);
+}
+
 .ant-tooltip .ant-tooltip-inner {
-  border-radius: 10px !important;
-  padding: 6px 10px !important;
-  min-height: 28px !important;
+  border-radius: 12px !important;
+  padding: 8px 11px !important;
+  min-height: 30px !important;
   font-size: 11px !important;
   font-weight: 700 !important;
-  letter-spacing: 0.04em !important;
-  line-height: 1.1 !important;
+  letter-spacing: 0.01em !important;
+  line-height: 1.15 !important;
   text-shadow: none !important;
+  background: linear-gradient(
+    180deg,
+    rgba(12, 18, 28, 0.96),
+    rgba(16, 24, 40, 0.94)
+  ) !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 18px 42px -20px rgba(15, 23, 42, 0.45) !important;
 }
 
 .ant-tooltip .ant-tooltip-arrow::before {
   box-shadow: none !important;
+  background: rgba(14, 20, 31, 0.96) !important;
 }
 
 .ant-table-wrapper .ant-table {
@@ -354,12 +347,99 @@ table {
 }
 
 .cmdk-group-heading {
-  padding: 0 12px 8px;
+  padding: 0 12px 6px;
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgb(var(--color-text-subtle));
+  color: rgba(15, 23, 42, 0.42);
+}
+
+.page-scroll,
+.command-scroll,
+.panel-scroll,
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(102, 112, 133, 0.34) transparent;
+  overscroll-behavior: contain;
+}
+
+.page-scroll::-webkit-scrollbar,
+.command-scroll::-webkit-scrollbar,
+.panel-scroll::-webkit-scrollbar,
+.sidebar-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.page-scroll::-webkit-scrollbar-track,
+.command-scroll::-webkit-scrollbar-track,
+.panel-scroll::-webkit-scrollbar-track,
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.page-scroll::-webkit-scrollbar-thumb,
+.command-scroll::-webkit-scrollbar-thumb,
+.panel-scroll::-webkit-scrollbar-thumb,
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgba(102, 112, 133, 0.28);
+  background-clip: padding-box;
+}
+
+.page-scroll::-webkit-scrollbar-thumb:hover,
+.command-scroll::-webkit-scrollbar-thumb:hover,
+.panel-scroll::-webkit-scrollbar-thumb:hover,
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(84, 94, 113, 0.42);
+  background-clip: padding-box;
+}
+
+@keyframes shellFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shellPanelIn {
+  from {
+    opacity: 0;
+    transform: translate3d(-50%, -8px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+}
+
+@keyframes shellDropdownIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -8px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.command-overlay-anim {
+  animation: shellFadeIn 180ms var(--motion-premium) both;
+}
+
+.command-panel-anim {
+  transform-origin: top center;
+  animation: shellPanelIn 220ms var(--motion-premium) both;
+}
+
+.dropdown-panel-anim {
+  transform-origin: top right;
+  animation: shellDropdownIn 180ms var(--motion-premium) both;
 }
 
 @layer components {

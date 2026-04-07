@@ -1,12 +1,12 @@
 import { Button, Empty, Spin } from "antd";
 import { Bell, CheckCircle2, RefreshCw } from "lucide-react";
 import FocusDialog from "../ui/FocusDialog.jsx";
-import { Surface } from "../ui/AppShellPrimitives.jsx";
+import { InlineNotice, Surface } from "../ui/AppShellPrimitives.jsx";
 import { cx } from "../../lib/cx.js";
 
 function formatWhen(value = "") {
   const raw = String(value || "").trim();
-  if (!raw) return "Unknown time";
+  if (!raw) return "Unknown";
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return raw;
   return date.toLocaleString();
@@ -16,34 +16,31 @@ function NotificationRow({ item, saving = false, onMarkRead }) {
   return (
     <div
       className={cx(
-        "rounded-[20px] border p-4 transition",
+        "rounded-[18px] border px-4 py-3.5 transition duration-200",
         item.unread
-          ? "border-line bg-brand-soft/60"
-          : "border-line-soft bg-surface-muted"
+          ? "border-[rgba(var(--color-brand),0.14)] bg-[linear-gradient(180deg,rgba(var(--color-brand),0.045),rgba(255,255,255,0.88))]"
+          : "border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,253,0.995))]"
       )}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-text">{item.title}</div>
-          <div className="mt-1 text-xs text-text-subtle">{formatWhen(item.createdAt)}</div>
-        </div>
-        {item.unread ? (
-          <span className="rounded-pill border border-brand/10 bg-surface px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-brand">
-            Unread
-          </span>
-        ) : null}
-      </div>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            {item.unread ? (
+              <span className="inline-flex h-2 w-2 rounded-full bg-brand" />
+            ) : null}
 
-      <div className="mt-3 text-sm leading-6 text-text-muted">
-        {item.body || "No notification body was provided."}
-      </div>
+            <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.94)]">
+              {item.title}
+            </div>
+          </div>
 
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <div className="text-xs text-text-subtle">
-          {item.unread ? "Pending acknowledgement" : `Read ${formatWhen(item.readAt)}`}
+          <div className="mt-1 text-[12px] font-medium text-[rgba(15,23,42,0.48)]">
+            {formatWhen(item.createdAt)}
+          </div>
         </div>
+
         <Button
-          size="large"
+          size="small"
           icon={
             saving ? (
               <Spin size="small" />
@@ -53,11 +50,17 @@ function NotificationRow({ item, saving = false, onMarkRead }) {
           }
           onClick={() => onMarkRead?.(item.id)}
           disabled={!item.unread || saving}
-          className="!rounded-[14px] !border-line !text-text-muted hover:!border-line-strong hover:!text-text"
+          className="!rounded-[12px] !border-line !text-text-muted hover:!border-line-strong hover:!text-text"
         >
-          {item.unread ? "Mark read" : "Read"}
+          {item.unread ? "Read" : "Done"}
         </Button>
       </div>
+
+      {item.body ? (
+        <div className="mt-3 text-[13px] leading-6 text-[rgba(15,23,42,0.64)]">
+          {item.body}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -81,57 +84,56 @@ export default function NotificationsPanel({
       onClose={onClose}
       title="Notifications"
       backdropClassName="bg-overlay/60 backdrop-blur-[8px]"
-      panelClassName="w-full max-w-[760px]"
+      panelClassName="w-full max-w-[680px]"
     >
       <Surface className="overflow-hidden p-0 shadow-panel-strong">
-        <div className="flex items-start justify-between gap-4 border-b border-line-soft px-5 py-5">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-[18px] border border-line bg-surface-muted">
-              <Bell className="h-5 w-5 text-text" />
+        <div className="flex items-center justify-between gap-4 border-b border-[rgba(15,23,42,0.06)] px-5 py-4">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-11 w-11 items-center justify-center rounded-[16px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,253,0.995))]">
+              <Bell className="h-[18px] w-[18px] text-[rgba(15,23,42,0.88)]" />
             </div>
+
             <div>
-              <div className="font-display text-[1.35rem] font-semibold tracking-[-0.04em] text-text">
+              <div className="text-[18px] font-semibold tracking-[-0.04em] text-[rgba(15,23,42,0.96)]">
                 Notifications
               </div>
-              <div className="text-sm text-text-muted">
-                Backend-backed alerts, delivery signals, and review notices.
+              <div className="text-[12px] font-medium text-[rgba(15,23,42,0.48)]">
+                {unreadCount} unread
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="rounded-pill border border-line bg-surface-muted px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-text-subtle">
-              {unreadCount} unread
-            </span>
-            <Button
-              size="large"
-              icon={refreshing ? <Spin size="small" /> : <RefreshCw className="h-4 w-4" />}
-              onClick={() => onRefresh?.({ silent: true })}
-              disabled={loading || refreshing}
-              className="!rounded-[14px] !border-line !text-text-muted hover:!border-line-strong hover:!text-text"
-            />
-          </div>
+          <Button
+            size="large"
+            icon={
+              refreshing ? (
+                <Spin size="small" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )
+            }
+            onClick={() => onRefresh?.({ silent: true })}
+            disabled={loading || refreshing}
+            className="!rounded-[14px] !border-line !text-text-muted hover:!border-line-strong hover:!text-text"
+          />
         </div>
 
-        <div className="max-h-[70vh] overflow-y-auto px-5 py-5">
+        <div className="panel-scroll max-h-[68vh] overflow-y-auto px-5 py-5">
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <Spin />
             </div>
           ) : error ? (
-            <Surface subdued>{error}</Surface>
+            <InlineNotice tone="danger" title="Notifications unavailable" description={error} />
           ) : unavailable ? (
-            <Surface subdued>Notifications are currently unavailable.</Surface>
+            <InlineNotice tone="warning" title="Notifications unavailable" description="Try again in a moment." />
           ) : notifications.length === 0 ? (
-            <div className="rounded-[20px] border border-dashed border-line bg-surface-muted px-4 py-14">
+            <div className="rounded-[20px] border border-dashed border-[rgba(15,23,42,0.08)] bg-[rgba(255,255,255,0.7)] px-4 py-14">
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
-                  <div className="space-y-1">
-                    <div className="text-sm font-semibold text-text">No notifications yet</div>
-                    <div className="text-sm text-text-muted">
-                      The feed is live and will populate when backend events arrive.
-                    </div>
+                  <div className="text-[14px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.76)]">
+                    No notifications
                   </div>
                 }
               />

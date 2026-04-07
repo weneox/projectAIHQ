@@ -6,7 +6,10 @@ import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
 import useProductHome from "../../view-models/useProductHome.js";
 import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
 import FloatingAiWidget from "../layout/FloatingAiWidget.jsx";
-import Sidebar, { SIDEBAR_WIDTH, SHELL_TOPBAR_HEIGHT } from "./Sidebar.jsx";
+import Sidebar, {
+  SIDEBAR_COLLAPSED_WIDTH,
+  SIDEBAR_WIDTH,
+} from "./Sidebar.jsx";
 import Header from "./Header.jsx";
 import {
   getActiveContextItem,
@@ -31,6 +34,8 @@ const SHELL_REFRESH_EVENT_TYPES = new Set([
   "lead.created",
   "lead.updated",
 ]);
+
+const SIDEBAR_STORAGE_KEY = "aihq.sidebar.collapsed";
 
 function isImmersivePath(pathname = "") {
   const path = String(pathname || "");
@@ -110,16 +115,24 @@ function SharedStatsNotice({ message }) {
       tone="warning"
       title="Shared workspace stats unavailable"
       description={message}
-      className="mb-5"
+      className="mb-4"
       compact
     />
   );
+}
+
+function getInitialCollapsedState() {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "1";
 }
 
 export default function Shell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [widgetOpen, setWidgetOpen] = useState(false);
   const [shellStats, setShellStats] = useState(INITIAL_SHELL_STATS);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    getInitialCollapsedState
+  );
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -140,14 +153,6 @@ export default function Shell() {
     () => isImmersivePath(location.pathname),
     [location.pathname]
   );
-
-  const shellPaddingClass = immersive
-    ? "px-0 py-0"
-    : "px-5 py-5 md:px-6 md:py-6 xl:px-8 xl:py-7";
-
-  const shellContentClass = immersive
-    ? "h-full w-full overflow-hidden"
-    : "mx-auto w-full max-w-shell-content";
 
   const assistantRequested = useMemo(() => {
     const params = new URLSearchParams(location.search || "");
@@ -240,7 +245,13 @@ export default function Shell() {
     if (!homeRouteActive) return shortcutAssistant;
     if (home.loading) return loadingAssistant;
     return home.assistant || loadingAssistant;
-  }, [homeRouteActive, home.loading, home.assistant, loadingAssistant, shortcutAssistant]);
+  }, [
+    homeRouteActive,
+    home.loading,
+    home.assistant,
+    loadingAssistant,
+    shortcutAssistant,
+  ]);
 
   const autoOpenKey = useMemo(() => {
     if (!homeRouteActive || !home.onboardingState?.autoOpen) return "";
@@ -292,6 +303,14 @@ export default function Shell() {
     },
     [loadShellStats]
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      SIDEBAR_STORAGE_KEY,
+      sidebarCollapsed ? "1" : "0"
+    );
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -383,18 +402,24 @@ export default function Shell() {
     [navigate]
   );
 
+  const shellSidebarWidth = sidebarCollapsed
+    ? SIDEBAR_COLLAPSED_WIDTH
+    : SIDEBAR_WIDTH;
+
   return (
     <div
-      className="min-h-screen bg-canvas text-text"
-      style={{ "--shell-sidebar-w": `${SIDEBAR_WIDTH}px` }}
+      className="h-screen overflow-hidden bg-canvas text-text"
+      style={{ "--shell-sidebar-w": `${shellSidebarWidth}px` }}
     >
       <Sidebar
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
         shellStats={shellStats}
+        collapsed={sidebarCollapsed}
+        setCollapsed={setSidebarCollapsed}
       />
 
-      <div className="min-h-screen md:pl-[var(--shell-sidebar-w)]">
+      <div className="flex h-full min-w-0 flex-col md:pl-[var(--shell-sidebar-w)]">
         <Header
           onMenuClick={() => setMobileOpen(true)}
           notifications={notifications}
@@ -402,29 +427,19 @@ export default function Shell() {
           activeContextItem={activeContextItem}
         />
 
-        <main
-          className={immersive ? "overflow-hidden" : shellPaddingClass}
-          style={{
-            height: immersive
-              ? `calc(100vh - ${SHELL_TOPBAR_HEIGHT}px)`
-              : "auto",
-            minHeight: immersive
-              ? `calc(100vh - ${SHELL_TOPBAR_HEIGHT}px)`
-              : `calc(100vh - ${SHELL_TOPBAR_HEIGHT}px)`,
-          }}
-        >
-          <div className={shellContentClass}>
-            {!immersive ? (
-              <>
-                <SharedStatsNotice message={shellStats?.message} />
-                <div className={shellPaddingClass}>
-                  <Outlet />
-                </div>
-              </>
-            ) : (
+        <main className="flex-1 min-h-0 overflow-hidden">
+          {immersive ? (
+            <div className="h-full min-h-0 overflow-hidden">
               <Outlet />
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="page-scroll h-full min-h-0 overflow-y-auto">
+              <div className="mx-auto w-full max-w-shell-content px-5 py-5 md:px-6 md:py-6 xl:px-8 xl:py-7">
+                <SharedStatsNotice message={shellStats?.message} />
+                <Outlet />
+              </div>
+            </div>
+          )}
         </main>
 
         <FloatingAiWidget

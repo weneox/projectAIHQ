@@ -14,13 +14,13 @@ const PRIMARY_SECTIONS = [
   {
     id: "home",
     label: "Home",
-    description: "The main operating surface.",
+    description: "Overview and live surfaces.",
     icon: House,
     to: "/home",
     paths: ["/home"],
     contextGroups: [
       {
-        title: "Start",
+        title: "Core",
         items: [
           { label: "Home", to: "/home" },
           { label: "Inbox", to: "/inbox" },
@@ -33,14 +33,14 @@ const PRIMARY_SECTIONS = [
   {
     id: "inbox",
     label: "Inbox",
-    description: "Messages and active conversations.",
+    description: "Conversations.",
     icon: Inbox,
     to: "/inbox",
     badgeKey: "inboxUnread",
     paths: ["/inbox"],
     contextGroups: [
       {
-        title: "Messaging",
+        title: "Core",
         items: [
           { label: "Inbox", to: "/inbox" },
           { label: "Incidents", to: "/incidents" },
@@ -51,13 +51,13 @@ const PRIMARY_SECTIONS = [
   {
     id: "comments",
     label: "Comments",
-    description: "Comment review and moderation.",
+    description: "Moderation.",
     icon: MessageCircleMore,
     to: "/comments",
     paths: ["/comments"],
     contextGroups: [
       {
-        title: "Moderation",
+        title: "Core",
         items: [
           { label: "Comments", to: "/comments" },
           { label: "Inbox", to: "/inbox" },
@@ -68,13 +68,13 @@ const PRIMARY_SECTIONS = [
   {
     id: "voice",
     label: "Voice",
-    description: "Calls, handoff, and transcripts.",
+    description: "Calls.",
     icon: PhoneCall,
     to: "/voice",
     paths: ["/voice"],
     contextGroups: [
       {
-        title: "Calls",
+        title: "Core",
         items: [
           { label: "Voice", to: "/voice" },
           { label: "Inbox", to: "/inbox" },
@@ -88,13 +88,13 @@ const SECONDARY_SECTIONS = [
   {
     id: "workspace",
     label: "Workspace",
-    description: "Operator overview and internal control.",
+    description: "Control.",
     icon: LayoutGrid,
     to: "/workspace",
     paths: ["/workspace"],
     contextGroups: [
       {
-        title: "Control",
+        title: "Platform",
         items: [
           { label: "Workspace", to: "/workspace" },
           { label: "Channels", to: "/channels" },
@@ -105,13 +105,13 @@ const SECONDARY_SECTIONS = [
   {
     id: "channels",
     label: "Channels",
-    description: "Connect and manage channels.",
+    description: "Connections.",
     icon: PlugZap,
     to: "/channels",
     paths: ["/channels"],
     contextGroups: [
       {
-        title: "Channels",
+        title: "Platform",
         items: [
           { label: "Channels", to: "/channels" },
           { label: "Workspace", to: "/workspace" },
@@ -122,14 +122,14 @@ const SECONDARY_SECTIONS = [
   {
     id: "contacts",
     label: "Pipeline",
-    description: "Leads and proposal flow.",
+    description: "Leads.",
     icon: BriefcaseBusiness,
     to: "/leads",
     badgeKey: "leadsOpen",
     paths: ["/leads", "/proposals"],
     contextGroups: [
       {
-        title: "Backoffice",
+        title: "Platform",
         items: [
           { label: "Leads", to: "/leads" },
           { label: "Proposals", to: "/proposals" },
@@ -140,13 +140,13 @@ const SECONDARY_SECTIONS = [
   {
     id: "publish",
     label: "Content",
-    description: "Publishing and execution flow.",
+    description: "Publishing.",
     icon: Sparkles,
     to: "/publish",
     paths: ["/publish", "/executions"],
     contextGroups: [
       {
-        title: "Backoffice",
+        title: "Platform",
         items: [
           { label: "Publish", to: "/publish" },
           { label: "Executions", to: "/executions" },
@@ -157,13 +157,13 @@ const SECONDARY_SECTIONS = [
   {
     id: "intelligence",
     label: "Knowledge",
-    description: "Approved business memory and review history.",
+    description: "Business memory.",
     icon: ShieldCheck,
     to: "/truth",
     paths: ["/truth"],
     contextGroups: [
       {
-        title: "Internal",
+        title: "Platform",
         items: [
           { label: "Knowledge", to: "/truth" },
           { label: "Workspace", to: "/workspace" },
