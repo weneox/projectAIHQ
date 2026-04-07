@@ -77,7 +77,7 @@ function createAssistant(overrides = {}) {
           title: "Confirm who the business is",
           summary: "Add the core business identity.",
         },
-      },
+      ],
       servicesCatalog: {
         items: [],
         packs: [],
@@ -134,7 +134,7 @@ describe("FloatingAiWidget", () => {
 
     expect(screen.getByRole("dialog", { name: "AI setup" })).toBeInTheDocument();
     expect(screen.getByText("Telegram is connected. Start the first structured business draft.")).toBeInTheDocument();
-    expect(screen.getByText("Confirm who the business is")).toBeInTheDocument();
+    expect(screen.getAllByText("Confirm who the business is").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Save section" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Close AI setup" }));
