@@ -141,6 +141,8 @@ test("setup assistant session start reuses setup review storage but returns cano
     result.body.setup.draft.businessProfile.websiteUrl,
     "https://acme.example"
   );
+  assert.equal(result.body.setup.assistant.mode, "structured_v2");
+  assert.ok(Array.isArray(result.body.setup.assistant.confirmationBlockers));
   assert.equal(result.body.message, "Setup assistant session started");
   assert.equal(auditCalls.length, 1);
 });
@@ -271,10 +273,79 @@ test("setup assistant draft update stays inside setup review storage and returns
   assert.equal(result.body.ok, true);
   assert.equal(result.body.setup.draft.version, 3);
   assert.equal(result.body.setup.draft.services[0].title, "Consultation");
-  assert.equal(result.body.setup.draft.pricingPosture.mode, "quote_based");
+  assert.equal(
+    result.body.setup.draft.pricingPosture.pricingMode,
+    "quote_required"
+  );
+  assert.equal(
+    result.body.setup.draft.pricingPosture.publicSummary,
+    "Pricing depends on treatment complexity."
+  );
   assert.equal(result.body.session.namespace, "setup_assistant");
   assert.equal(result.body.message, "Setup assistant draft updated");
   assert.equal(auditCalls.length, 1);
+});
+
+test("setup assistant message mode parses rough hours into structured weekly rows", async () => {
+  let currentReview = {
+    session: {
+      id: "session-1",
+      status: "draft",
+      mode: "setup",
+      currentStep: "hours",
+    },
+    draft: {
+      version: 1,
+      draftPayload: {
+        setupAssistant: {
+          businessProfile: {
+            companyName: "Acme Clinic",
+            websiteUrl: "https://acme.example",
+            description: "Dental clinic",
+          },
+          services: [{ key: "consultation", title: "Consultation" }],
+          contacts: [{ type: "phone", label: "Phone", value: "+994555555555" }],
+          hours: [],
+          pricingPosture: {},
+          handoffRules: {},
+        },
+      },
+    },
+  };
+
+  const result = await updateSetupAssistantDraft(
+    {
+      db: {},
+      actor: createActor(),
+      body: {
+        step: "hours",
+        answer: "Mon-Fri 09:00-18:00; Sat 10:00-14:00; Sun closed",
+      },
+    },
+    {
+      async getCurrentSetupReview() {
+        return currentReview;
+      },
+      async patchSetupReviewDraft(input) {
+        currentReview = {
+          ...currentReview,
+          draft: {
+            ...currentReview.draft,
+            version: currentReview.draft.version + 1,
+            draftPayload: input.patch.draftPayload,
+          },
+        };
+        return currentReview.draft;
+      },
+      async auditSetupAction() {},
+    }
+  );
+
+  assert.equal(result.status, 200);
+  assert.equal(result.body.setup.draft.hours[0].day, "monday");
+  assert.equal(result.body.setup.draft.hours[0].enabled, true);
+  assert.equal(result.body.setup.draft.hours[0].openTime, "09:00");
+  assert.equal(result.body.setup.draft.hours[6].closed, true);
 });
 
 test("setup assistant routes wire start, current, and update through the tenant-scoped actor", async () => {

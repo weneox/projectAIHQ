@@ -13,64 +13,104 @@ import {
   safeUuidOrNull,
 } from "./draftShared.js";
 import { auditSetupAction } from "./auditApp.js";
+import { buildSetupAssistantServiceCatalog } from "./setupAssistantCatalog.js";
+import {
+  parseHoursNote,
+  parsePricingNote,
+  parseServicesNote,
+  sanitizeStructuredHours,
+} from "./setupAssistantParser.js";
 
 const REVIEW_MESSAGE =
-  "Draft answers stay separate from approved truth and the strict runtime until a later approval step is completed.";
+  "Setup drafts stay separate from approved truth and the strict runtime until a later review and approval step is completed.";
 
 const SETUP_ASSISTANT_NAMESPACE = "setup_assistant";
 const SETUP_ASSISTANT_SOURCE_TYPE = "setup_assistant";
 const SETUP_ASSISTANT_CURRENT_STEP = "setup_assistant";
 
-const SETUP_ASSISTANT_QUESTIONS = [
-  {
-    key: "website",
-    label: "Website",
-    prompt: "Saytın var?",
-    placeholder: "https://yourbusiness.com",
-  },
-  {
-    key: "company",
-    label: "Business",
-    prompt: "Biznes adı nədir?",
-    placeholder: "NEOX AI",
-  },
-  {
-    key: "description",
-    label: "About",
-    prompt: "Nə iş görürsən?",
-    placeholder: "Bir cümlə ilə yaz",
-  },
-  {
-    key: "services",
-    label: "Services",
-    prompt: "Əsas xidmətlərin hansılardır?",
-    placeholder: "Məs: dizayn, quraşdırma, servis",
-  },
-  {
-    key: "contact",
-    label: "Contact",
-    prompt: "Müştəri sənə necə çatsın?",
-    placeholder: "Telefon, WhatsApp, email və s.",
-  },
-  {
-    key: "hours",
-    label: "Hours",
-    prompt: "İş saatların necədir?",
-    placeholder: "Məs: Hər gün 09:00-19:00",
-  },
-  {
-    key: "pricing",
-    label: "Pricing",
-    prompt: "Qiymət barədə necə cavab verək?",
-    placeholder: "Məs: qiymət üçün yazın / starting from 50 AZN",
-  },
-  {
-    key: "handoff",
-    label: "Handoff",
-    prompt: "Bot səni hansı hallarda çağırsın?",
-    placeholder: "Məs: şikayət, təcili sifariş, böyük qiymət sorğusu",
-  },
+const SECTION_ORDER = [
+  "profile",
+  "services",
+  "hours",
+  "pricing",
+  "contacts",
+  "handoff",
 ];
+
+const SECTION_META = {
+  profile: {
+    label: "Business profile",
+    title: "Confirm who the business is",
+    missing:
+      "Add the core business identity so future AI replies can anchor on real business truth.",
+    review:
+      "Core identity exists, but some profile fields still need confirmation or polish.",
+    ready: "Core business identity is captured in the draft.",
+    prompt:
+      "Confirm the business profile first: website, business name, and a reliable short description.",
+    placeholder: "Paste a website or describe the business in one line",
+  },
+  services: {
+    label: "Services",
+    title: "Curate the service menu",
+    missing:
+      "Select the real services the business wants AI to talk about. Avoid giant generic lists.",
+    review:
+      "Services exist, but they still need confirmation, cleanup, or stronger structure.",
+    ready: "Service coverage is already drafted in a structured form.",
+    prompt:
+      "List the core services in plain language, and I will convert them into structured service items.",
+    placeholder: "e.g. Consultation, Tax filing, Payroll support",
+  },
+  hours: {
+    label: "Business hours",
+    title: "Lock in structured weekly hours",
+    missing:
+      "Business hours are still missing. Structured hours matter for accurate reply promises.",
+    review:
+      "Hours exist, but they still need confirmation before the system should rely on them.",
+    ready: "Weekly hours are drafted in a structured schedule.",
+    prompt:
+      "Paste rough opening hours and I will convert them into a weekly schedule.",
+    placeholder: "Mon-Fri 09:00-18:00; Sat 10:00-14:00; Sun closed",
+  },
+  pricing: {
+    label: "Pricing",
+    title: "Choose a safe pricing posture",
+    missing:
+      "Pricing still needs a structured reply policy so AI does not improvise unsafe price answers.",
+    review:
+      "Pricing posture exists, but it still needs confirmation or refinement.",
+    ready: "Pricing has a structured public reply posture.",
+    prompt:
+      "Paste a rough pricing note and I will turn it into a structured pricing policy.",
+    placeholder: "Starts from 50 AZN. Exact quotes depend on the service.",
+  },
+  contacts: {
+    label: "Contacts",
+    title: "Set the main customer contact lanes",
+    missing:
+      "At least one reliable public contact is needed so AI can hand customers to a real channel.",
+    review:
+      "Contacts exist, but they still need confirmation or stronger prioritization.",
+    ready: "A reliable customer contact path is present in the draft.",
+    prompt:
+      "Add the best public contact routes for customers, like phone, WhatsApp, or email.",
+    placeholder: "Phone +994..., WhatsApp link, support@company.com",
+  },
+  handoff: {
+    label: "Operator handoff",
+    title: "Define when AI should escalate",
+    missing:
+      "Operator handoff rules are still light. Capture the cases where AI should stop and bring in a human.",
+    review:
+      "Handoff rules exist, but they still need stronger escalation detail.",
+    ready: "Operator escalation rules are present in the draft.",
+    prompt:
+      "Describe when AI should escalate to an operator or manager.",
+    placeholder: "Complaints, urgent requests, custom quotes, payment disputes",
+  },
+};
 
 function nowIso() {
   return new Date().toISOString();
@@ -88,6 +128,14 @@ function slugify(value = "") {
     .slice(0, 80);
 }
 
+function normalizeWebsiteUrl(value = "") {
+  const raw = s(value);
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.includes(".") && !raw.includes(" ")) return `https://${raw}`;
+  return raw;
+}
+
 function normalizeStringArray(value = [], limit = 24) {
   return arr(value)
     .map((item) => s(item))
@@ -99,32 +147,17 @@ function uniqueStrings(value = [], limit = 24) {
   return Array.from(new Set(normalizeStringArray(value, limit))).slice(0, limit);
 }
 
-function normalizeWebsiteUrl(value = "") {
-  const raw = s(value);
-  if (!raw) return "";
-  if (/^https?:\/\//i.test(raw)) return raw;
-  if (raw.includes(".") && !raw.includes(" ")) {
-    return `https://${raw}`;
-  }
-  return raw;
-}
-
-function splitAnswerList(value = "", limit = 24) {
-  return String(value || "")
-    .split(/\n|,|;|\u2022|- /g)
-    .map((item) => s(item))
-    .filter(Boolean)
-    .slice(0, limit);
-}
-
 function inferContactType(value = "") {
   const text = s(value).toLowerCase();
   if (!text) return "";
   if (text.includes("@")) return "email";
+  if (text.includes("whatsapp")) return "whatsapp";
+  if (text.includes("telegram")) return "telegram";
   if (
     text.includes("http") ||
     text.includes("www.") ||
-    text.includes("instagram.com")
+    text.includes("instagram.com") ||
+    text.includes("wa.me")
   ) {
     return "link";
   }
@@ -132,11 +165,32 @@ function inferContactType(value = "") {
   return "primary";
 }
 
+function splitAnswerList(value = "", limit = 24) {
+  return String(value || "")
+    .split(/\n|,|;|\u2022/g)
+    .map((item) => s(item))
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
 function sanitizeBusinessProfile(value = {}) {
   const source = obj(value);
   return compactDraftObject({
-    companyName: s(source.companyName || source.company_name),
-    description: s(source.description || source.summary),
+    companyName: s(
+      source.companyName ||
+        source.company_name ||
+        source.displayName ||
+        source.companyTitle ||
+        source.name
+    ),
+    description: s(
+      source.description ||
+        source.summary ||
+        source.summaryLong ||
+        source.companySummaryLong ||
+        source.summaryShort ||
+        source.companySummaryShort
+    ),
     websiteUrl: normalizeWebsiteUrl(
       source.websiteUrl || source.website_url || source.website
     ),
@@ -146,43 +200,52 @@ function sanitizeBusinessProfile(value = {}) {
 function sanitizeServiceItem(value = {}) {
   const source = obj(value);
   const title = s(source.title || source.name || source.label);
-  const summary = s(
-    source.summary || source.description || source.detail || source.notes
-  );
-  const priceLabel = s(
-    source.priceLabel ||
-      source.price_label ||
-      source.price ||
-      source.priceRange
-  );
-  const category = s(source.category);
-
-  if (!title && !summary && !priceLabel && !category) return null;
+  if (!title) return null;
 
   return compactDraftObject({
-    key:
-      s(source.key || source.serviceKey || source.service_key) ||
-      slugify(title || summary || category),
+    key: s(source.key || source.serviceKey || source.service_key) || slugify(title),
     title,
-    summary,
-    category,
-    priceLabel,
+    summary: s(
+      source.summary || source.description || source.detail || source.notes
+    ),
+    category: s(source.category || "general").toLowerCase() || "general",
+    priceLabel: s(
+      source.priceLabel ||
+        source.price_label ||
+        source.price ||
+        source.priceRange
+    ),
+    aliases: uniqueStrings(source.aliases, 12),
+    availabilityStatus:
+      s(source.availabilityStatus || source.availability_status).toLowerCase() ||
+      "available",
+    operatorNotes: s(source.operatorNotes || source.operator_notes),
   });
 }
 
 function sanitizeServices(value = []) {
-  return arr(value)
-    .map(sanitizeServiceItem)
-    .filter(Boolean)
-    .slice(0, 100);
+  const out = [];
+  const seen = new Set();
+
+  for (const item of arr(value)) {
+    const normalized = sanitizeServiceItem(item);
+    if (!normalized) continue;
+    const dedupeKey = `${s(normalized.key).toLowerCase()}|${s(
+      normalized.title
+    ).toLowerCase()}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    out.push(normalized);
+  }
+
+  return out.slice(0, 100);
 }
 
 function sanitizeContactItem(value = {}) {
   const source = obj(value);
-  const type = s(source.type || source.channel).toLowerCase();
+  const type = s(source.type || source.channel || inferContactType(source.value)).toLowerCase();
   const label = s(source.label || source.title);
   const entryValue = s(source.value || source.contact || source.address);
-
   if (!type && !label && !entryValue) return null;
 
   return compactDraftObject({
@@ -190,7 +253,7 @@ function sanitizeContactItem(value = {}) {
     label,
     value: entryValue,
     preferred: source.preferred === true,
-    visibility: s(source.visibility || source.scope).toLowerCase(),
+    visibility: s(source.visibility || source.scope).toLowerCase() || "public",
   });
 }
 
@@ -201,39 +264,80 @@ function sanitizeContacts(value = []) {
     .slice(0, 100);
 }
 
-function sanitizeHoursItem(value = {}) {
-  const source = obj(value);
-  const day = s(source.day || source.label);
-  const open = s(source.open || source.opensAt || source.opens_at);
-  const close = s(source.close || source.closesAt || source.closes_at);
-  const notes = s(source.notes || source.summary);
-  const closed = source.closed === true;
-
-  if (!day && !open && !close && !notes && !closed) return null;
-
-  return compactDraftObject({
-    day,
-    open,
-    close,
-    closed,
-    notes,
-  });
+function normalizeCurrency(value = "") {
+  const upper = s(value).toUpperCase();
+  if (!upper) return "";
+  if (upper === "$") return "USD";
+  if (upper === "\u20ac") return "EUR";
+  if (upper === "\u20bc") return "AZN";
+  if (upper === "\u00a3") return "GBP";
+  return upper;
 }
 
-function sanitizeHours(value = []) {
-  return arr(value)
-    .map(sanitizeHoursItem)
-    .filter(Boolean)
-    .slice(0, 32);
+function sanitizePerServicePricingItem(value = {}) {
+  const source = obj(value);
+  const title = s(source.title || source.serviceTitle);
+  const serviceKey = s(source.serviceKey || source.service_key || slugify(title));
+  if (!title && !serviceKey) return null;
+
+  return compactDraftObject({
+    serviceKey: serviceKey || slugify(title),
+    title,
+    mode: s(source.mode || "fixed_price").toLowerCase(),
+    startingAt:
+      source.startingAt ?? source.starting_at ?? source.startingPrice ?? null,
+    minPrice: source.minPrice ?? source.min_price ?? null,
+    maxPrice: source.maxPrice ?? source.max_price ?? null,
+    priceLabel: s(source.priceLabel || source.price_label || source.price),
+  });
 }
 
 function sanitizePricingPosture(value = {}) {
   const source = obj(value);
+  const legacyMode = s(source.mode || source.posture || source.model).toLowerCase();
+  const pricingMode =
+    s(source.pricingMode || source.pricing_mode).toLowerCase() ||
+    (legacyMode === "quote_based" ? "quote_required" : legacyMode);
+  const publicSummary =
+    s(source.publicSummary || source.public_summary) ||
+    s(source.summary || source.description);
+
   return compactDraftObject({
-    mode: s(source.mode || source.posture || source.model).toLowerCase(),
-    summary: s(source.summary || source.description || source.notes),
-    startingAt: s(source.startingAt || source.starting_at || source.priceFrom),
-    currency: s(source.currency).toUpperCase(),
+    pricingMode,
+    currency: normalizeCurrency(source.currency || "AZN") || "AZN",
+    publicSummary,
+    startingAt:
+      source.startingAt ?? source.starting_at ?? source.priceFrom ?? null,
+    minPrice: source.minPrice ?? source.min_price ?? null,
+    maxPrice: source.maxPrice ?? source.max_price ?? null,
+    perServicePricing: arr(source.perServicePricing || source.per_service_pricing)
+      .map(sanitizePerServicePricingItem)
+      .filter(Boolean)
+      .slice(0, 40),
+    allowPublicPriceReplies:
+      typeof source.allowPublicPriceReplies === "boolean"
+        ? source.allowPublicPriceReplies
+        : typeof source.allow_public_price_replies === "boolean"
+          ? source.allow_public_price_replies
+          : pricingMode && !["operator_only", "quote_required"].includes(pricingMode),
+    requiresOperatorForExactQuote:
+      typeof source.requiresOperatorForExactQuote === "boolean"
+        ? source.requiresOperatorForExactQuote
+        : typeof source.requires_operator_for_exact_quote === "boolean"
+          ? source.requires_operator_for_exact_quote
+          : ["quote_required", "operator_only", "variable_by_service", "promotional"].includes(
+              pricingMode
+            ),
+    pricingNotes: s(
+      source.pricingNotes || source.pricing_notes || source.notes || source.summary
+    ),
+    pricingConfidence: s(
+      source.pricingConfidence || source.pricing_confidence
+    ).toLowerCase(),
+    operatorEscalationRules: uniqueStrings(
+      source.operatorEscalationRules || source.operator_escalation_rules,
+      12
+    ),
   });
 }
 
@@ -265,226 +369,534 @@ function sanitizeProgress(value = {}) {
   });
 }
 
-function buildServicesFromAnswer(answer = "") {
-  return splitAnswerList(answer, 24).map((title) => ({
-    key: slugify(title),
-    title,
-  }));
-}
-
-function buildContactsFromAnswer(answer = "") {
-  const text = s(answer);
-  if (!text) return [];
-  return [
-    {
-      type: inferContactType(text),
-      label: "Primary",
-      value: text,
-      preferred: true,
-      visibility: "public",
-    },
-  ];
-}
-
-function buildHoursFromAnswer(answer = "") {
-  const text = s(answer);
-  if (!text) return [];
-  return [
-    {
-      day: "general",
-      notes: text,
-    },
-  ];
-}
-
-function patchFromAnswer(step = "", answer = "") {
-  const key = s(step).toLowerCase();
-  const text = s(answer);
-
-  if (!key || !text) return {};
-
-  switch (key) {
-    case "website":
-      return {
-        businessProfile: {
-          websiteUrl: normalizeWebsiteUrl(text),
-        },
-      };
-    case "company":
-      return {
-        businessProfile: {
-          companyName: text,
-        },
-      };
-    case "description":
-      return {
-        businessProfile: {
-          description: text,
-        },
-      };
-    case "services":
-      return {
-        services: buildServicesFromAnswer(text),
-      };
-    case "contact":
-      return {
-        contacts: buildContactsFromAnswer(text),
-      };
-    case "hours":
-      return {
-        hours: buildHoursFromAnswer(text),
-      };
-    case "pricing":
-      return {
-        pricingPosture: {
-          summary: text,
-        },
-      };
-    case "handoff":
-      return {
-        handoffRules: {
-          summary: text,
-          triggers: splitAnswerList(text, 24),
-        },
-      };
-    default:
-      return {};
-  }
-}
-
-function isMessageSkip(body = {}) {
-  return body?.skip === true || s(body?.intent).toLowerCase() === "skip";
-}
-
-function mergePatchObjects(left = {}, right = {}) {
-  const a = obj(left);
-  const b = obj(right);
-
+function sanitizeSourceMetadata(value = {}) {
+  const source = obj(value);
   return compactDraftObject({
-    businessProfile:
-      a.businessProfile !== undefined || b.businessProfile !== undefined
-        ? {
-            ...obj(a.businessProfile),
-            ...obj(b.businessProfile),
-          }
-        : undefined,
-    services: b.services !== undefined ? b.services : a.services,
-    contacts: b.contacts !== undefined ? b.contacts : a.contacts,
-    hours: b.hours !== undefined ? b.hours : a.hours,
-    pricingPosture:
-      a.pricingPosture !== undefined || b.pricingPosture !== undefined
-        ? {
-            ...obj(a.pricingPosture),
-            ...obj(b.pricingPosture),
-          }
-        : undefined,
-    handoffRules:
-      a.handoffRules !== undefined || b.handoffRules !== undefined
-        ? {
-            ...obj(a.handoffRules),
-            ...obj(b.handoffRules),
-          }
-        : undefined,
-    progress:
-      a.progress !== undefined || b.progress !== undefined
-        ? {
-            ...obj(a.progress),
-            ...obj(b.progress),
-          }
-        : undefined,
+    primarySourceType: s(source.primarySourceType || source.primary_source_type),
+    primarySourceUrl: s(source.primarySourceUrl || source.primary_source_url),
+    sourceLabels: uniqueStrings(source.sourceLabels, 12),
+    evidenceSummary: uniqueStrings(source.evidenceSummary, 12),
+    warningCount: Number(source.warningCount || 0) || 0,
+    sourceCount: Number(source.sourceCount || 0) || 0,
   });
 }
 
-function deriveWebsitePrefillDraft(core = {}) {
-  const businessProfile = obj(core.businessProfile);
-  const websiteUrl = s(businessProfile.websiteUrl);
-
-  return {
-    supported: true,
-    mode: "manual_url",
-    status: websiteUrl ? "captured" : "awaiting_input",
-    websiteUrl,
-    scanSuggested: Boolean(websiteUrl),
-  };
+function sanitizeAssistantState(value = {}) {
+  const source = obj(value);
+  return compactDraftObject({
+    activeSection: s(source.activeSection || source.active_section).toLowerCase(),
+    lastParsedPricingNote: s(
+      source.lastParsedPricingNote || source.last_parsed_pricing_note
+    ),
+    lastParsedHoursNote: s(
+      source.lastParsedHoursNote || source.last_parsed_hours_note
+    ),
+    lastParsedServicesNote: s(
+      source.lastParsedServicesNote || source.last_parsed_services_note
+    ),
+    lastUpdatedSection: s(
+      source.lastUpdatedSection || source.last_updated_section
+    ).toLowerCase(),
+  });
 }
 
-function buildSummary(draft = {}) {
-  const businessProfile = obj(draft.businessProfile);
-  const pricingPosture = obj(draft.pricingPosture);
-  const handoffRules = obj(draft.handoffRules);
-
-  const completed = {
-    website: Boolean(s(businessProfile.websiteUrl)),
-    company: Boolean(s(businessProfile.companyName)),
-    description: Boolean(s(businessProfile.description)),
-    services: arr(draft.services).length > 0,
-    contact: arr(draft.contacts).length > 0,
-    hours: arr(draft.hours).length > 0,
-    pricing: Boolean(Object.keys(pricingPosture).length),
-    handoff: Boolean(Object.keys(handoffRules).length),
-  };
-
-  const completedCount = Object.values(completed).filter(Boolean).length;
-  const coreComplete =
-    completed.company &&
-    completed.description &&
-    (completed.website || completed.contact);
-
+function sanitizeSetupAssistantCore(value = {}) {
   return {
-    completed,
-    completedCount,
-    totalSteps: SETUP_ASSISTANT_QUESTIONS.length,
-    hasAnyDraft: completedCount > 0,
-    coreComplete,
-    hasWebsite: completed.website,
-    hasServices: completed.services,
-    hasContacts: completed.contact,
-    hasHours: completed.hours,
-  };
-}
-
-function buildReviewState(draft = {}, summary = {}) {
-  return {
-    status: summary.hasAnyDraft ? "draft_in_progress" : "awaiting_input",
-    readyForReview: summary.coreComplete === true,
-    readyForApproval: false,
-    message:
-      summary.coreComplete === true
-        ? "Review hazırdır. Aktivləşmə sonrakı mərhələdir."
-        : REVIEW_MESSAGE,
-  };
-}
-
-function buildStoredSetupAssistantPayload(value = {}) {
-  const core = {
     businessProfile: sanitizeBusinessProfile(
       obj(value.businessProfile || value.business_profile)
     ),
     services: sanitizeServices(value.services),
     contacts: sanitizeContacts(value.contacts),
-    hours: sanitizeHours(value.hours),
+    hours: sanitizeStructuredHours(value.hours),
     pricingPosture: sanitizePricingPosture(
       obj(value.pricingPosture || value.pricing_posture || value.pricing)
     ),
     handoffRules: sanitizeHandoffRules(
       obj(value.handoffRules || value.handoff_rules || value.handoff)
     ),
+    sourceMetadata: sanitizeSourceMetadata(
+      obj(value.sourceMetadata || value.source_metadata)
+    ),
+    assistantState: sanitizeAssistantState(
+      obj(value.assistantState || value.assistant_state)
+    ),
+    progress: sanitizeProgress(value.progress),
   };
+}
 
-  const summary = buildSummary(core);
+function mergeBusinessProfile(left = {}, right = {}) {
+  return sanitizeBusinessProfile({
+    ...obj(left),
+    ...obj(right),
+  });
+}
+
+function mergePricingPosture(left = {}, right = {}) {
+  return sanitizePricingPosture({
+    ...obj(left),
+    ...obj(right),
+    perServicePricing:
+      right.perServicePricing !== undefined
+        ? right.perServicePricing
+        : left.perServicePricing,
+  });
+}
+
+function mergeHandoffRules(left = {}, right = {}) {
+  return sanitizeHandoffRules({
+    ...obj(left),
+    ...obj(right),
+  });
+}
+
+function mergeSourceMetadata(left = {}, right = {}) {
+  return sanitizeSourceMetadata({
+    ...obj(left),
+    ...obj(right),
+    sourceLabels:
+      right.sourceLabels !== undefined ? right.sourceLabels : left.sourceLabels,
+    evidenceSummary:
+      right.evidenceSummary !== undefined
+        ? right.evidenceSummary
+        : left.evidenceSummary,
+  });
+}
+
+function mergeAssistantState(left = {}, right = {}) {
+  return sanitizeAssistantState({
+    ...obj(left),
+    ...obj(right),
+  });
+}
+
+function mergeProgress(left = {}, right = {}) {
+  return sanitizeProgress({
+    ...obj(left),
+    ...obj(right),
+    skippedQuestions: uniqueStrings(
+      [...arr(left.skippedQuestions), ...arr(right.skippedQuestions)],
+      32
+    ),
+  });
+}
+
+function mergeSetupAssistantCore(left = {}, right = {}) {
+  const a = sanitizeSetupAssistantCore(left);
+  const b = sanitizeSetupAssistantCore(right);
 
   return {
-    ...core,
-    progress: sanitizeProgress(value.progress),
-    websitePrefill: deriveWebsitePrefillDraft(core),
-    review: buildReviewState(core, summary),
+    businessProfile: mergeBusinessProfile(a.businessProfile, b.businessProfile),
+    services: b.services.length ? sanitizeServices(b.services) : a.services,
+    contacts: b.contacts.length ? sanitizeContacts(b.contacts) : a.contacts,
+    hours:
+      b.hours.length && b.hours.some((row) => row.enabled || row.closed || row.notes)
+        ? sanitizeStructuredHours(b.hours)
+        : a.hours,
+    pricingPosture: mergePricingPosture(a.pricingPosture, b.pricingPosture),
+    handoffRules: mergeHandoffRules(a.handoffRules, b.handoffRules),
+    sourceMetadata: mergeSourceMetadata(a.sourceMetadata, b.sourceMetadata),
+    assistantState: mergeAssistantState(a.assistantState, b.assistantState),
+    progress: mergeProgress(a.progress, b.progress),
+  };
+}
+
+function buildContactsFromAnswer(answer = "") {
+  const items = splitAnswerList(answer, 12).map((item, index) => ({
+    type: inferContactType(item),
+    label: index === 0 ? "Primary" : `Contact ${index + 1}`,
+    value: item,
+    preferred: index === 0,
+    visibility: "public",
+  }));
+
+  return sanitizeContacts(items);
+}
+
+function buildHandoffFromAnswer(answer = "") {
+  const text = s(answer);
+  if (!text) return {};
+  return sanitizeHandoffRules({
+    enabled: true,
+    summary: text,
+    triggers: splitAnswerList(text, 24),
+  });
+}
+
+function deriveServicesFromReviewDraft(reviewDraft = {}) {
+  const profile = obj(reviewDraft.businessProfile);
+  const payloadProfile = obj(obj(reviewDraft.draftPayload).profile);
+
+  return sanitizeServices([
+    ...arr(reviewDraft.services).map((item) => ({
+      key: s(item.key || item.serviceKey || item.service_key || item.id),
+      title: s(item.title || item.name || item.label || item.value_text),
+      summary: s(item.description || item.summary || item.value_text),
+      category: s(item.category || "general"),
+    })),
+    ...arr(payloadProfile.services).map((title) => ({
+      key: slugify(title),
+      title: s(title),
+      category: "general",
+    })),
+    ...arr(profile.services).map((title) => ({
+      key: slugify(title),
+      title: s(title),
+      category: "general",
+    })),
+  ]);
+}
+
+function deriveContactsFromReviewDraft(reviewDraft = {}) {
+  const profile = obj(reviewDraft.businessProfile);
+  const payloadProfile = obj(obj(reviewDraft.draftPayload).profile);
+
+  return sanitizeContacts([
+    s(profile.primaryPhone || payloadProfile.primaryPhone)
+      ? {
+          type: "phone",
+          label: "Phone",
+          value: s(profile.primaryPhone || payloadProfile.primaryPhone),
+          preferred: true,
+          visibility: "public",
+        }
+      : null,
+    s(profile.primaryEmail || payloadProfile.primaryEmail)
+      ? {
+          type: "email",
+          label: "Email",
+          value: s(profile.primaryEmail || payloadProfile.primaryEmail),
+          visibility: "public",
+        }
+      : null,
+    ...arr(payloadProfile.whatsappLinks).map((item, index) => ({
+      type: "whatsapp",
+      label: index === 0 ? "WhatsApp" : `WhatsApp ${index + 1}`,
+      value: s(item),
+      visibility: "public",
+    })),
+  ]);
+}
+
+function deriveHoursFromReviewDraft(reviewDraft = {}) {
+  const profile = obj(reviewDraft.businessProfile);
+  const payloadProfile = obj(obj(reviewDraft.draftPayload).profile);
+  const rawHours = uniqueStrings([
+    ...arr(profile.hours),
+    ...arr(payloadProfile.hours),
+  ]);
+  if (!rawHours.length) return sanitizeStructuredHours([]);
+  return parseHoursNote(rawHours.join("\n"));
+}
+
+function derivePricingFromReviewDraft(reviewDraft = {}, derivedServices = []) {
+  const profile = obj(reviewDraft.businessProfile);
+  const payloadProfile = obj(obj(reviewDraft.draftPayload).profile);
+  const note = uniqueStrings([
+    s(profile.pricingPolicy),
+    s(payloadProfile.pricingPolicy),
+    ...arr(profile.pricingHints),
+    ...arr(payloadProfile.pricingHints),
+  ]).join(". ");
+
+  if (!note) return sanitizePricingPosture({});
+  return parsePricingNote(note, {}, derivedServices);
+}
+
+function buildSourceMetadataFromReview(review = {}) {
+  const draft = obj(review.draft);
+  const summary = obj(draft.sourceSummary);
+  const latestImport = obj(summary.latestImport);
+  const latestAnalyze = obj(summary.latestAnalyze);
+  const sources = arr(review.sources);
+  const sourceLabels = uniqueStrings([
+    ...sources.map(
+      (item) =>
+        s(item.label || item.sourceLabel || item.sourceType || item.role)
+    ),
+    s(latestImport.sourceLabel),
+    s(summary.primarySourceType),
+  ]);
+  const evidenceSummary = uniqueStrings([
+    summary.primarySourceUrl
+      ? `Primary source: ${summary.primarySourceUrl}`
+      : "",
+    latestImport.sourceUrl ? `Latest import: ${latestImport.sourceUrl}` : "",
+    latestAnalyze.sourceType ? `Last analyze: ${latestAnalyze.sourceType}` : "",
+    Number(draft.warningCount || arr(draft.warnings).length) > 0
+      ? `${Number(draft.warningCount || arr(draft.warnings).length)} warnings need review`
+      : "",
+  ]);
+
+  return sanitizeSourceMetadata({
+    primarySourceType:
+      summary.primarySourceType || latestImport.sourceType || latestAnalyze.sourceType,
+    primarySourceUrl: summary.primarySourceUrl || latestImport.sourceUrl,
+    sourceLabels,
+    evidenceSummary,
+    warningCount: Number(draft.warningCount || arr(draft.warnings).length || 0),
+    sourceCount: sources.length || arr(summary.imports).length,
+  });
+}
+
+function buildSetupAssistantSeedFromReview(review = {}) {
+  const reviewDraft = obj(review.draft);
+  const payloadProfile = obj(obj(reviewDraft.draftPayload).profile);
+  const businessProfile = sanitizeBusinessProfile({
+    ...payloadProfile,
+    ...obj(reviewDraft.businessProfile),
+  });
+  const services = deriveServicesFromReviewDraft(reviewDraft);
+
+  return {
+    businessProfile,
+    services,
+    contacts: deriveContactsFromReviewDraft(reviewDraft),
+    hours: deriveHoursFromReviewDraft(reviewDraft),
+    pricingPosture: derivePricingFromReviewDraft(reviewDraft, services),
+    handoffRules: sanitizeHandoffRules({}),
+    sourceMetadata: buildSourceMetadataFromReview(review),
+    assistantState: sanitizeAssistantState({}),
+    progress: sanitizeProgress({}),
+  };
+}
+
+function deriveWebsitePrefillDraft(core = {}) {
+  const businessProfile = obj(core.businessProfile);
+  const sourceMetadata = obj(core.sourceMetadata);
+  const websiteUrl = s(
+    businessProfile.websiteUrl || sourceMetadata.primarySourceUrl
+  );
+
+  return {
+    supported: true,
+    mode: "source_or_manual_url",
+    status: websiteUrl ? "captured" : "awaiting_input",
+    websiteUrl,
+    scanSuggested: Boolean(websiteUrl),
+  };
+}
+
+function buildSectionStatus(draft = {}) {
+  const businessProfile = obj(draft.businessProfile);
+  const pricing = obj(draft.pricingPosture);
+  const handoff = obj(draft.handoffRules);
+  const enabledHours = arr(draft.hours).filter(
+    (item) => item.enabled === true || item.allDay === true || item.appointmentOnly === true
+  );
+
+  const sections = {
+    profile: {
+      completed: Boolean(
+        s(businessProfile.companyName) &&
+          s(businessProfile.description) &&
+          s(businessProfile.websiteUrl)
+      ),
+      partial: Boolean(
+        s(businessProfile.companyName) ||
+          s(businessProfile.description) ||
+          s(businessProfile.websiteUrl)
+      ),
+      metric: [
+        s(businessProfile.companyName) ? "name" : "",
+        s(businessProfile.websiteUrl) ? "website" : "",
+        s(businessProfile.description) ? "summary" : "",
+      ]
+        .filter(Boolean)
+        .join(" / "),
+    },
+    services: {
+      completed: arr(draft.services).length > 0,
+      partial: arr(draft.services).length > 0,
+      metric: `${arr(draft.services).length} drafted`,
+    },
+    hours: {
+      completed: enabledHours.length > 0,
+      partial: arr(draft.hours).some(
+        (item) => item.enabled === true || item.closed === true || s(item.notes)
+      ),
+      metric: enabledHours.length
+        ? `${enabledHours.length} days scheduled`
+        : "not scheduled",
+    },
+    pricing: {
+      completed: Boolean(s(pricing.pricingMode) && s(pricing.publicSummary)),
+      partial: Boolean(
+        s(pricing.pricingMode) ||
+          s(pricing.publicSummary) ||
+          pricing.minPrice != null ||
+          pricing.startingAt != null
+      ),
+      metric: s(pricing.pricingMode) || "not set",
+    },
+    contacts: {
+      completed: arr(draft.contacts).length > 0,
+      partial: arr(draft.contacts).length > 0,
+      metric: `${arr(draft.contacts).length} contact routes`,
+    },
+    handoff: {
+      completed: Boolean(
+        handoff.enabled === true ||
+          s(handoff.summary) ||
+          arr(handoff.triggers).length
+      ),
+      partial: Boolean(s(handoff.summary) || arr(handoff.triggers).length),
+      metric: arr(handoff.triggers).length
+        ? `${arr(handoff.triggers).length} triggers`
+        : s(handoff.summary)
+          ? "configured"
+          : "recommended",
+    },
+  };
+
+  return Object.fromEntries(
+    Object.entries(sections).map(([key, value]) => [
+      key,
+      {
+        ...value,
+        status: value.completed ? "ready" : value.partial ? "needs_review" : "missing",
+      },
+    ])
+  );
+}
+
+function buildConfirmationBlockers(draft = {}, sectionStatus = {}) {
+  const sourceMetadata = obj(draft.sourceMetadata);
+
+  return SECTION_ORDER.filter((key) => sectionStatus[key]?.status !== "ready").map(
+    (key) => ({
+      key,
+      label: SECTION_META[key].label,
+      title: SECTION_META[key].title,
+      severity: sectionStatus[key]?.status === "missing" ? "high" : "medium",
+      reason:
+        sectionStatus[key]?.status === "missing"
+          ? SECTION_META[key].missing
+          : SECTION_META[key].review,
+      metric: s(sectionStatus[key]?.metric),
+      sourceHint:
+        key === "profile" && s(sourceMetadata.primarySourceType)
+          ? `Signals already exist from ${sourceMetadata.primarySourceType}.`
+          : key === "services" && arr(sourceMetadata.evidenceSummary).length
+            ? arr(sourceMetadata.evidenceSummary)[0]
+            : "",
+    })
+  );
+}
+
+function buildSummary(draft = {}) {
+  const sectionStatus = buildSectionStatus(draft);
+  const completionCount = Object.values(sectionStatus).filter(
+    (item) => item.status === "ready"
+  ).length;
+  const confirmationBlockers = buildConfirmationBlockers(draft, sectionStatus);
+  const hasAnyDraft =
+    completionCount > 0 ||
+    Object.values(sectionStatus).some((item) => item.partial === true);
+  const readyForReview = ["profile", "services", "hours", "pricing", "contacts"].every(
+    (key) => sectionStatus[key]?.status === "ready"
+  );
+
+  return {
+    hasAnyDraft,
+    readyForReview,
+    readyForApproval: false,
+    completionCount,
+    totalSections: SECTION_ORDER.length,
+    blockerCount: confirmationBlockers.length,
+    sectionStatus,
+    confirmationBlockers,
+    servicesCount: arr(draft.services).length,
+    contactsCount: arr(draft.contacts).length,
+    hoursConfiguredCount: arr(draft.hours).filter(
+      (item) => item.enabled === true || item.allDay === true || item.appointmentOnly === true
+    ).length,
+  };
+}
+
+function buildReviewState(draft = {}, summary = {}) {
+  return {
+    status: summary.hasAnyDraft ? "draft_in_progress" : "awaiting_input",
+    readyForReview: summary.readyForReview === true,
+    readyForApproval: false,
+    message:
+      summary.readyForReview === true
+        ? "The setup draft is structurally complete enough to move into a later review step. Nothing is live yet."
+        : REVIEW_MESSAGE,
+  };
+}
+
+function buildAssistantSections(draft = {}, summary = {}, servicesCatalog = {}) {
+  return SECTION_ORDER.map((key) => {
+    const meta = SECTION_META[key];
+    const status = obj(summary.sectionStatus)[key]?.status || "missing";
+
+    return {
+      key,
+      label: meta.label,
+      title: meta.title,
+      status,
+      summary:
+        status === "ready"
+          ? meta.ready
+          : status === "needs_review"
+            ? meta.review
+            : meta.missing,
+      metric: s(obj(summary.sectionStatus)[key]?.metric),
+      suggestedCount:
+        key === "services" ? arr(servicesCatalog.suggestedServices).length : 0,
+    };
+  });
+}
+
+function getNextQuestion(summary = {}) {
+  const blocker = arr(summary.confirmationBlockers)[0];
+  if (!blocker) return null;
+
+  const meta = SECTION_META[blocker.key];
+  return {
+    key: blocker.key,
+    label: meta.label,
+    prompt: meta.prompt,
+    placeholder: meta.placeholder,
+  };
+}
+
+function resolveSessionCurrentStep(review = {}, setup = {}, nextQuestion = null) {
+  const storedSession = obj(review.session);
+  const assistantState = obj(setup.assistantState);
+
+  return (
+    s(
+      storedSession.currentStep ||
+        assistantState.activeSection ||
+        obj(setup.progress).currentQuestionKey ||
+        nextQuestion?.key ||
+        SETUP_ASSISTANT_CURRENT_STEP
+    ) || SETUP_ASSISTANT_CURRENT_STEP
+  );
+}
+
+function safeDraftVersion(draftRow = {}) {
+  const version = Number(draftRow.version || 1);
+  return Number.isFinite(version) && version > 0 ? version : 1;
+}
+
+function buildStoredSetupAssistantPayload(value = {}, seed = {}) {
+  const mergedCore = mergeSetupAssistantCore(seed, value);
+  const summary = buildSummary(mergedCore);
+  const review = buildReviewState(mergedCore, summary);
+
+  return {
+    ...mergedCore,
+    websitePrefill: deriveWebsitePrefillDraft(mergedCore),
+    review,
     namespace: SETUP_ASSISTANT_NAMESPACE,
     sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
   };
 }
 
-function normalizeStoredSetupAssistantPayload(value = {}) {
-  return buildStoredSetupAssistantPayload(obj(value));
+function normalizeStoredSetupAssistantPayload(value = {}, seed = {}) {
+  return buildStoredSetupAssistantPayload(obj(value), seed);
 }
 
 function pickAliasedField(source = {}, aliases = []) {
@@ -532,7 +944,7 @@ function normalizeDirectPatchBody(body = {}) {
 
   const hours = pickAliasedField(root, ["hours"]);
   if (hours.provided) {
-    out.hours = sanitizeHours(hours.value);
+    out.hours = sanitizeStructuredHours(hours.value);
   }
 
   const pricingPosture = pickAliasedField(root, [
@@ -553,10 +965,122 @@ function normalizeDirectPatchBody(body = {}) {
     out.handoffRules = sanitizeHandoffRules(obj(handoffRules.value));
   }
 
+  const sourceMetadata = pickAliasedField(root, [
+    "sourceMetadata",
+    "source_metadata",
+  ]);
+  if (sourceMetadata.provided) {
+    out.sourceMetadata = sanitizeSourceMetadata(obj(sourceMetadata.value));
+  }
+
+  const assistantState = pickAliasedField(root, [
+    "assistantState",
+    "assistant_state",
+  ]);
+  if (assistantState.provided) {
+    out.assistantState = sanitizeAssistantState(obj(assistantState.value));
+  }
+
   return compactDraftObject(out);
 }
 
-function normalizeAnswerPatchBody(body = {}) {
+function isMessageSkip(body = {}) {
+  return body?.skip === true || s(body?.intent).toLowerCase() === "skip";
+}
+
+function patchFromAnswer(step = "", answer = "", current = {}) {
+  const key = s(step).toLowerCase();
+  const text = s(answer);
+  const currentDraft = obj(current);
+
+  if (!key || !text) return {};
+
+  switch (key) {
+    case "profile":
+    case "website":
+      return {
+        businessProfile: {
+          websiteUrl: normalizeWebsiteUrl(text),
+        },
+        assistantState: {
+          lastUpdatedSection: "profile",
+          activeSection: "profile",
+        },
+      };
+    case "company":
+      return {
+        businessProfile: {
+          companyName: text,
+        },
+        assistantState: {
+          lastUpdatedSection: "profile",
+          activeSection: "profile",
+        },
+      };
+    case "description":
+      return {
+        businessProfile: {
+          description: text,
+        },
+        assistantState: {
+          lastUpdatedSection: "profile",
+          activeSection: "profile",
+        },
+      };
+    case "services":
+      return {
+        services: parseServicesNote(text, currentDraft.services),
+        assistantState: {
+          lastParsedServicesNote: text,
+          lastUpdatedSection: "services",
+          activeSection: "services",
+        },
+      };
+    case "contact":
+    case "contacts":
+      return {
+        contacts: buildContactsFromAnswer(text),
+        assistantState: {
+          lastUpdatedSection: "contacts",
+          activeSection: "contacts",
+        },
+      };
+    case "hours":
+      return {
+        hours: parseHoursNote(text, currentDraft.hours),
+        assistantState: {
+          lastParsedHoursNote: text,
+          lastUpdatedSection: "hours",
+          activeSection: "hours",
+        },
+      };
+    case "pricing":
+      return {
+        pricingPosture: parsePricingNote(
+          text,
+          currentDraft.pricingPosture,
+          currentDraft.services
+        ),
+        assistantState: {
+          lastParsedPricingNote: text,
+          lastUpdatedSection: "pricing",
+          activeSection: "pricing",
+        },
+      };
+    case "handoff":
+      return {
+        handoffRules: buildHandoffFromAnswer(text),
+        assistantState: {
+          lastUpdatedSection: "handoff",
+          activeSection: "handoff",
+        },
+      };
+    default:
+      return {};
+  }
+}
+
+function normalizeAnswerPatchBody(body = {}, current = {}) {
   const step = s(body.step || body.questionKey || body.field).toLowerCase();
   const answer = s(body.answer || body.message || body.text || body.value);
 
@@ -569,10 +1093,13 @@ function normalizeAnswerPatchBody(body = {}) {
         currentQuestionKey: step,
         updatedAt: nowIso(),
       },
+      assistantState: {
+        activeSection: step,
+      },
     };
   }
 
-  const answerPatch = patchFromAnswer(step, answer);
+  const answerPatch = patchFromAnswer(step, answer, current);
   if (!Object.keys(answerPatch).length) return {};
 
   return compactDraftObject({
@@ -585,10 +1112,10 @@ function normalizeAnswerPatchBody(body = {}) {
   });
 }
 
-export function normalizeSetupAssistantDraftPatchBody(body = {}) {
+export function normalizeSetupAssistantDraftPatchBody(body = {}, current = {}) {
   const directPatch = normalizeDirectPatchBody(body);
-  const answerPatch = normalizeAnswerPatchBody(body);
-  return mergePatchObjects(directPatch, answerPatch);
+  const answerPatch = normalizeAnswerPatchBody(body, current);
+  return mergeDraftState(directPatch, answerPatch);
 }
 
 function removeSkippedIfAnswered(skipped = [], patch = {}) {
@@ -600,9 +1127,8 @@ function removeSkippedIfAnswered(skipped = [], patch = {}) {
   if (patch.services !== undefined && arr(patch.services).length > 0)
     nextSkipped.delete("services");
   if (patch.contacts !== undefined && arr(patch.contacts).length > 0)
-    nextSkipped.delete("contact");
-  if (patch.hours !== undefined && arr(patch.hours).length > 0)
-    nextSkipped.delete("hours");
+    nextSkipped.delete("contacts");
+  if (patch.hours !== undefined) nextSkipped.delete("hours");
   if (
     patch.pricingPosture !== undefined &&
     Object.keys(obj(patch.pricingPosture)).length > 0
@@ -619,8 +1145,8 @@ function removeSkippedIfAnswered(skipped = [], patch = {}) {
   return Array.from(nextSkipped);
 }
 
-export function mergeSetupAssistantDraft(current = {}, patch = {}) {
-  const existing = normalizeStoredSetupAssistantPayload(current);
+export function mergeSetupAssistantDraft(current = {}, patch = {}, seed = {}) {
+  const existing = normalizeStoredSetupAssistantPayload(current, seed);
   const existingProgress = obj(existing.progress);
   const patchProgress = obj(patch.progress);
 
@@ -634,43 +1160,14 @@ export function mergeSetupAssistantDraft(current = {}, patch = {}) {
 
   const normalizedSkipped = removeSkippedIfAnswered(mergedSkipped, patch);
   const nextQuestionKey =
+    s(obj(patch.assistantState).activeSection) ||
     s(patchProgress.currentQuestionKey) ||
     s(existingProgress.currentQuestionKey) ||
     s(patchProgress.lastAnsweredStep) ||
     s(existingProgress.lastAnsweredStep);
 
   const next = {
-    businessProfile:
-      patch.businessProfile !== undefined
-        ? sanitizeBusinessProfile({
-            ...obj(existing.businessProfile),
-            ...obj(patch.businessProfile),
-          })
-        : existing.businessProfile,
-    services:
-      patch.services !== undefined
-        ? sanitizeServices(patch.services)
-        : existing.services,
-    contacts:
-      patch.contacts !== undefined
-        ? sanitizeContacts(patch.contacts)
-        : existing.contacts,
-    hours:
-      patch.hours !== undefined ? sanitizeHours(patch.hours) : existing.hours,
-    pricingPosture:
-      patch.pricingPosture !== undefined
-        ? sanitizePricingPosture({
-            ...obj(existing.pricingPosture),
-            ...obj(patch.pricingPosture),
-          })
-        : existing.pricingPosture,
-    handoffRules:
-      patch.handoffRules !== undefined
-        ? sanitizeHandoffRules({
-            ...obj(existing.handoffRules),
-            ...obj(patch.handoffRules),
-          })
-        : existing.handoffRules,
+    ...mergeSetupAssistantCore(existing, patch),
     progress: sanitizeProgress({
       ...existingProgress,
       ...patchProgress,
@@ -678,141 +1175,20 @@ export function mergeSetupAssistantDraft(current = {}, patch = {}) {
       currentQuestionKey: nextQuestionKey,
       updatedAt: nowIso(),
     }),
+    assistantState: sanitizeAssistantState({
+      ...obj(existing.assistantState),
+      ...obj(patch.assistantState),
+      activeSection:
+        s(obj(patch.assistantState).activeSection) ||
+        s(obj(existing.assistantState).activeSection) ||
+        nextQuestionKey,
+      lastUpdatedSection:
+        s(obj(patch.assistantState).lastUpdatedSection) ||
+        s(obj(existing.assistantState).lastUpdatedSection),
+    }),
   };
 
-  return buildStoredSetupAssistantPayload(next);
-}
-
-function isQuestionAnswered(questionKey = "", draft = {}) {
-  const businessProfile = obj(draft.businessProfile);
-
-  switch (questionKey) {
-    case "website":
-      return Boolean(s(businessProfile.websiteUrl));
-    case "company":
-      return Boolean(s(businessProfile.companyName));
-    case "description":
-      return Boolean(s(businessProfile.description));
-    case "services":
-      return arr(draft.services).length > 0;
-    case "contact":
-      return arr(draft.contacts).length > 0;
-    case "hours":
-      return arr(draft.hours).length > 0;
-    case "pricing":
-      return Boolean(Object.keys(obj(draft.pricingPosture)).length);
-    case "handoff":
-      return Boolean(Object.keys(obj(draft.handoffRules)).length);
-    default:
-      return false;
-  }
-}
-
-function isQuestionSkipped(questionKey = "", draft = {}) {
-  return arr(obj(draft.progress).skippedQuestions)
-    .map((item) => s(item).toLowerCase())
-    .includes(s(questionKey).toLowerCase());
-}
-
-function summarizeAnswer(questionKey = "", draft = {}) {
-  const businessProfile = obj(draft.businessProfile);
-
-  switch (questionKey) {
-    case "website":
-      return s(businessProfile.websiteUrl);
-    case "company":
-      return s(businessProfile.companyName);
-    case "description":
-      return s(businessProfile.description);
-    case "services":
-      return arr(draft.services)
-        .map((item) => s(item.title || item.name || item.label))
-        .filter(Boolean)
-        .slice(0, 4)
-        .join(", ");
-    case "contact":
-      return s(arr(draft.contacts)[0]?.value);
-    case "hours":
-      return s(arr(draft.hours)[0]?.notes || arr(draft.hours)[0]?.day);
-    case "pricing":
-      return s(obj(draft.pricingPosture).summary);
-    case "handoff":
-      return s(obj(draft.handoffRules).summary);
-    default:
-      return "";
-  }
-}
-
-function buildConversation(draft = {}) {
-  const items = [];
-
-  for (const question of SETUP_ASSISTANT_QUESTIONS) {
-    items.push({
-      id: `q:${question.key}`,
-      role: "assistant",
-      step: question.key,
-      text: question.prompt,
-    });
-
-    if (isQuestionAnswered(question.key, draft)) {
-      items.push({
-        id: `a:${question.key}`,
-        role: "user",
-        step: question.key,
-        text: summarizeAnswer(question.key, draft),
-      });
-      continue;
-    }
-
-    if (isQuestionSkipped(question.key, draft)) {
-      items.push({
-        id: `a:${question.key}:skipped`,
-        role: "user",
-        step: question.key,
-        text: "Skip",
-      });
-      continue;
-    }
-
-    break;
-  }
-
-  return items;
-}
-
-function getNextQuestion(draft = {}) {
-  const next = SETUP_ASSISTANT_QUESTIONS.find(
-    (question) =>
-      !isQuestionAnswered(question.key, draft) &&
-      !isQuestionSkipped(question.key, draft)
-  );
-
-  if (!next) return null;
-
-  return {
-    key: next.key,
-    label: next.label,
-    prompt: next.prompt,
-    placeholder: next.placeholder,
-  };
-}
-
-function resolveSessionCurrentStep(review = {}, setup = {}, nextQuestion = null) {
-  const storedSession = obj(review.session);
-
-  return (
-    s(
-      storedSession.currentStep ||
-        obj(setup.progress).currentQuestionKey ||
-        nextQuestion?.key ||
-        SETUP_ASSISTANT_CURRENT_STEP
-    ) || SETUP_ASSISTANT_CURRENT_STEP
-  );
-}
-
-function safeDraftVersion(draftRow = {}) {
-  const version = Number(draftRow.version || 1);
-  return Number.isFinite(version) && version > 0 ? version : 1;
+  return buildStoredSetupAssistantPayload(next, seed);
 }
 
 function readStoredSetupAssistantDraftPayload(draftPayload = {}) {
@@ -830,12 +1206,18 @@ export function buildSetupAssistantSessionPayload(review = {}) {
   const session = obj(review.session);
   const draftRow = obj(review.draft);
   const draftPayload = obj(draftRow.draftPayload);
+  const seed = buildSetupAssistantSeedFromReview(review);
   const setup = normalizeStoredSetupAssistantPayload(
-    readStoredSetupAssistantDraftPayload(draftPayload)
+    readStoredSetupAssistantDraftPayload(draftPayload),
+    seed
   );
   const summary = buildSummary(setup);
-  const nextQuestion = getNextQuestion(setup);
-  const conversation = buildConversation(setup);
+  const servicesCatalog = buildSetupAssistantServiceCatalog({
+    businessProfile: setup.businessProfile,
+    currentServices: setup.services,
+    sourceServices: seed.services,
+  });
+  const nextQuestion = getNextQuestion(summary);
 
   return {
     session: {
@@ -866,16 +1248,22 @@ export function buildSetupAssistantSessionPayload(review = {}) {
       websitePrefill: obj(setup.websitePrefill),
       review: obj(setup.review),
       assistant: {
-        mode: "qna",
+        mode: "structured_v2",
         nextQuestion,
-        conversation,
-        composer:
-          nextQuestion == null
-            ? null
-            : {
-                step: nextQuestion.key,
-                placeholder: nextQuestion.placeholder,
-              },
+        confirmationBlockers: arr(summary.confirmationBlockers),
+        sections: buildAssistantSections(setup, summary, servicesCatalog),
+        quickCapture: Object.fromEntries(
+          SECTION_ORDER.map((key) => [
+            key,
+            {
+              step: key,
+              label: SECTION_META[key].label,
+              placeholder: SECTION_META[key].placeholder,
+            },
+          ])
+        ),
+        servicesCatalog,
+        sourceInsights: arr(obj(setup.sourceMetadata).evidenceSummary),
       },
       draft: {
         businessProfile: obj(setup.businessProfile),
@@ -884,6 +1272,8 @@ export function buildSetupAssistantSessionPayload(review = {}) {
         hours: arr(setup.hours),
         pricingPosture: obj(setup.pricingPosture),
         handoffRules: obj(setup.handoffRules),
+        sourceMetadata: obj(setup.sourceMetadata),
+        assistantState: obj(setup.assistantState),
         progress: obj(setup.progress),
         version: safeDraftVersion(draftRow),
         updatedAt: draftRow.updatedAt || draftRow.updated_at || null,
@@ -952,7 +1342,7 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
       mode: "setup",
       currentStep: SETUP_ASSISTANT_CURRENT_STEP,
       startedBy: resolveStartedBy(actor),
-      title: "AI setup",
+      title: "Setup assistant v2",
       notes: "",
       metadata: {
         setupAssistantShell: true,
@@ -1057,7 +1447,14 @@ export async function updateSetupAssistantDraft(
     };
   }
 
-  const patch = normalizeSetupAssistantDraftPatchBody(body);
+  const existingDraftPayload = obj(review?.draft?.draftPayload);
+  const seed = buildSetupAssistantSeedFromReview(review);
+  const currentSetupAssistant = normalizeStoredSetupAssistantPayload(
+    readStoredSetupAssistantDraftPayload(existingDraftPayload),
+    seed
+  );
+  const patch = normalizeSetupAssistantDraftPatchBody(body, currentSetupAssistant);
+
   if (!Object.keys(patch).length) {
     return {
       status: 400,
@@ -1069,13 +1466,14 @@ export async function updateSetupAssistantDraft(
     };
   }
 
-  const existingDraftPayload = obj(review?.draft?.draftPayload);
   const mergedSetupAssistant = mergeSetupAssistantDraft(
-    readStoredSetupAssistantDraftPayload(existingDraftPayload),
-    patch
+    currentSetupAssistant,
+    patch,
+    seed
   );
 
-  const nextQuestion = getNextQuestion(mergedSetupAssistant);
+  const nextSummary = buildSummary(mergedSetupAssistant);
+  const nextQuestion = getNextQuestion(nextSummary);
 
   const nextDraftPayload = mergeDraftState(
     stripLegacySetupAssistantPayloadKeys(existingDraftPayload),
@@ -1143,7 +1541,8 @@ export async function updateSetupAssistantDraft(
 }
 
 export const __test__ = {
-  buildConversation,
+  buildConfirmationBlockers,
+  buildSetupAssistantSeedFromReview,
   buildSetupAssistantSessionPayload,
   buildStoredSetupAssistantPayload,
   getNextQuestion,

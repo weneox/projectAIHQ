@@ -416,6 +416,15 @@ function buildSetupFlowState({
   const websitePrefill = obj(setup.websitePrefill);
   const summaryMeta = obj(setup.summary);
   const assistantState = obj(setup.assistant);
+  const sectionStatus = obj(summaryMeta.sectionStatus);
+  const blockerCount = Number(summaryMeta.blockerCount || 0);
+  const completionCount = Number(summaryMeta.completionCount || 0);
+  const readySections = Object.values(sectionStatus).filter(
+    (item) => s(item?.status) === "ready"
+  ).length;
+  const pricingReady = s(sectionStatus.pricing?.status) === "ready";
+  const hoursReady = s(sectionStatus.hours?.status) === "ready";
+  const servicesReady = s(sectionStatus.services?.status) === "ready";
 
   const hasDraft =
     summaryMeta.hasAnyDraft === true ||
@@ -472,7 +481,7 @@ function buildSetupFlowState({
         ? launchChannel.detail
         : hasDraft
           ? s(review.message)
-          : "Start with the website, then continue through short guided questions.",
+          : "Start from sources or a short note, then confirm only the important structured fields.",
     status:
       launchPosture === "connect_channel"
         ? "waiting_for_channel"
@@ -518,6 +527,12 @@ function buildSetupFlowState({
     servicesCount: arr(draft.services).length,
     contactsCount: arr(draft.contacts).length,
     hoursCount: arr(draft.hours).length,
+    blockerCount,
+    completionCount,
+    readySections,
+    pricingReady,
+    hoursReady,
+    servicesReady,
     review,
     websitePrefill,
     session,
@@ -529,6 +544,8 @@ function buildSetupFlowState({
       hours: arr(draft.hours),
       pricingPosture: obj(draft.pricingPosture),
       handoffRules: obj(draft.handoffRules),
+      sourceMetadata: obj(draft.sourceMetadata),
+      assistantState: obj(draft.assistantState),
       version: Number(draft.version || session.draftVersion || 0),
       updatedAt: draft.updatedAt || session.updatedAt || null,
     },
@@ -974,7 +991,7 @@ export function useProductHome(options = {}) {
         setupFlow.launchPosture === "connect_channel"
           ? "Connect channel"
           : setupFlow.needed
-            ? "Quick setup"
+            ? "Structured setup"
             : setupFlow.hasDraft
               ? "Continue setup"
               : "Setup",

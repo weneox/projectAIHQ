@@ -31,9 +31,23 @@ function createAssistant(overrides = {}) {
       businessProfile: {},
       services: [],
       contacts: [],
-      hours: [],
+      hours: [
+        { day: "monday", enabled: false, closed: true },
+        { day: "tuesday", enabled: false, closed: true },
+        { day: "wednesday", enabled: false, closed: true },
+        { day: "thursday", enabled: false, closed: true },
+        { day: "friday", enabled: false, closed: true },
+        { day: "saturday", enabled: false, closed: true },
+        { day: "sunday", enabled: false, closed: true },
+      ],
       pricingPosture: {},
       handoffRules: {},
+      sourceMetadata: {
+        primarySourceType: "website",
+      },
+      assistantState: {
+        activeSection: "profile",
+      },
       version: 0,
       updatedAt: null,
     },
@@ -44,22 +58,32 @@ function createAssistant(overrides = {}) {
     },
     assistant: {
       nextQuestion: {
-        key: "website",
-        prompt: "Saytin var?",
+        key: "profile",
+        prompt: "Confirm the business profile first.",
         placeholder: "https://yourbusiness.com",
       },
-      conversation: [
+      confirmationBlockers: [
         {
-          id: "q:website",
-          role: "assistant",
-          step: "website",
-          text: "Saytin var?",
+          key: "profile",
+          title: "Confirm who the business is",
+          reason: "Website, name, and summary still need confirmation.",
+          severity: "high",
         },
       ],
-      composer: {
-        step: "website",
-        placeholder: "https://yourbusiness.com",
+      sections: [
+        {
+          key: "profile",
+          label: "Business profile",
+          title: "Confirm who the business is",
+          summary: "Add the core business identity.",
+        },
       },
+      servicesCatalog: {
+        items: [],
+        packs: [],
+        suggestedServices: [],
+      },
+      sourceInsights: ["Primary source: https://acme.test"],
     },
     launchChannel: {
       connected: true,
@@ -110,7 +134,8 @@ describe("FloatingAiWidget", () => {
 
     expect(screen.getByRole("dialog", { name: "AI setup" })).toBeInTheDocument();
     expect(screen.getByText("Telegram is connected. Start the first structured business draft.")).toBeInTheDocument();
-    expect(screen.getByText("Saytin var?")).toBeInTheDocument();
+    expect(screen.getByText("Confirm who the business is")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save section" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Close AI setup" }));
 
