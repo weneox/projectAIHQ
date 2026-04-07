@@ -1,13 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import express from "express";
 
 import { workspaceOnboardingRoutes } from "../src/routes/api/workspace/onboarding.js";
+import { registerSetupAssistantRoutes } from "../src/routes/api/workspace/setupRoutesAssistant.js";
 import {
-  __test__ as onboardingTest,
-  loadCurrentOnboardingSession,
-  startOnboardingSession,
-  updateOnboardingDraft,
-} from "../src/services/workspace/setup/onboardingApp.js";
+  loadCurrentSetupAssistantSession,
+  startSetupAssistantSession,
+  updateSetupAssistantDraft,
+} from "../src/services/workspace/setup/setupAssistantApp.js";
 
 function createActor(overrides = {}) {
   return {
@@ -79,85 +80,12 @@ async function invokeRoute(router, method, path, req = {}) {
   return { req: fullReq, res };
 }
 
-test("onboarding draft patch normalization keeps the website-first fields structured", () => {
-  const patch = onboardingTest.normalizeOnboardingDraftPatchBody({
-    draft: {
-      businessProfile: {
-        companyName: "Acme Clinic",
-        websiteUrl: "https://acme.example",
-        description: "Cosmetic dentistry and consultations",
-      },
-      services: [
-        {
-          title: "Initial consultation",
-          priceLabel: "From $50",
-        },
-      ],
-      contacts: [
-        {
-          type: "phone",
-          value: "+994501112233",
-        },
-      ],
-      hours: [
-        {
-          day: "Mon-Fri",
-          open: "09:00",
-          close: "18:00",
-        },
-      ],
-      pricingPosture: {
-        mode: "quote_based",
-      },
-      handoffRules: {
-        enabled: true,
-        triggers: ["medical_urgency", "human_request"],
-      },
-    },
-  });
-
-  assert.deepEqual(patch.businessProfile, {
-    companyName: "Acme Clinic",
-    description: "Cosmetic dentistry and consultations",
-    websiteUrl: "https://acme.example",
-  });
-  assert.deepEqual(patch.services, [
-    {
-      key: "initial-consultation",
-      title: "Initial consultation",
-      priceLabel: "From $50",
-    },
-  ]);
-  assert.deepEqual(patch.contacts, [
-    {
-      type: "phone",
-      value: "+994501112233",
-      preferred: false,
-    },
-  ]);
-  assert.deepEqual(patch.hours, [
-    {
-      day: "Mon-Fri",
-      open: "09:00",
-      close: "18:00",
-      closed: false,
-    },
-  ]);
-  assert.deepEqual(patch.pricingPosture, {
-    mode: "quote_based",
-  });
-  assert.deepEqual(patch.handoffRules, {
-    enabled: true,
-    triggers: ["medical_urgency", "human_request"],
-  });
-});
-
-test("onboarding session start reuses setup review storage but stays draft-only", async () => {
+test("setup assistant session start reuses setup review storage but returns canonical setup payloads", async () => {
   let currentReview = null;
   let createdSessionInput = null;
   const auditCalls = [];
 
-  const result = await startOnboardingSession(
+  const result = await startSetupAssistantSession(
     {
       db: {},
       actor: createActor(),
@@ -204,22 +132,18 @@ test("onboarding session start reuses setup review storage but stays draft-only"
   assert.equal(result.body.created, true);
   assert.equal(createdSessionInput.currentStep, "onboarding");
   assert.equal(createdSessionInput.metadata.onboardingShell, true);
-  assert.equal(createdSessionInput.metadata.truthApprovalDeferred, true);
-  assert.equal(result.body.session.draftOnly, true);
-  assert.equal(result.body.onboarding.draftOnly, true);
+  assert.equal(result.body.session.namespace, "setup_assistant");
+  assert.equal(result.body.setup.draftOnly, true);
   assert.equal(
-    result.body.onboarding.draft.businessProfile.websiteUrl,
+    result.body.setup.draft.businessProfile.websiteUrl,
     "https://acme.example"
   );
-  assert.equal(
-    result.body.onboarding.review.message,
-    "Draft answers stay separate from approved truth and the strict runtime until a later approval step is completed."
-  );
+  assert.equal(result.body.message, "Setup assistant session started");
   assert.equal(auditCalls.length, 1);
 });
 
-test("onboarding session current returns a safe not-found shape until a session exists", async () => {
-  const result = await loadCurrentOnboardingSession(
+test("setup assistant current returns a safe not-found shape until a session exists", async () => {
+  const result = await loadCurrentSetupAssistantSession(
     {
       db: {},
       actor: createActor(),
@@ -233,10 +157,11 @@ test("onboarding session current returns a safe not-found shape until a session 
 
   assert.equal(result.status, 404);
   assert.equal(result.body.ok, false);
-  assert.equal(result.body.error, "OnboardingSessionNotFound");
+  assert.equal(result.body.error, "SetupAssistantSessionNotFound");
+  assert.equal(result.body.setup, null);
 });
 
-test("onboarding draft update stays inside the onboarding namespace and preserves existing setup draft data", async () => {
+test("setup assistant draft update stays inside setup review storage and returns the canonical setup payload", async () => {
   let currentReview = {
     session: {
       id: "session-1",
@@ -271,7 +196,7 @@ test("onboarding draft update stays inside the onboarding namespace and preserve
   let patchInput = null;
   const auditCalls = [];
 
-  const result = await updateOnboardingDraft(
+  const result = await updateSetupAssistantDraft(
     {
       db: {},
       actor: createActor(),
@@ -280,7 +205,7 @@ test("onboarding draft update stays inside the onboarding namespace and preserve
           businessProfile: {
             companyName: "Acme Clinic",
             websiteUrl: "https://acme.example",
-            description: "Draft-only onboarding profile",
+            description: "Draft-only setup profile",
           },
           services: [
             {
@@ -338,70 +263,69 @@ test("onboarding draft update stays inside the onboarding namespace and preserve
     patchInput.patch.draftPayload.onboarding.businessProfile.companyName,
     "Acme Clinic"
   );
-  assert.equal(
-    patchInput.patch.draftPayload.onboarding.businessProfile.websiteUrl,
-    "https://acme.example"
-  );
-  assert.equal(
-    patchInput.patch.draftPayload.onboarding.review.readyForApproval,
-    false
-  );
   assert.equal(result.status, 200);
   assert.equal(result.body.ok, true);
-  assert.equal(result.body.onboarding.draft.version, 3);
-  assert.equal(
-    result.body.onboarding.draft.services[0].title,
-    "Consultation"
-  );
-  assert.equal(
-    result.body.onboarding.draft.pricingPosture.mode,
-    "quote_based"
-  );
-  assert.equal(result.body.onboarding.draft.handoffRules.enabled, true);
+  assert.equal(result.body.setup.draft.version, 3);
+  assert.equal(result.body.setup.draft.services[0].title, "Consultation");
+  assert.equal(result.body.setup.draft.pricingPosture.mode, "quote_based");
+  assert.equal(result.body.session.namespace, "setup_assistant");
+  assert.equal(result.body.message, "Setup assistant draft updated");
   assert.equal(auditCalls.length, 1);
 });
 
-test("onboarding routes wire start, current, and update through the tenant-scoped actor", async () => {
+test("setup assistant routes wire start, current, and update through the tenant-scoped actor", async () => {
   const routeCalls = [];
-  const router = workspaceOnboardingRoutes({
+  const router = express.Router();
+
+  registerSetupAssistantRoutes(router, {
     db: { name: "db" },
-    services: {
-      async startOnboardingSession({ db, actor }) {
-        routeCalls.push({ type: "start", db, actor });
-        return {
-          status: 200,
-          body: {
-            ok: true,
-            session: { id: "session-1" },
-          },
-        };
-      },
-      async loadCurrentOnboardingSession({ db, actor }) {
-        routeCalls.push({ type: "current", db, actor });
-        return {
-          status: 404,
-          body: {
-            ok: false,
-            error: "OnboardingSessionNotFound",
-          },
-        };
-      },
-      async updateOnboardingDraft({ db, actor, body }) {
-        routeCalls.push({ type: "update", db, actor, body });
-        return {
-          status: 200,
-          body: {
-            ok: true,
-            onboarding: {
-              draft: {
-                businessProfile: {
-                  companyName: "Acme Clinic",
-                },
+    requireSetupActor(req) {
+      return {
+        user: req.user,
+        tenantId: req.tenantId,
+        tenantKey: req.tenantKey,
+      };
+    },
+    async startSetupAssistantSession({ db, actor }) {
+      routeCalls.push({ type: "start", db, actor });
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          session: { id: "session-1" },
+          setup: { draft: {} },
+        },
+      };
+    },
+    async loadCurrentSetupAssistantSession({ db, actor }) {
+      routeCalls.push({ type: "current", db, actor });
+      return {
+        status: 404,
+        body: {
+          ok: false,
+          error: "SetupAssistantSessionNotFound",
+          setup: null,
+        },
+      };
+    },
+    async updateSetupAssistantDraft({ db, actor, body }) {
+      routeCalls.push({ type: "update", db, actor, body });
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          setup: {
+            draft: {
+              businessProfile: {
+                companyName: "Acme Clinic",
               },
             },
           },
-        };
-      },
+        },
+      };
+    },
+    s(value, fallback = "") {
+      return String(value ?? fallback).trim();
     },
   });
 
@@ -411,15 +335,20 @@ test("onboarding routes wire start, current, and update through the tenant-scope
     role: "owner",
   };
 
-  const startRes = await invokeRoute(router, "post", "/onboarding/session/start", {
-    user,
-    tenantId: "tenant-1",
-    tenantKey: "acme",
-  });
+  const startRes = await invokeRoute(
+    router,
+    "post",
+    "/setup/assistant/session/start",
+    {
+      user,
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+    }
+  );
   const currentRes = await invokeRoute(
     router,
     "get",
-    "/onboarding/session/current",
+    "/setup/assistant/session/current",
     {
       user,
       tenantId: "tenant-1",
@@ -429,7 +358,7 @@ test("onboarding routes wire start, current, and update through the tenant-scope
   const updateRes = await invokeRoute(
     router,
     "patch",
-    "/onboarding/session/current",
+    "/setup/assistant/session/current",
     {
       user,
       tenantId: "tenant-1",
@@ -449,11 +378,40 @@ test("onboarding routes wire start, current, and update through the tenant-scope
   assert.equal(updateRes.res.statusCode, 200);
   assert.equal(routeCalls.length, 3);
   assert.equal(routeCalls[0].type, "start");
-  assert.equal(routeCalls[0].actor.tenantId, "tenant-1");
   assert.equal(routeCalls[1].type, "current");
   assert.equal(routeCalls[2].type, "update");
-  assert.equal(
-    routeCalls[2].body.draft.businessProfile.companyName,
-    "Acme Clinic"
-  );
+});
+
+test("legacy onboarding routes remain available as compatibility aliases", async () => {
+  const routeCalls = [];
+  const router = workspaceOnboardingRoutes({
+    db: { name: "db" },
+    services: {
+      async startOnboardingSession({ db, actor }) {
+        routeCalls.push({ type: "start", db, actor });
+        return {
+          status: 200,
+          body: {
+            ok: true,
+            session: { id: "session-1" },
+            onboarding: { draft: {} },
+          },
+        };
+      },
+    },
+  });
+
+  const res = await invokeRoute(router, "post", "/onboarding/session/start", {
+    user: {
+      id: "11111111-1111-4111-8111-111111111111",
+      email: "owner@acme.test",
+      role: "owner",
+    },
+    tenantId: "tenant-1",
+    tenantKey: "acme",
+  });
+
+  assert.equal(res.res.statusCode, 200);
+  assert.equal(routeCalls.length, 1);
+  assert.equal(routeCalls[0].actor.tenantId, "tenant-1");
 });

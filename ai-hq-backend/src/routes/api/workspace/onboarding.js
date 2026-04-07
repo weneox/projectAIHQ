@@ -6,6 +6,10 @@ import {
   updateOnboardingDraft,
 } from "../../../services/workspace/setup/onboardingApp.js";
 
+// Legacy compatibility aliases. The canonical product-facing flow now lives
+// under /api/setup/assistant/session/* and persists into the same setup review
+// draft storage.
+
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
 }

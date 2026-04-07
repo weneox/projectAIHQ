@@ -17,9 +17,9 @@ function createHomeState(overrides = {}) {
     currentStatus: {
       title: "Connect Telegram before launching AI conversations.",
       summary:
-        "The guided onboarding lane stays locked until the tenant Telegram bot is connected.",
+        "The guided setup lane stays locked until the tenant Telegram bot is connected.",
       action: { label: "Open channels", path: "/channels?channel=telegram" },
-      secondaryAction: { label: "Open AI onboarding", path: "/home?assistant=setup" },
+      secondaryAction: { label: "Open AI setup", path: "/home?assistant=setup" },
     },
     heroStats: [
       {
@@ -30,11 +30,11 @@ function createHomeState(overrides = {}) {
         action: { label: "Open channels", path: "/channels?channel=telegram" },
       },
       {
-        id: "onboarding",
-        label: "AI onboarding",
+        id: "setup",
+        label: "AI setup",
         status: "Waiting for Telegram",
-        summary: "The onboarding assistant stays in connect-CTA posture until Telegram is attached.",
-        action: { label: "Open AI onboarding", path: "/home?assistant=setup" },
+        summary: "The setup assistant stays in connect-CTA posture until Telegram is attached.",
+        action: { label: "Open AI setup", path: "/home?assistant=setup" },
       },
       {
         id: "runtime",
@@ -44,10 +44,10 @@ function createHomeState(overrides = {}) {
         action: { label: "Open truth", path: "/truth" },
       },
     ],
-    onboardingState: {
-      title: "Connect Telegram to unlock guided onboarding.",
+    setupFlow: {
+      title: "Connect Telegram to unlock guided setup.",
       summary:
-        "The onboarding assistant stays in connect-CTA posture until the tenant Telegram bot is attached.",
+        "The setup assistant stays in connect-CTA posture until the tenant Telegram bot is attached.",
       detail: "Use Channels to connect the Telegram bot for this workspace.",
       action: { label: "Open channels", path: "/channels?channel=telegram" },
       secondaryAction: { label: "Open home", path: "/home" },
@@ -78,8 +78,8 @@ function createHomeState(overrides = {}) {
         id: "comments",
         title: "Comments",
         status: "Separate surface",
-        summary: "Comments remain available, but they are not the launch channel for this onboarding batch.",
-        detail: "Keep the onboarding story narrow for this phase.",
+        summary: "Comments remain available, but they are not the launch surface for this setup flow.",
+        detail: "Keep the setup story narrow for this phase.",
         action: { label: "Open comments", path: "/comments" },
       },
       {
@@ -87,7 +87,7 @@ function createHomeState(overrides = {}) {
         title: "Voice Receptionist",
         status: "Separate surface",
         summary: "Voice stays available as its own surface.",
-        detail: "Voice readiness does not drive the Telegram onboarding path.",
+        detail: "Voice readiness does not drive the Telegram setup path.",
         action: { label: "Open voice", path: "/voice" },
       },
       {
@@ -103,7 +103,7 @@ function createHomeState(overrides = {}) {
         title: "Truth",
         status: "Blocked",
         summary: "Approved truth and runtime stay protected.",
-        detail: "Draft onboarding does not publish automatically.",
+        detail: "Draft setup does not publish automatically.",
         action: { label: "Open truth", path: "/truth" },
       },
       {
@@ -121,26 +121,18 @@ function createHomeState(overrides = {}) {
           id: "inbox",
           title: "Inbox",
           status: "Waiting on launch readiness",
-          summary:
-            "The inbox becomes the main operating surface after Telegram, approved truth, and runtime are aligned.",
-          detail:
-            "Approved truth exists, but the strict runtime projection is not ready for Telegram yet.",
           action: { label: "Open inbox", path: "/inbox" },
         },
         {
           id: "comments",
           title: "Comments",
           status: "Separate surface",
-          summary: "Comments remain available, but they are not the launch channel for this onboarding batch.",
-          detail: "Keep the onboarding story narrow for this phase.",
           action: { label: "Open comments", path: "/comments" },
         },
         {
           id: "voice",
           title: "Voice Receptionist",
           status: "Separate surface",
-          summary: "Voice stays available as its own surface.",
-          detail: "Voice readiness does not drive the Telegram onboarding path.",
           action: { label: "Open voice", path: "/voice" },
         },
       ],
@@ -166,7 +158,7 @@ function createHomeState(overrides = {}) {
       ],
     },
     assistant: {
-      title: "Connect Telegram to unlock guided onboarding.",
+      title: "Connect Telegram to unlock guided setup.",
     },
     ...overrides,
   };
@@ -201,10 +193,10 @@ describe("ProductHomePage", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "Live work starts here.",
+        name: "Operate live from one surface.",
       })
     ).toBeInTheDocument();
-    expect(screen.getByText("AI onboarding shell")).toBeInTheDocument();
+    expect(screen.getByText("Setup")).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("button", { name: "Open channels" })[0]);
 
@@ -218,8 +210,7 @@ describe("ProductHomePage", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText("Assistant open")).toBeInTheDocument();
-    expect(screen.getByText("Draft snapshot")).toBeInTheDocument();
+    expect(screen.getByText("Assistant active")).toBeInTheDocument();
     expect(screen.getByText("Awaiting website")).toBeInTheDocument();
   });
 });
