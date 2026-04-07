@@ -45,9 +45,9 @@ function compactSentence(value, fallback = "") {
 }
 
 function buildCoverageText(home) {
-  const servicesCount = Number(home?.onboardingState?.servicesCount || 0);
-  const contactsCount = Number(home?.onboardingState?.contactsCount || 0);
-  const hoursCount = Number(home?.onboardingState?.hoursCount || 0);
+  const servicesCount = Number(home?.setupFlow?.servicesCount || 0);
+  const contactsCount = Number(home?.setupFlow?.contactsCount || 0);
+  const hoursCount = Number(home?.setupFlow?.hoursCount || 0);
 
   return `${servicesCount} services · ${contactsCount} contacts · ${hoursCount} hours`;
 }
@@ -209,7 +209,7 @@ function UnifiedHomeScene({
   assistantOpen,
   onNavigate,
 }) {
-  const profile = home.onboardingState?.draft?.businessProfile || {};
+  const profile = home.setupFlow?.draft?.businessProfile || {};
   const highlightedPath = home.currentStatus.action?.path;
 
   return (
@@ -318,14 +318,14 @@ function UnifiedHomeScene({
 
               <div className="mt-3 text-[26px] font-semibold tracking-[-0.055em] text-[rgba(15,23,42,0.96)]">
                 {compactText(
-                  home.onboardingState?.title,
+                  home.setupFlow?.title,
                   "Complete your operating draft"
                 )}
               </div>
 
               <div className="mt-2 max-w-[48rem] text-[14px] leading-6 text-[rgba(15,23,42,0.58)]">
                 {compactSentence(
-                  home.onboardingState?.summary,
+                  home.setupFlow?.summary,
                   "Connect sources and finish the operating draft before launch."
                 )}
               </div>
@@ -336,7 +336,7 @@ function UnifiedHomeScene({
                   label="Website"
                   value={compactText(
                     profile.websiteUrl,
-                    home.onboardingState?.websiteUrl || "Awaiting website"
+                    home.setupFlow?.websiteUrl || "Awaiting website"
                   )}
                 />
                 <SetupFact
@@ -353,25 +353,25 @@ function UnifiedHomeScene({
             </div>
 
             <div className="flex flex-wrap gap-3 xl:justify-end">
-              {home.onboardingState?.action?.path ? (
+              {home.setupFlow?.action?.path ? (
                 <Button
                   type="button"
                   size="hero"
-                  onClick={() => onNavigate(home.onboardingState.action)}
+                  onClick={() => onNavigate(home.setupFlow.action)}
                   rightIcon={<ArrowRight className="h-4 w-4" />}
                 >
-                  {home.onboardingState.action.label}
+                  {home.setupFlow.action.label}
                 </Button>
               ) : null}
 
-              {home.onboardingState?.secondaryAction?.path ? (
+              {home.setupFlow?.secondaryAction?.path ? (
                 <Button
                   type="button"
                   size="hero"
                   variant="secondary"
-                  onClick={() => onNavigate(home.onboardingState.secondaryAction)}
+                  onClick={() => onNavigate(home.setupFlow.secondaryAction)}
                 >
-                  {home.onboardingState.secondaryAction.label}
+                  {home.setupFlow.secondaryAction.label}
                 </Button>
               ) : null}
             </div>

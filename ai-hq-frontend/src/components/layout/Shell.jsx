@@ -163,10 +163,10 @@ export default function Shell() {
   const shortcutAssistant = useMemo(
     () => ({
       mode: "shortcut",
-      title: "AI onboarding lives on Home",
+      title: "AI setup lives on Home",
       statusLabel: "Home shortcut",
       summary:
-        "Use Home to connect Telegram, continue the structured onboarding draft, and inspect strict runtime readiness.",
+        "Use Home to connect Telegram, continue the structured setup draft, and inspect strict runtime readiness.",
       primaryAction: {
         label: "Open home assistant",
         path: "/home?assistant=setup",
@@ -181,15 +181,15 @@ export default function Shell() {
           role: "assistant",
           title: "Open Home",
           body:
-            "The onboarding shell is available on Home, where Telegram connect and runtime posture are already composed together.",
+            "The setup shell is available on Home, where Telegram connect and runtime posture are already composed together.",
         },
       ],
       review: {
         message:
-          "Draft-only onboarding remains intentionally separate from truth approval and runtime activation in this batch.",
+          "Draft-only setup remains intentionally separate from truth approval and runtime activation in this batch.",
       },
       launchPosture: "shortcut",
-      onboardingNeeded: false,
+      setupNeeded: false,
       session: {},
       draft: {
         businessProfile: {},
@@ -215,11 +215,11 @@ export default function Shell() {
   const loadingAssistant = useMemo(
     () => ({
       ...shortcutAssistant,
-      mode: "onboarding",
-      title: "Loading AI onboarding",
+      mode: "setup",
+      title: "Loading AI setup",
       statusLabel: "Loading",
       summary:
-        "Preparing Telegram, draft, and strict runtime posture for the onboarding shell.",
+        "Preparing Telegram, draft, and strict runtime posture for the setup shell.",
       primaryAction: {
         label: "Open channels",
         path: "/channels?channel=telegram",
@@ -232,7 +232,7 @@ export default function Shell() {
         {
           id: "loading",
           role: "assistant",
-          title: "Loading onboarding posture",
+          title: "Loading setup posture",
           body:
             "The assistant is waiting for the current Home state before it suggests the next step.",
         },
@@ -254,19 +254,19 @@ export default function Shell() {
   ]);
 
   const autoOpenKey = useMemo(() => {
-    if (!homeRouteActive || !home.onboardingState?.autoOpen) return "";
+    if (!homeRouteActive || !home.setupFlow?.autoOpen) return "";
 
     return [
-      s(home.onboardingState.launchPosture),
-      s(home.onboardingState.sessionId, "no-session"),
-      String(home.onboardingState.draftVersion || 0),
+      s(home.setupFlow.launchPosture),
+      s(home.setupFlow.sessionId, "no-session"),
+      String(home.setupFlow.draftVersion || 0),
     ].join(":");
   }, [
     homeRouteActive,
-    home.onboardingState?.autoOpen,
-    home.onboardingState?.launchPosture,
-    home.onboardingState?.sessionId,
-    home.onboardingState?.draftVersion,
+    home.setupFlow?.autoOpen,
+    home.setupFlow?.launchPosture,
+    home.setupFlow?.sessionId,
+    home.setupFlow?.draftVersion,
   ]);
 
   const loadShellStats = useCallback(async () => {
@@ -333,7 +333,7 @@ export default function Shell() {
   }, [assistantRequested]);
 
   useEffect(() => {
-    if (!homeRouteActive || !home.onboardingState?.autoOpen || !autoOpenKey) {
+    if (!homeRouteActive || !home.setupFlow?.autoOpen || !autoOpenKey) {
       return;
     }
 
@@ -341,7 +341,7 @@ export default function Shell() {
 
     autoOpenedRef.current = autoOpenKey;
     setWidgetOpen(true);
-  }, [autoOpenKey, homeRouteActive, home.onboardingState?.autoOpen]);
+  }, [autoOpenKey, homeRouteActive, home.setupFlow?.autoOpen]);
 
   useEffect(() => {
     const unsubscribeStatus = realtimeStore.subscribeStatus((status) => {

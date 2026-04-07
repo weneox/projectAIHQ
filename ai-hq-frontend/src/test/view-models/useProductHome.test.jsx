@@ -4,12 +4,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getAppSessionContext = vi.fn();
 const getSetupOverview = vi.fn();
+const getCurrentSetupAssistantSession = vi.fn();
 const getSettingsTrustView = vi.fn();
 const getTruthReviewWorkbench = vi.fn();
 const listInboxThreads = vi.fn();
 const getOutboundSummary = vi.fn();
 const getTelegramChannelStatus = vi.fn();
-const getCurrentOnboardingSession = vi.fn();
 
 vi.mock("../../lib/appSession.js", () => ({
   getAppSessionContext: (...args) => getAppSessionContext(...args),
@@ -17,6 +17,8 @@ vi.mock("../../lib/appSession.js", () => ({
 
 vi.mock("../../api/setup.js", () => ({
   getSetupOverview: (...args) => getSetupOverview(...args),
+  getCurrentSetupAssistantSession: (...args) =>
+    getCurrentSetupAssistantSession(...args),
 }));
 
 vi.mock("../../api/trust.js", () => ({
@@ -34,10 +36,6 @@ vi.mock("../../api/inbox.js", () => ({
 
 vi.mock("../../api/channelConnect.js", () => ({
   getTelegramChannelStatus: (...args) => getTelegramChannelStatus(...args),
-}));
-
-vi.mock("../../api/onboarding.js", () => ({
-  getCurrentOnboardingSession: (...args) => getCurrentOnboardingSession(...args),
 }));
 
 import useProductHome from "../../view-models/useProductHome.js";
@@ -127,7 +125,7 @@ describe("useProductHome", () => {
     listInboxThreads.mockResolvedValue({ threads: [] });
     getOutboundSummary.mockResolvedValue({ pendingCount: 0 });
     getTelegramChannelStatus.mockResolvedValue(createTelegramStatus());
-    getCurrentOnboardingSession.mockResolvedValue(null);
+    getCurrentSetupAssistantSession.mockResolvedValue(null);
   });
 
   it("uses a connect CTA posture when Telegram is not connected", async () => {
@@ -150,8 +148,8 @@ describe("useProductHome", () => {
     });
 
     expect(result.current.launchChannel.connected).toBe(false);
-    expect(result.current.onboardingNeeded).toBe(false);
-    expect(result.current.onboardingState.launchPosture).toBe("connect_channel");
+    expect(result.current.setupNeeded).toBe(false);
+    expect(result.current.setupFlow.launchPosture).toBe("connect_channel");
     expect(result.current.currentStatus.action.path).toBe("/channels?channel=telegram");
   });
 
@@ -185,12 +183,12 @@ describe("useProductHome", () => {
       })
     );
 
-    getCurrentOnboardingSession.mockResolvedValue({
+    getCurrentSetupAssistantSession.mockResolvedValue({
       session: {
         id: "session-1",
         draftVersion: 2,
       },
-      onboarding: {
+      setup: {
         draft: {
           businessProfile: {
             websiteUrl: "https://acme.test",
@@ -222,8 +220,8 @@ describe("useProductHome", () => {
 
     expect(result.current.launchChannel.connected).toBe(true);
     expect(result.current.truthRuntime.ready).toBe(false);
-    expect(result.current.onboardingNeeded).toBe(true);
-    expect(result.current.onboardingState.launchPosture).toBe("onboarding_needed");
+    expect(result.current.setupNeeded).toBe(true);
+    expect(result.current.setupFlow.launchPosture).toBe("setup_needed");
     expect(result.current.currentStatus.action.path).toBe("/home?assistant=setup");
   });
 
@@ -277,7 +275,7 @@ describe("useProductHome", () => {
     });
 
     expect(result.current.truthRuntime.ready).toBe(false);
-    expect(result.current.onboardingNeeded).toBe(true);
+    expect(result.current.setupNeeded).toBe(true);
     expect(result.current.truthRuntime.summary).toMatch(/strict runtime projection/i);
     expect(result.current.currentStatus.title).not.toMatch(/aligned|ready/i);
   });
@@ -293,8 +291,8 @@ describe("useProductHome", () => {
 
     expect(result.current.launchChannel.connected).toBe(true);
     expect(result.current.truthRuntime.ready).toBe(true);
-    expect(result.current.onboardingNeeded).toBe(false);
-    expect(result.current.onboardingState.launchPosture).toBe("normal_operation");
+    expect(result.current.setupNeeded).toBe(false);
+    expect(result.current.setupFlow.launchPosture).toBe("normal_operation");
     expect(result.current.currentStatus.action.path).toBe("/inbox");
   });
 });

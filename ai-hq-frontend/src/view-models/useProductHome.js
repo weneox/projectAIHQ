@@ -1,8 +1,10 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getOutboundSummary, listInboxThreads } from "../api/inbox.js";
-import { getCurrentOnboardingSession } from "../api/onboarding.js";
-import { getSetupOverview } from "../api/setup.js";
+import {
+  getCurrentSetupAssistantSession,
+  getSetupOverview,
+} from "../api/setup.js";
 import { getTelegramChannelStatus } from "../api/channelConnect.js";
 import { getSettingsTrustView } from "../api/trust.js";
 import { getTruthReviewWorkbench } from "../api/truth.js";
@@ -54,7 +56,7 @@ async function loadProductHomePayloads() {
     inboxThreads: listInboxThreads({ limit: 10 }),
     inboxOutbound: getOutboundSummary(),
     telegramStatus: getTelegramChannelStatus(),
-    onboardingSession: getCurrentOnboardingSession(),
+    setupAssistantSession: getCurrentSetupAssistantSession(),
   };
 
   const settledEntries = await Promise.all(
@@ -188,7 +190,7 @@ function buildLaunchChannelState({ telegramPayload, sourceStatus }) {
       title: "Launch channel state is unavailable.",
       summary: "Home cannot confirm whether a launch channel is connected.",
       detail:
-        "Open Channels to verify connection status before treating onboarding as ready.",
+        "Open Channels to verify connection status before treating setup as ready.",
       action,
       deliveryReady: false,
       channelLabel: "Telegram",
@@ -261,10 +263,10 @@ function buildLaunchChannelState({ telegramPayload, sourceStatus }) {
     available: true,
     status: "needs_connection",
     statusLabel: "Connect required",
-    title: "Connect a launch channel before onboarding can start.",
+    title: "Connect a launch channel before setup can start.",
     summary:
       readinessMessage ||
-      "The guided onboarding lane stays locked until a launch channel is connected.",
+      "The guided setup lane stays locked until a launch channel is connected.",
     detail: "Use Channels to connect Telegram for this workspace.",
     action,
     deliveryReady: false,
@@ -401,19 +403,19 @@ function buildTruthRuntimeState({ trustPayload, telegramPayload, sourceStatus })
   };
 }
 
-function buildOnboardingState({
+function buildSetupFlowState({
   launchChannel,
   truthRuntime,
-  onboardingSession,
+  setupAssistantSession,
 }) {
-  const session = obj(onboardingSession?.session);
-  const onboarding = obj(onboardingSession?.onboarding);
-  const draft = obj(onboarding.draft);
+  const session = obj(setupAssistantSession?.session);
+  const setup = obj(setupAssistantSession?.setup);
+  const draft = obj(setup.draft);
   const draftBusinessProfile = obj(draft.businessProfile);
-  const review = obj(onboarding.review);
-  const websitePrefill = obj(onboarding.websitePrefill);
-  const summaryMeta = obj(onboarding.summary);
-  const assistantState = obj(onboarding.assistant);
+  const review = obj(setup.review);
+  const websitePrefill = obj(setup.websitePrefill);
+  const summaryMeta = obj(setup.summary);
+  const assistantState = obj(setup.assistant);
 
   const hasDraft =
     summaryMeta.hasAnyDraft === true ||
@@ -431,26 +433,26 @@ function buildOnboardingState({
   const launchPosture = !launchChannel.connected
     ? "connect_channel"
     : needed
-      ? "onboarding_needed"
+      ? "setup_needed"
       : "normal_operation";
 
   const assistantMode =
-    launchPosture === "onboarding_needed"
-      ? "onboarding"
+    launchPosture === "setup_needed"
+      ? "setup"
       : hasDraft && launchChannel.connected
-        ? "onboarding"
+        ? "setup"
         : "shortcut";
 
   return {
     needed,
-    onboardingNeeded: needed,
+    setupNeeded: needed,
     autoOpen: needed,
     launchPosture,
     assistantMode,
     title:
       launchPosture === "connect_channel"
         ? "Connect a launch channel first."
-        : launchPosture === "onboarding_needed"
+        : launchPosture === "setup_needed"
           ? hasDraft
             ? "Channel is connected. Continue the setup draft."
             : "Channel is connected. Start the first setup draft."
@@ -460,7 +462,7 @@ function buildOnboardingState({
     summary:
       launchPosture === "connect_channel"
         ? launchChannel.summary
-        : launchPosture === "onboarding_needed"
+        : launchPosture === "setup_needed"
           ? truthRuntime.summary
           : hasDraft
             ? "Draft work stays separate from approved truth and runtime activation."
@@ -474,7 +476,7 @@ function buildOnboardingState({
     status:
       launchPosture === "connect_channel"
         ? "waiting_for_channel"
-        : launchPosture === "onboarding_needed"
+        : launchPosture === "setup_needed"
           ? hasDraft
             ? "draft_in_progress"
             : "ready_to_start"
@@ -484,7 +486,7 @@ function buildOnboardingState({
     statusLabel:
       launchPosture === "connect_channel"
         ? "Waiting for channel"
-        : launchPosture === "onboarding_needed"
+        : launchPosture === "setup_needed"
           ? hasDraft
             ? "Draft in progress"
             : "Start setup"
@@ -496,7 +498,7 @@ function buildOnboardingState({
         ? launchChannel.action
         : {
             label:
-              launchPosture === "onboarding_needed"
+              launchPosture === "setup_needed"
                 ? hasDraft
                   ? "Continue AI setup"
                   : "Start AI setup"
@@ -506,7 +508,7 @@ function buildOnboardingState({
     secondaryAction:
       launchPosture === "connect_channel"
         ? { label: "Open home", path: "/home" }
-        : launchPosture === "onboarding_needed"
+        : launchPosture === "setup_needed"
           ? { label: "Open truth", path: "/truth" }
           : { label: "Open home", path: "/home" },
     sessionId: s(session.id),
@@ -536,7 +538,7 @@ function buildOnboardingState({
 function buildAssistantMessages({
   launchChannel,
   truthRuntime,
-  onboardingState,
+  setupFlow,
 }) {
   if (!launchChannel.connected) {
     return [
@@ -550,7 +552,7 @@ function buildAssistantMessages({
     ];
   }
 
-  if (onboardingState.needed && onboardingState.hasDraft) {
+  if (setupFlow.needed && setupFlow.hasDraft) {
     return [
       {
         id: "assistant-continue",
@@ -568,7 +570,7 @@ function buildAssistantMessages({
     ];
   }
 
-  if (onboardingState.needed) {
+  if (setupFlow.needed) {
     return [
       {
         id: "assistant-start",
@@ -644,7 +646,7 @@ function buildAvailabilityNote({
 
 function buildPrimaryAction({
   launchChannel,
-  onboardingState,
+  setupFlow,
   truthRuntime,
   inboxState,
 }) {
@@ -656,11 +658,11 @@ function buildPrimaryAction({
     };
   }
 
-  if (onboardingState.needed) {
+  if (setupFlow.needed) {
     return {
-      title: onboardingState.title,
-      detail: onboardingState.summary,
-      action: onboardingState.action,
+      title: setupFlow.title,
+      detail: setupFlow.summary,
+      action: setupFlow.action,
     };
   }
 
@@ -740,7 +742,7 @@ export function useProductHome(options = {}) {
     inboxThreads: null,
     inboxOutbound: null,
     telegramStatus: null,
-    onboardingSession: null,
+    setupAssistantSession: null,
   };
 
   const sourceStatus = state.data?.sourceStatus || {
@@ -751,7 +753,7 @@ export function useProductHome(options = {}) {
     inboxThreads: { available: true },
     inboxOutbound: { available: true },
     telegramStatus: { available: true },
-    onboardingSession: { available: true },
+    setupAssistantSession: { available: true },
   };
 
   const derived = useMemo(() => {
@@ -790,16 +792,16 @@ export function useProductHome(options = {}) {
       sourceStatus,
     });
 
-    const onboardingState = buildOnboardingState({
+    const setupFlow = buildSetupFlowState({
       launchChannel,
       truthRuntime,
-      onboardingSession: payloads.onboardingSession,
+      setupAssistantSession: payloads.setupAssistantSession,
     });
 
     const assistantMessages = buildAssistantMessages({
       launchChannel,
       truthRuntime,
-      onboardingState,
+      setupFlow,
     });
 
     const availabilityNote = buildAvailabilityNote({
@@ -816,7 +818,7 @@ export function useProductHome(options = {}) {
 
     const primaryAction = buildPrimaryAction({
       launchChannel,
-      onboardingState,
+      setupFlow,
       truthRuntime,
       inboxState,
     });
@@ -824,7 +826,7 @@ export function useProductHome(options = {}) {
     const secondaryAction =
       !launchChannel.connected
         ? { label: "Open AI setup", path: "/home?assistant=setup" }
-        : onboardingState.needed
+        : setupFlow.needed
           ? { label: "Open truth", path: "/truth" }
           : inboxState.action?.path === "/inbox"
             ? { label: "Open channels", path: "/channels?channel=telegram" }
@@ -839,11 +841,11 @@ export function useProductHome(options = {}) {
         action: launchChannel.action,
       },
       {
-        id: "onboarding",
+        id: "setup",
         label: "AI setup",
-        status: onboardingState.statusLabel,
-        summary: onboardingState.summary,
-        action: onboardingState.action,
+        status: setupFlow.statusLabel,
+        summary: setupFlow.summary,
+        action: setupFlow.action,
       },
       {
         id: "runtime",
@@ -859,17 +861,17 @@ export function useProductHome(options = {}) {
         id: "inbox",
         title: "Inbox",
         status:
-          onboardingState.launchPosture === "normal_operation"
+          setupFlow.launchPosture === "normal_operation"
             ? primaryAction.action?.path === "/inbox"
               ? "Start here"
               : inboxState.statusLabel
             : "Waiting on launch readiness",
         summary:
-          onboardingState.launchPosture === "normal_operation"
+          setupFlow.launchPosture === "normal_operation"
             ? "Handle live conversations and operator follow-up in one queue."
             : "The inbox becomes the main operating surface after channel, approved truth, and runtime are aligned.",
         detail:
-          onboardingState.launchPosture === "normal_operation"
+          setupFlow.launchPosture === "normal_operation"
             ? inboxState.detail
             : truthRuntime.summary,
         action: { label: "Open inbox", path: "/inbox" },
@@ -879,9 +881,9 @@ export function useProductHome(options = {}) {
         title: "Comments",
         status: "Separate surface",
         summary:
-          "Comments remain available, but they are not the launch surface for this onboarding batch.",
+          "Comments remain available, but they are not the launch surface for this setup flow.",
         detail:
-          "Keep the onboarding story narrow: connect a channel, complete the setup draft, approve truth, then go live.",
+          "Keep the setup story narrow: connect a channel, complete the setup draft, approve truth, then go live.",
         action: { label: "Open comments", path: "/comments" },
       },
       {
@@ -889,7 +891,7 @@ export function useProductHome(options = {}) {
         title: "Voice Receptionist",
         status: "Separate surface",
         summary:
-          "Voice stays available as its own surface and does not drive this connect-first onboarding path.",
+          "Voice stays available as its own surface and does not drive this connect-first setup path.",
         detail:
           "Do not mix voice readiness into the current launch promise.",
         action: { label: "Open voice", path: "/voice" },
@@ -917,7 +919,7 @@ export function useProductHome(options = {}) {
         title: "Workspace",
         status: "Support",
         summary:
-          "Use the workspace for broader operator posture once the onboarding lane is already clear.",
+          "Use the workspace for broader operator posture once the setup lane is already clear.",
         detail:
           "Home leads channel connect, setup, and runtime posture for this flow.",
         action: { label: "Open workspace", path: "/workspace" },
@@ -942,11 +944,11 @@ export function useProductHome(options = {}) {
         action: launchChannel.action,
       },
       {
-        id: "onboarding-support",
+        id: "setup-support",
         label: "AI setup",
-        status: onboardingState.statusLabel,
-        summary: onboardingState.summary,
-        action: onboardingState.action,
+        status: setupFlow.statusLabel,
+        summary: setupFlow.summary,
+        action: setupFlow.action,
       },
       {
         id: "runtime-support",
@@ -961,44 +963,44 @@ export function useProductHome(options = {}) {
       primaryAction.action,
       secondaryAction,
       launchChannel.action,
-      onboardingState.action,
+      setupFlow.action,
       truthRuntime.action,
       { label: "Open workspace", path: "/workspace" },
     ]).slice(0, 4);
 
     const assistant = {
-      mode: onboardingState.assistantMode,
+      mode: setupFlow.assistantMode,
       title:
-        onboardingState.launchPosture === "connect_channel"
+        setupFlow.launchPosture === "connect_channel"
           ? "Connect channel"
-          : onboardingState.needed
+          : setupFlow.needed
             ? "Quick setup"
-            : onboardingState.hasDraft
+            : setupFlow.hasDraft
               ? "Continue setup"
               : "Setup",
-      statusLabel: onboardingState.statusLabel,
+      statusLabel: setupFlow.statusLabel,
       summary:
-        onboardingState.launchPosture === "connect_channel"
+        setupFlow.launchPosture === "connect_channel"
           ? "Əvvəl channel qoş."
-          : onboardingState.needed
+          : setupFlow.needed
             ? "Qısa sual-cavab."
-            : onboardingState.hasDraft
+            : setupFlow.hasDraft
               ? "Draft qalır."
               : "Hazırdır.",
       primaryAction:
-        onboardingState.launchPosture === "connect_channel"
+        setupFlow.launchPosture === "connect_channel"
           ? launchChannel.action
-          : onboardingState.action,
-      secondaryAction: onboardingState.secondaryAction,
-      launchPosture: onboardingState.launchPosture,
-      onboardingNeeded: onboardingState.needed,
-      autoOpen: onboardingState.autoOpen,
-      session: onboardingState.session,
-      draft: onboardingState.draft,
-      review: onboardingState.review,
-      websitePrefill: onboardingState.websitePrefill,
+          : setupFlow.action,
+      secondaryAction: setupFlow.secondaryAction,
+      launchPosture: setupFlow.launchPosture,
+      setupNeeded: setupFlow.needed,
+      autoOpen: setupFlow.autoOpen,
+      session: setupFlow.session,
+      draft: setupFlow.draft,
+      review: setupFlow.review,
+      websitePrefill: setupFlow.websitePrefill,
       messages: assistantMessages,
-      assistant: onboardingState.assistantState,
+      assistant: setupFlow.assistantState,
       launchChannel,
       truthRuntime,
     };
@@ -1011,8 +1013,8 @@ export function useProductHome(options = {}) {
       inboxState,
       launchChannel,
       truthRuntime,
-      onboardingState,
-      onboardingNeeded: onboardingState.needed,
+      setupFlow,
+      setupNeeded: setupFlow.needed,
       assistant,
       availabilityNote,
       heroStats,

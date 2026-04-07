@@ -8,32 +8,24 @@ import FloatingAiWidget from "../../../components/layout/FloatingAiWidget.jsx";
 
 function createAssistant(overrides = {}) {
   return {
-    mode: "onboarding",
+    mode: "setup",
     title: "Telegram is connected. Start the first structured business draft.",
-    statusLabel: "Start onboarding",
+    statusLabel: "Start setup",
     summary: "Capture the website first. Nothing in this batch goes live automatically.",
     primaryAction: {
-      label: "Start AI onboarding",
+      label: "Start AI setup",
       path: "/home?assistant=setup",
     },
     secondaryAction: {
       label: "Open truth",
       path: "/truth",
     },
-    messages: [
-      {
-        id: "assistant-start",
-        role: "assistant",
-        title: "Start with the website.",
-        body: "Capture the business website first and keep it in a draft-only onboarding lane.",
-      },
-    ],
     review: {
       message:
         "Draft answers remain isolated from approved truth and runtime until a later approval step is added.",
     },
-    launchPosture: "onboarding_needed",
-    onboardingNeeded: true,
+    launchPosture: "setup_needed",
+    setupNeeded: true,
     session: {},
     draft: {
       businessProfile: {},
@@ -49,6 +41,25 @@ function createAssistant(overrides = {}) {
       supported: true,
       status: "awaiting_input",
       websiteUrl: "",
+    },
+    assistant: {
+      nextQuestion: {
+        key: "website",
+        prompt: "Saytin var?",
+        placeholder: "https://yourbusiness.com",
+      },
+      conversation: [
+        {
+          id: "q:website",
+          role: "assistant",
+          step: "website",
+          text: "Saytin var?",
+        },
+      ],
+      composer: {
+        step: "website",
+        placeholder: "https://yourbusiness.com",
+      },
     },
     launchChannel: {
       connected: true,
@@ -92,32 +103,33 @@ function renderWidget(assistant = createAssistant()) {
 }
 
 describe("FloatingAiWidget", () => {
-  it("opens and closes the onboarding panel manually", () => {
+  it("opens and closes the setup panel manually", () => {
     renderWidget();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open AI onboarding assistant" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open AI setup" }));
+
+    expect(screen.getByRole("dialog", { name: "AI setup" })).toBeInTheDocument();
+    expect(screen.getByText("Telegram is connected. Start the first structured business draft.")).toBeInTheDocument();
+    expect(screen.getByText("Saytin var?")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Close AI setup" }));
 
     expect(
-      screen.getByRole("dialog", { name: "AI onboarding assistant" })
-    ).toBeInTheDocument();
-    expect(screen.getByText("Conversation")).toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: "Close AI onboarding assistant" })
-    );
-
-    expect(
-      screen.queryByRole("dialog", { name: "AI onboarding assistant" })
+      screen.queryByRole("dialog", { name: "AI setup" })
     ).not.toBeInTheDocument();
   });
 
-  it("shows the review placeholder view when switched from conversation", () => {
-    renderWidget();
+  it("uses the shortcut mode CTA to navigate back into Home setup", () => {
+    const { navigate } = renderWidget(
+      createAssistant({
+        mode: "shortcut",
+        title: "Setup",
+      })
+    );
 
-    fireEvent.click(screen.getByRole("button", { name: "Open AI onboarding assistant" }));
-    fireEvent.click(screen.getByRole("button", { name: "Draft review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open setup shortcut" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start AI setup" }));
 
-    expect(screen.getByText("Review placeholder")).toBeInTheDocument();
-    expect(screen.getByText("Final review stays intentionally gated.")).toBeInTheDocument();
+    expect(navigate).toHaveBeenCalledWith("/home?assistant=setup");
   });
 });

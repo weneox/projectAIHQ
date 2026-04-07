@@ -73,9 +73,9 @@ describe("Shell", () => {
     useProductHome.mockReturnValue({
       loading: false,
       assistant: {
-        title: "AI onboarding lives on Home",
+        title: "AI setup lives on Home",
       },
-      onboardingState: {
+      setupFlow: {
         autoOpen: false,
         launchPosture: "normal_operation",
         sessionId: "",
@@ -114,9 +114,9 @@ describe("Shell", () => {
       assistant: {
         title: "Telegram is connected. Start the first structured business draft.",
       },
-      onboardingState: {
+      setupFlow: {
         autoOpen: true,
-        launchPosture: "onboarding_needed",
+        launchPosture: "setup_needed",
         sessionId: "session-1",
         draftVersion: 3,
       },

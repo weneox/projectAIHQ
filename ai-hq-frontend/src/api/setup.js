@@ -3,6 +3,20 @@
 
 import { apiGet, apiPost, apiPut, apiPatch } from "./client.js";
 
+function obj(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function normalizeSetupAssistantPayload(payload = {}) {
+  const root = obj(payload);
+  const setup = root.setup || root.onboarding;
+
+  return {
+    ...root,
+    setup: setup ? obj(setup) : null,
+  };
+}
+
 export function getSetupStatus() {
   return apiGet("/api/setup/status");
 }
@@ -41,6 +55,40 @@ export function importBundleForSetup(payload = {}) {
 
 export function analyzeSetupIntake(payload = {}) {
   return apiPost("/api/setup/review/current/analyze", payload);
+}
+
+export async function startSetupAssistantSession(payload = {}) {
+  const response = await apiPost("/api/setup/assistant/session/start", payload);
+  return normalizeSetupAssistantPayload(response);
+}
+
+export async function getCurrentSetupAssistantSession() {
+  const payload = await apiGet("/api/setup/assistant/session/current", {
+    allowStatuses: [404],
+  });
+
+  if (
+    payload?.ok === false &&
+    (payload?.error === "SetupAssistantSessionNotFound" ||
+      payload?.error === "OnboardingSessionNotFound")
+  ) {
+    return null;
+  }
+
+  return normalizeSetupAssistantPayload(payload);
+}
+
+export async function updateCurrentSetupAssistantDraft(payload = {}) {
+  const response = await apiPatch("/api/setup/assistant/session/current", payload);
+  return normalizeSetupAssistantPayload(response);
+}
+
+export async function sendSetupAssistantMessage(payload = {}) {
+  const response = await apiPost(
+    "/api/setup/assistant/session/current/message",
+    payload
+  );
+  return normalizeSetupAssistantPayload(response);
 }
 
 export function getCurrentSetupReview(params = {}) {

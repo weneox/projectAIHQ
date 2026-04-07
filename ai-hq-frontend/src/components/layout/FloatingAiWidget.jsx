@@ -4,9 +4,9 @@ import { ArrowLeft, Link2, Send, X } from "lucide-react";
 import Button from "../ui/Button.jsx";
 import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
 import {
-  sendOnboardingMessage,
-  startOnboardingSession,
-} from "../../api/onboarding.js";
+  sendSetupAssistantMessage,
+  startSetupAssistantSession,
+} from "../../api/setup.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -579,14 +579,14 @@ export default function FloatingAiWidget({
   async function ensureSession() {
     if (s(clientAssistant.session?.id)) return s(clientAssistant.session.id);
 
-    const started = await startOnboardingSession();
+    const started = await startSetupAssistantSession();
 
     const nextAssistant = normalizeAssistantState({
       ...clientAssistant,
-      draft: obj(started?.onboarding?.draft),
-      review: obj(started?.onboarding?.review),
-      websitePrefill: obj(started?.onboarding?.websitePrefill),
-      assistant: obj(started?.onboarding?.assistant),
+      draft: obj(started?.setup?.draft),
+      review: obj(started?.setup?.review),
+      websitePrefill: obj(started?.setup?.websitePrefill),
+      assistant: obj(started?.setup?.assistant),
       session: obj(started?.session),
     });
 
@@ -613,17 +613,17 @@ export default function FloatingAiWidget({
     try {
       await ensureSession();
 
-      const response = await sendOnboardingMessage({
+      const response = await sendSetupAssistantMessage({
         step: s(clientAssistant.nextQuestion?.key),
         answer: value,
       });
 
       const nextAssistant = normalizeAssistantState({
         ...clientAssistant,
-        draft: obj(response?.onboarding?.draft),
-        review: obj(response?.onboarding?.review),
-        websitePrefill: obj(response?.onboarding?.websitePrefill),
-        assistant: obj(response?.onboarding?.assistant),
+        draft: obj(response?.setup?.draft),
+        review: obj(response?.setup?.review),
+        websitePrefill: obj(response?.setup?.websitePrefill),
+        assistant: obj(response?.setup?.assistant),
         session: obj(response?.session),
       });
 
@@ -651,17 +651,17 @@ export default function FloatingAiWidget({
     try {
       await ensureSession();
 
-      const response = await sendOnboardingMessage({
+      const response = await sendSetupAssistantMessage({
         step: currentStep,
         skip: true,
       });
 
       const nextAssistant = normalizeAssistantState({
         ...clientAssistant,
-        draft: obj(response?.onboarding?.draft),
-        review: obj(response?.onboarding?.review),
-        websitePrefill: obj(response?.onboarding?.websitePrefill),
-        assistant: obj(response?.onboarding?.assistant),
+        draft: obj(response?.setup?.draft),
+        review: obj(response?.setup?.review),
+        websitePrefill: obj(response?.setup?.websitePrefill),
+        assistant: obj(response?.setup?.assistant),
         session: obj(response?.session),
       });
 

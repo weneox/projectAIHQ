@@ -75,8 +75,14 @@ import {
 } from "../../../services/workspace/setup/actorApp.js";
 import { auditSetupAction } from "../../../services/workspace/setup/auditApp.js";
 import { discardSetupReviewComposition } from "../../../services/workspace/setup/discardApp.js";
+import {
+  loadCurrentSetupAssistantSession,
+  startSetupAssistantSession,
+  updateSetupAssistantDraft,
+} from "../../../services/workspace/setup/setupAssistantApp.js";
 import { buildSetupStatus } from "../../../services/workspace/setup.js";
 import { registerSetupReadRoutes } from "./setupRoutesReads.js";
+import { registerSetupAssistantRoutes } from "./setupRoutesAssistant.js";
 import { registerSetupReviewRoutes } from "./setupRoutesReview.js";
 import { registerSetupImportRoutes } from "./setupRoutesImports.js";
 import { registerSetupStagingRoutes } from "./setupRoutesStaging.js";
@@ -339,6 +345,15 @@ async function handleSetupAnalyze(req, res, db) {
 
 export function workspaceSetupRoutes({ db }) {
   const r = express.Router();
+
+  registerSetupAssistantRoutes(r, {
+    db,
+    requireSetupActor,
+    startSetupAssistantSession,
+    loadCurrentSetupAssistantSession,
+    updateSetupAssistantDraft,
+    s,
+  });
 
   registerSetupReadRoutes(r, {
     db,
