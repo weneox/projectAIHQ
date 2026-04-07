@@ -1022,6 +1022,17 @@ export function useProductHome(options = {}) {
       truthRuntime,
     };
 
+    assistant.summary =
+      setupFlow.launchPosture === "connect_channel"
+        ? "Connect the launch channel first."
+        : setupFlow.needed
+          ? setupFlow.blockerCount > 0
+            ? `${setupFlow.blockerCount} structured blockers still need confirmation.`
+            : "The draft is structurally complete for later review."
+          : setupFlow.hasDraft
+            ? `${setupFlow.readySections} setup sections already have draft coverage.`
+            : "Structured setup is available when needed.";
+
     return {
       companyName,
       actorName,
