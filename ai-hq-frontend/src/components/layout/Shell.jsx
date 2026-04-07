@@ -157,7 +157,7 @@ export default function Shell() {
   const assistantRequested = useMemo(() => {
     const params = new URLSearchParams(location.search || "");
     const assistant = s(params.get("assistant")).toLowerCase();
-    return assistant === "setup" || assistant === "onboarding";
+    return assistant === "setup";
   }, [location.search]);
 
   const shortcutAssistant = useMemo(

@@ -9,7 +9,7 @@ function obj(value) {
 
 function normalizeSetupAssistantPayload(payload = {}) {
   const root = obj(payload);
-  const setup = root.setup || root.onboarding;
+  const setup = root.setup;
 
   return {
     ...root,
@@ -69,8 +69,7 @@ export async function getCurrentSetupAssistantSession() {
 
   if (
     payload?.ok === false &&
-    (payload?.error === "SetupAssistantSessionNotFound" ||
-      payload?.error === "OnboardingSessionNotFound")
+    payload?.error === "SetupAssistantSessionNotFound"
   ) {
     return null;
   }

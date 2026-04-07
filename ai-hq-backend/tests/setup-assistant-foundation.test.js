@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import express from "express";
 
-import { workspaceOnboardingRoutes } from "../src/routes/api/workspace/onboarding.js";
 import { registerSetupAssistantRoutes } from "../src/routes/api/workspace/setupRoutesAssistant.js";
 import {
   loadCurrentSetupAssistantSession,
@@ -101,7 +100,7 @@ test("setup assistant session start reuses setup review storage but returns cano
             id: "session-1",
             status: "draft",
             mode: "setup",
-            currentStep: "onboarding",
+            currentStep: "setup_assistant",
             started_at: "2026-04-06T09:00:00.000Z",
           },
           draft: {
@@ -130,8 +129,12 @@ test("setup assistant session start reuses setup review storage but returns cano
   assert.equal(result.status, 200);
   assert.equal(result.body.ok, true);
   assert.equal(result.body.created, true);
-  assert.equal(createdSessionInput.currentStep, "onboarding");
-  assert.equal(createdSessionInput.metadata.onboardingShell, true);
+  assert.equal(createdSessionInput.currentStep, "setup_assistant");
+  assert.equal(createdSessionInput.metadata.setupAssistantShell, true);
+  assert.equal(
+    createdSessionInput.metadata.setupAssistantNamespace,
+    "draftPayload.setupAssistant"
+  );
   assert.equal(result.body.session.namespace, "setup_assistant");
   assert.equal(result.body.setup.draftOnly, true);
   assert.equal(
@@ -180,7 +183,7 @@ test("setup assistant draft update stays inside setup review storage and returns
         draftPayload: {
           importRunId: "run-1",
         },
-        onboarding: {
+        setupAssistant: {
           businessProfile: {
             companyName: "Acme",
           },
@@ -260,9 +263,10 @@ test("setup assistant draft update stays inside setup review storage and returns
     "run-1"
   );
   assert.equal(
-    patchInput.patch.draftPayload.onboarding.businessProfile.companyName,
+    patchInput.patch.draftPayload.setupAssistant.businessProfile.companyName,
     "Acme Clinic"
   );
+  assert.equal("onboarding" in patchInput.patch.draftPayload, false);
   assert.equal(result.status, 200);
   assert.equal(result.body.ok, true);
   assert.equal(result.body.setup.draft.version, 3);
@@ -380,38 +384,4 @@ test("setup assistant routes wire start, current, and update through the tenant-
   assert.equal(routeCalls[0].type, "start");
   assert.equal(routeCalls[1].type, "current");
   assert.equal(routeCalls[2].type, "update");
-});
-
-test("legacy onboarding routes remain available as compatibility aliases", async () => {
-  const routeCalls = [];
-  const router = workspaceOnboardingRoutes({
-    db: { name: "db" },
-    services: {
-      async startOnboardingSession({ db, actor }) {
-        routeCalls.push({ type: "start", db, actor });
-        return {
-          status: 200,
-          body: {
-            ok: true,
-            session: { id: "session-1" },
-            onboarding: { draft: {} },
-          },
-        };
-      },
-    },
-  });
-
-  const res = await invokeRoute(router, "post", "/onboarding/session/start", {
-    user: {
-      id: "11111111-1111-4111-8111-111111111111",
-      email: "owner@acme.test",
-      role: "owner",
-    },
-    tenantId: "tenant-1",
-    tenantKey: "acme",
-  });
-
-  assert.equal(res.res.statusCode, 200);
-  assert.equal(routeCalls.length, 1);
-  assert.equal(routeCalls[0].actor.tenantId, "tenant-1");
 });

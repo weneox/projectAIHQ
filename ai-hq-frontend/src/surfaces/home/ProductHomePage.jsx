@@ -410,9 +410,7 @@ export default function ProductHomePage() {
     [home, secondaryEntryPoints]
   );
 
-  const assistantOpen = ["setup", "onboarding"].includes(
-    searchParams.get("assistant")
-  );
+  const assistantOpen = searchParams.get("assistant") === "setup";
 
   function navigateFromAction(action = null) {
     if (!action?.path) return;

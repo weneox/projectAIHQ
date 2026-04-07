@@ -107,7 +107,7 @@ describe("Shell", () => {
     });
   });
 
-  it("auto-opens the widget when home requires onboarding", async () => {
+  it("auto-opens the widget when home requires setup", async () => {
     pathname = "/home";
     useProductHome.mockReturnValue({
       loading: false,

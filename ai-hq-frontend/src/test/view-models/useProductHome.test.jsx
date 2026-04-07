@@ -153,7 +153,7 @@ describe("useProductHome", () => {
     expect(result.current.currentStatus.action.path).toBe("/channels?channel=telegram");
   });
 
-  it("switches to onboarding-needed posture when Telegram is connected but truth/runtime is not ready", async () => {
+  it("switches to setup-needed posture when Telegram is connected but truth/runtime is not ready", async () => {
     getSettingsTrustView.mockResolvedValue(
       createTrustView({
         summary: {
@@ -276,7 +276,7 @@ describe("useProductHome", () => {
 
     expect(result.current.truthRuntime.ready).toBe(false);
     expect(result.current.setupNeeded).toBe(true);
-    expect(result.current.truthRuntime.summary).toMatch(/strict runtime projection/i);
+    expect(result.current.truthRuntime.summary).toMatch(/runtime projection/i);
     expect(result.current.currentStatus.title).not.toMatch(/aligned|ready/i);
   });
 
