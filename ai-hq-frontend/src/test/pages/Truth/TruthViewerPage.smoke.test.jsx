@@ -340,7 +340,7 @@ describe("Truth viewer smoke", () => {
     ).toBeDisabled();
 
     expect(screen.getByText(/^Unavailable$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^0$/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/^0$/i).length).toBeGreaterThanOrEqual(2);
   });
 
   it("renders safely when metadata is partial", async () => {
