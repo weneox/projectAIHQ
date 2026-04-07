@@ -1,255 +1,532 @@
+import { useEffect, useMemo, useState } from "react";
 import {
-  MessageCircle,
-  ShieldAlert,
   CheckCircle2,
-  Clock3,
-  Search,
-  Filter,
-  Bot,
-  UserRound,
   Ban,
+  Bot,
+  Facebook,
+  Globe,
+  Instagram,
+  MessageCircle,
+  PencilLine,
+  Search,
   Send,
+  ShieldAlert,
 } from "lucide-react";
 
-import AdminPageShell from "../components/admin/AdminPageShell.jsx";
-import CommentMiniInfo from "../components/comments/CommentMiniInfo.jsx";
+import Button from "../components/ui/Button.jsx";
+import Card from "../components/ui/Card.jsx";
+import Input, { Textarea } from "../components/ui/Input.jsx";
 import CommentRow from "../components/comments/CommentRow.jsx";
-import CommentStatCard from "../components/comments/CommentStatCard.jsx";
-import { fmtRelative, priorityTone, statusTone } from "../features/comments/comment-utils.js";
+import { PageCanvas, PageHeader } from "../components/ui/AppShellPrimitives.jsx";
+import {
+  fmtRelative,
+  labelizeToken,
+} from "../features/comments/comment-utils.js";
 import { useCommentsData } from "../hooks/useCommentsData.js";
+import { cx } from "../lib/cx.js";
+
+const FILTERS = [
+  { id: "all", label: "All" },
+  { id: "pending", label: "Pending" },
+  { id: "manual_review", label: "Manual review" },
+  { id: "reviewed", label: "Reviewed" },
+  { id: "replied", label: "Replied" },
+  { id: "flagged", label: "Flagged" },
+  { id: "ignored", label: "Ignored" },
+];
+
+function PlatformGlyph({ platform, className }) {
+  const value = String(platform || "").toLowerCase();
+
+  if (value.includes("instagram")) {
+    return <Instagram className={className} />;
+  }
+  if (value.includes("facebook")) {
+    return <Facebook className={className} />;
+  }
+
+  return <Globe className={className} />;
+}
+
+function InlineState({ tone = "neutral", children, action = null }) {
+  const toneClass =
+    tone === "danger"
+      ? "border-danger bg-danger-soft text-danger"
+      : "border-line-soft bg-surface-subtle text-text-muted";
+
+  return (
+    <div
+      className={cx(
+        "flex flex-wrap items-center justify-between gap-3 border px-4 py-3",
+        toneClass
+      )}
+    >
+      <div className="min-w-0 text-[13px] font-medium leading-6">{children}</div>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </div>
+  );
+}
+
+function FilterLink({ active, children, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        "text-[13px] font-medium tracking-[-0.01em] transition duration-200 ease-premium",
+        active
+          ? "text-text"
+          : "text-text-subtle hover:text-text"
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ComposerModeButton({ active, children, onClick, icon: Icon }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        "inline-flex items-center gap-2 text-[12px] font-semibold tracking-[-0.01em] transition duration-200 ease-premium",
+        active ? "text-text" : "text-text-subtle hover:text-text"
+      )}
+    >
+      {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+      <span>{children}</span>
+    </button>
+  );
+}
+
+function PostTile({ post, selected, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(post.id)}
+      className="group w-full text-left"
+    >
+      <div
+        className={cx(
+          "relative aspect-square overflow-hidden bg-surface-subtle transition-[transform,box-shadow,outline] duration-200 ease-premium",
+          selected
+            ? "outline outline-2 outline-[rgba(var(--color-brand),0.34)]"
+            : "hover:scale-[0.995]"
+        )}
+      >
+        {post.coverUrl ? (
+          <img
+            src={post.coverUrl}
+            alt={post.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(239,242,247,0.92)_0%,rgba(228,233,240,0.96)_100%)]" />
+        )}
+
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.02)_0%,rgba(15,23,42,0.18)_100%)]" />
+
+        <div className="absolute left-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/86 text-text shadow-[0_8px_20px_-14px_rgba(15,23,42,0.18)]">
+          <PlatformGlyph platform={post.platform} className="h-4 w-4" />
+        </div>
+
+        <div className="absolute bottom-3 left-3 right-3">
+          <div className="truncate text-[13px] font-semibold tracking-[-0.02em] text-white">
+            {post.title}
+          </div>
+          <div className="mt-1 text-[12px] font-medium text-white/82">
+            {post.totalComments} comments
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function MediaStage({ post }) {
+  return (
+    <div className="overflow-hidden bg-surface-subtle">
+      <div className="relative aspect-[4/5] w-full bg-[linear-gradient(180deg,rgba(243,246,250,0.94)_0%,rgba(231,236,243,0.98)_100%)]">
+        {post?.coverUrl ? (
+          <img
+            src={post.coverUrl}
+            alt={post.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center">
+              <div className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-white/78 text-text shadow-[0_18px_34px_-20px_rgba(15,23,42,0.18)]">
+                <PlatformGlyph platform={post?.platform} className="h-6 w-6" />
+              </div>
+              <div className="mt-4 text-[14px] font-semibold tracking-[-0.02em] text-text">
+                {post?.title || "Post"}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SkeletonTile() {
+  return (
+    <div className="aspect-square animate-pulse bg-surface-subtle" />
+  );
+}
 
 export default function Comments() {
   const {
+    posts,
+    postComments,
     statusFilter,
     setStatusFilter,
+    selectedPostId,
+    setSelectedPostId,
+    selectedId,
     setSelectedId,
+    selectedPost,
+    selected,
     search,
     setSearch,
     replyDraft,
     setReplyDraft,
     surface,
     actionLoading,
-    filtered,
-    selected,
-    stats,
+    visibleCommentCount,
+    loadComments,
     handleReview,
     handleReplySave,
     handleIgnore,
   } = useCommentsData();
 
+  const [composeMode, setComposeMode] = useState("ai");
+
+  useEffect(() => {
+    if (selected?.suggestedReply) {
+      setComposeMode("ai");
+      return;
+    }
+
+    setComposeMode("manual");
+  }, [selected?.id, selected?.suggestedReply]);
+
+  const selectedPostCaption = useMemo(() => {
+    const caption = String(selectedPost?.caption || "").trim();
+    if (!caption) return "";
+    return caption.length > 180 ? `${caption.slice(0, 180).trim()}…` : caption;
+  }, [selectedPost?.caption]);
+
+  function useAiDraft() {
+    setComposeMode("ai");
+    setReplyDraft(selected?.suggestedReply || "");
+  }
+
+  function useManualDraft() {
+    setComposeMode("manual");
+    if (replyDraft === selected?.suggestedReply) {
+      setReplyDraft("");
+    }
+  }
+
   return (
-    <AdminPageShell
-      eyebrow="Operator moderation"
-      title="Comments"
-      description="Social comment moderation, AI reply review, and operator intervention."
-      surface={surface}
-      refreshLabel="Refresh comments"
-      unavailableMessage="Comments moderation is temporarily unavailable."
-    >
-      <div className="grid gap-4 md:grid-cols-4">
-        <CommentStatCard label="Total Comments" value={stats.total} icon={MessageCircle} />
-        <CommentStatCard label="Pending Review" value={stats.pending} icon={Clock3} tone="amber" />
-        <CommentStatCard label="Replied / Reviewed" value={stats.replied} icon={CheckCircle2} tone="emerald" />
-        <CommentStatCard label="Flagged / Ignored" value={stats.flagged} icon={ShieldAlert} tone="cyan" />
-      </div>
+    <PageCanvas className="space-y-4">
+      <PageHeader
+        eyebrow="Moderation"
+        title="Comments"
+        description="Posts, threads, and reply control in one view."
+        actions={
+          <Button
+            variant="secondary"
+            onClick={loadComments}
+            isLoading={surface.loading}
+            className="h-[40px]"
+          >
+            Refresh
+          </Button>
+        }
+      />
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-lg border border-line bg-surface p-5">
-          <div className="flex flex-col gap-4 border-b border-line-soft pb-4">
-            <div>
-              <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-950">Comment Stream</div>
-              <div className="mt-1 text-sm text-slate-500">Post comments, sentiment, and reply workflow.</div>
+      <Card padded={false} clip className="border-line-soft">
+        <div className="px-5 py-5 md:px-6">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0">
+              <div className="text-[15px] font-semibold tracking-[-0.03em] text-text">
+                Post view
+              </div>
+              <div className="mt-1 text-[13px] font-medium text-text-muted">
+                Select a post, inspect comments, then answer manually or from the AI draft.
+              </div>
             </div>
 
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="relative w-full md:max-w-[340px]">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Author, text, post..."
-                  className="h-10 w-full rounded-md border border-line bg-surface pl-10 pr-4 text-sm text-text outline-none transition focus:border-brand"
+            <div className="w-full xl:max-w-[340px]">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search comment, post, or author..."
+                leftIcon={<Search className="h-4 w-4" />}
+                appearance="quiet"
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+            {FILTERS.map((filter) => (
+              <FilterLink
+                key={filter.id}
+                active={statusFilter === filter.id}
+                onClick={() => setStatusFilter(filter.id)}
+              >
+                {filter.label}
+              </FilterLink>
+            ))}
+
+            <div className="ml-auto text-[12px] font-medium text-text-subtle">
+              {posts.length} posts · {visibleCommentCount} comments
+            </div>
+          </div>
+        </div>
+
+        {surface.unavailable ? (
+          <div className="border-t border-line-soft px-5 py-4 md:px-6">
+            <InlineState
+              tone="danger"
+              action={
+                <Button
+                  variant="secondary"
+                  onClick={loadComments}
+                  className="h-[36px]"
+                >
+                  Retry
+                </Button>
+              }
+            >
+              {surface.error || "Comments are currently unavailable."}
+            </InlineState>
+          </div>
+        ) : null}
+
+        <div className="border-t border-line-soft px-5 py-5 md:px-6">
+          {surface.loading && !posts.length ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <SkeletonTile key={index} />
+              ))}
+            </div>
+          ) : posts.length ? (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+              {posts.map((post) => (
+                <PostTile
+                  key={post.id}
+                  post={post}
+                  selected={post.id === selectedPostId}
+                  onClick={setSelectedPostId}
                 />
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {["all", "pending", "manual_review", "reviewed", "replied", "flagged", "ignored"].map((status) => (
-                  <button
-                    key={status}
-                    type="button"
-                    onClick={() => setStatusFilter(status)}
-                    className={`inline-flex h-8 items-center rounded-md border px-3 text-sm transition ${
-                      statusFilter === status
-                        ? "border-line-strong bg-surface text-text"
-                        : "border-line bg-surface-muted text-text-muted hover:border-line-strong hover:bg-surface hover:text-text"
-                    }`}
-                  >
-                    {status}
-                  </button>
-                ))}
-              </div>
+              ))}
             </div>
-          </div>
-
-          <div className="mt-5 space-y-3">
-            <div className="hidden xl:grid xl:grid-cols-[1.1fr_1fr_0.7fr_0.7fr_0.7fr] xl:gap-3 xl:px-2 xl:text-[11px] xl:uppercase xl:tracking-[0.18em] xl:text-slate-400">
-              <div>Author</div>
-              <div>Comment</div>
-              <div>Status</div>
-              <div>Sentiment</div>
-              <div className="text-right">Priority</div>
-            </div>
-
-            {surface.loading ? (
-              <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-10 text-center">
-                <div className="text-sm font-medium text-slate-700">Loading comments...</div>
-              </div>
-            ) : surface.unavailable ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50/90 px-4 py-10 text-center">
-                <div className="text-sm font-medium text-rose-700">Failed to load comments</div>
-                <div className="mt-2 text-sm leading-6 text-rose-600">{surface.error}</div>
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="rounded-md border border-line-soft bg-surface-muted px-4 py-10 text-center">
-                <div className="text-sm font-medium text-slate-700">No comments</div>
-                <div className="mt-2 text-sm leading-6 text-slate-500">No comments matched the current filters.</div>
-              </div>
-            ) : (
-              filtered.map((item) => (
-                <CommentRow key={item.id} item={item} selected={selected?.id === item.id} onSelect={(row) => setSelectedId(row.id)} />
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <div className="rounded-lg border border-line bg-surface p-5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/80 bg-white/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_24px_-18px_rgba(15,23,42,0.18)]">
-                <MessageCircle className="h-4 w-4 text-slate-600" />
-              </div>
-              <div>
-                <div className="text-[16px] font-semibold tracking-[-0.03em] text-slate-950">Comment Detail</div>
-                <div className="mt-1 text-sm text-slate-500">Selected comment moderation panel.</div>
-              </div>
-            </div>
-
-            <div className="mt-5 rounded-md border border-line-soft bg-surface-muted p-4">
-              {!selected ? (
-                <div className="px-2 py-8 text-center">
-                  <div className="text-sm font-medium text-slate-700">No comment selected</div>
-                  <div className="mt-2 text-sm leading-6 text-slate-500">Select a comment from the stream.</div>
+          ) : (
+            <div className="flex min-h-[300px] items-center justify-center">
+              <div className="max-w-[320px] text-center">
+                <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-full bg-surface-subtle text-text-subtle">
+                  <MessageCircle className="h-5 w-5" />
                 </div>
-              ) : (
-                <>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="truncate text-[18px] font-semibold tracking-[-0.03em] text-slate-950">{selected.author}</div>
-                      <div className="mt-1 text-sm text-slate-500">{selected.postTitle}</div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${statusTone(selected.status)}`}>
-                        {selected.status}
-                      </span>
-                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${priorityTone(selected.priority)}`}>
-                        {selected.priority}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 rounded-md border border-line-soft bg-surface-muted px-4 py-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Original Comment</div>
-                    <div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{selected.text || "—"}</div>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <CommentMiniInfo label="Platform" value={selected.platform} icon={Filter} />
-                    <CommentMiniInfo label="Sentiment" value={selected.sentiment} icon={ShieldAlert} />
-                    <CommentMiniInfo label="Assigned to" value={selected.assignedTo} icon={UserRound} />
-                    <CommentMiniInfo label="Created" value={fmtRelative(selected.createdAt)} icon={Clock3} />
-                    <CommentMiniInfo label="Category" value={selected.category} icon={Bot} />
-                    <CommentMiniInfo label="Lead Intent" value={selected.shouldCreateLead ? "Yes" : "No"} icon={CheckCircle2} />
-                    <CommentMiniInfo label="Moderated by" value={selected.moderationActor || "—"} icon={UserRound} />
-                    <CommentMiniInfo label="Moderation update" value={fmtRelative(selected.moderationUpdatedAt)} icon={Clock3} />
-                  </div>
-
-                  <div className="mt-4 rounded-md border border-line-soft bg-surface-muted px-4 py-3">
-                    <div className="mb-2 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
-                      <Bot className="h-3.5 w-3.5" />
-                      Suggested Reply
-                    </div>
-
-                    <textarea
-                      value={replyDraft}
-                      onChange={(e) => setReplyDraft(e.target.value)}
-                      rows={5}
-                      placeholder="Reply draft..."
-                      className="w-full resize-none rounded-md border border-line bg-surface px-4 py-3 text-sm leading-6 text-text outline-none transition focus:border-brand"
-                    />
-                  </div>
-
-                  {!!selected.moderationNote && (
-                    <div className="mt-4 rounded-md border border-line-soft bg-surface-muted px-4 py-3">
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400">Moderation Note</div>
-                      <div className="mt-2 text-sm leading-6 text-slate-700">{selected.moderationNote}</div>
-                    </div>
-                  )}
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <button
-                      type="button"
-                      onClick={handleReplySave}
-                      disabled={actionLoading === "reply"}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <Send className="h-4 w-4" />
-                      {actionLoading === "reply" ? "Saving..." : "Save Reply"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleReview("manual_review")}
-                      disabled={actionLoading === "review:manual_review"}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-surface px-4 text-sm font-medium text-text transition hover:border-line-strong hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <ShieldAlert className="h-4 w-4" />
-                      {actionLoading === "review:manual_review" ? "Saving..." : "Manual Review"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleReview("reviewed")}
-                      disabled={actionLoading === "review:reviewed"}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-4 text-sm font-medium text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <CheckCircle2 className="h-4 w-4" />
-                      {actionLoading === "review:reviewed" ? "Saving..." : "Mark Reviewed"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleIgnore}
-                      disabled={actionLoading === "ignore"}
-                      className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 text-sm font-medium text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <Ban className="h-4 w-4" />
-                      {actionLoading === "ignore" ? "Saving..." : "Ignore"}
-                    </button>
-                  </div>
-                </>
-              )}
+                <div className="mt-4 text-[16px] font-semibold tracking-[-0.03em] text-text">
+                  No posts to review
+                </div>
+                <div className="mt-2 text-[13px] leading-6 text-text-muted">
+                  Connected post context will appear here as comment traffic arrives.
+                </div>
+              </div>
             </div>
-          </div>
-
-          <div className="rounded-lg border border-line bg-surface p-5">
-            <div className="text-[16px] font-semibold tracking-[-0.03em] text-slate-950">System Note</div>
-            <div className="mt-4 rounded-md border border-line-soft bg-surface-muted px-4 py-4 text-sm leading-6 text-slate-600">
-              This page reads from the real comments backend and drives review, reply, and ignore actions.
-            </div>
-          </div>
+          )}
         </div>
-      </div>
-    </AdminPageShell>
+
+        {selectedPost ? (
+          <>
+            <div className="border-t border-line-soft" />
+
+            <div className="grid xl:grid-cols-[minmax(340px,520px)_minmax(0,1fr)]">
+              <div className="border-b border-line-soft xl:border-b-0 xl:border-r">
+                <MediaStage post={selectedPost} />
+
+                <div className="px-5 py-5 md:px-6">
+                  <div className="flex items-center gap-3">
+                    <div className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface-subtle text-text">
+                      <PlatformGlyph
+                        platform={selectedPost.platform}
+                        className="h-4 w-4"
+                      />
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="truncate text-[15px] font-semibold tracking-[-0.03em] text-text">
+                        {selectedPost.title}
+                      </div>
+                      <div className="mt-1 text-[12px] font-medium text-text-subtle">
+                        {labelizeToken(selectedPost.platform)} ·{" "}
+                        {selectedPost.totalComments} comments ·{" "}
+                        {fmtRelative(selectedPost.latestActivityAt)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedPostCaption ? (
+                    <div className="mt-4 text-[13px] leading-6 text-text-muted">
+                      {selectedPostCaption}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="min-w-0">
+                <div className="px-5 py-5 md:px-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[15px] font-semibold tracking-[-0.03em] text-text">
+                        Comments
+                      </div>
+                      <div className="mt-1 text-[13px] font-medium text-text-muted">
+                        {postComments.length} items on this post
+                      </div>
+                    </div>
+
+                    {selected ? (
+                      <div className="text-[12px] font-medium text-text-subtle">
+                        Selected · {fmtRelative(selected.createdAt)}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-4 max-h-[420px] overflow-y-auto pr-1 panel-scroll">
+                    {postComments.length ? (
+                      <div className="space-y-1">
+                        {postComments.map((item) => (
+                          <CommentRow
+                            key={item.id}
+                            item={item}
+                            selected={item.id === selectedId}
+                            onSelect={(row) => setSelectedId(row.id)}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-10 text-center text-[13px] text-text-muted">
+                        No comments on this post yet.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-5 border-t border-line-soft pt-5">
+                    {!selected ? (
+                      <div className="text-[13px] leading-6 text-text-muted">
+                        Select a comment to load its reply workflow.
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div>
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
+                                {selected.author}
+                              </div>
+                              <div className="mt-1 text-[12px] font-medium text-text-subtle">
+                                {labelizeToken(selected.status)} ·{" "}
+                                {labelizeToken(selected.sentiment)} ·{" "}
+                                {labelizeToken(selected.priority)}
+                              </div>
+                            </div>
+
+                            <div className="text-[12px] font-medium text-text-subtle">
+                              {fmtRelative(selected.createdAt)}
+                            </div>
+                          </div>
+
+                          <div className="mt-3 whitespace-pre-wrap text-[14px] leading-7 text-text">
+                            {selected.text || "—"}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-4 border-t border-line-soft pt-4">
+                          <ComposerModeButton
+                            active={composeMode === "ai"}
+                            onClick={useAiDraft}
+                            icon={Bot}
+                          >
+                            AI draft
+                          </ComposerModeButton>
+
+                          <ComposerModeButton
+                            active={composeMode === "manual"}
+                            onClick={useManualDraft}
+                            icon={PencilLine}
+                          >
+                            Write manually
+                          </ComposerModeButton>
+                        </div>
+
+                        <Textarea
+                          value={replyDraft}
+                          onChange={(e) => setReplyDraft(e.target.value)}
+                          rows={6}
+                          placeholder={
+                            composeMode === "ai"
+                              ? "AI draft will appear here if available..."
+                              : "Write your reply..."
+                          }
+                          appearance="quiet"
+                        />
+
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <Button
+                            onClick={handleReplySave}
+                            isLoading={actionLoading === "reply"}
+                            leftIcon={<Send className="h-4 w-4" />}
+                            className="h-[42px]"
+                          >
+                            Save reply
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleReview("reviewed")}
+                            isLoading={actionLoading === "review:reviewed"}
+                            leftIcon={<CheckCircle2 className="h-4 w-4" />}
+                            className="h-[42px] px-0 text-text"
+                          >
+                            Reviewed
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            onClick={() => handleReview("manual_review")}
+                            isLoading={actionLoading === "review:manual_review"}
+                            leftIcon={<ShieldAlert className="h-4 w-4" />}
+                            className="h-[42px] px-0 text-text"
+                          >
+                            Manual review
+                          </Button>
+
+                          <Button
+                            variant="ghost"
+                            onClick={handleIgnore}
+                            isLoading={actionLoading === "ignore"}
+                            leftIcon={<Ban className="h-4 w-4" />}
+                            className="h-[42px] px-0 text-danger hover:text-danger"
+                          >
+                            Ignore
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : null}
+      </Card>
+    </PageCanvas>
   );
 }

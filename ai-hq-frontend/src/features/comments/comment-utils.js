@@ -2,6 +2,12 @@ export function s(v) {
   return String(v ?? "").trim();
 }
 
+export function labelizeToken(value) {
+  const text = s(value).replace(/[_-]+/g, " ");
+  if (!text) return "—";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 export function fmtRelative(input) {
   if (!input) return "—";
   const d = new Date(input);
@@ -29,44 +35,56 @@ export function channelIcon(channel, icons) {
 
 export function channelTone(channel) {
   const c = String(channel || "").toLowerCase();
-  if (c.includes("instagram")) return "text-pink-200 border-pink-400/20 bg-pink-400/[0.06]";
-  if (c.includes("facebook")) return "text-blue-200 border-blue-400/20 bg-blue-400/[0.06]";
-  if (c.includes("messenger")) return "text-cyan-200 border-cyan-400/20 bg-cyan-400/[0.06]";
-  return "text-white/80 border-white/10 bg-white/[0.04]";
+
+  if (c.includes("instagram")) {
+    return "border-[#f6d0e2] bg-[#fdf2f8] text-[#b4236b]";
+  }
+
+  if (c.includes("facebook")) {
+    return "border-[#c7d7fe] bg-[#eff4ff] text-[#175cd3]";
+  }
+
+  if (c.includes("messenger")) {
+    return "border-[#b8e6f7] bg-[#ecfdff] text-[#0e7490]";
+  }
+
+  return "border-line bg-surface-subtle text-text-muted";
 }
 
 export function statusTone(status) {
-  const s = String(status || "").toLowerCase();
+  const x = String(status || "").toLowerCase();
 
-  if (s === "replied" || s === "approved" || s === "reviewed") {
-    return "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100";
+  if (x === "replied" || x === "approved" || x === "reviewed") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
 
-  if (s === "pending" || s === "manual_review") {
-    return "border-amber-300/20 bg-amber-300/[0.08] text-amber-100";
+  if (x === "pending" || x === "manual_review") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
   }
 
-  if (s === "flagged" || s === "ignored") {
-    return "border-rose-400/20 bg-rose-400/[0.08] text-rose-100";
+  if (x === "flagged" || x === "ignored") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
   }
 
-  return "border-white/10 bg-white/[0.05] text-white/72";
+  return "border-line bg-surface-subtle text-text-muted";
 }
 
 export function sentimentTone(sentiment) {
   const x = String(sentiment || "").toLowerCase();
-  if (x === "positive") return "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100";
-  if (x === "negative") return "border-rose-400/20 bg-rose-400/[0.08] text-rose-100";
-  if (x === "mixed") return "border-amber-300/20 bg-amber-300/[0.08] text-amber-100";
-  return "border-white/10 bg-white/[0.05] text-white/72";
+
+  if (x === "positive") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (x === "negative") return "border-rose-200 bg-rose-50 text-rose-700";
+  if (x === "mixed") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-line bg-surface-subtle text-text-muted";
 }
 
 export function priorityTone(priority) {
-  const p = String(priority || "").toLowerCase();
-  if (p === "urgent") return "border-rose-500/25 bg-rose-500/[0.12] text-rose-100";
-  if (p === "high") return "border-rose-400/20 bg-rose-400/[0.08] text-rose-100";
-  if (p === "medium") return "border-amber-300/20 bg-amber-300/[0.08] text-amber-100";
-  return "border-white/10 bg-white/[0.05] text-white/72";
+  const x = String(priority || "").toLowerCase();
+
+  if (x === "urgent") return "border-rose-300 bg-rose-50 text-rose-800";
+  if (x === "high") return "border-rose-200 bg-rose-50 text-rose-700";
+  if (x === "medium") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-line bg-surface-subtle text-text-muted";
 }
 
 export function categoryToFallbackStatus(category) {
@@ -101,7 +119,7 @@ export function mapCommentToUi(row) {
     status: pickUiStatus(classification),
     sentiment: s(classification?.sentiment || "neutral").toLowerCase() || "neutral",
     priority: s(classification?.priority || "low").toLowerCase() || "low",
-    assignedTo: classification?.requiresHuman ? "Manual Review" : "AI Copilot",
+    assignedTo: classification?.requiresHuman ? "Manual review" : "AI copilot",
     createdAt: row?.created_at || row?.updated_at || null,
     suggestedReply:
       s(reply?.text || "") ||

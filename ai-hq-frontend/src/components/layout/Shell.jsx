@@ -37,14 +37,14 @@ const SHELL_REFRESH_EVENT_TYPES = new Set([
 
 const SIDEBAR_STORAGE_KEY = "aihq.sidebar.collapsed";
 
-function isImmersivePath(pathname = "") {
+function resolveShellMode(pathname = "") {
   const path = String(pathname || "");
-  return (
-    path.startsWith("/inbox") ||
-    path.startsWith("/comments") ||
-    path.startsWith("/voice") ||
-    path.startsWith("/channels")
-  );
+
+  if (path.startsWith("/inbox")) {
+    return "immersive";
+  }
+
+  return "standard";
 }
 
 function s(value, fallback = "") {
@@ -115,7 +115,7 @@ function SharedStatsNotice({ message }) {
       tone="warning"
       title="Shared workspace stats unavailable"
       description={message}
-      className="mb-4"
+      className="mb-5"
       compact
     />
   );
@@ -147,10 +147,13 @@ export default function Shell() {
   const autoOpenedRef = useRef("");
 
   const shellSection = getActiveShellSection(location.pathname);
-  const activeContextItem = getActiveContextItem(shellSection, location.pathname);
+  const activeContextItem = getActiveContextItem(
+    shellSection,
+    location.pathname
+  );
 
-  const immersive = useMemo(
-    () => isImmersivePath(location.pathname),
+  const shellMode = useMemo(
+    () => resolveShellMode(location.pathname),
     [location.pathname]
   );
 
@@ -408,9 +411,13 @@ export default function Shell() {
 
   return (
     <div
-      className="h-screen overflow-hidden bg-canvas text-text"
+      className="relative h-screen overflow-hidden bg-canvas text-text"
       style={{ "--shell-sidebar-w": `${shellSidebarWidth}px` }}
     >
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-0 bg-[radial-gradient(980px_circle_at_50%_-18%,rgba(38,76,165,0.07),transparent_40%),radial-gradient(680px_circle_at_92%_10%,rgba(38,76,165,0.035),transparent_38%),linear-gradient(180deg,rgba(250,252,254,0.98),rgba(244,246,250,1))]" />
+      </div>
+
       <Sidebar
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
@@ -419,7 +426,7 @@ export default function Shell() {
         setCollapsed={setSidebarCollapsed}
       />
 
-      <div className="flex h-full min-w-0 flex-col transition-[padding-left] duration-[460ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:pl-[var(--shell-sidebar-w)]">
+      <div className="relative flex h-full min-w-0 flex-col transition-[padding-left] duration-[460ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:pl-[var(--shell-sidebar-w)]">
         <Header
           onMenuClick={() => setMobileOpen(true)}
           notifications={notifications}
@@ -427,16 +434,19 @@ export default function Shell() {
           activeContextItem={activeContextItem}
         />
 
-        <main className="flex-1 min-h-0 overflow-hidden">
-          {immersive ? (
+        <main className="relative flex-1 min-h-0 overflow-hidden">
+          {shellMode === "immersive" ? (
             <div className="h-full min-h-0 overflow-hidden">
               <Outlet />
             </div>
           ) : (
             <div className="page-scroll h-full min-h-0 overflow-y-auto">
-              <div className="mx-auto w-full max-w-shell-content px-5 py-5 md:px-6 md:py-6 xl:px-8 xl:py-7">
+              <div className="mx-auto flex min-h-full w-full max-w-shell-content flex-col px-4 py-4 md:px-6 md:py-6 xl:px-8 xl:py-7">
                 <SharedStatsNotice message={shellStats?.message} />
-                <Outlet />
+
+                <div className="flex-1 min-h-0">
+                  <Outlet />
+                </div>
               </div>
             </div>
           )}
