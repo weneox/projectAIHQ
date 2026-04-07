@@ -419,7 +419,7 @@ export default function Shell() {
         setCollapsed={setSidebarCollapsed}
       />
 
-      <div className="flex h-full min-w-0 flex-col md:pl-[var(--shell-sidebar-w)]">
+      <div className="flex h-full min-w-0 flex-col transition-[padding-left] duration-[460ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:pl-[var(--shell-sidebar-w)]">
         <Header
           onMenuClick={() => setMobileOpen(true)}
           notifications={notifications}
