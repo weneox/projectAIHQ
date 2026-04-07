@@ -1,5 +1,3 @@
-// ai-hq-frontend/src/pages/Truth/TruthViewerPage.jsx
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import {
@@ -722,12 +720,17 @@ export default function TruthViewerPage() {
 
   const latestHistoryItem = arr(state.data.history)[0] || null;
   const reviewSummary = obj(state.data.reviewWorkbench?.summary);
+
   const pageHint =
     s(state.data.notices?.[0]) ||
     s(state.error) ||
     (state.data.approvedTruthUnavailable
-      ? "Approved truth is unavailable until the next setup/runtime step is completed."
+      ? "Approved truth is unavailable. No non-approved fallback data is being shown."
       : "This surface shows only approved truth. Extra operational detail is intentionally hidden from the main view.");
+
+  const visibleSummary = state.data.approvedTruthUnavailable
+    ? "Approved truth is unavailable. No non-approved fallback data is being shown."
+    : "Approved fields and the latest governed snapshot.";
 
   const hasAnyData =
     arr(sections.business).length > 0 ||
@@ -735,15 +738,29 @@ export default function TruthViewerPage() {
     arr(sections.presence).length > 0 ||
     arr(sections.offering).length > 0;
 
+  const emptyStateText = state.data.approvedTruthUnavailable
+    ? "Approved truth is unavailable. No non-approved fallback data is being shown."
+    : "No approved fields were returned by the backend.";
+
   return (
     <div className="w-full p-0">
       <div className="border-y border-[#dde5ee] bg-white">
-        <div className="flex flex-col gap-4 border-b border-[#e8edf3] px-8 py-4 md:flex-row md:items-center md:justify-between">
-          <div className="inline-flex items-center gap-2">
-            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#8f9bae]">
-              Truth
+        <div className="flex flex-col gap-4 border-b border-[#e8edf3] px-8 py-5 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2">
+              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#8f9bae]">
+                Truth
+              </div>
+              <InfoHint text={pageHint} align="left" />
             </div>
-            <InfoHint text={pageHint} align="left" />
+
+            <h1 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-[#0f1728]">
+              Business truth
+            </h1>
+
+            <p className="mt-2 max-w-[720px] text-[14px] leading-6 text-[#667085]">
+              {visibleSummary}
+            </p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -762,7 +779,7 @@ export default function TruthViewerPage() {
         <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="bg-white px-8 py-7">
             {!hasAnyData ? (
-              <EmptyInline text="No approved fields were returned by the backend." />
+              <EmptyInline text={emptyStateText} />
             ) : (
               <div className="space-y-7">
                 {arr(sections.business).length ? (
