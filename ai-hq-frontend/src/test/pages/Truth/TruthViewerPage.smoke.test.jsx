@@ -340,6 +340,8 @@ describe("Truth viewer smoke", () => {
     ).toBeDisabled();
 
     expect(screen.getByText(/^Unavailable$/i)).toBeInTheDocument();
+    expect(screen.getByText(/saved versions/i)).toBeInTheDocument();
+    expect(screen.getByText(/pending review/i)).toBeInTheDocument();
     expect(screen.getAllByText(/^0$/i).length).toBeGreaterThanOrEqual(2);
   });
 
