@@ -12,6 +12,7 @@ import {
   finalizeSetupAssistantSession,
   sendSetupAssistantMessage,
   startSetupAssistantSession,
+  updateCurrentSetupAssistantDraft,
 } from "../../api/setup.js";
 import SetupAssistantSections from "./SetupAssistantSections.jsx";
 
@@ -299,8 +300,8 @@ function useWidgetStyles() {
         position: absolute;
         right: 0;
         bottom: calc(100% + 14px);
-        width: min(calc(100vw - 28px), 396px);
-        height: min(78vh, 680px);
+        width: min(calc(100vw - 28px), 414px);
+        height: min(82vh, 760px);
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -317,7 +318,7 @@ function useWidgetStyles() {
         flex: 0 0 auto;
         padding: 16px 16px 12px;
         border-bottom: 1px solid rgba(232, 235, 241, 0.98);
-        background: rgba(255,255,255,0.76);
+        background: rgba(255,255,255,0.82);
       }
 
       .ai-widget-header-top {
@@ -813,6 +814,7 @@ export default function FloatingAiWidget({
   const styles = useWidgetStyles();
   const queryClient = useQueryClient();
   const rootRef = useRef(null);
+  const assistantRef = useRef(normalizeAssistantState(assistant));
 
   const [clientAssistant, setClientAssistant] = useState(
     normalizeAssistantState(assistant)
@@ -828,8 +830,14 @@ export default function FloatingAiWidget({
   const [supportBusy, setSupportBusy] = useState(false);
 
   useEffect(() => {
-    setClientAssistant(normalizeAssistantState(assistant));
+    const normalized = normalizeAssistantState(assistant);
+    assistantRef.current = normalized;
+    setClientAssistant(normalized);
   }, [assistant]);
+
+  useEffect(() => {
+    assistantRef.current = clientAssistant;
+  }, [clientAssistant]);
 
   useEffect(() => {
     if (!open) return;
@@ -847,15 +855,42 @@ export default function FloatingAiWidget({
   if (hidden) return null;
 
   async function ensureSession() {
-    if (s(clientAssistant.session?.id)) return;
+    const current = assistantRef.current;
+    if (s(current.session?.id)) {
+      return current;
+    }
+
     const response = await startSetupAssistantSession();
-    const nextAssistant = buildAssistantFromApi(clientAssistant, response);
-    setClientAssistant(nextAssistant);
+    let nextAssistant = null;
+
+    setClientAssistant((prev) => {
+      nextAssistant = buildAssistantFromApi(prev, response);
+      return nextAssistant;
+    });
+
+    return nextAssistant || assistantRef.current;
   }
 
-  async function handleSetupSendMessage({ text, step }) {
+  async function handleSetupPatchDraft(payload = {}) {
+    if (saving || finalizing) return null;
+
+    setSaving(true);
+    try {
+      await ensureSession();
+      const response = await updateCurrentSetupAssistantDraft(payload);
+
+      setClientAssistant((prev) => buildAssistantFromApi(prev, response));
+
+      await queryClient.invalidateQueries({ queryKey: ["product-home"] });
+      return response;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSetupParseMessage({ text, step }) {
     const answer = s(text);
-    if (!answer || saving || finalizing) return;
+    if (!answer || saving || finalizing) return null;
 
     setSaving(true);
     try {
@@ -864,21 +899,24 @@ export default function FloatingAiWidget({
         step: s(step, "profile"),
         answer,
       });
-      const nextAssistant = buildAssistantFromApi(clientAssistant, response);
-      setClientAssistant(nextAssistant);
+
+      setClientAssistant((prev) => buildAssistantFromApi(prev, response));
+
       await queryClient.invalidateQueries({ queryKey: ["product-home"] });
+      return response;
     } finally {
       setSaving(false);
     }
   }
 
   async function handleSetupFinalize() {
-    if (saving || finalizing) return;
+    if (saving || finalizing) return null;
 
     setFinalizing(true);
     try {
       await ensureSession();
       const response = await finalizeSetupAssistantSession({});
+
       if (response?.ok === false) {
         throw new Error(
           s(response?.reason || response?.error, "Failed to finalize setup")
@@ -891,20 +929,20 @@ export default function FloatingAiWidget({
         queryClient.invalidateQueries({ queryKey: ["meta-channel-status"] }),
       ]);
 
-      setClientAssistant((current) =>
+      setClientAssistant((prev) =>
         normalizeAssistantState({
-          ...current,
+          ...prev,
           review: {
-            ...obj(current.review),
+            ...obj(prev.review),
+            finalized: true,
             readyForReview: false,
             readyForApproval: false,
             finalizeAvailable: false,
-            finalized: true,
             message:
               "Setup finalized. Approved truth and strict runtime projection were refreshed.",
           },
           assistant: {
-            ...obj(current.assistant),
+            ...obj(prev.assistant),
             completion: {
               ready: false,
               action: null,
@@ -914,6 +952,8 @@ export default function FloatingAiWidget({
           },
         })
       );
+
+      return response;
     } finally {
       setFinalizing(false);
     }
@@ -1016,7 +1056,8 @@ export default function FloatingAiWidget({
                   assistant={clientAssistant}
                   saving={saving}
                   finalizing={finalizing}
-                  onSendMessage={handleSetupSendMessage}
+                  onPatchDraft={handleSetupPatchDraft}
+                  onParseMessage={handleSetupParseMessage}
                   onFinalize={handleSetupFinalize}
                 />
               ) : (
