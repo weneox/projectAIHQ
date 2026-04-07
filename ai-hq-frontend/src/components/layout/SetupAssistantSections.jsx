@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SendHorizontal } from "lucide-react";
 
 function s(value, fallback = "") {
@@ -17,16 +17,20 @@ function obj(value, fallback = {}) {
 
 function normalizeChoice(item, index = 0) {
   if (typeof item === "string") {
+    const text = s(item);
+    if (!text) return null;
     return {
-      id: `choice-${index}-${item}`,
-      label: item,
-      value: item,
+      id: `choice-${index}-${text}`,
+      label: text,
+      value: text,
     };
   }
 
   const safe = obj(item);
   const label = s(safe.label || safe.title || safe.name || safe.value);
-  const value = s(safe.value || safe.answer || safe.label || safe.title || safe.name);
+  const value = s(
+    safe.value || safe.answer || safe.label || safe.title || safe.name
+  );
 
   if (!label && !value) return null;
 
@@ -48,183 +52,7 @@ function normalizeChoices(question = {}) {
       ? arr(safe.quickReplies)
       : arr(safe.suggestions);
 
-  return raw.map(normalizeChoice).filter(Boolean).slice(0, 5);
-}
-
-function buildFallbackChoices(key = "profile", assistant = {}) {
-  const draft = obj(assistant.draft);
-  const businessProfile = obj(draft.businessProfile);
-
-  if (!s(businessProfile.companyName)) {
-    return [
-      {
-        id: "business-name",
-        label: "Business name",
-        value: "I'll share the business name now.",
-      },
-      {
-        id: "website",
-        label: "Website",
-        value: "Let's start from the website.",
-      },
-      {
-        id: "instagram",
-        label: "Instagram",
-        value: "Let's use Instagram as a source.",
-      },
-      {
-        id: "manual",
-        label: "Manual details",
-        value: "I want to write the business details manually.",
-      },
-    ];
-  }
-
-  if (key === "services" || arr(draft.services).length === 0) {
-    return [
-      {
-        id: "services-list",
-        label: "List services",
-        value: "I'll list the services now.",
-      },
-      {
-        id: "rough-note",
-        label: "Paste rough note",
-        value: "I want to paste a rough services note.",
-      },
-      {
-        id: "pricing",
-        label: "Pricing first",
-        value: "Let's define pricing posture first.",
-      },
-      {
-        id: "skip-services",
-        label: "Skip for now",
-        value: "Let's skip services for now and continue.",
-      },
-    ];
-  }
-
-  if (key === "hours") {
-    return [
-      {
-        id: "hours",
-        label: "Working hours",
-        value: "I'll share the working hours now.",
-      },
-      {
-        id: "appointment",
-        label: "Appointment only",
-        value: "The business is appointment only.",
-      },
-      {
-        id: "always-open",
-        label: "24/7",
-        value: "The business is open 24/7.",
-      },
-    ];
-  }
-
-  if (key === "pricing") {
-    return [
-      {
-        id: "starting-from",
-        label: "Starting from",
-        value: "Pricing starts from a visible base amount.",
-      },
-      {
-        id: "quote-required",
-        label: "Quote required",
-        value: "Exact pricing requires a quote.",
-      },
-      {
-        id: "public-pricing",
-        label: "Public summary",
-        value: "I want to define what AI can say publicly about pricing.",
-      },
-    ];
-  }
-
-  return [
-    {
-      id: "continue",
-      label: "Continue",
-      value: "Let's continue.",
-    },
-    {
-      id: "add-detail",
-      label: "Add detail",
-      value: "I want to add more detail here.",
-    },
-  ];
-}
-
-function deriveQuestion(assistant = {}) {
-  const assistantData = obj(assistant.assistant);
-  const nextQuestion = obj(assistantData.nextQuestion);
-  const blockers = arr(assistantData.confirmationBlockers);
-  const draft = obj(assistant.draft);
-  const businessProfile = obj(draft.businessProfile);
-
-  const nextPrompt = s(nextQuestion.prompt || nextQuestion.question || nextQuestion.summary);
-  const nextTitle = s(nextQuestion.title || nextQuestion.label);
-  const nextKey = s(nextQuestion.key, "profile");
-  const nextHelper = s(nextQuestion.helper || nextQuestion.description);
-  const nextChoices = normalizeChoices(nextQuestion);
-
-  if (nextPrompt || nextTitle || nextChoices.length > 0) {
-    return {
-      key: nextKey,
-      title: nextTitle || "",
-      prompt:
-        nextPrompt || "Tell me the next detail and I’ll keep shaping the draft.",
-      helper: nextHelper,
-      options: nextChoices.length ? nextChoices : buildFallbackChoices(nextKey, assistant),
-    };
-  }
-
-  if (blockers.length > 0) {
-    const blocker = obj(blockers[0]);
-    const key = s(blocker.key, "profile");
-    return {
-      key,
-      title: "",
-      prompt: s(
-        blocker.reason,
-        "This part still needs confirmation before the draft feels solid."
-      ),
-      helper: s(blocker.metric),
-      options: buildFallbackChoices(key, assistant),
-    };
-  }
-
-  if (!s(businessProfile.companyName)) {
-    return {
-      key: "profile",
-      title: "",
-      prompt: "Tell me the name and what the business mainly does.",
-      helper: "",
-      options: buildFallbackChoices("profile", assistant),
-    };
-  }
-
-  if (arr(draft.services).length === 0) {
-    return {
-      key: "services",
-      title: "",
-      prompt: "What does the business offer? A rough list is enough.",
-      helper: "",
-      options: buildFallbackChoices("services", assistant),
-    };
-  }
-
-  return {
-    key: "profile",
-    title: "",
-    prompt: "What should we refine next?",
-    helper: "",
-    options: buildFallbackChoices("profile", assistant),
-  };
+  return raw.map(normalizeChoice).filter(Boolean).slice(0, 6);
 }
 
 function buildWelcomeMessage(assistant = {}) {
@@ -237,7 +65,7 @@ function buildWelcomeMessage(assistant = {}) {
       id: "setup-welcome",
       role: "assistant",
       text: `We already have a starting draft for ${companyName}. Let's refine it here.`,
-      helper: "Nothing launches from this chat.",
+      helper: "Nothing goes live until you finish setup.",
     };
   }
 
@@ -245,7 +73,67 @@ function buildWelcomeMessage(assistant = {}) {
     id: "setup-welcome",
     role: "assistant",
     text: "Let's shape the business here first.",
-    helper: "Channels can come later.",
+    helper: "We will finalize it only after the draft is ready.",
+  };
+}
+
+function buildQuestionFromAssistant(assistant = {}) {
+  const assistantData = obj(assistant.assistant);
+  const nextQuestion = obj(assistantData.nextQuestion);
+  const completion = obj(assistantData.completion);
+  const blockers = arr(assistantData.confirmationBlockers);
+
+  const prompt = s(
+    nextQuestion.prompt || nextQuestion.question || nextQuestion.summary
+  );
+  const title = s(nextQuestion.title || nextQuestion.label);
+  const key = s(nextQuestion.key, "profile");
+  const helper = s(nextQuestion.helper || nextQuestion.description);
+  const options = normalizeChoices(nextQuestion);
+
+  if (prompt || title || options.length > 0) {
+    return {
+      key,
+      title,
+      prompt: prompt || "Tell me the next business detail.",
+      helper,
+      options,
+    };
+  }
+
+  if (completion.ready === true) {
+    return {
+      key: "finalize",
+      title: "",
+      prompt: s(
+        completion.message,
+        "The setup draft is ready to finalize."
+      ),
+      helper: "",
+      options: [],
+    };
+  }
+
+  if (blockers.length > 0) {
+    const first = obj(blockers[0]);
+    return {
+      key: s(first.key, "profile"),
+      title: s(first.title),
+      prompt: s(
+        first.reason,
+        "This section still needs confirmation before setup can finish."
+      ),
+      helper: s(first.metric || first.sourceHint),
+      options: [],
+    };
+  }
+
+  return {
+    key: "profile",
+    title: "",
+    prompt: "Tell me the business name and what the business mainly does.",
+    helper: "",
+    options: [],
   };
 }
 
@@ -261,10 +149,35 @@ function TypingBubble() {
   );
 }
 
+function FinalizePrompt({ message, busy, onFinalize }) {
+  return (
+    <div className="ai-row assistant">
+      <div className="ai-bubble assistant">
+        <div className="ai-bubble-text">
+          {s(message, "The setup draft is ready to finalize.")}
+        </div>
+
+        <div className="ai-quick-row">
+          <button
+            type="button"
+            className="ai-action-link"
+            onClick={onFinalize}
+            disabled={busy}
+          >
+            <span>{busy ? "Finalizing..." : "Finish setup"}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SetupAssistantSections({
   assistant,
   saving = false,
+  finalizing = false,
   onSendMessage,
+  onFinalize,
 }) {
   const threadRef = useRef(null);
   const seenAssistantSignaturesRef = useRef(new Set());
@@ -272,10 +185,25 @@ export default function SetupAssistantSections({
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState(() => [buildWelcomeMessage(assistant)]);
 
-  const question = deriveQuestion(assistant);
+  const busy = saving || finalizing;
+  const question = useMemo(
+    () => buildQuestionFromAssistant(assistant),
+    [assistant]
+  );
+  const completion = obj(assistant?.assistant?.completion);
+  const canFinalize = completion.ready === true;
   const latestAssistantId = [...messages]
     .reverse()
     .find((item) => item.role === "assistant")?.id;
+
+  useEffect(() => {
+    setMessages((current) => {
+      if (!current.length) return [buildWelcomeMessage(assistant)];
+      const first = current[0];
+      if (first?.id !== "setup-welcome") return current;
+      return [buildWelcomeMessage(assistant), ...current.slice(1)];
+    });
+  }, [assistant]);
 
   useEffect(() => {
     const signature = JSON.stringify({
@@ -286,6 +214,9 @@ export default function SetupAssistantSections({
       title: question.title,
       prompt: question.prompt,
       helper: question.helper,
+      options: arr(question.options).map((item) => `${item.id}:${item.label}`),
+      finalize: canFinalize,
+      finalizeMessage: s(completion.message),
     });
 
     if (seenAssistantSignaturesRef.current.has(signature)) return;
@@ -311,6 +242,8 @@ export default function SetupAssistantSections({
     question.prompt,
     question.helper,
     question.options,
+    canFinalize,
+    completion.message,
   ]);
 
   useEffect(() => {
@@ -319,11 +252,11 @@ export default function SetupAssistantSections({
       top: threadRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages, saving]);
+  }, [messages, busy, canFinalize]);
 
   async function submitMessage(rawValue) {
     const value = s(rawValue);
-    if (!value || saving) return;
+    if (!value || busy) return;
 
     setMessages((current) => [
       ...current,
@@ -355,6 +288,37 @@ export default function SetupAssistantSections({
     }
   }
 
+  async function finalizeSetup() {
+    if (!canFinalize || busy) return;
+
+    try {
+      await onFinalize?.();
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-finalized-${Date.now()}`,
+          role: "assistant",
+          text:
+            "Setup finalized. Approved truth and strict runtime projection were refreshed.",
+          helper:
+            "Now go back to channels or inbox and refresh their readiness state.",
+        },
+      ]);
+    } catch (error) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-finalize-error-${Date.now()}`,
+          role: "assistant",
+          text: s(
+            error?.message,
+            "Finalization failed. Review the remaining blockers and try again."
+          ),
+        },
+      ]);
+    }
+  }
+
   return (
     <div className="ai-thread-wrap">
       <div ref={threadRef} className="ai-thread-scroll">
@@ -362,7 +326,7 @@ export default function SetupAssistantSections({
           {messages.map((message, index) => {
             const isUser = message.role === "user";
             const showOptions =
-              !saving &&
+              !busy &&
               !isUser &&
               latestAssistantId === message.id &&
               arr(message.options).length > 0;
@@ -403,7 +367,15 @@ export default function SetupAssistantSections({
             );
           })}
 
-          {saving ? <TypingBubble /> : null}
+          {canFinalize ? (
+            <FinalizePrompt
+              message={completion.message}
+              busy={busy}
+              onFinalize={finalizeSetup}
+            />
+          ) : null}
+
+          {busy ? <TypingBubble /> : null}
         </div>
       </div>
 
@@ -426,7 +398,7 @@ export default function SetupAssistantSections({
           <button
             type="button"
             onClick={() => submitMessage(input)}
-            disabled={!s(input) || saving}
+            disabled={!s(input) || busy}
             className="ai-send-btn"
             aria-label="Send setup message"
           >

@@ -37,6 +37,8 @@ const SECTION_ORDER = [
   "handoff",
 ];
 
+const PROFILE_FIELDS_ORDER = ["company", "description", "website"];
+
 const SECTION_META = {
   profile: {
     label: "Business profile",
@@ -49,6 +51,24 @@ const SECTION_META = {
     prompt:
       "Confirm the business profile first: website, business name, and a reliable short description.",
     placeholder: "Paste a website or describe the business in one line",
+  },
+  company: {
+    label: "Business name",
+    title: "Confirm the business name",
+    prompt: "What is the business name?",
+    placeholder: "e.g. Neox Studio",
+  },
+  description: {
+    label: "Business summary",
+    title: "Describe what the business does",
+    prompt: "In one or two lines, what does the business mainly do?",
+    placeholder: "e.g. Premium AI automation and customer operations for local businesses.",
+  },
+  website: {
+    label: "Website",
+    title: "Add the main website",
+    prompt: "What is the main website URL?",
+    placeholder: "e.g. https://example.com",
   },
   services: {
     label: "Services",
@@ -111,6 +131,28 @@ const SECTION_META = {
     placeholder: "Complaints, urgent requests, custom quotes, payment disputes",
   },
 };
+
+const INTENT_ONLY_RESPONSES = {
+  "i'll share the business name now.": "company",
+  "let's start from the website.": "website",
+  "let's use instagram as a source.": "company",
+  "i want to write the business details manually.": "company",
+  "i'll list the services now.": "services",
+  "i want to paste a rough services note.": "services",
+  "let's define pricing posture first.": "pricing",
+  "let's skip services for now and continue.": "__skip__",
+  "i'll share the working hours now.": "hours",
+  "the business is appointment only.": "__appointment_only__",
+  "the business is open 24/7.": "__always_open__",
+  "pricing starts from a visible base amount.": "pricing",
+  "exact pricing requires a quote.": "__quote_required__",
+  "i want to define what ai can say publicly about pricing.": "pricing",
+  "let's continue.": "__continue__",
+  "i want to add more detail here.": "__continue__",
+};
+
+const WEBSITE_PATTERN =
+  /\b((?:https?:\/\/)?(?:www\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?:\/[^\s]*)?)\b/i;
 
 function nowIso() {
   return new Date().toISOString();
@@ -243,7 +285,9 @@ function sanitizeServices(value = []) {
 
 function sanitizeContactItem(value = {}) {
   const source = obj(value);
-  const type = s(source.type || source.channel || inferContactType(source.value)).toLowerCase();
+  const type = s(
+    source.type || source.channel || inferContactType(source.value)
+  ).toLowerCase();
   const label = s(source.label || source.title);
   const entryValue = s(source.value || source.contact || source.address);
   if (!type && !label && !entryValue) return null;
@@ -318,16 +362,16 @@ function sanitizePricingPosture(value = {}) {
       typeof source.allowPublicPriceReplies === "boolean"
         ? source.allowPublicPriceReplies
         : typeof source.allow_public_price_replies === "boolean"
-          ? source.allow_public_price_replies
-          : pricingMode && !["operator_only", "quote_required"].includes(pricingMode),
+        ? source.allow_public_price_replies
+        : pricingMode && !["operator_only", "quote_required"].includes(pricingMode),
     requiresOperatorForExactQuote:
       typeof source.requiresOperatorForExactQuote === "boolean"
         ? source.requiresOperatorForExactQuote
         : typeof source.requires_operator_for_exact_quote === "boolean"
-          ? source.requires_operator_for_exact_quote
-          : ["quote_required", "operator_only", "variable_by_service", "promotional"].includes(
-              pricingMode
-            ),
+        ? source.requires_operator_for_exact_quote
+        : ["quote_required", "operator_only", "variable_by_service", "promotional"].includes(
+            pricingMode
+          ),
     pricingNotes: s(
       source.pricingNotes || source.pricing_notes || source.notes || source.summary
     ),
@@ -522,6 +566,221 @@ function buildHandoffFromAnswer(answer = "") {
   });
 }
 
+function extractWebsiteCandidate(text = "") {
+  const match = s(text).match(WEBSITE_PATTERN);
+  if (!match?.[1]) return "";
+  return normalizeWebsiteUrl(match[1]);
+}
+
+function stripWebsiteFromText(text = "") {
+  const value = s(text);
+  const website = extractWebsiteCandidate(value);
+  if (!website) return value;
+
+  return s(value.replace(WEBSITE_PATTERN, " ").replace(/\s{2,}/g, " "));
+}
+
+function splitProfileLines(text = "") {
+  return String(text || "")
+    .split(/\n+/)
+    .map((item) => s(item))
+    .filter(Boolean);
+}
+
+function parseProfileAnswer(answer = "", current = {}) {
+  const text = s(answer);
+  const profile = obj(current.businessProfile);
+  if (!text) return {};
+
+  const websiteUrl = extractWebsiteCandidate(text);
+  const stripped = stripWebsiteFromText(text);
+  const lines = splitProfileLines(stripped);
+  const out = {};
+
+  if (!profile.websiteUrl && websiteUrl) {
+    out.websiteUrl = websiteUrl;
+  }
+
+  if (!lines.length) {
+    return compactDraftObject(out);
+  }
+
+  if (lines.length >= 2) {
+    if (!profile.companyName) {
+      out.companyName = lines[0];
+    }
+    if (!profile.description) {
+      out.description = lines.slice(1).join(" ");
+    }
+    return compactDraftObject(out);
+  }
+
+  const single = lines[0];
+  const split = single.split(/\s[-–—:]\s/).map((item) => s(item)).filter(Boolean);
+
+  if (split.length >= 2) {
+    if (!profile.companyName) {
+      out.companyName = split[0];
+    }
+    if (!profile.description) {
+      out.description = split.slice(1).join(" - ");
+    }
+    return compactDraftObject(out);
+  }
+
+  if (!profile.companyName && !profile.description) {
+    const words = single.split(/\s+/).filter(Boolean);
+    if (words.length <= 6 && !/[.!?]/.test(single)) {
+      out.companyName = single;
+    } else {
+      out.description = single;
+    }
+    return compactDraftObject(out);
+  }
+
+  if (!profile.companyName) {
+    out.companyName = single;
+  } else if (!profile.description) {
+    out.description = single;
+  }
+
+  return compactDraftObject(out);
+}
+
+function buildAllDayHoursPatch() {
+  return sanitizeStructuredHours(
+    ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map(
+      (day) => ({
+        day,
+        enabled: true,
+        closed: false,
+        allDay: true,
+        appointmentOnly: false,
+        openTime: "",
+        closeTime: "",
+        notes: "",
+      })
+    )
+  );
+}
+
+function buildAppointmentOnlyHoursPatch() {
+  return sanitizeStructuredHours(
+    ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"].map(
+      (day) => ({
+        day,
+        enabled: false,
+        closed: false,
+        allDay: false,
+        appointmentOnly: true,
+        openTime: "",
+        closeTime: "",
+        notes: "Appointment only",
+      })
+    )
+  );
+}
+
+function deriveProfileNextMissingField(profile = {}) {
+  const safe = obj(profile);
+
+  if (!s(safe.companyName)) return "company";
+  if (!s(safe.description)) return "description";
+  if (!s(safe.websiteUrl)) return "website";
+  return "profile";
+}
+
+function buildStepIntentPatch(step = "") {
+  const safeStep = s(step).toLowerCase();
+  if (!safeStep) return {};
+
+  return compactDraftObject({
+    progress: {
+      currentQuestionKey: safeStep,
+      updatedAt: nowIso(),
+    },
+    assistantState: {
+      activeSection: safeStep,
+    },
+  });
+}
+
+function resolveIntentOnlyPatch(step = "", answer = "", current = {}) {
+  const safeStep = s(step).toLowerCase();
+  const normalizedAnswer = s(answer).toLowerCase();
+  const intent = INTENT_ONLY_RESPONSES[normalizedAnswer];
+
+  if (!intent) return {};
+
+  if (intent === "__skip__") {
+    return compactDraftObject({
+      progress: {
+        skippedQuestions: [safeStep || "services"],
+        lastAnsweredStep: safeStep || "services",
+        currentQuestionKey: safeStep || "services",
+        updatedAt: nowIso(),
+      },
+      assistantState: {
+        activeSection: safeStep || "services",
+      },
+    });
+  }
+
+  if (intent === "__continue__") {
+    if (safeStep === "profile") {
+      return buildStepIntentPatch(
+        deriveProfileNextMissingField(obj(current.businessProfile))
+      );
+    }
+    return buildStepIntentPatch(safeStep || "profile");
+  }
+
+  if (intent === "__always_open__") {
+    return compactDraftObject({
+      hours: buildAllDayHoursPatch(),
+      assistantState: {
+        activeSection: "hours",
+        lastUpdatedSection: "hours",
+      },
+    });
+  }
+
+  if (intent === "__appointment_only__") {
+    return compactDraftObject({
+      hours: buildAppointmentOnlyHoursPatch(),
+      assistantState: {
+        activeSection: "hours",
+        lastUpdatedSection: "hours",
+      },
+    });
+  }
+
+  if (intent === "__quote_required__") {
+    return compactDraftObject({
+      pricingPosture: sanitizePricingPosture({
+        pricingMode: "quote_required",
+        publicSummary: "Exact pricing requires a quote.",
+        requiresOperatorForExactQuote: true,
+        allowPublicPriceReplies: false,
+      }),
+      assistantState: {
+        activeSection: "pricing",
+        lastUpdatedSection: "pricing",
+      },
+    });
+  }
+
+  if (intent === "company" || intent === "description" || intent === "website") {
+    return buildStepIntentPatch(intent);
+  }
+
+  if (intent === "services" || intent === "pricing" || intent === "hours") {
+    return buildStepIntentPatch(intent);
+  }
+
+  return {};
+}
+
 function deriveServicesFromReviewDraft(reviewDraft = {}) {
   const profile = obj(reviewDraft.businessProfile);
   const payloadProfile = obj(obj(reviewDraft.draftPayload).profile);
@@ -580,10 +839,7 @@ function deriveContactsFromReviewDraft(reviewDraft = {}) {
 function deriveHoursFromReviewDraft(reviewDraft = {}) {
   const profile = obj(reviewDraft.businessProfile);
   const payloadProfile = obj(obj(reviewDraft.draftPayload).profile);
-  const rawHours = uniqueStrings([
-    ...arr(profile.hours),
-    ...arr(payloadProfile.hours),
-  ]);
+  const rawHours = uniqueStrings([...arr(profile.hours), ...arr(payloadProfile.hours)]);
   if (!rawHours.length) return sanitizeStructuredHours([]);
   return parseHoursNote(rawHours.join("\n"));
 }
@@ -609,17 +865,14 @@ function buildSourceMetadataFromReview(review = {}) {
   const latestAnalyze = obj(summary.latestAnalyze);
   const sources = arr(review.sources);
   const sourceLabels = uniqueStrings([
-    ...sources.map(
-      (item) =>
-        s(item.label || item.sourceLabel || item.sourceType || item.role)
+    ...sources.map((item) =>
+      s(item.label || item.sourceLabel || item.sourceType || item.role)
     ),
     s(latestImport.sourceLabel),
     s(summary.primarySourceType),
   ]);
   const evidenceSummary = uniqueStrings([
-    summary.primarySourceUrl
-      ? `Primary source: ${summary.primarySourceUrl}`
-      : "",
+    summary.primarySourceUrl ? `Primary source: ${summary.primarySourceUrl}` : "",
     latestImport.sourceUrl ? `Latest import: ${latestImport.sourceUrl}` : "",
     latestAnalyze.sourceType ? `Last analyze: ${latestAnalyze.sourceType}` : "",
     Number(draft.warningCount || arr(draft.warnings).length) > 0
@@ -681,7 +934,8 @@ function buildSectionStatus(draft = {}) {
   const pricing = obj(draft.pricingPosture);
   const handoff = obj(draft.handoffRules);
   const enabledHours = arr(draft.hours).filter(
-    (item) => item.enabled === true || item.allDay === true || item.appointmentOnly === true
+    (item) =>
+      item.enabled === true || item.allDay === true || item.appointmentOnly === true
   );
 
   const sections = {
@@ -743,8 +997,8 @@ function buildSectionStatus(draft = {}) {
       metric: arr(handoff.triggers).length
         ? `${arr(handoff.triggers).length} triggers`
         : s(handoff.summary)
-          ? "configured"
-          : "recommended",
+        ? "configured"
+        : "recommended",
     },
   };
 
@@ -777,8 +1031,8 @@ function buildConfirmationBlockers(draft = {}, sectionStatus = {}) {
         key === "profile" && s(sourceMetadata.primarySourceType)
           ? `Signals already exist from ${sourceMetadata.primarySourceType}.`
           : key === "services" && arr(sourceMetadata.evidenceSummary).length
-            ? arr(sourceMetadata.evidenceSummary)[0]
-            : "",
+          ? arr(sourceMetadata.evidenceSummary)[0]
+          : "",
     })
   );
 }
@@ -808,7 +1062,8 @@ function buildSummary(draft = {}) {
     servicesCount: arr(draft.services).length,
     contactsCount: arr(draft.contacts).length,
     hoursConfiguredCount: arr(draft.hours).filter(
-      (item) => item.enabled === true || item.allDay === true || item.appointmentOnly === true
+      (item) =>
+        item.enabled === true || item.allDay === true || item.appointmentOnly === true
     ).length,
   };
 }
@@ -818,9 +1073,10 @@ function buildReviewState(draft = {}, summary = {}) {
     status: summary.hasAnyDraft ? "draft_in_progress" : "awaiting_input",
     readyForReview: summary.readyForReview === true,
     readyForApproval: false,
+    finalizeAvailable: summary.readyForReview === true,
     message:
       summary.readyForReview === true
-        ? "The setup draft is structurally complete enough to move into a later review step. Nothing is live yet."
+        ? "The setup draft is structurally complete enough to be finalized into approved truth and strict runtime."
         : REVIEW_MESSAGE,
   };
 }
@@ -839,8 +1095,8 @@ function buildAssistantSections(draft = {}, summary = {}, servicesCatalog = {}) 
         status === "ready"
           ? meta.ready
           : status === "needs_review"
-            ? meta.review
-            : meta.missing,
+          ? meta.review
+          : meta.missing,
       metric: s(obj(summary.sectionStatus)[key]?.metric),
       suggestedCount:
         key === "services" ? arr(servicesCatalog.suggestedServices).length : 0,
@@ -848,11 +1104,96 @@ function buildAssistantSections(draft = {}, summary = {}, servicesCatalog = {}) 
   });
 }
 
-function getNextQuestion(summary = {}) {
+function resolveProfileQuestion(profile = {}, progress = {}) {
+  const currentQuestionKey = s(progress.currentQuestionKey).toLowerCase();
+  const safeProfile = obj(profile);
+
+  if (
+    currentQuestionKey === "company" &&
+    !s(safeProfile.companyName)
+  ) {
+    return {
+      key: "company",
+      label: SECTION_META.company.label,
+      prompt: SECTION_META.company.prompt,
+      placeholder: SECTION_META.company.placeholder,
+    };
+  }
+
+  if (
+    currentQuestionKey === "description" &&
+    !s(safeProfile.description)
+  ) {
+    return {
+      key: "description",
+      label: SECTION_META.description.label,
+      prompt: SECTION_META.description.prompt,
+      placeholder: SECTION_META.description.placeholder,
+    };
+  }
+
+  if (
+    currentQuestionKey === "website" &&
+    !s(safeProfile.websiteUrl)
+  ) {
+    return {
+      key: "website",
+      label: SECTION_META.website.label,
+      prompt: SECTION_META.website.prompt,
+      placeholder: SECTION_META.website.placeholder,
+    };
+  }
+
+  if (!s(safeProfile.companyName)) {
+    return {
+      key: "company",
+      label: SECTION_META.company.label,
+      prompt: SECTION_META.company.prompt,
+      placeholder: SECTION_META.company.placeholder,
+    };
+  }
+
+  if (!s(safeProfile.description)) {
+    return {
+      key: "description",
+      label: SECTION_META.description.label,
+      prompt: SECTION_META.description.prompt,
+      placeholder: SECTION_META.description.placeholder,
+    };
+  }
+
+  if (!s(safeProfile.websiteUrl)) {
+    return {
+      key: "website",
+      label: SECTION_META.website.label,
+      prompt: SECTION_META.website.prompt,
+      placeholder: SECTION_META.website.placeholder,
+    };
+  }
+
+  return {
+    key: "profile",
+    label: SECTION_META.profile.label,
+    prompt: SECTION_META.profile.prompt,
+    placeholder: SECTION_META.profile.placeholder,
+  };
+}
+
+function getNextQuestion(summary = {}, draft = {}, progress = {}) {
+  if (summary.readyForReview === true) {
+    return null;
+  }
+
+  const sectionStatus = obj(summary.sectionStatus);
+
+  if (sectionStatus.profile?.status !== "ready") {
+    return resolveProfileQuestion(obj(draft.businessProfile), progress);
+  }
+
   const blocker = arr(summary.confirmationBlockers)[0];
   if (!blocker) return null;
 
-  const meta = SECTION_META[blocker.key];
+  const meta = SECTION_META[blocker.key] || SECTION_META.profile;
   return {
     key: blocker.key,
     label: meta.label,
@@ -919,8 +1260,8 @@ function normalizeDirectPatchBody(body = {}) {
   const root = obj(body?.draft)
     ? obj(body.draft)
     : obj(body?.setup)
-      ? obj(body.setup)
-      : obj(body);
+    ? obj(body.setup)
+    : obj(body);
 
   const out = {};
 
@@ -997,6 +1338,13 @@ function patchFromAnswer(step = "", answer = "", current = {}) {
 
   switch (key) {
     case "profile":
+      return {
+        businessProfile: parseProfileAnswer(text, currentDraft),
+        assistantState: {
+          lastUpdatedSection: "profile",
+          activeSection: "profile",
+        },
+      };
     case "website":
       return {
         businessProfile: {
@@ -1004,7 +1352,7 @@ function patchFromAnswer(step = "", answer = "", current = {}) {
         },
         assistantState: {
           lastUpdatedSection: "profile",
-          activeSection: "profile",
+          activeSection: "website",
         },
       };
     case "company":
@@ -1014,7 +1362,7 @@ function patchFromAnswer(step = "", answer = "", current = {}) {
         },
         assistantState: {
           lastUpdatedSection: "profile",
-          activeSection: "profile",
+          activeSection: "company",
         },
       };
     case "description":
@@ -1024,7 +1372,7 @@ function patchFromAnswer(step = "", answer = "", current = {}) {
         },
         assistantState: {
           lastUpdatedSection: "profile",
-          activeSection: "profile",
+          activeSection: "description",
         },
       };
     case "services":
@@ -1099,14 +1447,22 @@ function normalizeAnswerPatchBody(body = {}, current = {}) {
     };
   }
 
+  const intentOnlyPatch = resolveIntentOnlyPatch(step, answer, current);
+  if (Object.keys(intentOnlyPatch).length > 0) {
+    return intentOnlyPatch;
+  }
+
   const answerPatch = patchFromAnswer(step, answer, current);
   if (!Object.keys(answerPatch).length) return {};
+
+  const activeSection =
+    s(obj(answerPatch.assistantState).activeSection) || step || "profile";
 
   return compactDraftObject({
     ...answerPatch,
     progress: {
       lastAnsweredStep: step,
-      currentQuestionKey: step,
+      currentQuestionKey: activeSection,
       updatedAt: nowIso(),
     },
   });
@@ -1121,9 +1477,18 @@ export function normalizeSetupAssistantDraftPatchBody(body = {}, current = {}) {
 function removeSkippedIfAnswered(skipped = [], patch = {}) {
   const nextSkipped = new Set(arr(skipped).map((item) => s(item).toLowerCase()));
 
-  if (patch.businessProfile?.websiteUrl) nextSkipped.delete("website");
-  if (patch.businessProfile?.companyName) nextSkipped.delete("company");
-  if (patch.businessProfile?.description) nextSkipped.delete("description");
+  if (patch.businessProfile?.websiteUrl) {
+    nextSkipped.delete("website");
+    nextSkipped.delete("profile");
+  }
+  if (patch.businessProfile?.companyName) {
+    nextSkipped.delete("company");
+    nextSkipped.delete("profile");
+  }
+  if (patch.businessProfile?.description) {
+    nextSkipped.delete("description");
+    nextSkipped.delete("profile");
+  }
   if (patch.services !== undefined && arr(patch.services).length > 0)
     nextSkipped.delete("services");
   if (patch.contacts !== undefined && arr(patch.contacts).length > 0)
@@ -1217,7 +1582,7 @@ export function buildSetupAssistantSessionPayload(review = {}) {
     currentServices: setup.services,
     sourceServices: seed.services,
   });
-  const nextQuestion = getNextQuestion(summary);
+  const nextQuestion = getNextQuestion(summary, setup, obj(setup.progress));
 
   return {
     session: {
@@ -1252,6 +1617,20 @@ export function buildSetupAssistantSessionPayload(review = {}) {
         nextQuestion,
         confirmationBlockers: arr(summary.confirmationBlockers),
         sections: buildAssistantSections(setup, summary, servicesCatalog),
+        completion: {
+          ready: summary.readyForReview === true,
+          action: summary.readyForReview
+            ? {
+                id: "finalize_setup",
+                label: "Finish setup",
+                intent: "finalize_review",
+              }
+            : null,
+          message:
+            summary.readyForReview === true
+              ? "The draft is complete enough to finalize into approved truth and strict runtime."
+              : REVIEW_MESSAGE,
+        },
         quickCapture: Object.fromEntries(
           SECTION_ORDER.map((key) => [
             key,
@@ -1473,7 +1852,11 @@ export async function updateSetupAssistantDraft(
   );
 
   const nextSummary = buildSummary(mergedSetupAssistant);
-  const nextQuestion = getNextQuestion(nextSummary);
+  const nextQuestion = getNextQuestion(
+    nextSummary,
+    mergedSetupAssistant,
+    obj(mergedSetupAssistant.progress)
+  );
 
   const nextDraftPayload = mergeDraftState(
     stripLegacySetupAssistantPayloadKeys(existingDraftPayload),
@@ -1549,4 +1932,6 @@ export const __test__ = {
   mergeSetupAssistantDraft,
   normalizeSetupAssistantDraftPatchBody,
   patchFromAnswer,
+  parseProfileAnswer,
+  resolveIntentOnlyPatch,
 };

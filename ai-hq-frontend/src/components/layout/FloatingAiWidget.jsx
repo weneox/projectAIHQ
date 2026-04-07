@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  finalizeSetupAssistantSession,
   sendSetupAssistantMessage,
   startSetupAssistantSession,
 } from "../../api/setup.js";
@@ -82,6 +83,11 @@ function buildDefaultAssistant() {
       nextQuestion: {},
       confirmationBlockers: [],
       sections: [],
+      completion: {
+        ready: false,
+        action: null,
+        message: "",
+      },
       servicesCatalog: {
         items: [],
         packs: [],
@@ -124,6 +130,7 @@ function normalizeAssistantState(input = null) {
       nextQuestion: obj(assistant.nextQuestion),
       confirmationBlockers: arr(assistant.confirmationBlockers),
       sections: arr(assistant.sections),
+      completion: obj(assistant.completion),
       servicesCatalog: obj(assistant.servicesCatalog),
       sourceInsights: arr(assistant.sourceInsights),
     },
@@ -812,6 +819,7 @@ export default function FloatingAiWidget({
   );
   const [surfaceMode, setSurfaceMode] = useState("setup");
   const [saving, setSaving] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
 
   const [supportMessages, setSupportMessages] = useState(
     buildInitialSupportMessages()
@@ -847,7 +855,7 @@ export default function FloatingAiWidget({
 
   async function handleSetupSendMessage({ text, step }) {
     const answer = s(text);
-    if (!answer || saving) return;
+    if (!answer || saving || finalizing) return;
 
     setSaving(true);
     try {
@@ -861,6 +869,53 @@ export default function FloatingAiWidget({
       await queryClient.invalidateQueries({ queryKey: ["product-home"] });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSetupFinalize() {
+    if (saving || finalizing) return;
+
+    setFinalizing(true);
+    try {
+      await ensureSession();
+      const response = await finalizeSetupAssistantSession({});
+      if (response?.ok === false) {
+        throw new Error(
+          s(response?.reason || response?.error, "Failed to finalize setup")
+        );
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["product-home"] }),
+        queryClient.invalidateQueries({ queryKey: ["telegram-channel-status"] }),
+        queryClient.invalidateQueries({ queryKey: ["meta-channel-status"] }),
+      ]);
+
+      setClientAssistant((current) =>
+        normalizeAssistantState({
+          ...current,
+          review: {
+            ...obj(current.review),
+            readyForReview: false,
+            readyForApproval: false,
+            finalizeAvailable: false,
+            finalized: true,
+            message:
+              "Setup finalized. Approved truth and strict runtime projection were refreshed.",
+          },
+          assistant: {
+            ...obj(current.assistant),
+            completion: {
+              ready: false,
+              action: null,
+              message:
+                "Setup finalized. Approved truth and strict runtime projection were refreshed.",
+            },
+          },
+        })
+      );
+    } finally {
+      setFinalizing(false);
     }
   }
 
@@ -960,7 +1015,9 @@ export default function FloatingAiWidget({
                 <SetupAssistantSections
                   assistant={clientAssistant}
                   saving={saving}
+                  finalizing={finalizing}
                   onSendMessage={handleSetupSendMessage}
+                  onFinalize={handleSetupFinalize}
                 />
               ) : (
                 <SupportThread

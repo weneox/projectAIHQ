@@ -1,5 +1,5 @@
 // src/api/setup.js
-// FINAL v2.1 - setup studio API with session review flow + unified analyze
+// FINAL v2.2 - setup studio API with session review flow + assistant finalize
 
 import { apiGet, apiPost, apiPut, apiPatch } from "./client.js";
 
@@ -88,6 +88,10 @@ export async function sendSetupAssistantMessage(payload = {}) {
     payload
   );
   return normalizeSetupAssistantPayload(response);
+}
+
+export async function finalizeSetupAssistantSession(payload = {}) {
+  return apiPost("/api/setup/review/current/finalize", payload);
 }
 
 export function getCurrentSetupReview(params = {}) {
