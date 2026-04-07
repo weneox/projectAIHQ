@@ -6,7 +6,6 @@ import {
 } from "lucide-react";
 import { cx } from "../../lib/cx.js";
 import {
-  channelIcon,
   fmtRelative,
   labelizeToken,
 } from "../../features/comments/comment-utils.js";
@@ -54,12 +53,7 @@ function initial(text = "") {
 }
 
 export default function CommentRow({ item, selected, onSelect }) {
-  const Icon = channelIcon(item.platform, {
-    Instagram,
-    Facebook,
-    MessageSquareText,
-    Globe,
-  });
+  const platform = String(item.platform || "").toLowerCase();
 
   return (
     <button
@@ -114,7 +108,15 @@ export default function CommentRow({ item, selected, onSelect }) {
             channelMarkClass(item.platform)
           )}
         >
-          <Icon className="h-4 w-4" />
+          {platform.includes("instagram") ? (
+            <Instagram className="h-4 w-4" />
+          ) : platform.includes("facebook") ? (
+            <Facebook className="h-4 w-4" />
+          ) : platform.includes("messenger") ? (
+            <MessageSquareText className="h-4 w-4" />
+          ) : (
+            <Globe className="h-4 w-4" />
+          )}
         </span>
       </div>
     </button>

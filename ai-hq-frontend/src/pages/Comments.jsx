@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CheckCircle2,
   Ban,
@@ -202,16 +202,10 @@ export default function Comments() {
     handleIgnore,
   } = useCommentsData();
 
-  const [composeMode, setComposeMode] = useState("ai");
-
-  useEffect(() => {
-    if (selected?.suggestedReply) {
-      setComposeMode("ai");
-      return;
-    }
-
-    setComposeMode("manual");
-  }, [selected?.id, selected?.suggestedReply]);
+  const [composeChoice, setComposeChoice] = useState({
+    commentId: "",
+    mode: "",
+  });
 
   const selectedPostCaption = useMemo(() => {
     const caption = String(selectedPost?.caption || "").trim();
@@ -219,13 +213,26 @@ export default function Comments() {
     return caption.length > 180 ? `${caption.slice(0, 180).trim()}...` : caption;
   }, [selectedPost?.caption]);
 
+  const composeMode =
+    composeChoice.commentId === selected?.id && composeChoice.mode
+      ? composeChoice.mode
+      : selected?.suggestedReply
+        ? "ai"
+        : "manual";
+
   function useAiDraft() {
-    setComposeMode("ai");
+    setComposeChoice({
+      commentId: selected?.id || "",
+      mode: "ai",
+    });
     setReplyDraft(selected?.suggestedReply || "");
   }
 
   function useManualDraft() {
-    setComposeMode("manual");
+    setComposeChoice({
+      commentId: selected?.id || "",
+      mode: "manual",
+    });
     if (replyDraft === selected?.suggestedReply) {
       setReplyDraft("");
     }

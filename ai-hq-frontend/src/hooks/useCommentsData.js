@@ -244,7 +244,7 @@ export function useCommentsData() {
   const actionState = useActionState();
   const {
     data: items,
-    setData: setItems,
+    setData: _setItems,
     surface,
     beginRefresh,
     succeedRefresh,
@@ -329,7 +329,10 @@ export function useCommentsData() {
     [posts, selectedPostId]
   );
 
-  const postComments = selectedPost?.comments || [];
+  const postComments = useMemo(
+    () => selectedPost?.comments || [],
+    [selectedPost]
+  );
 
   const selected = useMemo(
     () => postComments.find((comment) => comment.id === selectedId) || null,
