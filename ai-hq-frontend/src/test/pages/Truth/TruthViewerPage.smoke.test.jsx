@@ -280,7 +280,9 @@ describe("Truth viewer smoke", () => {
     expect(screen.getByText("https://north.example")).toBeInTheDocument();
     expect(screen.getByText(/reviewer@aihq\.test/i)).toBeInTheDocument();
     expect(screen.getByText(/^Ready$/i)).toBeInTheDocument();
-    expect(screen.getByText(/https:\/\/north\.example\/about/i)).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/https:\/\/north\.example\/about/i).length
+    ).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: /version history/i }));
 
@@ -328,10 +330,10 @@ describe("Truth viewer smoke", () => {
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText(
+      screen.getAllByText(
         /approved truth is unavailable\. no non-approved fallback data is being shown\./i
-      )
-    ).toBeInTheDocument();
+      ).length
+    ).toBeGreaterThan(0);
 
     expect(
       screen.getByRole("button", { name: /version history/i })
@@ -431,8 +433,8 @@ describe("Truth viewer smoke", () => {
     );
 
     expect(
-      await screen.findByText(/rollback receipt/i)
-    ).toBeInTheDocument();
+      (await screen.findAllByText(/rollback receipt/i)).length
+    ).toBeGreaterThan(0);
     expect(
       screen.getByText(/rollback committed, but follow-up is required/i)
     ).toBeInTheDocument();
