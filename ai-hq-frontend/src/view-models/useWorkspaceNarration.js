@@ -103,6 +103,26 @@ const OUTCOME_NOISE_PATTERNS = [
   /could not be loaded/i,
 ];
 
+const DEFAULT_WORKSPACE_NARRATION_PAYLOADS = {
+  bootstrap: null,
+  overview: null,
+  trust: null,
+  workbench: null,
+  inboxThreads: null,
+  inboxOutbound: null,
+  comments: null,
+};
+
+const DEFAULT_WORKSPACE_NARRATION_SOURCE_STATUS = {
+  bootstrap: { available: true },
+  overview: { available: true },
+  trust: { available: true },
+  workbench: { available: true },
+  inboxThreads: { available: true },
+  inboxOutbound: { available: true },
+  comments: { available: true },
+};
+
 function titleize(value = "") {
   return String(value || "")
     .trim()
@@ -952,25 +972,15 @@ export function useWorkspaceNarration() {
     refetchOnWindowFocus: false,
   });
 
-  const payloads = state.data?.payloads || {
-    bootstrap: null,
-    overview: null,
-    trust: null,
-    workbench: null,
-    inboxThreads: null,
-    inboxOutbound: null,
-    comments: null,
-  };
+  const payloads = useMemo(
+    () => state.data?.payloads ?? DEFAULT_WORKSPACE_NARRATION_PAYLOADS,
+    [state.data?.payloads]
+  );
 
-  const sourceStatus = state.data?.sourceStatus || {
-    bootstrap: { available: true },
-    overview: { available: true },
-    trust: { available: true },
-    workbench: { available: true },
-    inboxThreads: { available: true },
-    inboxOutbound: { available: true },
-    comments: { available: true },
-  };
+  const sourceStatus = useMemo(
+    () => state.data?.sourceStatus ?? DEFAULT_WORKSPACE_NARRATION_SOURCE_STATUS,
+    [state.data?.sourceStatus]
+  );
 
   const narration = useMemo(() => {
     const truthSignals = buildTruthSystemSignals({
