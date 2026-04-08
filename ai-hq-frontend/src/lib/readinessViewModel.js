@@ -200,8 +200,11 @@ export function buildTruthOperationalState(
   }
 
   if (!runtimeReady) {
+    const healthRepairAction = obj(runtimeHealth.repairAction);
     const repairAction =
-      normalizeOperationalAction(runtimeHealth.repairAction) ||
+      (Object.keys(healthRepairAction).length
+        ? normalizeOperationalAction(healthRepairAction)
+        : null) ||
       arr(runtimeHealth.repairActions)
         .map((item) => normalizeOperationalAction(item))
         .find((item) => item.path) ||

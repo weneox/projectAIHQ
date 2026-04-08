@@ -7,6 +7,7 @@ import {
   Mail,
   MapPin,
   Phone,
+  ShieldCheck,
   Sparkles,
   User2,
   Wrench,

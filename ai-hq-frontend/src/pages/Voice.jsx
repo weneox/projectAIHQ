@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getSettingsTrustView } from "../api/trust.js";
 import { getVoiceSettings } from "../api/voice.js";
 import AdminPageShell from "../components/admin/AdminPageShell.jsx";
+import Button from "../components/ui/Button.jsx";
 import { MetricCard, Surface } from "../components/ui/AppShellPrimitives.jsx";
 import {
   buildTruthOperationalState,
