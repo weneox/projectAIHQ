@@ -82,9 +82,36 @@ function absolutizeWsBase(value = "") {
   }
 
   try {
-    return new URL(raw, `${getBrowserWsOrigin()}/`).toString().replace(/\/+$/, "");
+    return new URL(raw, `${getBrowserWsOrigin()}/`)
+      .toString()
+      .replace(/\/+$/, "");
   } catch {
     return "";
+  }
+}
+
+function ensureWsEndpointPath(value = "") {
+  const raw = trimTrailingSlash(value);
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw);
+
+    const pathname = s(url.pathname || "/");
+    const normalizedPathname =
+      pathname === "/" || pathname === ""
+        ? "/ws"
+        : pathname === "/api" || pathname === "/api/"
+          ? "/ws"
+          : pathname;
+
+    url.pathname = normalizedPathname;
+    url.search = "";
+    url.hash = "";
+
+    return trimTrailingSlash(url.toString());
+  } catch {
+    return raw.endsWith("/ws") ? raw : `${raw}/ws`;
   }
 }
 
@@ -107,16 +134,18 @@ function buildFallbackWsUrl() {
     return `${getBrowserWsOrigin()}/ws`;
   }
 
-  const configuredWs = absolutizeWsBase(RAW_WS_URL);
+  const configuredWs = ensureWsEndpointPath(absolutizeWsBase(RAW_WS_URL));
   if (configuredWs) return configuredWs;
 
   const base = resolveApiBase();
 
   if (isAbsoluteHttpUrl(base)) {
-    return base
-      .replace(/^https:/i, "wss:")
-      .replace(/^http:/i, "ws:")
-      .replace(/\/api$/i, "") + "/ws";
+    return ensureWsEndpointPath(
+      base
+        .replace(/^https:/i, "wss:")
+        .replace(/^http:/i, "ws:")
+        .replace(/\/api$/i, "")
+    );
   }
 
   return `${getBrowserWsOrigin()}/ws`;
@@ -163,13 +192,18 @@ async function requestRealtimeSession() {
   };
 }
 
-function buildSocketUrl(session = {}) {
-  const preferredWsBase =
-    absolutizeWsBase(RAW_WS_URL) ||
-    absolutizeWsBase(session.wsUrl) ||
-    buildFallbackWsUrl();
+function resolvePreferredWsBase(session = {}) {
+  const sessionWs = ensureWsEndpointPath(absolutizeWsBase(session.wsUrl));
+  if (sessionWs) return sessionWs;
 
-  const wsBase = trimTrailingSlash(preferredWsBase);
+  const configuredWs = ensureWsEndpointPath(absolutizeWsBase(RAW_WS_URL));
+  if (configuredWs) return configuredWs;
+
+  return buildFallbackWsUrl();
+}
+
+function buildSocketUrl(session = {}) {
+  const wsBase = trimTrailingSlash(resolvePreferredWsBase(session));
   const ticket = s(session.ticket);
 
   if (!wsBase || !ticket) return "";
@@ -186,6 +220,7 @@ export function createWsClient({ onEvent, onStatus, maxDelayMs = 12000 } = {}) {
   let currentUrl = "";
   let manuallyClosed = false;
   let realtimeScope = null;
+  let consecutiveTransportFailures = 0;
 
   const notifyStatus = (status) => {
     try {
@@ -246,7 +281,10 @@ export function createWsClient({ onEvent, onStatus, maxDelayMs = 12000 } = {}) {
   const connect = async () => {
     if (stopped) return;
 
-    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    if (
+      ws &&
+      (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)
+    ) {
       return;
     }
 
@@ -306,6 +344,7 @@ export function createWsClient({ onEvent, onStatus, maxDelayMs = 12000 } = {}) {
 
       ws.onopen = () => {
         attempt = 0;
+        consecutiveTransportFailures = 0;
         notifyStatus({
           state: "connected",
           url: currentUrl,
@@ -319,6 +358,13 @@ export function createWsClient({ onEvent, onStatus, maxDelayMs = 12000 } = {}) {
         ws = null;
 
         const unauthorized = Number(ev?.code || 0) === 1008;
+        const abnormal = Number(ev?.code || 0) === 1006;
+
+        if (abnormal) {
+          consecutiveTransportFailures += 1;
+        } else {
+          consecutiveTransportFailures = 0;
+        }
 
         notifyStatus({
           state: unauthorized ? "unauthorized" : "disconnected",
@@ -326,9 +372,22 @@ export function createWsClient({ onEvent, onStatus, maxDelayMs = 12000 } = {}) {
           reason: ev?.reason || "",
           wasClean: Boolean(ev?.wasClean),
           scope: realtimeScope,
+          url: currentUrl,
         });
 
         if (stopped || wasManual || unauthorized) return;
+
+        if (consecutiveTransportFailures >= 4) {
+          stopped = true;
+          notifyStatus({
+            state: "off",
+            detail: "realtime transport unavailable",
+            url: currentUrl,
+            scope: realtimeScope,
+          });
+          return;
+        }
+
         scheduleReconnect();
       };
 
@@ -382,6 +441,7 @@ export function createWsClient({ onEvent, onStatus, maxDelayMs = 12000 } = {}) {
     start() {
       stopped = false;
       attempt = 0;
+      consecutiveTransportFailures = 0;
       clearReconnectTimer();
       void connect();
     },
@@ -421,4 +481,6 @@ export const __test__ = {
   buildFallbackWsUrl,
   buildRealtimeSessionEndpoint,
   shouldUseDevProxyWs,
+  ensureWsEndpointPath,
+  resolvePreferredWsBase,
 };
