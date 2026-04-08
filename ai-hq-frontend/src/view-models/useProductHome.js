@@ -5,7 +5,10 @@ import {
   getCurrentSetupAssistantSession,
   getSetupOverview,
 } from "../api/setup.js";
-import { getTelegramChannelStatus } from "../api/channelConnect.js";
+import {
+  getMetaChannelStatus,
+  getTelegramChannelStatus,
+} from "../api/channelConnect.js";
 import { getSettingsTrustView } from "../api/trust.js";
 import { getTruthReviewWorkbench } from "../api/truth.js";
 import { getAppSessionContext } from "../lib/appSession.js";
@@ -73,6 +76,92 @@ function firstReadableValue(...values) {
     if (next) return next;
   }
   return "";
+}
+
+function formatHandle(value = "") {
+  const text = s(value);
+  if (!text) return "";
+  return text.startsWith("@") ? text : `@${text}`;
+}
+
+function buildLaunchChannelUnavailableState() {
+  return {
+    id: "launch",
+    type: "launch_channel",
+    provider: "",
+    connected: false,
+    available: false,
+    status: "unavailable",
+    statusLabel: "Unavailable",
+    title: "Launch channel state is unavailable.",
+    summary: "Home cannot confirm which launch channel is ready right now.",
+    detail:
+      "Open Channels to verify Instagram or Telegram before treating setup as launch-ready.",
+    action: { label: "Open channels", path: "/channels" },
+    deliveryReady: false,
+    reasonCode: "launch_channel_status_unavailable",
+    channelLabel: "Launch channel",
+    accountLabel: "",
+    accountDisplayName: "",
+    accountHandle: "",
+    account: {},
+  };
+}
+
+function buildAccountAttachmentDetail(account = {}, fallback = "") {
+  const displayName = s(account.displayName);
+  const handle = s(account.handle);
+
+  if (displayName && handle && !displayName.includes(handle)) {
+    return `${displayName} (${handle}) is attached to this workspace.`;
+  }
+
+  if (displayName) {
+    return `${displayName} is attached to this workspace.`;
+  }
+
+  if (handle) {
+    return `${handle} is attached to this workspace.`;
+  }
+
+  return s(fallback);
+}
+
+function createCanonicalLaunchChannel(value = {}) {
+  const account = obj(value.account);
+  const displayName = firstReadableValue(
+    value.accountDisplayName,
+    account.displayName
+  );
+  const handle = firstReadableValue(value.accountHandle, account.handle);
+
+  return {
+    id: s(value.id),
+    type: s(value.type, "launch_channel"),
+    provider: s(value.provider).toLowerCase(),
+    connected: value.connected === true,
+    available: value.available !== false,
+    status: s(value.status, "unavailable"),
+    statusLabel: s(value.statusLabel, "Unavailable"),
+    title: s(value.title),
+    summary: s(value.summary),
+    detail: s(value.detail),
+    action: normalizeAction(value.action, {
+      label: "Open channels",
+      path: "/channels",
+    }),
+    deliveryReady: value.deliveryReady === true,
+    reasonCode: s(value.reasonCode).toLowerCase(),
+    channelLabel: s(value.channelLabel, "Launch channel"),
+    accountLabel: s(value.accountLabel),
+    accountDisplayName: displayName,
+    accountHandle: handle,
+    account: {
+      ...account,
+      displayName,
+      handle,
+    },
+  };
 }
 
 function buildReasonHeadline(reasonCode = "") {
@@ -225,6 +314,7 @@ async function loadProductHomePayloads() {
     workbench: getTruthReviewWorkbench({ limit: 4 }),
     inboxThreads: listInboxThreads({ limit: 10 }),
     inboxOutbound: getOutboundSummary(),
+    metaStatus: getMetaChannelStatus(),
     telegramStatus: getTelegramChannelStatus(),
     setupAssistantSession: getCurrentSetupAssistantSession(),
   };
