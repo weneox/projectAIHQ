@@ -27,6 +27,25 @@ function firstText(...values) {
   return "";
 }
 
+function hasKeys(value) {
+  return Object.keys(obj(value)).length > 0;
+}
+
+function isConnectedChannel(value = null) {
+  return obj(value).connected === true;
+}
+
+function isDeliveryReadyChannel(value = null) {
+  const channel = obj(value);
+  return channel.connected === true && channel.deliveryReady === true;
+}
+
+function normalizeLaunchChannels(values = []) {
+  return arr(values)
+    .map((item) => obj(item))
+    .filter((item) => hasKeys(item));
+}
+
 export function normalizeOperationalAction(value = {}, fallback = null) {
   const action = {
     ...obj(fallback),
@@ -83,7 +102,9 @@ function normalizeBlocker(value = {}) {
       .map((entry) => s(entry))
       .filter(Boolean),
     suggestedRepairActionId: s(
-      item.suggestedRepairActionId || item.suggested_repair_action_id || action.id
+      item.suggestedRepairActionId ||
+        item.suggested_repair_action_id ||
+        action.id
     ),
     nextAction: action,
     action,
@@ -454,7 +475,7 @@ export function buildChannelTruthLaunchReadiness({
   surface = {},
   copy = {},
 } = {}) {
-  const safeChannels = arr(channels);
+  const safeChannels = normalizeLaunchChannels(channels);
   const truth = obj(truthState);
   const surfaceUnavailable = surface?.unavailable === true;
 
@@ -488,13 +509,17 @@ export function buildChannelTruthLaunchReadiness({
     };
   }
 
-  const launchChannel =
-    safeChannels.find((item) => item.connected) || safeChannels[0] || null;
-  const channelReady = safeChannels.some(
-    (item) => item.connected && item.deliveryReady
-  );
+  const deliveryReadyChannel =
+    safeChannels.find((item) => isDeliveryReadyChannel(item)) || null;
+  const connectedChannel =
+    safeChannels.find((item) => isConnectedChannel(item)) || null;
+  const fallbackChannel =
+    safeChannels.find((item) => s(item?.action?.path)) || safeChannels[0] || null;
 
-  if (!launchChannel || !launchChannel.connected) {
+  const launchChannel =
+    deliveryReadyChannel || connectedChannel || fallbackChannel || null;
+
+  if (!connectedChannel) {
     return {
       status: "blocked",
       statusLabel: resolveCopy(copy, "noChannelStatusLabel", "Connect required"),
@@ -509,12 +534,12 @@ export function buildChannelTruthLaunchReadiness({
         "No launch channel is currently connected."
       ),
       action:
-        launchChannel?.action ||
-        safeChannels.find((item) => item?.action?.path)?.action ||
-        normalizeOperationalAction(copy.noChannelAction, {
-          label: "Open channels",
-          path: copy.channelsPath || "/channels",
-        }),
+        normalizeOperationalAction(launchChannel?.action).path
+          ? normalizeOperationalAction(launchChannel?.action)
+          : normalizeOperationalAction(copy.noChannelAction, {
+              label: "Open channels",
+              path: copy.channelsPath || "/channels",
+            }),
       detail: resolveCopy(
         copy,
         "noChannelDetail",
@@ -523,7 +548,7 @@ export function buildChannelTruthLaunchReadiness({
     };
   }
 
-  if (!channelReady) {
+  if (!deliveryReadyChannel) {
     return {
       status: "attention",
       statusLabel: resolveCopy(
@@ -537,13 +562,19 @@ export function buildChannelTruthLaunchReadiness({
         "A channel is connected, but delivery is still blocked."
       ),
       summary:
-        launchChannel.summary ||
+        s(connectedChannel?.summary) ||
         resolveCopy(
           copy,
           "deliveryBlockedSummary",
           "Inspect the connected channel and fix delivery blockers before trusting live automation."
         ),
-      action: launchChannel.action,
+      action:
+        normalizeOperationalAction(connectedChannel?.action).path
+          ? normalizeOperationalAction(connectedChannel?.action)
+          : normalizeOperationalAction({
+              label: "Open channels",
+              path: copy.channelsPath || "/channels",
+            }),
       detail: resolveCopy(
         copy,
         "deliveryBlockedDetail",
@@ -556,7 +587,8 @@ export function buildChannelTruthLaunchReadiness({
     return {
       status: s(truth.status || (!truth.truthReady ? "blocked" : "attention")),
       statusLabel: s(
-        truth.statusLabel || (!truth.truthReady ? "Approval required" : "Repair required")
+        truth.statusLabel ||
+          (!truth.truthReady ? "Approval required" : "Repair required")
       ),
       title: !truth.truthReady
         ? resolveCopy(
@@ -596,11 +628,12 @@ export function buildChannelTruthLaunchReadiness({
       "Channels, approved truth, and runtime are aligned."
     ),
     action:
-      launchChannel.action ||
-      normalizeOperationalAction(copy.readyAction, {
-        label: "Open truth",
-        path: copy.truthPath || "/truth",
-      }),
+      normalizeOperationalAction(deliveryReadyChannel?.action).path
+        ? normalizeOperationalAction(deliveryReadyChannel?.action)
+        : normalizeOperationalAction(copy.readyAction, {
+            label: "Open truth",
+            path: copy.truthPath || "/truth",
+          }),
     detail: resolveCopy(
       copy,
       "readyDetail",

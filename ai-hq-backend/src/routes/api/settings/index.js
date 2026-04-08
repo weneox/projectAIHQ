@@ -16,19 +16,21 @@ import { auditHistorySettingsRoutes } from "./auditHistory.js";
 export function settingsRoutes({ db }) {
   const router = express.Router();
 
-  router.use("/settings", workspaceSettingsRoutes({ db }));
-  router.use("/settings", channelsSettingsRoutes({ db }));
-  router.use("/settings", agentsSettingsRoutes({ db }));
-  router.use("/settings", teamSettingsRoutes({ db }));
-  router.use("/settings", secretsSettingsRoutes({ db }));
-  router.use("/settings", businessFactsSettingsRoutes({ db }));
-  router.use("/settings", channelPoliciesSettingsRoutes({ db }));
-  router.use("/settings", locationsSettingsRoutes({ db }));
-  router.use("/settings", contactsSettingsRoutes({ db }));
-  router.use("/settings", operationalSettingsRoutes({ db }));
-  router.use("/settings", settingsSourcesRoutes({ db }));
-  router.use("/settings", settingsTrustRoutes({ db }));
-  router.use("/settings", auditHistorySettingsRoutes({ db }));
+  // Child settings routers already define their own /settings/... paths.
+  // Mount them at "/" to avoid generating /settings/settings/... routes.
+  router.use("/", workspaceSettingsRoutes({ db }));
+  router.use("/", channelsSettingsRoutes({ db }));
+  router.use("/", agentsSettingsRoutes({ db }));
+  router.use("/", teamSettingsRoutes({ db }));
+  router.use("/", secretsSettingsRoutes({ db }));
+  router.use("/", businessFactsSettingsRoutes({ db }));
+  router.use("/", channelPoliciesSettingsRoutes({ db }));
+  router.use("/", locationsSettingsRoutes({ db }));
+  router.use("/", contactsSettingsRoutes({ db }));
+  router.use("/", operationalSettingsRoutes({ db }));
+  router.use("/", settingsSourcesRoutes({ db }));
+  router.use("/", settingsTrustRoutes({ db }));
+  router.use("/", auditHistorySettingsRoutes({ db }));
 
   return router;
 }
