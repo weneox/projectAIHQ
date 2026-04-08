@@ -45,6 +45,134 @@ const tenantRow = {
   },
 };
 
+test("website widget install token only issues for allowed origins", async () => {
+  const db = {
+    async query(text) {
+      const sql = String(text?.text || text || "").toLowerCase();
+      if (sql.includes("from tenants t")) {
+        return { rows: [tenantRow] };
+      }
+      throw new Error(`Unexpected query: ${text}`);
+    },
+  };
+
+  const { issueWidgetInstallToken } = createWebsiteWidgetHandlers({
+    db,
+    wsHub: null,
+  });
+
+  const req = {
+    body: {
+      widgetId: "ww_acme_widget",
+      page: {
+        url: "https://www.acme.example/pricing",
+        title: "Pricing",
+      },
+    },
+    headers: {
+      origin: "https://www.acme.example",
+      referer: "https://www.acme.example/pricing",
+    },
+  };
+  const res = createMockRes();
+
+  await issueWidgetInstallToken(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.ok, true);
+  assert.ok(res.body?.bootstrapToken);
+
+  const verified = verifyWebsiteWidgetBootstrapToken(res.body?.bootstrapToken);
+  assert.equal(verified.ok, true);
+  assert.equal(verified.payload?.widgetId, "ww_acme_widget");
+  assert.equal(verified.payload?.installOrigin, "https://www.acme.example");
+});
+
+test("website widget install token fails closed for rejected origins", async () => {
+  const db = {
+    async query(text) {
+      const sql = String(text?.text || text || "").toLowerCase();
+      if (sql.includes("from tenants t")) {
+        return { rows: [tenantRow] };
+      }
+      throw new Error(`Unexpected query: ${text}`);
+    },
+  };
+
+  const { issueWidgetInstallToken } = createWebsiteWidgetHandlers({
+    db,
+    wsHub: null,
+  });
+
+  const req = {
+    body: {
+      widgetId: "ww_acme_widget",
+      page: {
+        url: "https://evil.example/spoof",
+      },
+    },
+    headers: {
+      origin: "https://evil.example",
+      referer: "https://evil.example/spoof",
+    },
+  };
+  const res = createMockRes();
+
+  await issueWidgetInstallToken(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.ok, false);
+  assert.equal(res.body?.error, "website_origin_mismatch");
+});
+
+test("website widget install token respects tenant config disable state", async () => {
+  const db = {
+    async query(text) {
+      const sql = String(text?.text || text || "").toLowerCase();
+      if (sql.includes("from tenants t")) {
+        return {
+          rows: [
+            {
+              ...tenantRow,
+              widget_channel_status: "disabled",
+              widget_config: {
+                ...tenantRow.widget_config,
+                enabled: false,
+              },
+            },
+          ],
+        };
+      }
+      throw new Error(`Unexpected query: ${text}`);
+    },
+  };
+
+  const { issueWidgetInstallToken } = createWebsiteWidgetHandlers({
+    db,
+    wsHub: null,
+  });
+
+  const req = {
+    body: {
+      widgetId: "ww_acme_widget",
+      page: {
+        url: "https://www.acme.example/pricing",
+      },
+    },
+    headers: {
+      origin: "https://www.acme.example",
+      referer: "https://www.acme.example/pricing",
+    },
+  };
+  const res = createMockRes();
+
+  await issueWidgetInstallToken(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.ok, false);
+  assert.equal(res.body?.error, "website_widget_disabled");
+});
+
 test("website widget bootstrap returns a real session and honest blocked automation when strict runtime is unavailable", async () => {
   const db = {
     async query(text) {
@@ -70,15 +198,20 @@ test("website widget bootstrap returns a real session and honest blocked automat
     },
   });
 
+  const bootstrap = issueWebsiteWidgetBootstrapToken({
+    tenantId: tenantRow.id,
+    tenantKey: "acme",
+    widgetId: "ww_acme_widget",
+    installOrigin: "https://www.acme.example",
+    installHost: "www.acme.example",
+    pageUrl: "https://www.acme.example/pricing",
+    pageTitle: "Pricing",
+  });
+
   const req = {
     body: {
-      tenantKey: "acme",
-      page: {
-        url: "https://acme.example/pricing",
-      },
-    },
-    headers: {
-      origin: "https://acme.example",
+      widgetId: "ww_acme_widget",
+      bootstrapToken: bootstrap.token,
     },
   };
   const res = createMockRes();
