@@ -2,6 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 
 import { deriveThreadState } from "../../../lib/inbox-ui.js";
 
+function s(value, fallback = "") {
+  return String(value ?? fallback).trim();
+}
+
+function clearFailure(current, threadId) {
+  if (current.id !== threadId) return current;
+  return { id: "", message: "" };
+}
+
 export function useInboxThreadListSurface({
   requestedThreadId = "",
   threads = [],
@@ -14,60 +23,92 @@ export function useInboxThreadListSurface({
   loadRelatedLead,
 }) {
   const [filter, setFilter] = useState("all");
-  const [deepLinkNotice, setDeepLinkNotice] = useState("");
-  const [pendingThreadId, setPendingThreadId] = useState(String(requestedThreadId || "").trim());
+  const [resolvedRequestedThreadId, setResolvedRequestedThreadId] = useState("");
+  const [failedRequest, setFailedRequest] = useState({
+    id: "",
+    message: "",
+  });
+
+  const requestedId = s(requestedThreadId);
+  const selectedThreadId = s(selectedThread?.id);
+
+  const pendingThreadId =
+    requestedId &&
+    requestedId !== selectedThreadId &&
+    requestedId !== resolvedRequestedThreadId &&
+    failedRequest.id !== requestedId
+      ? requestedId
+      : "";
+
+  const deepLinkNotice =
+    requestedId && failedRequest.id === requestedId ? failedRequest.message : "";
 
   useEffect(() => {
-    setPendingThreadId(String(requestedThreadId || "").trim());
-    if (!requestedThreadId) {
-      setDeepLinkNotice("");
-    }
-  }, [requestedThreadId]);
-
-  useEffect(() => {
-    loadThreads(pendingThreadId || requestedThreadId);
-  }, [loadThreads, pendingThreadId, requestedThreadId]);
+    loadThreads(pendingThreadId || requestedId);
+  }, [loadThreads, pendingThreadId, requestedId]);
 
   useEffect(() => {
     if (!pendingThreadId || surface?.loading) return;
 
-    const matchingThread = threads.find((thread) => String(thread?.id || "") === pendingThreadId);
-
-    if (matchingThread) {
-      if (selectedThread?.id !== matchingThread.id) {
-        setSelectedThread(matchingThread);
-      }
-      setDeepLinkNotice("");
-      setPendingThreadId("");
-      return;
-    }
-
     let cancelled = false;
 
-    async function hydrateRequestedThread() {
-      try {
-        await Promise.all([loadThreadDetail(pendingThreadId), loadMessages(pendingThreadId), loadRelatedLead(pendingThreadId)]);
+    async function syncRequestedThread() {
+      const matchingThread = threads.find(
+        (thread) => s(thread?.id) === pendingThreadId
+      );
+
+      if (matchingThread) {
+        if (selectedThreadId !== s(matchingThread.id)) {
+          setSelectedThread(matchingThread);
+        }
         if (cancelled) return;
 
+        setFailedRequest((current) => clearFailure(current, pendingThreadId));
+        setResolvedRequestedThreadId(pendingThreadId);
+        return;
+      }
+
+      try {
+        await Promise.all([
+          loadThreadDetail(pendingThreadId),
+          loadMessages(pendingThreadId),
+          loadRelatedLead(pendingThreadId),
+        ]);
+
+        if (cancelled) return;
+
+        let opened = false;
+
         setSelectedThread((current) => {
-          if (String(current?.id || "") === pendingThreadId) {
-            setDeepLinkNotice("");
-            setPendingThreadId("");
-            return current;
+          if (s(current?.id) === pendingThreadId) {
+            opened = true;
           }
-          setDeepLinkNotice("The requested inbox thread is no longer available.");
-          setPendingThreadId("");
           return current;
         });
-      } catch {
-        if (!cancelled) {
-          setDeepLinkNotice("The requested inbox thread could not be opened.");
-          setPendingThreadId("");
+
+        if (cancelled) return;
+
+        if (opened) {
+          setFailedRequest((current) => clearFailure(current, pendingThreadId));
+          setResolvedRequestedThreadId(pendingThreadId);
+          return;
         }
+
+        setFailedRequest({
+          id: pendingThreadId,
+          message: "The requested inbox thread is no longer available.",
+        });
+      } catch {
+        if (cancelled) return;
+
+        setFailedRequest({
+          id: pendingThreadId,
+          message: "The requested inbox thread could not be opened.",
+        });
       }
     }
 
-    hydrateRequestedThread();
+    syncRequestedThread();
 
     return () => {
       cancelled = true;
@@ -77,22 +118,32 @@ export function useInboxThreadListSurface({
     loadRelatedLead,
     loadThreadDetail,
     pendingThreadId,
-    selectedThread?.id,
+    selectedThreadId,
     setSelectedThread,
     surface?.loading,
     threads,
   ]);
 
   const filteredThreads = useMemo(() => {
-    if (filter === "handoff") return threads.filter((thread) => Boolean(thread?.handoff_active));
-    if (filter === "open") return threads.filter((thread) => deriveThreadState(thread) === "open");
-    if (filter === "assigned") return threads.filter((thread) => deriveThreadState(thread) === "assigned");
+    if (filter === "handoff") {
+      return threads.filter((thread) => Boolean(thread?.handoff_active));
+    }
+
+    if (filter === "open") {
+      return threads.filter((thread) => deriveThreadState(thread) === "open");
+    }
+
+    if (filter === "assigned") {
+      return threads.filter((thread) => deriveThreadState(thread) === "assigned");
+    }
+
     if (filter === "resolved") {
       return threads.filter((thread) => {
         const state = deriveThreadState(thread);
         return state === "resolved" || state === "closed";
       });
     }
+
     return threads;
   }, [filter, threads]);
 
@@ -122,7 +173,7 @@ export function useInboxThreadListSurface({
     openThread: setSelectedThread,
     surface: {
       ...surface,
-      refresh: () => loadThreads(selectedThread?.id || requestedThreadId || ""),
+      refresh: () => loadThreads(selectedThreadId || requestedId || ""),
     },
   };
 }

@@ -54,9 +54,15 @@ function pickStatus(x) {
 }
 
 function isLiveStatus(status) {
-  return ["live", "active", "in_progress", "ongoing", "ringing", "queued", "bridged"].includes(
-    String(status || "").toLowerCase()
-  );
+  return [
+    "live",
+    "active",
+    "in_progress",
+    "ongoing",
+    "ringing",
+    "queued",
+    "bridged",
+  ].includes(String(status || "").toLowerCase());
 }
 
 function pickOverviewData(x) {
@@ -81,7 +87,9 @@ function findPreferredLiveSessionId({
     return preferred;
   }
 
-  const sessionIds = new Set((sessions || []).map((item) => pickSessionId(item)).filter(Boolean));
+  const sessionIds = new Set(
+    (sessions || []).map((item) => pickSessionId(item)).filter(Boolean)
+  );
   for (const item of liveSessions || []) {
     const liveId = pickSessionId(item);
     if (liveId && sessionIds.has(liveId)) return liveId;
@@ -104,6 +112,7 @@ export function useVoiceSurface() {
   const selectedIdRef = useRef("");
   const selectedLiveSessionIdRef = useRef("");
   const liveSessionsRef = useRef([]);
+
   const actionState = useActionState();
 
   const {
@@ -132,6 +141,14 @@ export function useVoiceSurface() {
     initialData: EMPTY_DETAIL,
     initialLoading: false,
   });
+
+  useEffect(() => {
+    selectedIdRef.current = selectedId;
+  }, [selectedId]);
+
+  useEffect(() => {
+    selectedLiveSessionIdRef.current = selectedLiveSessionId;
+  }, [selectedLiveSessionId]);
 
   const refresh = useCallback(
     async ({
@@ -162,6 +179,7 @@ export function useVoiceSurface() {
         const nextSelectedId = s(
           preferredId || selectedIdRef.current || pickCallId(safeCalls[0]) || ""
         );
+
         const nextSelectedLiveSessionId = findPreferredLiveSessionId({
           preferredLiveSessionId:
             preferredLiveSessionId || selectedLiveSessionIdRef.current,
@@ -202,13 +220,15 @@ export function useVoiceSurface() {
       beginDetailRefresh();
 
       try {
-        const [callRes, events, sessions] = await Promise.all([
+        const [callRes, eventsRes, sessionsRes] = await Promise.all([
           getVoiceCall(nextId),
           listVoiceCallEvents(nextId, { limit: 100 }),
           listVoiceCallSessions(nextId, { limit: 50 }),
         ]);
 
-        const safeSessions = Array.isArray(sessions) ? sessions : [];
+        const safeEvents = Array.isArray(eventsRes) ? eventsRes : [];
+        const safeSessions = Array.isArray(sessionsRes) ? sessionsRes : [];
+
         const liveSessionId = findPreferredLiveSessionId({
           preferredLiveSessionId:
             preferredLiveSessionId || selectedLiveSessionIdRef.current,
@@ -231,7 +251,7 @@ export function useVoiceSurface() {
               ? callRes.call
               : callRes || null,
           selectedLiveSession,
-          events: Array.isArray(events) ? events : [],
+          events: safeEvents,
           sessions: safeSessions,
         });
       } catch (error) {
@@ -248,26 +268,51 @@ export function useVoiceSurface() {
   );
 
   useEffect(() => {
-    selectedIdRef.current = selectedId;
-  }, [selectedId]);
+    const raf = window.requestAnimationFrame(() => {
+      refresh();
+    });
 
-  useEffect(() => {
-    selectedLiveSessionIdRef.current = selectedLiveSessionId;
-  }, [selectedLiveSessionId]);
-
-  useEffect(() => {
-    refresh();
+    return () => {
+      window.cancelAnimationFrame(raf);
+    };
   }, [refresh]);
 
   useEffect(() => {
-    if (!selectedId) return;
-    openCall(selectedId);
+    if (!selectedId) return undefined;
+
+    const raf = window.requestAnimationFrame(() => {
+      openCall(selectedId);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+    };
   }, [openCall, selectedId]);
 
+  const calls = useMemo(
+    () => (Array.isArray(data?.calls) ? data.calls : []),
+    [data?.calls]
+  );
+  const liveSessions = useMemo(
+    () => (Array.isArray(data?.liveSessions) ? data.liveSessions : []),
+    [data?.liveSessions]
+  );
+  const overview = data?.overview || null;
+  const overviewData = useMemo(() => pickOverviewData(overview), [overview]);
+
+  const selectedCall = detail?.selectedCall || null;
+  const selectedLiveSession = detail?.selectedLiveSession || null;
+  const events = useMemo(
+    () => (Array.isArray(detail?.events) ? detail.events : []),
+    [detail?.events]
+  );
+  const sessions = useMemo(
+    () => (Array.isArray(detail?.sessions) ? detail.sessions : []),
+    [detail?.sessions]
+  );
+
   useEffect(() => {
-    const hasLiveSession =
-      (Array.isArray(data?.liveSessions) && data.liveSessions.length > 0) ||
-      !!selectedLiveSessionId;
+    const hasLiveSession = liveSessions.length > 0 || !!selectedLiveSessionId;
     if (!hasLiveSession) return undefined;
 
     const timer = window.setInterval(() => {
@@ -285,16 +330,8 @@ export function useVoiceSurface() {
     return () => {
       window.clearInterval(timer);
     };
-  }, [data?.liveSessions, openCall, refresh, selectedLiveSessionId]);
+  }, [liveSessions.length, openCall, refresh, selectedLiveSessionId]);
 
-  const calls = data?.calls || [];
-  const liveSessions = data?.liveSessions || [];
-  const overview = data?.overview || null;
-  const overviewData = useMemo(() => pickOverviewData(overview), [overview]);
-  const selectedCall = detail?.selectedCall || null;
-  const selectedLiveSession = detail?.selectedLiveSession || null;
-  const events = detail?.events || [];
-  const sessions = detail?.sessions || [];
   const selectedStatus = useMemo(() => pickStatus(selectedCall), [selectedCall]);
   const selectedLive = useMemo(() => isLiveStatus(selectedStatus), [selectedStatus]);
   const selectedLiveSessionStatus = useMemo(

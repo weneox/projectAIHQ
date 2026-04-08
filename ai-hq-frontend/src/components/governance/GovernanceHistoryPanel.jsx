@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 
 import Badge from "../ui/Badge.jsx";
 import Button from "../ui/Button.jsx";
@@ -57,7 +57,9 @@ function joinLine(values = [], empty = "Unavailable") {
 function resolveControlSummary(control = {}) {
   const source = obj(control);
   return joinLine(
-    [source.controlMode, source.changedBy, source.changedAt].map((item) => titleize(item)),
+    [source.controlMode, source.changedBy, source.changedAt].map((item) =>
+      titleize(item)
+    ),
     "Unknown control state"
   );
 }
@@ -69,7 +71,9 @@ function derivePostureRows(event = {}) {
   return [
     {
       label: "Policy Outcome",
-      value: s(event.policyOutcomeLabel || titleize(event.policyOutcome || "unknown")),
+      value: s(
+        event.policyOutcomeLabel || titleize(event.policyOutcome || "unknown")
+      ),
       hint: joinLine(event.reasonCodes, "No explicit reason code"),
     },
     {
@@ -90,7 +94,11 @@ function derivePostureRows(event = {}) {
     {
       label: "Control State",
       value: resolveControlSummary(event.controlState),
-      hint: s(event.links?.controlScope ? titleize(event.links.controlScope) : "No explicit control scope"),
+      hint: s(
+        event.links?.controlScope
+          ? titleize(event.links.controlScope)
+          : "No explicit control scope"
+      ),
     },
   ];
 }
@@ -101,8 +109,12 @@ function DetailField({ label, value, hint = "" }) {
       <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
         {label}
       </div>
-      <div className="mt-1 text-sm font-medium text-slate-900 dark:text-white">{value}</div>
-      <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{hint}</div>
+      <div className="mt-1 text-sm font-medium text-slate-900 dark:text-white">
+        {value}
+      </div>
+      <div className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+        {hint}
+      </div>
     </div>
   );
 }
@@ -115,7 +127,9 @@ function RemediationCard({ title, body, tone = "neutral" }) {
           {title}
         </Badge>
       </div>
-      <div className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">{body}</div>
+      <div className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-400">
+        {body}
+      </div>
     </div>
   );
 }
@@ -136,7 +150,10 @@ function EventDetailPanel({ event = {}, onRunAction }) {
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={toneForOutcome(event.policyOutcome)} variant="subtle" dot>
-                {s(event.policyOutcomeLabel || titleize(event.policyOutcome || "unknown"))}
+                {s(
+                  event.policyOutcomeLabel ||
+                    titleize(event.policyOutcome || "unknown")
+                )}
               </Badge>
               <Badge tone="neutral" variant="subtle">
                 {s(event.groupLabel || titleize(event.group || "execution"))}
@@ -146,7 +163,10 @@ function EventDetailPanel({ event = {}, onRunAction }) {
               {s(event.eventLabel || titleize(event.eventType || "unknown_event"))}
             </div>
             <div className="text-sm leading-6 text-slate-600 dark:text-slate-400">
-              {s(snapshot.summary || "Decision context is partially unavailable. The control plane is showing only safely-shaped metadata.")}
+              {s(
+                snapshot.summary ||
+                  "Decision context is partially unavailable. The control plane is showing only safely-shaped metadata."
+              )}
             </div>
           </div>
 
@@ -232,7 +252,11 @@ function EventDetailPanel({ event = {}, onRunAction }) {
             </div>
           </div>
           <Badge tone={toneForOutcome(event.policyOutcome)} variant="subtle" dot>
-            {s(remediation.requiredRole ? titleize(remediation.requiredRole) : "Operator")}
+            {s(
+              remediation.requiredRole
+                ? titleize(remediation.requiredRole)
+                : "Operator"
+            )}
           </Badge>
         </div>
 
@@ -267,7 +291,11 @@ function EventDetailPanel({ event = {}, onRunAction }) {
           />
           <RemediationCard
             title="Operator Only"
-            tone={remediation.operatorOnly || remediation.handoffRequired ? "warn" : "neutral"}
+            tone={
+              remediation.operatorOnly || remediation.handoffRequired
+                ? "warn"
+                : "neutral"
+            }
             body={s(
               remediation.operator ||
                 "This event does not currently require a dedicated operator-only lane."
@@ -298,6 +326,24 @@ function EventDetailPanel({ event = {}, onRunAction }) {
   );
 }
 
+function resolveSelectedEventId({
+  visibleItems,
+  localSelectedEventId,
+  preferredEventId,
+}) {
+  const localId = s(localSelectedEventId);
+  if (localId && visibleItems.some((item) => s(item.id) === localId)) {
+    return localId;
+  }
+
+  const preferredId = s(preferredEventId);
+  if (preferredId && visibleItems.some((item) => s(item.id) === preferredId)) {
+    return preferredId;
+  }
+
+  return s(visibleItems[0]?.id);
+}
+
 export default function GovernanceHistoryPanel({
   decisionAudit = {},
   onRunAction,
@@ -305,38 +351,25 @@ export default function GovernanceHistoryPanel({
   preferredEventId = "",
 }) {
   const filters = arr(decisionAudit.availableFilters);
-  const [activeFilter, setActiveFilter] = useState(s(preferredFilter || "all").toLowerCase());
-  const [selectedEventId, setSelectedEventId] = useState(s(preferredEventId));
-  const items = arr(decisionAudit.items);
+  const items = arr(decisionAudit.items).slice();
 
-  useEffect(() => {
-    const nextFilter = s(preferredFilter || "all").toLowerCase();
-    if (!nextFilter) return;
-    setActiveFilter(nextFilter);
-  }, [preferredFilter]);
+  const [localActiveFilter, setLocalActiveFilter] = useState("");
+  const [localSelectedEventId, setLocalSelectedEventId] = useState("");
 
-  useEffect(() => {
-    const nextEventId = s(preferredEventId);
-    if (!nextEventId) return;
-    setSelectedEventId(nextEventId);
-  }, [preferredEventId]);
+  const activeFilter = s(localActiveFilter || preferredFilter || "all").toLowerCase();
+  const visibleItems =
+    activeFilter === "all"
+      ? items
+      : items.filter((item) => s(item.group).toLowerCase() === activeFilter);
 
-  const visibleItems = useMemo(() => {
-    if (activeFilter === "all") return items;
-    return items.filter((item) => s(item.group).toLowerCase() === activeFilter);
-  }, [activeFilter, items]);
-
-  useEffect(() => {
-    if (!visibleItems.length) {
-      setSelectedEventId("");
-      return;
-    }
-    if (visibleItems.some((item) => s(item.id) === selectedEventId)) return;
-    setSelectedEventId(s(visibleItems[0].id));
-  }, [selectedEventId, visibleItems]);
+  const selectedEventId = resolveSelectedEventId({
+    visibleItems,
+    localSelectedEventId,
+    preferredEventId,
+  });
 
   const selectedEvent =
-    visibleItems.find((item) => s(item.id) === selectedEventId) || visibleItems[0] || null;
+    visibleItems.find((item) => s(item.id) === selectedEventId) || null;
 
   return (
     <Card variant="surface" className="rounded-[28px]">
@@ -356,7 +389,9 @@ export default function GovernanceHistoryPanel({
         </div>
 
         <div className="text-sm leading-6 text-slate-600 dark:text-slate-400">
-          Operators can inspect an individual governance decision, trace the truth/runtime/control posture involved, and get guided remediation without leaving the existing governance cockpit.
+          Operators can inspect an individual governance decision, trace the
+          truth/runtime/control posture involved, and get guided remediation without
+          leaving the existing governance cockpit.
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -364,12 +399,14 @@ export default function GovernanceHistoryPanel({
             ? filters
             : [{ key: "all", label: "All events", count: items.length }]
           ).map((filter) => {
-            const selected = s(filter.key || "all").toLowerCase() === activeFilter;
+            const filterKey = s(filter.key || "all").toLowerCase();
+            const selected = filterKey === activeFilter;
+
             return (
               <button
                 key={filter.key}
                 type="button"
-                onClick={() => setActiveFilter(s(filter.key || "all").toLowerCase())}
+                onClick={() => setLocalActiveFilter(filterKey)}
                 className={[
                   "rounded-full border px-3 py-1.5 text-sm transition",
                   selected
@@ -385,18 +422,20 @@ export default function GovernanceHistoryPanel({
 
         {!visibleItems.length ? (
           <div className="rounded-[20px] border border-slate-200/80 bg-white/70 px-4 py-4 text-sm text-slate-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400">
-            Governance history is unavailable for this slice. The control plane shows an explicit empty timeline instead of inventing incident history.
+            Governance history is unavailable for this slice. The control plane
+            shows an explicit empty timeline instead of inventing incident history.
           </div>
         ) : (
           <div className="grid gap-4 xl:grid-cols-[0.72fr_1.28fr]">
             <div className="space-y-3">
               {visibleItems.map((event) => {
                 const selected = s(event.id) === s(selectedEvent?.id);
+
                 return (
                   <button
                     key={s(event.id || `${event.eventType}-${event.timestamp}`)}
                     type="button"
-                    onClick={() => setSelectedEventId(s(event.id))}
+                    onClick={() => setLocalSelectedEventId(s(event.id))}
                     className={[
                       "w-full rounded-[22px] border px-4 py-4 text-left transition",
                       selected
@@ -407,28 +446,57 @@ export default function GovernanceHistoryPanel({
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge tone={toneForOutcome(event.policyOutcome)} variant="subtle" dot>
-                            {s(event.policyOutcomeLabel || titleize(event.policyOutcome || "unknown"))}
+                          <Badge
+                            tone={toneForOutcome(event.policyOutcome)}
+                            variant="subtle"
+                            dot
+                          >
+                            {s(
+                              event.policyOutcomeLabel ||
+                                titleize(event.policyOutcome || "unknown")
+                            )}
                           </Badge>
                           <Badge tone="neutral" variant="subtle">
                             {s(event.groupLabel || titleize(event.group || "execution"))}
                           </Badge>
                         </div>
                         <div className="text-sm font-semibold">
-                          {s(event.eventLabel || titleize(event.eventType || "unknown_event"))}
+                          {s(
+                            event.eventLabel ||
+                              titleize(event.eventType || "unknown_event")
+                          )}
                         </div>
-                        <div className={selected ? "text-xs leading-5 text-white/70 dark:text-slate-700" : "text-xs leading-5 text-slate-500 dark:text-slate-400"}>
-                          {formatWhen(event.timestamp)} · {s(event.actor || event.source || "system")}
+                        <div
+                          className={
+                            selected
+                              ? "text-xs leading-5 text-white/70 dark:text-slate-700"
+                              : "text-xs leading-5 text-slate-500 dark:text-slate-400"
+                          }
+                        >
+                          {formatWhen(event.timestamp)} ·{" "}
+                          {s(event.actor || event.source || "system")}
                         </div>
                       </div>
 
-                      <div className={selected ? "text-right text-xs leading-5 text-white/70 dark:text-slate-700" : "text-right text-xs leading-5 text-slate-500 dark:text-slate-400"}>
+                      <div
+                        className={
+                          selected
+                            ? "text-right text-xs leading-5 text-white/70 dark:text-slate-700"
+                            : "text-right text-xs leading-5 text-slate-500 dark:text-slate-400"
+                        }
+                      >
                         <div>{titleize(event.surface || "unknown")}</div>
                         <div>{titleize(event.channelType || "unknown")}</div>
                       </div>
                     </div>
 
-                    <div className={selected ? "mt-3 text-sm text-white/82 dark:text-slate-700" : "mt-3 text-sm text-slate-600 dark:text-slate-300"}>
+                    <div
+                      className={
+                        selected
+                          ? "mt-3 text-sm text-white/82 dark:text-slate-700"
+                          : "mt-3 text-sm text-slate-600 dark:text-slate-300"
+                      }
+                    >
                       {s(
                         obj(event.decisionContextSnapshot).summary ||
                           obj(event.remediation).headline ||
@@ -436,7 +504,13 @@ export default function GovernanceHistoryPanel({
                       )}
                     </div>
 
-                    <div className={selected ? "mt-3 text-xs text-white/68 dark:text-slate-700" : "mt-3 text-xs text-slate-500 dark:text-slate-400"}>
+                    <div
+                      className={
+                        selected
+                          ? "mt-3 text-xs text-white/68 dark:text-slate-700"
+                          : "mt-3 text-xs text-slate-500 dark:text-slate-400"
+                      }
+                    >
                       Next action:{" "}
                       {s(
                         obj(event.recommendedNextAction).label ||

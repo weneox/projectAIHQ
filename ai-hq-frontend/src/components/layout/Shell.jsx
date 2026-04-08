@@ -21,7 +21,7 @@ const INITIAL_SHELL_STATS = {
   inboxOpen: null,
   leadsOpen: null,
   dbDisabled: false,
-  wsState: "idle",
+  wsState: realtimeStore.canUseWs() ? "idle" : "off",
   availability: "loading",
   message: "",
 };
@@ -284,21 +284,15 @@ export default function Shell() {
     shortcutAssistant,
   ]);
 
-  const autoOpenKey = useMemo(() => {
-    if (!homeRouteActive || !home.setupFlow?.autoOpen) return "";
-
-    return [
-      s(home.setupFlow.launchPosture),
-      s(home.setupFlow.sessionId, "no-session"),
-      String(home.setupFlow.draftVersion || 0),
-    ].join(":");
-  }, [
-    homeRouteActive,
-    home.setupFlow?.autoOpen,
-    home.setupFlow?.launchPosture,
-    home.setupFlow?.sessionId,
-    home.setupFlow?.draftVersion,
-  ]);
+  const setupFlow = home.setupFlow || {};
+  const autoOpenKey =
+    homeRouteActive && setupFlow.autoOpen
+      ? [
+          s(setupFlow.launchPosture),
+          s(setupFlow.sessionId, "no-session"),
+          String(setupFlow.draftVersion || 0),
+        ].join(":")
+      : "";
 
   const loadShellStats = useCallback(async () => {
     if (statsRequestRef.current) return statsRequestRef.current;
@@ -344,8 +338,15 @@ export default function Shell() {
   }, [sidebarCollapsed]);
 
   useEffect(() => {
-    setMobileOpen(false);
+    const frame = window.requestAnimationFrame(() => {
+      setMobileOpen(false);
+    });
+
     loadShellStats();
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
   }, [location.pathname, loadShellStats]);
 
   useEffect(() => {
@@ -358,21 +359,33 @@ export default function Shell() {
   }, [mobileOpen, widgetOpen]);
 
   useEffect(() => {
-    if (assistantRequested) {
+    if (!assistantRequested) return undefined;
+
+    const frame = window.requestAnimationFrame(() => {
       setWidgetOpen(true);
-    }
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
   }, [assistantRequested]);
 
   useEffect(() => {
-    if (!homeRouteActive || !home.setupFlow?.autoOpen || !autoOpenKey) {
-      return;
+    if (!homeRouteActive || !setupFlow.autoOpen || !autoOpenKey) {
+      return undefined;
     }
 
-    if (autoOpenedRef.current === autoOpenKey) return;
+    if (autoOpenedRef.current === autoOpenKey) return undefined;
 
-    autoOpenedRef.current = autoOpenKey;
-    setWidgetOpen(true);
-  }, [autoOpenKey, homeRouteActive, home.setupFlow?.autoOpen]);
+    const frame = window.requestAnimationFrame(() => {
+      autoOpenedRef.current = autoOpenKey;
+      setWidgetOpen(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [autoOpenKey, homeRouteActive, setupFlow.autoOpen]);
 
   useEffect(() => {
     const unsubscribeStatus = realtimeStore.subscribeStatus((status) => {
@@ -388,13 +401,6 @@ export default function Shell() {
         scheduleShellRefresh(120);
       }
     });
-
-    if (!realtimeStore.canUseWs()) {
-      setShellStats((prev) => ({
-        ...prev,
-        wsState: "off",
-      }));
-    }
 
     return () => {
       clearTimeout(refreshTimerRef.current);

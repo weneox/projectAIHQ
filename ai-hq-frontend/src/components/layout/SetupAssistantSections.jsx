@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SendHorizontal } from "lucide-react";
 
 function s(value, fallback = "") {
@@ -202,13 +202,13 @@ function buildHoursSummary(hours = []) {
   return count ? `${count} day${count > 1 ? "s" : ""} configured` : "";
 }
 
-function stepAnswered(step = "", assistant = {}) {
-  const profile = obj(assistant?.draft?.businessProfile);
-  const services = arr(assistant?.draft?.services);
-  const hours = arr(assistant?.draft?.hours);
-  const pricing = obj(assistant?.draft?.pricingPosture);
-  const contacts = arr(assistant?.draft?.contacts);
-  const handoff = obj(assistant?.draft?.handoffRules);
+function stepAnswered(step = "", assistantState = {}) {
+  const profile = obj(assistantState?.draft?.businessProfile);
+  const services = arr(assistantState?.draft?.services);
+  const hours = arr(assistantState?.draft?.hours);
+  const pricing = obj(assistantState?.draft?.pricingPosture);
+  const contacts = arr(assistantState?.draft?.contacts);
+  const handoff = obj(assistantState?.draft?.handoffRules);
 
   switch (step) {
     case "company":
@@ -236,30 +236,30 @@ function stepAnswered(step = "", assistant = {}) {
   }
 }
 
-function hasAnyProgress(assistant = {}) {
-  return STEP_ORDER.some((step) => stepAnswered(step, assistant));
+function hasAnyProgress(assistantState = {}) {
+  return STEP_ORDER.some((step) => stepAnswered(step, assistantState));
 }
 
-function getNaturalStep(assistant = {}) {
-  const completion = obj(assistant?.assistant?.completion);
+function getNaturalStep(assistantState = {}) {
+  const completion = obj(assistantState?.assistant?.completion);
   if (completion.ready === true) return "finalize";
 
-  const nextQuestion = obj(assistant?.assistant?.nextQuestion);
+  const nextQuestion = obj(assistantState?.assistant?.nextQuestion);
   const nextKey = normalizeStep(nextQuestion.key);
   if (nextKey) return nextKey;
 
   const firstMissingRequired = REQUIRED_STEPS.find(
-    (step) => !stepAnswered(step, assistant)
+    (step) => !stepAnswered(step, assistantState)
   );
   if (firstMissingRequired) return firstMissingRequired;
 
-  if (!stepAnswered("handoff", assistant)) return "handoff";
+  if (!stepAnswered("handoff", assistantState)) return "handoff";
 
   return "finalize";
 }
 
-function buildWelcomeMessage(assistant = {}) {
-  if (hasAnyProgress(assistant)) {
+function buildWelcomeMessage(assistantState = {}) {
+  if (hasAnyProgress(assistantState)) {
     return {
       id: uid("assistant"),
       role: "assistant",
@@ -297,7 +297,7 @@ function buildPauseMessage() {
   };
 }
 
-function buildQuestionMessage(step = "", assistant = {}) {
+function buildQuestionMessage(step = "") {
   const meta = STEP_META[step] || STEP_META.company;
 
   return {
@@ -324,16 +324,13 @@ function buildClarifierMessage(step = "") {
   };
 }
 
-function buildFinalizeMessage(assistant = {}) {
-  const completion = obj(assistant?.assistant?.completion);
+function buildFinalizeMessage(assistantState = {}) {
+  const completion = obj(assistantState?.assistant?.completion);
 
   return {
     id: uid("assistant"),
     role: "assistant",
-    text: s(
-      completion.message,
-      "Setup looks complete. Finish now?"
-    ),
+    text: s(completion.message, "Setup looks complete. Finish now?"),
     helper: "",
     options: [{ id: "finish", label: "Finish setup", kind: "finish" }],
     kind: "finalize",
@@ -394,7 +391,7 @@ export default function SetupAssistantSections({
   const introShownRef = useRef(false);
   const timeoutRef = useRef(null);
   const sessionRef = useRef("");
-  const currentStepRef = useRef("");
+
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [started, setStarted] = useState(false);
@@ -406,35 +403,36 @@ export default function SetupAssistantSections({
   const currentStep = started && !paused ? getNaturalStep(assistant) : "";
   const canFinalize = currentStep === "finalize";
 
-  currentStepRef.current = currentStep;
-
-  function clearTypingTimer() {
+  const clearTypingTimer = useCallback(() => {
     if (timeoutRef.current) {
       window.clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
-  }
+  }, []);
 
-  function queueAssistantMessage(message, signature, delay = 420) {
-    if (!message || !signature) return;
-    if (askedRef.current.has(signature)) return;
+  const queueAssistantMessage = useCallback(
+    (message, signature, delay = 420) => {
+      if (!message || !signature) return;
+      if (askedRef.current.has(signature)) return;
 
-    askedRef.current.add(signature);
-    clearTypingTimer();
-    setTyping(true);
+      askedRef.current.add(signature);
+      clearTypingTimer();
+      setTyping(true);
 
-    timeoutRef.current = window.setTimeout(() => {
-      setTyping(false);
-      setMessages((current) => [...current, message]);
-      timeoutRef.current = null;
-    }, delay);
-  }
+      timeoutRef.current = window.setTimeout(() => {
+        setTyping(false);
+        setMessages((current) => [...current, message]);
+        timeoutRef.current = null;
+      }, delay);
+    },
+    [clearTypingTimer]
+  );
 
   useEffect(() => {
     return () => {
       clearTypingTimer();
     };
-  }, []);
+  }, [clearTypingTimer]);
 
   useEffect(() => {
     const nextSession = s(assistant?.session?.id || "setup-session");
@@ -451,7 +449,7 @@ export default function SetupAssistantSections({
     setPaused(false);
     setTyping(false);
     setLocalError("");
-  }, [assistant?.session?.id]);
+  }, [assistant?.session?.id, clearTypingTimer]);
 
   useEffect(() => {
     if (introShownRef.current) return;
@@ -462,7 +460,7 @@ export default function SetupAssistantSections({
       `welcome:${hasAnyProgress(assistant) ? "continue" : "start"}`,
       520
     );
-  }, [assistant]);
+  }, [assistant, queueAssistantMessage]);
 
   useEffect(() => {
     if (!started || paused || busy || canFinalize) return;
@@ -473,7 +471,7 @@ export default function SetupAssistantSections({
     )}:${currentStep}`;
 
     queueAssistantMessage(
-      buildQuestionMessage(currentStep, assistant),
+      buildQuestionMessage(currentStep),
       `question:${versionKey}`,
       360
     );
@@ -485,7 +483,7 @@ export default function SetupAssistantSections({
     currentStep,
     assistant?.session?.id,
     assistant?.draft?.version,
-    assistant,
+    queueAssistantMessage,
   ]);
 
   useEffect(() => {
@@ -501,9 +499,10 @@ export default function SetupAssistantSections({
     paused,
     busy,
     canFinalize,
+    assistant,
     assistant?.session?.id,
     assistant?.draft?.version,
-    assistant,
+    queueAssistantMessage,
   ]);
 
   useEffect(() => {
@@ -516,7 +515,7 @@ export default function SetupAssistantSections({
 
   async function handleSetupAnswer(rawText, forcedStep = "") {
     const text = s(rawText);
-    const step = forcedStep || currentStepRef.current;
+    const step = forcedStep || currentStep;
 
     if (!text || !step || step === "finalize" || busy) return;
 
@@ -543,7 +542,7 @@ export default function SetupAssistantSections({
       if (!stepAnswered(step, nextAssistant)) {
         queueAssistantMessage(
           buildClarifierMessage(step),
-          `clarifier:${step}:${Date.now()}`,
+          uid(`clarifier-${step}`),
           260
         );
       }
@@ -562,7 +561,7 @@ export default function SetupAssistantSections({
           options: [],
           kind: "error",
         },
-        `error:${Date.now()}`,
+        uid("error"),
         200
       );
     }
@@ -583,7 +582,7 @@ export default function SetupAssistantSections({
         },
       ]);
       setPaused(true);
-      queueAssistantMessage(buildPauseMessage(), `pause:${Date.now()}`, 250);
+      queueAssistantMessage(buildPauseMessage(), uid("pause"), 250);
       setInput("");
       return;
     }
@@ -605,7 +604,10 @@ export default function SetupAssistantSections({
 
     setStarted(true);
     setPaused(false);
-    await handleSetupAnswer(text, hasAnyProgress(assistant) ? getNaturalStep(assistant) : "company");
+    await handleSetupAnswer(
+      text,
+      hasAnyProgress(assistant) ? getNaturalStep(assistant) : "company"
+    );
   }
 
   async function handleOptionClick(option = {}) {
@@ -645,7 +647,7 @@ export default function SetupAssistantSections({
             options: [],
             kind: "done",
           },
-          `done:${Date.now()}`,
+          uid("done"),
           260
         );
       } catch (error) {
@@ -668,11 +670,9 @@ export default function SetupAssistantSections({
       return;
     }
 
-    if (canFinalize) {
-      if (isAffirmative(text)) {
-        await handleOptionClick({ kind: "finish", label: text });
-        return;
-      }
+    if (canFinalize && isAffirmative(text)) {
+      await handleOptionClick({ kind: "finish", label: text });
+      return;
     }
 
     await handleSetupAnswer(text);

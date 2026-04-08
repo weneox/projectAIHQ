@@ -228,7 +228,7 @@ export function resolveWorkspaceContractRoute(payload = {}) {
 
 export function resolveAuthenticatedLanding({
   auth = {},
-  bootstrap = {},
+  bootstrap: _bootstrap = {},
 } = {}) {
   if (hasMultipleWorkspaceChoices(auth)) {
     return WORKSPACE_SELECTION_ROUTE;

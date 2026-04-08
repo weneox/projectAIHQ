@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 
 import Badge from "../ui/Badge.jsx";
 import Button from "../ui/Button.jsx";
@@ -106,7 +106,9 @@ function StatCard({ label, value, hint, tone = "neutral" }) {
           {value}
         </div>
         {hint ? (
-          <div className="text-xs leading-5 text-slate-500 dark:text-slate-400">{hint}</div>
+          <div className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+            {hint}
+          </div>
         ) : null}
       </div>
     </Card>
@@ -144,6 +146,7 @@ function ImpactGrid({ preview = {} }) {
   const affectedSurfaces = arr(current.affectedSurfaces).length
     ? current.affectedSurfaces
     : current.channels?.affectedSurfaces;
+
   return (
     <div className="grid gap-3 md:grid-cols-2">
       <div className="space-y-2">
@@ -181,7 +184,11 @@ function PreviewDeltaStrip({ preview = {} }) {
       <Badge tone={toneForDelta(current.policy?.autonomyDelta)} variant="subtle" dot>
         Autonomy {titleize(current.policy?.autonomyDelta || "unknown")}
       </Badge>
-      <Badge tone={toneForDelta(current.policy?.executionPostureDelta)} variant="subtle" dot>
+      <Badge
+        tone={toneForDelta(current.policy?.executionPostureDelta)}
+        variant="subtle"
+        dot
+      >
         Execution {titleize(current.policy?.executionPostureDelta || "unknown")}
       </Badge>
       <Badge tone={toneForDelta(current.policy?.riskDelta)} variant="subtle" dot>
@@ -244,7 +251,8 @@ function PublishReceiptPanel({ receipt = {} }) {
               Change Receipt
             </div>
             <div className="text-sm leading-6 text-slate-600 dark:text-slate-400">
-              {current.summaryExplanation || "Post-publish verification detail is unavailable."}
+              {current.summaryExplanation ||
+                "Post-publish verification detail is unavailable."}
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -261,7 +269,11 @@ function PublishReceiptPanel({ receipt = {} }) {
           <StatCard
             label="Truth Version"
             value={current.truthVersionId || "Unavailable"}
-            hint={current.verification?.truthVersionCreated ? "Verified" : "No truth version identifier was exposed."}
+            hint={
+              current.verification?.truthVersionCreated
+                ? "Verified"
+                : "No truth version identifier was exposed."
+            }
             tone={current.verification?.truthVersionCreated ? "success" : "neutral"}
           />
           <StatCard
@@ -272,8 +284,15 @@ function PublishReceiptPanel({ receipt = {} }) {
           />
           <StatCard
             label="Projection Health"
-            value={titleize(current.projectionHealthLabel || current.projectionHealthStatus || "unknown")}
-            hint={current.verification?.repairRecommendation || "No repair recommendation returned."}
+            value={titleize(
+              current.projectionHealthLabel ||
+                current.projectionHealthStatus ||
+                "unknown"
+            )}
+            hint={
+              current.verification?.repairRecommendation ||
+              "No repair recommendation returned."
+            }
             tone={toneForPublishStatus(
               current.publishStatus === "repair_required"
                 ? "repair_required"
@@ -336,7 +355,9 @@ function PublishReceiptPanel({ receipt = {} }) {
               Preview vs Actual
             </div>
             <div className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
-              Verified publish impact is compared against the preview the operator saw before approval. Unknown preview dimensions stay explicit instead of being treated as a match.
+              Verified publish impact is compared against the preview the operator saw
+              before approval. Unknown preview dimensions stay explicit instead of being
+              treated as a match.
             </div>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
@@ -350,6 +371,35 @@ function PublishReceiptPanel({ receipt = {} }) {
   );
 }
 
+function resolveSelectedId({ filteredItems, localSelectedId, preferredCandidateId }) {
+  const localId = s(localSelectedId);
+  if (localId && filteredItems.some((item) => s(item.id) === localId)) {
+    return localId;
+  }
+
+  const preferredId = s(preferredCandidateId);
+  if (preferredId && filteredItems.some((item) => s(item.id) === preferredId)) {
+    return preferredId;
+  }
+
+  return s(filteredItems[0]?.id);
+}
+
+function resolveComparisonChoiceId({ comparisonChoices, localChoiceId, selectedId }) {
+  const localId = s(localChoiceId);
+  if (localId && comparisonChoices.some((choice) => s(choice.candidateId) === localId)) {
+    return localId;
+  }
+
+  const selectedMatch = s(
+    comparisonChoices.find((choice) => s(choice.candidateId) === s(selectedId))
+      ?.candidateId
+  );
+  if (selectedMatch) return selectedMatch;
+
+  return s(comparisonChoices[0]?.candidateId);
+}
+
 export default function TruthReviewWorkbench({
   title = "Truth Review Workbench",
   subtitle = "Pending, quarantined, conflicting, and high-risk source-derived truth candidates stay in one governed review surface.",
@@ -360,61 +410,54 @@ export default function TruthReviewWorkbench({
   preferredCandidateId = "",
 }) {
   const summary = obj(workbench.summary);
-  const items = arr(workbench.items);
+  const items = arr(workbench.items).slice();
+
   const [filter, setFilter] = useState("all");
-  const [selectedId, setSelectedId] = useState(s(preferredCandidateId || items[0]?.id));
-  const [comparisonChoiceId, setComparisonChoiceId] = useState("");
+  const [localSelectedId, setLocalSelectedId] = useState("");
+  const [localComparisonChoiceId, setLocalComparisonChoiceId] = useState("");
 
-  const filters = useMemo(
-    () => [
-      { key: "all", label: "All", count: items.length },
-      { key: "pending", label: "Pending", count: n(summary.pending) },
-      { key: "quarantined", label: "Quarantined", count: n(summary.quarantined) },
-      { key: "conflicting", label: "Conflicts", count: n(summary.conflicting) },
-      { key: "auto_approvable", label: "Auto-Approvable", count: n(summary.autoApprovable) },
-      { key: "blocked_high_risk", label: "High Risk", count: n(summary.blockedHighRisk) },
-    ],
-    [items.length, summary]
-  );
+  const filters = [
+    { key: "all", label: "All", count: items.length },
+    { key: "pending", label: "Pending", count: n(summary.pending) },
+    { key: "quarantined", label: "Quarantined", count: n(summary.quarantined) },
+    { key: "conflicting", label: "Conflicts", count: n(summary.conflicting) },
+    {
+      key: "auto_approvable",
+      label: "Auto-Approvable",
+      count: n(summary.autoApprovable),
+    },
+    {
+      key: "blocked_high_risk",
+      label: "High Risk",
+      count: n(summary.blockedHighRisk),
+    },
+  ];
 
-  const filteredItems = useMemo(() => {
-    if (filter === "all") return items;
-    return items.filter((item) => s(item.queueBucket) === filter);
-  }, [filter, items]);
+  const filteredItems =
+    filter === "all"
+      ? items
+      : items.filter((item) => s(item.queueBucket) === filter);
 
-  useEffect(() => {
-    if (!preferredCandidateId) return;
-    setSelectedId(preferredCandidateId);
-  }, [preferredCandidateId]);
+  const selectedId = resolveSelectedId({
+    filteredItems,
+    localSelectedId,
+    preferredCandidateId,
+  });
 
-  useEffect(() => {
-    if (!filteredItems.length) {
-      setSelectedId("");
-      return;
-    }
-    const stillVisible = filteredItems.some((item) => s(item.id) === s(selectedId));
-    if (!stillVisible) {
-      setSelectedId(s(filteredItems[0]?.id));
-    }
-  }, [filteredItems, selectedId]);
+  const selected =
+    filteredItems.find((item) => s(item.id) === selectedId) || null;
 
-  const selected = filteredItems.find((item) => s(item.id) === s(selectedId)) || filteredItems[0] || null;
   const comparisonChoices = arr(selected?.conflictResolution?.previewChoices);
-  useEffect(() => {
-    if (!comparisonChoices.length) {
-      setComparisonChoiceId("");
-      return;
-    }
-    const preferred = s(
-      comparisonChoices.find((choice) => s(choice.candidateId) === s(selected?.id))?.candidateId ||
-        comparisonChoices[0]?.candidateId
-    );
-    setComparisonChoiceId((current) => (current && comparisonChoices.some((choice) => s(choice.candidateId) === s(current)) ? current : preferred));
-  }, [comparisonChoices, selected?.id]);
+  const comparisonChoiceId = resolveComparisonChoiceId({
+    comparisonChoices,
+    localChoiceId: localComparisonChoiceId,
+    selectedId,
+  });
+
   const selectedComparison =
-    comparisonChoices.find((choice) => s(choice.candidateId) === s(comparisonChoiceId)) ||
-    comparisonChoices[0] ||
-    null;
+    comparisonChoices.find(
+      (choice) => s(choice.candidateId) === s(comparisonChoiceId)
+    ) || null;
 
   return (
     <Card variant="elevated" className="overflow-hidden rounded-[32px]">
@@ -435,12 +478,17 @@ export default function TruthReviewWorkbench({
 
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone="info" variant="subtle" dot>
-              {n(summary.total || items.length)} candidate{n(summary.total || items.length) === 1 ? "" : "s"}
+              {n(summary.total || items.length)} candidate
+              {n(summary.total || items.length) === 1 ? "" : "s"}
             </Badge>
             <Badge tone="warn" variant="subtle" dot>
               {n(summary.conflicting)} conflict{n(summary.conflicting) === 1 ? "" : "s"}
             </Badge>
-            <Badge tone={n(summary.highRisk) > 0 ? "danger" : "neutral"} variant="subtle" dot>
+            <Badge
+              tone={n(summary.highRisk) > 0 ? "danger" : "neutral"}
+              variant="subtle"
+              dot
+            >
               {n(summary.highRisk)} high-risk
             </Badge>
           </div>
@@ -458,7 +506,9 @@ export default function TruthReviewWorkbench({
           </div>
         ) : null}
 
-        {surface.publishReceipt ? <PublishReceiptPanel receipt={surface.publishReceipt} /> : null}
+        {surface.publishReceipt ? (
+          <PublishReceiptPanel receipt={surface.publishReceipt} />
+        ) : null}
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
@@ -512,7 +562,8 @@ export default function TruthReviewWorkbench({
                 No candidates in this review lane
               </div>
               <div className="text-sm leading-6 text-slate-500 dark:text-slate-400">
-                The workbench is intentionally empty here instead of inventing hidden review work.
+                The workbench is intentionally empty here instead of inventing hidden
+                review work.
               </div>
             </div>
           </Card>
@@ -524,7 +575,7 @@ export default function TruthReviewWorkbench({
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setSelectedId(item.id)}
+                    onClick={() => setLocalSelectedId(item.id)}
                     className={[
                       "w-full rounded-[22px] border px-4 py-4 text-left transition",
                       s(selected?.id) === s(item.id)
@@ -536,17 +587,23 @@ export default function TruthReviewWorkbench({
                       <Badge tone={toneForBucket(item.queueBucket)} variant="subtle" dot>
                         {titleize(item.queueBucket || "pending")}
                       </Badge>
-                      <Badge tone={toneForRisk(item.approvalPolicy?.riskLevel)} variant="subtle">
+                      <Badge
+                        tone={toneForRisk(item.approvalPolicy?.riskLevel)}
+                        variant="subtle"
+                      >
                         {titleize(item.approvalPolicy?.riskLevel || "unknown")} risk
                       </Badge>
                     </div>
                     <div className="mt-3 text-sm font-semibold">{item.title}</div>
                     <div className="mt-1 text-sm opacity-80">
-                      {item.source?.displayName || "Unknown source"} · {titleize(item.category || "candidate")}
+                      {item.source?.displayName || "Unknown source"} ·{" "}
+                      {titleize(item.category || "candidate")}
                     </div>
                     <div className="mt-2 text-xs opacity-75">
                       {item.approvalPolicy?.outcome
-                        ? `${titleize(item.approvalPolicy.outcome)} · ${titleize(item.approvalPolicy.requiredRole || "reviewer")}`
+                        ? `${titleize(item.approvalPolicy.outcome)} · ${titleize(
+                            item.approvalPolicy.requiredRole || "reviewer"
+                          )}`
                         : "Policy telemetry unavailable"}
                     </div>
                   </button>
@@ -563,12 +620,18 @@ export default function TruthReviewWorkbench({
                         <Badge tone={toneForBucket(selected.queueBucket)} variant="subtle" dot>
                           {titleize(selected.queueBucket || "pending")}
                         </Badge>
-                        <Badge tone={toneForRisk(selected.approvalPolicy?.riskLevel)} variant="subtle" dot>
+                        <Badge
+                          tone={toneForRisk(selected.approvalPolicy?.riskLevel)}
+                          variant="subtle"
+                          dot
+                        >
                           {titleize(selected.approvalPolicy?.riskLevel || "unknown")}
                         </Badge>
                         <Badge tone="neutral" variant="subtle">
                           {selected.confidence?.label
-                            ? `${titleize(selected.confidence.label)} ${Math.round(n(selected.confidence.score) * 100)}%`
+                            ? `${titleize(selected.confidence.label)} ${Math.round(
+                                n(selected.confidence.score) * 100
+                              )}%`
                             : "Confidence unavailable"}
                         </Badge>
                       </div>
@@ -595,7 +658,11 @@ export default function TruthReviewWorkbench({
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
-                    <Card variant="subtle" className="rounded-[24px]" tone={toneForRisk(selected.approvalPolicy?.riskLevel)}>
+                    <Card
+                      variant="subtle"
+                      className="rounded-[24px]"
+                      tone={toneForRisk(selected.approvalPolicy?.riskLevel)}
+                    >
                       <div className="space-y-2">
                         <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
                           Approval Policy
@@ -604,7 +671,8 @@ export default function TruthReviewWorkbench({
                           {titleize(selected.approvalPolicy?.outcome || "review_required")}
                         </div>
                         <div className="text-sm leading-6 text-slate-500 dark:text-slate-400">
-                          Required role: {titleize(selected.approvalPolicy?.requiredRole || "reviewer")}
+                          Required role:{" "}
+                          {titleize(selected.approvalPolicy?.requiredRole || "reviewer")}
                         </div>
                         <ChipList
                           items={selected.approvalPolicy?.reasonCodes}
@@ -619,10 +687,19 @@ export default function TruthReviewWorkbench({
                           Trust and Freshness
                         </div>
                         <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                          {titleize(selected.source?.trustLabel || selected.source?.trustTier || "unknown")}
+                          {titleize(
+                            selected.source?.trustLabel ||
+                              selected.source?.trustTier ||
+                              "unknown"
+                          )}
                         </div>
                         <div className="text-sm leading-6 text-slate-500 dark:text-slate-400">
-                          Freshness {titleize(selected.governance?.freshness?.bucket || "unknown")} · {n(selected.governance?.support?.uniqueSourceCount)} source{n(selected.governance?.support?.uniqueSourceCount) === 1 ? "" : "s"}
+                          Freshness{" "}
+                          {titleize(selected.governance?.freshness?.bucket || "unknown")} ·{" "}
+                          {n(selected.governance?.support?.uniqueSourceCount)} source
+                          {n(selected.governance?.support?.uniqueSourceCount) === 1
+                            ? ""
+                            : "s"}
                         </div>
                         <ChipList
                           items={selected.governance?.reviewExplanation}
@@ -634,15 +711,20 @@ export default function TruthReviewWorkbench({
 
                   {!canManage ? (
                     <div className="rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-100">
-                      This workbench is read-only for your account. The review model is still shown so policy, trust, and impact remain visible before action is delegated.
+                      This workbench is read-only for your account. The review model is
+                      still shown so policy, trust, and impact remain visible before
+                      action is delegated.
                     </div>
                   ) : null}
 
-                  {arr(selected.actions).some((action) => action.allowed === false && action.unavailableReason) ? (
+                  {arr(selected.actions).some(
+                    (action) => action.allowed === false && action.unavailableReason
+                  ) ? (
                     <div className="rounded-[18px] border border-slate-200/80 bg-slate-50/80 px-4 py-3 text-sm text-slate-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300">
                       {
                         arr(selected.actions).find(
-                          (action) => action.allowed === false && action.unavailableReason
+                          (action) =>
+                            action.allowed === false && action.unavailableReason
                         )?.unavailableReason
                       }
                     </div>
@@ -654,7 +736,8 @@ export default function TruthReviewWorkbench({
                         Change Impact Simulator
                       </div>
                       <div className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
-                        This publish preview shows the likely canonical, runtime, and channel consequences before a truth-review approval is committed.
+                        This publish preview shows the likely canonical, runtime, and
+                        channel consequences before a truth-review approval is committed.
                       </div>
                     </div>
 
@@ -672,7 +755,8 @@ export default function TruthReviewWorkbench({
                               "Unavailable"}
                           </div>
                           <div className="text-sm leading-6 text-slate-600 dark:text-slate-400">
-                            {selected.publishPreview?.values?.currentApprovedValue?.valueText ||
+                            {selected.publishPreview?.values?.currentApprovedValue
+                              ?.valueText ||
                               selected.currentTruth?.valueText ||
                               "No approved value was available for comparison."}
                           </div>
@@ -684,7 +768,8 @@ export default function TruthReviewWorkbench({
                             Proposed Value
                           </div>
                           <div className="text-sm font-medium text-slate-900 dark:text-white">
-                            {selected.publishPreview?.values?.proposedValue?.title || selected.title}
+                            {selected.publishPreview?.values?.proposedValue?.title ||
+                              selected.title}
                           </div>
                           <div className="text-sm leading-6 text-slate-600 dark:text-slate-400">
                             {selected.publishPreview?.values?.proposedValue?.valueText ||
@@ -706,7 +791,8 @@ export default function TruthReviewWorkbench({
                             empty="Likely affected areas are unavailable."
                           />
                           <div className="text-xs leading-5 text-slate-500 dark:text-slate-400">
-                            Preview confidence: {titleize(selected.publishPreview?.guidance?.confidence || "unknown")}
+                            Preview confidence:{" "}
+                            {titleize(selected.publishPreview?.guidance?.confidence || "unknown")}
                           </div>
                         </div>
                       </Card>
@@ -716,7 +802,9 @@ export default function TruthReviewWorkbench({
                             Readiness Implications
                           </div>
                           <ChipList
-                            items={selected.publishPreview?.guidance?.likelyReadinessImplications}
+                            items={
+                              selected.publishPreview?.guidance?.likelyReadinessImplications
+                            }
                             empty="No readiness implication could be inferred safely."
                           />
                         </div>
@@ -731,7 +819,9 @@ export default function TruthReviewWorkbench({
                           Conflict Resolution
                         </div>
                         <div className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
-                          Competing values are shown side by side so operators can compare which option would change more, affect different surfaces, or carry higher operational risk.
+                          Competing values are shown side by side so operators can compare
+                          which option would change more, affect different surfaces, or
+                          carry higher operational risk.
                         </div>
                       </div>
                       {comparisonChoices.length ? (
@@ -740,7 +830,9 @@ export default function TruthReviewWorkbench({
                             <button
                               key={choice.candidateId}
                               type="button"
-                              onClick={() => setComparisonChoiceId(choice.candidateId)}
+                              onClick={() =>
+                                setLocalComparisonChoiceId(choice.candidateId)
+                              }
                               className={[
                                 "rounded-full border px-3 py-2 text-sm transition",
                                 s(choice.candidateId) === s(selectedComparison?.candidateId)
@@ -777,7 +869,8 @@ export default function TruthReviewWorkbench({
                               {peer.valueText || "Unavailable"}
                             </div>
                             <div className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                              {peer.sourceDisplayName || "Unknown source"} · {Math.round(n(peer.confidence) * 100)}% confidence
+                              {peer.sourceDisplayName || "Unknown source"} ·{" "}
+                              {Math.round(n(peer.confidence) * 100)}% confidence
                             </div>
                             <div className="mt-3">
                               <ChipList
@@ -808,10 +901,17 @@ export default function TruthReviewWorkbench({
                         Finalize Impact Preview
                       </div>
                       <div className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-400">
-                        This is the deterministic preview of which canonical and runtime areas could move if the candidate becomes approved truth.
+                        This is the deterministic preview of which canonical and runtime
+                        areas could move if the candidate becomes approved truth.
                       </div>
                     </div>
-                    <ImpactGrid preview={selected.publishPreview || selected.finalizeImpactPreview || selected.impactPreview} />
+                    <ImpactGrid
+                      preview={
+                        selected.publishPreview ||
+                        selected.finalizeImpactPreview ||
+                        selected.impactPreview
+                      }
+                    />
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
@@ -821,10 +921,12 @@ export default function TruthReviewWorkbench({
                           Review State
                         </div>
                         <div className="text-sm text-slate-600 dark:text-slate-400">
-                          {selected.review?.reviewReason || "No explicit review reason was returned."}
+                          {selected.review?.reviewReason ||
+                            "No explicit review reason was returned."}
                         </div>
                         <div className="text-xs leading-5 text-slate-500 dark:text-slate-400">
-                          First seen {formatWhen(selected.review?.firstSeenAt)} · Updated {formatWhen(selected.review?.updatedAt)}
+                          First seen {formatWhen(selected.review?.firstSeenAt)} · Updated{" "}
+                          {formatWhen(selected.review?.updatedAt)}
                         </div>
                       </div>
                     </Card>
@@ -835,12 +937,16 @@ export default function TruthReviewWorkbench({
                         </div>
                         <div className="text-sm text-slate-600 dark:text-slate-400">
                           {selected.auditContext?.latestAction
-                            ? `${titleize(selected.auditContext.latestAction)} · ${titleize(selected.auditContext.latestDecision || "recorded")}`
+                            ? `${titleize(selected.auditContext.latestAction)} · ${titleize(
+                                selected.auditContext.latestDecision || "recorded"
+                              )}`
                             : "No prior approval decision is recorded for this candidate."}
                         </div>
                         <div className="text-xs leading-5 text-slate-500 dark:text-slate-400">
                           {selected.auditContext?.latestBy
-                            ? `${selected.auditContext.latestBy} · ${formatWhen(selected.auditContext.latestAt)}`
+                            ? `${selected.auditContext.latestBy} · ${formatWhen(
+                                selected.auditContext.latestAt
+                              )}`
                             : "Audit context unavailable."}
                         </div>
                       </div>

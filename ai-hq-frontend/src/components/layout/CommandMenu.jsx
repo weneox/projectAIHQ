@@ -48,35 +48,56 @@ function buildCommandGroups() {
 
 export default function CommandMenu() {
   const [open, setOpen] = useState(false);
+  const [openedAtPath, setOpenedAtPath] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
 
   const groups = useMemo(() => buildCommandGroups(), []);
+  const dialogOpen = open && openedAtPath === location.pathname;
+
+  function openMenu() {
+    setOpenedAtPath(location.pathname);
+    setOpen(true);
+  }
+
+  function closeMenu() {
+    setOpen(false);
+  }
+
+  function handleOpenChange(nextOpen) {
+    if (nextOpen) {
+      openMenu();
+      return;
+    }
+    closeMenu();
+  }
 
   useEffect(() => {
     function onKeyDown(event) {
       const isModifier = event.metaKey || event.ctrlKey;
-      if (isModifier && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        setOpen((value) => !value);
+      if (!isModifier || event.key.toLowerCase() !== "k") return;
+
+      event.preventDefault();
+
+      if (dialogOpen) {
+        closeMenu();
+        return;
       }
+
+      openMenu();
     }
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
-  useEffect(() => {
-    setOpen(false);
-  }, [location.pathname]);
+  }, [dialogOpen, location.pathname]);
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={openMenu}
         aria-label="Open search"
-        aria-expanded={open}
+        aria-expanded={dialogOpen}
         className={cx(
           "hidden h-11 w-[252px] items-center gap-3 rounded-[16px] px-4 text-left transition duration-200 md:inline-flex lg:w-[304px] xl:w-[360px]",
           "bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(248,250,253,0.995)_100%)]",
@@ -94,7 +115,11 @@ export default function CommandMenu() {
         </span>
       </button>
 
-      <Command.Dialog open={open} onOpenChange={setOpen} label="Command menu">
+      <Command.Dialog
+        open={dialogOpen}
+        onOpenChange={handleOpenChange}
+        label="Command menu"
+      >
         <div className="command-overlay-anim fixed inset-0 z-[140] bg-[rgba(243,246,250,0.64)] backdrop-blur-[10px]" />
 
         <div className="command-panel-anim fixed left-1/2 top-[10vh] z-[150] w-[min(660px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-[24px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,0.985)_0%,rgba(248,250,253,0.998)_100%)] shadow-[0_36px_110px_-40px_rgba(15,23,42,0.28)] backdrop-blur-xl">
@@ -136,7 +161,7 @@ export default function CommandMenu() {
                       value={item.value}
                       onSelect={() => {
                         navigate(item.to);
-                        setOpen(false);
+                        closeMenu();
                       }}
                       className={cx(
                         "group flex cursor-pointer items-center justify-between gap-3 rounded-[14px] px-3 py-2.5 outline-none transition duration-150",

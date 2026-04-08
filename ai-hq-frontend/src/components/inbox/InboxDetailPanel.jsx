@@ -374,13 +374,21 @@ export default function InboxDetailPanel({
   const hasThread = Boolean(selectedThread?.id);
   const unreadCount = Number(selectedThread?.unread_count ?? 0);
   const handoffActive = Boolean(selectedThread?.handoff_active);
+  const currentThreadId = s(selectedThread?.id);
 
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [openMenuThreadId, setOpenMenuThreadId] = useState("");
   const menuAnchorRef = useRef(null);
 
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [selectedThread?.id]);
+  const menuOpen = Boolean(currentThreadId) && openMenuThreadId === currentThreadId;
+
+  function closeMenu() {
+    setOpenMenuThreadId("");
+  }
+
+  function toggleMenu() {
+    if (!currentThreadId) return;
+    setOpenMenuThreadId((prev) => (prev === currentThreadId ? "" : currentThreadId));
+  }
 
   const showSurfaceBanner = hasThread && (
     surface?.unavailable ||
@@ -414,7 +422,7 @@ export default function InboxDetailPanel({
           unreadCount={unreadCount}
           onOpenDetails={onOpenDetails}
           onRefresh={surface?.refresh}
-          onMenuToggle={() => setMenuOpen((prev) => !prev)}
+          onMenuToggle={toggleMenu}
           menuOpen={menuOpen}
           menuAnchorRef={menuAnchorRef}
           surface={surface}
@@ -422,7 +430,7 @@ export default function InboxDetailPanel({
             <DetailActionMenu
               open={menuOpen}
               anchorRef={menuAnchorRef}
-              onClose={() => setMenuOpen(false)}
+              onClose={closeMenu}
               onMarkRead={() => markRead(selectedThread.id)}
               canMarkRead={canMarkRead}
               onAssign={() => assignThread(selectedThread.id)}
@@ -433,7 +441,7 @@ export default function InboxDetailPanel({
             />
           }
         />
-      ) : surface?.loading ? (
+      ) : surface?.loading && !hasThread ? (
         <div className="border-b border-slate-200/70 bg-[#f6f6f7] px-5 py-4">
           <div className="flex items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">

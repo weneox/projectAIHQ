@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import { Skeleton, Spin } from "antd";
 import {
   AlertTriangle,
@@ -253,7 +254,10 @@ export function InlineNotice({
   icon: IconOverride,
 }) {
   const palette = resolveNoticeTone(tone);
-  const Icon = IconOverride || resolveNoticeIcon(tone);
+  const iconElement = createElement(
+    IconOverride || resolveNoticeIcon(tone),
+    { className: compact ? "h-4 w-4" : "h-[18px] w-[18px]" }
+  );
 
   return (
     <div
@@ -273,7 +277,7 @@ export function InlineNotice({
             palette.icon
           )}
         >
-          <Icon className={compact ? "h-4 w-4" : "h-[18px] w-[18px]"} />
+          {iconElement}
         </span>
 
         <div className="min-w-0 flex-1">

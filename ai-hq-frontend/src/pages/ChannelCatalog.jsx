@@ -347,15 +347,17 @@ export default function ChannelCatalog() {
     truth: null,
   });
 
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [closingChannel, setClosingChannel] = useState(null);
+  const closeTimerRef = useRef(null);
+
   const selectedChannelId = searchParams.get("channel") || "";
   const selectedChannel = useMemo(
     () => findChannelById(selectedChannelId),
     [selectedChannelId]
   );
 
-  const [drawerChannel, setDrawerChannel] = useState(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const closeTimerRef = useRef(null);
+  const drawerChannel = selectedChannel || closingChannel;
 
   useEffect(() => {
     let alive = true;
@@ -408,32 +410,12 @@ export default function ChannelCatalog() {
   }, []);
 
   useEffect(() => {
-    if (closeTimerRef.current) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-
-    if (selectedChannel) {
-      setDrawerChannel(selectedChannel);
-
-      const raf = window.requestAnimationFrame(() => {
-        setDrawerOpen(true);
-      });
-
-      return () => window.cancelAnimationFrame(raf);
-    }
-
-    setDrawerOpen(false);
-
-    closeTimerRef.current = window.setTimeout(() => {
-      setDrawerChannel(null);
-    }, 320);
-
+    if (!selectedChannel) return undefined;
+    const raf = window.requestAnimationFrame(() => {
+      setDrawerOpen(true);
+    });
     return () => {
-      if (closeTimerRef.current) {
-        window.clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = null;
-      }
+      window.cancelAnimationFrame(raf);
     };
   }, [selectedChannel]);
 
@@ -543,11 +525,34 @@ export default function ChannelCatalog() {
 
   function handlePrimaryAction(channel) {
     if (!channel?.id) return;
+
+    if (closeTimerRef.current) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+
+    setClosingChannel(null);
     updateSelectedChannel(channel.id);
   }
 
   function handleDrawerClose() {
-    updateSelectedChannel("");
+    if (!drawerChannel) {
+      updateSelectedChannel("");
+      return;
+    }
+
+    setClosingChannel(drawerChannel);
+    setDrawerOpen(false);
+
+    if (closeTimerRef.current) {
+      window.clearTimeout(closeTimerRef.current);
+    }
+
+    closeTimerRef.current = window.setTimeout(() => {
+      setClosingChannel(null);
+      updateSelectedChannel("");
+      closeTimerRef.current = null;
+    }, 320);
   }
 
   return (

@@ -18,6 +18,14 @@ import {
   leadHandle,
 } from "../../features/leads/lead-utils.js";
 
+const CHANNEL_ICONS = Object.freeze({
+  Instagram,
+  Facebook,
+  MessageCircleMore,
+  Mail,
+  Globe,
+});
+
 export default function LeadRow({ lead, selected, onSelect }) {
   const name = leadName(lead);
   const source = prettySource(lead);
@@ -26,13 +34,10 @@ export default function LeadRow({ lead, selected, onSelect }) {
   const value = formatMoneyAZN(pickLeadValue(lead));
   const status = String(lead?.status || "open").toLowerCase();
 
-  const ChannelIcon = channelIconFromLead(lead, {
-    Instagram,
-    Facebook,
-    MessageCircleMore,
-    Mail,
-    Globe,
-  });
+  const channelIconNode = React.createElement(
+    channelIconFromLead(lead, CHANNEL_ICONS),
+    { className: "h-3.5 w-3.5" }
+  );
 
   return (
     <button
@@ -52,7 +57,7 @@ export default function LeadRow({ lead, selected, onSelect }) {
                 lead
               )}`}
             >
-              <ChannelIcon className="h-3.5 w-3.5" />
+              {channelIconNode}
             </div>
             <div className="truncate text-sm font-semibold text-slate-900">{name}</div>
           </div>

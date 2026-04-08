@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 
 function noop() {}
 
@@ -9,24 +9,49 @@ export function useInboxComposerSurface({
   sendOperatorReply,
   releaseHandoff,
 }) {
-  const [replyText, setReplyText] = useState("");
+  const selectedThreadId = String(selectedThread?.id || "").trim();
+  const [composerState, setComposerState] = useState({
+    threadId: "",
+    text: "",
+  });
 
-  useEffect(() => {
-    setReplyText("");
-  }, [selectedThread?.id]);
+  const replyText =
+    composerState.threadId === selectedThreadId ? composerState.text : "";
 
-  const handleSend = useCallback(async () => {
-    if (!selectedThread?.id) return;
-    const ok = await sendOperatorReply(selectedThread.id, replyText.trim());
+  function setReplyText(nextValue) {
+    const threadId = selectedThreadId;
+
+    setComposerState((prev) => {
+      const previousText = prev.threadId === threadId ? prev.text : "";
+      const resolvedText =
+        typeof nextValue === "function" ? nextValue(previousText) : nextValue;
+
+      return {
+        threadId,
+        text: String(resolvedText ?? ""),
+      };
+    });
+  }
+
+  async function handleSend() {
+    if (!selectedThreadId) return;
+
+    const trimmed = replyText.trim();
+    if (!trimmed) return;
+
+    const ok = await sendOperatorReply(selectedThreadId, trimmed);
     if (ok !== false) {
-      setReplyText("");
+      setComposerState({
+        threadId: selectedThreadId,
+        text: "",
+      });
     }
-  }, [replyText, selectedThread?.id, sendOperatorReply]);
+  }
 
-  const handleRelease = useCallback(() => {
-    if (!selectedThread?.id) return;
-    return releaseHandoff(selectedThread.id);
-  }, [releaseHandoff, selectedThread?.id]);
+  function handleRelease() {
+    if (!selectedThreadId) return;
+    return releaseHandoff(selectedThreadId);
+  }
 
   return {
     replyText,
@@ -35,7 +60,7 @@ export function useInboxComposerSurface({
       loading: false,
       error: "",
       unavailable: false,
-      ready: Boolean(selectedThread?.id),
+      ready: Boolean(selectedThreadId),
       saving: Boolean(surface?.saving),
       saveError: surface?.saveError || "",
       saveSuccess: surface?.saveSuccess || "",
