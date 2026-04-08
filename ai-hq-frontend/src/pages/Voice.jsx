@@ -96,7 +96,7 @@ function buildVoiceLaunchReadiness({ truth, voiceSettings, surface, liveCount })
     return {
       status: "unavailable",
       statusLabel: "Unavailable",
-      title: "Voice operations are temporarily unavailable.",
+      title: "Voice launch posture is unavailable.",
       summary:
         surface.error ||
         "The voice surface cannot confirm launch posture right now.",
