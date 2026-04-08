@@ -36,6 +36,7 @@ import {
   normalizeWidgetConfig,
   normalizeUrl,
   resolveWebsiteWidgetTenant,
+  resolveWidgetEnabled,
   validateWidgetInstallContext,
 } from "./config.js";
 import {
@@ -237,7 +238,7 @@ async function resolveTenantFromSession(db, providedToken = "") {
     };
   }
 
-  if (widgetConfig.enabled !== true) {
+  if (!resolveWidgetEnabled(tenant)) {
     return {
       ok: false,
       error: "website_widget_disabled",
@@ -1183,7 +1184,7 @@ export function createWebsiteWidgetHandlers({
       const currentConfig = normalizeWidgetConfig(tenant.widgetConfig, {
         defaultEnabled: true,
       });
-      if (currentConfig.enabled !== true) {
+      if (!resolveWidgetEnabled(tenant)) {
         return okJson(res, {
           ok: false,
           error: "website_widget_disabled",

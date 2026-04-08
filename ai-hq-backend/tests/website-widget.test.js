@@ -367,17 +367,24 @@ test("website widget message persists the website thread and activates handoff w
     },
   });
 
+  const session = issueWebsiteWidgetSession({
+    tenantId: tenantRow.id,
+    tenantKey: "acme",
+    widgetId: "ww_acme_widget",
+    sessionId: "session-1",
+    visitorId: "visitor-1",
+    installId: "install-1",
+    installOrigin: "https://www.acme.example",
+    installHost: "www.acme.example",
+    pageUrl: "https://www.acme.example/pricing",
+    pageTitle: "Pricing",
+  });
+
   const req = {
     body: {
-      tenantKey: "acme",
+      sessionToken: session.token,
       text: "Can someone help me today?",
       messageId: "msg-1",
-      page: {
-        url: "https://acme.example/pricing",
-      },
-    },
-    headers: {
-      origin: "https://acme.example",
     },
   };
   const res = createMockRes();
@@ -423,9 +430,14 @@ test("website widget transcript only exposes delivered outbound replies", async 
   const session = issueWebsiteWidgetSession({
     tenantId: tenantRow.id,
     tenantKey: "acme",
+    widgetId: "ww_acme_widget",
     threadId: thread.id,
     sessionId: "session-2",
     visitorId: "visitor-2",
+    installId: "install-2",
+    installOrigin: "https://www.acme.example",
+    installHost: "www.acme.example",
+    pageUrl: "https://www.acme.example/pricing",
   });
 
   const db = {
@@ -500,14 +512,7 @@ test("website widget transcript only exposes delivered outbound replies", async 
 
   const req = {
     body: {
-      tenantKey: "acme",
       sessionToken: session.token,
-      page: {
-        url: "https://acme.example/pricing",
-      },
-    },
-    headers: {
-      origin: "https://acme.example",
     },
   };
   const res = createMockRes();
