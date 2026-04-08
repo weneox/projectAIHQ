@@ -297,7 +297,7 @@ export default function Inbox() {
         copy: {
           channelsPath: "/channels",
           truthPath: "/truth",
-          unavailableTitle: "Inbox operations are temporarily unavailable.",
+          unavailableTitle: "Inbox launch posture is unavailable.",
           unavailableSummary:
             "The inbox surface cannot confirm launch posture right now.",
           unavailableDetail:
