@@ -16,8 +16,7 @@ import { auditHistorySettingsRoutes } from "./auditHistory.js";
 export function settingsRoutes({ db }) {
   const router = express.Router();
 
-  // Child settings routers already define their own /settings/... paths.
-  // Mount them at "/" to avoid generating /settings/settings/... routes.
+  // These child routers already declare absolute /settings/... paths.
   router.use("/", workspaceSettingsRoutes({ db }));
   router.use("/", channelsSettingsRoutes({ db }));
   router.use("/", agentsSettingsRoutes({ db }));
@@ -28,9 +27,12 @@ export function settingsRoutes({ db }) {
   router.use("/", locationsSettingsRoutes({ db }));
   router.use("/", contactsSettingsRoutes({ db }));
   router.use("/", operationalSettingsRoutes({ db }));
-  router.use("/", settingsSourcesRoutes({ db }));
   router.use("/", settingsTrustRoutes({ db }));
   router.use("/", auditHistorySettingsRoutes({ db }));
+
+  // Sources/knowledge routes are relative (/sources, /knowledge/...)
+  // and must stay mounted under /settings.
+  router.use("/settings", settingsSourcesRoutes({ db }));
 
   return router;
 }
