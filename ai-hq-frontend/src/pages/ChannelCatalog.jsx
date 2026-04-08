@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, ShieldCheck, Wrench } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Link2,
+  ShieldCheck,
+  Sparkles,
+  Wrench,
+} from "lucide-react";
 import {
   getMetaChannelStatus,
   getTelegramChannelStatus,
@@ -28,6 +35,19 @@ import {
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
+}
+
+function compactText(value, fallback = "") {
+  return s(value, fallback);
+}
+
+function compactSentence(value, fallback = "") {
+  const text = s(value, fallback);
+  if (!text) return "";
+  const sentence = text.split(/(?<=[.!?])\s+/)[0] || text;
+  return sentence.length > 150
+    ? `${sentence.slice(0, 147).trim()}...`
+    : sentence;
 }
 
 function buildResultsLabel(filteredCount, totalCount, isFiltered) {
@@ -70,71 +90,244 @@ function FilterTab({ label, count, active, onClick }) {
   );
 }
 
-function LaunchReadinessStrip({ readiness, onNavigate }) {
+function StatusMiniCard({ label, status, summary, tone = "neutral", icon: Icon }) {
+  const toneStyles =
+    tone === "ready"
+      ? {
+          border: "border-[rgba(22,101,52,0.10)]",
+          bg: "bg-[rgba(236,253,245,0.72)]",
+          icon: "text-[rgba(22,101,52,0.92)]",
+          status: "text-[rgba(22,101,52,0.82)]",
+        }
+      : tone === "attention"
+        ? {
+            border: "border-[rgba(180,83,9,0.10)]",
+            bg: "bg-[rgba(255,251,235,0.78)]",
+            icon: "text-[rgba(180,83,9,0.92)]",
+            status: "text-[rgba(146,64,14,0.82)]",
+          }
+        : {
+            border: "border-[rgba(15,23,42,0.06)]",
+            bg: "bg-white/[0.76]",
+            icon: "text-[rgba(15,23,42,0.48)]",
+            status: "text-[rgba(15,23,42,0.42)]",
+          };
+
+  return (
+    <div
+      className={cx(
+        "border px-4 py-4 shadow-[0_12px_32px_-28px_rgba(15,23,42,0.16)]",
+        toneStyles.border,
+        toneStyles.bg
+      )}
+      style={{ borderRadius: 16 }}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className={cx(
+            "flex h-10 w-10 shrink-0 items-center justify-center border border-white/70 bg-white/[0.82]",
+            toneStyles.icon
+          )}
+          style={{ borderRadius: 12 }}
+        >
+          <Icon className="h-[16px] w-[16px]" strokeWidth={1.9} />
+        </div>
+
+        <div className="min-w-0">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[rgba(15,23,42,0.32)]">
+            {label}
+          </div>
+
+          <div className="mt-1 text-[14px] font-semibold tracking-[-0.03em] text-[rgba(15,23,42,0.95)]">
+            {status}
+          </div>
+
+          <div className={cx("mt-1 text-[12px] leading-5", toneStyles.status)}>
+            {compactSentence(summary)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LaunchHero({ readiness, meta, telegram, truth, onNavigate }) {
   const palette =
     readiness.status === "ready"
       ? {
-          border: "border-[#d8ebe0]",
-          bg: "bg-[#f7fcf8]",
-          icon: ShieldCheck,
-          iconColor: "text-[#156f3d]",
-          text: "text-[#156f3d]",
+          border: "border-[rgba(22,101,52,0.10)]",
+          bg: "bg-[linear-gradient(180deg,rgba(250,255,252,0.98),rgba(246,252,248,0.98))]",
+          icon: CheckCircle2,
+          iconColor: "text-[rgba(22,101,52,0.92)]",
+          eyebrow: "text-[rgba(22,101,52,0.84)]",
         }
       : readiness.status === "attention"
         ? {
-            border: "border-[#f0dfc5]",
-            bg: "bg-[#fffaf1]",
+            border: "border-[rgba(180,83,9,0.10)]",
+            bg: "bg-[linear-gradient(180deg,rgba(255,253,247,0.98),rgba(255,249,238,0.98))]",
             icon: Wrench,
-            iconColor: "text-[#b76a11]",
-            text: "text-[#8d4f07]",
+            iconColor: "text-[rgba(180,83,9,0.92)]",
+            eyebrow: "text-[rgba(146,64,14,0.82)]",
           }
         : {
-            border: "border-[#f0d3d5]",
-            bg: "bg-[#fff7f7]",
-            icon: Wrench,
-            iconColor: "text-[#b42318]",
-            text: "text-[#912018]",
+            border: "border-[rgba(185,28,28,0.08)]",
+            bg: "bg-[linear-gradient(180deg,rgba(255,251,251,0.98),rgba(255,247,247,0.98))]",
+            icon: Link2,
+            iconColor: "text-[rgba(185,28,28,0.9)]",
+            eyebrow: "text-[rgba(153,27,27,0.82)]",
           };
 
   const Icon = palette.icon;
 
+  const metaTone =
+    meta?.status === "ready"
+      ? "ready"
+      : meta?.status === "attention"
+        ? "attention"
+        : "neutral";
+  const telegramTone =
+    telegram?.status === "ready"
+      ? "ready"
+      : telegram?.status === "attention"
+        ? "attention"
+        : "neutral";
+  const truthTone =
+    truth?.status === "ready"
+      ? "ready"
+      : truth?.status === "attention" || truth?.status === "blocked"
+        ? "attention"
+        : "neutral";
+
   return (
-    <div className={`border border-[#e6ebf2] ${palette.border} ${palette.bg} px-4 py-4`}>
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Icon className={`h-4 w-4 ${palette.iconColor}`} strokeWidth={2} />
-            <div className={`text-[11px] font-bold uppercase tracking-[0.14em] ${palette.text}`}>
-              {s(readiness.statusLabel, "Unknown")}
+    <section
+      className={cx(
+        "relative overflow-hidden border shadow-[0_24px_54px_-42px_rgba(15,23,42,0.16)]",
+        palette.border,
+        palette.bg
+      )}
+      style={{ borderRadius: 22 }}
+    >
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(620px_circle_at_10%_0%,rgba(38,76,165,0.05),transparent_52%)]" />
+
+      <div className="relative px-5 py-5 md:px-7 md:py-7">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.06fr)_minmax(0,0.94fr)] xl:gap-8">
+          <div className="min-w-0">
+            <div className={cx("flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em]", palette.eyebrow)}>
+              <Icon className={cx("h-[13px] w-[13px]", palette.iconColor)} strokeWidth={1.95} />
+              <span>{compactText(readiness.statusLabel, "Launch posture")}</span>
+            </div>
+
+            <div className="mt-4 text-[2rem] font-semibold leading-[0.94] tracking-[-0.065em] text-[rgba(15,23,42,0.98)] md:text-[2.9rem]">
+              {compactText(readiness.title, "Launch channels")}
+            </div>
+
+            <div className="mt-3 max-w-[40rem] text-[14px] leading-7 text-[rgba(15,23,42,0.58)]">
+              {compactSentence(
+                readiness.summary,
+                "Connect the right channel and keep launch posture healthy."
+              )}
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              {readiness.action?.path ? (
+                <Button
+                  size="hero"
+                  onClick={() => onNavigate(readiness.action.path)}
+                  rightIcon={<ArrowRight className="h-4 w-4" />}
+                >
+                  {readiness.action.label}
+                </Button>
+              ) : null}
+
+              <Button
+                type="button"
+                size="hero"
+                variant="secondary"
+                onClick={() => onNavigate("/truth")}
+              >
+                Open truth
+              </Button>
             </div>
           </div>
 
-          <div className="mt-2 text-[15px] font-semibold tracking-[-0.03em] text-[#0f1728]">
-            {s(readiness.title, "Launch readiness")}
+          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-1">
+            <StatusMiniCard
+              label="Instagram"
+              status={compactText(meta?.statusLabel, "Unknown")}
+              summary={compactText(meta?.summary, "Instagram posture unavailable.")}
+              tone={metaTone}
+              icon={Sparkles}
+            />
+            <StatusMiniCard
+              label="Telegram"
+              status={compactText(telegram?.statusLabel, "Unknown")}
+              summary={compactText(telegram?.summary, "Telegram posture unavailable.")}
+              tone={telegramTone}
+              icon={Link2}
+            />
+            <StatusMiniCard
+              label="Truth + runtime"
+              status={compactText(truth?.statusLabel, "Unknown")}
+              summary={compactText(truth?.summary, "Truth posture unavailable.")}
+              tone={truthTone}
+              icon={ShieldCheck}
+            />
           </div>
-
-          <div className="mt-1 text-[13px] leading-6 text-[#5f6b7c]">
-            {s(readiness.summary)}
-          </div>
-
-          {s(readiness.detail) ? (
-            <div className="mt-1 text-[12px] leading-5 text-[#7a8698]">
-              {s(readiness.detail)}
-            </div>
-          ) : null}
         </div>
+      </div>
+    </section>
+  );
+}
 
-        {readiness.action?.path ? (
-          <div className="shrink-0">
-            <Button
-              size="sm"
-              onClick={() => onNavigate(readiness.action.path)}
-              rightIcon={<ArrowRight className="h-4 w-4" />}
-            >
-              {readiness.action.label}
-            </Button>
+function SectionHeader({ eyebrow, title, meta, actionLabel, onAction }) {
+  return (
+    <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+      <div className="min-w-0">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.32)]">
+          {eyebrow}
+        </div>
+        <div className="mt-2 text-[24px] font-semibold tracking-[-0.055em] text-[rgba(15,23,42,0.96)]">
+          {title}
+        </div>
+        {meta ? (
+          <div className="mt-2 text-[13px] leading-6 text-[rgba(15,23,42,0.52)]">
+            {meta}
           </div>
         ) : null}
+      </div>
+
+      {actionLabel ? (
+        <div className="shrink-0">
+          <ChannelActionButton quiet showArrow={false} onClick={onAction}>
+            {actionLabel}
+          </ChannelActionButton>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function EmptyState({ onReset }) {
+  return (
+    <div className="grid min-h-[220px] place-items-center border border-dashed border-[#dbe3ec] bg-white/[0.76] px-5 py-10 shadow-[0_12px_30px_-28px_rgba(15,23,42,0.12)]" style={{ borderRadius: 18 }}>
+      <div className="max-w-[360px] text-center">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[rgba(15,23,42,0.34)]">
+          No matches
+        </div>
+
+        <div className="mt-2 text-[22px] font-semibold tracking-[-0.05em] text-[rgba(15,23,42,0.96)]">
+          No connector matched this view.
+        </div>
+
+        <div className="mt-3 text-[14px] leading-6 text-[rgba(15,23,42,0.54)]">
+          Reset the catalog and bring the full launch surface back.
+        </div>
+
+        <div className="mt-5 flex justify-center">
+          <Button type="button" size="sm" variant="secondary" onClick={onReset}>
+            Reset view
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -200,7 +393,9 @@ export default function ChannelCatalog() {
         if (!alive) return;
         setReadinessState({
           loading: false,
-          error: s(error?.message || error || "Channel readiness could not be loaded."),
+          error: s(
+            error?.message || error || "Channel readiness could not be loaded."
+          ),
           meta: buildMetaLaunchChannelState({}),
           telegram: buildTelegramLaunchChannelState({}),
           truth: buildTruthOperationalState(null),
@@ -288,28 +483,42 @@ export default function ChannelCatalog() {
           channelsPath: "/channels",
           truthPath: "/truth",
           noChannelSummary:
-            "No launch channel is currently connected. Connect Meta or Telegram before the launch path can go live.",
+            "No launch channel is currently connected. Connect Instagram or Telegram first.",
           noChannelDetail:
-            "The launch path expects at least one connected and delivery-ready channel.",
+            "The launch lane expects at least one connected and delivery-ready channel.",
           deliveryBlockedSummary:
             "A channel is connected, but delivery is still blocked.",
           deliveryBlockedDetail:
-            "Inspect the connected channel and fix delivery blockers before trusting live automation.",
+            "Inspect the connected channel and clear delivery blockers before trusting live automation.",
           truthBlockedApprovalTitle:
             "Business truth still needs approval.",
-          truthBlockedRuntimeTitle:
-            "Runtime still needs repair.",
+          truthBlockedRuntimeTitle: "Runtime still needs repair.",
           truthBlockedDetail:
-            "Channel connection alone is not enough. Approved truth and healthy runtime must also be aligned.",
+            "Connected channels alone are not enough. Approved truth and healthy runtime must also be aligned.",
           readyTitle:
             "A launch channel is connected and the operating posture is healthy.",
           readySummary:
             "Channels, approved truth, and runtime are aligned for the current launch promise.",
           readyDetail:
-            "You can inspect channels here, but the launch spine no longer has a blocker at the channel layer.",
+            "The launch spine is not blocked at the channel layer right now.",
         },
       }),
-    [readinessState.error, readinessState.meta, readinessState.telegram, readinessState.truth]
+    [
+      readinessState.error,
+      readinessState.meta,
+      readinessState.telegram,
+      readinessState.truth,
+    ]
+  );
+
+  const primaryChannels = useMemo(
+    () => filteredChannels.filter((channel) => channel.status !== "phase2"),
+    [filteredChannels]
+  );
+
+  const secondaryChannels = useMemo(
+    () => filteredChannels.filter((channel) => channel.status === "phase2"),
+    [filteredChannels]
   );
 
   function updateSelectedChannel(channelId = "") {
@@ -343,37 +552,42 @@ export default function ChannelCatalog() {
 
   return (
     <>
-      <PageCanvas className="px-3 py-3 md:px-4 md:py-4">
-        <div className="space-y-3.5">
-          <LaunchReadinessStrip
+      <PageCanvas className="px-4 py-4 md:px-5 md:py-5 xl:px-0">
+        <div className="space-y-6">
+          <LaunchHero
             readiness={launchReadiness}
+            meta={readinessState.meta}
+            telegram={readinessState.telegram}
+            truth={readinessState.truth}
             onNavigate={handleNavigate}
           />
 
           {s(readinessState.error) ? (
-            <div className="border border-[#f0d3d5] bg-[#fff7f7] px-4 py-3 text-[13px] leading-6 text-[#912018]">
+            <div
+              className="border border-[rgba(185,28,28,0.10)] bg-[rgba(255,247,247,0.9)] px-4 py-3 text-[13px] leading-6 text-[rgba(153,27,27,0.88)]"
+              style={{ borderRadius: 14 }}
+            >
               {readinessState.error}
             </div>
           ) : null}
 
-          <div className="border-b border-[#e6ebf2] pb-2.5">
-            <div className="flex flex-col gap-2.5 md:flex-row md:items-end md:justify-between">
-              <div className="flex items-end gap-8">
-                <div className="flex items-center gap-7">
-                  {filterCounts.map((filter) => (
-                    <FilterTab
-                      key={filter.id}
-                      label={filter.label}
-                      count={filter.count}
-                      active={activeFilter === filter.id}
-                      onClick={() => setActiveFilter(filter.id)}
-                    />
-                  ))}
+          <section
+            className="border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(253,254,255,0.98),rgba(248,250,252,0.98))] px-5 py-5 shadow-[0_18px_44px_-36px_rgba(15,23,42,0.14)]"
+            style={{ borderRadius: 20 }}
+          >
+            <div className="flex flex-col gap-4 border-b border-[rgba(15,23,42,0.06)] pb-4 md:flex-row md:items-end md:justify-between">
+              <div className="min-w-0">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.32)]">
+                  Catalog
+                </div>
+
+                <div className="mt-2 text-[24px] font-semibold tracking-[-0.055em] text-[rgba(15,23,42,0.96)]">
+                  Connect what matters now.
                 </div>
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#667085]">
+                <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[rgba(15,23,42,0.34)]">
                   {resultsLabel}
                 </div>
 
@@ -389,58 +603,93 @@ export default function ChannelCatalog() {
                 ) : null}
               </div>
             </div>
-          </div>
 
-          {filteredChannels.length ? (
-            <section className="relative min-h-[280px]">
-              <div
-                className={cx(
-                  "grid gap-3.5 md:grid-cols-2 xl:grid-cols-3 transition-[opacity,transform] duration-300 ease-premium",
-                  drawerChannel
-                    ? drawerOpen
-                      ? "opacity-[0.28] scale-[0.992]"
-                      : "opacity-[0.55] scale-[0.996]"
-                    : "opacity-100 scale-100"
-                )}
-              >
-                {filteredChannels.map((channel) => (
-                  <ChannelOverviewCard
-                    key={channel.id}
-                    channel={channel}
-                    selected={selectedChannel?.id === channel.id}
-                    onInspect={updateSelectedChannel}
-                    onRunPrimaryAction={handlePrimaryAction}
-                  />
-                ))}
-              </div>
-            </section>
-          ) : (
-            <div className="grid min-h-[220px] place-items-center rounded-[14px] border border-dashed border-line-soft bg-white px-5 py-10">
-              <div className="max-w-[360px] text-center">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-                  No matches
-                </div>
-
-                <div className="mt-2 text-[20px] font-semibold tracking-[-0.04em] text-text">
-                  No connectors matched this filter.
-                </div>
-
-                <p className="mt-3 text-[14px] leading-6 text-text-muted">
-                  Reset the view to bring the full catalog back.
-                </p>
-
-                <div className="mt-5 flex justify-center">
-                  <ChannelActionButton
-                    quiet
-                    showArrow={false}
-                    onClick={handleResetView}
-                  >
-                    Reset view
-                  </ChannelActionButton>
-                </div>
-              </div>
+            <div className="mt-4 flex flex-wrap items-center gap-x-7 gap-y-3">
+              {filterCounts.map((filter) => (
+                <FilterTab
+                  key={filter.id}
+                  label={filter.label}
+                  count={filter.count}
+                  active={activeFilter === filter.id}
+                  onClick={() => setActiveFilter(filter.id)}
+                />
+              ))}
             </div>
-          )}
+
+            <div className="mt-6 space-y-8">
+              {filteredChannels.length ? (
+                <>
+                  {primaryChannels.length ? (
+                    <section>
+                      <SectionHeader
+                        eyebrow="Ready now"
+                        title="Launch connectors"
+                        meta="These are the channels that belong in the current launch lane."
+                      />
+
+                      <div className="mt-4">
+                        <div
+                          className={cx(
+                            "grid gap-3.5 md:grid-cols-2 xl:grid-cols-3 transition-[opacity,transform] duration-300 ease-premium",
+                            drawerChannel
+                              ? drawerOpen
+                                ? "opacity-[0.28] scale-[0.992]"
+                                : "opacity-[0.55] scale-[0.996]"
+                              : "opacity-100 scale-100"
+                          )}
+                        >
+                          {primaryChannels.map((channel) => (
+                            <ChannelOverviewCard
+                              key={channel.id}
+                              channel={channel}
+                              selected={selectedChannel?.id === channel.id}
+                              onInspect={updateSelectedChannel}
+                              onRunPrimaryAction={handlePrimaryAction}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {secondaryChannels.length ? (
+                    <section className="border-t border-[rgba(15,23,42,0.06)] pt-8">
+                      <SectionHeader
+                        eyebrow="Later"
+                        title="Not in the launch lane yet"
+                        meta="Keep these visible, but do not let them distort the launch story."
+                      />
+
+                      <div className="mt-4">
+                        <div
+                          className={cx(
+                            "grid gap-3.5 md:grid-cols-2 xl:grid-cols-3 transition-[opacity,transform] duration-300 ease-premium",
+                            drawerChannel
+                              ? drawerOpen
+                                ? "opacity-[0.28] scale-[0.992]"
+                                : "opacity-[0.55] scale-[0.996]"
+                              : "opacity-100 scale-100"
+                          )}
+                        >
+                          {secondaryChannels.map((channel) => (
+                            <ChannelOverviewCard
+                              key={channel.id}
+                              channel={channel}
+                              selected={selectedChannel?.id === channel.id}
+                              onInspect={updateSelectedChannel}
+                              onRunPrimaryAction={handlePrimaryAction}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </section>
+                  ) : null}
+                </>
+              ) : (
+                <EmptyState onReset={handleResetView} />
+              )}
+            </div>
+          </section>
         </div>
       </PageCanvas>
 
