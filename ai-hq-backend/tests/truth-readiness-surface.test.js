@@ -34,7 +34,16 @@ test("truth payload exposes unified readiness language when approved truth is un
 
   assert.equal(data.truth.readiness.status, "blocked");
   assert.equal(data.truth.readiness.reasonCode, "approved_truth_unavailable");
-  assert.equal(data.truth.readiness.blockers[0].reasonCode, "approved_truth_unavailable");
-  assert.equal(data.truth.readiness.blockers[0].nextAction.id, "open_setup_route");
-  assert.equal(data.truth.readiness.blockers[0].nextAction.target.path, "/setup/runtime");
+  assert.equal(
+    data.truth.readiness.blockers[0].reasonCode,
+    "approved_truth_unavailable"
+  );
+  assert.equal(
+    data.truth.readiness.blockers[0].nextAction.id,
+    "open_setup_route"
+  );
+  assert.equal(
+    data.truth.readiness.blockers[0].nextAction.target.path,
+    "/truth"
+  );
 });
