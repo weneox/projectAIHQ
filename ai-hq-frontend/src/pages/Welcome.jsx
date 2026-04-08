@@ -25,6 +25,10 @@ function s(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
 
+function ignoreError() {
+  return undefined;
+}
+
 function WelcomeField({ icon: Icon, label, value, onChange, placeholder }) {
   return (
     <label className="block">
@@ -120,7 +124,9 @@ export default function Welcome() {
           name: payload.companyName,
         });
         clearAppBootstrapContext();
-      } catch {}
+      } catch {
+        ignoreError();
+      }
 
       navigate("/home", { replace: true });
     } catch {

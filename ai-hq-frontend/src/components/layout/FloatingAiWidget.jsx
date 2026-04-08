@@ -1168,31 +1168,18 @@ export default function FloatingAiWidget({
     assistantRef.current = clientAssistant;
   }, [clientAssistant]);
 
+    const supportWelcomeMessages = useMemo(
+    () => buildSupportWelcomeFromAssistant(clientAssistant),
+    [clientAssistant]
+  );
+
   useEffect(() => {
-    const nextMessages = buildSupportWelcomeFromAssistant(clientAssistant);
     setSupportMessages((current) => {
       const hasUserMessages = current.some((item) => item.role === "user");
       if (hasUserMessages) return current;
-      return nextMessages;
+      return supportWelcomeMessages;
     });
-  }, [
-    clientAssistant.launchPosture,
-    clientAssistant.launchChannel?.connected,
-    clientAssistant.launchChannel?.available,
-    clientAssistant.launchChannel?.status,
-    clientAssistant.launchChannel?.statusLabel,
-    clientAssistant.launchChannel?.summary,
-    clientAssistant.launchChannel?.detail,
-    clientAssistant.launchChannel?.channelLabel,
-    clientAssistant.launchChannel?.accountDisplayName,
-    clientAssistant.launchChannel?.accountHandle,
-    clientAssistant.truthRuntime?.status,
-    clientAssistant.truthRuntime?.blockedBy,
-    clientAssistant.truthRuntime?.leadReason,
-    clientAssistant.truthRuntime?.title,
-    clientAssistant.truthRuntime?.summary,
-    clientAssistant.truthRuntime?.detail,
-  ]);
+  }, [supportWelcomeMessages]);
 
   useEffect(() => {
     if (!open) return;

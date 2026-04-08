@@ -547,8 +547,6 @@ export default function TruthViewerPage() {
     () =>
       resolveRuntimeLabel(
         state.data.trust,
-        state.data.approvedTruthUnavailable,
-        state.data
       ),
     [state.data, state.data.trust, state.data.approvedTruthUnavailable]
   );

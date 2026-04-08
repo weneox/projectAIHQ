@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowUpRight,
@@ -33,6 +33,10 @@ const UI_TABS = ["draft", "approved", "published", "rejected"];
 
 function cn(...classes) {
   return classes.filter(Boolean).join(" ");
+}
+
+function ignoreError() {
+  return undefined;
 }
 
 function normalizeList(resp) {
@@ -124,14 +128,14 @@ function pickContentIdFromProposal(p) {
   ].filter(Boolean);
 
   for (const src of nestedSources) {
-    const obj = safeJson(src) || src;
-    if (!obj || typeof obj !== "object") continue;
+    const value = safeJson(src) || src;
+    if (!value || typeof value !== "object") continue;
 
     const nestedId =
-      obj?.id ||
-      obj?.contentItemId ||
-      obj?.content_item_id ||
-      obj?.content_item?.id;
+      value?.id ||
+      value?.contentItemId ||
+      value?.content_item_id ||
+      value?.content_item?.id;
 
     if (nestedId) return String(nestedId);
   }
@@ -213,18 +217,18 @@ export default function ProposalsPage() {
     statusRef.current = status;
   }, [status]);
 
-  const showToast = (msg) => {
+  const showToast = useCallback((msg) => {
     if (!msg) return;
     setToast(msg);
     window.setTimeout(() => setToast(""), 1400);
-  };
+  }, []);
 
-  const refreshStats = async () => {
+  const refreshStats = useCallback(async () => {
     try {
       const results = await Promise.allSettled(
-        BACKEND_STATUSES.map(async (s) => {
-          const items = await listProposals(s);
-          return { status: s, items: normalizeList(items) };
+        BACKEND_STATUSES.map(async (nextStatus) => {
+          const items = await listProposals(nextStatus);
+          return { status: nextStatus, items: normalizeList(items) };
         })
       );
 
@@ -237,24 +241,26 @@ export default function ProposalsPage() {
         pending: 0,
       };
 
-      for (const x of results) {
-        if (x.status !== "fulfilled") continue;
-        const { status: s, items } = x.value || {};
-        if (!s) continue;
-        next[s] = Array.isArray(items) ? items.length : 0;
+      for (const result of results) {
+        if (result.status !== "fulfilled") continue;
+        const { status: nextStatus, items } = result.value || {};
+        if (!nextStatus) continue;
+        next[nextStatus] = Array.isArray(items) ? items.length : 0;
       }
 
       next.draft =
         (next.draft || 0) + (next.in_progress || 0) + (next.pending || 0);
 
       setStats(next);
-    } catch {}
-  };
+    } catch {
+      ignoreError();
+    }
+  }, []);
 
-  const fetchByUiStatus = async (uiStatus) => {
-    const s = String(uiStatus || "draft").toLowerCase();
+  const fetchByUiStatus = useCallback(async (uiStatus) => {
+    const normalizedStatus = String(uiStatus || "draft").toLowerCase();
 
-    if (s === "draft") {
+    if (normalizedStatus === "draft") {
       const [a, b, c] = await Promise.all([
         listProposals("draft"),
         listProposals("in_progress"),
@@ -268,32 +274,34 @@ export default function ProposalsPage() {
       );
     }
 
-    const list = await listProposals(s);
+    const list = await listProposals(normalizedStatus);
     return normalizeList(list).sort(sortNewestFirst);
-  };
+  }, []);
 
-  const refreshProposals = async (why = "", opts = {}) => {
-    const desiredStatus = opts.status ?? statusRef.current;
+  const refreshProposals = useCallback(
+    async (why = "", opts = {}) => {
+      const desiredStatus = opts.status ?? statusRef.current;
 
-    setErr("");
+      setErr("");
 
-    try {
-      const next = await fetchByUiStatus(desiredStatus);
-      setProposals(next);
+      try {
+        const next = await fetchByUiStatus(desiredStatus);
+        setProposals(next);
 
-      if (why) showToast(why);
-    } catch (e) {
-      setErr(String(e?.message || e));
-    } finally {
-      setLoading(false);
-    }
-  };
+        if (why) showToast(why);
+      } catch (error) {
+        setErr(String(error?.message || error));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchByUiStatus, showToast]
+  );
 
   useEffect(() => {
-    refreshProposals();
-    refreshStats();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+    void refreshProposals();
+    void refreshStats();
+  }, [refreshProposals, refreshStats, status]);
 
   useEffect(() => {
     const unsubscribeStatus = realtimeStore.subscribeStatus((nextStatus) => {
@@ -301,42 +309,42 @@ export default function ProposalsPage() {
     });
 
     const unsubscribeEvents = realtimeStore.subscribeEvents(({ type }) => {
-        const isProposalEvent =
-          type === "proposal.created" || type === "proposal.updated";
-        const isContentEvent = type === "content.updated";
-        const isExecEvent =
-          type === "execution.updated" || type === "job.updated";
+      const isProposalEvent =
+        type === "proposal.created" || type === "proposal.updated";
+      const isContentEvent = type === "content.updated";
+      const isExecEvent =
+        type === "execution.updated" || type === "job.updated";
 
-        if (isProposalEvent || isContentEvent || isExecEvent) {
-          refreshStats();
+      if (isProposalEvent || isContentEvent || isExecEvent) {
+        void refreshStats();
 
-          const currentStatus = statusRef.current;
-          refreshProposals(
-            isProposalEvent && type === "proposal.created" ? "New item" : "",
-            { status: currentStatus }
-          );
-        }
+        const currentStatus = statusRef.current;
+        void refreshProposals(
+          isProposalEvent && type === "proposal.created" ? "New item" : "",
+          { status: currentStatus }
+        );
+      }
     });
+
     if (!realtimeStore.canUseWs()) setWsStatus({ state: "off" });
 
     return () => {
       unsubscribeEvents();
       unsubscribeStatus();
     };
-  }, []);
+  }, [refreshProposals, refreshStats]);
 
   useEffect(() => {
-    const s = wsStatus?.state;
-    if (s === "connected") return;
+    const nextState = wsStatus?.state;
+    if (nextState === "connected") return undefined;
 
     const id = setInterval(() => {
-      refreshProposals();
-      refreshStats();
+      void refreshProposals();
+      void refreshStats();
     }, 9000);
 
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wsStatus?.state, status]);
+  }, [refreshProposals, refreshStats, wsStatus?.state]);
 
   const onRequestChanges = async (proposalId, contentId, feedbackText) => {
     setBusy(true);
@@ -355,8 +363,8 @@ export default function ProposalsPage() {
         }
       );
       await refreshStats();
-    } catch (e) {
-      setErr(String(e?.message || e));
+    } catch (error) {
+      setErr(String(error?.message || error));
     } finally {
       setBusy(false);
     }
@@ -384,8 +392,8 @@ export default function ProposalsPage() {
           status: "draft",
         }
       );
-    } catch (e) {
-      setErr(String(e?.message || e));
+    } catch (error) {
+      setErr(String(error?.message || error));
     } finally {
       setBusy(false);
     }
@@ -406,8 +414,8 @@ export default function ProposalsPage() {
       await refreshProposals("Rejected", {
         status: "rejected",
       });
-    } catch (e) {
-      setErr(String(e?.message || e));
+    } catch (error) {
+      setErr(String(error?.message || error));
     } finally {
       setBusy(false);
     }
@@ -429,8 +437,8 @@ export default function ProposalsPage() {
       await refreshProposals("Analyze completed", {
         status: statusRef.current,
       });
-    } catch (e) {
-      setErr(String(e?.message || e));
+    } catch (error) {
+      setErr(String(error?.message || error));
     } finally {
       setBusy(false);
     }
@@ -455,7 +463,7 @@ export default function ProposalsPage() {
       try {
         const publishedItems = await fetchByUiStatus("published");
         const nowPublished = publishedItems.some(
-          (p) => String(p?.id) === String(proposalId)
+          (item) => String(item?.id) === String(proposalId)
         );
 
         if (nowPublished) {
@@ -480,8 +488,8 @@ export default function ProposalsPage() {
           )
         );
       }
-    } catch (e) {
-      setErr(String(e?.message || e));
+    } catch (error) {
+      setErr(String(error?.message || error));
     } finally {
       setBusy(false);
     }
@@ -650,8 +658,10 @@ export default function ProposalsPage() {
                 proposals={proposals}
                 stats={stats}
                 status={status}
-                setStatus={(s) => {
-                  const next = UI_TABS.includes(String(s)) ? String(s) : "draft";
+                setStatus={(nextStatus) => {
+                  const next = UI_TABS.includes(String(nextStatus))
+                    ? String(nextStatus)
+                    : "draft";
                   setStatus(next);
                 }}
                 search={search}

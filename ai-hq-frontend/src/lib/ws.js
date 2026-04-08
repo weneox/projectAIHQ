@@ -8,6 +8,10 @@ function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
+function ignoreError() {
+  return undefined;
+}
+
 function trimTrailingSlash(value = "") {
   return s(value).replace(/\/+$/, "");
 }
@@ -225,7 +229,9 @@ export function createWsClient({ onEvent, onStatus, maxDelayMs = 12000 } = {}) {
   const notifyStatus = (status) => {
     try {
       if (typeof onStatus === "function") onStatus(status);
-    } catch {}
+    } catch {
+      ignoreError();
+    }
   };
 
   const clearReconnectTimer = () => {
@@ -243,14 +249,18 @@ export function createWsClient({ onEvent, onStatus, maxDelayMs = 12000 } = {}) {
       ws.onclose = null;
       ws.onerror = null;
       ws.onmessage = null;
-    } catch {}
+    } catch {
+      ignoreError();
+    }
 
     try {
       if (ws.readyState === WebSocket.OPEN) {
         manuallyClosed = true;
         ws.close(1000, "manual");
       }
-    } catch {}
+    } catch {
+      ignoreError();
+    }
 
     ws = null;
   };
@@ -426,7 +436,9 @@ export function createWsClient({ onEvent, onStatus, maxDelayMs = 12000 } = {}) {
               raw: ev.data,
             });
           }
-        } catch {}
+        } catch {
+          ignoreError();
+        }
       };
     } catch (err) {
       notifyStatus({

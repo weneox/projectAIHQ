@@ -62,6 +62,10 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function ignoreError() {
+  return undefined;
+}
+
 function getTenantKeyFromHost() {
   if (typeof window === "undefined") return "";
 
@@ -395,7 +399,9 @@ export default function Login() {
         let bootstrap = null;
         try {
           bootstrap = await getAppBootstrapContext();
-        } catch {}
+        } catch {
+          ignoreError();
+        }
 
         if (!alive) return;
 
@@ -472,7 +478,9 @@ export default function Login() {
       }
 
       bootstrap = await getAppBootstrapContext({ force: true }).catch(() => ({}));
-    } catch {}
+    } catch {
+      ignoreError();
+    }
 
     if (!isWelcomeIdentityComplete({ auth, bootstrap })) {
       navigate("/welcome", { replace: true });
@@ -750,7 +758,7 @@ export default function Login() {
                   disabled={isSignupMode ? isSignupDisabled : isLoginDisabled}
                   className={cn(
                     "group relative inline-flex h-[66px] w-full items-center justify-center overflow-hidden rounded-[20px] px-5 text-[16px] font-semibold tracking-[-0.03em] transition duration-200",
-                    (isSignupMode ? isSignupDisabled : isLoginDisabled)
+                    isSignupMode ? isSignupDisabled : isLoginDisabled
                       ? "bg-slate-200 text-slate-400"
                       : "bg-[linear-gradient(135deg,#5f88ff_0%,#3a67f5_38%,#2a4ed0_100%)] text-white shadow-[0_22px_50px_rgba(37,99,235,0.25)] hover:translate-y-[-1px] hover:shadow-[0_26px_60px_rgba(37,99,235,0.30)]"
                   )}

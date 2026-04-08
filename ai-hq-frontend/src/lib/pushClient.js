@@ -101,11 +101,15 @@ export async function registerServiceWorker() {
 
     try {
       await reg.update();
-    } catch {}
+    } catch {
+      return { ok: true, reg };
+    }
 
     try {
       if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
-    } catch {}
+    } catch {
+      return { ok: true, reg };
+    }
 
     return { ok: true, reg };
   } catch (error) {
@@ -146,7 +150,9 @@ export async function subscribePush({ vapidPublicKey, recipient = "ceo" }) {
       console.log("[push] resolved base =", getApiBase() || "(missing)");
       console.log("[push] subscribe url =", url || "(missing)");
     }
-  } catch {}
+  } catch {
+    return { ok: false, error: "debug logging failed" };
+  }
 
   let resp;
   try {

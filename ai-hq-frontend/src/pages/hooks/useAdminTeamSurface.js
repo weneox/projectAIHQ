@@ -44,7 +44,6 @@ export function useAdminTeamSurface() {
   const [newPassword, setNewPassword] = useState("");
   const {
     data,
-    setData,
     surface,
     beginRefresh,
     succeedRefresh,
@@ -59,46 +58,58 @@ export function useAdminTeamSurface() {
   });
   const actionState = useActionState();
 
-  const tenants = data.tenants || [];
-  const users = data.users || [];
+  const tenants = useMemo(
+    () => (Array.isArray(data?.tenants) ? data.tenants : []),
+    [data]
+  );
 
-  const refreshAdminTeam = useCallback(async (overrideTenantKey = tenantKey) => {
-    beginRefresh();
-    try {
-      const rows = await listTenants();
-      const nextTenants = Array.isArray(rows) ? rows : [];
-      const resolvedTenantKey =
-        String(overrideTenantKey || nextTenants[0]?.tenant_key || "").trim();
-      const nextUsers = resolvedTenantKey ? await listTenantUsers(resolvedTenantKey) : [];
+  const users = useMemo(
+    () => (Array.isArray(data?.users) ? data.users : []),
+    [data]
+  );
 
-      const nextData = {
-        tenants: nextTenants,
-        users: Array.isArray(nextUsers) ? nextUsers : [],
-      };
+  const refreshAdminTeam = useCallback(
+    async (overrideTenantKey = tenantKey) => {
+      beginRefresh();
+      try {
+        const rows = await listTenants();
+        const nextTenants = Array.isArray(rows) ? rows : [];
+        const resolvedTenantKey =
+          String(overrideTenantKey || nextTenants[0]?.tenant_key || "").trim();
+        const nextUsers = resolvedTenantKey
+          ? await listTenantUsers(resolvedTenantKey)
+          : [];
 
-      if (!tenantKey && resolvedTenantKey) {
-        setTenantKey(resolvedTenantKey);
+        const nextData = {
+          tenants: nextTenants,
+          users: Array.isArray(nextUsers) ? nextUsers : [],
+        };
+
+        if (!tenantKey && resolvedTenantKey) {
+          setTenantKey(resolvedTenantKey);
+        }
+
+        return succeedRefresh(nextData);
+      } catch (error) {
+        return failRefresh(error, {
+          fallbackData: createEmptyData(),
+        });
       }
-
-      return succeedRefresh(nextData);
-    } catch (error) {
-      return failRefresh(error, {
-        fallbackData: createEmptyData(),
-      });
-    }
-  }, [beginRefresh, failRefresh, succeedRefresh, tenantKey]);
+    },
+    [beginRefresh, failRefresh, succeedRefresh, tenantKey]
+  );
 
   useEffect(() => {
-    refreshAdminTeam();
+    void refreshAdminTeam();
   }, [refreshAdminTeam]);
 
   useEffect(() => {
     if (!tenantKey) return;
-    refreshAdminTeam(tenantKey);
+    void refreshAdminTeam(tenantKey);
     setEditForm(EMPTY_EDIT);
     setPasswordUserId("");
     setNewPassword("");
-  }, [tenantKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [refreshAdminTeam, tenantKey]);
 
   const filteredUsers = useMemo(() => {
     const normalizedQuery = String(query || "").trim().toLowerCase();

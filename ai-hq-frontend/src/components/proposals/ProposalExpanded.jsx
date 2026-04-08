@@ -208,6 +208,8 @@ export default function ProposalExpanded({
         if (!alive) return;
         setFetchedDraftRaw(next);
       } catch {
+        if (!alive) return;
+        setFetchedDraftRaw(null);
       } finally {
         if (alive) setFetchingDraft(false);
       }
@@ -218,7 +220,7 @@ export default function ProposalExpanded({
     return () => {
       alive = false;
     };
-  }, [apiBase, item?.id]);
+  }, [apiBase, item]);
 
   const title = titleFrom(item);
   const summary = summaryOf(item);
@@ -304,13 +306,19 @@ export default function ProposalExpanded({
   const copy = async (t) => {
     try {
       await navigator.clipboard.writeText(String(t || ""));
-    } catch {}
+      return true;
+    } catch {
+      return false;
+    }
   };
 
-  const copyJson = async (obj) => {
+  const copyJson = async (value) => {
     try {
-      await navigator.clipboard.writeText(pretty(obj));
-    } catch {}
+      await navigator.clipboard.writeText(pretty(value));
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const doApprove = async () => {
@@ -901,9 +909,9 @@ export default function ProposalExpanded({
                   />
                   <MetaRow k="Proposal status" v={exactProposalStatus || "—"} />
                   <MetaRow k="Draft status" v={resolvedDraft?.status || "—"} />
-                  <MetaRow k="Execution status" v={execution?.status || "â€”"} />
-                  <MetaRow k="Retry lineage" v={executionRetry || "â€”"} />
-                  <MetaRow k="Publish confirmation" v={publishConfirmation || "â€”"} />
+                  <MetaRow k="Execution status" v={execution?.status || "—"} />
+                  <MetaRow k="Retry lineage" v={executionRetry || "—"} />
+                  <MetaRow k="Publish confirmation" v={publishConfirmation || "—"} />
                   <MetaRow
                     k="Assets"
                     v={hasPublishableAsset ? `${assetUrls.length} linked` : "—"}

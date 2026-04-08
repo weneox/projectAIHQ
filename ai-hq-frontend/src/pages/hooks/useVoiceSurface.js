@@ -289,27 +289,19 @@ export function useVoiceSurface() {
     };
   }, [openCall, selectedId]);
 
-  const calls = useMemo(
-    () => (Array.isArray(data?.calls) ? data.calls : []),
-    [data?.calls]
-  );
-  const liveSessions = useMemo(
-    () => (Array.isArray(data?.liveSessions) ? data.liveSessions : []),
-    [data?.liveSessions]
-  );
+  const calls = Array.isArray(data?.calls) ? data.calls : EMPTY_SURFACE.calls;
+  const liveSessions = Array.isArray(data?.liveSessions)
+    ? data.liveSessions
+    : EMPTY_SURFACE.liveSessions;
   const overview = data?.overview || null;
   const overviewData = useMemo(() => pickOverviewData(overview), [overview]);
 
   const selectedCall = detail?.selectedCall || null;
   const selectedLiveSession = detail?.selectedLiveSession || null;
-  const events = useMemo(
-    () => (Array.isArray(detail?.events) ? detail.events : []),
-    [detail?.events]
-  );
-  const sessions = useMemo(
-    () => (Array.isArray(detail?.sessions) ? detail.sessions : []),
-    [detail?.sessions]
-  );
+  const events = Array.isArray(detail?.events) ? detail.events : EMPTY_DETAIL.events;
+  const sessions = Array.isArray(detail?.sessions)
+    ? detail.sessions
+    : EMPTY_DETAIL.sessions;
 
   useEffect(() => {
     const hasLiveSession = liveSessions.length > 0 || !!selectedLiveSessionId;

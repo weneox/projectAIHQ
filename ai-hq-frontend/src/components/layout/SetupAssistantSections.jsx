@@ -73,16 +73,23 @@ const STEP_META = {
     placeholder:
       "e.g. Mon-Fri 09:00-18:00, Sat 10:00-14:00, Sun closed",
     options: [
-      { id: "hours-1", label: "Mon-Fri 09:00-18:00", value: "Mon-Fri 09:00-18:00" },
+      {
+        id: "hours-1",
+        label: "Mon-Fri 09:00-18:00",
+        value: "Mon-Fri 09:00-18:00",
+      },
       { id: "hours-2", label: "24/7", value: "24/7" },
-      { id: "hours-3", label: "Appointment only", value: "Appointment only" },
+      {
+        id: "hours-3",
+        label: "Appointment only",
+        value: "Appointment only",
+      },
     ],
   },
   pricing: {
     question: "What is safe to say about pricing?",
     helper: "Public summary or quote rule.",
-    placeholder:
-      "e.g. Starts from 50 AZN. Exact prices require a quote.",
+    placeholder: "e.g. Starts from 50 AZN. Exact prices require a quote.",
     options: [
       {
         id: "pricing-1",
@@ -104,8 +111,7 @@ const STEP_META = {
   contacts: {
     question: "Where should AI send customers?",
     helper: "Add the real public contact routes.",
-    placeholder:
-      "e.g. +994..., WhatsApp link, hello@company.com",
+    placeholder: "e.g. +994..., WhatsApp link, hello@company.com",
     options: [],
   },
   handoff: {
@@ -140,8 +146,7 @@ const CLARIFIERS = {
   },
   description: {
     text: "I still need a clearer short description.",
-    helper:
-      "Example: AI automation and chatbot systems for businesses.",
+    helper: "Example: AI automation and chatbot systems for businesses.",
   },
   website: {
     text: "I still need the website in a clearer form.",
@@ -159,18 +164,15 @@ const CLARIFIERS = {
   },
   pricing: {
     text: "I still need a pricing rule I can safely store.",
-    helper:
-      "Example: Starts from 50 AZN. Exact prices require a quote.",
+    helper: "Example: Starts from 50 AZN. Exact prices require a quote.",
   },
   contacts: {
     text: "I still need at least one real contact route.",
-    helper:
-      "Example: +994..., WhatsApp link, hello@company.com",
+    helper: "Example: +994..., WhatsApp link, hello@company.com",
   },
   handoff: {
     text: "I still need clearer escalation rules.",
-    helper:
-      "Example: Complaints, urgent requests, payment issues",
+    helper: "Example: Complaints, urgent requests, payment issues",
   },
 };
 
@@ -347,26 +349,6 @@ function isNegative(value = "") {
   return /^(no|nah|later|not now|skip|yox|sonra)$/i.test(s(value));
 }
 
-function renderMessageOptions(message, onOptionClick, disabled = false) {
-  if (!arr(message.options).length) return null;
-
-  return (
-    <div className="ai-quick-row">
-      {arr(message.options).map((option) => (
-        <button
-          key={`${message.id}-${option.id}`}
-          type="button"
-          className="ai-quick-chip"
-          onClick={() => onOptionClick(option)}
-          disabled={disabled}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function TypingBubble() {
   return (
     <div className="ai-row assistant">
@@ -379,7 +361,43 @@ function TypingBubble() {
   );
 }
 
-export default function SetupAssistantSections({
+function MessageRow({ message, index, busy, onOptionClick }) {
+  const isUser = message.role === "user";
+  const options = arr(message.options);
+
+  return (
+    <div
+      className={`ai-row ${isUser ? "user" : "assistant"}`}
+      style={{ animationDelay: `${Math.min(index * 34, 170)}ms` }}
+    >
+      <div className={`ai-bubble ${isUser ? "user" : "assistant"}`}>
+        <div className="ai-bubble-text">{message.text}</div>
+
+        {s(message.helper) ? (
+          <div className="ai-bubble-helper">{message.helper}</div>
+        ) : null}
+
+        {!isUser && options.length ? (
+          <div className="ai-quick-row">
+            {options.map((option) => (
+              <button
+                key={`${message.id}-${option.id}`}
+                type="button"
+                className="ai-quick-chip"
+                onClick={() => onOptionClick(option)}
+                disabled={busy}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function SetupAssistantSession({
   assistant,
   saving = false,
   finalizing = false,
@@ -389,8 +407,8 @@ export default function SetupAssistantSections({
   const scrollRef = useRef(null);
   const askedRef = useRef(new Set());
   const introShownRef = useRef(false);
-  const timeoutRef = useRef(null);
-  const sessionRef = useRef("");
+  const typingFrameRef = useRef(null);
+  const messageTimerRef = useRef(null);
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -403,10 +421,19 @@ export default function SetupAssistantSections({
   const currentStep = started && !paused ? getNaturalStep(assistant) : "";
   const canFinalize = currentStep === "finalize";
 
-  const clearTypingTimer = useCallback(() => {
-    if (timeoutRef.current) {
-      window.clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
+  const clearQueuedAssistant = useCallback(() => {
+    if (
+      typingFrameRef.current != null &&
+      typeof window !== "undefined" &&
+      typeof window.cancelAnimationFrame === "function"
+    ) {
+      window.cancelAnimationFrame(typingFrameRef.current);
+      typingFrameRef.current = null;
+    }
+
+    if (messageTimerRef.current != null) {
+      window.clearTimeout(messageTimerRef.current);
+      messageTimerRef.current = null;
     }
   }, []);
 
@@ -416,40 +443,36 @@ export default function SetupAssistantSections({
       if (askedRef.current.has(signature)) return;
 
       askedRef.current.add(signature);
-      clearTypingTimer();
-      setTyping(true);
+      clearQueuedAssistant();
 
-      timeoutRef.current = window.setTimeout(() => {
-        setTyping(false);
+      if (
+        typeof window !== "undefined" &&
+        typeof window.requestAnimationFrame === "function"
+      ) {
+        typingFrameRef.current = window.requestAnimationFrame(() => {
+          setTyping(true);
+          typingFrameRef.current = null;
+        });
+      } else {
+        messageTimerRef.current = window.setTimeout(() => {
+          setTyping(true);
+        }, 0);
+      }
+
+      messageTimerRef.current = window.setTimeout(() => {
         setMessages((current) => [...current, message]);
-        timeoutRef.current = null;
+        setTyping(false);
+        messageTimerRef.current = null;
       }, delay);
     },
-    [clearTypingTimer]
+    [clearQueuedAssistant]
   );
 
   useEffect(() => {
     return () => {
-      clearTypingTimer();
+      clearQueuedAssistant();
     };
-  }, [clearTypingTimer]);
-
-  useEffect(() => {
-    const nextSession = s(assistant?.session?.id || "setup-session");
-    if (sessionRef.current === nextSession) return;
-
-    sessionRef.current = nextSession;
-    askedRef.current = new Set();
-    introShownRef.current = false;
-    clearTypingTimer();
-
-    setMessages([]);
-    setInput("");
-    setStarted(false);
-    setPaused(false);
-    setTyping(false);
-    setLocalError("");
-  }, [assistant?.session?.id, clearTypingTimer]);
+  }, [clearQueuedAssistant]);
 
   useEffect(() => {
     if (introShownRef.current) return;
@@ -688,29 +711,15 @@ export default function SetupAssistantSections({
     <div className="ai-thread-wrap">
       <div ref={scrollRef} className="ai-thread-scroll">
         <div className="ai-thread-stack">
-          {messages.map((message, index) => {
-            const isUser = message.role === "user";
-
-            return (
-              <div
-                key={message.id}
-                className={`ai-row ${isUser ? "user" : "assistant"}`}
-                style={{ animationDelay: `${Math.min(index * 34, 170)}ms` }}
-              >
-                <div className={`ai-bubble ${isUser ? "user" : "assistant"}`}>
-                  <div className="ai-bubble-text">{message.text}</div>
-
-                  {s(message.helper) ? (
-                    <div className="ai-bubble-helper">{message.helper}</div>
-                  ) : null}
-
-                  {!isUser
-                    ? renderMessageOptions(message, handleOptionClick, busy)
-                    : null}
-                </div>
-              </div>
-            );
-          })}
+          {messages.map((message, index) => (
+            <MessageRow
+              key={message.id}
+              message={message}
+              index={index}
+              busy={busy}
+              onOptionClick={handleOptionClick}
+            />
+          ))}
 
           {typing || busy ? <TypingBubble /> : null}
         </div>
@@ -751,4 +760,9 @@ export default function SetupAssistantSections({
       </div>
     </div>
   );
+}
+
+export default function SetupAssistantSections(props) {
+  const sessionKey = s(props?.assistant?.session?.id || "setup-session");
+  return <SetupAssistantSession key={sessionKey} {...props} />;
 }

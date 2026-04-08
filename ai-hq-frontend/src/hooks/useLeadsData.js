@@ -107,7 +107,7 @@ export function useLeadsData({ requestedLeadId = "", navigate }) {
     }
   }, [requestedLeadId, sessionContext.tenantKey]);
 
-  async function loadEventsData(leadId) {
+  const loadEventsData = useCallback(async (leadId) => {
     if (!leadId) {
       setEvents([]);
       return;
@@ -122,7 +122,7 @@ export function useLeadsData({ requestedLeadId = "", navigate }) {
     } finally {
       setEventsLoading(false);
     }
-  }
+  }, []);
 
   function patchLeadInState(lead) {
     if (!lead?.id) return;
@@ -153,23 +153,37 @@ export function useLeadsData({ requestedLeadId = "", navigate }) {
     if (found) setSelectedLead(found);
   }, [requestedLeadId, leads]);
 
-  useEffect(() => {
-    const sel = selectedLead;
-    setForm({
-      stage: String(sel?.stage || "new").toLowerCase(),
-      status: String(sel?.status || "open").toLowerCase(),
-      owner: String(sel?.owner || ""),
-      priority: String(sel?.priority || "normal").toLowerCase(),
+  const selectedLeadId = String(selectedLead?.id || "");
+
+  const selectedLeadFormSnapshot = useMemo(
+    () => ({
+      stage: String(selectedLead?.stage || "new").toLowerCase(),
+      status: String(selectedLead?.status || "open").toLowerCase(),
+      owner: String(selectedLead?.owner || ""),
+      priority: String(selectedLead?.priority || "normal").toLowerCase(),
       valueAzn:
-        sel?.value_azn !== undefined && sel?.value_azn !== null
-          ? String(Number(sel.value_azn || 0))
+        selectedLead?.value_azn !== undefined && selectedLead?.value_azn !== null
+          ? String(Number(selectedLead.value_azn || 0))
           : "",
-      followUpAt: toDatetimeLocalValue(sel?.follow_up_at),
-      nextAction: String(sel?.next_action || ""),
-    });
+      followUpAt: toDatetimeLocalValue(selectedLead?.follow_up_at),
+      nextAction: String(selectedLead?.next_action || ""),
+    }),
+    [
+      selectedLead?.stage,
+      selectedLead?.status,
+      selectedLead?.owner,
+      selectedLead?.priority,
+      selectedLead?.value_azn,
+      selectedLead?.follow_up_at,
+      selectedLead?.next_action,
+    ]
+  );
+
+  useEffect(() => {
+    setForm(selectedLeadFormSnapshot);
     setNoteText("");
-    loadEventsData(sel?.id);
-  }, [selectedLead?.id]);
+    loadEventsData(selectedLeadId);
+  }, [loadEventsData, selectedLeadFormSnapshot, selectedLeadId]);
 
   useEffect(() => {
     const unsubscribeStatus = realtimeStore.subscribeStatus((status) => {
@@ -177,23 +191,24 @@ export function useLeadsData({ requestedLeadId = "", navigate }) {
     });
 
     const unsubscribeEvents = realtimeStore.subscribeEvents(({ type, payload }) => {
-        if (!type) return;
+      if (!type) return;
 
-        if (type === "lead.created" || type === "lead.updated") {
-          const lead = payload?.lead;
-          if (!lead?.id) return;
-          patchLeadInState(lead);
-          return;
-        }
+      if (type === "lead.created" || type === "lead.updated") {
+        const lead = payload?.lead;
+        if (!lead?.id) return;
+        patchLeadInState(lead);
+        return;
+      }
 
-        if (type === "lead.event.created") {
-          const ev = payload?.event;
-          const currentSelectedLead = selectedLeadRef.current;
-          if (!ev?.id || !currentSelectedLead?.id) return;
-          if (String(ev?.lead_id || "") !== String(currentSelectedLead.id)) return;
-          setEvents((prev) => [ev, ...prev]);
-        }
+      if (type === "lead.event.created") {
+        const ev = payload?.event;
+        const currentSelectedLead = selectedLeadRef.current;
+        if (!ev?.id || !currentSelectedLead?.id) return;
+        if (String(ev?.lead_id || "") !== String(currentSelectedLead.id)) return;
+        setEvents((prev) => [ev, ...prev]);
+      }
     });
+
     if (!realtimeStore.canUseWs()) setWsState("off");
 
     return () => {

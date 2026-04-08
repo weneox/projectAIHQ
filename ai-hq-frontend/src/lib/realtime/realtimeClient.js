@@ -1,5 +1,9 @@
 import { createWsClient } from "../ws.js";
 
+function ignoreError() {
+  return undefined;
+}
+
 function createRealtimeClient() {
   const eventListeners = new Set();
   const statusListeners = new Set();
@@ -11,7 +15,9 @@ function createRealtimeClient() {
     for (const listener of eventListeners) {
       try {
         listener(event);
-      } catch {}
+      } catch {
+        ignoreError();
+      }
     }
   }
 
@@ -20,7 +26,9 @@ function createRealtimeClient() {
     for (const listener of statusListeners) {
       try {
         listener(lastStatus);
-      } catch {}
+      } catch {
+        ignoreError();
+      }
     }
   }
 
@@ -42,7 +50,9 @@ function createRealtimeClient() {
     if (!client) return;
     try {
       client.stop();
-    } catch {}
+    } catch {
+      ignoreError();
+    }
   }
 
   function retain() {
@@ -75,7 +85,9 @@ function createRealtimeClient() {
     statusListeners.add(listener);
     try {
       listener(lastStatus);
-    } catch {}
+    } catch {
+      ignoreError();
+    }
     retain();
 
     return () => {

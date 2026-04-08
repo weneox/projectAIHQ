@@ -1,5 +1,9 @@
 import { realtimeClient } from "./realtimeClient.js";
 
+function ignoreError() {
+  return undefined;
+}
+
 function createRealtimeStore() {
   let lastEvent = null;
   let status = realtimeClient.getStatus();
@@ -10,7 +14,9 @@ function createRealtimeStore() {
     for (const listener of snapshotListeners) {
       try {
         listener();
-      } catch {}
+      } catch {
+        ignoreError();
+      }
     }
   }
 

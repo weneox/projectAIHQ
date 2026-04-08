@@ -161,9 +161,13 @@ export default function InboxThreadListPanel({
     setLocalSearch(searchQuery);
   }, [searchQuery]);
 
-  const baseThreads = Array.isArray(threadList?.filteredThreads)
-    ? threadList.filteredThreads
-    : [];
+  const baseThreads = useMemo(
+    () =>
+      Array.isArray(threadList?.filteredThreads)
+        ? threadList.filteredThreads
+        : [],
+    [threadList?.filteredThreads]
+  );
 
   const channelOptions = useMemo(
     () => buildChannelOptions(baseThreads),

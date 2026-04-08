@@ -8,6 +8,10 @@ function obj(value) {
     : {};
 }
 
+function ignoreError() {
+  return undefined;
+}
+
 const STORAGE_KEY = "aihq.welcome.identity";
 
 function canUseStorage() {
@@ -55,7 +59,9 @@ export function writeWelcomeIdentity(value = {}) {
   if (canUseStorage()) {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
-    } catch {}
+    } catch {
+      ignoreError();
+    }
   }
 
   return normalized;

@@ -1,6 +1,6 @@
 import { Command } from "cmdk";
 import { ArrowRight, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { cx } from "../../lib/cx.js";
 import { ALL_SECTIONS } from "./shellNavigation.js";
@@ -55,22 +55,25 @@ export default function CommandMenu() {
   const groups = useMemo(() => buildCommandGroups(), []);
   const dialogOpen = open && openedAtPath === location.pathname;
 
-  function openMenu() {
+  const openMenu = useCallback(() => {
     setOpenedAtPath(location.pathname);
     setOpen(true);
-  }
+  }, [location.pathname]);
 
-  function closeMenu() {
+  const closeMenu = useCallback(() => {
     setOpen(false);
-  }
+  }, []);
 
-  function handleOpenChange(nextOpen) {
-    if (nextOpen) {
-      openMenu();
-      return;
-    }
-    closeMenu();
-  }
+  const handleOpenChange = useCallback(
+    (nextOpen) => {
+      if (nextOpen) {
+        openMenu();
+        return;
+      }
+      closeMenu();
+    },
+    [closeMenu, openMenu]
+  );
 
   useEffect(() => {
     function onKeyDown(event) {
@@ -89,7 +92,7 @@ export default function CommandMenu() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [dialogOpen, location.pathname]);
+  }, [closeMenu, dialogOpen, openMenu]);
 
   return (
     <>
