@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   Bot,
@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import {
   finalizeSetupAssistantSession,
+  getCurrentSetupReview,
   sendSetupAssistantMessage,
   startSetupAssistantSession,
   updateCurrentSetupAssistantDraft,
@@ -848,6 +849,237 @@ function useWidgetStyles() {
         transform: translateY(-1px);
       }
 
+      .ai-review-sheet {
+        border: 1px solid rgba(15,23,42,0.07);
+        background:
+          radial-gradient(circle at top left, rgba(70,115,242,0.06), transparent 34%),
+          linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,253,0.995) 100%);
+        border-radius: 20px;
+        padding: 16px 16px 14px;
+        box-shadow: 0 18px 34px -30px rgba(15,23,42,0.18);
+      }
+
+      .ai-review-kicker {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+        color: rgba(15,23,42,0.34);
+      }
+
+      .ai-review-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 8px;
+      }
+
+      .ai-review-title-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .ai-review-title {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.12;
+        font-weight: 700;
+        letter-spacing: -.04em;
+        color: rgba(15,23,42,0.96);
+      }
+
+      .ai-review-status {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 0 9px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: -.02em;
+        border: 1px solid rgba(15,23,42,0.07);
+        background: rgba(255,255,255,0.88);
+        color: rgba(15,23,42,0.68);
+      }
+
+      .ai-review-status.strong {
+        border-color: rgba(22,101,52,0.12);
+        background: rgba(236,253,245,0.9);
+        color: rgba(22,101,52,0.9);
+      }
+
+      .ai-review-status.partial {
+        border-color: rgba(180,83,9,0.12);
+        background: rgba(255,251,235,0.94);
+        color: rgba(180,83,9,0.9);
+      }
+
+      .ai-review-status.weak {
+        border-color: rgba(185,28,28,0.12);
+        background: rgba(254,242,242,0.92);
+        color: rgba(185,28,28,0.88);
+      }
+
+      .ai-review-summary {
+        margin: 8px 0 0;
+        font-size: 13px;
+        line-height: 1.7;
+        color: rgba(15,23,42,0.58);
+      }
+
+      .ai-review-action {
+        flex: 0 0 auto;
+      }
+
+      .ai-review-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(15,23,42,0.06);
+      }
+
+      .ai-review-stat {
+        min-width: 0;
+      }
+
+      .ai-review-stat-label {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+        color: rgba(15,23,42,0.32);
+      }
+
+      .ai-review-stat-value {
+        margin-top: 6px;
+        font-size: 14px;
+        line-height: 1.35;
+        font-weight: 700;
+        letter-spacing: -.03em;
+        color: rgba(15,23,42,0.94);
+      }
+
+      .ai-review-block {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(15,23,42,0.06);
+      }
+
+      .ai-review-block-title {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+        color: rgba(15,23,42,0.34);
+      }
+
+      .ai-review-rows {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .ai-review-row {
+        display: grid;
+        grid-template-columns: 68px minmax(0, 1fr);
+        gap: 10px;
+      }
+
+      .ai-review-row-label {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: -.01em;
+        color: rgba(15,23,42,0.54);
+      }
+
+      .ai-review-row-value {
+        min-width: 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: rgba(15,23,42,0.86);
+      }
+
+      .ai-review-row-value.multiline {
+        line-height: 1.72;
+      }
+
+      .ai-review-pages {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .ai-review-page {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 0;
+        border-top: 1px solid rgba(15,23,42,0.05);
+      }
+
+      .ai-review-page:first-child {
+        border-top: 0;
+        padding-top: 0;
+      }
+
+      .ai-review-page:last-child {
+        padding-bottom: 0;
+      }
+
+      .ai-review-page-main {
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+
+      .ai-review-page-title {
+        font-size: 13px;
+        line-height: 1.45;
+        font-weight: 700;
+        letter-spacing: -.02em;
+        color: rgba(15,23,42,0.94);
+      }
+
+      .ai-review-page-meta {
+        margin-top: 3px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 11px;
+        line-height: 1.45;
+        color: rgba(15,23,42,0.42);
+      }
+
+      .ai-review-page-note {
+        flex: 0 0 auto;
+        max-width: 132px;
+        text-align: right;
+        font-size: 11px;
+        line-height: 1.5;
+        color: rgba(15,23,42,0.54);
+      }
+
+      .ai-review-footer {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(15,23,42,0.06);
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+
+      .ai-review-footnote {
+        font-size: 12px;
+        line-height: 1.6;
+        color: rgba(15,23,42,0.6);
+      }
+
       .ai-typing-bubble {
         display: inline-flex;
         align-items: center;
@@ -981,6 +1213,24 @@ function useWidgetStyles() {
 
         .ai-bubble {
           max-width: 86%;
+        }
+
+        .ai-review-header {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .ai-review-action {
+          width: 100%;
+        }
+
+        .ai-review-page {
+          flex-direction: column;
+        }
+
+        .ai-review-page-note {
+          max-width: none;
+          text-align: left;
         }
       }
     `,
@@ -1157,6 +1407,13 @@ export default function FloatingAiWidget({
   );
   const [supportInput, setSupportInput] = useState("");
   const [supportBusy, setSupportBusy] = useState(false);
+  const reviewQuery = useQuery({
+    queryKey: ["setup-review-current", "widget"],
+    queryFn: () => getCurrentSetupReview({ eventLimit: 12 }),
+    enabled: open && surfaceMode === "setup",
+    retry: false,
+    staleTime: 30_000,
+  });
 
   useEffect(() => {
     const normalized = normalizeAssistantState(assistant);
@@ -1230,7 +1487,10 @@ export default function FloatingAiWidget({
 
       setClientAssistant((prev) => buildAssistantFromApi(prev, response));
 
-      await queryClient.invalidateQueries({ queryKey: ["product-home"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["product-home"] }),
+        queryClient.invalidateQueries({ queryKey: ["setup-review-current"] }),
+      ]);
       return response;
     } finally {
       setSaving(false);
@@ -1251,7 +1511,10 @@ export default function FloatingAiWidget({
 
       setClientAssistant((prev) => buildAssistantFromApi(prev, response));
 
-      await queryClient.invalidateQueries({ queryKey: ["product-home"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["product-home"] }),
+        queryClient.invalidateQueries({ queryKey: ["setup-review-current"] }),
+      ]);
       return response;
     } finally {
       setSaving(false);
@@ -1274,6 +1537,7 @@ export default function FloatingAiWidget({
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["product-home"] }),
+        queryClient.invalidateQueries({ queryKey: ["setup-review-current"] }),
         queryClient.invalidateQueries({ queryKey: ["telegram-channel-status"] }),
         queryClient.invalidateQueries({ queryKey: ["meta-channel-status"] }),
       ]);
@@ -1405,6 +1669,7 @@ export default function FloatingAiWidget({
               {surfaceMode === "setup" ? (
                 <SetupAssistantSections
                   assistant={clientAssistant}
+                  reviewPayload={reviewQuery.data}
                   saving={saving}
                   finalizing={finalizing}
                   onPatchDraft={handleSetupPatchDraft}

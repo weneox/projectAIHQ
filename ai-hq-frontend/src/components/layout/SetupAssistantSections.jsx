@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SendHorizontal } from "lucide-react";
+import SetupReviewActivationPanel from "./SetupReviewActivationPanel.jsx";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -361,6 +362,17 @@ function TypingBubble() {
   );
 }
 
+function scrollThread(container, top, behavior = "auto") {
+  if (!container) return;
+
+  if (typeof container.scrollTo === "function") {
+    container.scrollTo({ top, behavior });
+    return;
+  }
+
+  container.scrollTop = top;
+}
+
 function MessageRow({ message, index, busy, onOptionClick }) {
   const isUser = message.role === "user";
   const options = arr(message.options);
@@ -399,6 +411,7 @@ function MessageRow({ message, index, busy, onOptionClick }) {
 
 function SetupAssistantSession({
   assistant,
+  reviewPayload = null,
   saving = false,
   finalizing = false,
   onParseMessage,
@@ -409,6 +422,7 @@ function SetupAssistantSession({
   const introShownRef = useRef(false);
   const typingFrameRef = useRef(null);
   const messageTimerRef = useRef(null);
+  const initialReviewScrollRef = useRef(false);
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -420,6 +434,9 @@ function SetupAssistantSession({
   const busy = saving || finalizing;
   const currentStep = started && !paused ? getNaturalStep(assistant) : "";
   const canFinalize = currentStep === "finalize";
+  const normalizedReviewRoot = obj(obj(reviewPayload).review, reviewPayload);
+  const hasWebsiteReview =
+    Object.keys(obj(obj(obj(normalizedReviewRoot).reviewDebug).websiteKnowledge)).length > 0;
 
   const clearQueuedAssistant = useCallback(() => {
     if (
@@ -530,11 +547,15 @@ function SetupAssistantSession({
 
   useEffect(() => {
     if (!scrollRef.current) return;
-    scrollRef.current.scrollTo({
-      top: scrollRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [messages, typing, busy]);
+
+    if (hasWebsiteReview && (!initialReviewScrollRef.current || !started)) {
+      scrollThread(scrollRef.current, 0, "auto");
+      initialReviewScrollRef.current = true;
+      return;
+    }
+
+    scrollThread(scrollRef.current, scrollRef.current.scrollHeight, "smooth");
+  }, [messages, typing, busy, hasWebsiteReview]);
 
   async function handleSetupAnswer(rawText, forcedStep = "") {
     const text = s(rawText);
@@ -711,6 +732,15 @@ function SetupAssistantSession({
     <div className="ai-thread-wrap">
       <div ref={scrollRef} className="ai-thread-scroll">
         <div className="ai-thread-stack">
+          {hasWebsiteReview ? (
+            <SetupReviewActivationPanel
+              reviewPayload={reviewPayload}
+              assistantReview={assistant?.review}
+              onFinalize={onFinalize}
+              finalizing={finalizing}
+            />
+          ) : null}
+
           {messages.map((message, index) => (
             <MessageRow
               key={message.id}

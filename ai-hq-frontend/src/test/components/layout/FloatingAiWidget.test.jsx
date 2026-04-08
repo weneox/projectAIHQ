@@ -1,19 +1,28 @@
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 
 import FloatingAiWidget from "../../../components/layout/FloatingAiWidget.jsx";
+import { getCurrentSetupReview } from "../../../api/setup.js";
+
+vi.mock("../../../api/setup.js", () => ({
+  finalizeSetupAssistantSession: vi.fn(),
+  getCurrentSetupReview: vi.fn(),
+  sendSetupAssistantMessage: vi.fn(),
+  startSetupAssistantSession: vi.fn(),
+  updateCurrentSetupAssistantDraft: vi.fn(),
+}));
 
 function createAssistant(overrides = {}) {
   return {
     mode: "setup",
-    title: "Telegram is connected. Start the first structured business draft.",
-    statusLabel: "Start setup",
-    summary: "Capture the website first. Nothing in this batch goes live automatically.",
+    title: "Structured setup",
+    statusLabel: "In progress",
+    summary: "Confirm the draft before anything reaches approved truth.",
     primaryAction: {
-      label: "Start AI setup",
+      label: "Open AI setup",
       path: "/home?assistant=setup",
     },
     secondaryAction: {
@@ -21,25 +30,20 @@ function createAssistant(overrides = {}) {
       path: "/truth",
     },
     review: {
-      message:
-        "Draft answers remain isolated from approved truth and runtime until a later approval step is added.",
+      message: "Draft work stays separate from approved truth until review.",
+      readyForReview: true,
+      finalizeAvailable: true,
     },
     launchPosture: "setup_needed",
     setupNeeded: true,
-    session: {},
+    session: {
+      id: "session-1",
+    },
     draft: {
       businessProfile: {},
       services: [],
       contacts: [],
-      hours: [
-        { day: "monday", enabled: false, closed: true },
-        { day: "tuesday", enabled: false, closed: true },
-        { day: "wednesday", enabled: false, closed: true },
-        { day: "thursday", enabled: false, closed: true },
-        { day: "friday", enabled: false, closed: true },
-        { day: "saturday", enabled: false, closed: true },
-        { day: "sunday", enabled: false, closed: true },
-      ],
+      hours: [],
       pricingPosture: {},
       handoffRules: {},
       sourceMetadata: {
@@ -48,42 +52,29 @@ function createAssistant(overrides = {}) {
       assistantState: {
         activeSection: "profile",
       },
-      version: 0,
+      version: 2,
       updatedAt: null,
     },
     websitePrefill: {
       supported: true,
-      status: "awaiting_input",
-      websiteUrl: "",
+      status: "captured",
+      websiteUrl: "https://lunasmile.az",
     },
     assistant: {
       nextQuestion: {
         key: "profile",
-        prompt: "Confirm the business profile first.",
-        placeholder: "https://yourbusiness.com",
       },
-      confirmationBlockers: [
-        {
-          key: "profile",
-          title: "Confirm who the business is",
-          reason: "Website, name, and summary still need confirmation.",
-          severity: "high",
-        },
-      ],
-      sections: [
-        {
-          key: "profile",
-          label: "Business profile",
-          title: "Confirm who the business is",
-          summary: "Add the core business identity.",
-        },
-      ],
+      confirmationBlockers: [],
+      sections: [],
+      completion: {
+        ready: true,
+      },
       servicesCatalog: {
         items: [],
         packs: [],
         suggestedServices: [],
       },
-      sourceInsights: ["Primary source: https://acme.test"],
+      sourceInsights: [],
     },
     launchChannel: {
       connected: true,
@@ -92,6 +83,74 @@ function createAssistant(overrides = {}) {
       ready: false,
     },
     ...overrides,
+  };
+}
+
+function createWebsiteReviewPayload() {
+  return {
+    review: {
+      draft: {
+        businessProfile: {
+          primaryPhone: "+994 50 555 12 12",
+          primaryEmail: "hello@lunasmile.az",
+          primaryAddress: "14 Nizami Street, Baku",
+          hours: ["Mon-Fri 09:00-18:00"],
+        },
+      },
+      reviewDebug: {
+        websiteKnowledge: {
+          finalUrl: "https://lunasmile.az",
+          pageCount: 4,
+          artifactCount: 5,
+          coverage: {
+            pagesRequested: 6,
+            pagesSucceeded: 4,
+            pagesKept: 4,
+          },
+          siteQuality: {
+            score: 82,
+            band: "strong",
+          },
+          pageTypeCounts: {
+            home: 1,
+            services: 1,
+            pricing: 1,
+            contact: 1,
+          },
+          draftSections: {
+            summaryShort:
+              "Luna Smile Studio is a Baku dental clinic focused on cosmetic dentistry, implants, whitening, and family care.",
+            servicesDraft: ["Smile design", "Dental implants"],
+            pricingHints: ["Consultation from 30 AZN."],
+          },
+          topPages: [
+            {
+              url: "https://lunasmile.az/services",
+              title: "Services",
+              pageType: "services",
+              serviceHintCount: 4,
+            },
+            {
+              url: "https://lunasmile.az/contact",
+              title: "Contact",
+              pageType: "contact",
+              contactSignalCount: 3,
+              hourCount: 1,
+            },
+          ],
+        },
+      },
+    },
+    permissions: {
+      setupReviewFinalize: {
+        allowed: true,
+      },
+    },
+    setup: {
+      review: {
+        finalizeAvailable: true,
+      },
+    },
   };
 }
 
@@ -127,34 +186,52 @@ function renderWidget(assistant = createAssistant()) {
 }
 
 describe("FloatingAiWidget", () => {
-  it("opens and closes the setup panel manually", () => {
-    renderWidget();
-
-    fireEvent.click(screen.getByRole("button", { name: "Open AI setup" }));
-
-    expect(screen.getByRole("dialog", { name: "AI setup" })).toBeInTheDocument();
-    expect(screen.getByText("Telegram is connected. Start the first structured business draft.")).toBeInTheDocument();
-    expect(screen.getAllByText("Confirm who the business is").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Save section" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Close AI setup" }));
-
-    expect(
-      screen.queryByRole("dialog", { name: "AI setup" })
-    ).not.toBeInTheDocument();
+  beforeEach(() => {
+    vi.mocked(getCurrentSetupReview).mockResolvedValue({
+      review: {
+        reviewDebug: {},
+      },
+    });
   });
 
-  it("uses the shortcut mode CTA to navigate back into Home setup", () => {
-    const { navigate } = renderWidget(
-      createAssistant({
-        mode: "shortcut",
-        title: "Setup",
-      })
-    );
+  it("opens the assistant and loads the website review scene when review data exists", async () => {
+    vi.mocked(getCurrentSetupReview).mockResolvedValue(createWebsiteReviewPayload());
 
-    fireEvent.click(screen.getByRole("button", { name: "Open setup shortcut" }));
-    fireEvent.click(screen.getByRole("button", { name: "Start AI setup" }));
+    renderWidget();
 
-    expect(navigate).toHaveBeenCalledWith("/home?assistant=setup");
+    fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+
+    expect(
+      screen.getByRole("dialog", { name: "AI assistant" })
+    ).toBeInTheDocument();
+
+    expect(
+      await screen.findByRole("region", { name: "Website knowledge review" })
+    ).toBeInTheDocument();
+    expect(screen.getByText("What the site seems to mean")).toBeInTheDocument();
+    expect(screen.getByText("Top pages")).toBeInTheDocument();
+    expect(screen.getAllByText("Services").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close AI assistant" }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "AI assistant" })
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("keeps the website review scene hidden when no website knowledge is available", async () => {
+    renderWidget();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+
+    await waitFor(() => {
+      expect(getCurrentSetupReview).toHaveBeenCalled();
+    });
+
+    expect(
+      screen.queryByRole("region", { name: "Website knowledge review" })
+    ).not.toBeInTheDocument();
   });
 });
