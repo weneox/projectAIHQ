@@ -544,8 +544,13 @@ export default function TruthViewerPage() {
   );
 
   const runtimeLabel = useMemo(
-    () => resolveRuntimeLabel(state.data.trust),
-      [state.data]  
+    () =>
+      resolveRuntimeLabel(
+        state.data.trust,
+        state.data.approvedTruthUnavailable,
+        state.data
+      ),
+    [state.data]
   );
 
   const sourceLine = useMemo(
