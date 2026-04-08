@@ -30,6 +30,52 @@ const SUPPORT_ICONS = {
   truth: ShieldCheck,
 };
 
+const CHECK_ICONS = {
+  channel: Link2,
+  setup: Bot,
+  truth: ShieldCheck,
+  runtime: Sparkles,
+  live: MessageSquareText,
+};
+
+const CHECK_TONE_STYLES = {
+  success: {
+    border: "border-[rgba(37,99,72,0.12)]",
+    bg: "bg-[rgba(236,253,245,0.72)]",
+    icon: "text-[rgba(22,101,52,0.9)]",
+    label: "text-[rgba(22,101,52,0.9)]",
+    status: "text-[rgba(22,101,52,0.88)]",
+  },
+  warn: {
+    border: "border-[rgba(180,83,9,0.12)]",
+    bg: "bg-[rgba(255,251,235,0.82)]",
+    icon: "text-[rgba(180,83,9,0.9)]",
+    label: "text-[rgba(180,83,9,0.92)]",
+    status: "text-[rgba(146,64,14,0.84)]",
+  },
+  danger: {
+    border: "border-[rgba(185,28,28,0.12)]",
+    bg: "bg-[rgba(254,242,242,0.82)]",
+    icon: "text-[rgba(185,28,28,0.9)]",
+    label: "text-[rgba(185,28,28,0.92)]",
+    status: "text-[rgba(153,27,27,0.84)]",
+  },
+  info: {
+    border: "border-[rgba(38,76,165,0.12)]",
+    bg: "bg-[rgba(242,246,255,0.92)]",
+    icon: "text-[rgba(38,76,165,0.94)]",
+    label: "text-[rgba(38,76,165,0.94)]",
+    status: "text-[rgba(38,76,165,0.82)]",
+  },
+  neutral: {
+    border: "border-[rgba(15,23,42,0.07)]",
+    bg: "bg-white/[0.78]",
+    icon: "text-[rgba(15,23,42,0.52)]",
+    label: "text-[rgba(15,23,42,0.72)]",
+    status: "text-[rgba(15,23,42,0.42)]",
+  },
+};
+
 function compactText(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
@@ -39,8 +85,8 @@ function compactSentence(value, fallback = "") {
   if (!text) return "";
 
   const firstSentence = text.split(/(?<=[.!?])\s+/)[0] || text;
-  return firstSentence.length > 140
-    ? `${firstSentence.slice(0, 137).trim()}...`
+  return firstSentence.length > 160
+    ? `${firstSentence.slice(0, 157).trim()}...`
     : firstSentence;
 }
 
@@ -202,6 +248,170 @@ function SetupFact({ icon: Icon, label, value }) {
   );
 }
 
+function GoldenPathProgress({ goldenPath, onNavigate }) {
+  const percent = Number(goldenPath?.percent || 0);
+  const circumference = 2 * Math.PI * 27;
+  const dashOffset = circumference - (percent / 100) * circumference;
+
+  return (
+    <section className="mt-8 border-t border-[rgba(15,23,42,0.07)] pt-6">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.96fr)] xl:items-start">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-[rgba(15,23,42,0.34)]">
+            <CheckCircle2 className="h-[13px] w-[13px] text-brand" strokeWidth={1.9} />
+            <span>Launch acceptance</span>
+          </div>
+
+          <div className="mt-3 flex items-start gap-5">
+            <div className="relative h-[74px] w-[74px] shrink-0">
+              <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90">
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="27"
+                  fill="none"
+                  stroke="rgba(15,23,42,0.08)"
+                  strokeWidth="6"
+                />
+                <circle
+                  cx="32"
+                  cy="32"
+                  r="27"
+                  fill="none"
+                  stroke="rgba(38,76,165,0.94)"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={dashOffset}
+                />
+              </svg>
+
+              <div className="absolute inset-0 flex items-center justify-center text-[15px] font-semibold tracking-[-0.04em] text-[rgba(15,23,42,0.96)]">
+                {percent}%
+              </div>
+            </div>
+
+            <div className="min-w-0">
+              <div className="text-[24px] font-semibold tracking-[-0.055em] text-[rgba(15,23,42,0.96)]">
+                {compactText(goldenPath?.title, "Launch acceptance")}
+              </div>
+              <div className="mt-2 max-w-[42rem] text-[14px] leading-6 text-[rgba(15,23,42,0.58)]">
+                {compactSentence(
+                  goldenPath?.summary,
+                  "The current launch promise is still missing one or more checks."
+                )}
+              </div>
+              <div className="mt-2 max-w-[44rem] text-[12px] leading-6 text-[rgba(15,23,42,0.42)]">
+                {compactSentence(
+                  goldenPath?.detail,
+                  "This checklist only covers the current launch promise."
+                )}
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                {goldenPath?.nextAction?.path ? (
+                  <Button
+                    type="button"
+                    size="hero"
+                    onClick={() => onNavigate(goldenPath.nextAction)}
+                    rightIcon={<ArrowRight className="h-4 w-4" />}
+                  >
+                    {goldenPath.nextAction.label}
+                  </Button>
+                ) : null}
+
+                <Button
+                  type="button"
+                  size="hero"
+                  variant="secondary"
+                  onClick={() => onNavigate({ path: "/truth", label: "Open truth" })}
+                >
+                  Open truth
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3">
+          {(goldenPath?.steps || []).map((step) => {
+            const Icon = CHECK_ICONS[step.id] || Sparkles;
+            const palette = CHECK_TONE_STYLES[step.tone] || CHECK_TONE_STYLES.neutral;
+
+            return (
+              <div
+                key={step.id}
+                className={[
+                  "border px-4 py-4",
+                  palette.border,
+                  palette.bg,
+                ].join(" ")}
+                style={{ borderRadius: 16 }}
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className={[
+                      "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center border border-white/70 bg-white/[0.78]",
+                      palette.icon,
+                    ].join(" ")}
+                    style={{ borderRadius: 12 }}
+                  >
+                    <Icon className="h-[16px] w-[16px]" strokeWidth={1.95} />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="truncate text-[14px] font-semibold tracking-[-0.03em] text-[rgba(15,23,42,0.95)]">
+                        {compactText(step.label, "Step")}
+                      </div>
+                      <div
+                        className={[
+                          "shrink-0 text-[10px] font-semibold uppercase tracking-[0.16em]",
+                          palette.status,
+                        ].join(" ")}
+                      >
+                        {compactText(step.statusLabel, "Pending")}
+                      </div>
+                    </div>
+
+                    <div
+                      className={[
+                        "mt-1 text-[13px] font-medium leading-6",
+                        palette.label,
+                      ].join(" ")}
+                    >
+                      {compactSentence(step.summary, "This step still needs attention.")}
+                    </div>
+
+                    {compactText(step.detail) ? (
+                      <div className="mt-1 text-[12px] leading-5 text-[rgba(15,23,42,0.46)]">
+                        {compactSentence(step.detail)}
+                      </div>
+                    ) : null}
+
+                    {step.action?.path ? (
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={() => onNavigate(step.action)}
+                          className="inline-flex items-center gap-2 text-[12px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.76)] transition-colors duration-200 hover:text-[rgba(38,76,165,0.94)]"
+                        >
+                          <span>{step.action.label}</span>
+                          <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function UnifiedHomeScene({
   home,
   featuredEntryPoints,
@@ -307,6 +517,8 @@ function UnifiedHomeScene({
             ) : null}
           </div>
         </div>
+
+        <GoldenPathProgress goldenPath={home.goldenPath} onNavigate={onNavigate} />
 
         <div className="mt-8 border-t border-[rgba(15,23,42,0.07)] pt-6">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">

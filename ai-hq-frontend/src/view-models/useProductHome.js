@@ -929,6 +929,245 @@ function buildPrimaryAction({
   };
 }
 
+function buildGoldenPathStep({
+  id,
+  label,
+  status,
+  statusLabel,
+  tone,
+  summary,
+  detail,
+  action,
+  complete,
+}) {
+  return {
+    id,
+    label,
+    status,
+    statusLabel,
+    tone,
+    summary,
+    detail,
+    action: normalizeAction(action),
+    complete: complete === true,
+  };
+}
+
+function buildGoldenPath({ launchChannel, truthRuntime, setupFlow, inboxState }) {
+  const setupReady =
+    setupFlow.hasDraft &&
+    setupFlow.blockerCount === 0 &&
+    (setupFlow.readySections > 0 ||
+      setupFlow.servicesCount > 0 ||
+      setupFlow.contactsCount > 0 ||
+      setupFlow.hoursCount > 0);
+
+  const channelStep = !launchChannel.connected
+    ? buildGoldenPathStep({
+        id: "channel",
+        label: "Launch channel",
+        status: "blocked",
+        statusLabel:
+          launchChannel.status === "connecting" ? "Connecting" : "Connect required",
+        tone: launchChannel.status === "connecting" ? "info" : "danger",
+        summary:
+          launchChannel.summary ||
+          "Connect the launch channel before the rest of the launch path can be trusted.",
+        detail: launchChannel.detail,
+        action: launchChannel.action,
+        complete: false,
+      })
+    : buildGoldenPathStep({
+        id: "channel",
+        label: "Launch channel",
+        status: "ready",
+        statusLabel: "Connected",
+        tone: "success",
+        summary:
+          launchChannel.summary ||
+          "The launch channel is attached and available to the workspace.",
+        detail: launchChannel.detail,
+        action: launchChannel.action,
+        complete: true,
+      });
+
+  const setupStep = setupReady
+    ? buildGoldenPathStep({
+        id: "setup",
+        label: "AI setup draft",
+        status: "ready",
+        statusLabel: "Structured",
+        tone: "success",
+        summary:
+          "The current setup draft has enough confirmed structure to support the launch path.",
+        detail:
+          `${setupFlow.readySections} ready sections · ${setupFlow.servicesCount} services · ${setupFlow.contactsCount} contacts`,
+        action: setupFlow.action,
+        complete: true,
+      })
+    : buildGoldenPathStep({
+        id: "setup",
+        label: "AI setup draft",
+        status:
+          setupFlow.hasDraft ? "in_progress" : launchChannel.connected ? "pending" : "blocked",
+        statusLabel:
+          setupFlow.hasDraft ? "In progress" : launchChannel.connected ? "Start setup" : "Blocked by channel",
+        tone:
+          setupFlow.hasDraft ? "warn" : launchChannel.connected ? "info" : "danger",
+        summary:
+          setupFlow.summary ||
+          "Collect the structured business draft before expecting consistent live behavior.",
+        detail:
+          setupFlow.hasDraft
+            ? `${setupFlow.readySections} ready sections · ${setupFlow.blockerCount} blockers remaining`
+            : "No structured setup draft is visible yet.",
+        action: setupFlow.action,
+        complete: false,
+      });
+
+  const truthStep = truthRuntime.truthReady
+    ? buildGoldenPathStep({
+        id: "truth",
+        label: "Approved business truth",
+        status: "ready",
+        statusLabel: "Approved",
+        tone: "success",
+        summary:
+          truthRuntime.truthVersionId
+            ? `Approved truth version ${truthRuntime.truthVersionId} is available.`
+            : "Approved business truth is available.",
+        detail:
+          "Truth is already published and can back the live runtime.",
+        action: { label: "Open truth", path: "/truth" },
+        complete: true,
+      })
+    : buildGoldenPathStep({
+        id: "truth",
+        label: "Approved business truth",
+        status: "blocked",
+        statusLabel: "Approval required",
+        tone: "danger",
+        summary:
+          truthRuntime.summary ||
+          "Business truth still needs approval before the runtime should be trusted.",
+        detail: truthRuntime.detail,
+        action: truthRuntime.action,
+        complete: false,
+      });
+
+  const runtimeStep = truthRuntime.truthReady && truthRuntime.runtimeReady
+    ? buildGoldenPathStep({
+        id: "runtime",
+        label: "Runtime projection",
+        status: "ready",
+        statusLabel: "Healthy",
+        tone: "success",
+        summary:
+          "The runtime projection is healthy and aligned with approved truth.",
+        detail:
+          truthRuntime.detail ||
+          "Live automation can rely on the current approved runtime projection.",
+        action: { label: "Open truth", path: "/truth" },
+        complete: true,
+      })
+    : buildGoldenPathStep({
+        id: "runtime",
+        label: "Runtime projection",
+        status: truthRuntime.truthReady ? "attention" : "blocked",
+        statusLabel: truthRuntime.truthReady ? "Repair required" : "Waiting on truth",
+        tone: truthRuntime.truthReady ? "warn" : "danger",
+        summary:
+          truthRuntime.summary ||
+          "Refresh or repair the runtime projection before trusting live automation.",
+        detail: truthRuntime.detail,
+        action: truthRuntime.action,
+        complete: false,
+      });
+
+  const liveReady =
+    launchChannel.connected &&
+    truthRuntime.ready &&
+    inboxState.status !== "unavailable";
+
+  const liveStep = liveReady
+    ? buildGoldenPathStep({
+        id: "live",
+        label: "Live queue posture",
+        status: "ready",
+        statusLabel: "Launch ready",
+        tone: "success",
+        summary:
+          inboxState.status === "attention"
+            ? "The live queue is ready and already has work waiting."
+            : "The live queue is ready for operator use.",
+        detail: inboxState.detail || "Open inbox to operate live work.",
+        action: inboxState.action,
+        complete: true,
+      })
+    : buildGoldenPathStep({
+        id: "live",
+        label: "Live queue posture",
+        status:
+          !launchChannel.connected
+            ? "blocked"
+            : truthRuntime.ready
+              ? "pending"
+              : "blocked",
+        statusLabel:
+          !launchChannel.connected
+            ? "Blocked by channel"
+            : truthRuntime.ready
+              ? "Queue limited"
+              : "Blocked by truth/runtime",
+        tone:
+          !launchChannel.connected
+            ? "danger"
+            : truthRuntime.ready
+              ? "info"
+              : "danger",
+        summary:
+          !launchChannel.connected
+            ? "The live queue should wait until the launch channel is connected."
+            : truthRuntime.ready
+              ? "Inbox telemetry is limited, so treat live posture cautiously."
+              : "Do not treat the live queue as launch-ready until truth and runtime are aligned.",
+        detail:
+          inboxState.detail ||
+          truthRuntime.detail ||
+          "Open Inbox or Truth to inspect the current launch posture.",
+        action:
+          truthRuntime.ready && inboxState.action?.path
+            ? inboxState.action
+            : truthRuntime.action || launchChannel.action,
+        complete: false,
+      });
+
+  const steps = [channelStep, setupStep, truthStep, runtimeStep, liveStep];
+  const completeCount = steps.filter((item) => item.complete).length;
+  const totalCount = steps.length;
+  const percent = Math.round((completeCount / totalCount) * 100);
+  const nextIncomplete = steps.find((item) => !item.complete) || null;
+
+  return {
+    title:
+      completeCount === totalCount
+        ? "Launch acceptance is green."
+        : `${completeCount}/${totalCount} launch checks are ready.`,
+    summary:
+      completeCount === totalCount
+        ? "The current launch promise is aligned across channel, setup, truth, runtime, and live queue."
+        : nextIncomplete?.summary ||
+          "The launch promise is still blocked by one or more missing checks.",
+    detail:
+      "This checklist covers the current launch promise only: launch channel, setup draft, approved truth, runtime, and live queue.",
+    percent,
+    completeCount,
+    totalCount,
+    steps,
+    nextAction: nextIncomplete?.action || { label: "Open inbox", path: "/inbox" },
+  };
+}
+
 function dedupeActions(actions = []) {
   const seen = new Set();
   return actions.filter((item) => {
@@ -1033,6 +1272,13 @@ export function useProductHome(options = {}) {
       launchChannel,
       truthRuntime,
       setupAssistantSession: payloads.setupAssistantSession,
+    });
+
+    const goldenPath = buildGoldenPath({
+      launchChannel,
+      truthRuntime,
+      setupFlow,
+      inboxState,
     });
 
     const assistantMessages = buildAssistantMessages({
@@ -1210,6 +1456,7 @@ export function useProductHome(options = {}) {
       launchChannel.action,
       setupFlow.action,
       truthRuntime.action,
+      goldenPath.nextAction,
       { label: "Open workspace", path: "/workspace" },
     ]).slice(0, 4);
 
@@ -1270,6 +1517,7 @@ export function useProductHome(options = {}) {
       setupNeeded: setupFlow.needed,
       assistant,
       availabilityNote,
+      goldenPath,
       heroStats,
       primaryAction,
       secondaryAction,
