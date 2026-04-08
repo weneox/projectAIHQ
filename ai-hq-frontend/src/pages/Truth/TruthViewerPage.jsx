@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import {
-  ArrowRight,
   Building2,
   Globe,
   History,
   Mail,
   MapPin,
   Phone,
-  ShieldCheck,
   Sparkles,
   User2,
   Wrench,
@@ -23,6 +21,7 @@ import {
 } from "../../api/truth.js";
 import Button from "../../components/ui/Button.jsx";
 import TruthVersionComparePanel from "../../components/truth/TruthVersionComparePanel.jsx";
+import { buildTruthOperationalState } from "../../lib/readinessViewModel.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -62,54 +61,12 @@ function normalizeTruthToken(value = "") {
   return String(value ?? "").trim();
 }
 
-function titleize(value = "") {
-  return s(value)
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (x) => x.toUpperCase());
-}
-
 function formatWhen(value = "") {
   const raw = s(value);
   if (!raw) return "Not available";
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return raw;
   return date.toLocaleString();
-}
-
-function actionPath(action = {}) {
-  return s(action?.path || action?.target?.path);
-}
-
-function normalizeAction(action = null, fallback = null) {
-  const primary = obj(action);
-  const secondary = obj(fallback);
-  const path = actionPath(primary) || actionPath(secondary);
-  const label = s(primary.label || secondary.label);
-
-  if (!path && !label) return null;
-
-  return {
-    label: label || "Open",
-    path: path || "/truth",
-  };
-}
-
-function pickReadinessAction(readiness = {}, fallbackAction = null) {
-  const source = obj(readiness);
-
-  for (const blocker of arr(source.blockedItems || source.blockers)) {
-    const nextAction = normalizeAction(
-      blocker?.nextAction || blocker?.action || blocker?.repairAction
-    );
-    if (nextAction?.path) return nextAction;
-  }
-
-  for (const action of arr(source.repairActions)) {
-    const nextAction = normalizeAction(action);
-    if (nextAction?.path) return nextAction;
-  }
-
-  return normalizeAction(fallbackAction);
 }
 
 function resolveRequestedVersionId(searchParams, location) {
@@ -184,12 +141,8 @@ function fieldProvenance(fields = [], key = "") {
 
 function resolveRuntimeLabel(trust = null, approvedTruthUnavailable = false) {
   if (approvedTruthUnavailable) return "Unavailable";
-
-  const runtimeReadiness = obj(trust?.summary?.runtimeProjection?.readiness);
-  const truthReadiness = obj(trust?.summary?.truth?.readiness);
-  const status = s(runtimeReadiness.status || truthReadiness.status).toLowerCase();
-  if (!status) return "Unknown";
-  return titleize(status);
+  const operationalState = buildTruthOperationalState(trust);
+  return s(operationalState.statusLabel, "Unknown");
 }
 
 function resolveSourceSummaryLine(sourceSummary = {}) {
@@ -211,93 +164,7 @@ function resolveSourceSummaryLine(sourceSummary = {}) {
       source.url
   );
 
-  return [sourceType ? titleize(sourceType) : "", sourceUrl]
-    .filter(Boolean)
-    .join(" · ");
-}
-
-function buildTrustOperationalState(trust = null, approvedTruthUnavailable = false) {
-  if (approvedTruthUnavailable) {
-    return {
-      status: "blocked",
-      statusLabel: "Approval required",
-      title: "Approved truth is unavailable.",
-      summary:
-        "No non-approved fallback data is being shown. Continue setup or truth review before trusting runtime.",
-      action: { label: "Continue AI setup", path: "/home?assistant=setup" },
-      detail:
-        "This page is intentionally fail-closed when approved truth is unavailable.",
-    };
-  }
-
-  const summary = obj(trust?.summary);
-  const truth = obj(summary.truth);
-  const runtimeProjection = obj(summary.runtimeProjection);
-  const truthReadiness = obj(truth.readiness);
-  const runtimeReadiness = obj(runtimeProjection.readiness);
-  const runtimeHealth = obj(runtimeProjection.health);
-
-  const truthVersionId = s(truth.latestVersionId);
-  const truthReady = truthReadiness.status === "ready" && Boolean(truthVersionId);
-  const runtimeReady =
-    runtimeReadiness.status === "ready" &&
-    (runtimeHealth.usable === true ||
-      runtimeHealth.autonomousAllowed === true ||
-      obj(runtimeProjection.authority).available === true);
-
-  if (!truthReady) {
-    return {
-      status: "blocked",
-      statusLabel: "Approval required",
-      title: "Business truth still needs approval.",
-      summary:
-        s(truthReadiness.message) ||
-        "Approved business truth is still unavailable for the live runtime.",
-      action: pickReadinessAction(truthReadiness, {
-        label: "Continue AI setup",
-        path: "/home?assistant=setup",
-      }),
-      detail:
-        arr(truthReadiness.blockedItems)
-          .map((item) => s(item?.subtitle || item?.title))
-          .filter(Boolean)[0] || "No approved truth snapshot is visible yet.",
-    };
-  }
-
-  if (!runtimeReady) {
-    return {
-      status: "attention",
-      statusLabel: "Repair required",
-      title: "Runtime still needs repair.",
-      summary:
-        s(runtimeReadiness.message) ||
-        s(runtimeHealth.lastFailure?.errorMessage) ||
-        "Approved truth exists, but the runtime projection is not healthy enough for live automation.",
-      action:
-        normalizeAction(runtimeHealth.repairAction) ||
-        arr(runtimeHealth.repairActions).map((item) => normalizeAction(item)).find(Boolean) ||
-        pickReadinessAction(runtimeReadiness, {
-          label: "Open truth and runtime",
-          path: "/truth",
-        }),
-      detail:
-        s(runtimeHealth.lastFailure?.errorCode) ||
-        s(runtimeHealth.reasonCode) ||
-        "Review the runtime state and repair path before treating automation as live.",
-    };
-  }
-
-  return {
-    status: "ready",
-    statusLabel: "Healthy",
-    title: "Approved truth and runtime are aligned.",
-    summary:
-      "The current approved truth version is already backing the live runtime posture.",
-    action: { label: "Open version history", path: "/truth" },
-    detail: truthVersionId
-      ? `Truth version ${truthVersionId} is the current approved source of runtime authority.`
-      : "Approved truth is available.",
-  };
+  return [sourceType, sourceUrl].filter(Boolean).join(" · ");
 }
 
 function InfoHint({ text = "", align = "right" }) {
@@ -542,9 +409,7 @@ function TruthReadinessStrip({ operationalState }) {
   const Icon = tone.icon;
 
   return (
-    <div
-      className={`border-b px-8 py-4 ${tone.border} ${tone.bg}`}
-    >
+    <div className={`border-b px-8 py-4 ${tone.border} ${tone.bg}`}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -578,7 +443,7 @@ function TruthReadinessStrip({ operationalState }) {
                   window.location.assign(operationalState.action.path);
                 }
               }}
-              rightIcon={<ArrowRight className="h-4 w-4" />}
+              leftIcon={<Wrench className="h-4 w-4" />}
             >
               {operationalState.action.label}
             </Button>
@@ -635,10 +500,23 @@ export default function TruthViewerPage() {
 
   const operationalState = useMemo(
     () =>
-      buildTrustOperationalState(
-        state.data.trust,
-        state.data.approvedTruthUnavailable
-      ),
+      state.data.approvedTruthUnavailable
+        ? {
+            truthReady: false,
+            runtimeReady: false,
+            status: "blocked",
+            statusLabel: "Approval required",
+            title: "Approved truth is unavailable.",
+            summary:
+              "No non-approved fallback data is being shown. Continue setup or truth review before trusting runtime.",
+            detail:
+              "This page is intentionally fail-closed when approved truth is unavailable.",
+            action: {
+              label: "Continue AI setup",
+              path: "/home?assistant=setup",
+            },
+          }
+        : buildTruthOperationalState(state.data.trust),
     [state.data.trust, state.data.approvedTruthUnavailable]
   );
 

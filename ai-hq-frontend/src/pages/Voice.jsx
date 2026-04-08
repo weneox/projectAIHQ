@@ -1,20 +1,26 @@
 import {
-  Activity,
+  ArrowRight,
   ArrowRightLeft,
   BadgeCheck,
   Ban,
-  Clock3,
-  Languages,
   Mic,
-  Phone,
   PhoneCall,
   PhoneOff,
   Settings2,
+  ShieldCheck,
   UserRound,
+  Wrench,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
+import { getSettingsTrustView } from "../api/trust.js";
+import { getVoiceSettings } from "../api/voice.js";
 import AdminPageShell from "../components/admin/AdminPageShell.jsx";
 import { MetricCard, Surface } from "../components/ui/AppShellPrimitives.jsx";
+import {
+  buildTruthOperationalState,
+  buildVoiceSettingsOperationalState,
+} from "../lib/readinessViewModel.js";
 import { useVoiceSurface } from "./hooks/useVoiceSurface.js";
 
 function s(v, d = "") {
@@ -84,6 +90,65 @@ function pickOperatorName(x) {
   return s(x?.operatorName || x?.operator_name || x?.operatorLabel || "-");
 }
 
+function buildVoiceLaunchReadiness({ truth, voiceSettings, surface, liveCount }) {
+  if (surface.unavailable) {
+    return {
+      status: "unavailable",
+      statusLabel: "Unavailable",
+      title: "Voice operations are temporarily unavailable.",
+      summary:
+        surface.error ||
+        "The voice surface cannot confirm launch posture right now.",
+      action: { label: "Refresh voice", path: "/voice" },
+      detail:
+        "This surface stays intentionally cautious when live voice data is unavailable.",
+    };
+  }
+
+  if (!voiceSettings.ready) {
+    return {
+      status: voiceSettings.status,
+      statusLabel: voiceSettings.statusLabel,
+      title: "Voice settings still need attention.",
+      summary: voiceSettings.summary,
+      action: voiceSettings.action,
+      detail:
+        "The receptionist should not be treated as launch-ready until voice settings are complete.",
+    };
+  }
+
+  if (!truth.truthReady || !truth.runtimeReady) {
+    return {
+      status: truth.status,
+      statusLabel: truth.statusLabel,
+      title:
+        truth.truthReady
+          ? "Voice settings are ready, but runtime still needs repair."
+          : "Voice settings are ready, but approved truth still needs approval.",
+      summary: truth.summary,
+      action: truth.action,
+      detail:
+        "Voice setup alone is not enough. Approved truth and healthy runtime must also be aligned.",
+    };
+  }
+
+  return {
+    status: "ready",
+    statusLabel: liveCount > 0 ? "Live and ready" : "Launch ready",
+    title:
+      liveCount > 0
+        ? "Voice launch posture is healthy and live sessions are active."
+        : "Voice launch posture is healthy.",
+    summary:
+      liveCount > 0
+        ? `${liveCount} live voice call${liveCount === 1 ? "" : "s"} currently use the healthy voice posture.`
+        : "Voice settings, approved truth, and runtime are aligned for the receptionist.",
+    action: { label: "Open truth", path: "/truth" },
+    detail:
+      "The current receptionist lane is not blocked by settings, truth, or runtime posture.",
+  };
+}
+
 function StatusPill({ status }) {
   const x = s(status || "unknown").toLowerCase();
   const live = ["live", "active", "in_progress", "ongoing", "ringing", "queued", "bridged"].includes(x);
@@ -100,6 +165,76 @@ function StatusPill({ status }) {
       <span className={["h-2 w-2 rounded-full", live ? "bg-emerald-500" : "bg-text-subtle"].join(" ")} />
       {x || "unknown"}
     </div>
+  );
+}
+
+function ReadinessStrip({ readiness, onNavigate }) {
+  const palette =
+    readiness.status === "ready"
+      ? {
+          border: "border-emerald-200",
+          bg: "bg-emerald-50/80",
+          icon: ShieldCheck,
+          iconColor: "text-emerald-700",
+          text: "text-emerald-700",
+        }
+      : readiness.status === "attention"
+        ? {
+            border: "border-amber-200",
+            bg: "bg-amber-50/80",
+            icon: Wrench,
+            iconColor: "text-amber-700",
+            text: "text-amber-700",
+          }
+        : {
+            border: "border-rose-200",
+            bg: "bg-rose-50/80",
+            icon: Wrench,
+            iconColor: "text-rose-700",
+            text: "text-rose-700",
+          };
+
+  const Icon = palette.icon;
+
+  return (
+    <Surface className={`space-y-4 border ${palette.border} ${palette.bg}`}>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Icon className={`h-4 w-4 ${palette.iconColor}`} strokeWidth={2} />
+            <div className={`text-[11px] font-bold uppercase tracking-[0.14em] ${palette.text}`}>
+              {s(readiness.statusLabel, "Unknown")}
+            </div>
+          </div>
+
+          <div className="mt-2 text-lg font-semibold text-text">
+            {s(readiness.title, "Voice readiness")}
+          </div>
+
+          <div className="mt-1 text-sm leading-6 text-text-muted">
+            {s(readiness.summary)}
+          </div>
+
+          {s(readiness.detail) ? (
+            <div className="mt-1 text-xs leading-5 text-text-subtle">
+              {s(readiness.detail)}
+            </div>
+          ) : null}
+        </div>
+
+        {readiness.action?.path ? (
+          <div className="shrink-0">
+            <Button
+              size="sm"
+              onClick={() => onNavigate?.(readiness.action.path)}
+              rightIcon={<ArrowRight className="h-4 w-4" />}
+            >
+              {readiness.action.label}
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </Surface>
   );
 }
 
@@ -268,6 +403,62 @@ export default function Voice() {
     canEnd,
   } = useVoiceSurface();
 
+  const [readinessData, setReadinessData] = useState({
+    loading: true,
+    trust: null,
+    voiceSettings: null,
+  });
+
+  useEffect(() => {
+    let alive = true;
+
+    Promise.allSettled([
+      getSettingsTrustView({ limit: 4 }),
+      getVoiceSettings(),
+    ])
+      .then((results) => {
+        if (!alive) return;
+        setReadinessData({
+          loading: false,
+          trust: results[0].status === "fulfilled" ? results[0].value : null,
+          voiceSettings: results[1].status === "fulfilled" ? results[1].value : null,
+        });
+      })
+      .catch(() => {
+        if (!alive) return;
+        setReadinessData({
+          loading: false,
+          trust: null,
+          voiceSettings: null,
+        });
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const truthState = useMemo(
+    () => buildTruthOperationalState(readinessData.trust),
+    [readinessData.trust]
+  );
+
+  const voiceSettingsState = useMemo(
+    () => buildVoiceSettingsOperationalState(readinessData.voiceSettings, surface),
+    [readinessData.voiceSettings, surface]
+  );
+
+  const voiceReadiness = useMemo(
+    () =>
+      buildVoiceLaunchReadiness({
+        truth: truthState,
+        voiceSettings: voiceSettingsState,
+        surface,
+        liveCount,
+      }),
+    [truthState, voiceSettingsState, surface, liveCount]
+  );
+
   return (
     <AdminPageShell
       eyebrow="Voice"
@@ -288,6 +479,15 @@ export default function Voice() {
         </button>
       }
     >
+      <ReadinessStrip
+        readiness={voiceReadiness}
+        onNavigate={(path) => {
+          if (typeof window !== "undefined" && s(path)) {
+            window.location.assign(path);
+          }
+        }}
+      />
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Live calls" value={surface.loading ? "..." : String(overviewData?.liveCalls ?? liveCount)} hint="Currently active calls" tone="brand" />
         <MetricCard label="Total calls" value={surface.loading ? "..." : String(overviewData?.totalCalls ?? totalCount)} hint="Latest loaded call list" />

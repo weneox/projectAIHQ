@@ -1,12 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  ArrowRight,
-  Link2,
-  ShieldCheck,
-  Sparkles,
-  Wrench,
-} from "lucide-react";
+import { ArrowRight, ShieldCheck, Wrench } from "lucide-react";
 import {
   getMetaChannelStatus,
   getTelegramChannelStatus,
@@ -25,37 +19,15 @@ import { ChannelActionButton } from "../components/channels/ChannelPrimitives.js
 import Button from "../components/ui/Button.jsx";
 import { PageCanvas } from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
+import {
+  buildChannelTruthLaunchReadiness,
+  buildMetaLaunchChannelState,
+  buildTelegramLaunchChannelState,
+  buildTruthOperationalState,
+} from "../lib/readinessViewModel.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
-}
-
-function obj(value, fallback = {}) {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value
-    : fallback;
-}
-
-function arr(value, fallback = []) {
-  return Array.isArray(value) ? value : fallback;
-}
-
-function actionPath(action = {}) {
-  return s(action?.path || action?.target?.path);
-}
-
-function normalizeAction(action = null, fallback = null) {
-  const primary = obj(action);
-  const secondary = obj(fallback);
-  const path = actionPath(primary) || actionPath(secondary);
-  const label = s(primary.label || secondary.label);
-
-  if (!path && !label) return null;
-
-  return {
-    label: label || "Open",
-    path: path || "/channels",
-  };
 }
 
 function buildResultsLabel(filteredCount, totalCount, isFiltered) {
@@ -96,254 +68,6 @@ function FilterTab({ label, count, active, onClick }) {
       />
     </button>
   );
-}
-
-function pickReadinessAction(readiness = {}, fallbackAction = null) {
-  const source = obj(readiness);
-
-  for (const blocker of arr(source.blockedItems || source.blockers)) {
-    const nextAction = normalizeAction(
-      blocker?.nextAction || blocker?.action || blocker?.repairAction
-    );
-    if (nextAction?.path) return nextAction;
-  }
-
-  for (const action of arr(source.repairActions)) {
-    const nextAction = normalizeAction(action);
-    if (nextAction?.path) return nextAction;
-  }
-
-  return normalizeAction(fallbackAction);
-}
-
-function buildTruthState(trust = null) {
-  const summary = obj(trust?.summary);
-  const truth = obj(summary.truth);
-  const runtimeProjection = obj(summary.runtimeProjection);
-  const truthReadiness = obj(truth.readiness);
-  const runtimeReadiness = obj(runtimeProjection.readiness);
-  const runtimeHealth = obj(runtimeProjection.health);
-
-  const truthVersionId = s(truth.latestVersionId);
-  const truthReady = truthReadiness.status === "ready" && Boolean(truthVersionId);
-  const runtimeReady =
-    runtimeReadiness.status === "ready" &&
-    (runtimeHealth.usable === true ||
-      runtimeHealth.autonomousAllowed === true ||
-      obj(runtimeProjection.authority).available === true);
-
-  if (!truthReady) {
-    return {
-      truthReady: false,
-      runtimeReady: false,
-      status: "blocked",
-      statusLabel: "Approval required",
-      summary:
-        s(truthReadiness.message) ||
-        "Approved truth is not ready yet.",
-      action: pickReadinessAction(truthReadiness, {
-        label: "Continue AI setup",
-        path: "/home?assistant=setup",
-      }),
-    };
-  }
-
-  if (!runtimeReady) {
-    return {
-      truthReady: true,
-      runtimeReady: false,
-      status: "attention",
-      statusLabel: "Repair required",
-      summary:
-        s(runtimeReadiness.message) ||
-        s(runtimeHealth.lastFailure?.errorMessage) ||
-        "Approved truth exists, but runtime still needs repair.",
-      action:
-        normalizeAction(runtimeHealth.repairAction) ||
-        arr(runtimeHealth.repairActions).map((item) => normalizeAction(item)).find(Boolean) ||
-        pickReadinessAction(runtimeReadiness, {
-          label: "Open truth",
-          path: "/truth",
-        }),
-    };
-  }
-
-  return {
-    truthReady: true,
-    runtimeReady: true,
-    status: "ready",
-    statusLabel: "Healthy",
-    summary: "Approved truth and runtime are aligned.",
-    action: { label: "Open truth", path: "/truth" },
-  };
-}
-
-function buildMetaState(payload = {}) {
-  const source = obj(payload);
-  const connected =
-    source.connected === true ||
-    ["connected", "active", "ready"].includes(s(source.state || source.status).toLowerCase());
-  const deliveryReady =
-    source.runtime?.deliveryReady === true ||
-    s(source.readiness?.status).toLowerCase() === "ready";
-
-  if (!connected) {
-    return {
-      id: "meta",
-      label: "Meta",
-      connected: false,
-      deliveryReady: false,
-      status: "blocked",
-      statusLabel: "Connect required",
-      summary:
-        s(source.readiness?.message) ||
-        "Meta is not connected yet.",
-      action: { label: "Connect Meta", path: "/channels?channel=instagram" },
-    };
-  }
-
-  if (!deliveryReady) {
-    return {
-      id: "meta",
-      label: "Meta",
-      connected: true,
-      deliveryReady: false,
-      status: "attention",
-      statusLabel: "Delivery blocked",
-      summary:
-        s(source.readiness?.message) ||
-        "Meta is connected, but delivery is still blocked.",
-      action: { label: "Open Meta", path: "/channels?channel=instagram" },
-    };
-  }
-
-  return {
-    id: "meta",
-    label: "Meta",
-    connected: true,
-    deliveryReady: true,
-    status: "ready",
-    statusLabel: "Connected",
-    summary:
-      s(source.readiness?.message) ||
-      "Meta is connected and usable for the launch path.",
-    action: { label: "Open Meta", path: "/channels?channel=instagram" },
-  };
-}
-
-function buildTelegramState(payload = {}) {
-  const source = obj(payload);
-  const connected =
-    source.connected === true ||
-    ["connected", "active", "ready"].includes(s(source.state || source.status).toLowerCase());
-  const deliveryReady =
-    source.runtime?.deliveryReady === true ||
-    s(source.readiness?.status).toLowerCase() === "ready";
-
-  if (!connected) {
-    return {
-      id: "telegram",
-      label: "Telegram",
-      connected: false,
-      deliveryReady: false,
-      status: "blocked",
-      statusLabel: "Connect required",
-      summary:
-        s(source.readiness?.message) ||
-        "Telegram is not connected yet.",
-      action: { label: "Connect Telegram", path: "/channels?channel=telegram" },
-    };
-  }
-
-  if (!deliveryReady) {
-    return {
-      id: "telegram",
-      label: "Telegram",
-      connected: true,
-      deliveryReady: false,
-      status: "attention",
-      statusLabel: "Delivery blocked",
-      summary:
-        s(source.readiness?.message) ||
-        "Telegram is connected, but delivery is still blocked.",
-      action: { label: "Open Telegram", path: "/channels?channel=telegram" },
-    };
-  }
-
-  return {
-    id: "telegram",
-    label: "Telegram",
-    connected: true,
-    deliveryReady: true,
-    status: "ready",
-    statusLabel: "Connected",
-    summary:
-      s(source.readiness?.message) ||
-      "Telegram is connected and usable for the launch path.",
-    action: { label: "Open Telegram", path: "/channels?channel=telegram" },
-  };
-}
-
-function buildLaunchReadiness({ meta, telegram, truth }) {
-  const channels = [meta, telegram].filter(Boolean);
-  const launchChannel = channels.find((item) => item.connected) || channels[0] || null;
-  const channelReady = channels.some((item) => item.connected && item.deliveryReady);
-
-  if (!launchChannel || !launchChannel.connected) {
-    return {
-      status: "blocked",
-      statusLabel: "Connect required",
-      title: "Connect a launch channel first.",
-      summary:
-        "No launch channel is currently connected. Connect Meta or Telegram before the launch path can go live.",
-      action:
-        meta?.action ||
-        telegram?.action ||
-        { label: "Open channels", path: "/channels" },
-      detail:
-        "The launch path expects at least one connected and delivery-ready channel.",
-    };
-  }
-
-  if (!channelReady) {
-    return {
-      status: "attention",
-      statusLabel: "Delivery blocked",
-      title: "A channel is connected, but delivery is still blocked.",
-      summary:
-        launchChannel.summary ||
-        "Inspect the connected channel and fix delivery blockers before trusting live automation.",
-      action: launchChannel.action,
-      detail:
-        "The launch path expects at least one connected and delivery-ready channel.",
-    };
-  }
-
-  if (!truth.truthReady || !truth.runtimeReady) {
-    return {
-      status: truth.truthReady ? "attention" : "blocked",
-      statusLabel: truth.statusLabel,
-      title:
-        truth.truthReady
-          ? "Truth exists, but runtime still needs repair."
-          : "Business truth still needs approval.",
-      summary: truth.summary,
-      action: truth.action,
-      detail:
-        "Channel connection alone is not enough. Approved truth and healthy runtime must also be aligned.",
-    };
-  }
-
-  return {
-    status: "ready",
-    statusLabel: "Launch ready",
-    title: "A launch channel is connected and the operating posture is healthy.",
-    summary:
-      "Channels, approved truth, and runtime are aligned for the current launch promise.",
-    action: launchChannel.action,
-    detail:
-      "You can inspect channels here, but the launch spine no longer has a blocker at the channel layer.",
-  };
 }
 
 function LaunchReadinessStrip({ readiness, onNavigate }) {
@@ -431,7 +155,6 @@ export default function ChannelCatalog() {
   });
 
   const selectedChannelId = searchParams.get("channel") || "";
-
   const selectedChannel = useMemo(
     () => findChannelById(selectedChannelId),
     [selectedChannelId]
@@ -453,15 +176,17 @@ export default function ChannelCatalog() {
         if (!alive) return;
 
         const meta =
-          results[0].status === "fulfilled" ? buildMetaState(results[0].value) : buildMetaState({});
+          results[0].status === "fulfilled"
+            ? buildMetaLaunchChannelState(results[0].value)
+            : buildMetaLaunchChannelState({});
         const telegram =
           results[1].status === "fulfilled"
-            ? buildTelegramState(results[1].value)
-            : buildTelegramState({});
+            ? buildTelegramLaunchChannelState(results[1].value)
+            : buildTelegramLaunchChannelState({});
         const truth =
           results[2].status === "fulfilled"
-            ? buildTruthState(results[2].value)
-            : buildTruthState(null);
+            ? buildTruthOperationalState(results[2].value)
+            : buildTruthOperationalState(null);
 
         setReadinessState({
           loading: false,
@@ -476,9 +201,9 @@ export default function ChannelCatalog() {
         setReadinessState({
           loading: false,
           error: s(error?.message || error || "Channel readiness could not be loaded."),
-          meta: buildMetaState({}),
-          telegram: buildTelegramState({}),
-          truth: buildTruthState(null),
+          meta: buildMetaLaunchChannelState({}),
+          telegram: buildTelegramLaunchChannelState({}),
+          truth: buildTruthOperationalState(null),
         });
       });
 
@@ -555,12 +280,36 @@ export default function ChannelCatalog() {
 
   const launchReadiness = useMemo(
     () =>
-      buildLaunchReadiness({
-        meta: readinessState.meta,
-        telegram: readinessState.telegram,
-        truth: readinessState.truth,
+      buildChannelTruthLaunchReadiness({
+        channels: [readinessState.meta, readinessState.telegram],
+        truthState: readinessState.truth,
+        surface: { unavailable: false, error: readinessState.error },
+        copy: {
+          channelsPath: "/channels",
+          truthPath: "/truth",
+          noChannelSummary:
+            "No launch channel is currently connected. Connect Meta or Telegram before the launch path can go live.",
+          noChannelDetail:
+            "The launch path expects at least one connected and delivery-ready channel.",
+          deliveryBlockedSummary:
+            "A channel is connected, but delivery is still blocked.",
+          deliveryBlockedDetail:
+            "Inspect the connected channel and fix delivery blockers before trusting live automation.",
+          truthBlockedApprovalTitle:
+            "Business truth still needs approval.",
+          truthBlockedRuntimeTitle:
+            "Runtime still needs repair.",
+          truthBlockedDetail:
+            "Channel connection alone is not enough. Approved truth and healthy runtime must also be aligned.",
+          readyTitle:
+            "A launch channel is connected and the operating posture is healthy.",
+          readySummary:
+            "Channels, approved truth, and runtime are aligned for the current launch promise.",
+          readyDetail:
+            "You can inspect channels here, but the launch spine no longer has a blocker at the channel layer.",
+        },
       }),
-    [readinessState.meta, readinessState.telegram, readinessState.truth]
+    [readinessState.error, readinessState.meta, readinessState.telegram, readinessState.truth]
   );
 
   function updateSelectedChannel(channelId = "") {

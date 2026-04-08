@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowRight, ShieldCheck, Wrench } from "lucide-react";
 
+import { getMetaChannelStatus, getTelegramChannelStatus } from "../api/channelConnect.js";
+import { getSettingsTrustView } from "../api/trust.js";
 import InboxComposer from "../components/inbox/InboxComposer.jsx";
 import { useInboxComposerSurface } from "../components/inbox/hooks/useInboxComposerSurface.js";
 import { useInboxThreadListSurface } from "../components/inbox/hooks/useInboxThreadListSurface.js";
@@ -12,6 +15,12 @@ import SurfaceBanner from "../components/feedback/SurfaceBanner.jsx";
 import { useInboxData } from "../hooks/useInboxData.js";
 import { useInboxRealtime } from "../hooks/useInboxRealtime.js";
 import { getAppSessionContext } from "../lib/appSession.js";
+import {
+  buildChannelTruthLaunchReadiness,
+  buildMetaLaunchChannelState,
+  buildTelegramLaunchChannelState,
+  buildTruthOperationalState,
+} from "../lib/readinessViewModel.js";
 
 function shouldRenderSurfaceBanner(surface) {
   return Boolean(
@@ -19,6 +28,81 @@ function shouldRenderSurfaceBanner(surface) {
       surface?.saveError ||
       surface?.unavailable ||
       (!surface?.unavailable && surface?.error)
+  );
+}
+
+function s(value, fallback = "") {
+  return String(value ?? fallback).trim();
+}
+
+function ReadinessStrip({ readiness, onNavigate }) {
+  const palette =
+    readiness.status === "ready"
+      ? {
+          border: "border-emerald-200",
+          bg: "bg-emerald-50/80",
+          icon: ShieldCheck,
+          iconColor: "text-emerald-700",
+          text: "text-emerald-700",
+        }
+      : readiness.status === "attention"
+        ? {
+            border: "border-amber-200",
+            bg: "bg-amber-50/80",
+            icon: Wrench,
+            iconColor: "text-amber-700",
+            text: "text-amber-700",
+          }
+        : {
+            border: "border-rose-200",
+            bg: "bg-rose-50/80",
+            icon: Wrench,
+            iconColor: "text-rose-700",
+            text: "text-rose-700",
+          };
+
+  const Icon = palette.icon;
+
+  return (
+    <div className={`mb-4 border ${palette.border} ${palette.bg} px-4 py-4`}>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Icon className={`h-4 w-4 ${palette.iconColor}`} strokeWidth={2} />
+            <div className={`text-[11px] font-bold uppercase tracking-[0.14em] ${palette.text}`}>
+              {s(readiness.statusLabel, "Unknown")}
+            </div>
+          </div>
+
+          <div className="mt-2 text-[15px] font-semibold tracking-[-0.03em] text-[#0f1728]">
+            {s(readiness.title, "Inbox readiness")}
+          </div>
+
+          <div className="mt-1 text-[13px] leading-6 text-[#475467]">
+            {s(readiness.summary)}
+          </div>
+
+          {s(readiness.detail) ? (
+            <div className="mt-1 text-[12px] leading-5 text-[#667085]">
+              {s(readiness.detail)}
+            </div>
+          ) : null}
+        </div>
+
+        {readiness.action?.path ? (
+          <div className="shrink-0">
+            <button
+              type="button"
+              onClick={() => onNavigate?.(readiness.action.path)}
+              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 transition hover:border-slate-300"
+            >
+              <span>{readiness.action.label}</span>
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -31,6 +115,12 @@ export default function Inbox() {
   const [tenantKey, setTenantKey] = useState("");
   const [operatorName, setOperatorName] = useState("");
   const [detailOpen, setDetailOpen] = useState(false);
+  const [readinessState, setReadinessState] = useState({
+    loading: true,
+    trust: null,
+    meta: null,
+    telegram: null,
+  });
 
   const requestedThreadId = String(
     location.state?.selectedThreadId || searchParams.get("threadId") || ""
@@ -50,6 +140,47 @@ export default function Inbox() {
       .catch(() => {
         if (!alive) return;
         setOperatorName((prev) => prev || "operator");
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+
+    Promise.allSettled([
+      getSettingsTrustView({ limit: 4 }),
+      getMetaChannelStatus(),
+      getTelegramChannelStatus(),
+    ])
+      .then((results) => {
+        if (!alive) return;
+        setReadinessState({
+          loading: false,
+          trust:
+            results[0].status === "fulfilled"
+              ? buildTruthOperationalState(results[0].value)
+              : buildTruthOperationalState(null),
+          meta:
+            results[1].status === "fulfilled"
+              ? buildMetaLaunchChannelState(results[1].value)
+              : buildMetaLaunchChannelState({}),
+          telegram:
+            results[2].status === "fulfilled"
+              ? buildTelegramLaunchChannelState(results[2].value)
+              : buildTelegramLaunchChannelState({}),
+        });
+      })
+      .catch(() => {
+        if (!alive) return;
+        setReadinessState({
+          loading: false,
+          trust: buildTruthOperationalState(null),
+          meta: buildMetaLaunchChannelState({}),
+          telegram: buildTelegramLaunchChannelState({}),
+        });
       });
 
     return () => {
@@ -157,6 +288,48 @@ export default function Inbox() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [detailOpen]);
 
+  const inboxReadiness = useMemo(
+    () =>
+      buildChannelTruthLaunchReadiness({
+        channels: [readinessState.meta, readinessState.telegram],
+        truthState: readinessState.truth,
+        surface,
+        copy: {
+          channelsPath: "/channels",
+          truthPath: "/truth",
+          unavailableTitle: "Inbox operations are temporarily unavailable.",
+          unavailableSummary:
+            "The inbox surface cannot confirm launch posture right now.",
+          unavailableDetail:
+            "This surface stays intentionally cautious when live inbox data is unavailable.",
+          noChannelSummary:
+            "No launch channel is currently connected. Connect Meta or Telegram before trusting live inbox automation.",
+          noChannelDetail:
+            "The inbox can still be inspected, but live launch posture is blocked until a launch channel is attached.",
+          deliveryBlockedSummary:
+            "A channel is connected, but delivery is still blocked.",
+          deliveryBlockedDetail:
+            "The inbox can remain visible, but delivery posture is not healthy enough for launch.",
+          truthBlockedApprovalTitle:
+            "Inbox is connected, but approved truth still needs approval.",
+          truthBlockedRuntimeTitle:
+            "Inbox is connected, but runtime still needs repair.",
+          truthBlockedDetail:
+            "Connected channels alone are not enough. Approved truth and healthy runtime must also be aligned.",
+          readyStatusLabel: selectedThread?.id ? "Live and ready" : "Launch ready",
+          readyTitle: selectedThread?.id
+            ? "Inbox launch posture is healthy and a live thread is selected."
+            : "Inbox launch posture is healthy.",
+          readySummary: selectedThread?.id
+            ? "Channels, approved truth, and runtime are aligned for the selected thread."
+            : "Channels, approved truth, and runtime are aligned for live inbox operations.",
+          readyDetail:
+            "The current inbox lane is not blocked by channel, truth, or runtime posture.",
+        },
+      }),
+    [readinessState.meta, readinessState.telegram, readinessState.truth, surface, selectedThread]
+  );
+
   const showTopBanner = shouldRenderSurfaceBanner(surface);
 
   return (
@@ -186,73 +359,84 @@ export default function Inbox() {
         </div>
       ) : null}
 
-      <div className="relative grid flex-1 min-h-0 overflow-hidden grid-cols-[344px_minmax(0,1fr)] bg-[#f6f6f7]">
-        <div className="min-h-0 overflow-hidden border-r border-slate-200/80 bg-[#f6f6f7]">
-          <InboxThreadListPanel
-            threadList={threadList}
-            selectedThreadId={selectedThread?.id || ""}
-            searchQuery=""
+      <div className="relative flex-1 min-h-0 overflow-hidden bg-[#f6f6f7]">
+        <div className="px-4 pb-4 pt-4">
+          <ReadinessStrip
+            readiness={inboxReadiness}
+            onNavigate={(path) => {
+              if (s(path)) navigate(path);
+            }}
           />
         </div>
 
-        <div className="min-h-0 overflow-hidden bg-[#f6f6f7]">
-          <InboxDetailPanel
-            selectedThread={selectedThread}
-            messages={messages}
-            outboundAttempts={threadAttemptSurface.attempts}
-            surface={detailSurface}
-            actionState={actionState}
-            markRead={markRead}
-            assignThread={assignThread}
-            activateHandoff={activateHandoff}
-            setThreadStatus={setThreadStatus}
-            onOpenDetails={() => setDetailOpen(true)}
-            composer={
-              <InboxComposer
-                embedded
-                selectedThread={selectedThread}
-                surface={composerSurface}
-                actionState={actionState}
-                replyText={replyText}
-                setReplyText={setReplyText}
-                onSend={handleSend}
-                onReleaseHandoff={handleRelease}
-              />
-            }
-          />
-        </div>
+        <div className="relative grid h-[calc(100%-96px)] min-h-0 overflow-hidden grid-cols-[344px_minmax(0,1fr)] bg-[#f6f6f7]">
+          <div className="min-h-0 overflow-hidden border-r border-slate-200/80 bg-[#f6f6f7]">
+            <InboxThreadListPanel
+              threadList={threadList}
+              selectedThreadId={selectedThread?.id || ""}
+              searchQuery=""
+            />
+          </div>
 
-        <div
-          className={[
-            "absolute inset-0 z-30 transition",
-            detailOpen ? "pointer-events-auto" : "pointer-events-none",
-          ].join(" ")}
-        >
+          <div className="min-h-0 overflow-hidden bg-[#f6f6f7]">
+            <InboxDetailPanel
+              selectedThread={selectedThread}
+              messages={messages}
+              outboundAttempts={threadAttemptSurface.attempts}
+              surface={detailSurface}
+              actionState={actionState}
+              markRead={markRead}
+              assignThread={assignThread}
+              activateHandoff={activateHandoff}
+              setThreadStatus={setThreadStatus}
+              onOpenDetails={() => setDetailOpen(true)}
+              composer={
+                <InboxComposer
+                  embedded
+                  selectedThread={selectedThread}
+                  surface={composerSurface}
+                  actionState={actionState}
+                  replyText={replyText}
+                  setReplyText={setReplyText}
+                  onSend={handleSend}
+                  onReleaseHandoff={handleRelease}
+                />
+              }
+            />
+          </div>
+
           <div
-            onClick={() => setDetailOpen(false)}
             className={[
-              "absolute inset-0 bg-slate-950/10 transition-opacity duration-200",
-              detailOpen ? "opacity-100" : "opacity-0",
-            ].join(" ")}
-          />
-
-          <aside
-            className={[
-              "absolute inset-y-0 right-0 w-[360px] max-w-[92vw] border-l border-slate-200/80 bg-[#fbfbfc] shadow-[0_18px_60px_rgba(15,23,42,0.18)] transition-transform duration-200",
-              detailOpen ? "translate-x-0" : "translate-x-full",
+              "absolute inset-0 z-30 transition",
+              detailOpen ? "pointer-events-auto" : "pointer-events-none",
             ].join(" ")}
           >
-            <InboxLeadPanel
-              selectedThread={selectedThread}
-              surface={leadSurface}
-              relatedLead={relatedLead}
-              openLeadDetail={openLeadDetail}
-              operatorName={operatorName}
-              tenantKey={tenantKey}
-              wsState={wsState}
-              onClose={() => setDetailOpen(false)}
+            <div
+              onClick={() => setDetailOpen(false)}
+              className={[
+                "absolute inset-0 bg-slate-950/10 transition-opacity duration-200",
+                detailOpen ? "opacity-100" : "opacity-0",
+              ].join(" ")}
             />
-          </aside>
+
+            <aside
+              className={[
+                "absolute inset-y-0 right-0 w-[360px] max-w-[92vw] border-l border-slate-200/80 bg-[#fbfbfc] shadow-[0_18px_60px_rgba(15,23,42,0.18)] transition-transform duration-200",
+                detailOpen ? "translate-x-0" : "translate-x-full",
+              ].join(" ")}
+            >
+              <InboxLeadPanel
+                selectedThread={selectedThread}
+                surface={leadSurface}
+                relatedLead={relatedLead}
+                openLeadDetail={openLeadDetail}
+                operatorName={operatorName}
+                tenantKey={tenantKey}
+                wsState={wsState}
+                onClose={() => setDetailOpen(false)}
+              />
+            </aside>
+          </div>
         </div>
       </div>
     </section>
