@@ -31,8 +31,9 @@
     "test:smoke:ui:ci:truth": "vitest run --configLoader runner --config vitest.smoke-ui.config.js src/test/pages/Truth/TruthViewerPage.smoke.test.jsx --reporter=default --reporter=junit --reporter=json --outputFile.junit=./test-results/frontend-smoke-ui-truth.junit.xml --outputFile.json=./test-results/frontend-smoke-ui-truth.json",
     "test:smoke:ui:ci:rest": "vitest run --configLoader runner --config vitest.smoke-ui.config.js src/test/components/feedback/SurfaceBanner.test.jsx src/test/components/admin/ProviderSecretsPanel.test.jsx src/test/components/admin/AdminPageShell.test.jsx src/test/components/inbox/InboxComposer.test.jsx src/test/components/inbox/InboxThreadListPanel.test.jsx src/test/components/inbox/InboxDetailPanel.test.jsx src/test/components/inbox/InboxLeadPanel.test.jsx src/test/pages/AdminTenants.test.jsx src/test/pages/AdminTeam.test.jsx src/test/pages/ChannelCatalog.test.jsx src/test/pages/Executions.smoke.test.jsx src/test/pages/Voice.test.jsx src/test/pages/Comments.test.jsx src/test/pages/Inbox.test.jsx --reporter=default --reporter=junit --reporter=json --outputFile.junit=./test-results/frontend-smoke-ui-rest.junit.xml --outputFile.json=./test-results/frontend-smoke-ui-rest.json",
     "test:extended": "vitest run --configLoader runner src/test",
-    "lint": "node ../scripts/check-js-syntax.mjs src public vite.config.js eslint.config.js postcss.config.js tailwind.config.js",
-    "lint:strict": "eslint .",
+    "lint:syntax": "node ../scripts/check-js-syntax.mjs src public vite.config.js eslint.config.js postcss.config.js tailwind.config.js",
+    "lint:strict": "eslint . --max-warnings=0",
+    "lint": "npm run lint:syntax && npm run lint:strict",
     "clean": "rimraf dist node_modules/.vite"
   },
   "dependencies": {
