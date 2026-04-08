@@ -23,6 +23,14 @@ function lower(v, d = "") {
   return s(v, d).toLowerCase();
 }
 
+const PRODUCT_HOME_ROUTE = "/home";
+const CANONICAL_SETUP_ROUTE = "/home?assistant=setup";
+const TRUTH_ROUTE = "/truth";
+const CHANNELS_ROUTE = "/channels";
+const META_CHANNELS_ROUTE = "/channels?channel=meta";
+const VOICE_ROUTE = "/voice";
+const ADMIN_SECRETS_ROUTE = "/admin/secrets";
+
 function normalizeSamples(value) {
   if (!Array.isArray(value)) return [];
   return value
@@ -37,19 +45,134 @@ function normalizeSamples(value) {
     .filter((item) => item.tenantKey || item.tenantId);
 }
 
+function resolveDefaultRouteForReason(reasonCode = "") {
+  switch (lower(reasonCode)) {
+    case "voice_settings_missing":
+    case "voice_disabled":
+    case "voice_phone_number_missing":
+    case "voice_provider_unsupported":
+      return VOICE_ROUTE;
+
+    case "channel_not_connected":
+    case "channel_identifiers_missing":
+      return META_CHANNELS_ROUTE;
+
+    case "provider_secret_missing":
+      return ADMIN_SECRETS_ROUTE;
+
+    case "approved_truth_unavailable":
+    case "approved_truth_empty":
+    case "approval_required":
+      return CANONICAL_SETUP_ROUTE;
+
+    case "runtime_projection_missing":
+    case "projection_missing":
+    case "runtime_projection_stale":
+    case "projection_stale":
+    case "truth_version_drift":
+    case "runtime_authority_unavailable":
+    case "authority_invalid":
+    case "projection_build_failed":
+    case "repair_pending":
+    case "source_dependency_failed":
+    case "review_required":
+      return TRUTH_ROUTE;
+
+    default:
+      return PRODUCT_HOME_ROUTE;
+  }
+}
+
+function normalizeLegacyRepairPath(path = "", reasonCode = "") {
+  const raw = s(path);
+  if (!raw) return resolveDefaultRouteForReason(reasonCode);
+
+  const [pathname, queryString = ""] = raw.split("?");
+  const normalizedPath = lower(pathname);
+
+  if (!normalizedPath) {
+    return resolveDefaultRouteForReason(reasonCode);
+  }
+
+  if (normalizedPath === "/setup/runtime" || normalizedPath.startsWith("/setup/runtime/")) {
+    return TRUTH_ROUTE;
+  }
+
+  if (normalizedPath === "/setup" || normalizedPath.startsWith("/setup/")) {
+    return CANONICAL_SETUP_ROUTE;
+  }
+
+  if (normalizedPath === "/settings") {
+    const params = new URLSearchParams(queryString);
+    const tab = lower(params.get("tab"));
+    if (["knowledge-review", "truth", "runtime"].includes(tab)) {
+      return TRUTH_ROUTE;
+    }
+  }
+
+  return raw;
+}
+
+function canonicalizeRepairTarget(reasonCode = "", target = {}) {
+  const nextTarget = { ...obj(target) };
+  const normalizedPath = normalizeLegacyRepairPath(nextTarget.path, reasonCode);
+
+  if (normalizedPath) {
+    nextTarget.path = normalizedPath;
+  }
+
+  if (!s(nextTarget.section)) {
+    const code = lower(reasonCode);
+    if (
+      [
+        "approved_truth_unavailable",
+        "approved_truth_empty",
+        "approval_required",
+      ].includes(code)
+    ) {
+      nextTarget.section = "setup";
+    } else if (
+      [
+        "runtime_projection_missing",
+        "projection_missing",
+        "runtime_projection_stale",
+        "projection_stale",
+        "truth_version_drift",
+        "runtime_authority_unavailable",
+        "authority_invalid",
+        "projection_build_failed",
+        "repair_pending",
+        "source_dependency_failed",
+        "review_required",
+      ].includes(code)
+    ) {
+      nextTarget.section = "truth";
+    } else if (code.startsWith("voice_")) {
+      nextTarget.section = "voice";
+    } else if (
+      ["channel_not_connected", "channel_identifiers_missing"].includes(code)
+    ) {
+      nextTarget.section = "channels";
+    }
+  }
+
+  return nextTarget;
+}
+
 const OPERATIONAL_REASON_METADATA = {
   voice_settings_missing: {
     category: "voice",
     dependencyType: "voice_settings",
-    title: "Voice settings missing",
+    title: "Complete voice receptionist setup",
     action: {
       id: "repair_voice_settings",
       kind: "focus",
-      label: "Complete voice settings",
+      label: "Open voice setup",
       target: {
+        path: VOICE_ROUTE,
         panel: "voice",
         field: "twilioPhoneNumber",
-        section: "operational",
+        section: "voice",
       },
       requiredRole: "admin",
     },
@@ -57,15 +180,16 @@ const OPERATIONAL_REASON_METADATA = {
   voice_disabled: {
     category: "voice",
     dependencyType: "voice_settings",
-    title: "Voice runtime disabled",
+    title: "Voice receptionist is turned off",
     action: {
       id: "repair_voice_settings",
       kind: "focus",
       label: "Review voice settings",
       target: {
+        path: VOICE_ROUTE,
         panel: "voice",
         field: "enabled",
-        section: "operational",
+        section: "voice",
       },
       requiredRole: "admin",
     },
@@ -73,15 +197,16 @@ const OPERATIONAL_REASON_METADATA = {
   voice_phone_number_missing: {
     category: "voice",
     dependencyType: "voice_phone_number",
-    title: "Voice phone number missing",
+    title: "Voice phone number is missing",
     action: {
       id: "repair_voice_phone_number",
       kind: "focus",
-      label: "Add voice phone number",
+      label: "Add voice number",
       target: {
+        path: VOICE_ROUTE,
         panel: "voice",
         field: "twilioPhoneNumber",
-        section: "operational",
+        section: "voice",
       },
       requiredRole: "admin",
     },
@@ -89,15 +214,16 @@ const OPERATIONAL_REASON_METADATA = {
   voice_provider_unsupported: {
     category: "voice",
     dependencyType: "voice_provider",
-    title: "Voice provider unsupported",
+    title: "Voice provider needs review",
     action: {
       id: "repair_voice_settings",
       kind: "focus",
       label: "Review voice provider",
       target: {
+        path: VOICE_ROUTE,
         panel: "voice",
         field: "provider",
-        section: "operational",
+        section: "voice",
       },
       requiredRole: "admin",
     },
@@ -105,12 +231,13 @@ const OPERATIONAL_REASON_METADATA = {
   channel_not_connected: {
     category: "meta",
     dependencyType: "channel_connection",
-    title: "Channel not connected",
+    title: "Connect Meta before going live",
     action: {
       id: "connect_meta_channel",
       kind: "oauth",
-      label: "Connect Meta channel",
+      label: "Connect Meta",
       target: {
+        path: META_CHANNELS_ROUTE,
         provider: "meta",
         channelType: "instagram",
         connectUrlPath: "/api/channels/meta/connect-url",
@@ -122,15 +249,16 @@ const OPERATIONAL_REASON_METADATA = {
   channel_identifiers_missing: {
     category: "meta",
     dependencyType: "channel_identifier",
-    title: "Channel identifiers missing",
+    title: "Meta channel identifiers need review",
     action: {
       id: "repair_channel_identifiers",
       kind: "focus",
-      label: "Add channel identifiers",
+      label: "Open channel details",
       target: {
+        path: META_CHANNELS_ROUTE,
         panel: "meta",
         field: "externalPageId",
-        section: "operational",
+        section: "channels",
       },
       requiredRole: "admin",
     },
@@ -138,15 +266,16 @@ const OPERATIONAL_REASON_METADATA = {
   provider_secret_missing: {
     category: "meta",
     dependencyType: "provider_secret",
-    title: "Provider secret missing",
+    title: "Meta access token is missing",
     action: {
       id: "open_provider_secrets",
       kind: "admin_route",
       label: "Open secure secrets",
       target: {
-        path: "/admin/secrets",
+        path: ADMIN_SECRETS_ROUTE,
         provider: "meta",
         secretKeys: ["page_access_token"],
+        section: "admin",
       },
       requiredRole: "admin",
     },
@@ -154,14 +283,14 @@ const OPERATIONAL_REASON_METADATA = {
   approved_truth_unavailable: {
     category: "truth",
     dependencyType: "approved_truth",
-    title: "Approved truth unavailable",
+    title: "Business truth has not been approved yet",
     action: {
       id: "open_setup_route",
       kind: "route",
-      label: "Continue setup",
+      label: "Continue AI setup",
       target: {
-        path: "/setup/studio",
-        section: "truth",
+        path: CANONICAL_SETUP_ROUTE,
+        section: "setup",
       },
       requiredRole: "operator",
     },
@@ -169,14 +298,14 @@ const OPERATIONAL_REASON_METADATA = {
   approved_truth_empty: {
     category: "truth",
     dependencyType: "approved_truth",
-    title: "Approved truth empty",
+    title: "Business truth is still empty",
     action: {
       id: "open_setup_route",
       kind: "route",
-      label: "Continue setup",
+      label: "Continue AI setup",
       target: {
-        path: "/setup/studio",
-        section: "truth",
+        path: CANONICAL_SETUP_ROUTE,
+        section: "setup",
       },
       requiredRole: "operator",
     },
@@ -184,14 +313,14 @@ const OPERATIONAL_REASON_METADATA = {
   runtime_projection_missing: {
     category: "runtime",
     dependencyType: "runtime_projection",
-    title: "Runtime projection missing",
+    title: "Runtime has not been built yet",
     action: {
-      id: "open_setup_route",
+      id: "refresh_projection",
       kind: "route",
-      label: "Open setup runtime",
+      label: "Open truth and runtime",
       target: {
-        path: "/setup/runtime",
-        section: "runtime",
+        path: TRUTH_ROUTE,
+        section: "truth",
       },
       requiredRole: "operator",
     },
@@ -199,14 +328,14 @@ const OPERATIONAL_REASON_METADATA = {
   projection_missing: {
     category: "runtime",
     dependencyType: "runtime_projection",
-    title: "Runtime projection missing",
+    title: "Runtime has not been built yet",
     action: {
       id: "refresh_projection",
       kind: "route",
-      label: "Open runtime setup",
+      label: "Open truth and runtime",
       target: {
-        path: "/setup/runtime",
-        section: "runtime",
+        path: TRUTH_ROUTE,
+        section: "truth",
       },
       requiredRole: "operator",
     },
@@ -214,14 +343,14 @@ const OPERATIONAL_REASON_METADATA = {
   runtime_projection_stale: {
     category: "runtime",
     dependencyType: "runtime_projection",
-    title: "Runtime projection stale",
+    title: "Runtime needs refresh",
     action: {
-      id: "open_setup_route",
+      id: "refresh_projection",
       kind: "route",
-      label: "Review runtime setup",
+      label: "Refresh runtime",
       target: {
-        path: "/setup/runtime",
-        section: "runtime",
+        path: TRUTH_ROUTE,
+        section: "truth",
       },
       requiredRole: "operator",
     },
@@ -229,14 +358,14 @@ const OPERATIONAL_REASON_METADATA = {
   projection_stale: {
     category: "runtime",
     dependencyType: "runtime_projection",
-    title: "Runtime projection stale",
+    title: "Runtime needs refresh",
     action: {
       id: "refresh_projection",
       kind: "route",
-      label: "Review runtime setup",
+      label: "Refresh runtime",
       target: {
-        path: "/setup/runtime",
-        section: "runtime",
+        path: TRUTH_ROUTE,
+        section: "truth",
       },
       requiredRole: "operator",
     },
@@ -244,14 +373,14 @@ const OPERATIONAL_REASON_METADATA = {
   truth_version_drift: {
     category: "runtime",
     dependencyType: "runtime_projection",
-    title: "Runtime projection drifted from approved truth",
+    title: "Runtime is out of sync with approved truth",
     action: {
       id: "refresh_projection",
       kind: "route",
-      label: "Refresh projection",
+      label: "Review truth and refresh runtime",
       target: {
-        path: "/setup/runtime",
-        section: "runtime",
+        path: TRUTH_ROUTE,
+        section: "truth",
       },
       requiredRole: "operator",
     },
@@ -259,14 +388,14 @@ const OPERATIONAL_REASON_METADATA = {
   runtime_authority_unavailable: {
     category: "runtime",
     dependencyType: "runtime_authority",
-    title: "Runtime authority unavailable",
+    title: "Runtime authority is unavailable",
     action: {
-      id: "open_setup_route",
+      id: "review_runtime_authority",
       kind: "route",
-      label: "Review runtime authority",
+      label: "Review truth and runtime",
       target: {
-        path: "/setup/runtime",
-        section: "runtime",
+        path: TRUTH_ROUTE,
+        section: "truth",
       },
       requiredRole: "operator",
     },
@@ -274,14 +403,14 @@ const OPERATIONAL_REASON_METADATA = {
   authority_invalid: {
     category: "runtime",
     dependencyType: "runtime_authority",
-    title: "Runtime authority invalid",
+    title: "Runtime repair is required",
     action: {
       id: "rebuild_runtime",
       kind: "route",
-      label: "Rebuild runtime",
+      label: "Open runtime repair",
       target: {
-        path: "/setup/runtime",
-        section: "runtime",
+        path: TRUTH_ROUTE,
+        section: "truth",
       },
       requiredRole: "operator",
     },
@@ -289,14 +418,14 @@ const OPERATIONAL_REASON_METADATA = {
   projection_build_failed: {
     category: "runtime",
     dependencyType: "runtime_projection",
-    title: "Runtime projection build failed",
+    title: "Runtime build failed",
     action: {
       id: "rebuild_runtime",
       kind: "route",
-      label: "Rebuild runtime",
+      label: "Open runtime repair",
       target: {
-        path: "/setup/runtime",
-        section: "runtime",
+        path: TRUTH_ROUTE,
+        section: "truth",
       },
       requiredRole: "operator",
     },
@@ -304,14 +433,14 @@ const OPERATIONAL_REASON_METADATA = {
   repair_pending: {
     category: "runtime",
     dependencyType: "runtime_projection",
-    title: "Runtime repair pending",
+    title: "Runtime repair is still running",
     action: {
       id: "refresh_projection",
       kind: "route",
-      label: "Monitor runtime repair",
+      label: "Monitor runtime state",
       target: {
-        path: "/setup/runtime",
-        section: "runtime",
+        path: TRUTH_ROUTE,
+        section: "truth",
       },
       requiredRole: "operator",
     },
@@ -319,13 +448,14 @@ const OPERATIONAL_REASON_METADATA = {
   source_dependency_failed: {
     category: "runtime",
     dependencyType: "runtime_dependency",
-    title: "Runtime dependency failed",
+    title: "A required source sync failed",
     action: {
       id: "investigate_dependency_failure",
-      kind: "focus",
-      label: "Investigate dependency failure",
+      kind: "route",
+      label: "Open truth and review",
       target: {
-        section: "runtime",
+        path: TRUTH_ROUTE,
+        section: "truth",
       },
       requiredRole: "operator",
     },
@@ -333,14 +463,14 @@ const OPERATIONAL_REASON_METADATA = {
   approval_required: {
     category: "runtime",
     dependencyType: "approved_truth",
-    title: "Truth approval required",
+    title: "Review and publish business truth",
     action: {
       id: "verify_truth_publish",
       kind: "route",
-      label: "Open truth setup",
+      label: "Continue AI setup",
       target: {
-        path: "/setup/studio",
-        section: "truth",
+        path: CANONICAL_SETUP_ROUTE,
+        section: "setup",
       },
       requiredRole: "operator",
     },
@@ -348,14 +478,14 @@ const OPERATIONAL_REASON_METADATA = {
   review_required: {
     category: "review",
     dependencyType: "review",
-    title: "Review required",
+    title: "Truth review is required",
     action: {
       id: "open_review_workspace",
       kind: "route",
-      label: "Open review workspace",
+      label: "Open truth review",
       target: {
-        path: "/settings?tab=knowledge-review",
-        section: "review",
+        path: TRUTH_ROUTE,
+        section: "truth",
       },
       requiredRole: "operator",
     },
@@ -371,9 +501,10 @@ function getReasonMetadata(reasonCode = "") {
       title: "Operational blocker",
       action: {
         id: "review_operational_blocker",
-        kind: "focus",
-        label: "Review blocker",
+        kind: "route",
+        label: "Open home",
         target: {
+          path: PRODUCT_HOME_ROUTE,
           section: "operational",
         },
         requiredRole: "operator",
@@ -397,10 +528,10 @@ function isActionAllowedForRole(action = {}, viewerRole = "") {
     required === "owner"
       ? 3
       : required === "admin"
-      ? 2
-      : required === "operator"
-      ? 1
-      : 0;
+        ? 2
+        : required === "operator"
+          ? 1
+          : 0;
 
   return roleRank(viewerRole) >= minimum;
 }
@@ -408,17 +539,26 @@ function isActionAllowedForRole(action = {}, viewerRole = "") {
 function buildRepairActionDescriptor(reasonCode = "", overrides = {}) {
   const metadata = getReasonMetadata(reasonCode);
   const action = metadata.action || {};
-  const target = {
+  const target = canonicalizeRepairTarget(reasonCode, {
     ...(action.target || {}),
     ...(overrides.target && typeof overrides.target === "object" ? overrides.target : {}),
-  };
+  });
+  const path = normalizeLegacyRepairPath(
+    overrides.path || target.path || action?.target?.path || "",
+    reasonCode
+  );
+
+  if (path) {
+    target.path = path;
+  }
 
   return {
     id: s(overrides.id || action.id || "review_operational_blocker"),
-    kind: lower(overrides.kind || action.kind || "focus"),
-    label: s(overrides.label || action.label || "Review blocker"),
+    kind: lower(overrides.kind || action.kind || "route"),
+    label: s(overrides.label || action.label || "Open home"),
     requiredRole: lower(overrides.requiredRole || action.requiredRole || "operator"),
     allowed: bool(overrides.allowed, false),
+    path,
     target,
   };
 }
@@ -445,6 +585,21 @@ function buildOperationalBlockerItem(sample = {}, viewerRole = "") {
   };
 }
 
+function dedupeRepairActions(actions = []) {
+  const byId = new Map();
+
+  for (const action of arr(actions)) {
+    const item = obj(action);
+    const key = s(item.id) || s(item.path);
+    if (!key) continue;
+    if (!byId.has(key)) {
+      byId.set(key, item);
+    }
+  }
+
+  return [...byId.values()];
+}
+
 function buildOperationalBlockers({ voice = {}, meta = {}, runtime = {}, viewerRole = "" } = {}) {
   const items = [...arr(voice.samples), ...arr(meta.samples), ...arr(runtime.samples)]
     .map((sample) => buildOperationalBlockerItem(sample, viewerRole))
@@ -452,9 +607,8 @@ function buildOperationalBlockers({ voice = {}, meta = {}, runtime = {}, viewerR
   const reasonCodes = Array.from(
     new Set(items.map((item) => item.reasonCode).filter(Boolean))
   );
-  const repairActions = Array.from(
-    new Map(items.map((item) => [item.suggestedRepairActionId, item.repairAction]))
-      .values()
+  const repairActions = dedupeRepairActions(
+    items.map((item) => item.repairAction)
   );
 
   return {
@@ -522,8 +676,8 @@ function finalizeOperationalReadinessSummary(summary = {}, { enforced = false, v
       summary?.ok !== true
         ? "attention"
         : total > 0
-        ? "blocked"
-        : "ready",
+          ? "blocked"
+          : "ready",
     executionPolicy: {
       posture: total > 0 ? "blocked_until_repair" : "allowed",
       strictestOutcome: total > 0 ? "blocked_until_repair" : "allowed",
@@ -781,6 +935,7 @@ export function shouldEnforceOperationalReadinessOnStartup({
 export function buildOperationalReadinessBlockerError(summary = {}) {
   const voice = summary?.blockers?.voice || {};
   const meta = summary?.blockers?.meta || {};
+  const runtime = summary?.blockers?.runtime || {};
   const details = [
     n(voice.missingSettings)
       ? `voice settings missing: ${n(voice.missingSettings)}`
@@ -796,6 +951,15 @@ export function buildOperationalReadinessBlockerError(summary = {}) {
       : "",
     n(meta.missingPageAccessToken)
       ? `meta provider secrets missing: ${n(meta.missingPageAccessToken)}`
+      : "",
+    n(runtime.missingProjection)
+      ? `runtime projection missing: ${n(runtime.missingProjection)}`
+      : "",
+    n(runtime.staleProjection)
+      ? `runtime projection stale: ${n(runtime.staleProjection)}`
+      : "",
+    n(runtime.invalidProjection)
+      ? `runtime projection invalid: ${n(runtime.invalidProjection)}`
       : "",
   ].filter(Boolean);
 
@@ -839,7 +1003,7 @@ export function buildReadinessSurface({
   message = "",
 } = {}) {
   const items = arr(blockers)
-    .map((item) => item && typeof item === "object" ? item : null)
+    .map((item) => (item && typeof item === "object" ? item : null))
     .filter(Boolean);
 
   return {
@@ -847,8 +1011,8 @@ export function buildReadinessSurface({
     blocked: items.some((item) => item.blocked),
     message: s(message),
     blockers: items,
-    repairActions: items
-      .map((item) => obj(item.nextAction))
-      .filter((item) => s(item.id)),
+    repairActions: dedupeRepairActions(
+      items.map((item) => obj(item.nextAction)).filter((item) => s(item.id))
+    ),
   };
 }

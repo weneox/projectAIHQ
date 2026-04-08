@@ -10,22 +10,59 @@ function arr(value) {
   return Array.isArray(value) ? value : [];
 }
 
-function normalizeSetupRoute(target = "") {
-  const value = s(target);
+function splitRoute(value = "") {
+  const raw = s(value);
+  if (!raw) return { pathname: "", search: "" };
+  const [pathname, search = ""] = raw.split("?");
+  return {
+    pathname: s(pathname),
+    search: s(search),
+  };
+}
 
-  if (!value) return "/home?assistant=setup";
-  if (value === "/setup" || value.startsWith("/setup/")) {
-    return "/home?assistant=setup";
-  }
-
+function normalizeSetupRoute(_target = "") {
   return "/home?assistant=setup";
 }
 
+function normalizeLegacyAppRoute(target = "") {
+  const raw = s(target);
+  if (!raw) return "";
+
+  const { pathname, search } = splitRoute(raw);
+  const normalizedPath = pathname.toLowerCase();
+
+  if (!normalizedPath) return "";
+
+  if (normalizedPath === "/setup/runtime" || normalizedPath.startsWith("/setup/runtime/")) {
+    return "/truth";
+  }
+
+  if (normalizedPath === "/setup" || normalizedPath.startsWith("/setup/")) {
+    return normalizeSetupRoute(raw);
+  }
+
+  if (normalizedPath === "/settings") {
+    const params = new URLSearchParams(search);
+    const tab = s(params.get("tab")).toLowerCase();
+    if (["knowledge-review", "truth", "runtime"].includes(tab)) {
+      return "/truth";
+    }
+  }
+
+  return raw;
+}
+
 function normalizeRoute(target = "", fallback = "/workspace") {
-  const value = s(target);
+  const value = normalizeLegacyAppRoute(target);
   if (!value) return fallback;
   if (value.startsWith("/")) return value;
   return `/${value}`;
+}
+
+function getComparablePath(path = "") {
+  const value = normalizeLegacyAppRoute(path);
+  const { pathname } = splitRoute(value);
+  return pathname;
 }
 
 function hasWorkspaceSignal(workspace = {}) {
@@ -83,21 +120,26 @@ export function isForcedWorkspaceEntryEnabled() {
 }
 
 export function isSetupPath(path = "") {
-  const next = s(path);
-  return next === "/setup" || next.startsWith("/setup/");
+  const raw = s(path);
+  const normalized = normalizeLegacyAppRoute(raw);
+  return (
+    normalized === "/home?assistant=setup" ||
+    raw === "/setup" ||
+    raw.startsWith("/setup/")
+  );
 }
 
 export function isWorkspaceSelectionPath(path = "") {
-  return s(path) === WORKSPACE_SELECTION_ROUTE;
+  return getComparablePath(path) === WORKSPACE_SELECTION_ROUTE;
 }
 
 export function isCoreAppPath(path = "") {
-  const next = s(path);
+  const next = getComparablePath(path);
   return CORE_APP_ROUTE_SET.has(next);
 }
 
 export function isInternalOnlyPath(path = "") {
-  const next = s(path);
+  const next = getComparablePath(path);
   return INTERNAL_ONLY_ROUTE_SET.has(next);
 }
 
@@ -108,30 +150,16 @@ export function getCanonicalWorkspaceContract(payload = {}) {
   const destination = obj(root.destination || source.destination);
 
   return {
-    setupCompleted: !!(
-      source.setupCompleted ??
-      source.workspaceReady ??
-      false
-    ),
+    setupCompleted: !!(source.setupCompleted ?? source.workspaceReady ?? false),
     setupRequired: !!(source.setupRequired ?? !source.workspaceReady),
-    workspaceReady: !!(
-      source.workspaceReady ??
-      source.setupCompleted ??
-      false
-    ),
+    workspaceReady: !!(source.workspaceReady ?? source.setupCompleted ?? false),
     destination,
     routeHint: normalizeRoute(source.routeHint || destination.path, ""),
     nextRoute: normalizeRoute(
-      destination.path ||
-        source.routeHint ||
-        source.nextRoute ||
-        "/workspace"
+      destination.path || source.routeHint || source.nextRoute || "/workspace"
     ),
     nextSetupRoute: normalizeSetupRoute(
-      source.nextSetupRoute ||
-        destination.path ||
-        source.routeHint ||
-        "/setup"
+      source.nextSetupRoute || destination.path || source.routeHint || "/setup"
     ),
   };
 }
@@ -180,13 +208,11 @@ export function hasMultipleWorkspaceChoices(auth = {}) {
 export function resolveWorkspaceContractRoute(payload = {}) {
   const workspace = getCanonicalWorkspaceContract(payload);
   const setupCompleted = workspace.workspaceReady;
-  const nextRoute = s(workspace.nextRoute || "/workspace");
-  const nextSetupRoute = workspace.nextSetupRoute;
+  const nextRoute = normalizeRoute(workspace.nextRoute || "/workspace");
+  const nextSetupRoute = normalizeSetupRoute(workspace.nextSetupRoute);
 
   if (!setupCompleted) {
-    return isSetupPath(nextSetupRoute)
-      ? normalizeSetupRoute(nextSetupRoute)
-      : "/home?assistant=setup";
+    return nextSetupRoute;
   }
 
   if (nextRoute === "/workspace") {
@@ -210,3 +236,11 @@ export function resolveAuthenticatedLanding({
 
   return PRODUCT_HOME_ROUTE;
 }
+
+export const __test__ = {
+  splitRoute,
+  getComparablePath,
+  normalizeLegacyAppRoute,
+  normalizeRoute,
+  normalizeSetupRoute,
+};
