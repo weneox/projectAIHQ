@@ -49,6 +49,7 @@ export default defineConfig([
       },
     },
     rules: {
+      "react/prop-types": "off",
       "no-unused-vars": [
         "error",
         {
@@ -70,8 +71,28 @@ export default defineConfig([
   },
 
   {
+    files: ["src/env/**/*.{js,jsx}"],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+      },
+    },
+  },
+
+  {
+    files: ["public/sw.js"],
+    languageOptions: {
+      globals: {
+        ...globals.serviceworker,
+      },
+    },
+  },
+
+  {
     files: [
       "vite.config.js",
+      "vitest*.config.js",
       "eslint.config.js",
       "postcss.config.js",
       "tailwind.config.js",
@@ -97,6 +118,18 @@ export default defineConfig([
         ...globals.node,
         ...vitestGlobals,
       },
+    },
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+      "react-refresh/only-export-components": "off",
+    },
+  },
+
+  {
+    files: ["src/test/mocks/**/*.{js,jsx}"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+      "react-refresh/only-export-components": "off",
     },
   },
 ]);

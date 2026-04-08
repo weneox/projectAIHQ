@@ -60,7 +60,6 @@ function shouldUseDevProxyBase(
 ) {
   if (!dev) return false;
   if (!isAbsoluteUrl(rawBase)) return false;
-
   if (!browserOrigin) return false;
 
   try {
@@ -231,7 +230,9 @@ export async function apiRequest(path, options = {}) {
         didTimeout = true;
         try {
           controller.abort();
-        } catch {}
+        } catch {
+          // Ignore abort failures.
+        }
       }, Number(timeoutMs));
     }
   } else if (externalSignal) {

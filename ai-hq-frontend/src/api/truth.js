@@ -487,13 +487,6 @@ function pickFirstObject(...values) {
   return {};
 }
 
-function pickFirstArray(...values) {
-  for (const value of values) {
-    if (Array.isArray(value) && value.length) return value;
-  }
-  return [];
-}
-
 function buildQuery(params = {}) {
   const query = new URLSearchParams();
 
