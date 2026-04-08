@@ -97,7 +97,7 @@ function collectLatestFinalize(truth = {}) {
   };
 }
 
-function collectPolicyPosture(summary = {}, truth = {}) {
+function collectPolicyPosture(summary = {}) {
   const source = obj(summary.policyPosture);
   const approvalPolicy = obj(obj(summary.truth).approvalPolicy);
   return {
@@ -166,7 +166,9 @@ function MetricCard({ label, value, hint, tone = "neutral" }) {
           {value}
         </div>
         {hint ? (
-          <div className="text-xs leading-5 text-slate-500 dark:text-slate-400">{hint}</div>
+          <div className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+            {hint}
+          </div>
         ) : null}
       </div>
     </Card>
@@ -262,13 +264,32 @@ export function GovernanceSignalStrip({
       <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Approved Truth"
-          value={s(truth.approval?.version || truth.latestVersionId || truthSummary.latestVersionId || "Pending")}
+          value={s(
+            truth.approval?.version ||
+              truth.latestVersionId ||
+              truthSummary.latestVersionId ||
+              "Pending"
+          )}
           hint={
-            s(truth.approval?.approvedAt || truth.approvedAt || truthSummary.approvedAt)
-              ? `Latest approval ${formatWhen(truth.approval?.approvedAt || truth.approvedAt || truthSummary.approvedAt)}`
+            s(
+              truth.approval?.approvedAt ||
+                truth.approvedAt ||
+                truthSummary.approvedAt
+            )
+              ? `Latest approval ${formatWhen(
+                  truth.approval?.approvedAt ||
+                    truth.approvedAt ||
+                    truthSummary.approvedAt
+                )}`
               : "No approved truth version is available."
           }
-          tone={s(truthSummary.latestVersionId || truth.latestVersionId || truth.approval?.version) ? "success" : "warn"}
+          tone={s(
+            truthSummary.latestVersionId ||
+              truth.latestVersionId ||
+              truth.approval?.version
+          )
+            ? "success"
+            : "warn"}
         />
         <MetricCard
           label="Review Pressure"
@@ -327,7 +348,7 @@ export default function GovernanceCockpit({
   const governance = obj(latestFinalize.governance);
   const primaryRepair = collectRuntimeRepair(runtime, readiness);
   const affectedSurfaces = arr(runtimeHealth.affectedSurfaces);
-  const policyPosture = collectPolicyPosture(summary, truth);
+  const policyPosture = collectPolicyPosture(summary);
   const channelAutonomy = collectChannelAutonomy(summary);
   const policyControls = collectPolicyControls(summary);
   const decisionAudit = collectDecisionAudit(summary);
@@ -380,17 +401,23 @@ export default function GovernanceCockpit({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={s(truthSummary.latestVersionId || truth.approval?.version) ? "success" : "warn"} variant="subtle" dot>
-              {s(truthSummary.latestVersionId || truth.approval?.version) ? "Approved truth present" : "Truth approval required"}
-            </Badge>
-            <Badge tone={hasRuntimeTelemetry ? toneForHealth(runtimeStatus) : "neutral"} variant="subtle" dot>
-              Runtime {titleize(runtimeStatus || "unknown")}
-            </Badge>
             <Badge
-              tone={policyTone}
+              tone={s(truthSummary.latestVersionId || truth.approval?.version) ? "success" : "warn"}
               variant="subtle"
               dot
             >
+              {s(truthSummary.latestVersionId || truth.approval?.version)
+                ? "Approved truth present"
+                : "Truth approval required"}
+            </Badge>
+            <Badge
+              tone={hasRuntimeTelemetry ? toneForHealth(runtimeStatus) : "neutral"}
+              variant="subtle"
+              dot
+            >
+              Runtime {titleize(runtimeStatus || "unknown")}
+            </Badge>
+            <Badge tone={policyTone} variant="subtle" dot>
               {titleize(policyPosture.executionPosture || "unknown")}
             </Badge>
           </div>
@@ -402,7 +429,9 @@ export default function GovernanceCockpit({
             value={s(truth.approval?.version || truthSummary.latestVersionId || "Pending")}
             hint={
               s(truth.approval?.approvedAt || truthSummary.approvedAt)
-                ? `${formatWhen(truth.approval?.approvedAt || truthSummary.approvedAt)} by ${s(truth.approval?.approvedBy || truthSummary.approvedBy || "operator")}`
+                ? `${formatWhen(truth.approval?.approvedAt || truthSummary.approvedAt)} by ${s(
+                    truth.approval?.approvedBy || truthSummary.approvedBy || "operator"
+                  )}`
                 : "No approved truth version is currently available."
             }
             tone={s(truthSummary.latestVersionId || truth.approval?.version) ? "success" : "warn"}
@@ -410,7 +439,9 @@ export default function GovernanceCockpit({
           <MetricCard
             label="Pending Review"
             value={String(Number(reviewQueue.pending || 0))}
-            hint={`${Number(reviewQueue.conflicts || 0)} conflict${Number(reviewQueue.conflicts || 0) === 1 ? "" : "s"} waiting for review.`}
+            hint={`${Number(reviewQueue.conflicts || 0)} conflict${
+              Number(reviewQueue.conflicts || 0) === 1 ? "" : "s"
+            } waiting for review.`}
             tone={Number(reviewQueue.conflicts || 0) > 0 ? "warn" : "neutral"}
           />
           <MetricCard
@@ -430,7 +461,11 @@ export default function GovernanceCockpit({
             value={titleize(policyPosture.executionPosture || "unknown")}
             hint={
               policyPosture.requiredAction
-                ? `${policyPosture.requiredAction}${policyPosture.requiredRole ? ` · ${titleize(policyPosture.requiredRole)}` : ""}`
+                ? `${policyPosture.requiredAction}${
+                    policyPosture.requiredRole
+                      ? ` · ${titleize(policyPosture.requiredRole)}`
+                      : ""
+                  }`
                 : policyPosture.explanation
             }
             tone={policyTone}
@@ -446,7 +481,7 @@ export default function GovernanceCockpit({
                     Policy Posture
                   </div>
                   <div className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">
-                     Approval and runtime state
+                    Approval and runtime state
                   </div>
                 </div>
                 <Badge tone={policyTone} variant="subtle" dot>
@@ -488,7 +523,9 @@ export default function GovernanceCockpit({
                 empty="No policy driver telemetry was returned."
               />
 
-              {(policyPosture.reviewRequired || policyPosture.handoffRequired || policyPosture.blockedUntilRepair) ? (
+              {policyPosture.reviewRequired ||
+              policyPosture.handoffRequired ||
+              policyPosture.blockedUntilRepair ? (
                 <div className="flex flex-wrap gap-2">
                   {policyPosture.reviewRequired ? (
                     <Badge tone="warn" variant="subtle">
@@ -582,7 +619,9 @@ export default function GovernanceCockpit({
                       </div>
                       <div className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
                         {item.requiredAction
-                          ? `Next step: ${item.requiredAction}${item.requiredRole ? ` · ${titleize(item.requiredRole)}` : ""}`
+                          ? `Next step: ${item.requiredAction}${
+                              item.requiredRole ? ` · ${titleize(item.requiredRole)}` : ""
+                            }`
                           : "No explicit next step was returned."}
                       </div>
                       {item.nextAction?.label && item.nextAction.allowed !== false ? (
@@ -610,108 +649,113 @@ export default function GovernanceCockpit({
         </div>
 
         <div ref={policyControlsRef}>
-        <Card variant="surface" className="border-t rounded-none">
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
-                  Policy Controls
+          <Card variant="surface" className="border-t rounded-none">
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                    Policy Controls
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">
+                    Operator-manageable autonomy controls
+                  </div>
                 </div>
-                <div className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">
-                  Operator-manageable autonomy controls
+                <Badge tone="info" variant="subtle" dot>
+                  {titleize(policyControls.viewerRole || "member")}
+                </Badge>
+              </div>
+
+              <div className="text-sm leading-6 text-slate-600 dark:text-slate-400">
+                Controls can tighten autonomy by channel, but they never bypass strict runtime authority, repair-required posture, or blocked truth governance.
+              </div>
+
+              {policyControlState.error ? (
+                <div className="border-l-2 border-rose-200 px-4 py-3 text-sm text-rose-700 dark:border-rose-400/20 dark:text-rose-200">
+                  {policyControlState.error}
                 </div>
-              </div>
-              <Badge tone="info" variant="subtle" dot>
-                {titleize(policyControls.viewerRole || "member")}
-              </Badge>
-            </div>
+              ) : null}
 
-            <div className="text-sm leading-6 text-slate-600 dark:text-slate-400">
-              Controls can tighten autonomy by channel, but they never bypass strict runtime authority, repair-required posture, or blocked truth governance.
-            </div>
+              {policyControls.cannotLoosenAutonomy ? (
+                <div className="border-l-2 border-amber-200 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/20 dark:text-amber-100">
+                  Runtime or truth safety posture currently forbids loosening autonomy. Safer control modes remain available.
+                </div>
+              ) : null}
 
-            {policyControlState.error ? (
-              <div className="border-l-2 border-rose-200 px-4 py-3 text-sm text-rose-700 dark:border-rose-400/20 dark:text-rose-200">
-                {policyControlState.error}
-              </div>
-            ) : null}
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {[policyControls.tenantDefault, ...policyControls.items]
+                  .filter((item) => Object.keys(obj(item)).length > 0)
+                  .map((item) => {
+                    const savingKey = s(item.surface || "tenant");
+                    const saving =
+                      policyControlState.savingSurface &&
+                      policyControlState.savingSurface === savingKey;
 
-            {policyControls.cannotLoosenAutonomy ? (
-              <div className="border-l-2 border-amber-200 px-4 py-3 text-sm text-amber-800 dark:border-amber-400/20 dark:text-amber-100">
-                Runtime or truth safety posture currently forbids loosening autonomy. Safer control modes remain available.
-              </div>
-            ) : null}
-
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {[policyControls.tenantDefault, ...policyControls.items]
-                .filter((item) => Object.keys(obj(item)).length > 0)
-                .map((item) => {
-                  const savingKey = s(item.surface || "tenant");
-                  const saving =
-                    policyControlState.savingSurface &&
-                    policyControlState.savingSurface === savingKey;
-                  return (
-                    <div
-                      key={savingKey}
-                      className="border-t border-slate-200/80 px-4 py-4 dark:border-white/10"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm font-semibold text-slate-950 dark:text-white">
-                          {savingKey === "tenant" ? "Tenant Default" : titleize(savingKey)}
+                    return (
+                      <div
+                        key={savingKey}
+                        className="border-t border-slate-200/80 px-4 py-4 dark:border-white/10"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-sm font-semibold text-slate-950 dark:text-white">
+                            {savingKey === "tenant" ? "Tenant Default" : titleize(savingKey)}
+                          </div>
+                          <Badge tone={toneForPolicyOutcome(item.controlMode)} variant="subtle" dot>
+                            {titleize(item.controlMode || "autonomy_enabled")}
+                          </Badge>
                         </div>
-                        <Badge tone={toneForPolicyOutcome(item.controlMode)} variant="subtle" dot>
-                          {titleize(item.controlMode || "autonomy_enabled")}
-                        </Badge>
-                      </div>
-                      <div className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                        {item.changedAt
-                          ? `Updated ${formatWhen(item.changedAt)}${item.changedBy ? ` by ${item.changedBy}` : ""}`
-                          : "No explicit override recorded."}
-                      </div>
-                      <div className="mt-3 space-y-2">
-                        {arr(item.availableModes).map((mode) => (
-                          <button
-                            key={mode.mode}
-                            type="button"
-                            disabled={!mode.allowed || !onSavePolicyControl || saving}
-                            onClick={() =>
-                              onSavePolicyControl?.({
-                                surface: item.surface || "tenant",
-                                controlMode: mode.mode,
-                              })
+                        <div className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                          {item.changedAt
+                            ? `Updated ${formatWhen(item.changedAt)}${
+                                item.changedBy ? ` by ${item.changedBy}` : ""
+                              }`
+                            : "No explicit override recorded."}
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {arr(item.availableModes).map((mode) => (
+                            <button
+                              key={mode.mode}
+                              type="button"
+                              disabled={!mode.allowed || !onSavePolicyControl || saving}
+                              onClick={() =>
+                                onSavePolicyControl?.({
+                                  surface: item.surface || "tenant",
+                                  controlMode: mode.mode,
+                                })
+                              }
+                              className={[
+                                "flex w-full items-center justify-between rounded-[14px] border px-3 py-2 text-left text-sm transition",
+                                mode.mode === item.controlMode
+                                  ? "border-slate-900 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950"
+                                  : "border-slate-200 bg-white text-slate-700 dark:border-white/10 dark:bg-black/20 dark:text-slate-200",
+                                !mode.allowed || !onSavePolicyControl || saving
+                                  ? "cursor-not-allowed opacity-60"
+                                  : "hover:border-slate-400 dark:hover:border-white/30",
+                              ].join(" ")}
+                            >
+                              <span>{mode.label}</span>
+                              <span className="text-[11px] uppercase tracking-[0.14em] opacity-70">
+                                {mode.allowed ? "Apply" : titleize(mode.requiredRole)}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                        {arr(item.availableModes).some(
+                          (mode) => !mode.allowed && mode.unavailableReason
+                        ) ? (
+                          <div className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                            {
+                              arr(item.availableModes).find(
+                                (mode) => !mode.allowed && mode.unavailableReason
+                              )?.unavailableReason
                             }
-                            className={[
-                              "flex w-full items-center justify-between rounded-[14px] border px-3 py-2 text-left text-sm transition",
-                              mode.mode === item.controlMode
-                                ? "border-slate-900 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950"
-                                : "border-slate-200 bg-white text-slate-700 dark:border-white/10 dark:bg-black/20 dark:text-slate-200",
-                              !mode.allowed || !onSavePolicyControl || saving
-                                ? "cursor-not-allowed opacity-60"
-                                : "hover:border-slate-400 dark:hover:border-white/30",
-                            ].join(" ")}
-                          >
-                            <span>{mode.label}</span>
-                            <span className="text-[11px] uppercase tracking-[0.14em] opacity-70">
-                              {mode.allowed ? "Apply" : titleize(mode.requiredRole)}
-                            </span>
-                          </button>
-                        ))}
+                          </div>
+                        ) : null}
                       </div>
-                      {arr(item.availableModes).some((mode) => !mode.allowed && mode.unavailableReason) ? (
-                        <div className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                          {
-                            arr(item.availableModes).find(
-                              (mode) => !mode.allowed && mode.unavailableReason
-                            )?.unavailableReason
-                          }
-                        </div>
-                      ) : null}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
         </div>
 
         <div ref={historyRef}>
@@ -742,7 +786,9 @@ export default function GovernanceCockpit({
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <div className="text-sm font-medium text-slate-900 dark:text-white">Trust and freshness</div>
+                  <div className="text-sm font-medium text-slate-900 dark:text-white">
+                    Trust and freshness
+                  </div>
                   <TagList
                     items={[
                       governance.trust?.strongestTier,
@@ -754,7 +800,9 @@ export default function GovernanceCockpit({
                   />
                 </div>
                 <div className="space-y-2">
-                  <div className="text-sm font-medium text-slate-900 dark:text-white">Review posture</div>
+                  <div className="text-sm font-medium text-slate-900 dark:text-white">
+                    Review posture
+                  </div>
                   <TagList
                     items={[
                       governance.disposition,
@@ -770,7 +818,9 @@ export default function GovernanceCockpit({
                 <MetricCard
                   label="Strong Evidence"
                   value={String(Number(governance.support?.strongEvidenceCount || 0))}
-                  hint={`${Number(governance.support?.evidenceCount || 0)} total evidence point${Number(governance.support?.evidenceCount || 0) === 1 ? "" : "s"}`}
+                  hint={`${Number(governance.support?.evidenceCount || 0)} total evidence point${
+                    Number(governance.support?.evidenceCount || 0) === 1 ? "" : "s"
+                  }`}
                   tone="info"
                 />
                 <MetricCard
@@ -783,85 +833,97 @@ export default function GovernanceCockpit({
                   label="Stale Signals"
                   value={String(Number(governance.support?.staleEvidenceCount || 0))}
                   hint="Older signals are visible here instead of being flattened away."
-                  tone={Number(governance.support?.staleEvidenceCount || 0) > 0 ? "warn" : "neutral"}
+                  tone={
+                    Number(governance.support?.staleEvidenceCount || 0) > 0
+                      ? "warn"
+                      : "neutral"
+                  }
                 />
               </div>
             </div>
           </Card>
 
           <div ref={runtimeHealthRef}>
-          <Card variant="surface" className="border-t rounded-none" tone={hasRuntimeTelemetry ? toneForHealth(runtimeStatus) : "neutral"}>
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
-                    Runtime Health
+            <Card
+              variant="surface"
+              className="border-t rounded-none"
+              tone={hasRuntimeTelemetry ? toneForHealth(runtimeStatus) : "neutral"}
+            >
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+                      Runtime Health
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">
+                      Projection authority and repair
+                    </div>
                   </div>
-                  <div className="mt-1 text-lg font-semibold text-slate-950 dark:text-white">
-                    Projection authority and repair
+                  <Badge
+                    tone={hasRuntimeTelemetry ? toneForHealth(runtimeStatus) : "neutral"}
+                    variant="subtle"
+                    dot
+                  >
+                    {titleize(runtimeStatus || "unknown")}
+                  </Badge>
+                </div>
+
+                <div className="text-sm leading-6 text-slate-600 dark:text-slate-400">
+                  {autonomyHeadline}
+                </div>
+
+                <ImpactList
+                  title="Reason Codes"
+                  items={runtimeReasonCodes.length ? runtimeReasonCodes : [runtimeHealth.reasonCode]}
+                  empty="No active runtime health reason was returned."
+                />
+                <ImpactList
+                  title="Affected Surfaces"
+                  items={affectedSurfaces}
+                  empty="No affected surfaces were returned."
+                />
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="border-t border-slate-200/80 px-4 py-3 dark:border-white/10">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                      Last Known Good
+                    </div>
+                    <div className="mt-2 text-sm font-medium text-slate-900 dark:text-white">
+                      {s(runtimeHealth.lastKnownGood?.runtimeProjectionId || "Unavailable")}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      {runtimeHealth.lastKnownGood?.lastGoodAt
+                        ? `Observed ${formatWhen(runtimeHealth.lastKnownGood.lastGoodAt)}`
+                        : "Diagnostic visibility only. Never used as runtime authority."}
+                    </div>
+                  </div>
+                  <div className="border-t border-slate-200/80 px-4 py-3 dark:border-white/10">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                      Latest Failure
+                    </div>
+                    <div className="mt-2 text-sm font-medium text-slate-900 dark:text-white">
+                      {s(runtimeHealth.lastFailure?.errorCode || "None")}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                      {runtimeHealth.lastFailure?.finishedAt
+                        ? formatWhen(runtimeHealth.lastFailure.finishedAt)
+                        : "No recent failed projection repair was returned."}
+                    </div>
                   </div>
                 </div>
-                <Badge tone={hasRuntimeTelemetry ? toneForHealth(runtimeStatus) : "neutral"} variant="subtle" dot>
-                  {titleize(runtimeStatus || "unknown")}
-                </Badge>
+
+                {Object.keys(obj(primaryRepair)).length ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button onClick={() => onRunAction?.(primaryRepair)}>
+                      {s(primaryRepair.label || "Run recommended repair")}
+                    </Button>
+                    <div className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+                      Next repair: {titleize(runtimeHealth.nextRecommendedRepair?.action || primaryRepair.id)}
+                    </div>
+                  </div>
+                ) : null}
               </div>
-
-              <div className="text-sm leading-6 text-slate-600 dark:text-slate-400">
-                {autonomyHeadline}
-              </div>
-
-              <ImpactList
-                title="Reason Codes"
-                items={runtimeReasonCodes.length ? runtimeReasonCodes : [runtimeHealth.reasonCode]}
-                empty="No active runtime health reason was returned."
-              />
-              <ImpactList
-                title="Affected Surfaces"
-                items={affectedSurfaces}
-                empty="No affected surfaces were returned."
-              />
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="border-t border-slate-200/80 px-4 py-3 dark:border-white/10">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                    Last Known Good
-                  </div>
-                  <div className="mt-2 text-sm font-medium text-slate-900 dark:text-white">
-                    {s(runtimeHealth.lastKnownGood?.runtimeProjectionId || "Unavailable")}
-                  </div>
-                  <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    {runtimeHealth.lastKnownGood?.lastGoodAt
-                      ? `Observed ${formatWhen(runtimeHealth.lastKnownGood.lastGoodAt)}`
-                      : "Diagnostic visibility only. Never used as runtime authority."}
-                  </div>
-                </div>
-                <div className="border-t border-slate-200/80 px-4 py-3 dark:border-white/10">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
-                    Latest Failure
-                  </div>
-                  <div className="mt-2 text-sm font-medium text-slate-900 dark:text-white">
-                    {s(runtimeHealth.lastFailure?.errorCode || "None")}
-                  </div>
-                  <div className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    {runtimeHealth.lastFailure?.finishedAt
-                      ? formatWhen(runtimeHealth.lastFailure.finishedAt)
-                      : "No recent failed projection repair was returned."}
-                  </div>
-                </div>
-              </div>
-
-              {Object.keys(obj(primaryRepair)).length ? (
-                <div className="flex flex-wrap items-center gap-3">
-                  <Button onClick={() => onRunAction?.(primaryRepair)}>
-                    {s(primaryRepair.label || "Run recommended repair")}
-                  </Button>
-                  <div className="text-xs leading-5 text-slate-500 dark:text-slate-400">
-                    Next repair: {titleize(runtimeHealth.nextRecommendedRepair?.action || primaryRepair.id)}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </Card>
+            </Card>
           </div>
         </div>
 
@@ -877,7 +939,10 @@ export default function GovernanceCockpit({
                 </div>
               </div>
               <Badge tone="info" variant="subtle" dot>
-                {arr(finalizeImpact.canonicalAreas).length + arr(finalizeImpact.runtimeAreas).length} area{arr(finalizeImpact.canonicalAreas).length + arr(finalizeImpact.runtimeAreas).length === 1 ? "" : "s"}
+                {arr(finalizeImpact.canonicalAreas).length + arr(finalizeImpact.runtimeAreas).length} area
+                {arr(finalizeImpact.canonicalAreas).length + arr(finalizeImpact.runtimeAreas).length === 1
+                  ? ""
+                  : "s"}
               </Badge>
             </div>
 

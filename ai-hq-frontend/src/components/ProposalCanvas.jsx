@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Search,
@@ -90,8 +90,11 @@ function countQueueStates(items = []) {
     (acc, item) => {
       const status = rawStatusOf(item);
       if (status === "pending") acc.pending += 1;
-      else if (status === "in_progress" || status === "drafting") acc.inProgress += 1;
-      else acc.draft += 1;
+      else if (status === "in_progress" || status === "drafting") {
+        acc.inProgress += 1;
+      } else {
+        acc.draft += 1;
+      }
       return acc;
     },
     { draft: 0, inProgress: 0, pending: 0 }
@@ -134,7 +137,7 @@ export default function ProposalCanvas({
   wsStatus,
   busy = false,
 }) {
-  const [selected, setSelected] = useState(null);
+  const [selectedId, setSelectedId] = useState("");
 
   const filtered = useMemo(() => {
     const q = String(search || "").trim().toLowerCase();
@@ -148,15 +151,22 @@ export default function ProposalCanvas({
         p?.agent_key || p?.agentKey || p?.agent || ""
       ).toLowerCase();
 
-      return !q || t.includes(q) || c.includes(q) || id.includes(q) || agent.includes(q);
+      return (
+        !q ||
+        t.includes(q) ||
+        c.includes(q) ||
+        id.includes(q) ||
+        agent.includes(q)
+      );
     });
   }, [proposals, status, search]);
 
-  useEffect(() => {
-    if (!selected?.id) return;
-    const fresh = proposals.find((p) => String(p?.id) === String(selected?.id));
-    if (fresh) setSelected(fresh);
-  }, [proposals, selected?.id]);
+  const selected = useMemo(() => {
+    if (!selectedId) return null;
+    return (
+      proposals.find((p) => String(p?.id) === String(selectedId)) || null
+    );
+  }, [proposals, selectedId]);
 
   const wsState = wsStatus?.state || "disconnected";
   const WsIcon = wsState === "connected" ? Wifi : WifiOff;
@@ -164,10 +174,10 @@ export default function ProposalCanvas({
     status === "draft"
       ? stats?.draft ?? 0
       : status === "approved"
-      ? stats?.approved ?? 0
-      : status === "published"
-      ? stats?.published ?? 0
-      : stats?.rejected ?? 0;
+        ? stats?.approved ?? 0
+        : status === "published"
+          ? stats?.published ?? 0
+          : stats?.rejected ?? 0;
 
   const counts = {
     draft: stats?.draft ?? 0,
@@ -186,6 +196,14 @@ export default function ProposalCanvas({
   const split = featuredSplit(filtered);
   const queueBreakdown = useMemo(() => countQueueStates(filtered), [filtered]);
 
+  function handleOpen(item) {
+    setSelectedId(String(item?.id || ""));
+  }
+
+  function handleClose() {
+    setSelectedId("");
+  }
+
   return (
     <div className="relative space-y-6">
       <section className="relative overflow-hidden rounded-[34px] bg-[linear-gradient(180deg,rgba(5,10,20,0.94),rgba(3,8,16,0.88))] px-5 py-5 shadow-[0_26px_100px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.03)] backdrop-blur-2xl md:px-7 md:py-6">
@@ -201,7 +219,7 @@ export default function ProposalCanvas({
 
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.045] px-3 py-1.5 text-[11px] font-medium text-white/68 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                   <span className="h-1.5 w-1.5 rounded-full bg-cyan-300/90 shadow-[0_0_10px_rgba(34,211,238,0.75)]" />
-                  Single-surface review
+                  <span>Single-surface review</span>
                 </div>
               </div>
 
@@ -284,7 +302,9 @@ export default function ProposalCanvas({
                   <div className="inline-flex h-11 items-center gap-2 rounded-full bg-white/[0.04] px-4 text-[12px] text-white/66 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                     <span className={cn("h-2 w-2 rounded-full", stageTone(status).dot)} />
                     <span className="font-medium">{currentCount}</span>
-                    <span className="text-white/42">{STATUS_META[status]?.label}</span>
+                    <span className="text-white/42">
+                      {STATUS_META[status]?.label}
+                    </span>
                   </div>
 
                   <div className="inline-flex h-11 items-center gap-2 rounded-full bg-white/[0.04] px-4 text-[12px] text-white/58 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
@@ -325,15 +345,25 @@ export default function ProposalCanvas({
               <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-white/60">
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.04] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
                   <span className="text-white/36">Draft</span>
-                  <span className="font-medium text-white/78">{queueBreakdown.draft}</span>
+                  <span className="font-medium text-white/78">
+                    {queueBreakdown.draft}
+                  </span>
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.04] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                  <span className="text-white/36">{stageLabel({ status: "in_progress" })}</span>
-                  <span className="font-medium text-white/78">{queueBreakdown.inProgress}</span>
+                  <span className="text-white/36">
+                    {stageLabel({ status: "in_progress" })}
+                  </span>
+                  <span className="font-medium text-white/78">
+                    {queueBreakdown.inProgress}
+                  </span>
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/[0.04] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-                  <span className="text-white/36">{stageLabel({ status: "pending" })}</span>
-                  <span className="font-medium text-white/78">{queueBreakdown.pending}</span>
+                  <span className="text-white/36">
+                    {stageLabel({ status: "pending" })}
+                  </span>
+                  <span className="font-medium text-white/78">
+                    {queueBreakdown.pending}
+                  </span>
                 </div>
               </div>
             ) : null}
@@ -353,7 +383,7 @@ export default function ProposalCanvas({
           >
             <ProposalExpanded
               item={selected}
-              onClose={() => setSelected(null)}
+              onClose={handleClose}
               onApprove={onApprove}
               onReject={onReject}
               onPublish={onPublish}
@@ -371,7 +401,7 @@ export default function ProposalCanvas({
                     key={item?.id}
                     item={item}
                     isDimmed
-                    onOpen={setSelected}
+                    onOpen={handleOpen}
                   />
                 ))}
             </div>
@@ -400,7 +430,7 @@ export default function ProposalCanvas({
                   <section className="grid gap-5 xl:grid-cols-[minmax(0,1.4fr)_420px]">
                     <ProposalCard
                       item={split.featured}
-                      onOpen={setSelected}
+                      onOpen={handleOpen}
                       featured
                     />
 
@@ -409,7 +439,7 @@ export default function ProposalCanvas({
                         <ProposalCard
                           key={item?.id}
                           item={item}
-                          onOpen={setSelected}
+                          onOpen={handleOpen}
                           compact
                         />
                       ))}
@@ -423,7 +453,7 @@ export default function ProposalCanvas({
                       <ProposalCard
                         key={item?.id}
                         item={item}
-                        onOpen={setSelected}
+                        onOpen={handleOpen}
                       />
                     ))}
                   </div>

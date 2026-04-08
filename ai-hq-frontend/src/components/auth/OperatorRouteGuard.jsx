@@ -104,10 +104,7 @@ export default function OperatorRouteGuard({
     const cachedAuth = peekAppAuthContext();
     const cachedSession = peekAppSessionContext();
 
-    if (
-      cachedAuth?.authenticated ||
-      cachedSession?.auth?.authenticated
-    ) {
+    if (cachedAuth?.authenticated || cachedSession?.auth?.authenticated) {
       return deriveGuardState(cachedAuth, cachedSession, allowedRoles);
     }
 
@@ -157,7 +154,9 @@ export default function OperatorRouteGuard({
           const session = await getAppSessionContext();
           if (!alive) return;
           role = normalizeRole(session?.viewerRole) || role;
-        } catch {}
+        } catch {
+          // Session context can fail independently; fall back to auth-derived role.
+        }
 
         if (!alive) return;
 
@@ -170,10 +169,7 @@ export default function OperatorRouteGuard({
         const fallbackAuth = peekAppAuthContext() || cachedAuth;
         const fallbackSession = peekAppSessionContext() || cachedSession;
 
-        if (
-          fallbackAuth?.authenticated ||
-          fallbackSession?.auth?.authenticated
-        ) {
+        if (fallbackAuth?.authenticated || fallbackSession?.auth?.authenticated) {
           setState(deriveGuardState(fallbackAuth, fallbackSession, allowedRoles));
           return;
         }
@@ -195,7 +191,9 @@ export default function OperatorRouteGuard({
   }, [allowedRoles, localWorkspaceEntry]);
 
   if (state.loading) {
-    return <AppBootSurface label="Preparing workspace" detail="Loading operator access" />;
+    return (
+      <AppBootSurface label="Preparing workspace" detail="Loading operator access" />
+    );
   }
 
   if (state.unavailable) {

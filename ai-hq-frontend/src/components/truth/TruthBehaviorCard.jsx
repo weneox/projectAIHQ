@@ -44,7 +44,9 @@ export default function TruthBehaviorCard({
               <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
                 {row.label}
               </div>
-              <div className="mt-2 text-sm leading-6 text-slate-800">{row.value}</div>
+              <div className="mt-2 text-sm leading-6 text-slate-800">
+                {row.value}
+              </div>
             </div>
           ))}
         </div>
@@ -69,7 +71,7 @@ export function TruthBehaviorChangesCard({
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-            Behavior changes
+            {title}
           </div>
           <div className="mt-2 text-sm leading-6 text-slate-600">
             {safeChanges.length

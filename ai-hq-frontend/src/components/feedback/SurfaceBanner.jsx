@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { RefreshCw, X } from "lucide-react";
 
@@ -86,15 +86,21 @@ function compactUnavailableMessage(message) {
     .trim();
 }
 
-function compactDisplayMessage(message, tone) {
+function compactDisplayMessage(message) {
   const value = s(message);
   if (!value) return "";
 
   const exactMap = new Map([
     ["Saved cleanly.", "Saved"],
     ["Thread assigned.", "Assigned"],
-    ["Retry accepted. Waiting for outbound attempt status to move.", "Retry queued"],
-    ["Reply accepted. Waiting for outbound attempt status to confirm delivery.", "Reply queued"],
+    [
+      "Retry accepted. Waiting for outbound attempt status to move.",
+      "Retry queued",
+    ],
+    [
+      "Reply accepted. Waiting for outbound attempt status to confirm delivery.",
+      "Reply queued",
+    ],
     ["Join accepted.", "Join requested"],
   ]);
 
@@ -115,7 +121,7 @@ function buildAction(surface, refreshLabel) {
 function pushItem(items, nextItem) {
   if (!s(nextItem?.message)) return;
 
-  const displayMessage = compactDisplayMessage(nextItem.message, nextItem.tone);
+  const displayMessage = compactDisplayMessage(nextItem.message);
   const signature = `${nextItem.key}:${displayMessage}:${nextItem.message}`;
   if (items.some((item) => item.signature === signature)) return;
 
@@ -131,6 +137,13 @@ function NotificationCard({ item, onRemove }) {
   const [visible, setVisible] = useState(false);
   const closedRef = useRef(false);
 
+  const handleClose = useCallback(() => {
+    if (closedRef.current) return;
+    closedRef.current = true;
+    setVisible(false);
+    window.setTimeout(() => onRemove?.(), EXIT_MS);
+  }, [onRemove]);
+
   useEffect(() => {
     const enterId = window.requestAnimationFrame(() => setVisible(true));
     return () => window.cancelAnimationFrame(enterId);
@@ -138,16 +151,9 @@ function NotificationCard({ item, onRemove }) {
 
   useEffect(() => {
     if (!item.autoDismissMs) return undefined;
-    const timeoutId = window.setTimeout(() => handleClose(), item.autoDismissMs);
+    const timeoutId = window.setTimeout(handleClose, item.autoDismissMs);
     return () => window.clearTimeout(timeoutId);
-  }, [item.autoDismissMs]);
-
-  function handleClose() {
-    if (closedRef.current) return;
-    closedRef.current = true;
-    setVisible(false);
-    window.setTimeout(() => onRemove?.(), EXIT_MS);
-  }
+  }, [handleClose, item.autoDismissMs]);
 
   const hasAction = Boolean(item.action?.onClick);
 
@@ -168,8 +174,12 @@ function NotificationCard({ item, onRemove }) {
         />
 
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-medium leading-5">{item.displayMessage}</div>
-          {item.displayMessage !== item.fullMessage ? <span className="sr-only">{item.fullMessage}</span> : null}
+          <div className="truncate text-[13px] font-medium leading-5">
+            {item.displayMessage}
+          </div>
+          {item.displayMessage !== item.fullMessage ? (
+            <span className="sr-only">{item.fullMessage}</span>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
@@ -208,7 +218,11 @@ export default function SurfaceBanner({
   refreshLabel = "Refresh",
 }) {
   const overlayRoot = ensureOverlayRoot();
-  const [dismissedSignatures, setDismissedSignatures] = useState([]);
+
+  const [dismissState, setDismissState] = useState({
+    itemSignature: "",
+    dismissedSignatures: [],
+  });
 
   const items = useMemo(() => {
     const next = [];
@@ -283,15 +297,26 @@ export default function SurfaceBanner({
     }
 
     return next;
-  }, [errorMessage, refreshLabel, saveErrorMessage, saveSuccessMessage, surface, unavailableMessage]);
+  }, [
+    errorMessage,
+    refreshLabel,
+    saveErrorMessage,
+    saveSuccessMessage,
+    surface,
+    unavailableMessage,
+  ]);
 
   const itemSignature = items.map((item) => item.signature).join("|");
 
-  useEffect(() => {
-    setDismissedSignatures([]);
-  }, [itemSignature]);
+  const dismissedSignatures =
+    dismissState.itemSignature === itemSignature
+      ? dismissState.dismissedSignatures
+      : [];
 
-  const visibleItems = items.filter((item) => !dismissedSignatures.includes(item.signature));
+  const visibleItems = items.filter(
+    (item) => !dismissedSignatures.includes(item.signature)
+  );
+
   if (!visibleItems.length) return null;
 
   const content = (
@@ -301,9 +326,24 @@ export default function SurfaceBanner({
           key={item.signature}
           item={item}
           onRemove={() =>
-            setDismissedSignatures((current) =>
-              current.includes(item.signature) ? current : [...current, item.signature]
-            )
+            setDismissState((current) => {
+              const currentDismissed =
+                current.itemSignature === itemSignature
+                  ? current.dismissedSignatures
+                  : [];
+
+              if (currentDismissed.includes(item.signature)) {
+                return {
+                  itemSignature,
+                  dismissedSignatures: currentDismissed,
+                };
+              }
+
+              return {
+                itemSignature,
+                dismissedSignatures: [...currentDismissed, item.signature],
+              };
+            })
           }
         />
       ))}
