@@ -60,20 +60,28 @@ export function useExecutionsSurface() {
 
   const refresh = useCallback(async () => {
     beginRefresh();
+
     try {
       const [summaryResult, listResult] = await Promise.all([
         getDurableExecutionSummary(),
         listDurableExecutions({ status: "", limit: 160 }),
       ]);
+
       return succeedRefresh({
         summary: summaryResult,
         items: Array.isArray(listResult) ? listResult : [],
       });
     } catch (error) {
-      return failRefresh(getErrorMessage(error, "Durable execution data is temporarily unavailable."), {
-        fallbackData: EMPTY_SURFACE,
-        unavailable: true,
-      });
+      return failRefresh(
+        getErrorMessage(
+          error,
+          "Durable execution data is temporarily unavailable."
+        ),
+        {
+          fallbackData: EMPTY_SURFACE,
+          unavailable: true,
+        }
+      );
     }
   }, [beginRefresh, failRefresh, succeedRefresh]);
 
@@ -81,20 +89,29 @@ export function useExecutionsSurface() {
     async (id) => {
       const nextId = String(id || "").trim();
       if (!nextId) return;
+
       setSelectedId(nextId);
       beginDetailRefresh();
+
       try {
         const payload = await getDurableExecution(nextId);
+
         succeedDetailRefresh({
           execution: payload?.execution || null,
           attempts: Array.isArray(payload?.attempts) ? payload.attempts : [],
           auditTrail: Array.isArray(payload?.auditTrail) ? payload.auditTrail : [],
         });
       } catch (error) {
-        failDetailRefresh(getErrorMessage(error, "Execution detail is temporarily unavailable."), {
-          fallbackData: EMPTY_DETAIL,
-          unavailable: false,
-        });
+        failDetailRefresh(
+          getErrorMessage(
+            error,
+            "Execution detail is temporarily unavailable."
+          ),
+          {
+            fallbackData: EMPTY_DETAIL,
+            unavailable: false,
+          }
+        );
       }
     },
     [beginDetailRefresh, failDetailRefresh, succeedDetailRefresh]
@@ -102,14 +119,20 @@ export function useExecutionsSurface() {
 
   const retrySelectedExecution = useCallback(async () => {
     if (!selectedId) return null;
+
     beginSave();
+
     try {
-      await actionState.runAction("retry", () => retryDurableExecution(selectedId));
+      await actionState.runAction("retry", () =>
+        retryDurableExecution(selectedId)
+      );
       await refresh();
       await openExecution(selectedId);
       return succeedSave({ message: "Manual retry requested." });
     } catch (error) {
-      return failSave(getErrorMessage(error, "Unable to retry this execution."));
+      return failSave(
+        getErrorMessage(error, "Unable to retry this execution.")
+      );
     }
   }, [
     actionState,
@@ -122,29 +145,54 @@ export function useExecutionsSurface() {
   ]);
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
 
-  const items = data?.items || [];
+  const items = useMemo(
+    () => (Array.isArray(data?.items) ? data.items : EMPTY_SURFACE.items),
+    [data]
+  );
+
   const summary = data?.summary || null;
 
   const providers = useMemo(
-    () => [...new Set(items.map((item) => String(item.provider || "")).filter(Boolean))].sort(),
+    () =>
+      [...new Set(items.map((item) => String(item.provider || "")).filter(Boolean))].sort(),
     [items]
   );
 
   const channels = useMemo(
-    () => [...new Set(items.map((item) => String(item.channel || "")).filter(Boolean))].sort(),
+    () =>
+      [...new Set(items.map((item) => String(item.channel || "")).filter(Boolean))].sort(),
     [items]
   );
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const tenantValue = `${item.tenant_key || ""} ${item.tenant_id || ""}`.toLowerCase();
-      if (statusFilter && String(item.status || "").toLowerCase() !== statusFilter) return false;
-      if (providerFilter && String(item.provider || "").toLowerCase() !== providerFilter) return false;
-      if (channelFilter && String(item.channel || "").toLowerCase() !== channelFilter) return false;
-      if (tenantFilter && !tenantValue.includes(tenantFilter.toLowerCase())) return false;
+
+      if (statusFilter && String(item.status || "").toLowerCase() !== statusFilter) {
+        return false;
+      }
+
+      if (
+        providerFilter &&
+        String(item.provider || "").toLowerCase() !== providerFilter
+      ) {
+        return false;
+      }
+
+      if (
+        channelFilter &&
+        String(item.channel || "").toLowerCase() !== channelFilter
+      ) {
+        return false;
+      }
+
+      if (tenantFilter && !tenantValue.includes(tenantFilter.toLowerCase())) {
+        return false;
+      }
+
       return true;
     });
   }, [channelFilter, items, providerFilter, statusFilter, tenantFilter]);

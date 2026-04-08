@@ -15,8 +15,18 @@ function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
+function buildEmptyData(filters = DEFAULT_FILTERS) {
+  return {
+    incidents: [],
+    summary: null,
+    retentionPolicy: null,
+    filters,
+  };
+}
+
 export function useAdminIncidentsSurface() {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
+
   const {
     data,
     surface,
@@ -24,46 +34,40 @@ export function useAdminIncidentsSurface() {
     succeedRefresh,
     failRefresh,
   } = useAsyncSurfaceState({
-    initialData: () => ({
-      incidents: [],
-      summary: null,
-      retentionPolicy: null,
-      filters: DEFAULT_FILTERS,
-    }),
+    initialData: () => buildEmptyData(DEFAULT_FILTERS),
     initialLoading: true,
   });
 
-  const refreshIncidents = useCallback(async (nextFilters = DEFAULT_FILTERS) => {
-    beginRefresh();
-    try {
-      const response = await listRuntimeIncidents({
-        service: s(nextFilters.service),
-        severity: s(nextFilters.severity),
-        reasonCode: s(nextFilters.reasonCode),
-        sinceHours: s(nextFilters.sinceHours || "24"),
-        limit: s(nextFilters.limit || "50"),
-      });
+  const refreshIncidents = useCallback(
+    async (nextFilters = DEFAULT_FILTERS) => {
+      beginRefresh();
 
-      return succeedRefresh({
-        incidents: Array.isArray(response?.incidents) ? response.incidents : [],
-        summary: response?.summary || null,
-        retentionPolicy: response?.retentionPolicy || null,
-        filters: response?.filters || nextFilters,
-      });
-    } catch (error) {
-      return failRefresh(error, {
-        fallbackData: {
-          incidents: [],
-          summary: null,
-          retentionPolicy: null,
-          filters: nextFilters,
-        },
-      });
-    }
-  }, [beginRefresh, failRefresh, succeedRefresh]);
+      try {
+        const response = await listRuntimeIncidents({
+          service: s(nextFilters.service),
+          severity: s(nextFilters.severity),
+          reasonCode: s(nextFilters.reasonCode),
+          sinceHours: s(nextFilters.sinceHours || "24"),
+          limit: s(nextFilters.limit || "50"),
+        });
+
+        return succeedRefresh({
+          incidents: Array.isArray(response?.incidents) ? response.incidents : [],
+          summary: response?.summary || null,
+          retentionPolicy: response?.retentionPolicy || null,
+          filters: response?.filters || nextFilters,
+        });
+      } catch (error) {
+        return failRefresh(error, {
+          fallbackData: buildEmptyData(nextFilters),
+        });
+      }
+    },
+    [beginRefresh, failRefresh, succeedRefresh]
+  );
 
   useEffect(() => {
-    refreshIncidents(filters);
+    void refreshIncidents(DEFAULT_FILTERS);
   }, [refreshIncidents]);
 
   const patchFilter = useCallback((key, value) => {
