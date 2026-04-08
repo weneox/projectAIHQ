@@ -474,6 +474,26 @@ function buildCandidatesFromSynthesis({
     });
   }
 
+  for (const item of arr(profile.policyHighlights)) {
+    addListCandidate(candidates, {
+      tenantId,
+      tenantKey,
+      sourceId,
+      sourceRunId,
+      selectedClaims,
+      claimType: "policy_highlight",
+      fallbackScore: 0.4,
+      category: "policy",
+      itemKey: safeKeyPart(item, "policy"),
+      title: "Policy highlight",
+      valueText: item,
+      valueJson: { policy: item },
+      normalizedText: normalizeObservedText(item),
+      normalizedJson: { policy: item },
+      reviewReason: "Policy highlight selected from synthesized source evidence",
+    });
+  }
+
   addScalarCandidate(candidates, {
     tenantId,
     tenantKey,

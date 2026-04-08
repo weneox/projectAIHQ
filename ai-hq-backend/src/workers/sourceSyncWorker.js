@@ -2,6 +2,7 @@ import { cfg } from "../config.js";
 import { createTenantSourcesHelpers } from "../db/helpers/tenantSources.js";
 import { createTenantKnowledgeHelpers } from "../db/helpers/tenantKnowledge.js";
 import { createTenantSourceFusionHelpers } from "../db/helpers/tenantSourceFusion.js";
+import { createTenantSourceArtifactsHelpers } from "../db/helpers/tenantSourceArtifacts.js";
 import {
   buildSourceSyncRetryPlan,
   buildWorkerRunnerKey,
@@ -60,6 +61,7 @@ async function processClaimedSyncRun({ db, claimedRun, runnerKey }) {
   const sources = createTenantSourcesHelpers({ db });
   const knowledge = createTenantKnowledgeHelpers({ db });
   const fusion = createTenantSourceFusionHelpers({ db });
+  const artifacts = createTenantSourceArtifactsHelpers({ db });
 
   const source = await sources.getSourceById(claimedRun.source_id);
   if (!source?.id) {
@@ -82,6 +84,7 @@ async function processClaimedSyncRun({ db, claimedRun, runnerKey }) {
     sources,
     knowledge,
     fusion,
+    artifacts,
   });
 }
 

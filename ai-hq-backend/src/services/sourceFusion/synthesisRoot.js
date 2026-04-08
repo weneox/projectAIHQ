@@ -98,6 +98,7 @@ function buildSynthesisMetrics({
     bookingCount: arr(profile?.bookingLinks).length,
     whatsappCount: arr(profile?.whatsappLinks).length,
     pricingHintCount: arr(profile?.pricingHints).length,
+    policyCount: arr(profile?.policyHighlights).length,
     hoursCount: arr(profile?.hours).length,
     addressCount: arr(profile?.addresses).length,
     emailCount: arr(profile?.emails).length,
@@ -178,6 +179,7 @@ function buildFieldConfidenceMap({ profile = {}, confidence = 0, conflicts = [] 
     primaryAddress: score(-0.02, !!s(profile.primaryAddress)),
     services: score(0.02, arr(profile.services).length > 0),
     pricingHints: score(-0.03, arr(profile.pricingHints).length > 0),
+    policyHighlights: score(-0.02, arr(profile.policyHighlights).length > 0),
     socialLinks: score(-0.03, arr(profile.socialLinks).length > 0),
     faqItems: score(-0.01, arr(profile.faqItems).length > 0),
   };

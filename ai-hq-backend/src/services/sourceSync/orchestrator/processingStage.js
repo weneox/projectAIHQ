@@ -1,5 +1,15 @@
 export async function runProcessingStage(context, state) {
-  const { source, run, sourceType, sourceUrl, fusion, deps } = context;
+  const { source, run, sourceType, sourceUrl, fusion, artifacts, deps } = context;
+
+  if (sourceType === "website") {
+    state.stage = "persist_artifacts";
+    state.websiteArtifacts = await deps.persistWebsiteArtifacts({
+      artifacts,
+      source,
+      run,
+      extracted: state.extracted,
+    });
+  }
 
   state.stage = "normalize_observations";
 

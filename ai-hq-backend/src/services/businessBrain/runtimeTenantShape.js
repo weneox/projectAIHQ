@@ -195,6 +195,9 @@ function mergeTenantRuntime({
       pricingHints: listCanonical(["pricing"]).length
         ? listCanonical(["pricing"])
         : listFactsByCategory(facts, ["pricing"]),
+      policies: listCanonical(["policy"]).length
+        ? listCanonical(["policy"])
+        : listFactsByCategory(facts, ["policy"]),
       pricingPolicy: firstCanonical(["pricing_policy"]) || firstFact(facts, ["pricing_policy"]),
       supportMode: firstCanonical(["support"]) || firstFact(facts, ["support"]),
       bookingLinks: listCanonical(["booking"]).length
@@ -375,6 +378,9 @@ function buildTenantFromProjection({
       pricingHints: listFactsByCategory(activeKnowledge, ["pricing"]).length
         ? listFactsByCategory(activeKnowledge, ["pricing"])
         : listFactsByCategory(facts, ["pricing"]),
+      policies: listFactsByCategory(activeKnowledge, ["policy"]).length
+        ? listFactsByCategory(activeKnowledge, ["policy"])
+        : listFactsByCategory(facts, ["policy"]),
       pricingPolicy: firstFact(activeKnowledge, ["pricing_policy"]) || firstFact(facts, ["pricing_policy"]),
       supportMode: firstFact(activeKnowledge, ["support"]) || firstFact(facts, ["support"]),
       bookingLinks: listFactsByCategory(activeKnowledge, ["booking"]).length

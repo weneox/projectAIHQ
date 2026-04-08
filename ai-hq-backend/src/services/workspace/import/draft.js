@@ -1988,6 +1988,173 @@ export function createSetupReviewCollector({ reviewSessionId = "", sourceType = 
   };
 }
 
+function countWebsitePolicySignals(page = {}) {
+  const policyRegex =
+    /\b(policy|privacy|terms|conditions|refund|return|shipping|cancellation)\b/i;
+
+  return (
+    (s(page?.sections?.policy) ? 1 : 0) +
+    arr(page?.listItems).filter((item) => policyRegex.test(s(item))).length +
+    arr(page?.paragraphs).filter((item) => policyRegex.test(s(item))).length
+  );
+}
+
+function buildWebsitePageTypeCounts({
+  pages = [],
+  artifactCounts = {},
+  site = {},
+} = {}) {
+  if (Object.keys(obj(artifactCounts)).length) {
+    return obj(artifactCounts);
+  }
+
+  if (Object.keys(obj(site?.pageTypeCounts)).length) {
+    return obj(site.pageTypeCounts);
+  }
+
+  return arr(pages).reduce((acc, page) => {
+    const key = lower(s(page?.pageType || "other"));
+    acc[key || "other"] = (acc[key || "other"] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function buildWebsiteTopPages(pages = []) {
+  return uniqBy(
+    arr(pages)
+      .map((page) =>
+        compactObject({
+          url: cleanDisplayText(page?.canonicalUrl || page?.url, 320),
+          title: cleanDisplayText(page?.title, 180),
+          pageType: cleanDisplayText(page?.pageType || "other", 40),
+          serviceHintCount: arr(page?.serviceHints).length,
+          faqCount: arr(page?.faqItems).length,
+          pricingHintCount: arr(page?.pricingHints).length,
+          policySignalCount: countWebsitePolicySignals(page),
+          contactSignalCount:
+            arr(page?.phones).length +
+            arr(page?.emails).length +
+            arr(page?.addresses).length,
+          hourCount: arr(page?.hours).length,
+          bookingLinkCount: arr(page?.bookingLinks).length,
+        })
+      )
+      .filter((item) => item.url),
+    "url"
+  ).slice(0, 8);
+}
+
+function buildWebsiteDraftSections({
+  synthesisProfile = {},
+  businessProfile = {},
+} = {}) {
+  const rawProfile = obj(synthesisProfile);
+  const safeProfile = obj(businessProfile);
+
+  return compactObject({
+    summaryShort: cleanDisplayText(
+      rawProfile.summaryShort ||
+        rawProfile.companySummaryShort ||
+        safeProfile.companySummaryShort ||
+        safeProfile.summaryShort,
+      420
+    ),
+    servicesDraft: normalizeDraftServiceList(
+      [
+        ...arr(rawProfile.services),
+        ...arr(rawProfile.products),
+        ...arr(safeProfile.services),
+        ...arr(safeProfile.products),
+      ],
+      s(safeProfile.companyName || rawProfile.companyName || rawProfile.companyTitle)
+    ).slice(0, 8),
+    faqQuestions: normalizeDraftFaqItems([
+      ...arr(rawProfile.faqItems),
+      ...arr(safeProfile.faqItems),
+    ])
+      .map((item) => cleanDisplayText(item.question, 220))
+      .filter(Boolean)
+      .slice(0, 6),
+    policyHighlights: normalizeProfileArrays(arr(rawProfile.policyHighlights), 6, 220),
+    pricingHints: normalizePricingHints([
+      ...arr(rawProfile.pricingHints),
+      ...arr(safeProfile.pricingHints),
+    ]).slice(0, 6),
+  });
+}
+
+function buildWebsiteKnowledgeSummary({
+  result = {},
+  sourceType = "",
+  sourceUrl = "",
+  businessProfile = {},
+} = {}) {
+  const extracted = obj(result?.extracted);
+  const artifacts = obj(result?.artifacts);
+  const site = obj(extracted.site);
+  const crawl = obj(extracted.crawl);
+  const pages = arr(extracted.pages);
+  const synthesisProfile = obj(result?.profile);
+  const isWebsiteSource =
+    lower(sourceType) === "website" ||
+    !!Object.keys(artifacts).length ||
+    !!pages.length;
+
+  if (!isWebsiteSource) return {};
+
+  const pageTypeCounts = buildWebsitePageTypeCounts({
+    pages,
+    artifactCounts: obj(artifacts.pageTypeCounts),
+    site,
+  });
+
+  const signalCounts = {
+    services: arr(synthesisProfile.services).length,
+    faqItems: arr(synthesisProfile.faqItems).length,
+    pricingHints: arr(synthesisProfile.pricingHints).length,
+    policies: arr(synthesisProfile.policyHighlights).length,
+    contactSignals:
+      (s(synthesisProfile.primaryEmail) ? 1 : 0) +
+      (s(synthesisProfile.primaryPhone) ? 1 : 0) +
+      (s(synthesisProfile.primaryAddress) ? 1 : 0) +
+      arr(synthesisProfile.emails).length +
+      arr(synthesisProfile.phones).length +
+      arr(synthesisProfile.addresses).length,
+    hours: arr(synthesisProfile.hours).length,
+    bookingLinks: arr(synthesisProfile.bookingLinks).length,
+    whatsappLinks: arr(synthesisProfile.whatsappLinks).length,
+    socialLinks: arr(synthesisProfile.socialLinks).length,
+  };
+
+  return compactObject({
+    sourceUrl: cleanDisplayText(sourceUrl || extracted.sourceUrl, 320),
+    finalUrl: cleanDisplayText(
+      artifacts.finalUrl || result?.finalUrl || extracted.finalUrl || sourceUrl,
+      320
+    ),
+    pageCount: Number(artifacts.pageCount || pages.length || 0),
+    normalizedPageCount: Number(artifacts.normalizedPageCount || pages.length || 0),
+    artifactCount: Number(artifacts.artifactCount || (pages.length ? pages.length + 1 : 0)),
+    pageArtifactCount: Number(artifacts.pageArtifactCount || pages.length || 0),
+    chunkCount: Number(artifacts.chunkCount || 0),
+    pageTypeCounts,
+    siteQuality: obj(site?.quality),
+    coverage: compactObject({
+      pagesRequested: Number(crawl.pagesRequested || 0),
+      pagesSucceeded: Number(crawl.pagesSucceeded || 0),
+      pagesKept: Number(crawl.pagesKept || 0),
+      pagesRejected: Number(crawl.pagesRejected || 0),
+      pagesFailed: Number(crawl.pagesFailed || 0),
+    }),
+    signalCounts,
+    topPages: buildWebsiteTopPages(pages),
+    draftSections: buildWebsiteDraftSections({
+      synthesisProfile,
+      businessProfile,
+    }),
+  });
+}
+
 export function buildDraftPayloadFromResult({
   session = {},
   result = {},
@@ -2009,6 +2176,12 @@ export function buildDraftPayloadFromResult({
         sourceType,
         sourceUrl
       );
+  const websiteKnowledge = buildWebsiteKnowledgeSummary({
+    result,
+    sourceType,
+    sourceUrl,
+    businessProfile: profile,
+  });
 
   return compactObject({
     draftMode: "setup_review_session",
@@ -2037,6 +2210,7 @@ export function buildDraftPayloadFromResult({
     profile,
     signals,
     extracted,
+    websiteKnowledge,
     snapshot,
     reviewRequired: !!profile.reviewRequired,
     reviewFlags: arr(profile.reviewFlags),
@@ -2120,6 +2294,11 @@ export function buildSourceSummary({
 }) {
   const current = obj(existing);
   const imports = arr(current.imports);
+  const websiteKnowledge = buildWebsiteKnowledgeSummary({
+    result,
+    sourceType,
+    sourceUrl,
+  });
 
   const nextImport = compactObject({
     at: nowIso(),
@@ -2141,6 +2320,7 @@ export function buildSourceSummary({
     ),
     observationCount: Number(collector?.observationCount || 0),
     lastSnapshotId: collector?.lastSnapshotId || null,
+    websiteKnowledge,
   });
 
   return compactObject({
@@ -2161,6 +2341,7 @@ export function buildSourceSummary({
     latestSourceId: source?.id || null,
     latestRunId: run?.id || null,
     latestSnapshotId: collector?.lastSnapshotId || null,
+    websiteKnowledge,
     latestImport: nextImport,
     imports: [...imports.slice(-9), nextImport],
   });
@@ -2178,6 +2359,12 @@ export function buildDiffFromCanonical({
   const profile = businessProfileOverride
     ? obj(businessProfileOverride)
     : obj(result?.profile);
+  const websiteKnowledge = buildWebsiteKnowledgeSummary({
+    result,
+    sourceType,
+    sourceUrl,
+    businessProfile: profile,
+  });
 
   return mergeDeep(obj(existing), {
     pendingReview: true,
@@ -2198,6 +2385,12 @@ export function buildDiffFromCanonical({
     reviewRequired: !!profile.reviewRequired,
     reviewFlags: normalizeProfileArrays(profile.reviewFlags, 20, 80),
     fieldConfidence: isPlainObject(profile.fieldConfidence) ? obj(profile.fieldConfidence) : {},
+    websiteKnowledge: compactObject({
+      pageCount: Number(websiteKnowledge.pageCount || 0),
+      artifactCount: Number(websiteKnowledge.artifactCount || 0),
+      chunkCount: Number(websiteKnowledge.chunkCount || 0),
+      pageTypeCounts: obj(websiteKnowledge.pageTypeCounts),
+    }),
   });
 }
 
@@ -2362,6 +2555,7 @@ export function deriveDraftPatch({
 
   return {
     draftPayload,
+    websiteKnowledge: obj(draftPayload.websiteKnowledge),
     businessProfile,
     capabilities,
     services,
@@ -2381,6 +2575,7 @@ export const __test__ = {
   buildCompanyNameCandidates,
   buildDeterministicSummaryLong,
   buildDeterministicSummaryShort,
+  buildWebsiteKnowledgeSummary,
   mapSynthesisProfileToBusinessProfile,
   mergeBusinessProfiles,
   pickFirstSanitized,

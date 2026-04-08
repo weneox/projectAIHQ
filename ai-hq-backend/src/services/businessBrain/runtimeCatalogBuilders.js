@@ -125,9 +125,10 @@ function buildKnowledgeEntries({
 }) {
   const allowed = [
     "faq",
-    "pricing",
-    "pricing_policy",
-    "support",
+      "pricing",
+      "pricing_policy",
+      "policy",
+      "support",
     "company",
     "summary",
     "service",

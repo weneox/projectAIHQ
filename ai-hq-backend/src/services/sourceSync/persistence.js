@@ -100,6 +100,36 @@ function buildKnowledgeItemsPreview(candidates = []) {
   }));
 }
 
+function buildDraftTruthPreview(profile = {}) {
+  const safeProfile = obj(profile);
+  return {
+    businessProfileDraft: {
+      companyName: s(safeProfile.companyName || safeProfile.companyTitle || safeProfile.displayName),
+      websiteUrl: s(safeProfile.websiteUrl),
+      summaryShort: s(safeProfile.summaryShort || safeProfile.companySummaryShort),
+      summaryLong: s(safeProfile.summaryLong || safeProfile.companySummaryLong),
+      primaryEmail: s(safeProfile.primaryEmail),
+      primaryPhone: s(safeProfile.primaryPhone),
+      primaryAddress: s(safeProfile.primaryAddress),
+    },
+    servicesDraft: arr(safeProfile.services).slice(0, 12),
+    faqDraft: arr(safeProfile.faqItems).slice(0, 12),
+    contactsDraft: {
+      emails: arr(safeProfile.emails).slice(0, 20),
+      phones: arr(safeProfile.phones).slice(0, 20),
+      socialLinks: arr(safeProfile.socialLinks).slice(0, 12),
+      bookingLinks: arr(safeProfile.bookingLinks).slice(0, 10),
+      whatsappLinks: arr(safeProfile.whatsappLinks).slice(0, 8),
+    },
+    hoursDraft: arr(safeProfile.hours).slice(0, 10),
+    policiesDraft: arr(safeProfile.policyHighlights).slice(0, 8),
+    pricingDraft: {
+      hints: arr(safeProfile.pricingHints).slice(0, 8),
+      policy: s(safeProfile.pricingPolicy),
+    },
+  };
+}
+
 async function persistSynthesisOutputs({
   source,
   run,
@@ -114,6 +144,7 @@ async function persistSynthesisOutputs({
   skipCandidateCreate = false,
   candidateAdmission = null,
   trust = null,
+  artifactSummary = null,
 }) {
   const safeSynthesis = normalizeSynthesisResult(synthesis, {
     fallbackProfile: obj(synthesis?.profile),
@@ -187,6 +218,7 @@ async function persistSynthesisOutputs({
       source_summary: arr(safeSynthesis.sourceSummary?.sources),
       source_fusion_version: SOURCE_FUSION_VERSION,
       trust: trust ? obj(trust) : null,
+      artifacts: artifactSummary ? obj(artifactSummary) : null,
       candidate_admission: candidateAdmission ? obj(candidateAdmission) : null,
       governance: obj(safeSynthesis.governance),
     },
@@ -218,6 +250,8 @@ async function persistSynthesisOutputs({
       source_run_id: run?.id || "",
       review_session_id: reviewSessionId,
       source_fusion_version: SOURCE_FUSION_VERSION,
+      artifacts: artifactSummary ? obj(artifactSummary) : null,
+      websiteDraft: buildDraftTruthPreview(safeProfile),
       candidate_draft_count: dedupedCandidates.length,
       candidate_created_count: createdCount,
       candidate_create_skipped: !!skipCandidateCreate,

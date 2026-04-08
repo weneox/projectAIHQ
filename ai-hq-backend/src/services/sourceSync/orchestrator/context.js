@@ -30,6 +30,7 @@ import {
   normalizeSynthesisResult,
 } from "../normalize.js";
 import { loadScopedObservations, persistSynthesisOutputs } from "../persistence.js";
+import { persistWebsiteArtifacts } from "../websiteArtifacts.js";
 import {
   buildWebsiteExtractionWarnings,
   buildWebsiteSignals,
@@ -62,6 +63,7 @@ export function createSourceSyncOrchestratorContext({
   sources,
   knowledge,
   fusion,
+  artifacts = null,
   stageDeps = {},
 }) {
   if (!source?.id) throw new Error("runSourceSync: source is required");
@@ -93,6 +95,7 @@ export function createSourceSyncOrchestratorContext({
     sources,
     knowledge,
     fusion,
+    artifacts,
     sourceType,
     sourceUrl,
     stepTimeouts: resolveStepTimeouts(),
@@ -140,6 +143,7 @@ export function createSourceSyncOrchestratorContext({
       loadScopedObservations,
       normalizeSynthesisResult,
       synthesizeTenantBusinessFromObservations,
+      persistWebsiteArtifacts,
       buildCandidateAdmission,
       buildCandidatesFromSynthesis,
       normalizeCandidateRecord,
@@ -182,6 +186,7 @@ export function createSourceSyncStageState(sourceType = "") {
     weakWebsiteExtraction: false,
     weakInstagramExtraction: false,
     websiteTrust: null,
+    websiteArtifacts: null,
     candidateAdmission: buildCandidateAdmission({ sourceType }),
   };
 }

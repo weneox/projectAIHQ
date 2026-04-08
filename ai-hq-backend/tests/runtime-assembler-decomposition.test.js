@@ -84,6 +84,26 @@ test("catalog builders normalize and compose services, knowledge, and generated 
   assert.ok(playbooks.some((item) => item.intent_key === "support"));
 });
 
+test("catalog builders admit approved website-derived policy knowledge into runtime entries", () => {
+  const tenant = buildLegacyTenant();
+  const knowledgeEntries = buildKnowledgeEntries({
+    incomingKnowledgeEntries: [],
+    facts: [],
+    activeKnowledge: [
+      {
+        category: "policy",
+        title: "Cancellation policy",
+        value_text: "Please notify us 24 hours in advance.",
+      },
+    ],
+    tenant,
+  });
+
+  assert.equal(knowledgeEntries.length, 1);
+  assert.equal(knowledgeEntries[0].entry_type, "policy");
+  assert.ok(/24 hours in advance/i.test(knowledgeEntries[0].answer));
+});
+
 test("catalog dedupe and fact selection helpers preserve current compatibility behavior", () => {
   const tenant = buildLegacyTenant();
   const knowledge = dedupeKnowledgeEntries(

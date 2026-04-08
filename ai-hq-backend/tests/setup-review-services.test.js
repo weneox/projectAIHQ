@@ -33,6 +33,16 @@ test("service extraction: review shape keeps bundle and provenance summary", () 
             services: [{ key: "branding", title: "Branding" }],
             knowledgeItems: [],
             warnings: [],
+            websiteKnowledge: {
+              pageCount: 3,
+              artifactCount: 4,
+              chunkCount: 18,
+              pageTypeCounts: {
+                home: 1,
+                services: 1,
+                contact: 1,
+              },
+            },
             sourceSummary: {
               latestImport: {
                 sourceType: "website",
@@ -64,6 +74,10 @@ test("service extraction: review shape keeps bundle and provenance summary", () 
   assert.equal(shaped.fieldProvenance.companyName.observedValue, "Alpha Studio");
   assert.equal(shaped.reviewDraftSummary.serviceCount, 1);
   assert.equal(shaped.reviewDraftSummary.fieldSourceObservedValueCount, 1);
+  assert.equal(shaped.reviewDraftSummary.websitePageCount, 3);
+  assert.equal(shaped.reviewDraftSummary.websiteArtifactCount, 4);
+  assert.equal(shaped.contributionSummary[0].websitePageCount, 3);
+  assert.equal(shaped.contributionSummary[0].websitePageTypes.contact, 1);
 });
 
 test("service extraction: review shape keeps observed values from snake_case provenance", () => {
@@ -119,10 +133,25 @@ test("service extraction: fresh website draft shaping carries observed field val
         services: ["Website development", "Technical SEO"],
         products: ["Premium hosting"],
         pricingHints: ["Starting from 300 AZN"],
+        policyHighlights: ["Cancellation requests should be sent at least 24 hours in advance."],
         socialLinks: [{ platform: "instagram", url: "https://instagram.com/saytpro" }],
       },
       warnings: [],
       signals: {},
+      artifacts: {
+        finalUrl: "https://saytpro.az",
+        pageCount: 4,
+        normalizedPageCount: 4,
+        artifactCount: 5,
+        pageArtifactCount: 4,
+        chunkCount: 22,
+        pageTypeCounts: {
+          home: 1,
+          services: 1,
+          pricing: 1,
+          contact: 1,
+        },
+      },
       extracted: {
         crawl: {
           effectiveLimits: {
@@ -137,12 +166,73 @@ test("service extraction: fresh website draft shaping carries observed field val
           warnings: ["limited_page_coverage"],
         },
         site: {
+          quality: {
+            score: 78,
+            band: "medium",
+          },
           debug: {
             weakSelectionReasons: ["limited_kept_page_coverage"],
             pageAdmissions: [{ url: "https://saytpro.az/contact", admitted: false }],
             pagesWithContactSignals: [{ url: "https://saytpro.az/contact", phones: ["+994707370717"] }],
           },
         },
+        pages: [
+          {
+            url: "https://saytpro.az/",
+            canonicalUrl: "https://saytpro.az/",
+            title: "SaytPro",
+            pageType: "generic",
+            serviceHints: ["Website development"],
+            pricingHints: [],
+            faqItems: [],
+            bookingLinks: [],
+            phones: [],
+            emails: [],
+            addresses: [],
+            hours: [],
+            listItems: [],
+            paragraphs: [],
+            sections: {
+              hero: "Bakida pesekar vebsayt hazirlanmasi ve SEO xidmetleri.",
+            },
+          },
+          {
+            url: "https://saytpro.az/pricing",
+            canonicalUrl: "https://saytpro.az/pricing",
+            title: "Pricing",
+            pageType: "pricing",
+            serviceHints: [],
+            pricingHints: ["Starting from 300 AZN"],
+            faqItems: [],
+            bookingLinks: [],
+            phones: [],
+            emails: [],
+            addresses: [],
+            hours: [],
+            listItems: [],
+            paragraphs: [],
+            sections: {},
+          },
+          {
+            url: "https://saytpro.az/policy",
+            canonicalUrl: "https://saytpro.az/policy",
+            title: "Policy",
+            pageType: "policy",
+            serviceHints: [],
+            pricingHints: [],
+            faqItems: [],
+            bookingLinks: [],
+            phones: [],
+            emails: [],
+            addresses: [],
+            hours: [],
+            listItems: ["Cancellation requests should be sent at least 24 hours in advance."],
+            paragraphs: [],
+            sections: {
+              policy: "Cancellation requests should be sent at least 24 hours in advance.",
+            },
+          },
+        ],
       },
     },
     requestId: "req-1",
@@ -206,12 +296,24 @@ test("service extraction: fresh website draft shaping carries observed field val
   assert.ok(
     shaped.reviewDraftSummary.fieldSourceObservedFields.includes("socialLinks")
   );
+  assert.equal(patch.diffFromCanonical.pendingReview, true);
+  assert.equal(shaped.reviewDraftSummary.websitePageCount, 4);
+  assert.equal(shaped.reviewDraftSummary.websiteArtifactCount, 5);
+  assert.equal(shaped.reviewDraftSummary.websitePageTypes.pricing, 1);
   assert.deepEqual(shaped.reviewDebug.effectiveLimits, {
     maxPagesAllowed: 6,
     maxCandidatesQueued: 40,
     maxFetchPages: 10,
   });
   assert.ok(shaped.reviewDebug.weakSelectionReasons.includes("limited_kept_page_coverage"));
+  assert.equal(shaped.reviewDebug.websiteKnowledge.pageCount, 4);
+  assert.equal(shaped.reviewDebug.websiteKnowledge.signalCounts.policies, 1);
+  assert.equal(shaped.reviewDebug.websiteKnowledge.pageTypeCounts.contact, 1);
+  assert.ok(
+    shaped.reviewDebug.websiteKnowledge.draftSections.policyHighlights.some((item) =>
+      /24 hours/i.test(item)
+    )
+  );
 });
 
 test("service extraction: current review payload keeps shaped review and setup", async () => {

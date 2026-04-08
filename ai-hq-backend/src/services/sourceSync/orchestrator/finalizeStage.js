@@ -122,6 +122,7 @@ export async function runFinalizeSourceSyncStage(
     skipCandidateCreate: !state.candidateAdmission.allowCandidateCreation,
     candidateAdmission: state.candidateAdmission,
     trust: state.websiteTrust,
+    artifactSummary: state.websiteArtifacts,
   });
 
   state.stage = "finish_sync";
@@ -142,6 +143,10 @@ export async function runFinalizeSourceSyncStage(
     quarantinedClaimCount: deps.arr(state.synthesis?.governance?.quarantinedClaims).length,
     scopedObservationCount: deps.arr(state.scopedObservations).length,
     scopedObservationScope: state.scopedObservationScope,
+    artifactCount: Number(state.websiteArtifacts?.artifactCount || 0),
+    chunkCount: Number(state.websiteArtifacts?.chunkCount || 0),
+    normalizedPageCount: Number(state.websiteArtifacts?.normalizedPageCount || 0),
+    pageTypeCounts: deps.obj(state.websiteArtifacts?.pageTypeCounts),
     droppedDraftObservationCount:
       Number(processingMetrics.droppedDraftObservationCount || 0),
     synthesisInputObservationCount:
@@ -193,6 +198,8 @@ export async function runFinalizeSourceSyncStage(
             observationsCreated: deps.arr(state.createdObservations).length,
             scopedObservationCount: deps.arr(state.scopedObservations).length,
             scopedObservationScope: state.scopedObservationScope,
+            artifactCount: Number(state.websiteArtifacts?.artifactCount || 0),
+            chunkCount: Number(state.websiteArtifacts?.chunkCount || 0),
             conflictCount: deps.arr(state.synthesis?.conflicts).length,
             quarantinedClaimCount: deps.arr(state.synthesis?.governance?.quarantinedClaims).length,
             currentSnapshotId: persisted.snapshot?.id || "",
@@ -225,6 +232,7 @@ export async function runFinalizeSourceSyncStage(
           rawWarnings: state.warnings,
           debugWarnings: state.debugWarnings,
           synthesisMetrics: deps.obj(state.synthesis?.metrics),
+          artifacts: deps.obj(state.websiteArtifacts),
           governance: deps.obj(state.synthesis?.governance),
           canonicalProjection: "deferred_to_review",
         },
@@ -263,6 +271,7 @@ export async function runFinalizeSourceSyncStage(
             websiteTrust: state.websiteTrust,
             candidateAdmission: state.candidateAdmission,
             synthesisMetrics: deps.obj(state.synthesis?.metrics),
+            artifacts: deps.obj(state.websiteArtifacts),
             snapshotId: persisted.snapshot?.id || "",
             canonicalProjection: "deferred_to_review",
           },
@@ -309,6 +318,7 @@ export async function runFinalizeSourceSyncStage(
     profile: state.synthesis.profile,
     snapshot: persisted.snapshot,
     trust: state.websiteTrust,
+    artifacts: state.websiteArtifacts,
     admission: state.candidateAdmission,
   };
 }

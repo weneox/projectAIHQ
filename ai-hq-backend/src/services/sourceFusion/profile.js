@@ -700,6 +700,11 @@ function synthesizeProfile({ clusterMap = {}, sourceSummary = {} }) {
   const services = collectListValues("service", clusterMap.service, 12);
   const products = collectListValues("product", clusterMap.product, 12);
   const pricingHints = collectListValues("pricing_hint", clusterMap.pricing_hint, 6);
+  const policyHighlights = collectListValues(
+    "policy_highlight",
+    clusterMap.policy_highlight,
+    8
+  );
   const hours = collectListValues("working_hours", clusterMap.working_hours, 10);
 
   const socialLinks = buildSocialLinks(clusterMap.social_link);
@@ -761,6 +766,7 @@ function synthesizeProfile({ clusterMap = {}, sourceSummary = {} }) {
       ...services.slice(0, 8),
       ...products.slice(0, 6),
       ...pricingHints.slice(0, 4),
+      ...policyHighlights.slice(0, 4),
       ...faqItems.slice(0, 4).flatMap((x) => [x.question, x.answer]),
       supportMode,
       pricingPolicy,
@@ -831,6 +837,7 @@ function synthesizeProfile({ clusterMap = {}, sourceSummary = {} }) {
     services,
     products,
     pricingHints,
+    policyHighlights,
     pricingPolicy,
     supportMode,
     hours,

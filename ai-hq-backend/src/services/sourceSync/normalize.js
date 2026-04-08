@@ -457,6 +457,14 @@ function normalizeSynthesisProfile(
     maxText: 260,
   });
 
+  const policyHighlights = dedupeTextList(
+    arr(x.policyHighlights || x.policy_highlights || fb.policyHighlights),
+    {
+      maxItems: 12,
+      maxText: 260,
+    }
+  );
+
   const hours = dedupeTextList(arr(x.hours || fb.hours), {
     maxItems: 14,
     maxText: 160,
@@ -466,14 +474,6 @@ function normalizeSynthesisProfile(
     maxItems: 10,
     maxText: 220,
   });
-
-  const policyHighlights = dedupeTextList(
-    arr(x.policyHighlights || x.policy_highlights || fb.policyHighlights),
-    {
-      maxItems: 12,
-      maxText: 260,
-    }
-  );
 
   const socialLinks = uniqBy(
     arr(x.socialLinks || x.social_links || fb.socialLinks)
@@ -542,6 +542,7 @@ function normalizeSynthesisProfile(
     services,
     products,
     pricingHints,
+    policyHighlights,
     pricingPolicy: s(x.pricingPolicy || x.pricing_policy || fb.pricingPolicy),
     supportMode: s(x.supportMode || x.support_mode || fb.supportMode),
     hours,

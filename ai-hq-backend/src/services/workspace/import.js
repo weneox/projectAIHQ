@@ -18,6 +18,7 @@ import {
   readSetupReviewDraft,
   updateSetupReviewSession,
 } from "../../db/helpers/tenantSetupReview.js";
+import { createTenantSourceArtifactsHelpers } from "../../db/helpers/tenantSourceArtifacts.js";
 
 import {
   SOURCE_TABLES,
@@ -266,6 +267,7 @@ function recomputeDraftFromContributions({
               services: arr(item.services),
               knowledgeItems: arr(item.knowledgeItems),
               warnings: arr(item.warnings),
+              websiteKnowledge: obj(item.websiteKnowledge),
               diffFromCanonical: obj(item.diffFromCanonical),
               sourceSummary: obj(item.sourceSummary),
             }),
@@ -729,6 +731,7 @@ function mergeImportedDraftPatch({
       services: arr(importedPatch.services),
       knowledgeItems: arr(importedPatch.knowledgeItems),
       warnings: arr(importedPatch.warnings),
+      websiteKnowledge: obj(importedPatch.websiteKnowledge),
       diffFromCanonical: obj(importedPatch.diffFromCanonical),
       sourceSummary: obj(importedPatch.sourceSummary),
     });
@@ -887,9 +890,9 @@ async function completeImportSourceByType({
   });
 
   const result = await runSourceSync({
-    db,
-    source: ensured.source,
-    run: createdRun.run,
+      db,
+      source: ensured.source,
+      run: createdRun.run,
     requestedBy: actor.auditValue,
     reviewSessionId: session.id,
     setupReviewSessionId: session.id,
@@ -907,16 +910,17 @@ async function completeImportSourceByType({
       reviewSessionId: session.id,
       collector,
     }),
-    fusion: buildFusionAdapter({
-      db,
-      scope: {
-        tenantId: scope.tenantId,
-        tenantKey: scope.tenantKey,
-      },
-      reviewSessionId: session.id,
-      collector,
-    }),
-  });
+      fusion: buildFusionAdapter({
+        db,
+        scope: {
+          tenantId: scope.tenantId,
+          tenantKey: scope.tenantKey,
+        },
+        reviewSessionId: session.id,
+        collector,
+      }),
+      artifacts: createTenantSourceArtifactsHelpers({ db }),
+    });
 
   let warnings = arr(result?.warnings).map((x) => s(x)).filter(Boolean);
   let mode = s(result?.mode || "success");

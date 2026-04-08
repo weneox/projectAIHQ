@@ -73,6 +73,19 @@ function buildStageDeps(overrides = {}) {
     buildWebsiteExtractionWarnings: () => [],
     buildWebsiteObservations: () => [{ id: "obs-1" }],
     buildWebsiteSyncQualitySummary: () => ({ stage: "extract" }),
+    persistWebsiteArtifacts: async () => ({
+      persisted: true,
+      pageCount: 3,
+      normalizedPageCount: 3,
+      artifactCount: 4,
+      pageArtifactCount: 3,
+      chunkCount: 12,
+      pageTypeCounts: {
+        home: 1,
+        pricing: 1,
+        contact: 1,
+      },
+    }),
     normalizeObservationRecord: (item) => item,
     loadScopedObservations: async () => ({
       observations: [{ id: "obs-1" }],
@@ -146,6 +159,7 @@ test("source sync context preserves run metadata and initializes staged defaults
 
 test("staged source sync success preserves finish semantics and persistence output", async () => {
   const { source, run, sources, knowledge, fusion, finishCalls, markErrorCalls } = buildBase();
+  const persistCalls = [];
 
   const result = await runSourceSync({
     db: null,
@@ -155,7 +169,24 @@ test("staged source sync success preserves finish semantics and persistence outp
     sources,
     knowledge,
     fusion,
-    stageDeps: buildStageDeps(),
+    stageDeps: buildStageDeps({
+      persistWebsiteArtifacts: async (input) => {
+        persistCalls.push(input);
+        return {
+          persisted: true,
+          pageCount: 3,
+          normalizedPageCount: 3,
+          artifactCount: 4,
+          pageArtifactCount: 3,
+          chunkCount: 12,
+          pageTypeCounts: {
+            home: 1,
+            pricing: 1,
+            contact: 1,
+          },
+        };
+      },
+    }),
   });
 
   assert.equal(result.ok, true);
@@ -163,9 +194,17 @@ test("staged source sync success preserves finish semantics and persistence outp
   assert.equal(result.stage, "finish_sync");
   assert.equal(result.candidateCount, 1);
   assert.equal(result.snapshot?.id, "snapshot-1");
+  assert.equal(result.artifacts?.pageCount, 3);
+  assert.equal(result.artifacts?.artifactCount, 4);
+  assert.equal(persistCalls.length, 1);
   assert.equal(finishCalls.length, 1);
   assert.equal(finishCalls[0].runStatus, "success");
   assert.equal(finishCalls[0].resultSummaryJson.candidateCount, 1);
+  assert.equal(finishCalls[0].resultSummaryJson.artifacts.pageTypeCounts.contact, 1);
+  assert.equal(
+    finishCalls[0].extractionSummaryJson.sourceFusion.artifactCount,
+    4
+  );
   assert.equal(markErrorCalls.length, 0);
 });
 

@@ -12,6 +12,57 @@ function firstObservedValue(source = {}) {
   );
 }
 
+function sumWebsitePageTypes(list = []) {
+  return arr(list).reduce((acc, item) => {
+    for (const [key, value] of Object.entries(obj(item))) {
+      acc[key] = Number(acc[key] || 0) + Number(value || 0);
+    }
+    return acc;
+  }, {});
+}
+
+function normalizeWebsiteKnowledge(draft = {}) {
+  const payload = obj(draft?.draftPayload);
+  const sourceSummary = obj(draft?.sourceSummary);
+  const direct = obj(payload.websiteKnowledge || sourceSummary.websiteKnowledge);
+
+  if (Object.keys(direct).length) {
+    return direct;
+  }
+
+  const contributionItems = Object.values(obj(payload.sourceContributions))
+    .map((item) =>
+      obj(
+        obj(item).websiteKnowledge ||
+          obj(obj(item).sourceSummary).websiteKnowledge ||
+          obj(obj(obj(item).sourceSummary).latestImport).websiteKnowledge
+      )
+    )
+    .filter((item) => Object.keys(item).length);
+
+  if (!contributionItems.length) {
+    return {};
+  }
+
+  return compactObject({
+    pageCount: contributionItems.reduce(
+      (sum, item) => sum + Number(item.pageCount || 0),
+      0
+    ),
+    artifactCount: contributionItems.reduce(
+      (sum, item) => sum + Number(item.artifactCount || 0),
+      0
+    ),
+    chunkCount: contributionItems.reduce(
+      (sum, item) => sum + Number(item.chunkCount || 0),
+      0
+    ),
+    pageTypeCounts: sumWebsitePageTypes(
+      contributionItems.map((item) => obj(item.pageTypeCounts))
+    ),
+  });
+}
+
 function normalizeBundleSources({ session = {}, draft = {}, sources = [] } = {}) {
   const summary = obj(draft?.sourceSummary);
   const imports = arr(summary.imports);
@@ -74,6 +125,11 @@ function normalizeContributionSummary(draft = {}) {
     const summary = obj(contribution.sourceSummary);
     const latestImport = obj(summary.latestImport);
     const profile = obj(contribution.businessProfile);
+    const websiteKnowledge = obj(
+      contribution.websiteKnowledge ||
+        latestImport.websiteKnowledge ||
+        summary.websiteKnowledge
+    );
 
     return compactObject({
       key,
@@ -86,6 +142,10 @@ function normalizeContributionSummary(draft = {}) {
       serviceCount: arr(contribution.services).length,
       knowledgeCount: arr(contribution.knowledgeItems).length,
       warningCount: arr(contribution.warnings).length,
+      websitePageCount: Number(websiteKnowledge.pageCount || 0),
+      websiteArtifactCount: Number(websiteKnowledge.artifactCount || 0),
+      websiteChunkCount: Number(websiteKnowledge.chunkCount || 0),
+      websitePageTypes: obj(websiteKnowledge.pageTypeCounts),
       latestRunId: latestImport.runId || null,
       lastSnapshotId: latestImport.lastSnapshotId || null,
     });
@@ -151,6 +211,7 @@ function normalizeReviewDebug(draft = {}) {
   const extracted = obj(payload.extracted);
   const crawl = obj(extracted.crawl);
   const site = obj(extracted.site);
+  const websiteKnowledge = normalizeWebsiteKnowledge(draft);
   const rollupDebug = obj(site.debug);
 
   const effectiveLimits = obj(crawl.effectiveLimits);
@@ -163,6 +224,7 @@ function normalizeReviewDebug(draft = {}) {
     !pageAdmissions.length &&
     !pagesWithContactSignals.length &&
     !weakSelectionReasons.length &&
+    !Object.keys(websiteKnowledge).length &&
     !arr(crawl.failures).length
   ) {
     return {};
@@ -182,6 +244,18 @@ function normalizeReviewDebug(draft = {}) {
       rejected: arr(crawl.rejected).slice(0, 20),
       skipped: arr(crawl.skipped).slice(0, 20),
     }),
+    websiteKnowledge: compactObject({
+      finalUrl: s(websiteKnowledge.finalUrl),
+      pageCount: Number(websiteKnowledge.pageCount || 0),
+      artifactCount: Number(websiteKnowledge.artifactCount || 0),
+      chunkCount: Number(websiteKnowledge.chunkCount || 0),
+      pageTypeCounts: obj(websiteKnowledge.pageTypeCounts),
+      coverage: obj(websiteKnowledge.coverage),
+      signalCounts: obj(websiteKnowledge.signalCounts),
+      draftSections: obj(websiteKnowledge.draftSections),
+      siteQuality: obj(websiteKnowledge.siteQuality),
+      topPages: arr(websiteKnowledge.topPages).slice(0, 8),
+    }),
     weakSelectionReasons,
     pageAdmissions: pageAdmissions.slice(0, 30),
     pagesWithContactSignals: pagesWithContactSignals.slice(0, 20),
@@ -189,10 +263,12 @@ function normalizeReviewDebug(draft = {}) {
 }
 
 function normalizeReviewDraftSummary(draft = {}) {
+  const payload = obj(draft?.draftPayload);
   const fieldSources = {
-    ...obj(obj(obj(draft?.draftPayload).profile).fieldSources),
+    ...obj(obj(payload.profile).fieldSources),
     ...obj(obj(draft?.businessProfile).fieldSources),
   };
+  const websiteKnowledge = normalizeWebsiteKnowledge(draft);
   const observedFields = Object.entries(fieldSources)
     .filter(([, value]) => s(value?.observedValue || value?.observed_value))
     .map(([field]) => field);
@@ -204,6 +280,10 @@ function normalizeReviewDraftSummary(draft = {}) {
     warnings: arr(draft?.warnings),
     serviceCount: arr(draft?.services).length,
     knowledgeCount: arr(draft?.knowledgeItems).length,
+    websitePageCount: Number(websiteKnowledge.pageCount || 0),
+    websiteArtifactCount: Number(websiteKnowledge.artifactCount || 0),
+    websiteChunkCount: Number(websiteKnowledge.chunkCount || 0),
+    websitePageTypes: obj(websiteKnowledge.pageTypeCounts),
     hasBusinessProfile:
       Object.keys(compactObject(draft?.businessProfile))
         .filter((field) => field !== "fieldSources").length > 0,

@@ -5,10 +5,12 @@ import { cfg } from "../src/config.js";
 import { analyzePage } from "../src/services/sourceSync/websiteExtractor/pageModel.js";
 import { __test__ as websiteExtractorTest } from "../src/services/sourceSync/websiteExtractor/index.js";
 import { buildSiteRollup } from "../src/services/sourceSync/websiteExtractor/rollup.js";
+import { buildWebsiteArtifactDrafts } from "../src/services/sourceSync/websiteArtifacts.js";
 import {
   buildWebsiteSignals,
   synthesizeBusinessProfile,
 } from "../src/services/sourceSync/websiteHelpers.js";
+import { buildWebsiteObservations } from "../src/services/sourceFusion/observations.js";
 
 const HOME_HTML = `
 <html>
@@ -432,4 +434,148 @@ test("common landing pages with footer contact clues still yield a useful setup 
   assert.ok(profile.services.some((item) => /vat filing/i.test(item)));
   assert.ok(/help(s)? founders|growing companies/i.test(profile.companySummaryShort));
   assert.ok(profile.socialLinks.some((item) => item.platform === "linkedin"));
+});
+
+test("website artifact drafts keep normalized page records, classifications, and chunked evidence", () => {
+  const homePage = analyzePage({
+    html: HOME_HTML,
+    pageUrl: "https://lunasmile.az/",
+  });
+  const pricingPage = analyzePage({
+    html: PRICING_HTML,
+    pageUrl: "https://lunasmile.az/pricing",
+  });
+  const faqPage = analyzePage({
+    html: `
+      <html>
+        <head><title>FAQ | Luna Smile Studio</title></head>
+        <body>
+          <h1>Frequently Asked Questions</h1>
+          <h2>Do you offer weekend appointments?</h2>
+          <p>Weekend appointments are available by pre-booking.</p>
+        </body>
+      </html>
+    `,
+    pageUrl: "https://lunasmile.az/faq",
+  });
+
+  const rollup = buildSiteRollup(homePage, [homePage, pricingPage, faqPage], []);
+  const artifacts = buildWebsiteArtifactDrafts({
+    source: {
+      id: "source-1",
+      source_url: "https://lunasmile.az/",
+    },
+    run: { id: "run-1" },
+    extracted: {
+      sourceUrl: "https://lunasmile.az/",
+      finalUrl: "https://lunasmile.az/",
+      crawl: {
+        fetchedAt: "2026-04-08T10:00:00.000Z",
+        warnings: [],
+      },
+      discovery: {},
+      site: rollup,
+      pageAdmissions: [
+        { url: homePage.url, admitted: true, reason: "entry_page" },
+        { url: pricingPage.url, admitted: true, reason: "pricing_page" },
+        { url: faqPage.url, admitted: true, reason: "faq_page" },
+      ],
+      pages: [homePage, pricingPage, faqPage],
+      siteText: `${homePage.text}\n${pricingPage.text}\n${faqPage.text}`,
+    },
+  });
+
+  assert.equal(artifacts.summary.pageCount, 3);
+  assert.equal(artifacts.summary.pageTypeCounts.home, 1);
+  assert.equal(artifacts.summary.pageTypeCounts.pricing, 1);
+  assert.equal(artifacts.summary.pageTypeCounts.faq, 1);
+  assert.ok(artifacts.pageArtifacts.every((item) => /^website_page:/.test(item.artifactKey)));
+  assert.equal(
+    artifacts.pageArtifacts.find((item) => item.canonicalUrl === "https://lunasmile.az/faq")
+      ?.pageType,
+    "faq"
+  );
+  assert.ok(
+    artifacts.pageArtifacts
+      .find((item) => item.canonicalUrl === "https://lunasmile.az/faq")
+      ?.chunks.some((item) => item.chunkType === "faq")
+  );
+});
+
+test("website observations keep page-level evidence for FAQ and policy-derived claims", () => {
+  const homePage = analyzePage({
+    html: HOME_HTML,
+    pageUrl: "https://lunasmile.az/",
+  });
+  const faqPage = analyzePage({
+    html: `
+      <html>
+        <head><title>FAQ | Luna Smile Studio</title></head>
+        <body>
+          <h1>Frequently Asked Questions</h1>
+          <h2>Do you offer weekend appointments?</h2>
+          <p>Weekend appointments are available by pre-booking.</p>
+        </body>
+      </html>
+    `,
+    pageUrl: "https://lunasmile.az/faq",
+  });
+  const policyPage = analyzePage({
+    html: `
+      <html>
+        <head><title>Cancellation Policy | Luna Smile Studio</title></head>
+        <body>
+          <h1>Cancellation Policy</h1>
+          <p>Please notify us 24 hours in advance for treatment changes.</p>
+          <ul>
+            <li>Deposits are non-refundable after confirmation.</li>
+          </ul>
+        </body>
+      </html>
+    `,
+    pageUrl: "https://lunasmile.az/cancellation-policy",
+  });
+
+  const rollup = buildSiteRollup(homePage, [homePage, faqPage, policyPage], []);
+  const websiteSignals = buildWebsiteSignals({
+    pages: [homePage, faqPage, policyPage],
+    site: rollup,
+    crawl: { warnings: [] },
+  });
+  const profile = synthesizeBusinessProfile(websiteSignals);
+  const observations = buildWebsiteObservations({
+    source: {
+      id: "source-1",
+      source_type: "website",
+      source_url: "https://lunasmile.az/",
+    },
+    run: { id: "run-1" },
+    extracted: {
+      sourceUrl: "https://lunasmile.az/",
+      finalUrl: "https://lunasmile.az/",
+      crawl: { warnings: [] },
+      discovery: {},
+      site: rollup,
+      pages: [homePage, faqPage, policyPage],
+    },
+    profile,
+  });
+
+  const faqObservation = observations.find(
+    (item) =>
+      item.claimType === "faq" &&
+      /weekend appointments/i.test(item.rawValueText)
+  );
+  const policyObservation = observations.find(
+    (item) =>
+      item.claimType === "policy_highlight" &&
+      /24 hours in advance/i.test(item.rawValueText)
+  );
+
+  assert.equal(faqObservation?.pageUrl, "https://lunasmile.az/faq");
+  assert.equal(faqObservation?.metadataJson?.page_type, "faq");
+  assert.ok(/^website_page:/.test(faqObservation?.metadataJson?.artifact_key || ""));
+  assert.equal(policyObservation?.pageUrl, "https://lunasmile.az/cancellation-policy");
+  assert.equal(policyObservation?.metadataJson?.page_type, "policies");
+  assert.ok(/24 hours in advance/i.test(policyObservation?.evidenceText || ""));
 });
