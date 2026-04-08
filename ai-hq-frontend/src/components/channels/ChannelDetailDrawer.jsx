@@ -440,22 +440,7 @@ function TelegramSplitAction({
   );
 }
 
-export default function ChannelDetailDrawer({
-  channel,
-  open = false,
-  onClose,
-  onNavigate,
-}) {
-  if (isWebsiteChannel(channel)) {
-    return (
-      <WebsiteWidgetDetailDrawer
-        channel={channel}
-        open={open}
-        onClose={onClose}
-      />
-    );
-  }
-
+function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigate }) {
   const isInstagram = isInstagramChannel(channel);
   const isTelegram = isTelegramChannel(channel);
   const queryClient = useQueryClient();
@@ -1191,4 +1176,18 @@ export default function ChannelDetailDrawer({
       </div>
     </aside>
   );
+}
+
+export default function ChannelDetailDrawer(props) {
+  if (isWebsiteChannel(props.channel)) {
+    return (
+      <WebsiteWidgetDetailDrawer
+        channel={props.channel}
+        open={props.open}
+        onClose={props.onClose}
+      />
+    );
+  }
+
+  return <StandardChannelDetailDrawer {...props} />;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Copy,
@@ -134,7 +134,7 @@ export default function WebsiteWidgetDetailDrawer({
   onClose,
 }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState(buildFormState());
+  const [draftForm, setDraftForm] = useState(null);
   const [copyFeedback, setCopyFeedback] = useState("");
 
   const statusQuery = useQuery({
@@ -148,19 +148,13 @@ export default function WebsiteWidgetDetailDrawer({
   const saveMutation = useMutation({
     mutationFn: saveWebsiteWidgetConfig,
     async onSuccess(payload) {
-      setForm(buildFormState(payload));
+      setDraftForm(buildFormState(payload));
       setCopyFeedback("Website widget settings saved.");
       await queryClient.invalidateQueries({
         queryKey: ["website-widget-status"],
       });
     },
   });
-
-  useEffect(() => {
-    if (statusQuery.data) {
-      setForm(buildFormState(statusQuery.data));
-    }
-  }, [statusQuery.data]);
 
   const payload = statusQuery.data || {};
   const widget = obj(payload.widget);
@@ -169,12 +163,21 @@ export default function WebsiteWidgetDetailDrawer({
   const permissions = obj(payload.permissions);
   const blockers = arr(readiness.blockers);
   const saveAllowed = permissions.saveAllowed !== false;
+  const form = draftForm || buildFormState(payload);
 
-  const headerStatus = useMemo(() => {
-    if (readiness.status === "ready") return "connected";
-    if (widget.enabled === true) return "blocked";
-    return "not_connected";
-  }, [readiness.status, widget.enabled]);
+  const headerStatus =
+    readiness.status === "ready"
+      ? "connected"
+      : widget.enabled === true
+        ? "blocked"
+        : "not_connected";
+
+  function updateForm(updater) {
+    setDraftForm((current) => {
+      const nextCurrent = current || buildFormState(statusQuery.data || {});
+      return typeof updater === "function" ? updater(nextCurrent) : updater;
+    });
+  }
 
   async function handleCopySnippet() {
     const snippet = s(install.embedSnippet);
@@ -206,6 +209,16 @@ export default function WebsiteWidgetDetailDrawer({
     });
   }
 
+  function handleRefresh() {
+    setDraftForm(null);
+    statusQuery.refetch();
+  }
+
+  function handleClose() {
+    setDraftForm(null);
+    onClose?.();
+  }
+
   const actionError = s(
     saveMutation.error?.message || statusQuery.error?.message
   );
@@ -230,7 +243,7 @@ export default function WebsiteWidgetDetailDrawer({
           <button
             type="button"
             aria-label="Close channel details"
-            onClick={onClose}
+            onClick={handleClose}
             className="row-span-2 inline-flex h-11 w-11 items-center justify-center rounded-[12px] border border-[#dbe3ec] bg-white text-[#667085] transition duration-fast ease-premium hover:border-[#c8d2df] hover:text-[#101828]"
           >
             <X className="h-4.5 w-4.5" strokeWidth={2.35} />
@@ -342,7 +355,7 @@ export default function WebsiteWidgetDetailDrawer({
                   type="button"
                   disabled={!saveAllowed}
                   onClick={() =>
-                    setForm((current) => ({
+                    updateForm((current) => ({
                       ...current,
                       enabled: !current.enabled,
                     }))
@@ -363,7 +376,7 @@ export default function WebsiteWidgetDetailDrawer({
                 <Textarea
                   value={form.allowedOrigins}
                   onChange={(event) =>
-                    setForm((current) => ({
+                    updateForm((current) => ({
                       ...current,
                       allowedOrigins: event.target.value,
                     }))
@@ -379,7 +392,7 @@ export default function WebsiteWidgetDetailDrawer({
                 <Textarea
                   value={form.allowedDomains}
                   onChange={(event) =>
-                    setForm((current) => ({
+                    updateForm((current) => ({
                       ...current,
                       allowedDomains: event.target.value,
                     }))
@@ -396,7 +409,7 @@ export default function WebsiteWidgetDetailDrawer({
                   <Input
                     value={form.title}
                     onChange={(event) =>
-                      setForm((current) => ({
+                      updateForm((current) => ({
                         ...current,
                         title: event.target.value,
                       }))
@@ -411,7 +424,7 @@ export default function WebsiteWidgetDetailDrawer({
                   <Input
                     value={form.accentColor}
                     onChange={(event) =>
-                      setForm((current) => ({
+                      updateForm((current) => ({
                         ...current,
                         accentColor: event.target.value,
                       }))
@@ -427,7 +440,7 @@ export default function WebsiteWidgetDetailDrawer({
                 <Input
                   value={form.subtitle}
                   onChange={(event) =>
-                    setForm((current) => ({
+                    updateForm((current) => ({
                       ...current,
                       subtitle: event.target.value,
                     }))
@@ -442,7 +455,7 @@ export default function WebsiteWidgetDetailDrawer({
                 <Textarea
                   value={form.initialPrompts}
                   onChange={(event) =>
-                    setForm((current) => ({
+                    updateForm((current) => ({
                       ...current,
                       initialPrompts: event.target.value,
                     }))
@@ -529,7 +542,7 @@ export default function WebsiteWidgetDetailDrawer({
             quiet
             fullWidth
             showArrow={false}
-            onClick={() => statusQuery.refetch()}
+            onClick={handleRefresh}
             isLoading={statusQuery.isFetching}
             leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.2} />}
             className="!h-[38px] !rounded-[10px] !text-[10px]"
@@ -541,7 +554,7 @@ export default function WebsiteWidgetDetailDrawer({
             quiet
             fullWidth
             showArrow={false}
-            onClick={onClose}
+            onClick={handleClose}
             leftIcon={<ShieldAlert className="h-4 w-4" strokeWidth={2.2} />}
             className="!h-[38px] !rounded-[10px] !text-[10px]"
           >
