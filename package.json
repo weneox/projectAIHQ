@@ -26,7 +26,9 @@
     "lint:all": "npm run lint -w shared-contracts && npm run lint -w ai-hq-backend && npm run lint -w meta-bot-backend && npm run lint -w twilio-voice-backend && npm run lint -w ai-hq-frontend",
     "test:all": "npm run test:frontend:stable && npm run test:backend:all",
     "build:all": "npm run build -w shared-contracts && npm run build -w ai-hq-backend && npm run build -w meta-bot-backend && npm run build -w twilio-voice-backend && npm run build -w ai-hq-frontend",
-    "ops:postdeploy:verify": "node scripts/postdeploy-verify.mjs"
+    "ops:postdeploy:verify": "node scripts/postdeploy-verify.mjs",
+    "ops:prod-spine:smoke": "node scripts/prod-spine-smoke.mjs",
+    "ops:postdeploy:full": "npm run ops:postdeploy:verify && npm run ops:prod-spine:smoke"
   },
   "engines": {
     "node": ">=18"

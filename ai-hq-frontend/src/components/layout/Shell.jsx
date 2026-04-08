@@ -138,8 +138,18 @@ export default function Shell() {
   const navigate = useNavigate();
   const notifications = useNotificationsSurface();
   const homeRouteActive = location.pathname === "/home";
+
+  const assistantRequested = useMemo(() => {
+    const params = new URLSearchParams(location.search || "");
+    const assistant = s(params.get("assistant")).toLowerCase();
+    return assistant === "setup";
+  }, [location.search]);
+
+  const homeDataEnabled =
+    homeRouteActive || widgetOpen || assistantRequested;
+
   const home = useProductHome({
-    enabled: homeRouteActive,
+    enabled: homeDataEnabled,
   });
 
   const refreshTimerRef = useRef(0);
@@ -157,19 +167,13 @@ export default function Shell() {
     [location.pathname]
   );
 
-  const assistantRequested = useMemo(() => {
-    const params = new URLSearchParams(location.search || "");
-    const assistant = s(params.get("assistant")).toLowerCase();
-    return assistant === "setup";
-  }, [location.search]);
-
   const shortcutAssistant = useMemo(
     () => ({
       mode: "shortcut",
       title: "AI setup lives on Home",
       statusLabel: "Home shortcut",
       summary:
-        "Use Home to connect Telegram, continue the structured setup draft, and inspect strict runtime readiness.",
+        "Use Home to connect the launch channel, continue the structured setup draft, and inspect truth/runtime posture.",
       primaryAction: {
         label: "Open home assistant",
         path: "/home?assistant=setup",
@@ -184,7 +188,7 @@ export default function Shell() {
           role: "assistant",
           title: "Open Home",
           body:
-            "The setup shell is available on Home, where Telegram connect and runtime posture are already composed together.",
+            "The setup shell is available on Home, where channel connect, setup draft, and runtime posture are already composed together.",
         },
       ],
       review: {
@@ -222,14 +226,14 @@ export default function Shell() {
       title: "Loading AI setup",
       statusLabel: "Loading",
       summary:
-        "Preparing Telegram, draft, and strict runtime posture for the setup shell.",
+        "Preparing channel, setup draft, and strict runtime posture for the assistant.",
       primaryAction: {
-        label: "Open channels",
-        path: "/channels?channel=telegram",
-      },
-      secondaryAction: {
         label: "Open home",
         path: "/home",
+      },
+      secondaryAction: {
+        label: "Open channels",
+        path: "/channels?channel=telegram",
       },
       messages: [
         {
@@ -245,11 +249,11 @@ export default function Shell() {
   );
 
   const assistantModel = useMemo(() => {
-    if (!homeRouteActive) return shortcutAssistant;
+    if (!homeDataEnabled) return shortcutAssistant;
     if (home.loading) return loadingAssistant;
     return home.assistant || loadingAssistant;
   }, [
-    homeRouteActive,
+    homeDataEnabled,
     home.loading,
     home.assistant,
     loadingAssistant,

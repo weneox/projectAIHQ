@@ -96,6 +96,10 @@ function buildDefaultAssistant() {
       },
       sourceInsights: [],
     },
+    launchPosture: "",
+    setupNeeded: false,
+    launchChannel: {},
+    truthRuntime: {},
   };
 }
 
@@ -114,6 +118,10 @@ function normalizeAssistantState(input = null) {
     review: obj(source.review),
     websitePrefill: obj(source.websitePrefill),
     session: obj(source.session),
+    launchPosture: s(source.launchPosture),
+    setupNeeded: source.setupNeeded === true,
+    launchChannel: obj(source.launchChannel),
+    truthRuntime: obj(source.truthRuntime),
     draft: {
       businessProfile: obj(draft.businessProfile),
       services: arr(draft.services),
@@ -149,99 +157,364 @@ function buildAssistantFromApi(base = {}, response = {}) {
   });
 }
 
-function buildInitialSupportMessages() {
-  return [
-    {
-      id: "support-welcome",
-      role: "assistant",
-      text: "Tell me what is broken, and I’ll guide you from there.",
-      suggestions: [
-        "Instagram connection problem",
-        "Truth/runtime is unavailable",
-        "Inbox is not updating",
-      ],
-      actions: [],
-    },
-  ];
+function normalizeUiAction(action = null, fallback = null) {
+  const primary = obj(action);
+  const secondary = obj(fallback);
+  const path = s(primary.path || primary.target?.path || secondary.path || secondary.target?.path);
+  const label = s(primary.label || secondary.label);
+
+  if (!path && !label) return null;
+
+  return {
+    label: label || "Open",
+    path: path || "/home",
+  };
 }
 
-function buildSupportReply(rawText = "") {
-  const text = s(rawText);
-  const lower = text.toLowerCase();
+function buildSupportContext(assistantState = {}) {
+  const source = normalizeAssistantState(assistantState);
+  const launchPosture = s(source.launchPosture).toLowerCase();
+  const launchChannel = obj(source.launchChannel);
+  const truthRuntime = obj(source.truthRuntime);
+
+  const channelAction = normalizeUiAction(launchChannel.action, {
+    label: "Open channels",
+    path: "/channels?channel=telegram",
+  });
+
+  const truthAction = normalizeUiAction(truthRuntime.action, {
+    label: "Open truth",
+    path: "/truth",
+  });
+
+  const setupAction = normalizeUiAction(source.primaryAction, {
+    label: "Open AI setup",
+    path: "/home?assistant=setup",
+  });
+
+  const secondaryAction = normalizeUiAction(source.secondaryAction, {
+    label: "Open home",
+    path: "/home",
+  });
+
+  return {
+    launchPosture,
+    setupNeeded: source.setupNeeded === true,
+    channelConnected: launchChannel.connected === true,
+    channelStatus: s(launchChannel.statusLabel || launchChannel.status),
+    channelSummary: s(launchChannel.summary),
+    truthReady: truthRuntime.truthReady === true,
+    runtimeReady: truthRuntime.runtimeReady === true,
+    deliveryReady: truthRuntime.deliveryReady === true,
+    truthStatus: s(truthRuntime.statusLabel || truthRuntime.status),
+    truthSummary: s(truthRuntime.summary),
+    truthTitle: s(truthRuntime.title),
+    truthDetail: s(truthRuntime.detail),
+    blockedBy: s(truthRuntime.blockedBy).toLowerCase(),
+    leadReason: s(truthRuntime.leadReason).toLowerCase(),
+    setupAction,
+    truthAction,
+    channelAction,
+    secondaryAction,
+  };
+}
+
+function buildSupportWelcomeFromAssistant(assistantState = {}) {
+  const context = buildSupportContext(assistantState);
+
+  if (context.launchPosture === "connect_channel" || !context.channelConnected) {
+    return [
+      {
+        id: "support-welcome-connect",
+        role: "assistant",
+        title: "Connect the launch channel first.",
+        text:
+          context.channelSummary ||
+          "The fastest next move is to connect the launch channel before starting live AI operations.",
+        actions: [context.channelAction].filter(Boolean),
+        suggestions: [
+          "Open channels",
+          "Why is setup blocked?",
+          "How do I start AI setup?",
+        ],
+      },
+    ];
+  }
 
   if (
-    /instagram|telegram|whatsapp|channel|channels|meta|facebook/.test(lower)
+    context.launchPosture === "runtime_repair_needed" ||
+    context.blockedBy === "runtime" ||
+    context.blockedBy === "truth"
   ) {
-    return {
-      text:
-        "Start from the channel surface. Check connector state, identifiers, and blocked secrets before treating it as a runtime problem.",
-      actions: [{ label: "Open channels", path: "/channels" }],
-      suggestions: [
-        "Telegram is connected but not working",
-        "Instagram webhook problem",
-      ],
-    };
+    return [
+      {
+        id: "support-welcome-runtime",
+        role: "assistant",
+        title: context.truthTitle || "Truth or runtime still needs repair.",
+        text:
+          context.truthSummary ||
+          "Approved truth exists, but live automation should wait until truth/runtime repair finishes.",
+        actions: [context.truthAction, context.channelAction].filter(Boolean),
+        suggestions: [
+          "Why is runtime blocked?",
+          "Open truth",
+          "What should I repair?",
+        ],
+      },
+    ];
   }
 
-  if (/truth|runtime|approved|projection|brain/.test(lower)) {
-    return {
-      text:
-        "Check the approved truth and runtime projection first. Compare the latest state instead of trusting the page at a glance.",
-      actions: [
-        { label: "Open truth", path: "/truth" },
-        { label: "Open home", path: "/home" },
-      ],
-      suggestions: [
-        "Why is runtime unavailable?",
-        "Compare truth versions",
-      ],
-    };
+  if (context.launchPosture === "setup_needed" || context.setupNeeded) {
+    return [
+      {
+        id: "support-welcome-setup",
+        role: "assistant",
+        title: "Continue the setup draft.",
+        text:
+          "The launch channel is connected. Continue the structured setup draft before you expect live automation to behave consistently.",
+        actions: [context.setupAction, context.truthAction].filter(Boolean),
+        suggestions: [
+          "Open AI setup",
+          "What still needs confirmation?",
+          "Open truth",
+        ],
+      },
+    ];
   }
 
-  if (/inbox|dm|message|messages|comment|comments|reply/.test(lower)) {
-    return {
+  return [
+    {
+      id: "support-welcome-ready",
+      role: "assistant",
+      title: "Live surfaces are available.",
       text:
-        "Look at the operator surface first. We usually need to confirm inbound freshness and outbound execution truth.",
+        "Truth and runtime look aligned. Open the live surfaces or ask about channels, inbox, comments, voice, setup, or runtime.",
       actions: [
         { label: "Open inbox", path: "/inbox" },
         { label: "Open comments", path: "/comments" },
       ],
-      suggestions: ["DMs are not appearing", "Comment reply failed"],
-    };
-  }
-
-  if (/voice|call|phone|twilio/.test(lower)) {
-    return {
-      text:
-        "Voice issues are usually readiness, authority, or session-truth problems. The voice surface is the fastest place to inspect it.",
-      actions: [{ label: "Open voice", path: "/voice" }],
       suggestions: [
-        "Voice assistant not answering",
-        "Phone number readiness issue",
+        "Open inbox",
+        "Open comments",
+        "Open voice",
+        "Open truth",
       ],
+    },
+  ];
+}
+
+function buildSupportFallbackReply(context) {
+  if (context.launchPosture === "connect_channel" || !context.channelConnected) {
+    return {
+      text:
+        context.channelSummary ||
+        "The next move is still to connect the launch channel before the rest of the setup flow matters.",
+      actions: [context.channelAction].filter(Boolean),
+      suggestions: ["Open channels", "Why is setup blocked?"],
     };
   }
 
-  if (/setup|business|draft|service|services|website/.test(lower)) {
+  if (
+    context.launchPosture === "runtime_repair_needed" ||
+    context.blockedBy === "runtime" ||
+    context.blockedBy === "truth"
+  ) {
     return {
       text:
-        "Setup should shape the business first. Channels come later. I can take you back into the setup flow now.",
-      actions: [{ label: "Open home", path: "/home?assistant=setup" }],
-      suggestions: ["Continue business setup", "How should I add services?"],
+        context.truthSummary ||
+        "Truth/runtime repair still comes before trusting live automation.",
+      actions: [context.truthAction, context.channelAction].filter(Boolean),
+      suggestions: ["Open truth", "What should I repair?"],
+    };
+  }
+
+  if (context.launchPosture === "setup_needed" || context.setupNeeded) {
+    return {
+      text:
+        "The launch channel is attached, but the structured setup draft still deserves attention before you treat automation as fully ready.",
+      actions: [context.setupAction, context.truthAction].filter(Boolean),
+      suggestions: ["Open AI setup", "Open truth"],
     };
   }
 
   return {
     text:
-      "Tell me which area is affected: channels, truth/runtime, inbox/comments, voice, or setup.",
-    actions: [{ label: "Open home", path: "/home" }],
-    suggestions: [
-      "Channels issue",
-      "Truth/runtime issue",
-      "Inbox issue",
-      "Setup issue",
+      "Pick the surface you need: inbox, comments, voice, channels, truth, or setup.",
+    actions: [
+      { label: "Open inbox", path: "/inbox" },
+      { label: "Open truth", path: "/truth" },
     ],
+    suggestions: ["Open inbox", "Open comments", "Open voice", "Open channels"],
   };
+}
+
+function buildSupportReply(rawText = "", assistantState = {}) {
+  const text = s(rawText);
+  const lower = text.toLowerCase();
+  const context = buildSupportContext(assistantState);
+
+  if (
+    /channel|channels|connect|connected|telegram|meta|instagram|facebook|oauth|token|secret/.test(
+      lower
+    )
+  ) {
+    if (!context.channelConnected || context.launchPosture === "connect_channel") {
+      return {
+        text:
+          context.channelSummary ||
+          "The launch channel is not ready yet. Start from Channels and finish the connect flow first.",
+        actions: [context.channelAction].filter(Boolean),
+        suggestions: ["Open channels", "How do I start AI setup?"],
+      };
+    }
+
+    if (
+      context.launchPosture === "runtime_repair_needed" ||
+      context.blockedBy === "runtime" ||
+      context.blockedBy === "truth"
+    ) {
+      return {
+        text:
+          "The channel is attached, but live automation is still blocked by truth/runtime posture.",
+        actions: [context.truthAction, context.channelAction].filter(Boolean),
+        suggestions: ["Why is runtime blocked?", "Open truth"],
+      };
+    }
+
+    return {
+      text:
+        "The channel side looks connected. Open Channels if you need to inspect identities or connection posture.",
+      actions: [context.channelAction].filter(Boolean),
+      suggestions: ["Open channels", "Open inbox"],
+    };
+  }
+
+  if (
+    /truth|runtime|projection|repair|blocked|approval|approve|publish|review|memory/.test(
+      lower
+    )
+  ) {
+    if (
+      context.launchPosture === "runtime_repair_needed" ||
+      context.blockedBy === "runtime" ||
+      context.blockedBy === "truth"
+    ) {
+      return {
+        text:
+          context.truthSummary ||
+          "Approved truth exists, but runtime still needs repair before live automation should be trusted.",
+        actions: [context.truthAction].filter(Boolean),
+        suggestions: ["Open truth", "What should I repair?"],
+      };
+    }
+
+    if (context.launchPosture === "setup_needed" || context.setupNeeded) {
+      return {
+        text:
+          "Truth is still downstream of the setup draft. Continue setup first, then review/publish truth.",
+        actions: [context.setupAction, context.truthAction].filter(Boolean),
+        suggestions: ["Open AI setup", "Open truth"],
+      };
+    }
+
+    return {
+      text:
+        "Truth and runtime already look aligned from the current assistant posture. Open Truth if you want the full review surface.",
+      actions: [context.truthAction].filter(Boolean),
+      suggestions: ["Open truth", "Open inbox"],
+    };
+  }
+
+  if (/setup|draft|website|business|service|services|company|profile/.test(lower)) {
+    if (!context.channelConnected || context.launchPosture === "connect_channel") {
+      return {
+        text:
+          "Setup is available, but the cleanest first move is still to connect the launch channel.",
+        actions: [context.channelAction, context.setupAction].filter(Boolean),
+        suggestions: ["Open channels", "Open AI setup"],
+      };
+    }
+
+    if (context.launchPosture === "runtime_repair_needed") {
+      return {
+        text:
+          "You can still inspect the draft, but the more urgent issue is truth/runtime repair before trusting live automation.",
+        actions: [context.truthAction, context.setupAction].filter(Boolean),
+        suggestions: ["Open truth", "Open AI setup"],
+      };
+    }
+
+    return {
+      text:
+        "Open the AI setup flow to continue the structured draft and confirm the business details that shape runtime.",
+      actions: [context.setupAction].filter(Boolean),
+      suggestions: ["Open AI setup", "What still needs confirmation?"],
+    };
+  }
+
+  if (/inbox|dm|message|messages|reply/.test(lower)) {
+    if (!context.channelConnected || context.launchPosture === "connect_channel") {
+      return {
+        text:
+          "The inbox surface exists, but the system still wants a connected launch channel first.",
+        actions: [context.channelAction].filter(Boolean),
+        suggestions: ["Open channels", "Open inbox"],
+      };
+    }
+
+    if (
+      context.launchPosture === "runtime_repair_needed" ||
+      context.blockedBy === "runtime" ||
+      context.blockedBy === "truth"
+    ) {
+      return {
+        text:
+          "You can inspect inbox activity, but live automation should still be treated cautiously until truth/runtime repair finishes.",
+        actions: [context.truthAction, { label: "Open inbox", path: "/inbox" }].filter(Boolean),
+        suggestions: ["Open truth", "Open inbox"],
+      };
+    }
+
+    return {
+      text:
+        "Inbox is the right live surface for conversation triage and follow-up.",
+      actions: [{ label: "Open inbox", path: "/inbox" }],
+      suggestions: ["Open inbox", "Open comments"],
+    };
+  }
+
+  if (/comment|comments|moderation|post/.test(lower)) {
+    if (
+      context.launchPosture === "runtime_repair_needed" ||
+      context.blockedBy === "runtime" ||
+      context.blockedBy === "truth"
+    ) {
+      return {
+        text:
+          "Comments can still be inspected, but live automation should wait for truth/runtime repair.",
+        actions: [context.truthAction, { label: "Open comments", path: "/comments" }].filter(Boolean),
+        suggestions: ["Open truth", "Open comments"],
+      };
+    }
+
+    return {
+      text:
+        "Comments remain a separate surface. Open it when you want moderation and reply review.",
+      actions: [{ label: "Open comments", path: "/comments" }],
+      suggestions: ["Open comments", "Open inbox"],
+    };
+  }
+
+  if (/voice|call|phone|twilio|receptionist/.test(lower)) {
+    return {
+      text:
+        "Voice stays available as its own surface. Open it when you need receptionist posture, live call handling, or phone readiness.",
+      actions: [{ label: "Open voice", path: "/voice" }],
+      suggestions: ["Open voice", "Open truth"],
+    };
+  }
+
+  return buildSupportFallbackReply(context);
 }
 
 function useWidgetStyles() {
@@ -738,7 +1011,7 @@ function SupportThread({
                     <div className="ai-quick-row">
                       {arr(message.actions).map((action) => (
                         <button
-                          key={`${message.id}-${action.path}`}
+                          key={`${message.id}-${action.path}-${action.label}`}
                           type="button"
                           className="ai-action-link"
                           onClick={() => onAction?.(action.path)}
@@ -785,7 +1058,7 @@ function SupportThread({
                 handleSubmit();
               }
             }}
-            placeholder="Ask a question..."
+            placeholder="Ask about setup, runtime, channels, inbox, comments, or voice..."
             className="ai-composer-input"
           />
 
@@ -824,7 +1097,7 @@ export default function FloatingAiWidget({
   const [finalizing, setFinalizing] = useState(false);
 
   const [supportMessages, setSupportMessages] = useState(
-    buildInitialSupportMessages()
+    buildSupportWelcomeFromAssistant(assistantRef.current)
   );
   const [supportInput, setSupportInput] = useState("");
   const [supportBusy, setSupportBusy] = useState(false);
@@ -840,6 +1113,25 @@ export default function FloatingAiWidget({
   }, [clientAssistant]);
 
   useEffect(() => {
+    const nextMessages = buildSupportWelcomeFromAssistant(clientAssistant);
+    setSupportMessages((current) => {
+      const hasUserMessages = current.some((item) => item.role === "user");
+      if (hasUserMessages) return current;
+      return nextMessages;
+    });
+  }, [
+    clientAssistant.launchPosture,
+    clientAssistant.launchChannel?.connected,
+    clientAssistant.launchChannel?.status,
+    clientAssistant.truthRuntime?.status,
+    clientAssistant.truthRuntime?.blockedBy,
+    clientAssistant.truthRuntime?.leadReason,
+    clientAssistant.truthRuntime?.title,
+    clientAssistant.truthRuntime?.summary,
+    clientAssistant.truthRuntime?.detail,
+  ]);
+
+  useEffect(() => {
     if (!open) return;
 
     const onPointerDown = (event) => {
@@ -851,6 +1143,13 @@ export default function FloatingAiWidget({
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open, onOpenChange]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (clientAssistant.launchPosture === "runtime_repair_needed") {
+      setSurfaceMode("support");
+    }
+  }, [clientAssistant.launchPosture, open]);
 
   if (hidden) return null;
 
@@ -974,7 +1273,7 @@ export default function FloatingAiWidget({
     setSupportInput("");
     setSupportBusy(true);
 
-    const reply = buildSupportReply(text);
+    const reply = buildSupportReply(text, assistantRef.current);
     await new Promise((resolve) => window.setTimeout(resolve, 240));
 
     setSupportMessages((current) => [
@@ -982,9 +1281,10 @@ export default function FloatingAiWidget({
       {
         id: `support-assistant-${Date.now()}`,
         role: "assistant",
+        title: s(reply.title),
         text: reply.text,
-        actions: arr(reply.actions),
-        suggestions: arr(reply.suggestions),
+        actions: arr(reply.actions).filter((item) => s(item?.path)),
+        suggestions: arr(reply.suggestions).filter(Boolean),
       },
     ]);
 
@@ -992,8 +1292,9 @@ export default function FloatingAiWidget({
   }
 
   function handleSupportAction(path) {
-    if (!s(path)) return;
-    onNavigate?.(path);
+    const target = s(path);
+    if (!target) return;
+    onNavigate?.(target);
     onOpenChange?.(false);
   }
 
