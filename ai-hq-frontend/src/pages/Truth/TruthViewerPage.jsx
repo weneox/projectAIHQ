@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import {
+  ArrowRight,
   Building2,
   Globe,
   History,
   Mail,
   MapPin,
   Phone,
+  ShieldCheck,
   Sparkles,
   User2,
+  Wrench,
 } from "lucide-react";
 
+import { getSettingsTrustView } from "../../api/trust.js";
 import {
   getCanonicalTruthSnapshot,
   getTruthReviewWorkbench,
@@ -49,6 +53,7 @@ function initialState() {
       governance: {},
       finalizeImpact: {},
       reviewWorkbench: { summary: {}, items: [] },
+      trust: null,
     },
   };
 }
@@ -69,6 +74,42 @@ function formatWhen(value = "") {
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return raw;
   return date.toLocaleString();
+}
+
+function actionPath(action = {}) {
+  return s(action?.path || action?.target?.path);
+}
+
+function normalizeAction(action = null, fallback = null) {
+  const primary = obj(action);
+  const secondary = obj(fallback);
+  const path = actionPath(primary) || actionPath(secondary);
+  const label = s(primary.label || secondary.label);
+
+  if (!path && !label) return null;
+
+  return {
+    label: label || "Open",
+    path: path || "/truth",
+  };
+}
+
+function pickReadinessAction(readiness = {}, fallbackAction = null) {
+  const source = obj(readiness);
+
+  for (const blocker of arr(source.blockedItems || source.blockers)) {
+    const nextAction = normalizeAction(
+      blocker?.nextAction || blocker?.action || blocker?.repairAction
+    );
+    if (nextAction?.path) return nextAction;
+  }
+
+  for (const action of arr(source.repairActions)) {
+    const nextAction = normalizeAction(action);
+    if (nextAction?.path) return nextAction;
+  }
+
+  return normalizeAction(fallbackAction);
 }
 
 function resolveRequestedVersionId(searchParams, location) {
@@ -141,9 +182,12 @@ function fieldProvenance(fields = [], key = "") {
   return s(findField(fields, key)?.provenance);
 }
 
-function resolveRuntimeLabel(readiness = {}, approvedTruthUnavailable = false) {
+function resolveRuntimeLabel(trust = null, approvedTruthUnavailable = false) {
   if (approvedTruthUnavailable) return "Unavailable";
-  const status = s(readiness?.status).toLowerCase();
+
+  const runtimeReadiness = obj(trust?.summary?.runtimeProjection?.readiness);
+  const truthReadiness = obj(trust?.summary?.truth?.readiness);
+  const status = s(runtimeReadiness.status || truthReadiness.status).toLowerCase();
   if (!status) return "Unknown";
   return titleize(status);
 }
@@ -170,6 +214,90 @@ function resolveSourceSummaryLine(sourceSummary = {}) {
   return [sourceType ? titleize(sourceType) : "", sourceUrl]
     .filter(Boolean)
     .join(" · ");
+}
+
+function buildTrustOperationalState(trust = null, approvedTruthUnavailable = false) {
+  if (approvedTruthUnavailable) {
+    return {
+      status: "blocked",
+      statusLabel: "Approval required",
+      title: "Approved truth is unavailable.",
+      summary:
+        "No non-approved fallback data is being shown. Continue setup or truth review before trusting runtime.",
+      action: { label: "Continue AI setup", path: "/home?assistant=setup" },
+      detail:
+        "This page is intentionally fail-closed when approved truth is unavailable.",
+    };
+  }
+
+  const summary = obj(trust?.summary);
+  const truth = obj(summary.truth);
+  const runtimeProjection = obj(summary.runtimeProjection);
+  const truthReadiness = obj(truth.readiness);
+  const runtimeReadiness = obj(runtimeProjection.readiness);
+  const runtimeHealth = obj(runtimeProjection.health);
+
+  const truthVersionId = s(truth.latestVersionId);
+  const truthReady = truthReadiness.status === "ready" && Boolean(truthVersionId);
+  const runtimeReady =
+    runtimeReadiness.status === "ready" &&
+    (runtimeHealth.usable === true ||
+      runtimeHealth.autonomousAllowed === true ||
+      obj(runtimeProjection.authority).available === true);
+
+  if (!truthReady) {
+    return {
+      status: "blocked",
+      statusLabel: "Approval required",
+      title: "Business truth still needs approval.",
+      summary:
+        s(truthReadiness.message) ||
+        "Approved business truth is still unavailable for the live runtime.",
+      action: pickReadinessAction(truthReadiness, {
+        label: "Continue AI setup",
+        path: "/home?assistant=setup",
+      }),
+      detail:
+        arr(truthReadiness.blockedItems)
+          .map((item) => s(item?.subtitle || item?.title))
+          .filter(Boolean)[0] || "No approved truth snapshot is visible yet.",
+    };
+  }
+
+  if (!runtimeReady) {
+    return {
+      status: "attention",
+      statusLabel: "Repair required",
+      title: "Runtime still needs repair.",
+      summary:
+        s(runtimeReadiness.message) ||
+        s(runtimeHealth.lastFailure?.errorMessage) ||
+        "Approved truth exists, but the runtime projection is not healthy enough for live automation.",
+      action:
+        normalizeAction(runtimeHealth.repairAction) ||
+        arr(runtimeHealth.repairActions).map((item) => normalizeAction(item)).find(Boolean) ||
+        pickReadinessAction(runtimeReadiness, {
+          label: "Open truth and runtime",
+          path: "/truth",
+        }),
+      detail:
+        s(runtimeHealth.lastFailure?.errorCode) ||
+        s(runtimeHealth.reasonCode) ||
+        "Review the runtime state and repair path before treating automation as live.",
+    };
+  }
+
+  return {
+    status: "ready",
+    statusLabel: "Healthy",
+    title: "Approved truth and runtime are aligned.",
+    summary:
+      "The current approved truth version is already backing the live runtime posture.",
+    action: { label: "Open version history", path: "/truth" },
+    detail: truthVersionId
+      ? `Truth version ${truthVersionId} is the current approved source of runtime authority.`
+      : "Approved truth is available.",
+  };
 }
 
 function InfoHint({ text = "", align = "right" }) {
@@ -385,6 +513,82 @@ function buildSections(fields = []) {
   return { business, contact, presence, offering };
 }
 
+function TruthReadinessStrip({ operationalState }) {
+  const tone =
+    operationalState.status === "ready"
+      ? {
+          border: "border-[#d8ebe0]",
+          bg: "bg-[#f7fcf8]",
+          icon: ShieldCheck,
+          iconColor: "text-[#156f3d]",
+          text: "text-[#156f3d]",
+        }
+      : operationalState.status === "attention"
+        ? {
+            border: "border-[#f0dfc5]",
+            bg: "bg-[#fffaf1]",
+            icon: Wrench,
+            iconColor: "text-[#b76a11]",
+            text: "text-[#8d4f07]",
+          }
+        : {
+            border: "border-[#f0d3d5]",
+            bg: "bg-[#fff7f7]",
+            icon: Wrench,
+            iconColor: "text-[#b42318]",
+            text: "text-[#912018]",
+          };
+
+  const Icon = tone.icon;
+
+  return (
+    <div
+      className={`border-b px-8 py-4 ${tone.border} ${tone.bg}`}
+    >
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Icon className={`h-4 w-4 ${tone.iconColor}`} strokeWidth={2} />
+            <div className={`text-[11px] font-bold uppercase tracking-[0.14em] ${tone.text}`}>
+              {s(operationalState.statusLabel, "Unknown")}
+            </div>
+          </div>
+
+          <div className="mt-2 text-[15px] font-semibold tracking-[-0.03em] text-[#0f1728]">
+            {s(operationalState.title, "Truth posture")}
+          </div>
+
+          <div className="mt-1 text-[13px] leading-6 text-[#5f6b7c]">
+            {s(operationalState.summary)}
+          </div>
+
+          {s(operationalState.detail) ? (
+            <div className="mt-1 text-[12px] leading-5 text-[#7a8698]">
+              {s(operationalState.detail)}
+            </div>
+          ) : null}
+        </div>
+
+        {operationalState.action?.path ? (
+          <div className="shrink-0">
+            <Button
+              size="sm"
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  window.location.assign(operationalState.action.path);
+                }
+              }}
+              rightIcon={<ArrowRight className="h-4 w-4" />}
+            >
+              {operationalState.action.label}
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function TruthViewerPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -418,10 +622,10 @@ export default function TruthViewerPage() {
   const runtimeLabel = useMemo(
     () =>
       resolveRuntimeLabel(
-        state.data.readiness,
+        state.data.trust,
         state.data.approvedTruthUnavailable
       ),
-    [state.data.readiness, state.data.approvedTruthUnavailable]
+    [state.data.trust, state.data.approvedTruthUnavailable]
   );
 
   const sourceLine = useMemo(
@@ -429,10 +633,20 @@ export default function TruthViewerPage() {
     [state.data.sourceSummary]
   );
 
+  const operationalState = useMemo(
+    () =>
+      buildTrustOperationalState(
+        state.data.trust,
+        state.data.approvedTruthUnavailable
+      ),
+    [state.data.trust, state.data.approvedTruthUnavailable]
+  );
+
   async function refreshTruthSurface() {
-    const [truthResult, reviewResult] = await Promise.allSettled([
+    const [truthResult, reviewResult, trustResult] = await Promise.allSettled([
       getCanonicalTruthSnapshot(),
       getTruthReviewWorkbench({ limit: 100 }),
+      getSettingsTrustView({ limit: 6 }),
     ]);
 
     if (truthResult.status !== "fulfilled") {
@@ -444,6 +658,7 @@ export default function TruthViewerPage() {
       reviewResult.status === "fulfilled"
         ? reviewResult.value || { summary: {}, items: [] }
         : { summary: {}, items: [] };
+    const trustData = trustResult.status === "fulfilled" ? trustResult.value : null;
 
     setState({
       loading: false,
@@ -461,6 +676,7 @@ export default function TruthViewerPage() {
         governance: truthData.governance || {},
         finalizeImpact: truthData.finalizeImpact || {},
         reviewWorkbench: reviewData || { summary: {}, items: [] },
+        trust: trustData,
       },
     });
   }
@@ -471,12 +687,14 @@ export default function TruthViewerPage() {
     Promise.allSettled([
       getCanonicalTruthSnapshot(),
       getTruthReviewWorkbench({ limit: 100 }),
+      getSettingsTrustView({ limit: 6 }),
     ])
       .then((results) => {
         if (!alive) return;
 
         const truthResult = results[0];
         const reviewResult = results[1];
+        const trustResult = results[2];
 
         if (truthResult.status !== "fulfilled") {
           throw truthResult.reason;
@@ -487,6 +705,8 @@ export default function TruthViewerPage() {
           reviewResult.status === "fulfilled"
             ? reviewResult.value || { summary: {}, items: [] }
             : { summary: {}, items: [] };
+        const trustData =
+          trustResult.status === "fulfilled" ? trustResult.value : null;
 
         setState({
           loading: false,
@@ -504,6 +724,7 @@ export default function TruthViewerPage() {
             governance: truthData.governance || {},
             finalizeImpact: truthData.finalizeImpact || {},
             reviewWorkbench: reviewData || { summary: {}, items: [] },
+            trust: trustData,
           },
         });
       })
@@ -764,6 +985,21 @@ export default function TruthViewerPage() {
           </div>
 
           <div className="flex items-center gap-3">
+            {operationalState.action?.path ? (
+              <Button
+                variant="secondary"
+                size="md"
+                leftIcon={<Wrench className="h-4 w-4" />}
+                onClick={() => {
+                  if (typeof window !== "undefined") {
+                    window.location.assign(operationalState.action.path);
+                  }
+                }}
+              >
+                {operationalState.action.label}
+              </Button>
+            ) : null}
+
             <Button
               variant="secondary"
               size="md"
@@ -775,6 +1011,8 @@ export default function TruthViewerPage() {
             </Button>
           </div>
         </div>
+
+        <TruthReadinessStrip operationalState={operationalState} />
 
         <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="bg-white px-8 py-7">
@@ -883,6 +1121,12 @@ export default function TruthViewerPage() {
                 label="Runtime"
                 value={runtimeLabel}
                 hint="Current runtime posture for approved truth."
+              />
+
+              <SideMetaRow
+                label="Posture"
+                value={s(operationalState.statusLabel, "Unknown")}
+                hint="Current approval and runtime readiness posture."
               />
 
               <SideMetaRow
