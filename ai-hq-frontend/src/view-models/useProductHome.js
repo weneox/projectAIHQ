@@ -1577,6 +1577,30 @@ function splitEntryPoints(items = []) {
   };
 }
 
+const DEFAULT_PRODUCT_HOME_PAYLOADS = {
+  session: null,
+  overview: null,
+  trust: null,
+  workbench: null,
+  inboxThreads: null,
+  inboxOutbound: null,
+  metaStatus: null,
+  telegramStatus: null,
+  setupAssistantSession: null,
+};
+
+const DEFAULT_PRODUCT_HOME_SOURCE_STATUS = {
+  session: { available: true },
+  overview: { available: true },
+  trust: { available: true },
+  workbench: { available: true },
+  inboxThreads: { available: true },
+  inboxOutbound: { available: true },
+  metaStatus: { available: true },
+  telegramStatus: { available: true },
+  setupAssistantSession: { available: true },
+};
+
 export function useProductHome(options = {}) {
   const enabled = options.enabled !== false;
 
@@ -1589,29 +1613,15 @@ export function useProductHome(options = {}) {
     enabled,
   });
 
-  const payloads = state.data?.payloads || {
-    session: null,
-    overview: null,
-    trust: null,
-    workbench: null,
-    inboxThreads: null,
-    inboxOutbound: null,
-    metaStatus: null,
-    telegramStatus: null,
-    setupAssistantSession: null,
-  };
+  const payloads = useMemo(
+    () => state.data?.payloads ?? DEFAULT_PRODUCT_HOME_PAYLOADS,
+    [state.data?.payloads]
+  );
 
-  const sourceStatus = state.data?.sourceStatus || {
-    session: { available: true },
-    overview: { available: true },
-    trust: { available: true },
-    workbench: { available: true },
-    inboxThreads: { available: true },
-    inboxOutbound: { available: true },
-    metaStatus: { available: true },
-    telegramStatus: { available: true },
-    setupAssistantSession: { available: true },
-  };
+  const sourceStatus = useMemo(
+    () => state.data?.sourceStatus ?? DEFAULT_PRODUCT_HOME_SOURCE_STATUS,
+    [state.data?.sourceStatus]
+  );
 
   const derived = useMemo(() => {
     const session = payloads.session || {};
