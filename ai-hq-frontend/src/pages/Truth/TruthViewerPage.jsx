@@ -140,8 +140,66 @@ function fieldProvenance(fields = [], key = "") {
   return s(findField(fields, key)?.provenance);
 }
 
-function resolveRuntimeLabel(trust = null, approvedTruthUnavailable = false) {
+function hasTrustOperationalData(trust = null) {
+  const summary = obj(trust?.summary);
+  return (
+    Object.keys(obj(summary.truth)).length > 0 ||
+    Object.keys(obj(summary.runtimeProjection)).length > 0
+  );
+}
+
+function buildSnapshotOperationalState(data = {}) {
+  const approval = obj(data.approval);
+  const readiness = obj(data.readiness);
+  const ready =
+    s(readiness.status).toLowerCase() === "ready" && Boolean(s(approval.version));
+
+  if (!ready) {
+    return {
+      truthReady: false,
+      runtimeReady: false,
+      status: "blocked",
+      statusLabel: "Approval required",
+      title: "Approved truth is unavailable.",
+      summary:
+        "No non-approved fallback data is being shown. Continue setup or truth review before trusting runtime.",
+      detail:
+        "This page is intentionally fail-closed when approved truth is unavailable.",
+      action: {
+        label: "Continue AI setup",
+        path: "/home?assistant=setup",
+      },
+    };
+  }
+
+  return {
+    truthReady: true,
+    runtimeReady: true,
+    status: "ready",
+    statusLabel: "Healthy",
+    title: "Approved truth is available.",
+    summary: "Approved fields and the latest governed snapshot.",
+    detail: s(approval.version)
+      ? `Truth version ${approval.version} is currently approved.`
+      : "Approved truth is available.",
+    action: {
+      label: "Open truth",
+      path: "/truth",
+    },
+  };
+}
+
+function resolveRuntimeLabel(
+  trust = null,
+  approvedTruthUnavailable = false,
+  snapshot = {}
+) {
   if (approvedTruthUnavailable) return "Unavailable";
+  if (!hasTrustOperationalData(trust)) {
+    return s(snapshot?.readiness?.status).toLowerCase() === "ready"
+      ? "Ready"
+      : "Unknown";
+  }
   const operationalState = buildTruthOperationalState(trust);
   return s(operationalState.statusLabel, "Unknown");
 }
@@ -489,9 +547,10 @@ export default function TruthViewerPage() {
     () =>
       resolveRuntimeLabel(
         state.data.trust,
-        state.data.approvedTruthUnavailable
+        state.data.approvedTruthUnavailable,
+        state.data
       ),
-    [state.data.trust, state.data.approvedTruthUnavailable]
+    [state.data, state.data.trust, state.data.approvedTruthUnavailable]
   );
 
   const sourceLine = useMemo(
@@ -517,8 +576,10 @@ export default function TruthViewerPage() {
               path: "/home?assistant=setup",
             },
           }
-        : buildTruthOperationalState(state.data.trust),
-    [state.data.trust, state.data.approvedTruthUnavailable]
+        : hasTrustOperationalData(state.data.trust)
+          ? buildTruthOperationalState(state.data.trust)
+          : buildSnapshotOperationalState(state.data),
+    [state.data]
   );
 
   async function refreshTruthSurface() {
