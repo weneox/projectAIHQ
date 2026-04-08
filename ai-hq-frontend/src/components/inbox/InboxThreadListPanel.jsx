@@ -27,6 +27,7 @@ function prettyChannelLabel(value = "") {
   if (normalized === "whatsapp") return "WhatsApp";
   if (normalized === "telegram") return "Telegram";
   if (normalized === "email") return "Email";
+  if (normalized === "web") return "Website";
   if (normalized === "webchat") return "Web chat";
   if (normalized === "website") return "Website";
   if (normalized === "voice") return "Voice";

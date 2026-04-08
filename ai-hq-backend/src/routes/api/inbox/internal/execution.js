@@ -1,3 +1,5 @@
+import crypto from "crypto";
+
 import {
   enqueueChannelOutboundExecution,
 } from "../../../../services/durableExecutionService.js";
@@ -7,6 +9,7 @@ import { lower, normalizeArr, normalizeObj, nowIso } from "./shared.js";
 
 const META_PROVIDER = "meta";
 const TELEGRAM_PROVIDER = "telegram";
+const WEBSITE_WIDGET_PROVIDER = "website_widget";
 
 const STORED_INBOX_MESSAGE_TYPES = new Set([
   "text",
@@ -79,6 +82,9 @@ function resolveExecutionProvider({ provider = "", channel = "", action = {} } =
     lower(action?.meta?.provider);
 
   if (explicit) return explicit;
+  if (["web", "webchat", WEBSITE_WIDGET_PROVIDER].includes(lower(channel))) {
+    return WEBSITE_WIDGET_PROVIDER;
+  }
   if (lower(channel) === TELEGRAM_PROVIDER) return TELEGRAM_PROVIDER;
   return META_PROVIDER;
 }
@@ -164,11 +170,18 @@ export async function persistOutboundMessage({
   enqueueOutboundExecution = enqueueChannelOutboundExecution,
 }) {
   const resolvedProvider = resolveExecutionProvider({ provider, channel });
+  const autoDeliveredProvider =
+    resolvedProvider === WEBSITE_WIDGET_PROVIDER && !s(externalMessageId);
+  const providerMessageId =
+    s(externalMessageId) ||
+    (autoDeliveredProvider
+      ? `website-widget:${typeof crypto.randomUUID === "function" ? crypto.randomUUID() : Date.now()}`
+      : null);
   const messageType = normalizeInboxMessageType(
     storageMessageType || requestedMessageType || "text",
     "text"
   );
-  const deliveryStatus = externalMessageId ? "sent" : "pending";
+  const deliveryStatus = providerMessageId ? "sent" : "pending";
 
   const mergedMeta = {
     ...normalizeObj(meta),
@@ -179,9 +192,9 @@ export async function persistOutboundMessage({
     delivery: {
       status: deliveryStatus,
       provider: resolvedProvider,
-      pending: !externalMessageId,
+      pending: !providerMessageId,
       failed: false,
-      providerMessageId: s(externalMessageId || "") || null,
+      providerMessageId: s(providerMessageId || "") || null,
       updatedAt: nowIso(),
     },
   };
@@ -204,12 +217,12 @@ export async function persistOutboundMessage({
       thread.id,
       tenantKey,
       senderType,
-      externalMessageId,
+      providerMessageId,
       messageType,
       text,
       JSON.stringify(Array.isArray(attachments) ? attachments : []),
       JSON.stringify(mergedMeta),
-      externalMessageId ? nowIso() : null,
+      providerMessageId ? nowIso() : null,
     ]
   );
 
@@ -275,12 +288,12 @@ export async function persistOutboundMessage({
     provider: resolvedProvider,
     recipientId,
     payload: attemptPayload,
-    status: externalMessageId ? "sent" : "queued",
+    status: providerMessageId ? "sent" : "queued",
     maxAttempts,
-    nextRetryAt: externalMessageId ? null : nowIso(),
+    nextRetryAt: providerMessageId ? null : nowIso(),
   });
 
-  if (enqueueExecution && !externalMessageId) {
+  if (enqueueExecution && !providerMessageId) {
     await enqueueOutboundExecution({
       db: client,
       tenantId,

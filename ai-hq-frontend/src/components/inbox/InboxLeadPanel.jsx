@@ -1,5 +1,6 @@
 import {
   ArrowUpRight,
+  Globe2,
   MessageSquareText,
   Radio,
   UserRound,
@@ -76,6 +77,17 @@ function resolveHandle(selectedThread = {}, relatedLead = null) {
   );
 }
 
+function prettyThreadSource(value = "") {
+  const normalized = s(value).toLowerCase();
+  if (!normalized) return "conversation";
+  if (["web", "website", "webchat"].includes(normalized)) return "Website chat";
+  return normalized
+    .split(/[_\-\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function prettyStatus(selectedThread = {}, relatedLead = null) {
   if (selectedThread?.handoff_active) return "In handoff";
   if (relatedLead?.status) return s(relatedLead.status);
@@ -85,6 +97,22 @@ function prettyStatus(selectedThread = {}, relatedLead = null) {
 
 function prettyStage(relatedLead = null) {
   return s(relatedLead?.stage || "");
+}
+
+function resolveWebsiteContext(selectedThread = {}) {
+  const widget = obj(selectedThread?.meta)?.websiteWidget || {};
+  const page = obj(widget.page);
+
+  return {
+    title: s(page.title),
+    url: s(page.url),
+    referrer: s(page.referrer),
+    visible: Boolean(s(page.title) || s(page.url) || s(page.referrer)),
+  };
+}
+
+function obj(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 function Tag({ children, tone = "default" }) {
@@ -168,7 +196,7 @@ function IdentityCard({ selectedThread, relatedLead, owner, wsState }) {
   const avatarUrl = resolveAvatarUrl(selectedThread);
   const sourceLabel = relatedLead
     ? prettyLeadSource(relatedLead)
-    : s(selectedThread?.channel, "conversation");
+    : prettyThreadSource(selectedThread?.channel);
   const stage = prettyStage(relatedLead);
   const statusLabel = prettyStatus(selectedThread, relatedLead);
 
@@ -239,7 +267,8 @@ export default function InboxLeadPanel({
   const owner = s(selectedThread?.assigned_to) || operatorName || "Unassigned";
   const sourceLabel = hasLead
     ? prettyLeadSource(relatedLead)
-    : s(selectedThread?.channel, "--");
+    : prettyThreadSource(selectedThread?.channel || "--");
+  const websiteContext = resolveWebsiteContext(selectedThread);
 
   const people = [
     s(selectedThread?.customer_name),
@@ -324,6 +353,18 @@ export default function InboxLeadPanel({
                 />
               </div>
             </Section>
+
+            {websiteContext.visible ? (
+              <Section icon={Globe2} title="Website context">
+                <div className="border-t border-slate-200/70 px-0 py-2">
+                  <InfoRow label="Page title" value={websiteContext.title || "--"} />
+                  <div className="border-t border-slate-200/70" />
+                  <InfoRow label="Page URL" value={websiteContext.url || "--"} />
+                  <div className="border-t border-slate-200/70" />
+                  <InfoRow label="Referrer" value={websiteContext.referrer || "--"} />
+                </div>
+              </Section>
+            ) : null}
 
             <Section
               icon={UserRound}

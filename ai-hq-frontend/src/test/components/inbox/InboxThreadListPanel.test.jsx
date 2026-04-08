@@ -71,4 +71,33 @@ describe("InboxThreadListPanel", () => {
       expect.objectContaining({ id: "thread-2", customer_name: "Blair" })
     );
   });
+
+  it("labels web channel threads as website conversations", () => {
+    render(
+      <InboxThreadListPanel
+        selectedThreadId=""
+        threadList={{
+          filter: "all",
+          setFilter: vi.fn(),
+          deepLinkNotice: "",
+          stats: { open: 1, aiActive: 0, handoff: 0, resolved: 0 },
+          filteredThreads: [
+            {
+              id: "thread-web-1",
+              customer_name: "Taylor",
+              channel: "web",
+              last_message_text: "I found you on the pricing page",
+              status: "open",
+              handoff_active: false,
+            },
+          ],
+          openThread: vi.fn(),
+          surface: { loading: false },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /open conversation filters/i }));
+    expect(screen.getByText("Website")).toBeInTheDocument();
+  });
 });

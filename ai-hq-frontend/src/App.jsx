@@ -25,6 +25,7 @@ const Voice = lazy(() => import("./pages/Voice.jsx"));
 const Welcome = lazy(() => import("./pages/Welcome.jsx"));
 const Login = lazy(() => import("./pages/Login.jsx"));
 const VerifyEmail = lazy(() => import("./pages/Auth/VerifyEmailPage.jsx"));
+const PublicWebsiteWidget = lazy(() => import("./pages/PublicWebsiteWidget.jsx"));
 const TruthViewerPage = lazy(() => import("./pages/Truth/TruthViewerPage.jsx"));
 const ChannelCatalog = lazy(() => import("./pages/ChannelCatalog.jsx"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin.jsx"));
@@ -80,6 +81,10 @@ export default function App() {
         <Route path="/login" element={withSuspense(<Login />)} />
         <Route path="/signup" element={withSuspense(<Login />)} />
         <Route path="/verify-email" element={withSuspense(<VerifyEmail />)} />
+        <Route
+          path="/widget/website-chat"
+          element={withSuspense(<PublicWebsiteWidget />)}
+        />
 
         <Route path="/admin/login" element={withSuspense(<AdminLogin />)} />
 
