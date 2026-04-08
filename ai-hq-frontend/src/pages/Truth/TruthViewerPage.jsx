@@ -178,7 +178,7 @@ function buildSnapshotOperationalState(data = {}) {
     status: "ready",
     statusLabel: "Healthy",
     title: "Approved truth is available.",
-    summary: "Approved fields and the latest governed snapshot.",
+    summary: "Approved truth is present, and no blocker is visible from this page.",
     detail: s(approval.version)
       ? `Truth version ${approval.version} is currently approved.`
       : "Approved truth is available.",
