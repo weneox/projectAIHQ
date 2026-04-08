@@ -21,6 +21,10 @@ import {
   disconnectTelegram,
   getTelegramStatus,
 } from "./telegram.js";
+import {
+  getWebsiteWidgetStatus,
+  saveWebsiteWidgetConfig,
+} from "./website.js";
 
 function respondRouteError(res, err, fallbackMessage, extra = {}) {
   const status = Number(err?.status || 500);
@@ -180,6 +184,32 @@ export function channelConnectRoutes({ db }) {
       }
     }
   );
+
+  r.get("/channels/webchat/status", requireUserSession, async (req, res) => {
+    try {
+      const payload = await getWebsiteWidgetStatus({ db, req });
+      return ok(res, payload);
+    } catch (err) {
+      return respondRouteError(
+        res,
+        err,
+        "Failed to load website widget status"
+      );
+    }
+  });
+
+  r.post("/channels/webchat/config", requireUserSession, async (req, res) => {
+    try {
+      const payload = await saveWebsiteWidgetConfig({ db, req });
+      return ok(res, payload);
+    } catch (err) {
+      return respondRouteError(
+        res,
+        err,
+        "Failed to save website widget config"
+      );
+    }
+  });
 
   return r;
 }

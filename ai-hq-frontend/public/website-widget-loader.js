@@ -1,24 +1,87 @@
-/* global document, window, URL, console */
+/* global document, window, URL, console, fetch */
 
 (function websiteWidgetLoader() {
   const script = document.currentScript;
   if (!script) return;
 
-  const tenantKey = String(script.dataset.tenantKey || "").trim();
-  if (!tenantKey) {
-    console.warn("[aihq-widget] data-tenant-key is required");
+  const widgetId = String(script.dataset.widgetId || "").trim().toLowerCase();
+  if (!widgetId) {
+    if (String(script.dataset.tenantKey || "").trim()) {
+      console.warn("[aihq-widget] data-tenant-key is no longer supported. Use data-widget-id.");
+    } else {
+      console.warn("[aihq-widget] data-widget-id is required");
+    }
     return;
   }
 
   const widgetBase =
     String(script.dataset.widgetBase || "").trim() ||
     new URL(script.src, window.location.href).origin;
-  const apiBase = String(script.dataset.apiBase || "").trim();
+  const apiBase = String(script.dataset.apiBase || "").trim() || widgetBase;
   const accent = String(script.dataset.accent || "").trim();
   const launcherLabel = String(script.dataset.label || "").trim() || "Chat";
-  const side = String(script.dataset.side || "").trim().toLowerCase() === "left"
-    ? "left"
-    : "right";
+  const side =
+    String(script.dataset.side || "").trim().toLowerCase() === "left"
+      ? "left"
+      : "right";
+
+  function normalizeApiBase(raw) {
+    const clean = String(raw || "").trim().replace(/\/+$/, "");
+    if (!clean) return "/api";
+    return /\/api$/i.test(clean) ? clean : `${clean}/api`;
+  }
+
+  function buildApiUrl(path) {
+    const cleanPath = String(path || "").startsWith("/")
+      ? String(path || "")
+      : `/${String(path || "")}`;
+    return `${normalizeApiBase(apiBase)}${cleanPath}`;
+  }
+
+  function buildIframeUrl(bootstrapToken) {
+    const url = new URL("/widget/website-chat", widgetBase);
+    url.searchParams.set("widgetId", widgetId);
+    url.searchParams.set("bootstrapToken", bootstrapToken);
+    url.searchParams.set("apiBase", apiBase);
+    if (accent) url.searchParams.set("accent", accent);
+    return url.toString();
+  }
+
+  async function requestInstallToken() {
+    const response = await fetch(buildApiUrl("/public/widget/install-token"), {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      credentials: "omit",
+      body: JSON.stringify({
+        widgetId,
+        page: {
+          url: window.location.href,
+          title: document.title || "",
+          referrer: document.referrer || "",
+        },
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({
+      ok: false,
+      error: "invalid_response",
+    }));
+
+    if (!response.ok || payload?.ok === false) {
+      throw new Error(
+        String(
+          payload?.details?.message ||
+            payload?.error ||
+            "Website chat could not be verified for this page."
+        ).trim()
+      );
+    }
+
+    return payload;
+  }
 
   const root = document.createElement("div");
   root.setAttribute("data-aihq-website-widget", "true");
@@ -42,6 +105,7 @@
     background: "#ffffff",
     display: "none",
     marginBottom: "14px",
+    position: "relative",
   });
 
   const iframe = document.createElement("iframe");
@@ -50,7 +114,25 @@
   iframe.style.width = "100%";
   iframe.style.height = "100%";
   iframe.style.border = "0";
+
+  const statusBox = document.createElement("div");
+  Object.assign(statusBox.style, {
+    position: "absolute",
+    inset: "0",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "24px",
+    textAlign: "center",
+    color: "#475467",
+    fontSize: "14px",
+    lineHeight: "1.7",
+    background: "linear-gradient(180deg,#ffffff 0%,#f8fafc 100%)",
+  });
+  statusBox.textContent = "Opening website chat...";
+
   panel.appendChild(iframe);
+  panel.appendChild(statusBox);
 
   const button = document.createElement("button");
   button.type = "button";
@@ -73,30 +155,72 @@
     boxShadow: "0 18px 40px rgba(15, 23, 42, 0.26)",
   });
 
-  function buildIframeUrl() {
-    const url = new URL("/widget/website-chat", widgetBase);
-    url.searchParams.set("tenantKey", tenantKey);
-    url.searchParams.set("pageUrl", window.location.href);
-    url.searchParams.set("pageTitle", document.title || "");
-    url.searchParams.set("referrer", document.referrer || "");
-    if (apiBase) url.searchParams.set("apiBase", apiBase);
-    if (accent) url.searchParams.set("accent", accent);
-    return url.toString();
+  let open = false;
+  let loading = false;
+
+  function setStatus(message, tone) {
+    statusBox.textContent = String(message || "").trim();
+    statusBox.style.display = "flex";
+    statusBox.style.color = tone === "danger" ? "#b42318" : "#475467";
+    statusBox.style.background =
+      tone === "danger"
+        ? "linear-gradient(180deg,#fff5f5 0%,#fef2f2 100%)"
+        : "linear-gradient(180deg,#ffffff 0%,#f8fafc 100%)";
   }
 
-  let open = false;
+  function hideStatus() {
+    statusBox.style.display = "none";
+  }
 
   function sync() {
     panel.style.display = open ? "block" : "none";
+
+    if (loading) {
+      button.textContent = "Opening...";
+      return;
+    }
+
     button.textContent = open ? "Close" : launcherLabel;
-    if (open && iframe.src !== buildIframeUrl()) {
-      iframe.src = buildIframeUrl();
+  }
+
+  async function ensureIframeReady() {
+    if (iframe.src) {
+      hideStatus();
+      return true;
+    }
+
+    loading = true;
+    setStatus("Verifying this website install...", "neutral");
+    sync();
+
+    try {
+      const payload = await requestInstallToken();
+      iframe.src = buildIframeUrl(String(payload.bootstrapToken || "").trim());
+      hideStatus();
+      return true;
+    } catch (error) {
+      setStatus(
+        error?.message ||
+          "Website chat could not be verified for this page.",
+        "danger"
+      );
+      return false;
+    } finally {
+      loading = false;
+      sync();
     }
   }
 
-  button.addEventListener("click", function handleToggle() {
-    open = !open;
+  button.addEventListener("click", async function handleToggle() {
+    if (open) {
+      open = false;
+      sync();
+      return;
+    }
+
+    open = true;
     sync();
+    await ensureIframeReady();
   });
 
   root.appendChild(panel);

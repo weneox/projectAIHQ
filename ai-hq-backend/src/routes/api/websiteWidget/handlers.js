@@ -2,20 +2,17 @@ import express from "express";
 
 import { safeAppendDecisionEvent } from "../../../db/helpers/decisionEvents.js";
 import {
-  buildExecutionPolicyDecisionAuditShape,
   applyExecutionPolicyToActions,
+  buildExecutionPolicyDecisionAuditShape,
   mapExecutionOutcomeToDecisionEventType,
 } from "../../../services/executionPolicy.js";
 import { getTenantBrainRuntime } from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import { buildInboxActions } from "../../../services/inboxBrain.js";
 import { emitRealtimeEvent } from "../../../realtime/events.js";
-import { applyInMemoryRateLimit } from "../../../utils/rateLimit.js";
 import { isDbReady, okJson } from "../../../utils/http.js";
+import { applyInMemoryRateLimit } from "../../../utils/rateLimit.js";
 import { fixText } from "../../../utils/textFix.js";
-import {
-  applyHandoffActions,
-  persistLeadActions,
-} from "../inbox/mutations.js";
+import { applyHandoffActions, persistLeadActions } from "../inbox/mutations.js";
 import {
   findExistingInboundMessage,
   getInboxThreadState,
@@ -29,12 +26,22 @@ import {
   loadRecentMessages,
 } from "../inbox/internal/persistence.js";
 import { queueExecutionActions } from "../inbox/internal/execution.js";
-import { buildThreadStateForDecision } from "../inbox/internal/threadState.js";
-import { loadStrictInboxRuntime } from "../inbox/internal/runtime.js";
 import { emitIngestRealtime } from "../inbox/internal/responses.js";
+import { loadStrictInboxRuntime } from "../inbox/internal/runtime.js";
 import { rollbackAndRelease } from "../inbox/internal/shared.js";
+import { buildThreadStateForDecision } from "../inbox/internal/threadState.js";
 import {
+  buildInstallContext,
+  buildWidgetShell,
+  normalizeWidgetConfig,
+  normalizeUrl,
+  resolveWebsiteWidgetTenant,
+  validateWidgetInstallContext,
+} from "./config.js";
+import {
+  issueWebsiteWidgetBootstrapToken,
   issueWebsiteWidgetSession,
+  verifyWebsiteWidgetBootstrapToken,
   verifyWebsiteWidgetSessionToken,
 } from "./session.js";
 
@@ -76,128 +83,6 @@ function normalizeRequestIp(req) {
   return s(req?.ip || req?.socket?.remoteAddress || "unknown").toLowerCase();
 }
 
-function normalizeAllowedOrigins(config = {}) {
-  const source =
-    config.allowedOrigins ||
-    config.allowed_origins ||
-    config.origins ||
-    config.publicOrigins ||
-    config.public_origins;
-
-  if (Array.isArray(source)) {
-    return source.map((item) => s(item).toLowerCase()).filter(Boolean);
-  }
-
-  if (typeof source === "string") {
-    return source
-      .split(/[,\n]/)
-      .map((item) => s(item).toLowerCase())
-      .filter(Boolean);
-  }
-
-  return [];
-}
-
-function normalizeWidgetConfig(raw = {}) {
-  const config = obj(raw);
-  const initialPrompts = arr(
-    config.initialPrompts || config.initial_prompts || config.quickReplies
-  )
-    .map((item) => truncate(item, 90))
-    .filter(Boolean)
-    .slice(0, 4);
-
-  return {
-    title: truncate(config.title || config.widgetTitle || config.widget_title, 80),
-    subtitle: truncate(
-      config.subtitle || config.widgetSubtitle || config.widget_subtitle,
-      140
-    ),
-    accentColor: s(
-      config.accentColor || config.accent_color || config.brandColor || config.brand_color
-    ),
-    initialPrompts,
-    allowedOrigins: normalizeAllowedOrigins(config),
-    enabled:
-      typeof config.enabled === "boolean"
-        ? config.enabled
-        : typeof config.publicEnabled === "boolean"
-          ? config.publicEnabled
-          : true,
-  };
-}
-
-function normalizeUrl(raw = "") {
-  const value = s(raw);
-  if (!value) return null;
-
-  try {
-    const parsed = new URL(value);
-    return {
-      raw: value,
-      href: parsed.href,
-      origin: `${parsed.protocol}//${parsed.host}`.toLowerCase(),
-      hostname: parsed.hostname.toLowerCase().replace(/^www\./, ""),
-      host: parsed.host.toLowerCase(),
-      pathname: parsed.pathname || "/",
-    };
-  } catch {
-    return null;
-  }
-}
-
-function originFromRule(raw = "") {
-  const value = s(raw).toLowerCase();
-  if (!value) return null;
-
-  if (/^https?:\/\//i.test(value)) {
-    return normalizeUrl(value);
-  }
-
-  const normalized = value.replace(/^www\./, "");
-  return {
-    raw: value,
-    href: value,
-    origin: normalized,
-    hostname: normalized.replace(/^https?:\/\//, ""),
-    host: normalized.replace(/^https?:\/\//, ""),
-    pathname: "/",
-  };
-}
-
-function hostMatches(expectedHost = "", candidateHost = "") {
-  const expected = s(expectedHost).toLowerCase().replace(/^www\./, "");
-  const candidate = s(candidateHost).toLowerCase().replace(/^www\./, "");
-  if (!expected || !candidate) return false;
-  return candidate === expected || candidate.endsWith(`.${expected}`);
-}
-
-function resolvePageContext(req) {
-  const body = obj(req?.body);
-  const page = obj(body.page);
-  const pageUrl = s(page.url || body.pageUrl);
-  const pageTitle = truncate(page.title || body.pageTitle || body.title, 180);
-  const referrer = s(
-    page.referrer || body.referrer || req?.headers?.referer || req?.headers?.referrer
-  );
-  const requestOrigin = s(page.origin || body.origin || req?.headers?.origin).toLowerCase();
-  const pageUrlParsed = normalizeUrl(pageUrl);
-  const referrerParsed = normalizeUrl(referrer);
-  const originParsed = normalizeUrl(requestOrigin || pageUrl || referrer);
-
-  return {
-    url: pageUrlParsed?.href || pageUrl,
-    title: pageTitle,
-    referrer: referrerParsed?.href || referrer,
-    origin: originParsed?.origin || requestOrigin,
-    host:
-      pageUrlParsed?.hostname ||
-      referrerParsed?.hostname ||
-      originParsed?.hostname ||
-      "",
-  };
-}
-
 function normalizeVisitor(req) {
   const source = obj(obj(req?.body).visitor);
 
@@ -208,145 +93,237 @@ function normalizeVisitor(req) {
   };
 }
 
-function resolveRequestedTenantKey(req) {
-  return lower(obj(req?.body).tenantKey || obj(req?.query).tenantKey);
-}
+function resolveRequestedWidgetId(req) {
+  const body = obj(req?.body);
+  const query = obj(req?.query);
 
-function validateWebsiteContext(tenant = {}, page = {}) {
-  const config = normalizeWidgetConfig(tenant.widgetConfig);
-  const requestedOrigins = uniq([
-    lower(page.origin),
-    lower(normalizeUrl(page.url)?.origin),
-    lower(normalizeUrl(page.referrer)?.origin),
-  ]).filter(Boolean);
-  const requestedHosts = uniq([
-    lower(page.host),
-    lower(normalizeUrl(page.url)?.hostname),
-    lower(normalizeUrl(page.referrer)?.hostname),
-  ]).filter(Boolean);
-  const configuredOrigins = config.allowedOrigins
-    .map((item) => originFromRule(item))
-    .filter(Boolean);
-  const websiteUrl = normalizeUrl(tenant.websiteUrl);
-
-  if (config.enabled === false) {
-    return {
-      ok: false,
-      reasonCode: "website_widget_disabled",
-      detail: "Website chat is disabled for this tenant.",
-    };
-  }
-
-  if (configuredOrigins.length) {
-    const matched = configuredOrigins.find((rule) =>
-      requestedOrigins.some((candidate) => {
-        if (rule.origin.startsWith("http")) {
-          return candidate === rule.origin;
-        }
-        const candidateUrl = normalizeUrl(candidate);
-        return hostMatches(rule.hostname, candidateUrl?.hostname || "");
-      })
-    );
-
-    if (matched) {
-      return {
-        ok: true,
-        matchedBy: "allowed_origin",
-        matchedValue: matched.raw,
-      };
-    }
-
-    return {
-      ok: false,
-      reasonCode: "website_origin_mismatch",
-      detail: "This widget request did not come from an allowed website origin.",
-    };
-  }
-
-  if (websiteUrl?.hostname) {
-    const matchedHost = requestedHosts.find((candidate) =>
-      hostMatches(websiteUrl.hostname, candidate)
-    );
-
-    if (matchedHost) {
-      return {
-        ok: true,
-        matchedBy: "website_url",
-        matchedValue: websiteUrl.href,
-      };
-    }
-
-    return {
-      ok: false,
-      reasonCode: "website_origin_mismatch",
-      detail: "This widget request does not match the tenant website URL.",
-    };
-  }
-
-  return {
-    ok: false,
-    reasonCode: "website_widget_unconfigured",
-    detail:
-      "Website chat is not configured yet. Set an approved website URL or allowed widget origin first.",
-  };
-}
-
-async function resolveWebsiteWidgetTenant(db, tenantKey = "") {
-  if (!isDbReady(db) || !tenantKey) return null;
-
-  const result = await db.query(
-    `
-    select
-      t.id,
-      t.tenant_key,
-      t.company_name,
-      t.timezone,
-      coalesce(tp.website_url, '') as website_url,
-      coalesce(tc.status, '') as widget_channel_status,
-      coalesce(tc.display_name, '') as widget_display_name,
-      coalesce(tc.config, '{}'::jsonb) as widget_config
-    from tenants t
-    left join tenant_profiles tp
-      on tp.tenant_id = t.id
-    left join lateral (
-      select status, display_name, config
-      from tenant_channels
-      where tenant_id = t.id
-        and channel_type = 'webchat'
-      order by is_primary desc, updated_at desc
-      limit 1
-    ) tc on true
-    where lower(t.tenant_key) = lower($1::text)
-    limit 1
-    `,
-    [tenantKey]
+  return lower(
+    body.widgetId ||
+      body.widget_id ||
+      body.publicWidgetId ||
+      body.public_widget_id ||
+      query.widgetId ||
+      query.widget_id
   );
+}
 
-  const row = result.rows?.[0] || null;
-  if (!row) return null;
+function resolveRateLimitTenantKey(req) {
+  const body = obj(req?.body);
+  const sessionToken = s(body.sessionToken);
+  const bootstrapToken = s(body.bootstrapToken);
 
+  const verifiedSession = verifyWebsiteWidgetSessionToken(sessionToken);
+  if (verifiedSession.ok) {
+    return lower(verifiedSession.payload?.tenantKey);
+  }
+
+  const verifiedBootstrap = verifyWebsiteWidgetBootstrapToken(bootstrapToken);
+  if (verifiedBootstrap.ok) {
+    return lower(verifiedBootstrap.payload?.tenantKey);
+  }
+
+  return lower(body.tenantKey || obj(req?.query).tenantKey);
+}
+
+function sessionPageContext(payload = {}) {
   return {
-    id: s(row.id),
-    tenantKey: lower(row.tenant_key),
-    companyName: truncate(row.company_name || row.widget_display_name || row.tenant_key, 120),
-    timezone: s(row.timezone),
-    websiteUrl: s(row.website_url),
-    widgetChannelStatus: lower(row.widget_channel_status),
-    widgetConfig: obj(row.widget_config),
+    url: s(payload?.pageUrl),
+    title: s(payload?.pageTitle),
+    referrer: s(payload?.pageReferrer),
+    origin: s(payload?.installOrigin),
+    host: s(payload?.installHost),
   };
 }
 
-function buildWidgetShell(tenant = {}, automation = {}) {
-  const config = normalizeWidgetConfig(tenant.widgetConfig);
+function sessionValidationContext(payload = {}) {
   return {
-    title: config.title || tenant.companyName || tenant.tenantKey || "Website chat",
-    subtitle:
-      config.subtitle ||
-      (automation.available
-        ? "Ask a question and get help right here on the site."
-        : "Leave a message here and the team can take over."),
-    accentColor: config.accentColor || "#0f172a",
-    initialPrompts: config.initialPrompts,
+    ok: true,
+    matchedBy: s(payload?.matchedBy),
+    matchedValue: s(payload?.matchedValue),
+  };
+}
+
+function resolveSessionFromBootstrap({
+  tenant = {},
+  bootstrapPayload = {},
+  providedToken = "",
+} = {}) {
+  const verified = verifyWebsiteWidgetSessionToken(providedToken);
+
+  if (
+    verified.ok &&
+    lower(verified.payload?.tenantKey) === lower(tenant.tenantKey) &&
+    s(verified.payload?.tenantId || tenant.id) === s(tenant.id) &&
+    lower(verified.payload?.widgetId) === lower(bootstrapPayload.widgetId) &&
+    lower(verified.payload?.installOrigin || bootstrapPayload.installOrigin) ===
+      lower(bootstrapPayload.installOrigin)
+  ) {
+    return issueWebsiteWidgetSession({
+      ...verified.payload,
+      tenantId: tenant.id,
+      tenantKey: tenant.tenantKey,
+      widgetId: bootstrapPayload.widgetId,
+      installId: bootstrapPayload.installId,
+      installOrigin: bootstrapPayload.installOrigin,
+      installHost: bootstrapPayload.installHost,
+      pageUrl: bootstrapPayload.pageUrl,
+      pageTitle: bootstrapPayload.pageTitle,
+      pageReferrer: bootstrapPayload.pageReferrer,
+      matchedBy: bootstrapPayload.matchedBy,
+      matchedValue: bootstrapPayload.matchedValue,
+    });
+  }
+
+  return issueWebsiteWidgetSession({
+    tenantId: tenant.id,
+    tenantKey: tenant.tenantKey,
+    widgetId: bootstrapPayload.widgetId,
+    threadId: "",
+    installId: bootstrapPayload.installId,
+    installOrigin: bootstrapPayload.installOrigin,
+    installHost: bootstrapPayload.installHost,
+    pageUrl: bootstrapPayload.pageUrl,
+    pageTitle: bootstrapPayload.pageTitle,
+    pageReferrer: bootstrapPayload.pageReferrer,
+    matchedBy: bootstrapPayload.matchedBy,
+    matchedValue: bootstrapPayload.matchedValue,
+  });
+}
+
+async function resolveTenantFromSession(db, providedToken = "") {
+  const verified = verifyWebsiteWidgetSessionToken(providedToken);
+  if (!verified.ok) {
+    return {
+      ok: false,
+      error: verified.error || "website_widget_session_invalid",
+    };
+  }
+
+  const payload = verified.payload || {};
+  const tenant = await resolveWebsiteWidgetTenant(db, {
+    tenantKey: payload.tenantKey,
+  });
+
+  if (!tenant?.id) {
+    return {
+      ok: false,
+      error: "tenant not found",
+    };
+  }
+
+  const widgetConfig = normalizeWidgetConfig(tenant.widgetConfig, {
+    defaultEnabled: true,
+  });
+
+  if (!widgetConfig.publicWidgetId) {
+    return {
+      ok: false,
+      error: "website_widget_unconfigured",
+      details: {
+        message:
+          "Website chat is not configured yet. Save the widget settings to re-enable public sessions.",
+      },
+    };
+  }
+
+  if (lower(widgetConfig.publicWidgetId) !== lower(payload.widgetId)) {
+    return {
+      ok: false,
+      error: "website_widget_session_invalid",
+      details: {
+        message:
+          "This website widget session no longer matches the current tenant widget installation.",
+      },
+    };
+  }
+
+  if (widgetConfig.enabled !== true) {
+    return {
+      ok: false,
+      error: "website_widget_disabled",
+      details: {
+        message: "Website chat is disabled for this tenant.",
+      },
+    };
+  }
+
+  const refreshed = issueWebsiteWidgetSession({
+    ...payload,
+    tenantId: tenant.id,
+    tenantKey: tenant.tenantKey,
+    widgetId: widgetConfig.publicWidgetId,
+  });
+
+  return {
+    ok: true,
+    tenant,
+    session: refreshed,
+  };
+}
+
+function buildThreadMeta({ session, page, validation, visitor }) {
+  return {
+    source: WEBSITE_SOURCE,
+    websiteWidget: {
+      widgetId: s(session?.widgetId),
+      installId: s(session?.installId),
+      sessionId: s(session?.sessionId),
+      visitorId: s(session?.visitorId),
+      validatedAt: nowIso(),
+      validation: {
+        ok: validation?.ok === true,
+        matchedBy: s(validation?.matchedBy),
+        matchedValue: s(validation?.matchedValue),
+      },
+      page: {
+        url: s(page?.url),
+        title: truncate(page?.title, 180),
+        referrer: s(page?.referrer),
+        origin: s(page?.origin),
+        host: s(page?.host),
+      },
+      visitor: {
+        name: truncate(visitor?.name, 120),
+        email: truncate(visitor?.email, 160),
+        phone: truncate(visitor?.phone, 80),
+      },
+    },
+  };
+}
+
+function buildMessageMeta({
+  session,
+  page,
+  validation,
+  visitor,
+  clientMessageId,
+} = {}) {
+  return {
+    source: WEBSITE_SOURCE,
+    public: true,
+    websiteWidget: {
+      widgetId: s(session?.widgetId),
+      installId: s(session?.installId),
+      sessionId: s(session?.sessionId),
+      visitorId: s(session?.visitorId),
+      clientMessageId: s(clientMessageId),
+      validation: {
+        ok: validation?.ok === true,
+        matchedBy: s(validation?.matchedBy),
+        matchedValue: s(validation?.matchedValue),
+      },
+      page: {
+        url: s(page?.url),
+        title: truncate(page?.title, 180),
+        referrer: s(page?.referrer),
+        origin: s(page?.origin),
+      },
+      visitor: {
+        name: truncate(visitor?.name, 120),
+        email: truncate(visitor?.email, 160),
+        phone: truncate(visitor?.phone, 80),
+      },
+    },
   };
 }
 
@@ -371,11 +348,15 @@ function buildWidgetAutomation({
     };
   }
 
-  const surfaceSummary = summary || obj(runtimeState?.runtime?.executionPolicy?.inbox);
+  const surfaceSummary =
+    summary || obj(runtimeState?.runtime?.executionPolicy?.inbox);
   const lowRiskOutcome = lower(surfaceSummary.lowRiskOutcome || "");
   const reasonCodes = uniq(surfaceSummary.reasonCodes);
 
-  if (surfaceSummary.blockedUntilRepair || lowRiskOutcome === "blocked_until_repair") {
+  if (
+    surfaceSummary.blockedUntilRepair ||
+    lowRiskOutcome === "blocked_until_repair"
+  ) {
     return {
       available: false,
       mode: "blocked_until_repair",
@@ -394,11 +375,15 @@ function buildWidgetAutomation({
     };
   }
 
-  if (surfaceSummary.handoffRequired || lowRiskOutcome === "handoff_required") {
+  if (
+    surfaceSummary.handoffRequired ||
+    lowRiskOutcome === "handoff_required"
+  ) {
     return {
       available: false,
       mode: "handoff_required",
-      summary: "Messages will be routed to an operator when this chat needs human review.",
+      summary:
+        "Messages will be routed to an operator when this chat needs human review.",
       reasonCodes,
     };
   }
@@ -419,7 +404,8 @@ function buildWidgetAutomation({
   return {
     available: true,
     mode: "assistant_available",
-    summary: "AI replies are available within approved truth and runtime guardrails.",
+    summary:
+      "AI replies are available within approved truth and runtime guardrails.",
     reasonCodes,
   };
 }
@@ -507,95 +493,14 @@ async function loadWebsiteTranscript(db, threadId, tenantKey) {
     .map(toPublicMessage);
 }
 
-function resolveSession({
-  tenant = {},
-  providedToken = "",
+function buildConversationMode({
+  executionResults = [],
+  handoffResults = [],
+  automation = {},
 } = {}) {
-  const verified = verifyWebsiteWidgetSessionToken(providedToken);
-
   if (
-    verified.ok &&
-    lower(verified.payload?.tenantKey) === lower(tenant.tenantKey) &&
-    (!tenant.id || !verified.payload?.tenantId || s(verified.payload.tenantId) === s(tenant.id))
+    arr(executionResults).some((item) => s(item?.actionType) === "send_message")
   ) {
-    return issueWebsiteWidgetSession({
-      ...verified.payload,
-      tenantId: tenant.id,
-      tenantKey: tenant.tenantKey,
-    });
-  }
-
-  return issueWebsiteWidgetSession({
-    tenantId: tenant.id,
-    tenantKey: tenant.tenantKey,
-    threadId: "",
-  });
-}
-
-function buildThreadMeta({ session, page, validation, visitor }) {
-  return {
-    source: WEBSITE_SOURCE,
-    websiteWidget: {
-      sessionId: s(session?.sessionId),
-      visitorId: s(session?.visitorId),
-      validatedAt: nowIso(),
-      validation: {
-        ok: validation?.ok === true,
-        matchedBy: s(validation?.matchedBy),
-        matchedValue: s(validation?.matchedValue),
-      },
-      page: {
-        url: s(page?.url),
-        title: truncate(page?.title, 180),
-        referrer: s(page?.referrer),
-        origin: s(page?.origin),
-        host: s(page?.host),
-      },
-      visitor: {
-        name: truncate(visitor?.name, 120),
-        email: truncate(visitor?.email, 160),
-        phone: truncate(visitor?.phone, 80),
-      },
-    },
-  };
-}
-
-function buildMessageMeta({
-  session,
-  page,
-  validation,
-  visitor,
-  clientMessageId,
-} = {}) {
-  return {
-    source: WEBSITE_SOURCE,
-    public: true,
-    websiteWidget: {
-      sessionId: s(session?.sessionId),
-      visitorId: s(session?.visitorId),
-      clientMessageId: s(clientMessageId),
-      validation: {
-        ok: validation?.ok === true,
-        matchedBy: s(validation?.matchedBy),
-        matchedValue: s(validation?.matchedValue),
-      },
-      page: {
-        url: s(page?.url),
-        title: truncate(page?.title, 180),
-        referrer: s(page?.referrer),
-        origin: s(page?.origin),
-      },
-      visitor: {
-        name: truncate(visitor?.name, 120),
-        email: truncate(visitor?.email, 160),
-        phone: truncate(visitor?.phone, 80),
-      },
-    },
-  };
-}
-
-function buildConversationMode({ executionResults = [], handoffResults = [], automation = {} } = {}) {
-  if (arr(executionResults).some((item) => s(item?.actionType) === "send_message")) {
     return "assistant_replied";
   }
 
@@ -618,7 +523,8 @@ function buildFallbackActions(outcome = "", reasonCodes = []) {
       type: "handoff",
       reason: handoffReason,
       priority:
-        safeOutcome === "allowed_with_human_review" || safeOutcome === "operator_only"
+        safeOutcome === "allowed_with_human_review" ||
+        safeOutcome === "operator_only"
           ? "normal"
           : "high",
       meta: {
@@ -644,11 +550,23 @@ function websiteWidgetRateLimit(policyName, maxRequests, windowMs = 60_000) {
       maxRequests,
       windowMs,
       keyFn: (request) => {
-        const tenantKey = resolveRequestedTenantKey(request);
-        const page = resolvePageContext(request);
+        const widgetId = resolveRequestedWidgetId(request);
+        const tenantKey = resolveRateLimitTenantKey(request);
+        const install = buildInstallContext(request);
+        const session = verifyWebsiteWidgetSessionToken(
+          s(obj(request?.body).sessionToken)
+        );
+
         return [
-          tenantKey || "unknown",
-          lower(page.origin || page.host),
+          widgetId || tenantKey || "unknown",
+          lower(
+            session.ok
+              ? session.payload?.installOrigin || session.payload?.installHost
+              : install.requestOrigin ||
+                  install.requestRefererOrigin ||
+                  install.page.origin ||
+                  install.page.host
+          ),
           normalizeRequestIp(request),
         ].join("::");
       },
@@ -678,7 +596,8 @@ async function processWebsiteWidgetMessage({
     await client.query("BEGIN");
 
     const existingThread =
-      s(session.threadId) && (await getThreadById(client, session.threadId, tenant.tenantKey));
+      s(session.threadId) &&
+      (await getThreadById(client, session.threadId, tenant.tenantKey));
     const externalThreadId =
       s(existingThread?.external_thread_id) || `website:${session.sessionId}`;
     const externalMessageId = `website:${session.sessionId}:${clientMessageId}`;
@@ -691,7 +610,8 @@ async function processWebsiteWidgetMessage({
       externalThreadId,
       externalUserId: session.visitorId,
       externalUsername: visitor.email || visitor.name || null,
-      customerName: visitor.name || existingThread?.customer_name || "Website visitor",
+      customerName:
+        visitor.name || existingThread?.customer_name || "Website visitor",
       meta: buildThreadMeta({
         session,
         page,
@@ -777,7 +697,9 @@ async function processWebsiteWidgetMessage({
       leadScore: 0,
       executionPolicy: {
         strictestOutcome:
-          automation.mode === "blocked_until_repair" ? "blocked_until_repair" : "operator_only",
+          automation.mode === "blocked_until_repair"
+            ? "blocked_until_repair"
+            : "operator_only",
         reasonCodes: automation.reasonCodes,
       },
       trace: {
@@ -815,6 +737,7 @@ async function processWebsiteWidgetMessage({
           runtime,
           websiteWidget: {
             validatedOrigin: validation?.matchedValue || "",
+            widgetId: session.widgetId,
           },
         },
         services: runtime.serviceCatalog,
@@ -859,10 +782,15 @@ async function processWebsiteWidgetMessage({
           "blocked",
           "blocked_until_repair",
         ].includes(strictestOutcome)
-          ? buildFallbackActions(strictestOutcome, executionPolicy.summary.reasonCodes)
+          ? buildFallbackActions(
+              strictestOutcome,
+              executionPolicy.summary.reasonCodes
+            )
           : [];
 
-      actions = executionPolicy.actions.length ? executionPolicy.actions : fallbackActions;
+      actions = executionPolicy.actions.length
+        ? executionPolicy.actions
+        : fallbackActions;
 
       await safeAppendDecisionEvent(client, {
         ...buildExecutionPolicyDecisionAuditShape({
@@ -987,7 +915,9 @@ async function processWebsiteWidgetMessage({
         normalizeThread(refreshedThread.rows?.[0] || thread);
     } else {
       actions = buildFallbackActions(
-        automation.mode === "blocked_until_repair" ? "blocked_until_repair" : "operator_only",
+        automation.mode === "blocked_until_repair"
+          ? "blocked_until_repair"
+          : "operator_only",
         automation.reasonCodes
       );
 
@@ -1013,7 +943,8 @@ async function processWebsiteWidgetMessage({
         reasonCodes: automation.reasonCodes,
         healthState: {
           status: "blocked",
-          reasonCode: automation.reasonCodes[0] || "runtime_authority_unavailable",
+          reasonCode:
+            automation.reasonCodes[0] || "runtime_authority_unavailable",
         },
         affectedSurfaces: ["inbox"],
         decisionContext: {
@@ -1025,7 +956,7 @@ async function processWebsiteWidgetMessage({
       });
     }
 
-    const threadState = await upsertInboxThreadState(
+    await upsertInboxThreadState(
       client,
       buildThreadStateForDecision({
         thread: finalThread,
@@ -1095,7 +1026,6 @@ async function processWebsiteWidgetMessage({
       widget: buildWidgetShell(tenant, automation),
       automation,
       thread: toPublicThread(finalThread),
-      threadState,
       messages: publicMessages,
       delivery: {
         mode: buildConversationMode({
@@ -1119,9 +1049,8 @@ export function createWebsiteWidgetHandlers({
   persistLead = persistLeadActions,
   applyHandoff = applyHandoffActions,
 } = {}) {
-  async function bootstrapWebsiteWidget(req, res) {
-    const tenantKey = resolveRequestedTenantKey(req);
-    const providedToken = s(obj(req.body).sessionToken);
+  async function issueWidgetInstallToken(req, res) {
+    const widgetId = resolveRequestedWidgetId(req);
 
     try {
       if (!isDbReady(db)) {
@@ -1132,23 +1061,25 @@ export function createWebsiteWidgetHandlers({
         });
       }
 
-      if (!tenantKey) {
+      if (!widgetId) {
         return okJson(res, {
           ok: false,
-          error: "tenantKey required",
+          error: "widgetId required",
         });
       }
 
-      const tenant = await resolveWebsiteWidgetTenant(db, tenantKey);
+      const tenant = await resolveWebsiteWidgetTenant(db, {
+        publicWidgetId: widgetId,
+      });
       if (!tenant?.id) {
         return okJson(res, {
           ok: false,
-          error: "tenant not found",
+          error: "website_widget_not_found",
         });
       }
 
-      const page = resolvePageContext(req);
-      const validation = validateWebsiteContext(tenant, page);
+      const installContext = buildInstallContext(req);
+      const validation = validateWidgetInstallContext(tenant, installContext);
       if (!validation.ok) {
         return okJson(res, {
           ok: false,
@@ -1159,9 +1090,120 @@ export function createWebsiteWidgetHandlers({
         });
       }
 
-      const session = resolveSession({
+      const installOrigin =
+        installContext.requestOrigin ||
+        installContext.requestRefererOrigin ||
+        installContext.page.origin;
+      const installHost =
+        normalizeUrl(installOrigin)?.hostname || installContext.page.host;
+      const bootstrap = issueWebsiteWidgetBootstrapToken({
+        tenantId: tenant.id,
+        tenantKey: tenant.tenantKey,
+        widgetId,
+        installOrigin,
+        installHost,
+        pageUrl: installContext.page.url,
+        pageTitle: installContext.page.title,
+        pageReferrer: installContext.page.referrer,
+        matchedBy: validation.matchedBy,
+        matchedValue: validation.matchedValue,
+      });
+
+      return okJson(res, {
+        ok: true,
+        widgetId,
+        bootstrapToken: bootstrap.token,
+        expiresAt: new Date(bootstrap.payload.expiresAt).toISOString(),
+      });
+    } catch (error) {
+      return okJson(res, {
+        ok: false,
+        error: "Error",
+        details: {
+          message: s(error?.message || error),
+        },
+      });
+    }
+  }
+
+  async function bootstrapWebsiteWidget(req, res) {
+    const body = obj(req.body);
+    const widgetId = resolveRequestedWidgetId(req);
+    const providedSessionToken = s(body.sessionToken);
+    const bootstrapToken = s(body.bootstrapToken);
+
+    try {
+      if (!isDbReady(db)) {
+        return okJson(res, {
+          ok: false,
+          error: "db disabled",
+          dbDisabled: true,
+        });
+      }
+
+      if (!widgetId) {
+        return okJson(res, {
+          ok: false,
+          error: "widgetId required",
+        });
+      }
+
+      if (!bootstrapToken) {
+        return okJson(res, {
+          ok: false,
+          error: "bootstrapToken required",
+        });
+      }
+
+      const verifiedBootstrap = verifyWebsiteWidgetBootstrapToken(bootstrapToken);
+      if (!verifiedBootstrap.ok) {
+        return okJson(res, {
+          ok: false,
+          error: verifiedBootstrap.error,
+        });
+      }
+
+      if (lower(verifiedBootstrap.payload?.widgetId) !== lower(widgetId)) {
+        return okJson(res, {
+          ok: false,
+          error: "website_widget_install_mismatch",
+        });
+      }
+
+      const tenant = await resolveWebsiteWidgetTenant(db, {
+        publicWidgetId: widgetId,
+      });
+      if (!tenant?.id) {
+        return okJson(res, {
+          ok: false,
+          error: "tenant not found",
+        });
+      }
+
+      const currentConfig = normalizeWidgetConfig(tenant.widgetConfig, {
+        defaultEnabled: true,
+      });
+      if (currentConfig.enabled !== true) {
+        return okJson(res, {
+          ok: false,
+          error: "website_widget_disabled",
+          details: {
+            message: "Website chat is disabled for this tenant.",
+          },
+        });
+      }
+
+      if (lower(currentConfig.publicWidgetId) !== lower(widgetId)) {
+        return okJson(res, {
+          ok: false,
+          error: "website_widget_install_mismatch",
+        });
+      }
+
+      const session = resolveSessionFromBootstrap({
         tenant,
-        providedToken,
+        bootstrapPayload: verifiedBootstrap.payload,
+        providedToken: providedSessionToken,
       });
 
       const thread =
@@ -1207,10 +1249,7 @@ export function createWebsiteWidgetHandlers({
   }
 
   async function postWebsiteWidgetMessage(req, res) {
-    const tenantKey = resolveRequestedTenantKey(req);
     const body = obj(req.body);
-    const providedToken = s(body.sessionToken);
-    const page = resolvePageContext(req);
     const visitor = normalizeVisitor(req);
     const text = truncate(body.text || obj(body.message).text, 4000);
     const clientMessageId =
@@ -1226,13 +1265,6 @@ export function createWebsiteWidgetHandlers({
         });
       }
 
-      if (!tenantKey) {
-        return okJson(res, {
-          ok: false,
-          error: "tenantKey required",
-        });
-      }
-
       if (!text) {
         return okJson(res, {
           ok: false,
@@ -1240,37 +1272,25 @@ export function createWebsiteWidgetHandlers({
         });
       }
 
-      const tenant = await resolveWebsiteWidgetTenant(db, tenantKey);
-      if (!tenant?.id) {
+      const sessionState = await resolveTenantFromSession(
+        db,
+        s(body.sessionToken)
+      );
+      if (!sessionState.ok) {
         return okJson(res, {
           ok: false,
-          error: "tenant not found",
+          error: sessionState.error,
+          details: sessionState.details || {},
         });
       }
-
-      const validation = validateWebsiteContext(tenant, page);
-      if (!validation.ok) {
-        return okJson(res, {
-          ok: false,
-          error: validation.reasonCode,
-          details: {
-            message: validation.detail,
-          },
-        });
-      }
-
-      const session = resolveSession({
-        tenant,
-        providedToken,
-      });
 
       const response = await processWebsiteWidgetMessage({
         db,
         wsHub,
-        tenant,
-        session: session.payload,
-        page,
-        validation,
+        tenant: sessionState.tenant,
+        session: sessionState.session.payload,
+        page: sessionPageContext(sessionState.session.payload),
+        validation: sessionValidationContext(sessionState.session.payload),
         visitor,
         text,
         clientMessageId,
@@ -1293,9 +1313,6 @@ export function createWebsiteWidgetHandlers({
   }
 
   async function getWebsiteWidgetTranscript(req, res) {
-    const tenantKey = resolveRequestedTenantKey(req);
-    const providedToken = s(obj(req.body).sessionToken);
-
     try {
       if (!isDbReady(db)) {
         return okJson(res, {
@@ -1305,38 +1322,20 @@ export function createWebsiteWidgetHandlers({
         });
       }
 
-      if (!tenantKey) {
+      const sessionState = await resolveTenantFromSession(
+        db,
+        s(obj(req.body).sessionToken)
+      );
+      if (!sessionState.ok) {
         return okJson(res, {
           ok: false,
-          error: "tenantKey required",
+          error: sessionState.error,
+          details: sessionState.details || {},
         });
       }
 
-      const tenant = await resolveWebsiteWidgetTenant(db, tenantKey);
-      if (!tenant?.id) {
-        return okJson(res, {
-          ok: false,
-          error: "tenant not found",
-        });
-      }
-
-      const page = resolvePageContext(req);
-      const validation = validateWebsiteContext(tenant, page);
-      if (!validation.ok) {
-        return okJson(res, {
-          ok: false,
-          error: validation.reasonCode,
-          details: {
-            message: validation.detail,
-          },
-        });
-      }
-
-      const session = resolveSession({
-        tenant,
-        providedToken,
-      });
-
+      const tenant = sessionState.tenant;
+      const session = sessionState.session;
       const thread =
         s(session.payload.threadId) &&
         (await getThreadById(db, session.payload.threadId, tenant.tenantKey));
@@ -1379,6 +1378,7 @@ export function createWebsiteWidgetHandlers({
   }
 
   return {
+    issueWidgetInstallToken,
     bootstrapWebsiteWidget,
     postWebsiteWidgetMessage,
     getWebsiteWidgetTranscript,
@@ -1389,6 +1389,11 @@ export function websiteWidgetRoutes(options = {}) {
   const handlers = createWebsiteWidgetHandlers(options);
   const router = express.Router();
 
+  router.post(
+    "/public/widget/install-token",
+    websiteWidgetRateLimit("website_widget_install_token", 30),
+    handlers.issueWidgetInstallToken
+  );
   router.post(
     "/public/widget/bootstrap",
     websiteWidgetRateLimit("website_widget_bootstrap", 30),
@@ -1409,11 +1414,12 @@ export function websiteWidgetRoutes(options = {}) {
 }
 
 export const __test__ = {
+  buildInstallContext,
   buildWidgetAutomation,
   buildFallbackActions,
   buildWidgetShell,
   normalizeWidgetConfig,
   toPublicMessage,
   toPublicThread,
-  validateWebsiteContext,
+  validateWidgetInstallContext,
 };

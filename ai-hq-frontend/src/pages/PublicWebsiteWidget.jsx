@@ -14,15 +14,6 @@ function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
-function buildPageContext(params) {
-  return {
-    url: s(params.get("pageUrl")),
-    title: s(params.get("pageTitle")),
-    referrer: s(params.get("referrer")),
-    origin: s(params.get("origin")),
-  };
-}
-
 function normalizeApiBase(raw = "") {
   const clean = s(raw).replace(/\/+$/, "");
   if (!clean) return "/api";
@@ -34,23 +25,23 @@ function buildApiUrl(apiBase, path) {
   return `${normalizeApiBase(apiBase)}${cleanPath}`;
 }
 
-function storageKeyForTenant(tenantKey = "") {
-  return `aihq:website-widget:${s(tenantKey).toLowerCase() || "default"}`;
+function storageKeyForWidget(widgetId = "") {
+  return `aihq:website-widget:${s(widgetId).toLowerCase() || "default"}`;
 }
 
-function readStoredSession(tenantKey = "") {
+function readStoredSession(widgetId = "") {
   if (typeof window === "undefined") return "";
   try {
-    return s(window.localStorage.getItem(storageKeyForTenant(tenantKey)));
+    return s(window.localStorage.getItem(storageKeyForWidget(widgetId)));
   } catch {
     return "";
   }
 }
 
-function writeStoredSession(tenantKey = "", token = "") {
+function writeStoredSession(widgetId = "", token = "") {
   if (typeof window === "undefined") return;
   try {
-    const key = storageKeyForTenant(tenantKey);
+    const key = storageKeyForWidget(widgetId);
     if (token) {
       window.localStorage.setItem(key, token);
     } else {
@@ -125,13 +116,9 @@ export default function PublicWebsiteWidget() {
     typeof window !== "undefined"
       ? new URLSearchParams(window.location.search)
       : new URLSearchParams();
-  const tenantKey = s(params.get("tenantKey")).toLowerCase();
+  const widgetId = s(params.get("widgetId")).toLowerCase();
+  const bootstrapToken = s(params.get("bootstrapToken"));
   const apiBase = s(params.get("apiBase"));
-  const pageContext = buildPageContext(params);
-  const pageUrl = s(pageContext.url);
-  const pageTitle = s(pageContext.title);
-  const pageReferrer = s(pageContext.referrer);
-  const pageOrigin = s(pageContext.origin);
   const accentColor = s(params.get("accent")) || "#0f172a";
 
   const [loading, setLoading] = useState(true);
@@ -146,9 +133,15 @@ export default function PublicWebsiteWidget() {
   const scrollRef = useRef(null);
 
   useEffect(() => {
-    if (!tenantKey) {
+    if (!widgetId) {
       setLoading(false);
-      setError("Missing tenantKey. Add it to the widget embed configuration.");
+      setError("Missing widgetId. Add the publishable widget ID to the embed configuration.");
+      return;
+    }
+
+    if (!bootstrapToken) {
+      setLoading(false);
+      setError("Missing bootstrap token. Reload the website page and try opening the widget again.");
       return;
     }
 
@@ -160,14 +153,9 @@ export default function PublicWebsiteWidget() {
 
       try {
         const payload = await postWidget(apiBase, "/public/widget/bootstrap", {
-          tenantKey,
-          sessionToken: readStoredSession(tenantKey),
-          page: {
-            url: pageUrl,
-            title: pageTitle,
-            referrer: pageReferrer,
-            origin: pageOrigin,
-          },
+          widgetId,
+          bootstrapToken,
+          sessionToken: readStoredSession(widgetId),
         });
 
         if (cancelled) return;
@@ -177,7 +165,7 @@ export default function PublicWebsiteWidget() {
         setThread(payload.thread || null);
         setMessages(Array.isArray(payload.messages) ? payload.messages : []);
         setSessionToken(s(payload.sessionToken));
-        writeStoredSession(tenantKey, s(payload.sessionToken));
+        writeStoredSession(widgetId, s(payload.sessionToken));
       } catch (requestError) {
         if (cancelled) return;
         setError(s(requestError?.message || requestError));
@@ -191,29 +179,22 @@ export default function PublicWebsiteWidget() {
     return () => {
       cancelled = true;
     };
-  }, [apiBase, pageOrigin, pageReferrer, pageTitle, pageUrl, tenantKey]);
+  }, [apiBase, bootstrapToken, widgetId]);
 
   useEffect(() => {
-    if (!tenantKey || !sessionToken || !thread?.id) return undefined;
+    if (!widgetId || !sessionToken || !thread?.id) return undefined;
 
     const timer = window.setInterval(async () => {
       try {
         const payload = await postWidget(apiBase, "/public/widget/transcript", {
-          tenantKey,
           sessionToken,
-          page: {
-            url: pageUrl,
-            title: pageTitle,
-            referrer: pageReferrer,
-            origin: pageOrigin,
-          },
         });
 
         setThread(payload.thread || null);
         setMessages(Array.isArray(payload.messages) ? payload.messages : []);
         if (payload.sessionToken) {
           setSessionToken(s(payload.sessionToken));
-          writeStoredSession(tenantKey, s(payload.sessionToken));
+          writeStoredSession(widgetId, s(payload.sessionToken));
         }
       } catch {
         // Keep the last known transcript if polling fails.
@@ -221,7 +202,7 @@ export default function PublicWebsiteWidget() {
     }, 4000);
 
     return () => window.clearInterval(timer);
-  }, [apiBase, pageOrigin, pageReferrer, pageTitle, pageUrl, sessionToken, tenantKey, thread?.id]);
+  }, [apiBase, sessionToken, thread?.id, widgetId]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -231,7 +212,7 @@ export default function PublicWebsiteWidget() {
   async function handleSend(event) {
     event.preventDefault();
     const text = s(draft);
-    if (!text || sending || !tenantKey) return;
+    if (!text || sending || !widgetId) return;
 
     const optimisticId = `local-${Date.now()}`;
     const nextMessages = [
@@ -253,16 +234,9 @@ export default function PublicWebsiteWidget() {
 
     try {
       const payload = await postWidget(apiBase, "/public/widget/message", {
-        tenantKey,
-        sessionToken: sessionToken || readStoredSession(tenantKey),
+        sessionToken: sessionToken || readStoredSession(widgetId),
         text,
         messageId: optimisticId,
-        page: {
-          url: pageUrl,
-          title: pageTitle,
-          referrer: pageReferrer,
-          origin: pageOrigin,
-        },
       });
 
       setWidget(obj(payload.widget));
@@ -270,7 +244,7 @@ export default function PublicWebsiteWidget() {
       setThread(payload.thread || null);
       setMessages(Array.isArray(payload.messages) ? payload.messages : []);
       setSessionToken(s(payload.sessionToken));
-      writeStoredSession(tenantKey, s(payload.sessionToken));
+      writeStoredSession(widgetId, s(payload.sessionToken));
     } catch (requestError) {
       setDraft(text);
       setMessages(messages);
@@ -399,7 +373,7 @@ export default function PublicWebsiteWidget() {
             />
             <button
               type="submit"
-              disabled={!s(draft) || sending || loading || !tenantKey}
+              disabled={!s(draft) || sending || loading || !widgetId}
               className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-white transition disabled:cursor-not-allowed disabled:opacity-50"
             >
               {sending ? (

@@ -27,3 +27,11 @@ export async function connectTelegramChannel(payload = {}) {
 export async function disconnectTelegramChannel() {
   return apiPost("/api/channels/telegram/disconnect", {});
 }
+
+export async function getWebsiteWidgetStatus() {
+  return apiGet("/api/channels/webchat/status");
+}
+
+export async function saveWebsiteWidgetConfig(payload = {}) {
+  return apiPost("/api/channels/webchat/config", payload);
+}

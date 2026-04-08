@@ -66,6 +66,18 @@ function pushUnique(target = [], value = "") {
   return target;
 }
 
+function normalizeRequestPath(req) {
+  return s(req?.originalUrl || req?.url || req?.path || "").split("?")[0] || "/";
+}
+
+function isWebsiteWidgetInstallCorsPath(req) {
+  const path = normalizeRequestPath(req);
+  return (
+    path === "/api/public/widget/install-token" ||
+    path === "/public/widget/install-token"
+  );
+}
+
 function createAuditLogger(db) {
   return {
     async log({
@@ -145,17 +157,7 @@ async function main() {
 
   const allowedOrigins = buildAllowedCorsOrigins(cfg.urls.corsOrigin, cfg.app.env);
 
-  const corsOptions = {
-    origin(origin, cb) {
-      if (!origin) return cb(null, true);
-
-      if (isAllowedOrigin(origin, allowedOrigins, cfg.app.env)) {
-        return cb(null, true);
-      }
-
-      logger.warn("http.cors.blocked", { origin, allowedOrigins });
-      return cb(new Error(`CORS blocked for origin: ${origin}`));
-    },
+  const baseCorsOptions = {
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
@@ -170,6 +172,37 @@ async function main() {
       "Accept",
     ],
     optionsSuccessStatus: 204,
+  };
+
+  const corsOptions = (req, cb) => {
+    const origin = s(req?.headers?.origin);
+    if (!origin) {
+      return cb(null, {
+        ...baseCorsOptions,
+        origin: true,
+      });
+    }
+
+    if (isWebsiteWidgetInstallCorsPath(req)) {
+      return cb(null, {
+        ...baseCorsOptions,
+        origin: true,
+      });
+    }
+
+    if (isAllowedOrigin(origin, allowedOrigins, cfg.app.env)) {
+      return cb(null, {
+        ...baseCorsOptions,
+        origin: true,
+      });
+    }
+
+    logger.warn("http.cors.blocked", {
+      origin,
+      allowedOrigins,
+      path: normalizeRequestPath(req),
+    });
+    return cb(new Error(`CORS blocked for origin: ${origin}`));
   };
 
   app.use(cors(corsOptions));

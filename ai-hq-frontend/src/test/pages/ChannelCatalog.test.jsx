@@ -11,6 +11,8 @@ const selectMetaChannelCandidate = vi.fn();
 const getTelegramChannelStatus = vi.fn();
 const connectTelegramChannel = vi.fn();
 const disconnectTelegramChannel = vi.fn();
+const getWebsiteWidgetStatus = vi.fn();
+const saveWebsiteWidgetConfig = vi.fn();
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual("react-router-dom");
@@ -28,6 +30,8 @@ vi.mock("../../api/channelConnect.js", () => ({
   getTelegramChannelStatus: (...args) => getTelegramChannelStatus(...args),
   connectTelegramChannel: (...args) => connectTelegramChannel(...args),
   disconnectTelegramChannel: (...args) => disconnectTelegramChannel(...args),
+  getWebsiteWidgetStatus: (...args) => getWebsiteWidgetStatus(...args),
+  saveWebsiteWidgetConfig: (...args) => saveWebsiteWidgetConfig(...args),
 }));
 
 import ChannelCatalog from "../../pages/ChannelCatalog.jsx";
@@ -155,6 +159,41 @@ beforeEach(() => {
     ok: true,
     disconnected: true,
   });
+  getWebsiteWidgetStatus.mockResolvedValue({
+    ok: true,
+    state: "connected",
+    permissions: {
+      saveAllowed: true,
+      requiredRoles: ["owner", "admin"],
+      message: "",
+    },
+    widget: {
+      enabled: true,
+      publicWidgetId: "ww_acme_widget",
+      websiteUrl: "https://acme.example",
+      allowedOrigins: ["https://www.acme.example"],
+      allowedDomains: ["acme.example"],
+      title: "Acme Clinic",
+      subtitle: "Ask a question or leave a message for the team.",
+      accentColor: "#0f172a",
+      initialPrompts: ["What services do you offer?"],
+    },
+    install: {
+      scriptUrl: "https://widget.example.test/website-widget-loader.js",
+      apiBase: "https://api.example.test/api",
+      embedSnippet:
+        '<script src="https://widget.example.test/website-widget-loader.js" data-widget-id="ww_acme_widget" data-api-base="https://api.example.test/api" async></script>',
+    },
+    readiness: {
+      status: "ready",
+      message:
+        "Website chat is configured with a publishable install ID and trusted origin controls.",
+      blockers: [],
+    },
+  });
+  saveWebsiteWidgetConfig.mockResolvedValue({
+    ok: true,
+  });
 });
 
 afterEach(() => {
@@ -167,6 +206,8 @@ afterEach(() => {
   getTelegramChannelStatus.mockReset();
   connectTelegramChannel.mockReset();
   disconnectTelegramChannel.mockReset();
+  getWebsiteWidgetStatus.mockReset();
+  saveWebsiteWidgetConfig.mockReset();
 });
 
 describe("ChannelCatalog", () => {
@@ -209,6 +250,17 @@ describe("ChannelCatalog", () => {
     expect(screen.getByText("Connected bot")).toBeInTheDocument();
     expect(screen.getByText("Webhook")).toBeInTheDocument();
     expect(screen.getByText("@acme_support_bot")).toBeInTheDocument();
+  });
+
+  it("opens the Website chat drawer with trusted install config", async () => {
+    renderCatalog();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Website chat" }));
+
+    expect(await screen.findByText("Install-safe website chat")).toBeInTheDocument();
+    expect(screen.getByText("Public widget ID")).toBeInTheDocument();
+    expect(screen.getByText("ww_acme_widget")).toBeInTheDocument();
+    expect(screen.getByText(/loader-signed install token/i)).toBeInTheDocument();
   });
 
   it("submits a Telegram bot token and uses the real disconnect flow", async () => {

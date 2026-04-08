@@ -23,6 +23,7 @@ import ChannelIcon from "./ChannelIcon.jsx";
 import { ChannelActionButton } from "./ChannelPrimitives.jsx";
 import { getChannelStatusMeta } from "./channelCatalogModel.js";
 import Input from "../ui/Input.jsx";
+import WebsiteWidgetDetailDrawer from "./WebsiteWidgetDetailDrawer.jsx";
 
 const BOTFATHER_URL = "https://t.me/BotFather";
 
@@ -40,6 +41,10 @@ function isInstagramChannel(channel = {}) {
 
 function isTelegramChannel(channel = {}) {
   return s(channel?.id).toLowerCase() === "telegram";
+}
+
+function isWebsiteChannel(channel = {}) {
+  return ["website", "webchat"].includes(s(channel?.id).toLowerCase());
 }
 
 function buildInstagramStateCopy(status = {}) {
@@ -441,6 +446,16 @@ export default function ChannelDetailDrawer({
   onClose,
   onNavigate,
 }) {
+  if (isWebsiteChannel(channel)) {
+    return (
+      <WebsiteWidgetDetailDrawer
+        channel={channel}
+        open={open}
+        onClose={onClose}
+      />
+    );
+  }
+
   const isInstagram = isInstagramChannel(channel);
   const isTelegram = isTelegramChannel(channel);
   const queryClient = useQueryClient();

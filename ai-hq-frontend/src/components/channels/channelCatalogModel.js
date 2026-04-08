@@ -2,6 +2,7 @@ import gmailIcon from "../../assets/channels/gmail.svg";
 import instagramIcon from "../../assets/channels/instagram.svg";
 import telegramIcon from "../../assets/channels/telegram.svg";
 import whatsappIcon from "../../assets/channels/whatsapp.svg";
+import { Globe2 } from "lucide-react";
 
 export const CHANNEL_STATUS_META = {
   ready: {
@@ -89,6 +90,38 @@ function connector({
 }
 
 export const CHANNELS = [
+  connector({
+    id: "website",
+    name: "Website chat",
+    group: "business",
+    status: "ready",
+    iconComponent: Globe2,
+    iconAlt: "Website",
+    eyebrow: "Public widget / Trusted install",
+    summary:
+      "Install a public website widget, validate the real website origin, and route visitor chats into the shared inbox runtime.",
+    capabilities: ["Public widget", "Trusted bootstrap", "Inbox handoff"],
+    aliases: [
+      "website",
+      "web chat",
+      "widget",
+      "webchat",
+      "public chat",
+      "site chat",
+      "inbox",
+    ],
+    detailSummary:
+      "Website chat is the public web conversation lane. The loader validates the tenant widget install through a short-lived signed bootstrap token before the iframe session starts.",
+    detailNote:
+      "Allowed origins and domains are tenant-managed. Raw page context remains conversation context only and does not overwrite approved business truth.",
+    highlights: [
+      "The loader requests a signed bootstrap token from the backend using the real customer page request context.",
+      "Website-origin threads land in the same inbox model and operator reply flow as the rest of the product.",
+      "AI responses remain governed by the existing truth and runtime readiness posture.",
+    ],
+    primaryActionLabel: "Open",
+  }),
+
   connector({
     id: "instagram",
     name: "Instagram",

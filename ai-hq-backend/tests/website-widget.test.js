@@ -4,7 +4,11 @@ import assert from "node:assert/strict";
 import { createRuntimeAuthorityError } from "../src/services/businessBrain/runtimeAuthority.js";
 import { persistOutboundMessage } from "../src/routes/api/inbox/internal/execution.js";
 import { createWebsiteWidgetHandlers } from "../src/routes/api/websiteWidget/index.js";
-import { issueWebsiteWidgetSession } from "../src/routes/api/websiteWidget/session.js";
+import {
+  issueWebsiteWidgetBootstrapToken,
+  issueWebsiteWidgetSession,
+  verifyWebsiteWidgetBootstrapToken,
+} from "../src/routes/api/websiteWidget/session.js";
 
 function createMockRes() {
   return {
@@ -31,9 +35,14 @@ const tenantRow = {
   company_name: "Acme Clinic",
   timezone: "Asia/Baku",
   website_url: "https://acme.example",
-  widget_channel_status: "",
+  widget_channel_status: "active",
   widget_display_name: "",
-  widget_config: {},
+  widget_config: {
+    enabled: true,
+    publicWidgetId: "ww_acme_widget",
+    allowedOrigins: ["https://www.acme.example"],
+    allowedDomains: ["acme.example"],
+  },
 };
 
 test("website widget bootstrap returns a real session and honest blocked automation when strict runtime is unavailable", async () => {

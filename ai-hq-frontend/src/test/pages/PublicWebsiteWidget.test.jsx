@@ -9,7 +9,7 @@ describe("PublicWebsiteWidget", () => {
     window.history.replaceState(
       {},
       "",
-      "/widget/website-chat?tenantKey=acme&pageUrl=https%3A%2F%2Facme.example%2Fpricing&pageTitle=Pricing"
+      "/widget/website-chat?widgetId=ww_acme_widget&bootstrapToken=bootstrap-1"
     );
   });
 
@@ -53,6 +53,7 @@ describe("PublicWebsiteWidget", () => {
         expect.objectContaining({
           method: "POST",
           credentials: "omit",
+          body: expect.stringContaining("\"widgetId\":\"ww_acme_widget\""),
         })
       );
     });
