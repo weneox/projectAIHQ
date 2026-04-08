@@ -107,9 +107,7 @@ describe("WebsiteWidgetDetailDrawer", () => {
       await screen.findByDisplayValue(/data-widget-id="ww_acme_widget"/i)
     ).toBeInTheDocument();
     expect(screen.getByText("Public widget ID")).toBeInTheDocument();
-    expect(
-      screen.getByText((_, node) => node?.textContent?.includes("ww_acme_widget") === true)
-    ).toBeInTheDocument();
+    expect(screen.getAllByText("ww_acme_widget").length).toBeGreaterThan(0);
     expect(screen.getByText(/loader-signed install token/i)).toBeInTheDocument();
   });
 
