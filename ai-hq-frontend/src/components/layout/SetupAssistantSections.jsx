@@ -555,7 +555,7 @@ function SetupAssistantSession({
     }
 
     scrollThread(scrollRef.current, scrollRef.current.scrollHeight, "smooth");
-  }, [messages, typing, busy, hasWebsiteReview]);
+  }, [messages, typing, busy, hasWebsiteReview, started]);
 
   async function handleSetupAnswer(rawText, forcedStep = "") {
     const text = s(rawText);
