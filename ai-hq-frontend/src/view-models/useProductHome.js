@@ -45,6 +45,176 @@ function formatWorkspaceName(session = {}) {
   );
 }
 
+function actionPath(action = {}) {
+  return s(action?.path || action?.target?.path);
+}
+
+function normalizeAction(action = null, fallback = null) {
+  const primary = obj(action);
+  const secondary = obj(fallback);
+  const path = actionPath(primary) || actionPath(secondary);
+  const label = s(primary.label || secondary.label);
+
+  if (!path && !label) return null;
+
+  return {
+    label: label || "Open",
+    path: path || "/home",
+  };
+}
+
+function normalizeReasonCodes(items = []) {
+  return arr(items).map((item) => s(item).toLowerCase()).filter(Boolean);
+}
+
+function firstReadableValue(...values) {
+  for (const value of values) {
+    const next = s(value);
+    if (next) return next;
+  }
+  return "";
+}
+
+function buildReasonHeadline(reasonCode = "") {
+  switch (s(reasonCode).toLowerCase()) {
+    case "approved_truth_unavailable":
+    case "approved_truth_empty":
+    case "approval_required":
+      return {
+        title: "Business truth still needs approval.",
+        summary:
+          "The launch channel can stay connected, but live runtime stays fail-closed until business truth is approved.",
+      };
+    case "projection_missing":
+    case "runtime_projection_missing":
+      return {
+        title: "Runtime has not been built yet.",
+        summary:
+          "Approved truth exists, but the live runtime is not available yet.",
+      };
+    case "projection_stale":
+    case "runtime_projection_stale":
+      return {
+        title: "Runtime needs refresh.",
+        summary:
+          "Approved truth exists, but the runtime projection is stale and should be refreshed before trusting automation.",
+      };
+    case "truth_version_drift":
+      return {
+        title: "Runtime is out of sync with approved truth.",
+        summary:
+          "The business truth changed, and the runtime now needs refresh before it should be treated as live.",
+      };
+    case "authority_invalid":
+    case "runtime_authority_unavailable":
+      return {
+        title: "Runtime repair is required.",
+        summary:
+          "The system cannot safely use the current runtime authority until repair finishes.",
+      };
+    case "repair_pending":
+      return {
+        title: "Runtime repair is still running.",
+        summary:
+          "The system already knows what to fix, but the repair is not finished yet.",
+      };
+    case "provider_secret_missing":
+      return {
+        title: "A required provider secret is missing.",
+        summary:
+          "The connected channel cannot be treated as live until the missing provider secret is restored.",
+      };
+    case "channel_identifiers_missing":
+      return {
+        title: "Channel identifiers still need review.",
+        summary:
+          "The channel is connected, but required identifiers are incomplete, so delivery should not be trusted yet.",
+      };
+    case "channel_not_connected":
+      return {
+        title: "Connect a launch channel before going live.",
+        summary:
+          "The setup lane is blocked until a launch channel is connected.",
+      };
+    default:
+      return {
+        title: "Live automation is still blocked.",
+        summary:
+          "A required launch dependency still needs review or repair before the system should be trusted as live.",
+      };
+  }
+}
+
+function pickReadinessAction(readiness = {}, fallbackAction = null) {
+  const source = obj(readiness);
+
+  for (const blocker of arr(source.blockedItems || source.blockers)) {
+    const nextAction = normalizeAction(
+      blocker?.nextAction || blocker?.action || blocker?.repairAction
+    );
+    if (nextAction?.path) return nextAction;
+  }
+
+  for (const action of arr(source.repairActions)) {
+    const nextAction = normalizeAction(action);
+    if (nextAction?.path) return nextAction;
+  }
+
+  return normalizeAction(fallbackAction);
+}
+
+function pickRuntimeRepairAction(trustPayload = {}) {
+  const runtimeProjection = obj(trustPayload?.summary?.runtimeProjection);
+  const health = obj(runtimeProjection.health);
+  const repair = obj(runtimeProjection.repair);
+
+  return (
+    normalizeAction(health.repairAction) ||
+    arr(health.repairActions).map((item) => normalizeAction(item)).find(Boolean) ||
+    normalizeAction(repair.action) ||
+    pickReadinessAction(runtimeProjection.readiness) ||
+    normalizeAction({ label: "Open truth", path: "/truth" })
+  );
+}
+
+function buildRuntimeRepairDetail({ trustPayload, telegramPayload }) {
+  const runtimeProjection = obj(trustPayload?.summary?.runtimeProjection);
+  const health = obj(runtimeProjection.health);
+  const runtimeReadiness = obj(runtimeProjection.readiness);
+  const truthReadiness = obj(trustPayload?.summary?.truth?.readiness);
+  const channelReadiness = obj(telegramPayload?.readiness);
+  const reasonCodes = normalizeReasonCodes([
+    health.reasonCode,
+    ...(health.reasons || []),
+    truthReadiness.reasonCode,
+    ...(truthReadiness.reasonCodes || []),
+    runtimeReadiness.reasonCode,
+    ...(runtimeReadiness.reasonCodes || []),
+    channelReadiness.reasonCode,
+  ]);
+
+  const leadReason = reasonCodes[0] || "";
+  const copy = buildReasonHeadline(leadReason);
+
+  const detail = firstReadableValue(
+    runtimeReadiness.message,
+    truthReadiness.message,
+    channelReadiness.message,
+    health.lastFailure?.errorMessage,
+    health.lastFailure?.errorCode,
+    telegramPayload?.runtime?.message,
+    telegramPayload?.readiness?.message
+  );
+
+  return {
+    title: copy.title,
+    summary: copy.summary,
+    detail,
+    reasonCodes,
+    leadReason,
+  };
+}
+
 async function loadProductHomePayloads() {
   const session = await getAppSessionContext().catch(() => null);
 
@@ -278,7 +448,8 @@ function buildLaunchChannelState({ telegramPayload, sourceStatus }) {
 
 function buildTruthRuntimeState({ trustPayload, telegramPayload, sourceStatus }) {
   const available = sourceStatus.trust?.available !== false;
-  const action = { label: "Open truth", path: "/truth" };
+  const fallbackTruthAction = { label: "Continue AI setup", path: "/home?assistant=setup" };
+  const fallbackRuntimeAction = { label: "Open truth", path: "/truth" };
 
   if (!available) {
     return {
@@ -291,61 +462,72 @@ function buildTruthRuntimeState({ trustPayload, telegramPayload, sourceStatus })
         "Home cannot confirm approved truth or runtime projection health right now.",
       detail:
         "Do not treat the launch channel as live until approved truth and runtime readiness are visible again.",
-      action,
+      action: fallbackRuntimeAction,
       truthReady: false,
       runtimeReady: false,
       deliveryReady: false,
       truthVersionId: "",
       reasonCodes: ["trust_surface_unavailable"],
+      leadReason: "trust_surface_unavailable",
+      blockedBy: "trust_surface_unavailable",
+      repairAction: fallbackRuntimeAction,
     };
   }
 
-  const truth = obj(trustPayload?.summary?.truth);
-  const runtimeProjection = obj(trustPayload?.summary?.runtimeProjection);
+  const trust = obj(trustPayload?.summary);
+  const truth = obj(trust.truth);
+  const runtimeProjection = obj(trust.runtimeProjection);
   const runtimeHealth = obj(runtimeProjection.health);
   const runtimeAuthority = obj(runtimeProjection.authority);
+  const truthReadiness = obj(truth.readiness);
+  const runtimeReadiness = obj(runtimeProjection.readiness);
+
   const truthVersionId = s(truth.latestVersionId);
-  const truthReadiness = s(truth.readiness?.status).toLowerCase();
-  const runtimeReadiness = s(runtimeProjection.readiness?.status).toLowerCase();
-  const truthReady = truthReadiness === "ready" && Boolean(truthVersionId);
+  const truthReady = truthReadiness.status === "ready" && Boolean(truthVersionId);
   const runtimeReady =
-    runtimeReadiness === "ready" &&
+    runtimeReadiness.status === "ready" &&
     (runtimeHealth.usable === true ||
       runtimeHealth.autonomousAllowed === true ||
       runtimeAuthority.available === true);
   const deliveryReady = telegramPayload?.runtime?.deliveryReady === true;
-  const ready = truthReady && runtimeReady && deliveryReady;
-  const reasonCodes = arr(
-    runtimeHealth.reasonCodes ||
-      runtimeHealth.reasons ||
-      truth.readiness?.reasonCodes
-  )
-    .map((item) => s(item).toLowerCase())
-    .filter(Boolean);
+  const truthAction = pickReadinessAction(truthReadiness, fallbackTruthAction);
+  const runtimeAction = pickRuntimeRepairAction(trustPayload);
+  const repairDetail = buildRuntimeRepairDetail({ trustPayload, telegramPayload });
 
   if (!truthReady) {
     return {
       ready: false,
       available: true,
-      status: "blocked",
-      statusLabel: "Blocked",
-      title: "Approved truth is still missing.",
+      status: "blocked_truth",
+      statusLabel: "Truth required",
+      title: buildReasonHeadline(
+        truthReadiness.reasonCode || "approved_truth_unavailable"
+      ).title,
       summary:
-        "The launch channel can stay connected, but runtime activation remains fail-closed until approved truth exists.",
+        truthReadiness.message ||
+        buildReasonHeadline(
+          truthReadiness.reasonCode || "approved_truth_unavailable"
+        ).summary,
       detail:
-        s(truth.readiness?.message) ||
-        "No approved truth snapshot is available for strict runtime use yet.",
-      action,
+        firstReadableValue(
+          ...arr(truthReadiness.blockedItems).map((item) => item?.subtitle || item?.title)
+        ) || "No approved truth snapshot is available yet.",
+      action: truthAction,
       truthReady,
       runtimeReady,
       deliveryReady,
       truthVersionId,
-      reasonCodes: [
-        s(
-          truth.readiness?.reasonCode,
-          "approved_truth_unavailable"
-        ).toLowerCase(),
-      ],
+      reasonCodes: normalizeReasonCodes([
+        truthReadiness.reasonCode,
+        ...arr(truthReadiness.blockedItems).map((item) => item?.reasonCode),
+      ]),
+      leadReason:
+        normalizeReasonCodes([
+          truthReadiness.reasonCode,
+          ...arr(truthReadiness.blockedItems).map((item) => item?.reasonCode),
+        ])[0] || "approved_truth_unavailable",
+      blockedBy: "truth",
+      repairAction: truthAction,
     };
   }
 
@@ -353,38 +535,31 @@ function buildTruthRuntimeState({ trustPayload, telegramPayload, sourceStatus })
     return {
       ready: false,
       available: true,
-      status: "blocked",
-      statusLabel: "Blocked",
-      title: "Runtime activation is still blocked.",
+      status: "blocked_runtime",
+      statusLabel: "Repair required",
+      title: repairDetail.title,
       summary:
-        s(runtimeProjection.readiness?.message) ||
-        s(telegramPayload?.readiness?.message) ||
-        "Approved truth exists, but the runtime projection is not ready for live delivery yet.",
+        repairDetail.detail ||
+        repairDetail.summary ||
+        "Approved truth exists, but runtime or channel delivery is still blocked.",
       detail:
-        runtimeReady && !deliveryReady
-          ? "Channel delivery is still blocked even though truth is approved."
-          : "Repair or refresh the runtime projection before treating the launch channel as live.",
-      action,
+        !runtimeReady
+          ? "Refresh or repair runtime before trusting live automation."
+          : "Channel delivery is still blocked even though approved truth exists.",
+      action: runtimeAction || fallbackRuntimeAction,
       truthReady,
       runtimeReady,
       deliveryReady,
       truthVersionId,
-      reasonCodes:
-        reasonCodes.length > 0
-          ? reasonCodes
-          : [
-              s(
-                runtimeHealth.reasonCode ||
-                  runtimeProjection.readiness?.reasonCode ||
-                  telegramPayload?.runtime?.reasonCode ||
-                  "runtime_projection_unavailable"
-              ).toLowerCase(),
-            ],
+      reasonCodes: repairDetail.reasonCodes,
+      leadReason: repairDetail.leadReason,
+      blockedBy: !runtimeReady ? "runtime" : "delivery",
+      repairAction: runtimeAction || fallbackRuntimeAction,
     };
   }
 
   return {
-    ready,
+    ready: true,
     available: true,
     status: "ready",
     statusLabel: "Ready",
@@ -394,12 +569,15 @@ function buildTruthRuntimeState({ trustPayload, telegramPayload, sourceStatus })
     detail: truthVersionId
       ? `Approved truth version ${truthVersionId} is currently backing the live runtime.`
       : "Approved truth is active for the current runtime projection.",
-    action,
+    action: fallbackRuntimeAction,
     truthReady,
     runtimeReady,
     deliveryReady,
     truthVersionId,
-    reasonCodes,
+    reasonCodes: normalizeReasonCodes(runtimeHealth.reasons),
+    leadReason: "",
+    blockedBy: "",
+    repairAction: null,
   };
 }
 
@@ -437,25 +615,23 @@ function buildSetupFlowState({
         arr(draft.hours).length
     );
 
-  const needed = launchChannel.connected && !truthRuntime.ready;
-
   const launchPosture = !launchChannel.connected
     ? "connect_channel"
-    : needed
+    : !truthRuntime.truthReady
       ? "setup_needed"
-      : "normal_operation";
+      : !truthRuntime.runtimeReady || !truthRuntime.deliveryReady
+        ? "runtime_repair_needed"
+        : "normal_operation";
 
   const assistantMode =
-    launchPosture === "setup_needed"
-      ? "setup"
-      : hasDraft && launchChannel.connected
-        ? "setup"
-        : "shortcut";
+    launchPosture === "runtime_repair_needed"
+      ? "support"
+      : "setup";
 
   return {
-    needed,
-    setupNeeded: needed,
-    autoOpen: needed,
+    needed: launchPosture === "setup_needed",
+    setupNeeded: launchPosture === "setup_needed",
+    autoOpen: launchPosture === "setup_needed",
     launchPosture,
     assistantMode,
     title:
@@ -465,23 +641,29 @@ function buildSetupFlowState({
           ? hasDraft
             ? "Channel is connected. Continue the setup draft."
             : "Channel is connected. Start the first setup draft."
-          : hasDraft
-            ? "Continue the setup draft."
-            : "Setup is available when you need it.",
+          : launchPosture === "runtime_repair_needed"
+            ? truthRuntime.title
+            : hasDraft
+              ? "Continue the setup draft."
+              : "Setup is available when you need it.",
     summary:
       launchPosture === "connect_channel"
         ? launchChannel.summary
         : launchPosture === "setup_needed"
           ? truthRuntime.summary
-          : hasDraft
-            ? "Draft work stays separate from approved truth and runtime activation."
-            : "The assistant can stay available for future guided edits.",
+          : launchPosture === "runtime_repair_needed"
+            ? truthRuntime.summary
+            : hasDraft
+              ? "Draft work stays separate from approved truth and runtime activation."
+              : "The assistant can stay available for future guided edits.",
     detail:
       launchPosture === "connect_channel"
         ? launchChannel.detail
-        : hasDraft
-          ? s(review.message)
-          : "Start from sources or a short note, then confirm only the important structured fields.",
+        : launchPosture === "runtime_repair_needed"
+          ? truthRuntime.detail
+          : hasDraft
+            ? s(review.message)
+            : "Start from sources or a short note, then confirm only the important structured fields.",
     status:
       launchPosture === "connect_channel"
         ? "waiting_for_channel"
@@ -489,9 +671,11 @@ function buildSetupFlowState({
           ? hasDraft
             ? "draft_in_progress"
             : "ready_to_start"
-          : hasDraft
-            ? "draft_available"
-            : "ready",
+          : launchPosture === "runtime_repair_needed"
+            ? "repair_required"
+            : hasDraft
+              ? "draft_available"
+              : "ready",
     statusLabel:
       launchPosture === "connect_channel"
         ? "Waiting for channel"
@@ -499,27 +683,33 @@ function buildSetupFlowState({
           ? hasDraft
             ? "Draft in progress"
             : "Start setup"
-          : hasDraft
-            ? "Draft available"
-            : "Ready",
+          : launchPosture === "runtime_repair_needed"
+            ? "Repair required"
+            : hasDraft
+              ? "Draft available"
+              : "Ready",
     action:
       launchPosture === "connect_channel"
         ? launchChannel.action
-        : {
-            label:
-              launchPosture === "setup_needed"
-                ? hasDraft
-                  ? "Continue AI setup"
-                  : "Start AI setup"
-                : "Open AI setup",
-            path: "/home?assistant=setup",
-          },
+        : launchPosture === "setup_needed"
+          ? {
+              label: hasDraft ? "Continue AI setup" : "Start AI setup",
+              path: "/home?assistant=setup",
+            }
+          : launchPosture === "runtime_repair_needed"
+            ? truthRuntime.action
+            : {
+                label: "Open AI setup",
+                path: "/home?assistant=setup",
+              },
     secondaryAction:
       launchPosture === "connect_channel"
         ? { label: "Open home", path: "/home" }
         : launchPosture === "setup_needed"
           ? { label: "Open truth", path: "/truth" }
-          : { label: "Open home", path: "/home" },
+          : launchPosture === "runtime_repair_needed"
+            ? { label: "Open inbox", path: "/inbox" }
+            : { label: "Open home", path: "/home" },
     sessionId: s(session.id),
     draftVersion: Number(session.draftVersion || draft.version || 0),
     hasDraft,
@@ -565,6 +755,28 @@ function buildAssistantMessages({
         title: "Connect a channel first.",
         body:
           "Once a launch channel is connected, continue setup through the guided draft lane.",
+      },
+    ];
+  }
+
+  if (setupFlow.launchPosture === "runtime_repair_needed") {
+    return [
+      {
+        id: "assistant-runtime-repair",
+        role: "assistant",
+        title: truthRuntime.title,
+        body:
+          truthRuntime.summary ||
+          "The business truth exists, but runtime repair still needs operator attention.",
+      },
+      {
+        id: "assistant-runtime-detail",
+        role: "system",
+        title: "Next best move",
+        body:
+          truthRuntime.action?.label
+            ? `${truthRuntime.action.label} before treating automation as live.`
+            : "Open Truth and review the runtime status before treating automation as live.",
       },
     ];
   }
@@ -675,11 +887,19 @@ function buildPrimaryAction({
     };
   }
 
-  if (setupFlow.needed) {
+  if (setupFlow.launchPosture === "setup_needed") {
     return {
       title: setupFlow.title,
       detail: setupFlow.summary,
       action: setupFlow.action,
+    };
+  }
+
+  if (setupFlow.launchPosture === "runtime_repair_needed") {
+    return {
+      title: truthRuntime.title,
+      detail: truthRuntime.summary,
+      action: truthRuntime.action,
     };
   }
 
@@ -843,11 +1063,13 @@ export function useProductHome(options = {}) {
     const secondaryAction =
       !launchChannel.connected
         ? { label: "Open AI setup", path: "/home?assistant=setup" }
-        : setupFlow.needed
+        : setupFlow.launchPosture === "setup_needed"
           ? { label: "Open truth", path: "/truth" }
-          : inboxState.action?.path === "/inbox"
+          : setupFlow.launchPosture === "runtime_repair_needed"
             ? { label: "Open channels", path: "/channels?channel=telegram" }
-            : { label: "Open inbox", path: "/inbox" };
+            : inboxState.action?.path === "/inbox"
+              ? { label: "Open channels", path: "/channels?channel=telegram" }
+              : { label: "Open inbox", path: "/inbox" };
 
     const heroStats = [
       {
@@ -882,11 +1104,15 @@ export function useProductHome(options = {}) {
             ? primaryAction.action?.path === "/inbox"
               ? "Start here"
               : inboxState.statusLabel
-            : "Waiting on launch readiness",
+            : setupFlow.launchPosture === "runtime_repair_needed"
+              ? "Blocked by runtime"
+              : "Waiting on launch readiness",
         summary:
           setupFlow.launchPosture === "normal_operation"
             ? "Handle live conversations and operator follow-up in one queue."
-            : "The inbox becomes the main operating surface after channel, approved truth, and runtime are aligned.",
+            : setupFlow.launchPosture === "runtime_repair_needed"
+              ? "Inbox exists, but live automation should wait until runtime repair finishes."
+              : "The inbox becomes the main operating surface after channel, approved truth, and runtime are aligned.",
         detail:
           setupFlow.launchPosture === "normal_operation"
             ? inboxState.detail
@@ -927,7 +1153,9 @@ export function useProductHome(options = {}) {
         title: "Truth",
         status: truthRuntime.statusLabel,
         summary:
-          "Approved truth and runtime stay protected. Draft setup does not publish automatically.",
+          truthRuntime.status === "ready"
+            ? "Approved truth and runtime stay protected. Draft setup does not publish automatically."
+            : truthRuntime.summary,
         detail: truthRuntime.detail,
         action: truthRuntime.action,
       },
@@ -990,24 +1218,32 @@ export function useProductHome(options = {}) {
       title:
         setupFlow.launchPosture === "connect_channel"
           ? "Connect channel"
-          : setupFlow.needed
-            ? "Structured setup"
-            : setupFlow.hasDraft
-              ? "Continue setup"
-              : "Setup",
+          : setupFlow.launchPosture === "runtime_repair_needed"
+            ? "Runtime repair"
+            : setupFlow.needed
+              ? "Structured setup"
+              : setupFlow.hasDraft
+                ? "Continue setup"
+                : "Setup",
       statusLabel: setupFlow.statusLabel,
       summary:
         setupFlow.launchPosture === "connect_channel"
-          ? "Əvvəl channel qoş."
-          : setupFlow.needed
-            ? "Qısa sual-cavab."
-            : setupFlow.hasDraft
-              ? "Draft qalır."
-              : "Hazırdır.",
+          ? "Connect the launch channel first."
+          : setupFlow.launchPosture === "runtime_repair_needed"
+            ? "Repair runtime before trusting live automation."
+            : setupFlow.needed
+              ? setupFlow.blockerCount > 0
+                ? `${setupFlow.blockerCount} structured blockers still need confirmation.`
+                : "The draft is structurally complete for later review."
+              : setupFlow.hasDraft
+                ? `${setupFlow.readySections} setup sections already have draft coverage.`
+                : "Structured setup is available when needed.",
       primaryAction:
         setupFlow.launchPosture === "connect_channel"
           ? launchChannel.action
-          : setupFlow.action,
+          : setupFlow.launchPosture === "runtime_repair_needed"
+            ? truthRuntime.action
+            : setupFlow.action,
       secondaryAction: setupFlow.secondaryAction,
       launchPosture: setupFlow.launchPosture,
       setupNeeded: setupFlow.needed,
@@ -1021,17 +1257,6 @@ export function useProductHome(options = {}) {
       launchChannel,
       truthRuntime,
     };
-
-    assistant.summary =
-      setupFlow.launchPosture === "connect_channel"
-        ? "Connect the launch channel first."
-        : setupFlow.needed
-          ? setupFlow.blockerCount > 0
-            ? `${setupFlow.blockerCount} structured blockers still need confirmation.`
-            : "The draft is structurally complete for later review."
-          : setupFlow.hasDraft
-            ? `${setupFlow.readySections} setup sections already have draft coverage.`
-            : "Structured setup is available when needed.";
 
     return {
       companyName,

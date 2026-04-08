@@ -20,6 +20,107 @@ function formatDate(value = "") {
   return date.toLocaleString();
 }
 
+function actionPath(action = {}) {
+  return s(action?.path || action?.target?.path);
+}
+
+function normalizeAction(action = null, fallback = null) {
+  const primary = obj(action);
+  const secondary = obj(fallback);
+  const path = actionPath(primary) || actionPath(secondary);
+  const label = s(primary.label || secondary.label);
+
+  if (!path && !label) return null;
+
+  return {
+    label: label || "Open",
+    path: path || "/truth",
+  };
+}
+
+function normalizeReasonCodes(items = []) {
+  return arr(items).map((item) => s(item).toLowerCase()).filter(Boolean);
+}
+
+function buildRuntimeHeadline(reasonCode = "") {
+  switch (s(reasonCode).toLowerCase()) {
+    case "projection_missing":
+    case "runtime_projection_missing":
+      return "Runtime has not been built yet.";
+    case "projection_stale":
+    case "runtime_projection_stale":
+      return "Runtime needs refresh.";
+    case "truth_version_drift":
+      return "Runtime is out of sync with approved truth.";
+    case "authority_invalid":
+    case "runtime_authority_unavailable":
+      return "Runtime repair is required.";
+    case "repair_pending":
+      return "Runtime repair is still running.";
+    default:
+      return "Truth or runtime needs repair.";
+  }
+}
+
+function buildRuntimeSupportState(trust = null) {
+  const runtimeProjection = obj(trust?.summary?.runtimeProjection);
+  const truth = obj(trust?.summary?.truth);
+  const runtimeReadiness = obj(runtimeProjection.readiness);
+  const truthReadiness = obj(truth.readiness);
+  const health = obj(runtimeProjection.health);
+
+  const truthVersionId = s(truth.latestVersionId);
+  const truthReady = truthReadiness.status === "ready" && Boolean(truthVersionId);
+  const runtimeReady =
+    runtimeReadiness.status === "ready" &&
+    (health.usable === true ||
+      health.autonomousAllowed === true ||
+      obj(runtimeProjection.authority).available === true);
+
+  const reasonCodes = normalizeReasonCodes([
+    truthReadiness.reasonCode,
+    ...arr(truthReadiness.blockedItems).map((item) => item?.reasonCode),
+    health.reasonCode,
+    ...arr(health.reasons),
+    runtimeReadiness.reasonCode,
+    ...arr(runtimeReadiness.blockedItems).map((item) => item?.reasonCode),
+  ]);
+
+  const leadReason = reasonCodes[0] || "";
+  const repairAction =
+    normalizeAction(health.repairAction) ||
+    arr(health.repairActions).map((item) => normalizeAction(item)).find(Boolean) ||
+    arr(runtimeReadiness.blockedItems)
+      .map((item) => normalizeAction(item?.nextAction || item?.action || item?.repairAction))
+      .find(Boolean) ||
+    normalizeAction({ label: "Open truth", path: "/truth" });
+
+  const headline = buildRuntimeHeadline(leadReason);
+  const detail =
+    s(runtimeReadiness.message) ||
+    s(truthReadiness.message) ||
+    s(health.lastFailure?.errorMessage) ||
+    s(health.lastFailure?.errorCode);
+
+  return {
+    blocked: !truthReady || !runtimeReady,
+    truthReady,
+    runtimeReady,
+    leadReason,
+    reasonCodes,
+    headline,
+    detail,
+    action: !truthReady
+      ? normalizeAction(
+          arr(truthReadiness.blockedItems)
+            .map((item) => normalizeAction(item?.nextAction || item?.action || item?.repairAction))
+            .find(Boolean),
+          { label: "Continue AI setup", path: "/home?assistant=setup" }
+        )
+      : repairAction,
+  };
+}
+
 export function buildWorkspaceBusinessMemory({
   trust = null,
   workbench = null,
@@ -37,8 +138,8 @@ export function buildWorkspaceBusinessMemory({
     Number(reviewQueue?.pending || 0),
     candidates.length
   );
-  const hasSetupFollowUp =
-    setupState?.needsReview === true;
+  const hasSetupFollowUp = setupState?.needsReview === true;
+  const runtime = buildRuntimeSupportState(trust);
 
   const currentKnown = truth?.latestVersionId
     ? approvedAt
@@ -72,12 +173,16 @@ export function buildWorkspaceBusinessMemory({
       ? "Setup review is still open, so business memory should be treated cautiously."
       : "No confirmation work is waiting.";
 
-  const blocked = blockedItems.length
-    ? blockedItems
-        .map((item) => s(item?.title || item?.reasonCode || "A memory blocker"))
-        .filter(Boolean)
-        .join(" | ")
-    : "No active blockers are visible.";
+  const blocked = runtime.blocked
+    ? runtime.detail
+      ? `${runtime.headline} ${runtime.detail}`.trim()
+      : runtime.headline
+    : blockedItems.length
+      ? blockedItems
+          .map((item) => s(item?.title || item?.reasonCode || "A memory blocker"))
+          .filter(Boolean)
+          .join(" | ")
+      : "No active blockers are visible.";
 
   const recentlyReliable =
     truth?.latestVersionId && approvedAt
@@ -88,12 +193,15 @@ export function buildWorkspaceBusinessMemory({
           : `${latestRun.sourceDisplayName} refreshed successfully.`
         : "No recent business-memory activity is available.";
 
+  const blockerCount = blockedItems.length + (runtime.blocked ? 1 : 0);
+
   return {
     visible: !!(
       truth?.latestVersionId ||
       pendingCount ||
       blockedItems.length ||
-      latestRun
+      latestRun ||
+      runtime.blocked
     ),
     headline: "Business Memory",
     description:
@@ -103,20 +211,32 @@ export function buildWorkspaceBusinessMemory({
     needsConfirmation,
     blocked,
     recentlyReliable,
+    runtime: {
+      blocked: runtime.blocked,
+      truthReady: runtime.truthReady,
+      runtimeReady: runtime.runtimeReady,
+      leadReason: runtime.leadReason,
+      reasonCodes: runtime.reasonCodes,
+      action: runtime.action,
+      summary: runtime.blocked ? blocked : "",
+      headline: runtime.headline,
+    },
     stats: {
       approvedVersionId: s(truth?.latestVersionId),
       pendingCount,
-      blockerCount: blockedItems.length,
+      blockerCount,
     },
-    primaryAction: pendingCount
-      ? {
-          label: "Review business changes",
-          path: "/truth",
-        }
-      : {
-          label: "View business memory",
-          path: "/truth",
-        },
+    primaryAction: runtime.blocked
+      ? runtime.action || { label: "Open truth", path: "/truth" }
+      : pendingCount
+        ? {
+            label: "Review business changes",
+            path: "/truth",
+          }
+        : {
+            label: "View business memory",
+            path: "/truth",
+          },
     secondaryAction: hasSetupFollowUp
       ? {
           label: setupState?.action?.label || "Open setup assistant",

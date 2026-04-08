@@ -179,7 +179,9 @@ function buildCapabilitySummary(items = []) {
   const buckets = new Map();
 
   for (const item of items) {
-    const capability = String(item?.relatedCapability || "").trim().toLowerCase();
+    const capability = String(item?.relatedCapability || "")
+      .trim()
+      .toLowerCase();
     if (!capability || !CAPABILITY_ORDER.includes(capability)) continue;
 
     const existing = buckets.get(capability);
@@ -228,9 +230,11 @@ function buildSystemBrief(ordered = [], decisions = []) {
       changed?.whatHappened ||
       "Workspace is collecting lightweight operator signal across setup, business memory, inbox, and moderation.",
     mattersMost:
-      mattersMost?.whatHappened || "Nothing urgent is demanding operator attention right now.",
+      mattersMost?.whatHappened ||
+      "Nothing urgent is demanding operator attention right now.",
     safeToIgnore:
-      safeToIgnore?.whatHappened || "Low-priority completed work can stay in the background for now.",
+      safeToIgnore?.whatHappened ||
+      "Low-priority completed work can stay in the background for now.",
   };
 }
 
@@ -292,7 +296,10 @@ async function loadWorkspaceNarrationPayloads() {
   };
 
   const settledEntries = await Promise.all(
-    Object.entries(requests).map(async ([key, promise]) => [key, await Promise.allSettled([promise])])
+    Object.entries(requests).map(async ([key, promise]) => [
+      key,
+      await Promise.allSettled([promise]),
+    ])
   );
 
   const payloads = {};
@@ -443,6 +450,7 @@ function buildBusinessMemoryDomainState({
   const pendingCount = Number(businessMemory?.stats?.pendingCount || 0);
   const hasReviewQueue = pendingCount > 0;
   const hasBlockers = Number(businessMemory?.stats?.blockerCount || 0) > 0;
+  const runtimeBlocked = businessMemory?.runtime?.blocked === true;
 
   if (!trustAvailable && !workbenchAvailable) {
     return {
@@ -457,6 +465,29 @@ function buildBusinessMemoryDomainState({
       noticeDetail: "Business memory is unavailable.",
       actionable: false,
       latestChange: "",
+    };
+  }
+
+  if (runtimeBlocked) {
+    return {
+      id: "business_memory",
+      label: "Business memory",
+      status: "blocked",
+      statusLabel: "Repair required",
+      tone: "danger",
+      summary: sentence(
+        businessMemory?.runtime?.summary,
+        "Approved truth exists, but runtime repair is still required."
+      ),
+      action: businessMemory?.runtime?.action || businessMemory?.primaryAction || null,
+      noticeLevel: null,
+      noticeDetail: "",
+      actionable: true,
+      latestChange: sentence(
+        businessMemory?.runtime?.summary,
+        "Runtime repair is required."
+      ),
+      storyline: "runtime_repair",
     };
   }
 
@@ -551,7 +582,10 @@ function buildBusinessMemoryDomainState({
       status: "approved",
       statusLabel: "Stable",
       tone: "success",
-      summary: sentence(businessMemory?.currentKnown, "Approved business memory is available."),
+      summary: sentence(
+        businessMemory?.currentKnown,
+        "Approved business memory is available."
+      ),
       action: businessMemory?.primaryAction || null,
       noticeLevel: null,
       noticeDetail: "",
@@ -663,9 +697,11 @@ function buildActionItems({
       status: domainStates.business_memory.statusLabel,
       tone: domainStates.business_memory.tone,
       title:
-        domainStates.business_memory.storyline === "blocked"
-          ? "Business memory is blocked."
-          : "Review business changes.",
+        domainStates.business_memory.storyline === "runtime_repair"
+          ? "Repair truth/runtime before trusting automation."
+          : domainStates.business_memory.storyline === "blocked"
+            ? "Business memory is blocked."
+            : "Review business changes.",
       impact: compactSentence(
         domainStates.business_memory.summary,
         "Business memory needs operator review."
@@ -729,13 +765,33 @@ function buildPostureItems({ domainStates }) {
       status: state?.status || "unknown",
       statusLabel: state?.statusLabel || "Quiet",
       tone: state?.tone || "neutral",
-      summary: state?.summary || "No strong workspace signal is available for this area yet.",
+      summary:
+        state?.summary || "No strong workspace signal is available for this area yet.",
       action: state?.action || null,
     };
   });
 }
 
-function buildFallbackOutcomeItems(payloads = {}) {
+function buildFallbackOutcomeItems(payloads = {}, domainStates = {}) {
+  if (domainStates.business_memory?.storyline === "runtime_repair") {
+    return [
+      {
+        id: "runtime-repair-fallback",
+        title: "Runtime still needs repair.",
+        summary: compactSentence(
+          domainStates.business_memory.summary,
+          "Truth or runtime still needs repair before live automation should be trusted."
+        ),
+        tone: "danger",
+        label: "Repair required",
+        nextAction: domainStates.business_memory.action || {
+          label: "Open truth",
+          path: "/truth",
+        },
+      },
+    ];
+  }
+
   const workbenchItems = Array.isArray(payloads.workbench?.items)
     ? payloads.workbench.items
     : [];
@@ -769,7 +825,9 @@ function buildFallbackOutcomeItems(payloads = {}) {
       {
         id: "setup-review-fallback",
         title: "Setup review queue changed.",
-        summary: `${pendingSetupItems} imported setup ${pendingSetupItems === 1 ? "item needs" : "items need"} review.`,
+        summary: `${pendingSetupItems} imported setup ${
+          pendingSetupItems === 1 ? "item needs" : "items need"
+        } review.`,
         tone: "warn",
         label: "Pending review",
         nextAction: {
@@ -831,7 +889,7 @@ function buildOutcomeItems(items = [], notice = {}, payloads = {}, domainStates 
     }));
   }
 
-  const fallbackItems = buildFallbackOutcomeItems(payloads);
+  const fallbackItems = buildFallbackOutcomeItems(payloads, domainStates);
   if (fallbackItems.length) {
     return fallbackItems;
   }
@@ -1000,7 +1058,13 @@ export function useWorkspaceNarration() {
   );
 
   const outcomeItems = useMemo(
-    () => buildOutcomeItems(narration.recentOutcomes, availabilityNotice, payloads, domainStates),
+    () =>
+      buildOutcomeItems(
+        narration.recentOutcomes,
+        availabilityNotice,
+        payloads,
+        domainStates
+      ),
     [availabilityNotice, domainStates, narration.recentOutcomes, payloads]
   );
 
@@ -1015,30 +1079,40 @@ export function useWorkspaceNarration() {
     [actionItems, domainStates, narration.systemBrief, outcomeItems]
   );
 
-  const suggestedActions = useMemo(
-    () => {
-      const actions = buildWorkspaceSuggestedActions({
-        ...narration,
-        capabilities: withoutSetupNarration(narration.capabilities),
-        decisions: withoutSetupNarration(narration.decisions),
-      }).filter((item) => item.id !== "continue-setup");
+  const suggestedActions = useMemo(() => {
+    const actions = buildWorkspaceSuggestedActions({
+      ...narration,
+      capabilities: withoutSetupNarration(narration.capabilities),
+      decisions: withoutSetupNarration(narration.decisions),
+    }).filter((item) => item.id !== "continue-setup");
 
-      if (setupState?.isActionable && setupState.action?.path) {
-        return [
-          {
-            id: "continue-setup",
-            label: setupState.action.label,
-            route: setupState.action.path,
-            destinationSurface: "workspace",
-          },
-          ...actions,
-        ].slice(0, 5);
-      }
+    if (domainStates.business_memory?.storyline === "runtime_repair") {
+      return [
+        {
+          id: "repair-runtime",
+          label:
+            domainStates.business_memory.action?.label || "Open truth and repair runtime",
+          route: domainStates.business_memory.action?.path || "/truth",
+          destinationSurface: "workspace",
+        },
+        ...actions,
+      ].slice(0, 5);
+    }
 
-      return actions;
-    },
-    [narration, setupState]
-  );
+    if (setupState?.isActionable && setupState.action?.path) {
+      return [
+        {
+          id: "continue-setup",
+          label: setupState.action.label,
+          route: setupState.action.path,
+          destinationSurface: "workspace",
+        },
+        ...actions,
+      ].slice(0, 5);
+    }
+
+    return actions;
+  }, [domainStates.business_memory, narration, setupState]);
 
   const nextBestAction = actionItems[0]
     ? {
@@ -1051,7 +1125,8 @@ export function useWorkspaceNarration() {
       ? {
           id: suggestedActions[0].id,
           title: suggestedActions[0].label,
-          impact: "This is the clearest next operator move available from the current workspace signal.",
+          impact:
+            "This is the clearest next operator move available from the current workspace signal.",
           action: {
             label: suggestedActions[0].label,
             path: suggestedActions[0].route,
