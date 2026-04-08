@@ -6,7 +6,10 @@ import AdminRouteGuard from "./components/admin/AdminRouteGuard.jsx";
 import OperatorRouteGuard from "./components/auth/OperatorRouteGuard.jsx";
 import UserRouteGuard from "./components/auth/UserRouteGuard.jsx";
 import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
-import { LoadingSurface, PageCanvas } from "./components/ui/AppShellPrimitives.jsx";
+import {
+  LoadingSurface,
+  PageCanvas,
+} from "./components/ui/AppShellPrimitives.jsx";
 import { INTERNAL_ONLY_APP_ROUTES } from "./lib/appEntry.js";
 
 const Proposals = lazy(() => import("./pages/Proposals.jsx"));
@@ -118,7 +121,7 @@ export default function App() {
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Content and publishing remain internal workflow surfaces. They are not positioned as the primary launch product."
+                description="Publishing remains an internal workflow surface. It is not part of the primary launch lane."
               >
                 {withSuspense(<Publish />)}
               </OperatorRouteGuard>
@@ -130,7 +133,7 @@ export default function App() {
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Proposals remains an internal operational workspace. The launch product stays centered on social inbox, comments, and voice."
+                description="Proposals remains an internal operational workspace. The primary launch lane stays centered on launch channel, setup, truth, runtime, and live operator surfaces."
               >
                 {withSuspense(<Proposals />)}
               </OperatorRouteGuard>
@@ -145,7 +148,7 @@ export default function App() {
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Leads is an operational follow-up surface. This launch slice keeps it available only to owner, admin, and operator roles."
+                description="Leads is an operational follow-up surface. It stays available to owner, admin, and operator roles without redefining the launch lane."
               >
                 {withSuspense(<Leads />)}
               </OperatorRouteGuard>
@@ -157,7 +160,7 @@ export default function App() {
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Comments is part of the launch product and covers Meta comment moderation, AI reply review, and operator intervention."
+                description="Comments remains a live operator surface for moderation and reply review, but it does not replace the primary launch-channel and inbox posture."
               >
                 {withSuspense(<Comments />)}
               </OperatorRouteGuard>
@@ -181,7 +184,7 @@ export default function App() {
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Voice is part of the launch product and covers Twilio receptionist sessions, live call controls, and operator handoff."
+                description="Voice remains a separate live operator surface for receptionist sessions, call controls, and handoff. It does not redefine the primary launch lane."
               >
                 {withSuspense(<Voice />)}
               </OperatorRouteGuard>
@@ -193,12 +196,13 @@ export default function App() {
             element={
               <OperatorRouteGuard
                 title="Operator access required"
-                description="Truth remains an internal review surface behind the launch product."
+                description="Truth remains the governed review surface behind the launch lane and should stay aligned with setup approval and runtime health."
               >
                 {withSuspense(<TruthViewerPage />)}
               </OperatorRouteGuard>
             }
           />
+
           <Route
             path="executions"
             element={

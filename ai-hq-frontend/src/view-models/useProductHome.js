@@ -34,6 +34,10 @@ function n(value, fallback = 0) {
   return Number.isFinite(next) ? next : fallback;
 }
 
+function lower(value, fallback = "") {
+  return s(value, fallback).toLowerCase();
+}
+
 function pluralize(count, noun) {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
@@ -67,7 +71,7 @@ function normalizeAction(action = null, fallback = null) {
 }
 
 function normalizeReasonCodes(items = []) {
-  return arr(items).map((item) => s(item).toLowerCase()).filter(Boolean);
+  return arr(items).map((item) => lower(item)).filter(Boolean);
 }
 
 function firstReadableValue(...values) {
@@ -84,9 +88,50 @@ function formatHandle(value = "") {
   return text.startsWith("@") ? text : `@${text}`;
 }
 
+function buildChannelPath(provider = "") {
+  return provider === "meta"
+    ? "/channels?channel=instagram"
+    : "/channels?channel=telegram";
+}
+
+function buildChannelLabel(provider = "") {
+  return provider === "meta" ? "Instagram" : "Telegram";
+}
+
+function buildLaunchAction(provider = "", mode = "open") {
+  const labelBase = buildChannelLabel(provider);
+  const path = buildChannelPath(provider);
+
+  if (mode === "select") {
+    return {
+      label: provider === "meta" ? "Select Instagram account" : `Open ${labelBase}`,
+      path,
+    };
+  }
+
+  if (mode === "connect") {
+    return {
+      label: `Connect ${labelBase}`,
+      path,
+    };
+  }
+
+  if (mode === "reconnect") {
+    return {
+      label: `Reconnect ${labelBase}`,
+      path,
+    };
+  }
+
+  return {
+    label: `Open ${labelBase}`,
+    path,
+  };
+}
+
 function buildLaunchChannelUnavailableState() {
   return {
-    id: "launch",
+    id: "launch-unavailable",
     type: "launch_channel",
     provider: "",
     connected: false,
@@ -108,25 +153,6 @@ function buildLaunchChannelUnavailableState() {
   };
 }
 
-function buildAccountAttachmentDetail(account = {}, fallback = "") {
-  const displayName = s(account.displayName);
-  const handle = s(account.handle);
-
-  if (displayName && handle && !displayName.includes(handle)) {
-    return `${displayName} (${handle}) is attached to this workspace.`;
-  }
-
-  if (displayName) {
-    return `${displayName} is attached to this workspace.`;
-  }
-
-  if (handle) {
-    return `${handle} is attached to this workspace.`;
-  }
-
-  return s(fallback);
-}
-
 function createCanonicalLaunchChannel(value = {}) {
   const account = obj(value.account);
   const displayName = firstReadableValue(
@@ -138,7 +164,7 @@ function createCanonicalLaunchChannel(value = {}) {
   return {
     id: s(value.id),
     type: s(value.type, "launch_channel"),
-    provider: s(value.provider).toLowerCase(),
+    provider: lower(value.provider),
     connected: value.connected === true,
     available: value.available !== false,
     status: s(value.status, "unavailable"),
@@ -151,7 +177,7 @@ function createCanonicalLaunchChannel(value = {}) {
       path: "/channels",
     }),
     deliveryReady: value.deliveryReady === true,
-    reasonCode: s(value.reasonCode).toLowerCase(),
+    reasonCode: lower(value.reasonCode),
     channelLabel: s(value.channelLabel, "Launch channel"),
     accountLabel: s(value.accountLabel),
     accountDisplayName: displayName,
@@ -162,6 +188,348 @@ function createCanonicalLaunchChannel(value = {}) {
       handle,
     },
   };
+}
+
+function buildMetaLaunchChannelState({ metaPayload, sourceStatus }) {
+  const available = sourceStatus.metaStatus?.available !== false;
+  const fallback = buildLaunchChannelUnavailableState();
+
+  if (!available) {
+    return createCanonicalLaunchChannel({
+      ...fallback,
+      id: "launch-meta",
+      provider: "meta",
+      channelLabel: "Instagram",
+      action: buildLaunchAction("meta", "open"),
+    });
+  }
+
+  const state = lower(metaPayload?.state);
+  const connected =
+    metaPayload?.connected === true || state === "connected";
+  const deliveryReady = metaPayload?.runtime?.deliveryReady === true;
+  const selectionRequired = metaPayload?.pendingSelection?.required === true;
+  const account = obj(metaPayload?.account);
+  const displayName = firstReadableValue(
+    account.displayName,
+    account.pageName,
+    account.username ? `Instagram ${formatHandle(account.username)}` : ""
+  );
+  const handle = formatHandle(account.username);
+  const detail =
+    firstReadableValue(
+      metaPayload?.detail,
+      metaPayload?.readiness?.message,
+      metaPayload?.lastConnectFailure?.message
+    ) || "Open Channels to inspect Instagram connection posture.";
+
+  const base = {
+    id: "launch-meta",
+    provider: "meta",
+    channelLabel: "Instagram",
+    accountLabel: "Instagram account",
+    accountDisplayName: displayName,
+    accountHandle: handle,
+    account: {
+      displayName,
+      handle,
+      pageName: s(account.pageName),
+      username: s(account.username),
+      pageId: s(account.pageId),
+      igUserId: s(account.igUserId),
+      metaUserId: s(account.metaUserId),
+      metaUserName: s(account.metaUserName),
+    },
+    reasonCode: lower(
+      metaPayload?.reasonCode ||
+        metaPayload?.runtime?.reasonCode ||
+        metaPayload?.readiness?.blockers?.[0]?.reasonCode
+    ),
+  };
+
+  if (selectionRequired) {
+    return createCanonicalLaunchChannel({
+      ...base,
+      connected: false,
+      available: true,
+      status: "selection_required",
+      statusLabel: "Selection required",
+      title: "Instagram account selection is still required.",
+      summary:
+        "Meta returned eligible Instagram business assets, but one still needs to be selected before this tenant is bound.",
+      detail,
+      action: buildLaunchAction("meta", "select"),
+      deliveryReady: false,
+    });
+  }
+
+  if (connected) {
+    return createCanonicalLaunchChannel({
+      ...base,
+      connected: true,
+      available: true,
+      status: deliveryReady ? "connected" : "connected_blocked",
+      statusLabel: "Connected",
+      title: deliveryReady
+        ? "Instagram is connected."
+        : "Instagram is connected, but delivery is still gated.",
+      summary:
+        s(metaPayload?.readiness?.message) ||
+        (deliveryReady
+          ? "Instagram can be used as the current launch channel."
+          : "Instagram is attached, but launch delivery is still blocked by runtime or channel readiness."),
+      detail,
+      action: buildLaunchAction("meta", "open"),
+      deliveryReady,
+    });
+  }
+
+  if (state === "connecting") {
+    return createCanonicalLaunchChannel({
+      ...base,
+      connected: false,
+      available: true,
+      status: "connecting",
+      statusLabel: "Connecting",
+      title: "Instagram connection is still in progress.",
+      summary:
+        s(metaPayload?.summary) ||
+        "Meta OAuth or asset binding still needs to settle before Instagram is treated as connected.",
+      detail,
+      action: buildLaunchAction("meta", "open"),
+      deliveryReady: false,
+    });
+  }
+
+  if (
+    state === "deauthorized" ||
+    state === "reconnect_required" ||
+    state === "disconnected" ||
+    state === "error" ||
+    state === "blocked"
+  ) {
+    return createCanonicalLaunchChannel({
+      ...base,
+      connected: false,
+      available: true,
+      status: "repair_required",
+      statusLabel: "Reconnect required",
+      title: "Instagram needs reconnect or repair.",
+      summary:
+        s(metaPayload?.readiness?.message) ||
+        s(metaPayload?.summary) ||
+        "Instagram exists as a launch option, but the current connection should not be trusted yet.",
+      detail,
+      action: buildLaunchAction("meta", "reconnect"),
+      deliveryReady: false,
+    });
+  }
+
+  return createCanonicalLaunchChannel({
+    ...base,
+    connected: false,
+    available: true,
+    status: "needs_connection",
+    statusLabel: "Connect required",
+    title: "Connect Instagram before using it as the launch channel.",
+    summary:
+      s(metaPayload?.readiness?.message) ||
+      "Instagram is available as a launch channel, but it is not connected yet.",
+    detail,
+    action: buildLaunchAction("meta", "connect"),
+    deliveryReady: false,
+  });
+}
+
+function buildTelegramLaunchChannelState({ telegramPayload, sourceStatus }) {
+  const available = sourceStatus.telegramStatus?.available !== false;
+  const fallback = buildLaunchChannelUnavailableState();
+
+  if (!available) {
+    return createCanonicalLaunchChannel({
+      ...fallback,
+      id: "launch-telegram",
+      provider: "telegram",
+      channelLabel: "Telegram",
+      action: buildLaunchAction("telegram", "open"),
+    });
+  }
+
+  const state = lower(
+    telegramPayload?.state ||
+      (telegramPayload?.connected === true ? "connected" : "not_connected")
+  );
+  const connected =
+    telegramPayload?.connected === true || state === "connected";
+  const deliveryReady = telegramPayload?.runtime?.deliveryReady === true;
+  const account = obj(telegramPayload?.account);
+  const botHandle = formatHandle(account.botUsername);
+  const displayName = firstReadableValue(
+    account.displayName,
+    botHandle ? `Telegram ${botHandle}` : ""
+  );
+  const detail =
+    firstReadableValue(
+      telegramPayload?.detail,
+      telegramPayload?.readiness?.message
+    ) || "Open Channels to inspect Telegram connection posture.";
+
+  const base = {
+    id: "launch-telegram",
+    provider: "telegram",
+    channelLabel: "Telegram",
+    accountLabel: "Telegram bot",
+    accountDisplayName: displayName,
+    accountHandle: botHandle,
+    account: {
+      displayName,
+      handle: botHandle,
+      botUsername: s(account.botUsername),
+      botUserId: s(account.botUserId),
+      firstName: s(account.firstName),
+      lastName: s(account.lastName),
+    },
+    reasonCode: lower(
+      telegramPayload?.reasonCode ||
+        telegramPayload?.runtime?.reasonCode ||
+        telegramPayload?.webhook?.reasonCode
+    ),
+  };
+
+  if (connected) {
+    return createCanonicalLaunchChannel({
+      ...base,
+      connected: true,
+      available: true,
+      status: deliveryReady ? "connected" : "connected_blocked",
+      statusLabel: "Connected",
+      title: deliveryReady
+        ? "Telegram is connected."
+        : "Telegram is connected, but delivery is still gated.",
+      summary:
+        s(telegramPayload?.readiness?.message) ||
+        (deliveryReady
+          ? "Telegram can be used as the current launch channel."
+          : "Telegram is attached, but launch delivery is still blocked by runtime or channel readiness."),
+      detail,
+      action: buildLaunchAction("telegram", "open"),
+      deliveryReady,
+    });
+  }
+
+  if (state === "connecting") {
+    return createCanonicalLaunchChannel({
+      ...base,
+      connected: false,
+      available: true,
+      status: "connecting",
+      statusLabel: "Connecting",
+      title: "Telegram connection is still in progress.",
+      summary:
+        s(telegramPayload?.summary) ||
+        "Webhook or runtime checks still need to settle before Telegram is treated as connected.",
+      detail,
+      action: buildLaunchAction("telegram", "open"),
+      deliveryReady: false,
+    });
+  }
+
+  if (
+    state === "error" ||
+    state === "blocked" ||
+    state === "disconnected"
+  ) {
+    return createCanonicalLaunchChannel({
+      ...base,
+      connected: false,
+      available: true,
+      status: "repair_required",
+      statusLabel: "Reconnect required",
+      title: "Telegram needs reconnect or repair.",
+      summary:
+        s(telegramPayload?.readiness?.message) ||
+        s(telegramPayload?.summary) ||
+        "Telegram exists as a launch option, but the current connection should not be trusted yet.",
+      detail,
+      action: buildLaunchAction("telegram", "reconnect"),
+      deliveryReady: false,
+    });
+  }
+
+  return createCanonicalLaunchChannel({
+    ...base,
+    connected: false,
+    available: true,
+    status: "needs_connection",
+    statusLabel: "Connect required",
+    title: "Connect Telegram before using it as the launch channel.",
+    summary:
+      s(telegramPayload?.readiness?.message) ||
+      "Telegram is available as a launch channel, but it is not connected yet.",
+    detail,
+    action: buildLaunchAction("telegram", "connect"),
+    deliveryReady: false,
+  });
+}
+
+function scoreLaunchChannel(channel = {}) {
+  if (!channel?.available) return 0;
+
+  const provider = lower(channel.provider);
+  const isMeta = provider === "meta";
+
+  if (channel.connected && channel.deliveryReady) {
+    return isMeta ? 500 : 400;
+  }
+
+  if (channel.connected && !channel.deliveryReady) {
+    return isMeta ? 320 : 300;
+  }
+
+  if (channel.status === "selection_required") {
+    return 250;
+  }
+
+  if (channel.status === "connecting") {
+    return isMeta ? 240 : 180;
+  }
+
+  if (channel.status === "repair_required") {
+    return isMeta ? 230 : 170;
+  }
+
+  if (channel.status === "needs_connection") {
+    return isMeta ? 220 : 160;
+  }
+
+  if (channel.status === "unavailable") {
+    return 0;
+  }
+
+  return isMeta ? 120 : 110;
+}
+
+function resolveCanonicalLaunchChannel({
+  metaPayload,
+  telegramPayload,
+  sourceStatus,
+}) {
+  const metaChannel = buildMetaLaunchChannelState({
+    metaPayload,
+    sourceStatus,
+  });
+  const telegramChannel = buildTelegramLaunchChannelState({
+    telegramPayload,
+    sourceStatus,
+  });
+
+  const best = [metaChannel, telegramChannel].sort(
+    (left, right) => scoreLaunchChannel(right) - scoreLaunchChannel(left)
+  )[0];
+
+  return best?.available
+    ? best
+    : createCanonicalLaunchChannel(buildLaunchChannelUnavailableState());
 }
 
 function buildReasonHeadline(reasonCode = "") {
@@ -266,12 +634,11 @@ function pickRuntimeRepairAction(trustPayload = {}) {
   );
 }
 
-function buildRuntimeRepairDetail({ trustPayload, telegramPayload }) {
+function buildRuntimeRepairDetail({ trustPayload, launchChannel }) {
   const runtimeProjection = obj(trustPayload?.summary?.runtimeProjection);
   const health = obj(runtimeProjection.health);
   const runtimeReadiness = obj(runtimeProjection.readiness);
   const truthReadiness = obj(trustPayload?.summary?.truth?.readiness);
-  const channelReadiness = obj(telegramPayload?.readiness);
   const reasonCodes = normalizeReasonCodes([
     health.reasonCode,
     ...(health.reasons || []),
@@ -279,7 +646,7 @@ function buildRuntimeRepairDetail({ trustPayload, telegramPayload }) {
     ...(truthReadiness.reasonCodes || []),
     runtimeReadiness.reasonCode,
     ...(runtimeReadiness.reasonCodes || []),
-    channelReadiness.reasonCode,
+    launchChannel?.reasonCode,
   ]);
 
   const leadReason = reasonCodes[0] || "";
@@ -288,11 +655,10 @@ function buildRuntimeRepairDetail({ trustPayload, telegramPayload }) {
   const detail = firstReadableValue(
     runtimeReadiness.message,
     truthReadiness.message,
-    channelReadiness.message,
     health.lastFailure?.errorMessage,
     health.lastFailure?.errorCode,
-    telegramPayload?.runtime?.message,
-    telegramPayload?.readiness?.message
+    launchChannel?.detail,
+    launchChannel?.summary
   );
 
   return {
@@ -437,108 +803,12 @@ function buildInboxState({ threadsPayload, outboundPayload, sourceStatus }) {
   };
 }
 
-function buildLaunchChannelState({ telegramPayload, sourceStatus }) {
-  const available = sourceStatus.telegramStatus?.available !== false;
-  const action = { label: "Open channels", path: "/channels?channel=telegram" };
-
-  if (!available) {
-    return {
-      connected: false,
-      available: false,
-      status: "unavailable",
-      statusLabel: "Unavailable",
-      title: "Launch channel state is unavailable.",
-      summary: "Home cannot confirm whether a launch channel is connected.",
-      detail:
-        "Open Channels to verify connection status before treating setup as ready.",
-      action,
-      deliveryReady: false,
-      channelLabel: "Telegram",
-      botUsername: "",
-      reasonCode: "launch_channel_status_unavailable",
-    };
-  }
-
-  const connected =
-    telegramPayload?.connected === true ||
-    s(telegramPayload?.state).toLowerCase() === "connected";
-  const state = s(
-    telegramPayload?.state || (connected ? "connected" : "disconnected")
-  ).toLowerCase();
-  const botUsername = s(telegramPayload?.account?.botUsername);
-  const deliveryReady = telegramPayload?.runtime?.deliveryReady === true;
-  const readinessMessage = s(telegramPayload?.readiness?.message);
-  const reasonCode = s(
-    telegramPayload?.reasonCode ||
-      telegramPayload?.runtime?.reasonCode ||
-      telegramPayload?.webhook?.reasonCode
-  ).toLowerCase();
-
-  if (connected) {
-    return {
-      connected: true,
-      available: true,
-      status: deliveryReady ? "connected" : "connected_blocked",
-      statusLabel: "Connected",
-      title: deliveryReady
-        ? "Launch channel is connected."
-        : "Launch channel is connected, but delivery is still gated.",
-      summary:
-        readinessMessage ||
-        (deliveryReady
-          ? "The connected channel can use the strict runtime when approved truth stays healthy."
-          : "The channel is attached, but delivery still cannot be treated as live."),
-      detail: botUsername
-        ? `Bot @${botUsername} is attached to this workspace.`
-        : "The launch channel identity has already been verified.",
-      action,
-      deliveryReady,
-      channelLabel: "Telegram",
-      botUsername,
-      reasonCode,
-    };
-  }
-
-  if (state === "connecting") {
-    return {
-      connected: false,
-      available: true,
-      status: "connecting",
-      statusLabel: "Connecting",
-      title: "Launch channel connection is still in progress.",
-      summary:
-        readinessMessage ||
-        "Webhook or runtime checks still need to settle before the channel is treated as connected.",
-      detail: "Use Channels to finish the connect flow.",
-      action,
-      deliveryReady: false,
-      channelLabel: "Telegram",
-      botUsername,
-      reasonCode,
-    };
-  }
-
-  return {
-    connected: false,
-    available: true,
-    status: "needs_connection",
-    statusLabel: "Connect required",
-    title: "Connect a launch channel before setup can start.",
-    summary:
-      readinessMessage ||
-      "The guided setup lane stays locked until a launch channel is connected.",
-    detail: "Use Channels to connect Telegram for this workspace.",
-    action,
-    deliveryReady: false,
-    channelLabel: "Telegram",
-    botUsername,
-    reasonCode,
-  };
-}
-
-function buildTruthRuntimeState({ trustPayload, telegramPayload, sourceStatus }) {
+function buildTruthRuntimeState({ trustPayload, launchChannel, sourceStatus }) {
   const available = sourceStatus.trust?.available !== false;
-  const fallbackTruthAction = { label: "Continue AI setup", path: "/home?assistant=setup" };
+  const fallbackTruthAction = {
+    label: "Continue AI setup",
+    path: "/home?assistant=setup",
+  };
   const fallbackRuntimeAction = { label: "Open truth", path: "/truth" };
 
   if (!available) {
@@ -579,10 +849,13 @@ function buildTruthRuntimeState({ trustPayload, telegramPayload, sourceStatus })
     (runtimeHealth.usable === true ||
       runtimeHealth.autonomousAllowed === true ||
       runtimeAuthority.available === true);
-  const deliveryReady = telegramPayload?.runtime?.deliveryReady === true;
+  const deliveryReady = launchChannel?.deliveryReady === true;
   const truthAction = pickReadinessAction(truthReadiness, fallbackTruthAction);
   const runtimeAction = pickRuntimeRepairAction(trustPayload);
-  const repairDetail = buildRuntimeRepairDetail({ trustPayload, telegramPayload });
+  const repairDetail = buildRuntimeRepairDetail({
+    trustPayload,
+    launchChannel,
+  });
 
   if (!truthReady) {
     return {
@@ -600,7 +873,9 @@ function buildTruthRuntimeState({ trustPayload, telegramPayload, sourceStatus })
         ).summary,
       detail:
         firstReadableValue(
-          ...arr(truthReadiness.blockedItems).map((item) => item?.subtitle || item?.title)
+          ...arr(truthReadiness.blockedItems).map(
+            (item) => item?.subtitle || item?.title
+          )
         ) || "No approved truth snapshot is available yet.",
       action: truthAction,
       truthReady,
@@ -635,7 +910,7 @@ function buildTruthRuntimeState({ trustPayload, telegramPayload, sourceStatus })
       detail:
         !runtimeReady
           ? "Refresh or repair runtime before trusting live automation."
-          : "Channel delivery is still blocked even though approved truth exists.",
+          : "The launch channel is attached, but delivery is still blocked even though approved truth exists.",
       action: runtimeAction || fallbackRuntimeAction,
       truthReady,
       runtimeReady,
@@ -714,9 +989,7 @@ function buildSetupFlowState({
         : "normal_operation";
 
   const assistantMode =
-    launchPosture === "runtime_repair_needed"
-      ? "support"
-      : "setup";
+    launchPosture === "runtime_repair_needed" ? "support" : "setup";
 
   return {
     needed: launchPosture === "setup_needed",
@@ -726,11 +999,11 @@ function buildSetupFlowState({
     assistantMode,
     title:
       launchPosture === "connect_channel"
-        ? "Connect a launch channel first."
+        ? `Connect ${launchChannel.channelLabel || "a launch channel"} first.`
         : launchPosture === "setup_needed"
           ? hasDraft
-            ? "Channel is connected. Continue the setup draft."
-            : "Channel is connected. Start the first setup draft."
+            ? `${launchChannel.channelLabel || "Launch channel"} is connected. Continue the setup draft.`
+            : `${launchChannel.channelLabel || "Launch channel"} is connected. Start the first setup draft.`
           : launchPosture === "runtime_repair_needed"
             ? truthRuntime.title
             : hasDraft
@@ -842,7 +1115,7 @@ function buildAssistantMessages({
       {
         id: "assistant-connect",
         role: "assistant",
-        title: "Connect a channel first.",
+        title: `Connect ${launchChannel.channelLabel || "a channel"} first.`,
         body:
           "Once a launch channel is connected, continue setup through the guided draft lane.",
       },
@@ -1058,8 +1331,16 @@ function buildGoldenPath({ launchChannel, truthRuntime, setupFlow, inboxState })
         label: "Launch channel",
         status: "blocked",
         statusLabel:
-          launchChannel.status === "connecting" ? "Connecting" : "Connect required",
-        tone: launchChannel.status === "connecting" ? "info" : "danger",
+          launchChannel.status === "connecting"
+            ? "Connecting"
+            : launchChannel.status === "selection_required"
+              ? "Selection required"
+              : "Connect required",
+        tone:
+          launchChannel.status === "connecting" ||
+          launchChannel.status === "selection_required"
+            ? "info"
+            : "danger",
         summary:
           launchChannel.summary ||
           "Connect the launch channel before the rest of the launch path can be trusted.",
@@ -1090,8 +1371,7 @@ function buildGoldenPath({ launchChannel, truthRuntime, setupFlow, inboxState })
         tone: "success",
         summary:
           "The current setup draft has enough confirmed structure to support the launch path.",
-        detail:
-          `${setupFlow.readySections} ready sections · ${setupFlow.servicesCount} services · ${setupFlow.contactsCount} contacts`,
+        detail: `${setupFlow.readySections} ready sections · ${setupFlow.servicesCount} services · ${setupFlow.contactsCount} contacts`,
         action: setupFlow.action,
         complete: true,
       })
@@ -1099,18 +1379,29 @@ function buildGoldenPath({ launchChannel, truthRuntime, setupFlow, inboxState })
         id: "setup",
         label: "AI setup draft",
         status:
-          setupFlow.hasDraft ? "in_progress" : launchChannel.connected ? "pending" : "blocked",
+          setupFlow.hasDraft
+            ? "in_progress"
+            : launchChannel.connected
+              ? "pending"
+              : "blocked",
         statusLabel:
-          setupFlow.hasDraft ? "In progress" : launchChannel.connected ? "Start setup" : "Blocked by channel",
+          setupFlow.hasDraft
+            ? "In progress"
+            : launchChannel.connected
+              ? "Start setup"
+              : "Blocked by channel",
         tone:
-          setupFlow.hasDraft ? "warn" : launchChannel.connected ? "info" : "danger",
+          setupFlow.hasDraft
+            ? "warn"
+            : launchChannel.connected
+              ? "info"
+              : "danger",
         summary:
           setupFlow.summary ||
           "Collect the structured business draft before expecting consistent live behavior.",
-        detail:
-          setupFlow.hasDraft
-            ? `${setupFlow.readySections} ready sections · ${setupFlow.blockerCount} blockers remaining`
-            : "No structured setup draft is visible yet.",
+        detail: setupFlow.hasDraft
+          ? `${setupFlow.readySections} ready sections · ${setupFlow.blockerCount} blockers remaining`
+          : "No structured setup draft is visible yet.",
         action: setupFlow.action,
         complete: false,
       });
@@ -1122,12 +1413,10 @@ function buildGoldenPath({ launchChannel, truthRuntime, setupFlow, inboxState })
         status: "ready",
         statusLabel: "Approved",
         tone: "success",
-        summary:
-          truthRuntime.truthVersionId
-            ? `Approved truth version ${truthRuntime.truthVersionId} is available.`
-            : "Approved business truth is available.",
-        detail:
-          "Truth is already published and can back the live runtime.",
+        summary: truthRuntime.truthVersionId
+          ? `Approved truth version ${truthRuntime.truthVersionId} is available.`
+          : "Approved business truth is available.",
+        detail: "Truth is already published and can back the live runtime.",
         action: { label: "Open truth", path: "/truth" },
         complete: true,
       })
@@ -1307,6 +1596,7 @@ export function useProductHome(options = {}) {
     workbench: null,
     inboxThreads: null,
     inboxOutbound: null,
+    metaStatus: null,
     telegramStatus: null,
     setupAssistantSession: null,
   };
@@ -1318,6 +1608,7 @@ export function useProductHome(options = {}) {
     workbench: { available: true },
     inboxThreads: { available: true },
     inboxOutbound: { available: true },
+    metaStatus: { available: true },
     telegramStatus: { available: true },
     setupAssistantSession: { available: true },
   };
@@ -1347,14 +1638,15 @@ export function useProductHome(options = {}) {
       sourceStatus,
     });
 
-    const launchChannel = buildLaunchChannelState({
+    const launchChannel = resolveCanonicalLaunchChannel({
+      metaPayload: payloads.metaStatus,
       telegramPayload: payloads.telegramStatus,
       sourceStatus,
     });
 
     const truthRuntime = buildTruthRuntimeState({
       trustPayload: payloads.trust,
-      telegramPayload: payloads.telegramStatus,
+      launchChannel,
       sourceStatus,
     });
 
@@ -1402,9 +1694,9 @@ export function useProductHome(options = {}) {
         : setupFlow.launchPosture === "setup_needed"
           ? { label: "Open truth", path: "/truth" }
           : setupFlow.launchPosture === "runtime_repair_needed"
-            ? { label: "Open channels", path: "/channels?channel=telegram" }
+            ? launchChannel.action
             : inboxState.action?.path === "/inbox"
-              ? { label: "Open channels", path: "/channels?channel=telegram" }
+              ? launchChannel.action
               : { label: "Open inbox", path: "/inbox" };
 
     const heroStats = [
@@ -1458,21 +1750,21 @@ export function useProductHome(options = {}) {
       {
         id: "comments",
         title: "Comments",
-        status: "Separate surface",
+        status: "Operator surface",
         summary:
-          "Comments remain available, but they are not the launch surface for this setup flow.",
+          "Comments stay available as a separate operator surface outside the primary launch lane.",
         detail:
-          "Keep the setup story narrow: connect a channel, complete the setup draft, approve truth, then go live.",
+          "Use comments when moderation or reply review matters, but keep launch posture anchored to channel, setup, truth, runtime, and inbox readiness.",
         action: { label: "Open comments", path: "/comments" },
       },
       {
         id: "voice",
         title: "Voice Receptionist",
-        status: "Separate surface",
+        status: "Operator surface",
         summary:
-          "Voice stays available as its own surface and does not drive this connect-first setup path.",
+          "Voice stays available as its own operator surface and does not redefine the primary launch lane.",
         detail:
-          "Do not mix voice readiness into the current launch promise.",
+          "Keep launch posture focused on channel, setup, truth, runtime, and live queue readiness.",
         action: { label: "Open voice", path: "/voice" },
       },
       {
@@ -1480,7 +1772,7 @@ export function useProductHome(options = {}) {
         title: "Channels",
         status: launchChannel.statusLabel,
         summary:
-          "Connect and inspect the launch channel without weakening the strict runtime contract.",
+          "Connect and inspect the current launch channel without weakening the strict runtime contract.",
         detail: launchChannel.detail,
         action: launchChannel.action,
       },
@@ -1502,7 +1794,7 @@ export function useProductHome(options = {}) {
         summary:
           "Use the workspace for broader operator posture once the setup lane is already clear.",
         detail:
-          "Home leads channel connect, setup, and runtime posture for this flow.",
+          "Home leads launch-channel, setup, and runtime posture for this flow.",
         action: { label: "Open workspace", path: "/workspace" },
       },
     ];
@@ -1565,7 +1857,7 @@ export function useProductHome(options = {}) {
       statusLabel: setupFlow.statusLabel,
       summary:
         setupFlow.launchPosture === "connect_channel"
-          ? "Connect the launch channel first."
+          ? `Connect ${launchChannel.channelLabel || "the launch channel"} first.`
           : setupFlow.launchPosture === "runtime_repair_needed"
             ? "Repair runtime before trusting live automation."
             : setupFlow.needed

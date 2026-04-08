@@ -180,7 +180,7 @@ export default function Shell() {
       },
       secondaryAction: {
         label: "Open channels",
-        path: "/channels?channel=telegram",
+        path: "/channels",
       },
       messages: [
         {
@@ -188,7 +188,7 @@ export default function Shell() {
           role: "assistant",
           title: "Open Home",
           body:
-            "The setup shell is available on Home, where channel connect, setup draft, and runtime posture are already composed together.",
+            "The setup shell is available on Home, where launch channel, setup draft, and runtime posture are already composed together.",
         },
       ],
       review: {
@@ -213,7 +213,31 @@ export default function Shell() {
         status: "awaiting_input",
         websiteUrl: "",
       },
-      launchChannel: {},
+      launchChannel: {
+        id: "shortcut-launch",
+        type: "launch_channel",
+        provider: "",
+        connected: false,
+        available: true,
+        status: "shortcut",
+        statusLabel: "Home shortcut",
+        title: "Launch channel posture lives on Home",
+        summary:
+          "Open Home to inspect Instagram or Telegram launch posture in one place.",
+        detail:
+          "Home resolves the current launch channel and keeps setup, truth, runtime, and inbox posture aligned.",
+        action: {
+          label: "Open channels",
+          path: "/channels",
+        },
+        deliveryReady: false,
+        reasonCode: "",
+        channelLabel: "Launch channel",
+        accountLabel: "",
+        accountDisplayName: "",
+        accountHandle: "",
+        account: {},
+      },
       truthRuntime: {},
     }),
     []
@@ -226,14 +250,14 @@ export default function Shell() {
       title: "Loading AI setup",
       statusLabel: "Loading",
       summary:
-        "Preparing channel, setup draft, and strict runtime posture for the assistant.",
+        "Preparing launch channel, setup draft, and strict runtime posture for the assistant.",
       primaryAction: {
         label: "Open home",
         path: "/home",
       },
       secondaryAction: {
         label: "Open channels",
-        path: "/channels?channel=telegram",
+        path: "/channels",
       },
       messages: [
         {
