@@ -433,7 +433,7 @@ describe("FloatingAiWidget", () => {
     });
   });
 
-  it("drops stale setup review content while the widget switches tenants", async () => {
+  it("drops stale setup session content while the widget switches tenants", async () => {
     const queryClient = createQueryClient();
     const nextSessionPromise = new Promise(() => {});
     const nextReviewPromise = new Promise(() => {});
@@ -448,18 +448,19 @@ describe("FloatingAiWidget", () => {
         },
       },
     });
-    vi.mocked(getCurrentSetupReview).mockResolvedValueOnce(
-      createWebsiteReviewPayload()
-    );
+    vi.mocked(getCurrentSetupReview).mockResolvedValueOnce({
+      review: {
+        reviewDebug: {},
+      },
+    });
 
     const view = renderControlledWidget(createAssistant(), {
       queryClient,
       open: true,
     });
 
-    expect(
-      await screen.findByRole("region", { name: "Website knowledge review" })
-    ).toBeInTheDocument();
+    expect(await screen.findByText("https://lunasmile.az")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Scan website" })).toBeInTheDocument();
 
     useWorkspaceTenantKey.mockReturnValue({
       tenantKey: "globex",
@@ -502,9 +503,9 @@ describe("FloatingAiWidget", () => {
       expect(getCurrentSetupAssistantSession).toHaveBeenCalledTimes(2);
     });
 
-    expect(
-      screen.queryByRole("region", { name: "Website knowledge review" })
-    ).not.toBeInTheDocument();
     expect(screen.queryByText("https://lunasmile.az")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Scan website" })
+    ).not.toBeInTheDocument();
   });
 });
