@@ -20,6 +20,7 @@ import { useInboxData } from "../hooks/useInboxData.js";
 import { useInboxRealtime } from "../hooks/useInboxRealtime.js";
 import useWorkspaceTenantKey from "../hooks/useWorkspaceTenantKey.js";
 import { getAppSessionContext } from "../lib/appSession.js";
+import { useLaunchSliceRefreshToken } from "../lib/launchSliceRefresh.js";
 import {
   buildChannelTruthLaunchReadiness,
   buildMetaLaunchChannelState,
@@ -56,6 +57,10 @@ export default function Inbox() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const workspace = useWorkspaceTenantKey();
+  const refreshToken = useLaunchSliceRefreshToken(
+    workspace.tenantKey,
+    workspace.ready
+  );
 
   const [wsState, setWsState] = useState("idle");
   const [detailOpen, setDetailOpen] = useState(false);
@@ -94,7 +99,7 @@ export default function Inbox() {
     return () => {
       alive = false;
     };
-  }, [workspace.ready, workspace.tenantKey]);
+  }, [refreshToken, workspace.ready, workspace.tenantKey]);
 
   useEffect(() => {
     if (!workspace.ready) return undefined;

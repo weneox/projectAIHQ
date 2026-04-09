@@ -1234,6 +1234,132 @@ test("Case W: partial website barrier still seeds a usable setup review draft fr
   assert.ok(shaped.services.length >= 1);
 });
 
+test("Case W1: clean structured website draft does not get downgraded to weak review posture", () => {
+  const shaped = draftTest.mapSynthesisProfileToBusinessProfile(
+    {
+      companyName: "North Clinic",
+      summaryShort: "North Clinic provides cosmetic dentistry and implant services in Baku.",
+      summaryLong:
+        "North Clinic provides cosmetic dentistry, implants, whitening, and family care in Baku.",
+      primaryEmail: "hello@north.az",
+      primaryPhone: "+994 50 222 33 44",
+      primaryAddress: "14 Nizami Street, Baku",
+      services: ["Cosmetic dentistry", "Dental implants"],
+      faqItems: [
+        {
+          question: "Do you offer implants?",
+          answer: "Yes, implant consultations are available.",
+        },
+      ],
+      pricingHints: ["Consultation from 30 AZN"],
+      hours: ["Mon-Fri 09:00-18:00"],
+      supportedLanguages: ["az", "en"],
+      primaryLanguage: "az",
+    },
+    "website",
+    "https://north.az"
+  );
+
+  const warnings = importTest.buildWeakWebsiteDraftWarnings({
+    businessProfile: shaped,
+  });
+
+  assert.equal(shaped.companyName, "North Clinic");
+  assert.deepEqual(shaped.supportedLanguages, ["az", "en"]);
+  assert.deepEqual(shaped.hours, ["Mon-Fri 09:00-18:00"]);
+  assert.deepEqual(warnings, []);
+  assert.equal(importTest.shouldForcePartialModeFromWarnings(warnings), false);
+});
+
+test("Case W2: thin website evidence stays explicitly weak and partial", () => {
+  const warnings = importTest.buildWeakWebsiteDraftWarnings({
+    businessProfile: {
+      websiteUrl: "https://thin.example",
+    },
+  });
+
+  assert.ok(warnings.includes("website_review_data_partially_available"));
+  assert.ok(warnings.includes("website_identity_signals_weak"));
+  assert.ok(warnings.includes("website_contact_signals_weak"));
+  assert.ok(warnings.includes("website_service_signals_weak"));
+  assert.equal(importTest.shouldForcePartialModeFromWarnings(warnings), true);
+});
+
+test("Case W3: website drafts do not invent pricing when no public pricing exists", () => {
+  const shaped = draftTest.mapSynthesisProfileToBusinessProfile(
+    {
+      companyName: "Quiet Studio",
+      summaryShort: "Quiet Studio provides therapy and coaching sessions.",
+      primaryEmail: "hello@quiet.example",
+      services: ["Therapy", "Coaching"],
+      faqItems: [
+        {
+          question: "How do I book?",
+          answer: "Contact the studio to arrange a consultation.",
+        },
+      ],
+    },
+    "website",
+    "https://quiet.example"
+  );
+
+  assert.deepEqual(shaped.pricingHints || [], []);
+  assert.equal(shaped.pricingPolicy, undefined);
+  assert.equal(shaped.pricingText, undefined);
+});
+
+test("Case W4: missing public contact signals stay review-needed instead of looking complete", () => {
+  const shaped = draftTest.mapSynthesisProfileToBusinessProfile(
+    {
+      companyName: "No Contact Studio",
+      summaryShort: "Brand design and website systems for local businesses.",
+      services: ["Brand design", "Website systems"],
+      faqItems: [
+        {
+          question: "Do you work remotely?",
+          answer: "Yes, remote delivery is available.",
+        },
+      ],
+    },
+    "website",
+    "https://nocontact.example"
+  );
+
+  const warnings = importTest.buildWeakWebsiteDraftWarnings({
+    businessProfile: shaped,
+  });
+
+  assert.ok(warnings.includes("website_contact_signals_weak"));
+  assert.equal(importTest.shouldForcePartialModeFromWarnings(warnings), true);
+});
+
+test("Case W5: multilingual websites and messy hours stay as draft evidence, not false canonical polish", () => {
+  const shaped = draftTest.mapSynthesisProfileToBusinessProfile(
+    {
+      companyName: "Harbor Clinic",
+      summaryShort: "Harbor Clinic serves local and expat patients in Baku.",
+      primaryEmail: "hello@harbor.example",
+      primaryPhone: "+994 50 333 44 55",
+      services: ["Consultation", "Ultrasound"],
+      supportedLanguages: ["az", "en", "ru"],
+      primaryLanguage: "az",
+      hours: [
+        "Mon-Fri 9ish until late",
+        "Weekends by appointment",
+      ],
+    },
+    "website",
+    "https://harbor.example"
+  );
+
+  assert.deepEqual(shaped.supportedLanguages, ["az", "en", "ru"]);
+  assert.deepEqual(shaped.hours, [
+    "Mon-Fri 9ish until late",
+    "Weekends by appointment",
+  ]);
+  assert.equal(shaped.mainLanguage, "az");
+});
+
 test("Case X: website draft shaping does not invent language fields without source support", () => {
   const shaped = draftTest.mapSynthesisProfileToBusinessProfile(
     {

@@ -28,6 +28,10 @@ import {
 import Button from "../../components/ui/Button.jsx";
 import TruthVersionComparePanel from "../../components/truth/TruthVersionComparePanel.jsx";
 import useWorkspaceTenantKey from "../../hooks/useWorkspaceTenantKey.js";
+import {
+  emitLaunchSliceRefresh,
+  useLaunchSliceRefreshToken,
+} from "../../lib/launchSliceRefresh.js";
 import { buildTruthOperationalState } from "../../lib/readinessViewModel.js";
 
 function s(v, d = "") {
@@ -42,8 +46,9 @@ function obj(v, d = {}) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : d;
 }
 
-function initialState() {
+function initialState(tenantKey = "") {
   return {
+    tenantKey,
     loading: true,
     error: "",
     data: {
@@ -440,6 +445,10 @@ export default function TruthViewerPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const workspace = useWorkspaceTenantKey();
+  const refreshToken = useLaunchSliceRefreshToken(
+    workspace.tenantKey,
+    workspace.ready
+  );
 
   const [state, setState] = useState(initialState);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -457,34 +466,46 @@ export default function TruthViewerPage() {
 
   const deepLinkHandledRef = useRef("");
 
+  const viewState = useMemo(() => {
+    if (!workspace.ready) {
+      return initialState();
+    }
+
+    if (state.tenantKey !== workspace.tenantKey) {
+      return initialState(workspace.tenantKey);
+    }
+
+    return state;
+  }, [state, workspace.ready, workspace.tenantKey]);
+
   const requestedVersionId = useMemo(
     () => resolveRequestedVersionId(searchParams, location),
     [searchParams, location]
   );
 
   const sections = useMemo(
-    () => buildSections(state.data.fields),
-    [state.data.fields]
+    () => buildSections(viewState.data.fields),
+    [viewState.data.fields]
   );
 
   const runtimeLabel = useMemo(
     () =>
       resolveRuntimeLabel(
-        state.data.trust,
-        state.data.approvedTruthUnavailable,
-        state.data
+        viewState.data.trust,
+        viewState.data.approvedTruthUnavailable,
+        viewState.data
       ),
-    [state.data]
+    [viewState.data]
   );
 
   const sourceLine = useMemo(
-    () => resolveSourceSummaryLine(state.data.sourceSummary),
-    [state.data.sourceSummary]
+    () => resolveSourceSummaryLine(viewState.data.sourceSummary),
+    [viewState.data.sourceSummary]
   );
 
   const operationalState = useMemo(
     () =>
-      state.data.approvedTruthUnavailable
+      viewState.data.approvedTruthUnavailable
         ? {
             truthReady: false,
             runtimeReady: false,
@@ -500,10 +521,10 @@ export default function TruthViewerPage() {
               path: "/home?assistant=setup",
             },
           }
-        : hasTrustOperationalData(state.data.trust)
-          ? buildTruthOperationalState(state.data.trust)
-          : buildSnapshotOperationalState(state.data),
-    [state.data]
+        : hasTrustOperationalData(viewState.data.trust)
+          ? buildTruthOperationalState(viewState.data.trust)
+          : buildSnapshotOperationalState(viewState.data),
+    [viewState.data]
   );
 
   async function refreshTruthSurface() {
@@ -525,6 +546,7 @@ export default function TruthViewerPage() {
     const trustData = trustResult.status === "fulfilled" ? trustResult.value : null;
 
     setState({
+      tenantKey: workspace.tenantKey,
       loading: false,
       error: "",
       data: {
@@ -548,7 +570,14 @@ export default function TruthViewerPage() {
   useEffect(() => {
     let alive = true;
 
-    setState(initialState());
+    setState((current) =>
+      current.tenantKey === workspace.tenantKey
+        ? {
+            ...current,
+            error: "",
+          }
+        : initialState(workspace.tenantKey)
+    );
 
     if (!workspace.ready) {
       return () => {
@@ -581,6 +610,7 @@ export default function TruthViewerPage() {
           trustResult.status === "fulfilled" ? trustResult.value : null;
 
         setState({
+          tenantKey: workspace.tenantKey,
           loading: false,
           error: "",
           data: {
@@ -604,6 +634,7 @@ export default function TruthViewerPage() {
         if (!alive) return;
 
         setState({
+          tenantKey: workspace.tenantKey,
           loading: false,
           error: String(
             error?.message || error || "Truth viewer could not be loaded."
@@ -615,7 +646,7 @@ export default function TruthViewerPage() {
     return () => {
       alive = false;
     };
-  }, [workspace.ready, workspace.tenantKey]);
+  }, [refreshToken, workspace.ready, workspace.tenantKey]);
 
   async function handleOpenVersion(item = {}) {
     const versionId = normalizeTruthToken(
@@ -726,6 +757,10 @@ export default function TruthViewerPage() {
       });
 
       await refreshTruthSurface();
+      emitLaunchSliceRefresh({
+        tenantKey: workspace.tenantKey,
+        reason: "truth-rollback",
+      });
 
       const refreshed = await getTruthVersionDetail(versionId, {
         compareTo: detail?.comparedVersion?.id || "",
@@ -762,21 +797,21 @@ export default function TruthViewerPage() {
   }
 
   useEffect(() => {
-    if (!requestedVersionId || state.loading || compareOpen) return;
+    if (!requestedVersionId || viewState.loading || compareOpen) return;
 
     const marker = [
       requestedVersionId,
-      state.data.history.length,
-      state.data.approval?.version || "",
+      viewState.data.history.length,
+      viewState.data.approval?.version || "",
       location?.key || "",
     ].join("|");
 
     if (deepLinkHandledRef.current === marker) return;
 
     const matchedItem = findRequestedHistoryItem({
-      history: state.data.history || [],
+      history: viewState.data.history || [],
       requestedVersionId,
-      approval: state.data.approval || {},
+      approval: viewState.data.approval || {},
     });
 
     deepLinkHandledRef.current = marker;
@@ -795,13 +830,13 @@ export default function TruthViewerPage() {
   }, [
     compareOpen,
     requestedVersionId,
-    state.data.approval,
-    state.data.history,
-    state.loading,
+    viewState.data.approval,
+    viewState.data.history,
+    viewState.loading,
     location?.key,
   ]);
 
-  if (state.loading) {
+  if (viewState.loading) {
     return (
       <div className="w-full p-0">
         <div className="rounded-panel border border-line bg-surface px-5 py-4 text-sm text-text-muted">
@@ -811,17 +846,17 @@ export default function TruthViewerPage() {
     );
   }
 
-  const latestHistoryItem = arr(state.data.history)[0] || null;
-  const reviewSummary = obj(state.data.reviewWorkbench?.summary);
+  const latestHistoryItem = arr(viewState.data.history)[0] || null;
+  const reviewSummary = obj(viewState.data.reviewWorkbench?.summary);
 
   const pageHint =
-    s(state.data.notices?.[0]) ||
-    s(state.error) ||
-    (state.data.approvedTruthUnavailable
+    s(viewState.data.notices?.[0]) ||
+    s(viewState.error) ||
+    (viewState.data.approvedTruthUnavailable
       ? "Approved truth is unavailable. No non-approved fallback data is being shown."
       : "This surface shows only approved truth. Extra operational detail is intentionally hidden from the main view.");
 
-  const visibleSummary = state.data.approvedTruthUnavailable
+  const visibleSummary = viewState.data.approvedTruthUnavailable
     ? "Approved truth is unavailable. No non-approved fallback data is being shown."
     : "Approved fields and the latest governed snapshot.";
 
@@ -831,7 +866,7 @@ export default function TruthViewerPage() {
     arr(sections.presence).length > 0 ||
     arr(sections.offering).length > 0;
 
-  const emptyStateText = state.data.approvedTruthUnavailable
+  const emptyStateText = viewState.data.approvedTruthUnavailable
     ? "Approved truth is unavailable. No non-approved fallback data is being shown."
     : "No approved fields were returned by the backend.";
 
@@ -994,21 +1029,21 @@ export default function TruthViewerPage() {
             <PropertyList className="mt-4">
               <SideMetaRow
                 label="Version"
-                value={s(state.data.approval?.version, "Pending")}
+                value={s(viewState.data.approval?.version, "Pending")}
                 hint="Current approved truth version."
               />
 
               <SideMetaRow
                 label="Approved at"
-                value={s(state.data.approval?.approvedAt)
-                  ? formatWhen(state.data.approval.approvedAt)
+                value={s(viewState.data.approval?.approvedAt)
+                  ? formatWhen(viewState.data.approval.approvedAt)
                   : "Not available"}
                 hint="Latest approval timestamp."
               />
 
               <SideMetaRow
                 label="Approved by"
-                value={s(state.data.approval?.approvedBy, "Not available")}
+                value={s(viewState.data.approval?.approvedBy, "Not available")}
                 hint="Operator who approved the current truth."
               />
 
@@ -1032,7 +1067,7 @@ export default function TruthViewerPage() {
 
               <SideMetaRow
                 label="Saved versions"
-                value={String(arr(state.data.history).length)}
+                value={String(arr(viewState.data.history).length)}
                 hint="Visible truth versions in history."
               />
 
@@ -1067,7 +1102,7 @@ export default function TruthViewerPage() {
         loading={compareState.loading}
         error={compareState.error}
         detail={compareState.detail}
-        versions={state.data.history}
+        versions={viewState.data.history}
         onSelectVersion={handleOpenVersion}
         rollbackSurface={compareState.rollbackSurface}
         onRollback={handleRollback}

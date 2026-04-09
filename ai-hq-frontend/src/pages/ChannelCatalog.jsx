@@ -9,6 +9,7 @@ import {
 import { getSettingsTrustView } from "../api/trust.js";
 import ChannelDetailDrawer from "../components/channels/ChannelDetailDrawer.jsx";
 import ChannelOverviewCard from "../components/channels/ChannelOverviewCard.jsx";
+import useWorkspaceTenantKey from "../hooks/useWorkspaceTenantKey.js";
 import {
   CHANNELS,
   CHANNEL_FILTERS,
@@ -42,6 +43,17 @@ import {
   buildWebsiteLaunchChannelState,
   buildTruthOperationalState,
 } from "../lib/readinessViewModel.js";
+import { useLaunchSliceRefreshToken } from "../lib/launchSliceRefresh.js";
+
+const EMPTY_READINESS_STATE = {
+  tenantKey: "",
+  loading: true,
+  error: "",
+  meta: null,
+  telegram: null,
+  website: null,
+  truth: null,
+};
 
 function buildResultsLabel(filteredCount, totalCount, isFiltered) {
   if (!isFiltered) return `${totalCount} connectors`;
@@ -74,17 +86,15 @@ function launchMetricHint(state, fallback) {
 export default function ChannelCatalog() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const workspace = useWorkspaceTenantKey();
+  const refreshToken = useLaunchSliceRefreshToken(
+    workspace.tenantKey,
+    workspace.ready
+  );
   const [activeFilter, setActiveFilter] = useState("all");
   const [query] = useState("");
 
-  const [readinessState, setReadinessState] = useState({
-    loading: true,
-    error: "",
-    meta: null,
-    telegram: null,
-    website: null,
-    truth: null,
-  });
+  const [readinessState, setReadinessState] = useState(EMPTY_READINESS_STATE);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [closingChannel, setClosingChannel] = useState(null);
@@ -99,7 +109,22 @@ export default function ChannelCatalog() {
   const drawerChannel = selectedChannel || closingChannel;
 
   useEffect(() => {
+    if (!workspace.ready) return undefined;
+
     let alive = true;
+
+    setReadinessState((current) =>
+      current.tenantKey === workspace.tenantKey
+        ? {
+            ...current,
+            loading: true,
+            error: "",
+          }
+        : {
+            ...EMPTY_READINESS_STATE,
+            tenantKey: workspace.tenantKey,
+          }
+    );
 
     Promise.allSettled([
       getMetaChannelStatus(),
@@ -128,6 +153,7 @@ export default function ChannelCatalog() {
             : buildTruthOperationalState(null);
 
         setReadinessState({
+          tenantKey: workspace.tenantKey,
           loading: false,
           error: "",
           meta,
@@ -139,10 +165,11 @@ export default function ChannelCatalog() {
       .catch((error) => {
         if (!alive) return;
         setReadinessState({
+          tenantKey: workspace.tenantKey,
           loading: false,
           error: s(
-          error?.message || error || "Channel readiness could not be loaded."
-        ),
+            error?.message || error || "Channel readiness could not be loaded."
+          ),
           meta: buildMetaLaunchChannelState({}),
           telegram: buildTelegramLaunchChannelState({}),
           website: buildWebsiteLaunchChannelState({}),
@@ -153,7 +180,25 @@ export default function ChannelCatalog() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [refreshToken, workspace.ready, workspace.tenantKey]);
+
+  const effectiveReadinessState = useMemo(() => {
+    if (!workspace.ready) {
+      return {
+        ...EMPTY_READINESS_STATE,
+        loading: false,
+      };
+    }
+
+    if (readinessState.tenantKey !== workspace.tenantKey) {
+      return {
+        ...EMPTY_READINESS_STATE,
+        tenantKey: workspace.tenantKey,
+      };
+    }
+
+    return readinessState;
+  }, [readinessState, workspace.ready, workspace.tenantKey]);
 
   useEffect(() => {
     if (!selectedChannel) return undefined;
@@ -205,12 +250,12 @@ export default function ChannelCatalog() {
     () =>
       buildChannelTruthLaunchReadiness({
         channels: [
-          readinessState.meta,
-          readinessState.telegram,
-          readinessState.website,
+          effectiveReadinessState.meta,
+          effectiveReadinessState.telegram,
+          effectiveReadinessState.website,
         ],
-        truthState: readinessState.truth,
-        surface: { unavailable: false, error: readinessState.error },
+        truthState: effectiveReadinessState.truth,
+        surface: { unavailable: false, error: effectiveReadinessState.error },
         copy: {
           channelsPath: "/channels",
           truthPath: "/truth",
@@ -236,11 +281,11 @@ export default function ChannelCatalog() {
         },
       }),
     [
-      readinessState.error,
-      readinessState.meta,
-      readinessState.telegram,
-      readinessState.website,
-      readinessState.truth,
+      effectiveReadinessState.error,
+      effectiveReadinessState.meta,
+      effectiveReadinessState.telegram,
+      effectiveReadinessState.website,
+      effectiveReadinessState.truth,
     ]
   );
 
@@ -350,12 +395,12 @@ export default function ChannelCatalog() {
           detail={compactSentence(launchReadiness.detail)}
         />
 
-        {s(readinessState.error) ? (
+        {s(effectiveReadinessState.error) ? (
           <StatusBanner
             tone="danger"
             label="Unavailable"
             title="Channel readiness unavailable"
-            description={readinessState.error}
+            description={effectiveReadinessState.error}
           />
         ) : null}
 
@@ -368,30 +413,30 @@ export default function ChannelCatalog() {
           />
           <MetricCard
             label="Instagram"
-            value={s(readinessState.meta?.statusLabel, "Unknown")}
+            value={s(effectiveReadinessState.meta?.statusLabel, "Unknown")}
             hint={launchMetricHint(
-              readinessState.meta,
+              effectiveReadinessState.meta,
               "Instagram posture unavailable."
             )}
-            tone={toneFromReadiness(readinessState.meta || {})}
+            tone={toneFromReadiness(effectiveReadinessState.meta || {})}
           />
           <MetricCard
             label="Telegram"
-            value={s(readinessState.telegram?.statusLabel, "Unknown")}
+            value={s(effectiveReadinessState.telegram?.statusLabel, "Unknown")}
             hint={launchMetricHint(
-              readinessState.telegram,
+              effectiveReadinessState.telegram,
               "Telegram posture unavailable."
             )}
-            tone={toneFromReadiness(readinessState.telegram || {})}
+            tone={toneFromReadiness(effectiveReadinessState.telegram || {})}
           />
           <MetricCard
             label="Truth + runtime"
-            value={s(readinessState.truth?.statusLabel, "Unknown")}
+            value={s(effectiveReadinessState.truth?.statusLabel, "Unknown")}
             hint={launchMetricHint(
-              readinessState.truth,
+              effectiveReadinessState.truth,
               "Truth posture unavailable."
             )}
-            tone={toneFromReadiness(readinessState.truth || {})}
+            tone={toneFromReadiness(effectiveReadinessState.truth || {})}
           />
         </MetricGrid>
 

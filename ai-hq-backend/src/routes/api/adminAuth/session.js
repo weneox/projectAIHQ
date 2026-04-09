@@ -9,8 +9,11 @@ import {
 } from "../../../utils/adminAuth.js";
 import { cfg } from "../../../config.js";
 import { requireSafeDiagnostics } from "../../../utils/securitySurface.js";
-import { issueRealtimeTicket } from "../../../realtime/auth.js";
-import { listIdentityMembershipChoicesForLogin, findLegacyTenantUserForIdentityLogin } from "./repository.js";
+import { getRealtimeTicketIssueResult } from "../../../realtime/auth.js";
+import {
+  listIdentityMembershipChoicesForLogin,
+  findLegacyTenantUserForIdentityLogin,
+} from "./repository.js";
 import {
   buildWorkspaceAccessSummary,
   loadActiveWorkspaceContract,
@@ -92,6 +95,25 @@ function buildCanonicalWorkspaceChoice(choice = {}) {
   };
 }
 
+function buildFallbackWorkspace(sessionPayload = {}) {
+  return {
+    membershipId: sessionPayload?.membershipId || null,
+    tenantId: sessionPayload?.tenantId || null,
+    tenantKey: sessionPayload?.tenantKey || null,
+    companyName: sessionPayload?.companyName || "",
+    role: sessionPayload?.role || "member",
+    setupCompleted: true,
+    setupRequired: false,
+    workspaceReady: true,
+    routeHint: "/workspace",
+    destination: { kind: "workspace", path: "/workspace" },
+    readinessScore: 100,
+    readinessLabel: "ready",
+    activeSetupSessionId: "",
+    active: true,
+  };
+}
+
 async function loadSessionWorkspaceChoices(db, sessionPayload, req, resolveWorkspaceState) {
   const hostTenantKey = resolveTenantKeyFromRequestHost(req);
   const memberships = await listIdentityMembershipChoicesForLogin(db, {
@@ -106,7 +128,10 @@ async function loadSessionWorkspaceChoices(db, sessionPayload, req, resolveWorks
       email: sessionPayload.email,
     });
 
-    if (!legacyUser?.id || (s(legacyUser.status) && s(legacyUser.status).toLowerCase() !== "active")) {
+    if (
+      !legacyUser?.id ||
+      (s(legacyUser.status) && s(legacyUser.status).toLowerCase() !== "active")
+    ) {
       continue;
     }
 
@@ -183,182 +208,245 @@ export function adminSessionRoutes({
   r.get("/admin-auth/me", async (req, res) => {
     setNoStore(res);
 
-    const { adminSession, userSession } = await readCurrentSessions(req, db);
-    const dbOk = await checkDb(db);
+    try {
+      const { adminSession, userSession } = await readCurrentSessions(req, db);
+      const dbOk = await checkDb(db);
 
-    return res.status(200).json({
-      ok: true,
-      enabled: !!cfg.auth.adminPanelEnabled,
-      configured: {
-        admin: isAdminAuthConfigured(),
-        user: isUserAuthConfigured(),
-      },
-      authenticated: {
-        admin: !!adminSession?.ok,
-        user: !!userSession?.ok,
-      },
-      session: {
-        admin: adminSession?.ok
-          ? {
-              exp: adminSession.payload?.exp || null,
-              iat: adminSession.payload?.iat || null,
-            }
-          : null,
-        user: userSession?.ok
-          ? {
-              userId: userSession.payload?.userId || null,
-              tenantId: userSession.payload?.tenantId || null,
-              tenantKey: userSession.payload?.tenantKey || null,
-              email: userSession.payload?.email || null,
-              fullName: userSession.payload?.fullName || "",
-              role: userSession.payload?.role || null,
-              exp: userSession.payload?.exp || null,
-              iat: userSession.payload?.iat || null,
-            }
-          : {
-              ok: false,
-              error: userSession?.error || null,
-            },
-      },
-      runtime: buildRuntimeInfo(db, wsHub, dbOk),
-    });
+      return res.status(200).json({
+        ok: true,
+        enabled: !!cfg.auth.adminPanelEnabled,
+        configured: {
+          admin: isAdminAuthConfigured(),
+          user: isUserAuthConfigured(),
+        },
+        authenticated: {
+          admin: !!adminSession?.ok,
+          user: !!userSession?.ok,
+        },
+        session: {
+          admin: adminSession?.ok
+            ? {
+                exp: adminSession.payload?.exp || null,
+                iat: adminSession.payload?.iat || null,
+              }
+            : null,
+          user: userSession?.ok
+            ? {
+                userId: userSession.payload?.userId || null,
+                tenantId: userSession.payload?.tenantId || null,
+                tenantKey: userSession.payload?.tenantKey || null,
+                email: userSession.payload?.email || null,
+                fullName: userSession.payload?.fullName || "",
+                role: userSession.payload?.role || null,
+                exp: userSession.payload?.exp || null,
+                iat: userSession.payload?.iat || null,
+              }
+            : {
+                ok: false,
+                error: userSession?.error || null,
+              },
+        },
+        runtime: buildRuntimeInfo(db, wsHub, dbOk),
+      });
+    } catch (error) {
+      return res.status(200).json({
+        ok: true,
+        enabled: !!cfg.auth.adminPanelEnabled,
+        configured: {
+          admin: isAdminAuthConfigured(),
+          user: isUserAuthConfigured(),
+        },
+        authenticated: {
+          admin: false,
+          user: false,
+        },
+        session: {
+          admin: null,
+          user: {
+            ok: false,
+            error: s(error?.message || error || "admin_auth_me_failed"),
+          },
+        },
+        runtime: buildRuntimeInfo(db, wsHub, false),
+      });
+    }
   });
 
   r.get("/auth/me", async (req, res) => {
     setNoStore(res);
 
-    const { userSession } = await readCurrentSessions(req, db);
-    const runtime = buildAuthRuntimeInfo(db, null);
+    try {
+      const { userSession } = await readCurrentSessions(req, db);
+      const dbOk = await checkDb(db);
+      const runtime = buildAuthRuntimeInfo(db, dbOk);
 
-    if (!userSession?.ok) {
-      if (shouldInvalidateUserCookie(userSession)) {
-        clearUserCookie(res);
-        return res.status(200).json({
-          ok: true,
+      if (!userSession?.ok) {
+        if (shouldInvalidateUserCookie(userSession)) {
+          clearUserCookie(res);
+          return res.status(200).json({
+            ok: true,
+            authenticated: false,
+            error: null,
+            reason: userSession?.error || "invalid_session",
+            user: null,
+            runtime,
+            marker: "AUTH_ME_DEBUG_V4",
+          });
+        }
+
+        return res.status(503).json({
+          ok: false,
           authenticated: false,
-          error: null,
-          reason: userSession?.error || "invalid_session",
+          error: "Auth session unavailable",
+          reason: userSession?.error || "session_lookup_unavailable",
           user: null,
           runtime,
           marker: "AUTH_ME_DEBUG_V4",
         });
       }
 
+      const workspaces = await loadSessionWorkspaceChoices(
+        db,
+        userSession.payload,
+        req,
+        resolveWorkspaceState
+      ).catch(() => []);
+
+      const activeWorkspace =
+        workspaces.find((workspace) => workspace.active) ||
+        buildFallbackWorkspace(userSession.payload);
+
+      return res.status(200).json({
+        ok: true,
+        authenticated: true,
+        user: {
+          id: userSession.payload?.userId || null,
+          identityId: userSession.payload?.identityId || null,
+          membershipId: userSession.payload?.membershipId || null,
+          tenantId: userSession.payload?.tenantId || null,
+          tenantKey: userSession.payload?.tenantKey || null,
+          email: userSession.payload?.email || null,
+          fullName: userSession.payload?.fullName || "",
+          role: userSession.payload?.role || "member",
+          companyName: userSession.payload?.companyName || "",
+          exp: userSession.payload?.exp || null,
+          iat: userSession.payload?.iat || null,
+        },
+        identity: {
+          id: userSession.payload?.identityId || null,
+          email: userSession.payload?.email || null,
+        },
+        membership: {
+          id: userSession.payload?.membershipId || null,
+          role: userSession.payload?.role || "member",
+        },
+        workspace: activeWorkspace,
+        workspaces,
+        destination: activeWorkspace?.destination || null,
+        runtime,
+        marker: "AUTH_ME_DEBUG_V4",
+      });
+    } catch (error) {
+      const dbOk = await checkDb(db).catch(() => false);
+
       return res.status(503).json({
         ok: false,
         authenticated: false,
         error: "Auth session unavailable",
-        reason: userSession?.error || "session_lookup_unavailable",
+        reason: s(error?.message || error || "auth_me_failed"),
         user: null,
-        runtime,
+        runtime: buildAuthRuntimeInfo(db, dbOk),
         marker: "AUTH_ME_DEBUG_V4",
       });
     }
-
-    const workspaces = await loadSessionWorkspaceChoices(
-      db,
-      userSession.payload,
-      req,
-      resolveWorkspaceState
-    ).catch(
-      () => []
-    );
-    const activeWorkspace =
-      workspaces.find((workspace) => workspace.active) ||
-      {
-        membershipId: userSession.payload?.membershipId || null,
-        tenantId: userSession.payload?.tenantId || null,
-        tenantKey: userSession.payload?.tenantKey || null,
-        companyName: userSession.payload?.companyName || "",
-        role: userSession.payload?.role || "member",
-        setupCompleted: true,
-        setupRequired: false,
-        workspaceReady: true,
-        routeHint: "/workspace",
-        destination: { kind: "workspace", path: "/workspace" },
-        readinessScore: 100,
-        readinessLabel: "ready",
-        activeSetupSessionId: "",
-        active: true,
-      };
-
-    return res.status(200).json({
-      ok: true,
-      authenticated: true,
-      user: {
-        id: userSession.payload?.userId || null,
-        identityId: userSession.payload?.identityId || null,
-        membershipId: userSession.payload?.membershipId || null,
-        tenantId: userSession.payload?.tenantId || null,
-        tenantKey: userSession.payload?.tenantKey || null,
-        email: userSession.payload?.email || null,
-        fullName: userSession.payload?.fullName || "",
-        role: userSession.payload?.role || "member",
-        companyName: userSession.payload?.companyName || "",
-        exp: userSession.payload?.exp || null,
-        iat: userSession.payload?.iat || null,
-      },
-      identity: {
-        id: userSession.payload?.identityId || null,
-        email: userSession.payload?.email || null,
-      },
-      membership: {
-        id: userSession.payload?.membershipId || null,
-        role: userSession.payload?.role || "member",
-      },
-      workspace: activeWorkspace,
-      workspaces,
-      destination: activeWorkspace?.destination || null,
-      runtime,
-      marker: "AUTH_ME_DEBUG_V4",
-    });
   });
 
   r.get("/auth/realtime-session", async (req, res) => {
     setNoStore(res);
 
-    const userSession = await loadUserSessionFromRequest(req, { db });
-    if (!userSession?.ok || !userSession?.payload) {
-      if (shouldInvalidateUserCookie(userSession)) {
-        clearUserCookie(res);
-        return res.status(401).json({
+    try {
+      const dbOk = await checkDb(db);
+      const runtime = buildAuthRuntimeInfo(db, dbOk);
+      const userSession = await loadUserSessionFromRequest(req, { db });
+
+      if (!userSession?.ok || !userSession?.payload) {
+        if (shouldInvalidateUserCookie(userSession)) {
+          clearUserCookie(res);
+          return res.status(401).json({
+            ok: false,
+            error: "Unauthorized",
+            reason: userSession?.error || "invalid_session",
+            runtime,
+          });
+        }
+
+        return res.status(503).json({
           ok: false,
-          error: "Unauthorized",
-          reason: userSession?.error || "invalid_session",
+          error: "Auth session unavailable",
+          reason: userSession?.error || "session_lookup_unavailable",
+          runtime,
         });
       }
 
+      const payload = userSession.payload;
+      const ticketResult = getRealtimeTicketIssueResult({
+        userId: payload.userId,
+        tenantId: payload.tenantId,
+        tenantKey: payload.tenantKey,
+        role: payload.role,
+      });
+
+      if (!ticketResult.ok) {
+        return res.status(503).json({
+          ok: false,
+          error: "Realtime session unavailable",
+          reason: ticketResult.reason || ticketResult.error || "realtime_ticket_unavailable",
+          runtime,
+          realtime: {
+            enabled: false,
+            ticket: null,
+            wsUrl: buildRealtimeWsUrl(req),
+            tenantKey: payload.tenantKey || null,
+            tenantId: payload.tenantId || null,
+            role: payload.role || "member",
+            audience:
+              ["owner", "admin", "operator"].includes(
+                String(payload.role || "").toLowerCase()
+              )
+                ? "operator"
+                : "tenant",
+          },
+        });
+      }
+
+      return res.status(200).json({
+        ok: true,
+        realtime: {
+          enabled: true,
+          ticket: ticketResult.ticket,
+          wsUrl: buildRealtimeWsUrl(req),
+          tenantKey: payload.tenantKey || null,
+          tenantId: payload.tenantId || null,
+          role: payload.role || "member",
+          audience:
+            ["owner", "admin", "operator"].includes(
+              String(payload.role || "").toLowerCase()
+            )
+              ? "operator"
+              : "tenant",
+        },
+        runtime,
+      });
+    } catch (error) {
+      const dbOk = await checkDb(db).catch(() => false);
+
       return res.status(503).json({
         ok: false,
-        error: "Auth session unavailable",
-        reason: userSession?.error || "session_lookup_unavailable",
+        error: "Realtime session unavailable",
+        reason: s(error?.message || error || "realtime_session_failed"),
+        runtime: buildAuthRuntimeInfo(db, dbOk),
       });
     }
-
-    const payload = userSession.payload;
-    const ticket = issueRealtimeTicket({
-      userId: payload.userId,
-      tenantId: payload.tenantId,
-      tenantKey: payload.tenantKey,
-      role: payload.role,
-    });
-
-    return res.status(200).json({
-      ok: true,
-      realtime: {
-        ticket,
-        wsUrl: buildRealtimeWsUrl(req),
-        tenantKey: payload.tenantKey || null,
-        tenantId: payload.tenantId || null,
-        role: payload.role || "member",
-        audience:
-          ["owner", "admin", "operator"].includes(
-            String(payload.role || "").toLowerCase()
-          )
-            ? "operator"
-            : "tenant",
-      },
-    });
   });
 
   r.get(

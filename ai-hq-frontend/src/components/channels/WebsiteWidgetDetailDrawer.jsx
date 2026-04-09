@@ -19,6 +19,7 @@ import {
 } from "../../hooks/useWorkspaceTenantKey.js";
 import { s } from "../../lib/appUi.js";
 import { cx } from "../../lib/cx.js";
+import { emitLaunchSliceRefresh } from "../../lib/launchSliceRefresh.js";
 import Input, { Textarea } from "../ui/Input.jsx";
 import {
   FieldGroup,
@@ -108,6 +109,10 @@ export default function WebsiteWidgetDetailDrawer({
       setCopyFeedback("");
       await queryClient.invalidateQueries({
         queryKey: websiteStatusQueryKey,
+      });
+      emitLaunchSliceRefresh({
+        tenantKey: workspace.tenantKey,
+        reason: "website-widget-saved",
       });
     },
   });

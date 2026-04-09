@@ -25,6 +25,33 @@ function isFresh(timestamp = 0) {
   return Number(timestamp) > 0 && Date.now() - Number(timestamp) < CONTEXT_CACHE_TTL_MS;
 }
 
+function buildAuthFallback(error = null) {
+  return {
+    ok: false,
+    authenticated: false,
+    error: error ? "Auth session unavailable" : null,
+    reason: error ? s(error?.message || error || "auth_context_failed") : "",
+    user: null,
+    identity: null,
+    membership: null,
+    workspace: null,
+    workspaces: [],
+    destination: null,
+    runtime: {},
+  };
+}
+
+function buildBootstrapFallback(error = null) {
+  return {
+    ok: false,
+    error: error ? s(error?.message || error || "bootstrap_context_failed") : "",
+    tenant: null,
+    workspace: null,
+    viewer: null,
+    viewerRole: "",
+  };
+}
+
 function pickTenantKey(auth = {}, bootstrap = {}) {
   const authUser = obj(auth?.user);
   const authTenant = obj(auth?.tenant);
@@ -181,10 +208,11 @@ export async function getAppAuthContext({ force = false } = {}) {
         return value;
       })
       .catch((error) => {
-        authContextPromise = null;
-        authContextValue = null;
-        authContextAt = 0;
-        throw error;
+        const fallback = buildAuthFallback(error);
+        authContextValue = fallback;
+        lastAuthContextValue = fallback;
+        authContextAt = Date.now();
+        return fallback;
       })
       .finally(() => {
         authContextPromise = null;
@@ -214,10 +242,11 @@ export async function getAppBootstrapContext({ force = false } = {}) {
         return value;
       })
       .catch((error) => {
-        bootstrapContextPromise = null;
-        bootstrapContextValue = null;
-        bootstrapContextAt = 0;
-        throw error;
+        const fallback = buildBootstrapFallback(error);
+        bootstrapContextValue = fallback;
+        lastBootstrapContextValue = fallback;
+        bootstrapContextAt = Date.now();
+        return fallback;
       })
       .finally(() => {
         bootstrapContextPromise = null;
@@ -247,11 +276,7 @@ export async function getAppSessionContext({ force = false } = {}) {
         let bootstrap = {};
 
         if (auth?.authenticated) {
-          try {
-            bootstrap = await getAppBootstrapContext({ force });
-          } catch {
-            bootstrap = {};
-          }
+          bootstrap = await getAppBootstrapContext({ force });
         }
 
         const value = buildSessionContext(auth, bootstrap);
@@ -261,10 +286,11 @@ export async function getAppSessionContext({ force = false } = {}) {
         return value;
       })
       .catch((error) => {
-        sessionContextPromise = null;
-        sessionContextValue = null;
-        sessionContextAt = 0;
-        throw error;
+        const value = buildSessionContext(buildAuthFallback(error), {});
+        sessionContextValue = value;
+        lastSessionContextValue = value;
+        sessionContextAt = Date.now();
+        return value;
       })
       .finally(() => {
         sessionContextPromise = null;

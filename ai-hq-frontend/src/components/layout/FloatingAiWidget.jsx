@@ -21,6 +21,7 @@ import {
   useWorkspaceTenantKey,
 } from "../../hooks/useWorkspaceTenantKey.js";
 import { SETUP_WIDGET_ROUTE } from "../../lib/appEntry.js";
+import { emitLaunchSliceRefresh } from "../../lib/launchSliceRefresh.js";
 import SetupAssistantSections from "./SetupAssistantSections.jsx";
 
 function s(value, fallback = "") {
@@ -1558,6 +1559,10 @@ export default function FloatingAiWidget({
         queryClient.invalidateQueries({ queryKey: telegramStatusQueryKey }),
         queryClient.invalidateQueries({ queryKey: metaStatusQueryKey }),
       ]);
+      emitLaunchSliceRefresh({
+        tenantKey: workspace.tenantKey,
+        reason: "setup-finalized",
+      });
 
       setClientAssistant((prev) =>
         normalizeAssistantState({

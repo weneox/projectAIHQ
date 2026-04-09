@@ -22,6 +22,7 @@ import {
   buildWorkspaceScopedQueryKey,
   useWorkspaceTenantKey,
 } from "../../hooks/useWorkspaceTenantKey.js";
+import { emitLaunchSliceRefresh } from "../../lib/launchSliceRefresh.js";
 import { cx } from "../../lib/cx.js";
 import ChannelIcon from "./ChannelIcon.jsx";
 import { ChannelActionButton } from "./ChannelPrimitives.jsx";
@@ -466,6 +467,10 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
       await queryClient.invalidateQueries({
         queryKey: metaStatusQueryKey,
       });
+      emitLaunchSliceRefresh({
+        tenantKey: workspace.tenantKey,
+        reason: "meta-disconnected",
+      });
     },
   });
 
@@ -482,6 +487,10 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
       setSearchParams(nextParams);
       await queryClient.invalidateQueries({
         queryKey: metaStatusQueryKey,
+      });
+      emitLaunchSliceRefresh({
+        tenantKey: workspace.tenantKey,
+        reason: "meta-selected",
       });
       setSelectingCandidateId("");
     },
@@ -502,6 +511,10 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
       await queryClient.invalidateQueries({
         queryKey: telegramStatusQueryKey,
       });
+      emitLaunchSliceRefresh({
+        tenantKey: workspace.tenantKey,
+        reason: "telegram-connected",
+      });
     },
   });
 
@@ -516,6 +529,10 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
       setTelegramBotToken("");
       await queryClient.invalidateQueries({
         queryKey: telegramStatusQueryKey,
+      });
+      emitLaunchSliceRefresh({
+        tenantKey: workspace.tenantKey,
+        reason: "telegram-disconnected",
       });
     },
   });

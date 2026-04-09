@@ -48,6 +48,7 @@ vi.mock("../../hooks/useWorkspaceTenantKey.js", () => ({
 }));
 
 import useProductHome from "../../view-models/useProductHome.js";
+import { emitLaunchSliceRefresh } from "../../lib/launchSliceRefresh.js";
 
 function createWrapper(queryClient = null) {
   const client =
@@ -373,5 +374,213 @@ describe("useProductHome", () => {
     });
 
     expect(getSetupState).toHaveBeenCalledTimes(2);
+  });
+
+  it("refreshes home posture when a launch-slice mutation is emitted for the active tenant", async () => {
+    const queryClient = createQueryClient();
+    const wrapper = createWrapper(queryClient);
+
+    getSetupState
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({});
+    getSettingsTrustView
+      .mockResolvedValueOnce(createTrustView())
+      .mockResolvedValueOnce(
+        createTrustView({
+          summary: {
+            truth: {
+              latestVersionId: "",
+              readiness: {
+                status: "blocked",
+                reasonCode: "approved_truth_unavailable",
+              },
+            },
+            runtimeProjection: {
+              readiness: {
+                status: "blocked",
+                reasonCode: "approved_truth_unavailable",
+              },
+              health: {
+                usable: false,
+                reasonCode: "approved_truth_unavailable",
+              },
+              authority: {
+                available: false,
+              },
+            },
+            reviewQueue: {
+              pending: 0,
+            },
+          },
+        })
+      );
+
+    const { result } = renderHook(() => useProductHome(), {
+      wrapper,
+    });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.truthRuntime.ready).toBe(true);
+
+    emitLaunchSliceRefresh({
+      tenantKey: "acme",
+      reason: "launch-mutation",
+    });
+
+    await waitFor(() => {
+      expect(getSettingsTrustView).toHaveBeenCalledTimes(2);
+    });
+
+    await waitFor(() => {
+      expect(result.current.truthRuntime.ready).toBe(false);
+    });
+  });
+
+  it("keeps live launch posture fail-closed when only a partial setup draft exists", async () => {
+    getSettingsTrustView.mockResolvedValue(
+      createTrustView({
+        summary: {
+          truth: {
+            latestVersionId: "",
+            readiness: {
+              status: "blocked",
+              reasonCode: "approved_truth_unavailable",
+            },
+          },
+          runtimeProjection: {
+            readiness: {
+              status: "blocked",
+              reasonCode: "approved_truth_unavailable",
+            },
+            health: {
+              usable: false,
+              reasonCode: "approved_truth_unavailable",
+            },
+            authority: {
+              available: false,
+            },
+          },
+          reviewQueue: {
+            pending: 0,
+          },
+        },
+      })
+    );
+
+    getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
+    getWebsiteWidgetStatus.mockResolvedValue({
+      state: "connected",
+      readiness: {
+        status: "ready",
+        message: "Website chat is configured with trusted origins and a live widget ID.",
+      },
+      widget: {
+        enabled: true,
+        publicWidgetId: "ww_partial",
+      },
+    });
+
+    getCurrentSetupAssistantSession.mockResolvedValue({
+      session: {
+        id: "session-partial",
+        draftVersion: 3,
+      },
+      setup: {
+        draft: {
+          businessProfile: {
+            websiteUrl: "https://partial.example",
+          },
+          services: [{ key: "svc-1", title: "Consultation" }],
+          contacts: [],
+          hours: [],
+          version: 3,
+        },
+        summary: {
+          hasAnyDraft: true,
+          blockerCount: 3,
+          sectionStatus: {
+            profile: { status: "needs_review" },
+            services: { status: "needs_review" },
+          },
+        },
+        review: {
+          message: "Weak website extraction still needs confirmation before approval.",
+        },
+        websitePrefill: {
+          websiteUrl: "https://partial.example",
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useProductHome(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.launchReady).toBe(false);
+    expect(result.current.truthRuntime.truthReady).toBe(false);
+    expect(result.current.assistant.launchPosture).toBe("setup_needed");
+    expect(result.current.launchPhaseLabel).toBe("Create or continue setup draft");
+  });
+
+  it("does not demote a healthy launch path just because a fresh rescan draft exists", async () => {
+    getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
+    getWebsiteWidgetStatus.mockResolvedValue({
+      state: "connected",
+      readiness: {
+        status: "ready",
+        message: "Website chat is configured with trusted origins and a live widget ID.",
+      },
+      widget: {
+        enabled: true,
+        publicWidgetId: "ww_live",
+      },
+    });
+    getCurrentSetupAssistantSession.mockResolvedValue({
+      session: {
+        id: "session-rescan",
+        draftVersion: 6,
+      },
+      setup: {
+        draft: {
+          businessProfile: {
+            websiteUrl: "https://live.example",
+            companyName: "Live Example",
+          },
+          services: [{ key: "svc-1", title: "Consultation" }],
+          contacts: [{ key: "contact-1", label: "Phone" }],
+          hours: [{ key: "hours-1", label: "Mon-Fri" }],
+          version: 6,
+        },
+        summary: {
+          hasAnyDraft: true,
+          blockerCount: 2,
+          sectionStatus: {
+            profile: { status: "needs_review" },
+          },
+        },
+        review: {
+          message: "Fresh rescan draft still needs review, but approved truth remains live.",
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useProductHome(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.truthRuntime.ready).toBe(true);
+    expect(result.current.launchReady).toBe(true);
+    expect(result.current.assistant.launchPosture).toBe("normal_operation");
   });
 });

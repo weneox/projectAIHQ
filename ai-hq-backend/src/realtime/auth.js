@@ -49,7 +49,7 @@ export function isOperatorRealtimeRole(role = "member") {
   return ["owner", "admin", "operator"].includes(normalizeRole(role));
 }
 
-export function issueRealtimeTicket({
+export function getRealtimeTicketIssueResult({
   userId = "",
   tenantId = "",
   tenantKey = "",
@@ -58,7 +58,11 @@ export function issueRealtimeTicket({
 } = {}) {
   const secret = getRealtimeSecret();
   if (!secret) {
-    throw new Error("realtime auth secret missing");
+    return {
+      ok: false,
+      error: "realtime_auth_not_configured",
+      reason: "realtime auth secret missing",
+    };
   }
 
   const safeUserId = s(userId);
@@ -67,24 +71,55 @@ export function issueRealtimeTicket({
   const safeRole = normalizeRole(role);
 
   if (!safeUserId || !safeTenantId || !safeTenantKey) {
-    throw new Error("realtime ticket scope missing");
+    return {
+      ok: false,
+      error: "realtime_ticket_scope_missing",
+      reason: "realtime ticket scope missing",
+    };
   }
 
-  const now = Math.floor(Date.now() / 1000);
-  const payload = {
-    typ: "realtime_ticket",
-    userId: safeUserId,
-    tenantId: safeTenantId,
-    tenantKey: safeTenantKey,
-    role: safeRole,
-    audience: isOperatorRealtimeRole(safeRole) ? "operator" : "tenant",
-    iat: now,
-    exp: now + Math.max(15, Number(ttlSec || 90)),
-  };
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+      typ: "realtime_ticket",
+      userId: safeUserId,
+      tenantId: safeTenantId,
+      tenantKey: safeTenantKey,
+      role: safeRole,
+      audience: isOperatorRealtimeRole(safeRole) ? "operator" : "tenant",
+      iat: now,
+      exp: now + Math.max(15, Number(ttlSec || 90)),
+    };
 
-  const encodedPayload = base64url(JSON.stringify(payload));
-  const sig = crypto.createHmac("sha256", secret).update(encodedPayload).digest();
-  return `${encodedPayload}.${base64url(sig)}`;
+    const encodedPayload = base64url(JSON.stringify(payload));
+    const sig = crypto.createHmac("sha256", secret).update(encodedPayload).digest();
+
+    return {
+      ok: true,
+      ticket: `${encodedPayload}.${base64url(sig)}`,
+      scope: {
+        userId: safeUserId,
+        tenantId: safeTenantId,
+        tenantKey: safeTenantKey,
+        role: safeRole,
+        audience: payload.audience,
+      },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: "realtime_ticket_issue_failed",
+      reason: s(err?.message || err || "realtime ticket issue failed"),
+    };
+  }
+}
+
+export function issueRealtimeTicket(input = {}) {
+  const result = getRealtimeTicketIssueResult(input);
+  if (!result.ok) {
+    throw new Error(result.reason || result.error || "realtime ticket issue failed");
+  }
+  return result.ticket;
 }
 
 export function verifyRealtimeTicket(ticket = "") {

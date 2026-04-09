@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getOutboundSummary, listInboxThreads } from "../api/inbox.js";
 import {
   getCurrentSetupAssistantSession,
@@ -16,6 +16,7 @@ import {
   useWorkspaceTenantKey,
 } from "../hooks/useWorkspaceTenantKey.js";
 import { SETUP_WIDGET_ROUTE } from "../lib/appEntry.js";
+import { useLaunchSliceRefreshToken } from "../lib/launchSliceRefresh.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -1573,15 +1574,35 @@ const DEFAULT_PRODUCT_HOME_SOURCE_STATUS = {
 export function useProductHome(options = {}) {
   const enabled = options.enabled !== false;
   const workspace = useWorkspaceTenantKey({ enabled });
+  const queryClient = useQueryClient();
+  const productHomeQueryKey = useMemo(
+    () => buildWorkspaceScopedQueryKey(["product-home"], workspace.tenantKey),
+    [workspace.tenantKey]
+  );
+  const refreshToken = useLaunchSliceRefreshToken(
+    workspace.tenantKey,
+    enabled && workspace.ready
+  );
 
   const state = useQuery({
-    queryKey: buildWorkspaceScopedQueryKey(["product-home"], workspace.tenantKey),
+    queryKey: productHomeQueryKey,
     queryFn: loadProductHomePayloads,
     staleTime: 20_000,
     gcTime: 60_000,
     refetchOnWindowFocus: false,
     enabled: enabled && workspace.ready,
   });
+
+  useEffect(() => {
+    if (!enabled || !workspace.ready || refreshToken === 0) return;
+    queryClient.invalidateQueries({ queryKey: productHomeQueryKey });
+  }, [
+    enabled,
+    productHomeQueryKey,
+    queryClient,
+    refreshToken,
+    workspace.ready,
+  ]);
 
   const payloads = useMemo(
     () => state.data?.payloads ?? DEFAULT_PRODUCT_HOME_PAYLOADS,

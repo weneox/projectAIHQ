@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 const useWorkspaceTenantKey = vi.fn();
+const getSettingsTrustView = vi.fn();
 
 vi.mock("../../../api/truth.js", () => ({
   getCanonicalTruthSnapshot: vi.fn().mockResolvedValue({
@@ -237,12 +238,17 @@ vi.mock("../../../api/truth.js", () => ({
   }),
 }));
 
+vi.mock("../../../api/trust.js", () => ({
+  getSettingsTrustView: (...args) => getSettingsTrustView(...args),
+}));
+
 vi.mock("../../../hooks/useWorkspaceTenantKey.js", () => ({
   default: (...args) => useWorkspaceTenantKey(...args),
   useWorkspaceTenantKey: (...args) => useWorkspaceTenantKey(...args),
 }));
 
 import TruthViewerPage from "../../../pages/Truth/TruthViewerPage.jsx";
+import { emitLaunchSliceRefresh } from "../../../lib/launchSliceRefresh.js";
 import {
   getCanonicalTruthSnapshot,
   rollbackTruthVersion,
@@ -258,6 +264,29 @@ beforeEach(() => {
     tenantKey: "acme",
     loading: false,
     ready: true,
+  });
+  getSettingsTrustView.mockResolvedValue({
+    summary: {
+      truth: {
+        latestVersionId: "v3",
+        readiness: {
+          status: "ready",
+          blockers: [],
+        },
+      },
+      runtimeProjection: {
+        readiness: {
+          status: "ready",
+          blockers: [],
+        },
+        health: {
+          usable: true,
+        },
+        authority: {
+          available: true,
+        },
+      },
+    },
   });
 });
 
@@ -291,7 +320,7 @@ describe("Truth viewer smoke", () => {
     expect(screen.getByText("+15551112222")).toBeInTheDocument();
     expect(screen.getByText("https://north.example")).toBeInTheDocument();
     expect(screen.getByText(/reviewer@aihq\.test/i)).toBeInTheDocument();
-    expect(screen.getByText(/^Ready$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Healthy$/i)).toBeInTheDocument();
     expect(
       screen.getAllByText(/https:\/\/north\.example\/about/i).length
     ).toBeGreaterThan(0);
@@ -394,7 +423,7 @@ describe("Truth viewer smoke", () => {
 
     expect(screen.getByText("North Clinic")).toBeInTheDocument();
     expect(screen.getByText(/^Approved$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^Ready$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Healthy$/i)).toBeInTheDocument();
     expect(screen.getAllByText(/^Not available$/i).length).toBeGreaterThan(0);
     expect(
       screen.getByRole("button", { name: /version history/i })
@@ -453,5 +482,78 @@ describe("Truth viewer smoke", () => {
       screen.getByText(/rollback committed, but follow-up is required/i)
     ).toBeInTheDocument();
     expect(screen.getAllByText(/truth version v5/i).length).toBeGreaterThan(0);
+  });
+
+  it("refreshes the approved truth surface after a launch-slice refresh signal", async () => {
+    getCanonicalTruthSnapshot
+      .mockResolvedValueOnce({
+        fields: [
+          {
+            key: "companyName",
+            label: "Company name",
+            value: "North Clinic",
+            provenance: "Website, https://north.example/about - Authority 1",
+          },
+        ],
+        approval: {
+          approvedAt: "2026-03-25T10:00:00.000Z",
+          approvedBy: "reviewer@aihq.test",
+          version: "v3",
+        },
+        history: [],
+        notices: [],
+        hasProvenance: true,
+        approvedTruthUnavailable: false,
+        readiness: {
+          status: "ready",
+          blockers: [],
+        },
+        sourceSummary: {},
+        metadata: {},
+        governance: {},
+        finalizeImpact: {},
+      })
+      .mockResolvedValueOnce({
+        fields: [
+          {
+            key: "companyName",
+            label: "Company name",
+            value: "North Clinic Group",
+            provenance: "Website, https://north.example/about - Authority 1",
+          },
+        ],
+        approval: {
+          approvedAt: "2026-03-26T10:00:00.000Z",
+          approvedBy: "reviewer@aihq.test",
+          version: "v4",
+        },
+        history: [],
+        notices: [],
+        hasProvenance: true,
+        approvedTruthUnavailable: false,
+        readiness: {
+          status: "ready",
+          blockers: [],
+        },
+        sourceSummary: {},
+        metadata: {},
+        governance: {},
+        finalizeImpact: {},
+      });
+
+    renderPage();
+
+    expect(await screen.findByText("North Clinic")).toBeInTheDocument();
+
+    emitLaunchSliceRefresh({
+      tenantKey: "acme",
+      reason: "truth-updated",
+    });
+
+    await waitFor(() => {
+      expect(getCanonicalTruthSnapshot).toHaveBeenCalledTimes(2);
+    });
+
+    expect(await screen.findByText("North Clinic Group")).toBeInTheDocument();
   });
 });
