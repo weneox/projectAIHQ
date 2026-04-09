@@ -25,20 +25,88 @@ function isFresh(timestamp = 0) {
   return Number(timestamp) > 0 && Date.now() - Number(timestamp) < CONTEXT_CACHE_TTL_MS;
 }
 
-function buildAuthFallback(error = null) {
+function isDefinitiveSignedOutReason(reason = "") {
+  const value = s(reason).toLowerCase();
+  return (
+    value === "invalid_session" ||
+    value === "invalid session" ||
+    value === "missing session cookie" ||
+    value === "session not found" ||
+    value === "user inactive" ||
+    value === "unauthorized"
+  );
+}
+
+function looksTransientAuthFailure({ reason = "", error = "" } = {}) {
+  const value = `${s(reason)} ${s(error)}`.toLowerCase();
+  return (
+    value.includes("temporarily unavailable") ||
+    value.includes("session unavailable") ||
+    value.includes("session_lookup_unavailable") ||
+    value.includes("request timeout") ||
+    value.includes("request aborted") ||
+    value.includes("network error") ||
+    value.includes("network request failed") ||
+    value.includes("failed to fetch") ||
+    value.includes("load failed") ||
+    value.includes("unavailable")
+  );
+}
+
+function normalizeAuthContext(rawValue = {}, sourceError = null) {
+  const value = obj(rawValue);
+  const authenticated = value.authenticated === true;
+  const reason = s(sourceError?.message || value.reason);
+  const error = s(value.error);
+
+  const definitiveSignedOut =
+    !authenticated &&
+    (isDefinitiveSignedOutReason(reason) ||
+      (!error && value.authenticated === false && !looksTransientAuthFailure({ reason, error })));
+
+  const transientFailure =
+    !authenticated &&
+    !definitiveSignedOut &&
+    (Boolean(sourceError) ||
+      value.ok === false ||
+      looksTransientAuthFailure({ reason, error }));
+
   return {
-    ok: false,
-    authenticated: false,
-    error: error ? "Auth session unavailable" : null,
-    reason: error ? s(error?.message || error || "auth_context_failed") : "",
-    user: null,
-    identity: null,
-    membership: null,
-    workspace: null,
-    workspaces: [],
-    destination: null,
-    runtime: {},
+    ok: value.ok ?? authenticated,
+    authenticated,
+    error: error || (sourceError ? "Auth session unavailable" : null),
+    reason,
+    user: value.user || null,
+    identity: value.identity || null,
+    membership: value.membership || null,
+    workspace: value.workspace || null,
+    workspaces: Array.isArray(value.workspaces) ? value.workspaces : [],
+    destination: value.destination || null,
+    runtime: obj(value.runtime),
+    transientFailure,
+    unavailable: transientFailure,
+    resolved: authenticated || definitiveSignedOut,
+    raw: value,
   };
+}
+
+function buildAuthFallback(error = null) {
+  return normalizeAuthContext(
+    {
+      ok: false,
+      authenticated: false,
+      error: error ? "Auth session unavailable" : null,
+      reason: error ? s(error?.message || error || "auth_context_failed") : "",
+      user: null,
+      identity: null,
+      membership: null,
+      workspace: null,
+      workspaces: [],
+      destination: null,
+      runtime: {},
+    },
+    error
+  );
 }
 
 function buildBootstrapFallback(error = null) {
@@ -111,6 +179,9 @@ function buildSessionContext(auth = {}, bootstrap = {}) {
       !!(bootstrap && typeof bootstrap === "object" && Object.keys(bootstrap).length),
     auth,
     bootstrap,
+    resolved: !!auth?.resolved,
+    unavailable: !!auth?.unavailable,
+    transientFailure: !!auth?.transientFailure,
   };
 }
 
@@ -202,10 +273,11 @@ export async function getAppAuthContext({ force = false } = {}) {
 
     authContextPromise = loadAppAuthContext()
       .then((value) => {
-        authContextValue = value;
-        lastAuthContextValue = value;
+        const normalized = normalizeAuthContext(value);
+        authContextValue = normalized;
+        lastAuthContextValue = normalized;
         authContextAt = Date.now();
-        return value;
+        return normalized;
       })
       .catch((error) => {
         const fallback = buildAuthFallback(error);

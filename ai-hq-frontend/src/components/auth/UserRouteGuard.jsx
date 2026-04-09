@@ -34,8 +34,18 @@ export default function UserRouteGuard({ children }) {
       }
 
       try {
-        const auth = await getAppAuthContext();
+        const auth = await getAppAuthContext({ force: true });
         if (!alive) return;
+
+        if (auth?.transientFailure || auth?.unavailable || auth?.resolved === false) {
+          setState({
+            loading: false,
+            ok: false,
+            redirectTo: "",
+            failed: true,
+          });
+          return;
+        }
 
         if (!auth?.authenticated) {
           setState({
@@ -56,8 +66,6 @@ export default function UserRouteGuard({ children }) {
           });
           return;
         }
-
-        if (!alive) return;
 
         setState({
           loading: false,
@@ -82,10 +90,7 @@ export default function UserRouteGuard({ children }) {
     return () => {
       alive = false;
     };
-  }, [
-    localWorkspaceEntry,
-    onWorkspaceSelection,
-  ]);
+  }, [localWorkspaceEntry, onWorkspaceSelection]);
 
   if (state.loading) {
     return (

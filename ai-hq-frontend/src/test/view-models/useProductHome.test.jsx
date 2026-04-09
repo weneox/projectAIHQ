@@ -439,6 +439,32 @@ describe("useProductHome", () => {
     });
   });
 
+  it("ignores launch refresh signals for a different tenant", async () => {
+    const queryClient = createQueryClient();
+    const wrapper = createWrapper(queryClient);
+
+    getSetupState.mockResolvedValueOnce({});
+    getSettingsTrustView.mockResolvedValueOnce(createTrustView());
+
+    const { result } = renderHook(() => useProductHome(), {
+      wrapper,
+    });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    emitLaunchSliceRefresh({
+      tenantKey: "globex",
+      reason: "other-tenant-mutation",
+    });
+
+    await new Promise((resolve) => window.setTimeout(resolve, 25));
+
+    expect(getSettingsTrustView).toHaveBeenCalledTimes(1);
+    expect(result.current.truthRuntime.ready).toBe(true);
+  });
+
   it("keeps live launch posture fail-closed when only a partial setup draft exists", async () => {
     getSettingsTrustView.mockResolvedValue(
       createTrustView({

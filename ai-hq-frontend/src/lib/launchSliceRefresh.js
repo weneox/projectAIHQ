@@ -7,14 +7,20 @@ function normalizeTenantKey(value = "") {
 }
 
 export function emitLaunchSliceRefresh({ tenantKey = "", reason = "" } = {}) {
-  if (typeof window === "undefined" || typeof window.dispatchEvent !== "function") {
+  const normalizedTenantKey = normalizeTenantKey(tenantKey);
+
+  if (
+    !normalizedTenantKey ||
+    typeof window === "undefined" ||
+    typeof window.dispatchEvent !== "function"
+  ) {
     return;
   }
 
   window.dispatchEvent(
     new CustomEvent(LAUNCH_SLICE_REFRESH_EVENT, {
       detail: {
-        tenantKey: normalizeTenantKey(tenantKey),
+        tenantKey: normalizedTenantKey,
         reason: String(reason ?? "").trim(),
         issuedAt: Date.now(),
       },

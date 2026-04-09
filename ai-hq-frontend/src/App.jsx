@@ -1,16 +1,23 @@
-import { Suspense, lazy } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Suspense, lazy, useEffect, useState } from "react";
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+} from "react-router-dom";
 import Shell from "./components/layout/Shell.jsx";
 import AdminShell from "./components/admin/AdminShell.jsx";
 import AdminRouteGuard from "./components/admin/AdminRouteGuard.jsx";
 import OperatorRouteGuard from "./components/auth/OperatorRouteGuard.jsx";
 import UserRouteGuard from "./components/auth/UserRouteGuard.jsx";
 import AppEntryRedirect from "./components/auth/AppEntryRedirect.jsx";
+import AppBootSurface from "./components/loading/AppBootSurface.jsx";
 import {
   LoadingSurface,
   PageCanvas,
 } from "./components/ui/AppShellPrimitives.jsx";
 import { INTERNAL_ONLY_APP_ROUTES } from "./lib/appEntry.js";
+import { getAppAuthContext } from "./lib/appSession.js";
 
 const Proposals = lazy(() => import("./pages/Proposals.jsx"));
 const Publish = lazy(() => import("./pages/Publish.jsx"));
@@ -50,6 +57,86 @@ function withSuspense(element) {
   return <Suspense fallback={<RouteFallback />}>{element}</Suspense>;
 }
 
+function GuestRouteGuard({ children }) {
+  const [state, setState] = useState({
+    loading: true,
+    allowGuest: false,
+    unavailable: false,
+  });
+
+  useEffect(() => {
+    let alive = true;
+
+    async function run() {
+      try {
+        const auth = await getAppAuthContext({ force: true });
+        if (!alive) return;
+
+        if (auth?.authenticated) {
+          setState({
+            loading: false,
+            allowGuest: false,
+            unavailable: false,
+          });
+          return;
+        }
+
+        if (auth?.transientFailure || auth?.unavailable || auth?.resolved === false) {
+          setState({
+            loading: false,
+            allowGuest: false,
+            unavailable: true,
+          });
+          return;
+        }
+
+        setState({
+          loading: false,
+          allowGuest: true,
+          unavailable: false,
+        });
+      } catch {
+        if (!alive) return;
+        setState({
+          loading: false,
+          allowGuest: false,
+          unavailable: true,
+        });
+      }
+    }
+
+    run();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (state.loading) {
+    return (
+      <AppBootSurface
+        label="Checking account"
+        detail="Looking for an active session before we show this page."
+      />
+    );
+  }
+
+  if (state.unavailable) {
+    return (
+      <AppBootSurface
+        label="Authentication unavailable"
+        detail="We could not verify your session right now."
+      />
+    );
+  }
+
+  if (!state.allowGuest) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
+
 function renderInternalRouteRedirects() {
   return (
     <>
@@ -75,11 +162,15 @@ export default function App() {
     <UserRouteGuard>{withSuspense(<SelectWorkspace />)}</UserRouteGuard>
   );
 
+  const loginEntryElement = (
+    <GuestRouteGuard>{withSuspense(<Login />)}</GuestRouteGuard>
+  );
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={withSuspense(<Login />)} />
-        <Route path="/signup" element={withSuspense(<Login />)} />
+        <Route path="/login" element={loginEntryElement} />
+        <Route path="/signup" element={loginEntryElement} />
         <Route path="/verify-email" element={withSuspense(<VerifyEmail />)} />
         <Route
           path="/widget/website-chat"

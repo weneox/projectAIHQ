@@ -5,12 +5,17 @@ import "@testing-library/jest-dom/vitest";
 import { describe, expect, it, beforeEach, vi } from "vitest";
 
 import FloatingAiWidget from "../../../components/layout/FloatingAiWidget.jsx";
-import { getCurrentSetupReview, importWebsiteForSetup } from "../../../api/setup.js";
+import {
+  getCurrentSetupAssistantSession,
+  getCurrentSetupReview,
+  importWebsiteForSetup,
+} from "../../../api/setup.js";
 
 const useWorkspaceTenantKey = vi.fn();
 
 vi.mock("../../../api/setup.js", () => ({
   finalizeSetupAssistantSession: vi.fn(),
+  getCurrentSetupAssistantSession: vi.fn(),
   getCurrentSetupReview: vi.fn(),
   importWebsiteForSetup: vi.fn(),
   sendSetupAssistantMessage: vi.fn(),
@@ -177,6 +182,44 @@ function createQueryClient() {
   });
 }
 
+function renderControlledWidget(
+  assistant = createAssistant(),
+  { queryClient = null, open = true } = {}
+) {
+  const client = queryClient || createQueryClient();
+  const navigate = vi.fn();
+  const onOpenChange = vi.fn();
+  const view = render(
+    <QueryClientProvider client={client}>
+      <FloatingAiWidget
+        open={open}
+        onOpenChange={onOpenChange}
+        onNavigate={navigate}
+        assistant={assistant}
+      />
+    </QueryClientProvider>
+  );
+
+  return {
+    client,
+    navigate,
+    onOpenChange,
+    rerenderWidget(nextAssistant = assistant, nextOptions = {}) {
+      view.rerender(
+        <QueryClientProvider client={client}>
+          <FloatingAiWidget
+            open={nextOptions.open ?? open}
+            onOpenChange={onOpenChange}
+            onNavigate={navigate}
+            assistant={nextAssistant}
+          />
+        </QueryClientProvider>
+      );
+    },
+    ...view,
+  };
+}
+
 function renderWidget(assistant = createAssistant(), { queryClient = null } = {}) {
   const client = queryClient || createQueryClient();
   const navigate = vi.fn();
@@ -210,6 +253,7 @@ describe("FloatingAiWidget", () => {
       loading: false,
       ready: true,
     });
+    vi.mocked(getCurrentSetupAssistantSession).mockResolvedValue(null);
     vi.mocked(getCurrentSetupReview).mockResolvedValue({
       review: {
         reviewDebug: {},
@@ -331,5 +375,136 @@ describe("FloatingAiWidget", () => {
     await waitFor(() => {
       expect(getCurrentSetupReview).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("does not reuse setup-session cache across workspaces", async () => {
+    const queryClient = createQueryClient();
+
+    useWorkspaceTenantKey.mockReturnValue({
+      tenantKey: "acme",
+      loading: false,
+      ready: true,
+    });
+    vi.mocked(getCurrentSetupAssistantSession).mockResolvedValueOnce({
+      session: {
+        id: "session-acme",
+      },
+      setup: {
+        websitePrefill: {
+          websiteUrl: "https://lunasmile.az",
+        },
+      },
+    });
+
+    const first = renderControlledWidget(createAssistant(), {
+      queryClient,
+      open: true,
+    });
+
+    await waitFor(() => {
+      expect(getCurrentSetupAssistantSession).toHaveBeenCalledTimes(1);
+    });
+
+    first.unmount();
+
+    useWorkspaceTenantKey.mockReturnValue({
+      tenantKey: "globex",
+      loading: false,
+      ready: true,
+    });
+    vi.mocked(getCurrentSetupAssistantSession).mockResolvedValueOnce({
+      session: {
+        id: "session-globex",
+      },
+      setup: {
+        websitePrefill: {
+          websiteUrl: "https://globex.example",
+        },
+      },
+    });
+
+    renderControlledWidget(createAssistant(), {
+      queryClient,
+      open: true,
+    });
+
+    await waitFor(() => {
+      expect(getCurrentSetupAssistantSession).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("drops stale setup review content while the widget switches tenants", async () => {
+    const queryClient = createQueryClient();
+    const nextSessionPromise = new Promise(() => {});
+    const nextReviewPromise = new Promise(() => {});
+
+    vi.mocked(getCurrentSetupAssistantSession).mockResolvedValueOnce({
+      session: {
+        id: "session-acme",
+      },
+      setup: {
+        websitePrefill: {
+          websiteUrl: "https://lunasmile.az",
+        },
+      },
+    });
+    vi.mocked(getCurrentSetupReview).mockResolvedValueOnce(
+      createWebsiteReviewPayload()
+    );
+
+    const view = renderControlledWidget(createAssistant(), {
+      queryClient,
+      open: true,
+    });
+
+    expect(
+      await screen.findByRole("region", { name: "Website knowledge review" })
+    ).toBeInTheDocument();
+
+    useWorkspaceTenantKey.mockReturnValue({
+      tenantKey: "globex",
+      loading: false,
+      ready: true,
+    });
+    vi.mocked(getCurrentSetupAssistantSession).mockImplementationOnce(
+      () => nextSessionPromise
+    );
+    vi.mocked(getCurrentSetupReview).mockImplementationOnce(() => nextReviewPromise);
+
+    view.rerenderWidget(
+      createAssistant({
+        title: "Loading AI setup",
+        statusLabel: "Loading",
+        summary: "Loading the current workspace setup state.",
+        session: {},
+        draft: {
+          businessProfile: {},
+          services: [],
+          contacts: [],
+          hours: [],
+          pricingPosture: {},
+          handoffRules: {},
+          sourceMetadata: {},
+          assistantState: {},
+          version: 0,
+          updatedAt: null,
+        },
+        websitePrefill: {
+          supported: true,
+          status: "awaiting_input",
+          websiteUrl: "",
+        },
+      }),
+      { open: true }
+    );
+
+    await waitFor(() => {
+      expect(getCurrentSetupAssistantSession).toHaveBeenCalledTimes(2);
+    });
+
+    expect(
+      screen.queryByRole("region", { name: "Website knowledge review" })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("https://lunasmile.az")).not.toBeInTheDocument();
   });
 });

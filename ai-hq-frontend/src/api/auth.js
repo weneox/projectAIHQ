@@ -2,7 +2,8 @@
 
 import { apiGet, apiPost } from "./client.js";
 
-const AUTH_TIMEOUT_MS = 4000;
+const AUTH_ACTION_TIMEOUT_MS = 4000;
+const AUTH_SESSION_TIMEOUT_MS = 10000;
 
 export async function loginUser({
   email,
@@ -18,7 +19,7 @@ export async function loginUser({
       tenantKey,
       accountSelectionToken,
     },
-    { timeoutMs: AUTH_TIMEOUT_MS }
+    { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
   );
 }
 
@@ -40,7 +41,7 @@ export async function signupUser({
       tenantKey,
       websiteUrl,
     },
-    { timeoutMs: AUTH_TIMEOUT_MS }
+    { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
   );
 }
 
@@ -58,12 +59,12 @@ export async function selectWorkspaceUser({
       tenantKey,
       accountSelectionToken,
     },
-    { timeoutMs: AUTH_TIMEOUT_MS }
+    { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
   );
 }
 
 export async function logoutUser() {
-  return apiPost("/api/auth/logout", {}, { timeoutMs: AUTH_TIMEOUT_MS });
+  return apiPost("/api/auth/logout", {}, { timeoutMs: AUTH_ACTION_TIMEOUT_MS });
 }
 
 export async function switchWorkspaceUser({ switchToken }) {
@@ -72,30 +73,32 @@ export async function switchWorkspaceUser({ switchToken }) {
     {
       switchToken,
     },
-    { timeoutMs: AUTH_TIMEOUT_MS }
+    { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
   );
 }
 
 export async function getAuthMe(options = {}) {
   return apiGet("/api/auth/me", {
-    allowStatuses: [401],
-    timeoutMs: AUTH_TIMEOUT_MS,
+    allowStatuses: [401, 503],
+    timeoutMs: AUTH_SESSION_TIMEOUT_MS,
     ...options,
   });
 }
 
 export async function getAdminAuthMe() {
-  return apiGet("/api/admin-auth/me", { timeoutMs: AUTH_TIMEOUT_MS });
+  return apiGet("/api/admin-auth/me", {
+    timeoutMs: AUTH_SESSION_TIMEOUT_MS,
+  });
 }
 
 export async function loginAdminAuth(passcode) {
   return apiPost(
     "/api/admin-auth/login",
     { passcode },
-    { timeoutMs: AUTH_TIMEOUT_MS }
+    { timeoutMs: AUTH_ACTION_TIMEOUT_MS }
   );
 }
 
 export async function logoutAdminAuth() {
-  return apiPost("/api/admin-auth/logout", {}, { timeoutMs: AUTH_TIMEOUT_MS });
+  return apiPost("/api/admin-auth/logout", {}, { timeoutMs: AUTH_ACTION_TIMEOUT_MS });
 }

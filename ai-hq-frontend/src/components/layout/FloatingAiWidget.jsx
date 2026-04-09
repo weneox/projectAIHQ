@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import {
   finalizeSetupAssistantSession,
+  getCurrentSetupAssistantSession,
   getCurrentSetupReview,
   importWebsiteForSetup,
   sendSetupAssistantMessage,
@@ -112,6 +113,15 @@ function buildDefaultAssistant() {
     setupNeeded: false,
     launchChannel: {},
     truthRuntime: {},
+  };
+}
+
+function buildLoadingAssistantSeed() {
+  return {
+    ...buildDefaultAssistant(),
+    title: "Loading AI setup",
+    statusLabel: "Loading",
+    summary: "Loading the current workspace setup state.",
   };
 }
 
@@ -1400,28 +1410,52 @@ export default function FloatingAiWidget({
   const [finalizing, setFinalizing] = useState(false);
   const [importingWebsite, setImportingWebsite] = useState(false);
   const [importError, setImportError] = useState("");
+  const lastTenantKeyRef = useRef("");
 
   const [supportMessages, setSupportMessages] = useState(
     buildSupportWelcomeFromAssistant(assistantRef.current)
   );
   const [supportInput, setSupportInput] = useState("");
   const [supportBusy, setSupportBusy] = useState(false);
-  const productHomeQueryKey = buildWorkspaceScopedQueryKey(
-    ["product-home"],
-    workspace.tenantKey
+  const productHomeQueryKey = useMemo(
+    () => buildWorkspaceScopedQueryKey(["product-home"], workspace.tenantKey),
+    [workspace.tenantKey]
   );
-  const setupReviewQueryKey = buildWorkspaceScopedQueryKey(
-    ["setup-review-current", "widget"],
-    workspace.tenantKey
+  const setupAssistantSessionQueryKey = useMemo(
+    () =>
+      buildWorkspaceScopedQueryKey(
+        ["setup-assistant-session-current", "widget"],
+        workspace.tenantKey
+      ),
+    [workspace.tenantKey]
   );
-  const telegramStatusQueryKey = buildWorkspaceScopedQueryKey(
-    ["telegram-channel-status"],
-    workspace.tenantKey
+  const setupReviewQueryKey = useMemo(
+    () =>
+      buildWorkspaceScopedQueryKey(
+        ["setup-review-current", "widget"],
+        workspace.tenantKey
+      ),
+    [workspace.tenantKey]
   );
-  const metaStatusQueryKey = buildWorkspaceScopedQueryKey(
-    ["meta-channel-status"],
-    workspace.tenantKey
+  const telegramStatusQueryKey = useMemo(
+    () =>
+      buildWorkspaceScopedQueryKey(
+        ["telegram-channel-status"],
+        workspace.tenantKey
+      ),
+    [workspace.tenantKey]
   );
+  const metaStatusQueryKey = useMemo(
+    () => buildWorkspaceScopedQueryKey(["meta-channel-status"], workspace.tenantKey),
+    [workspace.tenantKey]
+  );
+  const sessionQuery = useQuery({
+    queryKey: setupAssistantSessionQueryKey,
+    queryFn: () => getCurrentSetupAssistantSession(),
+    enabled: panelOpen && workspace.ready,
+    retry: false,
+    staleTime: 30_000,
+  });
   const reviewQuery = useQuery({
     queryKey: setupReviewQueryKey,
     queryFn: () => getCurrentSetupReview({ eventLimit: 12 }),
@@ -1429,16 +1463,54 @@ export default function FloatingAiWidget({
     retry: false,
     staleTime: 30_000,
   });
+  const baseAssistant = useMemo(() => {
+    const sessionAssistant = normalizeAssistantState(sessionQuery.data);
+    if (s(sessionAssistant.session?.id)) {
+      return sessionAssistant;
+    }
+    return normalizeAssistantState(assistant);
+  }, [assistant, sessionQuery.data]);
 
   useEffect(() => {
-    const normalized = normalizeAssistantState(assistant);
-    assistantRef.current = normalized;
-    setClientAssistant(normalized);
-  }, [assistant]);
+    assistantRef.current = baseAssistant;
+    setClientAssistant(baseAssistant);
+  }, [baseAssistant]);
 
   useEffect(() => {
     assistantRef.current = clientAssistant;
   }, [clientAssistant]);
+
+  useEffect(() => {
+    const nextTenantKey = lower(workspace.tenantKey);
+
+    if (!nextTenantKey) {
+      lastTenantKeyRef.current = "";
+      return;
+    }
+
+    if (!lastTenantKeyRef.current) {
+      lastTenantKeyRef.current = nextTenantKey;
+      return;
+    }
+
+    if (lastTenantKeyRef.current === nextTenantKey) {
+      return;
+    }
+
+    lastTenantKeyRef.current = nextTenantKey;
+
+    const loadingAssistant = normalizeAssistantState(buildLoadingAssistantSeed());
+    assistantRef.current = loadingAssistant;
+    setClientAssistant(loadingAssistant);
+    setSurfaceMode("setup");
+    setSaving(false);
+    setFinalizing(false);
+    setImportingWebsite(false);
+    setImportError("");
+    setSupportMessages(buildSupportWelcomeFromAssistant(loadingAssistant));
+    setSupportInput("");
+    setSupportBusy(false);
+  }, [workspace.tenantKey]);
 
     const supportWelcomeMessages = useMemo(
     () => buildSupportWelcomeFromAssistant(clientAssistant),
@@ -1475,10 +1547,47 @@ export default function FloatingAiWidget({
 
   if (hidden) return null;
 
+  async function refreshWidgetWorkspaceState({
+    includeChannelStatus = false,
+    emitReason = "",
+  } = {}) {
+    const refreshTasks = [
+      queryClient.invalidateQueries({ queryKey: productHomeQueryKey }),
+      queryClient.invalidateQueries({ queryKey: setupAssistantSessionQueryKey }),
+      queryClient.invalidateQueries({ queryKey: setupReviewQueryKey }),
+    ];
+
+    if (includeChannelStatus) {
+      refreshTasks.push(
+        queryClient.invalidateQueries({ queryKey: telegramStatusQueryKey }),
+        queryClient.invalidateQueries({ queryKey: metaStatusQueryKey })
+      );
+    }
+
+    await Promise.all(refreshTasks);
+
+    if (emitReason) {
+      emitLaunchSliceRefresh({
+        tenantKey: workspace.tenantKey,
+        reason: emitReason,
+      });
+    }
+  }
+
   async function ensureSession() {
     const current = assistantRef.current;
     if (s(current.session?.id)) {
       return current;
+    }
+
+    const cachedSession = normalizeAssistantState(
+      queryClient.getQueryData(setupAssistantSessionQueryKey)
+    );
+
+    if (s(cachedSession.session?.id)) {
+      assistantRef.current = cachedSession;
+      setClientAssistant(cachedSession);
+      return cachedSession;
     }
 
     const response = await startSetupAssistantSession();
@@ -1488,6 +1597,7 @@ export default function FloatingAiWidget({
       nextAssistant = buildAssistantFromApi(prev, response);
       return nextAssistant;
     });
+    queryClient.setQueryData(setupAssistantSessionQueryKey, response);
 
     return nextAssistant || assistantRef.current;
   }
@@ -1502,11 +1612,9 @@ export default function FloatingAiWidget({
       const response = await updateCurrentSetupAssistantDraft(payload);
 
       setClientAssistant((prev) => buildAssistantFromApi(prev, response));
+      queryClient.setQueryData(setupAssistantSessionQueryKey, response);
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: productHomeQueryKey }),
-        queryClient.invalidateQueries({ queryKey: setupReviewQueryKey }),
-      ]);
+      await refreshWidgetWorkspaceState();
       return response;
     } finally {
       setSaving(false);
@@ -1527,11 +1635,9 @@ export default function FloatingAiWidget({
       });
 
       setClientAssistant((prev) => buildAssistantFromApi(prev, response));
+      queryClient.setQueryData(setupAssistantSessionQueryKey, response);
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: productHomeQueryKey }),
-        queryClient.invalidateQueries({ queryKey: setupReviewQueryKey }),
-      ]);
+      await refreshWidgetWorkspaceState();
       return response;
     } finally {
       setSaving(false);
@@ -1553,15 +1659,9 @@ export default function FloatingAiWidget({
         );
       }
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: productHomeQueryKey }),
-        queryClient.invalidateQueries({ queryKey: setupReviewQueryKey }),
-        queryClient.invalidateQueries({ queryKey: telegramStatusQueryKey }),
-        queryClient.invalidateQueries({ queryKey: metaStatusQueryKey }),
-      ]);
-      emitLaunchSliceRefresh({
-        tenantKey: workspace.tenantKey,
-        reason: "setup-finalized",
+      await refreshWidgetWorkspaceState({
+        includeChannelStatus: true,
+        emitReason: "setup-finalized",
       });
 
       setClientAssistant((prev) =>
@@ -1620,10 +1720,7 @@ export default function FloatingAiWidget({
         );
       }
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: productHomeQueryKey }),
-        queryClient.invalidateQueries({ queryKey: setupReviewQueryKey }),
-      ]);
+      await refreshWidgetWorkspaceState();
 
       return response;
     } catch (error) {

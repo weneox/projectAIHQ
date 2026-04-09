@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Building2,
@@ -11,19 +11,7 @@ import {
 } from "lucide-react";
 
 import { loginUser, selectWorkspaceUser, signupUser } from "../api/auth.js";
-import {
-  clearAppSessionContext,
-  getAppAuthContext,
-  getAppBootstrapContext,
-} from "../lib/appSession.js";
-import {
-  PRODUCT_HOME_ROUTE,
-  WORKSPACE_SELECTION_ROUTE,
-  hasMultipleWorkspaceChoices,
-  resolveAuthenticatedLanding,
-} from "../lib/appEntry.js";
-import { isWelcomeIdentityComplete } from "../lib/welcomeIdentity.js";
-import AppBootSurface from "../components/loading/AppBootSurface.jsx";
+import { clearAppSessionContext } from "../lib/appSession.js";
 
 import AIVisual from "../assets/channels/AI.png";
 import GmailIconAsset from "../assets/channels/gmail.svg";
@@ -60,10 +48,6 @@ function cn(...classes) {
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function ignoreError() {
-  return undefined;
 }
 
 function getTenantKeyFromHost() {
@@ -142,13 +126,6 @@ function normalizeAccountChoices(error) {
     [];
 
   return Array.isArray(accounts) ? accounts : [];
-}
-
-function resolvePostAuthTarget({ auth = {}, payload = {} } = {}) {
-  return resolveAuthenticatedLanding({
-    auth,
-    bootstrap: payload,
-  });
 }
 
 function InputResetStyles() {
@@ -348,7 +325,6 @@ export default function Login() {
   );
 
   const [loading, setLoading] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
   const [focusedField, setFocusedField] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -378,58 +354,6 @@ export default function Login() {
     }
   }
 
-  useEffect(() => {
-    let alive = true;
-
-    async function run() {
-      try {
-        const auth = await getAppAuthContext();
-        if (!alive) return;
-
-        if (!auth?.authenticated) {
-          setCheckingSession(false);
-          return;
-        }
-
-        if (hasMultipleWorkspaceChoices(auth)) {
-          navigate(WORKSPACE_SELECTION_ROUTE, { replace: true });
-          return;
-        }
-
-        let bootstrap = null;
-        try {
-          bootstrap = await getAppBootstrapContext();
-        } catch {
-          ignoreError();
-        }
-
-        if (!alive) return;
-
-        if (!isWelcomeIdentityComplete({ auth, bootstrap })) {
-          navigate("/welcome", { replace: true });
-          return;
-        }
-
-        navigate(
-          resolveAuthenticatedLanding({
-            auth,
-            bootstrap,
-          }),
-          { replace: true }
-        );
-      } catch {
-        if (!alive) return;
-        setCheckingSession(false);
-      }
-    }
-
-    run();
-
-    return () => {
-      alive = false;
-    };
-  }, [navigate]);
-
   async function handleLogin() {
     const email = s(form.email);
     const password = String(form.password || "");
@@ -445,55 +369,24 @@ export default function Login() {
       return;
     }
 
-    const response = usingInlineWorkspaceSelection
-      ? await selectWorkspaceUser({
-          email,
-          password,
-          tenantKey: activeTenantKey || undefined,
-          accountSelectionToken: selectedAccountToken || undefined,
-        })
-      : await loginUser({
-          email,
-          password,
-          tenantKey: activeTenantKey || undefined,
-          accountSelectionToken: undefined,
-        });
+    if (usingInlineWorkspaceSelection) {
+      await selectWorkspaceUser({
+        email,
+        password,
+        tenantKey: activeTenantKey || undefined,
+        accountSelectionToken: selectedAccountToken || undefined,
+      });
+    } else {
+      await loginUser({
+        email,
+        password,
+        tenantKey: activeTenantKey || undefined,
+        accountSelectionToken: undefined,
+      });
+    }
 
     clearAppSessionContext();
-
-    if (usingInlineWorkspaceSelection) {
-      navigate(PRODUCT_HOME_ROUTE, { replace: true });
-      return;
-    }
-
-    let auth = null;
-    let bootstrap = null;
-
-    try {
-      auth = await getAppAuthContext({ force: true });
-
-      if (hasMultipleWorkspaceChoices(auth)) {
-        navigate(WORKSPACE_SELECTION_ROUTE, { replace: true });
-        return;
-      }
-
-      bootstrap = await getAppBootstrapContext({ force: true }).catch(() => ({}));
-    } catch {
-      ignoreError();
-    }
-
-    if (!isWelcomeIdentityComplete({ auth, bootstrap })) {
-      navigate("/welcome", { replace: true });
-      return;
-    }
-
-    navigate(
-      resolvePostAuthTarget({
-        auth,
-        payload: bootstrap && Object.keys(bootstrap).length ? bootstrap : response,
-      }),
-      { replace: true }
-    );
+    navigate("/", { replace: true });
   }
 
   async function handleSignup() {
@@ -563,15 +456,6 @@ export default function Login() {
 
   function onSocialAuth(provider) {
     setError(`${provider} sign-in is not enabled yet.`);
-  }
-
-  if (checkingSession) {
-    return (
-      <AppBootSurface
-        label="Checking account"
-        detail="Looking for an active session before we show the sign-in screen."
-      />
-    );
   }
 
   return (
