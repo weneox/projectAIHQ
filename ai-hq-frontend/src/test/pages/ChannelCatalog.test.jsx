@@ -8,8 +8,14 @@ import { emitLaunchSliceRefresh } from "../../lib/launchSliceRefresh.js";
 
 const navigate = vi.fn();
 const getMetaChannelStatus = vi.fn();
+const getMetaConnectUrl = vi.fn();
+const disconnectMetaChannel = vi.fn();
+const selectMetaChannelCandidate = vi.fn();
 const getTelegramChannelStatus = vi.fn();
+const connectTelegramChannel = vi.fn();
+const disconnectTelegramChannel = vi.fn();
 const getWebsiteWidgetStatus = vi.fn();
+const saveWebsiteWidgetConfig = vi.fn();
 const getSettingsTrustView = vi.fn();
 const useWorkspaceTenantKey = vi.fn();
 
@@ -29,8 +35,14 @@ vi.mock("react-router-dom", async () => {
 
 vi.mock("../../api/channelConnect.js", () => ({
   getMetaChannelStatus: (...args) => getMetaChannelStatus(...args),
+  getMetaConnectUrl: (...args) => getMetaConnectUrl(...args),
+  disconnectMetaChannel: (...args) => disconnectMetaChannel(...args),
+  selectMetaChannelCandidate: (...args) => selectMetaChannelCandidate(...args),
   getTelegramChannelStatus: (...args) => getTelegramChannelStatus(...args),
+  connectTelegramChannel: (...args) => connectTelegramChannel(...args),
+  disconnectTelegramChannel: (...args) => disconnectTelegramChannel(...args),
   getWebsiteWidgetStatus: (...args) => getWebsiteWidgetStatus(...args),
+  saveWebsiteWidgetConfig: (...args) => saveWebsiteWidgetConfig(...args),
 }));
 
 vi.mock("../../api/trust.js", () => ({
@@ -40,6 +52,11 @@ vi.mock("../../api/trust.js", () => ({
 vi.mock("../../hooks/useWorkspaceTenantKey.js", () => ({
   default: (...args) => useWorkspaceTenantKey(...args),
   useWorkspaceTenantKey: (...args) => useWorkspaceTenantKey(...args),
+  buildWorkspaceScopedQueryKey: (baseKey, tenantKey) => [
+    ...(Array.isArray(baseKey) ? baseKey : [baseKey]),
+    "workspace",
+    String(tenantKey || "").trim().toLowerCase(),
+  ],
 }));
 
 function createQueryClient() {
@@ -228,8 +245,14 @@ beforeEach(() => {
   };
   useWorkspaceTenantKey.mockImplementation(() => workspaceScope);
   getMetaChannelStatus.mockResolvedValue(createMetaStatus());
+  getMetaConnectUrl.mockResolvedValue({ ok: true, url: "https://example.test/meta" });
+  disconnectMetaChannel.mockResolvedValue({ ok: true });
+  selectMetaChannelCandidate.mockResolvedValue({ ok: true, connected: true });
   getTelegramChannelStatus.mockResolvedValue(createTelegramStatus());
+  connectTelegramChannel.mockResolvedValue({ ok: true, connected: true });
+  disconnectTelegramChannel.mockResolvedValue({ ok: true, disconnected: true });
   getWebsiteWidgetStatus.mockResolvedValue(createWebsiteStatus());
+  saveWebsiteWidgetConfig.mockResolvedValue(createWebsiteStatus());
   getSettingsTrustView.mockResolvedValue(createTrustView());
 });
 
@@ -306,7 +329,9 @@ describe("ChannelCatalog", () => {
       expect(getSettingsTrustView).toHaveBeenCalledTimes(2);
     });
 
-    expect(await screen.findByText(/approval required/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryAllByText(/approval required/i).length).toBeGreaterThan(0);
+    });
   });
 
   it("drops the previous tenant posture while the next tenant is still loading", async () => {
@@ -428,6 +453,8 @@ describe("ChannelCatalog", () => {
       })
     );
 
-    expect(await screen.findByText(/connect required/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryAllByText(/connect required/i).length).toBeGreaterThan(0);
+    });
   });
 });
