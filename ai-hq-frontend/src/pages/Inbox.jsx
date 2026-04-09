@@ -43,6 +43,14 @@ function shouldRenderSurfaceBanner(surface) {
   );
 }
 
+const EMPTY_READINESS_STATE = {
+  tenantKey: "",
+  trust: null,
+  meta: null,
+  telegram: null,
+  website: null,
+};
+
 export default function Inbox() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -50,40 +58,37 @@ export default function Inbox() {
   const workspace = useWorkspaceTenantKey();
 
   const [wsState, setWsState] = useState("idle");
-  const [operatorName, setOperatorName] = useState("");
   const [detailOpen, setDetailOpen] = useState(false);
-  const [readinessState, setReadinessState] = useState({
-    loading: true,
-    trust: null,
-    meta: null,
-    telegram: null,
-    website: null,
+  const [operatorState, setOperatorState] = useState({
+    tenantKey: "",
+    name: "",
   });
+  const [resolvedReadinessState, setResolvedReadinessState] =
+    useState(EMPTY_READINESS_STATE);
 
   const requestedThreadId = String(
     location.state?.selectedThreadId || searchParams.get("threadId") || ""
   ).trim();
 
   useEffect(() => {
-    let alive = true;
+    if (!workspace.ready) return undefined;
 
-    if (!workspace.ready) {
-      setOperatorName("");
-      return () => {
-        alive = false;
-      };
-    }
+    let alive = true;
 
     getAppSessionContext()
       .then((next) => {
         if (!alive) return;
-        setOperatorName(
-          String(next?.actorName || "operator").trim() || "operator"
-        );
+        setOperatorState({
+          tenantKey: workspace.tenantKey,
+          name: String(next?.actorName || "operator").trim() || "operator",
+        });
       })
       .catch(() => {
         if (!alive) return;
-        setOperatorName("operator");
+        setOperatorState({
+          tenantKey: workspace.tenantKey,
+          name: "operator",
+        });
       });
 
     return () => {
@@ -92,21 +97,9 @@ export default function Inbox() {
   }, [workspace.ready, workspace.tenantKey]);
 
   useEffect(() => {
+    if (!workspace.ready) return undefined;
+
     let alive = true;
-
-    setReadinessState({
-      loading: true,
-      trust: null,
-      meta: null,
-      telegram: null,
-      website: null,
-    });
-
-    if (!workspace.ready) {
-      return () => {
-        alive = false;
-      };
-    }
 
     Promise.allSettled([
       getSettingsTrustView({ limit: 4 }),
@@ -116,8 +109,8 @@ export default function Inbox() {
     ])
       .then((results) => {
         if (!alive) return;
-        setReadinessState({
-          loading: false,
+        setResolvedReadinessState({
+          tenantKey: workspace.tenantKey,
           trust:
             results[0].status === "fulfilled"
               ? buildTruthOperationalState(results[0].value)
@@ -138,8 +131,8 @@ export default function Inbox() {
       })
       .catch(() => {
         if (!alive) return;
-        setReadinessState({
-          loading: false,
+        setResolvedReadinessState({
+          tenantKey: workspace.tenantKey,
           trust: buildTruthOperationalState(null),
           meta: buildMetaLaunchChannelState({}),
           telegram: buildTelegramLaunchChannelState({}),
@@ -151,6 +144,42 @@ export default function Inbox() {
       alive = false;
     };
   }, [workspace.ready, workspace.tenantKey]);
+
+  const operatorName = workspace.ready
+    ? (operatorState.tenantKey === workspace.tenantKey
+        ? operatorState.name
+        : "operator") || "operator"
+    : "";
+
+  const readinessState = useMemo(() => {
+    if (!workspace.ready) {
+      return {
+        loading: false,
+        trust: null,
+        meta: null,
+        telegram: null,
+        website: null,
+      };
+    }
+
+    if (resolvedReadinessState.tenantKey !== workspace.tenantKey) {
+      return {
+        loading: true,
+        trust: null,
+        meta: null,
+        telegram: null,
+        website: null,
+      };
+    }
+
+    return {
+      loading: false,
+      trust: resolvedReadinessState.trust,
+      meta: resolvedReadinessState.meta,
+      telegram: resolvedReadinessState.telegram,
+      website: resolvedReadinessState.website,
+    };
+  }, [workspace.ready, workspace.tenantKey, resolvedReadinessState]);
 
   const {
     threads,

@@ -19,47 +19,42 @@ export function buildWorkspaceScopedQueryKey(baseKey, tenantKey) {
 }
 
 export function useWorkspaceTenantKey({ enabled = true } = {}) {
-  const [tenantKey, setTenantKey] = useState(() => getCachedWorkspaceTenantKey());
-  const [loading, setLoading] = useState(
-    () => enabled && !getCachedWorkspaceTenantKey()
-  );
+  const [sessionState, setSessionState] = useState(() => ({
+    fetched: false,
+    tenantKey: "",
+  }));
+
+  const cachedTenantKey = getCachedWorkspaceTenantKey();
+  const tenantKey = enabled
+    ? normalizeTenantKey(cachedTenantKey || sessionState.tenantKey)
+    : "";
+  const loading = enabled && !cachedTenantKey && !sessionState.fetched;
 
   useEffect(() => {
+    if (!enabled || cachedTenantKey) return undefined;
+
     let alive = true;
-
-    if (!enabled) {
-      setLoading(false);
-      return () => {
-        alive = false;
-      };
-    }
-
-    const cachedTenantKey = getCachedWorkspaceTenantKey();
-
-    if (cachedTenantKey) {
-      setTenantKey(cachedTenantKey);
-      setLoading(false);
-    } else {
-      setTenantKey("");
-      setLoading(true);
-    }
 
     getAppSessionContext()
       .then((session) => {
         if (!alive) return;
-        setTenantKey(normalizeTenantKey(session?.tenantKey));
-        setLoading(false);
+        setSessionState({
+          fetched: true,
+          tenantKey: normalizeTenantKey(session?.tenantKey),
+        });
       })
       .catch(() => {
         if (!alive) return;
-        setTenantKey("");
-        setLoading(false);
+        setSessionState({
+          fetched: true,
+          tenantKey: "",
+        });
       });
 
     return () => {
       alive = false;
     };
-  }, [enabled]);
+  }, [enabled, cachedTenantKey]);
 
   return {
     tenantKey,
