@@ -2,6 +2,14 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { Outlet } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const { getAppAuthContextMock } = vi.hoisted(() => ({
+  getAppAuthContextMock: vi.fn(),
+}));
+
+vi.mock("../lib/appSession.js", () => ({
+  getAppAuthContext: getAppAuthContextMock,
+}));
+
 vi.mock("../components/layout/Shell.jsx", () => ({
   default: function ShellMock() {
     return (
@@ -60,11 +68,19 @@ import App from "../App.jsx";
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
 });
 
 describe("App shell smoke", () => {
   beforeEach(() => {
     window.history.replaceState({}, "", "/");
+
+    getAppAuthContextMock.mockResolvedValue({
+      authenticated: false,
+      resolved: true,
+      transientFailure: false,
+      unavailable: false,
+    });
   });
 
   it("renders the root app entry surface", async () => {
