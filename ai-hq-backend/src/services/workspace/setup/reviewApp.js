@@ -1,4 +1,4 @@
-import { buildSetupStatus } from "../setup.js";
+import { buildSetupState } from "../setup.js";
 import {
   buildFinalizeProtectionInfo,
   buildReviewConcurrencyInfo,
@@ -240,7 +240,7 @@ export async function finalizeSetupReviewComposition(
   const getCurrentSetupReview = deps.getCurrentSetupReview || defaultGetCurrentSetupReview;
   const finalizeSetupReviewSession =
     deps.finalizeSetupReviewSession || defaultFinalizeSetupReviewSession;
-  const buildStatus = deps.buildSetupStatus || buildSetupStatus;
+  const buildState = deps.buildSetupState || buildSetupState;
   const auditSetupAction = deps.auditSetupAction || (async () => {});
   const projectDraftToCanonical =
     deps.projectSetupReviewDraftToCanonical ||
@@ -352,7 +352,7 @@ export async function finalizeSetupReviewComposition(
         Boolean(s(obj(projectionSummary?.truthVersion).id)));
     projectionSummary.verification.truthVersionCreated = truthVersionCreated;
 
-    const setup = await buildStatus({
+    const setup = await buildState({
       db,
       tenantId: actor.tenantId,
       tenantKey: actor.tenantKey,

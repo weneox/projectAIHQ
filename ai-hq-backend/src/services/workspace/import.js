@@ -2,7 +2,7 @@
 // FINAL v6.2 — session-aware source import orchestration + website partial-review hardening
 
 import { runSourceSync } from "../sourceSync/index.js";
-import { buildSetupStatus } from "./setup.js";
+import { buildSetupState } from "./setup.js";
 import { createLogger } from "../../utils/logger.js";
 import { assertSafePublicFetchUrl } from "../../utils/publicFetchSafety.js";
 import {
@@ -803,7 +803,7 @@ async function buildAcceptedImportResult({
 }) {
   const setupState =
     setup ??
-    (await buildSetupStatus({
+    (await buildSetupState({
       db,
       tenantId: scope.tenantId,
       tenantKey: scope.tenantKey,
@@ -1097,7 +1097,7 @@ async function completeImportSourceByType({
       );
     }
 
-    const setup = await buildSetupStatus({
+    const setup = await buildSetupState({
       db,
       tenantId: scope.tenantId,
       tenantKey: scope.tenantKey,
@@ -1181,7 +1181,7 @@ async function completeImportSourceByType({
     },
   });
 
-  const setup = await buildSetupStatus({
+  const setup = await buildSetupState({
     db,
     tenantId: scope.tenantId,
     tenantKey: scope.tenantKey,

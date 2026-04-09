@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getAppBootstrap } from "../api/app.js";
 import { listComments } from "../api/comments.js";
 import { getOutboundSummary, listInboxThreads } from "../api/inbox.js";
-import { getSetupOverview } from "../api/setup.js";
+import { getSetupState } from "../api/setup.js";
 import { getSettingsTrustView } from "../api/trust.js";
 import { getTruthReviewWorkbench } from "../api/truth.js";
 import {
@@ -65,7 +65,7 @@ const STATUS_LABELS = {
 
 const SOURCE_DEFINITIONS = [
   { key: "bootstrap", label: "Workspace core" },
-  { key: "overview", label: "Setup" },
+  { key: "setup", label: "Setup" },
   { key: "trust", label: "Business memory" },
   { key: "workbench", label: "Business changes" },
   { key: "inboxThreads", label: "Inbox" },
@@ -82,7 +82,7 @@ const POSTURE_ORDER = [
 ];
 
 const SOURCE_KEYS_BY_DOMAIN = {
-  setup_intake: ["bootstrap", "overview"],
+  setup_intake: ["bootstrap", "setup"],
   business_memory: ["trust", "workbench"],
   inbox: ["inboxThreads", "inboxOutbound"],
   comments: ["comments"],
@@ -105,7 +105,7 @@ const OUTCOME_NOISE_PATTERNS = [
 
 const DEFAULT_WORKSPACE_NARRATION_PAYLOADS = {
   bootstrap: null,
-  overview: null,
+  setup: null,
   trust: null,
   workbench: null,
   inboxThreads: null,
@@ -115,7 +115,7 @@ const DEFAULT_WORKSPACE_NARRATION_PAYLOADS = {
 
 const DEFAULT_WORKSPACE_NARRATION_SOURCE_STATUS = {
   bootstrap: { available: true },
-  overview: { available: true },
+  setup: { available: true },
   trust: { available: true },
   workbench: { available: true },
   inboxThreads: { available: true },
@@ -307,7 +307,7 @@ async function loadWorkspaceNarrationPayloads() {
 
   const requests = {
     bootstrap: bootstrapPromise,
-    overview: getSetupOverview(),
+    setup: getSetupState(),
     trust: getSettingsTrustView({ limit: 6 }),
     workbench: getTruthReviewWorkbench({ limit: 6 }),
     inboxThreads: listInboxThreads({ limit: WORKSPACE_SAMPLE_LIMIT }),
@@ -836,8 +836,8 @@ function buildFallbackOutcomeItems(payloads = {}, domainStates = {}) {
   }
 
   const pendingSetupItems = Number(
-    payloads.overview?.setup?.knowledge?.pendingCandidateCount ||
-      payloads.overview?.knowledge?.pendingCandidateCount ||
+    payloads.setup?.setup?.knowledge?.pendingCandidateCount ||
+      payloads.setup?.knowledge?.pendingCandidateCount ||
       0
   );
   if (pendingSetupItems > 0) {
@@ -989,7 +989,7 @@ export function useWorkspaceNarration() {
     });
     const setupSignals = buildSetupSystemSignals({
       bootstrap: payloads.bootstrap,
-      overview: payloads.overview,
+      setup: payloads.setup,
     });
     const capabilitySignals = buildCapabilitySystemSignals({
       trust: payloads.trust,
@@ -1019,10 +1019,10 @@ export function useWorkspaceNarration() {
     () =>
       buildWorkspaceSetupState({
         bootstrap: payloads.bootstrap,
-        overview: payloads.overview,
+        setup: payloads.setup,
         sourceStatus,
       }),
-    [payloads.bootstrap, payloads.overview, sourceStatus]
+    [payloads.bootstrap, payloads.setup, sourceStatus]
   );
 
   const businessMemory = useMemo(

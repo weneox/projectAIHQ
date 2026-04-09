@@ -72,11 +72,11 @@ describe("GovernanceCockpit", () => {
               },
               repair: {
                 action: {
-                  id: "open_setup_route",
-                  kind: "route",
-                  label: "Open runtime setup",
-                  target: { path: "/setup/runtime" },
-                },
+                    id: "open_setup_route",
+                    kind: "route",
+                    label: "Open runtime setup",
+                    target: { path: "/truth" },
+                  },
               },
             },
             policyPosture: {

@@ -1,9 +1,9 @@
 // src/api/setup.js
-// FINAL v2.2 - setup studio API with session review flow + assistant finalize
+// FINAL v2.3 - setup state API with session review flow + assistant finalize
 
 import { apiGet, apiPost, apiPut, apiPatch } from "./client.js";
 
-const SETUP_OVERVIEW_PATH = "/api/setup/overview";
+const SETUP_STATE_PATH = "/api/setup/status";
 
 function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -19,8 +19,8 @@ function normalizeSetupAssistantPayload(payload = {}) {
   };
 }
 
-export function getSetupOverview() {
-  return apiGet(SETUP_OVERVIEW_PATH);
+export function getSetupState() {
+  return apiGet(SETUP_STATE_PATH);
 }
 
 export function getSetupTruth() {
@@ -113,16 +113,4 @@ export function discardCurrentSetupReview(payload = {}) {
 
 export function finalizeCurrentSetupReview(payload = {}) {
   return apiPost("/api/setup/review/current/finalize", payload);
-}
-
-/*
-  Backward-compatible aliases so older files do not break immediately.
-*/
-
-export function getSetupReviewDraft(params = {}) {
-  return getCurrentSetupReview(params);
-}
-
-export function finalizeSetupReview(payload = {}) {
-  return finalizeCurrentSetupReview(payload);
 }

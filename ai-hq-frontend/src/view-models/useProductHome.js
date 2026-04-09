@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getOutboundSummary, listInboxThreads } from "../api/inbox.js";
 import {
   getCurrentSetupAssistantSession,
-  getSetupOverview,
+  getSetupState,
 } from "../api/setup.js";
 import {
   getMetaChannelStatus,
@@ -12,7 +12,6 @@ import {
 } from "../api/channelConnect.js";
 import { getSettingsTrustView } from "../api/trust.js";
 import { SETUP_WIDGET_ROUTE } from "../lib/appEntry.js";
-import { getAppSessionContext } from "../lib/appSession.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -39,16 +38,6 @@ function lower(value, fallback = "") {
 
 function pluralize(count, noun) {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
-}
-
-function formatWorkspaceName(session = {}) {
-  return s(
-    session?.bootstrap?.workspace?.companyName ||
-      session?.auth?.tenant?.company_name ||
-      session?.auth?.tenant?.companyName ||
-      session?.tenantKey ||
-      "your business"
-  );
 }
 
 function actionPath(action = {}) {
@@ -789,11 +778,8 @@ function buildRuntimeRepairDetail({ trustPayload, launchChannel }) {
 }
 
 async function loadProductHomePayloads() {
-  const session = await getAppSessionContext().catch(() => null);
-
   const requests = {
-    session: Promise.resolve(session),
-    overview: getSetupOverview(),
+    setup: getSetupState(),
     trust: getSettingsTrustView({ limit: 4 }),
     inboxThreads: listInboxThreads({ limit: 10 }),
     inboxOutbound: getOutboundSummary(),
@@ -1079,13 +1065,9 @@ function buildSetupFlowState({
   const assistantState = obj(setup.assistant);
   const sectionStatus = obj(summaryMeta.sectionStatus);
   const blockerCount = Number(summaryMeta.blockerCount || 0);
-  const completionCount = Number(summaryMeta.completionCount || 0);
   const readySections = Object.values(sectionStatus).filter(
     (item) => s(item?.status) === "ready"
   ).length;
-  const pricingReady = s(sectionStatus.pricing?.status) === "ready";
-  const hoursReady = s(sectionStatus.hours?.status) === "ready";
-  const servicesReady = s(sectionStatus.services?.status) === "ready";
 
   const hasDraft =
     summaryMeta.hasAnyDraft === true ||
@@ -1111,8 +1093,6 @@ function buildSetupFlowState({
 
   return {
     needed: launchPosture === "setup_needed",
-    setupNeeded: launchPosture === "setup_needed",
-    autoOpen: false,
     launchPosture,
     assistantMode,
     title:
@@ -1191,19 +1171,12 @@ function buildSetupFlowState({
           : launchPosture === "runtime_repair_needed"
             ? { label: "Open inbox", path: "/inbox" }
             : { label: "Open home", path: "/home" },
-    sessionId: s(session.id),
-    draftVersion: Number(session.draftVersion || draft.version || 0),
     hasDraft,
-    websiteUrl: s(draftBusinessProfile.websiteUrl || websitePrefill.websiteUrl),
     servicesCount: arr(draft.services).length,
     contactsCount: arr(draft.contacts).length,
     hoursCount: arr(draft.hours).length,
     blockerCount,
-    completionCount,
     readySections,
-    pricingReady,
-    hoursReady,
-    servicesReady,
     review,
     websitePrefill,
     session,
@@ -1223,92 +1196,6 @@ function buildSetupFlowState({
   };
 }
 
-function buildAssistantMessages({
-  launchChannel,
-  truthRuntime,
-  setupFlow,
-}) {
-  if (!launchChannel.connected) {
-    return [
-      {
-        id: "assistant-connect",
-        role: "assistant",
-        title: `Connect ${launchChannel.channelLabel || "a channel"} first.`,
-        body:
-          "Once a launch channel is connected, continue setup through the guided draft lane.",
-      },
-    ];
-  }
-
-  if (setupFlow.launchPosture === "runtime_repair_needed") {
-    return [
-      {
-        id: "assistant-runtime-repair",
-        role: "assistant",
-        title: truthRuntime.title,
-        body:
-          truthRuntime.summary ||
-          "The business truth exists, but runtime repair still needs operator attention.",
-      },
-      {
-        id: "assistant-runtime-detail",
-        role: "system",
-        title: "Next best move",
-        body:
-          truthRuntime.action?.label
-            ? `${truthRuntime.action.label} before treating automation as live.`
-            : "Open Truth and review the runtime status before treating automation as live.",
-      },
-    ];
-  }
-
-  if (setupFlow.needed && setupFlow.hasDraft) {
-    return [
-      {
-        id: "assistant-continue",
-        role: "assistant",
-        title: "Continue the setup draft.",
-        body:
-          "The draft is already started. Keep collecting business details, but nothing goes live until a later approval step is added.",
-      },
-      {
-        id: "assistant-runtime-blocked",
-        role: "system",
-        title: "Runtime is still gated.",
-        body: truthRuntime.summary,
-      },
-    ];
-  }
-
-  if (setupFlow.needed) {
-    return [
-      {
-        id: "assistant-start",
-        role: "assistant",
-        title: "Start with the website.",
-        body:
-          "Capture the business website first. This batch stores it as draft-only setup context and does not publish anything to truth or runtime.",
-      },
-      {
-        id: "assistant-gate",
-        role: "system",
-        title: "Strict runtime remains fail-closed.",
-        body: truthRuntime.summary,
-      },
-    ];
-  }
-
-  return [
-    {
-      id: "assistant-ready",
-      role: "assistant",
-      title: "Runtime is ready.",
-      body:
-        "The assistant can still collect a future draft, but live behavior remains tied to approved truth and the current runtime projection.",
-    },
-  ];
-}
-
 function buildAvailabilityNote({
   sourceStatus,
   inboxState,
@@ -1317,7 +1204,7 @@ function buildAvailabilityNote({
 }) {
   const details = [];
 
-  if (sourceStatus.overview?.available === false) {
+  if (sourceStatus.setup?.available === false) {
     details.push("Setup progress is unavailable.");
   }
 
@@ -1584,13 +1471,7 @@ function buildLaunchLaneModel({
       });
 
   const launchSteps = [channelStep, setupStep, approvalStep, liveStep];
-  const completeCount = launchSteps.filter((step) => step.complete).length;
-  const totalCount = launchSteps.length;
-  const progressPercent = Math.round((completeCount / totalCount) * 100);
-  const nextLaunchStep =
-    launchSteps.find((step) => !step.complete) || launchSteps[launchSteps.length - 1] || null;
 
-  let launchPhase = "go_live_inbox";
   let launchPhaseLabel = "Go live in inbox";
   let launchHeadline = "Go live in inbox.";
   let launchSummary =
@@ -1599,7 +1480,6 @@ function buildLaunchLaneModel({
   let secondaryAction = truthAction;
 
   if (!launchChannel.connected) {
-    launchPhase = "connect_channel";
     launchPhaseLabel = "Connect launch channel";
     launchHeadline = `Connect ${launchChannel.channelLabel || "the launch channel"}.`;
     launchSummary =
@@ -1608,7 +1488,6 @@ function buildLaunchLaneModel({
     primaryAction = channelAction;
     secondaryAction = setupFlow.hasDraft ? setupAction : null;
   } else if (!setupReady) {
-    launchPhase = "setup_draft";
     launchPhaseLabel = "Create or continue setup draft";
     launchHeadline = setupFlow.hasDraft
       ? "Continue the setup draft."
@@ -1619,7 +1498,6 @@ function buildLaunchLaneModel({
     primaryAction = setupAction;
     secondaryAction = channelAction;
   } else if (!approvalReady) {
-    launchPhase = "approve_truth_runtime";
     launchPhaseLabel = "Approve truth and runtime";
     launchHeadline = truthRuntime.truthReady
       ? "Repair runtime before going live."
@@ -1632,7 +1510,6 @@ function buildLaunchLaneModel({
     primaryAction = truthAction;
     secondaryAction = setupAction;
   } else if (!liveSignalReady) {
-    launchPhase = "go_live_inbox";
     launchPhaseLabel = "Go live in inbox";
     launchHeadline = "Check live inbox posture.";
     launchSummary =
@@ -1640,7 +1517,6 @@ function buildLaunchLaneModel({
     primaryAction = inboxAction;
     secondaryAction = truthAction;
   } else {
-    launchPhase = "go_live_inbox";
     launchPhaseLabel = "Go live in inbox";
     launchHeadline =
       inboxState.status === "attention"
@@ -1658,54 +1534,18 @@ function buildLaunchLaneModel({
   }
 
   return {
-    launchPhase,
     launchPhaseLabel,
     launchHeadline,
     launchSummary,
-    primaryBlocker: launchReady
-      ? {
-          title: "Live inbox",
-          label: "Live inbox",
-          statusLabel: inboxState.statusLabel,
-          summary:
-            inboxState.summary || "The launch lane is clear and the inbox is ready.",
-          detail: inboxState.detail,
-          action: inboxAction,
-          tone: inboxState.tone || "success",
-        }
-      : {
-          title: s(nextLaunchStep?.title || nextLaunchStep?.label, "Launch lane"),
-          label: s(nextLaunchStep?.label, "Launch lane"),
-          statusLabel: s(nextLaunchStep?.statusLabel),
-          summary: s(nextLaunchStep?.summary),
-          detail: s(nextLaunchStep?.detail),
-          action: normalizeAction(nextLaunchStep?.action),
-          tone: s(nextLaunchStep?.tone),
-        },
     primaryAction,
     secondaryAction,
-    progressPercent,
     launchSteps,
     launchReady,
-    nextLaunchStep,
-    completeCount,
-    totalCount,
   };
 }
 
-function dedupeActions(actions = []) {
-  const seen = new Set();
-  return actions.filter((item) => {
-    const path = s(item?.path);
-    if (!path || seen.has(path)) return false;
-    seen.add(path);
-    return true;
-  });
-}
-
 const DEFAULT_PRODUCT_HOME_PAYLOADS = {
-  session: null,
-  overview: null,
+  setup: null,
   trust: null,
   inboxThreads: null,
   inboxOutbound: null,
@@ -1716,8 +1556,7 @@ const DEFAULT_PRODUCT_HOME_PAYLOADS = {
 };
 
 const DEFAULT_PRODUCT_HOME_SOURCE_STATUS = {
-  session: { available: true },
-  overview: { available: true },
+  setup: { available: true },
   trust: { available: true },
   inboxThreads: { available: true },
   inboxOutbound: { available: true },
@@ -1750,8 +1589,6 @@ export function useProductHome(options = {}) {
   );
 
   const derived = useMemo(() => {
-    const session = payloads.session || {};
-
     const inboxState = buildInboxState({
       threadsPayload: payloads.inboxThreads,
       outboundPayload: payloads.inboxOutbound,
@@ -1784,99 +1621,12 @@ export function useProductHome(options = {}) {
       inboxState,
     });
 
-    const assistantMessages = buildAssistantMessages({
-      launchChannel,
-      truthRuntime,
-      setupFlow,
-    });
-
     const availabilityNote = buildAvailabilityNote({
       sourceStatus,
       inboxState,
       launchChannel,
       truthRuntime,
     });
-
-    const companyName = formatWorkspaceName(session);
-    const actorName = s(session?.actorName, "operator");
-
-    const heroStats = [
-      {
-        id: "channel",
-        label: "Launch channel",
-        status: launchChannel.statusLabel,
-        summary: launchChannel.summary,
-        action: launchChannel.action,
-      },
-      {
-        id: "setup",
-        label: "AI setup",
-        status: setupFlow.statusLabel,
-        summary: setupFlow.summary,
-        action: setupFlow.action,
-      },
-      {
-        id: "runtime",
-        label: "Truth and runtime",
-        status: truthRuntime.statusLabel,
-        summary: truthRuntime.summary,
-        action: truthRuntime.action,
-      },
-    ];
-
-    const supportingStatus = [
-      {
-        id: "channel-support",
-        label: "Launch channel",
-        status: launchChannel.statusLabel,
-        summary: launchChannel.summary,
-        action: launchChannel.action,
-      },
-      {
-        id: "setup-support",
-        label: "AI setup",
-        status: setupFlow.statusLabel,
-        summary: setupFlow.summary,
-        action: setupFlow.action,
-      },
-      {
-        id: "runtime-support",
-        label: "Truth + runtime",
-        status: truthRuntime.statusLabel,
-        summary: truthRuntime.summary,
-        action: truthRuntime.action,
-      },
-    ];
-
-    const finalActions = dedupeActions([
-      launchLane.primaryAction,
-      launchLane.secondaryAction,
-      launchChannel.action,
-      setupFlow.action,
-      truthRuntime.action,
-      { label: "Open inbox", path: "/inbox" },
-    ]).slice(0, 4);
-
-    const currentStatus = {
-      title: launchLane.launchHeadline,
-      summary: launchLane.launchSummary,
-      action: launchLane.primaryAction,
-      secondaryAction: launchLane.secondaryAction,
-    };
-
-    const goldenPath = {
-      title: launchLane.launchReady
-        ? "Launch lane is ready."
-        : `${launchLane.completeCount}/${launchLane.totalCount} launch steps are ready.`,
-      summary: launchLane.launchSummary,
-      detail:
-        "Connect the launch channel, create the setup draft, approve truth and runtime, then go live in inbox.",
-      percent: launchLane.progressPercent,
-      completeCount: launchLane.completeCount,
-      totalCount: launchLane.totalCount,
-      steps: launchLane.launchSteps,
-      nextAction: launchLane.primaryAction,
-    };
 
     const assistant = {
       mode: setupFlow.assistantMode,
@@ -1900,7 +1650,7 @@ export function useProductHome(options = {}) {
               ? setupFlow.blockerCount > 0
                 ? `${setupFlow.blockerCount} structured blockers still need confirmation.`
                 : "The draft is structurally complete for later review."
-              : setupFlow.hasDraft
+            : setupFlow.hasDraft
                 ? `${setupFlow.readySections} setup sections already have draft coverage.`
                 : "Structured setup is available when needed.",
       primaryAction:
@@ -1912,43 +1662,27 @@ export function useProductHome(options = {}) {
       secondaryAction: setupFlow.secondaryAction,
       launchPosture: setupFlow.launchPosture,
       setupNeeded: setupFlow.needed,
-      autoOpen: setupFlow.autoOpen,
       session: setupFlow.session,
       draft: setupFlow.draft,
       review: setupFlow.review,
       websitePrefill: setupFlow.websitePrefill,
-      messages: assistantMessages,
       assistant: setupFlow.assistantState,
       launchChannel,
       truthRuntime,
     };
 
     return {
-      companyName,
-      actorName,
-      inboxState,
       launchChannel,
       truthRuntime,
-      setupFlow,
-      setupNeeded: launchLane.launchPhase === "setup_draft",
       assistant,
       availabilityNote,
-      launchPhase: launchLane.launchPhase,
       launchPhaseLabel: launchLane.launchPhaseLabel,
       launchHeadline: launchLane.launchHeadline,
       launchSummary: launchLane.launchSummary,
-      primaryBlocker: launchLane.primaryBlocker,
       primaryAction: launchLane.primaryAction,
       secondaryAction: launchLane.secondaryAction,
-      progressPercent: launchLane.progressPercent,
       launchSteps: launchLane.launchSteps,
       launchReady: launchLane.launchReady,
-      nextLaunchStep: launchLane.nextLaunchStep,
-      goldenPath,
-      heroStats,
-      currentStatus,
-      supportingStatus,
-      finalActions,
     };
   }, [payloads, sourceStatus]);
 
@@ -1956,7 +1690,6 @@ export function useProductHome(options = {}) {
     loading: enabled ? state.isLoading : false,
     isFetching: enabled ? state.isFetching : false,
     refetch: state.refetch,
-    sourceStatus,
     ...derived,
   };
 }

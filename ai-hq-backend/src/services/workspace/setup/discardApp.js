@@ -1,4 +1,4 @@
-import { buildSetupStatus } from "../setup.js";
+import { buildSetupState } from "../setup.js";
 import { auditSetupAction } from "./auditApp.js";
 
 function s(v, d = "") {
@@ -19,7 +19,7 @@ export async function discardSetupReviewComposition(
       const reviewModule = await import("../../../db/helpers/tenantSetupReview.js");
       return reviewModule.discardSetupReviewSession(input);
     });
-  const buildStatus = deps.buildSetupStatus || buildSetupStatus;
+  const buildState = deps.buildSetupState || buildSetupState;
   const auditAction = deps.auditSetupAction || auditSetupAction;
 
   const discarded = await discardReviewSession({
@@ -28,7 +28,7 @@ export async function discardSetupReviewComposition(
     metadata: obj(body?.metadata),
   });
 
-  const setup = await buildStatus({
+  const setup = await buildState({
     db,
     tenantId: actor.tenantId,
     tenantKey: actor.tenantKey,

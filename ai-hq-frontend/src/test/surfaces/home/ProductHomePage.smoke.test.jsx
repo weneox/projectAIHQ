@@ -18,14 +18,7 @@ function createHomeState(overrides = {}) {
       "The launch lane stays blocked until the tenant Telegram bot is attached.",
     primaryAction: { label: "Open channels", path: "/channels?channel=telegram" },
     secondaryAction: { label: "Open AI setup", path: "/home?assistant=setup" },
-    progressPercent: 25,
     launchReady: false,
-    primaryBlocker: {
-      title: "Connect launch channel",
-      label: "Connect launch channel",
-      summary: "Connect Telegram before the rest of the launch lane can move.",
-      detail: "Use Channels to connect the Telegram bot for this workspace.",
-    },
     launchChannel: {
       channelLabel: "Telegram",
       statusLabel: "Connect required",

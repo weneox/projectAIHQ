@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getAppSessionContext = vi.fn();
 const getAppBootstrap = vi.fn();
-const getSetupOverview = vi.fn();
+const getSetupState = vi.fn();
 const getSettingsTrustView = vi.fn();
 const getTruthReviewWorkbench = vi.fn();
 const listInboxThreads = vi.fn();
@@ -28,7 +28,7 @@ vi.mock("../../api/app.js", () => ({
 }));
 
 vi.mock("../../api/setup.js", () => ({
-  getSetupOverview: (...args) => getSetupOverview(...args),
+  getSetupState: (...args) => getSetupState(...args),
 }));
 
 vi.mock("../../api/trust.js", () => ({
@@ -100,7 +100,7 @@ describe("useWorkspaceNarration", () => {
       bootstrap: { workspace: { tenantKey: "acme" } },
     });
     getAppBootstrap.mockResolvedValue({ workspace: { tenantKey: "acme" } });
-    getSetupOverview.mockResolvedValue({});
+    getSetupState.mockResolvedValue({});
     getSettingsTrustView.mockResolvedValue({});
     getTruthReviewWorkbench.mockResolvedValue({ items: [] });
     listInboxThreads.mockResolvedValue({ threads: [] });
@@ -125,7 +125,7 @@ describe("useWorkspaceNarration", () => {
 
     expect(getAppSessionContext).toHaveBeenCalledTimes(1);
     expect(getAppBootstrap).not.toHaveBeenCalled();
-    expect(getSetupOverview).toHaveBeenCalledTimes(1);
+    expect(getSetupState).toHaveBeenCalledTimes(1);
     expect(getSettingsTrustView).toHaveBeenCalledTimes(1);
     expect(getTruthReviewWorkbench).toHaveBeenCalledTimes(1);
     expect(listInboxThreads).toHaveBeenCalledTimes(1);
@@ -136,7 +136,7 @@ describe("useWorkspaceNarration", () => {
   it("suppresses generic continue-setup actions when setup signal is unavailable", async () => {
     getAppSessionContext.mockResolvedValue(null);
     getAppBootstrap.mockRejectedValue(new Error("bootstrap unavailable"));
-    getSetupOverview.mockRejectedValue(new Error("setup unavailable"));
+    getSetupState.mockRejectedValue(new Error("setup unavailable"));
 
     const { result } = renderHook(() => useWorkspaceNarration(), {
       wrapper: createWrapper(),
@@ -164,7 +164,7 @@ describe("useWorkspaceNarration", () => {
         primaryMissingStep: "hours",
       },
     });
-    getSetupOverview.mockResolvedValue({
+    getSetupState.mockResolvedValue({
       progress: {
         setupCompleted: false,
         primaryMissingStep: "hours",

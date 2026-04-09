@@ -56,13 +56,45 @@ function createReq(overrides = {}) {
   };
 }
 
+test("setup read routes register only the canonical setup state endpoint", () => {
+  const router = createRouter();
+
+  registerSetupReadRoutes(router, {
+    db: {},
+    handleSetupState() {
+      throw new Error("not expected");
+    },
+    requireSetupActor() {
+      return { tenantId: "tenant-1" };
+    },
+    async loadSetupTruthCurrent() {
+      throw new Error("not expected");
+    },
+    async loadCurrentReview() {
+      throw new Error("not expected");
+    },
+    async loadSetupTruthVersion() {
+      throw new Error("not expected");
+    },
+    async loadSetupReviewDraft() {
+      throw new Error("not expected");
+    },
+    s(value) {
+      return String(value ?? "").trim();
+    },
+  });
+
+  assert.equal(router.routes.has("GET /setup/status"), true);
+  assert.equal(router.routes.has("GET /setup/overview"), false);
+});
+
 test("setup read routes load current review with explicit event limit", async () => {
   const router = createRouter();
   let receivedEventLimit = null;
 
   registerSetupReadRoutes(router, {
     db: { name: "db" },
-    handleSetupStatus() {
+    handleSetupState() {
       throw new Error("not expected");
     },
     requireSetupActor() {
@@ -110,7 +142,7 @@ test("setup read routes preserve truth-version 404 shaping", async () => {
 
   registerSetupReadRoutes(router, {
     db: {},
-    handleSetupStatus() {
+    handleSetupState() {
       throw new Error("not expected");
     },
     requireSetupActor() {
@@ -155,7 +187,7 @@ test("setup read routes preserve review-draft response shaping", async () => {
 
   registerSetupReadRoutes(router, {
     db: {},
-    handleSetupStatus() {
+    handleSetupState() {
       throw new Error("not expected");
     },
     requireSetupActor() {
@@ -239,7 +271,7 @@ test("setup review patch returns lock conflict payload unchanged", async () => {
     async discardSetupReviewSession() {
       throw new Error("not expected");
     },
-    async buildSetupStatus() {
+    async buildSetupState() {
       throw new Error("not expected");
     },
     async finalizeSetupReview() {
@@ -301,7 +333,7 @@ test("setup finalize failure keeps concurrency and finalize protection fail-clos
     async discardSetupReviewSession() {
       throw new Error("not expected");
     },
-    async buildSetupStatus() {
+    async buildSetupState() {
       throw new Error("not expected");
     },
     async finalizeSetupReview() {

@@ -281,9 +281,9 @@ test(
         {
           async setupBuilder() {
             return {
-              progress: {
-                nextRoute: "/setup/truth",
-              },
+                progress: {
+                  nextRoute: "/truth",
+                },
             };
           },
         }

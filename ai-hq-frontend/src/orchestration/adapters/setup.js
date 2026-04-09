@@ -1,39 +1,39 @@
 import { createSystemSignal, obj, s } from "../contracts/index.js";
 
-function pickSetupMeta(bootstrap = {}, overview = {}) {
+function pickSetupMeta(bootstrap = {}, setup = {}) {
   const workspace = obj(bootstrap?.workspace);
-  const setup = obj(bootstrap?.setup);
-  const progress = obj(setup?.progress || workspace?.progress || workspace);
-  const overviewSetup = obj(overview?.setup || overview);
-  const overviewProgress = obj(
-    overviewSetup?.progress || overviewSetup?.workspace || overviewSetup
+  const bootstrapSetup = obj(bootstrap?.setup);
+  const progress = obj(bootstrapSetup?.progress || workspace?.progress || workspace);
+  const setupRoot = obj(setup?.setup || setup);
+  const setupProgress = obj(
+    setupRoot?.progress || setupRoot?.workspace || setupRoot
   );
 
   return {
     setupCompleted: !!(
       progress?.setupCompleted ??
-      overviewProgress?.setupCompleted ??
+      setupProgress?.setupCompleted ??
       workspace?.setupCompleted ??
       false
     ),
     nextStudioStage: s(
       progress?.nextStudioStage ||
-        overviewProgress?.nextStudioStage ||
+        setupProgress?.nextStudioStage ||
         workspace?.nextStudioStage
     ),
     readinessLabel: s(
       progress?.readinessLabel ||
-        overviewProgress?.readinessLabel ||
+        setupProgress?.readinessLabel ||
         workspace?.readinessLabel
     ),
     primaryMissingStep: s(
       progress?.primaryMissingStep ||
-        overviewProgress?.primaryMissingStep ||
+        setupProgress?.primaryMissingStep ||
         workspace?.primaryMissingStep
     ),
     companyName: s(
-      overviewSetup?.tenantProfile?.companyName ||
-        overviewSetup?.businessProfile?.companyName ||
+      setupRoot?.tenantProfile?.companyName ||
+        setupRoot?.businessProfile?.companyName ||
         workspace?.tenantProfile?.companyName ||
         workspace?.businessProfile?.companyName
     ),
@@ -42,9 +42,9 @@ function pickSetupMeta(bootstrap = {}, overview = {}) {
 
 export function buildSetupSystemSignals({
   bootstrap = null,
-  overview = null,
+  setup = null,
 } = {}) {
-  const meta = pickSetupMeta(bootstrap || {}, overview || {});
+  const meta = pickSetupMeta(bootstrap || {}, setup || {});
 
   if (meta.setupCompleted) {
     return [

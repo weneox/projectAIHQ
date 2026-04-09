@@ -46,7 +46,7 @@ export function buildActiveWorkspaceContract({
     membershipId: s(membershipId),
     role: normalizedRole,
 
-    // Compatibility fields remain, but destination/routeHint are the canonical route truth.
+    // destination/routeHint are the canonical route truth.
     setupCompleted,
     setupRequired: !setupCompleted,
     workspaceReady: setupCompleted,
@@ -59,7 +59,7 @@ export function buildActiveWorkspaceContract({
     missingSteps: arr(readiness?.missingSteps),
     primaryMissingStep: s(readiness?.primaryMissingStep),
 
-    // Setup compatibility fields still surface the readiness-driven route/stage details.
+    // Readiness details still surface the next setup target for shared consumers.
     nextRoute: s(destination.path),
     nextSetupRoute: s(readiness?.nextSetupRoute),
     nextStudioStage: s(readiness?.nextStudioStage),

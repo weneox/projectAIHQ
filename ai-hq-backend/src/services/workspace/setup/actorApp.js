@@ -1,4 +1,4 @@
-import { buildSetupStatus } from "../setup.js";
+import { buildSetupState } from "../setup.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
@@ -30,15 +30,15 @@ export function requireSetupActor(req, res, deps = {}) {
   return actor;
 }
 
-export async function loadSetupStatusResponse(
-  { db, actor, errorCode = "SetupStatusFailed" },
+export async function loadSetupStateResponse(
+  { db, actor, errorCode = "SetupStateFailed" },
   deps = {}
 ) {
-  const buildStatus = deps.buildSetupStatus || buildSetupStatus;
+  const buildState = deps.buildSetupState || buildSetupState;
   const { tenant, tenantId, tenantKey, role } = actor;
 
   try {
-    const data = await buildStatus({
+    const data = await buildState({
       db,
       tenantId,
       tenantKey,
@@ -59,7 +59,7 @@ export async function loadSetupStatusResponse(
       body: {
         ok: false,
         error: errorCode,
-        reason: s(err?.message || "failed to load setup status"),
+        reason: s(err?.message || "failed to load setup state"),
       },
     };
   }

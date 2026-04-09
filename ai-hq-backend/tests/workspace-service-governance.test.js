@@ -75,7 +75,7 @@ test("service candidate approval stages maintenance review instead of mutating l
           },
         };
       },
-      async buildSetupStatus() {
+      async buildSetupState() {
         return {
           status: "review_required",
         };

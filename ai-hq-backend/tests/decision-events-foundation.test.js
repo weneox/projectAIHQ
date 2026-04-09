@@ -146,7 +146,7 @@ test("finalize setup review emits truth publication and approval policy decision
           reviewSessionId: "review-1",
         };
       },
-      buildSetupStatus: async () => ({ setupCompleted: true }),
+      buildSetupState: async () => ({ setupCompleted: true }),
       projectSetupReviewDraftToCanonical: async () => ({
         truthVersion: {
           id: "truth-v1",

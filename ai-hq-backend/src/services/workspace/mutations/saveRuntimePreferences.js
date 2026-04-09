@@ -2,7 +2,7 @@
 // saveRuntimePreferences extracted from src/services/workspace/mutations.js
 
 import { arr, obj, s } from "../shared.js";
-import { buildSetupStatus } from "../setup.js";
+import { buildSetupState } from "../setup.js";
 import { createTenantKnowledgeHelpers } from "../../../db/helpers/tenantKnowledge.js";
 import { jsonb } from "./shared.js";
 import {
@@ -336,7 +336,7 @@ export async function saveRuntimePreferences({
     rowId: s(canonicalCapabilities?.id),
   });
 
-  const setup = await buildSetupStatus({
+  const setup = await buildSetupState({
     db,
     tenantId: scope.id,
     tenantKey: scope.tenantKey,

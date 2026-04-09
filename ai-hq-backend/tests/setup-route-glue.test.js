@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  loadSetupStatusResponse,
+  loadSetupStateResponse,
   requireSetupActor,
 } from "../src/services/workspace/setup/actorApp.js";
 import {
@@ -49,8 +49,8 @@ test("actor app fails closed when authenticated user is missing", () => {
   assert.equal(res.body.error, "Unauthorized");
 });
 
-test("actor app loads setup status with unchanged response shape", async () => {
-  const result = await loadSetupStatusResponse(
+test("actor app loads setup state with unchanged response shape", async () => {
+  const result = await loadSetupStateResponse(
     {
       db: {},
       actor: {
@@ -59,10 +59,10 @@ test("actor app loads setup status with unchanged response shape", async () => {
         role: "owner",
         tenant: null,
       },
-      errorCode: "SetupStatusFailed",
+      errorCode: "SetupStateFailed",
     },
     {
-      async buildSetupStatus() {
+      async buildSetupState() {
         return {
           progress: {
             nextRoute: "/home?assistant=setup",
@@ -205,7 +205,7 @@ test("discard app preserves discard response and audit behavior", async () => {
       async discardSetupReviewSession() {
         return { id: "session-1" };
       },
-      async buildSetupStatus() {
+      async buildSetupState() {
         return { status: "ready" };
       },
       async auditSetupAction(...args) {

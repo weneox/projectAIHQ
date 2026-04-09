@@ -1,4 +1,4 @@
-import { buildSetupStatus } from "../setup.js";
+import { buildSetupState } from "../setup.js";
 import { loadCurrentReviewPayload } from "./reviewFlow.js";
 
 async function defaultLoadSetupTruthPayload(args, deps) {
@@ -20,7 +20,7 @@ export async function loadSetupTruthPayloadWithStatus(
     { db, actor },
     {
       ...deps,
-      setupBuilder: deps.setupBuilder || buildSetupStatus,
+      setupBuilder: deps.setupBuilder || buildSetupState,
     }
   );
 }
@@ -35,7 +35,7 @@ export async function loadSetupTruthVersionPayloadWithStatus(
     { db, actor, versionId, compareToVersionId },
     {
       ...deps,
-      setupBuilder: deps.setupBuilder || buildSetupStatus,
+      setupBuilder: deps.setupBuilder || buildSetupState,
     }
   );
 }

@@ -16,7 +16,7 @@ describe("dispatchRepairAction", () => {
         kind: "route",
         allowed: true,
         target: {
-          path: "/setup/runtime",
+          path: "/truth",
         },
       },
       {
@@ -27,7 +27,7 @@ describe("dispatchRepairAction", () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(assign).toHaveBeenCalledWith("/setup/runtime");
+    expect(assign).toHaveBeenCalledWith("/truth");
   });
 
   it("executes oauth handlers for oauth repair actions", async () => {

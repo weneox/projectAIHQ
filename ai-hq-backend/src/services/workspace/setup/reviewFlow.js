@@ -7,7 +7,7 @@ export async function loadCurrentReviewPayload(
   deps = {}
 ) {
   const review = await deps.getCurrentSetupReview(actor.tenantId);
-  const setup = await deps.buildSetupStatus({
+  const setup = await deps.buildSetupState({
     db,
     tenantId: actor.tenantId,
     tenantKey: actor.tenantKey,

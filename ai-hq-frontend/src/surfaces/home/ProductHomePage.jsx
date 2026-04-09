@@ -140,10 +140,13 @@ export default function ProductHomePage() {
   const steps = Array.isArray(home.launchSteps) ? home.launchSteps : [];
   const activeStep =
     steps.find((step) => step.complete !== true) || steps[steps.length - 1] || null;
-  const blocker = home.primaryBlocker || activeStep || {};
+  const blocker = activeStep || {};
   const completeCount = steps.filter((step) => step.complete).length;
   const progressPercent = Math.min(
-    Math.max(Number(home.progressPercent || 0), 0),
+    Math.max(
+      steps.length ? Math.round((completeCount / steps.length) * 100) : 0,
+      0
+    ),
     100
   );
   const channelIdentity = s(

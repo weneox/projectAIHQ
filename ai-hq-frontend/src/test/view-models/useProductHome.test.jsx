@@ -2,8 +2,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const getAppSessionContext = vi.fn();
-const getSetupOverview = vi.fn();
+const getSetupState = vi.fn();
 const getCurrentSetupAssistantSession = vi.fn();
 const getSettingsTrustView = vi.fn();
 const listInboxThreads = vi.fn();
@@ -12,12 +11,8 @@ const getMetaChannelStatus = vi.fn();
 const getTelegramChannelStatus = vi.fn();
 const getWebsiteWidgetStatus = vi.fn();
 
-vi.mock("../../lib/appSession.js", () => ({
-  getAppSessionContext: (...args) => getAppSessionContext(...args),
-}));
-
 vi.mock("../../api/setup.js", () => ({
-  getSetupOverview: (...args) => getSetupOverview(...args),
+  getSetupState: (...args) => getSetupState(...args),
   getCurrentSetupAssistantSession: (...args) =>
     getCurrentSetupAssistantSession(...args),
 }));
@@ -105,20 +100,7 @@ describe("useProductHome", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    getAppSessionContext.mockResolvedValue({
-      actorName: "Owner",
-      bootstrap: {
-        workspace: {
-          companyName: "Acme Clinic",
-        },
-      },
-      auth: {
-        tenant: {
-          company_name: "Acme Clinic",
-        },
-      },
-    });
-    getSetupOverview.mockResolvedValue({});
+    getSetupState.mockResolvedValue({});
     getSettingsTrustView.mockResolvedValue(createTrustView());
     listInboxThreads.mockResolvedValue({ threads: [] });
     getOutboundSummary.mockResolvedValue({ pendingCount: 0 });
@@ -148,9 +130,8 @@ describe("useProductHome", () => {
     });
 
     expect(result.current.launchChannel.connected).toBe(false);
-    expect(result.current.setupNeeded).toBe(false);
-    expect(result.current.setupFlow.launchPosture).toBe("connect_channel");
-    expect(result.current.currentStatus.action.path).toBe("/channels?channel=telegram");
+    expect(result.current.assistant.launchPosture).toBe("connect_channel");
+    expect(result.current.primaryAction.path).toBe("/channels?channel=telegram");
   });
 
   it("switches to setup-needed posture when Telegram is connected but truth/runtime is not ready", async () => {
@@ -220,9 +201,9 @@ describe("useProductHome", () => {
 
     expect(result.current.launchChannel.connected).toBe(true);
     expect(result.current.truthRuntime.ready).toBe(false);
-    expect(result.current.setupNeeded).toBe(true);
-    expect(result.current.setupFlow.launchPosture).toBe("setup_needed");
-    expect(result.current.currentStatus.action.path).toBe("/home?assistant=setup");
+    expect(result.current.assistant.launchPosture).toBe("setup_needed");
+    expect(result.current.assistant.setupNeeded).toBe(true);
+    expect(result.current.primaryAction.path).toBe("/home?assistant=setup");
   });
 
   it("keeps home truthful when Telegram is connected but runtime is still unavailable", async () => {
@@ -275,10 +256,9 @@ describe("useProductHome", () => {
     });
 
     expect(result.current.truthRuntime.ready).toBe(false);
-    expect(result.current.setupNeeded).toBe(false);
-    expect(result.current.setupFlow.launchPosture).toBe("runtime_repair_needed");
+    expect(result.current.assistant.launchPosture).toBe("runtime_repair_needed");
     expect(result.current.truthRuntime.summary).toMatch(/runtime projection/i);
-    expect(result.current.currentStatus.title).not.toMatch(/aligned|ready/i);
+    expect(result.current.launchHeadline).not.toMatch(/aligned|ready/i);
   });
 
   it("moves into normal operation when Telegram, truth, and runtime are ready", async () => {
@@ -292,9 +272,9 @@ describe("useProductHome", () => {
 
     expect(result.current.launchChannel.connected).toBe(true);
     expect(result.current.truthRuntime.ready).toBe(true);
-    expect(result.current.setupNeeded).toBe(false);
-    expect(result.current.setupFlow.launchPosture).toBe("normal_operation");
-    expect(result.current.currentStatus.action.path).toBe("/inbox");
+    expect(result.current.assistant.launchPosture).toBe("normal_operation");
+    expect(result.current.assistant.setupNeeded).toBe(false);
+    expect(result.current.primaryAction.path).toBe("/inbox");
   });
 
   it("treats website chat as a real launch channel when it is the only ready option", async () => {

@@ -2,7 +2,7 @@ export function registerSetupReadRoutes(
   router,
   {
     db,
-    handleSetupStatus,
+    handleSetupState,
     requireSetupActor,
     loadSetupTruthCurrent,
     loadCurrentReview,
@@ -11,15 +11,11 @@ export function registerSetupReadRoutes(
     s,
   }
 ) {
-  const handleSetupOverview = async (req, res, errorCode = "SetupOverviewFailed") =>
-    handleSetupStatus(req, res, db, errorCode);
-
-  router.get("/setup/overview", async (req, res) => {
-    return handleSetupOverview(req, res);
-  });
+  const respondWithSetupState = async (req, res, errorCode = "SetupStateFailed") =>
+    handleSetupState(req, res, db, errorCode);
 
   router.get("/setup/status", async (req, res) => {
-    return handleSetupOverview(req, res);
+    return respondWithSetupState(req, res);
   });
 
   router.get("/setup/truth/current", async (req, res) => {

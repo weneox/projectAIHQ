@@ -145,8 +145,8 @@ test("review finalize composition audits finalized session and truth version cre
           },
         };
       },
-      async buildSetupStatus() {
-        return { progress: { nextRoute: "/setup/truth" } };
+      async buildSetupState() {
+        return { progress: { nextRoute: "/truth" } };
       },
       async auditSetupAction(...args) {
         auditCalls.push(args);
@@ -226,7 +226,7 @@ test("review finalize composition surfaces the strict runtime projection in the 
           runtimeProjection: null,
         };
       },
-      async buildSetupStatus() {
+      async buildSetupState() {
         return { progress: { nextRoute: "/inbox" } };
       },
       async auditSetupAction() {},
@@ -397,16 +397,16 @@ test("read app injects setup status builder into truth payload loaders", async (
       },
       async setupBuilder() {
         return {
-          progress: {
-            nextRoute: "/setup/business",
-            primaryMissingStep: "approved_truth",
-          },
+            progress: {
+              nextRoute: "/home?assistant=setup",
+              primaryMissingStep: "approved_truth",
+            },
         };
       },
     }
   );
 
-  assert.equal(current.setup.progress.nextRoute, "/setup/business");
+  assert.equal(current.setup.progress.nextRoute, "/home?assistant=setup");
   assert.equal(
     validateSetupTruthPayload({
       truth: {
@@ -491,16 +491,16 @@ test("read app injects setup status builder into truth payload loaders", async (
       },
       async setupBuilder() {
         return {
-          progress: {
-            nextRoute: "/setup/truth",
-          },
+            progress: {
+              nextRoute: "/truth",
+            },
         };
       },
     }
   );
 
   assert.equal(version.truthVersion.id, "version-1");
-  assert.equal(version.setup.progress.nextRoute, "/setup/truth");
+  assert.equal(version.setup.progress.nextRoute, "/truth");
 });
 
 test("truth payload contract stays compatible with shared setup truth surface", async () => {
@@ -565,10 +565,10 @@ test("truth payload contract stays compatible with shared setup truth surface", 
       },
       async setupBuilder() {
         return {
-          progress: {
-            nextRoute: "/setup/business",
-            primaryMissingStep: "approved_truth",
-          },
+            progress: {
+              nextRoute: "/home?assistant=setup",
+              primaryMissingStep: "approved_truth",
+            },
         };
       },
     }
@@ -614,7 +614,7 @@ test("review current payload shape stays compatible with shared setup contract",
     },
     setup: {
       progress: {
-        nextRoute: "/setup/review",
+        nextRoute: "/home?assistant=setup",
       },
     },
   });
@@ -670,7 +670,7 @@ test("frontend review shape producer stays compatible with shared setup review c
     reviewDraftSummary: review.reviewDraftSummary,
     setup: {
       progress: {
-        nextRoute: "/setup/review",
+        nextRoute: "/home?assistant=setup",
       },
     },
   });

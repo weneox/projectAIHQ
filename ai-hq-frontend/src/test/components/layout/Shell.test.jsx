@@ -75,12 +75,6 @@ describe("Shell", () => {
       assistant: {
         title: "AI setup lives on Home",
       },
-      setupFlow: {
-        autoOpen: false,
-        launchPosture: "normal_operation",
-        sessionId: "",
-        draftVersion: 0,
-      },
     });
   });
 
@@ -107,30 +101,17 @@ describe("Shell", () => {
     });
   });
 
-  it("auto-opens the widget when home requires setup", async () => {
+  it("passes the Home assistant model through to the widget", async () => {
     pathname = "/home";
     useProductHome.mockReturnValue({
       loading: false,
       assistant: {
         title: "Telegram is connected. Start the first structured business draft.",
       },
-      setupFlow: {
-        autoOpen: true,
-        launchPosture: "setup_needed",
-        sessionId: "session-1",
-        draftVersion: 3,
-      },
     });
     apiGet.mockResolvedValueOnce({ threads: [] }).mockResolvedValueOnce({ leads: [] });
 
     render(<Shell />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId("floating-ai-widget")).toHaveAttribute(
-        "data-open",
-        "true"
-      );
-    });
 
     expect(
       screen.getByText("Telegram is connected. Start the first structured business draft.")

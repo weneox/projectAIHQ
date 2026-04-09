@@ -340,15 +340,15 @@ test("service extraction: current review payload keeps shaped review and setup",
         assert.equal(limit, 12);
         return [{ id: "event-1" }];
       },
-      async buildSetupStatus() {
-        return { progress: { nextRoute: "/setup/review" } };
+      async buildSetupState() {
+        return { progress: { nextRoute: "/home?assistant=setup" } };
       },
     }
   );
 
   assert.equal(payload.review.session.id, "session-1");
   assert.equal(payload.review.events.length, 1);
-  assert.equal(payload.setup.progress.nextRoute, "/setup/review");
+  assert.equal(payload.setup.progress.nextRoute, "/home?assistant=setup");
 });
 
 test("service extraction: projection still creates truth version and projection summaries", async () => {
@@ -516,10 +516,10 @@ test("service extraction: truth payload keeps approved-truth blocker semantics",
       },
       async setupBuilder() {
         return {
-          progress: {
-            nextRoute: "/setup/business",
-            primaryMissingStep: "approved_truth",
-          },
+            progress: {
+              nextRoute: "/home?assistant=setup",
+              primaryMissingStep: "approved_truth",
+            },
         };
       },
     }
@@ -527,5 +527,5 @@ test("service extraction: truth payload keeps approved-truth blocker semantics",
 
   assert.equal(payload.truth.readiness.status, "blocked");
   assert.equal(payload.truth.readiness.blockers[0].reasonCode, "approved_truth_unavailable");
-  assert.equal(payload.setup.progress.nextRoute, "/setup/business");
+  assert.equal(payload.setup.progress.nextRoute, "/home?assistant=setup");
 });

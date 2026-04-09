@@ -1,7 +1,7 @@
 // src/services/workspace/candidates.js
 // FINAL v2.1 — canonical knowledge candidate listing + approve/reject flow
 
-import { buildSetupStatus } from "./setup.js";
+import { buildSetupState } from "./setup.js";
 import { createTenantKnowledgeHelpers } from "../../db/helpers/tenantKnowledge.js";
 import { stageApprovedServiceCandidateInMaintenanceSession } from "./setup/draftServices.js";
 
@@ -160,7 +160,7 @@ export async function approveKnowledgeCandidate({
 }, deps = {}) {
   const knowledge = deps.knowledgeHelper || createTenantKnowledgeHelpers({ db });
   const buildSetup =
-    deps.buildSetupStatus || buildSetupStatus;
+    deps.buildSetupState || buildSetupState;
   const stageServiceCandidate =
     deps.stageApprovedServiceCandidateInMaintenanceSession ||
     stageApprovedServiceCandidateInMaintenanceSession;
@@ -296,7 +296,7 @@ export async function rejectKnowledgeCandidate({
 }, deps = {}) {
   const knowledge = deps.knowledgeHelper || createTenantKnowledgeHelpers({ db });
   const buildSetup =
-    deps.buildSetupStatus || buildSetupStatus;
+    deps.buildSetupState || buildSetupState;
   const scope = await resolveTenantScope(knowledge, { tenantId, tenantKey });
 
   const normalizedCandidateId = normalizeCandidateId(candidateId);

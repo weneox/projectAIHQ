@@ -1,5 +1,5 @@
 // src/services/workspace/setup.js
-// FINAL v1.1 — setup status / overview service
+// FINAL v1.2 — setup state service
 
 import { arr, obj, s } from "./shared.js";
 import { getWorkspaceReadiness } from "./readiness.js";
@@ -18,7 +18,7 @@ function buildPoliciesSummary(readiness = {}) {
   const tenantProfile = obj(readiness.tenantProfile);
 
   if (!checks.policies) {
-    return "Runtime preferences still need setup";
+    return "Runtime preferences still need confirmation";
   }
 
   const parts = [];
@@ -113,7 +113,7 @@ function buildChecklist(readiness = {}) {
   ];
 }
 
-export async function buildSetupStatus({
+export async function buildSetupState({
   db,
   tenantId,
   tenantKey,

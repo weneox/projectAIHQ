@@ -2,7 +2,7 @@
 // FINAL v1.2 — workspace service catalog setup services, projection-safe setup status gating
 
 import { normalizeStringArray, obj, s } from "./shared.js";
-import { buildSetupStatus } from "./setup.js";
+import { buildSetupState } from "./setup.js";
 
 function jsonb(value) {
   return JSON.stringify(value ?? {});
@@ -216,7 +216,7 @@ async function maybeBuildSetup({
 }) {
   if (!includeSetup) return null;
 
-  return buildSetupStatus({
+  return buildSetupState({
     db,
     tenantId,
     tenantKey,

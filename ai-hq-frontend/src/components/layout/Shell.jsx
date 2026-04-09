@@ -34,6 +34,32 @@ const SHELL_REFRESH_EVENT_TYPES = new Set([
 ]);
 
 const SIDEBAR_STORAGE_KEY = "aihq.sidebar.collapsed";
+const HOME_ASSISTANT_FALLBACK = {
+  mode: "setup",
+  title: "AI setup lives on Home",
+  statusLabel: "Home",
+  summary:
+    "Open Home to connect the active launch channel, continue setup, and inspect truth and runtime posture.",
+  primaryAction: {
+    label: "Open home assistant",
+    path: SETUP_WIDGET_ROUTE,
+  },
+  secondaryAction: {
+    label: "Open channels",
+    path: "/channels",
+  },
+};
+
+const LOADING_ASSISTANT_FALLBACK = {
+  ...HOME_ASSISTANT_FALLBACK,
+  title: "Loading AI setup",
+  statusLabel: "Loading",
+  summary: "Preparing the current Home setup state for the assistant.",
+  primaryAction: {
+    label: "Open home",
+    path: "/home",
+  },
+};
 
 function resolveShellMode(pathname = "") {
   const path = String(pathname || "");
@@ -132,11 +158,12 @@ export default function Shell() {
   const homeRouteActive = location.pathname === "/home";
 
   const assistantRequested = useMemo(() => {
+    if (!homeRouteActive) return false;
     const params = new URLSearchParams(location.search || "");
     return s(params.get("assistant")).toLowerCase() === "setup";
-  }, [location.search]);
+  }, [homeRouteActive, location.search]);
 
-  const homeDataEnabled = homeRouteActive || widgetOpen || assistantRequested;
+  const homeDataEnabled = homeRouteActive || widgetOpen;
 
   const home = useProductHome({
     enabled: homeDataEnabled,
@@ -144,139 +171,18 @@ export default function Shell() {
 
   const refreshTimerRef = useRef(0);
   const statsRequestRef = useRef(null);
-  const autoOpenedRef = useRef("");
 
   const shellMode = useMemo(
     () => resolveShellMode(location.pathname),
     [location.pathname]
   );
 
-  const shortcutAssistant = useMemo(
-    () => ({
-      mode: "shortcut",
-      title: "AI setup lives on Home",
-      statusLabel: "Home shortcut",
-      summary:
-        "Use Home to connect the active launch channel, continue setup, and inspect truth and runtime posture.",
-      primaryAction: {
-        label: "Open home assistant",
-        path: SETUP_WIDGET_ROUTE,
-      },
-      secondaryAction: {
-        label: "Open channels",
-        path: "/channels",
-      },
-      messages: [
-        {
-          id: "shortcut",
-          role: "assistant",
-          title: "Open Home",
-          body:
-            "The setup flow is available on Home, where launch channel, setup draft, and runtime posture are already aligned.",
-        },
-      ],
-      review: {
-        message:
-          "Draft-only setup remains intentionally separate from truth approval and runtime activation in this batch.",
-      },
-      launchPosture: "shortcut",
-      setupNeeded: false,
-      session: {},
-      draft: {
-        businessProfile: {},
-        services: [],
-        contacts: [],
-        hours: [],
-        pricingPosture: {},
-        handoffRules: {},
-        version: 0,
-        updatedAt: null,
-      },
-      websitePrefill: {
-        supported: true,
-        status: "awaiting_input",
-        websiteUrl: "",
-      },
-      launchChannel: {
-        id: "shortcut-launch",
-        type: "launch_channel",
-        provider: "",
-        connected: false,
-        available: true,
-        status: "shortcut",
-        statusLabel: "Home shortcut",
-        title: "Launch channel posture lives on Home",
-        summary:
-          "Open Home to inspect the active launch channel, including website chat, in one place.",
-        detail:
-          "Home resolves the current launch channel and keeps setup, truth, runtime, and inbox posture aligned.",
-        action: {
-          label: "Open channels",
-          path: "/channels",
-        },
-        deliveryReady: false,
-        reasonCode: "",
-        channelLabel: "Launch channel",
-        accountLabel: "",
-        accountDisplayName: "",
-        accountHandle: "",
-        account: {},
-      },
-      truthRuntime: {},
-    }),
-    []
-  );
-
-  const loadingAssistant = useMemo(
-    () => ({
-      ...shortcutAssistant,
-      mode: "setup",
-      title: "Loading AI setup",
-      statusLabel: "Loading",
-      summary:
-        "Preparing launch channel, setup draft, and strict runtime posture for the assistant.",
-      primaryAction: {
-        label: "Open home",
-        path: "/home",
-      },
-      secondaryAction: {
-        label: "Open channels",
-        path: "/channels",
-      },
-      messages: [
-        {
-          id: "loading",
-          role: "assistant",
-          title: "Loading setup posture",
-          body:
-            "The assistant is waiting for the current Home state before it suggests the next step.",
-        },
-      ],
-    }),
-    [shortcutAssistant]
-  );
-
   const assistantModel = useMemo(() => {
-    if (!homeDataEnabled) return shortcutAssistant;
-    if (home.loading) return loadingAssistant;
-    return home.assistant || loadingAssistant;
-  }, [
-    homeDataEnabled,
-    home.loading,
-    home.assistant,
-    loadingAssistant,
-    shortcutAssistant,
-  ]);
-
-  const setupFlow = home.setupFlow || {};
-  const autoOpenKey =
-    homeRouteActive && setupFlow.autoOpen
-      ? [
-          s(setupFlow.launchPosture),
-          s(setupFlow.sessionId, "no-session"),
-          String(setupFlow.draftVersion || 0),
-        ].join(":")
-      : "";
+    if (home.assistant) return home.assistant;
+    return homeDataEnabled && home.loading
+      ? LOADING_ASSISTANT_FALLBACK
+      : HOME_ASSISTANT_FALLBACK;
+  }, [home.assistant, home.loading, homeDataEnabled]);
 
   const loadShellStats = useCallback(async () => {
     if (statsRequestRef.current) return statsRequestRef.current;
@@ -353,23 +259,6 @@ export default function Shell() {
       window.cancelAnimationFrame(frame);
     };
   }, [assistantRequested]);
-
-  useEffect(() => {
-    if (!homeRouteActive || !setupFlow.autoOpen || !autoOpenKey) {
-      return undefined;
-    }
-
-    if (autoOpenedRef.current === autoOpenKey) return undefined;
-
-    const frame = window.requestAnimationFrame(() => {
-      autoOpenedRef.current = autoOpenKey;
-      setWidgetOpen(true);
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-    };
-  }, [autoOpenKey, homeRouteActive, setupFlow.autoOpen]);
 
   useEffect(() => {
     const unsubscribeStatus = realtimeStore.subscribeStatus((status) => {

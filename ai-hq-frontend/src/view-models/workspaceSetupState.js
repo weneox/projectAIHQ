@@ -46,12 +46,12 @@ function formatMissingStep(value = "") {
   return text ? titleize(text) : "setup details";
 }
 
-function buildSetupMeta(bootstrap = {}, overview = {}) {
+function buildSetupMeta(bootstrap = {}, setup = {}) {
   const workspace = obj(bootstrap?.workspace);
-  const setup = obj(bootstrap?.setup);
-  const setupRoot = obj(overview?.setup || overview);
-  const progress = obj(setup?.progress || workspace?.progress || workspace);
-  const overviewProgress = obj(
+  const bootstrapSetup = obj(bootstrap?.setup);
+  const setupRoot = obj(setup?.setup || setup);
+  const progress = obj(bootstrapSetup?.progress || workspace?.progress || workspace);
+  const setupProgress = obj(
     setupRoot?.progress || setupRoot?.workspace || setupRoot
   );
   const knowledge = obj(setupRoot?.knowledge);
@@ -63,7 +63,7 @@ function buildSetupMeta(bootstrap = {}, overview = {}) {
   );
 
   const missingSteps = [
-    ...arr(overviewProgress?.missingSteps),
+    ...arr(setupProgress?.missingSteps),
     ...arr(progress?.missingSteps),
   ]
     .map((item) => s(item))
@@ -76,22 +76,22 @@ function buildSetupMeta(bootstrap = {}, overview = {}) {
       knowledge?.quickSummary,
     ]),
     setupCompleted: firstBoolean([
-      overviewProgress?.setupCompleted,
+      setupProgress?.setupCompleted,
       progress?.setupCompleted,
       workspace?.setupCompleted,
     ]),
     readinessLabel: firstString([
-      overviewProgress?.readinessLabel,
+      setupProgress?.readinessLabel,
       progress?.readinessLabel,
       workspace?.readinessLabel,
     ]),
     nextStudioStage: firstString([
       progress?.nextStudioStage,
-      overviewProgress?.nextStudioStage,
+      setupProgress?.nextStudioStage,
       workspace?.nextStudioStage,
     ]),
     primaryMissingStep: firstString([
-      overviewProgress?.primaryMissingStep,
+      setupProgress?.primaryMissingStep,
       progress?.primaryMissingStep,
       workspace?.primaryMissingStep,
     ]),
@@ -100,7 +100,7 @@ function buildSetupMeta(bootstrap = {}, overview = {}) {
       firstNumber([
         knowledge?.pendingCandidateCount,
         setupRoot?.pendingCandidateCount,
-        overviewProgress?.pendingCandidateCount,
+        setupProgress?.pendingCandidateCount,
         progress?.pendingCandidateCount,
       ]),
       0
@@ -179,13 +179,13 @@ function buildStatePresentation(status, meta = {}) {
 
 export function buildWorkspaceSetupState({
   bootstrap = null,
-  overview = null,
+  setup = null,
   sourceStatus = {},
 } = {}) {
-  const meta = buildSetupMeta(bootstrap || {}, overview || {});
+  const meta = buildSetupMeta(bootstrap || {}, setup || {});
   const bootstrapAvailable = sourceStatus.bootstrap?.available !== false;
-  const overviewAvailable = sourceStatus.overview?.available !== false;
-  const anySetupSignalAvailable = bootstrapAvailable || overviewAvailable;
+  const setupAvailable = sourceStatus.setup?.available !== false;
+  const anySetupSignalAvailable = bootstrapAvailable || setupAvailable;
 
   let status = "unknown";
 

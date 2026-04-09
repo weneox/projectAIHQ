@@ -30,25 +30,13 @@ function normalizeLegacyAppRoute(target = "") {
   const raw = s(target);
   if (!raw) return "";
 
-  const { pathname, search } = splitRoute(raw);
+  const { pathname } = splitRoute(raw);
   const normalizedPath = pathname.toLowerCase();
 
   if (!normalizedPath) return "";
 
-  if (normalizedPath === "/setup/runtime" || normalizedPath.startsWith("/setup/runtime/")) {
-    return "/truth";
-  }
-
   if (normalizedPath === "/setup" || normalizedPath.startsWith("/setup/")) {
-    return normalizeSetupRoute(raw);
-  }
-
-  if (normalizedPath === "/settings") {
-    const params = new URLSearchParams(search);
-    const tab = s(params.get("tab")).toLowerCase();
-    if (["knowledge-review", "truth", "runtime"].includes(tab)) {
-      return "/truth";
-    }
+    return SETUP_WIDGET_ROUTE;
   }
 
   return raw;

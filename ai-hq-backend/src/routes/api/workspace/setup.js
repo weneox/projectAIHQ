@@ -70,7 +70,7 @@ import {
   loadSetupTruthVersionPayloadWithStatus,
 } from "../../../services/workspace/setup/readApp.js";
 import {
-  loadSetupStatusResponse,
+  loadSetupStateResponse,
   requireSetupActor as requireSetupActorService,
 } from "../../../services/workspace/setup/actorApp.js";
 import { auditSetupAction } from "../../../services/workspace/setup/auditApp.js";
@@ -80,7 +80,7 @@ import {
   startSetupAssistantSession,
   updateSetupAssistantDraft,
 } from "../../../services/workspace/setup/setupAssistantApp.js";
-import { buildSetupStatus } from "../../../services/workspace/setup.js";
+import { buildSetupState } from "../../../services/workspace/setup.js";
 import { registerSetupReadRoutes } from "./setupRoutesReads.js";
 import { registerSetupAssistantRoutes } from "./setupRoutesAssistant.js";
 import { registerSetupReviewRoutes } from "./setupRoutesReview.js";
@@ -113,11 +113,11 @@ function requireSetupActor(req, res) {
   });
 }
 
-async function handleSetupStatus(req, res, db, errorCode = "SetupStatusFailed") {
+async function handleSetupState(req, res, db, errorCode = "SetupStateFailed") {
   const actor = requireSetupActor(req, res);
   if (!actor) return;
 
-  const result = await loadSetupStatusResponse({
+  const result = await loadSetupStateResponse({
     db,
     actor,
     errorCode,
@@ -184,7 +184,7 @@ async function loadCurrentReviewPayload({ db, actor, eventLimit = 30 }) {
     {
       getCurrentSetupReview,
       listSetupReviewEvents,
-      buildSetupStatus,
+      buildSetupState,
     }
   );
 }
@@ -357,7 +357,7 @@ export function workspaceSetupRoutes({ db }) {
 
   registerSetupReadRoutes(r, {
     db,
-    handleSetupStatus,
+    handleSetupState,
     requireSetupActor,
     loadSetupTruthCurrent: loadSetupTruthCurrentRequest,
     loadCurrentReview: loadCurrentReviewRequest,

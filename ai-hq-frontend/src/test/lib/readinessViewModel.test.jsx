@@ -22,7 +22,7 @@ describe("createReadinessViewModel", () => {
               requiredRole: "operator",
               allowed: true,
               target: {
-                path: "/setup/runtime",
+                path: "/truth",
               },
             },
           },
