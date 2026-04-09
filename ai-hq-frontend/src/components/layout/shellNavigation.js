@@ -8,6 +8,7 @@ import {
   PlugZap,
   ShieldCheck,
   Sparkles,
+  Wrench,
 } from "lucide-react";
 
 const PRIMARY_SECTIONS = [
@@ -48,20 +49,36 @@ const PRIMARY_SECTIONS = [
 
 const SECONDARY_SECTIONS = [
   {
-    id: "workspace",
-    label: "Workspace",
-    icon: LayoutGrid,
-    to: "/workspace",
-    paths: ["/workspace"],
-    contextGroups: [{ title: "Navigation", items: [{ label: "Workspace", to: "/workspace" }] }],
-  },
-  {
     id: "channels",
     label: "Channels",
     icon: PlugZap,
     to: "/channels",
     paths: ["/channels"],
     contextGroups: [{ title: "Navigation", items: [{ label: "Channels", to: "/channels" }] }],
+  },
+  {
+    id: "setup",
+    label: "Setup",
+    icon: Wrench,
+    to: "/setup",
+    paths: ["/setup"],
+    contextGroups: [{ title: "Navigation", items: [{ label: "Setup", to: "/setup" }] }],
+  },
+  {
+    id: "truth",
+    label: "Truth",
+    icon: ShieldCheck,
+    to: "/truth",
+    paths: ["/truth"],
+    contextGroups: [{ title: "Navigation", items: [{ label: "Truth", to: "/truth" }] }],
+  },
+  {
+    id: "workspace",
+    label: "Workspace",
+    icon: LayoutGrid,
+    to: "/workspace",
+    paths: ["/workspace"],
+    contextGroups: [{ title: "Navigation", items: [{ label: "Workspace", to: "/workspace" }] }],
   },
   {
     id: "pipeline",
@@ -79,14 +96,6 @@ const SECONDARY_SECTIONS = [
     to: "/publish",
     paths: ["/publish", "/executions"],
     contextGroups: [{ title: "Navigation", items: [{ label: "Content", to: "/publish" }] }],
-  },
-  {
-    id: "knowledge",
-    label: "Knowledge",
-    icon: ShieldCheck,
-    to: "/truth",
-    paths: ["/truth"],
-    contextGroups: [{ title: "Navigation", items: [{ label: "Knowledge", to: "/truth" }] }],
   },
 ];
 

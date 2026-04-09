@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Drawer, Tooltip } from "antd";
+import { Drawer } from "antd";
 import { NavLink } from "react-router-dom";
 import {
   Building2,
@@ -14,62 +14,23 @@ import {
   UTILITY_SECTIONS,
 } from "./shellNavigation.js";
 
-const SIDEBAR_WIDTH = 276;
-const SIDEBAR_COLLAPSED_WIDTH = 76;
-const MOBILE_DRAWER_WIDTH = 292;
-const SHELL_TOPBAR_HEIGHT = 64;
+const SIDEBAR_WIDTH = 248;
+const SIDEBAR_COLLAPSED_WIDTH = 72;
+const MOBILE_DRAWER_WIDTH = 288;
+const SHELL_TOPBAR_HEIGHT = 56;
 
 function formatBadgeCount(count) {
   if (typeof count !== "number" || count <= 0) return null;
   return count > 99 ? "99+" : String(count);
 }
 
-function MobileCloseButton({ onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label="Close navigation"
-      className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] text-[rgba(15,23,42,0.54)] transition-colors duration-200 hover:bg-surface-subtle hover:text-[rgba(15,23,42,0.92)]"
-    >
-      <X className="h-[16px] w-[16px]" strokeWidth={1.9} />
-    </button>
-  );
-}
-
-function CollapseControl({ collapsed = false, onToggle }) {
-  const Icon = collapsed ? PanelLeftOpen : PanelLeftClose;
-  const label = collapsed ? "Expand sidebar" : "Collapse sidebar";
-
-  const node = (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-label={label}
-      className={cx(
-        "flex h-10 items-center text-[rgba(15,23,42,0.58)] transition-colors duration-200 hover:text-[rgba(15,23,42,0.92)]",
-        collapsed
-          ? "mx-auto w-10 justify-center rounded-[10px] hover:bg-surface-subtle"
-          : "w-full justify-between rounded-[10px] px-3 hover:bg-surface-subtle"
-      )}
-    >
-      <div className="flex items-center gap-3">
-        <Icon className="h-[15px] w-[15px]" strokeWidth={1.9} />
-        {!collapsed ? (
-          <span className="text-[13px] font-semibold tracking-[-0.02em]">
-            Collapse
-          </span>
-        ) : null}
-      </div>
-    </button>
-  );
-
-  if (!collapsed) return node;
+function SectionTitle({ children, collapsed = false }) {
+  if (collapsed) return null;
 
   return (
-    <Tooltip title={label} placement="right" mouseEnterDelay={0.12}>
-      {node}
-    </Tooltip>
+    <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle first:pt-0">
+      {children}
+    </div>
   );
 }
 
@@ -77,14 +38,14 @@ function Brand({ collapsed = false, mobile = false, onNavigate, onClose }) {
   return (
     <div
       className={cx(
-        "border-b border-line-soft",
-        collapsed && !mobile ? "px-0 py-5" : "px-5 py-5"
+        "border-b border-line-soft px-3 py-3",
+        collapsed && !mobile && "px-2"
       )}
     >
       <div
         className={cx(
           "flex items-center",
-          collapsed && !mobile ? "justify-center" : "justify-between gap-3"
+          collapsed && !mobile ? "justify-center" : "justify-between gap-2"
         )}
       >
         <NavLink
@@ -92,26 +53,38 @@ function Brand({ collapsed = false, mobile = false, onNavigate, onClose }) {
           onClick={onNavigate}
           aria-label="AI HQ Home"
           className={cx(
-            "min-w-0 text-[rgba(15,23,42,0.98)]",
+            "min-w-0 text-text",
             collapsed && !mobile
-              ? "flex items-center justify-center"
+              ? "flex h-10 w-10 items-center justify-center rounded-soft border border-line bg-surface"
               : "flex min-w-0 flex-1 items-center gap-3"
           )}
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[rgba(31,77,168,0.14)] bg-[rgba(31,77,168,0.05)] text-[rgb(var(--color-brand))]">
-            <Building2 className="h-[17px] w-[17px]" strokeWidth={1.95} />
-          </div>
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-soft border border-line bg-surface-subtle">
+            <Building2 className="h-4 w-4" strokeWidth={1.9} />
+          </span>
 
           {!collapsed || mobile ? (
-            <div className="min-w-0">
-              <div className="truncate text-[17px] font-semibold tracking-[-0.045em]">
+            <span className="min-w-0">
+              <span className="block truncate text-[15px] font-semibold">
                 AI HQ
-              </div>
-            </div>
+              </span>
+              <span className="block truncate text-[12px] text-text-muted">
+                Product shell
+              </span>
+            </span>
           ) : null}
         </NavLink>
 
-        {mobile ? <MobileCloseButton onClick={onClose} /> : null}
+        {mobile ? (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close navigation"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-soft border border-line bg-surface text-text-muted hover:bg-surface-subtle hover:text-text"
+          >
+            <X className="h-4 w-4" strokeWidth={1.9} />
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -120,58 +93,40 @@ function Brand({ collapsed = false, mobile = false, onNavigate, onClose }) {
 function NavRow({ item, shellStats = {}, onNavigate, collapsed = false }) {
   const Icon = item.icon;
   const badgeCount = formatBadgeCount(shellStats?.[item.badgeKey]);
+  const linkLabel = badgeCount ? `${item.label} ${badgeCount}` : item.label;
 
-  const row = (
-    <NavLink to={item.to} onClick={onNavigate}>
+  return (
+    <NavLink
+      to={item.to}
+      onClick={onNavigate}
+      title={collapsed ? item.label : undefined}
+      aria-label={linkLabel}
+    >
       {({ isActive }) => (
         <div
           className={cx(
-            "group relative flex items-center transition-colors duration-200",
-            collapsed
-              ? "mx-auto h-11 w-11 justify-center rounded-[10px]"
-              : "h-[46px] w-full gap-3 px-4",
+            "relative flex items-center gap-3 rounded-soft border px-3 text-[13px] transition-colors",
+            collapsed ? "mx-auto h-10 w-10 justify-center px-0" : "h-10",
             isActive
-              ? "bg-[rgba(31,77,168,0.08)] text-[rgba(15,23,42,0.98)]"
-              : "text-[rgba(15,23,42,0.68)] hover:bg-surface-subtle hover:text-[rgba(15,23,42,0.94)]"
+              ? "border-line-strong bg-surface-subtle text-text"
+              : "border-transparent text-text-muted hover:border-line-soft hover:bg-surface-subtle hover:text-text"
           )}
         >
-          {isActive ? (
-            <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-[rgb(var(--color-brand))]" />
-          ) : null}
-
-          <Icon
-            className={cx(
-              "h-[17px] w-[17px] shrink-0",
-              isActive
-                ? "text-[rgb(var(--color-brand))]"
-                : "text-[rgba(15,23,42,0.54)] group-hover:text-[rgba(15,23,42,0.92)]"
-            )}
-            strokeWidth={1.9}
-          />
+          <Icon className="h-4 w-4 shrink-0" strokeWidth={1.9} />
 
           {!collapsed ? (
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[14px] font-semibold tracking-[-0.02em]">
+            <>
+              <span className="min-w-0 flex-1 truncate font-medium">
                 {item.label}
-              </div>
-            </div>
-          ) : null}
-
-          {!collapsed && badgeCount ? (
-            <span
-              className={cx(
-                "inline-flex min-w-[18px] items-center justify-center text-[10px] font-semibold leading-5",
-                isActive
-                  ? "text-[rgb(var(--color-brand))]"
-                  : "text-[rgba(15,23,42,0.42)]"
-              )}
-            >
-              {badgeCount}
-            </span>
-          ) : null}
-
-          {collapsed && badgeCount ? (
-            <span className="absolute right-[4px] top-[4px] inline-flex min-w-[16px] items-center justify-center text-[9px] font-semibold leading-4 text-[rgb(var(--color-brand))]">
+              </span>
+              {badgeCount ? (
+                <span className="shrink-0 text-[12px] text-text-subtle">
+                  {badgeCount}
+                </span>
+              ) : null}
+            </>
+          ) : badgeCount ? (
+            <span className="absolute right-1 top-1 text-[10px] text-text-subtle">
               {badgeCount}
             </span>
           ) : null}
@@ -179,18 +134,51 @@ function NavRow({ item, shellStats = {}, onNavigate, collapsed = false }) {
       )}
     </NavLink>
   );
+}
 
-  if (!collapsed) return row;
+function NavGroup({
+  title,
+  items,
+  shellStats,
+  onNavigate,
+  collapsed = false,
+}) {
+  if (!items.length) return null;
 
   return (
-    <Tooltip title={item.label} placement="right" mouseEnterDelay={0.12}>
-      {row}
-    </Tooltip>
+    <div className="space-y-1">
+      <SectionTitle collapsed={collapsed}>{title}</SectionTitle>
+      {items.map((item) => (
+        <NavRow
+          key={item.id}
+          item={item}
+          shellStats={shellStats}
+          onNavigate={onNavigate}
+          collapsed={collapsed}
+        />
+      ))}
+    </div>
   );
 }
 
-function Spacer({ collapsed = false }) {
-  return <div className={cx("h-4", collapsed ? "mx-4" : "mx-5")} />;
+function CollapseControl({ collapsed = false, onToggle }) {
+  const Icon = collapsed ? PanelLeftOpen : PanelLeftClose;
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      className={cx(
+        "inline-flex items-center justify-center rounded-soft border border-line bg-surface text-text-muted hover:bg-surface-subtle hover:text-text",
+        collapsed ? "h-9 w-9" : "h-9 w-full gap-2"
+      )}
+    >
+      <Icon className="h-4 w-4" strokeWidth={1.9} />
+      {!collapsed ? <span className="text-[13px] font-medium">Collapse</span> : null}
+    </button>
+  );
 }
 
 function SidebarContent({
@@ -202,7 +190,7 @@ function SidebarContent({
   onCloseMobile,
 }) {
   return (
-    <div className="relative flex h-full flex-col overflow-hidden bg-white">
+    <div className="flex h-full flex-col bg-surface">
       <Brand
         collapsed={collapsed}
         mobile={mobile}
@@ -210,53 +198,39 @@ function SidebarContent({
         onClose={onCloseMobile}
       />
 
-      <div className="sidebar-scroll min-h-0 flex-1 overflow-y-auto px-3 py-4">
-        <div className="space-y-1">
-          {PRIMARY_SECTIONS.map((item) => (
-            <NavRow
-              key={item.id}
-              item={item}
-              shellStats={shellStats}
-              onNavigate={onNavigate}
-              collapsed={collapsed}
-            />
-          ))}
-        </div>
+      <div className="sidebar-scroll flex-1 overflow-y-auto px-2 py-3">
+        <div className="space-y-4">
+          <NavGroup
+            title="Primary"
+            items={PRIMARY_SECTIONS}
+            shellStats={shellStats}
+            onNavigate={onNavigate}
+            collapsed={collapsed}
+          />
 
-        {SECONDARY_SECTIONS.length ? <Spacer collapsed={collapsed} /> : null}
+          <NavGroup
+            title="Product"
+            items={SECONDARY_SECTIONS}
+            shellStats={shellStats}
+            onNavigate={onNavigate}
+            collapsed={collapsed}
+          />
 
-        <div className="space-y-1">
-          {SECONDARY_SECTIONS.map((item) => (
-            <NavRow
-              key={item.id}
-              item={item}
-              shellStats={shellStats}
-              onNavigate={onNavigate}
-              collapsed={collapsed}
-            />
-          ))}
-        </div>
-
-        {UTILITY_SECTIONS.length ? <Spacer collapsed={collapsed} /> : null}
-
-        <div className="space-y-1">
-          {UTILITY_SECTIONS.map((item) => (
-            <NavRow
-              key={item.id}
-              item={item}
-              shellStats={shellStats}
-              onNavigate={onNavigate}
-              collapsed={collapsed}
-            />
-          ))}
+          <NavGroup
+            title="Other"
+            items={UTILITY_SECTIONS}
+            shellStats={shellStats}
+            onNavigate={onNavigate}
+            collapsed={collapsed}
+          />
         </div>
       </div>
 
       {!mobile ? (
         <div
           className={cx(
-            "mt-auto border-t border-line-soft bg-white",
-            collapsed ? "px-2.5 py-3" : "px-3 py-3"
+            "border-t border-line-soft p-2",
+            collapsed && "flex justify-center"
           )}
         >
           <CollapseControl
@@ -279,11 +253,8 @@ export default function Sidebar({
   return (
     <>
       <aside
-        className="fixed inset-y-0 left-0 z-[70] hidden overflow-hidden border-r border-line-soft bg-white md:block"
-        style={{
-          width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH,
-          transition: "width 180ms cubic-bezier(0.22,1,0.36,1)",
-        }}
+        className="fixed inset-y-0 left-0 z-[70] hidden overflow-hidden border-r border-line-soft bg-surface md:block"
+        style={{ width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH }}
       >
         <SidebarContent
           shellStats={shellStats}
@@ -306,11 +277,9 @@ export default function Sidebar({
           header: { display: "none" },
           content: {
             background: "rgb(var(--color-surface))",
-            borderRight: "1px solid rgba(15,23,42,0.06)",
-            boxShadow: "0 24px 48px -30px rgba(15,23,42,0.18)",
           },
           mask: {
-            background: "rgba(15,23,42,0.22)",
+            background: "rgba(17,24,39,0.2)",
           },
         }}
       >

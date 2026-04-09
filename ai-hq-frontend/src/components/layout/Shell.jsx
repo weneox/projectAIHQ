@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { apiGet } from "../../api/client.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
+import { cx } from "../../lib/cx.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
 import useProductHome from "../../view-models/useProductHome.js";
-import FloatingAiWidget from "../layout/FloatingAiWidget.jsx";
+import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
+import FloatingAiWidget from "./FloatingAiWidget.jsx";
 import Sidebar, {
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_WIDTH,
@@ -101,14 +103,12 @@ function SharedStatsNotice({ message }) {
   if (!message) return null;
 
   return (
-    <div className="mb-5 rounded-[12px] border border-[rgba(220,38,38,0.12)] bg-[rgba(254,242,242,0.75)] px-4 py-3">
-      <div className="text-[13px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.92)]">
-        Workspace stats unavailable
-      </div>
-      <div className="mt-1 text-[13px] leading-6 text-[rgba(15,23,42,0.62)]">
-        {message}
-      </div>
-    </div>
+    <InlineNotice
+      tone="warning"
+      title="Workspace stats unavailable"
+      description={message}
+      className="mb-4"
+    />
   );
 }
 
@@ -135,8 +135,7 @@ export default function Shell() {
     return s(params.get("assistant")).toLowerCase() === "setup";
   }, [location.search]);
 
-  const homeDataEnabled =
-    homeRouteActive || widgetOpen || assistantRequested;
+  const homeDataEnabled = homeRouteActive || widgetOpen || assistantRequested;
 
   const home = useProductHome({
     enabled: homeDataEnabled,
@@ -429,7 +428,7 @@ export default function Shell() {
 
   return (
     <div
-      className="relative h-screen overflow-hidden bg-canvas text-text"
+      className="min-h-screen bg-canvas text-text"
       style={{ "--shell-sidebar-w": `${shellSidebarWidth}px` }}
     >
       <Sidebar
@@ -440,25 +439,26 @@ export default function Shell() {
         setCollapsed={setSidebarCollapsed}
       />
 
-      <div className="relative flex h-full min-w-0 flex-col transition-[padding-left] duration-200 ease-premium md:pl-[var(--shell-sidebar-w)]">
+      <div className="min-h-screen md:pl-[var(--shell-sidebar-w)]">
         <Header
           onMenuClick={() => setMobileOpen(true)}
           notifications={notifications}
         />
 
-        <main className="relative flex-1 min-h-0 overflow-hidden bg-canvas">
+        <main
+          className={cx(
+            "min-h-[calc(100vh-56px)]",
+            shellMode === "immersive" ? "overflow-hidden" : "page-scroll overflow-y-auto"
+          )}
+        >
           {shellMode === "immersive" ? (
-            <div className="h-full min-h-0 overflow-hidden">
+            <div className="h-[calc(100vh-56px)] min-h-0 overflow-hidden">
               <Outlet />
             </div>
           ) : (
-            <div className="page-scroll h-full min-h-0 overflow-y-auto">
-              <div className="mx-auto flex min-h-full w-full max-w-shell-content flex-col px-5 py-5 md:px-6 xl:px-8">
-                <SharedStatsNotice message={shellStats?.message} />
-                <div className="flex-1 min-h-0">
-                  <Outlet />
-                </div>
-              </div>
+            <div className="mx-auto w-full max-w-shell-content px-4 py-4 md:px-6 md:py-5">
+              <SharedStatsNotice message={shellStats?.message} />
+              <Outlet />
             </div>
           )}
         </main>

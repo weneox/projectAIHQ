@@ -6,33 +6,33 @@ function resolveAppearance(appearance = "default") {
   switch (appearance) {
     case "product":
       return {
-        shell: "rounded-[12px]",
-        row: "min-h-[46px] gap-3 px-4",
-        input: "h-[46px] text-[15px] font-medium",
-        textareaWrap: "px-4 py-4",
-        textarea: "min-h-[144px] text-[15px] leading-7",
-        selectWrap: "px-4",
-        select: "h-[46px] pr-8 text-[15px] font-medium",
+        shell: "rounded-soft",
+        row: "min-h-[44px] gap-3 px-3.5",
+        input: "h-[44px] text-[14px]",
+        textareaWrap: "px-3.5 py-3.5",
+        textarea: "min-h-[132px] text-[14px] leading-6",
+        selectWrap: "px-3.5",
+        select: "h-[44px] pr-8 text-[14px]",
       };
     case "quiet":
       return {
-        shell: "rounded-[10px]",
-        row: "min-h-[40px] gap-2.5 px-3.5",
-        input: "h-[40px] text-[14px]",
-        textareaWrap: "px-3.5 py-3",
-        textarea: "min-h-[112px] text-[14px] leading-6",
-        selectWrap: "px-3.5",
-        select: "h-[40px] pr-8 text-[14px]",
+        shell: "rounded-soft",
+        row: "min-h-[38px] gap-2.5 px-3",
+        input: "h-[38px] text-[13px]",
+        textareaWrap: "px-3 py-3",
+        textarea: "min-h-[112px] text-[13px] leading-6",
+        selectWrap: "px-3",
+        select: "h-[38px] pr-8 text-[13px]",
       };
     default:
       return {
-        shell: "rounded-[10px]",
-        row: "min-h-[42px] gap-2.5 px-3.5",
-        input: "h-[42px] text-[14px]",
+        shell: "rounded-soft",
+        row: "min-h-[40px] gap-2.5 px-3.5",
+        input: "h-[40px] text-[14px]",
         textareaWrap: "px-3.5 py-3.5",
-        textarea: "min-h-[128px] text-[14px] leading-6",
+        textarea: "min-h-[120px] text-[14px] leading-6",
         selectWrap: "px-3.5",
-        select: "h-[42px] pr-8 text-[14px]",
+        select: "h-[40px] pr-8 text-[14px]",
       };
   }
 }
@@ -42,17 +42,16 @@ function surfaceClass({ disabled, readOnly, invalid }) {
     return "border-line-soft bg-surface-subtle text-text-subtle opacity-70";
   }
   if (invalid) {
-    return "border-danger bg-white shadow-none";
+    return "border-danger bg-surface";
   }
   if (readOnly) {
     return "border-line bg-surface-muted";
   }
   return [
-    "border-line bg-white",
+    "border-line bg-surface",
     "hover:border-line-strong",
-    "focus-within:border-[rgba(var(--color-brand),0.34)]",
-    "focus-within:bg-white",
-    "focus-within:shadow-[0_0_0_3px_rgba(var(--color-brand),0.10)]",
+    "focus-within:border-brand",
+    "focus-within:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]",
   ].join(" ");
 }
 
@@ -69,7 +68,7 @@ function FieldShell({
   return (
     <div
       className={cx(
-        "relative w-full overflow-hidden border transition-[border-color,background-color,box-shadow] duration-200 ease-premium",
+        "relative w-full overflow-hidden border transition-[border-color,background-color,box-shadow] duration-150",
         view.shell,
         surfaceClass({ disabled, readOnly, invalid }),
         className
@@ -134,7 +133,7 @@ export function InputGroup({
           <button
             type="button"
             onClick={onClear}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-text-subtle transition-[background-color,color] duration-200 ease-premium hover:bg-surface-muted hover:text-text"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-soft text-text-subtle hover:bg-surface-subtle hover:text-text"
             aria-label="Clear"
           >
             <X className="h-3.5 w-3.5" />
@@ -229,7 +228,7 @@ export const Textarea = forwardRef(function Textarea(
           readOnly={readOnly}
           aria-invalid={invalid || undefined}
           className={cx(
-            "w-full resize-none border-0 bg-transparent p-0 text-text outline-none placeholder:text-text-subtle",
+            "w-full resize-y border-0 bg-transparent p-0 text-text outline-none placeholder:text-text-subtle",
             disabled && "cursor-not-allowed",
             view.textarea,
             textClassName

@@ -1,5 +1,5 @@
 import { Dropdown } from "antd";
-import { Bell, ChevronDown, LogOut, Menu } from "lucide-react";
+import { Bell, ChevronDown, Menu } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { logoutUser } from "../../api/auth.js";
 import {
@@ -85,18 +85,18 @@ function WorkspaceControl({ notifications }) {
   const initials = useMemo(() => getInitials(displayName) || "W", [displayName]);
 
   const overlay = (
-    <div className="dropdown-panel-anim w-[250px] rounded-[14px] border border-line bg-white p-2 shadow-[0_24px_48px_-30px_rgba(15,23,42,0.18)]">
-      <div className="px-2.5 pb-2 pt-1.5">
+    <div className="dropdown-panel-anim w-[240px] rounded-panel border border-line bg-surface p-2 shadow-panel-strong">
+      <div className="px-2 py-2">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--color-brand))] text-[11px] font-semibold text-white">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface-subtle text-[12px] font-semibold text-text">
             {initials}
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.95)]">
+            <div className="truncate text-[14px] font-semibold text-text">
               {displayName}
             </div>
-            <div className="mt-0.5 truncate text-[11px] font-medium text-[rgba(15,23,42,0.46)]">
+            <div className="truncate text-[12px] text-text-muted">
               {roleLabel}
             </div>
           </div>
@@ -111,10 +111,10 @@ function WorkspaceControl({ notifications }) {
           setOpen(false);
           notifications?.setOpen?.(!notifications?.open);
         }}
-        className="flex h-10 w-full items-center justify-between rounded-[10px] px-3 text-left text-[13px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.82)] transition-colors duration-200 hover:bg-surface-subtle"
+        className="flex h-9 w-full items-center justify-between rounded-soft px-3 text-left text-[13px] text-text hover:bg-surface-subtle"
       >
         <span>Notifications</span>
-        <span className="text-[12px] text-[rgba(15,23,42,0.44)]">
+        <span className="text-[12px] text-text-muted">
           {unread > 99 ? "99+" : unread}
         </span>
       </button>
@@ -122,7 +122,7 @@ function WorkspaceControl({ notifications }) {
       <button
         type="button"
         onClick={handleLogout}
-        className="mt-1 flex h-10 w-full items-center rounded-[10px] px-3 text-left text-[13px] font-semibold tracking-[-0.02em] text-[rgba(185,28,28,0.92)] transition-colors duration-200 hover:bg-[rgba(220,38,38,0.05)]"
+        className="mt-1 flex h-9 w-full items-center rounded-soft px-3 text-left text-[13px] text-danger hover:bg-danger-soft"
       >
         {loggingOut ? "Signing out..." : "Sign out"}
       </button>
@@ -142,27 +142,27 @@ function WorkspaceControl({ notifications }) {
         aria-label={displayName}
         aria-expanded={open}
         className={cx(
-          "group flex h-11 items-center gap-3 rounded-[12px] px-2.5 text-left transition-colors duration-200",
-          open ? "bg-surface-subtle" : "hover:bg-surface-subtle"
+          "flex h-9 items-center gap-2 rounded-soft border border-line bg-surface px-2.5 text-left hover:bg-surface-subtle",
+          open && "bg-surface-subtle"
         )}
       >
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--color-brand))] text-[11px] font-semibold text-white">
+        <div className="flex h-7 w-7 items-center justify-center rounded-full border border-line bg-surface-subtle text-[11px] font-semibold text-text">
           {initials}
         </div>
 
         <div className="hidden min-w-0 text-left lg:block">
-          <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.94)]">
+          <div className="truncate text-[13px] font-medium text-text">
             {displayName}
           </div>
-          <div className="truncate text-[11px] font-medium text-[rgba(15,23,42,0.42)]">
+          <div className="truncate text-[12px] text-text-muted">
             {roleLabel}
           </div>
         </div>
 
         <ChevronDown
           className={cx(
-            "h-[13px] w-[13px] text-[rgba(15,23,42,0.42)] transition-transform duration-200",
-            open ? "rotate-180" : ""
+            "h-[14px] w-[14px] text-text-subtle transition-transform",
+            open && "rotate-180"
           )}
           strokeWidth={2}
         />
@@ -181,12 +181,12 @@ function NotificationsButton({ notifications }) {
     <button
       type="button"
       onClick={() => notifications?.setOpen?.(!notifications?.open)}
-      className="relative inline-flex h-11 w-11 items-center justify-center rounded-[12px] border border-line bg-white text-[rgba(15,23,42,0.62)] transition-colors duration-200 hover:bg-surface-subtle hover:text-[rgba(15,23,42,0.92)]"
+      className="relative inline-flex h-9 w-9 items-center justify-center rounded-soft border border-line bg-surface text-text-muted hover:bg-surface-subtle hover:text-text"
       aria-label="Open notifications"
     >
-      <Bell className="h-[17px] w-[17px]" strokeWidth={1.9} />
+      <Bell className="h-4 w-4" strokeWidth={1.9} />
       {unread > 0 ? (
-        <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[rgb(var(--color-brand))]" />
+        <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand" />
       ) : null}
     </button>
   );
@@ -196,26 +196,31 @@ export default function Header({ onMenuClick, notifications }) {
   return (
     <>
       <header
-        className="sticky top-0 z-[60] border-b border-line-soft bg-white"
+        className="sticky top-0 z-[60] border-b border-line-soft bg-surface"
         style={{ height: SHELL_TOPBAR_HEIGHT }}
       >
-        <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-4 px-4 md:px-6 xl:px-8">
+        <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-3 px-4 md:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
               onClick={onMenuClick}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] text-[rgba(15,23,42,0.56)] transition-colors duration-200 hover:bg-surface-subtle hover:text-[rgba(15,23,42,0.9)] md:hidden"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-soft border border-line bg-surface text-text-muted hover:bg-surface-subtle hover:text-text md:hidden"
               aria-label="Open navigation"
             >
-              <Menu className="h-[16px] w-[16px]" strokeWidth={2} />
+              <Menu className="h-4 w-4" strokeWidth={2} />
             </button>
 
-            <div className="hidden md:block text-[13px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.34)]">
-              AI HQ
+            <div className="hidden md:block">
+              <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
+                AI HQ
+              </div>
+              <div className="text-[13px] text-text-muted">
+                Backend-facing shell
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <CommandMenu />
             <NotificationsButton notifications={notifications} />
             <WorkspaceControl notifications={notifications} />
