@@ -13,6 +13,10 @@ import {
   getWebsiteWidgetStatus,
   saveWebsiteWidgetConfig,
 } from "../../api/channelConnect.js";
+import {
+  buildWorkspaceScopedQueryKey,
+  useWorkspaceTenantKey,
+} from "../../hooks/useWorkspaceTenantKey.js";
 import { s } from "../../lib/appUi.js";
 import { cx } from "../../lib/cx.js";
 import Input, { Textarea } from "../ui/Input.jsx";
@@ -79,14 +83,19 @@ export default function WebsiteWidgetDetailDrawer({
   onClose,
 }) {
   const queryClient = useQueryClient();
+  const workspace = useWorkspaceTenantKey({ enabled: open });
   const [draftForm, setDraftForm] = useState(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [copyFeedback, setCopyFeedback] = useState("");
+  const websiteStatusQueryKey = buildWorkspaceScopedQueryKey(
+    ["website-widget-status"],
+    workspace.tenantKey
+  );
 
   const statusQuery = useQuery({
-    queryKey: ["website-widget-status"],
+    queryKey: websiteStatusQueryKey,
     queryFn: getWebsiteWidgetStatus,
-    enabled: open,
+    enabled: open && workspace.ready,
     staleTime: 10_000,
     refetchOnWindowFocus: false,
   });
@@ -98,7 +107,7 @@ export default function WebsiteWidgetDetailDrawer({
       setStatusMessage("Website widget settings saved.");
       setCopyFeedback("");
       await queryClient.invalidateQueries({
-        queryKey: ["website-widget-status"],
+        queryKey: websiteStatusQueryKey,
       });
     },
   });

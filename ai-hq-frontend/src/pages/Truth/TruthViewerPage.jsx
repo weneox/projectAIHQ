@@ -27,6 +27,7 @@ import {
 } from "../../api/truth.js";
 import Button from "../../components/ui/Button.jsx";
 import TruthVersionComparePanel from "../../components/truth/TruthVersionComparePanel.jsx";
+import useWorkspaceTenantKey from "../../hooks/useWorkspaceTenantKey.js";
 import { buildTruthOperationalState } from "../../lib/readinessViewModel.js";
 
 function s(v, d = "") {
@@ -438,6 +439,7 @@ function buildSections(fields = []) {
 export default function TruthViewerPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const workspace = useWorkspaceTenantKey();
 
   const [state, setState] = useState(initialState);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -546,6 +548,14 @@ export default function TruthViewerPage() {
   useEffect(() => {
     let alive = true;
 
+    setState(initialState());
+
+    if (!workspace.ready) {
+      return () => {
+        alive = false;
+      };
+    }
+
     Promise.allSettled([
       getCanonicalTruthSnapshot(),
       getTruthReviewWorkbench({ limit: 100 }),
@@ -605,7 +615,7 @@ export default function TruthViewerPage() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [workspace.ready, workspace.tenantKey]);
 
   async function handleOpenVersion(item = {}) {
     const versionId = normalizeTruthToken(

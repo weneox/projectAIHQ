@@ -4,6 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
+const useWorkspaceTenantKey = vi.fn();
+
 vi.mock("../../../api/truth.js", () => ({
   getCanonicalTruthSnapshot: vi.fn().mockResolvedValue({
     fields: [
@@ -235,6 +237,11 @@ vi.mock("../../../api/truth.js", () => ({
   }),
 }));
 
+vi.mock("../../../hooks/useWorkspaceTenantKey.js", () => ({
+  default: (...args) => useWorkspaceTenantKey(...args),
+  useWorkspaceTenantKey: (...args) => useWorkspaceTenantKey(...args),
+}));
+
 import TruthViewerPage from "../../../pages/Truth/TruthViewerPage.jsx";
 import {
   getCanonicalTruthSnapshot,
@@ -247,6 +254,11 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  useWorkspaceTenantKey.mockReturnValue({
+    tenantKey: "acme",
+    loading: false,
+    ready: true,
+  });
 });
 
 describe("Truth viewer smoke", () => {

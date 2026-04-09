@@ -11,6 +11,10 @@ import {
   getWebsiteWidgetStatus,
 } from "../api/channelConnect.js";
 import { getSettingsTrustView } from "../api/trust.js";
+import {
+  buildWorkspaceScopedQueryKey,
+  useWorkspaceTenantKey,
+} from "../hooks/useWorkspaceTenantKey.js";
 import { SETUP_WIDGET_ROUTE } from "../lib/appEntry.js";
 
 function s(value, fallback = "") {
@@ -1568,14 +1572,15 @@ const DEFAULT_PRODUCT_HOME_SOURCE_STATUS = {
 
 export function useProductHome(options = {}) {
   const enabled = options.enabled !== false;
+  const workspace = useWorkspaceTenantKey({ enabled });
 
   const state = useQuery({
-    queryKey: ["product-home"],
+    queryKey: buildWorkspaceScopedQueryKey(["product-home"], workspace.tenantKey),
     queryFn: loadProductHomePayloads,
     staleTime: 20_000,
     gcTime: 60_000,
     refetchOnWindowFocus: false,
-    enabled,
+    enabled: enabled && workspace.ready,
   });
 
   const payloads = useMemo(
@@ -1687,8 +1692,8 @@ export function useProductHome(options = {}) {
   }, [payloads, sourceStatus]);
 
   return {
-    loading: enabled ? state.isLoading : false,
-    isFetching: enabled ? state.isFetching : false,
+    loading: enabled ? workspace.loading || state.isLoading : false,
+    isFetching: enabled ? workspace.loading || state.isFetching : false,
     refetch: state.refetch,
     ...derived,
   };

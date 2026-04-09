@@ -18,6 +18,10 @@ import {
   getMetaConnectUrl,
   selectMetaChannelCandidate,
 } from "../../api/channelConnect.js";
+import {
+  buildWorkspaceScopedQueryKey,
+  useWorkspaceTenantKey,
+} from "../../hooks/useWorkspaceTenantKey.js";
 import { cx } from "../../lib/cx.js";
 import ChannelIcon from "./ChannelIcon.jsx";
 import { ChannelActionButton } from "./ChannelPrimitives.jsx";
@@ -414,23 +418,34 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
   const isInstagram = isInstagramChannel(channel);
   const isTelegram = isTelegramChannel(channel);
   const queryClient = useQueryClient();
+  const workspace = useWorkspaceTenantKey({
+    enabled: open && (isInstagram || isTelegram),
+  });
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectingCandidateId, setSelectingCandidateId] = useState("");
   const [telegramBotToken, setTelegramBotToken] = useState("");
   const [telegramFeedback, setTelegramFeedback] = useState(null);
+  const metaStatusQueryKey = buildWorkspaceScopedQueryKey(
+    ["meta-channel-status"],
+    workspace.tenantKey
+  );
+  const telegramStatusQueryKey = buildWorkspaceScopedQueryKey(
+    ["telegram-channel-status"],
+    workspace.tenantKey
+  );
 
   const metaStatusQuery = useQuery({
-    queryKey: ["meta-channel-status"],
+    queryKey: metaStatusQueryKey,
     queryFn: getMetaChannelStatus,
-    enabled: open && isInstagram,
+    enabled: open && isInstagram && workspace.ready,
     staleTime: 10_000,
     refetchOnWindowFocus: false,
   });
 
   const telegramStatusQuery = useQuery({
-    queryKey: ["telegram-channel-status"],
+    queryKey: telegramStatusQueryKey,
     queryFn: getTelegramChannelStatus,
-    enabled: open && isTelegram,
+    enabled: open && isTelegram && workspace.ready,
     staleTime: 10_000,
     refetchOnWindowFocus: false,
   });
@@ -449,7 +464,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
     mutationFn: disconnectMetaChannel,
     async onSuccess() {
       await queryClient.invalidateQueries({
-        queryKey: ["meta-channel-status"],
+        queryKey: metaStatusQueryKey,
       });
     },
   });
@@ -466,7 +481,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
       nextParams.set("channel", "instagram");
       setSearchParams(nextParams);
       await queryClient.invalidateQueries({
-        queryKey: ["meta-channel-status"],
+        queryKey: metaStatusQueryKey,
       });
       setSelectingCandidateId("");
     },
@@ -485,7 +500,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
       });
       setTelegramBotToken("");
       await queryClient.invalidateQueries({
-        queryKey: ["telegram-channel-status"],
+        queryKey: telegramStatusQueryKey,
       });
     },
   });
@@ -500,7 +515,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
       });
       setTelegramBotToken("");
       await queryClient.invalidateQueries({
-        queryKey: ["telegram-channel-status"],
+        queryKey: telegramStatusQueryKey,
       });
     },
   });

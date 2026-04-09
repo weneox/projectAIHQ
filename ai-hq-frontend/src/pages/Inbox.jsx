@@ -18,6 +18,7 @@ import { useThreadOutboundAttemptsSurface } from "../components/inbox/hooks/useT
 import SurfaceBanner from "../components/feedback/SurfaceBanner.jsx";
 import { useInboxData } from "../hooks/useInboxData.js";
 import { useInboxRealtime } from "../hooks/useInboxRealtime.js";
+import useWorkspaceTenantKey from "../hooks/useWorkspaceTenantKey.js";
 import { getAppSessionContext } from "../lib/appSession.js";
 import {
   buildChannelTruthLaunchReadiness,
@@ -46,9 +47,9 @@ export default function Inbox() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const workspace = useWorkspaceTenantKey();
 
   const [wsState, setWsState] = useState("idle");
-  const [tenantKey, setTenantKey] = useState("");
   const [operatorName, setOperatorName] = useState("");
   const [detailOpen, setDetailOpen] = useState(false);
   const [readinessState, setReadinessState] = useState({
@@ -66,26 +67,46 @@ export default function Inbox() {
   useEffect(() => {
     let alive = true;
 
+    if (!workspace.ready) {
+      setOperatorName("");
+      return () => {
+        alive = false;
+      };
+    }
+
     getAppSessionContext()
       .then((next) => {
         if (!alive) return;
-        setTenantKey(String(next?.tenantKey || "").trim().toLowerCase());
         setOperatorName(
-          (prev) => prev || String(next?.actorName || "operator").trim()
+          String(next?.actorName || "operator").trim() || "operator"
         );
       })
       .catch(() => {
         if (!alive) return;
-        setOperatorName((prev) => prev || "operator");
+        setOperatorName("operator");
       });
 
     return () => {
       alive = false;
     };
-  }, []);
+  }, [workspace.ready, workspace.tenantKey]);
 
   useEffect(() => {
     let alive = true;
+
+    setReadinessState({
+      loading: true,
+      trust: null,
+      meta: null,
+      telegram: null,
+      website: null,
+    });
+
+    if (!workspace.ready) {
+      return () => {
+        alive = false;
+      };
+    }
 
     Promise.allSettled([
       getSettingsTrustView({ limit: 4 }),
@@ -129,7 +150,7 @@ export default function Inbox() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [workspace.ready, workspace.tenantKey]);
 
   const {
     threads,
@@ -156,7 +177,12 @@ export default function Inbox() {
     setThreadStatus,
     sendOperatorReply,
     openLeadDetail,
-  } = useInboxData({ operatorName, navigate });
+  } = useInboxData({
+    operatorName,
+    navigate,
+    tenantKey: workspace.tenantKey,
+    requireTenantScope: true,
+  });
 
   const threadList = useInboxThreadListSurface({
     requestedThreadId,
@@ -391,7 +417,7 @@ export default function Inbox() {
                 relatedLead={relatedLead}
                 openLeadDetail={openLeadDetail}
                 operatorName={operatorName}
-                tenantKey={tenantKey}
+                tenantKey={workspace.tenantKey}
                 wsState={wsState}
                 onClose={() => setDetailOpen(false)}
               />

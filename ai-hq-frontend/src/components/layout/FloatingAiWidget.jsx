@@ -16,6 +16,10 @@ import {
   startSetupAssistantSession,
   updateCurrentSetupAssistantDraft,
 } from "../../api/setup.js";
+import {
+  buildWorkspaceScopedQueryKey,
+  useWorkspaceTenantKey,
+} from "../../hooks/useWorkspaceTenantKey.js";
 import { SETUP_WIDGET_ROUTE } from "../../lib/appEntry.js";
 import SetupAssistantSections from "./SetupAssistantSections.jsx";
 
@@ -1383,6 +1387,9 @@ export default function FloatingAiWidget({
   const assistantRef = useRef(normalizeAssistantState(assistant));
   const pageMode = presentation === "page";
   const panelOpen = pageMode ? true : open;
+  const workspace = useWorkspaceTenantKey({
+    enabled: panelOpen,
+  });
 
   const [clientAssistant, setClientAssistant] = useState(
     normalizeAssistantState(assistant)
@@ -1398,10 +1405,26 @@ export default function FloatingAiWidget({
   );
   const [supportInput, setSupportInput] = useState("");
   const [supportBusy, setSupportBusy] = useState(false);
+  const productHomeQueryKey = buildWorkspaceScopedQueryKey(
+    ["product-home"],
+    workspace.tenantKey
+  );
+  const setupReviewQueryKey = buildWorkspaceScopedQueryKey(
+    ["setup-review-current", "widget"],
+    workspace.tenantKey
+  );
+  const telegramStatusQueryKey = buildWorkspaceScopedQueryKey(
+    ["telegram-channel-status"],
+    workspace.tenantKey
+  );
+  const metaStatusQueryKey = buildWorkspaceScopedQueryKey(
+    ["meta-channel-status"],
+    workspace.tenantKey
+  );
   const reviewQuery = useQuery({
-    queryKey: ["setup-review-current", "widget"],
+    queryKey: setupReviewQueryKey,
     queryFn: () => getCurrentSetupReview({ eventLimit: 12 }),
-    enabled: panelOpen && surfaceMode === "setup",
+    enabled: panelOpen && surfaceMode === "setup" && workspace.ready,
     retry: false,
     staleTime: 30_000,
   });
@@ -1480,8 +1503,8 @@ export default function FloatingAiWidget({
       setClientAssistant((prev) => buildAssistantFromApi(prev, response));
 
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["product-home"] }),
-        queryClient.invalidateQueries({ queryKey: ["setup-review-current"] }),
+        queryClient.invalidateQueries({ queryKey: productHomeQueryKey }),
+        queryClient.invalidateQueries({ queryKey: setupReviewQueryKey }),
       ]);
       return response;
     } finally {
@@ -1505,8 +1528,8 @@ export default function FloatingAiWidget({
       setClientAssistant((prev) => buildAssistantFromApi(prev, response));
 
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["product-home"] }),
-        queryClient.invalidateQueries({ queryKey: ["setup-review-current"] }),
+        queryClient.invalidateQueries({ queryKey: productHomeQueryKey }),
+        queryClient.invalidateQueries({ queryKey: setupReviewQueryKey }),
       ]);
       return response;
     } finally {
@@ -1530,10 +1553,10 @@ export default function FloatingAiWidget({
       }
 
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["product-home"] }),
-        queryClient.invalidateQueries({ queryKey: ["setup-review-current"] }),
-        queryClient.invalidateQueries({ queryKey: ["telegram-channel-status"] }),
-        queryClient.invalidateQueries({ queryKey: ["meta-channel-status"] }),
+        queryClient.invalidateQueries({ queryKey: productHomeQueryKey }),
+        queryClient.invalidateQueries({ queryKey: setupReviewQueryKey }),
+        queryClient.invalidateQueries({ queryKey: telegramStatusQueryKey }),
+        queryClient.invalidateQueries({ queryKey: metaStatusQueryKey }),
       ]);
 
       setClientAssistant((prev) =>
@@ -1593,8 +1616,8 @@ export default function FloatingAiWidget({
       }
 
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["product-home"] }),
-        queryClient.invalidateQueries({ queryKey: ["setup-review-current"] }),
+        queryClient.invalidateQueries({ queryKey: productHomeQueryKey }),
+        queryClient.invalidateQueries({ queryKey: setupReviewQueryKey }),
       ]);
 
       return response;

@@ -10,6 +10,12 @@ const getOutboundSummary = vi.fn();
 const getMetaChannelStatus = vi.fn();
 const getTelegramChannelStatus = vi.fn();
 const getWebsiteWidgetStatus = vi.fn();
+const useWorkspaceTenantKey = vi.fn();
+let workspaceScope = {
+  tenantKey: "acme",
+  loading: false,
+  ready: true,
+};
 
 vi.mock("../../api/setup.js", () => ({
   getSetupState: (...args) => getSetupState(...args),
@@ -32,22 +38,43 @@ vi.mock("../../api/channelConnect.js", () => ({
   getWebsiteWidgetStatus: (...args) => getWebsiteWidgetStatus(...args),
 }));
 
+vi.mock("../../hooks/useWorkspaceTenantKey.js", () => ({
+  useWorkspaceTenantKey: (...args) => useWorkspaceTenantKey(...args),
+  buildWorkspaceScopedQueryKey: (baseKey, tenantKey) => [
+    ...(Array.isArray(baseKey) ? baseKey : [baseKey]),
+    "workspace",
+    String(tenantKey || "").trim().toLowerCase(),
+  ],
+}));
+
 import useProductHome from "../../view-models/useProductHome.js";
 
-function createWrapper() {
-  const queryClient = new QueryClient({
+function createWrapper(queryClient = null) {
+  const client =
+    queryClient ||
+    new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    });
+
+  return function Wrapper({ children }) {
+    return (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+  };
+}
+
+function createQueryClient() {
+  return new QueryClient({
     defaultOptions: {
       queries: {
         retry: false,
       },
     },
   });
-
-  return function Wrapper({ children }) {
-    return (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
-  };
 }
 
 function createTrustView(overrides = {}) {
@@ -99,6 +126,11 @@ function createTelegramStatus(overrides = {}) {
 describe("useProductHome", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    workspaceScope = {
+      tenantKey: "acme",
+      loading: false,
+      ready: true,
+    };
 
     getSetupState.mockResolvedValue({});
     getSettingsTrustView.mockResolvedValue(createTrustView());
@@ -108,6 +140,7 @@ describe("useProductHome", () => {
     getTelegramChannelStatus.mockResolvedValue(createTelegramStatus());
     getWebsiteWidgetStatus.mockRejectedValue(new Error("website unavailable"));
     getCurrentSetupAssistantSession.mockResolvedValue(null);
+    useWorkspaceTenantKey.mockImplementation(() => workspaceScope);
   });
 
   it("uses a connect CTA posture when Telegram is not connected", async () => {
@@ -304,5 +337,41 @@ describe("useProductHome", () => {
     expect(result.current.launchChannel.provider).toBe("website");
     expect(result.current.launchChannel.connected).toBe(true);
     expect(result.current.launchChannel.action.path).toBe("/channels?channel=website");
+  });
+
+  it("does not reuse another workspace's cached launch posture", async () => {
+    const queryClient = createQueryClient();
+    const wrapper = createWrapper(queryClient);
+
+    workspaceScope = {
+      tenantKey: "acme",
+      loading: false,
+      ready: true,
+    };
+    getSetupState.mockResolvedValueOnce({});
+
+    const first = renderHook(() => useProductHome(), { wrapper });
+
+    await waitFor(() => {
+      expect(first.result.current.loading).toBe(false);
+    });
+
+    expect(getSetupState).toHaveBeenCalledTimes(1);
+    first.unmount();
+
+    workspaceScope = {
+      tenantKey: "globex",
+      loading: false,
+      ready: true,
+    };
+    getSetupState.mockResolvedValueOnce({});
+
+    const second = renderHook(() => useProductHome(), { wrapper });
+
+    await waitFor(() => {
+      expect(second.result.current.loading).toBe(false);
+    });
+
+    expect(getSetupState).toHaveBeenCalledTimes(2);
   });
 });

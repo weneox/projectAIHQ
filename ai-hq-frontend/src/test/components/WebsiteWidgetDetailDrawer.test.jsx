@@ -4,11 +4,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const getWebsiteWidgetStatus = vi.fn();
 const saveWebsiteWidgetConfig = vi.fn();
+const useWorkspaceTenantKey = vi.fn();
 
 vi.mock("../../api/channelConnect.js", () => ({
   getWebsiteWidgetStatus: (...args) => getWebsiteWidgetStatus(...args),
   saveWebsiteWidgetConfig: (...args) => saveWebsiteWidgetConfig(...args),
 }));
+
+vi.mock("../../hooks/useWorkspaceTenantKey.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    default: (...args) => useWorkspaceTenantKey(...args),
+    useWorkspaceTenantKey: (...args) => useWorkspaceTenantKey(...args),
+    buildWorkspaceScopedQueryKey: (baseKey, tenantKey) => [
+      ...(Array.isArray(baseKey) ? baseKey : [baseKey]),
+      "workspace",
+      String(tenantKey || "").trim().toLowerCase(),
+    ],
+  };
+});
 
 import WebsiteWidgetDetailDrawer from "../../components/channels/WebsiteWidgetDetailDrawer.jsx";
 
@@ -41,6 +56,11 @@ function renderDrawer(props = {}) {
 
 describe("WebsiteWidgetDetailDrawer", () => {
   beforeEach(() => {
+    useWorkspaceTenantKey.mockReturnValue({
+      tenantKey: "acme",
+      loading: false,
+      ready: true,
+    });
     getWebsiteWidgetStatus.mockResolvedValue({
       ok: true,
       state: "connected",

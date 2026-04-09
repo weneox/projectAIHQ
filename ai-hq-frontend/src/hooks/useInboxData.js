@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiPost } from "../api/client.js";
 import { getLeadByThreadId } from "../api/leads.js";
 import { useActionState } from "./useActionState.js";
@@ -40,8 +40,19 @@ function clearSharedInboxRequests(prefix = "") {
   }
 }
 
-export function useInboxData({ operatorName, navigate }) {
+function s(value = "", fallback = "") {
+  return String(value ?? fallback).trim();
+}
+
+export function useInboxData({
+  operatorName,
+  navigate,
+  tenantKey = "",
+  requireTenantScope = false,
+}) {
   const actorName = String(operatorName || "").trim() || "operator";
+  const tenantScope = s(tenantKey).toLowerCase();
+  const requestScopePrefix = tenantScope ? `tenant:${tenantScope}:` : "";
   const actionState = useActionState();
   const [messages, setMessages] = useState([]);
   const [selectedThread, setSelectedThread] = useState(null);
@@ -73,12 +84,35 @@ export function useInboxData({ operatorName, navigate }) {
   const threads = Array.isArray(data?.threads) ? data.threads : [];
   const dbDisabled = Boolean(data?.dbDisabled);
 
+  useEffect(() => {
+    clearSharedInboxRequests("tenant:");
+    setData({
+      threads: [],
+      dbDisabled: false,
+    });
+    setMessages([]);
+    setSelectedThread(null);
+    setRelatedLead(null);
+    setThreadDetailError("");
+    setMessagesError("");
+    setLeadError("");
+    clearSaveState();
+
+    if (tenantScope) {
+      beginRefresh();
+    }
+  }, [beginRefresh, clearSaveState, setData, tenantScope]);
+
   const loadThreads = useCallback(
     async (preferredId = "") => {
+      if (requireTenantScope && !tenantScope) {
+        return null;
+      }
+
       try {
         beginRefresh();
 
-        const j = await withSharedInboxRequest("threads:list", () =>
+        const j = await withSharedInboxRequest(`${requestScopePrefix}threads:list`, () =>
           apiGet("/api/inbox/threads")
         );
         const arr = Array.isArray(j?.threads) ? j.threads : [];
@@ -118,17 +152,28 @@ export function useInboxData({ operatorName, navigate }) {
         });
       }
     },
-    [beginRefresh, failRefresh, setData, succeedRefresh]
+    [
+      beginRefresh,
+      failRefresh,
+      requestScopePrefix,
+      requireTenantScope,
+      setData,
+      succeedRefresh,
+      tenantScope,
+    ]
   );
 
   const loadThreadDetail = useCallback(async (threadId) => {
     if (!threadId) return;
+    if (requireTenantScope && !tenantScope) return;
 
     try {
       setLoadingThreadDetail(true);
       setThreadDetailError("");
-      const j = await withSharedInboxRequest(`threads:detail:${threadId}`, () =>
-        apiGet(`/api/inbox/threads/${threadId}`)
+      const j = await withSharedInboxRequest(
+        `${requestScopePrefix}threads:detail:${threadId}`,
+        () =>
+          apiGet(`/api/inbox/threads/${threadId}`)
       );
       if (j?.thread) {
         setSelectedThread(j.thread);
@@ -143,19 +188,22 @@ export function useInboxData({ operatorName, navigate }) {
     } finally {
       setLoadingThreadDetail(false);
     }
-  }, [setData]);
+  }, [requestScopePrefix, requireTenantScope, setData, tenantScope]);
 
   const loadMessages = useCallback(async (threadId) => {
     if (!threadId) {
       setMessages([]);
       return;
     }
+    if (requireTenantScope && !tenantScope) return;
 
     try {
       setLoadingMessages(true);
       setMessagesError("");
-      const j = await withSharedInboxRequest(`threads:messages:${threadId}`, () =>
-        apiGet(`/api/inbox/threads/${threadId}/messages?limit=200`)
+      const j = await withSharedInboxRequest(
+        `${requestScopePrefix}threads:messages:${threadId}`,
+        () =>
+          apiGet(`/api/inbox/threads/${threadId}/messages?limit=200`)
       );
       setMessages(Array.isArray(j?.messages) ? j.messages : []);
     } catch (e) {
@@ -164,19 +212,22 @@ export function useInboxData({ operatorName, navigate }) {
     } finally {
       setLoadingMessages(false);
     }
-  }, []);
+  }, [requestScopePrefix, requireTenantScope, tenantScope]);
 
   const loadRelatedLead = useCallback(async (threadId) => {
     if (!threadId) {
       setRelatedLead(null);
       return;
     }
+    if (requireTenantScope && !tenantScope) return;
 
     try {
       setLoadingLead(true);
       setLeadError("");
-      const j = await withSharedInboxRequest(`threads:lead:${threadId}`, () =>
-        getLeadByThreadId(threadId)
+      const j = await withSharedInboxRequest(
+        `${requestScopePrefix}threads:lead:${threadId}`,
+        () =>
+          getLeadByThreadId(threadId)
       );
       setRelatedLead(j?.lead || null);
     } catch (e) {
@@ -185,7 +236,7 @@ export function useInboxData({ operatorName, navigate }) {
     } finally {
       setLoadingLead(false);
     }
-  }, []);
+  }, [requestScopePrefix, requireTenantScope, tenantScope]);
 
   const syncSelected = useCallback(
     async (threadId) => {
@@ -205,14 +256,14 @@ export function useInboxData({ operatorName, navigate }) {
       try {
         beginSave();
         await actionState.runAction("read", () => apiPost(`/api/inbox/threads/${threadId}/read`, {}));
-        clearSharedInboxRequests("threads:");
+        clearSharedInboxRequests(`${requestScopePrefix}threads:`);
         await syncSelected(threadId);
         succeedSave({ message: "Thread marked as read." });
       } catch (e) {
         failSave(String(e?.message || e || "Failed to mark thread as read"));
       }
     },
-    [actionState, beginSave, failSave, succeedSave, syncSelected]
+    [actionState, beginSave, failSave, requestScopePrefix, succeedSave, syncSelected]
   );
 
   const assignThread = useCallback(
@@ -227,7 +278,7 @@ export function useInboxData({ operatorName, navigate }) {
             actor: actorName,
           })
         );
-        clearSharedInboxRequests("threads:");
+        clearSharedInboxRequests(`${requestScopePrefix}threads:`);
         await loadThreads(threadId);
         await syncSelected(threadId);
         succeedSave({ message: "Thread assigned." });
@@ -235,7 +286,16 @@ export function useInboxData({ operatorName, navigate }) {
         failSave(String(e?.message || e || "Failed to assign thread"));
       }
     },
-    [actionState, actorName, beginSave, failSave, loadThreads, succeedSave, syncSelected]
+    [
+      actionState,
+      actorName,
+      beginSave,
+      failSave,
+      loadThreads,
+      requestScopePrefix,
+      succeedSave,
+      syncSelected,
+    ]
   );
 
   const activateHandoff = useCallback(
@@ -252,7 +312,7 @@ export function useInboxData({ operatorName, navigate }) {
             actor: actorName,
           })
         );
-        clearSharedInboxRequests("threads:");
+        clearSharedInboxRequests(`${requestScopePrefix}threads:`);
         await loadThreads(threadId);
         await syncSelected(threadId);
         succeedSave({ message: "Handoff activated." });
@@ -260,7 +320,16 @@ export function useInboxData({ operatorName, navigate }) {
         failSave(String(e?.message || e || "Failed to activate handoff"));
       }
     },
-    [actionState, actorName, beginSave, failSave, loadThreads, succeedSave, syncSelected]
+    [
+      actionState,
+      actorName,
+      beginSave,
+      failSave,
+      loadThreads,
+      requestScopePrefix,
+      succeedSave,
+      syncSelected,
+    ]
   );
 
   const releaseHandoff = useCallback(
@@ -274,7 +343,7 @@ export function useInboxData({ operatorName, navigate }) {
             actor: actorName,
           })
         );
-        clearSharedInboxRequests("threads:");
+        clearSharedInboxRequests(`${requestScopePrefix}threads:`);
         await loadThreads(threadId);
         await syncSelected(threadId);
         succeedSave({ message: "Handoff released." });
@@ -282,7 +351,16 @@ export function useInboxData({ operatorName, navigate }) {
         failSave(String(e?.message || e || "Failed to release handoff"));
       }
     },
-    [actionState, actorName, beginSave, failSave, loadThreads, succeedSave, syncSelected]
+    [
+      actionState,
+      actorName,
+      beginSave,
+      failSave,
+      loadThreads,
+      requestScopePrefix,
+      succeedSave,
+      syncSelected,
+    ]
   );
 
   const setThreadStatus = useCallback(
@@ -297,7 +375,7 @@ export function useInboxData({ operatorName, navigate }) {
             actor: actorName,
           })
         );
-        clearSharedInboxRequests("threads:");
+        clearSharedInboxRequests(`${requestScopePrefix}threads:`);
         await loadThreads(threadId);
         await syncSelected(threadId);
         succeedSave({ message: status === "closed" ? "Thread closed." : "Thread resolved." });
@@ -305,7 +383,16 @@ export function useInboxData({ operatorName, navigate }) {
         failSave(String(e?.message || e || "Failed to update thread status"));
       }
     },
-    [actionState, actorName, beginSave, failSave, loadThreads, succeedSave, syncSelected]
+    [
+      actionState,
+      actorName,
+      beginSave,
+      failSave,
+      loadThreads,
+      requestScopePrefix,
+      succeedSave,
+      syncSelected,
+    ]
   );
 
   const sendOperatorReply = useCallback(
@@ -332,7 +419,7 @@ export function useInboxData({ operatorName, navigate }) {
           })
         );
 
-        clearSharedInboxRequests("threads:");
+        clearSharedInboxRequests(`${requestScopePrefix}threads:`);
         await loadThreads(threadId);
         await syncSelected(threadId);
         succeedSave({
@@ -345,7 +432,16 @@ export function useInboxData({ operatorName, navigate }) {
         return false;
       }
     },
-    [actionState, actorName, beginSave, failSave, loadThreads, succeedSave, syncSelected]
+    [
+      actionState,
+      actorName,
+      beginSave,
+      failSave,
+      loadThreads,
+      requestScopePrefix,
+      succeedSave,
+      syncSelected,
+    ]
   );
 
   const openLeadDetail = useCallback(

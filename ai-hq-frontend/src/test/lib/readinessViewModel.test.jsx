@@ -114,4 +114,59 @@ describe("createReadinessViewModel", () => {
     expect(readiness.action.path).toBe("/channels?channel=website");
     expect(readiness.title).toBe("Launch posture is healthy.");
   });
+
+  it("stays fail-closed when website chat is connected but approved truth is missing", () => {
+    const website = buildWebsiteLaunchChannelState({
+      state: "connected",
+      widget: {
+        enabled: true,
+        publicWidgetId: "widget_public_123",
+      },
+      readiness: {
+        status: "ready",
+        message:
+          "Website chat is configured with a publishable install ID and trusted origin controls.",
+      },
+    });
+
+    const readiness = buildChannelTruthLaunchReadiness({
+      channels: [website],
+      truthState: buildTruthOperationalState({
+        summary: {
+          truth: {
+            latestVersionId: "",
+            readiness: {
+              status: "blocked",
+              reasonCode: "approved_truth_unavailable",
+              blockers: [],
+            },
+          },
+          runtimeProjection: {
+            health: {
+              usable: false,
+            },
+            authority: {
+              available: false,
+            },
+            readiness: {
+              status: "blocked",
+              blockers: [],
+            },
+          },
+        },
+      }),
+      surface: {
+        unavailable: false,
+        error: "",
+      },
+      copy: {
+        channelsPath: "/channels",
+        truthPath: "/truth",
+      },
+    });
+
+    expect(readiness.status).toBe("blocked");
+    expect(readiness.title).toMatch(/truth/i);
+    expect(readiness.action.path).toBe("/home?assistant=setup");
+  });
 });

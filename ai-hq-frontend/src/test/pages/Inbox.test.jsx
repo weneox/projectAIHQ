@@ -8,6 +8,7 @@ const getAppSessionContext = vi.fn();
 const areInternalRoutesEnabled = vi.fn();
 const useInboxComposerSurface = vi.fn();
 const useThreadOutboundAttemptsSurface = vi.fn();
+const useWorkspaceTenantKey = vi.fn();
 const mockNavigate = vi.fn();
 const mockSetSearchParams = vi.fn();
 
@@ -61,6 +62,11 @@ vi.mock("../../hooks/useInboxRealtime.js", () => ({
   useInboxRealtime: (...args) => useInboxRealtime(...args),
 }));
 
+vi.mock("../../hooks/useWorkspaceTenantKey.js", () => ({
+  default: (...args) => useWorkspaceTenantKey(...args),
+  useWorkspaceTenantKey: (...args) => useWorkspaceTenantKey(...args),
+}));
+
 vi.mock("../../lib/appSession.js", () => ({
   getAppSessionContext: (...args) => getAppSessionContext(...args),
 }));
@@ -74,6 +80,11 @@ import Inbox from "../../pages/Inbox.jsx";
 describe("Inbox", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useWorkspaceTenantKey.mockReturnValue({
+      tenantKey: "acme",
+      loading: false,
+      ready: true,
+    });
   });
 
   it("renders the primary conversation-work surface feedback", async () => {

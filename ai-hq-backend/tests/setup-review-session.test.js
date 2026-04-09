@@ -217,6 +217,64 @@ test("Case A2: setup assistant shell can reuse the current session when the same
   assert.equal(shouldReuse, true);
 });
 
+test("Case A3: same website does not reuse when the intake bundle changed", () => {
+  const existingBundle = {
+    primarySource: {
+      sourceType: "website",
+      url: "https://alpha.example",
+    },
+    sources: [
+      {
+        sourceType: "website",
+        url: "https://alpha.example",
+        isPrimary: true,
+      },
+      {
+        sourceType: "instagram",
+        url: "https://instagram.com/alpha",
+      },
+    ],
+  };
+
+  const currentReview = {
+    session: {
+      id: "session-bundle-change",
+      metadata: {
+        intakeBundleKey: importTest.buildIntakeBundleKey(existingBundle),
+      },
+    },
+    draft: {
+      sourceSummary: {
+        primarySourceType: "website",
+        primarySourceUrl: "https://alpha.example",
+      },
+    },
+    sources: [],
+  };
+
+  const shouldReuse = importTest.shouldReuseSessionForImport({
+    currentReview,
+    incomingType: "website",
+    incomingUrl: "https://alpha.example",
+    allowSessionReuse: true,
+    nextIntakeContext: {
+      primarySource: {
+        sourceType: "website",
+        url: "https://alpha.example",
+      },
+      sources: [
+        {
+          sourceType: "website",
+          url: "https://alpha.example",
+          isPrimary: true,
+        },
+      ],
+    },
+  });
+
+  assert.equal(shouldReuse, false);
+});
+
 test("Case B: same-bundle re-import evicts unsupported source-derived fields", () => {
   const merged = importTest.mergeImportedDraftPatch({
     currentDraft: {

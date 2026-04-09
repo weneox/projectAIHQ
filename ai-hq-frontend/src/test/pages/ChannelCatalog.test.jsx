@@ -9,8 +9,10 @@ const getMetaConnectUrl = vi.fn();
 const disconnectMetaChannel = vi.fn();
 const selectMetaChannelCandidate = vi.fn();
 const getTelegramChannelStatus = vi.fn();
+const getWebsiteWidgetStatus = vi.fn();
 const connectTelegramChannel = vi.fn();
 const disconnectTelegramChannel = vi.fn();
+const useWorkspaceTenantKey = vi.fn();
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual("react-router-dom");
@@ -26,8 +28,19 @@ vi.mock("../../api/channelConnect.js", () => ({
   disconnectMetaChannel: (...args) => disconnectMetaChannel(...args),
   selectMetaChannelCandidate: (...args) => selectMetaChannelCandidate(...args),
   getTelegramChannelStatus: (...args) => getTelegramChannelStatus(...args),
+  getWebsiteWidgetStatus: (...args) => getWebsiteWidgetStatus(...args),
   connectTelegramChannel: (...args) => connectTelegramChannel(...args),
   disconnectTelegramChannel: (...args) => disconnectTelegramChannel(...args),
+}));
+
+vi.mock("../../hooks/useWorkspaceTenantKey.js", () => ({
+  default: (...args) => useWorkspaceTenantKey(...args),
+  useWorkspaceTenantKey: (...args) => useWorkspaceTenantKey(...args),
+  buildWorkspaceScopedQueryKey: (baseKey, tenantKey) => [
+    ...(Array.isArray(baseKey) ? baseKey : [baseKey]),
+    "workspace",
+    String(tenantKey || "").trim().toLowerCase(),
+  ],
 }));
 
 import ChannelCatalog from "../../pages/ChannelCatalog.jsx";
@@ -60,6 +73,11 @@ function renderCatalog(initialEntries = ["/channels"]) {
 }
 
 beforeEach(() => {
+  useWorkspaceTenantKey.mockReturnValue({
+    tenantKey: "acme",
+    loading: false,
+    ready: true,
+  });
   getMetaChannelStatus.mockResolvedValue({
     ok: true,
     state: "connected",
@@ -145,6 +163,20 @@ beforeEach(() => {
       connectAvailable: false,
       reconnectAvailable: false,
       disconnectAvailable: true,
+    },
+  });
+  getWebsiteWidgetStatus.mockResolvedValue({
+    state: "connected",
+    widget: {
+      enabled: true,
+      publicWidgetId: "ww_acme_widget",
+      websiteUrl: "https://acme.example",
+    },
+    readiness: {
+      status: "ready",
+      message:
+        "Website chat is configured with a publishable install ID and trusted origin controls.",
+      blockers: [],
     },
   });
   connectTelegramChannel.mockResolvedValue({

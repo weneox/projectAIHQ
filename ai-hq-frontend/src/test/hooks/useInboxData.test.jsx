@@ -69,4 +69,62 @@ describe("useInboxData", () => {
     );
     expect(result.current.actionState.pendingAction).toBe("");
   });
+
+  it("does not share inbox request dedupe across workspaces", async () => {
+    let releaseFirst;
+    let releaseSecond;
+    let threadListCalls = 0;
+
+    apiGet.mockImplementation((path) => {
+      if (String(path) === "/api/inbox/threads") {
+        threadListCalls += 1;
+        return new Promise((resolve) => {
+          if (threadListCalls === 1) {
+            releaseFirst = () =>
+              resolve({
+                threads: [],
+                dbDisabled: false,
+              });
+          } else {
+            releaseSecond = () =>
+              resolve({
+                threads: [],
+                dbDisabled: false,
+              });
+          }
+        });
+      }
+
+      return Promise.resolve({});
+    });
+
+    const first = renderHook(() =>
+      useInboxData({
+        operatorName: "operator",
+        navigate: vi.fn(),
+        tenantKey: "acme",
+        requireTenantScope: true,
+      })
+    );
+
+    const second = renderHook(() =>
+      useInboxData({
+        operatorName: "operator",
+        navigate: vi.fn(),
+        tenantKey: "globex",
+        requireTenantScope: true,
+      })
+    );
+
+    await act(async () => {
+      const firstLoad = first.result.current.loadThreads();
+      const secondLoad = second.result.current.loadThreads();
+      await waitFor(() => {
+        expect(apiGet).toHaveBeenCalledTimes(2);
+      });
+      releaseFirst?.();
+      releaseSecond?.();
+      await Promise.all([firstLoad, secondLoad]);
+    });
+  });
 });
