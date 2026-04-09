@@ -31,11 +31,7 @@ import {
   Surface,
 } from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
-import {
-  compactSentence,
-  s,
-  toneFromReadiness,
-} from "../lib/appUi.js";
+import { compactSentence, s, toneFromReadiness } from "../lib/appUi.js";
 import {
   buildChannelTruthLaunchReadiness,
   buildMetaLaunchChannelState,
@@ -47,6 +43,7 @@ import { useLaunchSliceRefreshToken } from "../lib/launchSliceRefresh.js";
 
 const EMPTY_READINESS_STATE = {
   tenantKey: "",
+  requestKey: "",
   loading: true,
   error: "",
   meta: null,
@@ -108,23 +105,17 @@ export default function ChannelCatalog() {
 
   const drawerChannel = selectedChannel || closingChannel;
 
+  const currentReadinessRequestKey = useMemo(() => {
+    if (!workspace.ready) return "";
+    return `${s(workspace.tenantKey)}:${String(refreshToken ?? "")}`;
+  }, [refreshToken, workspace.ready, workspace.tenantKey]);
+
   useEffect(() => {
     if (!workspace.ready) return undefined;
 
     let alive = true;
-
-    setReadinessState((current) =>
-      current.tenantKey === workspace.tenantKey
-        ? {
-            ...current,
-            loading: true,
-            error: "",
-          }
-        : {
-            ...EMPTY_READINESS_STATE,
-            tenantKey: workspace.tenantKey,
-          }
-    );
+    const tenantKey = workspace.tenantKey;
+    const requestKey = currentReadinessRequestKey;
 
     Promise.allSettled([
       getMetaChannelStatus(),
@@ -153,7 +144,8 @@ export default function ChannelCatalog() {
             : buildTruthOperationalState(null);
 
         setReadinessState({
-          tenantKey: workspace.tenantKey,
+          tenantKey,
+          requestKey,
           loading: false,
           error: "",
           meta,
@@ -164,8 +156,10 @@ export default function ChannelCatalog() {
       })
       .catch((error) => {
         if (!alive) return;
+
         setReadinessState({
-          tenantKey: workspace.tenantKey,
+          tenantKey,
+          requestKey,
           loading: false,
           error: s(
             error?.message || error || "Channel readiness could not be loaded."
@@ -180,7 +174,7 @@ export default function ChannelCatalog() {
     return () => {
       alive = false;
     };
-  }, [refreshToken, workspace.ready, workspace.tenantKey]);
+  }, [currentReadinessRequestKey, workspace.ready, workspace.tenantKey]);
 
   const effectiveReadinessState = useMemo(() => {
     if (!workspace.ready) {
@@ -194,11 +188,27 @@ export default function ChannelCatalog() {
       return {
         ...EMPTY_READINESS_STATE,
         tenantKey: workspace.tenantKey,
+        requestKey: currentReadinessRequestKey,
+        loading: true,
+      };
+    }
+
+    if (readinessState.requestKey !== currentReadinessRequestKey) {
+      return {
+        ...readinessState,
+        requestKey: currentReadinessRequestKey,
+        loading: true,
+        error: "",
       };
     }
 
     return readinessState;
-  }, [readinessState, workspace.ready, workspace.tenantKey]);
+  }, [
+    currentReadinessRequestKey,
+    readinessState,
+    workspace.ready,
+    workspace.tenantKey,
+  ]);
 
   useEffect(() => {
     if (!selectedChannel) return undefined;
@@ -267,8 +277,7 @@ export default function ChannelCatalog() {
             "A channel is connected, but delivery is still blocked.",
           deliveryBlockedDetail:
             "Inspect the connected channel and clear delivery blockers before trusting live automation.",
-          truthBlockedApprovalTitle:
-            "Business truth still needs approval.",
+          truthBlockedApprovalTitle: "Business truth still needs approval.",
           truthBlockedRuntimeTitle: "Runtime still needs repair.",
           truthBlockedDetail:
             "Connected channels alone are not enough. Approved truth and healthy runtime must also be aligned.",
@@ -408,7 +417,10 @@ export default function ChannelCatalog() {
           <MetricCard
             label="Launch posture"
             value={s(launchReadiness.statusLabel, "Unknown")}
-            hint={compactSentence(launchReadiness.summary, "Readiness unavailable.")}
+            hint={compactSentence(
+              launchReadiness.summary,
+              "Readiness unavailable."
+            )}
             tone={toneFromReadiness(launchReadiness)}
           />
           <MetricCard
