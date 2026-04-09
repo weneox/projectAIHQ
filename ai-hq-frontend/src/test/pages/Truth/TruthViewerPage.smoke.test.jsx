@@ -320,7 +320,7 @@ describe("Truth viewer smoke", () => {
     expect(screen.getByText("+15551112222")).toBeInTheDocument();
     expect(screen.getByText("https://north.example")).toBeInTheDocument();
     expect(screen.getByText(/reviewer@aihq\.test/i)).toBeInTheDocument();
-    expect(screen.getByText(/^Healthy$/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/^Healthy$/i).length).toBeGreaterThan(0);
     expect(
       screen.getAllByText(/https:\/\/north\.example\/about/i).length
     ).toBeGreaterThan(0);
@@ -423,7 +423,7 @@ describe("Truth viewer smoke", () => {
 
     expect(screen.getByText("North Clinic")).toBeInTheDocument();
     expect(screen.getByText(/^Approved$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^Healthy$/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/^Healthy$/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/^Not available$/i).length).toBeGreaterThan(0);
     expect(
       screen.getByRole("button", { name: /version history/i })

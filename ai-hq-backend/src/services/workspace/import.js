@@ -432,11 +432,10 @@ function dedupeSourceSeeds(list = []) {
 
 function hasMeaningfulDraftContent(draft = {}) {
   return !!(
-    Object.keys(obj(draft?.businessProfile)).length ||
-    Object.keys(obj(draft?.capabilities)).length ||
-    arr(draft?.services).length ||
-    arr(draft?.knowledgeItems).length ||
-    arr(draft?.warnings).length
+    hasDraftIdentityCoverage(draft) ||
+    hasDraftContactCoverage(draft) ||
+    hasDraftServiceCoverage(draft) ||
+    hasDraftKnowledgeCoverage(draft)
   );
 }
 
