@@ -138,9 +138,15 @@ export default function ProductHomePage() {
   const primaryAction = normalizeNavigationAction(home.primaryAction);
   const secondaryAction = normalizeNavigationAction(home.secondaryAction);
   const steps = Array.isArray(home.launchSteps) ? home.launchSteps : [];
-  const activeStep =
-    steps.find((step) => step.complete !== true) || steps[steps.length - 1] || null;
-  const blocker = activeStep || {};
+  const nextStep =
+    home.nextStep ||
+    steps.find((step) => step.complete !== true) ||
+    steps[steps.length - 1] ||
+    null;
+  const blockerCount =
+    typeof home.blockerCount === "number"
+      ? home.blockerCount
+      : steps.filter((step) => step.complete !== true).length;
   const completeCount = steps.filter((step) => step.complete).length;
   const progressPercent = Math.min(
     Math.max(
@@ -152,6 +158,11 @@ export default function ProductHomePage() {
   const channelIdentity = s(
     home.launchChannel?.accountDisplayName || home.launchChannel?.accountHandle
   );
+  const laneStatusValue = home.launchReady
+    ? "Ready"
+    : blockerCount === 1
+      ? "1 blocker"
+      : `${blockerCount} blockers`;
 
   return (
     <PageCanvas>
@@ -162,11 +173,11 @@ export default function ProductHomePage() {
       />
 
       <PageHeader
-        eyebrow={s(home.launchPhaseLabel, "Launch lane")}
-        title={s(home.launchHeadline, "Open the launch lane.")}
+        eyebrow={s(home.launchPhaseLabel, "Launch posture")}
+        title={s(home.launchHeadline, "Review launch posture.")}
         description={compactSentence(
           home.launchSummary,
-          "Use Home to see what is blocking launch and where to go next."
+          "Use Home to review the full launch lane and move only the next governed step."
         )}
         actions={
           <>
@@ -195,25 +206,31 @@ export default function ProductHomePage() {
 
       <MetricGrid>
         <MetricCard
-          label="Phase"
-          value={s(home.launchPhaseLabel, "Unknown")}
-          hint={s(home.launchReady ? "Launch ready" : "Still in progress")}
-          tone={home.launchReady ? "success" : "neutral"}
+          label="Lane status"
+          value={laneStatusValue}
+          hint={
+            home.launchReady
+              ? "Setup, truth/runtime, channels, and inbox are aligned."
+              : nextStep
+                ? `Next: ${s(nextStep.label, "Launch step")}`
+                : "Review the launch lane."
+          }
+          tone={home.launchReady ? "success" : "warning"}
         />
         <MetricCard
           label="Progress"
-          value={`${progressPercent}%`}
-          hint={`${completeCount}/${steps.length || 4} steps clear`}
+          value={`${completeCount}/${steps.length || 4}`}
+          hint={`${progressPercent}% of the launch lane is currently clear`}
           tone={home.launchReady ? "success" : "info"}
         />
         <MetricCard
-          label="Current blocker"
-          value={s(blocker.title || blocker.label, "Launch lane")}
+          label="Next step"
+          value={s(nextStep?.title || nextStep?.label, "Launch lane")}
           hint={compactSentence(
-            blocker.summary,
+            nextStep?.summary,
             "Open the next launch step to keep the lane moving."
           )}
-          tone={home.launchReady ? "success" : "warning"}
+          tone={home.launchReady ? "success" : stepTone(nextStep)}
         />
         <MetricCard
           label={s(home.launchChannel?.channelLabel, "Launch channel")}
@@ -238,17 +255,15 @@ export default function ProductHomePage() {
         <div className="space-y-4">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
-              Main flow
+              Launch lane
             </div>
             <div className="mt-1 text-[18px] font-semibold text-text">
-              Channels, setup, truth, then inbox.
+              Setup, truth/runtime, channels, then inbox.
             </div>
             <div className="mt-1 text-[13px] leading-6 text-text-muted">
-              {compactSentence(
-                blocker.detail ||
-                  home.launchSummary ||
-                  "Connect the channel, shape the draft, approve truth and runtime, then go live in inbox."
-              )}
+              {home.launchReady
+                ? "The governed launch surfaces are aligned. Open the next live operator surface only when you need it."
+                : "Keep setup, truth/runtime, channels, and inbox aligned before treating the tenant as live."}
             </div>
           </div>
 
@@ -257,7 +272,7 @@ export default function ProductHomePage() {
               <StepRow
                 key={step.id}
                 step={step}
-                active={step.id === activeStep?.id}
+                active={step.id === nextStep?.id}
                 onNavigate={navigateFromAction}
               />
             ))}

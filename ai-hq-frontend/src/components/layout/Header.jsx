@@ -215,7 +215,7 @@ export default function Header({ onMenuClick, notifications }) {
                 AI HQ
               </div>
               <div className="text-[13px] text-text-muted">
-                Backend-facing shell
+                Launch posture and live operations
               </div>
             </div>
           </div>
