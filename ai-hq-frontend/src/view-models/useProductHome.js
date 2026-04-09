@@ -116,7 +116,8 @@ function buildLaunchAction(provider = "", mode = "open") {
 
   if (mode === "select") {
     return {
-      label: provider === "meta" ? "Select Instagram account" : `Open ${labelBase}`,
+      label:
+        provider === "meta" ? "Select Instagram account" : `Open ${labelBase}`,
       path,
     };
   }
@@ -157,11 +158,14 @@ function buildLaunchChannelUnavailableState() {
     action: { label: "Open channels", path: "/channels" },
     deliveryReady: false,
     reasonCode: "launch_channel_status_unavailable",
-    channelLabel: "Launch channel",
+    channelLabel: "Launch channels",
     accountLabel: "",
     accountDisplayName: "",
     accountHandle: "",
     account: {},
+    providerStates: [],
+    readyCount: 0,
+    connectedCount: 0,
   };
 }
 
@@ -190,7 +194,7 @@ function createCanonicalLaunchChannel(value = {}) {
     }),
     deliveryReady: value.deliveryReady === true,
     reasonCode: lower(value.reasonCode),
-    channelLabel: s(value.channelLabel, "Launch channel"),
+    channelLabel: s(value.channelLabel, "Launch channels"),
     accountLabel: s(value.accountLabel),
     accountDisplayName: displayName,
     accountHandle: handle,
@@ -199,6 +203,9 @@ function createCanonicalLaunchChannel(value = {}) {
       displayName,
       handle,
     },
+    providerStates: arr(value.providerStates),
+    readyCount: n(value.readyCount),
+    connectedCount: n(value.connectedCount),
   };
 }
 
@@ -217,8 +224,7 @@ function buildMetaLaunchChannelState({ metaPayload, sourceStatus }) {
   }
 
   const state = lower(metaPayload?.state);
-  const connected =
-    metaPayload?.connected === true || state === "connected";
+  const connected = metaPayload?.connected === true || state === "connected";
   const deliveryReady = metaPayload?.runtime?.deliveryReady === true;
   const selectionRequired = metaPayload?.pendingSelection?.required === true;
   const account = obj(metaPayload?.account);
@@ -578,42 +584,48 @@ function buildWebsiteLaunchChannelState({ websitePayload, sourceStatus }) {
   });
 }
 
-function scoreLaunchChannel(channel = {}) {
-  if (!channel?.available) return 0;
+function buildGenericLaunchChannelsState({
+  channels = [],
+  title = "",
+  summary = "",
+  detail = "",
+  status = "unavailable",
+  statusLabel = "Unavailable",
+  connected = false,
+  deliveryReady = false,
+  reasonCode = "",
+}) {
+  const availableChannels = channels.filter((channel) => channel.available);
+  const readyChannels = availableChannels.filter(
+    (channel) => channel.connected && channel.deliveryReady
+  );
+  const connectedChannels = availableChannels.filter(
+    (channel) => channel.connected
+  );
 
-  const provider = lower(channel.provider);
-  const isMeta = provider === "meta";
-  const isWebsite = provider === "website";
-
-  if (channel.connected && channel.deliveryReady) {
-    return isMeta ? 500 : isWebsite ? 420 : 400;
-  }
-
-  if (channel.connected && !channel.deliveryReady) {
-    return isMeta ? 320 : isWebsite ? 310 : 300;
-  }
-
-  if (channel.status === "selection_required") {
-    return 250;
-  }
-
-  if (channel.status === "connecting") {
-    return isMeta ? 240 : isWebsite ? 190 : 180;
-  }
-
-  if (channel.status === "repair_required") {
-    return isMeta ? 230 : isWebsite ? 175 : 170;
-  }
-
-  if (channel.status === "needs_connection") {
-    return isMeta ? 220 : isWebsite ? 165 : 160;
-  }
-
-  if (channel.status === "unavailable") {
-    return 0;
-  }
-
-  return isMeta ? 120 : 110;
+  return createCanonicalLaunchChannel({
+    id: "launch-generic",
+    type: "launch_channel",
+    provider: "",
+    connected,
+    available: availableChannels.length > 0,
+    status,
+    statusLabel,
+    title,
+    summary,
+    detail,
+    action: { label: "Open channels", path: "/channels" },
+    deliveryReady,
+    reasonCode,
+    channelLabel: "Launch channels",
+    accountLabel: "",
+    accountDisplayName: "",
+    accountHandle: "",
+    account: {},
+    providerStates: channels,
+    readyCount: readyChannels.length,
+    connectedCount: connectedChannels.length,
+  });
 }
 
 function resolveCanonicalLaunchChannel({
@@ -635,13 +647,83 @@ function resolveCanonicalLaunchChannel({
     sourceStatus,
   });
 
-  const best = [metaChannel, telegramChannel, websiteChannel].sort(
-    (left, right) => scoreLaunchChannel(right) - scoreLaunchChannel(left)
-  )[0];
+  const channels = [metaChannel, telegramChannel, websiteChannel];
+  const availableChannels = channels.filter((channel) => channel.available);
+  const readyChannels = availableChannels.filter(
+    (channel) => channel.connected && channel.deliveryReady
+  );
+  const connectedChannels = availableChannels.filter(
+    (channel) => channel.connected
+  );
+  const blockedConnectedChannels = connectedChannels.filter(
+    (channel) => !channel.deliveryReady
+  );
 
-  return best?.available
-    ? best
-    : createCanonicalLaunchChannel(buildLaunchChannelUnavailableState());
+  if (!availableChannels.length) {
+    return createCanonicalLaunchChannel(buildLaunchChannelUnavailableState());
+  }
+
+  if (readyChannels.length === 1) {
+    const activeChannel = readyChannels[0];
+    return createCanonicalLaunchChannel({
+      ...activeChannel,
+      providerStates: channels,
+      readyCount: readyChannels.length,
+      connectedCount: connectedChannels.length,
+    });
+  }
+
+  if (readyChannels.length > 1) {
+    return buildGenericLaunchChannelsState({
+      channels,
+      title: "Multiple launch channels are connected.",
+      summary:
+        `${readyChannels.length} launch channels are ready. Review Channels before deciding which live surface should lead operations.`,
+      detail:
+        "Home stays generic when more than one channel is launch-ready so the workspace does not silently privilege a provider.",
+      status: "multiple_ready",
+      statusLabel: "Multiple connected",
+      connected: true,
+      deliveryReady: true,
+      reasonCode: "",
+    });
+  }
+
+  if (connectedChannels.length > 0) {
+    return buildGenericLaunchChannelsState({
+      channels,
+      title: "A connected launch channel still needs review.",
+      summary:
+        connectedChannels.length === 1
+          ? "A launch channel is attached, but it should not be treated as live yet."
+          : `${connectedChannels.length} connected channels still need review before any one of them should be trusted as live.`,
+      detail:
+        blockedConnectedChannels[0]?.detail ||
+        "Open Channels to inspect connection posture, provider repair needs, and delivery blockers.",
+      status: "connected_blocked",
+      statusLabel: "Connected, blocked",
+      connected: true,
+      deliveryReady: false,
+      reasonCode:
+        blockedConnectedChannels.length === 1
+          ? blockedConnectedChannels[0]?.reasonCode
+          : "",
+    });
+  }
+
+  return buildGenericLaunchChannelsState({
+    channels,
+    title: "Connect a launch channel.",
+    summary:
+      "No launch channel is connected yet. Open Channels to choose the provider that should enter the launch lane.",
+    detail:
+      "Home stays provider-agnostic until a real launch channel is explicitly connected and trusted.",
+    status: "needs_connection",
+    statusLabel: "Connect required",
+    connected: false,
+    deliveryReady: false,
+    reasonCode: "channel_not_connected",
+  });
 }
 
 function buildReasonHeadline(reasonCode = "") {
@@ -739,7 +821,9 @@ function pickRuntimeRepairAction(trustPayload = {}) {
 
   return (
     normalizeAction(health.repairAction) ||
-    arr(health.repairActions).map((item) => normalizeAction(item)).find(Boolean) ||
+    arr(health.repairActions)
+      .map((item) => normalizeAction(item))
+      .find(Boolean) ||
     normalizeAction(repair.action) ||
     pickReadinessAction(runtimeProjection.readiness) ||
     normalizeAction({ label: "Open truth", path: "/truth" })
@@ -1019,7 +1103,7 @@ function buildTruthRuntimeState({ trustPayload, launchChannel, sourceStatus }) {
       detail:
         !runtimeReady
           ? "Refresh or repair runtime before trusting live automation."
-          : "The launch channel is attached, but delivery is still blocked even though approved truth exists.",
+          : "A connected launch channel exists, but delivery is still blocked even though approved truth exists.",
       action: runtimeAction || fallbackRuntimeAction,
       truthReady,
       runtimeReady,
@@ -1039,7 +1123,7 @@ function buildTruthRuntimeState({ trustPayload, launchChannel, sourceStatus }) {
     statusLabel: "Ready",
     title: "Approved truth and runtime are aligned.",
     summary:
-      "The strict runtime projection is current, and the launch channel can use that approved state.",
+      "The strict runtime projection is current, and the launch lane can use that approved state.",
     detail: truthVersionId
       ? `Approved truth version ${truthVersionId} is currently backing the live runtime.`
       : "Approved truth is active for the current runtime projection.",
@@ -1115,12 +1199,12 @@ function buildSetupFlowState({
     title:
       launchPosture === "connect_channel"
         ? hasDraft
-          ? `A setup draft already exists while ${launchChannel.channelLabel || "the launch channel"} still needs repair.`
-          : `Connect ${launchChannel.channelLabel || "a launch channel"} first.`
+          ? "A setup draft already exists while the launch lane still needs a connected channel."
+          : "Connect a launch channel first."
         : launchPosture === "setup_needed"
           ? hasDraft
-            ? `${launchChannel.channelLabel || "Launch channel"} is connected. Continue the setup draft.`
-            : `${launchChannel.channelLabel || "Launch channel"} is connected. Start the first setup draft.`
+            ? "A launch channel is connected. Continue the setup draft."
+            : "A launch channel is connected. Start the first setup draft."
           : launchPosture === "runtime_repair_needed"
             ? truthRuntime.title
             : hasDraft
@@ -1129,8 +1213,8 @@ function buildSetupFlowState({
     summary:
       launchPosture === "connect_channel"
         ? hasDraft
-          ? "The draft can still be reviewed, but the launch lane remains blocked until the channel connection is repaired."
-          : launchChannel.summary
+          ? "The draft can still be reviewed, but the launch lane remains blocked until a real launch channel is connected."
+          : "Home stays provider-agnostic until a real launch channel is connected and trusted."
         : launchPosture === "setup_needed"
           ? truthRuntime.summary
           : launchPosture === "runtime_repair_needed"
@@ -1180,9 +1264,7 @@ function buildSetupFlowState({
     launchAction,
     secondaryAction:
       launchPosture === "connect_channel"
-        ? hasDraft
-          ? { label: "Open channels", path: "/channels" }
-          : { label: "Open home", path: "/home" }
+        ? { label: "Open channels", path: "/channels" }
         : launchPosture === "setup_needed"
           ? { label: "Open truth", path: "/truth" }
           : launchPosture === "runtime_repair_needed"
@@ -1324,12 +1406,19 @@ function buildLaunchLaneModel({
         id: "channel",
         label: "Connect launch channel",
         status: "ready",
-        statusLabel: "Connected",
-        tone: "success",
+        statusLabel: launchChannel.deliveryReady
+          ? "Connected"
+          : "Connected, blocked",
+        tone: launchChannel.deliveryReady ? "success" : "warning",
         summary:
-          launchChannel.summary ||
-          "The launch channel is attached and available to the workspace.",
-        detail: launchChannel.detail,
+          launchChannel.deliveryReady
+            ? launchChannel.summary ||
+              "A launch channel is attached and available to the workspace."
+            : launchChannel.summary ||
+              "A launch channel is attached, but it should not be treated as live yet.",
+        detail:
+          launchChannel.detail ||
+          "Open Channels to inspect launch-channel posture.",
         action: channelAction,
         complete: true,
       })
@@ -1337,17 +1426,8 @@ function buildLaunchLaneModel({
         id: "channel",
         label: "Connect launch channel",
         status: "blocked",
-        statusLabel:
-          launchChannel.status === "connecting"
-            ? "Connecting"
-            : launchChannel.status === "selection_required"
-              ? "Selection required"
-              : "Connect required",
-        tone:
-          launchChannel.status === "connecting" ||
-          launchChannel.status === "selection_required"
-            ? "info"
-            : "danger",
+        statusLabel: "Connect required",
+        tone: "danger",
         summary:
           launchChannel.summary ||
           "Connect the launch channel before the rest of the launch lane can move.",
@@ -1355,8 +1435,6 @@ function buildLaunchLaneModel({
         action: channelAction,
         complete: false,
       });
-
-  const setupBlockedByChannel = setupFlow.hasDraft && !launchChannel.connected;
 
   const setupStep = setupReady
     ? buildLaunchLaneStep({
@@ -1381,11 +1459,9 @@ function buildLaunchLaneModel({
         status: setupFlow.hasDraft ? "in_progress" : "pending",
         statusLabel: setupFlow.hasDraft ? "In progress" : "Start draft",
         tone: setupFlow.hasDraft ? "warn" : "info",
-        summary: setupBlockedByChannel
-          ? "A setup draft already exists, but the launch lane is still blocked by channel connection."
-          : setupFlow.hasDraft
-            ? "Continue confirming the business draft before truth approval and runtime activation."
-            : "Start the first structured business draft before truth approval and runtime activation.",
+        summary: setupFlow.hasDraft
+          ? "Continue confirming the business draft before truth approval and runtime activation."
+          : "Start the first structured business draft before truth approval and runtime activation.",
         detail: setupFlow.hasDraft
           ? `${setupFlow.readySections} ready sections / ${setupFlow.blockerCount} blockers remaining`
           : "No structured setup draft is visible yet.",
@@ -1470,7 +1546,7 @@ function buildLaunchLaneModel({
             : "danger",
         summary:
           !launchChannel.connected
-            ? "Inbox should wait until the launch channel is connected."
+            ? "Inbox should wait until a launch channel is connected."
             : !setupReady
               ? "Inbox is not the next move until the setup draft is structured."
               : !approvalReady
@@ -1493,14 +1569,17 @@ function buildLaunchLaneModel({
 
   const launchSteps = [channelStep, setupStep, approvalStep, liveStep];
   const incompleteSteps = launchSteps.filter((step) => step.complete !== true);
-  const nextStep = incompleteSteps[0] || launchSteps[launchSteps.length - 1] || null;
+  const nextStep =
+    incompleteSteps[0] || launchSteps[launchSteps.length - 1] || null;
   const blockerCount = incompleteSteps.length;
 
   let launchPhaseLabel = launchReady ? "Launch lane ready" : "Launch posture";
-  let launchHeadline = launchReady ? "Launch lane is ready." : "Review launch posture.";
+  let launchHeadline = launchReady
+    ? "Launch lane is ready."
+    : "Review launch posture.";
   let launchSummary = launchReady
     ? inboxState.summary ||
-      "Setup, truth/runtime, channels, and inbox are aligned for live work."
+      "Channels, setup, truth/runtime, and inbox are aligned for live work."
     : nextStep
       ? `Next step: ${nextStep.label}. ${s(nextStep.summary)}`
       : "Review the governed launch surfaces before treating the tenant as live.";
@@ -1676,7 +1755,7 @@ export function useProductHome(options = {}) {
       statusLabel: setupFlow.statusLabel,
       summary:
         setupFlow.launchPosture === "connect_channel"
-          ? `Connect ${launchChannel.channelLabel || "the launch channel"} first.`
+          ? "Connect a launch channel first."
           : setupFlow.launchPosture === "runtime_repair_needed"
             ? "Repair runtime before trusting live automation."
             : setupFlow.needed
