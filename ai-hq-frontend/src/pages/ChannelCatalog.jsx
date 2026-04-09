@@ -4,6 +4,7 @@ import { ArrowRight } from "lucide-react";
 import {
   getMetaChannelStatus,
   getTelegramChannelStatus,
+  getWebsiteWidgetStatus,
 } from "../api/channelConnect.js";
 import { getSettingsTrustView } from "../api/trust.js";
 import ChannelDetailDrawer from "../components/channels/ChannelDetailDrawer.jsx";
@@ -38,6 +39,7 @@ import {
   buildChannelTruthLaunchReadiness,
   buildMetaLaunchChannelState,
   buildTelegramLaunchChannelState,
+  buildWebsiteLaunchChannelState,
   buildTruthOperationalState,
 } from "../lib/readinessViewModel.js";
 
@@ -80,6 +82,7 @@ export default function ChannelCatalog() {
     error: "",
     meta: null,
     telegram: null,
+    website: null,
     truth: null,
   });
 
@@ -101,6 +104,7 @@ export default function ChannelCatalog() {
     Promise.allSettled([
       getMetaChannelStatus(),
       getTelegramChannelStatus(),
+      getWebsiteWidgetStatus(),
       getSettingsTrustView({ limit: 4 }),
     ])
       .then((results) => {
@@ -114,9 +118,13 @@ export default function ChannelCatalog() {
           results[1].status === "fulfilled"
             ? buildTelegramLaunchChannelState(results[1].value)
             : buildTelegramLaunchChannelState({});
-        const truth =
+        const website =
           results[2].status === "fulfilled"
-            ? buildTruthOperationalState(results[2].value)
+            ? buildWebsiteLaunchChannelState(results[2].value)
+            : buildWebsiteLaunchChannelState({});
+        const truth =
+          results[3].status === "fulfilled"
+            ? buildTruthOperationalState(results[3].value)
             : buildTruthOperationalState(null);
 
         setReadinessState({
@@ -124,6 +132,7 @@ export default function ChannelCatalog() {
           error: "",
           meta,
           telegram,
+          website,
           truth,
         });
       })
@@ -132,10 +141,11 @@ export default function ChannelCatalog() {
         setReadinessState({
           loading: false,
           error: s(
-            error?.message || error || "Channel readiness could not be loaded."
-          ),
+          error?.message || error || "Channel readiness could not be loaded."
+        ),
           meta: buildMetaLaunchChannelState({}),
           telegram: buildTelegramLaunchChannelState({}),
+          website: buildWebsiteLaunchChannelState({}),
           truth: buildTruthOperationalState(null),
         });
       });
@@ -194,14 +204,18 @@ export default function ChannelCatalog() {
   const launchReadiness = useMemo(
     () =>
       buildChannelTruthLaunchReadiness({
-        channels: [readinessState.meta, readinessState.telegram],
+        channels: [
+          readinessState.meta,
+          readinessState.telegram,
+          readinessState.website,
+        ],
         truthState: readinessState.truth,
         surface: { unavailable: false, error: readinessState.error },
         copy: {
           channelsPath: "/channels",
           truthPath: "/truth",
           noChannelSummary:
-            "No launch channel is currently connected. Connect Instagram or Telegram first.",
+            "No launch channel is currently connected. Connect website chat, Instagram, or Telegram first.",
           noChannelDetail:
             "The launch lane expects at least one connected and delivery-ready channel.",
           deliveryBlockedSummary:
@@ -225,6 +239,7 @@ export default function ChannelCatalog() {
       readinessState.error,
       readinessState.meta,
       readinessState.telegram,
+      readinessState.website,
       readinessState.truth,
     ]
   );

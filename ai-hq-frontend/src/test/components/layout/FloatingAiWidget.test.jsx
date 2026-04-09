@@ -5,11 +5,12 @@ import "@testing-library/jest-dom/vitest";
 import { describe, expect, it, beforeEach, vi } from "vitest";
 
 import FloatingAiWidget from "../../../components/layout/FloatingAiWidget.jsx";
-import { getCurrentSetupReview } from "../../../api/setup.js";
+import { getCurrentSetupReview, importWebsiteForSetup } from "../../../api/setup.js";
 
 vi.mock("../../../api/setup.js", () => ({
   finalizeSetupAssistantSession: vi.fn(),
   getCurrentSetupReview: vi.fn(),
+  importWebsiteForSetup: vi.fn(),
   sendSetupAssistantMessage: vi.fn(),
   startSetupAssistantSession: vi.fn(),
   updateCurrentSetupAssistantDraft: vi.fn(),
@@ -192,6 +193,7 @@ describe("FloatingAiWidget", () => {
         reviewDebug: {},
       },
     });
+    vi.mocked(importWebsiteForSetup).mockResolvedValue({ ok: true });
   });
 
   it("opens the assistant and loads the website review scene when review data exists", async () => {
@@ -233,5 +235,37 @@ describe("FloatingAiWidget", () => {
     expect(
       screen.queryByRole("region", { name: "Website knowledge review" })
     ).not.toBeInTheDocument();
+  });
+
+  it("scans the website from the setup widget and refreshes the review payload", async () => {
+    vi.mocked(getCurrentSetupReview)
+      .mockResolvedValueOnce({
+        review: {
+          reviewDebug: {},
+        },
+      })
+      .mockResolvedValue(createWebsiteReviewPayload());
+
+    renderWidget();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+
+    expect(
+      await screen.findByRole("button", { name: "Scan website" })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Scan website" }));
+
+    await waitFor(() =>
+      expect(importWebsiteForSetup).toHaveBeenCalledWith({
+        websiteUrl: "https://lunasmile.az",
+        allowSessionReuse: true,
+        waitForCompletion: true,
+      })
+    );
+
+    expect(
+      await screen.findByRole("region", { name: "Website knowledge review" })
+    ).toBeInTheDocument();
   });
 });

@@ -521,6 +521,32 @@ function extractExistingIntakeContext(review = {}) {
   return obj(review?.session?.metadata?.lastIntakeContext);
 }
 
+function extractDraftWebsiteSeed(review = {}) {
+  const draft = obj(review?.draft);
+  const draftPayload = obj(draft?.draftPayload);
+  const canonicalProfile = obj(draft?.businessProfile);
+  const payloadProfile = obj(draftPayload?.profile);
+  const setupAssistant = obj(draftPayload?.setupAssistant || draftPayload?.onboarding);
+  const assistantProfile = obj(setupAssistant?.businessProfile);
+
+  const websiteUrl = normalizeUrl(
+    canonicalProfile.websiteUrl ||
+      canonicalProfile.website ||
+      payloadProfile.websiteUrl ||
+      payloadProfile.website ||
+      assistantProfile.websiteUrl ||
+      assistantProfile.website
+  );
+
+  if (!websiteUrl) return null;
+
+  return normalizeSourceSeed({
+    sourceType: "website",
+    url: websiteUrl,
+    isPrimary: true,
+  });
+}
+
 function extractPrimarySeedFromReview(review = {}) {
   const existingContext = extractExistingIntakeContext(review);
   const fromContext = normalizeSourceSeed(existingContext?.primarySource);
@@ -534,20 +560,32 @@ function extractPrimarySeedFromReview(review = {}) {
     s(review?.session?.primarySourceType) || s(summary?.primarySourceType);
   const url = s(summary?.primarySourceUrl);
 
-  return normalizeSourceSeed({
+  const fromSummary = normalizeSourceSeed({
     sourceType,
     url,
     isPrimary: true,
   });
+
+  if (fromSummary?.sourceType || fromSummary?.url) {
+    return fromSummary;
+  }
+
+  return extractDraftWebsiteSeed(review);
 }
 
 function extractBundleSeedsFromReview(review = {}) {
   const existingContext = extractExistingIntakeContext(review);
-
-  return dedupeSourceSeeds([
+  const existingSeeds = dedupeSourceSeeds([
     obj(existingContext?.primarySource),
     ...arr(existingContext?.sources),
   ]);
+
+  if (existingSeeds.length) {
+    return existingSeeds;
+  }
+
+  const fallbackPrimary = extractPrimarySeedFromReview(review);
+  return fallbackPrimary ? [fallbackPrimary] : [];
 }
 
 function buildMergedIntakeContext({

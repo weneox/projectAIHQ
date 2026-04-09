@@ -11,6 +11,7 @@ import {
 import {
   finalizeSetupAssistantSession,
   getCurrentSetupReview,
+  importWebsiteForSetup,
   sendSetupAssistantMessage,
   startSetupAssistantSession,
   updateCurrentSetupAssistantDraft,
@@ -1389,6 +1390,8 @@ export default function FloatingAiWidget({
   const [surfaceMode, setSurfaceMode] = useState("setup");
   const [saving, setSaving] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+  const [importingWebsite, setImportingWebsite] = useState(false);
+  const [importError, setImportError] = useState("");
 
   const [supportMessages, setSupportMessages] = useState(
     buildSupportWelcomeFromAssistant(assistantRef.current)
@@ -1466,9 +1469,10 @@ export default function FloatingAiWidget({
   }
 
   async function handleSetupPatchDraft(payload = {}) {
-    if (saving || finalizing) return null;
+    if (saving || finalizing || importingWebsite) return null;
 
     setSaving(true);
+    setImportError("");
     try {
       await ensureSession();
       const response = await updateCurrentSetupAssistantDraft(payload);
@@ -1487,9 +1491,10 @@ export default function FloatingAiWidget({
 
   async function handleSetupParseMessage({ text, step }) {
     const answer = s(text);
-    if (!answer || saving || finalizing) return null;
+    if (!answer || saving || finalizing || importingWebsite) return null;
 
     setSaving(true);
+    setImportError("");
     try {
       await ensureSession();
       const response = await sendSetupAssistantMessage({
@@ -1510,9 +1515,10 @@ export default function FloatingAiWidget({
   }
 
   async function handleSetupFinalize() {
-    if (saving || finalizing) return null;
+    if (saving || finalizing || importingWebsite) return null;
 
     setFinalizing(true);
+    setImportError("");
     try {
       await ensureSession();
       const response = await finalizeSetupAssistantSession({});
@@ -1557,6 +1563,46 @@ export default function FloatingAiWidget({
       return response;
     } finally {
       setFinalizing(false);
+    }
+  }
+
+  async function handleImportWebsite(url = "") {
+    const websiteUrl =
+      s(url) ||
+      s(assistantRef.current?.websitePrefill?.websiteUrl) ||
+      s(assistantRef.current?.draft?.businessProfile?.websiteUrl);
+
+    if (!websiteUrl || saving || finalizing || importingWebsite) {
+      return null;
+    }
+
+    setImportError("");
+    setImportingWebsite(true);
+    try {
+      await ensureSession();
+      const response = await importWebsiteForSetup({
+        websiteUrl,
+        allowSessionReuse: true,
+        waitForCompletion: true,
+      });
+
+      if (response?.ok === false) {
+        throw new Error(
+          s(response?.reason || response?.error, "Website scan failed")
+        );
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["product-home"] }),
+        queryClient.invalidateQueries({ queryKey: ["setup-review-current"] }),
+      ]);
+
+      return response;
+    } catch (error) {
+      setImportError(s(error?.message, "Website scan failed"));
+      return null;
+    } finally {
+      setImportingWebsite(false);
     }
   }
 
@@ -1685,15 +1731,18 @@ export default function FloatingAiWidget({
 
             <div className="ai-widget-body">
               {surfaceMode === "setup" ? (
-                <SetupAssistantSections
-                  assistant={clientAssistant}
-                  reviewPayload={reviewQuery.data}
-                  saving={saving}
-                  finalizing={finalizing}
-                  onPatchDraft={handleSetupPatchDraft}
-                  onParseMessage={handleSetupParseMessage}
-                  onFinalize={handleSetupFinalize}
-                />
+                  <SetupAssistantSections
+                    assistant={clientAssistant}
+                    reviewPayload={reviewQuery.data}
+                    saving={saving}
+                    finalizing={finalizing}
+                    importingWebsite={importingWebsite}
+                    importError={importError}
+                    onImportWebsite={handleImportWebsite}
+                    onPatchDraft={handleSetupPatchDraft}
+                    onParseMessage={handleSetupParseMessage}
+                    onFinalize={handleSetupFinalize}
+                  />
               ) : (
                 <SupportThread
                   messages={supportMessages}

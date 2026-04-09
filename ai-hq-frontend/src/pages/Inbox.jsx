@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 
-import { getMetaChannelStatus, getTelegramChannelStatus } from "../api/channelConnect.js";
+import {
+  getMetaChannelStatus,
+  getTelegramChannelStatus,
+  getWebsiteWidgetStatus,
+} from "../api/channelConnect.js";
 import { getSettingsTrustView } from "../api/trust.js";
 import InboxComposer from "../components/inbox/InboxComposer.jsx";
 import { useInboxComposerSurface } from "../components/inbox/hooks/useInboxComposerSurface.js";
@@ -19,6 +23,7 @@ import {
   buildChannelTruthLaunchReadiness,
   buildMetaLaunchChannelState,
   buildTelegramLaunchChannelState,
+  buildWebsiteLaunchChannelState,
   buildTruthOperationalState,
 } from "../lib/readinessViewModel.js";
 import Button from "../components/ui/Button.jsx";
@@ -51,6 +56,7 @@ export default function Inbox() {
     trust: null,
     meta: null,
     telegram: null,
+    website: null,
   });
 
   const requestedThreadId = String(
@@ -85,6 +91,7 @@ export default function Inbox() {
       getSettingsTrustView({ limit: 4 }),
       getMetaChannelStatus(),
       getTelegramChannelStatus(),
+      getWebsiteWidgetStatus(),
     ])
       .then((results) => {
         if (!alive) return;
@@ -102,6 +109,10 @@ export default function Inbox() {
             results[2].status === "fulfilled"
               ? buildTelegramLaunchChannelState(results[2].value)
               : buildTelegramLaunchChannelState({}),
+          website:
+            results[3].status === "fulfilled"
+              ? buildWebsiteLaunchChannelState(results[3].value)
+              : buildWebsiteLaunchChannelState({}),
         });
       })
       .catch(() => {
@@ -111,6 +122,7 @@ export default function Inbox() {
           trust: buildTruthOperationalState(null),
           meta: buildMetaLaunchChannelState({}),
           telegram: buildTelegramLaunchChannelState({}),
+          website: buildWebsiteLaunchChannelState({}),
         });
       });
 
@@ -222,7 +234,11 @@ export default function Inbox() {
   const inboxReadiness = useMemo(
     () =>
       buildChannelTruthLaunchReadiness({
-        channels: [readinessState.meta, readinessState.telegram],
+        channels: [
+          readinessState.meta,
+          readinessState.telegram,
+          readinessState.website,
+        ],
         truthState: readinessState.truth,
         surface,
         copy: {
@@ -234,7 +250,7 @@ export default function Inbox() {
           unavailableDetail:
             "This surface stays intentionally cautious when live inbox data is unavailable.",
           noChannelSummary:
-            "No launch channel is currently connected. Connect Meta or Telegram before trusting live inbox automation.",
+            "No launch channel is currently connected. Connect website chat, Meta, or Telegram before trusting live inbox automation.",
           noChannelDetail:
             "The inbox can still be inspected, but live launch posture is blocked until a launch channel is attached.",
           deliveryBlockedSummary:
@@ -258,7 +274,14 @@ export default function Inbox() {
             "The current inbox lane is not blocked by channel, truth, or runtime posture.",
         },
       }),
-    [readinessState.meta, readinessState.telegram, readinessState.truth, surface, selectedThread]
+    [
+      readinessState.meta,
+      readinessState.telegram,
+      readinessState.website,
+      readinessState.truth,
+      surface,
+      selectedThread,
+    ]
   );
 
   const showTopBanner = shouldRenderSurfaceBanner(surface);

@@ -414,6 +414,9 @@ function SetupAssistantSession({
   reviewPayload = null,
   saving = false,
   finalizing = false,
+  importingWebsite = false,
+  importError = "",
+  onImportWebsite,
   onParseMessage,
   onFinalize,
 }) {
@@ -431,12 +434,19 @@ function SetupAssistantSession({
   const [typing, setTyping] = useState(false);
   const [localError, setLocalError] = useState("");
 
-  const busy = saving || finalizing;
+  const busy = saving || finalizing || importingWebsite;
   const currentStep = started && !paused ? getNaturalStep(assistant) : "";
   const canFinalize = currentStep === "finalize";
   const normalizedReviewRoot = obj(obj(reviewPayload).review, reviewPayload);
   const hasWebsiteReview =
     Object.keys(obj(obj(obj(normalizedReviewRoot).reviewDebug).websiteKnowledge)).length > 0;
+  const websiteUrl = s(
+    assistant?.websitePrefill?.websiteUrl ||
+      assistant?.draft?.businessProfile?.websiteUrl
+  );
+  const showWebsiteImportCard =
+    Boolean(websiteUrl) && !hasWebsiteReview && typeof onImportWebsite === "function";
+  const composerError = s(localError || importError);
 
   const clearQueuedAssistant = useCallback(() => {
     if (
@@ -732,6 +742,28 @@ function SetupAssistantSession({
     <div className="ai-thread-wrap">
       <div ref={scrollRef} className="ai-thread-scroll">
         <div className="ai-thread-stack">
+          {showWebsiteImportCard ? (
+            <section className="rounded-panel border border-line bg-surface px-4 py-3">
+              <div className="text-[12px] font-semibold text-text">
+                Scan the website into this draft
+              </div>
+              <div className="mt-1 text-[12px] leading-5 text-text-muted">
+                Import the current website into the same setup review before final truth approval.
+              </div>
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  className="ai-quick-chip"
+                  onClick={() => onImportWebsite?.(websiteUrl)}
+                  disabled={busy}
+                >
+                  {importingWebsite ? "Scanning website..." : "Scan website"}
+                </button>
+                <span className="text-[11px] text-text-subtle">{websiteUrl}</span>
+              </div>
+            </section>
+          ) : null}
+
           {hasWebsiteReview ? (
             <SetupReviewActivationPanel
               reviewPayload={reviewPayload}
@@ -756,9 +788,9 @@ function SetupAssistantSession({
       </div>
 
       <div className="ai-composer">
-        {localError ? (
+        {composerError ? (
           <div className="mb-3 rounded-panel border border-[rgba(var(--color-danger),0.18)] bg-danger-soft px-3 py-2.5 text-[12px] leading-5 text-danger">
-            {localError}
+            {composerError}
           </div>
         ) : null}
 

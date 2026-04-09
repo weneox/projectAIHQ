@@ -370,6 +370,27 @@ export function buildTelegramLaunchChannelState(payload = {}) {
   });
 }
 
+export function buildWebsiteLaunchChannelState(payload = {}) {
+  const source = obj(payload);
+  const widget = obj(source.widget);
+
+  return buildLaunchChannelState(
+    {
+      ...source,
+      connected:
+        source.connected === true ||
+        widget.enabled === true ||
+        lower(source.state) === "connected",
+    },
+    {
+      id: "website",
+      label: "Website chat",
+      connectPath: "/channels?channel=website",
+      openPath: "/channels?channel=website",
+    }
+  );
+}
+
 export function buildVoiceSettingsOperationalState(settings = null, surface = {}) {
   const value = obj(settings);
   const enabled = value.enabled === true;
