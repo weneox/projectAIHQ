@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, ShieldCheck, Wrench } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import { getMetaChannelStatus, getTelegramChannelStatus } from "../api/channelConnect.js";
 import { getSettingsTrustView } from "../api/trust.js";
@@ -22,6 +22,11 @@ import {
   buildTruthOperationalState,
 } from "../lib/readinessViewModel.js";
 import Button from "../components/ui/Button.jsx";
+import {
+  SlidingDetailOverlay,
+  StatusBanner,
+} from "../components/ui/AppShellPrimitives.jsx";
+import { s, toneFromReadiness } from "../lib/appUi.js";
 
 function shouldRenderSurfaceBanner(surface) {
   return Boolean(
@@ -29,83 +34,6 @@ function shouldRenderSurfaceBanner(surface) {
       surface?.saveError ||
       surface?.unavailable ||
       (!surface?.unavailable && surface?.error)
-  );
-}
-
-function s(value, fallback = "") {
-  return String(value ?? fallback).trim();
-}
-
-function ReadinessStrip({ readiness, onNavigate }) {
-  const palette =
-    readiness.status === "ready"
-      ? {
-          border: "border-[rgba(var(--color-success),0.18)]",
-          bg: "bg-success-soft",
-          icon: ShieldCheck,
-          iconColor: "text-success",
-          text: "text-success",
-        }
-      : readiness.status === "attention"
-        ? {
-            border: "border-[rgba(var(--color-warning),0.2)]",
-            bg: "bg-warning-soft",
-            icon: Wrench,
-            iconColor: "text-warning",
-            text: "text-warning",
-          }
-        : {
-            border: "border-[rgba(var(--color-danger),0.18)]",
-            bg: "bg-danger-soft",
-            icon: Wrench,
-            iconColor: "text-danger",
-            text: "text-danger",
-          };
-
-  const Icon = palette.icon;
-
-  return (
-    <div
-      className={`rounded-panel border ${palette.border} ${palette.bg} px-4 py-4`}
-    >
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Icon className={`h-4 w-4 ${palette.iconColor}`} strokeWidth={2} />
-            <div className={`text-[11px] font-bold uppercase tracking-[0.14em] ${palette.text}`}>
-              {s(readiness.statusLabel, "Unknown")}
-            </div>
-          </div>
-
-          <div className="mt-2 text-[15px] font-semibold text-text">
-            {s(readiness.title, "Inbox readiness")}
-          </div>
-
-          <div className="mt-1 text-[13px] leading-6 text-text-muted">
-            {s(readiness.summary)}
-          </div>
-
-          {s(readiness.detail) ? (
-            <div className="mt-1 text-[12px] leading-5 text-text-subtle">
-              {s(readiness.detail)}
-            </div>
-          ) : null}
-        </div>
-
-        {readiness.action?.path ? (
-          <div className="shrink-0">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => onNavigate?.(readiness.action.path)}
-              rightIcon={<ArrowRight className="h-4 w-4" />}
-            >
-              {readiness.action.label}
-            </Button>
-          </div>
-        ) : null}
-      </div>
-    </div>
   );
 }
 
@@ -364,11 +292,28 @@ export default function Inbox() {
 
       <div className="relative flex-1 min-h-0 overflow-hidden rounded-panel border border-line-soft bg-surface">
         <div className="border-b border-line-soft bg-surface-muted px-4 py-4">
-          <ReadinessStrip
-            readiness={inboxReadiness}
-            onNavigate={(path) => {
-              if (s(path)) navigate(path);
-            }}
+          <StatusBanner
+            tone={toneFromReadiness(inboxReadiness)}
+            label={s(inboxReadiness.statusLabel, "Unknown")}
+            title={s(inboxReadiness.title, "Inbox readiness")}
+            description={s(inboxReadiness.summary)}
+            detail={s(inboxReadiness.detail)}
+            action={
+              inboxReadiness.action?.path ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    if (s(inboxReadiness.action?.path)) {
+                      navigate(inboxReadiness.action.path);
+                    }
+                  }}
+                  rightIcon={<ArrowRight className="h-4 w-4" />}
+                >
+                  {inboxReadiness.action.label}
+                </Button>
+              ) : null
+            }
           />
         </div>
 
@@ -408,25 +353,14 @@ export default function Inbox() {
             />
           </div>
 
-          <div
-            className={[
-              "absolute inset-0 z-30 transition",
-              detailOpen ? "pointer-events-auto" : "pointer-events-none",
-            ].join(" ")}
-          >
-            <div
-              onClick={() => setDetailOpen(false)}
-              className={[
-                "absolute inset-0 bg-overlay/60 transition-opacity duration-200",
-                detailOpen ? "opacity-100" : "opacity-0",
-              ].join(" ")}
-            />
-
-            <aside
-              className={[
-                "absolute inset-y-0 right-0 w-[360px] max-w-[92vw] border-l border-line-soft bg-surface shadow-panel-strong transition-transform duration-200",
-                detailOpen ? "translate-x-0" : "translate-x-full",
-              ].join(" ")}
+          {detailOpen ? (
+            <SlidingDetailOverlay
+              open={detailOpen}
+              onClose={() => setDetailOpen(false)}
+              absolute
+              closeLabel="Close conversation details"
+              panelWidthClassName="max-w-[92vw] w-[360px]"
+              className="z-30"
             >
               <InboxLeadPanel
                 selectedThread={selectedThread}
@@ -438,8 +372,8 @@ export default function Inbox() {
                 wsState={wsState}
                 onClose={() => setDetailOpen(false)}
               />
-            </aside>
-          </div>
+            </SlidingDetailOverlay>
+          ) : null}
         </div>
       </div>
     </section>

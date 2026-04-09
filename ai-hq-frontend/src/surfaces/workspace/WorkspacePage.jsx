@@ -10,9 +10,11 @@ import Badge from "../../components/ui/Badge.jsx";
 import Button from "../../components/ui/Button.jsx";
 import Input from "../../components/ui/Input.jsx";
 import {
+  CompactState,
   PageCanvas,
   PageHeader,
   Section,
+  StatusBanner,
   Surface,
 } from "../../components/ui/AppShellPrimitives.jsx";
 import {
@@ -48,59 +50,6 @@ function toneForLabel(value = "") {
     default:
       return "neutral";
   }
-}
-
-function CompactEmpty({ title, description }) {
-  return (
-    <Surface subdued padded="sm" className="space-y-1">
-      <div className="text-sm font-medium text-text">{title}</div>
-      <div className="text-sm leading-5 text-text-muted">{description}</div>
-    </Surface>
-  );
-}
-
-function InlineAction({ label, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1 text-sm font-medium text-text hover:text-brand"
-    >
-      <span>{label}</span>
-      <ChevronRight className="h-4 w-4" />
-    </button>
-  );
-}
-
-function WorkspaceNotice({ notice, onRetry, isFetching }) {
-  if (!notice?.title) return null;
-
-  return (
-    <Surface subdued padded="sm" className="space-y-2">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Badge tone={toneForLabel(notice.tone)} variant="subtle">
-              {notice.partial ? "Limited signal" : "Unavailable"}
-            </Badge>
-            <div className="text-sm font-medium text-text">{notice.title}</div>
-          </div>
-          <div className="max-w-[860px] text-sm leading-5 text-text-muted">
-            {notice.description}
-          </div>
-        </div>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => onRetry?.()}
-          leftIcon={<RefreshCw className={isFetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />}
-        >
-          Retry
-        </Button>
-      </div>
-    </Surface>
-  );
 }
 
 function OperatorConsole({
@@ -199,7 +148,7 @@ function OperatorConsole({
 function ActionQueue({ items, onAction }) {
   if (!items.length) {
     return (
-      <CompactEmpty
+      <CompactState
         title="No immediate operator action"
         description="Workspace signals are not asking for a manual step right now."
       />
@@ -250,10 +199,16 @@ function PostureGrid({ items, onAction }) {
           </div>
           <div className="text-sm leading-5 text-text-muted">{item.summary}</div>
           {item.action?.path ? (
-            <InlineAction
-              label={item.action.label}
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="w-fit"
               onClick={() => onAction(item.action)}
-            />
+              rightIcon={<ChevronRight className="h-4 w-4" />}
+            >
+              {item.action.label}
+            </Button>
           ) : null}
         </Surface>
       ))}
@@ -264,7 +219,7 @@ function PostureGrid({ items, onAction }) {
 function OutcomesList({ items, onAction, hasPartialSignal }) {
   if (!items.length) {
     return (
-      <CompactEmpty
+      <CompactState
         title={hasPartialSignal ? "Recent outcomes are limited" : "No recent outcomes yet"}
         description={
           hasPartialSignal
@@ -287,10 +242,16 @@ function OutcomesList({ items, onAction, hasPartialSignal }) {
           </div>
           <div className="text-sm leading-5 text-text-muted">{item.summary}</div>
           {item.nextAction?.path ? (
-            <InlineAction
-              label={item.nextAction.label}
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="w-fit"
               onClick={() => onAction(item.nextAction)}
-            />
+              rightIcon={<ChevronRight className="h-4 w-4" />}
+            >
+              {item.nextAction.label}
+            </Button>
           ) : null}
         </Surface>
       ))}
@@ -364,11 +325,29 @@ export default function WorkspacePage() {
         className="gap-4 pb-4"
       />
 
-      <WorkspaceNotice
-        notice={workspace.availabilityNotice}
-        onRetry={workspace.refetch}
-        isFetching={workspace.isFetching}
-      />
+      {workspace.availabilityNotice?.title ? (
+        <StatusBanner
+          tone={workspace.availabilityNotice.partial ? "warning" : "danger"}
+          label={workspace.availabilityNotice.partial ? "Limited signal" : "Unavailable"}
+          title={workspace.availabilityNotice.title}
+          description={workspace.availabilityNotice.description}
+          action={
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => workspace.refetch?.()}
+              leftIcon={
+                <RefreshCw
+                  className={workspace.isFetching ? "h-4 w-4 animate-spin" : "h-4 w-4"}
+                />
+              }
+            >
+              Retry
+            </Button>
+          }
+        />
+      ) : null}
 
       <OperatorConsole
         value={command}

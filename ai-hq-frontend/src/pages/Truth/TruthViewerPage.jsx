@@ -7,13 +7,18 @@ import {
   Mail,
   MapPin,
   Phone,
-  ShieldCheck,
   Sparkles,
   User2,
   Wrench,
 } from "lucide-react";
 
 import { getSettingsTrustView } from "../../api/trust.js";
+import {
+  PropertyList,
+  PropertyRow,
+  StatusBanner,
+} from "../../components/ui/AppShellPrimitives.jsx";
+import { toneFromReadiness } from "../../lib/appUi.js";
 import {
   getCanonicalTruthSnapshot,
   getTruthReviewWorkbench,
@@ -307,20 +312,12 @@ function SideMetaRow({ label, value, hint = "" }) {
   if (!s(value)) return null;
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_18px] gap-3 border-b border-line-soft py-3.5 last:border-b-0">
-      <div className="min-w-0">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
-          {label}
-        </div>
-        <div className="mt-2 text-[13px] leading-6 text-text">
-          {value}
-        </div>
-      </div>
-
-      <div className="pt-[2px]">
-        <InfoHint text={hint} align="right" />
-      </div>
-    </div>
+    <PropertyRow
+      label={label}
+      value={value}
+      labelWidth="92px"
+      trailing={<InfoHint text={hint} align="right" />}
+    />
   );
 }
 
@@ -436,80 +433,6 @@ function buildSections(fields = []) {
   ].filter((item) => s(item.value));
 
   return { business, contact, presence, offering };
-}
-
-function TruthReadinessStrip({ operationalState }) {
-  const tone =
-    operationalState.status === "ready"
-      ? {
-          border: "border-[rgba(var(--color-success),0.18)]",
-          bg: "bg-success-soft",
-          icon: ShieldCheck,
-          iconColor: "text-success",
-          text: "text-success",
-        }
-      : operationalState.status === "attention"
-        ? {
-            border: "border-[rgba(var(--color-warning),0.2)]",
-            bg: "bg-warning-soft",
-            icon: Wrench,
-            iconColor: "text-warning",
-            text: "text-warning",
-          }
-        : {
-            border: "border-[rgba(var(--color-danger),0.18)]",
-            bg: "bg-danger-soft",
-            icon: Wrench,
-            iconColor: "text-danger",
-            text: "text-danger",
-          };
-
-  const Icon = tone.icon;
-
-  return (
-    <div className={`border-b px-6 py-4 ${tone.border} ${tone.bg}`}>
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Icon className={`h-4 w-4 ${tone.iconColor}`} strokeWidth={2} />
-            <div className={`text-[11px] font-bold uppercase tracking-[0.14em] ${tone.text}`}>
-              {s(operationalState.statusLabel, "Unknown")}
-            </div>
-          </div>
-
-          <div className="mt-2 text-[15px] font-semibold text-text">
-            {s(operationalState.title, "Truth posture")}
-          </div>
-
-          <div className="mt-1 text-[13px] leading-6 text-text-muted">
-            {s(operationalState.summary)}
-          </div>
-
-          {s(operationalState.detail) ? (
-            <div className="mt-1 text-[12px] leading-5 text-text-subtle">
-              {s(operationalState.detail)}
-            </div>
-          ) : null}
-        </div>
-
-        {operationalState.action?.path ? (
-          <div className="shrink-0">
-            <Button
-              size="sm"
-              onClick={() => {
-                if (typeof window !== "undefined") {
-                  window.location.assign(operationalState.action.path);
-                }
-              }}
-              leftIcon={<Wrench className="h-4 w-4" />}
-            >
-              {operationalState.action.label}
-            </Button>
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
 }
 
 export default function TruthViewerPage() {
@@ -951,7 +874,30 @@ export default function TruthViewerPage() {
           </div>
         </div>
 
-        <TruthReadinessStrip operationalState={operationalState} />
+        <div className="border-b border-line-soft px-6 py-4">
+          <StatusBanner
+            tone={toneFromReadiness(operationalState)}
+            label={s(operationalState.statusLabel, "Unknown")}
+            title={s(operationalState.title, "Truth posture")}
+            description={s(operationalState.summary)}
+            detail={s(operationalState.detail)}
+            action={
+              operationalState.action?.path ? (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (typeof window !== "undefined") {
+                      window.location.assign(operationalState.action.path);
+                    }
+                  }}
+                  leftIcon={<Wrench className="h-4 w-4" />}
+                >
+                  {operationalState.action.label}
+                </Button>
+              ) : null
+            }
+          />
+        </div>
 
         <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="bg-surface px-6 py-6">
@@ -1035,7 +981,7 @@ export default function TruthViewerPage() {
               Snapshot
             </div>
 
-            <div className="mt-4 rounded-panel border border-line bg-surface px-4 py-1">
+            <PropertyList className="mt-4">
               <SideMetaRow
                 label="Version"
                 value={s(state.data.approval?.version, "Pending")}
@@ -1085,7 +1031,7 @@ export default function TruthViewerPage() {
                 value={String(Number(reviewSummary.pending || 0))}
                 hint="Candidates still waiting in review."
               />
-            </div>
+            </PropertyList>
 
             <div className="sr-only">Business data review</div>
             <div className="sr-only">Truth Readiness</div>

@@ -4,43 +4,22 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import Button from "../../components/ui/Button.jsx";
 import Badge from "../../components/ui/Badge.jsx";
 import {
-  InlineNotice,
   LoadingSurface,
   MetricCard,
+  MetricGrid,
   PageCanvas,
   PageHeader,
+  StatusBanner,
   Surface,
 } from "../../components/ui/AppShellPrimitives.jsx";
+import {
+  compactSentence,
+  normalizeNavigationAction,
+  s,
+} from "../../lib/appUi.js";
 import useProductHome from "../../view-models/useProductHome.js";
 
-function s(value, fallback = "") {
-  return String(value ?? fallback).trim();
-}
-
-function sentence(value, fallback = "") {
-  const text = s(value, fallback);
-  if (!text) return "";
-  const first = text.split(/(?<=[.!?])\s+/)[0] || text;
-  return first.length > 180 ? `${first.slice(0, 177).trim()}...` : first;
-}
-
-function normalizeAction(action = null, fallback = null) {
-  const primary = action && typeof action === "object" ? action : {};
-  const secondary = fallback && typeof fallback === "object" ? fallback : {};
-  const path = s(
-    primary.path || primary.target?.path || secondary.path || secondary.target?.path
-  );
-  const label = s(primary.label || secondary.label);
-
-  if (!path && !label) return null;
-
-  return {
-    label: label || "Open",
-    path: path || "/home",
-  };
-}
-
-function StepTone(step = {}) {
+function stepTone(step = {}) {
   if (step.complete) return "success";
 
   const tone = s(step.tone || step.status).toLowerCase();
@@ -64,9 +43,11 @@ function AvailabilityNotice({ note, onRetry, isFetching }) {
   if (!note) return null;
 
   return (
-    <InlineNotice
+    <StatusBanner
+      tone="warning"
+      label="Limited context"
       title={s(note.title, "Limited context")}
-      description={sentence(note.description)}
+      description={compactSentence(note.description)}
       action={
         <Button
           type="button"
@@ -83,8 +64,8 @@ function AvailabilityNotice({ note, onRetry, isFetching }) {
 }
 
 function StepRow({ step, active = false, onNavigate }) {
-  const action = normalizeAction(step.action);
-  const tone = StepTone(step);
+  const action = normalizeNavigationAction(step.action);
+  const tone = stepTone(step);
 
   return (
     <div
@@ -104,12 +85,12 @@ function StepRow({ step, active = false, onNavigate }) {
         </div>
 
         <div className="mt-2 text-[13px] leading-6 text-text-muted">
-          {sentence(step.summary, "Still needs attention.")}
+          {compactSentence(step.summary, "Still needs attention.")}
         </div>
 
         {s(step.detail) ? (
           <div className="mt-1 text-[12px] leading-5 text-text-subtle">
-            {sentence(step.detail)}
+            {compactSentence(step.detail)}
           </div>
         ) : null}
       </div>
@@ -151,7 +132,7 @@ export default function ProductHomePage() {
   }, [assistantRequested, navigate]);
 
   function navigateFromAction(action = null) {
-    const nextAction = normalizeAction(action);
+    const nextAction = normalizeNavigationAction(action);
     if (!nextAction?.path) return;
     navigate(nextAction.path);
   }
@@ -160,8 +141,8 @@ export default function ProductHomePage() {
     return <ProductHomeLoadingSurface />;
   }
 
-  const primaryAction = normalizeAction(home.primaryAction);
-  const secondaryAction = normalizeAction(home.secondaryAction);
+  const primaryAction = normalizeNavigationAction(home.primaryAction);
+  const secondaryAction = normalizeNavigationAction(home.secondaryAction);
   const steps = Array.isArray(home.launchSteps) ? home.launchSteps : [];
   const activeStep =
     steps.find((step) => step.complete !== true) || steps[steps.length - 1] || null;
@@ -186,7 +167,7 @@ export default function ProductHomePage() {
       <PageHeader
         eyebrow={s(home.launchPhaseLabel, "Launch lane")}
         title={s(home.launchHeadline, "Open the launch lane.")}
-        description={sentence(
+        description={compactSentence(
           home.launchSummary,
           "Use Home to see what is blocking launch and where to go next."
         )}
@@ -215,7 +196,7 @@ export default function ProductHomePage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <MetricGrid>
         <MetricCard
           label="Phase"
           value={s(home.launchPhaseLabel, "Unknown")}
@@ -231,7 +212,7 @@ export default function ProductHomePage() {
         <MetricCard
           label="Current blocker"
           value={s(blocker.title || blocker.label, "Launch lane")}
-          hint={sentence(
+          hint={compactSentence(
             blocker.summary,
             "Open the next launch step to keep the lane moving."
           )}
@@ -240,12 +221,12 @@ export default function ProductHomePage() {
         <MetricCard
           label={s(home.launchChannel?.channelLabel, "Launch channel")}
           value={channelIdentity || s(home.launchChannel?.statusLabel, "Not connected")}
-          hint={sentence(
+          hint={compactSentence(
             home.launchChannel?.summary,
             "Inspect the active launch channel before trusting delivery."
           )}
         />
-      </div>
+      </MetricGrid>
 
       <Surface>
         <div className="space-y-4">
@@ -257,7 +238,7 @@ export default function ProductHomePage() {
               Channels, setup, truth, then inbox.
             </div>
             <div className="mt-1 text-[13px] leading-6 text-text-muted">
-              {sentence(
+              {compactSentence(
                 blocker.detail ||
                   home.launchSummary ||
                   "Connect the channel, shape the draft, approve truth and runtime, then go live in inbox."

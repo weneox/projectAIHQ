@@ -23,6 +23,11 @@ import ChannelIcon from "./ChannelIcon.jsx";
 import { ChannelActionButton } from "./ChannelPrimitives.jsx";
 import { getChannelStatusMeta } from "./channelCatalogModel.js";
 import Input from "../ui/Input.jsx";
+import {
+  InlineNotice,
+  PropertyRow,
+  Section,
+} from "../ui/AppShellPrimitives.jsx";
 import WebsiteWidgetDetailDrawer from "./WebsiteWidgetDetailDrawer.jsx";
 
 const BOTFATHER_URL = "https://t.me/BotFather";
@@ -176,49 +181,24 @@ function DrawerStatus({ status }) {
 
 function SectionBlock({ eyebrow, title, description, children, last = false }) {
   return (
-    <section
-      className={cx(
-        !last && "border-b border-line-soft pb-6",
-        last && "pb-0"
-      )}
+    <Section
+      eyebrow={eyebrow}
+      title={title}
+      description={description}
+      className={cx(!last && "border-b border-line-soft pb-6", last && "pb-0")}
     >
-      {eyebrow ? (
-        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
-          {eyebrow}
-        </div>
-      ) : null}
-
-      {title ? (
-        <div className="mt-2 text-[18px] font-semibold text-text">
-          {title}
-        </div>
-      ) : null}
-
-      {description ? (
-        <p className="mt-2 max-w-[640px] text-[13px] leading-6 text-text-muted">
-          {description}
-        </p>
-      ) : null}
-
-      {children ? <div className="mt-4">{children}</div> : null}
-    </section>
+      {children}
+    </Section>
   );
 }
 
 function FeedbackBanner({ tone = "success", children }) {
   return (
-    <div
-      className={cx(
-        "rounded-panel border px-4 py-3 text-[13px] leading-6",
-        tone === "danger"
-          ? "border-[rgba(var(--color-danger),0.18)] bg-danger-soft text-danger"
-          : tone === "warning"
-          ? "border-[rgba(var(--color-warning),0.18)] bg-warning-soft text-warning"
-          : "border-[rgba(var(--color-success),0.18)] bg-success-soft text-success"
-      )}
-    >
-      {children}
-    </div>
+    <InlineNotice
+      tone={tone === "danger" ? "danger" : tone === "warning" ? "warning" : "success"}
+      description={children}
+      compact
+    />
   );
 }
 
@@ -268,17 +248,7 @@ function RuntimeRow({ ready, label, description }) {
 }
 
 function DataRow({ label, value }) {
-  return (
-    <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-4 border-b border-line-soft py-3 last:border-b-0">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
-        {label}
-      </div>
-
-      <div className="min-w-0 text-[13px] leading-6 text-text">
-        {value || "Not available"}
-      </div>
-    </div>
-  );
+  return <PropertyRow label={label} value={value || "Not available"} labelWidth="150px" />;
 }
 
 function ScopePill({ children, muted = false }) {

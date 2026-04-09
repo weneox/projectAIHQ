@@ -80,6 +80,19 @@ function metricToneClass(tone = "neutral") {
   return "border-line bg-surface";
 }
 
+function bannerToneClass(tone = "info") {
+  if (tone === "success") {
+    return "border-[rgba(var(--color-success),0.18)] bg-success-soft text-success";
+  }
+  if (tone === "warning") {
+    return "border-[rgba(var(--color-warning),0.22)] bg-warning-soft text-warning";
+  }
+  if (tone === "danger") {
+    return "border-[rgba(var(--color-danger),0.18)] bg-danger-soft text-danger";
+  }
+  return "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand";
+}
+
 export function PageCanvas({ className, children }) {
   return (
     <div
@@ -229,6 +242,152 @@ export function MetricCard({
           {hint}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+export function MetricGrid({
+  className,
+  children,
+  columns = 4,
+}) {
+  const columnsClass =
+    columns === 2
+      ? "md:grid-cols-2"
+      : columns === 3
+        ? "md:grid-cols-3"
+        : "md:grid-cols-2 xl:grid-cols-4";
+
+  return <div className={cx("grid gap-4", columnsClass, className)}>{children}</div>;
+}
+
+export function StatusBanner({
+  tone = "info",
+  label,
+  title,
+  description,
+  detail,
+  action,
+  className,
+}) {
+  return (
+    <div
+      className={cx(
+        "rounded-panel border px-4 py-4",
+        bannerToneClass(tone),
+        className
+      )}
+    >
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          {label ? (
+            <div className="text-[11px] font-semibold uppercase tracking-[0.1em]">
+              {label}
+            </div>
+          ) : null}
+
+          {title ? (
+            <div className={cx("font-semibold text-text", label ? "mt-2 text-[15px]" : "text-[15px]")}>
+              {title}
+            </div>
+          ) : null}
+
+          {description ? (
+            <div className={cx("text-[13px] leading-6 text-text-muted", title ? "mt-1" : "mt-0")}>
+              {description}
+            </div>
+          ) : null}
+
+          {detail ? (
+            <div className="mt-1 text-[12px] leading-5 text-text-subtle">
+              {detail}
+            </div>
+          ) : null}
+        </div>
+
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+export function PropertyList({
+  className,
+  children,
+  tone = "default",
+}) {
+  return (
+    <Surface
+      className={className}
+      padded={false}
+      tone={tone === "muted" ? "muted" : "default"}
+    >
+      {children}
+    </Surface>
+  );
+}
+
+export function PropertyRow({
+  label,
+  value,
+  trailing,
+  className,
+  labelWidth = "150px",
+  valueClassName,
+  align = "left",
+}) {
+  return (
+    <div
+      className={cx(
+        "grid gap-4 border-b border-line-soft px-4 py-3 last:border-b-0",
+        className
+      )}
+      style={{
+        gridTemplateColumns: trailing
+          ? `${labelWidth} minmax(0,1fr) auto`
+          : `${labelWidth} minmax(0,1fr)`,
+      }}
+    >
+      <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
+        {label}
+      </div>
+
+      <div
+        className={cx(
+          "min-w-0 text-[13px] leading-6 text-text",
+          align === "right" && "text-right",
+          valueClassName
+        )}
+      >
+        {value || "Not available"}
+      </div>
+
+      {trailing ? <div className="shrink-0 pt-[2px]">{trailing}</div> : null}
+    </div>
+  );
+}
+
+export function FieldGroup({
+  label,
+  description,
+  children,
+  className,
+}) {
+  return (
+    <div className={cx("space-y-2", className)}>
+      {label ? (
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
+          {label}
+        </div>
+      ) : null}
+
+      {description ? (
+        <div className="text-[12px] leading-5 text-text-muted">
+          {description}
+        </div>
+      ) : null}
+
+      {children}
     </div>
   );
 }
@@ -391,6 +550,27 @@ export function EmptyState({
   );
 }
 
+export function CompactState({
+  title,
+  description,
+  action,
+  className,
+}) {
+  return (
+    <Surface className={className} padded="sm" tone="muted">
+      <div className="space-y-1.5">
+        <div className="text-[14px] font-medium text-text">{title}</div>
+        {description ? (
+          <div className="text-[13px] leading-5 text-text-muted">
+            {description}
+          </div>
+        ) : null}
+        {action ? <div className="pt-1">{action}</div> : null}
+      </div>
+    </Surface>
+  );
+}
+
 export function AuthFrame({ className, children, aside }) {
   return (
     <div className={cx("min-h-screen bg-canvas px-4 py-6 md:px-6", className)}>
@@ -511,4 +691,50 @@ export function SaveFeedback({
   }
 
   return null;
+}
+
+export function SlidingDetailOverlay({
+  open = false,
+  onClose,
+  children,
+  className,
+  panelClassName,
+  backdropClassName = "bg-overlay/60",
+  panelWidthClassName = "max-w-[620px]",
+  absolute = false,
+  closeLabel = "Close details",
+}) {
+  if (!open) return null;
+
+  return (
+    <div
+      className={cx(
+        absolute ? "absolute inset-0" : "fixed inset-0",
+        "z-[120] overflow-hidden",
+        className
+      )}
+    >
+      <button
+        type="button"
+        aria-label={closeLabel}
+        onClick={() => onClose?.()}
+        className={cx(
+          "absolute inset-0 transition-opacity duration-200 opacity-100",
+          backdropClassName
+        )}
+      />
+
+      <div className="absolute inset-y-0 right-0 flex w-full justify-end">
+        <div
+          className={cx(
+            "h-full w-full transform-gpu transition-transform duration-200 translate-x-0",
+            panelWidthClassName,
+            panelClassName
+          )}
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
 }

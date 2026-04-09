@@ -3,41 +3,20 @@ import { useNavigate } from "react-router-dom";
 import FloatingAiWidget from "../../components/layout/FloatingAiWidget.jsx";
 import Button from "../../components/ui/Button.jsx";
 import {
-  InlineNotice,
   LoadingSurface,
   MetricCard,
+  MetricGrid,
   PageCanvas,
   PageHeader,
+  StatusBanner,
   Surface,
 } from "../../components/ui/AppShellPrimitives.jsx";
+import {
+  compactSentence,
+  normalizeNavigationAction,
+  s,
+} from "../../lib/appUi.js";
 import useProductHome from "../../view-models/useProductHome.js";
-
-function s(value, fallback = "") {
-  return String(value ?? fallback).trim();
-}
-
-function sentence(value, fallback = "") {
-  const text = s(value, fallback);
-  if (!text) return "";
-  const first = text.split(/(?<=[.!?])\s+/)[0] || text;
-  return first.length > 180 ? `${first.slice(0, 177).trim()}...` : first;
-}
-
-function normalizeAction(action = null, fallback = null) {
-  const primary = action && typeof action === "object" ? action : {};
-  const secondary = fallback && typeof fallback === "object" ? fallback : {};
-  const path = s(
-    primary.path || primary.target?.path || secondary.path || secondary.target?.path
-  );
-  const label = s(primary.label || secondary.label);
-
-  if (!path && !label) return null;
-
-  return {
-    label: label || "Open",
-    path: path || "/home",
-  };
-}
 
 function buildSetupScene(home) {
   const hasDraft = home?.setupFlow?.hasDraft === true;
@@ -91,9 +70,11 @@ function AvailabilityNotice({ note, onRetry, isFetching }) {
   if (!note) return null;
 
   return (
-    <InlineNotice
+    <StatusBanner
+      tone="warning"
+      label="Limited context"
       title={s(note.title, "Limited context")}
-      description={sentence(note.description)}
+      description={compactSentence(note.description)}
       action={
         <Button
           type="button"
@@ -114,7 +95,7 @@ export default function SetupLaunchPage() {
   const home = useProductHome();
 
   function navigateFromAction(action = null) {
-    const nextAction = normalizeAction(action);
+    const nextAction = normalizeNavigationAction(action);
     if (!nextAction?.path) return;
     navigate(nextAction.path);
   }
@@ -130,12 +111,12 @@ export default function SetupLaunchPage() {
   const scene = buildSetupScene(home);
   const contextualAction =
     !home.launchChannel?.connected
-      ? normalizeAction(home.launchChannel?.action, {
+      ? normalizeNavigationAction(home.launchChannel?.action, {
           label: "Open channels",
           path: "/channels",
         })
       : home.launchPhase === "approve_truth_runtime"
-        ? normalizeAction(home.truthRuntime?.action, {
+        ? normalizeNavigationAction(home.truthRuntime?.action, {
             label: "Open truth",
             path: "/truth",
           })
@@ -179,11 +160,11 @@ export default function SetupLaunchPage() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <MetricGrid columns={3}>
         <MetricCard
           label={s(home.launchChannel?.channelLabel, "Launch channel")}
           value={s(home.launchChannel?.statusLabel, "Unavailable")}
-          hint={sentence(
+          hint={compactSentence(
             home.launchChannel?.summary,
             "Channel posture unavailable."
           )}
@@ -191,7 +172,7 @@ export default function SetupLaunchPage() {
         <MetricCard
           label="Setup draft"
           value={s(home.setupFlow?.statusLabel, "Unavailable")}
-          hint={sentence(
+          hint={compactSentence(
             home.setupFlow?.summary,
             "Draft posture unavailable."
           )}
@@ -199,12 +180,12 @@ export default function SetupLaunchPage() {
         <MetricCard
           label="Truth + runtime"
           value={s(home.truthRuntime?.statusLabel, "Unavailable")}
-          hint={sentence(
+          hint={compactSentence(
             home.truthRuntime?.summary,
             "Truth and runtime posture unavailable."
           )}
         />
-      </div>
+      </MetricGrid>
 
       <Surface padded={false} className="overflow-hidden">
         <div className="border-b border-line-soft px-4 py-3 text-[13px] text-text-muted">

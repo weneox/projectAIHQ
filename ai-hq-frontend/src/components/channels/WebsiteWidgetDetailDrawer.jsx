@@ -13,14 +13,18 @@ import {
   getWebsiteWidgetStatus,
   saveWebsiteWidgetConfig,
 } from "../../api/channelConnect.js";
+import { s } from "../../lib/appUi.js";
 import { cx } from "../../lib/cx.js";
 import Input, { Textarea } from "../ui/Input.jsx";
+import {
+  FieldGroup,
+  InlineNotice,
+  PropertyRow,
+  SaveFeedback,
+  Section,
+} from "../ui/AppShellPrimitives.jsx";
 import ChannelIcon from "./ChannelIcon.jsx";
 import { ChannelActionButton, ChannelStatus } from "./ChannelPrimitives.jsx";
-
-function s(value, fallback = "") {
-  return String(value ?? fallback).trim();
-}
 
 function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -55,77 +59,18 @@ function buildFormState(payload = {}) {
   };
 }
 
-function SectionBlock({ eyebrow, title, description, children, last = false }) {
-  return (
-    <section
-      className={cx(!last && "border-b border-[#e8edf3] pb-7", last && "pb-0")}
-    >
-      {eyebrow ? (
-        <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#667085]">
-          {eyebrow}
-        </div>
-      ) : null}
-
-      {title ? (
-        <div className="mt-3 text-[18px] font-semibold tracking-[-0.04em] text-[#101828]">
-          {title}
-        </div>
-      ) : null}
-
-      {description ? (
-        <p className="mt-3 max-w-[640px] text-[14px] leading-8 text-[#5f6c80]">
-          {description}
-        </p>
-      ) : null}
-
-      {children ? <div className="mt-4">{children}</div> : null}
-    </section>
-  );
-}
-
 function FeedbackBanner({ tone = "success", children }) {
   return (
-    <div
-      className={cx(
-        "rounded-[10px] border px-4 py-3 text-[13px] leading-6",
-        tone === "danger"
-          ? "border-[rgba(var(--color-danger),0.18)] bg-[rgba(var(--color-danger),0.05)] text-danger"
-          : tone === "warning"
-            ? "border-[rgba(var(--color-warning),0.18)] bg-[rgba(var(--color-warning),0.05)] text-warning"
-            : "border-[rgba(var(--color-success),0.18)] bg-[rgba(var(--color-success),0.05)] text-success"
-      )}
-    >
-      {children}
-    </div>
+    <InlineNotice
+      tone={tone === "danger" ? "danger" : tone === "warning" ? "warning" : "success"}
+      description={children}
+      compact
+    />
   );
 }
 
 function DataRow({ label, value }) {
-  return (
-    <div className="grid grid-cols-[160px_minmax(0,1fr)] gap-4 border-b border-[#eef2f6] py-3 last:border-b-0">
-      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#667085]">
-        {label}
-      </div>
-
-      <div className="min-w-0 text-[13px] font-medium leading-6 text-[#101828]">
-        {value || "Not available"}
-      </div>
-    </div>
-  );
-}
-
-function SettingField({ label, description, children }) {
-  return (
-    <div className="space-y-2">
-      <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#667085]">
-        {label}
-      </div>
-      {description ? (
-        <div className="text-[12px] leading-6 text-[#667085]">{description}</div>
-      ) : null}
-      {children}
-    </div>
-  );
+  return <PropertyRow label={label} value={value || "Not available"} labelWidth="160px" />;
 }
 
 export default function WebsiteWidgetDetailDrawer({
@@ -135,6 +80,7 @@ export default function WebsiteWidgetDetailDrawer({
 }) {
   const queryClient = useQueryClient();
   const [draftForm, setDraftForm] = useState(null);
+  const [statusMessage, setStatusMessage] = useState("");
   const [copyFeedback, setCopyFeedback] = useState("");
 
   const statusQuery = useQuery({
@@ -149,7 +95,8 @@ export default function WebsiteWidgetDetailDrawer({
     mutationFn: saveWebsiteWidgetConfig,
     async onSuccess(payload) {
       setDraftForm(buildFormState(payload));
-      setCopyFeedback("Website widget settings saved.");
+      setStatusMessage("Website widget settings saved.");
+      setCopyFeedback("");
       await queryClient.invalidateQueries({
         queryKey: ["website-widget-status"],
       });
@@ -187,6 +134,7 @@ export default function WebsiteWidgetDetailDrawer({
       if (navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(snippet);
         setCopyFeedback("Embed snippet copied.");
+        setStatusMessage("");
         return;
       }
     } catch {
@@ -194,9 +142,11 @@ export default function WebsiteWidgetDetailDrawer({
     }
 
     setCopyFeedback("Copy is unavailable in this browser context.");
+    setStatusMessage("");
   }
 
   function handleSave() {
+    setStatusMessage("");
     setCopyFeedback("");
     saveMutation.mutate({
       enabled: form.enabled,
@@ -211,11 +161,14 @@ export default function WebsiteWidgetDetailDrawer({
 
   function handleRefresh() {
     setDraftForm(null);
+    setStatusMessage("");
     statusQuery.refetch();
   }
 
   function handleClose() {
     setDraftForm(null);
+    setStatusMessage("");
+    setCopyFeedback("");
     onClose?.();
   }
 
@@ -226,16 +179,16 @@ export default function WebsiteWidgetDetailDrawer({
   return (
     <aside
       aria-hidden={!open}
-      className="flex h-full w-full flex-col border-l border-[#dbe3ec] bg-white shadow-[-18px_0_40px_-26px_rgba(15,23,42,0.16)]"
+      className="flex h-full w-full flex-col border-l border-line-soft bg-surface shadow-panel"
     >
-      <div className="border-b border-[#e8edf3] px-7 py-5">
+      <div className="border-b border-line-soft px-6 py-5">
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1">
           <div className="row-span-2 shrink-0 pt-0.5">
             <ChannelIcon channel={channel} size="lg" />
           </div>
 
           <div className="min-w-0 self-center">
-            <div className="truncate text-[30px] font-semibold leading-none tracking-[-0.06em] text-[#101828]">
+            <div className="truncate text-[28px] font-semibold leading-none tracking-[-0.04em] text-text">
               {channel?.name}
             </div>
           </div>
@@ -244,7 +197,7 @@ export default function WebsiteWidgetDetailDrawer({
             type="button"
             aria-label="Close channel details"
             onClick={handleClose}
-            className="row-span-2 inline-flex h-11 w-11 items-center justify-center rounded-[12px] border border-[#dbe3ec] bg-white text-[#667085] transition duration-fast ease-premium hover:border-[#c8d2df] hover:text-[#101828]"
+            className="row-span-2 inline-flex h-10 w-10 items-center justify-center rounded-soft border border-line bg-surface text-text-muted transition-colors hover:border-line-strong hover:text-text"
           >
             <X className="h-4.5 w-4.5" strokeWidth={2.35} />
           </button>
@@ -255,15 +208,9 @@ export default function WebsiteWidgetDetailDrawer({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-7 py-6">
-        <div className="space-y-7">
-          {saveMutation.isSuccess && copyFeedback ? (
-            <FeedbackBanner>{copyFeedback}</FeedbackBanner>
-          ) : null}
-
-          {actionError ? (
-            <FeedbackBanner tone="danger">{actionError}</FeedbackBanner>
-          ) : null}
+      <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="space-y-6">
+          <SaveFeedback success={statusMessage} error={actionError} />
 
           {!saveAllowed ? (
             <FeedbackBanner tone="warning">
@@ -284,24 +231,24 @@ export default function WebsiteWidgetDetailDrawer({
             </FeedbackBanner>
           ))}
 
-          <SectionBlock
+          <Section
             eyebrow="Summary"
             title="Install-safe website chat"
             description="The public loader now uses a short-lived bootstrap token tied to this tenant widget config. Random third-party pages cannot spoof a tenant install just by posting a tenant key and fake page data."
           >
             <div className="flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-2 rounded-[10px] border border-[rgba(22,101,52,0.10)] bg-[rgba(236,253,245,0.72)] px-3 py-2 text-[12px] font-semibold text-[rgba(22,101,52,0.82)]">
+              <span className="inline-flex items-center gap-2 rounded-pill border border-[rgba(var(--color-success),0.18)] bg-success-soft px-3 py-1.5 text-[12px] font-medium text-success">
                 <ShieldCheck className="h-4 w-4" />
                 Loader-signed install token
               </span>
-              <span className="inline-flex items-center gap-2 rounded-[10px] border border-[rgba(15,23,42,0.08)] bg-[#f8fafc] px-3 py-2 text-[12px] font-semibold text-[#475467]">
+              <span className="inline-flex items-center gap-2 rounded-pill border border-line bg-surface-subtle px-3 py-1.5 text-[12px] font-medium text-text-muted">
                 <Globe2 className="h-4 w-4" />
                 Per-tenant allowed origin rules
               </span>
             </div>
-          </SectionBlock>
+          </Section>
 
-          <SectionBlock
+          <Section
             eyebrow="Status"
             title="Current posture"
             description={s(
@@ -309,7 +256,7 @@ export default function WebsiteWidgetDetailDrawer({
               "Website chat posture is unavailable right now."
             )}
           >
-            <div className="space-y-0">
+            <div className="overflow-hidden rounded-panel border border-line-soft bg-surface">
               <DataRow
                 label="Widget enabled"
                 value={widget.enabled === true ? "Enabled" : "Disabled"}
@@ -333,20 +280,20 @@ export default function WebsiteWidgetDetailDrawer({
                 }
               />
             </div>
-          </SectionBlock>
+          </Section>
 
-          <SectionBlock
+          <Section
             eyebrow="Settings"
             title="Tenant-managed widget config"
             description="Allowed origins are exact browser origins such as https://www.example.com. Allowed domains are hostnames such as example.com and match the domain plus its subdomains."
           >
             <div className="space-y-5">
-              <div className="flex items-center justify-between rounded-[12px] border border-[#e6ebf2] bg-[#fbfcfe] px-4 py-4">
+              <div className="flex items-center justify-between rounded-panel border border-line bg-surface-muted px-4 py-4">
                 <div>
-                  <div className="text-[14px] font-semibold text-[#101828]">
+                  <div className="text-[14px] font-semibold text-text">
                     Public website chat
                   </div>
-                  <div className="mt-1 text-[12px] leading-6 text-[#667085]">
+                  <div className="mt-1 text-[12px] leading-5 text-text-muted">
                     Disable this to fail closed for new public installs immediately.
                   </div>
                 </div>
@@ -361,10 +308,10 @@ export default function WebsiteWidgetDetailDrawer({
                     }))
                   }
                   className={cx(
-                    "inline-flex min-w-[110px] items-center justify-center rounded-full border px-4 py-2 text-[11px] font-bold uppercase tracking-[0.14em] transition",
+                    "inline-flex min-w-[110px] items-center justify-center rounded-pill border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors",
                     form.enabled
-                      ? "border-[rgba(22,101,52,0.16)] bg-[rgba(236,253,245,0.82)] text-[rgba(22,101,52,0.88)]"
-                      : "border-[#dbe3ec] bg-white text-[#667085]",
+                      ? "border-[rgba(var(--color-success),0.18)] bg-success-soft text-success"
+                      : "border-line bg-surface text-text-muted",
                     !saveAllowed && "cursor-not-allowed opacity-70"
                   )}
                 >
@@ -372,7 +319,7 @@ export default function WebsiteWidgetDetailDrawer({
                 </button>
               </div>
 
-              <SettingField label="Allowed origins">
+              <FieldGroup label="Allowed origins">
                 <Textarea
                   value={form.allowedOrigins}
                   onChange={(event) =>
@@ -386,9 +333,9 @@ export default function WebsiteWidgetDetailDrawer({
                   appearance="quiet"
                   placeholder="https://www.example.com&#10;https://shop.example.com"
                 />
-              </SettingField>
+              </FieldGroup>
 
-              <SettingField label="Allowed domains">
+              <FieldGroup label="Allowed domains">
                 <Textarea
                   value={form.allowedDomains}
                   onChange={(event) =>
@@ -402,10 +349,10 @@ export default function WebsiteWidgetDetailDrawer({
                   appearance="quiet"
                   placeholder="example.com&#10;support.example.org"
                 />
-              </SettingField>
+              </FieldGroup>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <SettingField label="Widget title">
+                <FieldGroup label="Widget title">
                   <Input
                     value={form.title}
                     onChange={(event) =>
@@ -418,9 +365,9 @@ export default function WebsiteWidgetDetailDrawer({
                     appearance="quiet"
                     placeholder="Website chat"
                   />
-                </SettingField>
+                </FieldGroup>
 
-                <SettingField label="Accent color">
+                <FieldGroup label="Accent color">
                   <Input
                     value={form.accentColor}
                     onChange={(event) =>
@@ -433,10 +380,10 @@ export default function WebsiteWidgetDetailDrawer({
                     appearance="quiet"
                     placeholder="#0f172a"
                   />
-                </SettingField>
+                </FieldGroup>
               </div>
 
-              <SettingField label="Subtitle">
+              <FieldGroup label="Subtitle">
                 <Input
                   value={form.subtitle}
                   onChange={(event) =>
@@ -449,9 +396,9 @@ export default function WebsiteWidgetDetailDrawer({
                   appearance="quiet"
                   placeholder="Ask a question or leave a message for the team."
                 />
-              </SettingField>
+              </FieldGroup>
 
-              <SettingField label="Quick prompts">
+              <FieldGroup label="Quick prompts">
                 <Textarea
                   value={form.initialPrompts}
                   onChange={(event) =>
@@ -465,18 +412,17 @@ export default function WebsiteWidgetDetailDrawer({
                   appearance="quiet"
                   placeholder="What services do you offer?&#10;Can someone contact me today?"
                 />
-              </SettingField>
+              </FieldGroup>
             </div>
-          </SectionBlock>
+          </Section>
 
-          <SectionBlock
+          <Section
             eyebrow="Install"
             title="Embed this widget on the public website"
             description="The loader script requests a short-lived bootstrap token from the backend using the real customer page request context, then opens the iframe with that signed install token."
-            last
           >
             <div className="space-y-4">
-              <div className="space-y-0">
+              <div className="overflow-hidden rounded-panel border border-line-soft bg-surface">
                 <DataRow
                   label="Loader script"
                   value={s(install.scriptUrl, "Not available")}
@@ -491,7 +437,7 @@ export default function WebsiteWidgetDetailDrawer({
                 />
               </div>
 
-              <SettingField label="Embed snippet">
+              <FieldGroup label="Embed snippet">
                 <Textarea
                   value={s(install.embedSnippet)}
                   readOnly
@@ -499,19 +445,17 @@ export default function WebsiteWidgetDetailDrawer({
                   appearance="quiet"
                   placeholder="Save the website widget settings to generate the install snippet."
                 />
-              </SettingField>
+              </FieldGroup>
 
-              {copyFeedback && !saveMutation.isSuccess ? (
-                <div className="text-[12px] leading-6 text-[#667085]">
-                  {copyFeedback}
-                </div>
+              {copyFeedback ? (
+                <InlineNotice tone="info" description={copyFeedback} compact />
               ) : null}
             </div>
-          </SectionBlock>
+          </Section>
         </div>
       </div>
 
-      <div className="border-t border-[#e8edf3] bg-white px-7 py-4">
+      <div className="border-t border-line-soft bg-surface px-6 py-4">
         <div className="grid grid-cols-2 gap-3">
           <ChannelActionButton
             fullWidth

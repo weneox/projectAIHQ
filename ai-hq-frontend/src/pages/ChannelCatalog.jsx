@@ -18,33 +18,28 @@ import {
 import Button from "../components/ui/Button.jsx";
 import Badge from "../components/ui/Badge.jsx";
 import {
-  InlineNotice,
+  EmptyState,
   MetricCard,
+  MetricGrid,
   PageCanvas,
   PageHeader,
-  Surface,
   SectionHeader,
+  SlidingDetailOverlay,
+  StatusBanner,
+  Surface,
 } from "../components/ui/AppShellPrimitives.jsx";
 import { cx } from "../lib/cx.js";
+import {
+  compactSentence,
+  s,
+  toneFromReadiness,
+} from "../lib/appUi.js";
 import {
   buildChannelTruthLaunchReadiness,
   buildMetaLaunchChannelState,
   buildTelegramLaunchChannelState,
   buildTruthOperationalState,
 } from "../lib/readinessViewModel.js";
-
-function s(value, fallback = "") {
-  return String(value ?? fallback).trim();
-}
-
-function compactSentence(value, fallback = "") {
-  const text = s(value, fallback);
-  if (!text) return "";
-  const sentence = text.split(/(?<=[.!?])\s+/)[0] || text;
-  return sentence.length > 150
-    ? `${sentence.slice(0, 147).trim()}...`
-    : sentence;
-}
 
 function buildResultsLabel(filteredCount, totalCount, isFiltered) {
   if (!isFiltered) return `${totalCount} connectors`;
@@ -70,38 +65,8 @@ function FilterTab({ label, count, active, onClick }) {
   );
 }
 
-function readinessTone(readiness) {
-  if (readiness.status === "ready") return "success";
-  if (readiness.status === "attention") return "warning";
-  if (readiness.status === "blocked") return "danger";
-  return "info";
-}
-
 function launchMetricHint(state, fallback) {
   return compactSentence(state?.summary, fallback);
-}
-
-function EmptyState({ onReset }) {
-  return (
-    <Surface>
-      <div className="text-center">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
-          No matches
-        </div>
-        <div className="mt-2 text-[18px] font-semibold text-text">
-          No connector matched this view.
-        </div>
-        <div className="mt-2 text-[13px] leading-6 text-text-muted">
-          Reset the catalog and bring the full launch surface back.
-        </div>
-        <div className="mt-4">
-          <Button type="button" size="sm" variant="secondary" onClick={onReset}>
-            Reset view
-          </Button>
-        </div>
-      </div>
-    </Surface>
-  );
 }
 
 export default function ChannelCatalog() {
@@ -359,29 +324,32 @@ export default function ChannelCatalog() {
           }
         />
 
-        <InlineNotice
-          tone={readinessTone(launchReadiness)}
+        <StatusBanner
+          tone={toneFromReadiness(launchReadiness)}
+          label={s(launchReadiness.statusLabel, "Launch posture")}
           title={s(launchReadiness.title, "Launch posture")}
           description={compactSentence(
-            launchReadiness.detail || launchReadiness.summary,
+            launchReadiness.summary,
             "Launch posture is currently unavailable."
           )}
+          detail={compactSentence(launchReadiness.detail)}
         />
 
         {s(readinessState.error) ? (
-          <InlineNotice
+          <StatusBanner
             tone="danger"
+            label="Unavailable"
             title="Channel readiness unavailable"
             description={readinessState.error}
           />
         ) : null}
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricGrid>
           <MetricCard
             label="Launch posture"
             value={s(launchReadiness.statusLabel, "Unknown")}
             hint={compactSentence(launchReadiness.summary, "Readiness unavailable.")}
-            tone={readinessTone(launchReadiness)}
+            tone={toneFromReadiness(launchReadiness)}
           />
           <MetricCard
             label="Instagram"
@@ -390,7 +358,7 @@ export default function ChannelCatalog() {
               readinessState.meta,
               "Instagram posture unavailable."
             )}
-            tone={readinessTone(readinessState.meta || {})}
+            tone={toneFromReadiness(readinessState.meta || {})}
           />
           <MetricCard
             label="Telegram"
@@ -399,7 +367,7 @@ export default function ChannelCatalog() {
               readinessState.telegram,
               "Telegram posture unavailable."
             )}
-            tone={readinessTone(readinessState.telegram || {})}
+            tone={toneFromReadiness(readinessState.telegram || {})}
           />
           <MetricCard
             label="Truth + runtime"
@@ -408,9 +376,9 @@ export default function ChannelCatalog() {
               readinessState.truth,
               "Truth posture unavailable."
             )}
-            tone={readinessTone(readinessState.truth || {})}
+            tone={toneFromReadiness(readinessState.truth || {})}
           />
-        </div>
+        </MetricGrid>
 
         <Surface>
           <div className="space-y-5">
@@ -499,40 +467,38 @@ export default function ChannelCatalog() {
                 ) : null}
               </div>
             ) : (
-              <EmptyState onReset={handleResetView} />
+              <EmptyState
+                title="No connector matched this view."
+                description="Reset the catalog and bring the full launch surface back."
+                action={
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleResetView}
+                  >
+                    Reset view
+                  </Button>
+                }
+              />
             )}
           </div>
         </Surface>
       </PageCanvas>
 
       {drawerChannel ? (
-        <div className="fixed inset-0 z-[120] overflow-hidden">
-          <button
-            type="button"
-            aria-label="Close connector details"
-            onClick={handleDrawerClose}
-            className={cx(
-              "absolute inset-0 transition-opacity duration-200",
-              drawerOpen ? "bg-[rgba(17,24,39,0.18)] opacity-100" : "opacity-0"
-            )}
+        <SlidingDetailOverlay
+          open={drawerOpen}
+          onClose={handleDrawerClose}
+          closeLabel="Close connector details"
+        >
+          <ChannelDetailDrawer
+            channel={drawerChannel}
+            open={drawerOpen}
+            onClose={handleDrawerClose}
+            onNavigate={handleNavigate}
           />
-
-          <div className="absolute inset-y-0 right-0 flex w-full justify-end">
-            <div
-              className={cx(
-                "h-full w-full max-w-[620px] transform-gpu transition-transform duration-200",
-                drawerOpen ? "translate-x-0" : "translate-x-full"
-              )}
-            >
-              <ChannelDetailDrawer
-                channel={drawerChannel}
-                open={drawerOpen}
-                onClose={handleDrawerClose}
-                onNavigate={handleNavigate}
-              />
-            </div>
-          </div>
-        </div>
+        </SlidingDetailOverlay>
       ) : null}
     </>
   );
