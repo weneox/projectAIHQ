@@ -2,9 +2,11 @@ import { getActiveSetupReviewSession } from "../../db/helpers/tenantSetupReview.
 import { getWorkspaceReadiness } from "./readiness.js";
 import { arr, obj, s } from "./shared.js";
 
+const SETUP_WIDGET_ROUTE = "/home?assistant=setup";
+
 export function buildActiveWorkspaceDestination(readiness = {}) {
   const setupCompleted = !!readiness?.setupCompleted;
-  const setupPath = s(readiness?.nextSetupRoute || "/setup/studio") || "/setup/studio";
+  const setupPath = s(readiness?.nextSetupRoute || SETUP_WIDGET_ROUTE) || SETUP_WIDGET_ROUTE;
 
   return setupCompleted
     ? {
@@ -13,7 +15,7 @@ export function buildActiveWorkspaceDestination(readiness = {}) {
       }
     : {
         kind: "setup",
-        path: setupPath.startsWith("/setup/") ? setupPath : "/setup/studio",
+        path: setupPath,
       };
 }
 

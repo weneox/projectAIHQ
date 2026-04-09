@@ -3,6 +3,8 @@
 
 import { apiGet, apiPost, apiPut, apiPatch } from "./client.js";
 
+const SETUP_OVERVIEW_PATH = "/api/setup/overview";
+
 function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
@@ -17,12 +19,8 @@ function normalizeSetupAssistantPayload(payload = {}) {
   };
 }
 
-export function getSetupStatus() {
-  return apiGet("/api/setup/status");
-}
-
 export function getSetupOverview() {
-  return apiGet("/api/setup/overview");
+  return apiGet(SETUP_OVERVIEW_PATH);
 }
 
 export function getSetupTruth() {

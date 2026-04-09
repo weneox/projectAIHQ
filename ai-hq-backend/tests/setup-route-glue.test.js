@@ -65,7 +65,7 @@ test("actor app loads setup status with unchanged response shape", async () => {
       async buildSetupStatus() {
         return {
           progress: {
-            nextRoute: "/setup/business",
+            nextRoute: "/home?assistant=setup",
           },
         };
       },
@@ -74,7 +74,7 @@ test("actor app loads setup status with unchanged response shape", async () => {
 
   assert.equal(result.status, 200);
   assert.equal(result.body.ok, true);
-  assert.equal(result.body.progress.nextRoute, "/setup/business");
+  assert.equal(result.body.progress.nextRoute, "/home?assistant=setup");
 });
 
 test("audit app derives setup audit actor and swallows audit failures", async () => {

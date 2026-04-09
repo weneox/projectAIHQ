@@ -15,6 +15,7 @@ import {
   startSetupAssistantSession,
   updateCurrentSetupAssistantDraft,
 } from "../../api/setup.js";
+import { SETUP_WIDGET_ROUTE } from "../../lib/appEntry.js";
 import SetupAssistantSections from "./SetupAssistantSections.jsx";
 
 function s(value, fallback = "") {
@@ -221,7 +222,7 @@ function buildSupportContext(assistantState = {}) {
 
   const setupAction = normalizeUiAction(source.primaryAction, {
     label: "Open AI setup",
-    path: "/setup",
+    path: SETUP_WIDGET_ROUTE,
   });
 
   const secondaryAction = normalizeUiAction(source.secondaryAction, {

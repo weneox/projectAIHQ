@@ -68,8 +68,8 @@ describe("Header workspace switcher", () => {
 
   it("renders available workspaces and switches using the canonical switch endpoint", async () => {
     switchWorkspaceUser.mockResolvedValue({
-      destination: { path: "/setup" },
-      workspace: { routeHint: "/setup" },
+      destination: { path: "/home?assistant=setup" },
+      workspace: { routeHint: "/home?assistant=setup" },
     });
 
     const view = render(
@@ -97,7 +97,7 @@ describe("Header workspace switcher", () => {
     });
 
     expect(clearAppSessionContext).toHaveBeenCalledTimes(1);
-    expect(navigate).toHaveBeenCalledWith("/setup", { replace: true });
+    expect(navigate).toHaveBeenCalledWith("/home?assistant=setup", { replace: true });
   });
 });
 

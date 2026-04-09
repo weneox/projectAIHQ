@@ -17,7 +17,6 @@ const Publish = lazy(() => import("./pages/Publish.jsx"));
 const Executions = lazy(() => import("./pages/Executions.jsx"));
 const Inbox = lazy(() => import("./pages/Inbox.jsx"));
 const ProductHomePage = lazy(() => import("./surfaces/home/ProductHomePage.jsx"));
-const SetupLaunchPage = lazy(() => import("./surfaces/setup/SetupLaunchPage.jsx"));
 const WorkspacePage = lazy(() => import("./surfaces/workspace/WorkspacePage.jsx"));
 const Leads = lazy(() => import("./pages/Leads.jsx"));
 const Comments = lazy(() => import("./pages/Comments.jsx"));
@@ -115,7 +114,14 @@ export default function App() {
           }
         >
           <Route path="home" element={withSuspense(<ProductHomePage />)} />
-          <Route path="setup" element={withSuspense(<SetupLaunchPage />)} />
+          <Route
+            path="setup"
+            element={<Navigate to="/home?assistant=setup" replace />}
+          />
+          <Route
+            path="setup/*"
+            element={<Navigate to="/home?assistant=setup" replace />}
+          />
           <Route path="welcome" element={withSuspense(<Welcome />)} />
           <Route path="workspace" element={withSuspense(<WorkspacePage />)} />
 

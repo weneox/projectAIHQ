@@ -1,6 +1,7 @@
 import { apiGet, apiPost } from "./client.js";
 import { getSetupTruth } from "./setup.js";
 import { validateSetupTruthPayload } from "@aihq/shared-contracts/setup";
+import { SETUP_WIDGET_ROUTE } from "../lib/appEntry.js";
 import {
   extractTruthBehavior,
   formatTruthBehaviorFieldLabel,
@@ -1209,7 +1210,7 @@ function buildApprovedTruthUnavailableSnapshot(
             requiredRole: "operator",
             allowed: true,
             target: {
-              path: "/setup",
+              path: SETUP_WIDGET_ROUTE,
               section: "truth",
             },
           },

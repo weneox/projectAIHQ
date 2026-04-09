@@ -54,7 +54,7 @@ function buildWorkspaceGovernanceContract() {
     governedSections: ["tenant", "profile"],
     directlyEditableSections: ["aiPolicy"],
     governedFields: GOVERNED_WORKSPACE_FIELDS,
-    setupRoute: "/setup",
+    setupRoute: "/home?assistant=setup",
     truthRoute: "/truth",
   };
 }
@@ -163,7 +163,7 @@ export function workspaceSettingsRoutes({ db }) {
               tenant: governedWriteAttempt.attemptedTenantFields,
               profile: governedWriteAttempt.attemptedProfileFields,
             },
-            setupRoute: "/setup",
+            setupRoute: "/home?assistant=setup",
             truthRoute: "/truth",
           }
         );

@@ -8,12 +8,11 @@ import {
 import {
   getMetaChannelStatus,
   getTelegramChannelStatus,
+  getWebsiteWidgetStatus,
 } from "../api/channelConnect.js";
 import { getSettingsTrustView } from "../api/trust.js";
-import { getTruthReviewWorkbench } from "../api/truth.js";
+import { SETUP_WIDGET_ROUTE } from "../lib/appEntry.js";
 import { getAppSessionContext } from "../lib/appSession.js";
-import { buildWorkspaceBusinessMemory } from "./workspaceBusinessMemory.js";
-import { buildWorkspaceSetupState } from "./workspaceSetupState.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -89,18 +88,37 @@ function formatHandle(value = "") {
 }
 
 function buildChannelPath(provider = "") {
-  return provider === "meta"
-    ? "/channels?channel=instagram"
-    : "/channels?channel=telegram";
+  switch (provider) {
+    case "meta":
+      return "/channels?channel=instagram";
+    case "telegram":
+      return "/channels?channel=telegram";
+    case "website":
+    case "webchat":
+      return "/channels?channel=website";
+    default:
+      return "/channels";
+  }
 }
 
 function buildChannelLabel(provider = "") {
-  return provider === "meta" ? "Instagram" : "Telegram";
+  switch (provider) {
+    case "meta":
+      return "Instagram";
+    case "telegram":
+      return "Telegram";
+    case "website":
+    case "webchat":
+      return "Website chat";
+    default:
+      return "Launch channel";
+  }
 }
 
 function buildLaunchAction(provider = "", mode = "open") {
   const labelBase = buildChannelLabel(provider);
   const path = buildChannelPath(provider);
+  const isWebsite = provider === "website" || provider === "webchat";
 
   if (mode === "select") {
     return {
@@ -111,14 +129,14 @@ function buildLaunchAction(provider = "", mode = "open") {
 
   if (mode === "connect") {
     return {
-      label: `Connect ${labelBase}`,
+      label: isWebsite ? `Configure ${labelBase}` : `Connect ${labelBase}`,
       path,
     };
   }
 
   if (mode === "reconnect") {
     return {
-      label: `Reconnect ${labelBase}`,
+      label: isWebsite ? `Review ${labelBase}` : `Reconnect ${labelBase}`,
       path,
     };
   }
@@ -141,7 +159,7 @@ function buildLaunchChannelUnavailableState() {
     title: "Launch channel state is unavailable.",
     summary: "Home cannot confirm which launch channel is ready right now.",
     detail:
-      "Open Channels to verify Instagram or Telegram before treating setup as launch-ready.",
+      "Open Channels to verify Instagram, Telegram, or website chat before treating setup as launch-ready.",
     action: { label: "Open channels", path: "/channels" },
     deliveryReady: false,
     reasonCode: "launch_channel_status_unavailable",
@@ -472,18 +490,113 @@ function buildTelegramLaunchChannelState({ telegramPayload, sourceStatus }) {
   });
 }
 
+function buildWebsiteLaunchChannelState({ websitePayload, sourceStatus }) {
+  const available = sourceStatus.websiteStatus?.available !== false;
+  const fallback = buildLaunchChannelUnavailableState();
+
+  if (!available) {
+    return createCanonicalLaunchChannel({
+      ...fallback,
+      id: "launch-website",
+      provider: "website",
+      channelLabel: "Website chat",
+      action: buildLaunchAction("website", "open"),
+    });
+  }
+
+  const state = lower(websitePayload?.state);
+  const readiness = obj(websitePayload?.readiness);
+  const widget = obj(websitePayload?.widget);
+  const blockers = arr(readiness.blockers);
+  const enabled = widget.enabled === true;
+  const connected = state === "connected" && readiness.status === "ready";
+  const deliveryReady = connected;
+  const detail =
+    firstReadableValue(
+      readiness.message,
+      widget.websiteUrl ? `Reference website: ${widget.websiteUrl}` : "",
+      blockers[0]?.subtitle
+    ) || "Open Channels to inspect website chat posture.";
+
+  const base = {
+    id: "launch-website",
+    provider: "website",
+    channelLabel: "Website chat",
+    accountLabel: "Reference website",
+    accountDisplayName: s(widget.title || "Website chat"),
+    accountHandle: s(widget.websiteUrl),
+    account: {
+      displayName: s(widget.title || "Website chat"),
+      handle: s(widget.websiteUrl),
+      websiteUrl: s(widget.websiteUrl),
+      publicWidgetId: s(widget.publicWidgetId),
+    },
+    reasonCode: lower(blockers[0]?.reasonCode),
+  };
+
+  if (connected) {
+    return createCanonicalLaunchChannel({
+      ...base,
+      connected: true,
+      available: true,
+      status: "connected",
+      statusLabel: "Connected",
+      title: "Website chat is configured.",
+      summary:
+        readiness.message ||
+        "Website chat can be used as the current launch channel.",
+      detail,
+      action: buildLaunchAction("website", "open"),
+      deliveryReady,
+    });
+  }
+
+  if (enabled) {
+    return createCanonicalLaunchChannel({
+      ...base,
+      connected: false,
+      available: true,
+      status: "repair_required",
+      statusLabel: "Configuration required",
+      title: "Website chat still needs configuration.",
+      summary:
+        readiness.message ||
+        "Website chat is enabled, but install hardening is still incomplete.",
+      detail,
+      action: buildLaunchAction("website", "open"),
+      deliveryReady: false,
+    });
+  }
+
+  return createCanonicalLaunchChannel({
+    ...base,
+    connected: false,
+    available: true,
+    status: "needs_connection",
+    statusLabel: "Enable required",
+    title: "Enable website chat before using it as the launch channel.",
+    summary:
+      readiness.message ||
+      "Website chat is supported, but it is not configured yet.",
+    detail,
+    action: buildLaunchAction("website", "connect"),
+    deliveryReady: false,
+  });
+}
+
 function scoreLaunchChannel(channel = {}) {
   if (!channel?.available) return 0;
 
   const provider = lower(channel.provider);
   const isMeta = provider === "meta";
+  const isWebsite = provider === "website";
 
   if (channel.connected && channel.deliveryReady) {
-    return isMeta ? 500 : 400;
+    return isMeta ? 500 : isWebsite ? 420 : 400;
   }
 
   if (channel.connected && !channel.deliveryReady) {
-    return isMeta ? 320 : 300;
+    return isMeta ? 320 : isWebsite ? 310 : 300;
   }
 
   if (channel.status === "selection_required") {
@@ -491,15 +604,15 @@ function scoreLaunchChannel(channel = {}) {
   }
 
   if (channel.status === "connecting") {
-    return isMeta ? 240 : 180;
+    return isMeta ? 240 : isWebsite ? 190 : 180;
   }
 
   if (channel.status === "repair_required") {
-    return isMeta ? 230 : 170;
+    return isMeta ? 230 : isWebsite ? 175 : 170;
   }
 
   if (channel.status === "needs_connection") {
-    return isMeta ? 220 : 160;
+    return isMeta ? 220 : isWebsite ? 165 : 160;
   }
 
   if (channel.status === "unavailable") {
@@ -512,6 +625,7 @@ function scoreLaunchChannel(channel = {}) {
 function resolveCanonicalLaunchChannel({
   metaPayload,
   telegramPayload,
+  websitePayload,
   sourceStatus,
 }) {
   const metaChannel = buildMetaLaunchChannelState({
@@ -522,8 +636,12 @@ function resolveCanonicalLaunchChannel({
     telegramPayload,
     sourceStatus,
   });
+  const websiteChannel = buildWebsiteLaunchChannelState({
+    websitePayload,
+    sourceStatus,
+  });
 
-  const best = [metaChannel, telegramChannel].sort(
+  const best = [metaChannel, telegramChannel, websiteChannel].sort(
     (left, right) => scoreLaunchChannel(right) - scoreLaunchChannel(left)
   )[0];
 
@@ -677,11 +795,11 @@ async function loadProductHomePayloads() {
     session: Promise.resolve(session),
     overview: getSetupOverview(),
     trust: getSettingsTrustView({ limit: 4 }),
-    workbench: getTruthReviewWorkbench({ limit: 4 }),
     inboxThreads: listInboxThreads({ limit: 10 }),
     inboxOutbound: getOutboundSummary(),
     metaStatus: getMetaChannelStatus(),
     telegramStatus: getTelegramChannelStatus(),
+    websiteStatus: getWebsiteWidgetStatus(),
     setupAssistantSession: getCurrentSetupAssistantSession(),
   };
 
@@ -807,7 +925,7 @@ function buildTruthRuntimeState({ trustPayload, launchChannel, sourceStatus }) {
   const available = sourceStatus.trust?.available !== false;
   const fallbackTruthAction = {
     label: "Continue AI setup",
-    path: "/setup",
+    path: SETUP_WIDGET_ROUTE,
   };
   const fallbackRuntimeAction = { label: "Open truth", path: "/truth" };
 
@@ -1057,13 +1175,13 @@ function buildSetupFlowState({
         : launchPosture === "setup_needed"
           ? {
               label: hasDraft ? "Continue AI setup" : "Start AI setup",
-              path: "/setup",
+              path: SETUP_WIDGET_ROUTE,
             }
           : launchPosture === "runtime_repair_needed"
             ? truthRuntime.action
             : {
                 label: "Open AI setup",
-                path: "/setup",
+                path: SETUP_WIDGET_ROUTE,
               },
     secondaryAction:
       launchPosture === "connect_channel"
@@ -1193,27 +1311,18 @@ function buildAssistantMessages({
 
 function buildAvailabilityNote({
   sourceStatus,
-  setupState,
-  businessMemory,
   inboxState,
   launchChannel,
   truthRuntime,
 }) {
   const details = [];
 
-  if (setupState.isUnavailable) details.push("Setup progress is unavailable.");
-  if (
-    businessMemory.stats.pendingCount > 0 &&
-    sourceStatus.trust?.available === false
-  ) {
-    details.push(
-      "Approved business memory is unavailable, but review work is still visible."
-    );
-  } else if (
-    sourceStatus.trust?.available === false &&
-    sourceStatus.workbench?.available === false
-  ) {
-    details.push("Business memory is unavailable.");
+  if (sourceStatus.overview?.available === false) {
+    details.push("Setup progress is unavailable.");
+  }
+
+  if (sourceStatus.trust?.available === false) {
+    details.push("Truth and runtime posture are unavailable.");
   }
 
   if (!launchChannel.available) {
@@ -1233,261 +1342,6 @@ function buildAvailabilityNote({
   return {
     title: "Some live product context is limited",
     description: details.join(" "),
-  };
-}
-
-function buildGoldenPathStep({
-  id,
-  label,
-  status,
-  statusLabel,
-  tone,
-  summary,
-  detail,
-  action,
-  complete,
-}) {
-  return {
-    id,
-    label,
-    status,
-    statusLabel,
-    tone,
-    summary,
-    detail,
-    action: normalizeAction(action),
-    complete: complete === true,
-  };
-}
-
-function buildGoldenPath({ launchChannel, truthRuntime, setupFlow, inboxState }) {
-  const setupReady =
-    setupFlow.hasDraft &&
-    setupFlow.blockerCount === 0 &&
-    (setupFlow.readySections > 0 ||
-      setupFlow.servicesCount > 0 ||
-      setupFlow.contactsCount > 0 ||
-      setupFlow.hoursCount > 0);
-
-  const channelStep = !launchChannel.connected
-    ? buildGoldenPathStep({
-        id: "channel",
-        label: "Launch channel",
-        status: "blocked",
-        statusLabel:
-          launchChannel.status === "connecting"
-            ? "Connecting"
-            : launchChannel.status === "selection_required"
-              ? "Selection required"
-              : "Connect required",
-        tone:
-          launchChannel.status === "connecting" ||
-          launchChannel.status === "selection_required"
-            ? "info"
-            : "danger",
-        summary:
-          launchChannel.summary ||
-          "Connect the launch channel before the rest of the launch path can be trusted.",
-        detail: launchChannel.detail,
-        action: launchChannel.action,
-        complete: false,
-      })
-    : buildGoldenPathStep({
-        id: "channel",
-        label: "Launch channel",
-        status: "ready",
-        statusLabel: "Connected",
-        tone: "success",
-        summary:
-          launchChannel.summary ||
-          "The launch channel is attached and available to the workspace.",
-        detail: launchChannel.detail,
-        action: launchChannel.action,
-        complete: true,
-      });
-
-  const setupStep = setupReady
-    ? buildGoldenPathStep({
-        id: "setup",
-        label: "AI setup draft",
-        status: "ready",
-        statusLabel: "Structured",
-        tone: "success",
-        summary:
-          "The current setup draft has enough confirmed structure to support the launch path.",
-        detail: `${setupFlow.readySections} ready sections · ${setupFlow.servicesCount} services · ${setupFlow.contactsCount} contacts`,
-        action: setupFlow.action,
-        complete: true,
-      })
-    : buildGoldenPathStep({
-        id: "setup",
-        label: "AI setup draft",
-        status:
-          setupFlow.hasDraft
-            ? "in_progress"
-            : launchChannel.connected
-              ? "pending"
-              : "blocked",
-        statusLabel:
-          setupFlow.hasDraft
-            ? "In progress"
-            : launchChannel.connected
-              ? "Start setup"
-              : "Blocked by channel",
-        tone:
-          setupFlow.hasDraft
-            ? "warn"
-            : launchChannel.connected
-              ? "info"
-              : "danger",
-        summary:
-          setupFlow.summary ||
-          "Collect the structured business draft before expecting consistent live behavior.",
-        detail: setupFlow.hasDraft
-          ? `${setupFlow.readySections} ready sections · ${setupFlow.blockerCount} blockers remaining`
-          : "No structured setup draft is visible yet.",
-        action: setupFlow.action,
-        complete: false,
-      });
-
-  const truthStep = truthRuntime.truthReady
-    ? buildGoldenPathStep({
-        id: "truth",
-        label: "Approved business truth",
-        status: "ready",
-        statusLabel: "Approved",
-        tone: "success",
-        summary: truthRuntime.truthVersionId
-          ? `Approved truth version ${truthRuntime.truthVersionId} is available.`
-          : "Approved business truth is available.",
-        detail: "Truth is already published and can back the live runtime.",
-        action: { label: "Open truth", path: "/truth" },
-        complete: true,
-      })
-    : buildGoldenPathStep({
-        id: "truth",
-        label: "Approved business truth",
-        status: "blocked",
-        statusLabel: "Approval required",
-        tone: "danger",
-        summary:
-          truthRuntime.summary ||
-          "Business truth still needs approval before the runtime should be trusted.",
-        detail: truthRuntime.detail,
-        action: truthRuntime.action,
-        complete: false,
-      });
-
-  const runtimeStep = truthRuntime.truthReady && truthRuntime.runtimeReady
-    ? buildGoldenPathStep({
-        id: "runtime",
-        label: "Runtime projection",
-        status: "ready",
-        statusLabel: "Healthy",
-        tone: "success",
-        summary:
-          "The runtime projection is healthy and aligned with approved truth.",
-        detail:
-          truthRuntime.detail ||
-          "Live automation can rely on the current approved runtime projection.",
-        action: { label: "Open truth", path: "/truth" },
-        complete: true,
-      })
-    : buildGoldenPathStep({
-        id: "runtime",
-        label: "Runtime projection",
-        status: truthRuntime.truthReady ? "attention" : "blocked",
-        statusLabel: truthRuntime.truthReady ? "Repair required" : "Waiting on truth",
-        tone: truthRuntime.truthReady ? "warn" : "danger",
-        summary:
-          truthRuntime.summary ||
-          "Refresh or repair the runtime projection before trusting live automation.",
-        detail: truthRuntime.detail,
-        action: truthRuntime.action,
-        complete: false,
-      });
-
-  const liveReady =
-    launchChannel.connected &&
-    truthRuntime.ready &&
-    inboxState.status !== "unavailable";
-
-  const liveStep = liveReady
-    ? buildGoldenPathStep({
-        id: "live",
-        label: "Live queue posture",
-        status: "ready",
-        statusLabel: "Launch ready",
-        tone: "success",
-        summary:
-          inboxState.status === "attention"
-            ? "The live queue is ready and already has work waiting."
-            : "The live queue is ready for operator use.",
-        detail: inboxState.detail || "Open inbox to operate live work.",
-        action: inboxState.action,
-        complete: true,
-      })
-    : buildGoldenPathStep({
-        id: "live",
-        label: "Live queue posture",
-        status:
-          !launchChannel.connected
-            ? "blocked"
-            : truthRuntime.ready
-              ? "pending"
-              : "blocked",
-        statusLabel:
-          !launchChannel.connected
-            ? "Blocked by channel"
-            : truthRuntime.ready
-              ? "Queue limited"
-              : "Blocked by truth/runtime",
-        tone:
-          !launchChannel.connected
-            ? "danger"
-            : truthRuntime.ready
-              ? "info"
-              : "danger",
-        summary:
-          !launchChannel.connected
-            ? "The live queue should wait until the launch channel is connected."
-            : truthRuntime.ready
-              ? "Inbox telemetry is limited, so treat live posture cautiously."
-              : "Do not treat the live queue as launch-ready until truth and runtime are aligned.",
-        detail:
-          inboxState.detail ||
-          truthRuntime.detail ||
-          "Open Inbox or Truth to inspect the current launch posture.",
-        action:
-          truthRuntime.ready && inboxState.action?.path
-            ? inboxState.action
-            : truthRuntime.action || launchChannel.action,
-        complete: false,
-      });
-
-  const steps = [channelStep, setupStep, truthStep, runtimeStep, liveStep];
-  const completeCount = steps.filter((item) => item.complete).length;
-  const totalCount = steps.length;
-  const percent = Math.round((completeCount / totalCount) * 100);
-  const nextIncomplete = steps.find((item) => !item.complete) || null;
-
-  return {
-    title:
-      completeCount === totalCount
-        ? "Launch acceptance is green."
-        : `${completeCount}/${totalCount} launch checks are ready.`,
-    summary:
-      completeCount === totalCount
-        ? "The current launch promise is aligned across channel, setup, truth, runtime, and live queue."
-        : nextIncomplete?.summary ||
-          "The launch promise is still blocked by one or more missing checks.",
-    detail:
-      "This checklist covers the current launch promise only: launch channel, setup draft, approved truth, runtime, and live queue.",
-    percent,
-    completeCount,
-    totalCount,
-    steps,
-    nextAction: nextIncomplete?.action || { label: "Open inbox", path: "/inbox" },
   };
 }
 
@@ -1550,7 +1404,7 @@ function buildLaunchLaneModel({
   });
   const setupAction = normalizeAction(setupFlow.action, {
     label: setupFlow.hasDraft ? "Continue setup" : "Start setup",
-    path: "/setup",
+    path: SETUP_WIDGET_ROUTE,
   });
   const truthAction = normalizeAction(truthRuntime.action, {
     label: "Open truth",
@@ -1853,11 +1707,11 @@ const DEFAULT_PRODUCT_HOME_PAYLOADS = {
   session: null,
   overview: null,
   trust: null,
-  workbench: null,
   inboxThreads: null,
   inboxOutbound: null,
   metaStatus: null,
   telegramStatus: null,
+  websiteStatus: null,
   setupAssistantSession: null,
 };
 
@@ -1865,11 +1719,11 @@ const DEFAULT_PRODUCT_HOME_SOURCE_STATUS = {
   session: { available: true },
   overview: { available: true },
   trust: { available: true },
-  workbench: { available: true },
   inboxThreads: { available: true },
   inboxOutbound: { available: true },
   metaStatus: { available: true },
   telegramStatus: { available: true },
+  websiteStatus: { available: true },
   setupAssistantSession: { available: true },
 };
 
@@ -1897,22 +1751,6 @@ export function useProductHome(options = {}) {
 
   const derived = useMemo(() => {
     const session = payloads.session || {};
-    const bootstrap = session?.bootstrap || {};
-
-    const setupState = buildWorkspaceSetupState({
-      bootstrap,
-      overview: payloads.overview,
-      sourceStatus: {
-        bootstrap: { available: Boolean(session?.bootstrap) },
-        overview: sourceStatus.overview,
-      },
-    });
-
-    const businessMemory = buildWorkspaceBusinessMemory({
-      trust: payloads.trust,
-      workbench: payloads.workbench,
-      setupState,
-    });
 
     const inboxState = buildInboxState({
       threadsPayload: payloads.inboxThreads,
@@ -1923,6 +1761,7 @@ export function useProductHome(options = {}) {
     const launchChannel = resolveCanonicalLaunchChannel({
       metaPayload: payloads.metaStatus,
       telegramPayload: payloads.telegramStatus,
+      websitePayload: payloads.websiteStatus,
       sourceStatus,
     });
 
@@ -1936,13 +1775,6 @@ export function useProductHome(options = {}) {
       launchChannel,
       truthRuntime,
       setupAssistantSession: payloads.setupAssistantSession,
-    });
-
-    const legacyGoldenPath = buildGoldenPath({
-      launchChannel,
-      truthRuntime,
-      setupFlow,
-      inboxState,
     });
 
     const launchLane = buildLaunchLaneModel({
@@ -1960,8 +1792,6 @@ export function useProductHome(options = {}) {
 
     const availabilityNote = buildAvailabilityNote({
       sourceStatus,
-      setupState,
-      businessMemory,
       inboxState,
       launchChannel,
       truthRuntime,
@@ -2024,7 +1854,6 @@ export function useProductHome(options = {}) {
       launchChannel.action,
       setupFlow.action,
       truthRuntime.action,
-      legacyGoldenPath.nextAction,
       { label: "Open inbox", path: "/inbox" },
     ]).slice(0, 4);
 
@@ -2041,7 +1870,6 @@ export function useProductHome(options = {}) {
         : `${launchLane.completeCount}/${launchLane.totalCount} launch steps are ready.`,
       summary: launchLane.launchSummary,
       detail:
-        legacyGoldenPath.detail ||
         "Connect the launch channel, create the setup draft, approve truth and runtime, then go live in inbox.",
       percent: launchLane.progressPercent,
       completeCount: launchLane.completeCount,
@@ -2098,8 +1926,6 @@ export function useProductHome(options = {}) {
     return {
       companyName,
       actorName,
-      setupState,
-      businessMemory,
       inboxState,
       launchChannel,
       truthRuntime,

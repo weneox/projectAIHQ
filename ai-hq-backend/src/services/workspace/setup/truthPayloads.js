@@ -222,7 +222,7 @@ function buildTruthReadiness({
   const nextRoute = s(
     setup?.progress?.nextRoute ||
       setup?.progress?.nextSetupRoute ||
-      "/setup/studio"
+      "/home?assistant=setup"
   );
   const primaryMissingStep = s(
     setup?.progress?.primaryMissingStep || "approved_truth"

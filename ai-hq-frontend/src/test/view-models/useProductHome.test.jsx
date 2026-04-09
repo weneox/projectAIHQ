@@ -6,10 +6,11 @@ const getAppSessionContext = vi.fn();
 const getSetupOverview = vi.fn();
 const getCurrentSetupAssistantSession = vi.fn();
 const getSettingsTrustView = vi.fn();
-const getTruthReviewWorkbench = vi.fn();
 const listInboxThreads = vi.fn();
 const getOutboundSummary = vi.fn();
+const getMetaChannelStatus = vi.fn();
 const getTelegramChannelStatus = vi.fn();
+const getWebsiteWidgetStatus = vi.fn();
 
 vi.mock("../../lib/appSession.js", () => ({
   getAppSessionContext: (...args) => getAppSessionContext(...args),
@@ -25,17 +26,15 @@ vi.mock("../../api/trust.js", () => ({
   getSettingsTrustView: (...args) => getSettingsTrustView(...args),
 }));
 
-vi.mock("../../api/truth.js", () => ({
-  getTruthReviewWorkbench: (...args) => getTruthReviewWorkbench(...args),
-}));
-
 vi.mock("../../api/inbox.js", () => ({
   listInboxThreads: (...args) => listInboxThreads(...args),
   getOutboundSummary: (...args) => getOutboundSummary(...args),
 }));
 
 vi.mock("../../api/channelConnect.js", () => ({
+  getMetaChannelStatus: (...args) => getMetaChannelStatus(...args),
   getTelegramChannelStatus: (...args) => getTelegramChannelStatus(...args),
+  getWebsiteWidgetStatus: (...args) => getWebsiteWidgetStatus(...args),
 }));
 
 import useProductHome from "../../view-models/useProductHome.js";
@@ -121,10 +120,11 @@ describe("useProductHome", () => {
     });
     getSetupOverview.mockResolvedValue({});
     getSettingsTrustView.mockResolvedValue(createTrustView());
-    getTruthReviewWorkbench.mockResolvedValue({ items: [] });
     listInboxThreads.mockResolvedValue({ threads: [] });
     getOutboundSummary.mockResolvedValue({ pendingCount: 0 });
+    getMetaChannelStatus.mockRejectedValue(new Error("meta unavailable"));
     getTelegramChannelStatus.mockResolvedValue(createTelegramStatus());
+    getWebsiteWidgetStatus.mockRejectedValue(new Error("website unavailable"));
     getCurrentSetupAssistantSession.mockResolvedValue(null);
   });
 
@@ -275,7 +275,8 @@ describe("useProductHome", () => {
     });
 
     expect(result.current.truthRuntime.ready).toBe(false);
-    expect(result.current.setupNeeded).toBe(true);
+    expect(result.current.setupNeeded).toBe(false);
+    expect(result.current.setupFlow.launchPosture).toBe("runtime_repair_needed");
     expect(result.current.truthRuntime.summary).toMatch(/runtime projection/i);
     expect(result.current.currentStatus.title).not.toMatch(/aligned|ready/i);
   });
@@ -294,5 +295,34 @@ describe("useProductHome", () => {
     expect(result.current.setupNeeded).toBe(false);
     expect(result.current.setupFlow.launchPosture).toBe("normal_operation");
     expect(result.current.currentStatus.action.path).toBe("/inbox");
+  });
+
+  it("treats website chat as a real launch channel when it is the only ready option", async () => {
+    getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
+    getWebsiteWidgetStatus.mockResolvedValue({
+      state: "connected",
+      readiness: {
+        status: "ready",
+        message: "Website chat is configured with trusted origins and a live widget ID.",
+      },
+      widget: {
+        enabled: true,
+        title: "Website chat",
+        websiteUrl: "https://acme.test",
+        publicWidgetId: "ww_acme",
+      },
+    });
+
+    const { result } = renderHook(() => useProductHome(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+
+    expect(result.current.launchChannel.provider).toBe("website");
+    expect(result.current.launchChannel.connected).toBe(true);
+    expect(result.current.launchChannel.action.path).toBe("/channels?channel=website");
   });
 });

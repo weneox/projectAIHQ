@@ -25,7 +25,7 @@ test("truth payload exposes unified readiness language when approved truth is un
       },
       setupBuilder: async () => ({
         progress: {
-          nextRoute: "/setup/runtime",
+          nextRoute: "/home?assistant=setup",
           nextStep: "runtime",
         },
       }),
@@ -44,6 +44,6 @@ test("truth payload exposes unified readiness language when approved truth is un
   );
   assert.equal(
     data.truth.readiness.blockers[0].nextAction.target.path,
-    "/truth"
+    "/home?assistant=setup"
   );
 });

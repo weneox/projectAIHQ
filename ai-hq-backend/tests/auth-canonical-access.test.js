@@ -611,8 +611,8 @@ function createLoginRouter(db, workspaceStates = {}) {
       setupRequired: true,
       workspaceReady: false,
       activeSetupSessionId: "",
-      routeHint: "/setup/studio",
-      destination: { kind: "setup", path: "/setup/studio" },
+      routeHint: "/home?assistant=setup",
+      destination: { kind: "setup", path: "/home?assistant=setup" },
       readinessLabel: "setup_required",
       missingSteps: [],
       primaryMissingStep: "",
@@ -636,8 +636,8 @@ function createSignupRouter(db, workspaceStates = {}) {
       setupRequired: true,
       workspaceReady: false,
       activeSetupSessionId: "",
-      routeHint: "/setup/studio",
-      destination: { kind: "setup", path: "/setup/studio" },
+      routeHint: "/home?assistant=setup",
+      destination: { kind: "setup", path: "/home?assistant=setup" },
       readinessLabel: "setup_required",
       missingSteps: [],
       primaryMissingStep: "",
@@ -661,8 +661,8 @@ test("signup creates canonical identity, membership, bridge user, and authentica
       setupCompleted: false,
       setupRequired: true,
       workspaceReady: false,
-      destination: { kind: "setup", path: "/setup/studio" },
-      routeHint: "/setup/studio",
+      destination: { kind: "setup", path: "/home?assistant=setup" },
+      routeHint: "/home?assistant=setup",
     },
   });
 
@@ -678,7 +678,7 @@ test("signup creates canonical identity, membership, bridge user, and authentica
 
   assert.equal(signup.res.statusCode, 201);
   assert.equal(signup.res.body?.authenticated, true);
-  assert.equal(signup.res.body?.destination?.path, "/setup/studio");
+  assert.equal(signup.res.body?.destination?.path, "/home?assistant=setup");
   assert.equal(db.tenants.size, 1);
   assert.equal(db.identities.size, 1);
   assert.equal(db.memberships.size, 1);

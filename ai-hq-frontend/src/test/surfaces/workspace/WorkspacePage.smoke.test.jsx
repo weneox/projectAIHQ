@@ -75,7 +75,7 @@ describe("WorkspacePage smoke", () => {
           impact: "Setup still needs a few details.",
           action: {
             label: "Continue setup",
-            path: "/setup",
+            path: "/home?assistant=setup",
           },
         },
         actionItems: [
@@ -87,7 +87,7 @@ describe("WorkspacePage smoke", () => {
             impact: "Setup still needs a few details.",
             action: {
               label: "Continue setup",
-              path: "/setup",
+              path: "/home?assistant=setup",
             },
           },
         ],

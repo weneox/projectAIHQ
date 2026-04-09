@@ -68,7 +68,7 @@ test("canonical active workspace contract is stable for incomplete workspaces", 
       readinessLabel: "in_progress",
       missingSteps: ["knowledge", "services"],
       primaryMissingStep: "knowledge",
-      nextSetupRoute: "/setup/studio",
+      nextSetupRoute: "/home?assistant=setup",
       nextStudioStage: "knowledge",
       tenantProfile: {
         companyName: "Globex",
@@ -90,10 +90,10 @@ test("canonical active workspace contract is stable for incomplete workspaces", 
   assert.equal(workspace.setupCompleted, false);
   assert.equal(workspace.setupRequired, true);
   assert.equal(workspace.workspaceReady, false);
-  assert.equal(workspace.routeHint, "/setup/studio");
+  assert.equal(workspace.routeHint, "/home?assistant=setup");
   assert.deepEqual(workspace.destination, {
     kind: "setup",
-    path: "/setup/studio",
+    path: "/home?assistant=setup",
   });
   assert.equal(workspace.activeSetupSessionId, "setup-session-2");
   assert.deepEqual(workspace.missingSteps, ["knowledge", "services"]);
@@ -111,10 +111,10 @@ test("workspace access summaries preserve canonical contract semantics", () => {
       setupCompleted: false,
       setupRequired: true,
       workspaceReady: false,
-      routeHint: "/setup/studio",
+      routeHint: "/home?assistant=setup",
       destination: {
         kind: "setup",
-        path: "/setup/studio",
+        path: "/home?assistant=setup",
       },
       readinessScore: 62,
       readinessLabel: "almost_ready",
@@ -128,7 +128,7 @@ test("workspace access summaries preserve canonical contract semantics", () => {
   assert.equal(summary.setupCompleted, false);
   assert.equal(summary.setupRequired, true);
   assert.equal(summary.workspaceReady, false);
-  assert.equal(summary.routeHint, "/setup/studio");
+  assert.equal(summary.routeHint, "/home?assistant=setup");
   assert.equal(summary.activeSetupSessionId, "setup-session-1");
   assert.equal(summary.active, true);
 });
@@ -143,18 +143,18 @@ test("bootstrap reuses the canonical active workspace contract", async () => {
     setupCompleted: false,
     setupRequired: true,
     workspaceReady: false,
-    routeHint: "/setup/studio",
+    routeHint: "/home?assistant=setup",
     destination: {
       kind: "setup",
-      path: "/setup/studio",
+      path: "/home?assistant=setup",
     },
     activeSetupSessionId: "setup-session-1",
     readinessScore: 52,
     readinessLabel: "in_progress",
     missingSteps: ["knowledge"],
     primaryMissingStep: "knowledge",
-    nextRoute: "/setup/studio",
-    nextSetupRoute: "/setup/studio",
+    nextRoute: "/home?assistant=setup",
+    nextSetupRoute: "/home?assistant=setup",
     nextStudioStage: "knowledge",
     checks: {
       knowledge: false,
@@ -198,8 +198,8 @@ test("bootstrap reuses the canonical active workspace contract", async () => {
 
   assert.equal(bootstrap.workspace.setupRequired, true);
   assert.equal(bootstrap.workspace.workspaceReady, false);
-  assert.equal(bootstrap.workspace.routeHint, "/setup/studio");
-  assert.equal(bootstrap.workspace.destination.path, "/setup/studio");
-  assert.equal(bootstrap.navigation.initialRoute, "/setup/studio");
-  assert.equal(bootstrap.navigation.setupRoute, "/setup/studio");
+  assert.equal(bootstrap.workspace.routeHint, "/home?assistant=setup");
+  assert.equal(bootstrap.workspace.destination.path, "/home?assistant=setup");
+  assert.equal(bootstrap.navigation.initialRoute, "/home?assistant=setup");
+  assert.equal(bootstrap.navigation.setupRoute, "/home?assistant=setup");
 });

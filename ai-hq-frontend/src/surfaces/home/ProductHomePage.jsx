@@ -1,5 +1,4 @@
 import { ArrowRight } from "lucide-react";
-import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Button from "../../components/ui/Button.jsx";
 import Badge from "../../components/ui/Badge.jsx";
@@ -126,18 +125,13 @@ export default function ProductHomePage() {
   const home = useProductHome();
   const assistantRequested = searchParams.get("assistant") === "setup";
 
-  useEffect(() => {
-    if (!assistantRequested) return;
-    navigate("/setup", { replace: true });
-  }, [assistantRequested, navigate]);
-
   function navigateFromAction(action = null) {
     const nextAction = normalizeNavigationAction(action);
     if (!nextAction?.path) return;
     navigate(nextAction.path);
   }
 
-  if (assistantRequested || home.loading) {
+  if (home.loading) {
     return <ProductHomeLoadingSurface />;
   }
 
@@ -227,6 +221,15 @@ export default function ProductHomePage() {
           )}
         />
       </MetricGrid>
+
+      {assistantRequested ? (
+        <StatusBanner
+          tone="info"
+          label="AI setup"
+          title="Setup is open in the assistant widget."
+          description="Home remains the operational surface while the floating assistant guides the setup draft."
+        />
+      ) : null}
 
       <Surface>
         <div className="space-y-4">

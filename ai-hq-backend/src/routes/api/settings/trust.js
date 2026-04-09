@@ -62,6 +62,9 @@ function lower(v, d = "") {
   return s(v, d).toLowerCase();
 }
 
+const SETUP_WIDGET_ROUTE = "/home?assistant=setup";
+const TRUTH_ROUTE = "/truth";
+
 function iso(v) {
   if (!v) return "";
   try {
@@ -511,7 +514,7 @@ function deriveRequiredAction({
           reviewSessionId: s(activeReviewSession.id),
         }
       : {
-          path: "/setup/studio",
+          path: SETUP_WIDGET_ROUTE,
           section: "truth",
         };
     return {
@@ -1417,7 +1420,7 @@ function buildTrustReadiness({
         target: runtimeRepairAction
           ? obj(runtimeRepairAction.target)
           : {
-              path: "/setup/runtime",
+              path: TRUTH_ROUTE,
               section: "runtime",
             },
       })
@@ -1440,7 +1443,7 @@ function buildTrustReadiness({
         target: runtimeRepairAction
           ? obj(runtimeRepairAction.target)
           : {
-              path: "/setup/runtime",
+              path: TRUTH_ROUTE,
               section: "runtime",
             },
       })
@@ -1463,7 +1466,7 @@ function buildTrustReadiness({
         target: runtimeRepairAction
           ? obj(runtimeRepairAction.target)
           : {
-              path: "/setup/runtime",
+              path: TRUTH_ROUTE,
               section: "runtime",
             },
       })
@@ -1486,7 +1489,7 @@ function buildTrustReadiness({
           requiredRole: "operator",
         },
         target: {
-          path: "/setup/studio",
+          path: SETUP_WIDGET_ROUTE,
           section: "truth",
         },
       })

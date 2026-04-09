@@ -134,7 +134,7 @@ export async function buildAppBootstrap({
     },
     navigation: {
       initialRoute: s(workspaceState.routeHint || "/workspace"),
-      setupRoute: s(workspaceState.nextSetupRoute || "/setup/studio"),
+      setupRoute: s(workspaceState.nextSetupRoute || "/home?assistant=setup"),
     },
   };
 }

@@ -2,7 +2,7 @@
 // FINAL v4.0 — canonical-first workspace readiness + setup studio routing
 // principles:
 // - readiness should reflect canonical truth, not legacy fallback pollution
-// - /setup/studio is the primary onboarding route
+// - /home?assistant=setup is the primary onboarding route
 // - legacy tenant_profiles may help display context but should not complete setup on their own
 // - downstream runtime hints are useful for UX/debugging, but checks stay strict
 
@@ -56,6 +56,7 @@ const AI_POLICY_TABLES = ["tenant_ai_policies"];
 const CAPABILITY_TABLES = ["tenant_business_capabilities"];
 const BUSINESS_PROFILE_TABLES = ["tenant_business_profile"];
 const TENANT_PROFILE_TABLES = ["tenant_profiles"];
+const SETUP_WIDGET_ROUTE = "/home?assistant=setup";
 
 function isOperationsRole(role = "") {
   return [
@@ -127,8 +128,8 @@ function mapStepToStudioStage(step = "") {
 }
 
 function mapStepToRoute(step = "") {
-  if (!step) return "/setup/studio";
-  return "/setup/studio";
+  if (!step) return SETUP_WIDGET_ROUTE;
+  return SETUP_WIDGET_ROUTE;
 }
 
 function sortRowsByLatest(rows = []) {
@@ -718,7 +719,7 @@ export async function getWorkspaceReadiness({
     ? isOperationsRole(role)
       ? "/inbox"
       : "/"
-    : "/setup/studio";
+    : SETUP_WIDGET_ROUTE;
 
   return {
     setupCompleted,

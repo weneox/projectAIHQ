@@ -137,4 +137,20 @@ describe("Shell", () => {
     ).toBeInTheDocument();
   });
 
+  it("opens the global widget from the assistant query param", async () => {
+    pathname = "/home";
+    search = "?assistant=setup";
+    apiGet.mockResolvedValueOnce({ threads: [] }).mockResolvedValueOnce({ leads: [] });
+
+    render(<Shell />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("floating-ai-widget")).toHaveAttribute(
+        "data-open",
+        "true"
+      );
+    });
+
+    expect(useProductHome).toHaveBeenCalledWith({ enabled: true });
+  });
 });

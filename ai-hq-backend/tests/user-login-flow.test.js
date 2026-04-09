@@ -554,8 +554,8 @@ test("single workspace with setup incomplete returns setup destination", async (
       setupCompleted: false,
       setupRequired: true,
       workspaceReady: false,
-      routeHint: "/setup/studio",
-      destination: { kind: "setup", path: "/setup/studio" },
+      routeHint: "/home?assistant=setup",
+      destination: { kind: "setup", path: "/home?assistant=setup" },
       activeSetupSessionId: "setup-session-1",
     },
   });
@@ -568,7 +568,7 @@ test("single workspace with setup incomplete returns setup destination", async (
   assert.equal(login.res.body?.workspace?.setupCompleted, false);
   assert.equal(login.res.body?.workspace?.setupRequired, true);
   assert.equal(login.res.body?.workspace?.workspaceReady, false);
-  assert.equal(login.res.body?.destination?.path, "/setup/studio");
+  assert.equal(login.res.body?.destination?.path, "/home?assistant=setup");
 });
 
 test("single identity + multiple memberships returns explicit chooser response", async () => {
@@ -676,8 +676,8 @@ test("workspace selection endpoint completes login with per-workspace destinatio
       setupCompleted: false,
       setupRequired: true,
       workspaceReady: false,
-      routeHint: "/setup/studio",
-      destination: { kind: "setup", path: "/setup/studio" },
+      routeHint: "/home?assistant=setup",
+      destination: { kind: "setup", path: "/home?assistant=setup" },
     },
   });
   const ambiguous = await invokeRoute(router, "post", "/auth/login", {
@@ -697,7 +697,7 @@ test("workspace selection endpoint completes login with per-workspace destinatio
   assert.equal(login.res.body?.user?.tenantKey, "globex");
   assert.equal(login.res.body?.workspace?.setupRequired, true);
   assert.equal(login.res.body?.workspace?.workspaceReady, false);
-  assert.equal(login.res.body?.destination?.path, "/setup/studio");
+  assert.equal(login.res.body?.destination?.path, "/home?assistant=setup");
 });
 
 test("workspace selection endpoint rejects unauthorized selection tokens", async () => {
@@ -1102,8 +1102,8 @@ test("auth me loads canonical active workspace state and available workspaces", 
       setupCompleted: false,
       setupRequired: true,
       workspaceReady: false,
-      routeHint: "/setup/studio",
-      destination: { kind: "setup", path: "/setup/studio" },
+      routeHint: "/home?assistant=setup",
+      destination: { kind: "setup", path: "/home?assistant=setup" },
     },
   });
   const sessionRouter = createSessionRouter(db, {
@@ -1118,8 +1118,8 @@ test("auth me loads canonical active workspace state and available workspaces", 
       setupCompleted: false,
       setupRequired: true,
       workspaceReady: false,
-      routeHint: "/setup/studio",
-      destination: { kind: "setup", path: "/setup/studio" },
+      routeHint: "/home?assistant=setup",
+      destination: { kind: "setup", path: "/home?assistant=setup" },
     },
   });
 
@@ -1183,8 +1183,8 @@ test("workspace switch updates the canonical active workspace and preserves it a
       setupCompleted: false,
       setupRequired: true,
       workspaceReady: false,
-      routeHint: "/setup/studio",
-      destination: { kind: "setup", path: "/setup/studio" },
+      routeHint: "/home?assistant=setup",
+      destination: { kind: "setup", path: "/home?assistant=setup" },
     },
   });
   const sessionRouter = createSessionRouter(db, {
@@ -1199,8 +1199,8 @@ test("workspace switch updates the canonical active workspace and preserves it a
       setupCompleted: false,
       setupRequired: true,
       workspaceReady: false,
-      routeHint: "/setup/studio",
-      destination: { kind: "setup", path: "/setup/studio" },
+      routeHint: "/home?assistant=setup",
+      destination: { kind: "setup", path: "/home?assistant=setup" },
     },
   });
 
@@ -1227,7 +1227,7 @@ test("workspace switch updates the canonical active workspace and preserves it a
   assert.equal(switched.res.body?.workspace?.setupCompleted, false);
   assert.equal(switched.res.body?.workspace?.setupRequired, true);
   assert.equal(switched.res.body?.workspace?.workspaceReady, false);
-  assert.equal(switched.res.body?.destination?.path, "/setup/studio");
+  assert.equal(switched.res.body?.destination?.path, "/home?assistant=setup");
 
   const meAfter = await invokeRoute(sessionRouter, "get", "/auth/me", {
     headers: { cookie: `aihq_user=${sessionCookie.value}` },

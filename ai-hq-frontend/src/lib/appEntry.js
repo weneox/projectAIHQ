@@ -20,8 +20,10 @@ function splitRoute(value = "") {
   };
 }
 
+export const SETUP_WIDGET_ROUTE = "/home?assistant=setup";
+
 function normalizeSetupRoute(_target = "") {
-  return "/setup";
+  return SETUP_WIDGET_ROUTE;
 }
 
 function normalizeLegacyAppRoute(target = "") {
@@ -120,9 +122,7 @@ export function isForcedWorkspaceEntryEnabled() {
 }
 
 export function isSetupPath(path = "") {
-  const raw = s(path);
-  const normalized = normalizeLegacyAppRoute(raw);
-  return normalized === "/setup" || raw === "/setup" || raw.startsWith("/setup/");
+  return normalizeLegacyAppRoute(path) === SETUP_WIDGET_ROUTE;
 }
 
 export function isWorkspaceSelectionPath(path = "") {
@@ -155,7 +155,7 @@ export function getCanonicalWorkspaceContract(payload = {}) {
       destination.path || source.routeHint || source.nextRoute || "/workspace"
     ),
     nextSetupRoute: normalizeSetupRoute(
-      source.nextSetupRoute || destination.path || source.routeHint || "/setup"
+      source.nextSetupRoute || destination.path || source.routeHint || SETUP_WIDGET_ROUTE
     ),
   };
 }

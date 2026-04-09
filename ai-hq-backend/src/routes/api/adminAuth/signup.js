@@ -211,7 +211,7 @@ export function userSignupRoutes({
         workspace,
         destination: workspace?.destination || {
           kind: "setup",
-          path: "/setup/studio",
+          path: "/home?assistant=setup",
         },
       });
     } catch (error) {

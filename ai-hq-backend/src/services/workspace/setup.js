@@ -5,6 +5,8 @@ import { arr, obj, s } from "./shared.js";
 import { getWorkspaceReadiness } from "./readiness.js";
 import { buildActiveWorkspaceContract } from "./activeWorkspace.js";
 
+const SETUP_WIDGET_ROUTE = "/home?assistant=setup";
+
 function pluralize(count, one, many) {
   return `${count} ${count === 1 ? one : many}`;
 }
@@ -58,7 +60,7 @@ function buildChecklist(readiness = {}) {
       key: "business_profile",
       title: "Business profile",
       complete: !!checks.businessProfile,
-      route: "/setup/business",
+      route: SETUP_WIDGET_ROUTE,
       summary: tenantProfile.companyName
         ? `${tenantProfile.companyName}${tenantProfile.description ? " configured" : " partially configured"}`
         : "Company identity is not configured yet",
@@ -67,7 +69,7 @@ function buildChecklist(readiness = {}) {
       key: "channels",
       title: "Channels and sources",
       complete: !!checks.channels,
-      route: "/setup/channels",
+      route: "/channels",
       summary: sources.activeCount
         ? `${pluralize(sources.activeCount, "active source", "active sources")} connected${sourceTypes.length ? ` • ${sourceTypes.join(", ")}` : ""}`
         : "No active channels or sources connected yet",
@@ -76,7 +78,7 @@ function buildChecklist(readiness = {}) {
       key: "knowledge",
       title: "Knowledge base",
       complete: !!checks.knowledge,
-      route: "/setup/knowledge",
+      route: "/truth",
       summary: knowledge.approvedKnowledgeCount
         ? `${pluralize(knowledge.approvedKnowledgeCount, "approved knowledge entry", "approved knowledge entries")}${knowledge.pendingCandidateCount ? ` • ${pluralize(knowledge.pendingCandidateCount, "pending candidate", "pending candidates")}` : ""}`
         : knowledge.pendingCandidateCount
@@ -87,7 +89,7 @@ function buildChecklist(readiness = {}) {
       key: "services",
       title: "Service catalog",
       complete: !!checks.services,
-      route: "/setup/services",
+      route: SETUP_WIDGET_ROUTE,
       summary: catalog.serviceCount
         ? `${pluralize(catalog.serviceCount, "service entry", "service entries")} available`
         : "Service catalog is still empty",
@@ -96,7 +98,7 @@ function buildChecklist(readiness = {}) {
       key: "playbooks",
       title: "Response playbooks",
       complete: !!checks.playbooks,
-      route: "/setup/playbooks",
+      route: "/truth",
       summary: catalog.playbookCount
         ? `${pluralize(catalog.playbookCount, "playbook", "playbooks")} configured`
         : "No response playbooks configured yet",
@@ -105,7 +107,7 @@ function buildChecklist(readiness = {}) {
       key: "policies",
       title: "Runtime preferences",
       complete: !!checks.policies,
-      route: "/setup/runtime",
+      route: "/truth",
       summary: buildPoliciesSummary(readiness),
     },
   ];

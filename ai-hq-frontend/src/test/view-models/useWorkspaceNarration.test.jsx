@@ -181,7 +181,7 @@ describe("useWorkspaceNarration", () => {
         title: "Finish setup intake",
         nextAction: {
           label: "Continue setup",
-          path: "/setup",
+          path: "/home?assistant=setup",
         },
       },
     ]);

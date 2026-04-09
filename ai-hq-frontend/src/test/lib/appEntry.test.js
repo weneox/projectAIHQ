@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
+  __test__,
   areInternalRoutesEnabled,
   CORE_APP_ROUTES,
   INTERNAL_ONLY_APP_ROUTES,
   isForcedWorkspaceEntryEnabled,
   isInternalOnlyPath,
+  SETUP_WIDGET_ROUTE,
   resolveAuthenticatedLanding,
 } from "../../lib/appEntry.js";
 
@@ -183,6 +185,13 @@ describe("resolveAuthenticatedLanding", () => {
     });
 
     expect(target).toBe("/home");
+  });
+
+  it("normalizes legacy setup routes into the home widget entry", () => {
+    expect(__test__.normalizeLegacyAppRoute("/setup")).toBe(SETUP_WIDGET_ROUTE);
+    expect(__test__.normalizeLegacyAppRoute("/setup/business")).toBe(
+      SETUP_WIDGET_ROUTE
+    );
   });
 });
 

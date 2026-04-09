@@ -8,7 +8,6 @@ import {
   PlugZap,
   ShieldCheck,
   Sparkles,
-  Wrench,
 } from "lucide-react";
 
 const PRIMARY_SECTIONS = [
@@ -55,14 +54,6 @@ const SECONDARY_SECTIONS = [
     to: "/channels",
     paths: ["/channels"],
     contextGroups: [{ title: "Navigation", items: [{ label: "Channels", to: "/channels" }] }],
-  },
-  {
-    id: "setup",
-    label: "Setup",
-    icon: Wrench,
-    to: "/setup",
-    paths: ["/setup"],
-    contextGroups: [{ title: "Navigation", items: [{ label: "Setup", to: "/setup" }] }],
   },
   {
     id: "truth",

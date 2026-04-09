@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { apiGet } from "../../api/client.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
+import { SETUP_WIDGET_ROUTE } from "../../lib/appEntry.js";
 import { cx } from "../../lib/cx.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
 import useProductHome from "../../view-models/useProductHome.js";
@@ -156,10 +157,10 @@ export default function Shell() {
       title: "AI setup lives on Home",
       statusLabel: "Home shortcut",
       summary:
-        "Use Home to connect the launch channel, continue setup, and inspect truth and runtime posture.",
+        "Use Home to connect the active launch channel, continue setup, and inspect truth and runtime posture.",
       primaryAction: {
         label: "Open home assistant",
-        path: "/home?assistant=setup",
+        path: SETUP_WIDGET_ROUTE,
       },
       secondaryAction: {
         label: "Open channels",
@@ -206,7 +207,7 @@ export default function Shell() {
         statusLabel: "Home shortcut",
         title: "Launch channel posture lives on Home",
         summary:
-          "Open Home to inspect Instagram or Telegram launch posture in one place.",
+          "Open Home to inspect the active launch channel, including website chat, in one place.",
         detail:
           "Home resolves the current launch channel and keeps setup, truth, runtime, and inbox posture aligned.",
         action: {
