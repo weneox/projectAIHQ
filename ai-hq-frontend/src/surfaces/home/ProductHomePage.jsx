@@ -258,7 +258,7 @@ export default function ProductHomePage() {
               Launch lane
             </div>
             <div className="mt-1 text-[18px] font-semibold text-text">
-              Setup, truth/runtime, channels, then inbox.
+              Channels, setup, truth/runtime, then inbox.
             </div>
             <div className="mt-1 text-[13px] leading-6 text-text-muted">
               {home.launchReady
