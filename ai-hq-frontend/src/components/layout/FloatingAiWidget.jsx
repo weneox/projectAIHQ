@@ -221,7 +221,7 @@ function buildSupportContext(assistantState = {}) {
 
   const setupAction = normalizeUiAction(source.primaryAction, {
     label: "Open AI setup",
-    path: "/home?assistant=setup",
+    path: "/setup",
   });
 
   const secondaryAction = normalizeUiAction(source.secondaryAction, {
@@ -1389,11 +1389,14 @@ export default function FloatingAiWidget({
   onOpenChange,
   onNavigate,
   assistant = null,
+  presentation = "floating",
 }) {
   const styles = useWidgetStyles();
   const queryClient = useQueryClient();
   const rootRef = useRef(null);
   const assistantRef = useRef(normalizeAssistantState(assistant));
+  const pageMode = presentation === "page";
+  const panelOpen = pageMode ? true : open;
 
   const [clientAssistant, setClientAssistant] = useState(
     normalizeAssistantState(assistant)
@@ -1410,7 +1413,7 @@ export default function FloatingAiWidget({
   const reviewQuery = useQuery({
     queryKey: ["setup-review-current", "widget"],
     queryFn: () => getCurrentSetupReview({ eventLimit: 12 }),
-    enabled: open && surfaceMode === "setup",
+    enabled: panelOpen && surfaceMode === "setup",
     retry: false,
     staleTime: 30_000,
   });
@@ -1439,7 +1442,7 @@ export default function FloatingAiWidget({
   }, [supportWelcomeMessages]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!panelOpen || pageMode) return;
 
     const onPointerDown = (event) => {
       if (!rootRef.current?.contains(event.target)) {
@@ -1449,14 +1452,14 @@ export default function FloatingAiWidget({
 
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [open, onOpenChange]);
+  }, [onOpenChange, pageMode, panelOpen]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!panelOpen) return;
     if (clientAssistant.launchPosture === "runtime_repair_needed") {
       setSurfaceMode("support");
     }
-  }, [clientAssistant.launchPosture, open]);
+  }, [clientAssistant.launchPosture, panelOpen]);
 
   if (hidden) return null;
 
@@ -1616,13 +1619,41 @@ export default function FloatingAiWidget({
     <>
       <style>{styles}</style>
 
-      <div ref={rootRef} className="ai-widget-root">
-        {open ? (
+      <div
+        ref={rootRef}
+        className="ai-widget-root"
+        style={
+          pageMode
+            ? {
+                position: "relative",
+                right: "auto",
+                bottom: "auto",
+                width: "100%",
+                zIndex: "auto",
+              }
+            : undefined
+        }
+      >
+        {panelOpen ? (
           <section
             className="ai-widget-panel"
-            role="dialog"
-            aria-modal="false"
-            aria-label="AI assistant"
+            role={pageMode ? "region" : "dialog"}
+            aria-modal={pageMode ? undefined : "false"}
+            aria-label={pageMode ? "Setup workspace" : "AI assistant"}
+            style={
+              pageMode
+                ? {
+                    position: "relative",
+                    right: "auto",
+                    bottom: "auto",
+                    width: "100%",
+                    maxWidth: "none",
+                    height: "100%",
+                    minHeight: "720px",
+                    animation: "none",
+                  }
+                : undefined
+            }
           >
             <div className="ai-widget-header">
               <div className="ai-widget-header-top">
@@ -1630,14 +1661,16 @@ export default function FloatingAiWidget({
                   {surfaceMode === "setup" ? "Setup" : "Support"}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => onOpenChange?.(false)}
-                  className="ai-widget-close"
-                  aria-label="Close AI assistant"
-                >
-                  <X className="h-4 w-4" strokeWidth={2} />
-                </button>
+                {!pageMode ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenChange?.(false)}
+                    className="ai-widget-close"
+                    aria-label="Close AI assistant"
+                  >
+                    <X className="h-4 w-4" strokeWidth={2} />
+                  </button>
+                ) : null}
               </div>
 
               <div className="ai-widget-switch">
@@ -1690,17 +1723,19 @@ export default function FloatingAiWidget({
           </section>
         ) : null}
 
-        <button
-          type="button"
-          onClick={() => onOpenChange?.(!open)}
-          aria-label="Open AI assistant"
-          aria-expanded={open}
-          className="ai-widget-launcher"
-        >
-          <span className="ai-widget-launcher-core" />
-          <span className="ai-widget-launcher-badge" />
-          <LauncherGlyph />
-        </button>
+        {!pageMode ? (
+          <button
+            type="button"
+            onClick={() => onOpenChange?.(!panelOpen)}
+            aria-label="Open AI assistant"
+            aria-expanded={panelOpen}
+            className="ai-widget-launcher"
+          >
+            <span className="ai-widget-launcher-core" />
+            <span className="ai-widget-launcher-badge" />
+            <LauncherGlyph />
+          </button>
+        ) : null}
       </div>
     </>
   );

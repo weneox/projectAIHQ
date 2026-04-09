@@ -11,22 +11,22 @@ import { cx } from "../../lib/cx.js";
 const NOTICE_TONES = {
   info: {
     container:
-      "border-[rgba(var(--color-brand),0.08)] bg-[rgba(var(--color-brand),0.035)]",
+      "border-[rgba(var(--color-brand),0.08)] bg-[rgba(var(--color-brand),0.04)]",
     icon: "text-brand",
   },
   success: {
     container:
-      "border-[rgba(var(--color-success),0.10)] bg-[rgba(var(--color-success),0.045)]",
+      "border-[rgba(var(--color-success),0.12)] bg-[rgba(var(--color-success),0.05)]",
     icon: "text-success",
   },
   warning: {
     container:
-      "border-[rgba(var(--color-warning),0.10)] bg-[rgba(var(--color-warning),0.045)]",
+      "border-[rgba(var(--color-warning),0.14)] bg-[rgba(var(--color-warning),0.06)]",
     icon: "text-warning",
   },
   danger: {
     container:
-      "border-[rgba(var(--color-danger),0.10)] bg-[rgba(var(--color-danger),0.045)]",
+      "border-[rgba(var(--color-danger),0.14)] bg-[rgba(var(--color-danger),0.05)]",
     icon: "text-danger",
   },
 };
@@ -57,23 +57,22 @@ function paddedClass(padded) {
 
 function surfaceToneClass({ tone = "default", subdued = false }) {
   if (subdued || tone === "muted") {
-    return "border-[rgba(15,23,42,0.06)] bg-[rgba(250,251,253,0.96)]";
+    return "border-line bg-surface-muted";
   }
   if (tone === "subtle") {
-    return "border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.95)]";
+    return "border-line-soft bg-white";
   }
   if (tone === "brand-soft") {
     return "border-[rgba(var(--color-brand),0.08)] bg-[rgba(var(--color-brand),0.03)]";
   }
-  return "border-[rgba(15,23,42,0.07)] bg-white";
+  return "border-line bg-white";
 }
 
 export function PageCanvas({ className, children }) {
   return (
     <div
       className={cx(
-        "mx-auto w-full max-w-shell-content",
-        "space-y-4 md:space-y-5",
+        "mx-auto w-full max-w-shell-content space-y-4 md:space-y-5",
         className
       )}
     >
@@ -98,12 +97,12 @@ export function PageHeader({
     >
       <div className="max-w-[860px]">
         {eyebrow ? (
-          <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[rgba(15,23,42,0.42)]">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[rgba(15,23,42,0.38)]">
             {eyebrow}
           </div>
         ) : null}
 
-        <h1 className="font-display text-[1.6rem] font-semibold leading-[0.98] tracking-[-0.05em] text-[rgba(15,23,42,0.96)] md:text-[1.9rem]">
+        <h1 className="font-display text-[1.7rem] font-semibold leading-[1] tracking-[-0.05em] text-[rgba(15,23,42,0.96)] md:text-[2rem]">
           {title}
         </h1>
 
@@ -139,17 +138,17 @@ export function SectionHeader({
     >
       <div className="max-w-[760px]">
         {eyebrow ? (
-          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[rgba(15,23,42,0.42)]">
+          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[rgba(15,23,42,0.38)]">
             {eyebrow}
           </div>
         ) : null}
 
-        <h2 className="font-display text-[1.12rem] font-semibold leading-[1] tracking-[-0.04em] text-[rgba(15,23,42,0.96)] md:text-[1.22rem]">
+        <h2 className="font-display text-[1.14rem] font-semibold leading-[1] tracking-[-0.04em] text-[rgba(15,23,42,0.96)] md:text-[1.24rem]">
           {title}
         </h2>
 
         {description ? (
-          <p className="mt-2 text-[13px] font-medium leading-6 text-[rgba(15,23,42,0.6)]">
+          <p className="mt-2 text-[13px] font-medium leading-6 text-[rgba(15,23,42,0.62)]">
             {description}
           </p>
         ) : null}
@@ -175,72 +174,17 @@ export function Surface({
   return (
     <div
       className={cx(
-        "rounded-[10px] border",
+        "rounded-[12px] border",
         surfaceToneClass({ tone, subdued }),
         paddedClass(padded),
-        shadow === "sm" && "shadow-[0_12px_28px_-24px_rgba(15,23,42,0.14)]",
-        shadow === "md" && "shadow-[0_18px_40px_-28px_rgba(15,23,42,0.16)]",
+        shadow === "sm" && "shadow-[0_8px_20px_-18px_rgba(15,23,42,0.05)]",
+        shadow === "md" && "shadow-[0_14px_30px_-24px_rgba(15,23,42,0.07)]",
         shadow === "none" && "shadow-none",
         className
       )}
     >
       {children}
     </div>
-  );
-}
-
-export function MetricCard({
-  label,
-  value,
-  hint,
-  className,
-  tone = "default",
-}) {
-  const toneClass =
-    tone === "brand"
-      ? "border-[rgba(var(--color-brand),0.10)] bg-[rgba(var(--color-brand),0.03)]"
-      : tone === "success"
-        ? "border-[rgba(var(--color-success),0.10)] bg-[rgba(var(--color-success),0.03)]"
-        : tone === "warning"
-          ? "border-[rgba(var(--color-warning),0.10)] bg-[rgba(var(--color-warning),0.03)]"
-          : "border-[rgba(15,23,42,0.07)] bg-white";
-
-  return (
-    <div className={cx("rounded-[10px] border px-4 py-3.5", toneClass, className)}>
-      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[rgba(15,23,42,0.42)]">
-        {label}
-      </div>
-      <div className="mt-2 text-[1.22rem] font-semibold tracking-[-0.05em] text-[rgba(15,23,42,0.95)]">
-        {value}
-      </div>
-      {hint ? (
-        <div className="mt-1 text-[12px] font-medium leading-5 text-[rgba(15,23,42,0.58)]">
-          {hint}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-export function ToolbarRow({ className, children }) {
-  return (
-    <div
-      className={cx(
-        "flex flex-col gap-3 border-b border-[rgba(15,23,42,0.06)] pb-4 md:flex-row md:items-center md:justify-between",
-        className
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-export function StateSkeletonBlock({ className }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={cx("animate-pulse rounded-[8px] bg-surface-subtle", className)}
-    />
   );
 }
 
@@ -264,7 +208,7 @@ export function InlineNotice({
       className={cx(
         "border",
         palette.container,
-        compact ? "rounded-[8px] px-4 py-3" : "rounded-[10px] px-4 py-3.5",
+        compact ? "rounded-[10px] px-4 py-3" : "rounded-[12px] px-4 py-3.5",
         className
       )}
     >
@@ -305,6 +249,15 @@ export function InlineNotice({
   );
 }
 
+export function StateSkeletonBlock({ className }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={cx("animate-pulse rounded-[10px] bg-surface-subtle", className)}
+    />
+  );
+}
+
 export function SectionLoading({
   title = "Loading",
   description,
@@ -315,7 +268,7 @@ export function SectionLoading({
   return (
     <Surface className={className} tone="muted">
       <div className="flex items-center gap-3">
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[rgba(15,23,42,0.06)] bg-white text-text-subtle">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-line bg-white text-text-subtle">
           <Spin size="small" />
         </span>
 

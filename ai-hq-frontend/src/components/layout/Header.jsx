@@ -1,13 +1,6 @@
 import { Dropdown } from "antd";
-import {
-  Bell,
-  ChevronDown,
-  LayoutGrid,
-  LogOut,
-  Menu,
-} from "lucide-react";
+import { Bell, ChevronDown, LogOut, Menu } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { logoutUser } from "../../api/auth.js";
 import {
   clearAppSessionContext,
@@ -27,28 +20,7 @@ function getInitials(value = "") {
     .join("");
 }
 
-function HeaderMenuRow({ icon: Icon, label, onClick, danger = false }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cx(
-        "flex h-10 w-full items-center gap-3 rounded-[8px] px-3 text-left transition-colors duration-200",
-        danger
-          ? "text-danger hover:bg-[rgba(var(--color-danger),0.06)]"
-          : "text-[rgba(15,23,42,0.82)] hover:bg-[rgba(15,23,42,0.045)]"
-      )}
-    >
-      <Icon className="h-[15px] w-[15px] shrink-0" strokeWidth={1.9} />
-      <span className="truncate text-[13px] font-semibold tracking-[-0.02em]">
-        {label}
-      </span>
-    </button>
-  );
-}
-
 function WorkspaceControl({ notifications }) {
-  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [session, setSession] = useState({
@@ -103,11 +75,6 @@ function WorkspaceControl({ notifications }) {
     }
   }
 
-  function closeThen(fn) {
-    setOpen(false);
-    fn?.();
-  }
-
   const unread =
     typeof notifications?.unreadCount === "number"
       ? notifications.unreadCount
@@ -118,7 +85,7 @@ function WorkspaceControl({ notifications }) {
   const initials = useMemo(() => getInitials(displayName) || "W", [displayName]);
 
   const overlay = (
-    <div className="dropdown-panel-anim w-[260px] rounded-[12px] border border-[rgba(15,23,42,0.08)] bg-white p-2 shadow-[0_24px_48px_-30px_rgba(15,23,42,0.18)]">
+    <div className="dropdown-panel-anim w-[250px] rounded-[14px] border border-line bg-white p-2 shadow-[0_24px_48px_-30px_rgba(15,23,42,0.18)]">
       <div className="px-2.5 pb-2 pt-1.5">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--color-brand))] text-[11px] font-semibold text-white">
@@ -129,45 +96,36 @@ function WorkspaceControl({ notifications }) {
             <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.95)]">
               {displayName}
             </div>
-            <div className="mt-0.5 truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-[rgba(15,23,42,0.42)]">
+            <div className="mt-0.5 truncate text-[11px] font-medium text-[rgba(15,23,42,0.46)]">
               {roleLabel}
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mx-2 my-1 h-px bg-[rgba(15,23,42,0.07)]" />
+      <div className="mx-2 my-1 h-px bg-line-soft" />
 
-      <div className="px-1 py-1">
-        <HeaderMenuRow
-          icon={Bell}
-          label={
-            unread > 0
-              ? `Notifications (${unread > 99 ? "99+" : unread})`
-              : "Notifications"
-          }
-          onClick={() =>
-            closeThen(() => notifications?.setOpen?.(!notifications?.open))
-          }
-        />
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(false);
+          notifications?.setOpen?.(!notifications?.open);
+        }}
+        className="flex h-10 w-full items-center justify-between rounded-[10px] px-3 text-left text-[13px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.82)] transition-colors duration-200 hover:bg-surface-subtle"
+      >
+        <span>Notifications</span>
+        <span className="text-[12px] text-[rgba(15,23,42,0.44)]">
+          {unread > 99 ? "99+" : unread}
+        </span>
+      </button>
 
-        <HeaderMenuRow
-          icon={LayoutGrid}
-          label="Workspace"
-          onClick={() => closeThen(() => navigate("/workspace"))}
-        />
-      </div>
-
-      <div className="mx-2 my-1 h-px bg-[rgba(15,23,42,0.07)]" />
-
-      <div className="px-1 pb-1 pt-1">
-        <HeaderMenuRow
-          icon={LogOut}
-          label={loggingOut ? "Signing out..." : "Sign out"}
-          onClick={handleLogout}
-          danger
-        />
-      </div>
+      <button
+        type="button"
+        onClick={handleLogout}
+        className="mt-1 flex h-10 w-full items-center rounded-[10px] px-3 text-left text-[13px] font-semibold tracking-[-0.02em] text-[rgba(185,28,28,0.92)] transition-colors duration-200 hover:bg-[rgba(220,38,38,0.05)]"
+      >
+        {loggingOut ? "Signing out..." : "Sign out"}
+      </button>
     </div>
   );
 
@@ -184,8 +142,8 @@ function WorkspaceControl({ notifications }) {
         aria-label={displayName}
         aria-expanded={open}
         className={cx(
-          "group flex h-10 items-center gap-3 rounded-[8px] px-2.5 py-2 text-left transition-colors duration-200",
-          open ? "bg-[rgba(15,23,42,0.05)]" : "hover:bg-[rgba(15,23,42,0.045)]"
+          "group flex h-11 items-center gap-3 rounded-[12px] px-2.5 text-left transition-colors duration-200",
+          open ? "bg-surface-subtle" : "hover:bg-surface-subtle"
         )}
       >
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[rgb(var(--color-brand))] text-[11px] font-semibold text-white">
@@ -193,10 +151,10 @@ function WorkspaceControl({ notifications }) {
         </div>
 
         <div className="hidden min-w-0 text-left lg:block">
-          <div className="truncate text-[13px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.94)]">
+          <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.94)]">
             {displayName}
           </div>
-          <div className="truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-[rgba(15,23,42,0.42)]">
+          <div className="truncate text-[11px] font-medium text-[rgba(15,23,42,0.42)]">
             {roleLabel}
           </div>
         </div>
@@ -213,34 +171,53 @@ function WorkspaceControl({ notifications }) {
   );
 }
 
-export default function Header({
-  onMenuClick,
-  notifications,
-}) {
+function NotificationsButton({ notifications }) {
+  const unread =
+    typeof notifications?.unreadCount === "number"
+      ? notifications.unreadCount
+      : 0;
+
+  return (
+    <button
+      type="button"
+      onClick={() => notifications?.setOpen?.(!notifications?.open)}
+      className="relative inline-flex h-11 w-11 items-center justify-center rounded-[12px] border border-line bg-white text-[rgba(15,23,42,0.62)] transition-colors duration-200 hover:bg-surface-subtle hover:text-[rgba(15,23,42,0.92)]"
+      aria-label="Open notifications"
+    >
+      <Bell className="h-[17px] w-[17px]" strokeWidth={1.9} />
+      {unread > 0 ? (
+        <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[rgb(var(--color-brand))]" />
+      ) : null}
+    </button>
+  );
+}
+
+export default function Header({ onMenuClick, notifications }) {
   return (
     <>
       <header
-        className="sticky top-0 z-[60] border-b border-[rgba(15,23,42,0.06)] bg-white"
+        className="sticky top-0 z-[60] border-b border-line-soft bg-white"
         style={{ height: SHELL_TOPBAR_HEIGHT }}
       >
-        <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-5 px-4 md:px-6 xl:px-8">
+        <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-4 px-4 md:px-6 xl:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
               onClick={onMenuClick}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] text-[rgba(15,23,42,0.56)] transition-colors duration-200 hover:bg-[rgba(15,23,42,0.05)] hover:text-[rgba(15,23,42,0.9)] md:hidden"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-[10px] text-[rgba(15,23,42,0.56)] transition-colors duration-200 hover:bg-surface-subtle hover:text-[rgba(15,23,42,0.9)] md:hidden"
               aria-label="Open navigation"
             >
               <Menu className="h-[16px] w-[16px]" strokeWidth={2} />
             </button>
 
-            <div className="hidden md:block text-[12px] font-semibold uppercase tracking-[0.14em] text-[rgba(15,23,42,0.34)]">
+            <div className="hidden md:block text-[13px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.34)]">
               AI HQ
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             <CommandMenu />
+            <NotificationsButton notifications={notifications} />
             <WorkspaceControl notifications={notifications} />
           </div>
         </div>

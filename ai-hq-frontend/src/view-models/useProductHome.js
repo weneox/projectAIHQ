@@ -807,7 +807,7 @@ function buildTruthRuntimeState({ trustPayload, launchChannel, sourceStatus }) {
   const available = sourceStatus.trust?.available !== false;
   const fallbackTruthAction = {
     label: "Continue AI setup",
-    path: "/home?assistant=setup",
+    path: "/setup",
   };
   const fallbackRuntimeAction = { label: "Open truth", path: "/truth" };
 
@@ -994,7 +994,7 @@ function buildSetupFlowState({
   return {
     needed: launchPosture === "setup_needed",
     setupNeeded: launchPosture === "setup_needed",
-    autoOpen: launchPosture === "setup_needed",
+    autoOpen: false,
     launchPosture,
     assistantMode,
     title:
@@ -1057,13 +1057,13 @@ function buildSetupFlowState({
         : launchPosture === "setup_needed"
           ? {
               label: hasDraft ? "Continue AI setup" : "Start AI setup",
-              path: "/home?assistant=setup",
+              path: "/setup",
             }
           : launchPosture === "runtime_repair_needed"
             ? truthRuntime.action
             : {
                 label: "Open AI setup",
-                path: "/home?assistant=setup",
+                path: "/setup",
               },
     secondaryAction:
       launchPosture === "connect_channel"
@@ -1233,62 +1233,6 @@ function buildAvailabilityNote({
   return {
     title: "Some live product context is limited",
     description: details.join(" "),
-  };
-}
-
-function buildPrimaryAction({
-  launchChannel,
-  setupFlow,
-  truthRuntime,
-  inboxState,
-}) {
-  if (!launchChannel.connected) {
-    return {
-      title: "Connect a launch channel before launching AI conversations.",
-      detail: launchChannel.summary,
-      action: launchChannel.action,
-    };
-  }
-
-  if (setupFlow.launchPosture === "setup_needed") {
-    return {
-      title: setupFlow.title,
-      detail: setupFlow.summary,
-      action: setupFlow.action,
-    };
-  }
-
-  if (setupFlow.launchPosture === "runtime_repair_needed") {
-    return {
-      title: truthRuntime.title,
-      detail: truthRuntime.summary,
-      action: truthRuntime.action,
-    };
-  }
-
-  if (inboxState.status === "attention") {
-    return {
-      title:
-        "Launch channel, truth, and runtime are aligned. The inbox is the next place that needs an operator.",
-      detail: inboxState.summary,
-      action: inboxState.action,
-    };
-  }
-
-  if (inboxState.status === "active") {
-    return {
-      title: "Start from the live inbox.",
-      detail: inboxState.summary,
-      action: inboxState.action,
-    };
-  }
-
-  return {
-    title: "Launch channel, approved truth, and runtime are aligned.",
-    detail:
-      truthRuntime.detail ||
-      "The connected channel can now rely on the strict runtime projection.",
-    action: { label: "Open inbox", path: "/inbox" },
   };
 }
 
@@ -1547,6 +1491,354 @@ function buildGoldenPath({ launchChannel, truthRuntime, setupFlow, inboxState })
   };
 }
 
+function isSetupDraftReady(setupFlow = {}, truthRuntime = {}) {
+  if (truthRuntime.truthReady === true) {
+    return true;
+  }
+
+  return (
+    setupFlow.hasDraft &&
+    setupFlow.blockerCount === 0 &&
+    (setupFlow.readySections > 0 ||
+      setupFlow.servicesCount > 0 ||
+      setupFlow.contactsCount > 0 ||
+      setupFlow.hoursCount > 0)
+  );
+}
+
+function buildLaunchLaneStep({
+  id,
+  label,
+  title = "",
+  status,
+  statusLabel,
+  tone,
+  summary,
+  detail,
+  action,
+  complete,
+}) {
+  return {
+    id,
+    label,
+    title: s(title || label),
+    status,
+    statusLabel,
+    tone,
+    summary,
+    detail,
+    action: normalizeAction(action),
+    complete: complete === true,
+  };
+}
+
+function buildLaunchLaneModel({
+  launchChannel,
+  truthRuntime,
+  setupFlow,
+  inboxState,
+}) {
+  const setupReady = isSetupDraftReady(setupFlow, truthRuntime);
+  const approvalReady = truthRuntime.ready === true;
+  const liveSignalReady = inboxState.status !== "unavailable";
+  const launchReady =
+    launchChannel.connected && setupReady && approvalReady && liveSignalReady;
+
+  const channelAction = normalizeAction(launchChannel.action, {
+    label: "Open channels",
+    path: "/channels",
+  });
+  const setupAction = normalizeAction(setupFlow.action, {
+    label: setupFlow.hasDraft ? "Continue setup" : "Start setup",
+    path: "/setup",
+  });
+  const truthAction = normalizeAction(truthRuntime.action, {
+    label: "Open truth",
+    path: "/truth",
+  });
+  const inboxAction = normalizeAction(inboxState.action, {
+    label: "Open inbox",
+    path: "/inbox",
+  });
+
+  const channelStep = launchChannel.connected
+    ? buildLaunchLaneStep({
+        id: "channel",
+        label: "Connect launch channel",
+        status: "ready",
+        statusLabel: "Connected",
+        tone: "success",
+        summary:
+          launchChannel.summary ||
+          "The launch channel is attached and available to the workspace.",
+        detail: launchChannel.detail,
+        action: channelAction,
+        complete: true,
+      })
+    : buildLaunchLaneStep({
+        id: "channel",
+        label: "Connect launch channel",
+        status: "blocked",
+        statusLabel:
+          launchChannel.status === "connecting"
+            ? "Connecting"
+            : launchChannel.status === "selection_required"
+              ? "Selection required"
+              : "Connect required",
+        tone:
+          launchChannel.status === "connecting" ||
+          launchChannel.status === "selection_required"
+            ? "info"
+            : "danger",
+        summary:
+          launchChannel.summary ||
+          "Connect the launch channel before the rest of the launch lane can move.",
+        detail: launchChannel.detail,
+        action: channelAction,
+        complete: false,
+      });
+
+  const setupStep = setupReady
+    ? buildLaunchLaneStep({
+        id: "setup",
+        label: "Create or continue setup draft",
+        status: "ready",
+        statusLabel: "Structured",
+        tone: "success",
+        summary:
+          truthRuntime.truthReady === true && !setupFlow.hasDraft
+            ? "A governed setup baseline already exists behind approved truth."
+            : "The setup draft has enough confirmed structure to support launch review.",
+        detail: setupFlow.hasDraft
+          ? `${setupFlow.readySections} ready sections / ${setupFlow.servicesCount} services / ${setupFlow.contactsCount} contacts`
+          : "Draft edits stay separate from approved truth until a later review.",
+        action: setupAction,
+        complete: true,
+      })
+    : buildLaunchLaneStep({
+        id: "setup",
+        label: "Create or continue setup draft",
+        status: setupFlow.hasDraft ? "in_progress" : "pending",
+        statusLabel: setupFlow.hasDraft ? "In progress" : "Start draft",
+        tone: setupFlow.hasDraft ? "warn" : "info",
+        summary: setupFlow.hasDraft
+          ? "Continue confirming the business draft before truth approval and runtime activation."
+          : "Start the first structured business draft before truth approval and runtime activation.",
+        detail: setupFlow.hasDraft
+          ? `${setupFlow.readySections} ready sections / ${setupFlow.blockerCount} blockers remaining`
+          : "No structured setup draft is visible yet.",
+        action: setupAction,
+        complete: false,
+      });
+
+  const approvalStep = approvalReady
+    ? buildLaunchLaneStep({
+        id: "approval",
+        label: "Approve truth and runtime",
+        status: "ready",
+        statusLabel: "Approved",
+        tone: "success",
+        summary: truthRuntime.truthVersionId
+          ? `Approved truth version ${truthRuntime.truthVersionId} is governing a healthy runtime.`
+          : "Approved truth and runtime are aligned for live operation.",
+        detail:
+          truthRuntime.detail ||
+          "Approved truth stays governed and the runtime remains healthy.",
+        action: truthAction,
+        complete: true,
+      })
+    : buildLaunchLaneStep({
+        id: "approval",
+        label: "Approve truth and runtime",
+        status: "blocked",
+        statusLabel: setupReady
+          ? truthRuntime.truthReady
+            ? "Repair required"
+            : "Approval required"
+          : "Waiting on setup",
+        tone: setupReady
+          ? truthRuntime.truthReady
+            ? "warn"
+            : "danger"
+          : "danger",
+        summary: !setupReady
+          ? "Truth approval only starts after the setup draft is structured enough."
+          : truthRuntime.summary ||
+            (truthRuntime.truthReady
+              ? "Runtime still needs repair before live launch."
+              : "Approved truth still needs review before live launch."),
+        detail: !setupReady
+          ? "Complete the structured draft first."
+          : truthRuntime.detail,
+        action: !setupReady ? setupAction : truthAction,
+        complete: false,
+      });
+
+  const liveStep = launchReady
+    ? buildLaunchLaneStep({
+        id: "live",
+        label: "Go live in inbox",
+        status: "ready",
+        statusLabel: inboxState.status === "attention" ? "Live now" : "Ready",
+        tone: "success",
+        summary:
+          inboxState.status === "attention"
+            ? inboxState.summary ||
+              "The launch lane is clear and the inbox already has live work waiting."
+            : inboxState.summary || "The launch lane is clear and the inbox is ready.",
+        detail: inboxState.detail || "Open inbox to operate live work.",
+        action: inboxAction,
+        complete: true,
+      })
+    : buildLaunchLaneStep({
+        id: "live",
+        label: "Go live in inbox",
+        status: "blocked",
+        statusLabel:
+          !launchChannel.connected
+            ? "Waiting on channel"
+            : !setupReady
+              ? "Waiting on setup"
+              : !approvalReady
+                ? "Waiting on approval"
+                : "Signal limited",
+        tone:
+          launchChannel.connected && setupReady && approvalReady
+            ? "info"
+            : "danger",
+        summary:
+          !launchChannel.connected
+            ? "Inbox should wait until the launch channel is connected."
+            : !setupReady
+              ? "Inbox is not the next move until the setup draft is structured."
+              : !approvalReady
+                ? "Do not treat inbox as live until truth and runtime are aligned."
+                : "Inbox telemetry is limited, so live posture should be treated cautiously.",
+        detail:
+          inboxState.detail ||
+          truthRuntime.detail ||
+          "Open inbox or truth to inspect the current launch posture.",
+        action:
+          !launchChannel.connected
+            ? channelAction
+            : !setupReady
+              ? setupAction
+              : !approvalReady
+                ? truthAction
+                : inboxAction,
+        complete: false,
+      });
+
+  const launchSteps = [channelStep, setupStep, approvalStep, liveStep];
+  const completeCount = launchSteps.filter((step) => step.complete).length;
+  const totalCount = launchSteps.length;
+  const progressPercent = Math.round((completeCount / totalCount) * 100);
+  const nextLaunchStep =
+    launchSteps.find((step) => !step.complete) || launchSteps[launchSteps.length - 1] || null;
+
+  let launchPhase = "go_live_inbox";
+  let launchPhaseLabel = "Go live in inbox";
+  let launchHeadline = "Go live in inbox.";
+  let launchSummary =
+    inboxState.summary || "The launch lane is clear and the inbox is ready.";
+  let primaryAction = inboxAction;
+  let secondaryAction = truthAction;
+
+  if (!launchChannel.connected) {
+    launchPhase = "connect_channel";
+    launchPhaseLabel = "Connect launch channel";
+    launchHeadline = `Connect ${launchChannel.channelLabel || "the launch channel"}.`;
+    launchSummary =
+      launchChannel.summary ||
+      "The launch lane stays blocked until the live channel is attached.";
+    primaryAction = channelAction;
+    secondaryAction = setupFlow.hasDraft ? setupAction : null;
+  } else if (!setupReady) {
+    launchPhase = "setup_draft";
+    launchPhaseLabel = "Create or continue setup draft";
+    launchHeadline = setupFlow.hasDraft
+      ? "Continue the setup draft."
+      : "Create the setup draft.";
+    launchSummary = setupFlow.hasDraft
+      ? "The launch channel is connected. Finish the structured draft before truth approval and runtime."
+      : "The launch channel is connected. Start the structured draft before truth approval and runtime.";
+    primaryAction = setupAction;
+    secondaryAction = channelAction;
+  } else if (!approvalReady) {
+    launchPhase = "approve_truth_runtime";
+    launchPhaseLabel = "Approve truth and runtime";
+    launchHeadline = truthRuntime.truthReady
+      ? "Repair runtime before going live."
+      : "Approve truth before going live.";
+    launchSummary =
+      truthRuntime.summary ||
+      (truthRuntime.truthReady
+        ? "Approved truth exists, but runtime still needs repair before live inbox."
+        : "The draft is ready, but approved truth still needs review before live inbox.");
+    primaryAction = truthAction;
+    secondaryAction = setupAction;
+  } else if (!liveSignalReady) {
+    launchPhase = "go_live_inbox";
+    launchPhaseLabel = "Go live in inbox";
+    launchHeadline = "Check live inbox posture.";
+    launchSummary =
+      "Channel, setup, truth, and runtime are aligned, but live inbox signal is limited right now.";
+    primaryAction = inboxAction;
+    secondaryAction = truthAction;
+  } else {
+    launchPhase = "go_live_inbox";
+    launchPhaseLabel = "Go live in inbox";
+    launchHeadline =
+      inboxState.status === "attention"
+        ? "Operate live from inbox."
+        : "Go live in inbox.";
+    launchSummary =
+      inboxState.summary ||
+      "The launch lane is clear and the inbox is ready for live operation.";
+    primaryAction = inboxAction;
+    secondaryAction = truthAction;
+  }
+
+  if (primaryAction?.path && secondaryAction?.path && primaryAction.path === secondaryAction.path) {
+    secondaryAction = null;
+  }
+
+  return {
+    launchPhase,
+    launchPhaseLabel,
+    launchHeadline,
+    launchSummary,
+    primaryBlocker: launchReady
+      ? {
+          title: "Live inbox",
+          label: "Live inbox",
+          statusLabel: inboxState.statusLabel,
+          summary:
+            inboxState.summary || "The launch lane is clear and the inbox is ready.",
+          detail: inboxState.detail,
+          action: inboxAction,
+          tone: inboxState.tone || "success",
+        }
+      : {
+          title: s(nextLaunchStep?.title || nextLaunchStep?.label, "Launch lane"),
+          label: s(nextLaunchStep?.label, "Launch lane"),
+          statusLabel: s(nextLaunchStep?.statusLabel),
+          summary: s(nextLaunchStep?.summary),
+          detail: s(nextLaunchStep?.detail),
+          action: normalizeAction(nextLaunchStep?.action),
+          tone: s(nextLaunchStep?.tone),
+        },
+    primaryAction,
+    secondaryAction,
+    progressPercent,
+    launchSteps,
+    launchReady,
+    nextLaunchStep,
+    completeCount,
+    totalCount,
+  };
+}
+
 function dedupeActions(actions = []) {
   const seen = new Set();
   return actions.filter((item) => {
@@ -1555,26 +1847,6 @@ function dedupeActions(actions = []) {
     seen.add(path);
     return true;
   });
-}
-
-function splitEntryPoints(items = []) {
-  const priority = {
-    inbox: 100,
-    comments: 90,
-    voice: 80,
-    channels: 70,
-    truth: 60,
-    workspace: 40,
-  };
-
-  const ordered = [...items].sort(
-    (left, right) => (priority[right.id] || 0) - (priority[left.id] || 0)
-  );
-
-  return {
-    featured: ordered.slice(0, 3),
-    secondary: ordered.slice(3),
-  };
 }
 
 const DEFAULT_PRODUCT_HOME_PAYLOADS = {
@@ -1666,7 +1938,14 @@ export function useProductHome(options = {}) {
       setupAssistantSession: payloads.setupAssistantSession,
     });
 
-    const goldenPath = buildGoldenPath({
+    const legacyGoldenPath = buildGoldenPath({
+      launchChannel,
+      truthRuntime,
+      setupFlow,
+      inboxState,
+    });
+
+    const launchLane = buildLaunchLaneModel({
       launchChannel,
       truthRuntime,
       setupFlow,
@@ -1691,24 +1970,6 @@ export function useProductHome(options = {}) {
     const companyName = formatWorkspaceName(session);
     const actorName = s(session?.actorName, "operator");
 
-    const primaryAction = buildPrimaryAction({
-      launchChannel,
-      setupFlow,
-      truthRuntime,
-      inboxState,
-    });
-
-    const secondaryAction =
-      !launchChannel.connected
-        ? { label: "Open AI setup", path: "/home?assistant=setup" }
-        : setupFlow.launchPosture === "setup_needed"
-          ? { label: "Open truth", path: "/truth" }
-          : setupFlow.launchPosture === "runtime_repair_needed"
-            ? launchChannel.action
-            : inboxState.action?.path === "/inbox"
-              ? launchChannel.action
-              : { label: "Open inbox", path: "/inbox" };
-
     const heroStats = [
       {
         id: "channel",
@@ -1732,91 +1993,6 @@ export function useProductHome(options = {}) {
         action: truthRuntime.action,
       },
     ];
-
-    const entryPoints = [
-      {
-        id: "inbox",
-        title: "Inbox",
-        status:
-          setupFlow.launchPosture === "normal_operation"
-            ? primaryAction.action?.path === "/inbox"
-              ? "Start here"
-              : inboxState.statusLabel
-            : setupFlow.launchPosture === "runtime_repair_needed"
-              ? "Blocked by runtime"
-              : "Waiting on launch readiness",
-        summary:
-          setupFlow.launchPosture === "normal_operation"
-            ? "Handle live conversations and operator follow-up in one queue."
-            : setupFlow.launchPosture === "runtime_repair_needed"
-              ? "Inbox exists, but live automation should wait until runtime repair finishes."
-              : "The inbox becomes the main operating surface after channel, approved truth, and runtime are aligned.",
-        detail:
-          setupFlow.launchPosture === "normal_operation"
-            ? inboxState.detail
-            : truthRuntime.summary,
-        action: { label: "Open inbox", path: "/inbox" },
-      },
-      {
-        id: "comments",
-        title: "Comments",
-        status: "Operator surface",
-        summary:
-          "Comments stay available as a separate operator surface outside the primary launch lane.",
-        detail:
-          "Use comments when moderation or reply review matters, but keep launch posture anchored to channel, setup, truth, runtime, and inbox readiness.",
-        action: { label: "Open comments", path: "/comments" },
-      },
-      {
-        id: "voice",
-        title: "Voice Receptionist",
-        status: "Operator surface",
-        summary:
-          "Voice stays available as its own operator surface and does not redefine the primary launch lane.",
-        detail:
-          "Keep launch posture focused on channel, setup, truth, runtime, and live queue readiness.",
-        action: { label: "Open voice", path: "/voice" },
-      },
-      {
-        id: "channels",
-        title: "Channels",
-        status: launchChannel.statusLabel,
-        summary:
-          "Connect and inspect the current launch channel without weakening the strict runtime contract.",
-        detail: launchChannel.detail,
-        action: launchChannel.action,
-      },
-      {
-        id: "truth",
-        title: "Truth",
-        status: truthRuntime.statusLabel,
-        summary:
-          truthRuntime.status === "ready"
-            ? "Approved truth and runtime stay protected. Draft setup does not publish automatically."
-            : truthRuntime.summary,
-        detail: truthRuntime.detail,
-        action: truthRuntime.action,
-      },
-      {
-        id: "workspace",
-        title: "Workspace",
-        status: "Support",
-        summary:
-          "Use the workspace for broader operator posture once the setup lane is already clear.",
-        detail:
-          "Home leads launch-channel, setup, and runtime posture for this flow.",
-        action: { label: "Open workspace", path: "/workspace" },
-      },
-    ];
-
-    const entryPointGroups = splitEntryPoints(entryPoints);
-
-    const currentStatus = {
-      title: primaryAction.title,
-      summary: primaryAction.detail,
-      action: primaryAction.action,
-      secondaryAction,
-    };
 
     const supportingStatus = [
       {
@@ -1843,14 +2019,36 @@ export function useProductHome(options = {}) {
     ];
 
     const finalActions = dedupeActions([
-      primaryAction.action,
-      secondaryAction,
+      launchLane.primaryAction,
+      launchLane.secondaryAction,
       launchChannel.action,
       setupFlow.action,
       truthRuntime.action,
-      goldenPath.nextAction,
-      { label: "Open workspace", path: "/workspace" },
+      legacyGoldenPath.nextAction,
+      { label: "Open inbox", path: "/inbox" },
     ]).slice(0, 4);
+
+    const currentStatus = {
+      title: launchLane.launchHeadline,
+      summary: launchLane.launchSummary,
+      action: launchLane.primaryAction,
+      secondaryAction: launchLane.secondaryAction,
+    };
+
+    const goldenPath = {
+      title: launchLane.launchReady
+        ? "Launch lane is ready."
+        : `${launchLane.completeCount}/${launchLane.totalCount} launch steps are ready.`,
+      summary: launchLane.launchSummary,
+      detail:
+        legacyGoldenPath.detail ||
+        "Connect the launch channel, create the setup draft, approve truth and runtime, then go live in inbox.",
+      percent: launchLane.progressPercent,
+      completeCount: launchLane.completeCount,
+      totalCount: launchLane.totalCount,
+      steps: launchLane.launchSteps,
+      nextAction: launchLane.primaryAction,
+    };
 
     const assistant = {
       mode: setupFlow.assistantMode,
@@ -1906,15 +2104,22 @@ export function useProductHome(options = {}) {
       launchChannel,
       truthRuntime,
       setupFlow,
-      setupNeeded: setupFlow.needed,
+      setupNeeded: launchLane.launchPhase === "setup_draft",
       assistant,
       availabilityNote,
+      launchPhase: launchLane.launchPhase,
+      launchPhaseLabel: launchLane.launchPhaseLabel,
+      launchHeadline: launchLane.launchHeadline,
+      launchSummary: launchLane.launchSummary,
+      primaryBlocker: launchLane.primaryBlocker,
+      primaryAction: launchLane.primaryAction,
+      secondaryAction: launchLane.secondaryAction,
+      progressPercent: launchLane.progressPercent,
+      launchSteps: launchLane.launchSteps,
+      launchReady: launchLane.launchReady,
+      nextLaunchStep: launchLane.nextLaunchStep,
       goldenPath,
       heroStats,
-      primaryAction,
-      secondaryAction,
-      entryPoints,
-      entryPointGroups,
       currentStatus,
       supportingStatus,
       finalActions,

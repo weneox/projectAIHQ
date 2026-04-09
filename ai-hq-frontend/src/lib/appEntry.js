@@ -21,7 +21,7 @@ function splitRoute(value = "") {
 }
 
 function normalizeSetupRoute(_target = "") {
-  return "/home?assistant=setup";
+  return "/setup";
 }
 
 function normalizeLegacyAppRoute(target = "") {
@@ -122,11 +122,7 @@ export function isForcedWorkspaceEntryEnabled() {
 export function isSetupPath(path = "") {
   const raw = s(path);
   const normalized = normalizeLegacyAppRoute(raw);
-  return (
-    normalized === "/home?assistant=setup" ||
-    raw === "/setup" ||
-    raw.startsWith("/setup/")
-  );
+  return normalized === "/setup" || raw === "/setup" || raw.startsWith("/setup/");
 }
 
 export function isWorkspaceSelectionPath(path = "") {

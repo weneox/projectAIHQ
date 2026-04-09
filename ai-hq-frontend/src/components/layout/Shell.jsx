@@ -101,11 +101,11 @@ function SharedStatsNotice({ message }) {
   if (!message) return null;
 
   return (
-    <div className="mb-4 border-b border-[rgba(185,28,28,0.12)] pb-3">
-      <div className="text-[12px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.92)]">
+    <div className="mb-5 rounded-[12px] border border-[rgba(220,38,38,0.12)] bg-[rgba(254,242,242,0.75)] px-4 py-3">
+      <div className="text-[13px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.92)]">
         Workspace stats unavailable
       </div>
-      <div className="mt-1 text-[13px] leading-6 text-[rgba(15,23,42,0.58)]">
+      <div className="mt-1 text-[13px] leading-6 text-[rgba(15,23,42,0.62)]">
         {message}
       </div>
     </div>
@@ -429,7 +429,7 @@ export default function Shell() {
 
   return (
     <div
-      className="relative h-screen overflow-hidden bg-white text-text"
+      className="relative h-screen overflow-hidden bg-canvas text-text"
       style={{ "--shell-sidebar-w": `${shellSidebarWidth}px` }}
     >
       <Sidebar
@@ -453,7 +453,7 @@ export default function Shell() {
             </div>
           ) : (
             <div className="page-scroll h-full min-h-0 overflow-y-auto">
-              <div className="mx-auto flex min-h-full w-full max-w-shell-content flex-col px-5 py-6 md:px-7 md:py-6 xl:px-8">
+              <div className="mx-auto flex min-h-full w-full max-w-shell-content flex-col px-5 py-5 md:px-6 xl:px-8">
                 <SharedStatsNotice message={shellStats?.message} />
                 <div className="flex-1 min-h-0">
                   <Outlet />

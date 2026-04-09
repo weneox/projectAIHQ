@@ -6,7 +6,7 @@ function resolveAppearance(appearance = "default") {
   switch (appearance) {
     case "product":
       return {
-        shell: "rounded-[13px]",
+        shell: "rounded-[12px]",
         row: "min-h-[46px] gap-3 px-4",
         input: "h-[46px] text-[15px] font-medium",
         textareaWrap: "px-4 py-4",
@@ -16,7 +16,7 @@ function resolveAppearance(appearance = "default") {
       };
     case "quiet":
       return {
-        shell: "rounded-[11px]",
+        shell: "rounded-[10px]",
         row: "min-h-[40px] gap-2.5 px-3.5",
         input: "h-[40px] text-[14px]",
         textareaWrap: "px-3.5 py-3",
@@ -26,7 +26,7 @@ function resolveAppearance(appearance = "default") {
       };
     default:
       return {
-        shell: "rounded-[12px]",
+        shell: "rounded-[10px]",
         row: "min-h-[42px] gap-2.5 px-3.5",
         input: "h-[42px] text-[14px]",
         textareaWrap: "px-3.5 py-3.5",
@@ -49,7 +49,6 @@ function surfaceClass({ disabled, readOnly, invalid }) {
   }
   return [
     "border-line bg-white",
-    "shadow-[inset_0_1px_0_rgba(255,255,255,0.92)]",
     "hover:border-line-strong",
     "focus-within:border-[rgba(var(--color-brand),0.34)]",
     "focus-within:bg-white",
@@ -135,7 +134,7 @@ export function InputGroup({
           <button
             type="button"
             onClick={onClear}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-[9px] text-text-subtle transition-[background-color,color] duration-200 ease-premium hover:bg-surface-muted hover:text-text"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-[8px] text-text-subtle transition-[background-color,color] duration-200 ease-premium hover:bg-surface-muted hover:text-text"
             aria-label="Clear"
           >
             <X className="h-3.5 w-3.5" />
