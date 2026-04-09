@@ -29,12 +29,12 @@ function Spinner({ className }) {
 }
 
 const SIZE = {
-  sm: "h-[34px] rounded-[10px] px-3 text-[12px]",
-  md: "h-[38px] rounded-[10px] px-3.5 text-[13px]",
-  lg: "h-[42px] rounded-[11px] px-4 text-[14px]",
-  pill: "h-[40px] rounded-full px-4.5 text-[13px]",
-  hero: "h-[44px] rounded-[12px] px-4.5 text-[14px]",
-  icon: "h-[38px] w-[38px] rounded-[10px] px-0",
+  sm: "h-[34px] rounded-[8px] px-3 text-[12px]",
+  md: "h-[38px] rounded-[9px] px-3.5 text-[13px]",
+  lg: "h-[42px] rounded-[10px] px-4 text-[14px]",
+  pill: "h-[38px] rounded-full px-4 text-[13px]",
+  hero: "h-[42px] rounded-[10px] px-4 text-[14px]",
+  icon: "h-[38px] w-[38px] rounded-[9px] px-0",
 };
 
 function variantClass(variant = "primary") {
@@ -42,50 +42,53 @@ function variantClass(variant = "primary") {
     case "brand":
     case "primary":
       return [
-        "border-[rgba(23,43,91,0.18)] text-white",
-        "bg-[linear-gradient(180deg,#355ebc_0%,#264ca5_100%)]",
-        "shadow-[0_10px_22px_-12px_rgba(38,76,165,0.34),inset_0_1px_0_rgba(255,255,255,0.14)]",
-        "hover:-translate-y-[1px] hover:shadow-[0_14px_26px_-12px_rgba(38,76,165,0.42),inset_0_1px_0_rgba(255,255,255,0.16)]",
-        "active:translate-y-0 active:shadow-[0_8px_18px_-12px_rgba(38,76,165,0.3)]",
+        "border-[rgba(31,77,168,0.96)] bg-[rgb(var(--color-brand))] text-white",
+        "shadow-[0_10px_24px_-16px_rgba(31,77,168,0.42)]",
+        "hover:bg-[rgb(var(--color-brand-strong))] hover:border-[rgb(var(--color-brand-strong))]",
+        "active:translate-y-0",
       ].join(" ");
+
     case "surface":
     case "secondary":
       return [
         "border-line bg-white text-text",
-        "shadow-[0_1px_0_rgba(255,255,255,0.9),0_4px_12px_-10px_rgba(15,23,42,0.08)]",
+        "shadow-[0_1px_0_rgba(255,255,255,0.9)]",
         "hover:border-line-strong hover:bg-surface-muted",
       ].join(" ");
+
     case "soft":
       return [
         "border-[rgba(var(--color-brand),0.12)]",
         "bg-[rgba(var(--color-brand),0.06)] text-brand",
-        "hover:border-[rgba(var(--color-brand),0.2)]",
+        "hover:border-[rgba(var(--color-brand),0.18)]",
         "hover:bg-[rgba(var(--color-brand),0.1)]",
       ].join(" ");
+
     case "quiet":
     case "ghost":
       return [
         "border-transparent bg-transparent text-text-muted shadow-none",
-        "hover:bg-surface-muted hover:text-text",
+        "hover:bg-surface-subtle hover:text-text",
       ].join(" ");
+
     case "outline":
       return [
         "border-line bg-transparent text-text shadow-none",
         "hover:border-line-strong hover:bg-white",
       ].join(" ");
+
     case "destructive":
       return [
-        "border-[rgba(var(--color-danger),0.15)] text-white",
-        "bg-[linear-gradient(180deg,rgba(var(--color-danger),1)_0%,rgba(var(--color-danger),0.9)_100%)]",
-        "shadow-[0_10px_22px_-12px_rgba(170,43,52,0.34)]",
-        "hover:-translate-y-[1px] hover:shadow-[0_14px_28px_-12px_rgba(170,43,52,0.42)]",
+        "border-[rgba(var(--color-danger),1)] bg-[rgb(var(--color-danger))] text-white",
+        "shadow-[0_10px_24px_-16px_rgba(185,28,28,0.34)]",
+        "hover:bg-[rgba(var(--color-danger),0.92)] hover:border-[rgba(var(--color-danger),0.92)]",
       ].join(" ");
+
     default:
       return [
-        "border-[rgba(23,43,91,0.18)] text-white",
-        "bg-[linear-gradient(180deg,#355ebc_0%,#264ca5_100%)]",
-        "shadow-[0_10px_22px_-12px_rgba(38,76,165,0.34)]",
-        "hover:-translate-y-[1px] hover:shadow-[0_14px_26px_-12px_rgba(38,76,165,0.42)]",
+        "border-[rgba(31,77,168,0.96)] bg-[rgb(var(--color-brand))] text-white",
+        "shadow-[0_10px_24px_-16px_rgba(31,77,168,0.42)]",
+        "hover:bg-[rgb(var(--color-brand-strong))] hover:border-[rgb(var(--color-brand-strong))]",
       ].join(" ");
   }
 }
@@ -120,6 +123,7 @@ const Button = React.forwardRef(function Button(
         "transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-200 ease-premium",
         "disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none",
         "focus-visible:outline-none",
+        "hover:-translate-y-[1px]",
         fullWidth && "w-full",
         SIZE[size] || SIZE.md,
         variantClass(variant),

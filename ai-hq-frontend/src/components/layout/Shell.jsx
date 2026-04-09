@@ -4,17 +4,12 @@ import { apiGet } from "../../api/client.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
 import useProductHome from "../../view-models/useProductHome.js";
-import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
 import FloatingAiWidget from "../layout/FloatingAiWidget.jsx";
 import Sidebar, {
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_WIDTH,
 } from "./Sidebar.jsx";
 import Header from "./Header.jsx";
-import {
-  getActiveContextItem,
-  getActiveShellSection,
-} from "./shellNavigation.js";
 
 const INITIAL_SHELL_STATS = {
   inboxUnread: null,
@@ -39,11 +34,7 @@ const SIDEBAR_STORAGE_KEY = "aihq.sidebar.collapsed";
 
 function resolveShellMode(pathname = "") {
   const path = String(pathname || "");
-
-  if (path.startsWith("/inbox")) {
-    return "immersive";
-  }
-
+  if (path.startsWith("/inbox")) return "immersive";
   return "standard";
 }
 
@@ -61,7 +52,7 @@ async function fetchShellResource(path) {
       message:
         typeof error?.message === "string" && error.message.trim()
           ? error.message.trim()
-          : "Shared workspace stats are temporarily unavailable.",
+          : "Workspace stats are temporarily unavailable.",
     };
   }
 }
@@ -77,8 +68,7 @@ function buildShellStatsFromResponses(inboxRes, leadsRes) {
       dbDisabled: false,
       availability: "unavailable",
       message:
-        failedResponse.message ||
-        "Shared workspace stats are temporarily unavailable.",
+        failedResponse.message || "Workspace stats are temporarily unavailable.",
     };
   }
 
@@ -111,13 +101,14 @@ function SharedStatsNotice({ message }) {
   if (!message) return null;
 
   return (
-    <InlineNotice
-      tone="warning"
-      title="Shared workspace stats unavailable"
-      description={message}
-      className="mb-5"
-      compact
-    />
+    <div className="mb-4 border-b border-[rgba(185,28,28,0.12)] pb-3">
+      <div className="text-[12px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.92)]">
+        Workspace stats unavailable
+      </div>
+      <div className="mt-1 text-[13px] leading-6 text-[rgba(15,23,42,0.58)]">
+        {message}
+      </div>
+    </div>
   );
 }
 
@@ -141,8 +132,7 @@ export default function Shell() {
 
   const assistantRequested = useMemo(() => {
     const params = new URLSearchParams(location.search || "");
-    const assistant = s(params.get("assistant")).toLowerCase();
-    return assistant === "setup";
+    return s(params.get("assistant")).toLowerCase() === "setup";
   }, [location.search]);
 
   const homeDataEnabled =
@@ -156,12 +146,6 @@ export default function Shell() {
   const statsRequestRef = useRef(null);
   const autoOpenedRef = useRef("");
 
-  const shellSection = getActiveShellSection(location.pathname);
-  const activeContextItem = getActiveContextItem(
-    shellSection,
-    location.pathname
-  );
-
   const shellMode = useMemo(
     () => resolveShellMode(location.pathname),
     [location.pathname]
@@ -173,7 +157,7 @@ export default function Shell() {
       title: "AI setup lives on Home",
       statusLabel: "Home shortcut",
       summary:
-        "Use Home to connect the launch channel, continue the structured setup draft, and inspect truth/runtime posture.",
+        "Use Home to connect the launch channel, continue setup, and inspect truth and runtime posture.",
       primaryAction: {
         label: "Open home assistant",
         path: "/home?assistant=setup",
@@ -188,7 +172,7 @@ export default function Shell() {
           role: "assistant",
           title: "Open Home",
           body:
-            "The setup shell is available on Home, where launch channel, setup draft, and runtime posture are already composed together.",
+            "The setup flow is available on Home, where launch channel, setup draft, and runtime posture are already aligned.",
         },
       ],
       review: {
@@ -320,7 +304,7 @@ export default function Shell() {
   }, []);
 
   const scheduleShellRefresh = useCallback(
-    (delay = 180) => {
+    (delay = 160) => {
       clearTimeout(refreshTimerRef.current);
       refreshTimerRef.current = window.setTimeout(() => {
         loadShellStats();
@@ -445,13 +429,9 @@ export default function Shell() {
 
   return (
     <div
-      className="relative h-screen overflow-hidden bg-canvas text-text"
+      className="relative h-screen overflow-hidden bg-white text-text"
       style={{ "--shell-sidebar-w": `${shellSidebarWidth}px` }}
     >
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-[radial-gradient(980px_circle_at_50%_-18%,rgba(38,76,165,0.07),transparent_40%),radial-gradient(680px_circle_at_92%_10%,rgba(38,76,165,0.035),transparent_38%),linear-gradient(180deg,rgba(250,252,254,0.98),rgba(244,246,250,1))]" />
-      </div>
-
       <Sidebar
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
@@ -460,24 +440,21 @@ export default function Shell() {
         setCollapsed={setSidebarCollapsed}
       />
 
-      <div className="relative flex h-full min-w-0 flex-col transition-[padding-left] duration-[460ms] ease-[cubic-bezier(0.22,1,0.36,1)] md:pl-[var(--shell-sidebar-w)]">
+      <div className="relative flex h-full min-w-0 flex-col transition-[padding-left] duration-200 ease-premium md:pl-[var(--shell-sidebar-w)]">
         <Header
           onMenuClick={() => setMobileOpen(true)}
           notifications={notifications}
-          shellSection={shellSection}
-          activeContextItem={activeContextItem}
         />
 
-        <main className="relative flex-1 min-h-0 overflow-hidden">
+        <main className="relative flex-1 min-h-0 overflow-hidden bg-canvas">
           {shellMode === "immersive" ? (
             <div className="h-full min-h-0 overflow-hidden">
               <Outlet />
             </div>
           ) : (
             <div className="page-scroll h-full min-h-0 overflow-y-auto">
-              <div className="mx-auto flex min-h-full w-full max-w-shell-content flex-col px-4 py-4 md:px-6 md:py-6 xl:px-8 xl:py-7">
+              <div className="mx-auto flex min-h-full w-full max-w-shell-content flex-col px-5 py-6 md:px-7 md:py-6 xl:px-8">
                 <SharedStatsNotice message={shellStats?.message} />
-
                 <div className="flex-1 min-h-0">
                   <Outlet />
                 </div>
