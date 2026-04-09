@@ -16,6 +16,11 @@ function obj(value, fallback = {}) {
     : fallback;
 }
 
+function n(value, fallback = 0) {
+  const next = Number(value);
+  return Number.isFinite(next) ? next : fallback;
+}
+
 function uid(prefix = "id") {
   return `${prefix}-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
 }
@@ -43,7 +48,7 @@ const REQUIRED_STEPS = [
 
 const STEP_META = {
   company: {
-    question: "Great. First, what is the business name?",
+    question: "What is the business name?",
     helper: "Keep it exact.",
     placeholder: "e.g. Neox Company",
     options: [],
@@ -177,6 +182,17 @@ const CLARIFIERS = {
   },
 };
 
+const STEP_LABELS = {
+  company: "business name",
+  description: "business description",
+  website: "main website",
+  services: "services",
+  hours: "opening hours",
+  pricing: "pricing rule",
+  contacts: "public contact routes",
+  handoff: "handoff rules",
+};
+
 function normalizeStep(value = "") {
   const key = s(value).toLowerCase();
   if (key === "profile") return "company";
@@ -243,6 +259,55 @@ function hasAnyProgress(assistantState = {}) {
   return STEP_ORDER.some((step) => stepAnswered(step, assistantState));
 }
 
+function buildProgressSnapshot(assistantState = {}) {
+  const draft = obj(assistantState?.draft);
+  const progress = obj(draft.progress);
+  const review = obj(assistantState?.review);
+
+  const answeredCount = STEP_ORDER.filter((step) =>
+    stepAnswered(step, assistantState)
+  ).length;
+  const missingRequiredCount = REQUIRED_STEPS.filter(
+    (step) => !stepAnswered(step, assistantState)
+  ).length;
+
+  const explicitReadySections = n(
+    progress.readySections,
+    n(review.readySections, -1)
+  );
+  const explicitBlockerCount = n(
+    progress.blockerCount,
+    n(review.blockerCount, -1)
+  );
+
+  return {
+    answeredCount,
+    missingRequiredCount,
+    readySections:
+      explicitReadySections >= 0 ? explicitReadySections : answeredCount,
+    blockerCount:
+      explicitBlockerCount >= 0 ? explicitBlockerCount : missingRequiredCount,
+  };
+}
+
+function buildProgressHelper(assistantState = {}) {
+  const snapshot = buildProgressSnapshot(assistantState);
+
+  if (!hasAnyProgress(assistantState)) {
+    return "";
+  }
+
+  if (snapshot.blockerCount <= 0) {
+    return snapshot.readySections > 0
+      ? `${snapshot.readySections} sections already look captured. You can review the last details when ready.`
+      : "An existing draft is available.";
+  }
+
+  return `${snapshot.readySections} sections already look captured. ${snapshot.blockerCount} blocker${
+    snapshot.blockerCount > 1 ? "s remain" : " remains"
+  }.`;
+}
+
 function getNaturalStep(assistantState = {}) {
   const completion = obj(assistantState?.assistant?.completion);
   if (completion.ready === true) return "finalize";
@@ -263,11 +328,19 @@ function getNaturalStep(assistantState = {}) {
 
 function buildWelcomeMessage(assistantState = {}) {
   if (hasAnyProgress(assistantState)) {
+    const snapshot = buildProgressSnapshot(assistantState);
+    const helper =
+      buildProgressHelper(assistantState) ||
+      `${snapshot.readySections} sections already look captured.`;
+
     return {
       id: uid("assistant"),
       role: "assistant",
-      text: "Ready to continue setting up your business?",
-      helper: "",
+      text:
+        snapshot.blockerCount > 0
+          ? "I found your current setup draft. Ready to continue?"
+          : "I found your current setup draft. Ready to review the final details?",
+      helper,
       options: [
         { id: "continue", label: "Continue setup", kind: "start" },
         { id: "later", label: "Maybe later", kind: "later" },
@@ -300,14 +373,73 @@ function buildPauseMessage() {
   };
 }
 
-function buildQuestionMessage(step = "") {
+function buildResumeQuestionMeta(step = "", assistantState = {}) {
+  const progressHelper = buildProgressHelper(assistantState);
+  const baseHelper = s(STEP_META[step]?.helper);
+  const mergedHelper = [progressHelper, baseHelper].filter(Boolean).join(" ");
+
+  switch (step) {
+    case "company":
+      return {
+        question: "Let’s continue with the business name.",
+        helper: mergedHelper || "Keep it exact.",
+      };
+    case "description":
+      return {
+        question: "Let’s continue with the business description.",
+        helper: mergedHelper || "One clean sentence is enough.",
+      };
+    case "website":
+      return {
+        question: "Let’s continue with the main website.",
+        helper: mergedHelper || "This becomes a truth anchor later.",
+      };
+    case "services":
+      return {
+        question: "Let’s continue with the real services AI should mention.",
+        helper: mergedHelper || "List only the real ones.",
+      };
+    case "hours":
+      return {
+        question: "Let’s continue with the opening hours.",
+        helper: mergedHelper || "Use a clear weekly format.",
+      };
+    case "pricing":
+      return {
+        question: "Let’s continue with the safe pricing rule.",
+        helper: mergedHelper || "Public summary or quote rule.",
+      };
+    case "contacts":
+      return {
+        question: "Let’s continue with the public contact routes.",
+        helper: mergedHelper || "Add the real public contact routes.",
+      };
+    case "handoff":
+      return {
+        question: "Let’s continue with the handoff rules.",
+        helper: mergedHelper || "Optional but useful.",
+      };
+    default:
+      return {
+        question: `Let’s continue with ${STEP_LABELS[step] || "the next detail"}.`,
+        helper: mergedHelper,
+      };
+  }
+}
+
+function buildQuestionMessage(step = "", assistantState = {}) {
   const meta = STEP_META[step] || STEP_META.company;
+  const resumeAware =
+    hasAnyProgress(assistantState) && stepAnswered(step, assistantState) === false;
+  const questionMeta = resumeAware
+    ? buildResumeQuestionMeta(step, assistantState)
+    : meta;
 
   return {
     id: uid("assistant"),
     role: "assistant",
-    text: meta.question,
-    helper: meta.helper,
+    text: questionMeta.question,
+    helper: questionMeta.helper,
     options: arr(meta.options),
     step,
     kind: "question",
@@ -329,12 +461,13 @@ function buildClarifierMessage(step = "") {
 
 function buildFinalizeMessage(assistantState = {}) {
   const completion = obj(assistantState?.assistant?.completion);
+  const progressHelper = buildProgressHelper(assistantState);
 
   return {
     id: uid("assistant"),
     role: "assistant",
     text: s(completion.message, "Setup looks complete. Finish now?"),
-    helper: "",
+    helper: progressHelper,
     options: [{ id: "finish", label: "Finish setup", kind: "finish" }],
     kind: "finalize",
   };
@@ -439,7 +572,8 @@ function SetupAssistantSession({
   const canFinalize = currentStep === "finalize";
   const normalizedReviewRoot = obj(obj(reviewPayload).review, reviewPayload);
   const hasWebsiteReview =
-    Object.keys(obj(obj(obj(normalizedReviewRoot).reviewDebug).websiteKnowledge)).length > 0;
+    Object.keys(obj(obj(obj(normalizedReviewRoot).reviewDebug).websiteKnowledge))
+      .length > 0;
   const websiteUrl = s(
     assistant?.websitePrefill?.websiteUrl ||
       assistant?.draft?.businessProfile?.websiteUrl
@@ -521,7 +655,7 @@ function SetupAssistantSession({
     )}:${currentStep}`;
 
     queueAssistantMessage(
-      buildQuestionMessage(currentStep),
+      buildQuestionMessage(currentStep, assistant),
       `question:${versionKey}`,
       360
     );
@@ -531,6 +665,7 @@ function SetupAssistantSession({
     busy,
     canFinalize,
     currentStep,
+    assistant,
     assistant?.session?.id,
     assistant?.draft?.version,
     queueAssistantMessage,

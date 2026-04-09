@@ -1882,12 +1882,12 @@ export default function FloatingAiWidget({
           </section>
         ) : null}
 
-        {!pageMode ? (
+        {!pageMode && !panelOpen ? (
           <button
             type="button"
-            onClick={() => onOpenChange?.(!panelOpen)}
+            onClick={() => onOpenChange?.(true)}
             aria-label="Open AI assistant"
-            aria-expanded={panelOpen}
+            aria-expanded={false}
             className="ai-widget-launcher"
           >
             <span className="ai-widget-launcher-core" />
