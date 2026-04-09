@@ -81,6 +81,7 @@ function buildDefaultAssistant() {
       websiteUrl: "",
     },
     session: {},
+    setupSummary: {},
     draft: {
       businessProfile: {},
       services: [],
@@ -140,6 +141,7 @@ function normalizeAssistantState(input = null) {
     review: obj(source.review),
     websitePrefill: obj(source.websitePrefill),
     session: obj(source.session),
+    setupSummary: obj(source.setupSummary),
     launchPosture: s(source.launchPosture),
     setupNeeded: source.setupNeeded === true,
     launchChannel: obj(source.launchChannel),
@@ -174,6 +176,7 @@ function buildAssistantFromApi(base = {}, response = {}) {
     session: obj(response.session),
     review: obj(response.setup?.review),
     websitePrefill: obj(response.setup?.websitePrefill),
+    setupSummary: obj(response.setup?.summary),
     draft: obj(response.setup?.draft),
     assistant: obj(response.setup?.assistant),
   });
@@ -1512,7 +1515,7 @@ export default function FloatingAiWidget({
     setSupportBusy(false);
   }, [workspace.tenantKey]);
 
-    const supportWelcomeMessages = useMemo(
+  const supportWelcomeMessages = useMemo(
     () => buildSupportWelcomeFromAssistant(clientAssistant),
     [clientAssistant]
   );
@@ -1856,18 +1859,18 @@ export default function FloatingAiWidget({
 
             <div className="ai-widget-body">
               {surfaceMode === "setup" ? (
-                  <SetupAssistantSections
-                    assistant={clientAssistant}
-                    reviewPayload={reviewQuery.data}
-                    saving={saving}
-                    finalizing={finalizing}
-                    importingWebsite={importingWebsite}
-                    importError={importError}
-                    onImportWebsite={handleImportWebsite}
-                    onPatchDraft={handleSetupPatchDraft}
-                    onParseMessage={handleSetupParseMessage}
-                    onFinalize={handleSetupFinalize}
-                  />
+                <SetupAssistantSections
+                  assistant={clientAssistant}
+                  reviewPayload={reviewQuery.data}
+                  saving={saving}
+                  finalizing={finalizing}
+                  importingWebsite={importingWebsite}
+                  importError={importError}
+                  onImportWebsite={handleImportWebsite}
+                  onPatchDraft={handleSetupPatchDraft}
+                  onParseMessage={handleSetupParseMessage}
+                  onFinalize={handleSetupFinalize}
+                />
               ) : (
                 <SupportThread
                   messages={supportMessages}

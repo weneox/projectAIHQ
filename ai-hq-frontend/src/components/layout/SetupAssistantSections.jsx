@@ -207,6 +207,7 @@ function buildAssistantLike(response = {}) {
     assistant: obj(response.setup?.assistant),
     websitePrefill: obj(response.setup?.websitePrefill),
     review: obj(response.setup?.review),
+    setupSummary: obj(response.setup?.summary),
   };
 }
 
@@ -259,10 +260,18 @@ function hasAnyProgress(assistantState = {}) {
   return STEP_ORDER.some((step) => stepAnswered(step, assistantState));
 }
 
-function buildProgressSnapshot(assistantState = {}) {
+function countReadySectionsFromStatus(sectionStatus = {}) {
+  return Object.values(obj(sectionStatus)).filter(
+    (item) => s(item?.status).toLowerCase() === "ready"
+  ).length;
+}
+
+function buildProgressSnapshot(assistantState = {}, reviewPayload = null) {
   const draft = obj(assistantState?.draft);
-  const progress = obj(draft.progress);
-  const review = obj(assistantState?.review);
+  const draftProgress = obj(draft.progress);
+  const setupSummary = obj(assistantState?.setupSummary);
+  const reviewRoot = obj(obj(reviewPayload).review, reviewPayload);
+  const reviewObj = obj(assistantState?.review);
 
   const answeredCount = STEP_ORDER.filter((step) =>
     stepAnswered(step, assistantState)
@@ -271,27 +280,44 @@ function buildProgressSnapshot(assistantState = {}) {
     (step) => !stepAnswered(step, assistantState)
   ).length;
 
+  const sectionStatus = obj(setupSummary.sectionStatus);
+  const hasSectionStatus = Object.keys(sectionStatus).length > 0;
+  const derivedReadyFromSummary = hasSectionStatus
+    ? countReadySectionsFromStatus(sectionStatus)
+    : -1;
+
   const explicitReadySections = n(
-    progress.readySections,
-    n(review.readySections, -1)
+    draftProgress.readySections,
+    n(
+      setupSummary.readySections,
+      n(reviewObj.readySections, n(reviewRoot.readySections, -1))
+    )
   );
+
   const explicitBlockerCount = n(
-    progress.blockerCount,
-    n(review.blockerCount, -1)
+    draftProgress.blockerCount,
+    n(
+      setupSummary.blockerCount,
+      n(reviewObj.blockerCount, n(reviewRoot.blockerCount, -1))
+    )
   );
 
   return {
     answeredCount,
     missingRequiredCount,
     readySections:
-      explicitReadySections >= 0 ? explicitReadySections : answeredCount,
+      explicitReadySections >= 0
+        ? explicitReadySections
+        : derivedReadyFromSummary >= 0
+          ? derivedReadyFromSummary
+          : answeredCount,
     blockerCount:
       explicitBlockerCount >= 0 ? explicitBlockerCount : missingRequiredCount,
   };
 }
 
-function buildProgressHelper(assistantState = {}) {
-  const snapshot = buildProgressSnapshot(assistantState);
+function buildProgressHelper(assistantState = {}, reviewPayload = null) {
+  const snapshot = buildProgressSnapshot(assistantState, reviewPayload);
 
   if (!hasAnyProgress(assistantState)) {
     return "";
@@ -326,11 +352,11 @@ function getNaturalStep(assistantState = {}) {
   return "finalize";
 }
 
-function buildWelcomeMessage(assistantState = {}) {
+function buildWelcomeMessage(assistantState = {}, reviewPayload = null) {
   if (hasAnyProgress(assistantState)) {
-    const snapshot = buildProgressSnapshot(assistantState);
+    const snapshot = buildProgressSnapshot(assistantState, reviewPayload);
     const helper =
-      buildProgressHelper(assistantState) ||
+      buildProgressHelper(assistantState, reviewPayload) ||
       `${snapshot.readySections} sections already look captured.`;
 
     return {
@@ -373,8 +399,12 @@ function buildPauseMessage() {
   };
 }
 
-function buildResumeQuestionMeta(step = "", assistantState = {}) {
-  const progressHelper = buildProgressHelper(assistantState);
+function buildResumeQuestionMeta(
+  step = "",
+  assistantState = {},
+  reviewPayload = null
+) {
+  const progressHelper = buildProgressHelper(assistantState, reviewPayload);
   const baseHelper = s(STEP_META[step]?.helper);
   const mergedHelper = [progressHelper, baseHelper].filter(Boolean).join(" ");
 
@@ -427,12 +457,16 @@ function buildResumeQuestionMeta(step = "", assistantState = {}) {
   }
 }
 
-function buildQuestionMessage(step = "", assistantState = {}) {
+function buildQuestionMessage(
+  step = "",
+  assistantState = {},
+  reviewPayload = null
+) {
   const meta = STEP_META[step] || STEP_META.company;
   const resumeAware =
     hasAnyProgress(assistantState) && stepAnswered(step, assistantState) === false;
   const questionMeta = resumeAware
-    ? buildResumeQuestionMeta(step, assistantState)
+    ? buildResumeQuestionMeta(step, assistantState, reviewPayload)
     : meta;
 
   return {
@@ -459,9 +493,9 @@ function buildClarifierMessage(step = "") {
   };
 }
 
-function buildFinalizeMessage(assistantState = {}) {
+function buildFinalizeMessage(assistantState = {}, reviewPayload = null) {
   const completion = obj(assistantState?.assistant?.completion);
-  const progressHelper = buildProgressHelper(assistantState);
+  const progressHelper = buildProgressHelper(assistantState, reviewPayload);
 
   return {
     id: uid("assistant"),
@@ -640,11 +674,11 @@ function SetupAssistantSession({
     introShownRef.current = true;
 
     queueAssistantMessage(
-      buildWelcomeMessage(assistant),
+      buildWelcomeMessage(assistant, reviewPayload),
       `welcome:${hasAnyProgress(assistant) ? "continue" : "start"}`,
       520
     );
-  }, [assistant, queueAssistantMessage]);
+  }, [assistant, reviewPayload, queueAssistantMessage]);
 
   useEffect(() => {
     if (!started || paused || busy || canFinalize) return;
@@ -655,7 +689,7 @@ function SetupAssistantSession({
     )}:${currentStep}`;
 
     queueAssistantMessage(
-      buildQuestionMessage(currentStep, assistant),
+      buildQuestionMessage(currentStep, assistant, reviewPayload),
       `question:${versionKey}`,
       360
     );
@@ -666,6 +700,7 @@ function SetupAssistantSession({
     canFinalize,
     currentStep,
     assistant,
+    reviewPayload,
     assistant?.session?.id,
     assistant?.draft?.version,
     queueAssistantMessage,
@@ -678,13 +713,18 @@ function SetupAssistantSession({
       assistant?.draft?.version || 0
     )}`;
 
-    queueAssistantMessage(buildFinalizeMessage(assistant), signature, 360);
+    queueAssistantMessage(
+      buildFinalizeMessage(assistant, reviewPayload),
+      signature,
+      360
+    );
   }, [
     started,
     paused,
     busy,
     canFinalize,
     assistant,
+    reviewPayload,
     assistant?.session?.id,
     assistant?.draft?.version,
     queueAssistantMessage,
