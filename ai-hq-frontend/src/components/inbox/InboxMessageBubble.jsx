@@ -19,10 +19,10 @@ function InlineOutboundTruth({ truth }) {
   const maxAttempts = Number(attempt?.max_attempts || 0);
 
   return (
-    <div className="mt-2 max-w-[88%] rounded-[18px] border border-slate-200/80 bg-[#fafbfc] px-3 py-2.5 text-xs shadow-[0_8px_22px_rgba(15,23,42,0.04)]">
+    <div className="mt-2 max-w-[88%] rounded-soft border border-line bg-surface px-3 py-2 text-[12px]">
       <div className="flex flex-wrap items-center gap-2">
         <span
-          className={`inline-flex items-center rounded-full border px-2 py-0.5 font-medium ${getAttemptStatusTone(
+          className={`inline-flex items-center rounded-pill border px-2 py-0.5 font-medium ${getAttemptStatusTone(
             truth?.status
           )}`}
         >
@@ -30,17 +30,17 @@ function InlineOutboundTruth({ truth }) {
         </span>
 
         {attempt ? (
-          <span className="text-slate-500">
+          <span className="text-text-subtle">
             attempt {attemptCount || 0}
             {maxAttempts > 0 ? ` of ${maxAttempts}` : ""}
           </span>
         ) : null}
       </div>
 
-      <div className="mt-2 leading-5 text-slate-600">{truth?.detail}</div>
+      <div className="mt-2 leading-5 text-text-muted">{truth?.detail}</div>
 
       {attempt ? (
-        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-text-subtle">
           <span>Provider: {s(attempt?.provider) || "--"}</span>
           {s(attempt?.last_error) ? <span>Error: {s(attempt?.last_error)}</span> : null}
         </div>
@@ -66,6 +66,12 @@ export default function InboxMessageBubble({ m, attemptsByCorrelation }) {
   const outboundTruth = getMessageOutboundTruth(m, attemptsByCorrelation);
   const who = labelForMessage(m, inbound);
 
+  const bubbleClass = inbound
+    ? "border-line bg-surface text-text"
+    : m.sender_type === "agent"
+    ? "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-text"
+    : "border-line bg-surface-subtle text-text";
+
   return (
     <div className={`flex flex-col ${inbound ? "items-start" : "items-end"}`}>
       <div
@@ -73,22 +79,18 @@ export default function InboxMessageBubble({ m, attemptsByCorrelation }) {
           inbound ? "justify-start" : "justify-end"
         }`}
       >
-        <span className="font-medium capitalize text-slate-700">{who}</span>
-        <span className="text-slate-300">•</span>
-        <span className="text-slate-500">{fmtRelative(m.sent_at || m.created_at)}</span>
+        <span className="font-medium capitalize text-text-muted">{who}</span>
+        <span className="text-text-subtle">|</span>
+        <span className="text-text-subtle">{fmtRelative(m.sent_at || m.created_at)}</span>
       </div>
 
       <div
         className={[
-          "max-w-[88%] rounded-[22px] border px-4 py-3 text-[15px] leading-7 shadow-[0_10px_24px_rgba(15,23,42,0.04)]",
-          inbound
-            ? "border-slate-200/80 bg-white text-slate-800"
-            : m.sender_type === "agent"
-              ? "border-sky-200/80 bg-sky-50/80 text-sky-950"
-              : "border-violet-200/80 bg-violet-50/80 text-violet-950",
+          "max-w-[88%] rounded-panel border px-4 py-3 text-[14px] leading-6",
+          bubbleClass,
         ].join(" ")}
       >
-        {m.text || <span className="text-slate-400">(empty message)</span>}
+        {m.text || <span className="text-text-subtle">(empty message)</span>}
       </div>
 
       {outboundTruth ? <InlineOutboundTruth truth={outboundTruth} /> : null}
@@ -98,7 +100,7 @@ export default function InboxMessageBubble({ m, attemptsByCorrelation }) {
           <button
             type="button"
             onClick={() => setInspectOpen((current) => !current)}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-[#f8f9fb] px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] text-slate-600 transition hover:border-slate-300 hover:bg-white hover:text-slate-900"
+            className="inline-flex items-center gap-2 rounded-soft border border-line bg-surface px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:bg-surface-subtle hover:text-text"
           >
             {inspectOpen ? (
               <ChevronUp className="h-3.5 w-3.5" />

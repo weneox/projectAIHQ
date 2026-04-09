@@ -117,17 +117,17 @@ function obj(value) {
 
 function Tag({ children, tone = "default" }) {
   const tones = {
-    default: "border-slate-200 bg-slate-100 text-slate-600",
-    soft: "border-slate-200 bg-white text-slate-700",
-    green: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    blue: "border-sky-200 bg-sky-50 text-sky-700",
-    amber: "border-amber-200 bg-amber-50 text-amber-700",
+    default: "border-line bg-surface-subtle text-text-muted",
+    muted: "border-line bg-surface text-text-muted",
+    success: "border-[rgba(var(--color-success),0.18)] bg-success-soft text-success",
+    brand: "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand",
+    warning: "border-[rgba(var(--color-warning),0.2)] bg-warning-soft text-warning",
   };
 
   return (
     <span
       className={[
-        "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium",
+        "inline-flex items-center rounded-pill border px-2.5 py-1 text-[11px] font-medium",
         tones[tone] || tones.default,
       ].join(" ")}
     >
@@ -138,12 +138,14 @@ function Tag({ children, tone = "default" }) {
 
 function InfoRow({ label, value, valueTone = "default" }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-3">
-      <div className="text-[13px] font-medium text-slate-500">{label}</div>
+    <div className="grid grid-cols-[90px_minmax(0,1fr)] gap-4 py-3">
+      <div className="text-[11px] uppercase tracking-[0.08em] text-text-subtle">
+        {label}
+      </div>
       <div
         className={[
-          "min-w-0 truncate text-right text-[13px]",
-          valueTone === "strong" ? "font-medium text-slate-900" : "text-slate-700",
+          "min-w-0 text-right text-[13px]",
+          valueTone === "strong" ? "font-medium text-text" : "text-text-muted",
         ].join(" ")}
       >
         {value || "--"}
@@ -154,17 +156,17 @@ function InfoRow({ label, value, valueTone = "default" }) {
 
 function Section({ icon: Icon, title, children, action = null }) {
   return (
-    <section className="border-t border-slate-200/70 px-5 py-5">
+    <section className="border-t border-line-soft px-4 py-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[14px] font-medium text-slate-900">
-          {Icon ? <Icon className="h-4 w-4 text-slate-400" /> : null}
+        <div className="flex items-center gap-2 text-[14px] font-medium text-text">
+          {Icon ? <Icon className="h-4 w-4 text-text-subtle" /> : null}
           <span>{title}</span>
         </div>
 
         {action}
       </div>
 
-      <div className="mt-4">{children}</div>
+      <div className="mt-3">{children}</div>
     </section>
   );
 }
@@ -179,7 +181,7 @@ function AvatarStack({ people = [] }) {
           key={`${name}-${index}`}
           title={name}
           className={[
-            "-ml-2 first:ml-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white text-xs font-semibold shadow-[0_4px_14px_rgba(15,23,42,0.08)]",
+            "-ml-2 first:ml-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-xs font-semibold",
             avatarTone(name),
           ].join(" ")}
         >
@@ -201,20 +203,20 @@ function IdentityCard({ selectedThread, relatedLead, owner, wsState }) {
   const statusLabel = prettyStatus(selectedThread, relatedLead);
 
   return (
-    <div className="px-5 py-5">
-      <div className="border-t border-slate-200/70 px-1 py-5">
+    <div className="px-4 py-4">
+      <div className="rounded-panel border border-line bg-surface p-4">
         <div className="flex flex-col items-center text-center">
           {avatarUrl ? (
             <img
               src={avatarUrl}
               alt={name}
-              className="h-20 w-20 rounded-full object-cover"
+              className="h-16 w-16 rounded-full object-cover"
               loading="lazy"
             />
           ) : (
             <div
               className={[
-                "flex h-20 w-20 items-center justify-center rounded-full text-[24px] font-semibold",
+                "flex h-16 w-16 items-center justify-center rounded-full text-[20px] font-semibold",
                 avatarTone(name),
               ].join(" ")}
             >
@@ -222,26 +224,26 @@ function IdentityCard({ selectedThread, relatedLead, owner, wsState }) {
             </div>
           )}
 
-          <div className="mt-4 text-[20px] font-semibold tracking-[-0.03em] text-slate-950">
-            {name}
-          </div>
+          <div className="mt-3 text-[16px] font-semibold text-text">{name}</div>
 
           {handle ? (
-            <div className="mt-1 text-[14px] text-slate-500">@{handle.replace(/^@/, "")}</div>
+            <div className="mt-1 text-[13px] text-text-muted">
+              @{handle.replace(/^@/, "")}
+            </div>
           ) : null}
 
-          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-            <Tag tone="soft">{sourceLabel || "conversation"}</Tag>
-            <Tag tone="blue">{stage || "context"}</Tag>
-            <Tag tone={selectedThread?.handoff_active ? "amber" : "green"}>
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            <Tag tone="muted">{sourceLabel || "conversation"}</Tag>
+            <Tag tone="brand">{stage || "context"}</Tag>
+            <Tag tone={selectedThread?.handoff_active ? "warning" : "success"}>
               {statusLabel}
             </Tag>
           </div>
         </div>
 
-        <div className="mt-5 border-t border-slate-200/70 pt-2">
+        <div className="mt-4 border-t border-line-soft pt-2">
           <InfoRow label="Owner" value={owner} valueTone="strong" />
-          <div className="border-t border-slate-200/70" />
+          <div className="border-t border-line-soft" />
           <InfoRow
             label="Realtime"
             value={wsState ? `Realtime ${wsState}` : "Connected"}
@@ -287,14 +289,14 @@ export default function InboxLeadPanel({
     surface?.error;
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-[#fbfbfc]">
-      <div className="border-b border-slate-200/70 bg-[#fbfbfc] px-5 py-5">
+    <section className="flex h-full min-h-0 flex-col bg-surface">
+      <div className="border-b border-line-soft bg-surface px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-[15px] font-semibold tracking-[-0.02em] text-slate-950">
+            <h2 className="text-[15px] font-semibold text-text">
               Conversation details
             </h2>
-            <div className="mt-0.5 text-[12px] text-slate-500">
+            <div className="mt-0.5 text-[12px] text-text-muted">
               Profile, routing, and recent context
             </div>
           </div>
@@ -303,16 +305,16 @@ export default function InboxLeadPanel({
             type="button"
             onClick={onClose}
             aria-label="Close details"
-            className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 transition hover:bg-white hover:text-slate-900"
+            className="flex h-9 w-9 items-center justify-center rounded-soft border border-line bg-surface text-text-muted transition-colors hover:bg-surface-subtle hover:text-text"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-surface-muted [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {!hasThread ? (
-          <div className="px-5 py-8 text-sm text-slate-500">
+          <div className="px-4 py-6 text-[13px] text-text-muted">
             Select a conversation to load details.
           </div>
         ) : surface?.loading && !hasLead ? (
@@ -327,7 +329,7 @@ export default function InboxLeadPanel({
             />
 
             {showSurfaceBanner ? (
-              <div className="px-5 pb-2">
+              <div className="px-4 pb-2">
                 <SurfaceBanner
                   surface={surface}
                   unavailableMessage="Related context is temporarily unavailable."
@@ -337,30 +339,26 @@ export default function InboxLeadPanel({
             ) : null}
 
             <Section icon={Radio} title="Routing">
-              <div className="border-t border-slate-200/70 px-0 py-2">
+              <div className="rounded-panel border border-line bg-surface px-4">
                 <InfoRow label="Source" value={sourceLabel || "--"} />
-                <div className="border-t border-slate-200/70" />
+                <div className="border-t border-line-soft" />
                 <InfoRow
                   label="Status"
                   value={prettyStatus(selectedThread, relatedLead)}
                   valueTone="strong"
                 />
-                <div className="border-t border-slate-200/70" />
-                <InfoRow
-                  label="Assigned to"
-                  value={owner}
-                  valueTone="strong"
-                />
+                <div className="border-t border-line-soft" />
+                <InfoRow label="Assigned" value={owner} valueTone="strong" />
               </div>
             </Section>
 
             {websiteContext.visible ? (
               <Section icon={Globe2} title="Website context">
-                <div className="border-t border-slate-200/70 px-0 py-2">
-                  <InfoRow label="Page title" value={websiteContext.title || "--"} />
-                  <div className="border-t border-slate-200/70" />
-                  <InfoRow label="Page URL" value={websiteContext.url || "--"} />
-                  <div className="border-t border-slate-200/70" />
+                <div className="rounded-panel border border-line bg-surface px-4">
+                  <InfoRow label="Page" value={websiteContext.title || "--"} />
+                  <div className="border-t border-line-soft" />
+                  <InfoRow label="URL" value={websiteContext.url || "--"} />
+                  <div className="border-t border-line-soft" />
                   <InfoRow label="Referrer" value={websiteContext.referrer || "--"} />
                 </div>
               </Section>
@@ -370,22 +368,18 @@ export default function InboxLeadPanel({
               icon={UserRound}
               title="People"
               action={
-                people.length ? (
-                  <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600">
-                    {people.length}
-                  </span>
-                ) : null
+                people.length ? <Tag tone="muted">{people.length}</Tag> : null
               }
             >
-              <div className="border-t border-slate-200/70 px-0 py-4">
+              <div className="rounded-panel border border-line bg-surface px-4 py-4">
                 <div className="flex items-center justify-between gap-4">
                   <AvatarStack people={people} />
 
                   <div className="min-w-0 text-right">
-                    <div className="truncate text-[13px] font-medium text-slate-800">
+                    <div className="truncate text-[13px] font-medium text-text">
                       {resolveDisplayName(selectedThread, relatedLead)}
                     </div>
-                    <div className="mt-1 truncate text-[12px] text-slate-500">
+                    <div className="mt-1 truncate text-[12px] text-text-muted">
                       {resolveHandle(selectedThread, relatedLead)
                         ? `@${resolveHandle(selectedThread, relatedLead).replace(/^@/, "")}`
                         : "--"}
@@ -403,26 +397,26 @@ export default function InboxLeadPanel({
                   <button
                     type="button"
                     onClick={() => openLeadDetail?.(relatedLead)}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-950"
+                    className="inline-flex items-center gap-2 rounded-soft border border-line bg-surface px-3 py-1.5 text-[12px] text-text-muted transition-colors hover:bg-surface-subtle hover:text-text"
                   >
                     Open
                   </button>
                 }
               >
-                <div className="border-t border-slate-200/70 px-0 py-4">
-                  <div className="text-[15px] font-medium text-slate-900">
+                <div className="rounded-panel border border-line bg-surface px-4 py-4">
+                  <div className="text-[15px] font-medium text-text">
                     {leadName(relatedLead) || "Lead"}
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-2">
                     {prettyStage(relatedLead) ? (
-                      <Tag tone="blue">{prettyStage(relatedLead)}</Tag>
+                      <Tag tone="brand">{prettyStage(relatedLead)}</Tag>
                     ) : null}
                     {s(relatedLead?.status) ? (
-                      <Tag tone="green">{s(relatedLead.status)}</Tag>
+                      <Tag tone="success">{s(relatedLead.status)}</Tag>
                     ) : null}
                     {leadHandle(relatedLead) ? (
-                      <Tag tone="soft">{leadHandle(relatedLead)}</Tag>
+                      <Tag tone="muted">{leadHandle(relatedLead)}</Tag>
                     ) : null}
                   </div>
                 </div>
@@ -430,8 +424,8 @@ export default function InboxLeadPanel({
             ) : null}
 
             <Section icon={MessageSquareText} title="Latest message">
-              <div className="border-t border-slate-200/70 px-0 py-4">
-                <div className="text-[14px] leading-6 text-slate-700">{preview}</div>
+              <div className="rounded-panel border border-line bg-surface px-4 py-4">
+                <div className="text-[13px] leading-6 text-text-muted">{preview}</div>
               </div>
             </Section>
           </>

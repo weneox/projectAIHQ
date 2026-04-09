@@ -156,15 +156,15 @@ function DrawerStatus({ status }) {
 
   const toneClass =
     meta?.tone === "success" || meta?.tone === "info"
-      ? "text-[#264ca5]"
+      ? "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand"
       : meta?.tone === "warning"
-      ? "text-[#9a591e]"
-      : "text-[#667085]";
+      ? "border-[rgba(var(--color-warning),0.2)] bg-warning-soft text-warning"
+      : "border-line bg-surface-subtle text-text-muted";
 
   return (
     <div
       className={cx(
-        "inline-flex items-center gap-2 text-[13px] font-semibold",
+        "inline-flex items-center gap-2 rounded-pill border px-2.5 py-1 text-[12px] font-medium",
         toneClass
       )}
     >
@@ -178,24 +178,24 @@ function SectionBlock({ eyebrow, title, description, children, last = false }) {
   return (
     <section
       className={cx(
-        !last && "border-b border-[#e8edf3] pb-7",
+        !last && "border-b border-line-soft pb-6",
         last && "pb-0"
       )}
     >
       {eyebrow ? (
-        <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#667085]">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
           {eyebrow}
         </div>
       ) : null}
 
       {title ? (
-        <div className="mt-3 text-[18px] font-semibold tracking-[-0.04em] text-[#101828]">
+        <div className="mt-2 text-[18px] font-semibold text-text">
           {title}
         </div>
       ) : null}
 
       {description ? (
-        <p className="mt-3 max-w-[640px] text-[14px] leading-8 text-[#5f6c80]">
+        <p className="mt-2 max-w-[640px] text-[13px] leading-6 text-text-muted">
           {description}
         </p>
       ) : null}
@@ -209,12 +209,12 @@ function FeedbackBanner({ tone = "success", children }) {
   return (
     <div
       className={cx(
-        "rounded-[10px] border px-4 py-3 text-[13px] leading-6",
+        "rounded-panel border px-4 py-3 text-[13px] leading-6",
         tone === "danger"
-          ? "border-[rgba(var(--color-danger),0.18)] bg-[rgba(var(--color-danger),0.05)] text-danger"
+          ? "border-[rgba(var(--color-danger),0.18)] bg-danger-soft text-danger"
           : tone === "warning"
-          ? "border-[rgba(var(--color-warning),0.18)] bg-[rgba(var(--color-warning),0.05)] text-warning"
-          : "border-[rgba(var(--color-success),0.18)] bg-[rgba(var(--color-success),0.05)] text-success"
+          ? "border-[rgba(var(--color-warning),0.18)] bg-warning-soft text-warning"
+          : "border-[rgba(var(--color-success),0.18)] bg-success-soft text-success"
       )}
     >
       {children}
@@ -224,7 +224,7 @@ function FeedbackBanner({ tone = "success", children }) {
 
 function CapabilityPill({ children }) {
   return (
-    <span className="inline-flex items-center rounded-[8px] border border-[#e4eaf1] bg-[#fafbfd] px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-[#667085]">
+    <span className="inline-flex items-center rounded-pill border border-line bg-surface-subtle px-2.5 py-1 text-[11px] font-medium text-text-muted">
       {children}
     </span>
   );
@@ -232,7 +232,7 @@ function CapabilityPill({ children }) {
 
 function RuntimeRow({ ready, label, description }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 border-b border-[#eef2f6] py-4 last:border-b-0">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 border-b border-line-soft py-4 last:border-b-0">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           {ready ? (
@@ -241,13 +241,13 @@ function RuntimeRow({ ready, label, description }) {
             <ShieldAlert className="h-4 w-4 shrink-0 text-warning" />
           )}
 
-          <div className="truncate text-[15px] font-semibold tracking-[-0.02em] text-[#101828]">
+          <div className="truncate text-[14px] font-medium text-text">
             {label}
           </div>
         </div>
 
         {description ? (
-          <div className="mt-1 pl-6 text-[13px] leading-6 text-[#667085]">
+          <div className="mt-1 pl-6 text-[13px] leading-6 text-text-muted">
             {description}
           </div>
         ) : null}
@@ -255,10 +255,10 @@ function RuntimeRow({ ready, label, description }) {
 
       <div
         className={cx(
-          "rounded-[8px] border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em]",
+          "rounded-pill border px-2.5 py-1 text-[11px] font-medium",
           ready
-            ? "border-[rgba(var(--color-success),0.18)] bg-[rgba(var(--color-success),0.05)] text-success"
-            : "border-[rgba(var(--color-warning),0.18)] bg-[rgba(var(--color-warning),0.05)] text-warning"
+            ? "border-[rgba(var(--color-success),0.18)] bg-success-soft text-success"
+            : "border-[rgba(var(--color-warning),0.18)] bg-warning-soft text-warning"
         )}
       >
         {ready ? "Ready" : "Blocked"}
@@ -269,12 +269,12 @@ function RuntimeRow({ ready, label, description }) {
 
 function DataRow({ label, value }) {
   return (
-    <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-4 border-b border-[#eef2f6] py-3 last:border-b-0">
-      <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#667085]">
+    <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-4 border-b border-line-soft py-3 last:border-b-0">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
         {label}
       </div>
 
-      <div className="min-w-0 text-[13px] font-medium leading-6 text-[#101828]">
+      <div className="min-w-0 text-[13px] leading-6 text-text">
         {value || "Not available"}
       </div>
     </div>
@@ -285,10 +285,10 @@ function ScopePill({ children, muted = false }) {
   return (
     <span
       className={cx(
-        "inline-flex items-center rounded-[8px] border px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em]",
+        "inline-flex items-center rounded-pill border px-2.5 py-1 text-[11px] font-medium",
         muted
-          ? "border-[#e5eaf1] bg-[#f8fafc] text-[#667085]"
-          : "border-[rgba(var(--color-brand),0.14)] bg-[rgba(var(--color-brand),0.05)] text-[#264ca5]"
+          ? "border-line bg-surface-subtle text-text-muted"
+          : "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand"
       )}
     >
       {children}
@@ -311,7 +311,7 @@ function PendingSelectionPanel({
       title="Choose which Instagram Business account belongs to this tenant."
       description="The tenant is still not connected. Final binding only happens after you choose one account from the Meta callback results."
     >
-      <div className="text-[12px] leading-6 text-[#667085]">
+      <div className="text-[12px] leading-6 text-text-muted">
         Selection session expires at:{" "}
         {s(pendingSelection?.expiresAt, "Not available")}
       </div>
@@ -323,9 +323,9 @@ function PendingSelectionPanel({
           return (
             <div
               key={s(candidate?.id)}
-              className="rounded-[10px] border border-[#e6ebf2] bg-[#fbfcfe] px-4 py-4"
+              className="rounded-panel border border-line bg-surface px-4 py-4"
             >
-              <div className="text-[16px] font-semibold tracking-[-0.03em] text-[#101828]">
+              <div className="text-[16px] font-semibold text-text">
                 {s(candidate?.displayName, "Instagram")}
               </div>
 
@@ -355,7 +355,7 @@ function PendingSelectionPanel({
                     candidate?.displayName,
                     "Instagram"
                   )}`}
-                  className="!h-[38px] !rounded-[9px] !text-[10px]"
+                  className="!h-8 !text-[11px]"
                 >
                   Select this account
                 </ChannelActionButton>
@@ -377,15 +377,15 @@ function BlockerList({ items = [] }) {
         {items.map((item, index) => (
           <div
             key={`${s(item?.reasonCode) || "blocker"}-${index}`}
-            className="rounded-[10px] border border-[rgba(var(--color-warning),0.18)] bg-[rgba(var(--color-warning),0.05)] px-4 py-3"
+            className="rounded-panel border border-[rgba(var(--color-warning),0.18)] bg-warning-soft px-4 py-3"
           >
             <div className="flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
               <div className="min-w-0">
-                <div className="text-[13px] font-semibold text-[#101828]">
+                <div className="text-[13px] font-semibold text-text">
                   {s(item?.title, "Runtime blocker")}
                 </div>
-                <div className="mt-1 text-[12px] leading-6 text-[#667085]">
+                <div className="mt-1 text-[12px] leading-6 text-text-muted">
                   {s(item?.subtitle || item?.message || item?.description)}
                 </div>
               </div>
@@ -405,18 +405,18 @@ function TelegramSplitAction({
   onCreate,
 }) {
   return (
-    <div className="overflow-hidden rounded-[10px] border border-[#dbe3ec] bg-white">
+    <div className="overflow-hidden rounded-panel border border-line bg-surface">
       <div className="grid grid-cols-2">
         <button
           type="button"
           onClick={onConnect}
           disabled={connectDisabled || connectLoading}
           className={cx(
-            "inline-flex h-[40px] items-center justify-center px-3 text-[10px] font-bold uppercase tracking-[0.12em] transition duration-fast ease-premium",
-            "border-r border-[#dbe3ec]",
+            "inline-flex h-9 items-center justify-center px-3 text-[12px] font-medium transition-colors",
+            "border-r border-line",
             connectDisabled || connectLoading
-              ? "cursor-not-allowed bg-[#eef2f7] text-[#98a2b3]"
-              : "bg-[linear-gradient(180deg,#355ebc_0%,#264ca5_100%)] text-white hover:-translate-y-[1px] hover:shadow-[0_10px_20px_-12px_rgba(38,76,165,0.38)]"
+              ? "cursor-not-allowed bg-surface-subtle text-text-subtle"
+              : "bg-brand text-white hover:bg-brand-strong"
           )}
         >
           {connectLoading ? "Connecting..." : "Connect with token"}
@@ -427,10 +427,10 @@ function TelegramSplitAction({
           onClick={onCreate}
           disabled={createDisabled || connectLoading}
           className={cx(
-            "inline-flex h-[40px] items-center justify-center px-3 text-[10px] font-bold uppercase tracking-[0.12em] transition duration-fast ease-premium",
+            "inline-flex h-9 items-center justify-center px-3 text-[12px] font-medium transition-colors",
             createDisabled || connectLoading
-              ? "cursor-not-allowed bg-[#f8fafc] text-[#98a2b3]"
-              : "bg-white text-[#667085] hover:bg-surface-muted hover:text-[#101828]"
+              ? "cursor-not-allowed bg-surface-subtle text-text-subtle"
+              : "bg-surface text-text-muted hover:bg-surface-subtle hover:text-text"
           )}
         >
           Create in BotFather
@@ -699,16 +699,16 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
   return (
     <aside
       aria-hidden={!open}
-      className="flex h-full w-full flex-col border-l border-[#dbe3ec] bg-white shadow-[-18px_0_40px_-26px_rgba(15,23,42,0.16)]"
+      className="flex h-full w-full flex-col border-l border-line-soft bg-surface shadow-panel-strong"
     >
-      <div className="border-b border-[#e8edf3] px-7 py-5">
+      <div className="border-b border-line-soft px-6 py-5">
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1">
           <div className="row-span-2 shrink-0 pt-0.5">
             <ChannelIcon channel={channel} size="lg" />
           </div>
 
           <div className="min-w-0 self-center">
-            <div className="truncate text-[30px] font-semibold leading-none tracking-[-0.06em] text-[#101828]">
+            <div className="truncate text-[24px] font-semibold text-text">
               {channel?.name}
             </div>
           </div>
@@ -717,7 +717,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
             type="button"
             aria-label="Close channel details"
             onClick={handleClose}
-            className="row-span-2 inline-flex h-11 w-11 items-center justify-center rounded-[12px] border border-[#dbe3ec] bg-white text-[#667085] transition duration-fast ease-premium hover:border-[#c8d2df] hover:text-[#101828]"
+            className="row-span-2 inline-flex h-9 w-9 items-center justify-center rounded-soft border border-line bg-surface text-text-muted transition-colors hover:bg-surface-subtle hover:text-text"
           >
             <X className="h-4.5 w-4.5" strokeWidth={2.35} />
           </button>
@@ -728,8 +728,8 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-7 py-6">
-        <div className="space-y-7">
+      <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="space-y-6">
           {feedback.connected ? (
             <FeedbackBanner>
               Instagram connected successfully. The tenant channel is now bound
@@ -819,7 +819,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
                   />
                 </div>
 
-                <div className="mt-4 text-[12px] leading-6 text-[#667085]">
+                <div className="mt-4 text-[12px] leading-6 text-text-muted">
                   {metaStatusQuery.isLoading
                     ? "Loading tenant runtime state..."
                     : s(
@@ -889,7 +889,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
 
                 {reviewExcludedScopes.length ? (
                   <>
-                    <div className="mt-5 text-[10px] font-bold uppercase tracking-[0.16em] text-[#667085]">
+                    <div className="mt-5 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
                       Explicitly out of launch scope
                     </div>
 
@@ -932,7 +932,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
                     aria-label="Telegram bot token"
                   />
 
-                  <div className="mt-3 text-[12px] leading-6 text-[#667085]">
+                  <div className="mt-3 text-[12px] leading-6 text-text-muted">
                     Telegram MVP is private text only. Group chats, media, read
                     receipts, and unsupported control actions stay fail-closed
                     instead of pretending they are available.
@@ -961,7 +961,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
                   />
                 </div>
 
-                <div className="mt-4 text-[12px] leading-6 text-[#667085]">
+                <div className="mt-4 text-[12px] leading-6 text-text-muted">
                   {telegramStatusQuery.isLoading
                     ? "Loading Telegram runtime state..."
                     : s(
@@ -1074,7 +1074,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
         </div>
       </div>
 
-      <div className="border-t border-[#e8edf3] bg-white px-7 py-4">
+      <div className="border-t border-line-soft bg-surface px-6 py-4">
         <div className="space-y-3">
           {isTelegram && telegramRequiresTokenInput ? (
             <TelegramSplitAction
@@ -1109,7 +1109,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
                     (telegramRequiresTokenInput &&
                       (!telegramConnectAllowed || !s(telegramBotToken)))))
               }
-              className="!h-[40px] !rounded-[10px] !text-[10px]"
+              className="!h-9 !text-[12px]"
             >
               {primaryLabel}
             </ChannelActionButton>
@@ -1124,7 +1124,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
                 onClick={() => disconnectMutation.mutate()}
                 isLoading={disconnectMutation.isPending}
                 disabled={!metaStatusQuery.data?.actions?.disconnectAvailable}
-                className="!h-[38px] !rounded-[10px] !text-[10px]"
+                className="!h-8 !text-[11px]"
               >
                 {pendingSelectionRequired ? "Cancel selection" : "Disconnect"}
               </ChannelActionButton>
@@ -1136,7 +1136,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
                 onClick={() => telegramDisconnectMutation.mutate()}
                 isLoading={telegramDisconnectMutation.isPending}
                 disabled={!telegramStatusQuery.data?.actions?.disconnectAvailable}
-                className="!h-[38px] !rounded-[10px] !text-[10px]"
+                className="!h-8 !text-[11px]"
               >
                 Disconnect
               </ChannelActionButton>
@@ -1152,7 +1152,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
               disabled={!isInstagram && !isTelegram}
               isLoading={activeStatusQuery?.isFetching}
               leftIcon={<RefreshCw className="h-4 w-4" strokeWidth={2.2} />}
-              className="!h-[38px] !rounded-[10px] !text-[10px]"
+              className="!h-8 !text-[11px]"
             >
               Refresh
             </ChannelActionButton>
@@ -1167,7 +1167,7 @@ function StandardChannelDetailDrawer({ channel, open = false, onClose, onNavigat
               isLoading={connectMutation.isPending}
               disabled={connectMutation.isPending || selectionMutation.isPending}
               leftIcon={<ChevronRight className="h-4 w-4" strokeWidth={2.25} />}
-              className="!h-[38px] !rounded-[10px] !text-[10px]"
+              className="!h-8 !text-[11px]"
             >
               Reconnect
             </ChannelActionButton>

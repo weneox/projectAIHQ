@@ -757,7 +757,7 @@ function SetupAssistantSession({
 
       <div className="ai-composer">
         {localError ? (
-          <div className="mb-3 rounded-[14px] border border-[rgba(220,38,38,0.14)] bg-[rgba(254,242,242,0.9)] px-3 py-2.5 text-[12px] leading-5 text-[#b42318]">
+          <div className="mb-3 rounded-panel border border-[rgba(var(--color-danger),0.18)] bg-danger-soft px-3 py-2.5 text-[12px] leading-5 text-danger">
             {localError}
           </div>
         ) : null}

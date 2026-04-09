@@ -21,6 +21,7 @@ import {
   buildTelegramLaunchChannelState,
   buildTruthOperationalState,
 } from "../lib/readinessViewModel.js";
+import Button from "../components/ui/Button.jsx";
 
 function shouldRenderSurfaceBanner(surface) {
   return Boolean(
@@ -39,32 +40,34 @@ function ReadinessStrip({ readiness, onNavigate }) {
   const palette =
     readiness.status === "ready"
       ? {
-          border: "border-emerald-200",
-          bg: "bg-emerald-50/80",
+          border: "border-[rgba(var(--color-success),0.18)]",
+          bg: "bg-success-soft",
           icon: ShieldCheck,
-          iconColor: "text-emerald-700",
-          text: "text-emerald-700",
+          iconColor: "text-success",
+          text: "text-success",
         }
       : readiness.status === "attention"
         ? {
-            border: "border-amber-200",
-            bg: "bg-amber-50/80",
+            border: "border-[rgba(var(--color-warning),0.2)]",
+            bg: "bg-warning-soft",
             icon: Wrench,
-            iconColor: "text-amber-700",
-            text: "text-amber-700",
+            iconColor: "text-warning",
+            text: "text-warning",
           }
         : {
-            border: "border-rose-200",
-            bg: "bg-rose-50/80",
+            border: "border-[rgba(var(--color-danger),0.18)]",
+            bg: "bg-danger-soft",
             icon: Wrench,
-            iconColor: "text-rose-700",
-            text: "text-rose-700",
+            iconColor: "text-danger",
+            text: "text-danger",
           };
 
   const Icon = palette.icon;
 
   return (
-    <div className={`mb-4 border ${palette.border} ${palette.bg} px-4 py-4`}>
+    <div
+      className={`rounded-panel border ${palette.border} ${palette.bg} px-4 py-4`}
+    >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -74,16 +77,16 @@ function ReadinessStrip({ readiness, onNavigate }) {
             </div>
           </div>
 
-          <div className="mt-2 text-[15px] font-semibold tracking-[-0.03em] text-[#0f1728]">
+          <div className="mt-2 text-[15px] font-semibold text-text">
             {s(readiness.title, "Inbox readiness")}
           </div>
 
-          <div className="mt-1 text-[13px] leading-6 text-[#475467]">
+          <div className="mt-1 text-[13px] leading-6 text-text-muted">
             {s(readiness.summary)}
           </div>
 
           {s(readiness.detail) ? (
-            <div className="mt-1 text-[12px] leading-5 text-[#667085]">
+            <div className="mt-1 text-[12px] leading-5 text-text-subtle">
               {s(readiness.detail)}
             </div>
           ) : null}
@@ -91,14 +94,14 @@ function ReadinessStrip({ readiness, onNavigate }) {
 
         {readiness.action?.path ? (
           <div className="shrink-0">
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => onNavigate?.(readiness.action.path)}
-              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 transition hover:border-slate-300"
+              rightIcon={<ArrowRight className="h-4 w-4" />}
             >
-              <span>{readiness.action.label}</span>
-              <ArrowRight className="h-4 w-4" />
-            </button>
+              {readiness.action.label}
+            </Button>
           </div>
         ) : null}
       </div>
@@ -359,8 +362,8 @@ export default function Inbox() {
         </div>
       ) : null}
 
-      <div className="relative flex-1 min-h-0 overflow-hidden bg-[#f6f6f7]">
-        <div className="px-4 pb-4 pt-4">
+      <div className="relative flex-1 min-h-0 overflow-hidden rounded-panel border border-line-soft bg-surface">
+        <div className="border-b border-line-soft bg-surface-muted px-4 py-4">
           <ReadinessStrip
             readiness={inboxReadiness}
             onNavigate={(path) => {
@@ -369,8 +372,8 @@ export default function Inbox() {
           />
         </div>
 
-        <div className="relative grid h-[calc(100%-96px)] min-h-0 overflow-hidden grid-cols-[344px_minmax(0,1fr)] bg-[#f6f6f7]">
-          <div className="min-h-0 overflow-hidden border-r border-slate-200/80 bg-[#f6f6f7]">
+        <div className="relative grid h-[calc(100%-101px)] min-h-0 overflow-hidden grid-cols-[320px_minmax(0,1fr)] bg-surface">
+          <div className="min-h-0 overflow-hidden border-r border-line-soft bg-surface">
             <InboxThreadListPanel
               threadList={threadList}
               selectedThreadId={selectedThread?.id || ""}
@@ -378,7 +381,7 @@ export default function Inbox() {
             />
           </div>
 
-          <div className="min-h-0 overflow-hidden bg-[#f6f6f7]">
+          <div className="min-h-0 overflow-hidden bg-surface">
             <InboxDetailPanel
               selectedThread={selectedThread}
               messages={messages}
@@ -414,14 +417,14 @@ export default function Inbox() {
             <div
               onClick={() => setDetailOpen(false)}
               className={[
-                "absolute inset-0 bg-slate-950/10 transition-opacity duration-200",
+                "absolute inset-0 bg-overlay/60 transition-opacity duration-200",
                 detailOpen ? "opacity-100" : "opacity-0",
               ].join(" ")}
             />
 
             <aside
               className={[
-                "absolute inset-y-0 right-0 w-[360px] max-w-[92vw] border-l border-slate-200/80 bg-[#fbfbfc] shadow-[0_18px_60px_rgba(15,23,42,0.18)] transition-transform duration-200",
+                "absolute inset-y-0 right-0 w-[360px] max-w-[92vw] border-l border-line-soft bg-surface shadow-panel-strong transition-transform duration-200",
                 detailOpen ? "translate-x-0" : "translate-x-full",
               ].join(" ")}
             >

@@ -103,10 +103,10 @@ function QuietIconButton({
       aria-label={label}
       title={label}
       className={[
-        "flex h-10 w-10 items-center justify-center rounded-full transition",
+        "flex h-9 w-9 items-center justify-center rounded-soft border transition-colors",
         active
-          ? "bg-slate-900 text-white"
-          : "text-slate-400 hover:bg-white hover:text-slate-900",
+          ? "border-line-strong bg-surface-subtle text-text"
+          : "border-line bg-surface text-text-muted hover:bg-surface-subtle hover:text-text",
         disabled ? "cursor-not-allowed opacity-45" : "",
       ].join(" ")}
     >
@@ -191,14 +191,14 @@ function DetailActionMenu({
       icon: XCircle,
       onClick: onCloseThread,
       disabled: disabledMap.closed,
-      tone: "text-rose-600",
+      tone: "text-danger",
     },
   ].filter(Boolean);
 
   return (
     <div
       ref={menuRef}
-      className="absolute right-0 top-[calc(100%+8px)] z-30 w-56 overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-1.5 shadow-[0_10px_28px_rgba(15,23,42,0.08)]"
+      className="absolute right-0 top-[calc(100%+8px)] z-30 w-56 overflow-hidden rounded-panel border border-line bg-surface p-1.5 shadow-panel"
     >
       {items.map((item) => {
         const Icon = item.icon;
@@ -212,11 +212,11 @@ function DetailActionMenu({
             }}
             disabled={item.disabled}
             className={[
-              "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition",
-              item.tone || "text-slate-700",
+              "flex w-full items-center gap-3 rounded-soft px-3 py-2.5 text-left text-[13px] transition-colors",
+              item.tone || "text-text-muted",
               item.disabled
                 ? "cursor-not-allowed opacity-45"
-                : "hover:bg-slate-50",
+                : "hover:bg-surface-subtle hover:text-text",
             ].join(" ")}
           >
             <Icon className="h-4 w-4" />
@@ -244,7 +244,7 @@ function ConversationTopBar({
   const avatarUrl = resolveAvatarUrl(thread);
 
   return (
-    <div className="border-b border-slate-200/70 bg-[#f6f6f7] px-5 py-4">
+    <div className="border-b border-line-soft bg-surface px-4 py-4">
       <div className="flex items-center justify-between gap-4">
         <button
           type="button"
@@ -256,13 +256,13 @@ function ConversationTopBar({
             <img
               src={avatarUrl}
               alt={name}
-              className="h-11 w-11 rounded-full object-cover"
+              className="h-10 w-10 rounded-full object-cover"
               loading="lazy"
             />
           ) : (
             <div
               className={[
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition group-hover:scale-[1.02]",
+                "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
                 avatarTone(name),
               ].join(" ")}
             >
@@ -271,11 +271,9 @@ function ConversationTopBar({
           )}
 
           <div className="min-w-0">
-            <div className="truncate text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
-              {name}
-            </div>
+            <div className="truncate text-[15px] font-semibold text-text">{name}</div>
             {meta ? (
-              <div className="truncate text-[13px] text-slate-500">{meta}</div>
+              <div className="truncate text-[12px] text-text-muted">{meta}</div>
             ) : null}
           </div>
         </button>
@@ -293,7 +291,6 @@ function ConversationTopBar({
             onClick={onOpenDetails}
             disabled={!thread?.id}
             label="Open detail drawer"
-            active={false}
           >
             <SlidersHorizontal className="h-4 w-4" />
           </QuietIconButton>
@@ -312,7 +309,7 @@ function ConversationTopBar({
           </div>
 
           {unreadCount > 0 ? (
-            <span className="ml-1 inline-flex min-w-[22px] items-center justify-center rounded-full bg-[#eef2ff] px-2 py-1 text-[11px] font-semibold text-[#4c6fff]">
+            <span className="ml-1 inline-flex min-w-[22px] items-center justify-center rounded-pill bg-brand-soft px-2 py-0.5 text-[11px] font-medium text-brand">
               {unreadCount}
             </span>
           ) : null}
@@ -328,18 +325,18 @@ function ConversationProfileIntro({ thread }) {
   const avatarUrl = resolveAvatarUrl(thread);
 
   return (
-    <div className="flex flex-col items-center px-6 pb-8 pt-10 text-center">
+    <div className="flex flex-col items-center border-b border-line-soft px-6 pb-6 pt-6 text-center">
       {avatarUrl ? (
         <img
           src={avatarUrl}
           alt={name}
-          className="h-28 w-28 rounded-full object-cover shadow-[0_10px_30px_rgba(15,23,42,0.08)]"
+          className="h-16 w-16 rounded-full object-cover"
           loading="lazy"
         />
       ) : (
         <div
           className={[
-            "flex h-28 w-28 items-center justify-center rounded-full text-[30px] font-semibold shadow-[0_10px_30px_rgba(15,23,42,0.08)]",
+            "flex h-16 w-16 items-center justify-center rounded-full text-[20px] font-semibold",
             avatarTone(name),
           ].join(" ")}
         >
@@ -347,12 +344,10 @@ function ConversationProfileIntro({ thread }) {
         </div>
       )}
 
-      <div className="mt-4 text-[18px] font-semibold tracking-[-0.03em] text-slate-950">
-        {name}
-      </div>
+      <div className="mt-3 text-[16px] font-semibold text-text">{name}</div>
 
       {meta ? (
-        <div className="mt-1 text-[14px] text-slate-500">{meta}</div>
+        <div className="mt-1 text-[13px] text-text-muted">{meta}</div>
       ) : null}
     </div>
   );
@@ -415,7 +410,7 @@ export default function InboxDetailPanel({
   const canMarkRead = hasThread && unreadCount > 0;
 
   return (
-    <section className="relative flex h-full min-h-0 flex-col bg-[#f6f6f7]">
+    <section className="relative flex h-full min-h-0 flex-col bg-surface">
       {hasThread ? (
         <ConversationTopBar
           thread={selectedThread}
@@ -442,31 +437,31 @@ export default function InboxDetailPanel({
           }
         />
       ) : surface?.loading && !hasThread ? (
-        <div className="border-b border-slate-200/70 bg-[#f6f6f7] px-5 py-4">
+        <div className="border-b border-line-soft bg-surface px-4 py-4">
           <div className="flex items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="h-11 w-11 animate-pulse rounded-full bg-surface-subtle" />
+              <div className="h-10 w-10 animate-pulse rounded-full bg-surface-subtle" />
               <div className="min-w-0 space-y-2">
                 <div className="h-4 w-36 animate-pulse rounded-md bg-surface-subtle" />
                 <div className="h-3 w-24 animate-pulse rounded-md bg-surface-subtle" />
               </div>
             </div>
             <div className="flex gap-2">
-              <div className="h-10 w-10 animate-pulse rounded-full bg-surface-subtle" />
-              <div className="h-10 w-10 animate-pulse rounded-full bg-surface-subtle" />
+              <div className="h-9 w-9 animate-pulse rounded-soft bg-surface-subtle" />
+              <div className="h-9 w-9 animate-pulse rounded-soft bg-surface-subtle" />
             </div>
           </div>
         </div>
       ) : (
-        <div className="border-b border-slate-200/70 bg-[#f6f6f7] px-5 py-4">
-          <div className="text-[12px] font-medium uppercase tracking-[0.18em] text-slate-400">
+        <div className="border-b border-line-soft bg-surface px-4 py-4">
+          <div className="text-[12px] font-medium uppercase tracking-[0.12em] text-text-subtle">
             Conversation
           </div>
         </div>
       )}
 
       {showSurfaceBanner ? (
-        <div className="pointer-events-none absolute inset-x-0 top-[78px] z-20 flex justify-center px-4 pt-3">
+        <div className="pointer-events-none absolute inset-x-0 top-[74px] z-20 flex justify-center px-4 pt-3">
           <div className="pointer-events-auto w-full max-w-[760px]">
             <SurfaceBanner
               surface={surface}
@@ -478,33 +473,33 @@ export default function InboxDetailPanel({
       ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 overflow-y-auto bg-[#f6f6f7] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-surface-muted [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {surface?.loading && !hasThread ? (
             <InboxDetailSkeleton />
           ) : !hasThread ? (
             <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-6 text-center">
-              <div className="text-[18px] font-semibold tracking-[-0.03em] text-slate-900">
+              <div className="text-[16px] font-semibold text-text">
                 Conversation workspace
               </div>
-              <div className="mt-2 max-w-[34rem] text-sm leading-7 text-slate-500">
+              <div className="mt-2 max-w-[34rem] text-[13px] leading-6 text-text-muted">
                 Select a thread to open the timeline.
               </div>
             </div>
           ) : (
-            <div className="px-0 py-0">
+            <div>
               <ConversationProfileIntro thread={selectedThread} />
 
               {messages.length === 0 ? (
-                <div className="px-6 pb-10 text-center">
-                  <div className="text-[15px] font-medium text-slate-900">
+                <div className="px-6 py-10 text-center">
+                  <div className="text-[15px] font-medium text-text">
                     No messages yet
                   </div>
-                  <div className="mt-2 text-sm leading-6 text-slate-500">
+                  <div className="mt-2 text-[13px] leading-6 text-text-muted">
                     This conversation has no message history yet.
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4 px-6 pb-6">
+                <div className="space-y-4 px-6 py-6">
                   {messages.map((message) => (
                     <InboxMessageBubble
                       key={message.id}

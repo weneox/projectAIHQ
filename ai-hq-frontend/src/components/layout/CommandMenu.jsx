@@ -13,7 +13,7 @@ function buildCommandGroups() {
       {
         id: section.id,
         label: section.label,
-        value: `${section.label}`.trim().toLowerCase(),
+        value: String(section.label || "").trim().toLowerCase(),
         to: section.to,
       },
     ],
@@ -76,16 +76,14 @@ export default function CommandMenu() {
         aria-label="Open search"
         aria-expanded={dialogOpen}
         className={cx(
-          "hidden h-11 min-w-[300px] items-center gap-3 rounded-[14px] border border-line bg-white px-4 text-left transition duration-200 md:inline-flex lg:min-w-[340px] xl:min-w-[390px]",
-          "text-[rgba(15,23,42,0.92)] hover:border-line-strong hover:bg-surface-muted"
+          "hidden h-9 min-w-[260px] items-center gap-2 rounded-soft border border-line bg-surface px-3 text-left text-text-muted transition-colors md:inline-flex lg:min-w-[300px] xl:min-w-[340px]",
+          "hover:border-line-strong hover:bg-surface-subtle hover:text-text"
         )}
       >
-        <Search
-          className="h-[16px] w-[16px] shrink-0 text-[rgba(15,23,42,0.42)]"
-          strokeWidth={2}
-        />
-        <span className="truncate text-[14px] font-semibold tracking-[-0.02em]">
-          Search workspace
+        <Search className="h-4 w-4 shrink-0" strokeWidth={1.9} />
+        <span className="truncate text-[13px]">Search pages</span>
+        <span className="ml-auto shrink-0 text-[12px] text-text-subtle">
+          Ctrl K
         </span>
       </button>
 
@@ -94,68 +92,67 @@ export default function CommandMenu() {
         onOpenChange={handleOpenChange}
         label="Command menu"
       >
-        <div className="command-overlay-anim fixed inset-0 z-[140] bg-[rgba(15,23,42,0.18)] backdrop-blur-[6px]" />
+        <div className="command-overlay-anim fixed inset-0 z-[140] bg-overlay/60" />
 
-        <div className="command-panel-anim fixed left-1/2 top-[10vh] z-[150] w-[min(640px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-[16px] border border-line bg-white shadow-[0_24px_48px_-30px_rgba(15,23,42,0.18)]">
-          <Command className="relative w-full">
-            <div className="px-4 pb-2 pt-4">
-              <div className="flex items-center gap-3 border-b border-line-soft pb-3">
-                <Search
-                  className="h-[16px] w-[16px] shrink-0 text-[rgba(15,23,42,0.42)]"
-                  strokeWidth={2}
-                />
+        <div className="command-panel-anim fixed left-1/2 top-[10vh] z-[150] w-[min(560px,calc(100vw-24px))] -translate-x-1/2">
+          <div className="overflow-hidden rounded-panel border border-line bg-surface shadow-panel-strong">
+            <Command className="relative w-full">
+              <div className="border-b border-line-soft px-4 py-3.5">
+                <div className="flex items-center gap-3">
+                  <Search
+                    className="h-4 w-4 shrink-0 text-text-subtle"
+                    strokeWidth={1.9}
+                  />
 
-                <Command.Input
-                  placeholder="Search pages"
-                  className="h-10 w-full border-0 bg-transparent p-0 text-[15px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.95)] outline-none placeholder:font-medium placeholder:text-[rgba(15,23,42,0.42)]"
-                />
-              </div>
-            </div>
-
-            <Command.List className="command-scroll max-h-[360px] overflow-y-auto px-2 pb-2">
-              <Command.Empty className="px-6 py-12 text-center">
-                <div className="text-[14px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.84)]">
-                  No results
+                  <Command.Input
+                    placeholder="Search pages"
+                    className="h-8 w-full border-0 bg-transparent p-0 text-[14px] text-text outline-none placeholder:text-text-subtle"
+                  />
                 </div>
-              </Command.Empty>
+              </div>
 
-              {groups.map((group, groupIndex) => (
-                <Command.Group
-                  key={group.id}
-                  heading={group.label}
-                  className={cx(
-                    groupIndex > 0 ? "mt-2 border-t border-line-soft pt-2" : "pt-1"
-                  )}
-                >
-                  {group.items.map((item) => (
-                    <Command.Item
-                      key={item.id}
-                      value={item.value}
-                      onSelect={() => {
-                        navigate(item.to);
-                        closeMenu();
-                      }}
-                      className={cx(
-                        "group flex cursor-pointer items-center justify-between gap-3 rounded-[10px] px-3 py-2.5 outline-none transition duration-150",
-                        "data-[selected=true]:bg-surface-subtle"
-                      )}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-[rgba(15,23,42,0.94)]">
-                          {item.label}
+              <Command.List className="command-scroll max-h-[360px] overflow-y-auto p-2">
+                <Command.Empty className="px-3 py-8 text-center text-[13px] text-text-muted">
+                  No results
+                </Command.Empty>
+
+                {groups.map((group, groupIndex) => (
+                  <Command.Group
+                    key={group.id}
+                    heading={group.label}
+                    className={cx(
+                      "px-1",
+                      groupIndex > 0 && "mt-2 border-t border-line-soft pt-2"
+                    )}
+                  >
+                    {group.items.map((item) => (
+                      <Command.Item
+                        key={item.id}
+                        value={item.value}
+                        onSelect={() => {
+                          navigate(item.to);
+                          closeMenu();
+                        }}
+                        className={cx(
+                          "group flex cursor-pointer items-center justify-between gap-3 rounded-soft px-3 py-2.5 text-[13px] text-text outline-none transition-colors",
+                          "data-[selected=true]:bg-surface-subtle"
+                        )}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium">{item.label}</div>
                         </div>
-                      </div>
 
-                      <ArrowRight
-                        className="h-[15px] w-[15px] shrink-0 text-[rgba(15,23,42,0.3)] transition duration-200 group-data-[selected=true]:translate-x-[2px] group-data-[selected=true]:text-[rgba(31,77,168,0.95)]"
-                        strokeWidth={2}
-                      />
-                    </Command.Item>
-                  ))}
-                </Command.Group>
-              ))}
-            </Command.List>
-          </Command>
+                        <ArrowRight
+                          className="h-4 w-4 shrink-0 text-text-subtle transition-transform group-data-[selected=true]:translate-x-[2px]"
+                          strokeWidth={1.9}
+                        />
+                      </Command.Item>
+                    ))}
+                  </Command.Group>
+                ))}
+              </Command.List>
+            </Command>
+          </div>
         </div>
       </Command.Dialog>
     </>

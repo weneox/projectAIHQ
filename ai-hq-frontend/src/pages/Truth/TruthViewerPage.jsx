@@ -232,13 +232,13 @@ function InfoHint({ text = "", align = "right" }) {
 
   return (
     <span className="group relative inline-flex shrink-0">
-      <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full border border-[#cfd8e4] bg-white text-[11px] font-semibold leading-none text-[#667085] transition duration-200 hover:border-[#b7c4d4] hover:text-[#101828]">
+      <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full border border-line bg-surface text-[11px] font-semibold leading-none text-text-subtle transition-colors hover:border-line-strong hover:text-text">
         i
       </span>
 
       <span
         className={[
-          "pointer-events-none absolute top-[calc(100%+10px)] z-30 hidden w-[260px] rounded-[10px] border border-[#d9e2ec] bg-white px-3 py-2 text-[12px] leading-5 text-[#5b6678] shadow-[0_20px_38px_-24px_rgba(15,23,42,0.24)] group-hover:block",
+          "pointer-events-none absolute top-[calc(100%+8px)] z-30 hidden w-[260px] rounded-panel border border-line bg-surface px-3 py-2 text-[12px] leading-5 text-text-muted shadow-panel group-hover:block",
           align === "left"
             ? "left-0"
             : align === "center"
@@ -254,14 +254,13 @@ function InfoHint({ text = "", align = "right" }) {
 
 function SectionStrip({ label, children, last = false }) {
   return (
-    <section className={last ? "" : "border-b border-[#e8edf3] pb-7"}>
+    <section className={last ? "" : "border-b border-line-soft pb-6"}>
       <div className="flex items-center gap-3">
-        <span className="h-[14px] w-[2px] rounded-full bg-[#2f6fed]" />
-        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#8b98ab]">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
           {label}
         </span>
       </div>
-      <div className="mt-4">{children}</div>
+      <div className="mt-3">{children}</div>
     </section>
   );
 }
@@ -276,20 +275,20 @@ function MainRow({
   if (!s(value)) return null;
 
   return (
-    <div className="grid grid-cols-[18px_minmax(0,1fr)_18px] gap-4 border-b border-[#edf2f7] py-4 last:border-b-0">
-      <div className="pt-[2px] text-[#5f6b7c]">
+    <div className="grid grid-cols-[18px_minmax(0,1fr)_18px] gap-4 border-b border-line-soft py-4 last:border-b-0">
+      <div className="pt-[2px] text-text-subtle">
         <Icon className="h-[18px] w-[18px]" strokeWidth={2.05} />
       </div>
 
       <div className="min-w-0">
-        <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8c99ad]">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
           {label}
         </div>
         <div
           className={[
-            "mt-2 text-[15px] font-medium text-[#0f1728]",
+            "mt-2 text-[14px] text-text",
             multiline
-              ? "whitespace-pre-wrap break-words leading-7"
+              ? "whitespace-pre-wrap break-words leading-6"
               : "leading-6",
           ].join(" ")}
         >
@@ -308,12 +307,12 @@ function SideMetaRow({ label, value, hint = "" }) {
   if (!s(value)) return null;
 
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_18px] gap-3 border-b border-[#e7edf4] py-3.5 last:border-b-0">
+    <div className="grid grid-cols-[minmax(0,1fr)_18px] gap-3 border-b border-line-soft py-3.5 last:border-b-0">
       <div className="min-w-0">
-        <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#8c99ad]">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
           {label}
         </div>
-        <div className="mt-2 text-[13px] font-medium leading-6 text-[#0f1728]">
+        <div className="mt-2 text-[13px] leading-6 text-text">
           {value}
         </div>
       </div>
@@ -327,7 +326,7 @@ function SideMetaRow({ label, value, hint = "" }) {
 
 function EmptyInline({ text }) {
   return (
-    <div className="rounded-[8px] border border-[#e7edf4] bg-[#f8fafc] px-4 py-3 text-[14px] leading-7 text-[#667085]">
+    <div className="rounded-panel border border-line bg-surface-muted px-4 py-3 text-[14px] leading-6 text-text-muted">
       {text}
     </div>
   );
@@ -443,32 +442,32 @@ function TruthReadinessStrip({ operationalState }) {
   const tone =
     operationalState.status === "ready"
       ? {
-          border: "border-[#d8ebe0]",
-          bg: "bg-[#f7fcf8]",
+          border: "border-[rgba(var(--color-success),0.18)]",
+          bg: "bg-success-soft",
           icon: ShieldCheck,
-          iconColor: "text-[#156f3d]",
-          text: "text-[#156f3d]",
+          iconColor: "text-success",
+          text: "text-success",
         }
       : operationalState.status === "attention"
         ? {
-            border: "border-[#f0dfc5]",
-            bg: "bg-[#fffaf1]",
+            border: "border-[rgba(var(--color-warning),0.2)]",
+            bg: "bg-warning-soft",
             icon: Wrench,
-            iconColor: "text-[#b76a11]",
-            text: "text-[#8d4f07]",
+            iconColor: "text-warning",
+            text: "text-warning",
           }
         : {
-            border: "border-[#f0d3d5]",
-            bg: "bg-[#fff7f7]",
+            border: "border-[rgba(var(--color-danger),0.18)]",
+            bg: "bg-danger-soft",
             icon: Wrench,
-            iconColor: "text-[#b42318]",
-            text: "text-[#912018]",
+            iconColor: "text-danger",
+            text: "text-danger",
           };
 
   const Icon = tone.icon;
 
   return (
-    <div className={`border-b px-8 py-4 ${tone.border} ${tone.bg}`}>
+    <div className={`border-b px-6 py-4 ${tone.border} ${tone.bg}`}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -478,16 +477,16 @@ function TruthReadinessStrip({ operationalState }) {
             </div>
           </div>
 
-          <div className="mt-2 text-[15px] font-semibold tracking-[-0.03em] text-[#0f1728]">
+          <div className="mt-2 text-[15px] font-semibold text-text">
             {s(operationalState.title, "Truth posture")}
           </div>
 
-          <div className="mt-1 text-[13px] leading-6 text-[#5f6b7c]">
+          <div className="mt-1 text-[13px] leading-6 text-text-muted">
             {s(operationalState.summary)}
           </div>
 
           {s(operationalState.detail) ? (
-            <div className="mt-1 text-[12px] leading-5 text-[#7a8698]">
+            <div className="mt-1 text-[12px] leading-5 text-text-subtle">
               {s(operationalState.detail)}
             </div>
           ) : null}
@@ -872,7 +871,7 @@ export default function TruthViewerPage() {
   if (state.loading) {
     return (
       <div className="w-full p-0">
-        <div className="border border-[#e6ebf2] bg-white px-5 py-4 text-sm text-[#667085]">
+        <div className="rounded-panel border border-line bg-surface px-5 py-4 text-sm text-text-muted">
           Loading approved business truth...
         </div>
       </div>
@@ -905,21 +904,21 @@ export default function TruthViewerPage() {
 
   return (
     <div className="w-full p-0">
-      <div className="border-y border-[#dde5ee] bg-white">
-        <div className="flex flex-col gap-4 border-b border-[#e8edf3] px-8 py-5 md:flex-row md:items-start md:justify-between">
+      <div className="overflow-hidden rounded-panel border border-line-soft bg-surface">
+        <div className="flex flex-col gap-4 border-b border-line-soft px-6 py-5 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
             <div className="inline-flex items-center gap-2">
-              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#8f9bae]">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
                 Truth
               </div>
               <InfoHint text={pageHint} align="left" />
             </div>
 
-            <h1 className="mt-2 text-[24px] font-semibold tracking-[-0.03em] text-[#0f1728]">
+            <h1 className="mt-2 text-[28px] font-semibold text-text">
               Business truth
             </h1>
 
-            <p className="mt-2 max-w-[720px] text-[14px] leading-6 text-[#667085]">
+            <p className="mt-2 max-w-[720px] text-[14px] leading-6 text-text-muted">
               {visibleSummary}
             </p>
           </div>
@@ -955,11 +954,11 @@ export default function TruthViewerPage() {
         <TruthReadinessStrip operationalState={operationalState} />
 
         <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="bg-white px-8 py-7">
+          <div className="bg-surface px-6 py-6">
             {!hasAnyData ? (
               <EmptyInline text={emptyStateText} />
             ) : (
-              <div className="space-y-7">
+              <div className="space-y-6">
                 {arr(sections.business).length ? (
                   <SectionStrip label="Business">
                     <div className="space-y-0">
@@ -1031,12 +1030,12 @@ export default function TruthViewerPage() {
             )}
           </div>
 
-          <aside className="border-t border-[#e8edf3] bg-[#fbfcff] px-8 py-7 xl:border-l xl:border-t-0">
-            <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#8f9bae]">
+          <aside className="border-t border-line-soft bg-surface-muted px-6 py-6 xl:border-l xl:border-t-0">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
               Snapshot
             </div>
 
-            <div className="mt-5 space-y-0">
+            <div className="mt-4 rounded-panel border border-line bg-surface px-4 py-1">
               <SideMetaRow
                 label="Version"
                 value={s(state.data.approval?.version, "Pending")}

@@ -86,25 +86,25 @@ export default function InboxThreadCard({ thread, selected, onOpen }) {
       type="button"
       onClick={() => onOpen?.(thread)}
       className={[
-        "group w-full border-b border-slate-200/70 px-7 py-3.5 text-left transition duration-150",
+        "group w-full border-b border-line-soft px-4 py-3 text-left transition-colors",
         selected
-          ? "bg-[#e9ecef]"
-          : "bg-transparent hover:bg-white/70",
+          ? "bg-surface-subtle"
+          : "bg-transparent hover:bg-surface-subtle",
       ].join(" ")}
     >
-      <div className="flex items-center gap-3.5">
+      <div className="flex items-start gap-3">
         <div className="relative shrink-0">
           {avatarUrl ? (
             <img
               src={avatarUrl}
               alt={name}
-              className="h-14 w-14 rounded-full object-cover"
+              className="h-11 w-11 rounded-full object-cover"
               loading="lazy"
             />
           ) : (
             <div
               className={[
-                "flex h-14 w-14 items-center justify-center rounded-full text-[15px] font-semibold",
+                "flex h-11 w-11 items-center justify-center rounded-full text-[13px] font-semibold",
                 avatarTone(name),
               ].join(" ")}
             >
@@ -118,30 +118,27 @@ export default function InboxThreadCard({ thread, selected, onOpen }) {
             <div className="min-w-0">
               <div
                 className={[
-                  "truncate text-[15px] leading-5 tracking-[-0.02em]",
-                  unread > 0 ? "font-semibold text-slate-950" : "font-medium text-slate-900",
+                  "truncate text-[14px] leading-5",
+                  unread > 0 ? "font-semibold text-text" : "font-medium text-text",
                 ].join(" ")}
               >
                 {name}
               </div>
 
-              <div className="mt-1 truncate text-[14px] leading-5 text-slate-500">
+              <div className="mt-1 truncate text-[13px] leading-5 text-text-muted">
                 {preview}
               </div>
             </div>
 
             <div className="flex shrink-0 items-center gap-2 pt-0.5">
-              <span
-                className={[
-                  "text-[13px] leading-5",
-                  unread > 0 ? "text-slate-500" : "text-slate-400",
-                ].join(" ")}
-              >
+              <span className="text-[12px] leading-5 text-text-subtle">
                 {lastAt}
               </span>
 
               {unread > 0 ? (
-                <span className="h-2.5 w-2.5 rounded-full bg-[#4c6fff]" />
+                <span className="inline-flex min-w-[18px] items-center justify-center rounded-pill bg-brand-soft px-1.5 py-0.5 text-[11px] font-medium text-brand">
+                  {unread > 99 ? "99+" : unread}
+                </span>
               ) : null}
             </div>
           </div>

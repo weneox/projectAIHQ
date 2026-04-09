@@ -598,13 +598,9 @@ function useWidgetStyles() {
         position: absolute;
         inset: 0;
         border-radius: 999px;
-        border: 1px solid rgba(65, 101, 216, 0.55);
-        background:
-          radial-gradient(circle at 28% 24%, rgba(255,255,255,0.22), transparent 26%),
-          linear-gradient(180deg, #4474f5 0%, #355ed8 62%, #2949b5 100%);
-        box-shadow:
-          0 22px 40px rgba(39, 67, 158, 0.34),
-          inset 0 1px 0 rgba(255,255,255,0.14);
+        border: 1px solid rgba(209,213,219,0.98);
+        background: rgba(255,255,255,0.98);
+        box-shadow: 0 10px 24px rgba(15,23,42,0.12);
       }
 
       .ai-widget-launcher-badge {
@@ -614,8 +610,8 @@ function useWidgetStyles() {
         width: 10px;
         height: 10px;
         border-radius: 999px;
-        border: 2px solid rgba(237,241,255,0.98);
-        background: #81a3ff;
+        border: 2px solid rgba(255,255,255,0.98);
+        background: #2563eb;
       }
 
       .ai-widget-glyph {
@@ -635,20 +631,18 @@ function useWidgetStyles() {
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        border-radius: 28px;
-        border: 1px solid rgba(220, 225, 234, 0.98);
-        background: linear-gradient(180deg, rgba(253,254,255,0.99), rgba(248,249,252,0.99));
-        box-shadow:
-          0 44px 100px -46px rgba(15, 23, 42, 0.42),
-          0 16px 32px rgba(15, 23, 42, 0.10);
+        border-radius: 12px;
+        border: 1px solid rgba(229,231,235,0.98);
+        background: rgba(255,255,255,0.99);
+        box-shadow: 0 18px 34px rgba(15,23,42,0.12);
         animation: aiWidgetPanelIn .22s cubic-bezier(.22,1,.36,1);
       }
 
       .ai-widget-header {
         flex: 0 0 auto;
         padding: 16px 16px 12px;
-        border-bottom: 1px solid rgba(232, 235, 241, 0.98);
-        background: rgba(255,255,255,0.82);
+        border-bottom: 1px solid rgba(229,231,235,0.98);
+        background: rgba(255,255,255,0.98);
       }
 
       .ai-widget-header-top {
@@ -663,7 +657,7 @@ function useWidgetStyles() {
         line-height: 1.1;
         font-weight: 700;
         letter-spacing: -.03em;
-        color: #0f172a;
+        color: #111827;
       }
 
       .ai-widget-close {
@@ -672,16 +666,15 @@ function useWidgetStyles() {
         justify-content: center;
         width: 38px;
         height: 38px;
-        border-radius: 14px;
-        border: 1px solid rgba(228,232,239,0.98);
+        border-radius: 10px;
+        border: 1px solid rgba(209,213,219,0.98);
         background: rgba(255,255,255,0.96);
-        color: #64748b;
+        color: #6b7280;
         transition: all .18s ease;
       }
 
       .ai-widget-close:hover {
-        color: #0f172a;
-        transform: translateY(-1px);
+        color: #111827;
       }
 
       .ai-widget-switch {
@@ -689,9 +682,9 @@ function useWidgetStyles() {
         gap: 4px;
         margin-top: 12px;
         padding: 4px;
-        border-radius: 16px;
-        background: rgba(245,247,250,0.98);
-        border: 1px solid rgba(231,234,240,0.98);
+        border-radius: 10px;
+        background: rgba(243,244,246,0.98);
+        border: 1px solid rgba(229,231,235,0.98);
       }
 
       .ai-widget-switch-btn {
@@ -703,9 +696,9 @@ function useWidgetStyles() {
         min-height: 36px;
         padding: 0 12px;
         border: 0;
-        border-radius: 12px;
+        border-radius: 8px;
         background: transparent;
-        color: #64748b;
+        color: #6b7280;
         font-size: 13px;
         font-weight: 600;
         letter-spacing: -.02em;
@@ -714,8 +707,7 @@ function useWidgetStyles() {
 
       .ai-widget-switch-btn.active {
         background: rgba(255,255,255,0.98);
-        color: #1f3b90;
-        box-shadow: 0 8px 20px -18px rgba(52,93,215,0.5);
+        color: #111827;
       }
 
       .ai-widget-body {
@@ -773,21 +765,19 @@ function useWidgetStyles() {
       .ai-bubble {
         max-width: 78%;
         padding: 14px 15px;
-        border-radius: 22px;
+        border-radius: 12px;
         position: relative;
+        border: 1px solid rgba(229,231,235,0.98);
       }
 
       .ai-bubble.assistant {
-        border-bottom-left-radius: 8px;
-        background: #f2f4f7;
+        background: rgba(255,255,255,0.98);
         color: #111827;
       }
 
       .ai-bubble.user {
-        border-bottom-right-radius: 8px;
-        background: linear-gradient(180deg, #4673f2 0%, #355cd6 100%);
-        color: #ffffff;
-        box-shadow: 0 18px 30px -22px rgba(53,92,214,0.5);
+        background: rgba(239,246,255,0.98);
+        color: #111827;
       }
 
       .ai-bubble-title {
@@ -833,30 +823,26 @@ function useWidgetStyles() {
       }
 
       .ai-quick-chip {
-        border: 1px solid rgba(206,216,238,0.98);
-        background: rgba(247,249,255,0.98);
-        color: #2445aa;
+        border: 1px solid rgba(209,213,219,0.98);
+        background: rgba(243,244,246,0.98);
+        color: #4b5563;
       }
 
       .ai-action-link {
-        border: 1px solid rgba(226,231,239,0.98);
+        border: 1px solid rgba(209,213,219,0.98);
         background: rgba(255,255,255,0.96);
-        color: #0f172a;
+        color: #111827;
       }
 
       .ai-quick-chip:hover,
-      .ai-action-link:hover {
-        transform: translateY(-1px);
-      }
+      .ai-action-link:hover {}
 
       .ai-review-sheet {
-        border: 1px solid rgba(15,23,42,0.07);
-        background:
-          radial-gradient(circle at top left, rgba(70,115,242,0.06), transparent 34%),
-          linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,253,0.995) 100%);
-        border-radius: 20px;
+        border: 1px solid rgba(229,231,235,0.98);
+        background: rgba(249,250,251,0.98);
+        border-radius: 12px;
         padding: 16px 16px 14px;
-        box-shadow: 0 18px 34px -30px rgba(15,23,42,0.18);
+        box-shadow: none;
       }
 
       .ai-review-kicker {
@@ -1085,9 +1071,9 @@ function useWidgetStyles() {
         align-items: center;
         gap: 6px;
         padding: 14px 15px;
-        border-radius: 20px;
-        border-bottom-left-radius: 8px;
-        background: #f2f4f7;
+        border-radius: 12px;
+        border: 1px solid rgba(229,231,235,0.98);
+        background: rgba(255,255,255,0.98);
       }
 
       .ai-typing-dot {
@@ -1104,8 +1090,8 @@ function useWidgetStyles() {
       .ai-composer {
         flex: 0 0 auto;
         padding: 12px 16px 16px;
-        border-top: 1px solid rgba(232,235,241,0.98);
-        background: rgba(255,255,255,0.94);
+        border-top: 1px solid rgba(229,231,235,0.98);
+        background: rgba(249,250,251,0.98);
       }
 
       .ai-composer-shell {
@@ -1113,8 +1099,8 @@ function useWidgetStyles() {
         align-items: flex-end;
         gap: 10px;
         padding: 10px 10px 10px 14px;
-        border-radius: 22px;
-        border: 1px solid rgba(228,232,239,0.98);
+        border-radius: 12px;
+        border: 1px solid rgba(209,213,219,0.98);
         background: #ffffff;
       }
 
@@ -1126,7 +1112,7 @@ function useWidgetStyles() {
         outline: 0;
         resize: none;
         background: transparent;
-        color: #0f172a;
+        color: #111827;
         font-size: 14px;
         line-height: 1.65;
         padding: 2px 0 0;
@@ -1143,17 +1129,15 @@ function useWidgetStyles() {
         flex: 0 0 auto;
         width: 44px;
         height: 44px;
-        border-radius: 16px;
-        border: 1px solid rgba(86,118,226,0.36);
+        border-radius: 10px;
+        border: 1px solid rgba(37,99,235,0.36);
         color: #ffffff;
-        background: linear-gradient(180deg, #4a75f6 0%, #355cd6 100%);
-        box-shadow: 0 18px 28px -20px rgba(53,92,214,0.52);
+        background: #2563eb;
+        box-shadow: none;
         transition: transform .18s ease, opacity .18s ease;
       }
 
-      .ai-send-btn:hover:not(:disabled) {
-        transform: translateY(-1px);
-      }
+      .ai-send-btn:hover:not(:disabled) {}
 
       .ai-send-btn:disabled {
         opacity: .46;

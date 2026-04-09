@@ -3,6 +3,7 @@ import { ChevronDown, Funnel, Search } from "lucide-react";
 
 import InboxThreadCard from "./InboxThreadCard.jsx";
 import { InboxThreadListSkeleton } from "./InboxLoadingSurface.jsx";
+import { InputGroup } from "../ui/Input.jsx";
 
 const TOP_TABS = [
   { label: "Primary", value: "all" },
@@ -106,7 +107,7 @@ function ChannelFilterMenu({
   return (
     <div
       ref={menuRef}
-      className="absolute left-0 top-[calc(100%+10px)] z-30 w-[250px] overflow-hidden rounded-[22px] border border-slate-200/80 bg-white p-2 shadow-[0_18px_50px_rgba(15,23,42,0.12)]"
+      className="absolute left-0 top-[calc(100%+8px)] z-30 w-[240px] overflow-hidden rounded-panel border border-line bg-surface p-1.5 shadow-panel"
     >
       {options.map((option) => {
         const active = selectedValue === option.value;
@@ -121,22 +122,20 @@ function ChannelFilterMenu({
               onClose?.();
             }}
             className={[
-              "flex w-full items-center justify-between rounded-2xl px-3 py-2.5 text-left transition",
+              "flex w-full items-center justify-between rounded-soft px-3 py-2 text-left text-[13px] transition-colors",
               active
-                ? "bg-[#f2f5f8] text-slate-950"
-                : "text-slate-700 hover:bg-slate-50",
+                ? "bg-surface-subtle text-text"
+                : "text-text-muted hover:bg-surface-subtle hover:text-text",
             ].join(" ")}
           >
-            <span className="text-[14px] font-medium tracking-[-0.02em]">
-              {option.label}
-            </span>
+            <span className="truncate font-medium">{option.label}</span>
 
             <span
               className={[
-                "inline-flex min-w-[24px] items-center justify-center rounded-full px-2 py-1 text-[11px] font-medium",
+                "inline-flex min-w-[22px] items-center justify-center rounded-pill px-2 py-0.5 text-[11px]",
                 active
-                  ? "bg-white text-slate-700 shadow-[0_2px_8px_rgba(15,23,42,0.06)]"
-                  : "bg-slate-100 text-slate-500",
+                  ? "bg-surface text-text-muted"
+                  : "bg-surface-subtle text-text-subtle",
               ].join(" ")}
             >
               {count}
@@ -242,28 +241,28 @@ export default function InboxThreadListPanel({
   return (
     <section
       aria-labelledby="inbox-thread-list-title"
-      className="flex h-full min-h-0 flex-col bg-[#f6f6f7]"
+      className="flex h-full min-h-0 flex-col bg-surface"
     >
-      <div className="border-b border-slate-200/80 bg-[#f6f6f7]">
-        <div className="flex items-center justify-between px-7 pb-3 pt-5">
-          <div className="relative min-w-0" ref={filterAnchorRef}>
+      <div className="border-b border-line-soft bg-surface px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="relative min-w-0 flex-1" ref={filterAnchorRef}>
             <button
               type="button"
               onClick={() => setFilterMenuOpen((prev) => !prev)}
-              className="inline-flex max-w-full items-center gap-2 rounded-full px-0 text-left transition hover:text-slate-700"
+              className="inline-flex max-w-full items-center gap-2 text-left"
               aria-haspopup="menu"
               aria-expanded={filterMenuOpen}
             >
               <h2
                 id="inbox-thread-list-title"
-                className="truncate text-[17px] font-semibold tracking-[-0.03em] text-slate-950"
+                className="truncate text-[16px] font-semibold text-text"
               >
                 {selectedChannelLabel}
               </h2>
 
               <ChevronDown
                 className={[
-                  "h-4 w-4 shrink-0 text-slate-500 transition-transform duration-200",
+                  "h-4 w-4 shrink-0 text-text-subtle transition-transform",
                   filterMenuOpen ? "rotate-180" : "",
                 ].join(" ")}
               />
@@ -284,54 +283,46 @@ export default function InboxThreadListPanel({
             type="button"
             onClick={() => setFilterMenuOpen((prev) => !prev)}
             aria-label="Open conversation filters"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition hover:bg-white/80 hover:text-slate-950"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-soft border border-line bg-surface text-text-muted hover:bg-surface-subtle hover:text-text"
           >
             <Funnel className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="px-7">
-          <div className="flex items-end gap-9 overflow-x-auto">
-            {TOP_TABS.map((tab) => {
-              const active = threadList?.filter === tab.value;
+        <div className="mt-4 flex gap-4 overflow-x-auto border-b border-line-soft">
+          {TOP_TABS.map((tab) => {
+            const active = threadList?.filter === tab.value;
 
-              return (
-                <button
-                  key={tab.value}
-                  type="button"
-                  onClick={() => threadList?.setFilter?.(tab.value)}
-                  aria-pressed={active}
-                  className={[
-                    "relative inline-flex h-11 items-center whitespace-nowrap px-0 text-[14px] font-medium tracking-[-0.02em] transition",
-                    active
-                      ? "text-slate-950"
-                      : "text-slate-500 hover:text-slate-900",
-                  ].join(" ")}
-                >
-                  <span>{tab.label}</span>
-                  {active ? (
-                    <span className="absolute inset-x-0 bottom-0 h-[1.5px] rounded-full bg-slate-900" />
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => threadList?.setFilter?.(tab.value)}
+                aria-pressed={active}
+                className={[
+                  "relative inline-flex h-10 items-center whitespace-nowrap border-b-2 px-0 text-[13px] font-medium transition-colors",
+                  active
+                    ? "border-text text-text"
+                    : "border-transparent text-text-muted hover:text-text",
+                ].join(" ")}
+              >
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
 
-        <div className="px-6 pb-3 pt-2">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              value={localSearch}
-              onChange={(event) => setLocalSearch(event.target.value)}
-              placeholder="Search"
-              aria-label="Search conversations"
-              className="h-[50px] w-full rounded-[18px] border border-slate-200/70 bg-[#f1f2f4] pl-11 pr-4 text-[14px] text-slate-900 shadow-none outline-none placeholder:text-slate-500 focus:border-slate-300 focus:bg-white"
-            />
-          </div>
+        <div className="pt-4">
+          <InputGroup
+            value={localSearch}
+            onChange={(event) => setLocalSearch(event.target.value)}
+            placeholder="Search conversations"
+            aria-label="Search conversations"
+            leftIcon={<Search className="h-4 w-4" />}
+          />
 
           {threadList?.deepLinkNotice ? (
-            <p className="px-1 pt-2 text-[13px] leading-5 text-amber-700">
+            <p className="pt-2 text-[12px] leading-5 text-warning">
               {threadList.deepLinkNotice}
             </p>
           ) : null}
@@ -342,18 +333,18 @@ export default function InboxThreadListPanel({
         {threadList?.surface?.loading && !filteredThreads.length ? (
           <InboxThreadListSkeleton />
         ) : !filteredThreads.length ? (
-          <div className="px-7 py-8">
-            <div className="rounded-[34px] border border-slate-200/70 bg-[#fafafb] px-6 py-9 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
-              <div className="text-[13px] font-semibold tracking-[-0.02em] text-slate-900">
+          <div className="px-4 py-6">
+            <div className="rounded-panel border border-line bg-surface-muted px-5 py-8 text-center">
+              <div className="text-[14px] font-medium text-text">
                 No conversations found
               </div>
-              <div className="mt-3 text-[13px] leading-6 text-slate-500">
+              <div className="mt-2 text-[13px] leading-6 text-text-muted">
                 New threads will appear here.
               </div>
             </div>
           </div>
         ) : (
-          <div className="pb-8 pt-1">
+          <div>
             {filteredThreads.map((thread) => (
               <InboxThreadCard
                 key={thread.id}
