@@ -1,5 +1,20 @@
 import { apiGet, apiPost } from "./client.js";
 
+function s(value, fallback = "") {
+  return String(value ?? fallback).trim();
+}
+
+function buildDomainVerificationPath(basePath, options = {}) {
+  const domain = s(options?.domain);
+  if (!domain) return basePath;
+
+  const search = new URLSearchParams({
+    domain,
+  });
+
+  return `${basePath}?${search.toString()}`;
+}
+
 export async function getMetaChannelStatus() {
   return apiGet("/api/channels/meta/status");
 }
@@ -34,4 +49,21 @@ export async function getWebsiteWidgetStatus() {
 
 export async function saveWebsiteWidgetConfig(payload = {}) {
   return apiPost("/api/channels/webchat/config", payload);
+}
+
+export async function getWebsiteDomainVerificationStatus(options = {}) {
+  return apiGet(
+    buildDomainVerificationPath(
+      "/api/channels/webchat/domain-verification",
+      options
+    )
+  );
+}
+
+export async function createWebsiteDomainVerificationChallenge(payload = {}) {
+  return apiPost("/api/channels/webchat/domain-verification/challenge", payload);
+}
+
+export async function checkWebsiteDomainVerification(payload = {}) {
+  return apiPost("/api/channels/webchat/domain-verification/check", payload);
 }

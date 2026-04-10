@@ -10,6 +10,9 @@ import {
 } from "lucide-react";
 
 import {
+  checkWebsiteDomainVerification,
+  createWebsiteDomainVerificationChallenge,
+  getWebsiteDomainVerificationStatus,
   getWebsiteWidgetStatus,
   saveWebsiteWidgetConfig,
 } from "../../api/channelConnect.js";
@@ -64,6 +67,31 @@ function buildFormState(payload = {}) {
   };
 }
 
+function formatTimestamp(value) {
+  const raw = s(value);
+  if (!raw) return "Not available";
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleString();
+}
+
+function verificationTone(state = "") {
+  const normalized = s(state).toLowerCase();
+  if (normalized === "verified") return "success";
+  if (normalized === "failed") return "danger";
+  if (normalized === "pending") return "warning";
+  return "info";
+}
+
+function verificationStateLabel(state = "") {
+  const normalized = s(state).toLowerCase();
+  if (normalized === "verified") return "Verified";
+  if (normalized === "pending") return "Pending DNS check";
+  if (normalized === "failed") return "Verification failed";
+  return "Unverified";
+}
+
 function FeedbackBanner({ tone = "success", children }) {
   return (
     <InlineNotice
@@ -88,6 +116,9 @@ export default function WebsiteWidgetDetailDrawer({
   const [draftForm, setDraftForm] = useState(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [copyFeedback, setCopyFeedback] = useState("");
+  const [verificationInput, setVerificationInput] = useState("");
+  const [verificationMessage, setVerificationMessage] = useState("");
+  const [verificationOverride, setVerificationOverride] = useState(null);
   const websiteStatusQueryKey = buildWorkspaceScopedQueryKey(
     ["website-widget-status"],
     workspace.tenantKey
@@ -107,6 +138,9 @@ export default function WebsiteWidgetDetailDrawer({
       setDraftForm(buildFormState(payload));
       setStatusMessage("Website widget settings saved.");
       setCopyFeedback("");
+      setVerificationInput("");
+      setVerificationMessage("");
+      setVerificationOverride(null);
       await queryClient.invalidateQueries({
         queryKey: websiteStatusQueryKey,
       });
@@ -117,14 +151,85 @@ export default function WebsiteWidgetDetailDrawer({
     },
   });
 
+  const refreshVerificationMutation = useMutation({
+    mutationFn: getWebsiteDomainVerificationStatus,
+    async onSuccess(nextPayload) {
+      setVerificationOverride(obj(nextPayload));
+      setVerificationInput(
+        s(nextPayload.domain || nextPayload.candidateDomain || verificationInput)
+      );
+      setVerificationMessage("Domain verification status refreshed.");
+      await queryClient.invalidateQueries({
+        queryKey: websiteStatusQueryKey,
+      });
+    },
+  });
+
+  const createChallengeMutation = useMutation({
+    mutationFn: createWebsiteDomainVerificationChallenge,
+    async onSuccess(nextPayload) {
+      setVerificationOverride(obj(nextPayload));
+      setVerificationInput(
+        s(nextPayload.domain || nextPayload.candidateDomain || verificationInput)
+      );
+      setVerificationMessage("DNS TXT challenge created.");
+      await queryClient.invalidateQueries({
+        queryKey: websiteStatusQueryKey,
+      });
+    },
+  });
+
+  const checkVerificationMutation = useMutation({
+    mutationFn: checkWebsiteDomainVerification,
+    async onSuccess(nextPayload) {
+      setVerificationOverride(obj(nextPayload));
+      setVerificationInput(
+        s(nextPayload.domain || nextPayload.candidateDomain || verificationInput)
+      );
+      setVerificationMessage(
+        s(nextPayload.state).toLowerCase() === "verified"
+          ? "Domain ownership verified."
+          : "Domain verification checked."
+      );
+      await queryClient.invalidateQueries({
+        queryKey: websiteStatusQueryKey,
+      });
+    },
+  });
+
   const payload = statusQuery.data || {};
   const widget = obj(payload.widget);
   const install = obj(payload.install);
   const readiness = obj(payload.readiness);
+  const serverVerification = obj(payload.domainVerification);
+  const verificationSurface = Object.keys(obj(verificationOverride)).length
+    ? obj(verificationOverride)
+    : serverVerification;
+  const verificationChallenge = obj(verificationSurface.challenge);
+  const verificationCandidateDomains = arr(verificationSurface.candidateDomains);
   const permissions = obj(payload.permissions);
   const blockers = arr(readiness.blockers);
   const saveAllowed = permissions.saveAllowed !== false;
   const form = draftForm || buildFormState(payload);
+  const verificationError = s(
+    createChallengeMutation.error?.message ||
+      checkVerificationMutation.error?.message ||
+      refreshVerificationMutation.error?.message
+  );
+  const suggestedVerificationDomain = s(
+    verificationSurface.domain || verificationSurface.candidateDomain
+  );
+  const verificationInputValue =
+    verificationInput === "" ? suggestedVerificationDomain : verificationInput;
+  const verificationTargetDomain = s(
+    verificationInputValue ||
+      verificationSurface.domain ||
+      verificationSurface.candidateDomain
+  );
+  const verificationBusy =
+    createChallengeMutation.isPending ||
+    checkVerificationMutation.isPending ||
+    refreshVerificationMutation.isPending;
 
   const headerStatus =
     readiness.status === "ready"
@@ -173,9 +278,41 @@ export default function WebsiteWidgetDetailDrawer({
     });
   }
 
+  function resetVerificationFeedback() {
+    setVerificationMessage("");
+    createChallengeMutation.reset();
+    checkVerificationMutation.reset();
+    refreshVerificationMutation.reset();
+  }
+
+  function handleCreateChallenge() {
+    resetVerificationFeedback();
+    createChallengeMutation.mutate(
+      verificationTargetDomain ? { domain: verificationTargetDomain } : {}
+    );
+  }
+
+  function handleVerifyNow() {
+    resetVerificationFeedback();
+    checkVerificationMutation.mutate(
+      verificationTargetDomain ? { domain: verificationTargetDomain } : {}
+    );
+  }
+
+  function handleRefreshVerification() {
+    resetVerificationFeedback();
+    refreshVerificationMutation.mutate(
+      verificationTargetDomain ? { domain: verificationTargetDomain } : {}
+    );
+  }
+
   function handleRefresh() {
     setDraftForm(null);
     setStatusMessage("");
+    setVerificationInput("");
+    setVerificationMessage("");
+    setVerificationOverride(null);
+    resetVerificationFeedback();
     statusQuery.refetch();
   }
 
@@ -183,6 +320,10 @@ export default function WebsiteWidgetDetailDrawer({
     setDraftForm(null);
     setStatusMessage("");
     setCopyFeedback("");
+    setVerificationInput("");
+    setVerificationMessage("");
+    setVerificationOverride(null);
+    resetVerificationFeedback();
     onClose?.();
   }
 
@@ -293,6 +434,138 @@ export default function WebsiteWidgetDetailDrawer({
                       : "Needs setup"
                 }
               />
+            </div>
+          </Section>
+
+          <Section
+            eyebrow="Domain verification"
+            title="DNS TXT ownership"
+            description="This prepares future production install enforcement for Website Chat. It is visible here now, but it does not block the current widget flow yet."
+          >
+            <div className="space-y-4">
+              <SaveFeedback success={verificationMessage} error={verificationError} />
+
+              <InlineNotice
+                tone={verificationTone(verificationSurface.state)}
+                title={verificationStateLabel(verificationSurface.state)}
+                description={s(
+                  verificationSurface.message,
+                  "Create a DNS TXT challenge, publish it on the website domain, then verify ownership here."
+                )}
+                compact
+              />
+
+              {verificationCandidateDomains.length > 1 ? (
+                <InlineNotice
+                  tone="info"
+                  description={`Candidate domains from the current Website Chat config: ${verificationCandidateDomains.join(", ")}`}
+                  compact
+                />
+              ) : null}
+
+              <FieldGroup
+                label="Domain"
+                description={
+                  saveAllowed
+                    ? "Use the suggested website domain or enter a specific public domain to verify."
+                    : "Website Chat ownership verification is shown here for the current configured domain."
+                }
+              >
+                <Input
+                  value={verificationInputValue}
+                  onChange={(event) => setVerificationInput(event.target.value)}
+                  readOnly={!saveAllowed}
+                  appearance="quiet"
+                  placeholder={s(
+                    verificationSurface.candidateDomain,
+                    "example.com"
+                  )}
+                />
+              </FieldGroup>
+
+              <div className="overflow-hidden rounded-panel border border-line-soft bg-surface">
+                <DataRow
+                  label="Verification state"
+                  value={verificationStateLabel(verificationSurface.state)}
+                />
+                <DataRow
+                  label="Active domain"
+                  value={s(
+                    verificationSurface.domain ||
+                      verificationSurface.candidateDomain,
+                    "Not available"
+                  )}
+                />
+                <DataRow
+                  label="Reason code"
+                  value={s(verificationSurface.reasonCode, "Not available")}
+                />
+                <DataRow
+                  label="Last checked"
+                  value={formatTimestamp(verificationSurface.lastCheckedAt)}
+                />
+                <DataRow
+                  label="Verified at"
+                  value={formatTimestamp(verificationSurface.verifiedAt)}
+                />
+                <DataRow
+                  label="TXT record name"
+                  value={s(
+                    verificationChallenge.name,
+                    "Create a challenge to generate the TXT record name."
+                  )}
+                />
+              </div>
+
+              <FieldGroup
+                label="TXT record value"
+                description="Add this exact TXT value at the TXT host shown above."
+              >
+                <Textarea
+                  value={s(verificationChallenge.value)}
+                  readOnly
+                  rows={2}
+                  appearance="quiet"
+                  placeholder="Create a challenge to generate the TXT record value."
+                />
+              </FieldGroup>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <ChannelActionButton
+                  quiet
+                  fullWidth
+                  showArrow={false}
+                  onClick={handleCreateChallenge}
+                  disabled={!saveAllowed || statusQuery.isLoading || verificationBusy}
+                  isLoading={createChallengeMutation.isPending}
+                  className="!h-[40px] !rounded-[10px] !text-[10px]"
+                >
+                  Create challenge
+                </ChannelActionButton>
+
+                <ChannelActionButton
+                  fullWidth
+                  showArrow={false}
+                  onClick={handleVerifyNow}
+                  disabled={!saveAllowed || statusQuery.isLoading || verificationBusy}
+                  isLoading={checkVerificationMutation.isPending}
+                  className="!h-[40px] !rounded-[10px] !text-[10px]"
+                >
+                  Verify now
+                </ChannelActionButton>
+
+                <ChannelActionButton
+                  quiet
+                  fullWidth
+                  showArrow={false}
+                  onClick={handleRefreshVerification}
+                  disabled={statusQuery.isLoading || verificationBusy}
+                  isLoading={refreshVerificationMutation.isPending}
+                  className="!h-[40px] !rounded-[10px] !text-[10px]"
+                >
+                  Refresh status
+                </ChannelActionButton>
+              </div>
             </div>
           </Section>
 
