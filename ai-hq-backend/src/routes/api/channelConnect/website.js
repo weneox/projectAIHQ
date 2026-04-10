@@ -7,6 +7,7 @@ import {
   normalizeWidgetConfigForSave,
   resolveWidgetEnabled,
   resolveWebsiteWidgetStatus,
+  widgetStatusAllowsInstall,
 } from "../websiteWidget/config.js";
 import { auditSafe, getTenantByKey } from "./repository.js";
 import { getReqActor, getReqTenantKey, s } from "./utils.js";
@@ -17,7 +18,7 @@ function obj(value) {
 
 function buildBlockers(status = {}) {
   const config = normalizeWidgetConfig(status.widgetConfig, {
-    defaultEnabled: status.widgetChannelStatus === "active",
+    defaultEnabled: widgetStatusAllowsInstall(status.widgetChannelStatus),
   });
   const blockers = [];
 
@@ -66,7 +67,7 @@ function buildBlockers(status = {}) {
 
 function buildWebsiteWidgetStatusPayload(req, status = {}, viewerRole = "member") {
   const config = normalizeWidgetConfig(status.widgetConfig, {
-    defaultEnabled: status.widgetChannelStatus === "active",
+    defaultEnabled: widgetStatusAllowsInstall(status.widgetChannelStatus),
   });
   const blockers = buildBlockers(status);
   const saveAllowed = canManageSettings(viewerRole);
@@ -176,7 +177,7 @@ export async function saveWebsiteWidgetConfig({ db, req }) {
           : typeof obj(req.body).enabled === "boolean"
             ? obj(req.body).enabled
             : normalizeWidgetConfig(current?.widgetConfig, {
-                defaultEnabled: current?.widgetChannelStatus === "active",
+                defaultEnabled: widgetStatusAllowsInstall(current?.widgetChannelStatus),
               }).enabled,
     },
     tenantKey
@@ -197,7 +198,7 @@ export async function saveWebsiteWidgetConfig({ db, req }) {
   await dbUpsertTenantChannel(db, tenant.id, "webchat", {
     provider: "website_widget",
     display_name: "Website chat",
-    status: nextConfig.enabled ? "active" : "disabled",
+    status: nextConfig.enabled ? "connected" : "disabled",
     is_primary: true,
     config: persistedConfig,
   });
