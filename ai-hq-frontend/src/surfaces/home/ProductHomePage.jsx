@@ -140,8 +140,8 @@ function StepRow({
       disabled={!clickable}
       className={cx(
         "group grid w-full grid-cols-[40px_minmax(0,1fr)_24px] items-start gap-4 py-5 text-left transition-[background-color,color] duration-base ease-premium",
-        !last && "border-b border-line-soft",
-        clickable ? "hover:bg-white/20" : "cursor-default"
+        !last && "border-b border-white/60",
+        clickable ? "hover:bg-white/24" : "cursor-default"
       )}
     >
       <div className="flex items-start justify-center pt-[2px]">
@@ -237,14 +237,16 @@ export default function ProductHomePage() {
         />
       ) : null}
 
-      <section className="border-b border-line-soft pb-6">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+      <section className="relative border-b border-white/70 pb-7">
+        <div className="pointer-events-none absolute right-[-4%] top-[-18%] h-[220px] w-[220px] rounded-full bg-[radial-gradient(circle,rgba(65,105,255,0.14)_0%,rgba(65,105,255,0.04)_46%,rgba(65,105,255,0)_74%)] blur-3xl" />
+
+        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0 max-w-[920px]">
-            <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-text-subtle">
+            <div className="text-[12px] font-semibold uppercase tracking-[0.16em] text-brand">
               {topLabel}
             </div>
 
-            <h1 className="mt-3 text-[2.15rem] font-semibold leading-[0.96] tracking-[-0.055em] text-text md:text-[2.55rem]">
+            <h1 className="mt-3 text-[2.05rem] font-semibold leading-[0.96] tracking-[-0.055em] text-text md:text-[2.45rem]">
               {headline}
             </h1>
 
@@ -287,7 +289,7 @@ export default function ProductHomePage() {
         </div>
       </section>
 
-      <section className="border-t border-line-soft">
+      <section className="border-t border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.22),rgba(255,255,255,0.08))]">
         {steps.map((step, index) => (
           <StepRow
             key={step.id}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { apiGet } from "../../api/client.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
@@ -9,6 +10,7 @@ import useProductHome from "../../view-models/useProductHome.js";
 import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
 import FloatingAiWidget from "./FloatingAiWidget.jsx";
 import Sidebar, {
+  SHELL_TOPBAR_HEIGHT,
   SIDEBAR_COLLAPSED_WIDTH,
   SIDEBAR_WIDTH,
 } from "./Sidebar.jsx";
@@ -24,6 +26,13 @@ const INITIAL_SHELL_STATS = {
   message: "",
 };
 
+const INITIAL_WORKSPACE_META = {
+  workspaceName: "Workspace",
+  workspaceKey: "",
+  userName: "",
+  userEmail: "",
+};
+
 const SHELL_REFRESH_EVENT_TYPES = new Set([
   "inbox.message.created",
   "inbox.thread.updated",
@@ -34,6 +43,7 @@ const SHELL_REFRESH_EVENT_TYPES = new Set([
 ]);
 
 const SIDEBAR_STORAGE_KEY = "aihq.sidebar.collapsed";
+
 const HOME_ASSISTANT_FALLBACK = {
   mode: "setup",
   title: "AI setup lives on Home",
@@ -61,14 +71,32 @@ const LOADING_ASSISTANT_FALLBACK = {
   },
 };
 
+function s(value, fallback = "") {
+  return String(value ?? fallback).trim();
+}
+
+function obj(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : fallback;
+}
+
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+function pickFirstString(...values) {
+  for (const value of values) {
+    const text = s(value);
+    if (text) return text;
+  }
+  return "";
+}
+
 function resolveShellMode(pathname = "") {
   const path = String(pathname || "");
   if (path.startsWith("/inbox")) return "immersive";
   return "standard";
-}
-
-function s(value, fallback = "") {
-  return String(value ?? fallback).trim();
 }
 
 async function fetchShellResource(path) {
@@ -126,6 +154,105 @@ function buildShellStatsFromResponses(inboxRes, leadsRes) {
   };
 }
 
+function buildHostFallbackMeta() {
+  if (typeof window === "undefined") return INITIAL_WORKSPACE_META;
+
+  const hostname = s(window.location.hostname, "localhost").toLowerCase();
+
+  if (!hostname || hostname === "localhost" || hostname === "127.0.0.1") {
+    return {
+      workspaceName: "Local workspace",
+      workspaceKey: "localhost",
+      userName: "",
+      userEmail: "",
+    };
+  }
+
+  const key = hostname.split(".")[0] || "workspace";
+  const name = key
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+
+  return {
+    workspaceName: name,
+    workspaceKey: key,
+    userName: "",
+    userEmail: "",
+  };
+}
+
+function extractWorkspaceMeta(payload) {
+  const root = obj(payload);
+  const workspace = obj(
+    root.workspace ||
+      root.tenant ||
+      root.account ||
+      obj(root.bootstrap).workspace ||
+      obj(root.bootstrap).tenant ||
+      obj(root.session).workspace
+  );
+
+  const user = obj(
+    root.user ||
+      root.profile ||
+      obj(root.session).user ||
+      obj(root.auth).user
+  );
+
+  const membership = obj(arr(root.memberships)[0]);
+
+  const workspaceName = pickFirstString(
+    workspace.displayName,
+    workspace.name,
+    workspace.workspaceName,
+    workspace.tenantName,
+    membership.workspaceName,
+    membership.tenantName,
+    root.workspaceName,
+    root.tenantName
+  );
+
+  const workspaceKey = pickFirstString(
+    workspace.key,
+    workspace.slug,
+    workspace.workspaceKey,
+    workspace.tenantKey,
+    membership.workspaceKey,
+    membership.tenantKey,
+    root.workspaceKey,
+    root.tenantKey
+  );
+
+  const userName = pickFirstString(
+    user.name,
+    user.fullName,
+    user.displayName,
+    root.userName
+  );
+
+  const userEmail = pickFirstString(
+    user.email,
+    root.userEmail,
+    membership.email
+  );
+
+  return {
+    workspaceName,
+    workspaceKey,
+    userName,
+    userEmail,
+  };
+}
+
+function mergeWorkspaceMeta(currentMeta, nextMeta) {
+  return {
+    workspaceName: pickFirstString(nextMeta?.workspaceName, currentMeta?.workspaceName),
+    workspaceKey: pickFirstString(nextMeta?.workspaceKey, currentMeta?.workspaceKey),
+    userName: pickFirstString(nextMeta?.userName, currentMeta?.userName),
+    userEmail: pickFirstString(nextMeta?.userEmail, currentMeta?.userEmail),
+  };
+}
+
 function SharedStatsNotice({ message }) {
   if (!message) return null;
 
@@ -149,6 +276,9 @@ export default function Shell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [widgetOpen, setWidgetOpen] = useState(false);
   const [shellStats, setShellStats] = useState(INITIAL_SHELL_STATS);
+  const [workspaceMeta, setWorkspaceMeta] = useState(() =>
+    mergeWorkspaceMeta(INITIAL_WORKSPACE_META, buildHostFallbackMeta())
+  );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     getInitialCollapsedState
   );
@@ -165,14 +295,12 @@ export default function Shell() {
   }, [homeRouteActive, location.search]);
 
   const homeDataEnabled = homeRouteActive || widgetOpen;
-
   const home = useProductHome({
     enabled: homeDataEnabled,
   });
 
   const refreshTimerRef = useRef(0);
   const statsRequestRef = useRef(null);
-
   const shellMode = useMemo(
     () => resolveShellMode(location.pathname),
     [location.pathname]
@@ -219,6 +347,29 @@ export default function Shell() {
     },
     [loadShellStats]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadWorkspaceMeta = async () => {
+      try {
+        const response = await apiGet("/api/app/bootstrap");
+        if (cancelled) return;
+
+        const extracted = extractWorkspaceMeta(response);
+        setWorkspaceMeta((prev) => mergeWorkspaceMeta(prev, extracted));
+      } catch {
+        if (cancelled) return;
+        setWorkspaceMeta((prev) => mergeWorkspaceMeta(prev, buildHostFallbackMeta()));
+      }
+    };
+
+    loadWorkspaceMeta();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -306,7 +457,6 @@ export default function Shell() {
     (path = "") => {
       const target = s(path);
       if (!target) return;
-
       setWidgetOpen(false);
       navigate(target);
     },
@@ -317,22 +467,32 @@ export default function Shell() {
     ? SIDEBAR_COLLAPSED_WIDTH
     : SIDEBAR_WIDTH;
 
+  const contentMinHeight = `calc(100vh - ${SHELL_TOPBAR_HEIGHT}px)`;
+  const pageTransition = {
+    duration: 0.2,
+    ease: [0.22, 1, 0.36, 1],
+  };
+
   return (
     <div
-      className="relative min-h-screen overflow-hidden bg-canvas-muted text-text"
+      className="relative min-h-screen overflow-hidden text-text"
       style={{ "--shell-sidebar-w": `${shellSidebarWidth}px` }}
     >
-      <div className="pointer-events-none fixed inset-0 -z-[3] overflow-hidden">
-        <div className="absolute left-[-12%] top-[-14%] h-[460px] w-[460px] rounded-full bg-[radial-gradient(circle,rgba(46,96,255,0.12)_0%,rgba(46,96,255,0.04)_42%,rgba(46,96,255,0)_72%)] blur-3xl" />
-        <div className="absolute right-[-10%] top-[8%] h-[380px] w-[380px] rounded-full bg-[radial-gradient(circle,rgba(15,23,42,0.10)_0%,rgba(15,23,42,0.03)_48%,rgba(15,23,42,0)_76%)] blur-3xl" />
-        <div className="absolute bottom-[-14%] left-[28%] h-[320px] w-[320px] rounded-full bg-[radial-gradient(circle,rgba(21,128,61,0.06)_0%,rgba(21,128,61,0.015)_54%,rgba(21,128,61,0)_76%)] blur-3xl" />
+      <div className="pointer-events-none fixed inset-0 -z-[6] bg-[linear-gradient(180deg,#f4f5f7_0%,#f6f7f9_100%)]" />
+
+      <div className="pointer-events-none fixed inset-0 -z-[5] overflow-hidden">
+        <div className="absolute left-[6%] top-[-90px] h-[240px] w-[240px] rounded-full bg-[radial-gradient(circle,rgba(46,96,255,0.08)_0%,rgba(46,96,255,0.02)_44%,rgba(46,96,255,0)_74%)] blur-3xl" />
       </div>
 
-      <div className="pointer-events-none fixed inset-y-0 left-0 z-[1] hidden border-r border-white/60 bg-surface/88 shadow-[inset_-1px_0_0_rgba(255,255,255,0.7)] backdrop-blur md:block"
+      <div
+        className="pointer-events-none fixed inset-y-0 left-0 z-[1] hidden bg-white shadow-[inset_-1px_0_0_rgba(15,23,42,0.06)] transition-[width] duration-slow ease-premium md:block"
         style={{ width: "var(--shell-sidebar-w)" }}
       />
 
-      <div className="pointer-events-none fixed left-0 right-0 top-0 z-[1] h-[56px] border-b border-white/60 bg-surface/86 shadow-[inset_0_-1px_0_rgba(255,255,255,0.72)] backdrop-blur" />
+      <div
+        className="pointer-events-none fixed left-0 right-0 top-0 z-[1] bg-white shadow-[inset_0_-1px_0_rgba(15,23,42,0.06)]"
+        style={{ height: `${SHELL_TOPBAR_HEIGHT}px` }}
+      />
 
       <Sidebar
         mobileOpen={mobileOpen}
@@ -342,35 +502,42 @@ export default function Shell() {
         setCollapsed={setSidebarCollapsed}
       />
 
-      <div className="relative z-[2] min-h-screen md:pl-[var(--shell-sidebar-w)]">
+      <div className="relative z-[2] min-h-screen transition-[padding-left] duration-slow ease-premium md:pl-[var(--shell-sidebar-w)]">
         <Header
           onMenuClick={() => setMobileOpen(true)}
           notifications={notifications}
+          shellStats={shellStats}
+          workspaceMeta={workspaceMeta}
         />
 
         <main
           className={cx(
-            "relative min-h-[calc(100vh-56px)]",
+            "relative",
             shellMode === "immersive"
               ? "overflow-hidden"
               : "page-scroll overflow-y-auto"
           )}
+          style={{ minHeight: contentMinHeight }}
         >
           {shellMode === "immersive" ? (
-            <div className="h-[calc(100vh-56px)] min-h-0 overflow-hidden">
+            <div style={{ height: contentMinHeight }} className="min-h-0 overflow-hidden">
               <Outlet />
             </div>
           ) : (
-            <div className="relative">
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-[220px] bg-[linear-gradient(180deg,rgba(255,255,255,0.42),rgba(255,255,255,0))]" />
+            <div className="relative mx-auto w-full max-w-shell-content px-5 py-6 md:px-7 md:py-7">
+              <SharedStatsNotice message={shellStats?.message} />
 
-              <div className="relative mx-auto w-full max-w-shell-content px-5 py-6 md:px-7 md:py-7">
-                <SharedStatsNotice message={shellStats?.message} />
-
-                <div className="min-h-[calc(100vh-56px-56px)]">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={`${location.pathname}${location.search}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={pageTransition}
+                >
                   <Outlet />
-                </div>
-              </div>
+                </motion.div>
+              </AnimatePresence>
             </div>
           )}
         </main>

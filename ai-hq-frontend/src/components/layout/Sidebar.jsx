@@ -1,12 +1,7 @@
 import * as React from "react";
 import { Drawer } from "antd";
 import { NavLink } from "react-router-dom";
-import {
-  Building2,
-  PanelLeftClose,
-  PanelLeftOpen,
-  X,
-} from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { cx } from "../../lib/cx.js";
 import {
   PRIMARY_SECTIONS,
@@ -14,78 +9,106 @@ import {
   UTILITY_SECTIONS,
 } from "./shellNavigation.js";
 
-const SIDEBAR_WIDTH = 248;
-const SIDEBAR_COLLAPSED_WIDTH = 72;
-const MOBILE_DRAWER_WIDTH = 288;
-const SHELL_TOPBAR_HEIGHT = 56;
+const SIDEBAR_WIDTH = 272;
+const SIDEBAR_COLLAPSED_WIDTH = 84;
+const MOBILE_DRAWER_WIDTH = 304;
+const SHELL_TOPBAR_HEIGHT = 60;
+
+const NAV_STACK = [
+  ...PRIMARY_SECTIONS.map((item) => ({ type: "item", item })),
+  { type: "divider", id: "divider-primary-secondary" },
+  ...SECONDARY_SECTIONS.map((item) => ({ type: "item", item })),
+  ...(UTILITY_SECTIONS.length
+    ? [{ type: "divider", id: "divider-secondary-utility" }]
+    : []),
+  ...UTILITY_SECTIONS.map((item) => ({ type: "item", item })),
+];
 
 function formatBadgeCount(count) {
   if (typeof count !== "number" || count <= 0) return null;
   return count > 99 ? "99+" : String(count);
 }
 
-function SectionTitle({ children, collapsed = false }) {
-  if (collapsed) return null;
-
+function BrandMark({ compact = false }) {
   return (
-    <div className="px-4 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle first:pt-0">
-      {children}
-    </div>
+    <span
+      aria-hidden="true"
+      className={cx(
+        "relative shrink-0",
+        compact ? "h-6 w-6" : "h-7 w-7"
+      )}
+    >
+      <span className="absolute bottom-[2px] left-[1px] h-[2px] w-[18px] rounded-full bg-[linear-gradient(90deg,rgba(15,23,42,0.92),rgba(46,96,255,0.9))]" />
+      <span className="absolute left-[3px] top-[1px] h-[21px] w-[2px] rounded-full bg-[rgba(15,23,42,0.96)]" />
+      <span className="absolute left-[10px] top-[5px] h-[17px] w-[2px] rounded-full bg-[rgba(46,96,255,0.98)]" />
+      <span className="absolute left-[17px] top-[0px] h-[22px] w-[2px] rounded-full bg-[rgba(15,23,42,0.54)]" />
+    </span>
   );
 }
 
-function Brand({ collapsed = false, mobile = false, onNavigate, onClose }) {
+function SidebarBrand({
+  collapsed = false,
+  mobile = false,
+  onNavigate,
+  onClose,
+}) {
   return (
     <div
       className={cx(
-        "border-b border-white/70 px-3 py-3.5",
-        collapsed && !mobile && "px-2"
+        "relative flex h-[60px] items-center",
+        collapsed && !mobile ? "justify-center px-2" : "justify-between px-4"
       )}
     >
-      <div
+      <NavLink
+        to="/home"
+        onClick={onNavigate}
+        aria-label="AI HQ Home"
         className={cx(
-          "flex items-center",
-          collapsed && !mobile ? "justify-center" : "justify-between gap-2"
+          "min-w-0 text-text",
+          collapsed && !mobile
+            ? "flex h-11 w-11 items-center justify-center"
+            : "flex min-w-0 flex-1 items-center gap-3"
         )}
       >
-        <NavLink
-          to="/home"
-          onClick={onNavigate}
-          aria-label="AI HQ Home"
+        <BrandMark compact={collapsed && !mobile} />
+
+        <div
           className={cx(
-            "min-w-0 text-text",
+            "min-w-0 overflow-hidden transition-[max-width,opacity,transform] duration-slow ease-premium",
             collapsed && !mobile
-              ? "flex h-10 w-10 items-center justify-center rounded-soft"
-              : "flex min-w-0 flex-1 items-center gap-3"
+              ? "max-w-0 translate-x-1 opacity-0"
+              : "max-w-[160px] translate-x-0 opacity-100"
           )}
         >
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-soft bg-surface-subtle text-text shadow-[0_1px_0_rgba(255,255,255,0.88)_inset]">
-            <Building2 className="h-4 w-4" strokeWidth={1.9} />
-          </span>
+          <div className="truncate text-[15px] font-semibold tracking-[-0.04em] text-text">
+            AI HQ
+          </div>
+          <div className="mt-[1px] truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-text-subtle/70">
+            Workspace OS
+          </div>
+        </div>
+      </NavLink>
 
-          {!collapsed || mobile ? (
-            <span className="min-w-0 truncate text-[15px] font-semibold tracking-[-0.02em]">
-              AI HQ
-            </span>
-          ) : null}
-        </NavLink>
-
-        {mobile ? (
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close navigation"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-soft text-text-muted transition-[background-color,color] duration-base ease-premium hover:bg-surface-subtle hover:text-text"
-          >
-            <X className="h-4 w-4" strokeWidth={1.9} />
-          </button>
-        ) : null}
-      </div>
+      {mobile ? (
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close navigation"
+          className="inline-flex h-9 w-9 items-center justify-center text-text-muted transition-[color,opacity,transform] duration-base ease-premium hover:text-text"
+        >
+          <X className="h-4 w-4" strokeWidth={1.9} />
+        </button>
+      ) : null}
     </div>
   );
 }
 
-function NavRow({ item, shellStats = {}, onNavigate, collapsed = false }) {
+function SidebarItem({
+  item,
+  shellStats = {},
+  onNavigate,
+  collapsed = false,
+}) {
   const Icon = item.icon;
   const badgeCount = formatBadgeCount(shellStats?.[item.badgeKey]);
   const linkLabel = badgeCount ? `${item.label} ${badgeCount}` : item.label;
@@ -96,43 +119,72 @@ function NavRow({ item, shellStats = {}, onNavigate, collapsed = false }) {
       onClick={onNavigate}
       title={collapsed ? item.label : undefined}
       aria-label={linkLabel}
+      end={item.to === "/home"}
     >
       {({ isActive }) => (
         <div
           className={cx(
-            "group relative flex items-center gap-3 rounded-soft px-4 text-[13px] transition-[background-color,color,transform] duration-base ease-premium",
-            collapsed ? "mx-auto h-10 w-10 justify-center px-0" : "h-10",
-            isActive
-              ? "bg-surface-subtle text-text"
-              : "text-text-muted hover:bg-surface-subtle hover:text-text"
+            "group relative mx-2 flex items-center overflow-hidden transition-[transform,opacity] duration-base ease-premium",
+            collapsed ? "h-11 justify-center px-0" : "h-11 gap-3 px-4"
           )}
         >
-          {isActive && !collapsed ? (
-            <span className="absolute left-0 top-1/2 h-5 w-[2px] -translate-y-1/2 rounded-full bg-brand" />
+          <span
+            className={cx(
+              "pointer-events-none absolute inset-y-[4px] rounded-[13px] transition-[opacity,background-color,box-shadow,transform] duration-base ease-premium",
+              collapsed ? "inset-x-[4px]" : "left-0 right-0",
+              isActive
+                ? "bg-[linear-gradient(90deg,rgba(46,96,255,0.14),rgba(46,96,255,0.045))] opacity-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_10px_22px_-18px_rgba(46,96,255,0.58)]"
+                : "bg-[linear-gradient(90deg,rgba(255,255,255,0.92),rgba(255,255,255,0.52))] opacity-0 group-hover:opacity-100"
+            )}
+          />
+
+          {!collapsed ? (
+            <span
+              className={cx(
+                "absolute left-0 top-1/2 h-[18px] w-[2px] -translate-y-1/2 rounded-full transition-[opacity,transform,background-color] duration-base ease-premium",
+                isActive ? "bg-brand opacity-100" : "opacity-0"
+              )}
+            />
           ) : null}
 
           <Icon
             className={cx(
-              "h-4 w-4 shrink-0 transition-colors",
-              isActive ? "text-text" : "text-text-subtle group-hover:text-text"
+              "relative z-[1] h-[17px] w-[17px] shrink-0 transition-[color,transform] duration-base ease-premium",
+              isActive
+                ? "text-brand"
+                : "text-text-subtle group-hover:text-text"
             )}
             strokeWidth={1.9}
           />
 
-          {!collapsed ? (
-            <>
-              <span className="min-w-0 flex-1 truncate font-medium">
+          <div
+            className={cx(
+              "relative z-[1] min-w-0 overflow-hidden transition-[max-width,opacity,transform] duration-slow ease-premium",
+              collapsed
+                ? "max-w-0 translate-x-1 opacity-0"
+                : "max-w-[180px] translate-x-0 opacity-100"
+            )}
+          >
+            <div className="flex min-w-0 items-center gap-3">
+              <span
+                className={cx(
+                  "min-w-0 flex-1 truncate text-[13px] font-medium tracking-[-0.02em] transition-colors duration-base ease-premium",
+                  isActive ? "text-text" : "text-text-muted group-hover:text-text"
+                )}
+              >
                 {item.label}
               </span>
 
               {badgeCount ? (
-                <span className="shrink-0 text-[12px] text-text-subtle">
+                <span className="shrink-0 text-[11px] font-medium text-text-subtle">
                   {badgeCount}
                 </span>
               ) : null}
-            </>
-          ) : badgeCount ? (
-            <span className="absolute right-1 top-1 text-[10px] text-text-subtle">
+            </div>
+          </div>
+
+          {collapsed && badgeCount ? (
+            <span className="absolute right-[8px] top-[7px] text-[10px] font-medium text-text-subtle">
               {badgeCount}
             </span>
           ) : null}
@@ -142,28 +194,15 @@ function NavRow({ item, shellStats = {}, onNavigate, collapsed = false }) {
   );
 }
 
-function NavGroup({
-  title,
-  items,
-  shellStats,
-  onNavigate,
-  collapsed = false,
-}) {
-  if (!items.length) return null;
-
+function SidebarDivider({ collapsed = false }) {
   return (
-    <div className="space-y-1">
-      <SectionTitle collapsed={collapsed}>{title}</SectionTitle>
-
-      {items.map((item) => (
-        <NavRow
-          key={item.id}
-          item={item}
-          shellStats={shellStats}
-          onNavigate={onNavigate}
-          collapsed={collapsed}
-        />
-      ))}
+    <div
+      className={cx(
+        "px-3 py-2 transition-opacity duration-base ease-premium",
+        collapsed ? "opacity-0" : "opacity-100"
+      )}
+    >
+      <div className="h-px bg-[rgba(15,23,42,0.06)]" />
     </div>
   );
 }
@@ -177,9 +216,22 @@ function CollapseControl({ collapsed = false, onToggle }) {
       onClick={onToggle}
       aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-soft text-text-muted transition-[background-color,color] duration-base ease-premium hover:bg-surface-subtle hover:text-text"
+      className={cx(
+        "inline-flex items-center text-text-muted transition-[color,opacity] duration-base ease-premium hover:text-text",
+        collapsed ? "h-10 w-10 justify-center" : "h-10 gap-2 px-2"
+      )}
     >
       <Icon className="h-4 w-4" strokeWidth={1.9} />
+      <span
+        className={cx(
+          "overflow-hidden text-[12px] font-medium tracking-[-0.01em] transition-[max-width,opacity,transform] duration-slow ease-premium",
+          collapsed
+            ? "max-w-0 translate-x-1 opacity-0"
+            : "max-w-[120px] translate-x-0 opacity-100"
+        )}
+      >
+        Collapse
+      </span>
     </button>
   );
 }
@@ -193,53 +245,42 @@ function SidebarContent({
   onCloseMobile,
 }) {
   return (
-    <div className="flex h-full flex-col bg-transparent">
-      <Brand
+    <div className="relative flex h-full flex-col">
+      <SidebarBrand
         collapsed={collapsed}
         mobile={mobile}
         onNavigate={onNavigate}
         onClose={onCloseMobile}
       />
 
-      <div className="sidebar-scroll flex-1 overflow-y-auto px-2 py-3">
-        <div className="space-y-5">
-          <NavGroup
-            title="Primary"
-            items={PRIMARY_SECTIONS}
-            shellStats={shellStats}
-            onNavigate={onNavigate}
-            collapsed={collapsed}
-          />
+      <div className="sidebar-scroll flex-1 overflow-y-auto py-3">
+        <div className="space-y-[2px]">
+          {NAV_STACK.map((entry) => {
+            if (entry.type === "divider") {
+              return <SidebarDivider key={entry.id} collapsed={collapsed} />;
+            }
 
-          <NavGroup
-            title="Product"
-            items={SECONDARY_SECTIONS}
-            shellStats={shellStats}
-            onNavigate={onNavigate}
-            collapsed={collapsed}
-          />
-
-          <NavGroup
-            title="Other"
-            items={UTILITY_SECTIONS}
-            shellStats={shellStats}
-            onNavigate={onNavigate}
-            collapsed={collapsed}
-          />
+            return (
+              <SidebarItem
+                key={entry.item.id}
+                item={entry.item}
+                shellStats={shellStats}
+                onNavigate={onNavigate}
+                collapsed={collapsed}
+              />
+            );
+          })}
         </div>
       </div>
 
       {!mobile ? (
-        <div
-          className={cx(
-            "border-t border-white/70 p-2",
-            collapsed && "flex justify-center"
-          )}
-        >
-          <CollapseControl
-            collapsed={collapsed}
-            onToggle={onToggleCollapse}
-          />
+        <div className={cx("px-4 pb-3", collapsed && "flex justify-center px-2")}>
+          <div className={cx(!collapsed && "border-t border-[rgba(15,23,42,0.06)] pt-2")}>
+            <CollapseControl
+              collapsed={collapsed}
+              onToggle={onToggleCollapse}
+            />
+          </div>
         </div>
       ) : null}
     </div>
@@ -256,14 +297,20 @@ export default function Sidebar({
   return (
     <>
       <aside
-        className="fixed inset-y-0 left-0 z-[70] hidden overflow-hidden border-r border-white/70 bg-transparent md:block"
+        className="fixed inset-y-0 left-0 z-[70] hidden overflow-hidden transition-[width] duration-slow ease-premium md:block"
         style={{ width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH }}
       >
-        <SidebarContent
-          shellStats={shellStats}
-          collapsed={collapsed}
-          onToggleCollapse={() => setCollapsed?.((value) => !value)}
-        />
+        <div className="relative h-full">
+          <div className="absolute inset-0 bg-[rgb(255,255,255)]" />
+          <div className="absolute inset-0 shadow-[inset_-1px_0_0_rgba(15,23,42,0.06)]" />
+          <div className="absolute left-[-18px] top-[-10px] h-[130px] w-[130px] rounded-full bg-[radial-gradient(circle,rgba(46,96,255,0.10)_0%,rgba(46,96,255,0.034)_46%,rgba(46,96,255,0)_76%)] blur-2xl" />
+
+          <SidebarContent
+            shellStats={shellStats}
+            collapsed={collapsed}
+            onToggleCollapse={() => setCollapsed?.((value) => !value)}
+          />
+        </div>
       </aside>
 
       <Drawer
@@ -275,16 +322,16 @@ export default function Sidebar({
         styles={{
           body: {
             padding: 0,
-            background: "rgba(var(--color-surface),0.96)",
-            backdropFilter: "blur(16px)",
+            background: "rgb(255,255,255)",
           },
           header: { display: "none" },
           content: {
-            background: "rgba(var(--color-surface),0.96)",
-            backdropFilter: "blur(16px)",
+            background: "rgb(255,255,255)",
+            boxShadow: "inset -1px 0 0 rgba(15,23,42,0.06)",
           },
           mask: {
-            background: "rgba(17,24,39,0.2)",
+            background: "rgba(15,23,42,0.24)",
+            backdropFilter: "blur(3px)",
           },
         }}
       >
