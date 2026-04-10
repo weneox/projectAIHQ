@@ -544,6 +544,36 @@ function shouldEnsureCapabilitiesProjection({
   return false;
 }
 
+function shouldAttemptTruthVersionCreation({
+  businessProfile = {},
+  capabilities = {},
+  savedProfile = null,
+  savedCapabilities = null,
+  publishedServices = [],
+  publishedContacts = [],
+  publishedLocations = [],
+  publishedTruthFacts = [],
+  sourceInfo = {},
+} = {}) {
+  const savedProfileJson = obj(savedProfile?.profile_json || savedProfile?.profileJson);
+  const savedCapabilitiesJson = obj(
+    savedCapabilities?.capabilities_json || savedCapabilities?.capabilitiesJson
+  );
+
+  return Boolean(
+    Object.keys(obj(businessProfile)).length ||
+      Object.keys(obj(capabilities)).length ||
+      Object.keys(savedProfileJson).length ||
+      Object.keys(savedCapabilitiesJson).length ||
+      arr(publishedServices).length ||
+      arr(publishedContacts).length ||
+      arr(publishedLocations).length ||
+      arr(publishedTruthFacts).length ||
+      s(sourceInfo?.primarySourceType) ||
+      s(sourceInfo?.sourceUrl)
+  );
+}
+
 function buildTruthVersionRequiredError({
   businessProfileId = "",
   businessCapabilitiesId = "",
@@ -1188,8 +1218,17 @@ export async function projectSetupReviewDraftToCanonical(
 
   if (
     typeof truthVersionHelper?.createVersion === "function" &&
-    businessProfileId &&
-    businessCapabilitiesId
+    shouldAttemptTruthVersionCreation({
+      businessProfile,
+      capabilities,
+      savedProfile,
+      savedCapabilities,
+      publishedServices,
+      publishedContacts,
+      publishedLocations,
+      publishedTruthFacts,
+      sourceInfo,
+    })
   ) {
     const approvedAt =
       s(savedProfile?.approved_at) ||
@@ -1206,8 +1245,8 @@ export async function projectSetupReviewDraftToCanonical(
       createdTruthVersion = await truthVersionHelper.createVersion({
         tenantId: actor.tenantId,
         tenantKey: actor.tenantKey,
-        businessProfileId,
-        businessCapabilitiesId,
+        businessProfileId: businessProfileId || null,
+        businessCapabilitiesId: businessCapabilitiesId || null,
         reviewSessionId: persistedReviewSessionId || null,
         approvedAt,
         approvedBy,
