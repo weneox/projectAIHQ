@@ -291,8 +291,6 @@ function buildProgressSnapshot(assistantState = {}, reviewPayload = null) {
     ? countReadySectionsFromStatus(sectionStatus)
     : -1;
 
-  // Canonical priority:
-  // setup.summary -> assistant.review -> review payload -> draft.progress -> local fallback
   const explicitReadySections = n(
     setupSummary.readySections,
     n(
@@ -348,7 +346,6 @@ function getNaturalStep(assistantState = {}) {
   const nextQuestion = obj(assistantState?.assistant?.nextQuestion);
   const nextKey = normalizeStep(nextQuestion.key);
 
-  // Trust backend nextQuestion only if that step is still actually unanswered.
   if (nextKey && !stepAnswered(nextKey, assistantState)) {
     return nextKey;
   }
@@ -609,7 +606,7 @@ function MessageRow({ message, index, busy, onOptionClick }) {
                 key={`${message.id}-${option.id}`}
                 type="button"
                 className="ai-quick-chip"
-                onClick={() => onOptionClick(option)}
+                onClick={() => onOptionClick(option, s(message.step).toLowerCase())}
                 disabled={busy}
               >
                 {option.label}
@@ -661,6 +658,19 @@ function SetupAssistantSession({
   const showWebsiteImportCard =
     Boolean(websiteUrl) && !hasWebsiteReview && typeof onImportWebsite === "function";
   const composerError = s(localError || importError);
+
+  const latestVisibleQuestionStep = [...messages]
+    .reverse()
+    .find(
+      (item) =>
+        item?.role === "assistant" &&
+        (item?.kind === "question" || item?.kind === "clarifier") &&
+        s(item?.step)
+    )?.step;
+
+  const activePromptStep =
+    s(latestVisibleQuestionStep).toLowerCase() ||
+    s(currentStep).toLowerCase();
 
   const clearQueuedAssistant = useCallback(() => {
     if (
@@ -778,7 +788,7 @@ function SetupAssistantSession({
 
   async function handleSetupAnswer(rawText, forcedStep = "") {
     const text = s(rawText);
-    const step = forcedStep || currentStep;
+    const step = s(forcedStep || activePromptStep || currentStep).toLowerCase();
 
     if (!text || !step || step === "finalize" || busy) return;
 
@@ -894,7 +904,7 @@ function SetupAssistantSession({
     );
   }
 
-  async function handleOptionClick(option = {}) {
+  async function handleOptionClick(option = {}, optionStep = "") {
     const kind = s(option.kind).toLowerCase();
 
     if (kind === "start") {
@@ -941,7 +951,10 @@ function SetupAssistantSession({
     }
 
     if (s(option.value)) {
-      await handleSetupAnswer(option.value);
+      await handleSetupAnswer(
+        option.value,
+        s(optionStep || option.step || activePromptStep).toLowerCase()
+      );
     }
   }
 
@@ -966,7 +979,7 @@ function SetupAssistantSession({
     ? "Reply here..."
     : paused
       ? "Type start whenever you're ready..."
-      : STEP_META[currentStep]?.placeholder || "Type your answer...";
+      : STEP_META[activePromptStep]?.placeholder || "Type your answer...";
 
   return (
     <div className="ai-thread-wrap">
