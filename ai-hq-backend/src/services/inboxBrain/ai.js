@@ -217,9 +217,11 @@ STRICT BUSINESS RULES:
       matchedKnowledge,
       matchedPlaybook,
       runtime: resolvedRuntime,
+      promptBundle,
       trace: buildAgentReplayTrace({
         runtime: resolvedRuntime,
         behavior: resolvedRuntime.behavior,
+        policy,
         promptBundle,
         channel: channel || "inbox",
         usecase: "inbox.reply",
@@ -262,6 +264,20 @@ STRICT BUSINESS RULES:
             reason: s(parsed.handoffReason || ""),
             priority: s(parsed.handoffPriority || "normal").toLowerCase(),
           },
+        },
+        decisionPath: {
+          status: Boolean(parsed.handoff)
+            ? "escalated_to_operator"
+            : Boolean(parsed.noReply)
+              ? "no_reply"
+              : "answered",
+          reasonCode:
+            s(parsed.handoffReason || "") ||
+            (Boolean(parsed.handoff)
+              ? "ai_handoff_recommended"
+              : Boolean(parsed.noReply)
+                ? "ai_no_reply_recommended"
+                : "ai_reply_generated"),
         },
       }),
     };

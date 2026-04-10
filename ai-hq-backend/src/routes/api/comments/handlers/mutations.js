@@ -170,24 +170,27 @@ export function replyCommentHandler({
           actorType: actor || "operator",
         });
 
-        await safeAppendDecisionEvent(db, {
-          ...buildExecutionPolicyDecisionAuditShape({
-            tenantId: s(existing?.tenant_id || runtimeState?.tenant?.id),
-            tenantKey: s(existing?.tenant_key || tenantKey),
-            source: "comments.reply",
-            actor: actor || "operator",
-            surface: "comments",
-            channelType: s(existing.channel || "instagram").toLowerCase() || "instagram",
-            runtime: runtimeState.runtime,
-            decision: executionPolicy,
-            action: {
-              type: "reply_comment",
-              meta: {
-                intent: "comment_reply",
-              },
+        const decisionAudit = buildExecutionPolicyDecisionAuditShape({
+          tenantId: s(existing?.tenant_id || runtimeState?.tenant?.id),
+          tenantKey: s(existing?.tenant_key || tenantKey),
+          source: "comments.reply",
+          actor: actor || "operator",
+          surface: "comments",
+          channelType: s(existing.channel || "instagram").toLowerCase() || "instagram",
+          runtime: runtimeState.runtime,
+          decision: executionPolicy,
+          action: {
+            type: "reply_comment",
+            meta: {
+              intent: "comment_reply",
             },
-          }),
+          },
+        });
+
+        await safeAppendDecisionEvent(db, {
+          ...decisionAudit,
           decisionContext: {
+            ...decisionAudit.decisionContext,
             commentId: s(existing?.id),
             externalCommentId: s(existing?.external_comment_id),
             executeNow: Boolean(executeNow),
@@ -196,26 +199,29 @@ export function replyCommentHandler({
         });
 
         if (executionPolicy.blocked || executionPolicy.blockedUntilRepair) {
-          await safeAppendDecisionEvent(db, {
-            ...buildExecutionPolicyDecisionAuditShape({
-              tenantId: s(existing?.tenant_id || runtimeState?.tenant?.id),
-              tenantKey: s(existing?.tenant_key || tenantKey),
-              source: "comments.reply",
-              actor: actor || "operator",
-              surface: "comments",
-              channelType:
-                s(existing.channel || "instagram").toLowerCase() || "instagram",
-              runtime: runtimeState.runtime,
-              decision: executionPolicy,
-              action: {
-                type: "reply_comment",
-                meta: {
-                  intent: "comment_reply",
-                },
+          const blockedDecisionAudit = buildExecutionPolicyDecisionAuditShape({
+            tenantId: s(existing?.tenant_id || runtimeState?.tenant?.id),
+            tenantKey: s(existing?.tenant_key || tenantKey),
+            source: "comments.reply",
+            actor: actor || "operator",
+            surface: "comments",
+            channelType:
+              s(existing.channel || "instagram").toLowerCase() || "instagram",
+            runtime: runtimeState.runtime,
+            decision: executionPolicy,
+            action: {
+              type: "reply_comment",
+              meta: {
+                intent: "comment_reply",
               },
-            }),
+            },
+          });
+
+          await safeAppendDecisionEvent(db, {
+            ...blockedDecisionAudit,
             eventType: mapExecutionOutcomeToDecisionEventType(executionPolicy.outcome),
             decisionContext: {
+              ...blockedDecisionAudit.decisionContext,
               commentId: s(existing?.id),
               externalCommentId: s(existing?.external_comment_id),
               executeNow: Boolean(executeNow),

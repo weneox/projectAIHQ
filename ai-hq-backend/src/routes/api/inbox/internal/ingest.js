@@ -226,25 +226,28 @@ export function createInboxIngestHandler({
         executionPolicy: executionPolicy.summary,
       };
 
+      const decisionAudit = buildExecutionPolicyDecisionAuditShape({
+        tenantId: String(tenant?.id || tenantId),
+        tenantKey: input.tenantKey,
+        source: "inbox.ingest",
+        actor: "system",
+        surface: "inbox",
+        channelType: input.channel,
+        runtime,
+        summary: executionPolicy.summary,
+        actions: proposedActions,
+        currentState: {
+          handoffActive:
+            runtime?.threadState?.handoffActive ??
+            runtime?.threadState?.handoff_active ??
+            thread?.handoff_active,
+        },
+      });
+
       await safeAppendDecisionEvent(client, {
-        ...buildExecutionPolicyDecisionAuditShape({
-          tenantId: String(tenant?.id || tenantId),
-          tenantKey: input.tenantKey,
-          source: "inbox.ingest",
-          actor: "system",
-          surface: "inbox",
-          channelType: input.channel,
-          runtime,
-          summary: executionPolicy.summary,
-          actions: proposedActions,
-          currentState: {
-            handoffActive:
-              runtime?.threadState?.handoffActive ??
-              runtime?.threadState?.handoff_active ??
-              thread?.handoff_active,
-          },
-        }),
+        ...decisionAudit,
         decisionContext: {
+          ...decisionAudit.decisionContext,
           threadId: String(thread?.id || ""),
           messageId: String(message?.id || ""),
           proposedActionCount: proposedActions.length,
@@ -264,28 +267,31 @@ export function createInboxIngestHandler({
           executionPolicy.summary.strictestOutcome
         ) !== "execution_policy_decision"
       ) {
+        const blockedDecisionAudit = buildExecutionPolicyDecisionAuditShape({
+          tenantId: String(tenant?.id || tenantId),
+          tenantKey: input.tenantKey,
+          source: "inbox.ingest",
+          actor: "system",
+          surface: "inbox",
+          channelType: input.channel,
+          runtime,
+          summary: executionPolicy.summary,
+          actions: proposedActions,
+          currentState: {
+            handoffActive:
+              runtime?.threadState?.handoffActive ??
+              runtime?.threadState?.handoff_active ??
+              thread?.handoff_active,
+          },
+        });
+
         await safeAppendDecisionEvent(client, {
-          ...buildExecutionPolicyDecisionAuditShape({
-            tenantId: String(tenant?.id || tenantId),
-            tenantKey: input.tenantKey,
-            source: "inbox.ingest",
-            actor: "system",
-            surface: "inbox",
-            channelType: input.channel,
-            runtime,
-            summary: executionPolicy.summary,
-            actions: proposedActions,
-            currentState: {
-              handoffActive:
-                runtime?.threadState?.handoffActive ??
-                runtime?.threadState?.handoff_active ??
-                thread?.handoff_active,
-            },
-          }),
+          ...blockedDecisionAudit,
           eventType: mapExecutionOutcomeToDecisionEventType(
             executionPolicy.summary.strictestOutcome
           ),
           decisionContext: {
+            ...blockedDecisionAudit.decisionContext,
             threadId: String(thread?.id || ""),
             messageId: String(message?.id || ""),
             blockedActionTypes: executionPolicy.filteredActions

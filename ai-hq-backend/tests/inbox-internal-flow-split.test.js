@@ -357,6 +357,19 @@ test("persistOutboundMessage preserves payload metadata and durable correlation 
     meta: {
       correlationId: "corr-1",
       internalExecution: true,
+      replayTrace: {
+        schema: "agent_replay_trace.v1",
+        runtimeRef: {
+          source: "approved_runtime_projection",
+          approvedRuntime: true,
+          runtimeProjectionId: "projection-1",
+          truthVersionId: "truth-v1",
+        },
+        decisionPath: {
+          status: "answered",
+          reasonCode: "approved_runtime_reply",
+        },
+      },
     },
     createAttempt: async (input) => {
       createAttemptCalls.push(input);
@@ -373,7 +386,19 @@ test("persistOutboundMessage preserves payload metadata and durable correlation 
   assert.equal(createAttemptCalls[0]?.payload?.meta?.correlationId, "corr-1");
   assert.equal(createAttemptCalls[0]?.payload?.meta?.internalExecution, true);
   assert.equal(createAttemptCalls[0]?.payload?.meta?.delivery?.status, "pending");
+  assert.equal(
+    createAttemptCalls[0]?.payload?.meta?.replayTrace?.runtimeRef?.runtimeProjectionId,
+    "projection-1"
+  );
+  assert.equal(
+    createAttemptCalls[0]?.payload?.meta?.replayTrace?.runtimeRef?.truthVersionId,
+    "truth-v1"
+  );
   assert.equal(enqueueCalls[0]?.payload?.meta?.correlationId, "corr-1");
+  assert.equal(
+    enqueueCalls[0]?.payload?.meta?.replayTrace?.decisionPath?.status,
+    "answered"
+  );
   assert.equal(enqueueCalls[0]?.correlationIds?.messageId, result.message.id);
   assert.equal(enqueueCalls[0]?.safeMetadata?.recipientId, "user-ext-1");
 });
@@ -605,6 +630,23 @@ test("inbox behavior runtime uses niche qualification CTA guidance for fallback 
       company_name: "Acme Clinic",
     },
     runtime: {
+      authority: {
+        mode: "strict",
+        required: true,
+        available: true,
+        source: "approved_runtime_projection",
+        tenantId: "tenant-1",
+        tenantKey: "acme-clinic",
+        runtimeProjectionId: "projection-1",
+        projectionHash: "hash-1",
+      },
+      raw: {
+        projection: {
+          metadata_json: {
+            publishedTruthVersionId: "truth-v1",
+          },
+        },
+      },
       tenant: {
         id: "tenant-1",
         tenant_key: "acme-clinic",
@@ -643,6 +685,15 @@ test("inbox behavior runtime uses niche qualification CTA guidance for fallback 
   assert.equal(send?.meta?.toneProfile, "calm_professional_reassuring");
   assert.equal(result.trace?.channel, "instagram");
   assert.equal(result.trace?.usecase, "inbox.reply");
+  assert.equal(send?.meta?.replayTrace?.runtimeRef?.approvedRuntime, true);
+  assert.equal(send?.meta?.replayTrace?.runtimeRef?.truthVersionId, "truth-v1");
+  assert.equal(send?.meta?.replayTrace?.decisionPath?.status, "answered");
+  assert.equal(
+    send?.meta?.replayTrace?.decisionPath?.reasonCode,
+    "approved_runtime_reply"
+  );
+  assert.equal(send?.meta?.replayTrace?.policy?.autoReplyEnabled, true);
+  assert.equal(send?.meta?.replayTrace?.policy?.qualificationMode, "guided");
   assert.equal(result.trace?.behavior?.primaryCta, "book_now");
   assert.equal(result.trace?.evaluation?.outcome, "reply_recommended");
   assert.equal(result.trace?.evaluation?.ctaDirection, "reply_with_cta");
@@ -669,6 +720,23 @@ test("inbox behavior runtime blocks disallowed-claim requests and forces handoff
       company_name: "Acme Clinic",
     },
     runtime: {
+      authority: {
+        mode: "strict",
+        required: true,
+        available: true,
+        source: "approved_runtime_projection",
+        tenantId: "tenant-1",
+        tenantKey: "acme-clinic",
+        runtimeProjectionId: "projection-1",
+        projectionHash: "hash-1",
+      },
+      raw: {
+        projection: {
+          metadata_json: {
+            publishedTruthVersionId: "truth-v1",
+          },
+        },
+      },
       tenant: {
         id: "tenant-1",
         tenant_key: "acme-clinic",
@@ -708,6 +776,15 @@ test("inbox behavior runtime blocks disallowed-claim requests and forces handoff
   assert.equal(result.trace?.decisions?.claimBlock?.blocked, true);
   assert.equal(result.trace?.evaluation?.handoff?.status, "recommended");
   assert.equal(result.trace?.evaluation?.claimBlock?.status, "blocked");
+  assert.equal(
+    send?.meta?.replayTrace?.decisionPath?.status,
+    "fallback_safe_response"
+  );
+  assert.equal(
+    send?.meta?.replayTrace?.decisionPath?.reasonCode,
+    "behavior_guardrail"
+  );
+  assert.equal(send?.meta?.replayTrace?.runtimeRef?.approvedRuntime, true);
   assert.equal(
     result.trace?.decisions?.handoff?.reason,
     "diagnosis_or_treatment_guarantees"

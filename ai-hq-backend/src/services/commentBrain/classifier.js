@@ -318,6 +318,7 @@ export async function classifyComment({
         usecase: "meta.comment_reply",
         decisions: fallback.meta.replayTrace?.decisions,
         evaluation: fallback.meta.replayTrace?.evaluation,
+        decisionPath: fallback.meta.replayTrace?.decisionPath,
       });
       return fallback;
     }
@@ -333,6 +334,7 @@ export async function classifyComment({
       usecase: "meta.comment_reply",
       decisions: normalized.meta.replayTrace?.decisions,
       evaluation: normalized.meta.replayTrace?.evaluation,
+      decisionPath: normalized.meta.replayTrace?.decisionPath,
     });
     return normalized;
   } catch {
@@ -347,6 +349,7 @@ export async function classifyComment({
       usecase: "meta.comment_reply",
       decisions: fallback.meta.replayTrace?.decisions,
       evaluation: fallback.meta.replayTrace?.evaluation,
+      decisionPath: fallback.meta.replayTrace?.decisionPath,
     });
     return fallback;
   }

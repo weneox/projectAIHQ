@@ -15,6 +15,14 @@ function createBehaviorRuntime(overrides = {}) {
       tenantId: "tenant-1",
       tenantKey: "acme",
       runtimeProjectionId: "projection-1",
+      projectionHash: "hash-1",
+    },
+    raw: {
+      projection: {
+        metadata_json: {
+          publishedTruthVersionId: "truth-v1",
+        },
+      },
     },
     tenant: {
       id: "tenant-1",
@@ -102,9 +110,22 @@ test("fallback classification blocks disallowed claims and keeps comments behavi
   assert.equal(result.meta.matchedDisallowedClaim, "instant_result_guarantees");
   assert.equal(result.meta.replayTrace?.channel, "comments");
   assert.equal(result.meta.replayTrace?.usecase, "meta.comment_reply");
+  assert.equal(result.meta.replayTrace?.runtimeRef?.approvedRuntime, true);
+  assert.equal(result.meta.replayTrace?.runtimeRef?.truthVersionId, "truth-v1");
   assert.equal(result.meta.replayTrace?.evaluation?.outcome, "handoff_recommended");
   assert.equal(result.meta.replayTrace?.evaluation?.claimBlock?.status, "blocked");
   assert.equal(result.meta.replayTrace?.decisions?.claimBlock?.blocked, true);
+  assert.equal(
+    result.meta.replayTrace?.decisionPath?.status,
+    "fallback_safe_response"
+  );
+  assert.equal(
+    result.meta.replayTrace?.decisionPath?.reasonCode,
+    "disallowed_claim_request"
+  );
+  assert.equal(result.meta.replayTrace?.policy?.language, "en");
+  assert.equal(result.meta.replayTrace?.policy?.autoReplyEnabled, true);
+  assert.equal(result.meta.replayTrace?.policy?.createLeadEnabled, true);
 });
 
 test("comments sales follow-up changes when channel behavior stops favoring DM", () => {

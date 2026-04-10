@@ -338,6 +338,7 @@ test("replyCommentHandler keeps reply orchestration, audit, and gateway semantic
         tenantId: "tenant-1",
         tenantKey: "acme",
         runtimeProjectionId: "projection-1",
+        projectionHash: "hash-1",
         health: { status: "ready" },
       },
       tenant: {
@@ -347,6 +348,7 @@ test("replyCommentHandler keeps reply orchestration, audit, and gateway semantic
       raw: {
         projection: {
           metadata_json: {
+            publishedTruthVersionId: "truth-v1",
             approvalPolicy: {
               strictestOutcome: "auto_approvable",
               risk: { level: "low" },
@@ -400,7 +402,20 @@ test("replyCommentHandler keeps reply orchestration, audit, and gateway semantic
   assert.equal(auditCalls[0].meta?.executionId, "execution-1");
   assert.equal(db.decisionEvents.length, 1);
   assert.equal(db.decisionEvents[0].event_type, "execution_policy_decision");
+  assert.equal(db.decisionEvents[0].truth_version_id, "truth-v1");
   assert.equal(db.decisionEvents[0].runtime_projection_id, "projection-1");
+  assert.equal(
+    db.decisionEvents[0].decision_context_json?.runtimeAuthoritySource,
+    "approved_runtime_projection"
+  );
+  assert.equal(
+    db.decisionEvents[0].decision_context_json?.approvedRuntime,
+    true
+  );
+  assert.equal(
+    db.decisionEvents[0].decision_context_json?.projectionHash,
+    "hash-1"
+  );
   assert.equal(emitted.length, 1);
   assert.equal(emitted[0].type, "comment.updated");
 });
@@ -432,6 +447,7 @@ test("replyCommentHandler blocks execution when policy requires repair", async (
         tenantId: "tenant-1",
         tenantKey: "acme",
         runtimeProjectionId: "projection-1",
+        projectionHash: "hash-1",
         health: {
           status: "stale",
           primaryReasonCode: "projection_stale",
@@ -444,6 +460,7 @@ test("replyCommentHandler blocks execution when policy requires repair", async (
       raw: {
         projection: {
           metadata_json: {
+            publishedTruthVersionId: "truth-v1",
             approvalPolicy: {
               strictestOutcome: "auto_approvable",
               risk: { level: "low" },
@@ -477,5 +494,10 @@ test("replyCommentHandler blocks execution when policy requires repair", async (
   assert.equal(res.body?.executionPolicy?.outcome, "blocked_until_repair");
   assert.equal(db.decisionEvents.length, 2);
   assert.equal(db.decisionEvents[0].event_type, "blocked_action_outcome");
+  assert.equal(db.decisionEvents[0].truth_version_id, "truth-v1");
+  assert.equal(
+    db.decisionEvents[0].decision_context_json?.runtimeAuthoritySource,
+    "approved_runtime_projection"
+  );
   assert.equal(db.decisionEvents[1].event_type, "blocked_action_outcome");
 });

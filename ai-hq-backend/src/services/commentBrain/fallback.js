@@ -421,6 +421,20 @@ export function fallbackClassification(text, { tenantKey, runtime } = {}) {
             reason: matchedDisallowedClaim ? "disallowed_claim_request" : "",
           },
         },
+        decisionPath: {
+          status: matchedDisallowedClaim
+            ? shouldReply
+              ? "fallback_safe_response"
+              : "refused"
+            : shouldHandoff
+              ? shouldReply || shouldPrivateReply
+                ? "fallback_safe_response"
+                : "escalated_to_operator"
+              : shouldReply || shouldPrivateReply
+                ? "answered"
+                : "no_reply",
+          reasonCode: reason,
+        },
       }),
     },
   };

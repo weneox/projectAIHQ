@@ -236,6 +236,20 @@ export function normalizeOutput(parsed, { tenantKey, runtime } = {}) {
             reason: disallowedClaimReason ? reason : "",
           },
         },
+        decisionPath: {
+          status: disallowedClaimReason
+            ? shouldReply
+              ? "fallback_safe_response"
+              : "refused"
+            : shouldHandoff
+              ? shouldReply || shouldPrivateReply
+                ? "fallback_safe_response"
+                : "escalated_to_operator"
+              : shouldReply || shouldPrivateReply
+                ? "answered"
+                : "no_reply",
+          reasonCode: reason,
+        },
       }),
     },
   };

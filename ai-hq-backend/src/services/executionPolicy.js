@@ -209,6 +209,42 @@ function extractProjectionHealth(runtime = {}) {
   );
 }
 
+function extractRuntimeProjection(runtime = {}) {
+  const value = obj(runtime);
+  const raw = obj(value.raw);
+  return obj(raw.projection || raw.runtimeProjection || raw.currentProjection);
+}
+
+function extractTruthVersionId(runtime = {}) {
+  const projection = extractRuntimeProjection(runtime);
+  const metadata = obj(projection.metadata_json || projection.metadata);
+  return s(
+    runtime?.truthVersionId ||
+      runtime?.truth_version_id ||
+      runtime?.publishedTruthVersionId ||
+      runtime?.published_truth_version_id ||
+      projection.truthVersionId ||
+      projection.truth_version_id ||
+      projection.publishedTruthVersionId ||
+      projection.published_truth_version_id ||
+      metadata.publishedTruthVersionId ||
+      metadata.published_truth_version_id ||
+      metadata.currentPublishedTruthVersionId ||
+      metadata.current_published_truth_version_id
+  );
+}
+
+function extractProjectionHash(runtime = {}) {
+  const authority = obj(obj(runtime).authority);
+  const projection = extractRuntimeProjection(runtime);
+  return s(
+    authority.projectionHash ||
+      runtime?.projectionHash ||
+      runtime?.projection_hash ||
+      projection.projection_hash
+  );
+}
+
 function extractTenantPolicies(runtime = {}, surface = "") {
   const value = obj(runtime);
   const tenant = obj(value.tenant);
@@ -496,6 +532,8 @@ function buildDecision({
   health = {},
   approvalPolicy = {},
   policyControl = {},
+  truthVersionId = "",
+  projectionHash = "",
   surface = "",
   channelType = "",
   actorType = "system",
@@ -542,7 +580,13 @@ function buildDecision({
       actorType: s(actorType || "system"),
       runtimeAuthorityAvailable: authority.available === true,
       runtimeAuthorityMode: s(authority.mode),
+      runtimeAuthoritySource: s(authority.source),
+      approvedRuntime:
+        lower(authority.source) === "approved_runtime_projection" &&
+        authority.available !== false,
       runtimeProjectionId: s(authority.runtimeProjectionId),
+      runtimeProjectionHash: s(projectionHash),
+      truthVersionId: s(truthVersionId),
       projectionHealthStatus: s(health.status),
       projectionHealthReasonCode: s(
         health.primaryReasonCode || health.reasonCode
@@ -578,6 +622,8 @@ export function evaluateExecutionPolicy({
   const authority = obj(obj(runtime).authority);
   const health = extractProjectionHealth(runtime);
   const approvalPolicy = extractApprovalPolicy(runtime);
+  const truthVersionId = extractTruthVersionId(runtime);
+  const projectionHash = extractProjectionHash(runtime);
   const policies = extractTenantPolicies(runtime, surface);
   const risk = classifyExecutionActionRisk(action);
   const actionType = risk.actionType;
@@ -607,6 +653,8 @@ export function evaluateExecutionPolicy({
       health,
       approvalPolicy,
       policyControl: effectivePolicyControl,
+      truthVersionId,
+      projectionHash,
       surface,
       channelType,
       actorType,
@@ -622,6 +670,8 @@ export function evaluateExecutionPolicy({
       health,
       approvalPolicy,
       policyControl: effectivePolicyControl,
+      truthVersionId,
+      projectionHash,
       surface,
       channelType,
       actorType,
@@ -645,6 +695,8 @@ export function evaluateExecutionPolicy({
       health,
       approvalPolicy,
       policyControl: effectivePolicyControl,
+      truthVersionId,
+      projectionHash,
       surface,
       channelType,
       actorType,
@@ -722,6 +774,8 @@ export function evaluateExecutionPolicy({
     health,
     approvalPolicy,
     policyControl: effectivePolicyControl,
+    truthVersionId,
+    projectionHash,
     surface,
     channelType,
     actorType,
@@ -917,6 +971,16 @@ export function buildExecutionPolicyDecisionAuditShape({
   const authority = obj(obj(runtime).authority);
   const health = extractProjectionHealth(runtime);
   const approvalPolicy = extractApprovalPolicy(runtime);
+  const truthVersionId = s(
+    signals.truthVersionId ||
+      resolvedDecision.truthVersionId ||
+      extractTruthVersionId(runtime)
+  );
+  const projectionHash = s(
+    signals.runtimeProjectionHash ||
+      resolvedDecision.runtimeProjectionHash ||
+      extractProjectionHash(runtime)
+  );
 
   return {
     tenantId: s(tenantId),
@@ -968,6 +1032,7 @@ export function buildExecutionPolicyDecisionAuditShape({
       changedAt: s(policyControl.changedAt),
       policyReason: s(policyControl.policyReason),
     },
+    truthVersionId,
     runtimeProjectionId: s(
       signals.runtimeProjectionId ||
         resolvedDecision.runtimeProjectionId ||
@@ -983,6 +1048,16 @@ export function buildExecutionPolicyDecisionAuditShape({
       actionIntent: s(risk.intent || action?.intent || obj(action?.meta).intent),
       actionRisk: lower(risk.level),
       proposedActionTypes: uniq(arr(actions).map((item) => s(item?.type))),
+      runtimeAuthoritySource: s(
+        signals.runtimeAuthoritySource || authority.source
+      ),
+      runtimeAuthorityMode: s(signals.runtimeAuthorityMode || authority.mode),
+      approvedRuntime:
+        signals.approvedRuntime === true ||
+        (lower(authority.source) === "approved_runtime_projection" &&
+          authority.available !== false),
+      projectionHash,
+      truthVersionId,
       currentState: {
         handoffActive: bool(
           currentState.handoffActive ?? currentState.handoff_active,
