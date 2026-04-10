@@ -9,6 +9,7 @@ const createWebsiteDomainVerificationChallenge = vi.fn();
 const checkWebsiteDomainVerification = vi.fn();
 const createWebsiteWidgetGtmInstallHandoff = vi.fn();
 const createWebsiteWidgetInstallHandoff = vi.fn();
+const createWebsiteWidgetWordpressInstallHandoff = vi.fn();
 const useWorkspaceTenantKey = vi.fn();
 
 vi.mock("../../api/channelConnect.js", () => ({
@@ -20,6 +21,8 @@ vi.mock("../../api/channelConnect.js", () => ({
     createWebsiteWidgetGtmInstallHandoff(...args),
   createWebsiteWidgetInstallHandoff: (...args) =>
     createWebsiteWidgetInstallHandoff(...args),
+  createWebsiteWidgetWordpressInstallHandoff: (...args) =>
+    createWebsiteWidgetWordpressInstallHandoff(...args),
   getWebsiteDomainVerificationStatus: (...args) =>
     getWebsiteDomainVerificationStatus(...args),
   getWebsiteWidgetStatus: (...args) => getWebsiteWidgetStatus(...args),
@@ -218,6 +221,69 @@ function buildGtmInstallHandoffPayload() {
   };
 }
 
+function buildWordpressInstallHandoffPayload() {
+  const packageJson = JSON.stringify(
+    {
+      packageType: "wordpress",
+      packageTitle: "Website Chat WordPress install package",
+      ready: true,
+      verifiedDomain: "acme.example",
+      widgetId: "ww_acme_widget",
+      loaderScriptUrl: "https://widget.example.test/website-widget-loader.js",
+      apiBase: "https://api.example.test/api",
+      readiness: {
+        status: "ready",
+        message:
+          "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
+        productionInstallReady: true,
+        verificationState: "verified",
+        verifiedAt: "2026-04-10T10:30:00.000Z",
+      },
+      instructions: [
+        "Upload and activate the private AIHQ Website Chat WordPress plugin on the target WordPress site.",
+        "Open Settings > AIHQ Website Chat in WordPress admin.",
+      ],
+      wordpressPlugin: {
+        slug: "aihq-website-chat",
+        pluginDirectory: "integrations/wordpress/aihq-website-chat",
+        mainFile: "aihq-website-chat.php",
+      },
+    },
+    null,
+    2
+  );
+
+  return {
+    ready: true,
+    generatedAt: "2026-04-10T11:10:00.000Z",
+    audience: "developer",
+    packageType: "wordpress",
+    packageTitle: "Website Chat WordPress install package",
+    verifiedDomain: "acme.example",
+    widgetId: "ww_acme_widget",
+    loaderScriptUrl: "https://widget.example.test/website-widget-loader.js",
+    apiBase: "https://api.example.test/api",
+    embedSnippet:
+      '<script src="https://widget.example.test/website-widget-loader.js" data-widget-id="ww_acme_widget" data-api-base="https://api.example.test/api" async></script>',
+    wordpressConfig: JSON.parse(packageJson),
+    packageSnippet: packageJson,
+    snippetLabel: "WordPress plugin package JSON",
+    instructions: [
+      "Upload and activate the private AIHQ Website Chat WordPress plugin on the target WordPress site.",
+      "Open Settings > AIHQ Website Chat in WordPress admin.",
+    ],
+    readiness: {
+      status: "ready",
+      message:
+        "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
+      productionInstallReady: true,
+      verificationState: "verified",
+      verifiedAt: "2026-04-10T10:30:00.000Z",
+    },
+    packageText: packageJson,
+  };
+}
+
 function renderDrawer(props = {}) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -314,6 +380,9 @@ describe("WebsiteWidgetDetailDrawer", () => {
     createWebsiteWidgetGtmInstallHandoff.mockResolvedValue(
       buildGtmInstallHandoffPayload()
     );
+    createWebsiteWidgetWordpressInstallHandoff.mockResolvedValue(
+      buildWordpressInstallHandoffPayload()
+    );
 
     Object.defineProperty(window.navigator, "clipboard", {
       configurable: true,
@@ -331,6 +400,7 @@ describe("WebsiteWidgetDetailDrawer", () => {
     checkWebsiteDomainVerification.mockReset();
     createWebsiteWidgetGtmInstallHandoff.mockReset();
     createWebsiteWidgetInstallHandoff.mockReset();
+    createWebsiteWidgetWordpressInstallHandoff.mockReset();
   });
 
   it("loads the trusted install config and shows the public embed details", async () => {
@@ -370,6 +440,9 @@ describe("WebsiteWidgetDetailDrawer", () => {
     ).toBeDisabled();
     expect(
       screen.getByRole("button", { name: /install with gtm/i })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /install on wordpress/i })
     ).toBeDisabled();
   });
 
@@ -492,7 +565,7 @@ describe("WebsiteWidgetDetailDrawer", () => {
 
     fireEvent.click(
       within(installSection).getByRole("button", {
-        name: /copy developer package/i,
+        name: /copy install package/i,
       })
     );
 
@@ -536,6 +609,42 @@ describe("WebsiteWidgetDetailDrawer", () => {
 
     expect(
       within(installSection).getAllByText("Website Chat GTM install handoff").length
+    ).toBeGreaterThan(0);
+  });
+
+  it("prepares a WordPress install package when production install is ready", async () => {
+    getWebsiteWidgetStatus.mockResolvedValueOnce(buildStatusPayload({ verified: true }));
+    renderDrawer();
+
+    const installSection = (
+      await screen.findByText("Embed this widget on the public website")
+    ).closest("section");
+    expect(installSection).not.toBeNull();
+
+    const wordpressButton = within(installSection).getByRole("button", {
+      name: /install on wordpress/i,
+    });
+
+    await waitFor(() => expect(wordpressButton).toBeEnabled());
+    fireEvent.click(wordpressButton);
+
+    await waitFor(() =>
+      expect(createWebsiteWidgetWordpressInstallHandoff).toHaveBeenCalledWith(
+        expect.objectContaining({
+          domain: "acme.example",
+        }),
+        expect.anything()
+      )
+    );
+
+    expect(
+      await within(installSection).findByDisplayValue(
+        /"packageType": "wordpress"/i
+      )
+    ).toBeInTheDocument();
+
+    expect(
+      within(installSection).getAllByText("Website Chat WordPress install package").length
     ).toBeGreaterThan(0);
   });
 });

@@ -6,6 +6,7 @@ import {
   createWebsiteDomainVerificationChallenge,
   createWebsiteWidgetGtmInstallHandoff,
   createWebsiteWidgetInstallHandoff,
+  createWebsiteWidgetWordpressInstallHandoff,
   getWebsiteWidgetStatus,
 } from "../src/routes/api/channelConnect/website.js";
 import { __test__ as websiteDomainVerificationTest } from "../src/services/websiteDomainVerification.js";
@@ -445,6 +446,65 @@ test("website widget GTM handoff refuses to generate while production install is
   await assert.rejects(
     () =>
       createWebsiteWidgetGtmInstallHandoff({
+        db,
+        req: buildAuthedReq(),
+      }),
+    (error) => {
+      assert.equal(error?.status, 409);
+      assert.equal(error?.reasonCode, "website_domain_verification_missing");
+      return true;
+    }
+  );
+});
+
+test("website widget WordPress handoff returns a WordPress package only when production install is ready", async () => {
+  const db = new FakeWebsiteDomainVerificationDb();
+
+  const challenge = await createWebsiteDomainVerificationChallenge({
+    db,
+    req: buildAuthedReq({
+      body: {
+        domain: "acme.example",
+      },
+    }),
+  });
+
+  await checkWebsiteDomainVerification({
+    db,
+    req: buildAuthedReq({
+      body: {
+        domain: "acme.example",
+      },
+    }),
+    resolveTxtFn: async () => [[challenge.challenge.value]],
+  });
+
+  const payload = await createWebsiteWidgetWordpressInstallHandoff({
+    db,
+    req: buildAuthedReq(),
+  });
+
+  assert.equal(payload.ready, true);
+  assert.equal(payload.packageType, "wordpress");
+  assert.equal(payload.verifiedDomain, "acme.example");
+  assert.match(String(payload.packageText || ""), /"packageType": "wordpress"/);
+  assert.equal(payload.wordpressConfig?.wordpressPlugin?.slug, "aihq-website-chat");
+  assert.equal(
+    db.auditEntries.some(
+      (entry) =>
+        entry.action ===
+        "settings.channel.webchat.install_handoff.wordpress_generated"
+    ),
+    true
+  );
+});
+
+test("website widget WordPress handoff refuses to generate while production install is blocked", async () => {
+  const db = new FakeWebsiteDomainVerificationDb();
+
+  await assert.rejects(
+    () =>
+      createWebsiteWidgetWordpressInstallHandoff({
         db,
         req: buildAuthedReq(),
       }),

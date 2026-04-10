@@ -14,6 +14,7 @@ import {
   createWebsiteDomainVerificationChallenge,
   createWebsiteWidgetGtmInstallHandoff,
   createWebsiteWidgetInstallHandoff,
+  createWebsiteWidgetWordpressInstallHandoff,
   getWebsiteDomainVerificationStatus,
   getWebsiteWidgetStatus,
   saveWebsiteWidgetConfig,
@@ -154,6 +155,15 @@ export default function WebsiteWidgetDetailDrawer({
     },
   });
 
+  const wordpressHandoffMutation = useMutation({
+    mutationFn: createWebsiteWidgetWordpressInstallHandoff,
+    onSuccess(nextPayload) {
+      setHandoffPackage(obj(nextPayload));
+      setHandoffMessage("WordPress install package prepared.");
+      setCopyFeedback("");
+    },
+  });
+
   const saveMutation = useMutation({
     mutationFn: saveWebsiteWidgetConfig,
     async onSuccess(payload) {
@@ -167,6 +177,7 @@ export default function WebsiteWidgetDetailDrawer({
       setHandoffPackage(null);
       handoffMutation.reset();
       gtmHandoffMutation.reset();
+      wordpressHandoffMutation.reset();
       await queryClient.invalidateQueries({
         queryKey: websiteStatusQueryKey,
       });
@@ -189,6 +200,7 @@ export default function WebsiteWidgetDetailDrawer({
       setHandoffPackage(null);
       handoffMutation.reset();
       gtmHandoffMutation.reset();
+      wordpressHandoffMutation.reset();
       await queryClient.invalidateQueries({
         queryKey: websiteStatusQueryKey,
       });
@@ -207,6 +219,7 @@ export default function WebsiteWidgetDetailDrawer({
       setHandoffPackage(null);
       handoffMutation.reset();
       gtmHandoffMutation.reset();
+      wordpressHandoffMutation.reset();
       await queryClient.invalidateQueries({
         queryKey: websiteStatusQueryKey,
       });
@@ -229,6 +242,7 @@ export default function WebsiteWidgetDetailDrawer({
       setHandoffPackage(null);
       handoffMutation.reset();
       gtmHandoffMutation.reset();
+      wordpressHandoffMutation.reset();
       await queryClient.invalidateQueries({
         queryKey: websiteStatusQueryKey,
       });
@@ -280,14 +294,18 @@ export default function WebsiteWidgetDetailDrawer({
     s(readiness.status).toLowerCase() === "ready" &&
     Boolean(s(install.embedSnippet));
   const handoffError = s(
-    handoffMutation.error?.message || gtmHandoffMutation.error?.message
+    handoffMutation.error?.message ||
+      gtmHandoffMutation.error?.message ||
+      wordpressHandoffMutation.error?.message
   );
   const verificationBusy =
     createChallengeMutation.isPending ||
     checkVerificationMutation.isPending ||
     refreshVerificationMutation.isPending;
   const handoffBusy =
-    handoffMutation.isPending || gtmHandoffMutation.isPending;
+    handoffMutation.isPending ||
+    gtmHandoffMutation.isPending ||
+    wordpressHandoffMutation.isPending;
 
   const headerStatus =
     readiness.status === "ready"
@@ -331,7 +349,9 @@ export default function WebsiteWidgetDetailDrawer({
       handoffSurface.packageText,
       s(handoffSurface.packageType) === "gtm"
         ? "GTM install package copied."
-        : "Developer install package copied."
+        : s(handoffSurface.packageType) === "wordpress"
+          ? "WordPress install package copied."
+          : "Developer install package copied."
     );
   }
 
@@ -361,6 +381,7 @@ export default function WebsiteWidgetDetailDrawer({
     setHandoffPackage(null);
     handoffMutation.reset();
     gtmHandoffMutation.reset();
+    wordpressHandoffMutation.reset();
   }
 
   function handleCreateChallenge() {
@@ -396,6 +417,14 @@ export default function WebsiteWidgetDetailDrawer({
     resetHandoffFeedback();
     setCopyFeedback("");
     gtmHandoffMutation.mutate(
+      verificationTargetDomain ? { domain: verificationTargetDomain } : {}
+    );
+  }
+
+  function handlePrepareWordpressInstall() {
+    resetHandoffFeedback();
+    setCopyFeedback("");
+    wordpressHandoffMutation.mutate(
       verificationTargetDomain ? { domain: verificationTargetDomain } : {}
     );
   }
@@ -850,7 +879,7 @@ export default function WebsiteWidgetDetailDrawer({
                 />
               </FieldGroup>
 
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <ChannelActionButton
                   fullWidth
                   showArrow={false}
@@ -878,12 +907,24 @@ export default function WebsiteWidgetDetailDrawer({
                   quiet
                   fullWidth
                   showArrow={false}
+                  onClick={handlePrepareWordpressInstall}
+                  disabled={!handoffReady || statusQuery.isLoading || handoffBusy}
+                  isLoading={wordpressHandoffMutation.isPending}
+                  className="!h-[40px] !rounded-[10px] !text-[10px]"
+                >
+                  Install on WordPress
+                </ChannelActionButton>
+
+                <ChannelActionButton
+                  quiet
+                  fullWidth
+                  showArrow={false}
                   onClick={handleCopyHandoffPackage}
                   disabled={!s(handoffSurface.packageText)}
                   leftIcon={<Copy className="h-4 w-4" strokeWidth={2.2} />}
                   className="!h-[40px] !rounded-[10px] !text-[10px]"
                 >
-                  Copy developer package
+                  Copy install package
                 </ChannelActionButton>
               </div>
 
@@ -894,8 +935,8 @@ export default function WebsiteWidgetDetailDrawer({
                   tone={productionInstallBlocked ? "warning" : "info"}
                   description={
                     productionInstallBlocked
-                      ? "Complete DNS TXT domain verification before generating a developer or GTM install handoff."
-                      : "Developer and GTM install handoff become available once Website Chat is ready for production install."
+                      ? "Complete DNS TXT domain verification before generating a developer, GTM, or WordPress install handoff."
+                      : "Developer, GTM, and WordPress install handoff become available once Website Chat is ready for production install."
                   }
                   compact
                 />
@@ -933,7 +974,11 @@ export default function WebsiteWidgetDetailDrawer({
                       handoffSurface.packageTitle,
                       "Developer install package"
                     )}
-                    description="Share this directly with the developer or webmaster handling the website code."
+                    description={
+                      s(handoffSurface.packageType) === "wordpress"
+                        ? "Paste this package JSON into the AIHQ Website Chat WordPress plugin settings page."
+                        : "Share this directly with the developer or webmaster handling the website code."
+                    }
                   >
                     <Textarea
                       value={s(handoffSurface.packageText)}

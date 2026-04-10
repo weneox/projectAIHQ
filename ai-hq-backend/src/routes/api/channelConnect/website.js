@@ -239,6 +239,44 @@ function buildWebsiteGtmCustomHtmlSnippet({
   ].join("\n");
 }
 
+function buildWebsiteWordpressInstallHandoffInstructions({
+  verifiedDomain = "",
+} = {}) {
+  return [
+    "Upload and activate the private AIHQ Website Chat WordPress plugin on the target WordPress site.",
+    "Open Settings > AIHQ Website Chat in WordPress admin.",
+    "Paste the WordPress package JSON exactly as provided below, save the settings, then enable Website Chat.",
+    `Confirm the WordPress site is served from ${verifiedDomain} before going live.`,
+    `After saving, load a page on ${verifiedDomain} and confirm Website Chat opens successfully.`,
+  ];
+}
+
+function buildWebsiteWordpressInstallConfig({
+  verifiedDomain = "",
+  widgetId = "",
+  loaderScriptUrl = "",
+  apiBase = "",
+  readiness = {},
+  instructions = [],
+} = {}) {
+  return {
+    packageType: "wordpress",
+    packageTitle: "Website Chat WordPress install package",
+    ready: true,
+    verifiedDomain,
+    widgetId,
+    loaderScriptUrl,
+    apiBase,
+    readiness,
+    instructions,
+    wordpressPlugin: {
+      slug: "aihq-website-chat",
+      pluginDirectory: "integrations/wordpress/aihq-website-chat",
+      mainFile: "aihq-website-chat.php",
+    },
+  };
+}
+
 function buildWebsiteInstallHandoffText({
   title = "Website Chat developer install handoff",
   verifiedDomain = "",
@@ -327,29 +365,9 @@ function buildWebsiteInstallHandoffPayload(
   const packageTitle =
     safePackageType === "gtm"
       ? "Website Chat GTM install handoff"
+      : safePackageType === "wordpress"
+        ? "Website Chat WordPress install package"
       : "Website Chat developer install handoff";
-  const packageSnippet =
-    safePackageType === "gtm"
-      ? buildWebsiteGtmCustomHtmlSnippet({
-          loaderScriptUrl: s(install.scriptUrl),
-          widgetId: s(widget.publicWidgetId),
-          apiBase: s(install.apiBase),
-        })
-      : s(install.embedSnippet);
-  const snippetLabel =
-    safePackageType === "gtm" ? "GTM Custom HTML tag" : "Embed snippet";
-  const instructions =
-    safePackageType === "gtm"
-      ? buildWebsiteGtmInstallHandoffInstructions({
-          verifiedDomain,
-          loaderScriptUrl: install.scriptUrl,
-          apiBase: install.apiBase,
-        })
-      : buildWebsiteInstallHandoffInstructions({
-          verifiedDomain,
-          loaderScriptUrl: install.scriptUrl,
-          apiBase: install.apiBase,
-        });
   const readiness = {
     status: s(obj(statusPayload.readiness).status, "ready"),
     message: s(
@@ -360,6 +378,49 @@ function buildWebsiteInstallHandoffPayload(
     verificationState: s(verification.state, "verified"),
     verifiedAt: verification.verifiedAt || null,
   };
+  const instructions =
+    safePackageType === "gtm"
+      ? buildWebsiteGtmInstallHandoffInstructions({
+          verifiedDomain,
+          loaderScriptUrl: install.scriptUrl,
+          apiBase: install.apiBase,
+        })
+      : safePackageType === "wordpress"
+        ? buildWebsiteWordpressInstallHandoffInstructions({
+            verifiedDomain,
+          })
+        : buildWebsiteInstallHandoffInstructions({
+            verifiedDomain,
+            loaderScriptUrl: install.scriptUrl,
+            apiBase: install.apiBase,
+          });
+  const wordpressConfig =
+    safePackageType === "wordpress"
+      ? buildWebsiteWordpressInstallConfig({
+          verifiedDomain,
+          widgetId: s(widget.publicWidgetId),
+          loaderScriptUrl: s(install.scriptUrl),
+          apiBase: s(install.apiBase),
+          readiness,
+          instructions,
+        })
+      : null;
+  const packageSnippet =
+    safePackageType === "gtm"
+      ? buildWebsiteGtmCustomHtmlSnippet({
+          loaderScriptUrl: s(install.scriptUrl),
+          widgetId: s(widget.publicWidgetId),
+          apiBase: s(install.apiBase),
+        })
+      : safePackageType === "wordpress"
+        ? JSON.stringify(wordpressConfig, null, 2)
+        : s(install.embedSnippet);
+  const snippetLabel =
+    safePackageType === "gtm"
+      ? "GTM Custom HTML tag"
+      : safePackageType === "wordpress"
+        ? "WordPress plugin package JSON"
+        : "Embed snippet";
 
   return {
     ready: true,
@@ -374,21 +435,25 @@ function buildWebsiteInstallHandoffPayload(
     embedSnippet: s(install.embedSnippet),
     gtmCustomHtmlSnippet:
       safePackageType === "gtm" ? packageSnippet : "",
+    wordpressConfig,
     packageSnippet,
     snippetLabel,
     instructions,
     readiness,
-    packageText: buildWebsiteInstallHandoffText({
-      title: packageTitle,
-      verifiedDomain,
-      widgetId: s(widget.publicWidgetId),
-      loaderScriptUrl: s(install.scriptUrl),
-      apiBase: s(install.apiBase),
-      packageSnippet,
-      snippetLabel,
-      readiness,
-      instructions,
-    }),
+    packageText:
+      safePackageType === "wordpress"
+        ? packageSnippet
+        : buildWebsiteInstallHandoffText({
+            title: packageTitle,
+            verifiedDomain,
+            widgetId: s(widget.publicWidgetId),
+            loaderScriptUrl: s(install.scriptUrl),
+            apiBase: s(install.apiBase),
+            packageSnippet,
+            snippetLabel,
+            readiness,
+            instructions,
+          }),
   };
 }
 
@@ -844,6 +909,60 @@ export async function createWebsiteWidgetGtmInstallHandoff({ db, req }) {
       verifiedDomain: payload.verifiedDomain,
       widgetId: payload.widgetId,
       packageType: "gtm",
+    }
+  );
+
+  return payload;
+}
+
+export async function createWebsiteWidgetWordpressInstallHandoff({ db, req }) {
+  const tenantKey = getReqTenantKey(req);
+  if (!tenantKey) {
+    throw createHttpError("Missing tenant context", 401);
+  }
+
+  const viewerRole = getNormalizedAuthRole(req);
+  if (!canManageSettings(viewerRole)) {
+    throw createHttpError(
+      "Only owner/admin can prepare a WordPress website install handoff",
+      403
+    );
+  }
+
+  const tenant = await getTenantByKey(db, tenantKey);
+  if (!tenant?.id) {
+    throw createHttpError("Tenant not found", 404);
+  }
+
+  const status = await resolveWebsiteWidgetStatus(db, tenantKey);
+  if (!status?.id) {
+    throw createHttpError("Tenant not found", 404);
+  }
+
+  const domainVerification = await loadWebsiteDomainVerificationSurface(db, status, {
+    requestedDomain: obj(req.body).domain || req?.query?.domain || "",
+  });
+  const payload = buildWebsiteInstallHandoffPayload(
+    req,
+    status,
+    domainVerification,
+    {
+      packageType: "wordpress",
+    }
+  );
+
+  await auditSafe(
+    db,
+    getReqActor(req),
+    tenant,
+    "settings.channel.webchat.install_handoff.wordpress_generated",
+    "tenant_channel",
+    WEBSITE_DOMAIN_VERIFICATION_CHANNEL,
+    {
+      channelType: WEBSITE_DOMAIN_VERIFICATION_CHANNEL,
+      verifiedDomain: payload.verifiedDomain,
+      widgetId: payload.widgetId,
+      packageType: "wordpress",
     }
   );
 

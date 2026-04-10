@@ -75,3 +75,7 @@ export async function createWebsiteWidgetInstallHandoff(payload = {}) {
 export async function createWebsiteWidgetGtmInstallHandoff(payload = {}) {
   return apiPost("/api/channels/webchat/install-handoff/gtm", payload);
 }
+
+export async function createWebsiteWidgetWordpressInstallHandoff(payload = {}) {
+  return apiPost("/api/channels/webchat/install-handoff/wordpress", payload);
+}
