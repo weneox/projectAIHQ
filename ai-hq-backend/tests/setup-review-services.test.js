@@ -1,1317 +1,229 @@
-import { createTenantKnowledgeHelpers } from "../../../db/helpers/tenantKnowledge.js";
-import { createTenantTruthVersionHelpers } from "../../../db/helpers/tenantTruthVersions.js";
+import test from "node:test";
+import assert from "node:assert/strict";
+
 import {
-  refreshRuntimeProjectionBestEffort,
-  q,
-} from "../../../db/helpers/tenantKnowledge/core.js";
-import {
-  dbDeleteTenantContact,
-  dbDeleteTenantLocation,
-  dbListTenantBusinessFacts,
-  dbListTenantContacts,
-  dbListTenantLocations,
-  dbUpsertTenantContact,
-  dbUpsertTenantLocation,
-} from "../../../db/helpers/tenantBusinessBrain.js";
-import {
-  createSetupService,
-  listSetupServices,
-  updateSetupService,
-} from "../services.js";
-import {
-  arr,
-  compactObject,
-  lower,
-  mergeDeep,
-  obj,
-  s,
-  toFiniteNumber,
-} from "./utils.js";
-import { buildFinalizeImpactSummary } from "../../sourceFusion/governance.js";
-import { buildFinalizeApprovalPolicySummary } from "../../sourceFusion/approvalPolicy.js";
+  buildCanonicalProfileSourceSummary,
+  projectSetupReviewDraftToCanonical,
+} from "../src/services/workspace/setup/projection.js";
 
-function hasDbQuery(db) {
-  return Boolean(db && typeof db.query === "function");
-}
-
-function resolveKnowledgeHelper(db, explicitHelper = null) {
-  if (explicitHelper) return explicitHelper;
-  if (!hasDbQuery(db)) return null;
-  return createTenantKnowledgeHelpers({ db });
-}
-
-function resolveTruthVersionHelper(db, explicitHelper = null) {
-  if (explicitHelper) return explicitHelper;
-  if (!hasDbQuery(db)) return null;
-  return createTenantTruthVersionHelpers({ db });
-}
-
-function buildDeferredRuntimeProjection({
-  actor = {},
-  requestedBy = "",
-  session = {},
-  draft = {},
-  sourceInfo = {},
-  truthVersion = null,
-} = {}) {
-  return compactObject({
-    status: "deferred",
-    triggerType: "review_approval",
-    requestedBy: s(requestedBy),
-    tenantId: s(actor?.tenantId),
-    tenantKey: s(actor?.tenantKey),
-    reviewSessionId: s(session?.id),
-    truthVersionId: s(truthVersion?.id),
-    metadata: compactObject({
-      source: "projectSetupReviewDraftToCanonical",
-      reviewSessionId: s(session?.id),
-      draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
-      primarySourceId: s(sourceInfo.primarySourceId),
-      latestRunId: s(sourceInfo.latestRunId),
-      reasonCode: "db_projection_deferred",
-    }),
-  });
-}
-
-function extractPrimarySourceInfo(session = {}, draft = {}, sources = []) {
-  const summary = obj(draft?.sourceSummary);
-  const latestImport = obj(summary.latestImport);
-
+function createDb() {
   return {
-    primarySourceId:
-      session?.primarySourceId ||
-      summary.primarySourceId ||
-      latestImport.sourceId ||
-      null,
-    primarySourceType:
-      s(session?.primarySourceType) ||
-      s(summary.primarySourceType) ||
-      s(latestImport.sourceType),
-    latestRunId:
-      summary.latestRunId ||
-      latestImport.runId ||
-      draft?.draftPayload?.latestImport?.runId ||
-      null,
-    sourceUrl:
-      s(summary.primarySourceUrl) ||
-      s(latestImport.sourceUrl) ||
-      s(draft?.draftPayload?.sourceUrl),
-    sources: arr(sources),
+    async query(queryText, params = []) {
+      const sql = String(
+        typeof queryText === "string" ? queryText : queryText?.text || ""
+      ).toLowerCase();
+
+      if (sql.includes("from tenant_setup_review_sessions")) {
+        return {
+          rows: [{ id: params[0] || "session-1" }],
+        };
+      }
+
+      if (sql.includes("from tenants")) {
+        return {
+          rows: [
+            {
+              id: "tenant-1",
+              tenant_key: "alpha",
+              company_name: "Alpha Studio",
+            },
+          ],
+        };
+      }
+
+      return { rows: [] };
+    },
   };
 }
 
-function extractServiceRows(data = {}) {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.services)) return data.services;
-  if (Array.isArray(data?.items)) return data.items;
-  if (Array.isArray(data?.rows)) return data.rows;
-  if (Array.isArray(data?.data)) return data.data;
-  return [];
-}
-
-function extractTruthVersionRows(data = {}) {
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.versions)) return data.versions;
-  if (Array.isArray(data?.items)) return data.items;
-  if (Array.isArray(data?.rows)) return data.rows;
-  if (Array.isArray(data?.data)) return data.data;
-  if (data && typeof data === "object") return [data];
-  return [];
-}
-
-function extractTruthVersionId(version = {}) {
-  return s(
-    version?.id ||
-      version?.versionId ||
-      version?.version_id ||
-      version?.truthVersionId ||
-      version?.truth_version_id
-  );
-}
-
-function extractTruthVersionBusinessProfileId(version = {}) {
-  return s(
-    version?.businessProfileId ||
-      version?.business_profile_id ||
-      version?.profileId ||
-      version?.profile_id ||
-      version?.profile?.id
-  );
-}
-
-function extractTruthVersionBusinessCapabilitiesId(version = {}) {
-  return s(
-    version?.businessCapabilitiesId ||
-      version?.business_capabilities_id ||
-      version?.capabilitiesId ||
-      version?.capabilities_id ||
-      version?.capabilities?.id
-  );
-}
-
-function isApprovedTruthVersion(version = {}) {
-  if (!extractTruthVersionId(version)) return false;
-
-  if (typeof version?.isPublished === "boolean") return version.isPublished;
-  if (typeof version?.published === "boolean") return version.published;
-  if (typeof version?.approved === "boolean") return version.approved;
-  if (typeof version?.isApproved === "boolean") return version.isApproved;
-
-  const status = lower(
-    version?.status ||
-      version?.versionStatus ||
-      version?.version_status ||
-      version?.publicationStatus ||
-      version?.publication_status
-  );
-
-  if (status) {
-    return (
-      status === "published" ||
-      status === "approved" ||
-      status === "live" ||
-      status === "active"
-    );
-  }
-
-  return Boolean(
-    s(
-      version?.publishedAt ||
-        version?.published_at ||
-        version?.approvedAt ||
-        version?.approved_at
-    )
-  );
-}
-
-function truthVersionMatchesProjection(
-  version = {},
-  {
-    businessProfileId = "",
-    businessCapabilitiesId = "",
-  } = {}
-) {
-  const versionBusinessProfileId =
-    extractTruthVersionBusinessProfileId(version);
-  const versionBusinessCapabilitiesId =
-    extractTruthVersionBusinessCapabilitiesId(version);
-
-  if (
-    businessProfileId &&
-    versionBusinessProfileId &&
-    businessProfileId !== versionBusinessProfileId
-  ) {
-    return false;
-  }
-
-  if (
-    businessCapabilitiesId &&
-    versionBusinessCapabilitiesId &&
-    businessCapabilitiesId !== versionBusinessCapabilitiesId
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-function normalizeReusableTruthVersion(version = {}, reuseMode = "") {
-  const id = extractTruthVersionId(version);
-  if (!id) return null;
-
-  return mergeDeep(obj(version), {
-    id,
-    reuseMode: s(reuseMode || version?.reuseMode || version?.reuse_mode),
-    reusedExistingTruthVersion: true,
-    metadataJson: mergeDeep(obj(version?.metadataJson || version?.metadata_json), {
-      reusedExistingTruthVersion: true,
-      reuseMode: s(reuseMode || version?.reuseMode || version?.reuse_mode),
-    }),
-  });
-}
-
-function shouldReuseTruthVersionFromCreateError(error = null) {
-  const code = lower(error?.code);
-  const reasonCode = lower(error?.reasonCode);
-  const message = lower(error?.message);
-
-  if (
-    code === "truth_version_not_required" ||
-    code === "setup_review_truth_version_not_required" ||
-    code === "tenant_truth_version_not_required" ||
-    code === "published_truth_version_reusable" ||
-    code === "truth_version_already_current" ||
-    code === "truth_version_reuse_latest" ||
-    code === "truth_version_noop"
-  ) {
-    return true;
-  }
-
-  if (
-    reasonCode === "truth_version_not_required" ||
-    reasonCode === "published_truth_version_reusable" ||
-    reasonCode === "truth_version_already_current"
-  ) {
-    return true;
-  }
-
-  if (
-    message.includes("no new truth version") ||
-    message.includes("fresh published truth version is not required") ||
-    message.includes("existing published truth version can be reused") ||
-    message.includes("latest approved truth version can be reused") ||
-    message.includes("truth version already current")
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-async function resolveReusableTruthVersion({
-  truthVersionHelper,
-  actor,
-  businessProfileId = "",
-  businessCapabilitiesId = "",
-} = {}) {
-  if (!truthVersionHelper || !actor?.tenantId) return null;
-
-  const baseArgs = {
-    tenantId: actor.tenantId,
-    tenantKey: actor.tenantKey,
-    businessProfileId: businessProfileId || undefined,
-    businessCapabilitiesId: businessCapabilitiesId || undefined,
+function createKnowledgeHelper() {
+  return {
+    async getBusinessProfile() {
+      return null;
+    },
+    async getBusinessCapabilities() {
+      return null;
+    },
+    async upsertBusinessProfile(input) {
+      return {
+        id: "profile-1",
+        approved_by: "Reviewer",
+        approved_at: "2026-03-25T02:00:00.000Z",
+        profile_json: input.profileJson,
+        source_summary_json: input.sourceSummaryJson,
+      };
+    },
+    async upsertBusinessCapabilities(input) {
+      return {
+        id: "capabilities-1",
+        approved_by: "Reviewer",
+        capabilities_json: input.capabilitiesJson,
+      };
+    },
   };
+}
 
-  const attempts = [
-    ["findReusablePublishedVersion", baseArgs],
-    ["findReusableVersion", baseArgs],
-    [
-      "getLatestPublishedVersion",
+function createProjectionInput() {
+  return {
+    db: createDb(),
+    actor: {
+      tenantId: "tenant-1",
+      tenantKey: "alpha",
+      role: "admin",
+      tenant: {
+        id: "tenant-1",
+      },
+      user: {
+        name: "Reviewer",
+      },
+    },
+    session: {
+      id: "session-1",
+      primarySourceType: "website",
+    },
+    draft: {
+      version: 4,
+      businessProfile: {
+        companyName: "Alpha Studio",
+        description: "Brand strategy and design",
+      },
+      capabilities: {
+        supportsWhatsapp: true,
+      },
+      sourceSummary: {
+        primarySourceType: "website",
+        primarySourceUrl: "https://alpha.example",
+      },
+      services: [],
+      contacts: [],
+      locations: [],
+      knowledgeItems: [],
+    },
+    sources: [
       {
-        tenantId: actor.tenantId,
-        tenantKey: actor.tenantKey,
+        sourceId: "source-1",
+        sourceType: "website",
+        role: "primary",
+        sourceUrl: "https://alpha.example",
       },
     ],
-    [
-      "getLatestVersion",
-      {
-        tenantId: actor.tenantId,
-        tenantKey: actor.tenantKey,
-      },
-    ],
-    [
-      "listPublishedVersions",
-      {
-        tenantId: actor.tenantId,
-        tenantKey: actor.tenantKey,
-        limit: 10,
-      },
-    ],
-    [
-      "listVersions",
-      {
-        tenantId: actor.tenantId,
-        tenantKey: actor.tenantKey,
-        limit: 10,
-      },
-    ],
-  ];
-
-  for (const [method, args] of attempts) {
-    if (typeof truthVersionHelper?.[method] !== "function") continue;
-
-    const result = await truthVersionHelper[method](args);
-    const matches = extractTruthVersionRows(result)
-      .map((item) => normalizeReusableTruthVersion(item, method))
-      .filter(Boolean)
-      .filter((item) => isApprovedTruthVersion(item))
-      .filter((item) =>
-        truthVersionMatchesProjection(item, {
-          businessProfileId,
-          businessCapabilitiesId,
-        })
-      );
-
-    if (matches.length) {
-      return matches[0];
-    }
-  }
-
-  return null;
+  };
 }
 
-function normalizeServiceForProjection(item = {}) {
-  const value = obj(item);
-  const key = s(value.key || value.serviceKey || value.service_key || value.slug);
-  const title = s(value.title || value.name || value.label);
-  const description = s(
-    value.description || value.summary || value.valueText || value.value_text
-  );
-  const category = s(value.category || value.type || value.group || "service");
-
-  if (!title && !key) return null;
-
+function createProjectionDeps(overrides = {}) {
   return {
-    key,
-    title: title || key,
-    description,
-    category,
-    metadataJson: mergeDeep(obj(value.metadataJson || value.metadata_json), {
-      origin: s(value.origin || "setup_review_session"),
-      confidence:
-        typeof value.confidence === "number"
-          ? value.confidence
-          : Number(value.confidence || 0) || 0,
-      confidenceLabel: s(value.confidenceLabel || value.confidence_label),
-      reviewReason: s(value.reviewReason || value.review_reason),
-      sourceId: s(value.sourceId || value.source_id),
-      sourceRunId: s(value.sourceRunId || value.source_run_id),
-      sourceType: s(value.sourceType || value.source_type),
-      governance: obj(value.governance),
-      impact: obj(value.impact),
+    knowledgeHelper: createKnowledgeHelper(),
+    refreshRuntimeProjectionBestEffort: async () => ({
+      projection: {
+        status: "queued",
+      },
     }),
+    ...overrides,
   };
 }
 
-function normalizeKnowledgeForProjection(item = {}) {
-  const value = obj(item);
-  const title = s(
-    value.title || value.label || value.itemKey || value.item_key || value.key
-  );
-
-  if (!title) return null;
-
-  return {
-    key: s(value.key || value.itemKey || value.item_key),
-    category: s(value.category || value.group || "general"),
-    title,
-    valueText: s(value.valueText || value.value_text),
-    valueJson: obj(value.valueJson || value.value_json),
-    normalizedText: s(value.normalizedText || value.normalized_text),
-    normalizedJson: obj(value.normalizedJson || value.normalized_json),
-    confidence:
-      typeof value.confidence === "number"
-        ? value.confidence
-        : Number(value.confidence || 0) || 0,
-    confidenceLabel: s(value.confidenceLabel || value.confidence_label),
-    status: s(value.status || "approved"),
-    reviewReason: s(value.reviewReason || value.review_reason),
-    sourceId: s(value.sourceId || value.source_id),
-    sourceRunId: s(value.sourceRunId || value.source_run_id),
-    sourceType: s(value.sourceType || value.source_type),
-    metadataJson: mergeDeep(obj(value.metadataJson || value.metadata_json), {
-      origin: s(value.origin || "setup_review_session"),
-      governance: obj(value.governance),
-      impact: obj(value.impact),
-    }),
-  };
-}
-
-function normalizeContactForProjection(item = {}) {
-  const value = obj(item);
-  const contactKey = s(value.contactKey || value.contact_key || value.key);
-  const label = s(value.label);
-  const contactValue = s(value.value);
-
-  if (!contactKey) return null;
-
-  return {
-    id: s(value.id || value.contactId || value.contact_id),
-    contactKey,
-    channel: s(value.channel || "other").toLowerCase() || "other",
-    label,
-    value: contactValue,
-    isPrimary:
-      typeof value.isPrimary === "boolean"
-        ? value.isPrimary
-        : typeof value.is_primary === "boolean"
-          ? value.is_primary
-          : false,
-    enabled:
-      typeof value.enabled === "boolean"
-        ? value.enabled
-        : true,
-    visiblePublic:
-      typeof value.visiblePublic === "boolean"
-        ? value.visiblePublic
-        : typeof value.visible_public === "boolean"
-          ? value.visible_public
-          : true,
-    visibleInAi:
-      typeof value.visibleInAi === "boolean"
-        ? value.visibleInAi
-        : typeof value.visible_in_ai === "boolean"
-          ? value.visible_in_ai
-          : true,
-    sortOrder: Number(value.sortOrder ?? value.sort_order ?? 0) || 0,
-    meta: obj(value.meta),
-  };
-}
-
-function normalizeLocationForProjection(item = {}) {
-  const value = obj(item);
-  const locationKey = s(value.locationKey || value.location_key || value.key);
-  const title = s(value.title);
-
-  if (!locationKey) return null;
-
-  return {
-    id: s(value.id || value.locationId || value.location_id),
-    locationKey,
-    title,
-    countryCode: s(value.countryCode || value.country_code),
-    city: s(value.city),
-    addressLine: s(value.addressLine || value.address_line),
-    mapUrl: s(value.mapUrl || value.map_url),
-    phone: s(value.phone),
-    email: s(value.email),
-    workingHours: obj(value.workingHours || value.working_hours),
-    deliveryAreas: arr(value.deliveryAreas || value.delivery_areas),
-    isPrimary:
-      typeof value.isPrimary === "boolean"
-        ? value.isPrimary
-        : typeof value.is_primary === "boolean"
-          ? value.is_primary
-          : false,
-    enabled:
-      typeof value.enabled === "boolean"
-        ? value.enabled
-        : true,
-    sortOrder: Number(value.sortOrder ?? value.sort_order ?? 0) || 0,
-    meta: obj(value.meta),
-  };
-}
-
-function buildBusinessProfileProjection(draft = {}, sourceInfo = {}) {
-  const profile = compactObject(draft?.businessProfile);
-
-  if (s(sourceInfo.sourceUrl)) {
-    if (lower(sourceInfo.primarySourceType) === "website") {
-      profile.websiteUrl = s(profile.websiteUrl || sourceInfo.sourceUrl);
-    }
-    if (lower(sourceInfo.primarySourceType) === "google_maps") {
-      profile.googleMapsSeedUrl = s(
-        profile.googleMapsSeedUrl || sourceInfo.sourceUrl
-      );
-    }
-  }
-
-  return profile;
-}
-
-function buildCapabilitiesProjection(draft = {}) {
-  return compactObject(draft?.capabilities);
-}
-
-function shouldEnsureCapabilitiesProjection({
-  draft = {},
-  capabilities = {},
-  currentCapabilities = null,
-} = {}) {
-  if (s(currentCapabilities?.id)) return true;
-  if (Object.keys(obj(capabilities)).length) return true;
-  if (Object.keys(obj(draft?.businessProfile)).length) return true;
-  if (arr(draft?.services).length) return true;
-  if (arr(draft?.contacts).length) return true;
-  if (arr(draft?.locations).length) return true;
-  if (arr(draft?.knowledgeItems).length) return true;
-  if (arr(draft?.channels).length) return true;
-  if (Object.keys(obj(draft?.sourceSummary)).length) return true;
-  return false;
-}
-
-function buildTruthVersionRequiredError({
-  businessProfileId = "",
-  businessCapabilitiesId = "",
-  draft = {},
-  sourceInfo = {},
-} = {}) {
-  const err = new Error(
-    "Setup review cannot finalize yet because a fresh published truth version could not be created."
-  );
-  err.code = "SETUP_REVIEW_TRUTH_VERSION_REQUIRED";
-  err.reasonCode = "published_truth_version_required";
-  err.details = {
-    missingBusinessProfile: !s(businessProfileId),
-    missingBusinessCapabilities: !s(businessCapabilitiesId),
-    businessProfileKeys: Object.keys(obj(draft?.businessProfile)).length,
-    capabilitiesKeys: Object.keys(obj(draft?.capabilities)).length,
-    servicesCount: arr(draft?.services).length,
-    contactsCount: arr(draft?.contacts).length,
-    knowledgeCount: arr(draft?.knowledgeItems).length,
-    primarySourceType: s(sourceInfo?.primarySourceType),
-    primarySourceId: s(sourceInfo?.primarySourceId),
-  };
-  return err;
-}
-
-function extractBehaviorProjection(draft = {}) {
-  return compactObject(
-    obj(draft?.businessProfile?.nicheBehavior || draft?.businessProfile?.niche_behavior)
-  );
-}
-
-async function resolvePersistedReviewSessionId(db, actor = {}, session = {}) {
-  const rawSessionId = s(session?.id);
-  const tenantId = s(actor?.tenantId);
-
-  if (!rawSessionId || !tenantId) return "";
-
-  if (!hasDbQuery(db)) return rawSessionId;
-
-  const result = await q(
-    db,
-    `
-      select id
-      from tenant_setup_review_sessions
-      where id = $1
-        and tenant_id = $2
-      limit 1
-    `,
-    [rawSessionId, tenantId]
-  );
-
-  return s(result.rows?.[0]?.id);
-}
-
-export function buildCanonicalProfileSourceSummary({
-  session = {},
-  draft = {},
-  sources = [],
-  sourceInfo = {},
-  approvedAt = "",
-} = {}) {
-  const impactSummary = buildFinalizeImpactSummary({ draft });
-  const approvalPolicy = buildFinalizeApprovalPolicySummary({ draft });
-  return compactObject({
-    reviewSessionId: s(session?.id),
-    primarySourceType: s(sourceInfo.primarySourceType),
-    primarySourceId: s(sourceInfo.primarySourceId),
-    primarySourceUrl: s(sourceInfo.sourceUrl),
-    latestRunId: s(sourceInfo.latestRunId),
-    lastSnapshotId: s(draft?.lastSnapshotId),
-    approvedAt: s(approvedAt),
-    governance: obj(draft?.sourceSummary?.governance),
-    finalizeImpact: impactSummary,
-    approvalPolicy,
-    sources: arr(sources)
-      .map((item) =>
-        compactObject({
-          sourceId: s(item?.sourceId || item?.id),
-          sourceType: s(item?.sourceType),
-          role: s(item?.role),
-          label: s(item?.label),
-          sourceUrl: s(item?.sourceUrl || item?.url),
-        })
-      )
-      .filter((item) => Object.keys(item).length),
-  });
-}
-
-async function projectDraftServicesToCanonical({
-  db,
-  actor,
-  draft,
-  sourceInfo,
-}) {
-  const services = arr(draft?.services)
-    .map((item) => normalizeServiceForProjection(item))
-    .filter(Boolean);
-
-  if (!services.length) {
-    return {
-      created: 0,
-      updated: 0,
-      skipped: 0,
-      total: 0,
-    };
-  }
-
-  const existingServices = extractServiceRows(
-    await listSetupServices({
-      db,
-      tenantId: actor.tenantId,
-      tenantKey: actor.tenantKey,
-      role: actor.role,
-      tenant: actor.tenant,
-      includeSetup: false,
+test("setup review projection reuses versions returned by approved-only helper lookups", async () => {
+  const projected = await projectSetupReviewDraftToCanonical(
+    createProjectionInput(),
+    createProjectionDeps({
+      truthVersionHelper: {
+        async createVersion() {
+          const err = new Error("No new truth version required");
+          err.code = "TRUTH_VERSION_NOT_REQUIRED";
+          throw err;
+        },
+        async getLatestApprovedVersion() {
+          return {
+            id: "version-approved-1",
+          };
+        },
+      },
     })
   );
 
-  const findMatch = (service) => {
-    const serviceKey = lower(service.key);
-    const serviceTitle = lower(service.title);
+  assert.equal(projected.truthVersionCreated, false);
+  assert.equal(projected.truthVersionReused, true);
+  assert.equal(projected.truthVersion.id, "version-approved-1");
+  assert.equal(projected.truthVersion.reuseMode, "getLatestApprovedVersion");
+  assert.equal(projected.runtimeProjection.status, "queued");
+});
 
-    return existingServices.find((row) => {
-      const rowKey = lower(
-        row?.key || row?.serviceKey || row?.service_key || row?.slug
-      );
-
-      const rowTitle = lower(row?.title || row?.name || row?.label);
-
-      return (
-        (serviceKey && rowKey && serviceKey === rowKey) ||
-        (serviceTitle && rowTitle && serviceTitle === rowTitle)
-      );
-    });
-  };
-
-  let created = 0;
-  let updated = 0;
-  let skipped = 0;
-
-  for (const service of services) {
-    const body = {
-      key: service.key,
-      serviceKey: service.key,
-      service_key: service.key,
-      title: service.title,
-      name: service.title,
-      description: service.description,
-      category: service.category,
-      metadataJson: mergeDeep(service.metadataJson, {
-        reviewSessionProjection: true,
-        sourceId: sourceInfo.primarySourceId || null,
-        sourceRunId: sourceInfo.latestRunId || null,
-        sourceType: sourceInfo.primarySourceType || "",
-      }),
-    };
-
-    const match = findMatch(service);
-
-    if (match?.id) {
-      await updateSetupService({
-        db,
-        tenantId: actor.tenantId,
-        tenantKey: actor.tenantKey,
-        role: actor.role,
-        tenant: actor.tenant,
-        serviceId: match.id,
-        body,
-        includeSetup: false,
-      });
-      updated += 1;
-      continue;
-    }
-
-    try {
-      await createSetupService({
-        db,
-        tenantId: actor.tenantId,
-        tenantKey: actor.tenantKey,
-        role: actor.role,
-        tenant: actor.tenant,
-        body,
-        includeSetup: false,
-      });
-      created += 1;
-    } catch (error) {
-      const message = s(error?.message || error);
-      throw new Error(
-        `projectDraftServicesToCanonical:createSetupService failed for "${service.title || service.key}" (${message})`
-      );
-    }
-  }
-
-  return {
-    created,
-    updated,
-    skipped,
-    total: services.length,
-  };
-}
-
-async function projectDraftContactsToCanonical({ db, actor, draft }) {
-  if (!Array.isArray(draft?.contacts)) {
-    return {
-      created: 0,
-      updated: 0,
-      deleted: 0,
-      total: 0,
-    };
-  }
-
-  const contacts = arr(draft?.contacts)
-    .map((item) => normalizeContactForProjection(item))
-    .filter(Boolean);
-  const existingContacts = arr(await dbListTenantContacts(db, actor.tenantId));
-  const desiredKeys = new Set(
-    contacts.map((item) => lower(item.contactKey)).filter(Boolean)
-  );
-
-  let created = 0;
-  let updated = 0;
-  let deleted = 0;
-
-  for (const existing of existingContacts) {
-    const existingKey = lower(existing.contact_key || existing.contactKey);
-    if (existingKey && !desiredKeys.has(existingKey)) {
-      await dbDeleteTenantContact(db, actor.tenantId, existing.id);
-      deleted += 1;
-    }
-  }
-
-  for (const contact of contacts) {
-    const existing = existingContacts.find(
-      (item) => lower(item.contact_key || item.contactKey) === lower(contact.contactKey)
-    );
-
-    await dbUpsertTenantContact(db, actor.tenantId, {
-      contact_key: contact.contactKey,
-      channel: contact.channel,
-      label: contact.label,
-      value: contact.value,
-      is_primary: contact.isPrimary,
-      enabled: contact.enabled,
-      visible_public: contact.visiblePublic,
-      visible_in_ai: contact.visibleInAi,
-      sort_order: contact.sortOrder,
-      meta: contact.meta,
-    });
-
-    if (existing?.id) {
-      updated += 1;
-    } else {
-      created += 1;
-    }
-  }
-
-  return {
-    created,
-    updated,
-    deleted,
-    total: contacts.length,
-  };
-}
-
-async function projectDraftLocationsToCanonical({ db, actor, draft }) {
-  if (!Array.isArray(draft?.locations)) {
-    return {
-      created: 0,
-      updated: 0,
-      deleted: 0,
-      total: 0,
-    };
-  }
-
-  const locations = arr(draft?.locations)
-    .map((item) => normalizeLocationForProjection(item))
-    .filter(Boolean);
-  const existingLocations = arr(await dbListTenantLocations(db, actor.tenantId));
-  const desiredKeys = new Set(
-    locations.map((item) => lower(item.locationKey)).filter(Boolean)
-  );
-
-  let created = 0;
-  let updated = 0;
-  let deleted = 0;
-
-  for (const existing of existingLocations) {
-    const existingKey = lower(existing.location_key || existing.locationKey);
-    if (existingKey && !desiredKeys.has(existingKey)) {
-      await dbDeleteTenantLocation(db, actor.tenantId, existing.id);
-      deleted += 1;
-    }
-  }
-
-  for (const location of locations) {
-    const existing = existingLocations.find(
-      (item) => lower(item.location_key || item.locationKey) === lower(location.locationKey)
-    );
-
-    await dbUpsertTenantLocation(db, actor.tenantId, {
-      location_key: location.locationKey,
-      title: location.title,
-      country_code: location.countryCode,
-      city: location.city,
-      address_line: location.addressLine,
-      map_url: location.mapUrl,
-      phone: location.phone,
-      email: location.email,
-      working_hours: location.workingHours,
-      delivery_areas: location.deliveryAreas,
-      is_primary: location.isPrimary,
-      enabled: location.enabled,
-      sort_order: location.sortOrder,
-      meta: location.meta,
-    });
-
-    if (existing?.id) {
-      updated += 1;
-    } else {
-      created += 1;
-    }
-  }
-
-  return {
-    created,
-    updated,
-    deleted,
-    total: locations.length,
-  };
-}
-
-async function projectDraftKnowledgeToCanonical({
-  db,
-  actor,
-  draft,
-  session,
-  sourceInfo,
-  knowledgeHelper,
-}) {
-  const items = arr(draft?.knowledgeItems)
-    .map((item) => normalizeKnowledgeForProjection(item))
-    .filter(Boolean);
-
-  if (!items.length) {
-    return {
-      projected: 0,
-      skipped: 0,
-      total: 0,
-      method: "",
-    };
-  }
-
-  const helper = knowledgeHelper || resolveKnowledgeHelper(db);
-
-  if (!helper) {
-    return {
-      projected: 0,
-      skipped: items.length,
-      total: items.length,
-      method: "",
-    };
-  }
-
-  const payload = items.map((item) => ({
-    tenantId: actor.tenantId,
-    tenantKey: actor.tenantKey,
-    reviewSessionId: s(session?.id),
-    sourceId: s(item.sourceId || sourceInfo.primarySourceId),
-    sourceRunId: s(item.sourceRunId || sourceInfo.latestRunId),
-    sourceType: s(item.sourceType || sourceInfo.primarySourceType),
-    itemKey: s(item.key),
-    key: s(item.key),
-    category: s(item.category),
-    title: s(item.title),
-    valueText: s(item.valueText),
-    valueJson: obj(item.valueJson),
-    normalizedText: s(item.normalizedText),
-    normalizedJson: obj(item.normalizedJson),
-    confidence: item.confidence,
-    confidenceLabel: s(item.confidenceLabel),
-    status: s(item.status || "approved"),
-    reviewReason: s(item.reviewReason),
-    metadataJson: mergeDeep(obj(item.metadataJson), {
-      reviewSessionProjection: true,
-    }),
-  }));
-
-  for (const method of [
-    "upsertKnowledgeItemsBulk",
-    "upsertKnowledgeItems",
-    "createKnowledgeItemsBulk",
-    "mergeKnowledgeItems",
-  ]) {
-    if (typeof helper[method] === "function") {
-      await helper[method](payload);
-      return {
-        projected: payload.length,
-        skipped: 0,
-        total: payload.length,
-        method,
-      };
-    }
-  }
-
-  for (const method of [
-    "upsertKnowledgeItem",
-    "createKnowledgeItem",
-    "saveKnowledgeItem",
-  ]) {
-    if (typeof helper[method] === "function") {
-      let projected = 0;
-
-      for (const item of payload) {
-        try {
-          await helper[method](item);
-          projected += 1;
-        } catch (error) {
-          const label = s(item?.title || item?.key);
-          const message = s(error?.message || error);
-          throw new Error(
-            `projectDraftKnowledgeToCanonical:${method} failed for "${label}" (${message})`
-          );
-        }
-      }
-
-      return {
-        projected,
-        skipped: 0,
-        total: payload.length,
-        method,
-      };
-    }
-  }
-
-  return {
-    projected: 0,
-    skipped: payload.length,
-    total: payload.length,
-    method: "",
-  };
-}
-
-export async function projectSetupReviewDraftToCanonical(
-  {
-    db,
-    actor,
-    session,
-    draft,
-    sources,
-  },
-  deps = {}
-) {
-  const knowledgeHelper = resolveKnowledgeHelper(db, deps.knowledgeHelper);
-  const truthVersionHelper = resolveTruthVersionHelper(
-    db,
-    deps.truthVersionHelper
-  );
-  const refreshProjection =
-    deps.refreshRuntimeProjectionBestEffort || refreshRuntimeProjectionBestEffort;
-
-  const sourceInfo = extractPrimarySourceInfo(session, draft, sources);
-  const impactSummary = buildFinalizeImpactSummary({ draft });
-  const approvalPolicy = buildFinalizeApprovalPolicySummary({ draft });
-  const persistedReviewSessionId = await resolvePersistedReviewSessionId(
-    db,
-    actor,
-    session
-  );
-
-  const requestedBy =
-    s(actor?.user?.name) ||
-    s(actor?.user?.full_name) ||
-    s(actor?.user?.fullName) ||
-    s(actor?.user?.email) ||
-    s(actor?.user?.id) ||
-    "system";
-
-  const currentProfile =
-    typeof knowledgeHelper?.getBusinessProfile === "function"
-      ? await knowledgeHelper.getBusinessProfile({
-          tenantId: actor.tenantId,
-          tenantKey: actor.tenantKey,
+test("setup review projection does not reuse draft truth versions from generic fallbacks", async () => {
+  await assert.rejects(
+    () =>
+      projectSetupReviewDraftToCanonical(
+        createProjectionInput(),
+        createProjectionDeps({
+          truthVersionHelper: {
+            async createVersion() {
+              const err = new Error("No new truth version required");
+              err.code = "TRUTH_VERSION_NOT_REQUIRED";
+              throw err;
+            },
+            async listVersions() {
+              return [
+                {
+                  id: "version-draft-1",
+                  status: "draft",
+                },
+              ];
+            },
+          },
         })
-      : null;
-
-  const currentCapabilities =
-    typeof knowledgeHelper?.getBusinessCapabilities === "function"
-      ? await knowledgeHelper.getBusinessCapabilities({
-          tenantId: actor.tenantId,
-          tenantKey: actor.tenantKey,
-        })
-      : null;
-
-  const businessProfile = buildBusinessProfileProjection(draft, sourceInfo);
-  const capabilities = buildCapabilitiesProjection(draft);
-  const behavior = extractBehaviorProjection(draft);
-
-  let projectedProfile = false;
-  let projectedCapabilities = false;
-  let savedProfile = currentProfile;
-  let savedCapabilities = currentCapabilities;
-  let createdTruthVersion = null;
-  let reusedTruthVersion = null;
-  let truthVersion = null;
-  let truthVersionCreateError = null;
-  let publishedServices = [];
-  let publishedContacts = [];
-  let publishedLocations = [];
-  let publishedTruthFacts = [];
-
-  if (
-    Object.keys(businessProfile).length &&
-    typeof knowledgeHelper?.upsertBusinessProfile === "function"
-  ) {
-    const approvedAt = new Date().toISOString();
-
-    savedProfile = await knowledgeHelper.upsertBusinessProfile({
-      tenantId: actor.tenantId,
-      tenantKey: actor.tenantKey,
-      reviewSessionId: persistedReviewSessionId || null,
-      sourceId: sourceInfo.primarySourceId || null,
-      sourceRunId: sourceInfo.latestRunId || null,
-      profileStatus: "approved",
-      profileJson: businessProfile,
-      businessProfile,
-      profile: businessProfile,
-      sourceSummaryJson: buildCanonicalProfileSourceSummary({
-        session,
-        draft,
-        sources,
-        sourceInfo,
-        approvedAt,
-      }),
-      metadataJson: {
-        reviewSessionProjection: true,
-        reviewSessionId: s(session?.id),
-        persistedReviewSessionId: persistedReviewSessionId || undefined,
-        draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
-        nicheBehavior: Object.keys(behavior).length ? behavior : undefined,
-        finalizeImpact: impactSummary,
-        approvalPolicy,
-      },
-      generatedBy: requestedBy,
-      approvedBy: requestedBy,
-      approvedAt,
-      runtimeRefreshMode: "defer",
-    });
-    projectedProfile = true;
-  }
-
-  if (
-    shouldEnsureCapabilitiesProjection({
-      draft,
-      capabilities,
-      currentCapabilities,
-    }) &&
-    typeof knowledgeHelper?.upsertBusinessCapabilities === "function"
-  ) {
-    savedCapabilities = await knowledgeHelper.upsertBusinessCapabilities({
-      tenantId: actor.tenantId,
-      tenantKey: actor.tenantKey,
-      reviewSessionId: persistedReviewSessionId || null,
-      sourceId: sourceInfo.primarySourceId || null,
-      sourceRunId: sourceInfo.latestRunId || null,
-      capabilitiesJson: capabilities,
-      capabilities,
-      signals: capabilities,
-      metadataJson: {
-        reviewSessionProjection: true,
-        reviewSessionId: s(session?.id),
-        persistedReviewSessionId: persistedReviewSessionId || undefined,
-        nicheBehavior: Object.keys(behavior).length ? behavior : undefined,
-        finalizeImpact: impactSummary,
-        approvalPolicy,
-      },
-      approvedBy: requestedBy,
-      runtimeRefreshMode: "defer",
-    });
-    projectedCapabilities = true;
-  }
-
-  const businessProfileId = s(savedProfile?.id || currentProfile?.id);
-  const businessCapabilitiesId = s(
-    savedCapabilities?.id || currentCapabilities?.id
+      ),
+    (err) => {
+      assert.equal(err.code, "SETUP_REVIEW_TRUTH_VERSION_REQUIRED");
+      assert.equal(err.truthVersionCreateErrorCode, "TRUTH_VERSION_NOT_REQUIRED");
+      return true;
+    }
   );
+});
 
-  const serviceProjection = await projectDraftServicesToCanonical({
-    db,
-    actor,
-    draft,
-    sourceInfo,
+test("canonical profile source summary keeps primary source context and governance details", () => {
+  const summary = buildCanonicalProfileSourceSummary({
+    session: {
+      id: "session-1",
+    },
+    draft: {
+      lastSnapshotId: "snapshot-1",
+      sourceSummary: {
+        governance: {
+          approvalRequired: true,
+        },
+      },
+      businessProfile: {
+        companyName: "Alpha Studio",
+        companySummaryShort: "Brand strategy and design",
+      },
+      capabilities: {
+        supportsWhatsapp: true,
+      },
+      services: [{ title: "Brand strategy" }],
+    },
+    sources: [
+      {
+        sourceId: "source-1",
+        sourceType: "website",
+        role: "primary",
+        sourceUrl: "https://alpha.example",
+      },
+    ],
+    sourceInfo: {
+      primarySourceType: "website",
+      primarySourceId: "source-1",
+      sourceUrl: "https://alpha.example",
+      latestRunId: "run-1",
+    },
+    approvedAt: "2026-03-25T03:00:00.000Z",
   });
 
-  const contactProjection = await projectDraftContactsToCanonical({
-    db,
-    actor,
-    draft,
-  });
-
-  const locationProjection = await projectDraftLocationsToCanonical({
-    db,
-    actor,
-    draft,
-  });
-
-  publishedServices = extractServiceRows(
-    await listSetupServices({
-      db,
-      tenantId: actor.tenantId,
-      tenantKey: actor.tenantKey,
-      role: actor.role,
-      tenant: actor.tenant,
-      includeSetup: false,
-    })
-  );
-  publishedContacts = arr(await dbListTenantContacts(db, actor.tenantId));
-  publishedLocations = arr(await dbListTenantLocations(db, actor.tenantId));
-  if (Array.isArray(draft?.businessFacts)) {
-    publishedTruthFacts = arr(draft.businessFacts);
-  } else if (typeof truthVersionHelper?.getLatestVersion === "function") {
-    const latestTruthVersion = await truthVersionHelper.getLatestVersion({
-      tenantId: actor.tenantId,
-      tenantKey: actor.tenantKey,
-    });
-    publishedTruthFacts = arr(
-      latestTruthVersion?.truth_facts_snapshot_json ||
-        latestTruthVersion?.metadata_json?.truthFactsSnapshot ||
-        latestTruthVersion?.metadata_json?.truth_facts_snapshot_json
-    );
-  } else {
-    publishedTruthFacts = arr(
-      await dbListTenantBusinessFacts(db, actor.tenantId, {
-        enabledOnly: false,
-        factSurface: "legacy_truth",
-      })
-    );
-  }
-
-  if (
-    typeof truthVersionHelper?.createVersion === "function" &&
-    businessProfileId &&
-    businessCapabilitiesId
-  ) {
-    const approvedAt =
-      s(savedProfile?.approved_at) ||
-      s(currentProfile?.approved_at) ||
-      new Date().toISOString();
-
-    const approvedBy =
-      s(savedProfile?.approved_by) ||
-      s(savedCapabilities?.approved_by) ||
-      s(currentProfile?.approved_by) ||
-      requestedBy;
-
-    try {
-      createdTruthVersion = await truthVersionHelper.createVersion({
-        tenantId: actor.tenantId,
-        tenantKey: actor.tenantKey,
-        businessProfileId,
-        businessCapabilitiesId,
-        reviewSessionId: persistedReviewSessionId || null,
-        approvedAt,
-        approvedBy,
-        profile: savedProfile,
-        capabilities: savedCapabilities,
-        services: publishedServices,
-        contacts: publishedContacts,
-        locations: publishedLocations,
-        truthFacts: publishedTruthFacts,
-        sourceSummaryJson: obj(savedProfile?.source_summary_json),
-        metadataJson: compactObject({
-          reviewSessionProjection: true,
-          reviewSessionId: s(session?.id),
-          persistedReviewSessionId: persistedReviewSessionId || undefined,
-          draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
-          sourceId: sourceInfo.primarySourceId || undefined,
-          sourceRunId: sourceInfo.latestRunId || undefined,
-          finalizeImpact: impactSummary,
-          approvalPolicy,
-        }),
-      });
-      truthVersion = createdTruthVersion;
-    } catch (error) {
-      if (shouldReuseTruthVersionFromCreateError(error)) {
-        truthVersionCreateError = error;
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  if (!s(truthVersion?.id)) {
-    reusedTruthVersion = await resolveReusableTruthVersion({
-      truthVersionHelper,
-      actor,
-      businessProfileId,
-      businessCapabilitiesId,
-    });
-
-    if (reusedTruthVersion) {
-      truthVersion = reusedTruthVersion;
-    }
-  }
-
-  if (!s(truthVersion?.id)) {
-    const error = buildTruthVersionRequiredError({
-      businessProfileId,
-      businessCapabilitiesId,
-      draft,
-      sourceInfo,
-    });
-
-    if (truthVersionCreateError) {
-      error.cause = truthVersionCreateError;
-      error.truthVersionCreateErrorCode = s(truthVersionCreateError?.code);
-      error.truthVersionCreateReasonCode = s(truthVersionCreateError?.reasonCode);
-    }
-
-    throw error;
-  }
-
-  const knowledgeProjection = await projectDraftKnowledgeToCanonical({
-    db,
-    actor,
-    draft,
-    session,
-    sourceInfo,
-    knowledgeHelper,
-  });
-
-  const shouldRefreshRuntime =
-    projectedProfile ||
-    projectedCapabilities ||
-    Boolean(truthVersion?.id) ||
-    serviceProjection.total > 0 ||
-    contactProjection.total > 0 ||
-    locationProjection.total > 0 ||
-    knowledgeProjection.total > 0;
-
-  let runtimeRefresh = null;
-
-  if (shouldRefreshRuntime) {
-    if (hasDbQuery(db) && typeof refreshProjection === "function") {
-      runtimeRefresh = await refreshProjection(db, {
-        tenantId: actor.tenantId,
-        tenantKey: actor.tenantKey,
-        triggerType: "review_approval",
-        requestedBy,
-        runnerKey: "workspace.setup.projectSetupReviewDraftToCanonical",
-        generatedBy: requestedBy,
-        metadata: compactObject({
-          source: "projectSetupReviewDraftToCanonical",
-          reviewSessionId: s(session?.id),
-          persistedReviewSessionId: persistedReviewSessionId || undefined,
-          truthVersionId: s(truthVersion?.id),
-          truthVersionReused: Boolean(s(reusedTruthVersion?.id)) || undefined,
-          truthVersionReuseMode: s(reusedTruthVersion?.reuseMode) || undefined,
-          draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
-          primarySourceId: s(sourceInfo.primarySourceId),
-          latestRunId: s(sourceInfo.latestRunId),
-        }),
-      });
-    } else {
-      runtimeRefresh = {
-        projection: buildDeferredRuntimeProjection({
-          actor,
-          requestedBy,
-          session,
-          draft,
-          sourceInfo,
-          truthVersion,
-        }),
-      };
-    }
-  }
-
-  const runtimeProjection = obj(runtimeRefresh?.projection || runtimeRefresh);
-
-  return {
-    projectedProfile,
-    projectedCapabilities,
-    truthVersionCreated: Boolean(s(createdTruthVersion?.id)),
-    truthVersionReused: Boolean(s(reusedTruthVersion?.id)),
-    truthVersion,
-    runtimeProjection: Object.keys(runtimeProjection).length ? runtimeProjection : null,
-    serviceProjection,
-    contactProjection,
-    locationProjection,
-    knowledgeProjection,
-    sourceInfo,
-    impactSummary,
-    approvalPolicy,
-  };
-}
+  assert.equal(summary.reviewSessionId, "session-1");
+  assert.equal(summary.primarySourceType, "website");
+  assert.equal(summary.primarySourceId, "source-1");
+  assert.equal(summary.primarySourceUrl, "https://alpha.example");
+  assert.equal(summary.latestRunId, "run-1");
+  assert.equal(summary.lastSnapshotId, "snapshot-1");
+  assert.equal(summary.governance.approvalRequired, true);
+  assert.equal(summary.sources.length, 1);
+  assert.equal(summary.sources[0].sourceUrl, "https://alpha.example");
+});
