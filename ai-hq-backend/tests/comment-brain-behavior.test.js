@@ -7,6 +7,23 @@ import { resolveCommentRuntime } from "../src/services/commentBrain/runtime.js";
 
 function createBehaviorRuntime(overrides = {}) {
   return {
+    authority: {
+      mode: "strict",
+      required: true,
+      available: true,
+      source: "approved_runtime_projection",
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+      runtimeProjectionId: "projection-1",
+    },
+    tenant: {
+      id: "tenant-1",
+      tenant_key: "acme",
+      company_name: "Acme Clinic",
+      profile: {
+        brand_name: "Acme Clinic",
+      },
+    },
     language: "en",
     autoReplyEnabled: true,
     createLeadEnabled: true,
@@ -45,6 +62,29 @@ test("comment runtime surfaces approved behavior fields from behavior_json", asy
     qualificationDepth: "guided",
     handoffBias: "conditional",
   });
+});
+
+test("comment runtime rejects ad hoc runtime payloads without approved authority", async () => {
+  await assert.rejects(
+    () =>
+      resolveCommentRuntime({
+        tenantKey: "acme",
+        runtime: {
+          tenant: {
+            id: "tenant-1",
+            tenant_key: "acme",
+          },
+          behavior_json: {
+            conversionGoal: "book_consultation",
+          },
+        },
+      }),
+    (error) => {
+      assert.equal(error?.code, "TENANT_RUNTIME_AUTHORITY_UNAVAILABLE");
+      assert.equal(error?.runtimeAuthority?.reasonCode, "runtime_projection_missing");
+      return true;
+    }
+  );
 });
 
 test("fallback classification blocks disallowed claims and keeps comments behavior traceable", () => {

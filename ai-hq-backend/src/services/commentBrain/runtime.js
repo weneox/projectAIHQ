@@ -295,9 +295,68 @@ function pickRuntimeObject(runtime) {
   return {};
 }
 
-function normalizeResolvedRuntime(runtime, { tenantKey, tenant = null } = {}) {
+function buildStrictRuntimeFallback({ tenantKey } = {}) {
+  return {
+    tenantKey: getResolvedTenantKey(tenantKey),
+    brandName: "",
+    businessContext: "",
+    tone: "professional",
+    toneProfile: "",
+    preferredCta: "",
+    conversionGoal: "",
+    primaryCta: "",
+    handoffTriggers: [],
+    disallowedClaims: [],
+    bannedPhrases: [],
+    behavior: {},
+    channelBehavior: {},
+    commentPolicy: {},
+    autoReplyEnabled: true,
+    createLeadEnabled: true,
+    language: "az",
+    serviceCatalog: [],
+    services: [],
+    disabledServices: [],
+  };
+}
+
+function assertApprovedRuntimeProjection(runtime = null, tenantKey = "") {
   const raw = pickRuntimeObject(runtime);
-  const fallback = buildLocalRuntimeFallback({ tenantKey, tenant, runtime });
+  const authority = obj(raw.authority || raw.runtimeAuthority);
+  const source = s(authority.source || authority.authoritySource);
+  const tenant = obj(raw.tenant);
+
+  if (
+    source === "approved_runtime_projection" &&
+    (s(tenant.id) || s(tenant.tenant_key) || s(tenant.tenantKey))
+  ) {
+    return raw;
+  }
+
+  const reasonCode = source
+    ? "runtime_projection_invalid"
+    : "runtime_projection_missing";
+
+  throw createRuntimeAuthorityError({
+    mode: "strict",
+    tenantKey: getResolvedTenantKey(tenantKey),
+    reasonCode,
+    reason: reasonCode,
+    message:
+      reasonCode === "runtime_projection_invalid"
+        ? "Approved runtime authority is unavailable because the resolved comment runtime is not backed by the approved runtime projection."
+        : "Approved runtime authority is unavailable because the resolved comment runtime did not include approved runtime authority metadata.",
+  });
+}
+
+function normalizeResolvedRuntime(
+  runtime,
+  { tenantKey, tenant = null, strictAuthority = false } = {}
+) {
+  const raw = pickRuntimeObject(runtime);
+  const fallback = strictAuthority
+    ? buildStrictRuntimeFallback({ tenantKey })
+    : buildLocalRuntimeFallback({ tenantKey, tenant, runtime });
   const rawBehavior = pickBehaviorObject(raw);
   const rawChannelBehavior = pickChannelBehaviorObject(raw, rawBehavior);
 
@@ -499,7 +558,12 @@ export async function resolveCommentRuntime({
   const resolvedTenantKey = getResolvedTenantKey(tenantKey);
 
   if (runtime && typeof runtime === "object") {
-    return normalizeResolvedRuntime(runtime, { tenantKey, tenant });
+    assertApprovedRuntimeProjection(runtime, resolvedTenantKey);
+    return normalizeResolvedRuntime(runtime, {
+      tenantKey: resolvedTenantKey,
+      tenant,
+      strictAuthority: true,
+    });
   }
 
   const loaded = await loadRuntimeResolver();
@@ -528,7 +592,12 @@ export async function resolveCommentRuntime({
     try {
       const resolved = await tryResolve();
       if (resolved && typeof resolved === "object") {
-        return normalizeResolvedRuntime(resolved, { tenantKey, tenant });
+        assertApprovedRuntimeProjection(resolved, resolvedTenantKey);
+        return normalizeResolvedRuntime(resolved, {
+          tenantKey: resolvedTenantKey,
+          tenant,
+          strictAuthority: true,
+        });
       }
     } catch (error) {
       lastError = error;

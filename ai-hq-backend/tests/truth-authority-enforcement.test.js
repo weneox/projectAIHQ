@@ -10,6 +10,8 @@ import {
 import { buildProjectedTenantRuntime } from "../src/services/projectedTenantRuntime.js";
 import { buildVoiceConfigFromProjectedRuntime } from "../src/routes/api/voice/config.js";
 import { processVoiceTenantConfig } from "../src/services/voiceInternalRuntime.js";
+import { createWebsiteWidgetHandlers } from "../src/routes/api/websiteWidget/index.js";
+import { issueWebsiteWidgetBootstrapToken } from "../src/routes/api/websiteWidget/session.js";
 import { resolveInboxRuntime } from "../src/services/inboxBrain/runtime.js";
 import { resolveCommentRuntime } from "../src/services/commentBrain/runtime.js";
 import { ingestCommentHandler } from "../src/routes/api/comments/handlers.js";
@@ -2269,6 +2271,139 @@ test("authoritative tenant lookups and inbox context succeed when an approved pr
   assert.equal(inboxContext?.tenant?.tenant_key, "acme");
   assert.equal(Array.isArray(inboxContext?.services), true);
   assert.equal(inboxContext.services.length > 0, true);
+});
+
+test("website widget bootstrap uses approved runtime identity and ignores unfinalized setup review state", async () => {
+  const rows = buildProjectionRows();
+  rows.tenant.company_name = "Draft Drift Clinic";
+
+  const baseDb = createProjectionDb(rows);
+  const state = baseDb.state;
+  state.setupReviewQueryCount = 0;
+
+  const graph = await loadTenantCanonicalGraph(
+    { tenantId: rows.tenant.id, tenantKey: rows.tenant.tenant_key },
+    baseDb
+  );
+  const projection = buildTenantRuntimeProjection(graph);
+
+  state.projectionRow = {
+    id: "projection-1",
+    tenant_id: rows.tenant.id,
+    tenant_key: rows.tenant.tenant_key,
+    status: "ready",
+    source_snapshot_id: graph.synthesis.id,
+    source_profile_id: graph.publishedTruthVersion.business_profile_id,
+    source_capabilities_id: graph.publishedTruthVersion.business_capabilities_id,
+    ...projection,
+    metadata_json: {
+      ...(projection.metadata_json || {}),
+      publishedTruthVersionId: graph.publishedTruthVersion.id,
+    },
+  };
+
+  const db = {
+    state,
+    async query(text, values = []) {
+      const sql = String(text || "").toLowerCase();
+
+      if (sql.includes("tenant_setup_review")) {
+        state.setupReviewQueryCount += 1;
+        return {
+          rows: [
+            {
+              id: "review-session-1",
+              status: "active",
+              draft_payload_json: {
+                displayName: "Draft Leak Clinic",
+                businessSummary: "This should never become live.",
+              },
+            },
+          ],
+        };
+      }
+
+      if (sql.includes("from tenant_domain_verifications")) {
+        return {
+          rows: [
+            {
+              tenant_id: rows.tenant.id,
+              normalized_domain: String(values?.[2] || "acme.example").toLowerCase(),
+              status: "verified",
+            },
+          ],
+        };
+      }
+
+      if (
+        sql.includes("from tenants t") &&
+        sql.includes("widget_channel_status")
+      ) {
+        return {
+          rows: [
+            {
+              id: rows.tenant.id,
+              tenant_key: rows.tenant.tenant_key,
+              company_name: rows.tenant.company_name,
+              timezone: "Asia/Baku",
+              website_url: "https://acme.example",
+              widget_channel_status: "active",
+              widget_display_name: "",
+              widget_config: {
+                enabled: true,
+                publicWidgetId: "ww_acme_widget",
+                allowedOrigins: ["https://www.acme.example"],
+                allowedDomains: ["acme.example"],
+              },
+            },
+          ],
+        };
+      }
+
+      return baseDb.query(text, values);
+    },
+  };
+
+  const { bootstrapWebsiteWidget } = createWebsiteWidgetHandlers({
+    db,
+    wsHub: null,
+  });
+
+  const bootstrap = issueWebsiteWidgetBootstrapToken({
+    tenantId: rows.tenant.id,
+    tenantKey: rows.tenant.tenant_key,
+    widgetId: "ww_acme_widget",
+    installOrigin: "https://www.acme.example",
+    installHost: "www.acme.example",
+    pageUrl: "https://www.acme.example/pricing",
+    pageTitle: "Pricing",
+    pageReferrer: "https://www.google.com/search?q=acme",
+  });
+
+  const req = {
+    body: {
+      widgetId: "ww_acme_widget",
+      bootstrapToken: bootstrap.token,
+    },
+    headers: {
+      origin: "https://www.acme.example",
+      referer: "https://www.acme.example/pricing",
+    },
+    protocol: "https",
+    get(name) {
+      return this.headers[String(name || "").toLowerCase()];
+    },
+  };
+  const res = createMockRes();
+
+  await bootstrapWebsiteWidget(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.ok, true);
+  assert.ok(res.body?.sessionToken);
+  assert.equal(res.body?.widget?.title, "Acme Clinic");
+  assert.notEqual(res.body?.widget?.title, rows.tenant.company_name);
+  assert.equal(state.setupReviewQueryCount, 0);
 });
 
 test("runtime projection repair restores strict consumer usability without legacy fallback", async () => {

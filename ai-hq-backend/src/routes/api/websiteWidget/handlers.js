@@ -824,7 +824,7 @@ async function buildWebsiteConversationSnapshot({
   return {
     session: refreshedSession.payload,
     sessionToken: refreshedSession.token,
-    widget: buildWidgetShell(tenant, automation),
+    widget: buildWidgetShell(tenant, automation, runtimeState?.runtime),
     automation,
     thread: activeThread,
     messages,
@@ -992,7 +992,11 @@ async function processWebsiteWidgetMessage({
         duplicate: true,
         session: refreshedSession.payload,
         sessionToken: refreshedSession.token,
-        widget: buildWidgetShell(tenant, duplicateAutomation),
+        widget: buildWidgetShell(
+          tenant,
+          duplicateAutomation,
+          duplicateRuntimeState?.runtime
+        ),
         thread: toPublicThread(thread),
         messages: duplicateMessages,
         automation: duplicateAutomation,
@@ -1379,7 +1383,7 @@ async function processWebsiteWidgetMessage({
       duplicate: false,
       session: refreshedSession.payload,
       sessionToken: refreshedSession.token,
-      widget: buildWidgetShell(tenant, automation),
+      widget: buildWidgetShell(tenant, automation, runtimeState?.runtime),
       automation,
       thread: toPublicThread(finalThread),
       messages: responseMessages,

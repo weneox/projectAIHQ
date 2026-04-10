@@ -493,13 +493,28 @@ export async function resolveWebsiteWidgetStatus(db, tenantKey = "") {
   };
 }
 
-export function buildWidgetShell(tenant = {}, automation = {}) {
+export function buildWidgetShell(tenant = {}, automation = {}, runtime = null) {
   const config = normalizeWidgetConfig(tenant.widgetConfig, {
     defaultEnabled: resolveWidgetEnabled(tenant),
   });
+  const runtimeValue = obj(runtime);
+  const runtimeTitle = s(
+    runtimeValue.displayName ||
+      runtimeValue.brandName ||
+      runtimeValue.companyName ||
+      runtimeValue.company_name ||
+      runtimeValue.tenant?.profile?.brand_name ||
+      runtimeValue.tenant?.brand?.displayName ||
+      runtimeValue.tenant?.company_name
+  );
 
   return {
-    title: config.title || tenant.companyName || tenant.tenantKey || "Website chat",
+    title:
+      config.title ||
+      runtimeTitle ||
+      tenant.companyName ||
+      tenant.tenantKey ||
+      "Website chat",
     subtitle:
       config.subtitle ||
       (automation.available
