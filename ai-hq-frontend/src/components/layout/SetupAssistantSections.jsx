@@ -291,19 +291,21 @@ function buildProgressSnapshot(assistantState = {}, reviewPayload = null) {
     ? countReadySectionsFromStatus(sectionStatus)
     : -1;
 
+  // Canonical priority:
+  // setup.summary -> assistant.review -> review payload -> draft.progress -> local fallback
   const explicitReadySections = n(
-    draftProgress.readySections,
+    setupSummary.readySections,
     n(
-      setupSummary.readySections,
-      n(reviewObj.readySections, n(reviewRoot.readySections, -1))
+      reviewObj.readySections,
+      n(reviewRoot.readySections, n(draftProgress.readySections, -1))
     )
   );
 
   const explicitBlockerCount = n(
-    draftProgress.blockerCount,
+    setupSummary.blockerCount,
     n(
-      setupSummary.blockerCount,
-      n(reviewObj.blockerCount, n(reviewRoot.blockerCount, -1))
+      reviewObj.blockerCount,
+      n(reviewRoot.blockerCount, n(draftProgress.blockerCount, -1))
     )
   );
 
@@ -345,7 +347,11 @@ function getNaturalStep(assistantState = {}) {
 
   const nextQuestion = obj(assistantState?.assistant?.nextQuestion);
   const nextKey = normalizeStep(nextQuestion.key);
-  if (nextKey) return nextKey;
+
+  // Trust backend nextQuestion only if that step is still actually unanswered.
+  if (nextKey && !stepAnswered(nextKey, assistantState)) {
+    return nextKey;
+  }
 
   const firstMissingRequired = REQUIRED_STEPS.find(
     (step) => !stepAnswered(step, assistantState)
@@ -355,6 +361,41 @@ function getNaturalStep(assistantState = {}) {
   if (!stepAnswered("handoff", assistantState)) return "handoff";
 
   return "finalize";
+}
+
+function buildQuestionSignature(
+  assistantState = {},
+  reviewPayload = null,
+  step = ""
+) {
+  const sessionId = s(assistantState?.session?.id || "default");
+  const version = Number(assistantState?.draft?.version || 0);
+  const snapshot = buildProgressSnapshot(assistantState, reviewPayload);
+
+  return [
+    "question",
+    sessionId,
+    version,
+    step,
+    snapshot.readySections,
+    snapshot.blockerCount,
+    snapshot.answeredCount,
+  ].join(":");
+}
+
+function buildFinalizeSignature(assistantState = {}, reviewPayload = null) {
+  const sessionId = s(assistantState?.session?.id || "default");
+  const version = Number(assistantState?.draft?.version || 0);
+  const snapshot = buildProgressSnapshot(assistantState, reviewPayload);
+
+  return [
+    "finalize",
+    sessionId,
+    version,
+    snapshot.readySections,
+    snapshot.blockerCount,
+    snapshot.answeredCount,
+  ].join(":");
 }
 
 function buildWelcomeMessage(assistantState = {}, reviewPayload = null) {
@@ -689,13 +730,9 @@ function SetupAssistantSession({
     if (!started || paused || busy || canFinalize) return;
     if (!currentStep) return;
 
-    const versionKey = `${s(assistant?.session?.id || "default")}:${Number(
-      assistant?.draft?.version || 0
-    )}:${currentStep}`;
-
     queueAssistantMessage(
       buildQuestionMessage(currentStep, assistant, reviewPayload),
-      `question:${versionKey}`,
+      buildQuestionSignature(assistant, reviewPayload, currentStep),
       360
     );
   }, [
@@ -706,21 +743,15 @@ function SetupAssistantSession({
     currentStep,
     assistant,
     reviewPayload,
-    assistant?.session?.id,
-    assistant?.draft?.version,
     queueAssistantMessage,
   ]);
 
   useEffect(() => {
     if (!started || paused || busy || !canFinalize) return;
 
-    const signature = `finalize:${s(assistant?.session?.id || "default")}:${Number(
-      assistant?.draft?.version || 0
-    )}`;
-
     queueAssistantMessage(
       buildFinalizeMessage(assistant, reviewPayload),
-      signature,
+      buildFinalizeSignature(assistant, reviewPayload),
       360
     );
   }, [
@@ -730,8 +761,6 @@ function SetupAssistantSession({
     canFinalize,
     assistant,
     reviewPayload,
-    assistant?.session?.id,
-    assistant?.draft?.version,
     queueAssistantMessage,
   ]);
 
@@ -772,11 +801,32 @@ function SetupAssistantSession({
       });
 
       const nextAssistant = buildAssistantLike(response);
+      const nextReviewPayload = obj(response?.setup?.review, reviewPayload);
 
       if (!stepAnswered(step, nextAssistant)) {
         queueAssistantMessage(
           buildClarifierMessage(step),
           uid(`clarifier-${step}`),
+          260
+        );
+        return;
+      }
+
+      const nextStep = getNaturalStep(nextAssistant);
+
+      if (nextStep === "finalize") {
+        queueAssistantMessage(
+          buildFinalizeMessage(nextAssistant, nextReviewPayload),
+          buildFinalizeSignature(nextAssistant, nextReviewPayload),
+          260
+        );
+        return;
+      }
+
+      if (nextStep && nextStep !== step) {
+        queueAssistantMessage(
+          buildQuestionMessage(nextStep, nextAssistant, nextReviewPayload),
+          buildQuestionSignature(nextAssistant, nextReviewPayload, nextStep),
           260
         );
       }
