@@ -109,6 +109,261 @@ function extractServiceRows(data = {}) {
   return [];
 }
 
+function extractTruthVersionRows(data = {}) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.versions)) return data.versions;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.rows)) return data.rows;
+  if (Array.isArray(data?.data)) return data.data;
+  if (data && typeof data === "object") return [data];
+  return [];
+}
+
+function extractTruthVersionId(version = {}) {
+  return s(
+    version?.id ||
+      version?.versionId ||
+      version?.version_id ||
+      version?.truthVersionId ||
+      version?.truth_version_id
+  );
+}
+
+function extractTruthVersionBusinessProfileId(version = {}) {
+  return s(
+    version?.businessProfileId ||
+      version?.business_profile_id ||
+      version?.profileId ||
+      version?.profile_id ||
+      version?.profile?.id
+  );
+}
+
+function extractTruthVersionBusinessCapabilitiesId(version = {}) {
+  return s(
+    version?.businessCapabilitiesId ||
+      version?.business_capabilities_id ||
+      version?.capabilitiesId ||
+      version?.capabilities_id ||
+      version?.capabilities?.id
+  );
+}
+
+function truthVersionMatchesProjection(
+  version = {},
+  {
+    businessProfileId = "",
+    businessCapabilitiesId = "",
+  } = {}
+) {
+  const versionBusinessProfileId =
+    extractTruthVersionBusinessProfileId(version);
+  const versionBusinessCapabilitiesId =
+    extractTruthVersionBusinessCapabilitiesId(version);
+
+  if (
+    businessProfileId &&
+    versionBusinessProfileId &&
+    businessProfileId !== versionBusinessProfileId
+  ) {
+    return false;
+  }
+
+  if (
+    businessCapabilitiesId &&
+    versionBusinessCapabilitiesId &&
+    businessCapabilitiesId !== versionBusinessCapabilitiesId
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function isReusableTruthVersion(version = {}, { method = "" } = {}) {
+  if (!extractTruthVersionId(version)) return false;
+
+  if (version?.isPublished === true) return true;
+  if (version?.published === true) return true;
+  if (version?.approved === true) return true;
+  if (version?.isApproved === true) return true;
+
+  const status = lower(
+    version?.status ||
+      version?.versionStatus ||
+      version?.version_status ||
+      version?.publicationStatus ||
+      version?.publication_status
+  );
+
+  if (
+    status &&
+    ["draft", "pending", "queued", "failed", "error", "archived", "deleted"].includes(
+      status
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    status &&
+    ["published", "approved", "live", "active", "current"].includes(status)
+  ) {
+    return true;
+  }
+
+  if (
+    s(
+      version?.publishedAt ||
+        version?.published_at ||
+        version?.approvedAt ||
+        version?.approved_at
+    )
+  ) {
+    return true;
+  }
+
+  const sourceMethod = s(method);
+
+  if (
+    [
+      "findReusablePublishedVersion",
+      "findReusableApprovedVersion",
+      "getLatestPublishedVersion",
+      "getLatestApprovedVersion",
+      "listPublishedVersions",
+      "listApprovedVersions",
+    ].includes(sourceMethod)
+  ) {
+    return true;
+  }
+
+  if (
+    ["findReusableVersion", "getLatestVersion", "listVersions"].includes(
+      sourceMethod
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function normalizeReusableTruthVersion(version = {}, reuseMode = "") {
+  const id = extractTruthVersionId(version);
+  if (!id) return null;
+
+  return mergeDeep(obj(version), {
+    id,
+    reuseMode: s(reuseMode || version?.reuseMode || version?.reuse_mode),
+    reusedExistingTruthVersion: true,
+    metadataJson: mergeDeep(obj(version?.metadataJson || version?.metadata_json), {
+      reusedExistingTruthVersion: true,
+      reuseMode: s(reuseMode || version?.reuseMode || version?.reuse_mode),
+    }),
+  });
+}
+
+function shouldAttemptTruthVersionReuseFromError(error = null) {
+  const code = lower(error?.code);
+  const reasonCode = lower(error?.reasonCode);
+  const message = lower(error?.message || error);
+
+  if (
+    [
+      "truth_version_not_required",
+      "tenant_truth_version_not_required",
+      "setup_review_truth_version_not_required",
+      "published_truth_version_reusable",
+      "truth_version_already_current",
+      "truth_version_noop",
+      "truth_version_reuse_latest",
+    ].includes(code)
+  ) {
+    return true;
+  }
+
+  if (
+    [
+      "truth_version_not_required",
+      "published_truth_version_reusable",
+      "truth_version_already_current",
+      "no_new_truth_version_required",
+    ].includes(reasonCode)
+  ) {
+    return true;
+  }
+
+  if (
+    message.includes("not required") ||
+    message.includes("already current") ||
+    message.includes("reuse latest") ||
+    message.includes("re-use latest") ||
+    message.includes("existing published truth version") ||
+    message.includes("latest approved truth version")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+async function resolveReusableTruthVersion({
+  truthVersionHelper,
+  actor,
+  businessProfileId = "",
+  businessCapabilitiesId = "",
+} = {}) {
+  if (!truthVersionHelper || !actor?.tenantId) return null;
+
+  const exactArgs = {
+    tenantId: actor.tenantId,
+    tenantKey: actor.tenantKey,
+    businessProfileId: businessProfileId || undefined,
+    businessCapabilitiesId: businessCapabilitiesId || undefined,
+  };
+
+  const tenantArgs = {
+    tenantId: actor.tenantId,
+    tenantKey: actor.tenantKey,
+  };
+
+  const attempts = [
+    ["findReusablePublishedVersion", exactArgs],
+    ["findReusableApprovedVersion", exactArgs],
+    ["findReusableVersion", exactArgs],
+    ["getLatestPublishedVersion", tenantArgs],
+    ["getLatestApprovedVersion", tenantArgs],
+    ["getLatestVersion", tenantArgs],
+    ["listPublishedVersions", { ...tenantArgs, limit: 10 }],
+    ["listApprovedVersions", { ...tenantArgs, limit: 10 }],
+    ["listVersions", { ...tenantArgs, limit: 10 }],
+  ];
+
+  for (const [method, args] of attempts) {
+    if (typeof truthVersionHelper?.[method] !== "function") continue;
+
+    const result = await truthVersionHelper[method](args);
+
+    const match = extractTruthVersionRows(result)
+      .map((item) => normalizeReusableTruthVersion(item, method))
+      .filter(Boolean)
+      .filter((item) =>
+        truthVersionMatchesProjection(item, {
+          businessProfileId,
+          businessCapabilitiesId,
+        })
+      )
+      .find((item) => isReusableTruthVersion(item, { method }));
+
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
 function normalizeServiceForProjection(item = {}) {
   const value = obj(item);
   const key = s(value.key || value.serviceKey || value.service_key || value.slug);
@@ -522,7 +777,8 @@ async function projectDraftContactsToCanonical({ db, actor, draft }) {
 
   for (const contact of contacts) {
     const existing = existingContacts.find(
-      (item) => lower(item.contact_key || item.contactKey) === lower(contact.contactKey)
+      (item) =>
+        lower(item.contact_key || item.contactKey) === lower(contact.contactKey)
     );
 
     await dbUpsertTenantContact(db, actor.tenantId, {
@@ -585,7 +841,9 @@ async function projectDraftLocationsToCanonical({ db, actor, draft }) {
 
   for (const location of locations) {
     const existing = existingLocations.find(
-      (item) => lower(item.location_key || item.locationKey) === lower(location.locationKey)
+      (item) =>
+        lower(item.location_key || item.locationKey) ===
+        lower(location.locationKey)
     );
 
     await dbUpsertTenantLocation(db, actor.tenantId, {
@@ -791,7 +1049,9 @@ export async function projectSetupReviewDraftToCanonical(
   let savedProfile = currentProfile;
   let savedCapabilities = currentCapabilities;
   let createdTruthVersion = null;
+  let reusedTruthVersion = null;
   let truthVersion = null;
+  let truthVersionCreateError = null;
   let publishedServices = [];
   let publishedContacts = [];
   let publishedLocations = [];
@@ -904,6 +1164,7 @@ export async function projectSetupReviewDraftToCanonical(
   );
   publishedContacts = arr(await dbListTenantContacts(db, actor.tenantId));
   publishedLocations = arr(await dbListTenantLocations(db, actor.tenantId));
+
   if (Array.isArray(draft?.businessFacts)) {
     publishedTruthFacts = arr(draft.businessFacts);
   } else if (typeof truthVersionHelper?.getLatestVersion === "function") {
@@ -941,42 +1202,76 @@ export async function projectSetupReviewDraftToCanonical(
       s(currentProfile?.approved_by) ||
       requestedBy;
 
-    createdTruthVersion = await truthVersionHelper.createVersion({
-      tenantId: actor.tenantId,
-      tenantKey: actor.tenantKey,
-      businessProfileId,
-      businessCapabilitiesId,
-      reviewSessionId: persistedReviewSessionId || null,
-      approvedAt,
-      approvedBy,
-      profile: savedProfile,
-      capabilities: savedCapabilities,
-      services: publishedServices,
-      contacts: publishedContacts,
-      locations: publishedLocations,
-      truthFacts: publishedTruthFacts,
-      sourceSummaryJson: obj(savedProfile?.source_summary_json),
-      metadataJson: compactObject({
-        reviewSessionProjection: true,
-        reviewSessionId: s(session?.id),
-        persistedReviewSessionId: persistedReviewSessionId || undefined,
-        draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
-        sourceId: sourceInfo.primarySourceId || undefined,
-        sourceRunId: sourceInfo.latestRunId || undefined,
-        finalizeImpact: impactSummary,
-        approvalPolicy,
-      }),
-    });
-    truthVersion = createdTruthVersion;
+    try {
+      createdTruthVersion = await truthVersionHelper.createVersion({
+        tenantId: actor.tenantId,
+        tenantKey: actor.tenantKey,
+        businessProfileId,
+        businessCapabilitiesId,
+        reviewSessionId: persistedReviewSessionId || null,
+        approvedAt,
+        approvedBy,
+        profile: savedProfile,
+        capabilities: savedCapabilities,
+        services: publishedServices,
+        contacts: publishedContacts,
+        locations: publishedLocations,
+        truthFacts: publishedTruthFacts,
+        sourceSummaryJson: obj(savedProfile?.source_summary_json),
+        metadataJson: compactObject({
+          reviewSessionProjection: true,
+          reviewSessionId: s(session?.id),
+          persistedReviewSessionId: persistedReviewSessionId || undefined,
+          draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
+          sourceId: sourceInfo.primarySourceId || undefined,
+          sourceRunId: sourceInfo.latestRunId || undefined,
+          finalizeImpact: impactSummary,
+          approvalPolicy,
+        }),
+      });
+
+      if (s(createdTruthVersion?.id)) {
+        truthVersion = createdTruthVersion;
+      }
+    } catch (error) {
+      if (shouldAttemptTruthVersionReuseFromError(error)) {
+        truthVersionCreateError = error;
+      } else {
+        throw error;
+      }
+    }
   }
 
   if (!s(truthVersion?.id)) {
-    throw buildTruthVersionRequiredError({
+    reusedTruthVersion = await resolveReusableTruthVersion({
+      truthVersionHelper,
+      actor,
+      businessProfileId,
+      businessCapabilitiesId,
+    });
+
+    if (s(reusedTruthVersion?.id)) {
+      truthVersion = reusedTruthVersion;
+    }
+  }
+
+  if (!s(truthVersion?.id)) {
+    const error = buildTruthVersionRequiredError({
       businessProfileId,
       businessCapabilitiesId,
       draft,
       sourceInfo,
     });
+
+    if (truthVersionCreateError) {
+      error.cause = truthVersionCreateError;
+      error.truthVersionCreateErrorCode = s(truthVersionCreateError?.code);
+      error.truthVersionCreateReasonCode = s(
+        truthVersionCreateError?.reasonCode
+      );
+    }
+
+    throw error;
   }
 
   const knowledgeProjection = await projectDraftKnowledgeToCanonical({
@@ -1013,6 +1308,8 @@ export async function projectSetupReviewDraftToCanonical(
           reviewSessionId: s(session?.id),
           persistedReviewSessionId: persistedReviewSessionId || undefined,
           truthVersionId: s(truthVersion?.id),
+          truthVersionReused: Boolean(s(reusedTruthVersion?.id)) || undefined,
+          truthVersionReuseMode: s(reusedTruthVersion?.reuseMode) || undefined,
           draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
           primarySourceId: s(sourceInfo.primarySourceId),
           latestRunId: s(sourceInfo.latestRunId),
@@ -1038,8 +1335,11 @@ export async function projectSetupReviewDraftToCanonical(
     projectedProfile,
     projectedCapabilities,
     truthVersionCreated: Boolean(s(createdTruthVersion?.id)),
+    truthVersionReused: Boolean(s(reusedTruthVersion?.id)),
     truthVersion,
-    runtimeProjection: Object.keys(runtimeProjection).length ? runtimeProjection : null,
+    runtimeProjection: Object.keys(runtimeProjection).length
+      ? runtimeProjection
+      : null,
     serviceProjection,
     contactProjection,
     locationProjection,
