@@ -7,6 +7,7 @@ import {
 import {
   buildWebsiteDomainVerificationChallenge,
   buildWebsiteDomainVerificationPayload,
+  WEBSITE_DOMAIN_VERIFICATION_ENFORCEMENT,
   evaluateWebsiteDomainVerification,
   normalizeWebsiteVerificationDomain,
   WEBSITE_DOMAIN_VERIFICATION_CHANNEL,
@@ -26,8 +27,6 @@ import {
 } from "../websiteWidget/config.js";
 import { auditSafe, getTenantByKey } from "./repository.js";
 import { getReqActor, getReqTenantKey, s } from "./utils.js";
-
-const WEBSITE_DOMAIN_VERIFICATION_ENFORCEMENT = false;
 
 function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -154,7 +153,39 @@ async function loadWebsiteDomainVerificationSurface(
   });
 }
 
-function buildBlockers(status = {}) {
+function isProductionInstallBlocked(domainVerification = null) {
+  const verification = obj(domainVerification);
+  const readiness = obj(verification.readiness);
+
+  return (
+    verification.requiredForProductionInstall === true &&
+    readiness.enforcementActive === true &&
+    readiness.productionInstallReady !== true
+  );
+}
+
+function buildWebsiteInstallSurface(req, status = {}, domainVerification = null) {
+  const install = buildWebsiteWidgetInstallSurface(req, status);
+  const productionBlocked = isProductionInstallBlocked(domainVerification);
+
+  return {
+    ...install,
+    productionInstallReady: productionBlocked !== true,
+    productionBlocked,
+    blockReasonCode: productionBlocked
+      ? s(obj(domainVerification).reasonCode, "website_domain_verification_required")
+      : "",
+    blockMessage: productionBlocked
+      ? s(
+          obj(domainVerification).message,
+          "Create and verify a DNS TXT challenge for this domain before Website Chat can be installed on the public website."
+        )
+      : "",
+    embedSnippet: productionBlocked ? "" : s(install.embedSnippet),
+  };
+}
+
+function buildBlockers(status = {}, domainVerification = null) {
   const config = normalizeWidgetConfig(status.widgetConfig, {
     defaultEnabled: widgetStatusAllowsInstall(status.widgetChannelStatus),
   });
@@ -200,6 +231,20 @@ function buildBlockers(status = {}) {
     });
   }
 
+  if (config.enabled === true && isProductionInstallBlocked(domainVerification)) {
+    blockers.push({
+      reasonCode: s(
+        obj(domainVerification).reasonCode,
+        "website_domain_verification_required"
+      ),
+      title: "Website chat production install is blocked until domain ownership is verified.",
+      subtitle: s(
+        obj(domainVerification).message,
+        "Create and verify a DNS TXT challenge for this domain before Website Chat can launch publicly."
+      ),
+    });
+  }
+
   return blockers;
 }
 
@@ -209,18 +254,27 @@ function buildWebsiteWidgetStatusPayload(
   viewerRole = "member",
   domainVerification = null
 ) {
+  const verificationSurface =
+    domainVerification ||
+    buildWebsiteDomainVerificationPayload(null, {
+      candidateDomain: "",
+      candidateDomains: [],
+      enforcementActive: WEBSITE_DOMAIN_VERIFICATION_ENFORCEMENT,
+    });
   const config = normalizeWidgetConfig(status.widgetConfig, {
     defaultEnabled: widgetStatusAllowsInstall(status.widgetChannelStatus),
   });
-  const blockers = buildBlockers(status);
+  const blockers = buildBlockers(status, verificationSurface);
   const saveAllowed = canManageSettings(viewerRole);
   const launchEnabled = resolveWidgetEnabled(status);
-  const ready =
+  const launchReady =
     launchEnabled &&
     Boolean(config.publicWidgetId) &&
     (config.allowedOrigins.length > 0 ||
       config.allowedDomains.length > 0 ||
       Boolean(s(status.websiteUrl)));
+  const ready = launchReady && !isProductionInstallBlocked(verificationSurface);
+  const install = buildWebsiteInstallSurface(req, status, verificationSurface);
 
   return {
     state: ready ? "connected" : config.enabled ? "blocked" : "not_connected",
@@ -245,14 +299,8 @@ function buildWebsiteWidgetStatusPayload(
       channelStatus: s(status.widgetChannelStatus),
       updatedAt: status.widgetUpdatedAt || null,
     },
-    install: buildWebsiteWidgetInstallSurface(req, status),
-    domainVerification:
-      domainVerification ||
-      buildWebsiteDomainVerificationPayload(null, {
-        candidateDomain: "",
-        candidateDomains: [],
-        enforcementActive: WEBSITE_DOMAIN_VERIFICATION_ENFORCEMENT,
-      }),
+    install,
+    domainVerification: verificationSurface,
     readiness: {
       status: ready
         ? "ready"
@@ -261,8 +309,13 @@ function buildWebsiteWidgetStatusPayload(
           : "attention",
       message: ready
         ? "Website chat is configured with a publishable install ID and trusted origin controls."
+        : config.enabled && isProductionInstallBlocked(verificationSurface)
+          ? s(
+              verificationSurface.message,
+              "Website chat is blocked for public install until domain ownership is verified."
+            )
         : config.enabled
-          ? launchEnabled
+          ? launchReady
             ? "Website chat is enabled, but installation hardening is still incomplete."
             : "Website chat is enabled in settings, but public launch is still blocked until the channel becomes active again."
           : "Website chat is disabled until you intentionally enable and configure it.",

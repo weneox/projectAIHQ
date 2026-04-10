@@ -304,7 +304,7 @@ test("website domain verification evaluator reports failed when TXT records do n
   assert.deepEqual(result.last_seen_values, ["wrong-token"]);
 });
 
-test("website widget status exposes additive domain verification readiness without enforcing it yet", async () => {
+test("website widget status blocks production install until domain ownership is verified", async () => {
   const db = new FakeWebsiteDomainVerificationDb();
 
   const payload = await getWebsiteWidgetStatus({
@@ -314,13 +314,17 @@ test("website widget status exposes additive domain verification readiness witho
     }),
   });
 
-  assert.equal(payload.state, "connected");
+  assert.equal(payload.state, "blocked");
   assert.equal(payload.domainVerification?.state, "unverified");
   assert.equal(payload.domainVerification?.candidateDomain, "acme.example");
   assert.equal(payload.domainVerification?.requiredForProductionInstall, true);
-  assert.equal(payload.domainVerification?.enforcementActive, false);
+  assert.equal(payload.domainVerification?.enforcementActive, true);
   assert.equal(
     payload.domainVerification?.readiness?.productionInstallReady,
     false
   );
+  assert.equal(payload.install?.productionBlocked, true);
+  assert.equal(payload.install?.productionInstallReady, false);
+  assert.equal(payload.install?.embedSnippet, "");
+  assert.equal(payload.readiness?.status, "blocked");
 });

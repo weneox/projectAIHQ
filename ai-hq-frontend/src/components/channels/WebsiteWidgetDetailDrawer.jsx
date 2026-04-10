@@ -207,6 +207,7 @@ export default function WebsiteWidgetDetailDrawer({
     : serverVerification;
   const verificationChallenge = obj(verificationSurface.challenge);
   const verificationCandidateDomains = arr(verificationSurface.candidateDomains);
+  const verificationReadiness = obj(verificationSurface.readiness);
   const permissions = obj(payload.permissions);
   const blockers = arr(readiness.blockers);
   const saveAllowed = permissions.saveAllowed !== false;
@@ -225,6 +226,14 @@ export default function WebsiteWidgetDetailDrawer({
     verificationInputValue ||
       verificationSurface.domain ||
       verificationSurface.candidateDomain
+  );
+  const productionInstallBlocked =
+    install.productionBlocked === true ||
+    (verificationReadiness.enforcementActive === true &&
+      verificationReadiness.productionInstallReady !== true);
+  const installBlockMessage = s(
+    install.blockMessage ||
+      (productionInstallBlocked ? verificationSurface.message : "")
   );
   const verificationBusy =
     createChallengeMutation.isPending ||
@@ -440,7 +449,11 @@ export default function WebsiteWidgetDetailDrawer({
           <Section
             eyebrow="Domain verification"
             title="DNS TXT ownership"
-            description="This prepares future production install enforcement for Website Chat. It is visible here now, but it does not block the current widget flow yet."
+            description={
+              verificationReadiness.enforcementActive === true
+                ? "Public Website Chat install now requires verified DNS TXT ownership for the website domain."
+                : "This prepares future production install enforcement for Website Chat. It is visible here now, but it does not block the current widget flow yet."
+            }
           >
             <div className="space-y-4">
               <SaveFeedback success={verificationMessage} error={verificationError} />
@@ -709,6 +722,18 @@ export default function WebsiteWidgetDetailDrawer({
             description="The loader script requests a short-lived bootstrap token from the backend using the real customer page request context, then opens the iframe with that signed install token."
           >
             <div className="space-y-4">
+              {productionInstallBlocked ? (
+                <InlineNotice
+                  tone="warning"
+                  title="Production install blocked"
+                  description={s(
+                    installBlockMessage,
+                    "Verify DNS TXT ownership for this domain before Website Chat can be installed on the public website."
+                  )}
+                  compact
+                />
+              ) : null}
+
               <div className="overflow-hidden rounded-panel border border-line-soft bg-surface">
                 <DataRow
                   label="Loader script"
@@ -730,7 +755,11 @@ export default function WebsiteWidgetDetailDrawer({
                   readOnly
                   rows={5}
                   appearance="quiet"
-                  placeholder="Save the website widget settings to generate the install snippet."
+                  placeholder={
+                    productionInstallBlocked
+                      ? "Verify domain ownership to unlock the production install snippet."
+                      : "Save the website widget settings to generate the install snippet."
+                  }
                 />
               </FieldGroup>
 
@@ -760,7 +789,7 @@ export default function WebsiteWidgetDetailDrawer({
             fullWidth
             showArrow={false}
             onClick={handleCopySnippet}
-            disabled={!s(install.embedSnippet)}
+            disabled={productionInstallBlocked || !s(install.embedSnippet)}
             leftIcon={<Copy className="h-4 w-4" strokeWidth={2.2} />}
             className="!h-[40px] !rounded-[10px] !text-[10px]"
           >

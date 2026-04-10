@@ -1,12 +1,19 @@
 import express from "express";
 
 import { safeAppendDecisionEvent } from "../../../db/helpers/decisionEvents.js";
+import { dbGetTenantDomainVerification } from "../../../db/helpers/tenantDomainVerifications.js";
 import {
   applyExecutionPolicyToActions,
   buildExecutionPolicyDecisionAuditShape,
   mapExecutionOutcomeToDecisionEventType,
 } from "../../../services/executionPolicy.js";
 import { getTenantBrainRuntime } from "../../../services/businessBrain/getTenantBrainRuntime.js";
+import {
+  buildWebsiteDomainVerificationPayload,
+  buildWebsiteVerificationHostCandidates,
+  WEBSITE_DOMAIN_VERIFICATION_CHANNEL,
+  WEBSITE_DOMAIN_VERIFICATION_ENFORCEMENT,
+} from "../../../services/websiteDomainVerification.js";
 import { buildInboxActions } from "../../../services/inboxBrain.js";
 import { emitRealtimeEvent } from "../../../realtime/events.js";
 import { isDbReady, okJson } from "../../../utils/http.js";
@@ -168,6 +175,8 @@ function buildPublicErrorMessage(errorCode = "", fallback = "") {
       return "The widget install request contained page metadata that did not match the trusted browser request origin.";
     case "website_origin_mismatch":
       return "This widget install request did not come from an allowed website origin or domain.";
+    case "website_domain_verification_required":
+      return "Website chat is blocked on this domain until DNS TXT ownership is verified.";
     default:
       return "Website chat is temporarily unavailable right now.";
   }
@@ -200,6 +209,60 @@ function resolveRequestedWidgetId(req) {
       query.widgetId ||
       query.widget_id
   );
+}
+
+async function ensureWebsiteInstallDomainVerified(
+  db,
+  tenant = {},
+  installHost = ""
+) {
+  if (WEBSITE_DOMAIN_VERIFICATION_ENFORCEMENT !== true) {
+    return { ok: true };
+  }
+
+  const candidateDomains = buildWebsiteVerificationHostCandidates(installHost);
+  let matchedRecord = null;
+
+  try {
+    for (const candidateDomain of candidateDomains) {
+      const record = await dbGetTenantDomainVerification(db, tenant.id, {
+        channelType: WEBSITE_DOMAIN_VERIFICATION_CHANNEL,
+        normalizedDomain: candidateDomain,
+      });
+
+      if (!matchedRecord && record) {
+        matchedRecord = record;
+      }
+
+      if (lower(record?.status) === "verified") {
+        return {
+          ok: true,
+          record,
+          domain: candidateDomain,
+        };
+      }
+    }
+  } catch {}
+
+  const verification = buildWebsiteDomainVerificationPayload(matchedRecord, {
+    candidateDomain: candidateDomains[0] || "",
+    candidateDomains,
+    enforcementActive: WEBSITE_DOMAIN_VERIFICATION_ENFORCEMENT,
+  });
+
+  return {
+    ok: false,
+    error: "website_domain_verification_required",
+    reasonCode: s(
+      verification.reasonCode,
+      "website_domain_verification_required"
+    ),
+    detail: s(
+      verification.message,
+      "Website chat is blocked on this domain until DNS TXT ownership is verified."
+    ),
+    verification,
+  };
 }
 
 function resolveRateLimitTenantKey(req) {
@@ -338,6 +401,23 @@ async function resolveTenantFromSession(db, providedToken = "") {
       ok: false,
       error: "website_widget_disabled",
       details: buildPublicErrorDetails("website_widget_disabled"),
+    };
+  }
+
+  const installVerification = await ensureWebsiteInstallDomainVerified(
+    db,
+    tenant,
+    s(payload.installHost) || normalizeUrl(payload.installOrigin)?.hostname
+  );
+  if (!installVerification.ok) {
+    return {
+      ok: false,
+      error: installVerification.error,
+      reasonCode: installVerification.reasonCode,
+      details: buildPublicErrorDetails(
+        installVerification.error,
+        installVerification.detail
+      ),
     };
   }
 
@@ -1368,6 +1448,23 @@ export function createWebsiteWidgetHandlers({
         installContext.page.origin;
       const installHost =
         normalizeUrl(installOrigin)?.hostname || installContext.page.host;
+      const installVerification = await ensureWebsiteInstallDomainVerified(
+        db,
+        tenant,
+        installHost
+      );
+      if (!installVerification.ok) {
+        return okJson(
+          res,
+          buildPublicErrorResponse(
+            installVerification.error,
+            installVerification.detail,
+            {
+              reasonCode: installVerification.reasonCode,
+            }
+          )
+        );
+      }
       const bootstrap = issueWebsiteWidgetBootstrapToken({
         tenantId: tenant.id,
         tenantKey: tenant.tenantKey,
@@ -1514,6 +1611,25 @@ export function createWebsiteWidgetHandlers({
         return okJson(
           res,
           buildPublicErrorResponse("website_widget_install_mismatch")
+        );
+      }
+
+      const installVerification = await ensureWebsiteInstallDomainVerified(
+        db,
+        tenant,
+        s(verifiedBootstrap.payload?.installHost) ||
+          normalizeUrl(verifiedBootstrap.payload?.installOrigin)?.hostname
+      );
+      if (!installVerification.ok) {
+        return okJson(
+          res,
+          buildPublicErrorResponse(
+            installVerification.error,
+            installVerification.detail,
+            {
+              reasonCode: installVerification.reasonCode,
+            }
+          )
         );
       }
 

@@ -11,6 +11,7 @@ export const WEBSITE_DOMAIN_VERIFICATION_METHOD = "dns_txt";
 export const WEBSITE_DOMAIN_VERIFICATION_RECORD_LABEL = "_aihq-webchat";
 export const WEBSITE_DOMAIN_VERIFICATION_VALUE_PREFIX =
   "aihq-webchat-verification=";
+export const WEBSITE_DOMAIN_VERIFICATION_ENFORCEMENT = true;
 
 const DNS_PENDING_CODES = new Set(["ENODATA", "ENOTFOUND", "ENOENT", "NXDOMAIN"]);
 const DOMAIN_LABEL_PATTERN =
@@ -133,6 +134,23 @@ export function buildWebsiteDomainVerificationChallenge(domain = "") {
     challenge_dns_name: challengeDnsName,
     challenge_dns_value: challengeDnsValue,
   };
+}
+
+export function buildWebsiteVerificationHostCandidates(rawHost = "") {
+  const normalized = normalizeWebsiteVerificationDomain(rawHost);
+  if (!normalized.ok || !normalized.domain) return [];
+
+  const labels = normalized.domain.split(".").filter(Boolean);
+  const candidates = [];
+
+  for (let index = 0; index < labels.length - 1; index += 1) {
+    const candidate = labels.slice(index).join(".");
+    if (candidate.includes(".")) {
+      candidates.push(candidate);
+    }
+  }
+
+  return unique(candidates);
 }
 
 function flattenTxtRows(rows = []) {
@@ -266,15 +284,21 @@ export function buildWebsiteDomainVerificationPayload(
     } else if (safeState === "pending") {
       reasonCode = reasonCode || "dns_txt_pending";
       message =
-        "Publish the TXT record for this domain, then run verification again after DNS propagation.";
+        enforcementActive === true
+          ? "Publish the TXT record for this domain, then run verification again before Website Chat can launch publicly."
+          : "Publish the TXT record for this domain, then run verification again after DNS propagation.";
     } else if (safeState === "failed") {
       reasonCode = reasonCode || "dns_txt_failed";
       message =
-        "The last DNS TXT verification check did not confirm ownership for this domain.";
+        enforcementActive === true
+          ? "The last DNS TXT verification check did not confirm ownership, so Website Chat remains blocked for this domain."
+          : "The last DNS TXT verification check did not confirm ownership for this domain.";
     } else {
       reasonCode = reasonCode || "website_domain_verification_missing";
       message =
-        "Create a DNS TXT challenge for this domain before future production install enforcement is enabled.";
+        enforcementActive === true
+          ? "Create and verify a DNS TXT challenge for this domain before Website Chat can be installed on the public website."
+          : "Create a DNS TXT challenge for this domain before future production install enforcement is enabled.";
     }
   }
 
@@ -315,6 +339,7 @@ export function buildWebsiteDomainVerificationPayload(
 
 export const __test__ = {
   buildWebsiteDomainVerificationChallenge,
+  buildWebsiteVerificationHostCandidates,
   buildWebsiteDomainVerificationPayload,
   evaluateWebsiteDomainVerification,
   normalizeWebsiteVerificationDomain,

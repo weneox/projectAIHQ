@@ -36,6 +36,100 @@ vi.mock("../../hooks/useWorkspaceTenantKey.js", async (importOriginal) => {
 
 import WebsiteWidgetDetailDrawer from "../../components/channels/WebsiteWidgetDetailDrawer.jsx";
 
+function buildDomainVerificationPayload({
+  state = "unverified",
+  verified = false,
+  message,
+  challenge = null,
+  verifiedAt = null,
+  lastCheckedAt = null,
+} = {}) {
+  const defaultMessage =
+    state === "verified"
+      ? "DNS TXT ownership has been verified for this domain."
+      : "Create and verify a DNS TXT challenge for this domain before Website Chat can be installed on the public website.";
+
+  return {
+    state,
+    verified,
+    method: "dns_txt",
+    domain: verified ? "acme.example" : "",
+    candidateDomain: "acme.example",
+    candidateDomains: ["acme.example", "www.acme.example"],
+    challengeVersion: challenge ? 1 : 0,
+    challenge,
+    lastCheckedAt,
+    verifiedAt,
+    reasonCode:
+      state === "verified"
+        ? "dns_txt_verified"
+        : "website_domain_verification_missing",
+    message: message || defaultMessage,
+    readiness: {
+      productionInstall: verified ? "ready" : "verification_required",
+      productionInstallReady: verified,
+      enforcementActive: true,
+      message: message || defaultMessage,
+    },
+  };
+}
+
+function buildStatusPayload({ verified = false } = {}) {
+  const domainVerification = buildDomainVerificationPayload({ verified, state: verified ? "verified" : "unverified" });
+  const embedSnippet = verified
+    ? '<script src="https://widget.example.test/website-widget-loader.js" data-widget-id="ww_acme_widget" data-api-base="https://api.example.test/api" async></script>'
+    : "";
+
+  return {
+    ok: true,
+    state: verified ? "connected" : "blocked",
+    permissions: {
+      saveAllowed: true,
+      requiredRoles: ["owner", "admin"],
+      message: "",
+    },
+    widget: {
+      enabled: true,
+      publicWidgetId: "ww_acme_widget",
+      websiteUrl: "https://acme.example",
+      allowedOrigins: ["https://www.acme.example"],
+      allowedDomains: ["acme.example"],
+      title: "Acme Clinic",
+      subtitle: "Ask a question or leave a message for the team.",
+      accentColor: "#0f172a",
+      initialPrompts: ["What services do you offer?"],
+    },
+    install: {
+      scriptUrl: "https://widget.example.test/website-widget-loader.js",
+      apiBase: "https://api.example.test/api",
+      embedSnippet,
+      productionBlocked: verified !== true,
+      productionInstallReady: verified === true,
+      blockReasonCode: verified ? "" : "website_domain_verification_missing",
+      blockMessage: verified
+        ? ""
+        : domainVerification.message,
+    },
+    readiness: {
+      status: verified ? "ready" : "blocked",
+      message: verified
+        ? "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership."
+        : domainVerification.message,
+      blockers: verified
+        ? []
+        : [
+            {
+              reasonCode: "website_domain_verification_missing",
+              title:
+                "Website chat production install is blocked until domain ownership is verified.",
+              subtitle: domainVerification.message,
+            },
+          ],
+    },
+    domainVerification,
+  };
+}
+
 function renderDrawer(props = {}) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -70,60 +164,7 @@ describe("WebsiteWidgetDetailDrawer", () => {
       loading: false,
       ready: true,
     });
-    getWebsiteWidgetStatus.mockResolvedValue({
-      ok: true,
-      state: "connected",
-      permissions: {
-        saveAllowed: true,
-        requiredRoles: ["owner", "admin"],
-        message: "",
-      },
-      widget: {
-        enabled: true,
-        publicWidgetId: "ww_acme_widget",
-        websiteUrl: "https://acme.example",
-        allowedOrigins: ["https://www.acme.example"],
-        allowedDomains: ["acme.example"],
-        title: "Acme Clinic",
-        subtitle: "Ask a question or leave a message for the team.",
-        accentColor: "#0f172a",
-        initialPrompts: ["What services do you offer?"],
-      },
-      install: {
-        scriptUrl: "https://widget.example.test/website-widget-loader.js",
-        apiBase: "https://api.example.test/api",
-        embedSnippet:
-          '<script src="https://widget.example.test/website-widget-loader.js" data-widget-id="ww_acme_widget" data-api-base="https://api.example.test/api" async></script>',
-      },
-      readiness: {
-        status: "ready",
-        message:
-          "Website chat is configured with a publishable install ID and trusted origin controls.",
-        blockers: [],
-      },
-      domainVerification: {
-        state: "unverified",
-        verified: false,
-        method: "dns_txt",
-        domain: "",
-        candidateDomain: "acme.example",
-        candidateDomains: ["acme.example", "www.acme.example"],
-        challengeVersion: 0,
-        challenge: null,
-        lastCheckedAt: null,
-        verifiedAt: null,
-        reasonCode: "website_domain_verification_missing",
-        message:
-          "Create a DNS TXT challenge for this domain before future production install enforcement is enabled.",
-        readiness: {
-          productionInstall: "verification_required",
-          productionInstallReady: false,
-          enforcementActive: false,
-          message:
-            "Create a DNS TXT challenge for this domain before future production install enforcement is enabled.",
-        },
-      },
-    });
+    getWebsiteWidgetStatus.mockResolvedValue(buildStatusPayload());
     saveWebsiteWidgetConfig.mockResolvedValue({
       ok: true,
       widget: {
@@ -176,20 +217,8 @@ describe("WebsiteWidgetDetailDrawer", () => {
       message: "DNS TXT ownership has been verified for this domain.",
     });
     getWebsiteDomainVerificationStatus.mockResolvedValue({
-      ok: true,
-      state: "unverified",
-      verified: false,
-      method: "dns_txt",
+      ...buildDomainVerificationPayload(),
       domain: "acme.example",
-      candidateDomain: "acme.example",
-      candidateDomains: ["acme.example", "www.acme.example"],
-      challengeVersion: 0,
-      challenge: null,
-      lastCheckedAt: null,
-      verifiedAt: null,
-      reasonCode: "website_domain_verification_missing",
-      message:
-        "Create a DNS TXT challenge for this domain before future production install enforcement is enabled.",
     });
 
     Object.defineProperty(window.navigator, "clipboard", {
@@ -209,6 +238,7 @@ describe("WebsiteWidgetDetailDrawer", () => {
   });
 
   it("loads the trusted install config and shows the public embed details", async () => {
+    getWebsiteWidgetStatus.mockResolvedValueOnce(buildStatusPayload({ verified: true }));
     renderDrawer();
 
     expect(await screen.findByText("Install-safe website chat")).toBeInTheDocument();
@@ -223,6 +253,22 @@ describe("WebsiteWidgetDetailDrawer", () => {
     expect(
       within(verificationSection).getByDisplayValue("acme.example")
     ).toBeInTheDocument();
+  });
+
+  it("blocks production install actions until domain ownership is verified", async () => {
+    renderDrawer();
+
+    expect(
+      await screen.findByText("Production install blocked")
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        "Create and verify a DNS TXT challenge for this domain before Website Chat can be installed on the public website."
+      ).length
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByRole("button", { name: /copy snippet/i })
+    ).toBeDisabled();
   });
 
   it("saves tenant-managed widget settings without leaving the drawer", async () => {
@@ -256,10 +302,12 @@ describe("WebsiteWidgetDetailDrawer", () => {
     renderDrawer();
 
     expect(
-      await screen.findByText(
-        "Create a DNS TXT challenge for this domain before future production install enforcement is enabled."
-      )
-    ).toBeInTheDocument();
+      (
+        await screen.findAllByText(
+        "Create and verify a DNS TXT challenge for this domain before Website Chat can be installed on the public website."
+        )
+      ).length
+    ).toBeGreaterThan(0);
     const verificationSection = screen.getByText("DNS TXT ownership").closest("section");
     expect(verificationSection).not.toBeNull();
     const createButton = within(verificationSection).getByRole("button", {

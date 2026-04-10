@@ -45,10 +45,52 @@ const tenantRow = {
   },
 };
 
+function buildVerifiedDomainVerificationRow(domain = "acme.example") {
+  return {
+    id: `verification:${domain}`,
+    tenant_id: tenantRow.id,
+    channel_type: "webchat",
+    verification_scope: "website_widget",
+    verification_method: "dns_txt",
+    domain,
+    normalized_domain: domain,
+    status: "verified",
+    challenge_token: "token-1",
+    challenge_dns_name: `_aihq-webchat.${domain}`,
+    challenge_dns_value: "aihq-webchat-verification=test-token",
+    challenge_version: 1,
+    requested_by: "owner@acme.test",
+    last_checked_at: "2026-04-10T10:30:00.000Z",
+    verified_at: "2026-04-10T10:30:00.000Z",
+    status_reason_code: "dns_txt_verified",
+    status_message: "DNS TXT ownership has been verified for this domain.",
+    verification_meta: {},
+    last_seen_values: ["aihq-webchat-verification=test-token"],
+    created_at: "2026-04-10T10:00:00.000Z",
+    updated_at: "2026-04-10T10:30:00.000Z",
+  };
+}
+
+function maybeVerifiedDomainVerificationQuery(sql = "", values = []) {
+  if (
+    sql.includes("from tenant_domain_verifications") &&
+    sql.includes("normalized_domain = $3")
+  ) {
+    const domain = String(values?.[2] || "acme.example").toLowerCase();
+    return {
+      rows: [buildVerifiedDomainVerificationRow(domain)],
+    };
+  }
+
+  return null;
+}
+
 test("website widget install token only issues for allowed origins", async () => {
   const db = {
-    async query(text) {
+    async query(text, values = []) {
       const sql = String(text?.text || text || "").toLowerCase();
+      const verification = maybeVerifiedDomainVerificationQuery(sql, values);
+      if (verification) return verification;
       if (sql.includes("from tenants t")) {
         return { rows: [tenantRow] };
       }
@@ -90,8 +132,10 @@ test("website widget install token only issues for allowed origins", async () =>
 
 test("website widget install token fails closed for rejected origins", async () => {
   const db = {
-    async query(text) {
+    async query(text, values = []) {
       const sql = String(text?.text || text || "").toLowerCase();
+      const verification = maybeVerifiedDomainVerificationQuery(sql, values);
+      if (verification) return verification;
       if (sql.includes("from tenants t")) {
         return { rows: [tenantRow] };
       }
@@ -127,8 +171,10 @@ test("website widget install token fails closed for rejected origins", async () 
 
 test("website widget install token respects tenant config disable state", async () => {
   const db = {
-    async query(text) {
+    async query(text, values = []) {
       const sql = String(text?.text || text || "").toLowerCase();
+      const verification = maybeVerifiedDomainVerificationQuery(sql, values);
+      if (verification) return verification;
       if (sql.includes("from tenants t")) {
         return {
           rows: [
@@ -173,10 +219,52 @@ test("website widget install token respects tenant config disable state", async 
   assert.equal(res.body?.error, "website_widget_disabled");
 });
 
-test("website widget bootstrap returns a real session and honest blocked automation when strict runtime is unavailable", async () => {
+test("website widget install token blocks public launch until domain ownership is verified", async () => {
   const db = {
     async query(text) {
       const sql = String(text?.text || text || "").toLowerCase();
+      if (sql.includes("from tenant_domain_verifications")) {
+        return { rows: [] };
+      }
+      if (sql.includes("from tenants t")) {
+        return { rows: [tenantRow] };
+      }
+      throw new Error(`Unexpected query: ${text}`);
+    },
+  };
+
+  const { issueWidgetInstallToken } = createWebsiteWidgetHandlers({
+    db,
+    wsHub: null,
+  });
+
+  const req = {
+    body: {
+      widgetId: "ww_acme_widget",
+      page: {
+        url: "https://www.acme.example/pricing",
+      },
+    },
+    headers: {
+      origin: "https://www.acme.example",
+      referer: "https://www.acme.example/pricing",
+    },
+  };
+  const res = createMockRes();
+
+  await issueWidgetInstallToken(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.ok, false);
+  assert.equal(res.body?.error, "website_domain_verification_required");
+});
+
+test("website widget bootstrap returns a real session and honest blocked automation when strict runtime is unavailable", async () => {
+  const db = {
+    async query(text, values = []) {
+      const sql = String(text?.text || text || "").toLowerCase();
+      const verification = maybeVerifiedDomainVerificationQuery(sql, values);
+      if (verification) return verification;
       if (sql.includes("from tenants t")) {
         return { rows: [tenantRow] };
       }
@@ -223,6 +311,49 @@ test("website widget bootstrap returns a real session and honest blocked automat
   assert.equal(res.body?.automation?.mode, "blocked_until_repair");
   assert.match(String(res.body?.sessionToken || ""), /\./);
   assert.equal(res.body?.thread, null);
+});
+
+test("website widget bootstrap blocks public launch when domain ownership is not verified", async () => {
+  const db = {
+    async query(text) {
+      const sql = String(text?.text || text || "").toLowerCase();
+      if (sql.includes("from tenant_domain_verifications")) {
+        return { rows: [] };
+      }
+      if (sql.includes("from tenants t")) {
+        return { rows: [tenantRow] };
+      }
+      throw new Error(`Unexpected query: ${text}`);
+    },
+  };
+
+  const { bootstrapWebsiteWidget } = createWebsiteWidgetHandlers({
+    db,
+    wsHub: null,
+  });
+
+  const bootstrap = issueWebsiteWidgetBootstrapToken({
+    tenantId: tenantRow.id,
+    tenantKey: "acme",
+    widgetId: "ww_acme_widget",
+    installOrigin: "https://www.acme.example",
+    installHost: "www.acme.example",
+    pageUrl: "https://www.acme.example/pricing",
+  });
+
+  const req = {
+    body: {
+      widgetId: "ww_acme_widget",
+      bootstrapToken: bootstrap.token,
+    },
+  };
+  const res = createMockRes();
+
+  await bootstrapWebsiteWidget(req, res);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body?.ok, false);
+  assert.equal(res.body?.error, "website_domain_verification_required");
 });
 
 test("website widget message persists the website thread and activates handoff when strict runtime is unavailable", async () => {
@@ -345,8 +476,10 @@ test("website widget message persists the website thread and activates handoff w
   };
 
   const db = {
-    async query(text) {
+    async query(text, values = []) {
       const sql = String(text?.text || text || "").toLowerCase();
+      const verification = maybeVerifiedDomainVerificationQuery(sql, values);
+      if (verification) return verification;
       if (sql.includes("from tenants t")) return { rows: [tenantRow] };
       throw new Error(`Unexpected db query: ${text}`);
     },
@@ -441,8 +574,10 @@ test("website widget transcript only exposes delivered outbound replies", async 
   });
 
   const db = {
-    async query(text) {
+    async query(text, values = []) {
       const sql = String(text?.text || text || "").toLowerCase();
+      const verification = maybeVerifiedDomainVerificationQuery(sql, values);
+      if (verification) return verification;
       if (sql.includes("from tenants t")) return { rows: [tenantRow] };
       if (sql.includes("from inbox_threads")) return { rows: [thread] };
       if (sql.includes("from inbox_messages")) {
