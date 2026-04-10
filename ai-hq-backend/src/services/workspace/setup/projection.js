@@ -1,5 +1,9 @@
 import { createTenantKnowledgeHelpers } from "../../../db/helpers/tenantKnowledge.js";
-import { createTenantTruthVersionHelpers } from "../../../db/helpers/tenantTruthVersions.js";
+import {
+  buildCanonicalTruthVersionSnapshot,
+  createTenantTruthVersionHelpers,
+  hasTruthVersionChanged,
+} from "../../../db/helpers/tenantTruthVersions.js";
 import {
   refreshRuntimeProjectionBestEffort,
   q,
@@ -149,13 +153,76 @@ function extractTruthVersionBusinessCapabilitiesId(version = {}) {
   );
 }
 
+function buildComparablePendingTruthVersion(input = {}) {
+  const snapshot = buildCanonicalTruthVersionSnapshot({
+    profile: input.profile,
+    capabilities: input.capabilities,
+    services: input.services,
+    contacts: input.contacts,
+    locations: input.locations,
+    truthFacts: input.truthFacts,
+    sourceSummary: input.sourceSummaryJson ?? input.source_summary_json,
+    metadata: input.metadataJson ?? input.metadata_json,
+  });
+
+  return {
+    business_profile_id: s(input.businessProfileId || input.business_profile_id),
+    business_capabilities_id: s(
+      input.businessCapabilitiesId || input.business_capabilities_id
+    ),
+    review_session_id: s(input.reviewSessionId || input.review_session_id),
+    source_summary_json: obj(snapshot.sourceSummary),
+    profile_snapshot_json: obj(snapshot.profileSnapshot),
+    capabilities_snapshot_json: obj(snapshot.capabilitiesSnapshot),
+    services_snapshot_json: arr(snapshot.servicesSnapshot),
+    contacts_snapshot_json: arr(snapshot.contactsSnapshot),
+    locations_snapshot_json: arr(snapshot.locationsSnapshot),
+    truth_facts_snapshot_json: arr(snapshot.truthFactsSnapshot),
+    field_provenance_json: obj(snapshot.fieldProvenance),
+  };
+}
+
+function truthVersionEquivalentToPending(version = {}, pendingVersion = null) {
+  if (!s(version?.id) || !pendingVersion) return false;
+
+  const comparableCurrent = {
+    ...obj(version),
+    business_profile_id:
+      s(pendingVersion?.business_profile_id) || s(version?.business_profile_id),
+    business_capabilities_id:
+      s(pendingVersion?.business_capabilities_id) ||
+      s(version?.business_capabilities_id),
+    review_session_id:
+      s(pendingVersion?.review_session_id) || s(version?.review_session_id),
+  };
+
+  return hasTruthVersionChanged(comparableCurrent, pendingVersion) === false;
+}
+
+function markTruthVersionSnapshotEquivalent(version = {}) {
+  return mergeDeep(obj(version), {
+    reuseReason: "snapshot_equivalent",
+    metadataJson: mergeDeep(
+      obj(version?.metadataJson || version?.metadata_json),
+      {
+        reuseReason: "snapshot_equivalent",
+      }
+    ),
+  });
+}
+
 function truthVersionMatchesProjection(
   version = {},
   {
     businessProfileId = "",
     businessCapabilitiesId = "",
+    pendingVersion = null,
   } = {}
 ) {
+  if (truthVersionEquivalentToPending(version, pendingVersion)) {
+    return true;
+  }
+
   const versionBusinessProfileId =
     extractTruthVersionBusinessProfileId(version);
   const versionBusinessCapabilitiesId =
@@ -308,11 +375,26 @@ function shouldAttemptTruthVersionReuseFromError(error = null) {
   return false;
 }
 
+function buildTruthVersionNoopError({
+  message = "No new truth version required because published truth is already current.",
+  code = "TRUTH_VERSION_NOT_REQUIRED",
+  reasonCode = "published_truth_version_reusable",
+} = {}) {
+  const err = new Error(
+    s(message) ||
+      "No new truth version required because published truth is already current."
+  );
+  err.code = s(code) || "TRUTH_VERSION_NOT_REQUIRED";
+  err.reasonCode = s(reasonCode) || "published_truth_version_reusable";
+  return err;
+}
+
 async function resolveReusableTruthVersion({
   truthVersionHelper,
   actor,
   businessProfileId = "",
   businessCapabilitiesId = "",
+  pendingVersion = null,
 } = {}) {
   if (!truthVersionHelper || !actor?.tenantId) return null;
 
@@ -345,19 +427,30 @@ async function resolveReusableTruthVersion({
 
     const result = await truthVersionHelper[method](args);
 
-    const match = extractTruthVersionRows(result)
+    const reusable = extractTruthVersionRows(result)
       .map((item) => normalizeReusableTruthVersion(item, method))
       .filter(Boolean)
-      .filter((item) =>
-        truthVersionMatchesProjection(item, {
-          businessProfileId,
-          businessCapabilitiesId,
-        })
-      )
-      .find((item) => isReusableTruthVersion(item, { method }));
+      .filter((item) => isReusableTruthVersion(item, { method }));
 
-    if (match) {
-      return match;
+    const strictMatch = reusable.find((item) =>
+      truthVersionMatchesProjection(item, {
+        businessProfileId,
+        businessCapabilitiesId,
+      })
+    );
+
+    if (strictMatch) {
+      return strictMatch;
+    }
+
+    if (pendingVersion) {
+      const snapshotEquivalent = reusable.find((item) =>
+        truthVersionEquivalentToPending(item, pendingVersion)
+      );
+
+      if (snapshotEquivalent) {
+        return markTruthVersionSnapshotEquivalent(snapshotEquivalent);
+      }
     }
   }
 
@@ -660,6 +753,61 @@ export function buildCanonicalProfileSourceSummary({
       )
       .filter((item) => Object.keys(item).length),
   });
+}
+
+function buildTruthVersionCreateInput({
+  actor,
+  session,
+  draft,
+  sources,
+  sourceInfo,
+  businessProfileId = "",
+  businessCapabilitiesId = "",
+  savedProfile = null,
+  savedCapabilities = null,
+  publishedServices = [],
+  publishedContacts = [],
+  publishedLocations = [],
+  publishedTruthFacts = [],
+  impactSummary = {},
+  approvalPolicy = {},
+  persistedReviewSessionId = "",
+  requestedBy = "",
+  approvedAt = "",
+  approvedBy = "",
+} = {}) {
+  return {
+    tenantId: actor?.tenantId,
+    tenantKey: actor?.tenantKey,
+    businessProfileId: businessProfileId || null,
+    businessCapabilitiesId: businessCapabilitiesId || null,
+    reviewSessionId: persistedReviewSessionId || null,
+    approvedAt: approvedAt || new Date().toISOString(),
+    approvedBy: approvedBy || requestedBy || "system",
+    profile: savedProfile,
+    capabilities: savedCapabilities,
+    services: publishedServices,
+    contacts: publishedContacts,
+    locations: publishedLocations,
+    truthFacts: publishedTruthFacts,
+    sourceSummaryJson: buildCanonicalProfileSourceSummary({
+      session,
+      draft,
+      sources,
+      sourceInfo,
+      approvedAt: approvedAt || new Date().toISOString(),
+    }),
+    metadataJson: compactObject({
+      reviewSessionProjection: true,
+      reviewSessionId: s(session?.id),
+      persistedReviewSessionId: persistedReviewSessionId || undefined,
+      draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
+      sourceId: sourceInfo?.primarySourceId || undefined,
+      sourceRunId: sourceInfo?.latestRunId || undefined,
+      finalizeImpact: impactSummary,
+      approvalPolicy,
+    }),
+  };
 }
 
 async function projectDraftServicesToCanonical({
@@ -1082,6 +1230,8 @@ export async function projectSetupReviewDraftToCanonical(
   let reusedTruthVersion = null;
   let truthVersion = null;
   let truthVersionCreateError = null;
+  let truthVersionCreateInput = null;
+  let pendingTruthVersion = null;
   let publishedServices = [];
   let publishedContacts = [];
   let publishedLocations = [];
@@ -1241,36 +1391,41 @@ export async function projectSetupReviewDraftToCanonical(
       s(currentProfile?.approved_by) ||
       requestedBy;
 
+    truthVersionCreateInput = buildTruthVersionCreateInput({
+      actor,
+      session,
+      draft,
+      sources,
+      sourceInfo,
+      businessProfileId,
+      businessCapabilitiesId,
+      savedProfile,
+      savedCapabilities,
+      publishedServices,
+      publishedContacts,
+      publishedLocations,
+      publishedTruthFacts,
+      impactSummary,
+      approvalPolicy,
+      persistedReviewSessionId,
+      requestedBy,
+      approvedAt,
+      approvedBy,
+    });
+
+    pendingTruthVersion = buildComparablePendingTruthVersion(
+      truthVersionCreateInput
+    );
+
     try {
-      createdTruthVersion = await truthVersionHelper.createVersion({
-        tenantId: actor.tenantId,
-        tenantKey: actor.tenantKey,
-        businessProfileId: businessProfileId || null,
-        businessCapabilitiesId: businessCapabilitiesId || null,
-        reviewSessionId: persistedReviewSessionId || null,
-        approvedAt,
-        approvedBy,
-        profile: savedProfile,
-        capabilities: savedCapabilities,
-        services: publishedServices,
-        contacts: publishedContacts,
-        locations: publishedLocations,
-        truthFacts: publishedTruthFacts,
-        sourceSummaryJson: obj(savedProfile?.source_summary_json),
-        metadataJson: compactObject({
-          reviewSessionProjection: true,
-          reviewSessionId: s(session?.id),
-          persistedReviewSessionId: persistedReviewSessionId || undefined,
-          draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
-          sourceId: sourceInfo.primarySourceId || undefined,
-          sourceRunId: sourceInfo.latestRunId || undefined,
-          finalizeImpact: impactSummary,
-          approvalPolicy,
-        }),
-      });
+      createdTruthVersion = await truthVersionHelper.createVersion(
+        truthVersionCreateInput
+      );
 
       if (s(createdTruthVersion?.id)) {
         truthVersion = createdTruthVersion;
+      } else {
+        truthVersionCreateError = buildTruthVersionNoopError();
       }
     } catch (error) {
       if (shouldAttemptTruthVersionReuseFromError(error)) {
@@ -1287,6 +1442,7 @@ export async function projectSetupReviewDraftToCanonical(
       actor,
       businessProfileId,
       businessCapabilitiesId,
+      pendingVersion: pendingTruthVersion,
     });
 
     if (s(reusedTruthVersion?.id)) {
@@ -1349,6 +1505,7 @@ export async function projectSetupReviewDraftToCanonical(
           truthVersionId: s(truthVersion?.id),
           truthVersionReused: Boolean(s(reusedTruthVersion?.id)) || undefined,
           truthVersionReuseMode: s(reusedTruthVersion?.reuseMode) || undefined,
+          truthVersionReuseReason: s(reusedTruthVersion?.reuseReason) || undefined,
           draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
           primarySourceId: s(sourceInfo.primarySourceId),
           latestRunId: s(sourceInfo.latestRunId),
