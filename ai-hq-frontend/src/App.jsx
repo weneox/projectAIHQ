@@ -19,16 +19,8 @@ import {
 import { INTERNAL_ONLY_APP_ROUTES } from "./lib/appEntry.js";
 import { getAppAuthContext } from "./lib/appSession.js";
 
-const Proposals = lazy(() => import("./pages/Proposals.jsx"));
-const Publish = lazy(() => import("./pages/Publish.jsx"));
-const Executions = lazy(() => import("./pages/Executions.jsx"));
 const Inbox = lazy(() => import("./pages/Inbox.jsx"));
 const ProductHomePage = lazy(() => import("./surfaces/home/ProductHomePage.jsx"));
-const WorkspacePage = lazy(() => import("./surfaces/workspace/WorkspacePage.jsx"));
-const Leads = lazy(() => import("./pages/Leads.jsx"));
-const Comments = lazy(() => import("./pages/Comments.jsx"));
-const Incidents = lazy(() => import("./pages/Incidents.jsx"));
-const Voice = lazy(() => import("./pages/Voice.jsx"));
 const Welcome = lazy(() => import("./pages/Welcome.jsx"));
 const Login = lazy(() => import("./pages/Login.jsx"));
 const VerifyEmail = lazy(() => import("./pages/Auth/VerifyEmailPage.jsx"));
@@ -151,6 +143,10 @@ function renderInternalRouteRedirects() {
   );
 }
 
+function HiddenSurfaceRedirect() {
+  return <Navigate to="/home" replace />;
+}
+
 export default function App() {
   const rootEntryElement = (
     <UserRouteGuard>
@@ -205,6 +201,7 @@ export default function App() {
           }
         >
           <Route path="home" element={withSuspense(<ProductHomePage />)} />
+
           <Route
             path="setup"
             element={<Navigate to="/home?assistant=setup" replace />}
@@ -213,83 +210,10 @@ export default function App() {
             path="setup/*"
             element={<Navigate to="/home?assistant=setup" replace />}
           />
+
           <Route path="welcome" element={withSuspense(<Welcome />)} />
-          <Route path="workspace" element={withSuspense(<WorkspacePage />)} />
-
-          <Route
-            path="publish"
-            element={
-              <OperatorRouteGuard
-                title="Operator access required"
-                description="Publishing remains an internal workflow surface. It is not part of the primary launch lane."
-              >
-                {withSuspense(<Publish />)}
-              </OperatorRouteGuard>
-            }
-          />
-
-          <Route
-            path="proposals"
-            element={
-              <OperatorRouteGuard
-                title="Operator access required"
-                description="Proposals remains an internal operational workspace. The primary launch lane stays centered on launch channel, setup, truth, runtime, and live operator surfaces."
-              >
-                {withSuspense(<Proposals />)}
-              </OperatorRouteGuard>
-            }
-          />
-
           <Route path="inbox" element={withSuspense(<Inbox />)} />
           <Route path="channels" element={withSuspense(<ChannelCatalog />)} />
-
-          <Route
-            path="leads"
-            element={
-              <OperatorRouteGuard
-                title="Operator access required"
-                description="Leads is an operational follow-up surface. It stays available to owner, admin, and operator roles without redefining the launch lane."
-              >
-                {withSuspense(<Leads />)}
-              </OperatorRouteGuard>
-            }
-          />
-
-          <Route
-            path="comments"
-            element={
-              <OperatorRouteGuard
-                title="Operator access required"
-                description="Comments remains a live operator surface for moderation and reply review, but it does not replace the primary launch-channel and inbox posture."
-              >
-                {withSuspense(<Comments />)}
-              </OperatorRouteGuard>
-            }
-          />
-
-          <Route
-            path="incidents"
-            element={
-              <OperatorRouteGuard
-                title="Operator access required"
-                description="Incident history remains an advanced operational triage surface and stays limited to owner, admin, and operator roles."
-              >
-                {withSuspense(<Incidents />)}
-              </OperatorRouteGuard>
-            }
-          />
-
-          <Route
-            path="voice"
-            element={
-              <OperatorRouteGuard
-                title="Operator access required"
-                description="Voice remains a separate live operator surface for receptionist sessions, call controls, and handoff. It does not redefine the primary launch lane."
-              >
-                {withSuspense(<Voice />)}
-              </OperatorRouteGuard>
-            }
-          />
 
           <Route
             path="truth"
@@ -303,17 +227,14 @@ export default function App() {
             }
           />
 
-          <Route
-            path="executions"
-            element={
-              <OperatorRouteGuard
-                title="Operator access required"
-                description="Execution traces remain an advanced internal inspection surface rather than a primary launch product area."
-              >
-                {withSuspense(<Executions />)}
-              </OperatorRouteGuard>
-            }
-          />
+          <Route path="workspace" element={<HiddenSurfaceRedirect />} />
+          <Route path="leads" element={<HiddenSurfaceRedirect />} />
+          <Route path="comments" element={<HiddenSurfaceRedirect />} />
+          <Route path="voice" element={<HiddenSurfaceRedirect />} />
+          <Route path="publish" element={<HiddenSurfaceRedirect />} />
+          <Route path="proposals" element={<HiddenSurfaceRedirect />} />
+          <Route path="executions" element={<HiddenSurfaceRedirect />} />
+          <Route path="incidents" element={<HiddenSurfaceRedirect />} />
 
           {renderInternalRouteRedirects()}
         </Route>

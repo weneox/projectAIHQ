@@ -1,13 +1,8 @@
 import {
-  BriefcaseBusiness,
   House,
   Inbox,
-  LayoutGrid,
-  MessageCircleMore,
-  PhoneCall,
   PlugZap,
   ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 
 const PRIMARY_SECTIONS = [
@@ -28,22 +23,6 @@ const PRIMARY_SECTIONS = [
     paths: ["/inbox"],
     contextGroups: [{ title: "Navigation", items: [{ label: "Inbox", to: "/inbox" }] }],
   },
-  {
-    id: "comments",
-    label: "Comments",
-    icon: MessageCircleMore,
-    to: "/comments",
-    paths: ["/comments"],
-    contextGroups: [{ title: "Navigation", items: [{ label: "Comments", to: "/comments" }] }],
-  },
-  {
-    id: "voice",
-    label: "Voice",
-    icon: PhoneCall,
-    to: "/voice",
-    paths: ["/voice"],
-    contextGroups: [{ title: "Navigation", items: [{ label: "Voice", to: "/voice" }] }],
-  },
 ];
 
 const SECONDARY_SECTIONS = [
@@ -62,31 +41,6 @@ const SECONDARY_SECTIONS = [
     to: "/truth",
     paths: ["/truth"],
     contextGroups: [{ title: "Navigation", items: [{ label: "Truth", to: "/truth" }] }],
-  },
-  {
-    id: "workspace",
-    label: "Workspace",
-    icon: LayoutGrid,
-    to: "/workspace",
-    paths: ["/workspace"],
-    contextGroups: [{ title: "Navigation", items: [{ label: "Workspace", to: "/workspace" }] }],
-  },
-  {
-    id: "pipeline",
-    label: "Pipeline",
-    icon: BriefcaseBusiness,
-    to: "/leads",
-    badgeKey: "leadsOpen",
-    paths: ["/leads", "/proposals"],
-    contextGroups: [{ title: "Navigation", items: [{ label: "Pipeline", to: "/leads" }] }],
-  },
-  {
-    id: "content",
-    label: "Content",
-    icon: Sparkles,
-    to: "/publish",
-    paths: ["/publish", "/executions"],
-    contextGroups: [{ title: "Navigation", items: [{ label: "Content", to: "/publish" }] }],
   },
 ];
 

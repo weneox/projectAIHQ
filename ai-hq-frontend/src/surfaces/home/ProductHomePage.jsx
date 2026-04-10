@@ -1,14 +1,17 @@
-import { ArrowRight } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Circle,
+  LockKeyhole,
+  Radio,
+} from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Button from "../../components/ui/Button.jsx";
 import Badge from "../../components/ui/Badge.jsx";
 import {
+  InlineNotice,
   LoadingSurface,
-  MetricCard,
-  MetricGrid,
   PageCanvas,
-  PageHeader,
-  StatusBanner,
   Surface,
 } from "../../components/ui/AppShellPrimitives.jsx";
 import {
@@ -38,76 +41,97 @@ function stepTone(step = {}) {
   return "neutral";
 }
 
-function AvailabilityNotice({ note, onRetry, isFetching }) {
-  if (!note) return null;
+function StepIcon({ step, active = false }) {
+  if (step.complete) {
+    return <CheckCircle2 className="h-4 w-4 text-emerald-600" />;
+  }
+
+  if (active) {
+    return <Radio className="h-4 w-4 text-brand" />;
+  }
+
+  if (stepTone(step) === "danger") {
+    return <LockKeyhole className="h-4 w-4 text-rose-600" />;
+  }
+
+  return <Circle className="h-4 w-4 text-slate-400" />;
+}
+
+function StateMetaLine({ home }) {
+  const channelValue =
+    s(
+      home.launchChannel?.accountDisplayName ||
+        home.launchChannel?.accountHandle ||
+        home.launchChannel?.statusLabel
+    ) || "Not connected";
+
+  const truthValue =
+    home.truthRuntime?.truthVersionId
+      ? `v${home.truthRuntime.truthVersionId}`
+      : s(home.truthRuntime?.statusLabel, "Needs review");
+
+  const liveValue = home.launchReady
+    ? "Inbox ready"
+    : s(home.inboxState?.statusLabel, "Waiting");
 
   return (
-    <StatusBanner
-      tone="warning"
-      label="Limited context"
-      title={s(note.title, "Limited context")}
-      description={compactSentence(note.description)}
-      action={
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          onClick={() => onRetry?.()}
-          isLoading={isFetching}
-        >
-          Retry
-        </Button>
-      }
-    />
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-5 text-text-subtle">
+      <span>
+        <span className="text-text-muted">Channel:</span> {channelValue}
+      </span>
+      <span className="text-slate-300">•</span>
+      <span>
+        <span className="text-text-muted">Truth:</span> {truthValue}
+      </span>
+      <span className="text-slate-300">•</span>
+      <span>
+        <span className="text-text-muted">Live:</span> {liveValue}
+      </span>
+    </div>
   );
 }
 
-function StepRow({ step, active = false, onNavigate }) {
+function StepRow({ step, active = false, onNavigate, last = false }) {
   const action = normalizeNavigationAction(step.action);
   const tone = stepTone(step);
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={() => {
+        if (action?.path) onNavigate(action);
+      }}
+      disabled={!action?.path}
       className={[
-        "flex flex-col gap-3 rounded-panel border p-4 md:flex-row md:items-start md:justify-between",
-        active ? "border-line-strong bg-surface-subtle" : "border-line bg-surface",
+        "group flex w-full items-start gap-3 px-1 py-4 text-left transition disabled:cursor-default",
+        !last && "border-b border-line-soft",
       ].join(" ")}
     >
-      <div className="min-w-0">
+      <div className="mt-0.5 shrink-0">
+        <StepIcon step={step} active={active} />
+      </div>
+
+      <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="text-[15px] font-semibold text-text">
+          <div className="text-[14px] font-semibold text-text">
             {s(step.label, "Step")}
           </div>
           <Badge tone={tone}>
-            {s(step.statusLabel, step.complete ? "Complete" : "Pending")}
+            {s(step.statusLabel, step.complete ? "Ready" : "Pending")}
           </Badge>
         </div>
 
-        <div className="mt-2 text-[13px] leading-6 text-text-muted">
-          {compactSentence(step.summary, "Still needs attention.")}
+        <div className="mt-1 text-[13px] leading-5 text-text-muted">
+          {compactSentence(step.summary, "Needs review.")}
         </div>
-
-        {s(step.detail) ? (
-          <div className="mt-1 text-[12px] leading-5 text-text-subtle">
-            {compactSentence(step.detail)}
-          </div>
-        ) : null}
       </div>
 
       {action?.path ? (
-        <div className="shrink-0">
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            onClick={() => onNavigate(action)}
-            rightIcon={<ArrowRight className="h-4 w-4" />}
-          >
-            {action.label}
-          </Button>
+        <div className="mt-0.5 shrink-0 text-text-subtle transition group-hover:text-text">
+          <ArrowRight className="h-4 w-4" />
         </div>
       ) : null}
-    </div>
+    </button>
   );
 }
 
@@ -143,137 +167,103 @@ export default function ProductHomePage() {
     steps.find((step) => step.complete !== true) ||
     steps[steps.length - 1] ||
     null;
+
   const blockerCount =
     typeof home.blockerCount === "number"
       ? home.blockerCount
       : steps.filter((step) => step.complete !== true).length;
-  const completeCount = steps.filter((step) => step.complete).length;
-  const progressPercent = Math.min(
-    Math.max(
-      steps.length ? Math.round((completeCount / steps.length) * 100) : 0,
-      0
-    ),
-    100
-  );
-  const channelIdentity = s(
-    home.launchChannel?.accountDisplayName || home.launchChannel?.accountHandle
-  );
-  const laneStatusValue = home.launchReady
+
+  const laneLabel = home.launchReady
     ? "Ready"
     : blockerCount === 1
       ? "1 blocker"
       : `${blockerCount} blockers`;
 
+  const headline = home.launchReady
+    ? "Everything important is aligned."
+    : s(nextStep?.label, "Review launch posture.");
+
+  const summary = compactSentence(
+    home.launchReady
+      ? home.launchSummary || "Channel, setup, truth, and inbox are ready."
+      : nextStep?.summary || home.launchSummary,
+    "Review the next launch step."
+  );
+
   return (
-    <PageCanvas>
-      <AvailabilityNotice
-        note={home.availabilityNote}
-        onRetry={home.refetch}
-        isFetching={home.isFetching}
-      />
-
-      <PageHeader
-        eyebrow={s(home.launchPhaseLabel, "Launch posture")}
-        title={s(home.launchHeadline, "Review launch posture.")}
-        description={compactSentence(
-          home.launchSummary,
-          "Use Home to review the full launch lane and move only the next governed step."
-        )}
-        actions={
-          <>
-            {primaryAction?.path ? (
-              <Button
-                type="button"
-                onClick={() => navigateFromAction(primaryAction)}
-                rightIcon={<ArrowRight className="h-4 w-4" />}
-              >
-                {primaryAction.label}
-              </Button>
-            ) : null}
-
-            {secondaryAction?.path ? (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => navigateFromAction(secondaryAction)}
-              >
-                {secondaryAction.label}
-              </Button>
-            ) : null}
-          </>
-        }
-      />
-
-      <MetricGrid>
-        <MetricCard
-          label="Lane status"
-          value={laneStatusValue}
-          hint={
-            home.launchReady
-              ? "Setup, truth/runtime, channels, and inbox are aligned."
-              : nextStep
-                ? `Next: ${s(nextStep.label, "Launch step")}`
-                : "Review the launch lane."
-          }
-          tone={home.launchReady ? "success" : "warning"}
-        />
-        <MetricCard
-          label="Progress"
-          value={`${completeCount}/${steps.length || 4}`}
-          hint={`${progressPercent}% of the launch lane is currently clear`}
-          tone={home.launchReady ? "success" : "info"}
-        />
-        <MetricCard
-          label="Next step"
-          value={s(nextStep?.title || nextStep?.label, "Launch lane")}
-          hint={compactSentence(
-            nextStep?.summary,
-            "Open the next launch step to keep the lane moving."
-          )}
-          tone={home.launchReady ? "success" : stepTone(nextStep)}
-        />
-        <MetricCard
-          label={s(home.launchChannel?.channelLabel, "Launch channel")}
-          value={channelIdentity || s(home.launchChannel?.statusLabel, "Not connected")}
-          hint={compactSentence(
-            home.launchChannel?.summary,
-            "Inspect the active launch channel before trusting delivery."
-          )}
-        />
-      </MetricGrid>
-
-      {assistantRequested ? (
-        <StatusBanner
-          tone="info"
-          label="AI setup"
-          title="Setup is open in the assistant widget."
-          description="Home remains the operational surface while the floating assistant guides the setup draft."
+    <PageCanvas className="space-y-3">
+      {home.availabilityNote ? (
+        <InlineNotice
+          tone="warning"
+          title={s(home.availabilityNote.title, "Limited context")}
+          description={compactSentence(home.availabilityNote.description)}
+          compact
         />
       ) : null}
 
-      <Surface>
-        <div className="space-y-4">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
-              Launch lane
+      <Surface padded="lg" className="rounded-[22px]">
+        <div className="space-y-5">
+          <div className="flex flex-col gap-4 border-b border-line-soft pb-4 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <Badge tone={home.launchReady ? "success" : "warning"}>
+                  {laneLabel}
+                </Badge>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                  Launch lane
+                </div>
+              </div>
+
+              <h1 className="text-[1.55rem] font-semibold leading-tight tracking-[-0.03em] text-text md:text-[1.75rem]">
+                {headline}
+              </h1>
+
+              <p className="mt-2 max-w-[760px] text-[14px] leading-6 text-text-muted">
+                {summary}
+              </p>
+
+              <div className="mt-3">
+                <StateMetaLine home={home} />
+              </div>
+
+              {assistantRequested ? (
+                <div className="mt-3 text-[12px] leading-5 text-text-subtle">
+                  Setup assistant is open.
+                </div>
+              ) : null}
             </div>
-            <div className="mt-1 text-[18px] font-semibold text-text">
-              Channels, setup, truth/runtime, then inbox.
-            </div>
-            <div className="mt-1 text-[13px] leading-6 text-text-muted">
-              {home.launchReady
-                ? "The governed launch surfaces are aligned. Open the next live operator surface only when you need it."
-                : "Keep setup, truth/runtime, channels, and inbox aligned before treating the tenant as live."}
+
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {primaryAction?.path ? (
+                <Button
+                  type="button"
+                  onClick={() => navigateFromAction(primaryAction)}
+                  rightIcon={<ArrowRight className="h-4 w-4" />}
+                >
+                  {primaryAction.label}
+                </Button>
+              ) : null}
+
+              {secondaryAction?.path ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => navigateFromAction(secondaryAction)}
+                >
+                  {secondaryAction.label}
+                </Button>
+              ) : null}
             </div>
           </div>
 
-          <div className="space-y-3">
-            {steps.map((step) => (
+          <div>
+            {steps.map((step, index) => (
               <StepRow
                 key={step.id}
                 step={step}
                 active={step.id === nextStep?.id}
                 onNavigate={navigateFromAction}
+                last={index === steps.length - 1}
               />
             ))}
           </div>

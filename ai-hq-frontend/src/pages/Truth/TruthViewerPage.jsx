@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Building2,
   Globe,
@@ -14,29 +14,27 @@ import {
 
 import { getSettingsTrustView } from "../../api/trust.js";
 import {
-  PropertyList,
-  PropertyRow,
-  StatusBanner,
-} from "../../components/ui/AppShellPrimitives.jsx";
-import { toneFromReadiness } from "../../lib/appUi.js";
-import {
   getCanonicalTruthSnapshot,
   getTruthReviewWorkbench,
   getTruthVersionDetail,
   rollbackTruthVersion,
 } from "../../api/truth.js";
+import Badge from "../../components/ui/Badge.jsx";
 import Button from "../../components/ui/Button.jsx";
+import {
+  InlineNotice,
+  LoadingSurface,
+  PageCanvas,
+  Surface,
+} from "../../components/ui/AppShellPrimitives.jsx";
 import TruthVersionComparePanel from "../../components/truth/TruthVersionComparePanel.jsx";
 import useWorkspaceTenantKey from "../../hooks/useWorkspaceTenantKey.js";
+import { compactSentence, s, toneFromReadiness } from "../../lib/appUi.js";
 import {
   emitLaunchSliceRefresh,
   useLaunchSliceRefreshToken,
 } from "../../lib/launchSliceRefresh.js";
 import { buildTruthOperationalState } from "../../lib/readinessViewModel.js";
-
-function s(v, d = "") {
-  return String(v ?? d).trim();
-}
 
 function arr(v, d = []) {
   return Array.isArray(v) ? v : d;
@@ -263,13 +261,19 @@ function InfoHint({ text = "", align = "right" }) {
   );
 }
 
+function EmptyInline({ text }) {
+  return (
+    <div className="rounded-[18px] border border-line bg-surface-muted px-4 py-3 text-[14px] leading-6 text-text-muted">
+      {text}
+    </div>
+  );
+}
+
 function SectionStrip({ label, children, last = false }) {
   return (
     <section className={last ? "" : "border-b border-line-soft pb-6"}>
-      <div className="flex items-center gap-3">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
-          {label}
-        </span>
+      <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
+        {label}
       </div>
       <div className="mt-3">{children}</div>
     </section>
@@ -282,11 +286,17 @@ function MainRow({
   value,
   hint = "",
   multiline = false,
+  last = false,
 }) {
   if (!s(value)) return null;
 
   return (
-    <div className="grid grid-cols-[18px_minmax(0,1fr)_18px] gap-4 border-b border-line-soft py-4 last:border-b-0">
+    <div
+      className={[
+        "grid grid-cols-[18px_minmax(0,1fr)_18px] gap-4 py-3.5",
+        !last && "border-b border-line-soft",
+      ].join(" ")}
+    >
       <div className="pt-[2px] text-text-subtle">
         <Icon className="h-[18px] w-[18px]" strokeWidth={2.05} />
       </div>
@@ -297,7 +307,7 @@ function MainRow({
         </div>
         <div
           className={[
-            "mt-2 text-[14px] text-text",
+            "mt-1.5 text-[14px] text-text",
             multiline
               ? "whitespace-pre-wrap break-words leading-6"
               : "leading-6",
@@ -314,23 +324,36 @@ function MainRow({
   );
 }
 
-function SideMetaRow({ label, value, hint = "" }) {
-  if (!s(value)) return null;
-
+function MetaLine({ approval, runtimeLabel, sourceLine, reviewSummary, history }) {
   return (
-    <PropertyRow
-      label={label}
-      value={value}
-      labelWidth="92px"
-      trailing={<InfoHint text={hint} align="right" />}
-    />
-  );
-}
-
-function EmptyInline({ text }) {
-  return (
-    <div className="rounded-panel border border-line bg-surface-muted px-4 py-3 text-[14px] leading-6 text-text-muted">
-      {text}
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-5 text-text-subtle">
+      <span>
+        <span className="text-text-muted">Version:</span>{" "}
+        {s(approval?.version, "Pending")}
+      </span>
+      <span className="text-slate-300">•</span>
+      <span>
+        <span className="text-text-muted">Runtime:</span> {runtimeLabel}
+      </span>
+      <span className="text-slate-300">•</span>
+      <span>
+        <span className="text-text-muted">Approved:</span>{" "}
+        {s(approval?.approvedAt) ? formatWhen(approval.approvedAt) : "Not available"}
+      </span>
+      <span className="text-slate-300">•</span>
+      <span>
+        <span className="text-text-muted">Source:</span>{" "}
+        {s(sourceLine, "Not available")}
+      </span>
+      <span className="text-slate-300">•</span>
+      <span>
+        <span className="text-text-muted">Saved:</span> {String(arr(history).length)}
+      </span>
+      <span className="text-slate-300">•</span>
+      <span>
+        <span className="text-text-muted">Pending review:</span>{" "}
+        {String(Number(reviewSummary.pending || 0))}
+      </span>
     </div>
   );
 }
@@ -442,6 +465,7 @@ function buildSections(fields = []) {
 }
 
 export default function TruthViewerPage() {
+  const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const workspace = useWorkspaceTenantKey();
@@ -838,11 +862,9 @@ export default function TruthViewerPage() {
 
   if (viewState.loading) {
     return (
-      <div className="w-full p-0">
-        <div className="rounded-panel border border-line bg-surface px-5 py-4 text-sm text-text-muted">
-          Loading approved business truth...
-        </div>
-      </div>
+      <PageCanvas>
+        <LoadingSurface title="Loading truth" />
+      </PageCanvas>
     );
   }
 
@@ -856,10 +878,6 @@ export default function TruthViewerPage() {
       ? "Approved truth is unavailable. No non-approved fallback data is being shown."
       : "This surface shows only approved truth. Extra operational detail is intentionally hidden from the main view.");
 
-  const visibleSummary = viewState.data.approvedTruthUnavailable
-    ? "Approved truth is unavailable. No non-approved fallback data is being shown."
-    : "Approved fields and the latest governed snapshot.";
-
   const hasAnyData =
     arr(sections.business).length > 0 ||
     arr(sections.contact).length > 0 ||
@@ -871,221 +889,169 @@ export default function TruthViewerPage() {
     : "No approved fields were returned by the backend.";
 
   return (
-    <div className="w-full p-0">
-      <div className="overflow-hidden rounded-panel border border-line-soft bg-surface">
-        <div className="flex flex-col gap-4 border-b border-line-soft px-6 py-5 md:flex-row md:items-start md:justify-between">
-          <div className="min-w-0">
-            <div className="inline-flex items-center gap-2">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
-                Truth
+    <PageCanvas className="space-y-3">
+      {s(viewState.error) ? (
+        <InlineNotice
+          tone="danger"
+          title="Truth viewer unavailable"
+          description={viewState.error}
+          compact
+        />
+      ) : null}
+
+      {!viewState.data.approvedTruthUnavailable &&
+      s(operationalState.status).toLowerCase() !== "ready" ? (
+        <InlineNotice
+          tone={toneFromReadiness(operationalState)}
+          title={s(operationalState.title, "Truth posture")}
+          description={compactSentence(
+            operationalState.summary,
+            "Truth still needs review."
+          )}
+          compact
+        />
+      ) : null}
+
+      <Surface padded="lg" className="rounded-[22px]">
+        <div className="space-y-5">
+          <div className="flex flex-col gap-4 border-b border-line-soft pb-4 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <Badge tone={toneFromReadiness(operationalState)}>
+                  {s(operationalState.statusLabel, "Truth")}
+                </Badge>
+                <div className="inline-flex items-center gap-2">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                    Truth
+                  </div>
+                  <InfoHint text={pageHint} align="left" />
+                </div>
               </div>
-              <InfoHint text={pageHint} align="left" />
+
+              <h1 className="text-[1.55rem] font-semibold leading-tight tracking-[-0.03em] text-text md:text-[1.75rem]">
+                Approved business truth.
+              </h1>
+
+              <p className="mt-2 max-w-[760px] text-[14px] leading-6 text-text-muted">
+                {viewState.data.approvedTruthUnavailable
+                  ? "No fallback data is shown here."
+                  : "Approved fields and the latest governed snapshot."}
+              </p>
+
+              <div className="mt-3">
+                <MetaLine
+                  approval={viewState.data.approval}
+                  runtimeLabel={runtimeLabel}
+                  sourceLine={sourceLine}
+                  reviewSummary={reviewSummary}
+                  history={viewState.data.history}
+                />
+              </div>
             </div>
 
-            <h1 className="mt-2 text-[28px] font-semibold text-text">
-              Business truth
-            </h1>
-
-            <p className="mt-2 max-w-[720px] text-[14px] leading-6 text-text-muted">
-              {visibleSummary}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {operationalState.action?.path ? (
-              <Button
-                variant="secondary"
-                size="md"
-                leftIcon={<Wrench className="h-4 w-4" />}
-                onClick={() => {
-                  if (typeof window !== "undefined") {
-                    window.location.assign(operationalState.action.path);
-                  }
-                }}
-              >
-                {operationalState.action.label}
-              </Button>
-            ) : null}
-
-            <Button
-              variant="secondary"
-              size="md"
-              leftIcon={<History className="h-4 w-4" />}
-              onClick={() => latestHistoryItem && handleOpenVersion(latestHistoryItem)}
-              disabled={!latestHistoryItem}
-            >
-              Version history
-            </Button>
-          </div>
-        </div>
-
-        <div className="border-b border-line-soft px-6 py-4">
-          <StatusBanner
-            tone={toneFromReadiness(operationalState)}
-            label={s(operationalState.statusLabel, "Unknown")}
-            title={s(operationalState.title, "Truth posture")}
-            description={s(operationalState.summary)}
-            detail={s(operationalState.detail)}
-            action={
-              operationalState.action?.path ? (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {operationalState.action?.path ? (
                 <Button
+                  variant="secondary"
                   size="sm"
-                  onClick={() => {
-                    if (typeof window !== "undefined") {
-                      window.location.assign(operationalState.action.path);
-                    }
-                  }}
                   leftIcon={<Wrench className="h-4 w-4" />}
+                  onClick={() => navigate(operationalState.action.path)}
                 >
                   {operationalState.action.label}
                 </Button>
-              ) : null
-            }
-          />
-        </div>
+              ) : null}
 
-        <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="bg-surface px-6 py-6">
-            {!hasAnyData ? (
-              <EmptyInline text={emptyStateText} />
-            ) : (
-              <div className="space-y-6">
-                {arr(sections.business).length ? (
-                  <SectionStrip label="Business">
-                    <div className="space-y-0">
-                      {sections.business.map((item) => (
-                        <MainRow
-                          key={item.key}
-                          icon={item.icon}
-                          label={item.label}
-                          value={item.value}
-                          hint={item.hint}
-                          multiline={item.multiline}
-                        />
-                      ))}
-                    </div>
-                  </SectionStrip>
-                ) : null}
-
-                {arr(sections.contact).length ? (
-                  <SectionStrip label="Contact">
-                    <div className="space-y-0">
-                      {sections.contact.map((item) => (
-                        <MainRow
-                          key={item.key}
-                          icon={item.icon}
-                          label={item.label}
-                          value={item.value}
-                          hint={item.hint}
-                          multiline={item.multiline}
-                        />
-                      ))}
-                    </div>
-                  </SectionStrip>
-                ) : null}
-
-                {arr(sections.presence).length ? (
-                  <SectionStrip label="Presence">
-                    <div className="space-y-0">
-                      {sections.presence.map((item) => (
-                        <MainRow
-                          key={item.key}
-                          icon={item.icon}
-                          label={item.label}
-                          value={item.value}
-                          hint={item.hint}
-                          multiline={item.multiline}
-                        />
-                      ))}
-                    </div>
-                  </SectionStrip>
-                ) : null}
-
-                {arr(sections.offering).length ? (
-                  <SectionStrip label="Offering" last>
-                    <div className="space-y-0">
-                      {sections.offering.map((item) => (
-                        <MainRow
-                          key={item.key}
-                          icon={item.icon}
-                          label={item.label}
-                          value={item.value}
-                          hint={item.hint}
-                          multiline={item.multiline}
-                        />
-                      ))}
-                    </div>
-                  </SectionStrip>
-                ) : null}
-              </div>
-            )}
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<History className="h-4 w-4" />}
+                onClick={() => latestHistoryItem && handleOpenVersion(latestHistoryItem)}
+                disabled={!latestHistoryItem}
+              >
+                Version history
+              </Button>
+            </div>
           </div>
 
-          <aside className="border-t border-line-soft bg-surface-muted px-6 py-6 xl:border-l xl:border-t-0">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
-              Snapshot
+          {!hasAnyData ? (
+            <EmptyInline text={emptyStateText} />
+          ) : (
+            <div className="space-y-6">
+              {arr(sections.business).length ? (
+                <SectionStrip label="Business">
+                  <div>
+                    {sections.business.map((item, index) => (
+                      <MainRow
+                        key={item.key}
+                        icon={item.icon}
+                        label={item.label}
+                        value={item.value}
+                        hint={item.hint}
+                        multiline={item.multiline}
+                        last={index === sections.business.length - 1}
+                      />
+                    ))}
+                  </div>
+                </SectionStrip>
+              ) : null}
+
+              {arr(sections.contact).length ? (
+                <SectionStrip label="Contact">
+                  <div>
+                    {sections.contact.map((item, index) => (
+                      <MainRow
+                        key={item.key}
+                        icon={item.icon}
+                        label={item.label}
+                        value={item.value}
+                        hint={item.hint}
+                        multiline={item.multiline}
+                        last={index === sections.contact.length - 1}
+                      />
+                    ))}
+                  </div>
+                </SectionStrip>
+              ) : null}
+
+              {arr(sections.presence).length ? (
+                <SectionStrip label="Presence">
+                  <div>
+                    {sections.presence.map((item, index) => (
+                      <MainRow
+                        key={item.key}
+                        icon={item.icon}
+                        label={item.label}
+                        value={item.value}
+                        hint={item.hint}
+                        multiline={item.multiline}
+                        last={index === sections.presence.length - 1}
+                      />
+                    ))}
+                  </div>
+                </SectionStrip>
+              ) : null}
+
+              {arr(sections.offering).length ? (
+                <SectionStrip label="Offering" last>
+                  <div>
+                    {sections.offering.map((item, index) => (
+                      <MainRow
+                        key={item.key}
+                        icon={item.icon}
+                        label={item.label}
+                        value={item.value}
+                        hint={item.hint}
+                        multiline={item.multiline}
+                        last={index === sections.offering.length - 1}
+                      />
+                    ))}
+                  </div>
+                </SectionStrip>
+              ) : null}
             </div>
-
-            <PropertyList className="mt-4">
-              <SideMetaRow
-                label="Version"
-                value={s(viewState.data.approval?.version, "Pending")}
-                hint="Current approved truth version."
-              />
-
-              <SideMetaRow
-                label="Approved at"
-                value={s(viewState.data.approval?.approvedAt)
-                  ? formatWhen(viewState.data.approval.approvedAt)
-                  : "Not available"}
-                hint="Latest approval timestamp."
-              />
-
-              <SideMetaRow
-                label="Approved by"
-                value={s(viewState.data.approval?.approvedBy, "Not available")}
-                hint="Operator who approved the current truth."
-              />
-
-              <SideMetaRow
-                label="Runtime"
-                value={runtimeLabel}
-                hint="Current runtime posture for approved truth."
-              />
-
-              <SideMetaRow
-                label="Posture"
-                value={s(operationalState.statusLabel, "Unknown")}
-                hint="Current approval and runtime readiness posture."
-              />
-
-              <SideMetaRow
-                label="Source"
-                value={s(sourceLine, "Not available")}
-                hint="Primary source line behind the latest approved truth."
-              />
-
-              <SideMetaRow
-                label="Saved versions"
-                value={String(arr(viewState.data.history).length)}
-                hint="Visible truth versions in history."
-              />
-
-              <SideMetaRow
-                label="Pending review"
-                value={String(Number(reviewSummary.pending || 0))}
-                hint="Candidates still waiting in review."
-              />
-            </PropertyList>
-
-            <div className="sr-only">Business data review</div>
-            <div className="sr-only">Truth Readiness</div>
-            <div className="sr-only">Approved behavior profile</div>
-            <div className="sr-only">Truth Review Workbench</div>
-            <div className="sr-only">Approved business data</div>
-          </aside>
+          )}
         </div>
-      </div>
+      </Surface>
 
       {compareOpen ? (
         <>
@@ -1107,6 +1073,6 @@ export default function TruthViewerPage() {
         rollbackSurface={compareState.rollbackSurface}
         onRollback={handleRollback}
       />
-    </div>
+    </PageCanvas>
   );
 }
