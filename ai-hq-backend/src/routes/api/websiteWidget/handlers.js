@@ -691,12 +691,17 @@ async function buildWebsiteConversationSnapshot({
   session,
   service,
 } = {}) {
-  const thread = await findWebsiteThreadForSession(db, {
-    tenantKey: tenant?.tenantKey,
-    threadId: session?.threadId,
-    sessionId: session?.sessionId,
-  });
-  const activeThread = isWebsiteThread(thread) ? thread : null;
+  let activeThread = null;
+
+  try {
+    const thread = await findWebsiteThreadForSession(db, {
+      tenantKey: tenant?.tenantKey,
+      threadId: session?.threadId,
+      sessionId: session?.sessionId,
+    });
+    activeThread = isWebsiteThread(thread) ? thread : null;
+  } catch {}
+
   const refreshedSession = issueWebsiteWidgetSession({
     ...session,
     tenantId: tenant?.id,
@@ -707,8 +712,14 @@ async function buildWebsiteConversationSnapshot({
       }).publicWidgetId || s(session?.widgetId),
     threadId: activeThread?.id || "",
   });
-  const threadState =
-    activeThread?.id && (await getInboxThreadState(db, activeThread.id));
+  let threadState = null;
+
+  if (activeThread?.id) {
+    try {
+      threadState = await getInboxThreadState(db, activeThread.id);
+    } catch {}
+  }
+
   const runtimeState = await loadStrictInboxRuntime({
     client: db,
     getRuntime,
@@ -718,10 +729,17 @@ async function buildWebsiteConversationSnapshot({
     channelType: WEBSITE_RUNTIME_CHANNEL,
   });
   const automation = buildWidgetAutomation({ runtimeState });
-  const messages =
-    activeThread?.id
-      ? await loadWebsiteTranscriptSafe(db, activeThread.id, tenant?.tenantKey)
-      : [];
+  let messages = [];
+
+  if (activeThread?.id) {
+    try {
+      messages = await loadWebsiteTranscriptSafe(
+        db,
+        activeThread.id,
+        tenant?.tenantKey
+      );
+    } catch {}
+  }
 
   return {
     session: refreshedSession.payload,

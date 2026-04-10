@@ -128,6 +128,7 @@ function createReusableTruthVersion({
   businessProfileId = "profile-old-1",
   businessCapabilitiesId = "capabilities-old-1",
 } = {}) {
+  // Mirror the production source summary shape produced by extractPrimarySourceInfo().
   const sourceSummary = buildCanonicalProfileSourceSummary({
     session: {
       id: "session-1",
@@ -153,7 +154,7 @@ function createReusableTruthVersion({
     ],
     sourceInfo: {
       primarySourceType: "website",
-      primarySourceId: "source-1",
+      primarySourceId: "",
       sourceUrl: "https://alpha.example",
       latestRunId: "",
     },

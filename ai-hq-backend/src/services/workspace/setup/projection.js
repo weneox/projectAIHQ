@@ -182,21 +182,113 @@ function buildComparablePendingTruthVersion(input = {}) {
   };
 }
 
-function truthVersionEquivalentToPending(version = {}, pendingVersion = null) {
-  if (!s(version?.id) || !pendingVersion) return false;
+function normalizeTruthSnapshotComparableValue(value) {
+  if (value == null) return null;
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeTruthSnapshotComparableValue(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.keys(obj(value))
+      .sort()
+      .reduce((acc, key) => {
+        acc[key] = normalizeTruthSnapshotComparableValue(value[key]);
+        return acc;
+      }, {});
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "boolean") return value;
+  return s(value);
+}
 
-  const comparableCurrent = {
-    ...obj(version),
-    business_profile_id:
-      s(pendingVersion?.business_profile_id) || s(version?.business_profile_id),
-    business_capabilities_id:
-      s(pendingVersion?.business_capabilities_id) ||
-      s(version?.business_capabilities_id),
-    review_session_id:
-      s(pendingVersion?.review_session_id) || s(version?.review_session_id),
+function buildComparableTruthVersionSnapshotState(
+  version = {},
+  { ignoreIdentity = false } = {}
+) {
+  const metadataJson = obj(version?.metadataJson || version?.metadata_json);
+
+  return {
+    businessProfileId: ignoreIdentity
+      ? ""
+      : extractTruthVersionBusinessProfileId(version),
+    businessCapabilitiesId: ignoreIdentity
+      ? ""
+      : extractTruthVersionBusinessCapabilitiesId(version),
+    reviewSessionId: ignoreIdentity
+      ? ""
+      : s(version?.review_session_id || version?.reviewSessionId),
+    sourceSummary: obj(version?.source_summary_json || version?.sourceSummaryJson),
+    profile: obj(version?.profile_snapshot_json || version?.profileSnapshotJson),
+    capabilities: obj(
+      version?.capabilities_snapshot_json || version?.capabilitiesSnapshotJson
+    ),
+    services: arr(
+      version?.services_snapshot_json ||
+        version?.servicesSnapshotJson ||
+        metadataJson.servicesSnapshot ||
+        metadataJson.services_snapshot_json
+    ),
+    contacts: arr(
+      version?.contacts_snapshot_json ||
+        version?.contactsSnapshotJson ||
+        metadataJson.contactsSnapshot ||
+        metadataJson.contacts_snapshot_json
+    ),
+    locations: arr(
+      version?.locations_snapshot_json ||
+        version?.locationsSnapshotJson ||
+        metadataJson.locationsSnapshot ||
+        metadataJson.locations_snapshot_json
+    ),
+    truthFacts: arr(
+      version?.truth_facts_snapshot_json ||
+        version?.truthFactsSnapshotJson ||
+        metadataJson.truthFactsSnapshot ||
+        metadataJson.truth_facts_snapshot_json
+    ),
+    fieldProvenance: obj(
+      version?.field_provenance_json || version?.fieldProvenanceJson
+    ),
   };
+}
 
-  return hasTruthVersionChanged(comparableCurrent, pendingVersion) === false;
+function truthSnapshotsEquivalent(
+  currentVersion = {},
+  pendingVersion = null,
+  { ignoreIdentity = false } = {}
+) {
+  if (!pendingVersion) return false;
+
+  const currentComparable = buildComparableTruthVersionSnapshotState(
+    currentVersion,
+    { ignoreIdentity }
+  );
+  const pendingComparable = buildComparableTruthVersionSnapshotState(
+    pendingVersion,
+    { ignoreIdentity }
+  );
+
+  return (
+    JSON.stringify(
+      normalizeTruthSnapshotComparableValue(currentComparable)
+    ) ===
+    JSON.stringify(
+      normalizeTruthSnapshotComparableValue(pendingComparable)
+    )
+  );
+}
+
+function truthVersionEquivalentToPending(version = {}, pendingVersion = null) {
+  if (!extractTruthVersionId(version) || !pendingVersion) return false;
+
+  if (hasTruthVersionChanged(version, pendingVersion) === false) {
+    return true;
+  }
+
+  return truthSnapshotsEquivalent(version, pendingVersion, {
+    ignoreIdentity: true,
+  });
 }
 
 function markTruthVersionSnapshotEquivalent(version = {}) {
@@ -296,19 +388,12 @@ function isReusableTruthVersion(version = {}, { method = "" } = {}) {
     [
       "findReusablePublishedVersion",
       "findReusableApprovedVersion",
+      "findReusableVersion",
       "getLatestPublishedVersion",
       "getLatestApprovedVersion",
       "listPublishedVersions",
       "listApprovedVersions",
     ].includes(sourceMethod)
-  ) {
-    return true;
-  }
-
-  if (
-    ["findReusableVersion", "getLatestVersion", "listVersions"].includes(
-      sourceMethod
-    )
   ) {
     return true;
   }
