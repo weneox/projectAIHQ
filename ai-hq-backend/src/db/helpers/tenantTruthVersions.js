@@ -84,12 +84,25 @@ export function buildCanonicalTruthProfile(profile = {}) {
   const profileJson = obj(current.profile_json);
   const metadataJson = obj(current.metadata_json);
   const nicheBehavior = compactObject(
-    obj(profileJson.nicheBehavior || profileJson.niche_behavior || metadataJson.nicheBehavior)
+    obj(
+      profileJson.nicheBehavior ||
+        profileJson.niche_behavior ||
+        metadataJson.nicheBehavior
+    )
   );
 
   return compactObject({
-    companyName: s(current.company_name || current.display_name || profileJson.companyName || profileJson.displayName),
-    displayName: s(current.display_name || profileJson.displayName || current.company_name),
+    companyName: s(
+      current.company_name ||
+        current.display_name ||
+        profileJson.companyName ||
+        profileJson.displayName
+    ),
+    displayName: s(
+      current.display_name ||
+        profileJson.displayName ||
+        current.company_name
+    ),
     legalName: s(current.legal_name || profileJson.legalName),
     description: s(
       profileJson.description ||
@@ -99,7 +112,9 @@ export function buildCanonicalTruthProfile(profile = {}) {
     ),
     summaryShort: s(current.summary_short || profileJson.summaryShort),
     summaryLong: s(current.summary_long || profileJson.summaryLong),
-    valueProposition: s(current.value_proposition || profileJson.valueProposition),
+    valueProposition: s(
+      current.value_proposition || profileJson.valueProposition
+    ),
     targetAudience: s(current.target_audience || profileJson.targetAudience),
     tone: s(current.tone_profile || profileJson.tone),
     mainLanguage: s(current.main_language || profileJson.mainLanguage),
@@ -129,7 +144,9 @@ export function buildCanonicalTruthFieldProvenance(profile = {}) {
     const item = compactObject({
       sourceType: s(raw?.sourceType || raw?.source_type),
       sourceUrl: s(raw?.sourceUrl || raw?.source_url),
-      authorityRank: toFiniteNumber(raw?.authorityRank ?? raw?.authority_rank, 0) || undefined,
+      authorityRank:
+        toFiniteNumber(raw?.authorityRank ?? raw?.authority_rank, 0) ||
+        undefined,
       sourceLabel: s(raw?.sourceLabel || raw?.source_label),
       trustTier: s(raw?.trustTier || raw?.trust_tier),
       trustScore:
@@ -172,9 +189,11 @@ export function buildCanonicalTruthCapabilities(capabilities = {}) {
     handoffEnabled: current.handoff_enabled,
     autoHandoffOnHumanRequest: current.auto_handoff_on_human_request,
     autoHandoffOnLowConfidence: current.auto_handoff_on_low_confidence,
-    shouldAvoidCompetitorComparisons: current.should_avoid_competitor_comparisons,
+    shouldAvoidCompetitorComparisons:
+      current.should_avoid_competitor_comparisons,
     shouldAvoidLegalClaims: current.should_avoid_legal_claims,
-    shouldAvoidUnverifiedPromises: current.should_avoid_unverified_promises,
+    shouldAvoidUnverifiedPromises:
+      current.should_avoid_unverified_promises,
     replyStyle: s(current.reply_style),
     replyLength: s(current.reply_length),
     emojiLevel: s(current.emoji_level),
@@ -196,11 +215,17 @@ export function buildCanonicalTruthServices(services = []) {
         description: s(item?.description || item?.summary),
         category: s(item?.category),
         priceFrom:
-          item?.priceFrom ?? item?.price_from ?? item?.startingPrice ?? item?.starting_price,
+          item?.priceFrom ??
+          item?.price_from ??
+          item?.startingPrice ??
+          item?.starting_price,
         currency: s(item?.currency || "AZN").toUpperCase() || "AZN",
         pricingModel:
-          s(item?.pricingModel || item?.pricing_model || "custom_quote").toLowerCase() ||
-          "custom_quote",
+          s(
+            item?.pricingModel ||
+              item?.pricing_model ||
+              "custom_quote"
+          ).toLowerCase() || "custom_quote",
         durationMinutes: item?.durationMinutes ?? item?.duration_minutes,
         isActive:
           typeof item?.isActive === "boolean"
@@ -210,7 +235,9 @@ export function buildCanonicalTruthServices(services = []) {
               : true,
         sortOrder: toFiniteNumber(item?.sortOrder ?? item?.sort_order, 0),
         highlights: arr(item?.highlights ?? item?.highlights_json),
-        metadata: obj(item?.metadata || item?.metadataJson || item?.metadata_json),
+        metadata: obj(
+          item?.metadata || item?.metadataJson || item?.metadata_json
+        ),
       })
     )
     .filter((item) => Object.keys(item).length);
@@ -232,9 +259,7 @@ export function buildCanonicalTruthContacts(contacts = []) {
               ? item.is_primary
               : false,
         enabled:
-          typeof item?.enabled === "boolean"
-            ? item.enabled
-            : true,
+          typeof item?.enabled === "boolean" ? item.enabled : true,
         visiblePublic:
           typeof item?.visiblePublic === "boolean"
             ? item.visiblePublic
@@ -276,9 +301,7 @@ export function buildCanonicalTruthLocations(locations = []) {
               ? item.is_primary
               : false,
         enabled:
-          typeof item?.enabled === "boolean"
-            ? item.enabled
-            : true,
+          typeof item?.enabled === "boolean" ? item.enabled : true,
         sortOrder: toFiniteNumber(item?.sortOrder ?? item?.sort_order, 0),
         meta: obj(item?.meta),
       })
@@ -301,9 +324,7 @@ export function buildCanonicalTruthFacts(facts = []) {
         usecaseScope: arr(item?.usecaseScope || item?.usecase_scope),
         priority: toFiniteNumber(item?.priority, 100),
         enabled:
-          typeof item?.enabled === "boolean"
-            ? item.enabled
-            : true,
+          typeof item?.enabled === "boolean" ? item.enabled : true,
         meta: mergeObjects(obj(item?.meta), {
           factSurface: "published_truth",
         }),
@@ -338,7 +359,9 @@ export function buildCanonicalTruthVersionSnapshot({
     locationsSnapshot,
     truthFactsSnapshot,
     fieldProvenance,
-    sourceSummary: compactObject(sourceSummary || obj(profile?.source_summary_json)),
+    sourceSummary: compactObject(
+      sourceSummary || obj(profile?.source_summary_json)
+    ),
     metadata: compactObject({
       ...obj(metadata),
       servicesSnapshot,
@@ -397,7 +420,9 @@ function normalizeVersionRow(row = {}) {
 
 function normalizeComparableValue(value) {
   if (value == null) return null;
-  if (Array.isArray(value)) return value.map((item) => normalizeComparableValue(item));
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeComparableValue(item));
+  }
   if (isPlainObject(value)) {
     return Object.keys(value)
       .sort()
@@ -406,17 +431,29 @@ function normalizeComparableValue(value) {
         return acc;
       }, {});
   }
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
   if (typeof value === "boolean") return value;
   return s(value);
 }
 
 function valuesEqual(a, b) {
-  return JSON.stringify(normalizeComparableValue(a)) === JSON.stringify(normalizeComparableValue(b));
+  return (
+    JSON.stringify(normalizeComparableValue(a)) ===
+    JSON.stringify(normalizeComparableValue(b))
+  );
 }
 
 function isPrimitiveArray(value) {
-  return Array.isArray(value) && value.every((item) => item == null || ["string", "number", "boolean"].includes(typeof item));
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        item == null ||
+        ["string", "number", "boolean"].includes(typeof item)
+    )
+  );
 }
 
 function uniqStrings(items = []) {
@@ -456,7 +493,8 @@ function comparePreviewToActualDimension(previewItems = [], actualItems = []) {
 
   const missingFromActual = preview.filter((item) => !actual.includes(item));
   const addedInActual = actual.filter((item) => !preview.includes(item));
-  const matched = missingFromActual.length === 0 && addedInActual.length === 0;
+  const matched =
+    missingFromActual.length === 0 && addedInActual.length === 0;
 
   return {
     status: matched ? "matched" : "differs",
@@ -497,8 +535,12 @@ function titleize(value = "") {
 export function buildSafeTruthDiffValueSummary(value) {
   if (value == null) return { kind: "empty" };
   if (typeof value === "boolean") return { kind: "boolean", value };
-  if (typeof value === "number" && Number.isFinite(value)) return { kind: "number", value };
-  if (typeof value === "string") return { kind: "string", value: s(value), length: s(value).length };
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return { kind: "number", value };
+  }
+  if (typeof value === "string") {
+    return { kind: "string", value: s(value), length: s(value).length };
+  }
   if (isPrimitiveArray(value)) {
     return {
       kind: "array",
@@ -599,7 +641,9 @@ export function buildTruthVersionCompare(currentVersion = {}, previousVersion = 
   const changedFields = changes.map((item) => item.path);
   const summary = compactObject({
     totalChangedFields: changedFields.length,
-    profileChangedFields: changes.filter((item) => item.section === "profile").map((item) => item.path),
+    profileChangedFields: changes
+      .filter((item) => item.section === "profile")
+      .map((item) => item.path),
     capabilitiesChangedFields: changes
       .filter((item) => item.section === "capabilities")
       .map((item) => item.path),
@@ -705,25 +749,30 @@ function inferRuntimeImpactFromPaths(paths = []) {
 
 function inferAutonomyDeltaFromPaths(paths = []) {
   const lowerPaths = arr(paths).map((item) => s(item).toLowerCase());
+
   if (
-    lowerPaths.some((path) =>
-      path.includes("capabilities.autohandoff") ||
-      path.includes("capabilities.supports") ||
-      path.includes("capabilities.canoffer")
+    lowerPaths.some(
+      (path) =>
+        path.includes("capabilities.autohandoff") ||
+        path.includes("capabilities.supports") ||
+        path.includes("capabilities.canoffer")
     )
   ) {
     return "review_required";
   }
+
   if (
-    lowerPaths.some((path) =>
-      path.includes("profile.primaryphone") ||
-      path.includes("profile.primaryemail") ||
-      path.includes("profile.websiteurl") ||
-      path.includes("profile.summary")
+    lowerPaths.some(
+      (path) =>
+        path.includes("profile.primaryphone") ||
+        path.includes("profile.primaryemail") ||
+        path.includes("profile.websiteurl") ||
+        path.includes("profile.summary")
     )
   ) {
     return "follow_up_required";
   }
+
   return "safe";
 }
 
@@ -735,8 +784,10 @@ function summarizeValueCounts(fieldChanges = []) {
   };
 
   for (const change of arr(fieldChanges)) {
-    const hasBefore = change?.beforeSummary?.kind && change.beforeSummary.kind !== "empty";
-    const hasAfter = change?.afterSummary?.kind && change.afterSummary.kind !== "empty";
+    const hasBefore =
+      change?.beforeSummary?.kind && change.beforeSummary.kind !== "empty";
+    const hasAfter =
+      change?.afterSummary?.kind && change.afterSummary.kind !== "empty";
 
     if (!hasBefore && hasAfter) {
       summary.added += 1;
@@ -831,7 +882,8 @@ export function buildRollbackActionContract({
       label,
       allowed: false,
       requiredRole: "operator",
-      reason: "Current approved truth is unavailable, so governed rollback cannot start safely.",
+      reason:
+        "Current approved truth is unavailable, so governed rollback cannot start safely.",
     };
   }
 
@@ -841,7 +893,8 @@ export function buildRollbackActionContract({
       label,
       allowed: false,
       requiredRole: "operator",
-      reason: "This version already matches current approved truth, so no governed rollback is required.",
+      reason:
+        "This version already matches current approved truth, so no governed rollback is required.",
     };
   }
 
@@ -851,7 +904,8 @@ export function buildRollbackActionContract({
       label,
       allowed: false,
       requiredRole: "operator",
-      reason: "Only operator, admin, or owner roles can request governed rollback.",
+      reason:
+        "Only operator, admin, or owner roles can request governed rollback.",
     };
   }
 
@@ -866,7 +920,10 @@ export function buildRollbackActionContract({
     };
   }
 
-  if (disposition === "follow_up_required" && !["admin", "owner"].includes(role)) {
+  if (
+    disposition === "follow_up_required" &&
+    !["admin", "owner"].includes(role)
+  ) {
     return {
       actionType: "execute_safe_rollback",
       label,
@@ -957,7 +1014,9 @@ export function buildRollbackPreviewModel({
     summaryExplanation: arr(revertDiff.canonicalPathsChanged).length
       ? `Rolling back to ${target.id || "the selected version"} would revert ${
           revertDiff.canonicalPathsChanged.length
-        } canonical field${revertDiff.canonicalPathsChanged.length === 1 ? "" : "s"} and ${
+        } canonical field${
+          revertDiff.canonicalPathsChanged.length === 1 ? "" : "s"
+        } and ${
           arr(revertDiff.runtimeAreasLikelyAffected).length
             ? "trigger runtime follow-up."
             : "leave runtime impact limited."
@@ -974,7 +1033,12 @@ export function buildRollbackPreviewModel({
   });
 }
 
-function buildRollbackSourceSummary(targetVersion = {}, currentVersion = {}, preview = {}, receipt = {}) {
+function buildRollbackSourceSummary(
+  targetVersion = {},
+  currentVersion = {},
+  preview = {},
+  receipt = {}
+) {
   return mergeObjects(obj(targetVersion?.source_summary_json), {
     rollback: {
       requestedAt: s(receipt?.timestamp || new Date().toISOString()),
@@ -988,7 +1052,12 @@ function buildRollbackSourceSummary(targetVersion = {}, currentVersion = {}, pre
   });
 }
 
-function buildRollbackProfileInput(targetVersion = {}, actorName = "", metadataJson = {}, sourceSummaryJson = {}) {
+function buildRollbackProfileInput(
+  targetVersion = {},
+  actorName = "",
+  metadataJson = {},
+  sourceSummaryJson = {}
+) {
   const snapshot = obj(targetVersion?.profile_snapshot_json);
   return {
     companyName: snapshot.companyName,
@@ -1018,7 +1087,11 @@ function buildRollbackProfileInput(targetVersion = {}, actorName = "", metadataJ
   };
 }
 
-function buildRollbackCapabilitiesInput(targetVersion = {}, actorName = "", metadataJson = {}) {
+function buildRollbackCapabilitiesInput(
+  targetVersion = {},
+  actorName = "",
+  metadataJson = {}
+) {
   const snapshot = obj(targetVersion?.capabilities_snapshot_json);
   return {
     canSharePrices: snapshot.canSharePrices,
@@ -1042,9 +1115,11 @@ function buildRollbackCapabilitiesInput(targetVersion = {}, actorName = "", meta
     handoffEnabled: snapshot.handoffEnabled,
     autoHandoffOnHumanRequest: snapshot.autoHandoffOnHumanRequest,
     autoHandoffOnLowConfidence: snapshot.autoHandoffOnLowConfidence,
-    shouldAvoidCompetitorComparisons: snapshot.shouldAvoidCompetitorComparisons,
+    shouldAvoidCompetitorComparisons:
+      snapshot.shouldAvoidCompetitorComparisons,
     shouldAvoidLegalClaims: snapshot.shouldAvoidLegalClaims,
-    shouldAvoidUnverifiedPromises: snapshot.shouldAvoidUnverifiedPromises,
+    shouldAvoidUnverifiedPromises:
+      snapshot.shouldAvoidUnverifiedPromises,
     replyStyle: snapshot.replyStyle,
     replyLength: snapshot.replyLength,
     emojiLevel: snapshot.emojiLevel,
@@ -1141,11 +1216,18 @@ export function buildRollbackReceipt({
   actor = "",
   timestamp = "",
 } = {}) {
-  const actualDiff = buildTruthVersionDiffModel(resultingTruthVersion, currentVersion);
+  const actualDiff = buildTruthVersionDiffModel(
+    resultingTruthVersion,
+    currentVersion
+  );
   const runtimeProjectionSafe = obj(runtimeProjection);
   const runtimeHealth = obj(runtimeProjectionSafe.health);
-  const actualCanonicalAreas = normalizeComparisonList(actualDiff.canonicalAreasChanged);
-  const actualCanonicalPaths = normalizeComparisonList(actualDiff.canonicalPathsChanged);
+  const actualCanonicalAreas = normalizeComparisonList(
+    actualDiff.canonicalAreasChanged
+  );
+  const actualCanonicalPaths = normalizeComparisonList(
+    actualDiff.canonicalPathsChanged
+  );
   const actualRuntimeAreas = runtimeProjectionSafe.id
     ? normalizeComparisonList(actualDiff.runtimeAreasLikelyAffected)
     : [];
@@ -1229,7 +1311,9 @@ export function buildRollbackReceipt({
       ? `Canonical impact: ${actualCanonicalAreas.join(", ")}.`
       : "Canonical impact could not be verified precisely.",
     runtimeProjectionSafe.id
-      ? `Runtime projection ${runtimeProjectionSafe.id} recorded ${runtimeRefreshResult || "an update"}.`
+      ? `Runtime projection ${runtimeProjectionSafe.id} recorded ${
+          runtimeRefreshResult || "an update"
+        }.`
       : "Runtime projection verification was unavailable.",
     comparisonStatus === "matched"
       ? "Rollback preview matched the verified outcome."
@@ -1280,13 +1364,21 @@ export function buildRollbackReceipt({
         autonomyDelta:
           lower(runtimeHealth.autonomousAllowed) === "false"
             ? "tightens"
-            : lower(runtimeProjectionSafe.autonomyDelta || runtimeProjectionSafe.autonomy_delta || "unknown"),
+            : lower(
+                runtimeProjectionSafe.autonomyDelta ||
+                  runtimeProjectionSafe.autonomy_delta ||
+                  "unknown"
+              ),
         executionPostureDelta: lower(
           runtimeProjectionSafe.executionPostureDelta ||
             runtimeProjectionSafe.execution_posture_delta ||
             "unknown"
         ),
-        riskDelta: lower(runtimeProjectionSafe.riskDelta || runtimeProjectionSafe.risk_delta || "unknown"),
+        riskDelta: lower(
+          runtimeProjectionSafe.riskDelta ||
+            runtimeProjectionSafe.risk_delta ||
+            "unknown"
+        ),
       },
     },
     previewComparison: {
@@ -1343,7 +1435,9 @@ export function buildTruthVersionHistoryEntry(version = {}, compare = null) {
   return compactObject({
     id: s(version.id),
     versionId: s(version.id),
-    previousVersionId: s(version.previous_version_id || compare?.previousVersionId),
+    previousVersionId: s(
+      version.previous_version_id || compare?.previousVersionId
+    ),
     approvedAt: s(version.approved_at),
     approvedBy: s(version.approved_by),
     sourceSummary: obj(version.source_summary_json),
@@ -1363,17 +1457,60 @@ export function hasTruthVersionChanged(previous = null, next = null) {
   if (!previous) return true;
   if (!next) return false;
 
-  return JSON.stringify({
-    sourceSummary: obj(previous.source_summary_json),
-    profile: obj(previous.profile_snapshot_json),
-    capabilities: obj(previous.capabilities_snapshot_json),
-    services: arr(previous.services_snapshot_json),
-    contacts: arr(previous.contacts_snapshot_json),
-    locations: arr(previous.locations_snapshot_json),
-    truthFacts: arr(previous.truth_facts_snapshot_json),
-    fieldProvenance: obj(previous.field_provenance_json),
-  }) !==
+  const previousProfileId = s(
+    previous.business_profile_id ||
+      previous.businessProfileId ||
+      previous.profile_id ||
+      previous.profileId
+  );
+
+  const nextProfileId = s(
+    next.business_profile_id ||
+      next.businessProfileId ||
+      next.profile_id ||
+      next.profileId
+  );
+
+  const previousCapabilitiesId = s(
+    previous.business_capabilities_id ||
+      previous.businessCapabilitiesId ||
+      previous.capabilities_id ||
+      previous.capabilitiesId
+  );
+
+  const nextCapabilitiesId = s(
+    next.business_capabilities_id ||
+      next.businessCapabilitiesId ||
+      next.capabilities_id ||
+      next.capabilitiesId
+  );
+
+  const previousReviewSessionId = s(
+    previous.review_session_id || previous.reviewSessionId
+  );
+
+  const nextReviewSessionId = s(
+    next.review_session_id || next.reviewSessionId
+  );
+
+  return (
     JSON.stringify({
+      businessProfileId: previousProfileId,
+      businessCapabilitiesId: previousCapabilitiesId,
+      reviewSessionId: previousReviewSessionId,
+      sourceSummary: obj(previous.source_summary_json),
+      profile: obj(previous.profile_snapshot_json),
+      capabilities: obj(previous.capabilities_snapshot_json),
+      services: arr(previous.services_snapshot_json),
+      contacts: arr(previous.contacts_snapshot_json),
+      locations: arr(previous.locations_snapshot_json),
+      truthFacts: arr(previous.truth_facts_snapshot_json),
+      fieldProvenance: obj(previous.field_provenance_json),
+    }) !==
+    JSON.stringify({
+      businessProfileId: nextProfileId,
+      businessCapabilitiesId: nextCapabilitiesId,
+      reviewSessionId: nextReviewSessionId,
       sourceSummary: obj(next.source_summary_json),
       profile: obj(next.profile_snapshot_json),
       capabilities: obj(next.capabilities_snapshot_json),
@@ -1382,7 +1519,8 @@ export function hasTruthVersionChanged(previous = null, next = null) {
       locations: arr(next.locations_snapshot_json),
       truthFacts: arr(next.truth_facts_snapshot_json),
       fieldProvenance: obj(next.field_provenance_json),
-    });
+    })
+  );
 }
 
 export async function getLatestTruthVersionInternal(db, { tenantId, tenantKey } = {}) {
@@ -1406,7 +1544,7 @@ export async function getLatestTruthVersionInternal(db, { tenantId, tenantKey } 
 
 export async function listTruthVersionsInternal(
   db,
-  { tenantId, tenantKey, limit = 20, offset = 0 } = {},
+  { tenantId, tenantKey, limit = 20, offset = 0 } = {}
 ) {
   const tenant = await resolveTenantIdentity(db, { tenantId, tenantKey });
   if (!tenant) return [];
@@ -1429,7 +1567,11 @@ export async function listTruthVersionsInternal(
     limit $2
     offset $3
     `,
-    [tenant.tenant_id, Math.max(1, Math.min(200, Number(limit) || 20)), Math.max(0, Number(offset) || 0)]
+    [
+      tenant.tenant_id,
+      Math.max(1, Math.min(200, Number(limit) || 20)),
+      Math.max(0, Number(offset) || 0),
+    ]
   );
 
   return arr(r.rows).map(normalizeVersionRow);
@@ -1437,7 +1579,7 @@ export async function listTruthVersionsInternal(
 
 export async function getTruthVersionByIdInternal(
   db,
-  { tenantId, tenantKey, versionId } = {},
+  { tenantId, tenantKey, versionId } = {}
 ) {
   const tenant = await resolveTenantIdentity(db, { tenantId, tenantKey });
   if (!tenant || !s(versionId)) return null;
@@ -1474,7 +1616,8 @@ export async function createTruthVersionInternal(db, input = {}) {
     throw new Error("tenantTruthVersions.createVersion: tenant not found");
   }
 
-  const approvedAt = input.approvedAt || input.approved_at || new Date().toISOString();
+  const approvedAt =
+    input.approvedAt || input.approved_at || new Date().toISOString();
   const approvedBy = s(input.approvedBy || input.approved_by);
   const snapshot = buildCanonicalTruthVersionSnapshot({
     profile: input.profile,
@@ -1507,6 +1650,13 @@ export async function createTruthVersionInternal(db, input = {}) {
   });
 
   const pending = {
+    business_profile_id:
+      s(input.businessProfileId || input.business_profile_id) || null,
+    business_capabilities_id:
+      s(input.businessCapabilitiesId || input.business_capabilities_id) ||
+      null,
+    review_session_id:
+      s(input.reviewSessionId || input.review_session_id) || null,
     source_summary_json: snapshot.sourceSummary,
     profile_snapshot_json: snapshot.profileSnapshot,
     capabilities_snapshot_json: snapshot.capabilitiesSnapshot,
@@ -1547,7 +1697,8 @@ export async function createTruthVersionInternal(db, input = {}) {
       tenant.tenant_id,
       tenant.tenant_key,
       s(input.businessProfileId || input.business_profile_id) || null,
-      s(input.businessCapabilitiesId || input.business_capabilities_id) || null,
+      s(input.businessCapabilitiesId || input.business_capabilities_id) ||
+        null,
       s(input.reviewSessionId || input.review_session_id) || null,
       approvedAt,
       approvedBy,
@@ -1562,21 +1713,28 @@ export async function createTruthVersionInternal(db, input = {}) {
   return normalizeVersionRow(r.rows?.[0]);
 }
 
-export async function executeTruthVersionRollbackInternal(db, input = {}, deps = {}) {
+export async function executeTruthVersionRollbackInternal(
+  db,
+  input = {},
+  deps = {}
+) {
   const resolveTenant = deps.resolveTenantIdentity || resolveTenantIdentity;
   const getVersion = deps.getTruthVersionByIdInternal || getTruthVersionByIdInternal;
-  const getLatestVersion = deps.getLatestTruthVersionInternal || getLatestTruthVersionInternal;
+  const getLatestVersion =
+    deps.getLatestTruthVersionInternal || getLatestTruthVersionInternal;
   const runWithTx = deps.withTx || withTx;
   const getProfile = deps.getBusinessProfileInternal || getBusinessProfileInternal;
   const getCapabilities =
     deps.getBusinessCapabilitiesInternal || getBusinessCapabilitiesInternal;
-  const upsertProfile = deps.upsertBusinessProfileInternal || upsertBusinessProfileInternal;
+  const upsertProfile =
+    deps.upsertBusinessProfileInternal || upsertBusinessProfileInternal;
   const upsertCapabilities =
     deps.upsertBusinessCapabilitiesInternal || upsertBusinessCapabilitiesInternal;
   const createVersion = deps.createTruthVersionInternal || createTruthVersionInternal;
   const refreshProjection =
     deps.refreshRuntimeProjectionRequired || refreshRuntimeProjectionRequired;
-  const appendDecisionEvent = deps.safeAppendDecisionEvent || safeAppendDecisionEvent;
+  const appendDecisionEvent =
+    deps.safeAppendDecisionEvent || safeAppendDecisionEvent;
   const audit = deps.dbAudit || dbAudit;
 
   const tenant = await resolveTenant(db, {
@@ -1702,16 +1860,20 @@ export async function executeTruthVersionRollbackInternal(db, input = {}, deps =
     },
   });
 
-  const rollbackMetadata = mergeObjects(obj(targetVersion?.metadata_json), obj(input.metadataJson), {
-    rollbackExecution: {
-      sourceCurrentVersionId: s(currentVersion?.id),
-      targetRollbackVersionId: s(targetVersion?.id),
-      requestedBy: actorName,
-      requestedRole: actorRole,
-      requestedAt: timestamp,
-      rollbackDisposition: s(rollbackPreview.rollbackDisposition),
-    },
-  });
+  const rollbackMetadata = mergeObjects(
+    obj(targetVersion?.metadata_json),
+    obj(input.metadataJson),
+    {
+      rollbackExecution: {
+        sourceCurrentVersionId: s(currentVersion?.id),
+        targetRollbackVersionId: s(targetVersion?.id),
+        requestedBy: actorName,
+        requestedRole: actorRole,
+        requestedAt: timestamp,
+        rollbackDisposition: s(rollbackPreview.rollbackDisposition),
+      },
+    }
+  );
   const sourceSummaryJson = buildRollbackSourceSummary(
     targetVersion,
     currentVersion,
@@ -1735,18 +1897,29 @@ export async function executeTruthVersionRollbackInternal(db, input = {}, deps =
     const savedProfile = await upsertProfile(tx, {
       tenantId: tenant.tenant_id,
       tenantKey: tenant.tenant_key,
-      ...buildRollbackProfileInput(targetVersion, actorName, rollbackMetadata, sourceSummaryJson),
+      ...buildRollbackProfileInput(
+        targetVersion,
+        actorName,
+        rollbackMetadata,
+        sourceSummaryJson
+      ),
     });
     const savedCapabilities = await upsertCapabilities(tx, {
       tenantId: tenant.tenant_id,
       tenantKey: tenant.tenant_key,
-      ...buildRollbackCapabilitiesInput(targetVersion, actorName, rollbackMetadata),
+      ...buildRollbackCapabilitiesInput(
+        targetVersion,
+        actorName,
+        rollbackMetadata
+      ),
     });
     const resultingTruthVersion = await createVersion(tx, {
       tenantId: tenant.tenant_id,
       tenantKey: tenant.tenant_key,
       businessProfileId: s(savedProfile?.id || currentProfile?.id),
-      businessCapabilitiesId: s(savedCapabilities?.id || currentCapabilities?.id),
+      businessCapabilitiesId: s(
+        savedCapabilities?.id || currentCapabilities?.id
+      ),
       approvedAt: timestamp,
       approvedBy: actorName,
       profile: savedProfile,
@@ -1852,7 +2025,9 @@ export async function executeTruthVersionRollbackInternal(db, input = {}, deps =
     policyOutcome: lower(rollbackReceipt.rollbackStatus),
     reasonCodes: [
       lower(rollbackReceipt.rollbackStatus || "rollback_verified"),
-      runtimeError ? "runtime_projection_refresh_failed" : "runtime_projection_verified",
+      runtimeError
+        ? "runtime_projection_refresh_failed"
+        : "runtime_projection_verified",
     ],
     healthState: {
       status: s(rollbackReceipt?.verification?.projectionHealthStatus),
@@ -1861,13 +2036,14 @@ export async function executeTruthVersionRollbackInternal(db, input = {}, deps =
     truthVersionId: s(txResult?.resultingTruthVersion?.id),
     runtimeProjectionId: s(runtimeProjection?.id),
     affectedSurfaces: arr(rollbackReceipt?.actual?.channels?.affectedSurfaces),
-    recommendedNextAction:
-      s(rollbackReceipt?.verification?.repairRecommendation)
-        ? {
-            label: s(rollbackReceipt.verification.repairRecommendation),
-            kind: "review",
-          }
-        : { label: "Verification completed", kind: "observe" },
+    recommendedNextAction: s(
+      rollbackReceipt?.verification?.repairRecommendation
+    )
+      ? {
+          label: s(rollbackReceipt.verification.repairRecommendation),
+          kind: "review",
+        }
+      : { label: "Verification completed", kind: "observe" },
     decisionContext: {
       operationType: "rollback",
       sourceCurrentVersionId: s(currentVersion?.id),
@@ -1891,11 +2067,20 @@ export async function executeTruthVersionRollbackInternal(db, input = {}, deps =
 export function createTenantTruthVersionHelpers({ db }) {
   return {
     async listVersions({ tenantId, tenantKey, limit = 20, offset = 0 } = {}) {
-      return listTruthVersionsInternal(db, { tenantId, tenantKey, limit, offset });
+      return listTruthVersionsInternal(db, {
+        tenantId,
+        tenantKey,
+        limit,
+        offset,
+      });
     },
 
     async getVersion({ tenantId, tenantKey, versionId } = {}) {
-      return getTruthVersionByIdInternal(db, { tenantId, tenantKey, versionId });
+      return getTruthVersionByIdInternal(db, {
+        tenantId,
+        tenantKey,
+        versionId,
+      });
     },
 
     async getLatestVersion({ tenantId, tenantKey } = {}) {
