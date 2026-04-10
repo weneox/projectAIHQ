@@ -24,6 +24,7 @@ import {
 import {
   checkWebsiteDomainVerification,
   createWebsiteDomainVerificationChallenge,
+  createWebsiteWidgetInstallHandoff,
   getWebsiteDomainVerificationStatus,
   getWebsiteWidgetStatus,
   saveWebsiteWidgetConfig,
@@ -269,6 +270,26 @@ export function channelConnectRoutes({ db }) {
           res,
           err,
           "Failed to check website domain verification",
+          {
+            reasonCode: err?.reasonCode || null,
+          }
+        );
+      }
+    }
+  );
+
+  r.post(
+    "/channels/webchat/install-handoff",
+    requireUserSession,
+    async (req, res) => {
+      try {
+        const payload = await createWebsiteWidgetInstallHandoff({ db, req });
+        return ok(res, payload);
+      } catch (err) {
+        return respondRouteError(
+          res,
+          err,
+          "Failed to prepare website developer install handoff",
           {
             reasonCode: err?.reasonCode || null,
           }

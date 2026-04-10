@@ -67,3 +67,7 @@ export async function createWebsiteDomainVerificationChallenge(payload = {}) {
 export async function checkWebsiteDomainVerification(payload = {}) {
   return apiPost("/api/channels/webchat/domain-verification/check", payload);
 }
+
+export async function createWebsiteWidgetInstallHandoff(payload = {}) {
+  return apiPost("/api/channels/webchat/install-handoff", payload);
+}

@@ -7,6 +7,7 @@ const saveWebsiteWidgetConfig = vi.fn();
 const getWebsiteDomainVerificationStatus = vi.fn();
 const createWebsiteDomainVerificationChallenge = vi.fn();
 const checkWebsiteDomainVerification = vi.fn();
+const createWebsiteWidgetInstallHandoff = vi.fn();
 const useWorkspaceTenantKey = vi.fn();
 
 vi.mock("../../api/channelConnect.js", () => ({
@@ -14,6 +15,8 @@ vi.mock("../../api/channelConnect.js", () => ({
     checkWebsiteDomainVerification(...args),
   createWebsiteDomainVerificationChallenge: (...args) =>
     createWebsiteDomainVerificationChallenge(...args),
+  createWebsiteWidgetInstallHandoff: (...args) =>
+    createWebsiteWidgetInstallHandoff(...args),
   getWebsiteDomainVerificationStatus: (...args) =>
     getWebsiteDomainVerificationStatus(...args),
   getWebsiteWidgetStatus: (...args) => getWebsiteWidgetStatus(...args),
@@ -130,6 +133,40 @@ function buildStatusPayload({ verified = false } = {}) {
   };
 }
 
+function buildInstallHandoffPayload() {
+  return {
+    ready: true,
+    generatedAt: "2026-04-10T11:00:00.000Z",
+    audience: "developer",
+    verifiedDomain: "acme.example",
+    widgetId: "ww_acme_widget",
+    loaderScriptUrl: "https://widget.example.test/website-widget-loader.js",
+    apiBase: "https://api.example.test/api",
+    embedSnippet:
+      '<script src="https://widget.example.test/website-widget-loader.js" data-widget-id="ww_acme_widget" data-api-base="https://api.example.test/api" async></script>',
+    instructions: [
+      "Add the loader snippet once before the closing </body> tag on pages served from acme.example.",
+      "Keep the data-widget-id and data-api-base values exactly as provided.",
+    ],
+    readiness: {
+      status: "ready",
+      message:
+        "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
+      productionInstallReady: true,
+      verificationState: "verified",
+      verifiedAt: "2026-04-10T10:30:00.000Z",
+    },
+    packageText: [
+      "Website Chat developer install handoff",
+      "",
+      "Verified domain: acme.example",
+      "Widget ID: ww_acme_widget",
+      "Loader script URL: https://widget.example.test/website-widget-loader.js",
+      "API base: https://api.example.test/api",
+    ].join("\n"),
+  };
+}
+
 function renderDrawer(props = {}) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -220,6 +257,9 @@ describe("WebsiteWidgetDetailDrawer", () => {
       ...buildDomainVerificationPayload(),
       domain: "acme.example",
     });
+    createWebsiteWidgetInstallHandoff.mockResolvedValue(
+      buildInstallHandoffPayload()
+    );
 
     Object.defineProperty(window.navigator, "clipboard", {
       configurable: true,
@@ -235,6 +275,7 @@ describe("WebsiteWidgetDetailDrawer", () => {
     getWebsiteDomainVerificationStatus.mockReset();
     createWebsiteDomainVerificationChallenge.mockReset();
     checkWebsiteDomainVerification.mockReset();
+    createWebsiteWidgetInstallHandoff.mockReset();
   });
 
   it("loads the trusted install config and shows the public embed details", async () => {
@@ -268,6 +309,9 @@ describe("WebsiteWidgetDetailDrawer", () => {
     ).toBeGreaterThan(0);
     expect(
       screen.getByRole("button", { name: /copy snippet/i })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /prepare developer install/i })
     ).toBeDisabled();
   });
 
@@ -353,5 +397,51 @@ describe("WebsiteWidgetDetailDrawer", () => {
         "DNS TXT ownership has been verified for this domain."
       )
     ).toBeInTheDocument();
+  });
+
+  it("prepares a developer install package when production install is ready", async () => {
+    getWebsiteWidgetStatus.mockResolvedValueOnce(buildStatusPayload({ verified: true }));
+    renderDrawer();
+
+    expect(await screen.findByText("Install-safe website chat")).toBeInTheDocument();
+
+    const installSection = screen
+      .getByText("Embed this widget on the public website")
+      .closest("section");
+    expect(installSection).not.toBeNull();
+
+    const prepareButton = within(installSection).getByRole("button", {
+      name: /prepare developer install/i,
+    });
+
+    await waitFor(() => expect(prepareButton).toBeEnabled());
+    fireEvent.click(prepareButton);
+
+    await waitFor(() =>
+      expect(createWebsiteWidgetInstallHandoff).toHaveBeenCalledWith(
+        expect.objectContaining({
+          domain: "acme.example",
+        }),
+        expect.anything()
+      )
+    );
+
+    expect(
+      await within(installSection).findByDisplayValue(
+        /Website Chat developer install handoff/i
+      )
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(installSection).getByRole("button", {
+        name: /copy developer package/i,
+      })
+    );
+
+    await waitFor(() =>
+      expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(
+        buildInstallHandoffPayload().packageText
+      )
+    );
   });
 });

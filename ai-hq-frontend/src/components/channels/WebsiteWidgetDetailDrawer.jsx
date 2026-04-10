@@ -12,6 +12,7 @@ import {
 import {
   checkWebsiteDomainVerification,
   createWebsiteDomainVerificationChallenge,
+  createWebsiteWidgetInstallHandoff,
   getWebsiteDomainVerificationStatus,
   getWebsiteWidgetStatus,
   saveWebsiteWidgetConfig,
@@ -119,6 +120,8 @@ export default function WebsiteWidgetDetailDrawer({
   const [verificationInput, setVerificationInput] = useState("");
   const [verificationMessage, setVerificationMessage] = useState("");
   const [verificationOverride, setVerificationOverride] = useState(null);
+  const [handoffMessage, setHandoffMessage] = useState("");
+  const [handoffPackage, setHandoffPackage] = useState(null);
   const websiteStatusQueryKey = buildWorkspaceScopedQueryKey(
     ["website-widget-status"],
     workspace.tenantKey
@@ -132,6 +135,15 @@ export default function WebsiteWidgetDetailDrawer({
     refetchOnWindowFocus: false,
   });
 
+  const handoffMutation = useMutation({
+    mutationFn: createWebsiteWidgetInstallHandoff,
+    onSuccess(nextPayload) {
+      setHandoffPackage(obj(nextPayload));
+      setHandoffMessage("Developer install package prepared.");
+      setCopyFeedback("");
+    },
+  });
+
   const saveMutation = useMutation({
     mutationFn: saveWebsiteWidgetConfig,
     async onSuccess(payload) {
@@ -141,6 +153,9 @@ export default function WebsiteWidgetDetailDrawer({
       setVerificationInput("");
       setVerificationMessage("");
       setVerificationOverride(null);
+      setHandoffMessage("");
+      setHandoffPackage(null);
+      handoffMutation.reset();
       await queryClient.invalidateQueries({
         queryKey: websiteStatusQueryKey,
       });
@@ -159,6 +174,9 @@ export default function WebsiteWidgetDetailDrawer({
         s(nextPayload.domain || nextPayload.candidateDomain || verificationInput)
       );
       setVerificationMessage("Domain verification status refreshed.");
+      setHandoffMessage("");
+      setHandoffPackage(null);
+      handoffMutation.reset();
       await queryClient.invalidateQueries({
         queryKey: websiteStatusQueryKey,
       });
@@ -173,6 +191,9 @@ export default function WebsiteWidgetDetailDrawer({
         s(nextPayload.domain || nextPayload.candidateDomain || verificationInput)
       );
       setVerificationMessage("DNS TXT challenge created.");
+      setHandoffMessage("");
+      setHandoffPackage(null);
+      handoffMutation.reset();
       await queryClient.invalidateQueries({
         queryKey: websiteStatusQueryKey,
       });
@@ -191,6 +212,9 @@ export default function WebsiteWidgetDetailDrawer({
           ? "Domain ownership verified."
           : "Domain verification checked."
       );
+      setHandoffMessage("");
+      setHandoffPackage(null);
+      handoffMutation.reset();
       await queryClient.invalidateQueries({
         queryKey: websiteStatusQueryKey,
       });
@@ -205,9 +229,11 @@ export default function WebsiteWidgetDetailDrawer({
   const verificationSurface = Object.keys(obj(verificationOverride)).length
     ? obj(verificationOverride)
     : serverVerification;
+  const handoffSurface = obj(handoffPackage);
   const verificationChallenge = obj(verificationSurface.challenge);
   const verificationCandidateDomains = arr(verificationSurface.candidateDomains);
   const verificationReadiness = obj(verificationSurface.readiness);
+  const handoffReadiness = obj(handoffSurface.readiness);
   const permissions = obj(payload.permissions);
   const blockers = arr(readiness.blockers);
   const saveAllowed = permissions.saveAllowed !== false;
@@ -235,10 +261,16 @@ export default function WebsiteWidgetDetailDrawer({
     install.blockMessage ||
       (productionInstallBlocked ? verificationSurface.message : "")
   );
+  const handoffReady =
+    saveAllowed &&
+    s(readiness.status).toLowerCase() === "ready" &&
+    Boolean(s(install.embedSnippet));
+  const handoffError = s(handoffMutation.error?.message);
   const verificationBusy =
     createChallengeMutation.isPending ||
     checkVerificationMutation.isPending ||
     refreshVerificationMutation.isPending;
+  const handoffBusy = handoffMutation.isPending;
 
   const headerStatus =
     readiness.status === "ready"
@@ -254,14 +286,14 @@ export default function WebsiteWidgetDetailDrawer({
     });
   }
 
-  async function handleCopySnippet() {
-    const snippet = s(install.embedSnippet);
-    if (!snippet) return;
+  async function copyTextValue(value, successMessage) {
+    const text = s(value);
+    if (!text) return;
 
     try {
       if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(snippet);
-        setCopyFeedback("Embed snippet copied.");
+        await navigator.clipboard.writeText(text);
+        setCopyFeedback(successMessage);
         setStatusMessage("");
         return;
       }
@@ -271,6 +303,17 @@ export default function WebsiteWidgetDetailDrawer({
 
     setCopyFeedback("Copy is unavailable in this browser context.");
     setStatusMessage("");
+  }
+
+  function handleCopySnippet() {
+    return copyTextValue(install.embedSnippet, "Embed snippet copied.");
+  }
+
+  function handleCopyHandoffPackage() {
+    return copyTextValue(
+      handoffSurface.packageText,
+      "Developer install package copied."
+    );
   }
 
   function handleSave() {
@@ -294,6 +337,12 @@ export default function WebsiteWidgetDetailDrawer({
     refreshVerificationMutation.reset();
   }
 
+  function resetHandoffFeedback() {
+    setHandoffMessage("");
+    setHandoffPackage(null);
+    handoffMutation.reset();
+  }
+
   function handleCreateChallenge() {
     resetVerificationFeedback();
     createChallengeMutation.mutate(
@@ -315,6 +364,14 @@ export default function WebsiteWidgetDetailDrawer({
     );
   }
 
+  function handlePrepareDeveloperInstall() {
+    resetHandoffFeedback();
+    setCopyFeedback("");
+    handoffMutation.mutate(
+      verificationTargetDomain ? { domain: verificationTargetDomain } : {}
+    );
+  }
+
   function handleRefresh() {
     setDraftForm(null);
     setStatusMessage("");
@@ -322,6 +379,7 @@ export default function WebsiteWidgetDetailDrawer({
     setVerificationMessage("");
     setVerificationOverride(null);
     resetVerificationFeedback();
+    resetHandoffFeedback();
     statusQuery.refetch();
   }
 
@@ -333,6 +391,7 @@ export default function WebsiteWidgetDetailDrawer({
     setVerificationMessage("");
     setVerificationOverride(null);
     resetVerificationFeedback();
+    resetHandoffFeedback();
     onClose?.();
   }
 
@@ -762,6 +821,79 @@ export default function WebsiteWidgetDetailDrawer({
                   }
                 />
               </FieldGroup>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <ChannelActionButton
+                  fullWidth
+                  showArrow={false}
+                  onClick={handlePrepareDeveloperInstall}
+                  disabled={!handoffReady || statusQuery.isLoading || handoffBusy}
+                  isLoading={handoffMutation.isPending}
+                  className="!h-[40px] !rounded-[10px] !text-[10px]"
+                >
+                  Prepare developer install
+                </ChannelActionButton>
+
+                <ChannelActionButton
+                  quiet
+                  fullWidth
+                  showArrow={false}
+                  onClick={handleCopyHandoffPackage}
+                  disabled={!s(handoffSurface.packageText)}
+                  leftIcon={<Copy className="h-4 w-4" strokeWidth={2.2} />}
+                  className="!h-[40px] !rounded-[10px] !text-[10px]"
+                >
+                  Copy developer package
+                </ChannelActionButton>
+              </div>
+
+              <SaveFeedback success={handoffMessage} error={handoffError} />
+
+              {!handoffReady ? (
+                <InlineNotice
+                  tone={productionInstallBlocked ? "warning" : "info"}
+                  description={
+                    productionInstallBlocked
+                      ? "Complete DNS TXT domain verification before generating a developer install handoff."
+                      : "Developer install handoff becomes available once Website Chat is ready for production install."
+                  }
+                  compact
+                />
+              ) : null}
+
+              {s(handoffSurface.packageText) ? (
+                <div className="space-y-4">
+                  <div className="overflow-hidden rounded-panel border border-line-soft bg-surface">
+                    <DataRow
+                      label="Verified domain"
+                      value={s(handoffSurface.verifiedDomain, "Not available")}
+                    />
+                    <DataRow
+                      label="Generated at"
+                      value={formatTimestamp(handoffSurface.generatedAt)}
+                    />
+                    <DataRow
+                      label="Readiness summary"
+                      value={s(
+                        handoffReadiness.message,
+                        "Website Chat is ready for production install."
+                      )}
+                    />
+                  </div>
+
+                  <FieldGroup
+                    label="Developer install package"
+                    description="Share this directly with the developer or webmaster handling the website code."
+                  >
+                    <Textarea
+                      value={s(handoffSurface.packageText)}
+                      readOnly
+                      rows={12}
+                      appearance="quiet"
+                    />
+                  </FieldGroup>
+                </div>
+              ) : null}
 
               {copyFeedback ? (
                 <InlineNotice tone="info" description={copyFeedback} compact />

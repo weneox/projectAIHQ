@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   checkWebsiteDomainVerification,
   createWebsiteDomainVerificationChallenge,
+  createWebsiteWidgetInstallHandoff,
   getWebsiteWidgetStatus,
 } from "../src/routes/api/channelConnect/website.js";
 import { __test__ as websiteDomainVerificationTest } from "../src/services/websiteDomainVerification.js";
@@ -327,4 +328,63 @@ test("website widget status blocks production install until domain ownership is 
   assert.equal(payload.install?.productionInstallReady, false);
   assert.equal(payload.install?.embedSnippet, "");
   assert.equal(payload.readiness?.status, "blocked");
+});
+
+test("website widget install handoff returns a developer package only when production install is ready", async () => {
+  const db = new FakeWebsiteDomainVerificationDb();
+
+  const challenge = await createWebsiteDomainVerificationChallenge({
+    db,
+    req: buildAuthedReq({
+      body: {
+        domain: "acme.example",
+      },
+    }),
+  });
+
+  await checkWebsiteDomainVerification({
+    db,
+    req: buildAuthedReq({
+      body: {
+        domain: "acme.example",
+      },
+    }),
+    resolveTxtFn: async () => [[challenge.challenge.value]],
+  });
+
+  const payload = await createWebsiteWidgetInstallHandoff({
+    db,
+    req: buildAuthedReq(),
+  });
+
+  assert.equal(payload.ready, true);
+  assert.equal(payload.verifiedDomain, "acme.example");
+  assert.equal(payload.widgetId, "ww_acme_widget");
+  assert.match(String(payload.embedSnippet || ""), /data-widget-id="ww_acme_widget"/);
+  assert.match(String(payload.packageText || ""), /Verified domain: acme\.example/);
+  assert.equal(
+    db.auditEntries.some(
+      (entry) =>
+        entry.action ===
+        "settings.channel.webchat.install_handoff.generated"
+    ),
+    true
+  );
+});
+
+test("website widget install handoff refuses to generate while production install is blocked", async () => {
+  const db = new FakeWebsiteDomainVerificationDb();
+
+  await assert.rejects(
+    () =>
+      createWebsiteWidgetInstallHandoff({
+        db,
+        req: buildAuthedReq(),
+      }),
+    (error) => {
+      assert.equal(error?.status, 409);
+      assert.equal(error?.reasonCode, "website_domain_verification_missing");
+      return true;
+    }
+  );
 });

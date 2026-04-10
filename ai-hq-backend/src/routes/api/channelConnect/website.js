@@ -185,6 +185,144 @@ function buildWebsiteInstallSurface(req, status = {}, domainVerification = null)
   };
 }
 
+function buildWebsiteInstallHandoffInstructions({
+  verifiedDomain = "",
+  loaderScriptUrl = "",
+  apiBase = "",
+} = {}) {
+  const scriptOrigin = normalizeUrl(loaderScriptUrl)?.origin || "";
+  const apiOrigin = normalizeUrl(apiBase)?.origin || "";
+
+  return [
+    `Add the loader snippet once before the closing </body> tag on pages served from ${verifiedDomain}.`,
+    "Keep the data-widget-id and data-api-base values exactly as provided.",
+    `Publish the website change, then load a page on ${verifiedDomain} and confirm Website Chat opens successfully.`,
+    scriptOrigin || apiOrigin
+      ? `If the website uses a strict Content Security Policy, allow ${[scriptOrigin, apiOrigin]
+          .filter(Boolean)
+          .join(" and ")}.`
+      : "If the website uses a strict Content Security Policy, allow the Website Chat loader and API origins.",
+  ];
+}
+
+function buildWebsiteInstallHandoffText({
+  verifiedDomain = "",
+  widgetId = "",
+  loaderScriptUrl = "",
+  apiBase = "",
+  embedSnippet = "",
+  readiness = {},
+  instructions = [],
+} = {}) {
+  const lines = [
+    "Website Chat developer install handoff",
+    "",
+    `Verified domain: ${verifiedDomain}`,
+    `Widget ID: ${widgetId}`,
+    `Loader script URL: ${loaderScriptUrl}`,
+    `API base: ${apiBase}`,
+    `Install readiness: ${s(readiness.status, "ready")}`,
+    `Verification state: ${s(readiness.verificationState, "verified")}`,
+  ];
+
+  if (s(readiness.verifiedAt)) {
+    lines.push(`Verified at: ${s(readiness.verifiedAt)}`);
+  }
+
+  lines.push(
+    "",
+    "Embed snippet:",
+    embedSnippet,
+    "",
+    "Install instructions:"
+  );
+
+  instructions.forEach((item, index) => {
+    lines.push(`${index + 1}. ${s(item)}`);
+  });
+
+  return lines.join("\n");
+}
+
+function buildWebsiteInstallHandoffPayload(
+  req,
+  status = {},
+  domainVerification = null
+) {
+  const statusPayload = buildWebsiteWidgetStatusPayload(
+    req,
+    status,
+    "owner",
+    domainVerification
+  );
+  const widget = obj(statusPayload.widget);
+  const install = obj(statusPayload.install);
+  const verification = obj(statusPayload.domainVerification);
+  const blockers = arr(obj(statusPayload.readiness).blockers);
+  const verifiedDomain = s(verification.domain);
+
+  if (
+    obj(statusPayload.readiness).status !== "ready" ||
+    install.productionInstallReady !== true ||
+    !s(install.embedSnippet) ||
+    !verifiedDomain
+  ) {
+    const reasonCode = s(
+      install.blockReasonCode ||
+        blockers[0]?.reasonCode ||
+        verification.reasonCode,
+      "website_widget_not_ready"
+    );
+    const message = s(
+      install.blockMessage ||
+        blockers[0]?.subtitle ||
+        verification.message ||
+        obj(statusPayload.readiness).message,
+      "Website Chat is not ready for a developer install handoff yet."
+    );
+
+    throw createHttpError(message, 409, reasonCode);
+  }
+
+  const instructions = buildWebsiteInstallHandoffInstructions({
+    verifiedDomain,
+    loaderScriptUrl: install.scriptUrl,
+    apiBase: install.apiBase,
+  });
+  const readiness = {
+    status: s(obj(statusPayload.readiness).status, "ready"),
+    message: s(
+      obj(statusPayload.readiness).message,
+      "Website Chat is ready for production install."
+    ),
+    productionInstallReady: install.productionInstallReady === true,
+    verificationState: s(verification.state, "verified"),
+    verifiedAt: verification.verifiedAt || null,
+  };
+
+  return {
+    ready: true,
+    generatedAt: new Date().toISOString(),
+    audience: "developer",
+    verifiedDomain,
+    widgetId: s(widget.publicWidgetId),
+    loaderScriptUrl: s(install.scriptUrl),
+    apiBase: s(install.apiBase),
+    embedSnippet: s(install.embedSnippet),
+    instructions,
+    readiness,
+    packageText: buildWebsiteInstallHandoffText({
+      verifiedDomain,
+      widgetId: s(widget.publicWidgetId),
+      loaderScriptUrl: s(install.scriptUrl),
+      apiBase: s(install.apiBase),
+      embedSnippet: s(install.embedSnippet),
+      readiness,
+      instructions,
+    }),
+  };
+}
+
 function buildBlockers(status = {}, domainVerification = null) {
   const config = normalizeWidgetConfig(status.widgetConfig, {
     defaultEnabled: widgetStatusAllowsInstall(status.widgetChannelStatus),
@@ -537,6 +675,56 @@ export async function checkWebsiteDomainVerification({
     candidateDomains: selection.candidateDomains,
     enforcementActive: WEBSITE_DOMAIN_VERIFICATION_ENFORCEMENT,
   });
+}
+
+export async function createWebsiteWidgetInstallHandoff({ db, req }) {
+  const tenantKey = getReqTenantKey(req);
+  if (!tenantKey) {
+    throw createHttpError("Missing tenant context", 401);
+  }
+
+  const viewerRole = getNormalizedAuthRole(req);
+  if (!canManageSettings(viewerRole)) {
+    throw createHttpError(
+      "Only owner/admin can prepare a website install handoff",
+      403
+    );
+  }
+
+  const tenant = await getTenantByKey(db, tenantKey);
+  if (!tenant?.id) {
+    throw createHttpError("Tenant not found", 404);
+  }
+
+  const status = await resolveWebsiteWidgetStatus(db, tenantKey);
+  if (!status?.id) {
+    throw createHttpError("Tenant not found", 404);
+  }
+
+  const domainVerification = await loadWebsiteDomainVerificationSurface(db, status, {
+    requestedDomain: obj(req.body).domain || req?.query?.domain || "",
+  });
+  const payload = buildWebsiteInstallHandoffPayload(
+    req,
+    status,
+    domainVerification
+  );
+
+  await auditSafe(
+    db,
+    getReqActor(req),
+    tenant,
+    "settings.channel.webchat.install_handoff.generated",
+    "tenant_channel",
+    WEBSITE_DOMAIN_VERIFICATION_CHANNEL,
+    {
+      channelType: WEBSITE_DOMAIN_VERIFICATION_CHANNEL,
+      verifiedDomain: payload.verifiedDomain,
+      widgetId: payload.widgetId,
+    }
+  );
+
+  return payload;
 }
 
 export async function saveWebsiteWidgetConfig({ db, req }) {
