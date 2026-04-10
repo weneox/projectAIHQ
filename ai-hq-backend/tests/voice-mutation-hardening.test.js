@@ -3,6 +3,54 @@ import assert from "node:assert/strict";
 
 import { voiceRoutes } from "../src/routes/api/voice/public.js";
 
+function clone(value) {
+  return value ? JSON.parse(JSON.stringify(value)) : value;
+}
+
+function buildApprovedRuntime() {
+  return {
+    tenant: {
+      tenantId: "tenant-1",
+      tenant_id: "tenant-1",
+      tenantKey: "acme",
+      tenant_key: "acme",
+      mainLanguage: "en",
+    },
+    authority: {
+      mode: "strict",
+      source: "approved_runtime_projection",
+      available: true,
+      runtimeProjectionId: "projection-1",
+      projectionHash: "hash-1",
+      truthVersionId: "truth-v1",
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+    },
+    behavior: {
+      conversionGoal: "answer_and_route",
+      primaryCta: "book_consult",
+      toneProfile: "warm_confident",
+      handoffTriggers: ["pricing"],
+      qualificationQuestions: ["Which service do you need?"],
+      channelBehavior: {
+        voice: {
+          handoffBias: "conditional",
+          qualificationDepth: "guided",
+        },
+      },
+    },
+    aiPolicy: {
+      autoReplyEnabled: true,
+      createLeadEnabled: true,
+      handoffEnabled: true,
+    },
+  };
+}
+
+async function getApprovedRuntime() {
+  return clone(buildApprovedRuntime());
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -71,6 +119,14 @@ class FakeVoiceDb {
 
     if (text.includes("from voice_call_sessions where id = $1")) {
       return { rows: [this.clone(this.sessions.get(String(params[0])))].filter(Boolean) };
+    }
+
+    if (text.includes("from voice_call_events") && text.includes("where call_id = $1")) {
+      return {
+        rows: this.events
+          .filter((row) => String(row.call_id) === String(params[0]))
+          .map((row) => this.clone(row)),
+      };
     }
 
     if (text.startsWith("update voice_calls set")) {
@@ -502,6 +558,7 @@ test("voice call join persists durable event truth and emits operator realtime",
   const router = voiceRoutes({
     db,
     audit: null,
+    getRuntime: getApprovedRuntime,
     wsHub: {
       broadcast(payload) {
         sent.push(payload);
@@ -529,6 +586,18 @@ test("voice call join persists durable event truth and emits operator realtime",
   assert.equal(db.calls.get("call-2")?.agent_mode, "human");
   assert.equal(db.events.at(-1)?.event_type, "operator_joined");
   assert.equal(db.events.at(-1)?.payload?.mutationOutcome, "applied");
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.runtimeRef?.approvedRuntime,
+    true
+  );
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.runtimeRef?.truthVersionId,
+    "truth-v1"
+  );
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.decisionPath?.status,
+    "escalated_to_operator"
+  );
   assert.equal(sent.length, 2);
   assert.equal(sent[0]?.type, "voice.call.updated");
   assert.equal(sent[0]?.audience, "operator");
@@ -544,6 +613,7 @@ test("voice handoff request rejects terminal regression and records rejected tru
   const router = voiceRoutes({
     db,
     audit: null,
+    getRuntime: getApprovedRuntime,
     wsHub: {
       broadcast(payload) {
         sent.push(payload);
@@ -568,6 +638,14 @@ test("voice handoff request rejects terminal regression and records rejected tru
   assert.equal(db.events.at(-1)?.event_type, "operator_handoff_request_rejected");
   assert.equal(db.events.at(-1)?.payload?.mutationOutcome, "rejected");
   assert.equal(db.events.at(-1)?.payload?.requestedStatus, "agent_ringing");
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.decisionPath?.status,
+    "refused"
+  );
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.decisionPath?.reasonCode,
+    "terminal_state_regression"
+  );
   assert.equal(sent.length, 2);
   assert.equal(sent[0]?.mutationOutcome, "rejected");
   assert.equal(sent[1]?.event?.eventType, "operator_handoff_request_rejected");
@@ -580,6 +658,7 @@ test("voice end ignores already terminal truth without rewriting the session", a
   const router = voiceRoutes({
     db,
     audit: null,
+    getRuntime: getApprovedRuntime,
     wsHub: {
       broadcast(payload) {
         sent.push(payload);
@@ -601,9 +680,52 @@ test("voice end ignores already terminal truth without rewriting the session", a
   assert.equal(db.events.at(-1)?.event_type, "session_end_ignored");
   assert.equal(db.events.at(-1)?.payload?.mutationOutcome, "ignored");
   assert.equal(db.events.at(-1)?.payload?.reasonCode, "already_terminal");
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.decisionPath?.status,
+    "no_reply"
+  );
   assert.equal(sent.length, 2);
   assert.equal(sent[0]?.mutationOutcome, "ignored");
   assert.equal(sent[1]?.event?.eventType, "session_end_ignored");
+});
+
+test("voice events read endpoint exposes unified operator inspect shape", async () => {
+  const db = new FakeVoiceDb();
+  seedActiveVoiceRows(db);
+  const router = voiceRoutes({
+    db,
+    audit: null,
+    getRuntime: getApprovedRuntime,
+  });
+
+  const joinResult = await invokeRouter(router, "post", "/voice/calls/call-2/join", {
+    ...buildAuth("operator"),
+    body: {
+      sessionId: "session-2",
+      joinMode: "live",
+      operatorName: "Alice",
+      operatorUserId: "user-42",
+    },
+  });
+  assert.equal(joinResult.res.statusCode, 200);
+
+  const readResult = await invokeRouter(router, "get", "/voice/calls/call-2/events", {
+    ...buildAuth("operator"),
+  });
+
+  assert.equal(readResult.res.statusCode, 200);
+  assert.equal(readResult.res.body?.events?.length, 1);
+  assert.equal(readResult.res.body?.inspect?.schema, "operator_replay_inspect.v1");
+  assert.equal(readResult.res.body?.inspect?.channel, "voice");
+  assert.equal(readResult.res.body?.inspect?.authority?.approvedRuntime, true);
+  assert.equal(
+    readResult.res.body?.events?.[0]?.inspect?.decision?.status,
+    "escalated_to_operator"
+  );
+  assert.equal(
+    readResult.res.body?.events?.[0]?.inspect?.summary?.operatorJoinMode,
+    "live"
+  );
 });
 
 test("voice public mutation rolls back when durable event recording fails", async () => {

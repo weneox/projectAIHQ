@@ -7,6 +7,54 @@ import {
   processVoiceTranscript,
 } from "../src/services/voiceInternalRuntime.js";
 
+function clone(value) {
+  return value ? JSON.parse(JSON.stringify(value)) : value;
+}
+
+function buildApprovedRuntime() {
+  return {
+    tenant: {
+      tenantId: "tenant-1",
+      tenant_id: "tenant-1",
+      tenantKey: "acme",
+      tenant_key: "acme",
+      mainLanguage: "en",
+    },
+    authority: {
+      mode: "strict",
+      source: "approved_runtime_projection",
+      available: true,
+      runtimeProjectionId: "projection-1",
+      projectionHash: "hash-1",
+      truthVersionId: "truth-v1",
+      tenantId: "tenant-1",
+      tenantKey: "acme",
+    },
+    behavior: {
+      conversionGoal: "answer_and_route",
+      primaryCta: "book_consult",
+      toneProfile: "warm_confident",
+      handoffTriggers: ["pricing"],
+      qualificationQuestions: ["Which service do you need?"],
+      channelBehavior: {
+        voice: {
+          handoffBias: "conditional",
+          qualificationDepth: "guided",
+        },
+      },
+    },
+    aiPolicy: {
+      autoReplyEnabled: true,
+      createLeadEnabled: true,
+      handoffEnabled: true,
+    },
+  };
+}
+
+async function getApprovedRuntime() {
+  return clone(buildApprovedRuntime());
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -451,6 +499,7 @@ test("voice session state rejects terminal regression and records a rejection ev
 
   const result = await processVoiceSessionState({
     db,
+    getRuntime: getApprovedRuntime,
     providerCallSid: "CA123",
     body: {
       status: "bot_active",
@@ -466,6 +515,22 @@ test("voice session state rejects terminal regression and records a rejection ev
   assert.equal(db.calls.get("call-1")?.status, "completed");
   assert.equal(db.events.at(-1)?.event_type, "session_state_rejected");
   assert.equal(db.events.at(-1)?.payload?.requestedStatus, "bot_active");
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.runtimeRef?.approvedRuntime,
+    true
+  );
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.runtimeRef?.truthVersionId,
+    "truth-v1"
+  );
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.decisionPath?.status,
+    "refused"
+  );
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.decisionPath?.reasonCode,
+    "terminal_state_regression"
+  );
 });
 
 test("voice transcript replay is idempotent and does not duplicate persisted truth", async () => {
@@ -474,6 +539,7 @@ test("voice transcript replay is idempotent and does not duplicate persisted tru
 
   const result = await processVoiceTranscript({
     db,
+    getRuntime: getApprovedRuntime,
     providerCallSid: "CA123",
     role: "customer",
     text: "hello",
@@ -486,6 +552,18 @@ test("voice transcript replay is idempotent and does not duplicate persisted tru
   assert.equal(result.payload?.call?.transcript, "[customer] hello");
   assert.equal(db.events.at(-1)?.event_type, "transcript_ignored");
   assert.equal(db.events.at(-1)?.payload?.reasonCode, "duplicate_transcript_frame");
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.runtimeRef?.approvedRuntime,
+    true
+  );
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.decisionPath?.status,
+    "no_reply"
+  );
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.decisionPath?.reasonCode,
+    "duplicate_transcript_frame"
+  );
 });
 
 test("voice upsert preserves terminal statuses while still accepting late summary enrichment", async () => {
@@ -494,6 +572,7 @@ test("voice upsert preserves terminal statuses while still accepting late summar
 
   const result = await processVoiceSessionUpsert({
     db,
+    getRuntime: getApprovedRuntime,
     body: {
       tenantId: "tenant-1",
       tenantKey: "acme",
@@ -518,6 +597,18 @@ test("voice upsert preserves terminal statuses while still accepting late summar
     "call_terminal_status_preserved",
     "session_terminal_status_preserved",
   ]);
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.runtimeRef?.approvedRuntime,
+    true
+  );
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.decisionPath?.status,
+    "answered"
+  );
+  assert.equal(
+    db.events.at(-1)?.payload?.replayTrace?.policy?.handoffEnabled,
+    true
+  );
 });
 
 test("applied internal voice mutations persist durable events and emit operator realtime", async () => {

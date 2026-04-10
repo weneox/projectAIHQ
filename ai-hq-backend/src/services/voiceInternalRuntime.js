@@ -26,6 +26,7 @@ import {
 import { createRuntimeAuthorityError } from "./businessBrain/runtimeAuthority.js";
 import { buildOperationalChannels } from "./operationalChannels.js";
 import { buildProjectedTenantRuntime } from "./projectedTenantRuntime.js";
+import { buildVoiceReplayPayload } from "./voiceReplayTrace.js";
 
 function obj(v) {
   return v && typeof v === "object" && !Array.isArray(v) ? v : {};
@@ -111,6 +112,7 @@ async function appendVoiceConflictEvent({
   eventType,
   payload,
   mutationOutcome = "rejected",
+  getRuntime = getTenantBrainRuntime,
 }) {
   const call = await getVoiceCallByProviderSid(db, providerCallSid);
   if (!call?.id) return;
@@ -122,10 +124,17 @@ async function appendVoiceConflictEvent({
     tenantKey: call.tenantKey,
     eventType,
     actor: "voice_backend",
-    payload: {
-      ...obj(payload),
-      mutationOutcome: s(mutationOutcome || "rejected"),
-    },
+    payload: await buildVoiceReplayPayload({
+      db,
+      tenantId: call.tenantId || session?.tenantId,
+      tenantKey: call.tenantKey || session?.tenantKey,
+      eventType,
+      getRuntime,
+      payload: {
+        ...obj(payload),
+        mutationOutcome: s(mutationOutcome || "rejected"),
+      },
+    }),
   });
   return {
     call,
@@ -930,7 +939,13 @@ export async function processVoiceTenantConfig({
   };
 }
 
-export async function processVoiceSessionUpsert({ db, wsHub = null, logger = null, body }) {
+export async function processVoiceSessionUpsert({
+  db,
+  wsHub = null,
+  logger = null,
+  body,
+  getRuntime = getTenantBrainRuntime,
+}) {
   const committed = await runVoiceMutationTransaction(db, async (tx) => {
     const { call, session, appliedGuards = [] } = await upsertCallAndSession(tx, body);
     const event = await appendVoiceEventStrict(tx, {
@@ -939,13 +954,20 @@ export async function processVoiceSessionUpsert({ db, wsHub = null, logger = nul
       tenantKey: call.tenantKey,
       eventType: "session_upserted",
       actor: "voice_backend",
-      payload: {
-        callStatus: call.status,
-        sessionStatus: session.status,
-        conferenceName: session.conferenceName,
-        appliedGuards,
-        mutationOutcome: "applied",
-      },
+      payload: await buildVoiceReplayPayload({
+        db: tx,
+        tenantId: call.tenantId || session.tenantId,
+        tenantKey: call.tenantKey || session.tenantKey,
+        eventType: "session_upserted",
+        getRuntime,
+        payload: {
+          callStatus: call.status,
+          sessionStatus: session.status,
+          conferenceName: session.conferenceName,
+          appliedGuards,
+          mutationOutcome: "applied",
+        },
+      }),
     });
 
     return { call, session, event, appliedGuards };
@@ -981,6 +1003,7 @@ export async function processVoiceTranscript({
   text,
   role,
   ts,
+  getRuntime = getTenantBrainRuntime,
 }) {
   const committed = await runVoiceMutationTransaction(db, async (tx) => {
     const session = await getVoiceCallSessionByProviderCallSid(
@@ -1009,13 +1032,20 @@ export async function processVoiceTranscript({
             tenantKey: call.tenantKey,
             eventType: "transcript_ignored",
             actor: "voice_backend",
-            payload: {
-              reasonCode: "duplicate_transcript_frame",
-              role: nextItem.role,
-              text: nextItem.text,
-              ts: nextItem.ts,
-              mutationOutcome: "ignored",
-            },
+            payload: await buildVoiceReplayPayload({
+              db: tx,
+              tenantId: call.tenantId || session.tenantId,
+              tenantKey: call.tenantKey || session.tenantKey,
+              eventType: "transcript_ignored",
+              getRuntime,
+              payload: {
+                reasonCode: "duplicate_transcript_frame",
+                role: nextItem.role,
+                text: nextItem.text,
+                ts: nextItem.ts,
+                mutationOutcome: "ignored",
+              },
+            }),
           })
         : null;
 
@@ -1065,12 +1095,19 @@ export async function processVoiceTranscript({
         tenantKey: call.tenantKey,
         eventType: "transcript_appended",
         actor: "voice_backend",
-        payload: {
-          role,
-          text,
-          ts,
-          mutationOutcome: "applied",
-        },
+        payload: await buildVoiceReplayPayload({
+          db: tx,
+          tenantId: call.tenantId || updatedSession.tenantId,
+          tenantKey: call.tenantKey || updatedSession.tenantKey,
+          eventType: "transcript_appended",
+          getRuntime,
+          payload: {
+            role,
+            text,
+            ts,
+            mutationOutcome: "applied",
+          },
+        }),
       });
     }
 
@@ -1115,6 +1152,7 @@ export async function processVoiceSessionState({
   logger = null,
   providerCallSid,
   body = {},
+  getRuntime = getTenantBrainRuntime,
 }) {
   const committed = await runVoiceMutationTransaction(db, async (tx) => {
     const session = await getVoiceCallSessionByProviderCallSid(
@@ -1145,6 +1183,7 @@ export async function processVoiceSessionState({
         eventType: "session_state_rejected",
         payload: conflict.details,
         mutationOutcome: "rejected",
+        getRuntime,
       });
 
       return {
@@ -1224,16 +1263,24 @@ export async function processVoiceSessionState({
         tenantKey: call.tenantKey,
         eventType: s(body?.eventType || "session_state_updated"),
         actor: "voice_backend",
-        payload: {
-          sessionStatus: updatedSession.status,
-          requestedDepartment: updatedSession.requestedDepartment,
-          resolvedDepartment: updatedSession.resolvedDepartment,
-          operatorJoinRequested: updatedSession.operatorJoinRequested,
-          operatorJoined: updatedSession.operatorJoined,
-          whisperActive: updatedSession.whisperActive,
-          takeoverActive: updatedSession.takeoverActive,
-          mutationOutcome: "applied",
-        },
+        payload: await buildVoiceReplayPayload({
+          db: tx,
+          tenantId: call.tenantId || updatedSession.tenantId,
+          tenantKey: call.tenantKey || updatedSession.tenantKey,
+          eventType: s(body?.eventType || "session_state_updated"),
+          getRuntime,
+          payload: {
+            sessionStatus: updatedSession.status,
+            callStatus: updatedCall?.status,
+            requestedDepartment: updatedSession.requestedDepartment,
+            resolvedDepartment: updatedSession.resolvedDepartment,
+            operatorJoinRequested: updatedSession.operatorJoinRequested,
+            operatorJoined: updatedSession.operatorJoined,
+            whisperActive: updatedSession.whisperActive,
+            takeoverActive: updatedSession.takeoverActive,
+            mutationOutcome: "applied",
+          },
+        }),
       });
     }
 
@@ -1286,6 +1333,7 @@ export async function processVoiceOperatorJoin({
   logger = null,
   providerCallSid,
   body = {},
+  getRuntime = getTenantBrainRuntime,
 }) {
   const committed = await runVoiceMutationTransaction(db, async (tx) => {
     const session = await getVoiceCallSessionByProviderCallSid(
@@ -1316,6 +1364,7 @@ export async function processVoiceOperatorJoin({
           joinMode: lower(body?.operatorJoinMode || body?.joinMode || "live"),
         },
         mutationOutcome: "rejected",
+        getRuntime,
       });
 
       return {
@@ -1364,13 +1413,22 @@ export async function processVoiceOperatorJoin({
         tenantKey: call.tenantKey,
         eventType: "operator_joined",
         actor: "operator",
-        payload: {
-          operatorUserId: updatedSession.operatorUserId,
-          operatorName: updatedSession.operatorName,
-          operatorJoinMode: updatedSession.operatorJoinMode,
-          takeoverActive: updatedSession.takeoverActive,
-          mutationOutcome: "applied",
-        },
+        payload: await buildVoiceReplayPayload({
+          db: tx,
+          tenantId: call.tenantId || updatedSession.tenantId,
+          tenantKey: call.tenantKey || updatedSession.tenantKey,
+          eventType: "operator_joined",
+          getRuntime,
+          payload: {
+            operatorUserId: updatedSession.operatorUserId,
+            operatorName: updatedSession.operatorName,
+            operatorJoinMode: updatedSession.operatorJoinMode,
+            takeoverActive: updatedSession.takeoverActive,
+            sessionStatus: updatedSession.status,
+            callStatus: updatedCall?.status,
+            mutationOutcome: "applied",
+          },
+        }),
       });
     }
 

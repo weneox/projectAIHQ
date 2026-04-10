@@ -36,6 +36,9 @@ import {
   appendVoiceEventStrict,
   emitVoiceMutationRealtime,
 } from "./utils.js";
+import { getTenantBrainRuntime } from "../../../services/businessBrain/getTenantBrainRuntime.js";
+import { buildVoiceReplayPayload } from "../../../services/voiceReplayTrace.js";
+import { buildVoiceEventInspect } from "../../../services/operatorReplayInspect.js";
 
 const fallbackLogger = createLogger({
   service: "ai-hq-backend",
@@ -168,6 +171,7 @@ async function applyOperatorVoiceMutation({
   buildCallPatch = null,
   buildEventPayload = null,
   terminalBehavior = "reject",
+  getRuntime = getTenantBrainRuntime,
 } = {}) {
   const committed = await runVoiceMutationTransaction(db, async (tx) => {
     const currentSession = await getVoiceCallSessionById(tx, sessionId);
@@ -217,22 +221,29 @@ async function applyOperatorVoiceMutation({
           tenantKey: currentCall.tenantKey,
           eventType: s(ignoredEventType || `${eventType}_ignored`),
           actor: eventActor,
-          payload: {
-            ...obj(
-              typeof buildEventPayload === "function"
-                ? buildEventPayload({
-                    call: currentCall,
-                    session: currentSession,
-                    previousCall: currentCall,
-                    previousSession: currentSession,
-                  })
-                : buildEventPayload
-            ),
-            reasonCode: "already_terminal",
-            currentStatus: lower(currentSession.status),
-            requestedStatus: lower(requestedStatus),
-            mutationOutcome: "ignored",
-          },
+          payload: await buildVoiceReplayPayload({
+            db: tx,
+            tenantId: currentCall.tenantId || currentSession.tenantId,
+            tenantKey: currentCall.tenantKey || currentSession.tenantKey,
+            eventType: s(ignoredEventType || `${eventType}_ignored`),
+            getRuntime,
+            payload: {
+              ...obj(
+                typeof buildEventPayload === "function"
+                  ? buildEventPayload({
+                      call: currentCall,
+                      session: currentSession,
+                      previousCall: currentCall,
+                      previousSession: currentSession,
+                    })
+                  : buildEventPayload
+              ),
+              reasonCode: "already_terminal",
+              currentStatus: lower(currentSession.status),
+              requestedStatus: lower(requestedStatus),
+              mutationOutcome: "ignored",
+            },
+          }),
         });
 
         return {
@@ -263,20 +274,27 @@ async function applyOperatorVoiceMutation({
         tenantKey: currentCall.tenantKey,
         eventType: s(rejectEventType || `${eventType}_rejected`),
         actor: eventActor,
-        payload: {
-          ...obj(
-            typeof buildEventPayload === "function"
-              ? buildEventPayload({
-                  call: currentCall,
-                  session: currentSession,
-                  previousCall: currentCall,
-                  previousSession: currentSession,
-                })
-              : buildEventPayload
-          ),
-          ...conflict.details,
-          mutationOutcome: "rejected",
-        },
+        payload: await buildVoiceReplayPayload({
+          db: tx,
+          tenantId: currentCall.tenantId || currentSession.tenantId,
+          tenantKey: currentCall.tenantKey || currentSession.tenantKey,
+          eventType: s(rejectEventType || `${eventType}_rejected`),
+          getRuntime,
+          payload: {
+            ...obj(
+              typeof buildEventPayload === "function"
+                ? buildEventPayload({
+                    call: currentCall,
+                    session: currentSession,
+                    previousCall: currentCall,
+                    previousSession: currentSession,
+                  })
+                : buildEventPayload
+            ),
+            ...conflict.details,
+            mutationOutcome: "rejected",
+          },
+        }),
       });
 
       return {
@@ -317,10 +335,17 @@ async function applyOperatorVoiceMutation({
       tenantKey: currentCall.tenantKey,
       eventType,
       actor: eventActor,
-      payload: {
-        ...obj(eventPayload),
-        mutationOutcome: "applied",
-      },
+      payload: await buildVoiceReplayPayload({
+        db: tx,
+        tenantId: currentCall.tenantId || updatedSession.tenantId,
+        tenantKey: currentCall.tenantKey || updatedSession.tenantKey,
+        eventType,
+        getRuntime,
+        payload: {
+          ...obj(eventPayload),
+          mutationOutcome: "applied",
+        },
+      }),
     });
 
     return {
@@ -419,7 +444,13 @@ async function handleSettingsPost(req, res, { db, dbDisabled, audit }) {
   }
 }
 
-export function voiceRoutes({ db, dbDisabled = false, audit, wsHub = null } = {}) {
+export function voiceRoutes({
+  db,
+  dbDisabled = false,
+  audit,
+  wsHub = null,
+  getRuntime = getTenantBrainRuntime,
+} = {}) {
   const r = express.Router();
 
   r.get("/settings/voice", requireOperatorSurfaceAccess, (req, res) =>
@@ -621,8 +652,15 @@ export function voiceRoutes({ db, dbDisabled = false, audit, wsHub = null } = {}
       });
       if (!call) return;
 
-      const events = await listVoiceCallEvents(db, call.id);
-      return ok(res, { call, events });
+      const events = (await listVoiceCallEvents(db, call.id)).map((event) => ({
+        ...event,
+        inspect: buildVoiceEventInspect(event),
+      }));
+      return ok(res, {
+        call,
+        events,
+        inspect: events.at(-1)?.inspect || null,
+      });
     } catch (err) {
       logger.error("voice.calls.get.failed", err, {
         callId: s(req.params?.id),
@@ -661,8 +699,14 @@ export function voiceRoutes({ db, dbDisabled = false, audit, wsHub = null } = {}
       });
       if (!call) return;
 
-      const events = await listVoiceCallEvents(db, call.id);
-      return ok(res, { events });
+      const events = (await listVoiceCallEvents(db, call.id)).map((event) => ({
+        ...event,
+        inspect: buildVoiceEventInspect(event),
+      }));
+      return ok(res, {
+        events,
+        inspect: events.at(-1)?.inspect || null,
+      });
     } catch (err) {
       logger.error("voice.calls.events.failed", err, {
         callId: s(req.params?.id),
@@ -824,6 +868,7 @@ export function voiceRoutes({ db, dbDisabled = false, audit, wsHub = null } = {}
           callStatus: nextCall.status,
           callId: nextCall.id,
         }),
+        getRuntime,
       });
 
       if (!result?.ok) {
@@ -932,9 +977,10 @@ export function voiceRoutes({ db, dbDisabled = false, audit, wsHub = null } = {}
           callStatus: nextCall.status,
           endedAt: nextSession.endedAt || nextCall.endedAt || timestamp,
           callId: nextCall.id,
-        }),
-        terminalBehavior: "ignore",
-      });
+          }),
+          terminalBehavior: "ignore",
+          getRuntime,
+        });
 
       if (!result?.ok) {
         return fail(res, result.statusCode || 500, result.error || "voice_end_failed", {
@@ -1153,8 +1199,9 @@ export function voiceRoutes({ db, dbDisabled = false, audit, wsHub = null } = {}
           callStatus: nextCall.status,
           requestedDepartment:
             nextSession.requestedDepartment || nextSession.resolvedDepartment || null,
-        }),
-      });
+          }),
+          getRuntime,
+        });
 
       if (!result?.ok) {
         return fail(
@@ -1261,8 +1308,9 @@ export function voiceRoutes({ db, dbDisabled = false, audit, wsHub = null } = {}
           operatorJoinMode: nextSession.operatorJoinMode,
           sessionStatus: nextSession.status,
           callStatus: nextCall.status,
-        }),
-      });
+          }),
+          getRuntime,
+        });
 
       if (!result?.ok) {
         return fail(
@@ -1368,6 +1416,7 @@ export function voiceRoutes({ db, dbDisabled = false, audit, wsHub = null } = {}
           callStatus: nextCall.status,
           takeoverActive: !!nextSession.takeoverActive,
         }),
+        getRuntime,
       });
 
       if (!result?.ok) {
@@ -1456,9 +1505,10 @@ export function voiceRoutes({ db, dbDisabled = false, audit, wsHub = null } = {}
           callStatus: nextCall.status,
           endedAt: nextSession.endedAt || nextCall.endedAt || timestamp,
           callId: nextCall.id,
-        }),
-        terminalBehavior: "ignore",
-      });
+          }),
+          terminalBehavior: "ignore",
+          getRuntime,
+        });
 
       if (!result?.ok) {
         return fail(res, result.statusCode || 500, result.error || "voice_end_failed", {
