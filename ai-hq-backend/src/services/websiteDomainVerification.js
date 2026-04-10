@@ -12,6 +12,8 @@ export const WEBSITE_DOMAIN_VERIFICATION_RECORD_LABEL = "_aihq-webchat";
 export const WEBSITE_DOMAIN_VERIFICATION_VALUE_PREFIX =
   "aihq-webchat-verification=";
 export const WEBSITE_DOMAIN_VERIFICATION_ENFORCEMENT = true;
+export const WEBSITE_WIDGET_ALLOW_UNVERIFIED_HANDOFFS_ENV =
+  "WEBSITE_WIDGET_ALLOW_UNVERIFIED_HANDOFFS";
 
 const DNS_PENDING_CODES = new Set(["ENODATA", "ENOTFOUND", "ENOENT", "NXDOMAIN"]);
 const DOMAIN_LABEL_PATTERN =
@@ -31,6 +33,13 @@ function arr(value) {
 
 function unique(values = []) {
   return [...new Set(arr(values).map((item) => s(item)).filter(Boolean))];
+}
+
+export function shouldAllowUnverifiedWebsiteWidgetHandoffs({
+  env = process.env.NODE_ENV || process.env.APP_ENV || "production",
+  override = process.env[WEBSITE_WIDGET_ALLOW_UNVERIFIED_HANDOFFS_ENV],
+} = {}) {
+  return s(override) === "1" || lower(env || "production") !== "production";
 }
 
 function normalizeInputToHostname(raw = "") {
@@ -343,4 +352,5 @@ export const __test__ = {
   buildWebsiteDomainVerificationPayload,
   evaluateWebsiteDomainVerification,
   normalizeWebsiteVerificationDomain,
+  shouldAllowUnverifiedWebsiteWidgetHandoffs,
 };

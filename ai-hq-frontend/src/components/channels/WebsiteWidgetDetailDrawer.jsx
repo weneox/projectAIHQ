@@ -289,10 +289,28 @@ export default function WebsiteWidgetDetailDrawer({
     install.blockMessage ||
       (productionInstallBlocked ? verificationSurface.message : "")
   );
-  const handoffReady =
-    saveAllowed &&
-    s(readiness.status).toLowerCase() === "ready" &&
-    Boolean(s(install.embedSnippet));
+  const developerHandoffReady =
+    saveAllowed && install.developerHandoffReady === true;
+  const gtmHandoffReady = saveAllowed && install.gtmHandoffReady === true;
+  const wordpressHandoffReady =
+    saveAllowed && install.wordpressHandoffReady === true;
+  const anyHandoffReady =
+    developerHandoffReady || gtmHandoffReady || wordpressHandoffReady;
+  const installHandoffMessage = s(
+    install.handoffMessage ||
+      (productionInstallBlocked
+        ? verificationSurface.message
+        : "Website Chat install handoffs are unavailable right now.")
+  );
+  const handoffTestingOnly =
+    handoffSurface.testingOnly === true || handoffReadiness.testingOnly === true;
+  const handoffWarning = s(
+    handoffReadiness.warning ||
+      handoffSurface.warning ||
+      (handoffTestingOnly
+        ? "This package is for local/dev/test only. DNS TXT verification is still required before public launch."
+        : "")
+  );
   const handoffError = s(
     handoffMutation.error?.message ||
       gtmHandoffMutation.error?.message ||
@@ -884,7 +902,9 @@ export default function WebsiteWidgetDetailDrawer({
                   fullWidth
                   showArrow={false}
                   onClick={handlePrepareDeveloperInstall}
-                  disabled={!handoffReady || statusQuery.isLoading || handoffBusy}
+                  disabled={
+                    !developerHandoffReady || statusQuery.isLoading || handoffBusy
+                  }
                   isLoading={handoffMutation.isPending}
                   className="!h-[40px] !rounded-[10px] !text-[10px]"
                 >
@@ -896,7 +916,7 @@ export default function WebsiteWidgetDetailDrawer({
                   fullWidth
                   showArrow={false}
                   onClick={handlePrepareGtmInstall}
-                  disabled={!handoffReady || statusQuery.isLoading || handoffBusy}
+                  disabled={!gtmHandoffReady || statusQuery.isLoading || handoffBusy}
                   isLoading={gtmHandoffMutation.isPending}
                   className="!h-[40px] !rounded-[10px] !text-[10px]"
                 >
@@ -908,7 +928,9 @@ export default function WebsiteWidgetDetailDrawer({
                   fullWidth
                   showArrow={false}
                   onClick={handlePrepareWordpressInstall}
-                  disabled={!handoffReady || statusQuery.isLoading || handoffBusy}
+                  disabled={
+                    !wordpressHandoffReady || statusQuery.isLoading || handoffBusy
+                  }
                   isLoading={wordpressHandoffMutation.isPending}
                   className="!h-[40px] !rounded-[10px] !text-[10px]"
                 >
@@ -930,20 +952,35 @@ export default function WebsiteWidgetDetailDrawer({
 
               <SaveFeedback success={handoffMessage} error={handoffError} />
 
-              {!handoffReady ? (
+              {!anyHandoffReady ? (
                 <InlineNotice
                   tone={productionInstallBlocked ? "warning" : "info"}
-                  description={
-                    productionInstallBlocked
-                      ? "Complete DNS TXT domain verification before generating a developer, GTM, or WordPress install handoff."
-                      : "Developer, GTM, and WordPress install handoff become available once Website Chat is ready for production install."
-                  }
+                  description={installHandoffMessage}
+                  compact
+                />
+              ) : null}
+
+              {anyHandoffReady &&
+              productionInstallBlocked &&
+              install.unverifiedHandoffsAllowed === true ? (
+                <InlineNotice
+                  tone="warning"
+                  description={installHandoffMessage}
                   compact
                 />
               ) : null}
 
               {s(handoffSurface.packageText) ? (
                 <div className="space-y-4">
+                  {handoffTestingOnly ? (
+                    <InlineNotice
+                      tone="warning"
+                      title="Testing-only package"
+                      description={handoffWarning}
+                      compact
+                    />
+                  ) : null}
+
                   <div className="overflow-hidden rounded-panel border border-line-soft bg-surface">
                     <DataRow
                       label="Package type"
@@ -953,17 +990,38 @@ export default function WebsiteWidgetDetailDrawer({
                       )}
                     />
                     <DataRow
-                      label="Verified domain"
-                      value={s(handoffSurface.verifiedDomain, "Not available")}
+                      label={handoffTestingOnly ? "Target domain" : "Verified domain"}
+                      value={s(
+                        handoffSurface.targetDomain || handoffSurface.verifiedDomain,
+                        "Not available"
+                      )}
                     />
                     <DataRow
                       label="Generated at"
                       value={formatTimestamp(handoffSurface.generatedAt)}
                     />
                     <DataRow
+                      label="Verification state"
+                      value={s(
+                        handoffReadiness.verificationState ||
+                          handoffSurface.verificationState,
+                        "Not available"
+                      )}
+                    />
+                    <DataRow
+                      label="Production ready"
+                      value={
+                        handoffTestingOnly ||
+                        handoffSurface.productionReady !== true ||
+                        handoffReadiness.productionReady !== true
+                          ? "No"
+                          : "Yes"
+                      }
+                    />
+                    <DataRow
                       label="Readiness summary"
                       value={s(
-                        handoffReadiness.message,
+                        handoffWarning || handoffReadiness.message,
                         "Website Chat is ready for production install."
                       )}
                     />
@@ -975,7 +1033,9 @@ export default function WebsiteWidgetDetailDrawer({
                       "Developer install package"
                     )}
                     description={
-                      s(handoffSurface.packageType) === "wordpress"
+                      handoffTestingOnly
+                        ? "This package is for local/dev/test only. DNS TXT verification is still required before public launch."
+                        : s(handoffSurface.packageType) === "wordpress"
                         ? "Paste this package JSON into the AIHQ Website Chat WordPress plugin settings page."
                         : "Share this directly with the developer or webmaster handling the website code."
                     }

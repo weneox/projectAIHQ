@@ -83,8 +83,17 @@ function buildDomainVerificationPayload({
   };
 }
 
-function buildStatusPayload({ verified = false } = {}) {
+function buildStatusPayload({
+  verified = false,
+  unverifiedHandoffsAllowed = false,
+} = {}) {
   const domainVerification = buildDomainVerificationPayload({ verified, state: verified ? "verified" : "unverified" });
+  const handoffReady = verified === true || unverifiedHandoffsAllowed;
+  const handoffMessage = verified
+    ? "Website Chat is ready for developer, GTM, and WordPress install handoffs."
+    : unverifiedHandoffsAllowed
+      ? "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch."
+      : domainVerification.message;
   const embedSnippet = verified
     ? '<script src="https://widget.example.test/website-widget-loader.js" data-widget-id="ww_acme_widget" data-api-base="https://api.example.test/api" async></script>'
     : "";
@@ -118,6 +127,20 @@ function buildStatusPayload({ verified = false } = {}) {
       blockMessage: verified
         ? ""
         : domainVerification.message,
+      unverifiedHandoffsAllowed,
+      handoffReady,
+      developerHandoffReady: handoffReady,
+      gtmHandoffReady: handoffReady,
+      wordpressHandoffReady: handoffReady,
+      handoffTestingOnly: verified !== true && handoffReady,
+      handoffProductionReady: verified === true,
+      handoffTargetDomain: "acme.example",
+      handoffVerificationState: verified ? "verified" : "unverified",
+      handoffBlockReasonCode: handoffReady
+        ? ""
+        : "website_domain_verification_missing",
+      handoffMessage,
+      verificationRequiredForProduction: true,
     },
     readiness: {
       status: verified ? "ready" : "blocked",
@@ -139,53 +162,109 @@ function buildStatusPayload({ verified = false } = {}) {
   };
 }
 
-function buildInstallHandoffPayload() {
+function buildInstallHandoffPayload({
+  verified = true,
+  testingOnly = verified !== true,
+  verificationState = verified ? "verified" : "unverified",
+} = {}) {
+  const verifiedDomain = verified ? "acme.example" : "";
+  const readinessMessage = testingOnly
+    ? "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch."
+    : "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.";
+  const warning = testingOnly
+    ? "This package is for local/dev/test only. DNS TXT verification is still required before public launch."
+    : "";
+
   return {
     ready: true,
     generatedAt: "2026-04-10T11:00:00.000Z",
     audience: "developer",
-    verifiedDomain: "acme.example",
+    packageType: "developer",
+    packageTitle: "Website Chat developer install handoff",
+    targetDomain: "acme.example",
+    verifiedDomain,
     widgetId: "ww_acme_widget",
     loaderScriptUrl: "https://widget.example.test/website-widget-loader.js",
     apiBase: "https://api.example.test/api",
     embedSnippet:
       '<script src="https://widget.example.test/website-widget-loader.js" data-widget-id="ww_acme_widget" data-api-base="https://api.example.test/api" async></script>',
+    productionReady: testingOnly !== true,
+    testingOnly,
+    verificationState,
+    verificationRequiredForProduction: true,
+    unverifiedHandoffsAllowed: testingOnly === true,
+    warning,
+    message: readinessMessage,
     instructions: [
+      ...(testingOnly
+        ? [
+            "This install handoff is for local/dev/test only while DNS TXT verification is still pending for production launch.",
+          ]
+        : []),
       "Add the loader snippet once before the closing </body> tag on pages served from acme.example.",
       "Keep the data-widget-id and data-api-base values exactly as provided.",
     ],
     readiness: {
-      status: "ready",
-      message:
-        "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
-      productionInstallReady: true,
-      verificationState: "verified",
-      verifiedAt: "2026-04-10T10:30:00.000Z",
+      status: testingOnly ? "testing_only" : "ready",
+      message: readinessMessage,
+      productionInstallReady: testingOnly !== true,
+      productionReady: testingOnly !== true,
+      testingOnly,
+      verificationState,
+      verifiedAt: verified ? "2026-04-10T10:30:00.000Z" : null,
+      targetDomain: "acme.example",
+      verifiedDomain,
+      verificationRequiredForProduction: true,
+      unverifiedHandoffsAllowed: testingOnly === true,
+      warning,
     },
     packageText: [
       "Website Chat developer install handoff",
       "",
-      "Verified domain: acme.example",
+      `${testingOnly ? "Target domain" : "Verified domain"}: acme.example`,
       "Widget ID: ww_acme_widget",
       "Loader script URL: https://widget.example.test/website-widget-loader.js",
       "API base: https://api.example.test/api",
+      `Production ready: ${testingOnly ? "No" : "Yes"}`,
+      `Testing only: ${testingOnly ? "Yes" : "No"}`,
+      ...(warning ? [`Warning: ${warning}`] : []),
     ].join("\n"),
   };
 }
 
-function buildGtmInstallHandoffPayload() {
+function buildGtmInstallHandoffPayload({
+  verified = true,
+  testingOnly = verified !== true,
+  verificationState = verified ? "verified" : "unverified",
+} = {}) {
+  const verifiedDomain = verified ? "acme.example" : "";
+  const readinessMessage = testingOnly
+    ? "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch."
+    : "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.";
+  const warning = testingOnly
+    ? "This package is for local/dev/test only. DNS TXT verification is still required before public launch."
+    : "";
+
   return {
     ready: true,
     generatedAt: "2026-04-10T11:05:00.000Z",
     audience: "developer",
     packageType: "gtm",
     packageTitle: "Website Chat GTM install handoff",
-    verifiedDomain: "acme.example",
+    targetDomain: "acme.example",
+    verifiedDomain,
     widgetId: "ww_acme_widget",
     loaderScriptUrl: "https://widget.example.test/website-widget-loader.js",
     apiBase: "https://api.example.test/api",
     embedSnippet:
       '<script src="https://widget.example.test/website-widget-loader.js" data-widget-id="ww_acme_widget" data-api-base="https://api.example.test/api" async></script>',
+    productionReady: testingOnly !== true,
+    testingOnly,
+    verificationState,
+    verificationRequiredForProduction: true,
+    unverifiedHandoffsAllowed: testingOnly === true,
+    warning,
+    message: readinessMessage,
     gtmCustomHtmlSnippet: [
       "<!-- Website Chat GTM Custom HTML tag -->",
       '<script src="https://widget.example.test/website-widget-loader.js" data-widget-id="ww_acme_widget" data-api-base="https://api.example.test/api" async></script>',
@@ -196,21 +275,32 @@ function buildGtmInstallHandoffPayload() {
     ].join("\n"),
     snippetLabel: "GTM Custom HTML tag",
     instructions: [
+      ...(testingOnly
+        ? [
+            "This GTM handoff is for local/dev/test only while DNS TXT verification is still pending for production launch.",
+          ]
+        : []),
       "In Google Tag Manager, create a new Custom HTML tag for pages served from acme.example.",
       "Paste the GTM Custom HTML block exactly as provided below and keep the widget ID plus API base unchanged.",
     ],
     readiness: {
-      status: "ready",
-      message:
-        "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
-      productionInstallReady: true,
-      verificationState: "verified",
-      verifiedAt: "2026-04-10T10:30:00.000Z",
+      status: testingOnly ? "testing_only" : "ready",
+      message: readinessMessage,
+      productionInstallReady: testingOnly !== true,
+      productionReady: testingOnly !== true,
+      testingOnly,
+      verificationState,
+      verifiedAt: verified ? "2026-04-10T10:30:00.000Z" : null,
+      targetDomain: "acme.example",
+      verifiedDomain,
+      verificationRequiredForProduction: true,
+      unverifiedHandoffsAllowed: testingOnly === true,
+      warning,
     },
     packageText: [
       "Website Chat GTM install handoff",
       "",
-      "Verified domain: acme.example",
+      `${testingOnly ? "Target domain" : "Verified domain"}: acme.example`,
       "Widget ID: ww_acme_widget",
       "Loader script URL: https://widget.example.test/website-widget-loader.js",
       "API base: https://api.example.test/api",
@@ -221,25 +311,54 @@ function buildGtmInstallHandoffPayload() {
   };
 }
 
-function buildWordpressInstallHandoffPayload() {
+function buildWordpressInstallHandoffPayload({
+  verified = true,
+  testingOnly = verified !== true,
+  verificationState = verified ? "verified" : "unverified",
+} = {}) {
+  const verifiedDomain = verified ? "acme.example" : "";
+  const readinessMessage = testingOnly
+    ? "Developer, GTM, and WordPress install handoffs are available for local/dev/test only. DNS TXT verification is still required before public launch."
+    : "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.";
+  const warning = testingOnly
+    ? "This package is for local/dev/test only. DNS TXT verification is still required before public launch."
+    : "";
   const packageJson = JSON.stringify(
     {
       packageType: "wordpress",
       packageTitle: "Website Chat WordPress install package",
       ready: true,
-      verifiedDomain: "acme.example",
+      targetDomain: "acme.example",
+      verifiedDomain,
       widgetId: "ww_acme_widget",
       loaderScriptUrl: "https://widget.example.test/website-widget-loader.js",
       apiBase: "https://api.example.test/api",
+      testingOnly,
+      productionReady: testingOnly !== true,
+      verificationState,
+      verificationRequiredForProduction: true,
+      warning,
+      message: readinessMessage,
       readiness: {
-        status: "ready",
-        message:
-          "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
-        productionInstallReady: true,
-        verificationState: "verified",
-        verifiedAt: "2026-04-10T10:30:00.000Z",
+        status: testingOnly ? "testing_only" : "ready",
+        message: readinessMessage,
+        productionInstallReady: testingOnly !== true,
+        productionReady: testingOnly !== true,
+        testingOnly,
+        verificationState,
+        verifiedAt: verified ? "2026-04-10T10:30:00.000Z" : null,
+        targetDomain: "acme.example",
+        verifiedDomain,
+        verificationRequiredForProduction: true,
+        unverifiedHandoffsAllowed: testingOnly === true,
+        warning,
       },
       instructions: [
+        ...(testingOnly
+          ? [
+              "This WordPress package is for local/dev/test only while DNS TXT verification is still pending for production launch.",
+            ]
+          : []),
         "Upload and activate the private AIHQ Website Chat WordPress plugin on the target WordPress site.",
         "Open Settings > AIHQ Website Chat in WordPress admin.",
       ],
@@ -259,26 +378,45 @@ function buildWordpressInstallHandoffPayload() {
     audience: "developer",
     packageType: "wordpress",
     packageTitle: "Website Chat WordPress install package",
-    verifiedDomain: "acme.example",
+    targetDomain: "acme.example",
+    verifiedDomain,
     widgetId: "ww_acme_widget",
     loaderScriptUrl: "https://widget.example.test/website-widget-loader.js",
     apiBase: "https://api.example.test/api",
     embedSnippet:
       '<script src="https://widget.example.test/website-widget-loader.js" data-widget-id="ww_acme_widget" data-api-base="https://api.example.test/api" async></script>',
+    productionReady: testingOnly !== true,
+    testingOnly,
+    verificationState,
+    verificationRequiredForProduction: true,
+    unverifiedHandoffsAllowed: testingOnly === true,
+    warning,
+    message: readinessMessage,
     wordpressConfig: JSON.parse(packageJson),
     packageSnippet: packageJson,
     snippetLabel: "WordPress plugin package JSON",
     instructions: [
+      ...(testingOnly
+        ? [
+            "This WordPress package is for local/dev/test only while DNS TXT verification is still pending for production launch.",
+          ]
+        : []),
       "Upload and activate the private AIHQ Website Chat WordPress plugin on the target WordPress site.",
       "Open Settings > AIHQ Website Chat in WordPress admin.",
     ],
     readiness: {
-      status: "ready",
-      message:
-        "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
-      productionInstallReady: true,
-      verificationState: "verified",
-      verifiedAt: "2026-04-10T10:30:00.000Z",
+      status: testingOnly ? "testing_only" : "ready",
+      message: readinessMessage,
+      productionInstallReady: testingOnly !== true,
+      productionReady: testingOnly !== true,
+      testingOnly,
+      verificationState,
+      verifiedAt: verified ? "2026-04-10T10:30:00.000Z" : null,
+      targetDomain: "acme.example",
+      verifiedDomain,
+      verificationRequiredForProduction: true,
+      unverifiedHandoffsAllowed: testingOnly === true,
+      warning,
     },
     packageText: packageJson,
   };
@@ -444,6 +582,69 @@ describe("WebsiteWidgetDetailDrawer", () => {
     expect(
       screen.getByRole("button", { name: /install on wordpress/i })
     ).toBeDisabled();
+  });
+
+  it("allows testing handoffs while keeping the public snippet blocked when unverified handoffs are allowed", async () => {
+    getWebsiteWidgetStatus.mockResolvedValueOnce(
+      buildStatusPayload({
+        verified: false,
+        unverifiedHandoffsAllowed: true,
+      })
+    );
+    createWebsiteWidgetWordpressInstallHandoff.mockResolvedValueOnce(
+      buildWordpressInstallHandoffPayload({
+        verified: false,
+        testingOnly: true,
+        verificationState: "unverified",
+      })
+    );
+    renderDrawer();
+
+    const installSection = (
+      await screen.findByText("Embed this widget on the public website")
+    ).closest("section");
+    expect(installSection).not.toBeNull();
+
+    expect(
+      screen.getByRole("button", { name: /copy snippet/i })
+    ).toBeDisabled();
+
+    const developerButton = within(installSection).getByRole("button", {
+      name: /prepare developer install/i,
+    });
+    const gtmButton = within(installSection).getByRole("button", {
+      name: /install with gtm/i,
+    });
+    const wordpressButton = within(installSection).getByRole("button", {
+      name: /install on wordpress/i,
+    });
+
+    await waitFor(() => expect(developerButton).toBeEnabled());
+    expect(gtmButton).toBeEnabled();
+    expect(wordpressButton).toBeEnabled();
+    expect(
+      within(installSection).getByText(
+        /local\/dev\/test only\. dns txt verification is still required before public launch/i
+      )
+    ).toBeInTheDocument();
+
+    fireEvent.click(wordpressButton);
+
+    await waitFor(() =>
+      expect(createWebsiteWidgetWordpressInstallHandoff).toHaveBeenCalledWith(
+        expect.objectContaining({
+          domain: "acme.example",
+        }),
+        expect.anything()
+      )
+    );
+
+    expect(
+      await within(installSection).findByText("Testing-only package")
+    ).toBeInTheDocument();
+    expect(
+      within(installSection).getByDisplayValue(/"testingOnly": true/i)
+    ).toBeInTheDocument();
   });
 
   it("saves tenant-managed widget settings without leaving the drawer", async () => {
