@@ -266,11 +266,16 @@ function countReadySectionsFromStatus(sectionStatus = {}) {
   ).length;
 }
 
+function getNormalizedReviewRoot(reviewPayload = null) {
+  const reviewPayloadObj = obj(reviewPayload);
+  return obj(reviewPayloadObj.review, reviewPayloadObj);
+}
+
 function buildProgressSnapshot(assistantState = {}, reviewPayload = null) {
   const draft = obj(assistantState?.draft);
   const draftProgress = obj(draft.progress);
   const setupSummary = obj(assistantState?.setupSummary);
-  const reviewRoot = obj(obj(reviewPayload).review, reviewPayload);
+  const reviewRoot = getNormalizedReviewRoot(reviewPayload);
   const reviewObj = obj(assistantState?.review);
 
   const answeredCount = STEP_ORDER.filter((step) =>
@@ -604,7 +609,7 @@ function SetupAssistantSession({
   const busy = saving || finalizing || importingWebsite;
   const currentStep = started && !paused ? getNaturalStep(assistant) : "";
   const canFinalize = currentStep === "finalize";
-  const normalizedReviewRoot = obj(obj(reviewPayload).review, reviewPayload);
+  const normalizedReviewRoot = getNormalizedReviewRoot(reviewPayload);
   const hasWebsiteReview =
     Object.keys(obj(obj(obj(normalizedReviewRoot).reviewDebug).websiteKnowledge))
       .length > 0;
