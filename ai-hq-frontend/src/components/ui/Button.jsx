@@ -30,30 +30,59 @@ function Spinner({ className }) {
 
 const SIZE = {
   sm: "h-8 rounded-soft px-3 text-[12px]",
-  md: "h-9 rounded-soft px-3.5 text-[13px]",
-  lg: "h-10 rounded-soft px-4 text-[14px]",
-  hero: "h-10 rounded-soft px-4 text-[14px]",
-  icon: "h-9 w-9 rounded-soft px-0",
+  md: "h-10 rounded-soft px-3.5 text-[13px]",
+  lg: "h-11 rounded-soft px-4 text-[14px]",
+  hero: "h-11 rounded-soft px-4.5 text-[14px]",
+  icon: "h-10 w-10 rounded-soft px-0",
 };
 
 function variantClass(variant = "primary") {
   switch (variant) {
     case "primary":
     case "brand":
-      return "border-brand bg-brand text-white hover:border-brand-strong hover:bg-brand-strong";
+      return [
+        "border-[rgba(var(--color-brand),0.9)]",
+        "bg-brand text-white",
+        "shadow-[0_10px_24px_-16px_rgba(46,96,255,0.55)]",
+        "hover:bg-brand-strong hover:border-[rgba(var(--color-brand-strong),0.92)]",
+        "hover:shadow-[0_16px_32px_-18px_rgba(46,96,255,0.52)]",
+      ].join(" ");
+
     case "secondary":
     case "surface":
-      return "border-line bg-surface text-text hover:border-line-strong hover:bg-surface-muted";
+      return [
+        "border-line bg-surface text-text",
+        "shadow-[0_1px_0_rgba(255,255,255,0.9)_inset]",
+        "hover:border-line-strong hover:bg-surface-muted",
+      ].join(" ");
+
     case "soft":
-      return "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand hover:border-[rgba(var(--color-brand),0.28)]";
+      return [
+        "border-[rgba(var(--color-brand),0.14)] bg-brand-soft text-brand",
+        "hover:border-[rgba(var(--color-brand),0.22)] hover:bg-[rgba(var(--color-brand),0.12)]",
+      ].join(" ");
+
     case "ghost":
-      return "border-transparent bg-transparent text-text-muted hover:bg-surface-subtle hover:text-text";
+      return [
+        "border-transparent bg-transparent text-text-muted",
+        "hover:bg-surface-subtle hover:text-text",
+      ].join(" ");
+
     case "outline":
-      return "border-line bg-transparent text-text hover:border-line-strong hover:bg-surface";
+      return [
+        "border-line bg-transparent text-text",
+        "hover:border-line-strong hover:bg-surface",
+      ].join(" ");
+
     case "destructive":
-      return "border-danger bg-danger text-white hover:border-danger hover:bg-[rgba(var(--color-danger),0.92)]";
+      return [
+        "border-[rgba(var(--color-danger),0.9)] bg-danger text-white",
+        "shadow-[0_10px_24px_-16px_rgba(190,24,93,0.42)]",
+        "hover:bg-[rgba(var(--color-danger),0.92)] hover:border-[rgba(var(--color-danger),0.94)]",
+      ].join(" ");
+
     default:
-      return "border-brand bg-brand text-white hover:border-brand-strong hover:bg-brand-strong";
+      return variantClass("primary");
   }
 }
 
@@ -83,8 +112,10 @@ const Button = React.forwardRef(function Button(
       disabled={isDisabled}
       aria-busy={isLoading || undefined}
       className={cx(
-        "inline-flex items-center justify-center gap-2 whitespace-nowrap border font-medium transition-colors",
-        "disabled:cursor-not-allowed disabled:opacity-60",
+        "inline-flex items-center justify-center gap-2 whitespace-nowrap border font-semibold tracking-[-0.01em]",
+        "transition-[background-color,border-color,color,box-shadow,transform] duration-base ease-premium",
+        "active:translate-y-[1px]",
+        "disabled:cursor-not-allowed disabled:opacity-55 disabled:shadow-none disabled:transform-none",
         fullWidth && "w-full",
         SIZE[size] || SIZE.md,
         variantClass(variant),

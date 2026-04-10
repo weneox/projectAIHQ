@@ -3,13 +3,13 @@ import { App as AntApp, Button, ConfigProvider, Result } from "antd";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "react-error-boundary";
 import { Toaster } from "sonner";
-import { getAntdTheme } from "../theme/tokens.js";
+import { getAntdTheme } from "../theme/antdTheme.js";
 
 function AppErrorFallback({ error, resetErrorBoundary }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-canvas px-6 py-10">
-      <div className="w-full max-w-[760px] overflow-hidden rounded-[28px] border border-line bg-surface shadow-panel-strong">
-        <div className="h-1.5 w-full bg-[linear-gradient(90deg,rgb(var(--color-brand)),rgba(37,99,235,0.35),transparent)]" />
+      <div className="w-full max-w-[760px] overflow-hidden rounded-[24px] border border-line bg-surface shadow-panel-strong">
+        <div className="h-1.5 w-full bg-[linear-gradient(90deg,rgb(var(--color-brand)),rgba(var(--color-brand),0.34),transparent)]" />
         <div className="p-4 sm:p-5">
           <Result
             status="error"

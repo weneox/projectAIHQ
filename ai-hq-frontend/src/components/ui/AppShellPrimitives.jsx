@@ -7,22 +7,23 @@ import {
   LockKeyhole,
 } from "lucide-react";
 import { cx } from "../../lib/cx.js";
+import Card from "./Card.jsx";
 
 const NOTICE_TONES = {
   info: {
-    container: "border-[rgba(var(--color-brand),0.18)] bg-brand-soft",
+    container: "border-[rgba(var(--color-brand),0.14)] bg-brand-soft",
     icon: "text-brand",
   },
   success: {
-    container: "border-[rgba(var(--color-success),0.18)] bg-success-soft",
+    container: "border-[rgba(var(--color-success),0.14)] bg-success-soft",
     icon: "text-success",
   },
   warning: {
-    container: "border-[rgba(var(--color-warning),0.22)] bg-warning-soft",
+    container: "border-[rgba(var(--color-warning),0.16)] bg-warning-soft",
     icon: "text-warning",
   },
   danger: {
-    container: "border-[rgba(var(--color-danger),0.18)] bg-danger-soft",
+    container: "border-[rgba(var(--color-danger),0.14)] bg-danger-soft",
     icon: "text-danger",
   },
 };
@@ -55,42 +56,52 @@ function surfaceToneClass({ tone = "default", subdued = false }) {
   if (subdued || tone === "muted") {
     return "border-line-soft bg-surface-muted";
   }
+
   if (tone === "subtle") {
     return "border-line-soft bg-surface-subtle";
   }
+
   if (tone === "brand-soft") {
-    return "border-[rgba(var(--color-brand),0.18)] bg-brand-soft";
+    return "border-[rgba(var(--color-brand),0.14)] bg-brand-soft";
   }
-  return "border-line bg-surface";
+
+  return "border-line-soft bg-surface";
 }
 
 function metricToneClass(tone = "neutral") {
-  if (tone === "brand" || tone === "accent") {
-    return "border-[rgba(var(--color-brand),0.18)] bg-brand-soft";
+  if (tone === "brand" || tone === "accent" || tone === "info") {
+    return "border-[rgba(var(--color-brand),0.14)] bg-brand-soft";
   }
+
   if (tone === "warning") {
-    return "border-[rgba(var(--color-warning),0.22)] bg-warning-soft";
+    return "border-[rgba(var(--color-warning),0.16)] bg-warning-soft";
   }
+
   if (tone === "danger") {
-    return "border-[rgba(var(--color-danger),0.18)] bg-danger-soft";
+    return "border-[rgba(var(--color-danger),0.14)] bg-danger-soft";
   }
+
   if (tone === "success") {
-    return "border-[rgba(var(--color-success),0.18)] bg-success-soft";
+    return "border-[rgba(var(--color-success),0.14)] bg-success-soft";
   }
-  return "border-line bg-surface";
+
+  return "border-line-soft bg-surface";
 }
 
 function bannerToneClass(tone = "info") {
   if (tone === "success") {
-    return "border-[rgba(var(--color-success),0.18)] bg-success-soft text-success";
+    return "border-[rgba(var(--color-success),0.14)] bg-success-soft text-success";
   }
+
   if (tone === "warning") {
-    return "border-[rgba(var(--color-warning),0.22)] bg-warning-soft text-warning";
+    return "border-[rgba(var(--color-warning),0.16)] bg-warning-soft text-warning";
   }
+
   if (tone === "danger") {
-    return "border-[rgba(var(--color-danger),0.18)] bg-danger-soft text-danger";
+    return "border-[rgba(var(--color-danger),0.14)] bg-danger-soft text-danger";
   }
-  return "border-[rgba(var(--color-brand),0.18)] bg-brand-soft text-brand";
+
+  return "border-[rgba(var(--color-brand),0.14)] bg-brand-soft text-brand";
 }
 
 export function PageCanvas({ className, children }) {
@@ -120,19 +131,19 @@ export function PageHeader({
         className
       )}
     >
-      <div className="max-w-[840px]">
+      <div className="max-w-[860px]">
         {eyebrow ? (
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
             {eyebrow}
           </div>
         ) : null}
 
-        <h1 className="text-[1.75rem] font-semibold leading-tight text-text md:text-[2rem]">
+        <h1 className="text-[1.8rem] font-semibold leading-[1.04] tracking-[-0.04em] text-text md:text-[2.05rem]">
           {title}
         </h1>
 
         {description ? (
-          <p className="mt-2 text-[14px] leading-6 text-text-muted">
+          <p className="mt-2.5 text-[14px] leading-6 text-text-muted">
             {description}
           </p>
         ) : null}
@@ -163,12 +174,12 @@ export function SectionHeader({
     >
       <div className="max-w-[760px]">
         {eyebrow ? (
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
             {eyebrow}
           </div>
         ) : null}
 
-        <h2 className="text-[1.125rem] font-semibold leading-tight text-text md:text-[1.25rem]">
+        <h2 className="text-[1.15rem] font-semibold leading-tight tracking-[-0.03em] text-text md:text-[1.28rem]">
           {title}
         </h2>
 
@@ -199,11 +210,12 @@ export function Surface({
   return (
     <div
       className={cx(
-        "rounded-panel border",
+        "rounded-panel border transition-[border-color,background-color,box-shadow] duration-base ease-premium",
         surfaceToneClass({ tone, subdued }),
         paddedClass(padded),
         shadow === "sm" && "shadow-panel",
         shadow === "md" && "shadow-panel-strong",
+        shadow === "none" && "shadow-[0_1px_0_rgba(255,255,255,0.92)_inset]",
         className
       )}
     >
@@ -220,20 +232,17 @@ export function MetricCard({
   className,
 }) {
   return (
-    <div
-      className={cx(
-        "rounded-soft border px-4 py-3.5",
-        metricToneClass(tone),
-        className
-      )}
+    <Card
+      className={cx("px-4 py-4", metricToneClass(tone), className)}
+      padded={false}
     >
       {label ? (
-        <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-subtle">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-subtle">
           {label}
         </div>
       ) : null}
 
-      <div className="mt-1.5 text-[1.25rem] font-semibold leading-tight text-text">
+      <div className="mt-2 text-[1.3rem] font-semibold leading-tight tracking-[-0.04em] text-text">
         {value}
       </div>
 
@@ -242,7 +251,7 @@ export function MetricCard({
           {hint}
         </div>
       ) : null}
-    </div>
+    </Card>
   );
 }
 
@@ -273,7 +282,7 @@ export function StatusBanner({
   return (
     <div
       className={cx(
-        "rounded-panel border px-4 py-4",
+        "rounded-panel border px-4 py-4 shadow-[0_1px_0_rgba(255,255,255,0.84)_inset]",
         bannerToneClass(tone),
         className
       )}
@@ -281,19 +290,29 @@ export function StatusBanner({
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           {label ? (
-            <div className="text-[11px] font-semibold uppercase tracking-[0.1em]">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em]">
               {label}
             </div>
           ) : null}
 
           {title ? (
-            <div className={cx("font-semibold text-text", label ? "mt-2 text-[15px]" : "text-[15px]")}>
+            <div
+              className={cx(
+                "font-semibold tracking-[-0.02em] text-text",
+                label ? "mt-2 text-[15px]" : "text-[15px]"
+              )}
+            >
               {title}
             </div>
           ) : null}
 
           {description ? (
-            <div className={cx("text-[13px] leading-6 text-text-muted", title ? "mt-1" : "mt-0")}>
+            <div
+              className={cx(
+                "text-[13px] leading-6 text-text-muted",
+                title ? "mt-1" : "mt-0"
+              )}
+            >
               {description}
             </div>
           ) : null}
@@ -339,7 +358,7 @@ export function PropertyRow({
   return (
     <div
       className={cx(
-        "grid gap-4 border-b border-line-soft px-4 py-3 last:border-b-0",
+        "grid gap-4 border-b border-line-soft px-4 py-3.5 last:border-b-0",
         className
       )}
       style={{
@@ -410,7 +429,7 @@ export function InlineNotice({
   return (
     <div
       className={cx(
-        "rounded-soft border",
+        "rounded-soft border shadow-[0_1px_0_rgba(255,255,255,0.84)_inset]",
         palette.container,
         compact ? "px-3.5 py-3" : "px-4 py-3.5",
         className
@@ -430,7 +449,9 @@ export function InlineNotice({
 
         <div className="min-w-0 flex-1">
           {title ? (
-            <div className="text-[14px] font-semibold text-text">{title}</div>
+            <div className="text-[14px] font-semibold tracking-[-0.01em] text-text">
+              {title}
+            </div>
           ) : null}
 
           {description ? (
@@ -531,12 +552,14 @@ export function EmptyState({
   return (
     <Surface className={cx("text-center", className)} tone="muted">
       <div className="mx-auto flex max-w-[420px] flex-col items-center gap-3 py-4">
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface-subtle text-text-subtle">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-line bg-surface text-text-subtle">
           <Info className="h-4 w-4" />
         </span>
 
         <div>
-          <div className="text-[14px] font-semibold text-text">{title}</div>
+          <div className="text-[14px] font-semibold tracking-[-0.01em] text-text">
+            {title}
+          </div>
           {description ? (
             <div className="mt-1 text-[13px] leading-6 text-text-muted">
               {description}
@@ -559,7 +582,9 @@ export function CompactState({
   return (
     <Surface className={className} padded="sm" tone="muted">
       <div className="space-y-1.5">
-        <div className="text-[14px] font-medium text-text">{title}</div>
+        <div className="text-[14px] font-medium tracking-[-0.01em] text-text">
+          {title}
+        </div>
         {description ? (
           <div className="text-[13px] leading-5 text-text-muted">
             {description}
@@ -584,7 +609,7 @@ export function AuthFrame({ className, children, aside }) {
 
 export function AuthPanel({ className, children, padded = "xl" }) {
   return (
-    <Surface padded={padded} className={cx("w-full", className)}>
+    <Surface padded={padded} className={cx("w-full", className)} shadow="sm">
       {children}
     </Surface>
   );
@@ -719,7 +744,7 @@ export function SlidingDetailOverlay({
         aria-label={closeLabel}
         onClick={() => onClose?.()}
         className={cx(
-          "absolute inset-0 transition-opacity duration-200 opacity-100",
+          "absolute inset-0 transition-opacity duration-base ease-premium opacity-100",
           backdropClassName
         )}
       />
@@ -727,7 +752,8 @@ export function SlidingDetailOverlay({
       <div className="absolute inset-y-0 right-0 flex w-full justify-end">
         <div
           className={cx(
-            "h-full w-full transform-gpu transition-transform duration-200 translate-x-0",
+            "h-full w-full transform-gpu translate-x-0 transition-transform duration-base ease-premium",
+            "animate-[shellFadeIn_var(--motion-fast)_var(--motion-premium)_both]",
             panelWidthClassName,
             panelClassName
           )}

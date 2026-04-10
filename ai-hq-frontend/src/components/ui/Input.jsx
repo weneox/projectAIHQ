@@ -14,6 +14,7 @@ function resolveAppearance(appearance = "default") {
         selectWrap: "px-3.5",
         select: "h-[44px] pr-8 text-[14px]",
       };
+
     case "quiet":
       return {
         shell: "rounded-soft",
@@ -24,6 +25,7 @@ function resolveAppearance(appearance = "default") {
         selectWrap: "px-3",
         select: "h-[38px] pr-8 text-[13px]",
       };
+
     default:
       return {
         shell: "rounded-soft",
@@ -41,17 +43,20 @@ function surfaceClass({ disabled, readOnly, invalid }) {
   if (disabled) {
     return "border-line-soft bg-surface-subtle text-text-subtle opacity-70";
   }
+
   if (invalid) {
-    return "border-danger bg-surface";
+    return "border-[rgba(var(--color-danger),0.26)] bg-surface";
   }
+
   if (readOnly) {
-    return "border-line bg-surface-muted";
+    return "border-line-soft bg-surface-muted";
   }
+
   return [
     "border-line bg-surface",
-    "hover:border-line-strong",
-    "focus-within:border-brand",
-    "focus-within:shadow-[0_0_0_3px_rgba(37,99,235,0.12)]",
+    "shadow-[0_1px_0_rgba(255,255,255,0.86)_inset]",
+    "hover:border-line-strong hover:bg-surface",
+    "focus-within:border-brand focus-within:shadow-[var(--focus-ring)]",
   ].join(" ");
 }
 
@@ -68,7 +73,7 @@ function FieldShell({
   return (
     <div
       className={cx(
-        "relative w-full overflow-hidden border transition-[border-color,background-color,box-shadow] duration-150",
+        "relative w-full overflow-hidden border transition-[border-color,background-color,box-shadow] duration-base ease-premium",
         view.shell,
         surfaceClass({ disabled, readOnly, invalid }),
         className
@@ -133,7 +138,7 @@ export function InputGroup({
           <button
             type="button"
             onClick={onClear}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-soft text-text-subtle hover:bg-surface-subtle hover:text-text"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-soft text-text-subtle transition-colors hover:bg-surface-subtle hover:text-text"
             aria-label="Clear"
           >
             <X className="h-3.5 w-3.5" />
