@@ -39,6 +39,10 @@ function buildAuthedReq({
   role = "owner",
   body = {},
   query = {},
+  headers = {
+    host: "app.example.test",
+    "x-forwarded-proto": "https",
+  },
 } = {}) {
   return {
     auth: {
@@ -55,7 +59,7 @@ function buildAuthedReq({
     },
     body,
     query,
-    headers: {},
+    headers,
     get(name) {
       return this.headers[String(name || "").toLowerCase()];
     },
