@@ -173,6 +173,80 @@ test("review finalize composition audits finalized session and truth version cre
   assert.equal(auditCalls[1][2], "truth.version.created");
 });
 
+test("review finalize composition returns the projection summary back through the finalize callback", async () => {
+  let observedProjectionSummary = null;
+
+  const result = await finalizeSetupReviewComposition(
+    {
+      db: {},
+      actor: {
+        tenantId: "tenant-1",
+        tenantKey: "alpha",
+        role: "owner",
+        tenant: null,
+        user: {
+          email: "ops@example.com",
+          name: "Ops",
+        },
+      },
+      body: { reason: "ship it" },
+    },
+    {
+      async getCurrentSetupReview() {
+        return {
+          session: { id: "session-1", status: "ready" },
+          draft: { version: 9 },
+        };
+      },
+      async finalizeSetupReviewSession(input) {
+        observedProjectionSummary = await input.projectDraftToCanonical({
+          client: { name: "tx" },
+          tenantId: "tenant-1",
+          session: { id: "session-1", status: "ready" },
+          draft: { version: 9 },
+          sources: [],
+        });
+        return {
+          session: { id: "session-1", status: "finalized" },
+          reviewSessionId: "session-1",
+          runtimeProjection: {
+            id: "runtime-1",
+            status: "ready",
+          },
+          runtimeProjectionFreshness: {
+            stale: false,
+            reasons: [],
+          },
+        };
+      },
+      async projectSetupReviewDraftToCanonical() {
+        return {
+          truthVersion: {
+            id: "version-1",
+          },
+          runtimeProjection: {
+            id: "runtime-1",
+          },
+        };
+      },
+      async buildSetupState() {
+        return { progress: { nextRoute: "/truth" } };
+      },
+      async auditSetupAction() {},
+      buildReviewConcurrencyInfo() {
+        return {};
+      },
+      buildFinalizeProtectionInfo() {
+        return {};
+      },
+    }
+  );
+
+  assert.equal(observedProjectionSummary.truthVersion.id, "version-1");
+  assert.equal(result.status, 200);
+  assert.equal(result.body.projectionSummary.truthVersion.id, "version-1");
+});
+
 test("review finalize composition surfaces the strict runtime projection in the finalize response", async () => {
   const result = await finalizeSetupReviewComposition(
     {

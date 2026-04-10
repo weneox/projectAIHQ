@@ -316,6 +316,14 @@ export function createCanonicalBaselineDriftError(
   return err;
 }
 
+function createSetupReviewProjectionResultRequiredError() {
+  const err = new Error(
+    "finalizeSetupReviewSession: projectDraftToCanonical must return a projection result."
+  );
+  err.code = "SETUP_REVIEW_PROJECTION_RESULT_REQUIRED";
+  return err;
+}
+
 async function resolveBaselineForSession(
   { tenantId, baseRuntimeProjectionId = null, metadata = {} } = {},
   client
@@ -1556,6 +1564,9 @@ export async function finalizeSetupReviewSession(
         draft,
         sources,
       });
+      if (!Object.keys(obj(projectionResult)).length) {
+        throw createSetupReviewProjectionResultRequiredError();
+      }
     } else {
       throw new Error(
         "finalizeSetupReviewSession: projectDraftToCanonical callback is required."

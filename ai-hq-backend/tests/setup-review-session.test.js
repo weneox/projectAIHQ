@@ -14,6 +14,7 @@ import {
 import {
   hasCanonicalBaselineDrift,
   createCanonicalBaselineDriftError,
+  finalizeSetupReviewSession,
 } from "../src/db/helpers/tenantSetupReview.js";
 import { buildTenantRuntimeProjection } from "../src/db/helpers/tenantRuntimeProjection.js";
 import {
@@ -275,6 +276,74 @@ test("Case A3: same website does not reuse when the intake bundle changed", () =
   assert.equal(shouldReuse, false);
 });
 
+test("Case A4: identical bundle reuse is rejected when stale contribution keys are present", () => {
+  const bundle = {
+    primarySource: {
+      sourceType: "website",
+      url: "https://alpha.example",
+    },
+    sources: [
+      {
+        sourceType: "website",
+        url: "https://alpha.example",
+        isPrimary: true,
+      },
+    ],
+  };
+
+  const currentReview = {
+    session: {
+      id: "session-stale-contrib",
+      metadata: {
+        intakeBundleKey: importTest.buildIntakeBundleKey(bundle),
+      },
+    },
+    draft: {
+      sourceSummary: {
+        primarySourceType: "website",
+        primarySourceUrl: "https://alpha.example",
+      },
+      draftPayload: {
+        sourceContributions: {
+          "website|https://alpha.example": {
+            businessProfile: {
+              companyName: "Alpha Studio",
+            },
+            sourceSummary: {
+              latestImport: {
+                sourceType: "website",
+                sourceUrl: "https://alpha.example",
+              },
+            },
+          },
+          "instagram|https://instagram.com/alpha": {
+            businessProfile: {
+              primaryPhone: "+994501112233",
+            },
+            sourceSummary: {
+              latestImport: {
+                sourceType: "instagram",
+                sourceUrl: "https://instagram.com/alpha",
+              },
+            },
+          },
+        },
+      },
+    },
+    sources: [],
+  };
+
+  const shouldReuse = importTest.shouldReuseSessionForImport({
+    currentReview,
+    incomingType: "website",
+    incomingUrl: "https://alpha.example",
+    allowSessionReuse: true,
+    nextIntakeContext: bundle,
+  });
+
+  assert.equal(shouldReuse, false);
+});
+
 test("Case B: same-bundle re-import evicts unsupported source-derived fields", () => {
   const merged = importTest.mergeImportedDraftPatch({
     currentDraft: {
@@ -344,6 +413,167 @@ test("Case B: same-bundle re-import evicts unsupported source-derived fields", (
   assert.equal(merged.lastSnapshotId, null);
 });
 
+test("Case B1: first import seeds explicit source contribution state", () => {
+  const merged = importTest.mergeImportedDraftPatch({
+    currentDraft: {
+      draftPayload: {},
+      channels: [],
+      sourceSummary: {},
+    },
+    importedPatch: {
+      businessProfile: {
+        companyName: "Alpha Studio",
+        companySummaryLong: "Website summary",
+      },
+      capabilities: {
+        primaryLanguage: "en",
+      },
+      services: [
+        {
+          key: "branding",
+          title: "Branding",
+          sourceType: "website",
+        },
+      ],
+      knowledgeItems: [],
+      warnings: [],
+      diffFromCanonical: {},
+      sourceSummary: {
+        primarySourceType: "website",
+        primarySourceUrl: "https://alpha.example/",
+        latestImport: {
+          sourceType: "website",
+          sourceUrl: "https://alpha.example/",
+        },
+      },
+      draftPayload: {
+        profile: {
+          companyName: "Alpha Studio",
+        },
+      },
+      lastSnapshotId: null,
+    },
+    intakeContext: {
+      primarySource: {
+        sourceType: "website",
+        url: "https://alpha.example/",
+      },
+      sources: [
+        {
+          sourceType: "website",
+          url: "https://alpha.example/",
+          isPrimary: true,
+        },
+      ],
+    },
+    incomingType: "website",
+    incomingUrl: "https://alpha.example/",
+  });
+
+  assert.equal(merged.businessProfile.companyName, "Alpha Studio");
+  assert.ok(
+    merged.draftPayload.sourceContributions["website|https://alpha.example/"]
+  );
+  assert.equal(
+    merged.draftPayload.sourceContributions["website|https://alpha.example/"].businessProfile
+      .companyName,
+    "Alpha Studio"
+  );
+});
+
+test("Case B2: bundle-scoped merge drops stale contribution keys outside the active intake", () => {
+  const merged = importTest.mergeImportedDraftPatch({
+    currentDraft: {
+      businessProfile: {
+        companyName: "Alpha Studio",
+        primaryPhone: "+994501112233",
+      },
+      capabilities: {},
+      services: [],
+      knowledgeItems: [],
+      warnings: [],
+      channels: [],
+      sourceSummary: {
+        primarySourceType: "website",
+        primarySourceUrl: "https://alpha.example/",
+      },
+      draftPayload: {
+        sourceContributions: {
+          "website|https://alpha.example/": {
+            businessProfile: {
+              companyName: "Alpha Studio",
+            },
+            sourceSummary: {
+              latestImport: {
+                sourceType: "website",
+                sourceUrl: "https://alpha.example/",
+              },
+            },
+          },
+          "instagram|https://instagram.com/alpha": {
+            businessProfile: {
+              primaryPhone: "+994501112233",
+            },
+            sourceSummary: {
+              latestImport: {
+                sourceType: "instagram",
+                sourceUrl: "https://instagram.com/alpha",
+              },
+            },
+          },
+        },
+      },
+      diffFromCanonical: {},
+      lastSnapshotId: null,
+    },
+    importedPatch: {
+      businessProfile: {
+        companyName: "Alpha Studio",
+        companySummaryLong: "Only the website contribution should remain",
+      },
+      capabilities: {},
+      services: [],
+      knowledgeItems: [],
+      warnings: [],
+      diffFromCanonical: {},
+      sourceSummary: {
+        primarySourceType: "website",
+        primarySourceUrl: "https://alpha.example/",
+        latestImport: {
+          sourceType: "website",
+          sourceUrl: "https://alpha.example/",
+        },
+      },
+      draftPayload: {},
+      lastSnapshotId: null,
+    },
+    intakeContext: {
+      primarySource: {
+        sourceType: "website",
+        url: "https://alpha.example/",
+      },
+      sources: [
+        {
+          sourceType: "website",
+          url: "https://alpha.example/",
+          isPrimary: true,
+        },
+      ],
+    },
+    incomingType: "website",
+    incomingUrl: "https://alpha.example/",
+  });
+
+  assert.deepEqual(Object.keys(merged.draftPayload.sourceContributions), [
+    "website|https://alpha.example/",
+  ]);
+  assert.equal(merged.businessProfile.primaryPhone, undefined);
+  assert.equal(
+    merged.businessProfile.companySummaryLong,
+    "Only the website contribution should remain"
+  );
+});
+
 test("Case C: finalize blocks on baseline drift", () => {
   const baseline = {
     tenantId: "tenant-1",
@@ -370,6 +600,116 @@ test("Case C: finalize blocks on baseline drift", () => {
     ...current,
     error: "",
   });
+});
+
+test("Case C1: finalize fails cleanly when the projection callback returns no canonical result", async () => {
+  const sessionRow = {
+    id: "session-1",
+    tenant_id: "tenant-1",
+    status: "ready",
+    mode: "setup",
+    primary_source_type: "website",
+    primary_source_id: null,
+    started_by: null,
+    current_step: "review",
+    base_runtime_projection_id: null,
+    title: "Alpha setup",
+    notes: "",
+    metadata: {},
+    failure_payload: {},
+    started_at: "2026-04-01T00:00:00.000Z",
+    updated_at: "2026-04-01T00:00:00.000Z",
+    finalized_at: null,
+    discarded_at: null,
+    failed_at: null,
+  };
+
+  const draftRow = {
+    id: "draft-1",
+    session_id: "session-1",
+    tenant_id: "tenant-1",
+    draft_payload: {},
+    business_profile: {
+      companyName: "Alpha Studio",
+    },
+    capabilities: {},
+    services: [],
+    knowledge_items: [],
+    channels: [],
+    source_summary: {
+      primarySourceType: "website",
+      primarySourceUrl: "https://alpha.example",
+    },
+    warnings: [],
+    completeness: {},
+    confidence_summary: {},
+    diff_from_canonical: {},
+    last_snapshot_id: null,
+    version: 3,
+    created_at: "2026-04-01T00:00:00.000Z",
+    updated_at: "2026-04-01T00:00:00.000Z",
+  };
+
+  const client = {
+    async query(text) {
+      const sql = String(text || "").toLowerCase();
+
+      if (
+        sql.includes("from public.tenant_setup_review_sessions") &&
+        sql.includes("for update")
+      ) {
+        return {
+          rows: [sessionRow],
+        };
+      }
+
+      if (sql.includes("from public.tenant_setup_review_drafts")) {
+        return {
+          rows: [draftRow],
+        };
+      }
+
+      if (sql.includes("from public.tenant_setup_review_session_sources")) {
+        return {
+          rows: [],
+        };
+      }
+
+      if (sql.includes("update public.tenant_setup_review_sessions")) {
+        return {
+          rows: [
+            {
+              ...sessionRow,
+              status: "processing",
+              current_step: "finalize",
+            },
+          ],
+        };
+      }
+
+      throw new Error(`Unhandled query in finalize test: ${text}`);
+    },
+  };
+
+  await assert.rejects(
+    () =>
+      finalizeSetupReviewSession(
+        {
+          sessionId: "session-1",
+          refreshRuntime: false,
+          projectDraftToCanonical: async () => null,
+        },
+        client
+      ),
+    (error) => {
+      assert.equal(error.code, "SETUP_REVIEW_PROJECTION_RESULT_REQUIRED");
+      assert.match(
+        error.message,
+        /projectDraftToCanonical must return a projection result/i
+      );
+      return true;
+    }
+  );
 });
 
 test("Case D: setup business profile input is staged into the review draft only", () => {

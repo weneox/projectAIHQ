@@ -322,6 +322,7 @@ export async function finalizeSetupReviewComposition(
           draft,
           sources,
         });
+        return projectionSummary;
       },
     });
 

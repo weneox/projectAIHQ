@@ -251,31 +251,30 @@ function recomputeDraftFromContributions({
     ...items.map((item) => obj(item.diffFromCanonical))
   );
   const lastSnapshotId = importedPatch.lastSnapshotId || null;
+  const sourceContributions = Object.fromEntries(
+    items.map((item) => {
+      const key = extractContributionKey(item);
+      return [
+        key,
+        compactObject({
+          businessProfile: obj(item.businessProfile),
+          capabilities: obj(item.capabilities),
+          services: arr(item.services),
+          knowledgeItems: arr(item.knowledgeItems),
+          warnings: arr(item.warnings),
+          websiteKnowledge: obj(item.websiteKnowledge),
+          diffFromCanonical: obj(item.diffFromCanonical),
+          sourceSummary: obj(item.sourceSummary),
+        }),
+      ];
+    })
+  );
   const draftPayload = mergeDeep(
     {},
     obj(currentDraft.draftPayload),
-    obj(importedPatch.draftPayload),
-    {
-      sourceContributions: Object.fromEntries(
-        items.map((item) => {
-          const key = extractContributionKey(item);
-          return [
-            key,
-            compactObject({
-              businessProfile: obj(item.businessProfile),
-              capabilities: obj(item.capabilities),
-              services: arr(item.services),
-              knowledgeItems: arr(item.knowledgeItems),
-              warnings: arr(item.warnings),
-              websiteKnowledge: obj(item.websiteKnowledge),
-              diffFromCanonical: obj(item.diffFromCanonical),
-              sourceSummary: obj(item.sourceSummary),
-            }),
-          ];
-        })
-      ),
-    }
+    obj(importedPatch.draftPayload)
   );
+  draftPayload.sourceContributions = sourceContributions;
 
   const completeness = calculateCompleteness({
     businessProfile,
@@ -408,11 +407,89 @@ function normalizeMergedReviewWarnings({
   return uniqStrings(out);
 }
 
-function buildSourceContributionMap(currentDraft = {}) {
+function summarizeImportedSourceTypes(draft = {}) {
+  const summary = obj(draft?.sourceSummary);
+  return uniqStrings([
+    ...arr(summary.sourceTypes),
+    ...arr(summary.imports).map((item) => s(item?.sourceType)),
+    s(obj(summary.latestImport).sourceType),
+  ]).filter(Boolean);
+}
+
+function buildFallbackSourceContribution(currentDraft = {}) {
+  const draft = obj(currentDraft);
+  const sourceSummary = obj(draft.sourceSummary);
+  const sourceContributions = obj(obj(draft.draftPayload).sourceContributions);
+
+  if (Object.keys(sourceContributions).length) return null;
+
+  const importedCount = Math.max(
+    summarizeImportedSourceTypes(draft).length,
+    arr(sourceSummary.imports).length
+  );
+
+  if (importedCount > 1) return null;
+
+  const key = extractContributionKey({
+    sourceSummary,
+  });
+
+  if (!key) return null;
+
+  const contribution = compactObject({
+    businessProfile: obj(draft.businessProfile),
+    capabilities: obj(draft.capabilities),
+    services: arr(draft.services),
+    knowledgeItems: arr(draft.knowledgeItems),
+    warnings: arr(draft.warnings),
+    websiteKnowledge: obj(
+      obj(draft.draftPayload).websiteKnowledge ||
+        sourceSummary.websiteKnowledge ||
+        obj(obj(sourceSummary.latestImport).websiteKnowledge)
+    ),
+    diffFromCanonical: obj(draft.diffFromCanonical),
+    sourceSummary,
+  });
+
+  const hasMeaningfulContent =
+    Object.keys(obj(contribution.businessProfile)).length > 0 ||
+    Object.keys(obj(contribution.capabilities)).length > 0 ||
+    arr(contribution.services).length > 0 ||
+    arr(contribution.knowledgeItems).length > 0 ||
+    arr(contribution.warnings).length > 0 ||
+    Object.keys(obj(contribution.websiteKnowledge)).length > 0 ||
+    Object.keys(obj(contribution.diffFromCanonical)).length > 0;
+
+  if (!hasMeaningfulContent) return null;
+
+  return [key, contribution];
+}
+
+function buildSourceContributionMap(
+  currentDraft = {},
+  { allowedKeys = null } = {}
+) {
   const existing = obj(obj(currentDraft.draftPayload).sourceContributions);
-  return new Map(
+  const contributionMap = new Map(
     Object.entries(existing).map(([key, value]) => [key, obj(value)])
   );
+
+  if (!contributionMap.size) {
+    const fallbackContribution = buildFallbackSourceContribution(currentDraft);
+    if (fallbackContribution) {
+      contributionMap.set(fallbackContribution[0], fallbackContribution[1]);
+    }
+  }
+
+  if (allowedKeys instanceof Set && allowedKeys.size) {
+    for (const key of [...contributionMap.keys()]) {
+      if (!allowedKeys.has(key)) {
+        contributionMap.delete(key);
+      }
+    }
+  }
+
+  return contributionMap;
 }
 
 function dedupeSourceSeeds(list = []) {
@@ -587,6 +664,66 @@ function extractBundleSeedsFromReview(review = {}) {
   return fallbackPrimary ? [fallbackPrimary] : [];
 }
 
+function buildAllowedContributionKeys({
+  intakeContext = {},
+  incomingType = "",
+  incomingUrl = "",
+} = {}) {
+  return new Set(
+    dedupeSourceSeeds([
+      obj(intakeContext?.primarySource),
+      ...arr(intakeContext?.sources),
+      {
+        sourceType: incomingType,
+        url: incomingUrl,
+      },
+    ])
+      .map(sourceSeedKey)
+      .filter(Boolean)
+  );
+}
+
+function extractSourceKeyFromSessionSource(source = {}) {
+  const metadata = obj(source?.metadata);
+  return sourceSeedKey({
+    sourceType: s(source?.sourceType || metadata.sourceType),
+    url: s(metadata.sourceUrl || metadata.source_url || metadata.url),
+  });
+}
+
+function hasDeterministicContributionState(review = {}) {
+  const draft = obj(review?.draft);
+  const sourceContributions = obj(obj(draft.draftPayload).sourceContributions);
+  if (Object.keys(sourceContributions).length) return true;
+
+  const sourceSummary = obj(draft.sourceSummary);
+  const importedCount = Math.max(
+    summarizeImportedSourceTypes(draft).length,
+    arr(sourceSummary.imports).length,
+    arr(review?.sources).length
+  );
+
+  return importedCount <= 1;
+}
+
+function reviewMatchesExpectedSourceKeys(currentReview = {}, allowedKeys = new Set()) {
+  if (!(allowedKeys instanceof Set) || !allowedKeys.size) {
+    return true;
+  }
+
+  const draft = obj(currentReview?.draft);
+  const contributionKeys = Object.keys(
+    obj(obj(draft.draftPayload).sourceContributions)
+  ).filter(Boolean);
+  const attachedKeys = arr(currentReview?.sources)
+    .map(extractSourceKeyFromSessionSource)
+    .filter(Boolean);
+
+  return [...contributionKeys, ...attachedKeys].every((key) =>
+    allowedKeys.has(key)
+  );
+}
+
 function buildMergedIntakeContext({
   currentReview = {},
   incomingType = "",
@@ -648,6 +785,7 @@ function shouldReuseSessionForImport({
   if (!s(currentReview?.session?.id)) return false;
   if (lower(currentReview?.session?.status) === "failed") return false;
   if (isPollutedFailedReviewDraft(currentReview)) return false;
+  if (!hasDeterministicContributionState(currentReview)) return false;
 
   const incomingPrimaryKey = sourceSeedKey(
     normalizeSourceSeed({
@@ -670,7 +808,16 @@ function shouldReuseSessionForImport({
   const nextBundleKey = buildIntakeBundleKey(nextIntakeContext);
 
   if (!existingBundleKey || !nextBundleKey) return false;
-  return existingBundleKey === nextBundleKey;
+  if (existingBundleKey !== nextBundleKey) return false;
+
+  return reviewMatchesExpectedSourceKeys(
+    currentReview,
+    buildAllowedContributionKeys({
+      intakeContext: nextIntakeContext,
+      incomingType,
+      incomingUrl,
+    })
+  );
 }
 
 function shouldPromoteImportedSourceToPrimary({
@@ -757,11 +904,21 @@ function mergeSourceSummaryState(existing = {}, incoming = {}) {
 function mergeImportedDraftPatch({
   currentDraft = {},
   importedPatch = {},
+  intakeContext = {},
+  incomingType = "",
+  incomingUrl = "",
 } = {}) {
   const contributionKey = extractContributionKey(importedPatch);
-  const contributionMap = buildSourceContributionMap(currentDraft);
+  const allowedKeys = buildAllowedContributionKeys({
+    intakeContext,
+    incomingType,
+    incomingUrl,
+  });
+  const contributionMap = buildSourceContributionMap(currentDraft, {
+    allowedKeys,
+  });
 
-  if (contributionKey) {
+  if (contributionKey && (!allowedKeys.size || allowedKeys.has(contributionKey))) {
     contributionMap.set(contributionKey, {
       businessProfile: obj(importedPatch.businessProfile),
       capabilities: obj(importedPatch.capabilities),
@@ -853,6 +1010,12 @@ async function buildAcceptedImportResult({
     accepted: true,
     mode: "accepted",
     partial: false,
+    requiresFinalize: true,
+    canonicalTruthUpdated: false,
+    runtimeProjectionUpdated: false,
+    draftPartial: false,
+    startedFreshSession: !reuseExistingSession,
+    reusedActiveSession: reuseExistingSession,
     stage: "source_sync",
     status: "queued",
     warnings: [],
@@ -863,7 +1026,7 @@ async function buildAcceptedImportResult({
     intakeContext,
     requestId,
     reviewSessionId: s(session?.id || ""),
-    reviewSessionStatus: "processing",
+    reviewSessionStatus: s(session?.status || "processing"),
     source: ensured?.source || null,
     run: createdRun?.run || null,
     candidateCount: 0,
@@ -986,12 +1149,13 @@ async function completeImportSourceByType({
     collector,
   });
 
-  const draftPatch = reuseExistingSession
-    ? mergeImportedDraftPatch({
-        currentDraft,
-        importedPatch,
-      })
-    : importedPatch;
+  const draftPatch = mergeImportedDraftPatch({
+    currentDraft,
+    importedPatch,
+    intakeContext,
+    incomingType: normalizedType,
+    incomingUrl: normalizedUrl,
+  });
 
   let draft = await patchSetupReviewDraft({
     sessionId: session.id,
@@ -1146,6 +1310,12 @@ async function completeImportSourceByType({
       ok: false,
       mode,
       partial,
+      requiresFinalize: true,
+      canonicalTruthUpdated: false,
+      runtimeProjectionUpdated: false,
+      draftPartial: partial,
+      startedFreshSession: !reuseExistingSession,
+      reusedActiveSession: reuseExistingSession,
       error: s(result?.error),
       reason: s(result?.reason || result?.error),
       stage: s(result?.stage),
@@ -1242,6 +1412,12 @@ async function completeImportSourceByType({
     ok: result?.ok !== false,
     mode,
     partial,
+    requiresFinalize: true,
+    canonicalTruthUpdated: false,
+    runtimeProjectionUpdated: false,
+    draftPartial: partial,
+    startedFreshSession: !reuseExistingSession,
+    reusedActiveSession: reuseExistingSession,
     error: s(result?.error),
     reason: s(result?.reason || result?.error),
     stage: s(result?.stage),
@@ -1881,6 +2057,17 @@ export async function importSourceBundle({
             : "success",
     accepted,
     pending: accepted,
+    requiresFinalize: true,
+    canonicalTruthUpdated: false,
+    runtimeProjectionUpdated: false,
+    draftPartial:
+      Boolean(websiteResult?.draftPartial) || Boolean(instagramResult?.draftPartial),
+    startedFreshSession:
+      Boolean(websiteResult?.startedFreshSession) ||
+      Boolean(instagramResult?.startedFreshSession),
+    reusedActiveSession:
+      Boolean(websiteResult?.reusedActiveSession) ||
+      Boolean(instagramResult?.reusedActiveSession),
     reviewSessionId: s(
       instagramResult?.reviewSessionId || websiteResult?.reviewSessionId
     ),

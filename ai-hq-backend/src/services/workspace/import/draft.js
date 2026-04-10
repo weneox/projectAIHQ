@@ -2323,20 +2323,19 @@ export function buildSourceSummary({
     websiteKnowledge,
   });
 
+  const sourceTypes = uniqStrings([
+    ...arr(current.sourceTypes),
+    ...imports.map((item) => s(item?.sourceType)),
+    s(obj(current.latestImport).sourceType),
+    s(sourceType),
+  ]);
+
   return compactObject({
     primarySourceType: s(session?.primarySourceType || sourceType),
     primarySourceId: session?.primarySourceId || source?.id || null,
     primarySourceUrl: s(sourceUrl),
-    totalImportedSources: uniqStrings([
-      ...arr(current.sourceTypes),
-      ...arr(intakeContext?.sourceTypes),
-      s(sourceType),
-    ]).length,
-    sourceTypes: uniqStrings([
-      ...arr(current.sourceTypes),
-      ...arr(intakeContext?.sourceTypes),
-      s(sourceType),
-    ]),
+    totalImportedSources: sourceTypes.length,
+    sourceTypes,
     latestRequestId: s(requestId),
     latestSourceId: source?.id || null,
     latestRunId: run?.id || null,
