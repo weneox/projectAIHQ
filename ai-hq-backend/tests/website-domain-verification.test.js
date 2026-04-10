@@ -217,6 +217,73 @@ class FakeWebsiteDomainVerificationDb {
   }
 }
 
+async function withWebsiteHandoffEnv(
+  {
+    nodeEnv,
+    appEnv,
+    allowUnverifiedHandoffs,
+  } = {},
+  callback
+) {
+  const previousNodeEnv = process.env.NODE_ENV;
+  const previousAppEnv = process.env.APP_ENV;
+  const previousAllowUnverifiedHandoffs =
+    process.env.WEBSITE_WIDGET_ALLOW_UNVERIFIED_HANDOFFS;
+
+  if (nodeEnv == null) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = nodeEnv;
+
+  if (appEnv == null) delete process.env.APP_ENV;
+  else process.env.APP_ENV = appEnv;
+
+  if (allowUnverifiedHandoffs == null) {
+    delete process.env.WEBSITE_WIDGET_ALLOW_UNVERIFIED_HANDOFFS;
+  } else {
+    process.env.WEBSITE_WIDGET_ALLOW_UNVERIFIED_HANDOFFS =
+      allowUnverifiedHandoffs;
+  }
+
+  try {
+    return await callback();
+  } finally {
+    if (previousNodeEnv == null) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previousNodeEnv;
+
+    if (previousAppEnv == null) delete process.env.APP_ENV;
+    else process.env.APP_ENV = previousAppEnv;
+
+    if (previousAllowUnverifiedHandoffs == null) {
+      delete process.env.WEBSITE_WIDGET_ALLOW_UNVERIFIED_HANDOFFS;
+    } else {
+      process.env.WEBSITE_WIDGET_ALLOW_UNVERIFIED_HANDOFFS =
+        previousAllowUnverifiedHandoffs;
+    }
+  }
+}
+
+async function verifyWebsiteDomain(db, domain = "acme.example") {
+  const challenge = await createWebsiteDomainVerificationChallenge({
+    db,
+    req: buildAuthedReq({
+      body: {
+        domain,
+      },
+    }),
+  });
+
+  await checkWebsiteDomainVerification({
+    db,
+    req: buildAuthedReq({
+      body: {
+        domain,
+      },
+    }),
+    resolveTxtFn: async () => [[challenge.challenge.value]],
+  });
+
+  return challenge;
+}
+
 test("website domain verification normalizes public website domains safely", () => {
   const normalized = websiteDomainVerificationTest.normalizeWebsiteVerificationDomain(
     "https://WWW.Acme.Example/pricing"
@@ -311,207 +378,394 @@ test("website domain verification evaluator reports failed when TXT records do n
   assert.deepEqual(result.last_seen_values, ["wrong-token"]);
 });
 
-test("website widget status blocks production install until domain ownership is verified", async () => {
-  const db = new FakeWebsiteDomainVerificationDb();
-
-  const payload = await getWebsiteWidgetStatus({
-    db,
-    req: buildAuthedReq({
-      role: "member",
-    }),
-  });
-
-  assert.equal(payload.state, "blocked");
-  assert.equal(payload.domainVerification?.state, "unverified");
-  assert.equal(payload.domainVerification?.candidateDomain, "acme.example");
-  assert.equal(payload.domainVerification?.requiredForProductionInstall, true);
-  assert.equal(payload.domainVerification?.enforcementActive, true);
+test("website widget unverified handoff helper stays strict for production unless explicitly overridden", () => {
   assert.equal(
-    payload.domainVerification?.readiness?.productionInstallReady,
+    websiteDomainVerificationTest.shouldAllowUnverifiedWebsiteWidgetHandoffs({
+      env: "production",
+      override: "0",
+    }),
     false
   );
-  assert.equal(payload.install?.productionBlocked, true);
-  assert.equal(payload.install?.productionInstallReady, false);
-  assert.equal(payload.install?.embedSnippet, "");
-  assert.equal(payload.readiness?.status, "blocked");
-});
-
-test("website widget install handoff returns a developer package only when production install is ready", async () => {
-  const db = new FakeWebsiteDomainVerificationDb();
-
-  const challenge = await createWebsiteDomainVerificationChallenge({
-    db,
-    req: buildAuthedReq({
-      body: {
-        domain: "acme.example",
-      },
-    }),
-  });
-
-  await checkWebsiteDomainVerification({
-    db,
-    req: buildAuthedReq({
-      body: {
-        domain: "acme.example",
-      },
-    }),
-    resolveTxtFn: async () => [[challenge.challenge.value]],
-  });
-
-  const payload = await createWebsiteWidgetInstallHandoff({
-    db,
-    req: buildAuthedReq(),
-  });
-
-  assert.equal(payload.ready, true);
-  assert.equal(payload.verifiedDomain, "acme.example");
-  assert.equal(payload.widgetId, "ww_acme_widget");
-  assert.match(String(payload.embedSnippet || ""), /data-widget-id="ww_acme_widget"/);
-  assert.match(String(payload.packageText || ""), /Verified domain: acme\.example/);
   assert.equal(
-    db.auditEntries.some(
-      (entry) =>
-        entry.action ===
-        "settings.channel.webchat.install_handoff.generated"
-    ),
+    websiteDomainVerificationTest.shouldAllowUnverifiedWebsiteWidgetHandoffs({
+      env: "test",
+      override: "0",
+    }),
+    true
+  );
+  assert.equal(
+    websiteDomainVerificationTest.shouldAllowUnverifiedWebsiteWidgetHandoffs({
+      env: "production",
+      override: "1",
+    }),
     true
   );
 });
 
-test("website widget install handoff refuses to generate while production install is blocked", async () => {
-  const db = new FakeWebsiteDomainVerificationDb();
+test("website widget status blocks production install until domain ownership is verified", async () => {
+  await withWebsiteHandoffEnv(
+    {
+      nodeEnv: "production",
+      allowUnverifiedHandoffs: "0",
+    },
+    async () => {
+      const db = new FakeWebsiteDomainVerificationDb();
 
-  await assert.rejects(
-    () =>
-      createWebsiteWidgetInstallHandoff({
+      const payload = await getWebsiteWidgetStatus({
+        db,
+        req: buildAuthedReq({
+          role: "member",
+        }),
+      });
+
+      assert.equal(payload.state, "blocked");
+      assert.equal(payload.domainVerification?.state, "unverified");
+      assert.equal(payload.domainVerification?.candidateDomain, "acme.example");
+      assert.equal(payload.domainVerification?.requiredForProductionInstall, true);
+      assert.equal(payload.domainVerification?.enforcementActive, true);
+      assert.equal(
+        payload.domainVerification?.readiness?.productionInstallReady,
+        false
+      );
+      assert.equal(payload.install?.productionBlocked, true);
+      assert.equal(payload.install?.productionInstallReady, false);
+      assert.equal(payload.install?.embedSnippet, "");
+      assert.equal(payload.install?.unverifiedHandoffsAllowed, false);
+      assert.equal(payload.install?.developerHandoffReady, false);
+      assert.equal(payload.install?.gtmHandoffReady, false);
+      assert.equal(payload.install?.wordpressHandoffReady, false);
+      assert.equal(payload.install?.handoffTargetDomain, "acme.example");
+      assert.equal(payload.readiness?.status, "blocked");
+    }
+  });
+});
+
+test("website widget install handoff returns a developer package only when production install is ready", async () => {
+  await withWebsiteHandoffEnv(
+    {
+      nodeEnv: "production",
+      allowUnverifiedHandoffs: "0",
+    },
+    async () => {
+      const db = new FakeWebsiteDomainVerificationDb();
+
+      await verifyWebsiteDomain(db);
+
+      const payload = await createWebsiteWidgetInstallHandoff({
         db,
         req: buildAuthedReq(),
-      }),
-    (error) => {
-      assert.equal(error?.status, 409);
-      assert.equal(error?.reasonCode, "website_domain_verification_missing");
-      return true;
+      });
+
+      assert.equal(payload.ready, true);
+      assert.equal(payload.targetDomain, "acme.example");
+      assert.equal(payload.verifiedDomain, "acme.example");
+      assert.equal(payload.productionReady, true);
+      assert.equal(payload.testingOnly, false);
+      assert.equal(payload.verificationState, "verified");
+      assert.equal(payload.widgetId, "ww_acme_widget");
+      assert.match(
+        String(payload.embedSnippet || ""),
+        /data-widget-id="ww_acme_widget"/
+      );
+      assert.match(
+        String(payload.packageText || ""),
+        /Verified domain: acme\.example/
+      );
+      assert.equal(
+        db.auditEntries.some(
+          (entry) =>
+            entry.action ===
+            "settings.channel.webchat.install_handoff.generated"
+        ),
+        true
+      );
+    }
+  });
+});
+
+test("website widget install handoff refuses to generate while production install is blocked", async () => {
+  await withWebsiteHandoffEnv(
+    {
+      nodeEnv: "production",
+      allowUnverifiedHandoffs: "0",
+    },
+    async () => {
+      const db = new FakeWebsiteDomainVerificationDb();
+
+      await assert.rejects(
+        () =>
+          createWebsiteWidgetInstallHandoff({
+            db,
+            req: buildAuthedReq(),
+          }),
+        (error) => {
+          assert.equal(error?.status, 409);
+          assert.equal(error?.reasonCode, "website_domain_verification_missing");
+          return true;
+        }
+      );
     }
   );
 });
 
 test("website widget GTM handoff returns a GTM package only when production install is ready", async () => {
-  const db = new FakeWebsiteDomainVerificationDb();
+  await withWebsiteHandoffEnv(
+    {
+      nodeEnv: "production",
+      allowUnverifiedHandoffs: "0",
+    },
+    async () => {
+      const db = new FakeWebsiteDomainVerificationDb();
 
-  const challenge = await createWebsiteDomainVerificationChallenge({
-    db,
-    req: buildAuthedReq({
-      body: {
-        domain: "acme.example",
-      },
-    }),
-  });
+      await verifyWebsiteDomain(db);
 
-  await checkWebsiteDomainVerification({
-    db,
-    req: buildAuthedReq({
-      body: {
-        domain: "acme.example",
-      },
-    }),
-    resolveTxtFn: async () => [[challenge.challenge.value]],
-  });
+      const payload = await createWebsiteWidgetGtmInstallHandoff({
+        db,
+        req: buildAuthedReq(),
+      });
 
-  const payload = await createWebsiteWidgetGtmInstallHandoff({
-    db,
-    req: buildAuthedReq(),
-  });
-
-  assert.equal(payload.ready, true);
-  assert.equal(payload.packageType, "gtm");
-  assert.equal(payload.verifiedDomain, "acme.example");
-  assert.match(
-    String(payload.gtmCustomHtmlSnippet || ""),
-    /Website Chat GTM Custom HTML tag/
-  );
-  assert.match(String(payload.packageText || ""), /GTM Custom HTML tag:/);
-  assert.equal(
-    db.auditEntries.some(
-      (entry) =>
-        entry.action ===
-        "settings.channel.webchat.install_handoff.gtm_generated"
-    ),
-    true
+      assert.equal(payload.ready, true);
+      assert.equal(payload.packageType, "gtm");
+      assert.equal(payload.targetDomain, "acme.example");
+      assert.equal(payload.verifiedDomain, "acme.example");
+      assert.equal(payload.productionReady, true);
+      assert.equal(payload.testingOnly, false);
+      assert.match(
+        String(payload.gtmCustomHtmlSnippet || ""),
+        /Website Chat GTM Custom HTML tag/
+      );
+      assert.match(String(payload.packageText || ""), /GTM Custom HTML tag:/);
+      assert.equal(
+        db.auditEntries.some(
+          (entry) =>
+            entry.action ===
+            "settings.channel.webchat.install_handoff.gtm_generated"
+        ),
+        true
+      );
+    }
   );
 });
 
 test("website widget GTM handoff refuses to generate while production install is blocked", async () => {
-  const db = new FakeWebsiteDomainVerificationDb();
+  await withWebsiteHandoffEnv(
+    {
+      nodeEnv: "production",
+      allowUnverifiedHandoffs: "0",
+    },
+    async () => {
+      const db = new FakeWebsiteDomainVerificationDb();
 
-  await assert.rejects(
-    () =>
-      createWebsiteWidgetGtmInstallHandoff({
-        db,
-        req: buildAuthedReq(),
-      }),
-    (error) => {
-      assert.equal(error?.status, 409);
-      assert.equal(error?.reasonCode, "website_domain_verification_missing");
-      return true;
+      await assert.rejects(
+        () =>
+          createWebsiteWidgetGtmInstallHandoff({
+            db,
+            req: buildAuthedReq(),
+          }),
+        (error) => {
+          assert.equal(error?.status, 409);
+          assert.equal(error?.reasonCode, "website_domain_verification_missing");
+          return true;
+        }
+      );
     }
   );
 });
 
 test("website widget WordPress handoff returns a WordPress package only when production install is ready", async () => {
-  const db = new FakeWebsiteDomainVerificationDb();
+  await withWebsiteHandoffEnv(
+    {
+      nodeEnv: "production",
+      allowUnverifiedHandoffs: "0",
+    },
+    async () => {
+      const db = new FakeWebsiteDomainVerificationDb();
 
-  const challenge = await createWebsiteDomainVerificationChallenge({
-    db,
-    req: buildAuthedReq({
-      body: {
-        domain: "acme.example",
-      },
-    }),
-  });
+      await verifyWebsiteDomain(db);
 
-  await checkWebsiteDomainVerification({
-    db,
-    req: buildAuthedReq({
-      body: {
-        domain: "acme.example",
-      },
-    }),
-    resolveTxtFn: async () => [[challenge.challenge.value]],
-  });
+      const payload = await createWebsiteWidgetWordpressInstallHandoff({
+        db,
+        req: buildAuthedReq(),
+      });
 
-  const payload = await createWebsiteWidgetWordpressInstallHandoff({
-    db,
-    req: buildAuthedReq(),
-  });
-
-  assert.equal(payload.ready, true);
-  assert.equal(payload.packageType, "wordpress");
-  assert.equal(payload.verifiedDomain, "acme.example");
-  assert.match(String(payload.packageText || ""), /"packageType": "wordpress"/);
-  assert.equal(payload.wordpressConfig?.wordpressPlugin?.slug, "aihq-website-chat");
-  assert.equal(
-    db.auditEntries.some(
-      (entry) =>
-        entry.action ===
-        "settings.channel.webchat.install_handoff.wordpress_generated"
-    ),
-    true
+      assert.equal(payload.ready, true);
+      assert.equal(payload.packageType, "wordpress");
+      assert.equal(payload.targetDomain, "acme.example");
+      assert.equal(payload.verifiedDomain, "acme.example");
+      assert.equal(payload.productionReady, true);
+      assert.equal(payload.testingOnly, false);
+      assert.match(String(payload.packageText || ""), /"packageType": "wordpress"/);
+      assert.equal(
+        payload.wordpressConfig?.wordpressPlugin?.slug,
+        "aihq-website-chat"
+      );
+      assert.equal(
+        db.auditEntries.some(
+          (entry) =>
+            entry.action ===
+            "settings.channel.webchat.install_handoff.wordpress_generated"
+        ),
+        true
+      );
+    }
   );
 });
 
 test("website widget WordPress handoff refuses to generate while production install is blocked", async () => {
-  const db = new FakeWebsiteDomainVerificationDb();
+  await withWebsiteHandoffEnv(
+    {
+      nodeEnv: "production",
+      allowUnverifiedHandoffs: "0",
+    },
+    async () => {
+      const db = new FakeWebsiteDomainVerificationDb();
 
-  await assert.rejects(
-    () =>
-      createWebsiteWidgetWordpressInstallHandoff({
+      await assert.rejects(
+        () =>
+          createWebsiteWidgetWordpressInstallHandoff({
+            db,
+            req: buildAuthedReq(),
+          }),
+        (error) => {
+          assert.equal(error?.status, 409);
+          assert.equal(error?.reasonCode, "website_domain_verification_missing");
+          return true;
+        }
+      );
+    }
+  );
+});
+
+test("website widget allows testing-only developer, GTM, and WordPress handoffs outside production while keeping the public snippet blocked", async () => {
+  await withWebsiteHandoffEnv(
+    {
+      nodeEnv: "test",
+      allowUnverifiedHandoffs: "0",
+    },
+    async () => {
+      const db = new FakeWebsiteDomainVerificationDb();
+
+      const statusPayload = await getWebsiteWidgetStatus({
+        db,
+        req: buildAuthedReq({
+          role: "member",
+        }),
+      });
+
+      assert.equal(statusPayload.install?.productionBlocked, true);
+      assert.equal(statusPayload.install?.productionInstallReady, false);
+      assert.equal(statusPayload.install?.embedSnippet, "");
+      assert.equal(statusPayload.install?.unverifiedHandoffsAllowed, true);
+      assert.equal(statusPayload.install?.developerHandoffReady, true);
+      assert.equal(statusPayload.install?.gtmHandoffReady, true);
+      assert.equal(statusPayload.install?.wordpressHandoffReady, true);
+      assert.match(
+        String(statusPayload.install?.handoffMessage || ""),
+        /local\/dev\/test only/i
+      );
+
+      const developerPayload = await createWebsiteWidgetInstallHandoff({
         db,
         req: buildAuthedReq(),
-      }),
-    (error) => {
-      assert.equal(error?.status, 409);
-      assert.equal(error?.reasonCode, "website_domain_verification_missing");
-      return true;
+      });
+      const gtmPayload = await createWebsiteWidgetGtmInstallHandoff({
+        db,
+        req: buildAuthedReq(),
+      });
+      const wordpressPayload = await createWebsiteWidgetWordpressInstallHandoff({
+        db,
+        req: buildAuthedReq(),
+      });
+
+      assert.equal(developerPayload.ready, true);
+      assert.equal(developerPayload.productionReady, false);
+      assert.equal(developerPayload.testingOnly, true);
+      assert.equal(developerPayload.verificationState, "unverified");
+      assert.equal(developerPayload.verifiedDomain, "");
+      assert.equal(developerPayload.targetDomain, "acme.example");
+      assert.match(
+        String(developerPayload.packageText || ""),
+        /Target domain: acme\.example/
+      );
+
+      assert.equal(gtmPayload.ready, true);
+      assert.equal(gtmPayload.packageType, "gtm");
+      assert.equal(gtmPayload.productionReady, false);
+      assert.equal(gtmPayload.testingOnly, true);
+      assert.equal(gtmPayload.verificationState, "unverified");
+
+      assert.equal(wordpressPayload.ready, true);
+      assert.equal(wordpressPayload.packageType, "wordpress");
+      assert.equal(wordpressPayload.productionReady, false);
+      assert.equal(wordpressPayload.testingOnly, true);
+      assert.equal(wordpressPayload.verificationState, "unverified");
+      assert.equal(wordpressPayload.verifiedDomain, "");
+      assert.equal(wordpressPayload.targetDomain, "acme.example");
+      assert.equal(wordpressPayload.wordpressConfig?.targetDomain, "acme.example");
+      assert.equal(wordpressPayload.wordpressConfig?.testingOnly, true);
+      assert.equal(wordpressPayload.wordpressConfig?.productionReady, false);
+      assert.equal(
+        wordpressPayload.wordpressConfig?.verificationRequiredForProduction,
+        true
+      );
+      assert.match(
+        String(wordpressPayload.packageText || ""),
+        /"testingOnly": true/
+      );
+    }
+  );
+});
+
+test("website widget allows testing-only developer, GTM, and WordPress handoffs in production only when explicitly overridden", async () => {
+  await withWebsiteHandoffEnv(
+    {
+      nodeEnv: "production",
+      allowUnverifiedHandoffs: "1",
+    },
+    async () => {
+      const db = new FakeWebsiteDomainVerificationDb();
+
+      const statusPayload = await getWebsiteWidgetStatus({
+        db,
+        req: buildAuthedReq({
+          role: "member",
+        }),
+      });
+
+      assert.equal(statusPayload.install?.productionBlocked, true);
+      assert.equal(statusPayload.install?.productionInstallReady, false);
+      assert.equal(statusPayload.install?.embedSnippet, "");
+      assert.equal(statusPayload.install?.unverifiedHandoffsAllowed, true);
+      assert.equal(statusPayload.install?.developerHandoffReady, true);
+      assert.equal(statusPayload.install?.gtmHandoffReady, true);
+      assert.equal(statusPayload.install?.wordpressHandoffReady, true);
+
+      const developerPayload = await createWebsiteWidgetInstallHandoff({
+        db,
+        req: buildAuthedReq(),
+      });
+      const gtmPayload = await createWebsiteWidgetGtmInstallHandoff({
+        db,
+        req: buildAuthedReq(),
+      });
+      const wordpressPayload = await createWebsiteWidgetWordpressInstallHandoff({
+        db,
+        req: buildAuthedReq(),
+      });
+
+      assert.equal(developerPayload.testingOnly, true);
+      assert.equal(developerPayload.productionReady, false);
+      assert.equal(developerPayload.verificationState, "unverified");
+
+      assert.equal(gtmPayload.testingOnly, true);
+      assert.equal(gtmPayload.productionReady, false);
+      assert.equal(gtmPayload.verificationState, "unverified");
+
+      assert.equal(wordpressPayload.testingOnly, true);
+      assert.equal(wordpressPayload.productionReady, false);
+      assert.equal(wordpressPayload.verificationState, "unverified");
+      assert.equal(wordpressPayload.wordpressConfig?.testingOnly, true);
+      assert.equal(wordpressPayload.wordpressConfig?.productionReady, false);
     }
   );
 });
