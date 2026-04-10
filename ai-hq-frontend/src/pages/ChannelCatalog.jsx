@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import {
+  ArrowRight,
+  ChevronRight,
+  Globe2,
+  Sparkles,
+  Zap,
+} from "lucide-react";
+
 import {
   getMetaChannelStatus,
   getTelegramChannelStatus,
@@ -21,11 +28,9 @@ import {
   LoadingSurface,
   PageCanvas,
   SlidingDetailOverlay,
-  Surface,
 } from "../components/ui/AppShellPrimitives.jsx";
-import { compactSentence, s, toneFromReadiness } from "../lib/appUi.js";
+import { compactSentence, s } from "../lib/appUi.js";
 import {
-  buildChannelTruthLaunchReadiness,
   buildMetaLaunchChannelState,
   buildTelegramLaunchChannelState,
   buildWebsiteLaunchChannelState,
@@ -44,33 +49,43 @@ const EMPTY_READINESS_STATE = {
   truth: null,
 };
 
-function statusToneFromLabel(label = "") {
-  const value = s(label).toLowerCase();
+const CONNECTOR_COPY = {
+  website: {
+    label: "Website",
+    title: "Widget + trusted origin",
+    summary: "Public site conversations in the shared inbox.",
+    tone:
+      "border-[rgba(15,23,42,0.10)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]",
+    accent: "bg-slate-900",
+    glow: "from-slate-100/80 via-white to-white",
+    Icon: Globe2,
+  },
+  instagram: {
+    label: "Instagram",
+    title: "DM automation",
+    summary: "Business account conversations with tenant runtime.",
+    tone:
+      "border-[rgba(236,72,153,0.14)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,247,251,0.98))]",
+    accent: "bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%,#8134af_75%,#515bd4_100%)]",
+    glow: "from-pink-100/70 via-white to-white",
+    Icon: Sparkles,
+  },
+  telegram: {
+    label: "Telegram",
+    title: "Bot conversations",
+    summary: "Private chat intake through the same inbox lane.",
+    tone:
+      "border-[rgba(14,165,233,0.14)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(240,249,255,0.98))]",
+    accent: "bg-sky-500",
+    glow: "from-sky-100/70 via-white to-white",
+    Icon: Zap,
+  },
+};
 
-  if (
-    value.includes("connected") ||
-    value.includes("ready") ||
-    value.includes("live") ||
-    value.includes("available")
-  ) {
-    return "success";
-  }
-
-  if (
-    value.includes("reconnect") ||
-    value.includes("repair") ||
-    value.includes("blocked") ||
-    value.includes("required") ||
-    value.includes("waiting")
-  ) {
-    return "danger";
-  }
-
-  if (value.includes("connecting") || value.includes("pending")) {
-    return "warning";
-  }
-
-  return "neutral";
+function resolveLaunchChannels() {
+  return CHANNELS.filter((channel) =>
+    ["website", "instagram", "telegram"].includes(channel.id)
+  );
 }
 
 function buildRuntimeMeta(channel, readinessState) {
@@ -80,70 +95,170 @@ function buildRuntimeMeta(channel, readinessState) {
   return null;
 }
 
-function ChannelRow({
-  channel,
-  runtime,
-  onInspect,
-  onRunPrimaryAction,
-  muted = false,
-  last = false,
-  showPrimaryAction = true,
-}) {
-  const statusLabel = s(
-    runtime?.statusLabel,
-    channel.status === "phase2" ? "Later" : "Available"
-  );
-  const summary = compactSentence(
-    runtime?.summary || channel.summary,
-    channel.summary
-  );
-  const eyebrow = s(channel.eyebrow);
-  const tone = statusToneFromLabel(statusLabel);
+function normalizeStatus(runtime = null) {
+  const raw = s(runtime?.statusLabel);
+  const lower = raw.toLowerCase();
 
+  if (!raw || lower === "unknown") {
+    return {
+      label: "Connect",
+      tone: "warning",
+    };
+  }
+
+  if (
+    lower.includes("connected") ||
+    lower.includes("ready") ||
+    lower.includes("live")
+  ) {
+    return {
+      label: raw,
+      tone: "success",
+    };
+  }
+
+  if (
+    lower.includes("blocked") ||
+    lower.includes("reconnect") ||
+    lower.includes("repair") ||
+    lower.includes("required")
+  ) {
+    return {
+      label: raw,
+      tone: "danger",
+    };
+  }
+
+  if (lower.includes("connecting") || lower.includes("pending")) {
+    return {
+      label: raw,
+      tone: "warning",
+    };
+  }
+
+  return {
+    label: raw,
+    tone: "neutral",
+  };
+}
+
+function CompactHeader({ title, subtitle, onOpenTruth }) {
   return (
-    <div
-      className={[
-        "flex flex-col gap-3 px-1 py-3.5 md:flex-row md:items-center md:justify-between",
-        !last && "border-b border-line-soft",
-        muted && "opacity-80",
-      ].join(" ")}
-    >
-      <div className="min-w-0 flex items-start gap-3">
-        <div className="mt-0.5 shrink-0">
-          <ChannelIcon channel={channel} size="md" />
+    <section className="flex flex-col gap-4 border-b border-line-soft pb-4 md:flex-row md:items-center md:justify-between">
+      <div className="min-w-0">
+        <div className="mb-1 flex items-center gap-2">
+          <Badge tone="warning">Connect required</Badge>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+            Channels
+          </span>
         </div>
 
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="text-[14px] font-semibold text-text">
-              {channel.name}
-            </div>
-            <Badge tone={tone}>{statusLabel}</Badge>
-          </div>
+        <h1 className="text-[28px] font-semibold tracking-[-0.03em] text-text md:text-[32px]">
+          {title}
+        </h1>
 
-          {eyebrow ? (
-            <div className="mt-0.5 text-[12px] leading-5 text-text-subtle">
-              {eyebrow}
-            </div>
-          ) : null}
-
-          <div className="mt-1 text-[13px] leading-5 text-text-muted">
-            {summary}
-          </div>
-        </div>
+        <p className="mt-1 text-[14px] leading-6 text-text-muted">{subtitle}</p>
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
-          onClick={() => onInspect?.(channel.id)}
-        >
-          Details
+        <Button type="button" size="sm" variant="secondary" onClick={onOpenTruth}>
+          Open truth
         </Button>
+      </div>
+    </section>
+  );
+}
 
-        {showPrimaryAction ? (
+function StageStrip({ connectedCount = 0 }) {
+  return (
+    <section className="grid gap-3 md:grid-cols-3">
+      <div className="rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-white px-4 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
+          Launch channels
+        </div>
+        <div className="mt-1 text-[15px] font-semibold text-text">3 configured</div>
+      </div>
+
+      <div className="rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-white px-4 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
+          Live now
+        </div>
+        <div className="mt-1 text-[15px] font-semibold text-text">
+          {connectedCount > 0 ? `${connectedCount} connected` : "Nothing connected"}
+        </div>
+      </div>
+
+      <div className="rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-white px-4 py-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
+          Scope
+        </div>
+        <div className="mt-1 text-[15px] font-semibold text-text">
+          Website, Instagram, Telegram
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LaunchCard({ channel, runtime, onInspect, onRunPrimaryAction }) {
+  const copy = CONNECTOR_COPY[channel.id] || CONNECTOR_COPY.website;
+  const status = normalizeStatus(runtime);
+  const statusSummary = compactSentence(
+    runtime?.summary || copy.summary,
+    copy.summary
+  );
+  const AccentIcon = copy.Icon;
+
+  return (
+    <article
+      className={`group relative overflow-hidden rounded-[24px] border p-4 shadow-[0_12px_30px_-24px_rgba(15,23,42,0.22)] ${copy.tone}`}
+    >
+      <div
+        className={`pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b ${copy.glow}`}
+      />
+
+      <div className="relative z-[1] flex h-full flex-col">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="relative flex h-12 w-12 items-center justify-center rounded-[16px] border border-white/70 bg-white shadow-[0_10px_18px_-14px_rgba(15,23,42,0.35)]">
+              <ChannelIcon channel={channel} size="md" />
+              <span
+                className={`absolute -right-1 -top-1 inline-flex h-5 w-5 items-center justify-center rounded-full text-white shadow-sm ${copy.accent}`}
+              >
+                <AccentIcon className="h-3 w-3" />
+              </span>
+            </div>
+
+            <div className="min-w-0">
+              <div className="truncate text-[18px] font-semibold tracking-[-0.02em] text-text">
+                {channel.name}
+              </div>
+              <div className="mt-0.5 text-[12px] font-medium text-text-subtle">
+                {copy.label}
+              </div>
+            </div>
+          </div>
+
+          <Badge tone={status.tone}>{status.label}</Badge>
+        </div>
+
+        <div className="mt-5">
+          <div className="text-[15px] font-semibold text-text">{copy.title}</div>
+          <div className="mt-2 text-[13px] leading-6 text-text-muted">
+            {statusSummary}
+          </div>
+        </div>
+
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => onInspect?.(channel.id)}
+            className="inline-flex items-center gap-1 text-[12px] font-medium text-text-subtle transition hover:text-text"
+          >
+            Details
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+
           <Button
             type="button"
             size="sm"
@@ -152,49 +267,9 @@ function ChannelRow({
           >
             {s(channel.primaryAction?.label, "Open")}
           </Button>
-        ) : null}
+        </div>
       </div>
-    </div>
-  );
-}
-
-function MetaLine({ launchReadiness, readinessState }) {
-  const instagram = s(readinessState.meta?.statusLabel, "Unknown");
-  const telegram = s(readinessState.telegram?.statusLabel, "Unknown");
-  const website = s(readinessState.website?.statusLabel, "Unknown");
-  const truth = s(readinessState.truth?.statusLabel, "Unknown");
-
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-5 text-text-subtle">
-      <span>
-        <span className="text-text-muted">Launch:</span>{" "}
-        {s(launchReadiness.statusLabel, "Unknown")}
-      </span>
-      <span className="text-slate-300">•</span>
-      <span>
-        <span className="text-text-muted">Instagram:</span> {instagram}
-      </span>
-      <span className="text-slate-300">•</span>
-      <span>
-        <span className="text-text-muted">Telegram:</span> {telegram}
-      </span>
-      <span className="text-slate-300">•</span>
-      <span>
-        <span className="text-text-muted">Website:</span> {website}
-      </span>
-      <span className="text-slate-300">•</span>
-      <span>
-        <span className="text-text-muted">Truth:</span> {truth}
-      </span>
-    </div>
-  );
-}
-
-function ChannelsLoadingSurface() {
-  return (
-    <PageCanvas>
-      <LoadingSurface title="Loading channels" />
-    </PageCanvas>
+    </article>
   );
 }
 
@@ -217,7 +292,6 @@ export default function ChannelCatalog() {
     () => findChannelById(selectedChannelId),
     [selectedChannelId]
   );
-
   const drawerChannel = selectedChannel || closingChannel;
 
   const currentReadinessRequestKey = useMemo(() => {
@@ -330,9 +404,7 @@ export default function ChannelCatalog() {
     const raf = window.requestAnimationFrame(() => {
       setDrawerOpen(true);
     });
-    return () => {
-      window.cancelAnimationFrame(raf);
-    };
+    return () => window.cancelAnimationFrame(raf);
   }, [selectedChannel]);
 
   useEffect(() => {
@@ -343,57 +415,31 @@ export default function ChannelCatalog() {
     };
   }, []);
 
-  const launchReadiness = useMemo(
-    () =>
-      buildChannelTruthLaunchReadiness({
-        channels: [
-          effectiveReadinessState.meta,
-          effectiveReadinessState.telegram,
-          effectiveReadinessState.website,
-        ],
-        truthState: effectiveReadinessState.truth,
-        surface: { unavailable: false, error: effectiveReadinessState.error },
-        copy: {
-          channelsPath: "/channels",
-          truthPath: "/truth",
-          noChannelSummary:
-            "No launch channel is currently connected. Connect website chat, Instagram, or Telegram first.",
-          noChannelDetail:
-            "The launch lane expects at least one connected and delivery-ready channel.",
-          deliveryBlockedSummary:
-            "A channel is connected, but delivery is still blocked.",
-          deliveryBlockedDetail:
-            "Inspect the connected channel and clear delivery blockers before trusting live automation.",
-          truthBlockedApprovalTitle: "Business truth still needs approval.",
-          truthBlockedRuntimeTitle: "Runtime still needs repair.",
-          truthBlockedDetail:
-            "Connected channels alone are not enough. Approved truth and healthy runtime must also be aligned.",
-          readyTitle:
-            "A launch channel is connected and the operating posture is healthy.",
-          readySummary:
-            "Channels, approved truth, and runtime are aligned for the current launch promise.",
-          readyDetail:
-            "The launch spine is not blocked at the channel layer right now.",
-        },
-      }),
-    [
-      effectiveReadinessState.error,
+  const launchChannels = useMemo(() => resolveLaunchChannels(), []);
+
+  const connectedCount = useMemo(() => {
+    const items = [
+      effectiveReadinessState.website,
       effectiveReadinessState.meta,
       effectiveReadinessState.telegram,
-      effectiveReadinessState.website,
-      effectiveReadinessState.truth,
-    ]
-  );
+    ];
 
-  const launchChannels = useMemo(
-    () => CHANNELS.filter((channel) => channel.status !== "phase2"),
-    []
-  );
-
-  const laterChannels = useMemo(
-    () => CHANNELS.filter((channel) => channel.status === "phase2"),
-    []
-  );
+    return items.reduce((sum, item) => {
+      const lower = s(item?.statusLabel).toLowerCase();
+      if (
+        lower.includes("connected") ||
+        lower.includes("ready") ||
+        lower.includes("live")
+      ) {
+        return sum + 1;
+      }
+      return sum;
+    }, 0);
+  }, [
+    effectiveReadinessState.website,
+    effectiveReadinessState.meta,
+    effectiveReadinessState.telegram,
+  ]);
 
   function updateSelectedChannel(channelId = "") {
     const nextParams = new URLSearchParams(searchParams);
@@ -405,10 +451,6 @@ export default function ChannelCatalog() {
     }
 
     setSearchParams(nextParams);
-  }
-
-  function handleNavigate(path) {
-    navigate(path);
   }
 
   function handlePrimaryAction(channel) {
@@ -444,12 +486,16 @@ export default function ChannelCatalog() {
   }
 
   if (!workspace.ready && effectiveReadinessState.loading) {
-    return <ChannelsLoadingSurface />;
+    return (
+      <PageCanvas className="max-w-[1280px] py-2">
+        <LoadingSurface title="Loading channels" />
+      </PageCanvas>
+    );
   }
 
   return (
     <>
-      <PageCanvas className="space-y-3">
+      <PageCanvas className="max-w-[1280px] space-y-5 py-2">
         {s(effectiveReadinessState.error) ? (
           <InlineNotice
             tone="danger"
@@ -459,103 +505,34 @@ export default function ChannelCatalog() {
           />
         ) : null}
 
-        <Surface padded="lg" className="rounded-[22px]">
-          <div className="space-y-5">
-            <div className="flex flex-col gap-4 border-b border-line-soft pb-4 md:flex-row md:items-end md:justify-between">
-              <div className="min-w-0">
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <Badge tone={toneFromReadiness(launchReadiness)}>
-                    {s(launchReadiness.statusLabel, "Launch posture")}
-                  </Badge>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                    Channels
-                  </div>
-                </div>
+        <CompactHeader
+          title="Choose a launch channel"
+          subtitle="Connect the first live surface and continue setup from there."
+          onOpenTruth={() => navigate("/truth")}
+        />
 
-                <h1 className="text-[1.55rem] font-semibold leading-tight tracking-[-0.03em] text-text md:text-[1.75rem]">
-                  Connect and verify launch channels.
-                </h1>
+        <StageStrip connectedCount={connectedCount} />
 
-                <p className="mt-2 max-w-[760px] text-[14px] leading-6 text-text-muted">
-                  {compactSentence(
-                    launchReadiness.summary,
-                    "Keep channel posture honest so setup, truth, runtime, and inbox stay aligned."
-                  )}
-                </p>
-
-                <div className="mt-3">
-                  <MetaLine
-                    launchReadiness={launchReadiness}
-                    readinessState={effectiveReadinessState}
-                  />
-                </div>
-              </div>
-
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
-                {launchReadiness.action?.path ? (
-                  <Button
-                    size="sm"
-                    onClick={() => handleNavigate(launchReadiness.action.path)}
-                    rightIcon={<ArrowRight className="h-4 w-4" />}
-                  >
-                    {launchReadiness.action.label}
-                  </Button>
-                ) : null}
-
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => handleNavigate("/truth")}
-                >
-                  Open truth
-                </Button>
-              </div>
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+              Launch channels
             </div>
-
-            <div>
-              <div className="pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                Launch connectors
-              </div>
-
-              <div>
-                {launchChannels.map((channel, index) => (
-                  <ChannelRow
-                    key={channel.id}
-                    channel={channel}
-                    runtime={buildRuntimeMeta(channel, effectiveReadinessState)}
-                    onInspect={updateSelectedChannel}
-                    onRunPrimaryAction={handlePrimaryAction}
-                    muted={false}
-                    last={index === launchChannels.length - 1}
-                    showPrimaryAction
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="border-t border-line-soft pt-4">
-              <div className="pb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                Later
-              </div>
-
-              <div>
-                {laterChannels.map((channel, index) => (
-                  <ChannelRow
-                    key={channel.id}
-                    channel={channel}
-                    runtime={null}
-                    onInspect={updateSelectedChannel}
-                    onRunPrimaryAction={handlePrimaryAction}
-                    muted
-                    last={index === laterChannels.length - 1}
-                    showPrimaryAction={false}
-                  />
-                ))}
-              </div>
-            </div>
+            <div className="text-[12px] text-text-subtle">3 available</div>
           </div>
-        </Surface>
+
+          <div className="grid gap-4 xl:grid-cols-3">
+            {launchChannels.map((channel) => (
+              <LaunchCard
+                key={channel.id}
+                channel={channel}
+                runtime={buildRuntimeMeta(channel, effectiveReadinessState)}
+                onInspect={updateSelectedChannel}
+                onRunPrimaryAction={handlePrimaryAction}
+              />
+            ))}
+          </div>
+        </section>
       </PageCanvas>
 
       {drawerChannel ? (
@@ -568,7 +545,7 @@ export default function ChannelCatalog() {
             channel={drawerChannel}
             open={drawerOpen}
             onClose={handleDrawerClose}
-            onNavigate={handleNavigate}
+            onNavigate={navigate}
           />
         </SlidingDetailOverlay>
       ) : null}

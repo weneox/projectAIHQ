@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, PanelRightOpen } from "lucide-react";
 
 import {
   getMetaChannelStatus,
@@ -15,11 +15,11 @@ import InboxDetailPanel from "../components/inbox/InboxDetailPanel.jsx";
 import InboxLeadPanel from "../components/inbox/InboxLeadPanel.jsx";
 import InboxThreadListPanel from "../components/inbox/InboxThreadListPanel.jsx";
 import { useThreadOutboundAttemptsSurface } from "../components/inbox/hooks/useThreadOutboundAttemptsSurface.js";
-import SurfaceBanner from "../components/feedback/SurfaceBanner.jsx";
 import { useInboxData } from "../hooks/useInboxData.js";
 import { useInboxRealtime } from "../hooks/useInboxRealtime.js";
 import useWorkspaceTenantKey from "../hooks/useWorkspaceTenantKey.js";
 import { getAppSessionContext } from "../lib/appSession.js";
+import { compactSentence, s, toneFromReadiness } from "../lib/appUi.js";
 import { useLaunchSliceRefreshToken } from "../lib/launchSliceRefresh.js";
 import {
   buildChannelTruthLaunchReadiness,
@@ -29,20 +29,13 @@ import {
   buildTruthOperationalState,
 } from "../lib/readinessViewModel.js";
 import Button from "../components/ui/Button.jsx";
+import Badge from "../components/ui/Badge.jsx";
 import {
+  InlineNotice,
+  PageCanvas,
   SlidingDetailOverlay,
-  StatusBanner,
+  Surface,
 } from "../components/ui/AppShellPrimitives.jsx";
-import { s, toneFromReadiness } from "../lib/appUi.js";
-
-function shouldRenderSurfaceBanner(surface) {
-  return Boolean(
-    surface?.saveSuccess ||
-      surface?.saveError ||
-      surface?.unavailable ||
-      (!surface?.unavailable && surface?.error)
-  );
-}
 
 const EMPTY_READINESS_STATE = {
   tenantKey: "",
@@ -51,6 +44,68 @@ const EMPTY_READINESS_STATE = {
   telegram: null,
   website: null,
 };
+
+function buildSurfaceNotice(surface = {}) {
+  if (surface?.unavailable) {
+    return {
+      tone: "danger",
+      title: "Inbox unavailable",
+      description: "Inbox operations are temporarily unavailable.",
+    };
+  }
+
+  if (s(surface?.saveError || surface?.error)) {
+    return {
+      tone: "danger",
+      title: "Inbox issue",
+      description: s(surface?.saveError || surface?.error),
+    };
+  }
+
+  if (s(surface?.saveSuccess)) {
+    return {
+      tone: "success",
+      title: "Updated",
+      description: s(surface.saveSuccess),
+    };
+  }
+
+  return null;
+}
+
+function MetaLine({
+  inboxReadiness,
+  threadCount = 0,
+  unreadCount = 0,
+  selectedThread,
+  wsState = "idle",
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-5 text-text-subtle">
+      <span>
+        <span className="text-text-muted">Launch:</span>{" "}
+        {s(inboxReadiness?.statusLabel, "Unknown")}
+      </span>
+      <span className="text-slate-300">•</span>
+      <span>
+        <span className="text-text-muted">Threads:</span> {threadCount}
+      </span>
+      <span className="text-slate-300">•</span>
+      <span>
+        <span className="text-text-muted">Unread:</span> {unreadCount}
+      </span>
+      <span className="text-slate-300">•</span>
+      <span>
+        <span className="text-text-muted">Selected:</span>{" "}
+        {selectedThread?.id ? "Open" : "None"}
+      </span>
+      <span className="text-slate-300">•</span>
+      <span>
+        <span className="text-text-muted">Realtime:</span> {s(wsState, "idle")}
+      </span>
+    </div>
+  );
+}
 
 export default function Inbox() {
   const location = useLocation();
@@ -344,121 +399,159 @@ export default function Inbox() {
     ]
   );
 
-  const showTopBanner = shouldRenderSurfaceBanner(surface);
+  const surfaceNotice = buildSurfaceNotice(surface);
+
+  const threadCount = Array.isArray(threads) ? threads.length : 0;
+  const unreadCount = Array.isArray(threads)
+    ? threads.reduce((sum, thread) => sum + Number(thread?.unread_count || 0), 0)
+    : 0;
 
   return (
-    <section
-      aria-labelledby="inbox-surface-title"
-      aria-describedby="inbox-surface-description"
-      className="relative flex h-full min-h-0 flex-col overflow-hidden bg-transparent"
-    >
-      <header className="sr-only">
-        <h1 id="inbox-surface-title">Operator messaging workspace</h1>
-        <p id="inbox-surface-description">
-          Thread-first triage on the left and the live conversation on the
-          right, with details opening as an overlay drawer.
-        </p>
-        <p>{dbDisabled ? "Fallback mode" : "Live mode"}</p>
-      </header>
-
-      {showTopBanner ? (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center px-4 pt-4">
-          <div className="pointer-events-auto w-full max-w-[920px]">
-            <SurfaceBanner
-              surface={surface}
-              unavailableMessage="Inbox operations are temporarily unavailable."
-              refreshLabel="Refresh inbox"
-            />
-          </div>
-        </div>
+    <PageCanvas className="space-y-3 h-full">
+      {surfaceNotice ? (
+        <InlineNotice
+          tone={surfaceNotice.tone}
+          title={surfaceNotice.title}
+          description={surfaceNotice.description}
+          compact
+        />
       ) : null}
 
-      <div className="relative flex-1 min-h-0 overflow-hidden rounded-panel border border-line-soft bg-surface">
-        <div className="border-b border-line-soft bg-surface-muted px-4 py-4">
-          <StatusBanner
-            tone={toneFromReadiness(inboxReadiness)}
-            label={s(inboxReadiness.statusLabel, "Unknown")}
-            title={s(inboxReadiness.title, "Inbox readiness")}
-            description={s(inboxReadiness.summary)}
-            detail={s(inboxReadiness.detail)}
-            action={
-              inboxReadiness.action?.path ? (
+      {s(inboxReadiness.status).toLowerCase() !== "ready" ? (
+        <InlineNotice
+          tone={toneFromReadiness(inboxReadiness)}
+          title={s(inboxReadiness.title, "Inbox posture")}
+          description={compactSentence(
+            inboxReadiness.summary,
+            "Inbox launch posture still needs review."
+          )}
+          compact
+        />
+      ) : null}
+
+      <Surface padded={false} className="overflow-hidden rounded-[22px] h-[calc(100vh-220px)] min-h-[620px]">
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="border-b border-line-soft px-5 py-4">
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div className="min-w-0">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <Badge tone={toneFromReadiness(inboxReadiness)}>
+                    {s(inboxReadiness.statusLabel, "Inbox")}
+                  </Badge>
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+                    Inbox
+                  </div>
+                </div>
+
+                <h1 className="text-[1.55rem] font-semibold leading-tight tracking-[-0.03em] text-text md:text-[1.75rem]">
+                  Live conversation inbox.
+                </h1>
+
+                <p className="mt-2 max-w-[760px] text-[14px] leading-6 text-text-muted">
+                  {compactSentence(
+                    selectedThread?.id
+                      ? "Review the selected conversation and reply from a single live surface."
+                      : "Pick a thread and work from one clear live conversation surface.",
+                    "Review live conversation work."
+                  )}
+                </p>
+
+                <div className="mt-3">
+                  <MetaLine
+                    inboxReadiness={inboxReadiness}
+                    threadCount={threadCount}
+                    unreadCount={unreadCount}
+                    selectedThread={selectedThread}
+                    wsState={wsState}
+                  />
+                </div>
+              </div>
+
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {inboxReadiness.action?.path ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => navigate(inboxReadiness.action.path)}
+                    rightIcon={<ArrowRight className="h-4 w-4" />}
+                  >
+                    {inboxReadiness.action.label}
+                  </Button>
+                ) : null}
+
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => {
-                    if (s(inboxReadiness.action?.path)) {
-                      navigate(inboxReadiness.action.path);
-                    }
-                  }}
-                  rightIcon={<ArrowRight className="h-4 w-4" />}
+                  onClick={() => setDetailOpen(true)}
+                  disabled={!selectedThread?.id}
+                  leftIcon={<PanelRightOpen className="h-4 w-4" />}
                 >
-                  {inboxReadiness.action.label}
+                  Details
                 </Button>
-              ) : null
-            }
-          />
-        </div>
-
-        <div className="relative grid h-[calc(100%-101px)] min-h-0 overflow-hidden grid-cols-[320px_minmax(0,1fr)] bg-surface">
-          <div className="min-h-0 overflow-hidden border-r border-line-soft bg-surface">
-            <InboxThreadListPanel
-              threadList={threadList}
-              selectedThreadId={selectedThread?.id || ""}
-              searchQuery=""
-            />
+              </div>
+            </div>
           </div>
 
-          <div className="min-h-0 overflow-hidden bg-surface">
-            <InboxDetailPanel
-              selectedThread={selectedThread}
-              messages={messages}
-              outboundAttempts={threadAttemptSurface.attempts}
-              surface={detailSurface}
-              actionState={actionState}
-              markRead={markRead}
-              assignThread={assignThread}
-              activateHandoff={activateHandoff}
-              setThreadStatus={setThreadStatus}
-              onOpenDetails={() => setDetailOpen(true)}
-              composer={
-                <InboxComposer
-                  embedded
-                  selectedThread={selectedThread}
-                  surface={composerSurface}
-                  actionState={actionState}
-                  replyText={replyText}
-                  setReplyText={setReplyText}
-                  onSend={handleSend}
-                  onReleaseHandoff={handleRelease}
-                />
-              }
-            />
-          </div>
-
-          {detailOpen ? (
-            <SlidingDetailOverlay
-              open={detailOpen}
-              onClose={() => setDetailOpen(false)}
-              absolute
-              closeLabel="Close conversation details"
-              panelWidthClassName="max-w-[92vw] w-[360px]"
-              className="z-30"
-            >
-              <InboxLeadPanel
-                selectedThread={selectedThread}
-                surface={leadSurface}
-                relatedLead={relatedLead}
-                openLeadDetail={openLeadDetail}
-                operatorName={operatorName}
-                tenantKey={workspace.tenantKey}
-                wsState={wsState}
-                onClose={() => setDetailOpen(false)}
+          <div className="grid min-h-0 flex-1 overflow-hidden grid-cols-[320px_minmax(0,1fr)] bg-surface">
+            <div className="min-h-0 overflow-hidden border-r border-line-soft bg-surface">
+              <InboxThreadListPanel
+                threadList={threadList}
+                selectedThreadId={selectedThread?.id || ""}
+                searchQuery=""
               />
-            </SlidingDetailOverlay>
-          ) : null}
+            </div>
+
+            <div className="min-h-0 overflow-hidden bg-surface">
+              <InboxDetailPanel
+                selectedThread={selectedThread}
+                messages={messages}
+                outboundAttempts={threadAttemptSurface.attempts}
+                surface={detailSurface}
+                actionState={actionState}
+                markRead={markRead}
+                assignThread={assignThread}
+                activateHandoff={activateHandoff}
+                setThreadStatus={setThreadStatus}
+                onOpenDetails={() => setDetailOpen(true)}
+                composer={
+                  <InboxComposer
+                    embedded
+                    selectedThread={selectedThread}
+                    surface={composerSurface}
+                    actionState={actionState}
+                    replyText={replyText}
+                    setReplyText={setReplyText}
+                    onSend={handleSend}
+                    onReleaseHandoff={handleRelease}
+                  />
+                }
+              />
+            </div>
+
+            {detailOpen ? (
+              <SlidingDetailOverlay
+                open={detailOpen}
+                onClose={() => setDetailOpen(false)}
+                absolute
+                closeLabel="Close conversation details"
+                panelWidthClassName="max-w-[92vw] w-[360px]"
+                className="z-30"
+              >
+                <InboxLeadPanel
+                  selectedThread={selectedThread}
+                  surface={leadSurface}
+                  relatedLead={relatedLead}
+                  openLeadDetail={openLeadDetail}
+                  operatorName={operatorName}
+                  tenantKey={workspace.tenantKey}
+                  wsState={wsState}
+                  onClose={() => setDetailOpen(false)}
+                />
+              </SlidingDetailOverlay>
+            ) : null}
+          </div>
         </div>
-      </div>
-    </section>
+      </Surface>
+    </PageCanvas>
   );
 }
