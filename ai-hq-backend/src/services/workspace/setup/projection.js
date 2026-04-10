@@ -272,6 +272,48 @@ function buildCapabilitiesProjection(draft = {}) {
   return compactObject(draft?.capabilities);
 }
 
+function shouldEnsureCapabilitiesProjection({
+  draft = {},
+  capabilities = {},
+  currentCapabilities = null,
+} = {}) {
+  if (s(currentCapabilities?.id)) return true;
+  if (Object.keys(obj(capabilities)).length) return true;
+  if (Object.keys(obj(draft?.businessProfile)).length) return true;
+  if (arr(draft?.services).length) return true;
+  if (arr(draft?.contacts).length) return true;
+  if (arr(draft?.locations).length) return true;
+  if (arr(draft?.knowledgeItems).length) return true;
+  if (arr(draft?.channels).length) return true;
+  if (Object.keys(obj(draft?.sourceSummary)).length) return true;
+  return false;
+}
+
+function buildTruthVersionRequiredError({
+  businessProfileId = "",
+  businessCapabilitiesId = "",
+  draft = {},
+  sourceInfo = {},
+} = {}) {
+  const err = new Error(
+    "Setup review cannot finalize yet because a fresh published truth version could not be created."
+  );
+  err.code = "SETUP_REVIEW_TRUTH_VERSION_REQUIRED";
+  err.reasonCode = "published_truth_version_required";
+  err.details = {
+    missingBusinessProfile: !s(businessProfileId),
+    missingBusinessCapabilities: !s(businessCapabilitiesId),
+    businessProfileKeys: Object.keys(obj(draft?.businessProfile)).length,
+    capabilitiesKeys: Object.keys(obj(draft?.capabilities)).length,
+    servicesCount: arr(draft?.services).length,
+    contactsCount: arr(draft?.contacts).length,
+    knowledgeCount: arr(draft?.knowledgeItems).length,
+    primarySourceType: s(sourceInfo?.primarySourceType),
+    primarySourceId: s(sourceInfo?.primarySourceId),
+  };
+  return err;
+}
+
 function extractBehaviorProjection(draft = {}) {
   return compactObject(
     obj(draft?.businessProfile?.nicheBehavior || draft?.businessProfile?.niche_behavior)
@@ -284,7 +326,6 @@ async function resolvePersistedReviewSessionId(db, actor = {}, session = {}) {
 
   if (!rawSessionId || !tenantId) return "";
 
-  // Unit/non-DB fallback only
   if (!hasDbQuery(db)) return rawSessionId;
 
   const result = await q(
@@ -299,7 +340,6 @@ async function resolvePersistedReviewSessionId(db, actor = {}, session = {}) {
     [rawSessionId, tenantId]
   );
 
-  // DB-backed flow must remain FK-safe
   return s(result.rows?.[0]?.id);
 }
 
@@ -780,16 +820,16 @@ export async function projectSetupReviewDraftToCanonical(
         sourceInfo,
         approvedAt,
       }),
-        metadataJson: {
-          reviewSessionProjection: true,
-          reviewSessionId: s(session?.id),
-          persistedReviewSessionId: persistedReviewSessionId || undefined,
-          draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
-          nicheBehavior: Object.keys(behavior).length ? behavior : undefined,
-          finalizeImpact: impactSummary,
-          approvalPolicy,
-        },
-        generatedBy: requestedBy,
+      metadataJson: {
+        reviewSessionProjection: true,
+        reviewSessionId: s(session?.id),
+        persistedReviewSessionId: persistedReviewSessionId || undefined,
+        draftVersion: toFiniteNumber(draft?.version, 0) || undefined,
+        nicheBehavior: Object.keys(behavior).length ? behavior : undefined,
+        finalizeImpact: impactSummary,
+        approvalPolicy,
+      },
+      generatedBy: requestedBy,
       approvedBy: requestedBy,
       approvedAt,
       runtimeRefreshMode: "defer",
@@ -798,7 +838,11 @@ export async function projectSetupReviewDraftToCanonical(
   }
 
   if (
-    Object.keys(capabilities).length &&
+    shouldEnsureCapabilitiesProjection({
+      draft,
+      capabilities,
+      currentCapabilities,
+    }) &&
     typeof knowledgeHelper?.upsertBusinessCapabilities === "function"
   ) {
     savedCapabilities = await knowledgeHelper.upsertBusinessCapabilities({
@@ -926,13 +970,12 @@ export async function projectSetupReviewDraftToCanonical(
     truthVersion = createdTruthVersion;
   }
 
-  if (
-    !s(truthVersion?.id) &&
-    typeof truthVersionHelper?.getLatestVersion === "function"
-  ) {
-    truthVersion = await truthVersionHelper.getLatestVersion({
-      tenantId: actor.tenantId,
-      tenantKey: actor.tenantKey,
+  if (!s(truthVersion?.id)) {
+    throw buildTruthVersionRequiredError({
+      businessProfileId,
+      businessCapabilitiesId,
+      draft,
+      sourceInfo,
     });
   }
 
