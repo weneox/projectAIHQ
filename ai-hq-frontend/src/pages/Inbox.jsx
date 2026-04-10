@@ -39,7 +39,7 @@ import {
 
 const EMPTY_READINESS_STATE = {
   tenantKey: "",
-  trust: null,
+  truth: null,
   meta: null,
   telegram: null,
   website: null,
@@ -171,7 +171,7 @@ export default function Inbox() {
         if (!alive) return;
         setResolvedReadinessState({
           tenantKey: workspace.tenantKey,
-          trust:
+          truth:
             results[0].status === "fulfilled"
               ? buildTruthOperationalState(results[0].value)
               : buildTruthOperationalState(null),
@@ -193,7 +193,7 @@ export default function Inbox() {
         if (!alive) return;
         setResolvedReadinessState({
           tenantKey: workspace.tenantKey,
-          trust: buildTruthOperationalState(null),
+          truth: buildTruthOperationalState(null),
           meta: buildMetaLaunchChannelState({}),
           telegram: buildTelegramLaunchChannelState({}),
           website: buildWebsiteLaunchChannelState({}),
@@ -215,7 +215,7 @@ export default function Inbox() {
     if (!workspace.ready) {
       return {
         loading: false,
-        trust: null,
+        truth: null,
         meta: null,
         telegram: null,
         website: null,
@@ -225,7 +225,7 @@ export default function Inbox() {
     if (resolvedReadinessState.tenantKey !== workspace.tenantKey) {
       return {
         loading: true,
-        trust: null,
+        truth: null,
         meta: null,
         telegram: null,
         website: null,
@@ -234,7 +234,7 @@ export default function Inbox() {
 
     return {
       loading: false,
-      trust: resolvedReadinessState.trust,
+      truth: resolvedReadinessState.truth,
       meta: resolvedReadinessState.meta,
       telegram: resolvedReadinessState.telegram,
       website: resolvedReadinessState.website,
@@ -250,7 +250,6 @@ export default function Inbox() {
     setSelectedThread,
     relatedLead,
     setRelatedLead,
-    dbDisabled,
     surface,
     detailSurface,
     leadSurface,
@@ -403,7 +402,10 @@ export default function Inbox() {
 
   const threadCount = Array.isArray(threads) ? threads.length : 0;
   const unreadCount = Array.isArray(threads)
-    ? threads.reduce((sum, thread) => sum + Number(thread?.unread_count || 0), 0)
+    ? threads.reduce(
+        (sum, thread) => sum + Number(thread?.unread_count || 0),
+        0
+      )
     : 0;
 
   return (
@@ -429,7 +431,10 @@ export default function Inbox() {
         />
       ) : null}
 
-      <Surface padded={false} className="overflow-hidden rounded-[22px] h-[calc(100vh-220px)] min-h-[620px]">
+      <Surface
+        padded={false}
+        className="overflow-hidden rounded-[22px] h-[calc(100vh-220px)] min-h-[620px]"
+      >
         <div className="flex h-full min-h-0 flex-col">
           <div className="border-b border-line-soft px-5 py-4">
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
