@@ -5,6 +5,7 @@ import {
   buildWebsiteWidgetInstallSurface,
   normalizeWidgetConfig,
   normalizeWidgetConfigForSave,
+  resolveWidgetEnabled,
   resolveWebsiteWidgetStatus,
 } from "../websiteWidget/config.js";
 import { auditSafe, getTenantByKey } from "./repository.js";
@@ -51,6 +52,15 @@ function buildBlockers(status = {}) {
     });
   }
 
+  if (config.enabled === true && !resolveWidgetEnabled(status)) {
+    blockers.push({
+      reasonCode: "website_widget_channel_inactive",
+      title: "Website chat cannot launch because the website chat channel is not active.",
+      subtitle:
+        "Public website launches stay blocked until the website chat channel record is active again.",
+    });
+  }
+
   return blockers;
 }
 
@@ -60,8 +70,9 @@ function buildWebsiteWidgetStatusPayload(req, status = {}, viewerRole = "member"
   });
   const blockers = buildBlockers(status);
   const saveAllowed = canManageSettings(viewerRole);
+  const launchEnabled = resolveWidgetEnabled(status);
   const ready =
-    config.enabled === true &&
+    launchEnabled &&
     Boolean(config.publicWidgetId) &&
     (config.allowedOrigins.length > 0 ||
       config.allowedDomains.length > 0 ||
@@ -100,7 +111,9 @@ function buildWebsiteWidgetStatusPayload(req, status = {}, viewerRole = "member"
       message: ready
         ? "Website chat is configured with a publishable install ID and trusted origin controls."
         : config.enabled
-          ? "Website chat is enabled, but installation hardening is still incomplete."
+          ? launchEnabled
+            ? "Website chat is enabled, but installation hardening is still incomplete."
+            : "Website chat is enabled in settings, but public launch is still blocked until the channel becomes active again."
           : "Website chat is disabled until you intentionally enable and configure it.",
       blockers,
     },

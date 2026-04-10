@@ -133,7 +133,6 @@ function createReusableTruthVersion({
       id: "session-1",
     },
     draft: {
-      lastSnapshotId: "",
       sourceSummary: {},
       businessProfile: {
         companyName: "Alpha Studio",
@@ -169,6 +168,7 @@ function createReusableTruthVersion({
       profile_json: {
         companyName: "Alpha Studio",
         description: "Brand strategy and design",
+        websiteUrl: "https://alpha.example",
       },
       source_summary_json: sourceSummary,
       confidence: 0,
@@ -192,6 +192,7 @@ function createReusableTruthVersion({
     id,
     business_profile_id: businessProfileId,
     business_capabilities_id: businessCapabilitiesId,
+    review_session_id: "session-1",
     approved_at: "2026-03-25T02:00:00.000Z",
     approved_by: "Reviewer",
     source_summary_json: snapshot.sourceSummary,

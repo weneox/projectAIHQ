@@ -10,8 +10,16 @@ function s(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
 
+function lower(value, fallback = "") {
+  return s(value, fallback).toLowerCase();
+}
+
 function obj(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function arr(value) {
+  return Array.isArray(value) ? value : [];
 }
 
 function normalizeApiBase(raw = "") {
@@ -59,6 +67,7 @@ async function postWidget(apiBase, path, body) {
       Accept: "application/json",
       "Content-Type": "application/json; charset=utf-8",
     },
+    cache: "no-store",
     credentials: "omit",
     body: JSON.stringify(body ?? {}),
   });
@@ -69,14 +78,68 @@ async function postWidget(apiBase, path, body) {
   }));
 
   if (!response.ok || payload?.ok === false) {
+    const code = s(payload?.error || "request_failed");
     const error = new Error(
-      s(payload?.details?.message || payload?.error || "Request failed")
+      buildPublicErrorMessage(code, s(payload?.details?.message))
     );
+    error.code = code;
     error.payload = payload;
+    error.status = response.status;
     throw error;
   }
 
   return payload;
+}
+
+function buildPublicErrorMessage(errorCode = "", fallback = "") {
+  const safeFallback = s(fallback);
+
+  switch (lower(errorCode)) {
+    case "db disabled":
+      return safeFallback || "Website chat is temporarily unavailable right now.";
+    case "widgetid required":
+      return safeFallback || "Website chat could not start because the widget install ID is missing.";
+    case "bootstraptoken required":
+      return safeFallback || "Website chat needs a fresh launch token. Reload the website page and open chat again.";
+    case "website_widget_bootstrap_invalid":
+      return safeFallback || "Website chat could not verify this launch request. Reload the website page and try again.";
+    case "website_widget_bootstrap_expired":
+      return safeFallback || "This website chat launch token expired. Reload the website page and open chat again.";
+    case "website_widget_session_missing":
+      return safeFallback || "Website chat session is missing. Reload the website page to start a new chat.";
+    case "website_widget_session_invalid":
+      return safeFallback || "This website chat session is no longer valid. Reload the website page and try again.";
+    case "website_widget_session_expired":
+      return safeFallback || "This website chat session expired. Reload the website page to continue.";
+    case "website_widget_install_mismatch":
+      return safeFallback || "This website chat launch request no longer matches the current widget installation.";
+    case "website_widget_not_found":
+    case "tenant not found":
+      return safeFallback || "This website chat install is no longer active.";
+    case "website_widget_disabled":
+      return safeFallback || "Website chat is currently disabled.";
+    case "website_widget_unconfigured":
+      return safeFallback || "Website chat is not configured yet.";
+    case "website_request_context_missing":
+    case "website_request_context_mismatch":
+    case "website_origin_mismatch":
+      return safeFallback || "This website chat install request could not be verified for this page.";
+    case "message required":
+      return safeFallback || "Write a message before sending.";
+    default:
+      return safeFallback || "Website chat is temporarily unavailable right now.";
+  }
+}
+
+function toRequestErrorMessage(error) {
+  const code = s(error?.code || obj(error?.payload).error);
+  const fallback = s(error?.message || error);
+
+  if (!code && (error instanceof TypeError || /fetch|network/i.test(fallback))) {
+    return "Website chat could not reach the server. Check your connection and try again.";
+  }
+
+  return buildPublicErrorMessage(code, fallback);
 }
 
 function statusTone(mode = "") {
@@ -93,6 +156,30 @@ function statusLabel(mode = "") {
   if (mode === "blocked_until_repair") return "AI unavailable";
   if (mode === "blocked") return "Replies blocked";
   return "Operator reply";
+}
+
+function resolveStatusView(thread = {}, automation = {}) {
+  const mode = lower(automation.mode);
+
+  if (mode === "blocked_until_repair" || mode === "blocked") {
+    return {
+      mode,
+      summary: s(automation.summary),
+    };
+  }
+
+  if (thread?.handoffActive) {
+    return {
+      mode: "operator_only",
+      summary:
+        "This conversation has been routed to an operator. Replies may take a little longer.",
+    };
+  }
+
+  return {
+    mode: mode || "operator_only",
+    summary: s(automation.summary),
+  };
 }
 
 function messageBubbleTone(message = {}) {
@@ -131,15 +218,36 @@ export default function PublicWebsiteWidget() {
   const [sessionToken, setSessionToken] = useState("");
   const [draft, setDraft] = useState("");
   const scrollRef = useRef(null);
+  const retryEnvelopeRef = useRef(null);
+  const pollInFlightRef = useRef(false);
+
+  function applyConversationPayload(payload = {}) {
+    setError("");
+    if (payload.widget) setWidget(obj(payload.widget));
+    if (payload.automation) setAutomation(obj(payload.automation));
+    setThread(payload.thread || null);
+    setMessages(arr(payload.messages));
+
+    const nextSessionToken = s(payload.sessionToken);
+    if (nextSessionToken) {
+      setSessionToken(nextSessionToken);
+      writeStoredSession(widgetId, nextSessionToken);
+    }
+  }
+
+  const statusView = resolveStatusView(thread || {}, automation || {});
+  const canSend = Boolean(widgetId) && Boolean(sessionToken) && !loading;
 
   useEffect(() => {
+    const storedSessionToken = readStoredSession(widgetId);
+
     if (!widgetId) {
       setLoading(false);
       setError("Missing widgetId. Add the publishable widget ID to the embed configuration.");
       return;
     }
 
-    if (!bootstrapToken) {
+    if (!bootstrapToken && !storedSessionToken) {
       setLoading(false);
       setError("Missing bootstrap token. Reload the website page and try opening the widget again.");
       return;
@@ -155,20 +263,23 @@ export default function PublicWebsiteWidget() {
         const payload = await postWidget(apiBase, "/public/widget/bootstrap", {
           widgetId,
           bootstrapToken,
-          sessionToken: readStoredSession(widgetId),
+          sessionToken: storedSessionToken,
         });
 
         if (cancelled) return;
 
-        setWidget(obj(payload.widget));
-        setAutomation(obj(payload.automation));
-        setThread(payload.thread || null);
-        setMessages(Array.isArray(payload.messages) ? payload.messages : []);
-        setSessionToken(s(payload.sessionToken));
-        writeStoredSession(widgetId, s(payload.sessionToken));
+        applyConversationPayload(payload);
       } catch (requestError) {
         if (cancelled) return;
-        setError(s(requestError?.message || requestError));
+        if (
+          ["website_widget_session_invalid", "website_widget_session_expired"].includes(
+            lower(requestError?.code)
+          )
+        ) {
+          writeStoredSession(widgetId, "");
+          setSessionToken("");
+        }
+        setError(toRequestErrorMessage(requestError));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -182,27 +293,46 @@ export default function PublicWebsiteWidget() {
   }, [apiBase, bootstrapToken, widgetId]);
 
   useEffect(() => {
-    if (!widgetId || !sessionToken || !thread?.id) return undefined;
+    if (!widgetId || !sessionToken) return undefined;
+
+    let cancelled = false;
 
     const timer = window.setInterval(async () => {
+      if (pollInFlightRef.current || sending) return;
+
+      pollInFlightRef.current = true;
+
       try {
         const payload = await postWidget(apiBase, "/public/widget/transcript", {
           sessionToken,
         });
 
-        setThread(payload.thread || null);
-        setMessages(Array.isArray(payload.messages) ? payload.messages : []);
-        if (payload.sessionToken) {
-          setSessionToken(s(payload.sessionToken));
-          writeStoredSession(widgetId, s(payload.sessionToken));
+        if (cancelled) return;
+
+        applyConversationPayload(payload);
+      } catch (requestError) {
+        if (
+          cancelled ||
+          !["website_widget_session_invalid", "website_widget_session_expired"].includes(
+            lower(requestError?.code)
+          )
+        ) {
+          return;
         }
-      } catch {
-        // Keep the last known transcript if polling fails.
+
+        writeStoredSession(widgetId, "");
+        setSessionToken("");
+        setError(toRequestErrorMessage(requestError));
+      } finally {
+        pollInFlightRef.current = false;
       }
     }, 4000);
 
-    return () => window.clearInterval(timer);
-  }, [apiBase, sessionToken, thread?.id, widgetId]);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [apiBase, sending, sessionToken, widgetId]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -212,11 +342,16 @@ export default function PublicWebsiteWidget() {
   async function handleSend(event) {
     event.preventDefault();
     const text = s(draft);
-    if (!text || sending || !widgetId) return;
+    if (!text || sending || !widgetId || !sessionToken) return;
 
-    const optimisticId = `local-${Date.now()}`;
+    const previousMessages = messages;
+    const retryEnvelope = retryEnvelopeRef.current;
+    const optimisticId =
+      retryEnvelope && retryEnvelope.text === text
+        ? retryEnvelope.messageId
+        : `local-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const nextMessages = [
-      ...messages,
+      ...previousMessages,
       {
         id: optimisticId,
         role: "visitor",
@@ -231,6 +366,10 @@ export default function PublicWebsiteWidget() {
     setSending(true);
     setError("");
     setMessages(nextMessages);
+    retryEnvelopeRef.current = {
+      text,
+      messageId: optimisticId,
+    };
 
     try {
       const payload = await postWidget(apiBase, "/public/widget/message", {
@@ -239,16 +378,20 @@ export default function PublicWebsiteWidget() {
         messageId: optimisticId,
       });
 
-      setWidget(obj(payload.widget));
-      setAutomation(obj(payload.automation));
-      setThread(payload.thread || null);
-      setMessages(Array.isArray(payload.messages) ? payload.messages : []);
-      setSessionToken(s(payload.sessionToken));
-      writeStoredSession(widgetId, s(payload.sessionToken));
+      retryEnvelopeRef.current = null;
+      applyConversationPayload(payload);
     } catch (requestError) {
       setDraft(text);
-      setMessages(messages);
-      setError(s(requestError?.message || requestError));
+      setMessages(previousMessages);
+      if (
+        ["website_widget_session_invalid", "website_widget_session_expired"].includes(
+          lower(requestError?.code)
+        )
+      ) {
+        writeStoredSession(widgetId, "");
+        setSessionToken("");
+      }
+      setError(toRequestErrorMessage(requestError));
     } finally {
       setSending(false);
     }
@@ -271,10 +414,10 @@ export default function PublicWebsiteWidget() {
             <span
               className={[
                 "inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-medium",
-                statusTone(s(automation.mode)),
+                statusTone(s(statusView.mode)),
               ].join(" ")}
             >
-              {statusLabel(s(automation.mode))}
+              {statusLabel(s(statusView.mode))}
             </span>
           </div>
 
@@ -287,9 +430,9 @@ export default function PublicWebsiteWidget() {
           />
         </div>
 
-        {!loading && s(automation.summary) ? (
+        {!loading && s(statusView.summary) ? (
           <div className="border-b border-slate-200/80 bg-slate-50 px-5 py-3 text-[12px] leading-5 text-slate-600">
-            {automation.summary}
+            {statusView.summary}
           </div>
         ) : null}
 
@@ -299,66 +442,74 @@ export default function PublicWebsiteWidget() {
               <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
               Preparing chat
             </div>
-          ) : error ? (
-            <div className="rounded-[24px] border border-rose-100 bg-rose-50 p-4 text-sm text-rose-700">
-              <div className="flex items-start gap-3">
-                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                <div>{error}</div>
-              </div>
-            </div>
-          ) : messages.length ? (
-            <div className="space-y-3">
-              {messages.map((message) => (
-                <div key={message.id} className="flex flex-col gap-1">
-                  <div
-                    className={[
-                      "max-w-[86%] rounded-[22px] px-4 py-3 text-[14px] leading-6 shadow-sm",
-                      messageBubbleTone(message),
-                    ].join(" ")}
-                  >
-                    {s(message.text) || "No text"}
-                  </div>
-                  <div className="px-1 text-[11px] text-slate-400">
-                    {message.role === "visitor"
-                      ? "You"
-                      : message.role === "operator"
-                        ? "Operator"
-                        : message.role === "system"
-                          ? "System"
-                          : "Assistant"}
-                  </div>
-                </div>
-              ))}
-            </div>
           ) : (
-            <div className="flex h-full flex-col items-center justify-center px-5 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-600">
-                <MessageSquareText className="h-6 w-6" />
-              </div>
-              <div className="mt-4 text-[17px] font-semibold tracking-[-0.03em]">
-                Start the conversation
-              </div>
-              <div className="mt-2 max-w-[260px] text-[13px] leading-6 text-slate-500">
-                {automation.available
-                  ? "Ask about services, availability, or next steps."
-                  : "Your message will still reach the team even when AI is unavailable."}
-              </div>
-
-              {Array.isArray(widget.initialPrompts) && widget.initialPrompts.length ? (
-                <div className="mt-5 flex flex-wrap justify-center gap-2">
-                  {widget.initialPrompts.map((prompt) => (
-                    <button
-                      key={prompt}
-                      type="button"
-                      onClick={() => setDraft(prompt)}
-                      className="rounded-full border border-slate-200 bg-white px-3 py-2 text-[12px] font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
-                    >
-                      {prompt}
-                    </button>
-                  ))}
+            <>
+              {error ? (
+                <div className="mb-3 rounded-[24px] border border-rose-100 bg-rose-50 p-4 text-sm text-rose-700">
+                  <div className="flex items-start gap-3">
+                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div>{error}</div>
+                  </div>
                 </div>
               ) : null}
-            </div>
+
+              {messages.length ? (
+                <div className="space-y-3">
+                  {messages.map((message) => (
+                    <div key={message.id} className="flex flex-col gap-1">
+                      <div
+                        className={[
+                          "max-w-[86%] rounded-[22px] px-4 py-3 text-[14px] leading-6 shadow-sm",
+                          messageBubbleTone(message),
+                        ].join(" ")}
+                      >
+                        {s(message.text) || "No text"}
+                      </div>
+                      <div className="px-1 text-[11px] text-slate-400">
+                        {message.role === "visitor"
+                          ? "You"
+                          : message.role === "operator"
+                            ? "Operator"
+                            : message.role === "system"
+                              ? "System"
+                              : "Assistant"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center px-5 text-center">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+                    <MessageSquareText className="h-6 w-6" />
+                  </div>
+                  <div className="mt-4 text-[17px] font-semibold tracking-[-0.03em]">
+                    Start the conversation
+                  </div>
+                  <div className="mt-2 max-w-[260px] text-[13px] leading-6 text-slate-500">
+                    {thread?.handoffActive
+                      ? "This conversation is waiting for an operator reply."
+                      : automation.available
+                        ? "Ask about services, availability, or next steps."
+                        : "Your message will still reach the team even when AI is unavailable."}
+                  </div>
+
+                  {Array.isArray(widget.initialPrompts) && widget.initialPrompts.length ? (
+                    <div className="mt-5 flex flex-wrap justify-center gap-2">
+                      {widget.initialPrompts.map((prompt) => (
+                        <button
+                          key={prompt}
+                          type="button"
+                          onClick={() => setDraft(prompt)}
+                          className="rounded-full border border-slate-200 bg-white px-3 py-2 text-[12px] font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -366,14 +517,25 @@ export default function PublicWebsiteWidget() {
           <div className="flex items-end gap-3 rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-3">
             <textarea
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setDraft(nextValue);
+
+                if (
+                  retryEnvelopeRef.current &&
+                  s(nextValue) !== retryEnvelopeRef.current.text
+                ) {
+                  retryEnvelopeRef.current = null;
+                }
+              }}
               rows={1}
               placeholder="Write your message"
+              disabled={!canSend || sending}
               className="max-h-32 min-h-[24px] flex-1 resize-none bg-transparent text-[14px] leading-6 text-slate-900 outline-none placeholder:text-slate-400"
             />
             <button
               type="submit"
-              disabled={!s(draft) || sending || loading || !widgetId}
+              disabled={!s(draft) || sending || !canSend}
               className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-950 text-white transition disabled:cursor-not-allowed disabled:opacity-50"
             >
               {sending ? (

@@ -51,6 +51,31 @@ const WEBSITE_THREAD_CHANNEL = "web";
 const WEBSITE_RUNTIME_CHANNEL = "webchat";
 const WEBSITE_PROVIDER = "website_widget";
 const WEBSITE_TRANSCRIPT_LIMIT = 200;
+const WEBSITE_THREAD_SELECT = `
+  id,
+  tenant_id,
+  tenant_key,
+  channel,
+  external_thread_id,
+  external_user_id,
+  external_username,
+  customer_name,
+  status,
+  last_message_at,
+  last_inbound_at,
+  last_outbound_at,
+  unread_count,
+  assigned_to,
+  labels,
+  meta,
+  handoff_active,
+  handoff_reason,
+  handoff_priority,
+  handoff_at,
+  handoff_by,
+  created_at,
+  updated_at
+`;
 
 function lower(value, fallback = "") {
   return s(value, fallback).toLowerCase();
@@ -72,6 +97,13 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function applyNoStore(res) {
+  try {
+    res?.setHeader?.("Cache-Control", "no-store");
+    res?.setHeader?.("Pragma", "no-cache");
+  } catch {}
+}
+
 function truncate(value, limit = 280) {
   const text = fixText(s(value));
   if (!text || text.length <= limit) return text;
@@ -91,6 +123,68 @@ function normalizeVisitor(req) {
     name: truncate(source.name, 120),
     email: truncate(source.email, 160),
     phone: truncate(source.phone, 80),
+  };
+}
+
+function isWebsiteThread(thread = {}) {
+  return Boolean(s(thread?.id)) && lower(thread?.channel) === WEBSITE_THREAD_CHANNEL;
+}
+
+function buildPublicErrorMessage(errorCode = "", fallback = "") {
+  const safeFallback = s(fallback);
+  if (safeFallback) return safeFallback;
+
+  switch (lower(errorCode)) {
+    case "db disabled":
+      return "Website chat is temporarily unavailable right now.";
+    case "widgetid required":
+      return "Website chat could not start because the widget install ID is missing.";
+    case "bootstraptoken required":
+      return "Website chat needs a fresh launch token. Reload the website page and open chat again.";
+    case "message required":
+      return "Write a message before sending.";
+    case "tenant not found":
+    case "website_widget_not_found":
+      return "This website chat install is no longer active.";
+    case "website_widget_disabled":
+      return "Website chat is currently disabled for this tenant.";
+    case "website_widget_unconfigured":
+      return "Website chat is not configured yet. Save the widget settings to re-enable public sessions.";
+    case "website_widget_install_mismatch":
+      return "This website chat launch request no longer matches the current widget installation.";
+    case "website_widget_bootstrap_invalid":
+      return "Website chat could not verify this launch request. Reload the website page and try again.";
+    case "website_widget_bootstrap_expired":
+      return "This website chat launch token expired. Reload the website page and open chat again.";
+    case "website_widget_session_missing":
+      return "Website chat session is missing. Reload the website page to start a new chat.";
+    case "website_widget_session_invalid":
+      return "This website chat session is no longer valid. Reload the website page and try again.";
+    case "website_widget_session_expired":
+      return "This website chat session expired. Reload the website page to continue.";
+    case "website_request_context_missing":
+      return "The widget install request is missing trusted browser origin metadata, so the request was blocked.";
+    case "website_request_context_mismatch":
+      return "The widget install request contained page metadata that did not match the trusted browser request origin.";
+    case "website_origin_mismatch":
+      return "This widget install request did not come from an allowed website origin or domain.";
+    default:
+      return "Website chat is temporarily unavailable right now.";
+  }
+}
+
+function buildPublicErrorDetails(errorCode = "", fallback = "") {
+  return {
+    message: buildPublicErrorMessage(errorCode, fallback),
+  };
+}
+
+function buildPublicErrorResponse(errorCode = "", fallback = "", extra = {}) {
+  return {
+    ok: false,
+    error: errorCode || "Error",
+    details: buildPublicErrorDetails(errorCode, fallback),
+    ...extra,
   };
 }
 
@@ -197,6 +291,9 @@ async function resolveTenantFromSession(db, providedToken = "") {
     return {
       ok: false,
       error: verified.error || "website_widget_session_invalid",
+      details: buildPublicErrorDetails(
+        verified.error || "website_widget_session_invalid"
+      ),
     };
   }
 
@@ -209,6 +306,7 @@ async function resolveTenantFromSession(db, providedToken = "") {
     return {
       ok: false,
       error: "tenant not found",
+      details: buildPublicErrorDetails("tenant not found"),
     };
   }
 
@@ -220,10 +318,7 @@ async function resolveTenantFromSession(db, providedToken = "") {
     return {
       ok: false,
       error: "website_widget_unconfigured",
-      details: {
-        message:
-          "Website chat is not configured yet. Save the widget settings to re-enable public sessions.",
-      },
+      details: buildPublicErrorDetails("website_widget_unconfigured"),
     };
   }
 
@@ -231,10 +326,10 @@ async function resolveTenantFromSession(db, providedToken = "") {
     return {
       ok: false,
       error: "website_widget_session_invalid",
-      details: {
-        message:
-          "This website widget session no longer matches the current tenant widget installation.",
-      },
+      details: buildPublicErrorDetails(
+        "website_widget_session_invalid",
+        "This website chat session no longer matches the current widget installation."
+      ),
     };
   }
 
@@ -242,9 +337,7 @@ async function resolveTenantFromSession(db, providedToken = "") {
     return {
       ok: false,
       error: "website_widget_disabled",
-      details: {
-        message: "Website chat is disabled for this tenant.",
-      },
+      details: buildPublicErrorDetails("website_widget_disabled"),
     };
   }
 
@@ -461,6 +554,32 @@ function isPublicVisibleMessage(message = {}) {
   return Boolean(message.sent_at || message.sentAt || delivery === "sent");
 }
 
+async function findWebsiteThreadForSession(
+  db,
+  { tenantKey = "", threadId = "", sessionId = "" } = {}
+) {
+  const directThread = threadId && (await getThreadById(db, threadId, tenantKey));
+  if (isWebsiteThread(directThread)) return directThread;
+
+  const externalThreadId = s(sessionId) ? `website:${s(sessionId)}` : "";
+  if (!externalThreadId || !isDbReady(db)) return null;
+
+  const result = await db.query(
+    `
+    select ${WEBSITE_THREAD_SELECT}
+    from inbox_threads
+    where tenant_key = $1::text
+      and channel = $2::text
+      and external_thread_id = $3::text
+    order by updated_at desc nulls last, created_at desc
+    limit 1
+    `,
+    [tenantKey, WEBSITE_THREAD_CHANNEL, externalThreadId]
+  );
+
+  return normalizeThread(result.rows?.[0] || null);
+}
+
 async function loadWebsiteTranscript(db, threadId, tenantKey) {
   if (!threadId) return [];
 
@@ -494,6 +613,19 @@ async function loadWebsiteTranscript(db, threadId, tenantKey) {
     .map(toPublicMessage);
 }
 
+async function loadWebsiteTranscriptSafe(
+  db,
+  threadId,
+  tenantKey,
+  fallback = []
+) {
+  try {
+    return await loadWebsiteTranscript(db, threadId, tenantKey);
+  } catch {
+    return arr(fallback);
+  }
+}
+
 function buildConversationMode({
   executionResults = [],
   handoffResults = [],
@@ -508,6 +640,104 @@ function buildConversationMode({
   if (handoffResults.length) return "operator_only";
   if (!automation.available) return automation.mode || "operator_only";
   return "awaiting_reply";
+}
+
+function buildSnapshotDeliveryMode({
+  thread = {},
+  automation = {},
+  messages = [],
+} = {}) {
+  if (
+    arr(messages).some(
+      (item) =>
+        lower(item?.direction) === "outbound" && lower(item?.role) === "assistant"
+    )
+  ) {
+    return "assistant_replied";
+  }
+
+  if (
+    thread?.handoff_active === true ||
+    thread?.handoffActive === true ||
+    arr(messages).some(
+      (item) =>
+        lower(item?.direction) === "outbound" && lower(item?.role) === "operator"
+    )
+  ) {
+    return "operator_only";
+  }
+
+  if (!automation.available) return automation.mode || "operator_only";
+  return "awaiting_reply";
+}
+
+function ensureSessionMatchesWidgetId(sessionState = {}, widgetId = "") {
+  if (!sessionState?.ok) return sessionState;
+  if (lower(sessionState.session?.payload?.widgetId) === lower(widgetId)) {
+    return sessionState;
+  }
+
+  return {
+    ok: false,
+    error: "website_widget_install_mismatch",
+    details: buildPublicErrorDetails("website_widget_install_mismatch"),
+  };
+}
+
+async function buildWebsiteConversationSnapshot({
+  db,
+  getRuntime,
+  tenant,
+  session,
+  service,
+} = {}) {
+  const thread = await findWebsiteThreadForSession(db, {
+    tenantKey: tenant?.tenantKey,
+    threadId: session?.threadId,
+    sessionId: session?.sessionId,
+  });
+  const activeThread = isWebsiteThread(thread) ? thread : null;
+  const refreshedSession = issueWebsiteWidgetSession({
+    ...session,
+    tenantId: tenant?.id,
+    tenantKey: tenant?.tenantKey,
+    widgetId:
+      normalizeWidgetConfig(tenant?.widgetConfig, {
+        defaultEnabled: true,
+      }).publicWidgetId || s(session?.widgetId),
+    threadId: activeThread?.id || "",
+  });
+  const threadState =
+    activeThread?.id && (await getInboxThreadState(db, activeThread.id));
+  const runtimeState = await loadStrictInboxRuntime({
+    client: db,
+    getRuntime,
+    tenantKey: tenant?.tenantKey,
+    threadState: threadState || null,
+    service,
+    channelType: WEBSITE_RUNTIME_CHANNEL,
+  });
+  const automation = buildWidgetAutomation({ runtimeState });
+  const messages =
+    activeThread?.id
+      ? await loadWebsiteTranscriptSafe(db, activeThread.id, tenant?.tenantKey)
+      : [];
+
+  return {
+    session: refreshedSession.payload,
+    sessionToken: refreshedSession.token,
+    widget: buildWidgetShell(tenant, automation),
+    automation,
+    thread: activeThread,
+    messages,
+    delivery: {
+      mode: buildSnapshotDeliveryMode({
+        thread: activeThread,
+        automation,
+        messages,
+      }),
+    },
+  };
 }
 
 function buildFallbackActions(outcome = "", reasonCodes = []) {
@@ -629,6 +859,25 @@ async function processWebsiteWidgetMessage({
     });
 
     if (duplicateMessage) {
+      const duplicateThreadState = await getInboxThreadState(client, thread.id);
+      const duplicateRuntimeState = await loadStrictInboxRuntime({
+        client,
+        getRuntime,
+        tenantKey: tenant.tenantKey,
+        threadState: duplicateThreadState || null,
+        service: "website_widget.message",
+        channelType: WEBSITE_RUNTIME_CHANNEL,
+      });
+      const duplicateAutomation = buildWidgetAutomation({
+        runtimeState: duplicateRuntimeState,
+      });
+      const duplicateMessages = await loadWebsiteTranscriptSafe(
+        client,
+        thread.id,
+        tenant.tenantKey,
+        [toPublicMessage(duplicateMessage)]
+      );
+
       await client.query("COMMIT");
       client.release();
       client = null;
@@ -645,17 +894,16 @@ async function processWebsiteWidgetMessage({
         duplicate: true,
         session: refreshedSession.payload,
         sessionToken: refreshedSession.token,
-        widget: buildWidgetShell(tenant, { available: true }),
+        widget: buildWidgetShell(tenant, duplicateAutomation),
         thread: toPublicThread(thread),
-        messages: [toPublicMessage(duplicateMessage)],
-        automation: {
-          available: true,
-          mode: "assistant_available",
-          summary: "",
-          reasonCodes: [],
-        },
+        messages: duplicateMessages,
+        automation: duplicateAutomation,
         delivery: {
-          mode: "awaiting_reply",
+          mode: buildSnapshotDeliveryMode({
+            thread,
+            automation: duplicateAutomation,
+            messages: duplicateMessages,
+          }),
         },
       };
     }
@@ -975,6 +1223,28 @@ async function processWebsiteWidgetMessage({
       })
     );
 
+    const fallbackMessages = [
+      toPublicMessage(message),
+      ...executionResults
+        .map((item) => item?.message)
+        .filter(Boolean)
+        .filter(isPublicVisibleMessage)
+        .map(toPublicMessage),
+    ].sort((a, b) => {
+      const left = new Date(a.sentAt || a.createdAt || 0).getTime();
+      const right = new Date(b.sentAt || b.createdAt || 0).getTime();
+      return left - right;
+    });
+    const responseMessages =
+      finalThread?.id
+        ? await loadWebsiteTranscriptSafe(
+            client,
+            finalThread.id,
+            tenant.tenantKey,
+            fallbackMessages
+          )
+        : fallbackMessages;
+
     await client.query("COMMIT");
     client.release();
     client = null;
@@ -1006,19 +1276,6 @@ async function processWebsiteWidgetMessage({
       threadId: finalThread.id,
     });
 
-    const publicMessages = [
-      toPublicMessage(message),
-      ...executionResults
-        .map((item) => item?.message)
-        .filter(Boolean)
-        .filter(isPublicVisibleMessage)
-        .map(toPublicMessage),
-    ].sort((a, b) => {
-      const left = new Date(a.sentAt || a.createdAt || 0).getTime();
-      const right = new Date(b.sentAt || b.createdAt || 0).getTime();
-      return left - right;
-    });
-
     return {
       ok: true,
       duplicate: false,
@@ -1027,7 +1284,7 @@ async function processWebsiteWidgetMessage({
       widget: buildWidgetShell(tenant, automation),
       automation,
       thread: toPublicThread(finalThread),
-      messages: publicMessages,
+      messages: responseMessages,
       delivery: {
         mode: buildConversationMode({
           executionResults,
@@ -1051,44 +1308,40 @@ export function createWebsiteWidgetHandlers({
   applyHandoff = applyHandoffActions,
 } = {}) {
   async function issueWidgetInstallToken(req, res) {
+    applyNoStore(res);
     const widgetId = resolveRequestedWidgetId(req);
 
     try {
       if (!isDbReady(db)) {
-        return okJson(res, {
-          ok: false,
-          error: "db disabled",
-          dbDisabled: true,
-        });
+        return okJson(
+          res,
+          buildPublicErrorResponse("db disabled", "", {
+            dbDisabled: true,
+          })
+        );
       }
 
       if (!widgetId) {
-        return okJson(res, {
-          ok: false,
-          error: "widgetId required",
-        });
+        return okJson(res, buildPublicErrorResponse("widgetId required"));
       }
 
       const tenant = await resolveWebsiteWidgetTenant(db, {
         publicWidgetId: widgetId,
       });
       if (!tenant?.id) {
-        return okJson(res, {
-          ok: false,
-          error: "website_widget_not_found",
-        });
+        return okJson(
+          res,
+          buildPublicErrorResponse("website_widget_not_found")
+        );
       }
 
       const installContext = buildInstallContext(req);
       const validation = validateWidgetInstallContext(tenant, installContext);
       if (!validation.ok) {
-        return okJson(res, {
-          ok: false,
-          error: validation.reasonCode,
-          details: {
-            message: validation.detail,
-          },
-        });
+        return okJson(
+          res,
+          buildPublicErrorResponse(validation.reasonCode, validation.detail)
+        );
       }
 
       const installOrigin =
@@ -1117,17 +1370,12 @@ export function createWebsiteWidgetHandlers({
         expiresAt: new Date(bootstrap.payload.expiresAt).toISOString(),
       });
     } catch (error) {
-      return okJson(res, {
-        ok: false,
-        error: "Error",
-        details: {
-          message: s(error?.message || error),
-        },
-      });
+      return okJson(res, buildPublicErrorResponse("Error"));
     }
   }
 
   async function bootstrapWebsiteWidget(req, res) {
+    applyNoStore(res);
     const body = obj(req.body);
     const widgetId = resolveRequestedWidgetId(req);
     const providedSessionToken = s(body.sessionToken);
@@ -1135,70 +1383,120 @@ export function createWebsiteWidgetHandlers({
 
     try {
       if (!isDbReady(db)) {
-        return okJson(res, {
-          ok: false,
-          error: "db disabled",
-          dbDisabled: true,
-        });
+        return okJson(
+          res,
+          buildPublicErrorResponse("db disabled", "", {
+            dbDisabled: true,
+          })
+        );
       }
 
       if (!widgetId) {
-        return okJson(res, {
-          ok: false,
-          error: "widgetId required",
-        });
+        return okJson(res, buildPublicErrorResponse("widgetId required"));
       }
 
+      const recoverableSessionState = ensureSessionMatchesWidgetId(
+        providedSessionToken
+          ? await resolveTenantFromSession(db, providedSessionToken)
+          : {
+              ok: false,
+              error: "website_widget_session_missing",
+              details: buildPublicErrorDetails("website_widget_session_missing"),
+            },
+        widgetId
+      );
+
       if (!bootstrapToken) {
-        return okJson(res, {
-          ok: false,
-          error: "bootstrapToken required",
-        });
+        if (recoverableSessionState.ok) {
+          const snapshot = await buildWebsiteConversationSnapshot({
+            db,
+            getRuntime,
+            tenant: recoverableSessionState.tenant,
+            session: recoverableSessionState.session.payload,
+            service: "website_widget.bootstrap",
+          });
+
+          return okJson(res, {
+            ok: true,
+            session: snapshot.session,
+            sessionToken: snapshot.sessionToken,
+            widget: snapshot.widget,
+            automation: snapshot.automation,
+            thread: snapshot.thread ? toPublicThread(snapshot.thread) : null,
+            messages: snapshot.messages,
+            delivery: snapshot.delivery,
+          });
+        }
+
+        return okJson(
+          res,
+          buildPublicErrorResponse(
+            providedSessionToken
+              ? recoverableSessionState.error
+              : "bootstrapToken required",
+            s(recoverableSessionState?.details?.message)
+          )
+        );
       }
 
       const verifiedBootstrap = verifyWebsiteWidgetBootstrapToken(bootstrapToken);
       if (!verifiedBootstrap.ok) {
-        return okJson(res, {
-          ok: false,
-          error: verifiedBootstrap.error,
-        });
+        if (recoverableSessionState.ok) {
+          const snapshot = await buildWebsiteConversationSnapshot({
+            db,
+            getRuntime,
+            tenant: recoverableSessionState.tenant,
+            session: recoverableSessionState.session.payload,
+            service: "website_widget.bootstrap",
+          });
+
+          return okJson(res, {
+            ok: true,
+            session: snapshot.session,
+            sessionToken: snapshot.sessionToken,
+            widget: snapshot.widget,
+            automation: snapshot.automation,
+            thread: snapshot.thread ? toPublicThread(snapshot.thread) : null,
+            messages: snapshot.messages,
+            delivery: snapshot.delivery,
+          });
+        }
+
+        return okJson(
+          res,
+          buildPublicErrorResponse(verifiedBootstrap.error)
+        );
       }
 
       if (lower(verifiedBootstrap.payload?.widgetId) !== lower(widgetId)) {
-        return okJson(res, {
-          ok: false,
-          error: "website_widget_install_mismatch",
-        });
+        return okJson(
+          res,
+          buildPublicErrorResponse("website_widget_install_mismatch")
+        );
       }
 
       const tenant = await resolveWebsiteWidgetTenant(db, {
         publicWidgetId: widgetId,
       });
       if (!tenant?.id) {
-        return okJson(res, {
-          ok: false,
-          error: "tenant not found",
-        });
+        return okJson(res, buildPublicErrorResponse("tenant not found"));
       }
 
       const currentConfig = normalizeWidgetConfig(tenant.widgetConfig, {
         defaultEnabled: true,
       });
       if (!resolveWidgetEnabled(tenant)) {
-        return okJson(res, {
-          ok: false,
-          error: "website_widget_disabled",
-          details: {
-            message: "Website chat is disabled for this tenant.",
-          },
-        });
+        return okJson(
+          res,
+          buildPublicErrorResponse("website_widget_disabled")
+        );
       }
 
       if (lower(currentConfig.publicWidgetId) !== lower(widgetId)) {
-        return okJson(res, {
-          ok: false,
-          error: "website_widget_install_mismatch",
-        });
+        return okJson(
+          res,
+          buildPublicErrorResponse("website_widget_install_mismatch")
+        );
       }
 
       const session = resolveSessionFromBootstrap({
@@ -1206,50 +1504,31 @@ export function createWebsiteWidgetHandlers({
         bootstrapPayload: verifiedBootstrap.payload,
         providedToken: providedSessionToken,
       });
-
-      const thread =
-        s(session.payload.threadId) &&
-        (await getThreadById(db, session.payload.threadId, tenant.tenantKey));
-      const threadState =
-        thread?.id && (await getInboxThreadState(db, thread.id));
-      const runtimeState = await loadStrictInboxRuntime({
-        client: db,
+      const snapshot = await buildWebsiteConversationSnapshot({
+        db,
         getRuntime,
-        tenantKey: tenant.tenantKey,
-        threadState: threadState || null,
+        tenant,
+        session: session.payload,
         service: "website_widget.bootstrap",
-        channelType: WEBSITE_RUNTIME_CHANNEL,
       });
-      const automation = buildWidgetAutomation({ runtimeState });
-      const messages =
-        thread?.id && lower(thread.channel) === WEBSITE_THREAD_CHANNEL
-          ? await loadWebsiteTranscript(db, thread.id, tenant.tenantKey)
-          : [];
 
       return okJson(res, {
         ok: true,
-        session: session.payload,
-        sessionToken: session.token,
-        widget: buildWidgetShell(tenant, automation),
-        automation,
-        thread:
-          thread?.id && lower(thread.channel) === WEBSITE_THREAD_CHANNEL
-            ? toPublicThread(thread)
-            : null,
-        messages,
+        session: snapshot.session,
+        sessionToken: snapshot.sessionToken,
+        widget: snapshot.widget,
+        automation: snapshot.automation,
+        thread: snapshot.thread ? toPublicThread(snapshot.thread) : null,
+        messages: snapshot.messages,
+        delivery: snapshot.delivery,
       });
     } catch (error) {
-      return okJson(res, {
-        ok: false,
-        error: "Error",
-        details: {
-          message: s(error?.message || error),
-        },
-      });
+      return okJson(res, buildPublicErrorResponse("Error"));
     }
   }
 
   async function postWebsiteWidgetMessage(req, res) {
+    applyNoStore(res);
     const body = obj(req.body);
     const visitor = normalizeVisitor(req);
     const text = truncate(body.text || obj(body.message).text, 4000);
@@ -1259,18 +1538,16 @@ export function createWebsiteWidgetHandlers({
 
     try {
       if (!isDbReady(db)) {
-        return okJson(res, {
-          ok: false,
-          error: "db disabled",
-          dbDisabled: true,
-        });
+        return okJson(
+          res,
+          buildPublicErrorResponse("db disabled", "", {
+            dbDisabled: true,
+          })
+        );
       }
 
       if (!text) {
-        return okJson(res, {
-          ok: false,
-          error: "message required",
-        });
+        return okJson(res, buildPublicErrorResponse("message required"));
       }
 
       const sessionState = await resolveTenantFromSession(
@@ -1278,11 +1555,13 @@ export function createWebsiteWidgetHandlers({
         s(body.sessionToken)
       );
       if (!sessionState.ok) {
-        return okJson(res, {
-          ok: false,
-          error: sessionState.error,
-          details: sessionState.details || {},
-        });
+        return okJson(
+          res,
+          buildPublicErrorResponse(
+            sessionState.error,
+            s(sessionState?.details?.message)
+          )
+        );
       }
 
       const response = await processWebsiteWidgetMessage({
@@ -1303,24 +1582,20 @@ export function createWebsiteWidgetHandlers({
 
       return okJson(res, response);
     } catch (error) {
-      return okJson(res, {
-        ok: false,
-        error: "Error",
-        details: {
-          message: s(error?.message || error),
-        },
-      });
+      return okJson(res, buildPublicErrorResponse("Error"));
     }
   }
 
   async function getWebsiteWidgetTranscript(req, res) {
+    applyNoStore(res);
     try {
       if (!isDbReady(db)) {
-        return okJson(res, {
-          ok: false,
-          error: "db disabled",
-          dbDisabled: true,
-        });
+        return okJson(
+          res,
+          buildPublicErrorResponse("db disabled", "", {
+            dbDisabled: true,
+          })
+        );
       }
 
       const sessionState = await resolveTenantFromSession(
@@ -1328,53 +1603,43 @@ export function createWebsiteWidgetHandlers({
         s(obj(req.body).sessionToken)
       );
       if (!sessionState.ok) {
-        return okJson(res, {
-          ok: false,
-          error: sessionState.error,
-          details: sessionState.details || {},
-        });
+        return okJson(
+          res,
+          buildPublicErrorResponse(
+            sessionState.error,
+            s(sessionState?.details?.message)
+          )
+        );
       }
 
       const tenant = sessionState.tenant;
       const session = sessionState.session;
-      const thread =
-        s(session.payload.threadId) &&
-        (await getThreadById(db, session.payload.threadId, tenant.tenantKey));
-
-      if (!thread?.id || lower(thread.channel) !== WEBSITE_THREAD_CHANNEL) {
-        const refreshed = issueWebsiteWidgetSession({
-          ...session.payload,
-          tenantId: tenant.id,
-          tenantKey: tenant.tenantKey,
-          threadId: "",
-        });
-
-        return okJson(res, {
-          ok: true,
-          session: refreshed.payload,
-          sessionToken: refreshed.token,
-          thread: null,
-          messages: [],
-        });
-      }
-
-      const messages = await loadWebsiteTranscript(db, thread.id, tenant.tenantKey);
+      const thread = await findWebsiteThreadForSession(db, {
+        tenantKey: tenant.tenantKey,
+        threadId: session.payload.threadId,
+        sessionId: session.payload.sessionId,
+      });
+      const activeThread = isWebsiteThread(thread) ? thread : null;
+      const refreshed = issueWebsiteWidgetSession({
+        ...session.payload,
+        tenantId: tenant.id,
+        tenantKey: tenant.tenantKey,
+        threadId: activeThread?.id || "",
+      });
+      const messages =
+        activeThread?.id
+          ? await loadWebsiteTranscript(db, activeThread.id, tenant.tenantKey)
+          : [];
 
       return okJson(res, {
         ok: true,
-        session: session.payload,
-        sessionToken: session.token,
-        thread: toPublicThread(thread),
+        session: refreshed.payload,
+        sessionToken: refreshed.token,
+        thread: activeThread ? toPublicThread(activeThread) : null,
         messages,
       });
     } catch (error) {
-      return okJson(res, {
-        ok: false,
-        error: "Error",
-        details: {
-          message: s(error?.message || error),
-        },
-      });
+      return okJson(res, buildPublicErrorResponse("Error"));
     }
   }
 
