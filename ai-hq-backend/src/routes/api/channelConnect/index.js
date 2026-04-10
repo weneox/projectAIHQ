@@ -22,6 +22,9 @@ import {
   getTelegramStatus,
 } from "./telegram.js";
 import {
+  checkWebsiteDomainVerification,
+  createWebsiteDomainVerificationChallenge,
+  getWebsiteDomainVerificationStatus,
   getWebsiteWidgetStatus,
   saveWebsiteWidgetConfig,
 } from "./website.js";
@@ -210,6 +213,69 @@ export function channelConnectRoutes({ db }) {
       );
     }
   });
+
+  r.get(
+    "/channels/webchat/domain-verification",
+    requireUserSession,
+    async (req, res) => {
+      try {
+        const payload = await getWebsiteDomainVerificationStatus({ db, req });
+        return ok(res, payload);
+      } catch (err) {
+        return respondRouteError(
+          res,
+          err,
+          "Failed to load website domain verification status",
+          {
+            reasonCode: err?.reasonCode || null,
+          }
+        );
+      }
+    }
+  );
+
+  r.post(
+    "/channels/webchat/domain-verification/challenge",
+    requireUserSession,
+    async (req, res) => {
+      try {
+        const payload = await createWebsiteDomainVerificationChallenge({
+          db,
+          req,
+        });
+        return ok(res, payload);
+      } catch (err) {
+        return respondRouteError(
+          res,
+          err,
+          "Failed to create website domain verification challenge",
+          {
+            reasonCode: err?.reasonCode || null,
+          }
+        );
+      }
+    }
+  );
+
+  r.post(
+    "/channels/webchat/domain-verification/check",
+    requireUserSession,
+    async (req, res) => {
+      try {
+        const payload = await checkWebsiteDomainVerification({ db, req });
+        return ok(res, payload);
+      } catch (err) {
+        return respondRouteError(
+          res,
+          err,
+          "Failed to check website domain verification",
+          {
+            reasonCode: err?.reasonCode || null,
+          }
+        );
+      }
+    }
+  );
 
   return r;
 }

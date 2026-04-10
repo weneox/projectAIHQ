@@ -42,3 +42,4 @@
 \i ./93_runtime_incident_trail.sql
 \i ./94_operational_data_backfill_correction.sql
 \i ./97_inbox_thread_latest_message_index.sql
+\i ./98_website_domain_verifications.sql
