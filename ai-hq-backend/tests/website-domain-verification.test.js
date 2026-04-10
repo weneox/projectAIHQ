@@ -437,7 +437,7 @@ test("website widget status blocks production install until domain ownership is 
       assert.equal(payload.install?.handoffTargetDomain, "acme.example");
       assert.equal(payload.readiness?.status, "blocked");
     }
-  });
+  );
 });
 
 test("website widget install handoff returns a developer package only when production install is ready", async () => {
@@ -480,7 +480,7 @@ test("website widget install handoff returns a developer package only when produ
         true
       );
     }
-  });
+  );
 });
 
 test("website widget install handoff refuses to generate while production install is blocked", async () => {
