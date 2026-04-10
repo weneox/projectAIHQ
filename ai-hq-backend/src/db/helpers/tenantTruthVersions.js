@@ -1487,10 +1487,17 @@ export async function createTruthVersionInternal(db, input = {}) {
     metadata: input.metadataJson ?? input.metadata_json,
   });
 
-  if (
-    !Object.keys(snapshot.profileSnapshot).length &&
-    !Object.keys(snapshot.capabilitiesSnapshot).length
-  ) {
+  const hasAnySnapshotPayload =
+    Object.keys(obj(snapshot.profileSnapshot)).length > 0 ||
+    Object.keys(obj(snapshot.capabilitiesSnapshot)).length > 0 ||
+    arr(snapshot.servicesSnapshot).length > 0 ||
+    arr(snapshot.contactsSnapshot).length > 0 ||
+    arr(snapshot.locationsSnapshot).length > 0 ||
+    arr(snapshot.truthFactsSnapshot).length > 0 ||
+    Object.keys(obj(snapshot.fieldProvenance)).length > 0 ||
+    Object.keys(obj(snapshot.sourceSummary)).length > 0;
+
+  if (!hasAnySnapshotPayload) {
     return null;
   }
 
