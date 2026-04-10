@@ -28,7 +28,7 @@ function SectionTitle({ children, collapsed = false }) {
   if (collapsed) return null;
 
   return (
-    <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle first:pt-0">
+    <div className="px-4 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle first:pt-0">
       {children}
     </div>
   );
@@ -38,7 +38,7 @@ function Brand({ collapsed = false, mobile = false, onNavigate, onClose }) {
   return (
     <div
       className={cx(
-        "border-b border-line-soft px-3 py-3",
+        "border-b border-white/70 px-3 py-3.5",
         collapsed && !mobile && "px-2"
       )}
     >
@@ -55,22 +55,17 @@ function Brand({ collapsed = false, mobile = false, onNavigate, onClose }) {
           className={cx(
             "min-w-0 text-text",
             collapsed && !mobile
-              ? "flex h-10 w-10 items-center justify-center rounded-soft border border-line bg-surface"
+              ? "flex h-10 w-10 items-center justify-center rounded-soft"
               : "flex min-w-0 flex-1 items-center gap-3"
           )}
         >
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-soft border border-line bg-surface-subtle">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-soft bg-surface-subtle text-text shadow-[0_1px_0_rgba(255,255,255,0.88)_inset]">
             <Building2 className="h-4 w-4" strokeWidth={1.9} />
           </span>
 
           {!collapsed || mobile ? (
-            <span className="min-w-0">
-              <span className="block truncate text-[15px] font-semibold">
-                AI HQ
-              </span>
-              <span className="block truncate text-[12px] text-text-muted">
-                Product shell
-              </span>
+            <span className="min-w-0 truncate text-[15px] font-semibold tracking-[-0.02em]">
+              AI HQ
             </span>
           ) : null}
         </NavLink>
@@ -80,7 +75,7 @@ function Brand({ collapsed = false, mobile = false, onNavigate, onClose }) {
             type="button"
             onClick={onClose}
             aria-label="Close navigation"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-soft border border-line bg-surface text-text-muted hover:bg-surface-subtle hover:text-text"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-soft text-text-muted transition-[background-color,color] duration-base ease-premium hover:bg-surface-subtle hover:text-text"
           >
             <X className="h-4 w-4" strokeWidth={1.9} />
           </button>
@@ -105,20 +100,31 @@ function NavRow({ item, shellStats = {}, onNavigate, collapsed = false }) {
       {({ isActive }) => (
         <div
           className={cx(
-            "relative flex items-center gap-3 rounded-soft border px-3 text-[13px] transition-colors",
+            "group relative flex items-center gap-3 rounded-soft px-4 text-[13px] transition-[background-color,color,transform] duration-base ease-premium",
             collapsed ? "mx-auto h-10 w-10 justify-center px-0" : "h-10",
             isActive
-              ? "border-line-strong bg-surface-subtle text-text"
-              : "border-transparent text-text-muted hover:border-line-soft hover:bg-surface-subtle hover:text-text"
+              ? "bg-surface-subtle text-text"
+              : "text-text-muted hover:bg-surface-subtle hover:text-text"
           )}
         >
-          <Icon className="h-4 w-4 shrink-0" strokeWidth={1.9} />
+          {isActive && !collapsed ? (
+            <span className="absolute left-0 top-1/2 h-5 w-[2px] -translate-y-1/2 rounded-full bg-brand" />
+          ) : null}
+
+          <Icon
+            className={cx(
+              "h-4 w-4 shrink-0 transition-colors",
+              isActive ? "text-text" : "text-text-subtle group-hover:text-text"
+            )}
+            strokeWidth={1.9}
+          />
 
           {!collapsed ? (
             <>
               <span className="min-w-0 flex-1 truncate font-medium">
                 {item.label}
               </span>
+
               {badgeCount ? (
                 <span className="shrink-0 text-[12px] text-text-subtle">
                   {badgeCount}
@@ -148,6 +154,7 @@ function NavGroup({
   return (
     <div className="space-y-1">
       <SectionTitle collapsed={collapsed}>{title}</SectionTitle>
+
       {items.map((item) => (
         <NavRow
           key={item.id}
@@ -170,13 +177,9 @@ function CollapseControl({ collapsed = false, onToggle }) {
       onClick={onToggle}
       aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-      className={cx(
-        "inline-flex items-center justify-center rounded-soft border border-line bg-surface text-text-muted hover:bg-surface-subtle hover:text-text",
-        collapsed ? "h-9 w-9" : "h-9 w-full gap-2"
-      )}
+      className="inline-flex h-9 w-9 items-center justify-center rounded-soft text-text-muted transition-[background-color,color] duration-base ease-premium hover:bg-surface-subtle hover:text-text"
     >
       <Icon className="h-4 w-4" strokeWidth={1.9} />
-      {!collapsed ? <span className="text-[13px] font-medium">Collapse</span> : null}
     </button>
   );
 }
@@ -190,7 +193,7 @@ function SidebarContent({
   onCloseMobile,
 }) {
   return (
-    <div className="flex h-full flex-col bg-surface">
+    <div className="flex h-full flex-col bg-transparent">
       <Brand
         collapsed={collapsed}
         mobile={mobile}
@@ -199,7 +202,7 @@ function SidebarContent({
       />
 
       <div className="sidebar-scroll flex-1 overflow-y-auto px-2 py-3">
-        <div className="space-y-4">
+        <div className="space-y-5">
           <NavGroup
             title="Primary"
             items={PRIMARY_SECTIONS}
@@ -229,7 +232,7 @@ function SidebarContent({
       {!mobile ? (
         <div
           className={cx(
-            "border-t border-line-soft p-2",
+            "border-t border-white/70 p-2",
             collapsed && "flex justify-center"
           )}
         >
@@ -253,7 +256,7 @@ export default function Sidebar({
   return (
     <>
       <aside
-        className="fixed inset-y-0 left-0 z-[70] hidden overflow-hidden border-r border-line-soft bg-surface md:block"
+        className="fixed inset-y-0 left-0 z-[70] hidden overflow-hidden border-r border-white/70 bg-transparent md:block"
         style={{ width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH }}
       >
         <SidebarContent
@@ -272,11 +275,13 @@ export default function Sidebar({
         styles={{
           body: {
             padding: 0,
-            background: "rgb(var(--color-surface))",
+            background: "rgba(var(--color-surface),0.96)",
+            backdropFilter: "blur(16px)",
           },
           header: { display: "none" },
           content: {
-            background: "rgb(var(--color-surface))",
+            background: "rgba(var(--color-surface),0.96)",
+            backdropFilter: "blur(16px)",
           },
           mask: {
             background: "rgba(17,24,39,0.2)",

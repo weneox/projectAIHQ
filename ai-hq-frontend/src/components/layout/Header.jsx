@@ -85,15 +85,15 @@ function WorkspaceControl({ notifications }) {
   const initials = useMemo(() => getInitials(displayName) || "W", [displayName]);
 
   const overlay = (
-    <div className="dropdown-panel-anim w-[240px] rounded-panel border border-line bg-surface p-2 shadow-panel-strong">
-      <div className="px-2 py-2">
+    <div className="dropdown-panel-anim w-[248px] rounded-[18px] border border-white/70 bg-surface/96 p-2 shadow-panel-strong backdrop-blur">
+      <div className="px-2 py-2.5">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface-subtle text-[12px] font-semibold text-text">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-subtle text-[12px] font-semibold text-text shadow-[0_1px_0_rgba(255,255,255,0.88)_inset]">
             {initials}
           </div>
 
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[14px] font-semibold text-text">
+            <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
               {displayName}
             </div>
             <div className="truncate text-[12px] text-text-muted">
@@ -111,10 +111,10 @@ function WorkspaceControl({ notifications }) {
           setOpen(false);
           notifications?.setOpen?.(!notifications?.open);
         }}
-        className="flex h-9 w-full items-center justify-between rounded-soft px-3 text-left text-[13px] text-text hover:bg-surface-subtle"
+        className="flex h-10 w-full items-center justify-between rounded-soft px-3 text-left text-[13px] font-medium text-text transition-colors hover:bg-surface-subtle"
       >
         <span>Notifications</span>
-        <span className="text-[12px] text-text-muted">
+        <span className="text-[12px] text-text-subtle">
           {unread > 99 ? "99+" : unread}
         </span>
       </button>
@@ -122,7 +122,7 @@ function WorkspaceControl({ notifications }) {
       <button
         type="button"
         onClick={handleLogout}
-        className="mt-1 flex h-9 w-full items-center rounded-soft px-3 text-left text-[13px] text-danger hover:bg-danger-soft"
+        className="mt-1 flex h-10 w-full items-center rounded-soft px-3 text-left text-[13px] font-medium text-danger transition-colors hover:bg-danger-soft"
       >
         {loggingOut ? "Signing out..." : "Sign out"}
       </button>
@@ -142,16 +142,16 @@ function WorkspaceControl({ notifications }) {
         aria-label={displayName}
         aria-expanded={open}
         className={cx(
-          "flex h-9 items-center gap-2 rounded-soft border border-line bg-surface px-2.5 text-left hover:bg-surface-subtle",
-          open && "bg-surface-subtle"
+          "flex h-10 items-center gap-2.5 rounded-soft px-1.5 text-left transition-[background-color,color] duration-base ease-premium",
+          open ? "bg-surface-subtle" : "hover:bg-surface-subtle"
         )}
       >
-        <div className="flex h-7 w-7 items-center justify-center rounded-full border border-line bg-surface-subtle text-[11px] font-semibold text-text">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-subtle text-[11px] font-semibold text-text shadow-[0_1px_0_rgba(255,255,255,0.88)_inset]">
           {initials}
         </div>
 
         <div className="hidden min-w-0 text-left lg:block">
-          <div className="truncate text-[13px] font-medium text-text">
+          <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
             {displayName}
           </div>
           <div className="truncate text-[12px] text-text-muted">
@@ -181,12 +181,12 @@ function NotificationsButton({ notifications }) {
     <button
       type="button"
       onClick={() => notifications?.setOpen?.(!notifications?.open)}
-      className="relative inline-flex h-9 w-9 items-center justify-center rounded-soft border border-line bg-surface text-text-muted hover:bg-surface-subtle hover:text-text"
+      className="relative inline-flex h-9 w-9 items-center justify-center rounded-soft text-text-muted transition-[background-color,color] duration-base ease-premium hover:bg-surface-subtle hover:text-text"
       aria-label="Open notifications"
     >
       <Bell className="h-4 w-4" strokeWidth={1.9} />
       {unread > 0 ? (
-        <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand" />
+        <span className="absolute right-[8px] top-[8px] h-2 w-2 rounded-full bg-brand" />
       ) : null}
     </button>
   );
@@ -196,7 +196,7 @@ export default function Header({ onMenuClick, notifications }) {
   return (
     <>
       <header
-        className="sticky top-0 z-[60] border-b border-line-soft bg-surface"
+        className="sticky top-0 z-[60]"
         style={{ height: SHELL_TOPBAR_HEIGHT }}
       >
         <div className="mx-auto flex h-full max-w-shell-content items-center justify-between gap-3 px-4 md:px-6">
@@ -204,23 +204,14 @@ export default function Header({ onMenuClick, notifications }) {
             <button
               type="button"
               onClick={onMenuClick}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-soft border border-line bg-surface text-text-muted hover:bg-surface-subtle hover:text-text md:hidden"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-soft text-text-muted transition-[background-color,color] duration-base ease-premium hover:bg-surface-subtle hover:text-text md:hidden"
               aria-label="Open navigation"
             >
               <Menu className="h-4 w-4" strokeWidth={2} />
             </button>
-
-            <div className="hidden md:block">
-              <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
-                AI HQ
-              </div>
-              <div className="text-[13px] text-text-muted">
-                Launch posture and live operations
-              </div>
-            </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 md:gap-2">
             <CommandMenu />
             <NotificationsButton notifications={notifications} />
             <WorkspaceControl notifications={notifications} />

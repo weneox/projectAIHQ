@@ -7,34 +7,55 @@ function resolveAppearance(appearance = "default") {
     case "product":
       return {
         shell: "rounded-soft",
-        row: "min-h-[44px] gap-3 px-3.5",
-        input: "h-[44px] text-[14px]",
+        height: "h-[44px]",
+        input: "text-[14px]",
         textareaWrap: "px-3.5 py-3.5",
         textarea: "min-h-[132px] text-[14px] leading-6",
         selectWrap: "px-3.5",
-        select: "h-[44px] pr-8 text-[14px]",
+        select: "h-[44px] pr-10 text-[14px]",
+        leftInset: "left-3.5",
+        rightInset: "right-3.5",
+        padLeftBase: "pl-3.5",
+        padLeftWithIcon: "pl-11",
+        padRightBase: "pr-3.5",
+        padRightWithSlot: "pr-11",
+        padRightWide: "pr-[84px]",
       };
 
     case "quiet":
       return {
         shell: "rounded-soft",
-        row: "min-h-[38px] gap-2.5 px-3",
-        input: "h-[38px] text-[13px]",
+        height: "h-[38px]",
+        input: "text-[13px]",
         textareaWrap: "px-3 py-3",
         textarea: "min-h-[112px] text-[13px] leading-6",
         selectWrap: "px-3",
-        select: "h-[38px] pr-8 text-[13px]",
+        select: "h-[38px] pr-9 text-[13px]",
+        leftInset: "left-3",
+        rightInset: "right-3",
+        padLeftBase: "pl-3",
+        padLeftWithIcon: "pl-9.5",
+        padRightBase: "pr-3",
+        padRightWithSlot: "pr-9.5",
+        padRightWide: "pr-[76px]",
       };
 
     default:
       return {
         shell: "rounded-soft",
-        row: "min-h-[40px] gap-2.5 px-3.5",
-        input: "h-[40px] text-[14px]",
+        height: "h-[40px]",
+        input: "text-[14px]",
         textareaWrap: "px-3.5 py-3.5",
         textarea: "min-h-[120px] text-[14px] leading-6",
         selectWrap: "px-3.5",
-        select: "h-[40px] pr-8 text-[14px]",
+        select: "h-[40px] pr-10 text-[14px]",
+        leftInset: "left-3.5",
+        rightInset: "right-3.5",
+        padLeftBase: "pl-3.5",
+        padLeftWithIcon: "pl-11",
+        padRightBase: "pr-3.5",
+        padRightWithSlot: "pr-11",
+        padRightWide: "pr-[84px]",
       };
   }
 }
@@ -73,7 +94,7 @@ function FieldShell({
   return (
     <div
       className={cx(
-        "relative w-full overflow-hidden border transition-[border-color,background-color,box-shadow] duration-base ease-premium",
+        "ui-field-shell relative w-full overflow-hidden border transition-[border-color,background-color,box-shadow] duration-base ease-premium",
         view.shell,
         surfaceClass({ disabled, readOnly, invalid }),
         className
@@ -81,6 +102,17 @@ function FieldShell({
     >
       {children}
     </div>
+  );
+}
+
+function resolveInputPadding({ hasLeftIcon, hasRightSlot, hasWideRight, view }) {
+  return cx(
+    hasLeftIcon ? view.padLeftWithIcon : view.padLeftBase,
+    hasWideRight
+      ? view.padRightWide
+      : hasRightSlot
+        ? view.padRightWithSlot
+        : view.padRightBase
   );
 }
 
@@ -106,6 +138,9 @@ export function InputGroup({
     !readOnly &&
     String(value ?? "").length > 0;
 
+  const hasRightSlot = Boolean(showClear || right);
+  const hasWideRight = Boolean(showClear && right);
+
   return (
     <FieldShell
       className={className}
@@ -114,39 +149,60 @@ export function InputGroup({
       invalid={invalid}
       appearance={appearance}
     >
-      <div className={cx("flex items-center", view.row)}>
-        {leftIcon ? (
-          <span className="shrink-0 text-text-subtle">{leftIcon}</span>
-        ) : null}
-
-        <input
-          value={value}
-          disabled={disabled}
-          readOnly={readOnly}
-          placeholder={placeholder}
-          aria-invalid={invalid || undefined}
+      {leftIcon ? (
+        <span
           className={cx(
-            "w-full border-0 bg-transparent p-0 text-text outline-none placeholder:text-text-subtle",
-            disabled && "cursor-not-allowed",
-            view.input,
-            inputClassName
+            "pointer-events-none absolute top-1/2 z-[1] -translate-y-1/2 text-text-subtle",
+            view.leftInset
           )}
-          {...props}
-        />
+        >
+          {leftIcon}
+        </span>
+      ) : null}
 
-        {showClear ? (
-          <button
-            type="button"
-            onClick={onClear}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-soft text-text-subtle transition-colors hover:bg-surface-subtle hover:text-text"
-            aria-label="Clear"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        ) : null}
+      <input
+        value={value}
+        disabled={disabled}
+        readOnly={readOnly}
+        placeholder={placeholder}
+        aria-invalid={invalid || undefined}
+        className={cx(
+          "ui-field-control block w-full border-0 bg-transparent outline-none placeholder:text-text-subtle",
+          disabled && "cursor-not-allowed",
+          view.height,
+          view.input,
+          resolveInputPadding({
+            hasLeftIcon: Boolean(leftIcon),
+            hasRightSlot,
+            hasWideRight,
+            view,
+          }),
+          inputClassName
+        )}
+        {...props}
+      />
 
-        {right ? <div className="shrink-0">{right}</div> : null}
-      </div>
+      {hasRightSlot ? (
+        <div
+          className={cx(
+            "absolute top-1/2 z-[1] flex -translate-y-1/2 items-center gap-1.5",
+            view.rightInset
+          )}
+        >
+          {showClear ? (
+            <button
+              type="button"
+              onClick={onClear}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-soft text-text-subtle transition-colors hover:bg-surface-subtle hover:text-text"
+              aria-label="Clear"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+
+          {right ? <div className="shrink-0">{right}</div> : null}
+        </div>
+      ) : null}
     </FieldShell>
   );
 }
@@ -166,6 +222,7 @@ const Input = forwardRef(function Input(
   ref
 ) {
   const view = resolveAppearance(appearance);
+  const hasRightSlot = Boolean(right);
 
   return (
     <FieldShell
@@ -175,27 +232,48 @@ const Input = forwardRef(function Input(
       invalid={invalid}
       appearance={appearance}
     >
-      <div className={cx("flex items-center", view.row)}>
-        {leftIcon ? (
-          <span className="shrink-0 text-text-subtle">{leftIcon}</span>
-        ) : null}
-
-        <input
-          ref={ref}
-          disabled={disabled}
-          readOnly={readOnly}
-          aria-invalid={invalid || undefined}
+      {leftIcon ? (
+        <span
           className={cx(
-            "w-full border-0 bg-transparent p-0 text-text outline-none placeholder:text-text-subtle",
-            disabled && "cursor-not-allowed",
-            view.input,
-            inputClassName
+            "pointer-events-none absolute top-1/2 z-[1] -translate-y-1/2 text-text-subtle",
+            view.leftInset
           )}
-          {...props}
-        />
+        >
+          {leftIcon}
+        </span>
+      ) : null}
 
-        {right ? <div className="shrink-0">{right}</div> : null}
-      </div>
+      <input
+        ref={ref}
+        disabled={disabled}
+        readOnly={readOnly}
+        aria-invalid={invalid || undefined}
+        className={cx(
+          "ui-field-control block w-full border-0 bg-transparent outline-none placeholder:text-text-subtle",
+          disabled && "cursor-not-allowed",
+          view.height,
+          view.input,
+          resolveInputPadding({
+            hasLeftIcon: Boolean(leftIcon),
+            hasRightSlot,
+            hasWideRight: false,
+            view,
+          }),
+          inputClassName
+        )}
+        {...props}
+      />
+
+      {right ? (
+        <div
+          className={cx(
+            "absolute top-1/2 z-[1] -translate-y-1/2",
+            view.rightInset
+          )}
+        >
+          {right}
+        </div>
+      ) : null}
     </FieldShell>
   );
 });
@@ -233,7 +311,7 @@ export const Textarea = forwardRef(function Textarea(
           readOnly={readOnly}
           aria-invalid={invalid || undefined}
           className={cx(
-            "w-full resize-y border-0 bg-transparent p-0 text-text outline-none placeholder:text-text-subtle",
+            "ui-field-control block w-full resize-y border-0 bg-transparent p-0 text-text outline-none placeholder:text-text-subtle",
             disabled && "cursor-not-allowed",
             view.textarea,
             textClassName
@@ -274,7 +352,7 @@ export const Select = forwardRef(function Select(
           disabled={disabled || readOnly}
           aria-invalid={invalid || undefined}
           className={cx(
-            "w-full appearance-none border-0 bg-transparent p-0 text-text outline-none",
+            "ui-field-control w-full appearance-none border-0 bg-transparent p-0 text-text outline-none",
             (disabled || readOnly) && "cursor-not-allowed",
             view.select,
             selectClassName

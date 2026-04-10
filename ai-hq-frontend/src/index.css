@@ -581,3 +581,30 @@ table {
     scroll-behavior: auto !important;
   }
 }
+
+.ui-field-shell:has(input:-webkit-autofill),
+.ui-field-shell:has(textarea:-webkit-autofill),
+.ui-field-shell:has(select:-webkit-autofill) {
+  background-color: rgb(var(--color-surface)) !important;
+}
+
+.ui-field-shell input:-webkit-autofill,
+.ui-field-shell input:-webkit-autofill:hover,
+.ui-field-shell input:-webkit-autofill:focus,
+.ui-field-shell textarea:-webkit-autofill,
+.ui-field-shell textarea:-webkit-autofill:hover,
+.ui-field-shell textarea:-webkit-autofill:focus,
+.ui-field-shell select:-webkit-autofill,
+.ui-field-shell select:-webkit-autofill:hover,
+.ui-field-shell select:-webkit-autofill:focus {
+  -webkit-text-fill-color: rgb(var(--color-text)) !important;
+  caret-color: rgb(var(--color-text)) !important;
+  -webkit-box-shadow: 0 0 0 1000px rgb(var(--color-surface)) inset !important;
+  box-shadow: 0 0 0 1000px rgb(var(--color-surface)) inset !important;
+  background-color: transparent !important;
+  background-clip: padding-box !important;
+  border-radius: inherit !important;
+  transition:
+    background-color 999999s ease-in-out 0s,
+    color 999999s ease-in-out 0s;
+}

@@ -70,21 +70,29 @@ export default function CommandMenu() {
 
   return (
     <>
+      <style>{`
+        .command-input-plain,
+        .command-input-plain:focus,
+        .command-input-plain:focus-visible,
+        .command-input-plain:active {
+          outline: none !important;
+          box-shadow: none !important;
+          border: 0 !important;
+        }
+      `}</style>
+
       <button
         type="button"
         onClick={openMenu}
-        aria-label="Open search"
+        aria-label="Open command menu"
         aria-expanded={dialogOpen}
         className={cx(
-          "hidden h-9 min-w-[260px] items-center gap-2 rounded-soft border border-line bg-surface px-3 text-left text-text-muted transition-colors md:inline-flex lg:min-w-[300px] xl:min-w-[340px]",
+          "hidden h-9 min-w-[210px] items-center gap-2 rounded-soft border border-line bg-surface px-3 text-left text-text-muted transition-[background-color,border-color,color] duration-base ease-premium md:inline-flex lg:min-w-[240px]",
           "hover:border-line-strong hover:bg-surface-subtle hover:text-text"
         )}
       >
         <Search className="h-4 w-4 shrink-0" strokeWidth={1.9} />
-        <span className="truncate text-[13px]">Search pages</span>
-        <span className="ml-auto shrink-0 text-[12px] text-text-subtle">
-          Ctrl K
-        </span>
+        <span className="truncate text-[13px] font-medium">Go to…</span>
       </button>
 
       <Command.Dialog
@@ -105,15 +113,15 @@ export default function CommandMenu() {
                   />
 
                   <Command.Input
-                    placeholder="Search pages"
-                    className="h-8 w-full border-0 bg-transparent p-0 text-[14px] text-text outline-none placeholder:text-text-subtle"
+                    placeholder="Go to"
+                    className="command-input-plain h-8 w-full bg-transparent p-0 text-[14px] text-text placeholder:text-text-subtle"
                   />
                 </div>
               </div>
 
               <Command.List className="command-scroll max-h-[360px] overflow-y-auto p-2">
                 <Command.Empty className="px-3 py-8 text-center text-[13px] text-text-muted">
-                  No results
+                  No matching page
                 </Command.Empty>
 
                 {groups.map((group, groupIndex) => (

@@ -134,7 +134,8 @@ function SharedStatsNotice({ message }) {
       tone="warning"
       title="Workspace stats unavailable"
       description={message}
-      className="mb-4"
+      className="mb-5"
+      compact
     />
   );
 }
@@ -318,9 +319,21 @@ export default function Shell() {
 
   return (
     <div
-      className="min-h-screen bg-canvas text-text"
+      className="relative min-h-screen overflow-hidden bg-canvas-muted text-text"
       style={{ "--shell-sidebar-w": `${shellSidebarWidth}px` }}
     >
+      <div className="pointer-events-none fixed inset-0 -z-[3] overflow-hidden">
+        <div className="absolute left-[-12%] top-[-14%] h-[460px] w-[460px] rounded-full bg-[radial-gradient(circle,rgba(46,96,255,0.12)_0%,rgba(46,96,255,0.04)_42%,rgba(46,96,255,0)_72%)] blur-3xl" />
+        <div className="absolute right-[-10%] top-[8%] h-[380px] w-[380px] rounded-full bg-[radial-gradient(circle,rgba(15,23,42,0.10)_0%,rgba(15,23,42,0.03)_48%,rgba(15,23,42,0)_76%)] blur-3xl" />
+        <div className="absolute bottom-[-14%] left-[28%] h-[320px] w-[320px] rounded-full bg-[radial-gradient(circle,rgba(21,128,61,0.06)_0%,rgba(21,128,61,0.015)_54%,rgba(21,128,61,0)_76%)] blur-3xl" />
+      </div>
+
+      <div className="pointer-events-none fixed inset-y-0 left-0 z-[1] hidden border-r border-white/60 bg-surface/88 shadow-[inset_-1px_0_0_rgba(255,255,255,0.7)] backdrop-blur md:block"
+        style={{ width: "var(--shell-sidebar-w)" }}
+      />
+
+      <div className="pointer-events-none fixed left-0 right-0 top-0 z-[1] h-[56px] border-b border-white/60 bg-surface/86 shadow-[inset_0_-1px_0_rgba(255,255,255,0.72)] backdrop-blur" />
+
       <Sidebar
         mobileOpen={mobileOpen}
         setMobileOpen={setMobileOpen}
@@ -329,7 +342,7 @@ export default function Shell() {
         setCollapsed={setSidebarCollapsed}
       />
 
-      <div className="min-h-screen md:pl-[var(--shell-sidebar-w)]">
+      <div className="relative z-[2] min-h-screen md:pl-[var(--shell-sidebar-w)]">
         <Header
           onMenuClick={() => setMobileOpen(true)}
           notifications={notifications}
@@ -337,8 +350,10 @@ export default function Shell() {
 
         <main
           className={cx(
-            "min-h-[calc(100vh-56px)]",
-            shellMode === "immersive" ? "overflow-hidden" : "page-scroll overflow-y-auto"
+            "relative min-h-[calc(100vh-56px)]",
+            shellMode === "immersive"
+              ? "overflow-hidden"
+              : "page-scroll overflow-y-auto"
           )}
         >
           {shellMode === "immersive" ? (
@@ -346,9 +361,16 @@ export default function Shell() {
               <Outlet />
             </div>
           ) : (
-            <div className="mx-auto w-full max-w-shell-content px-4 py-4 md:px-6 md:py-5">
-              <SharedStatsNotice message={shellStats?.message} />
-              <Outlet />
+            <div className="relative">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-[220px] bg-[linear-gradient(180deg,rgba(255,255,255,0.42),rgba(255,255,255,0))]" />
+
+              <div className="relative mx-auto w-full max-w-shell-content px-5 py-6 md:px-7 md:py-7">
+                <SharedStatsNotice message={shellStats?.message} />
+
+                <div className="min-h-[calc(100vh-56px-56px)]">
+                  <Outlet />
+                </div>
+              </div>
             </div>
           )}
         </main>

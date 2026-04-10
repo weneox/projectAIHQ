@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
+  ArrowRight,
   Building2,
   Eye,
   EyeOff,
@@ -12,10 +13,14 @@ import {
 
 import { loginUser, selectWorkspaceUser, signupUser } from "../api/auth.js";
 import { clearAppSessionContext } from "../lib/appSession.js";
+import { cx } from "../lib/cx.js";
 
-import AIVisual from "../assets/channels/AI.png";
 import GmailIconAsset from "../assets/channels/gmail.svg";
 import AppleIconAsset from "../assets/channels/apple.svg";
+
+import Button from "../components/ui/Button.jsx";
+import Input from "../components/ui/Input.jsx";
+import { InlineNotice } from "../components/ui/AppShellPrimitives.jsx";
 
 const RESERVED_SUBDOMAINS = new Set([
   "www",
@@ -40,14 +45,6 @@ const RESERVED_SUBDOMAINS = new Set([
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
-}
-
-function cn(...classes) {
-  return classes.filter(Boolean).join(" ");
-}
-
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function getTenantKeyFromHost() {
@@ -128,47 +125,6 @@ function normalizeAccountChoices(error) {
   return Array.isArray(accounts) ? accounts : [];
 }
 
-function InputResetStyles() {
-  return (
-    <style>{`
-      .auth-clean-input {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        min-width: 0;
-        margin: 0;
-        border: 0 !important;
-        outline: none !important;
-        border-radius: 0 !important;
-        background: transparent !important;
-        background-color: transparent !important;
-        box-shadow: none !important;
-        -webkit-box-shadow: none !important;
-        appearance: none;
-        -webkit-appearance: none;
-        font: inherit;
-      }
-
-      .auth-clean-input::-ms-reveal,
-      .auth-clean-input::-ms-clear {
-        display: none;
-      }
-
-      .auth-clean-input:-webkit-autofill,
-      .auth-clean-input:-webkit-autofill:hover,
-      .auth-clean-input:-webkit-autofill:focus,
-      .auth-clean-input:-webkit-autofill:active {
-        -webkit-text-fill-color: #0f172a !important;
-        caret-color: #0f172a !important;
-        background: transparent !important;
-        background-color: transparent !important;
-        transition: background-color 999999s ease-in-out 0s;
-      }
-    `}</style>
-  );
-}
-
 function OutlookIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
@@ -189,86 +145,19 @@ function OutlookIcon() {
   );
 }
 
-function AuthField({
-  icon: Icon,
-  type = "text",
-  name,
-  value,
-  placeholder,
-  onChange,
-  onFocus,
-  onBlur,
-  autoComplete,
-  focused = false,
-  rightSlot = null,
-}) {
-  return (
-    <div
-      className={cn(
-        "relative h-[66px] overflow-hidden rounded-[18px] border bg-white transition-all duration-200",
-        focused
-          ? "border-[#2d61ff] shadow-[0_0_0_4px_rgba(45,97,255,0.07)]"
-          : "border-slate-200 hover:border-slate-300"
-      )}
-    >
-      <span className="pointer-events-none absolute left-5 top-1/2 z-10 -translate-y-1/2 text-slate-400">
-        <Icon className="h-[18px] w-[18px]" />
-      </span>
-
-      <input
-        type={type}
-        name={name}
-        value={value}
-        placeholder={placeholder}
-        onChange={onChange}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        autoComplete={autoComplete}
-        className={cn(
-          "auth-clean-input text-[15px] font-medium tracking-[-0.015em] text-slate-950 placeholder:font-normal placeholder:text-slate-400",
-          rightSlot ? "pl-[56px] pr-[56px]" : "pl-[56px] pr-5"
-        )}
-      />
-
-      {rightSlot ? (
-        <div className="absolute right-5 top-1/2 z-10 -translate-y-1/2">
-          {rightSlot}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function Divider({ label = "or continue with email" }) {
-  return (
-    <div className="flex items-center gap-4">
-      <div className="h-px flex-1 bg-slate-200" />
-      <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
-        {label}
-      </div>
-      <div className="h-px flex-1 bg-slate-200" />
-    </div>
-  );
-}
-
-function InlineError({ message }) {
-  if (!message) return null;
-
-  return (
-    <div className="rounded-[18px] border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] font-medium leading-6 text-rose-700">
-      {message}
-    </div>
-  );
-}
-
 function SocialButton({ icon, label, onClick }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-[62px] w-full items-center justify-center gap-3 rounded-[16px] border border-slate-200 bg-white px-5 text-[16px] font-semibold tracking-[-0.02em] text-slate-800 transition duration-200 hover:border-slate-300 hover:bg-slate-50"
+      className={cx(
+        "inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-soft border border-line bg-surface px-4 text-[13px] font-semibold tracking-[-0.01em] text-text",
+        "transition-[background-color,border-color,color,box-shadow,transform] duration-base ease-premium",
+        "shadow-[0_1px_0_rgba(255,255,255,0.92)_inset]",
+        "hover:border-line-strong hover:bg-surface-muted"
+      )}
     >
-      {icon}
+      <span className="shrink-0">{icon}</span>
       <span>{label}</span>
     </button>
   );
@@ -276,39 +165,42 @@ function SocialButton({ icon, label, onClick }) {
 
 function WorkspaceChoiceCard({ account, selected, onSelect }) {
   const token = s(account?.selectionToken);
+  const companyName =
+    s(account?.companyName) || s(account?.tenantKey) || "Workspace";
+  const role = s(account?.role || "member");
 
   return (
     <button
       type="button"
       onClick={() => onSelect(token)}
-      className={cn(
-        "flex w-full items-center justify-between rounded-[18px] border px-4 py-3.5 text-left transition",
+      className={cx(
+        "flex w-full items-center justify-between rounded-panel border px-4 py-3.5 text-left transition-[background-color,border-color,box-shadow] duration-base ease-premium",
         selected
-          ? "border-[#2962ff]/25 bg-[#2962ff]/[0.04]"
-          : "border-slate-200 bg-white hover:border-slate-300"
+          ? "border-[rgba(var(--color-brand),0.22)] bg-brand-soft shadow-panel"
+          : "border-line-soft bg-surface hover:border-line hover:bg-surface-muted"
       )}
     >
       <div className="min-w-0">
-        <div className="truncate text-[15px] font-semibold tracking-[-0.02em] text-slate-950">
-          {s(account?.companyName) || s(account?.tenantKey) || "Workspace"}
+        <div className="truncate text-[14px] font-semibold tracking-[-0.02em] text-text">
+          {companyName}
         </div>
-        <div className="mt-1 text-[13px] font-medium text-slate-500">
-          {s(account?.tenantKey)} · {s(account?.role || "member")}
+        <div className="mt-1 text-[12px] text-text-muted">
+          {s(account?.tenantKey)} · {role}
         </div>
       </div>
 
-      <div
-        className={cn(
-          "relative h-[18px] w-[18px] rounded-full border transition",
+      <span
+        className={cx(
+          "relative h-[18px] w-[18px] rounded-full border transition-colors",
           selected
-            ? "border-[#2962ff] bg-[#2962ff]"
-            : "border-slate-300 bg-white"
+            ? "border-brand bg-brand"
+            : "border-line-strong bg-surface"
         )}
       >
         {selected ? (
-          <div className="absolute inset-[4px] rounded-full bg-white" />
+          <span className="absolute inset-[4px] rounded-full bg-white" />
         ) : null}
-      </div>
+      </span>
     </button>
   );
 }
@@ -325,12 +217,10 @@ export default function Login() {
   );
 
   const [loading, setLoading] = useState(false);
-  const [focusedField, setFocusedField] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [accountChoices, setAccountChoices] = useState([]);
   const [selectedAccountToken, setSelectedAccountToken] = useState("");
-  const [submitBurst, setSubmitBurst] = useState(false);
   const [form, setForm] = useState({
     fullName: "",
     companyName: "",
@@ -419,9 +309,7 @@ export default function Login() {
 
     try {
       setError("");
-      setSubmitBurst(true);
       setLoading(true);
-      await wait(180);
 
       if (isSignupMode) {
         await handleSignup();
@@ -443,269 +331,223 @@ export default function Login() {
       }
     } finally {
       setLoading(false);
-      setSubmitBurst(false);
     }
   }
-
-  const isLoginDisabled = loading || !s(form.email) || !s(form.password);
-  const isSignupDisabled =
-    loading ||
-    !s(form.companyName) ||
-    !s(form.email) ||
-    !s(form.password);
 
   function onSocialAuth(provider) {
     setError(`${provider} sign-in is not enabled yet.`);
   }
 
-  return (
-    <div className="relative min-h-screen overflow-hidden bg-white text-slate-950">
-      <InputResetStyles />
+  const isLoginDisabled = loading || !s(form.email) || !s(form.password);
+  const isSignupDisabled =
+    loading || !s(form.companyName) || !s(form.email) || !s(form.password);
 
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-canvas text-text">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute left-[-9%] top-1/2 h-[760px] w-[760px] -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(59,130,246,0.12)_0%,rgba(59,130,246,0.05)_34%,rgba(255,255,255,0)_72%)]" />
-        <div className="absolute left-0 top-0 hidden h-full w-[54vw] min-w-[620px] max-w-[980px] lg:block">
-          <div className="flex h-full w-full items-center justify-start">
-            <img
-              src={AIVisual}
-              alt=""
-              className="h-auto w-[clamp(560px,44vw,840px)] max-w-none object-contain translate-x-[-4%] translate-y-[9%]"
-            />
-          </div>
-        </div>
+        <div className="absolute left-[-8%] top-[-12%] h-[360px] w-[360px] rounded-full bg-[radial-gradient(circle,rgba(46,96,255,0.14)_0%,rgba(46,96,255,0.04)_48%,rgba(46,96,255,0)_72%)] blur-3xl" />
+        <div className="absolute right-[-10%] top-[10%] h-[300px] w-[300px] rounded-full bg-[radial-gradient(circle,rgba(15,23,42,0.08)_0%,rgba(15,23,42,0.02)_50%,rgba(15,23,42,0)_74%)] blur-3xl" />
+        <div className="absolute bottom-[-14%] left-[24%] h-[280px] w-[280px] rounded-full bg-[radial-gradient(circle,rgba(21,128,61,0.06)_0%,rgba(21,128,61,0.02)_54%,rgba(21,128,61,0)_76%)] blur-3xl" />
       </div>
 
-      <main className="relative z-10 mx-auto grid min-h-screen w-full max-w-[1720px] grid-cols-1 px-4 sm:px-6 lg:grid-cols-[minmax(620px,1fr)_620px] lg:px-10 xl:px-14">
-        <section className="hidden lg:block" />
+      <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-[560px] flex-col justify-center px-6 py-10">
+        <div>
+          <h1 className="text-[2.65rem] font-semibold leading-[0.92] tracking-[-0.065em] text-text md:text-[3rem]">
+            {isSignupMode ? "Create workspace" : "Sign in"}
+          </h1>
 
-        <section className="flex min-h-screen items-center justify-center lg:justify-start">
-          <div className="w-full max-w-[648px] py-10 lg:-ml-6 xl:-ml-10">
-            <div className="mb-10">
-              <h1 className="text-[3rem] font-semibold leading-[0.93] tracking-[-0.07em] text-[#081121] sm:text-[3.35rem]">
-                Log in
-              </h1>
-            </div>
+          <p className="mt-3 text-[15px] leading-7 text-text-muted">
+            {isSignupMode
+              ? "Use your business details to open a new workspace."
+              : activeTenantKey
+                ? `Use your ${activeTenantKey} workspace email and password.`
+                : "Use your workspace email and password."}
+          </p>
+        </div>
 
-            <div className="space-y-4">
-              {activeTenantKey ? (
-                <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  {activeTenantKey}
+        <div className="mt-8">
+          {!isSignupMode ? (
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <SocialButton
+                  icon={<img src={GmailIconAsset} alt="" className="h-5 w-5" />}
+                  label="Gmail"
+                  onClick={() => onSocialAuth("Gmail")}
+                />
+
+                <SocialButton
+                  icon={<OutlookIcon />}
+                  label="Outlook"
+                  onClick={() => onSocialAuth("Outlook")}
+                />
+
+                <SocialButton
+                  icon={<img src={AppleIconAsset} alt="" className="h-5 w-5" />}
+                  label="Apple"
+                  onClick={() => onSocialAuth("Apple")}
+                />
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="h-px flex-1 bg-line-soft" />
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-text-subtle">
+                  Or continue with email
                 </div>
-              ) : null}
+                <div className="h-px flex-1 bg-line-soft" />
+              </div>
+            </div>
+          ) : null}
 
-              {!isSignupMode ? (
-                <>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <SocialButton
-                      icon={
-                        <img
-                          src={GmailIconAsset}
-                          alt=""
-                          className="h-5 w-5"
-                        />
-                      }
-                      label="Gmail"
-                      onClick={() => onSocialAuth("Gmail")}
-                    />
-                    <SocialButton
-                      icon={<OutlookIcon />}
-                      label="Outlook"
-                      onClick={() => onSocialAuth("Outlook")}
-                    />
-                    <SocialButton
-                      icon={
-                        <img
-                          src={AppleIconAsset}
-                          alt=""
-                          className="h-5 w-5"
-                        />
-                      }
-                      label="Apple"
-                      onClick={() => onSocialAuth("Apple")}
-                    />
-                  </div>
-
-                  <Divider />
-                </>
-              ) : null}
-
-              <form className="space-y-4 pt-1" onSubmit={onSubmit}>
-                {isSignupMode ? (
-                  <>
-                    <AuthField
-                      icon={User2}
-                      name="fullName"
-                      value={form.fullName}
-                      placeholder="Full name"
-                      onChange={onChange}
-                      onFocus={() => setFocusedField("fullName")}
-                      onBlur={() => setFocusedField("")}
-                      autoComplete="name"
-                      focused={focusedField === "fullName"}
-                    />
-
-                    <AuthField
-                      icon={Building2}
-                      name="companyName"
-                      value={form.companyName}
-                      placeholder="Workspace name"
-                      onChange={onChange}
-                      onFocus={() => setFocusedField("companyName")}
-                      onBlur={() => setFocusedField("")}
-                      autoComplete="organization"
-                      focused={focusedField === "companyName"}
-                    />
-                  </>
-                ) : null}
-
-                <AuthField
-                  icon={Mail}
-                  name="email"
-                  type="email"
-                  value={form.email}
-                  placeholder="Enter email address"
+          <form className="mt-5 space-y-4" onSubmit={onSubmit}>
+            {isSignupMode ? (
+              <>
+                <Input
+                  name="fullName"
+                  value={form.fullName}
                   onChange={onChange}
-                  onFocus={() => setFocusedField("email")}
-                  onBlur={() => setFocusedField("")}
-                  autoComplete="email"
-                  focused={focusedField === "email"}
+                  placeholder="Full name"
+                  autoComplete="name"
+                  leftIcon={<User2 className="h-4 w-4" />}
+                  appearance="product"
                 />
 
-                <AuthField
-                  icon={Lock}
-                  name="password"
-                  type={showPassword ? "text" : "password"}
-                  value={form.password}
-                  placeholder="Enter password"
+                <Input
+                  name="companyName"
+                  value={form.companyName}
                   onChange={onChange}
-                  onFocus={() => setFocusedField("password")}
-                  onBlur={() => setFocusedField("")}
-                  autoComplete={isSignupMode ? "new-password" : "current-password"}
-                  focused={focusedField === "password"}
-                  rightSlot={
-                    <button
-                      type="button"
-                      className="text-slate-400 transition hover:text-slate-700"
-                      onClick={() => setShowPassword((prev) => !prev)}
-                      aria-label="Toggle password visibility"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="h-[18px] w-[18px]" />
-                      ) : (
-                        <Eye className="h-[18px] w-[18px]" />
-                      )}
-                    </button>
-                  }
+                  placeholder="Workspace name"
+                  autoComplete="organization"
+                  leftIcon={<Building2 className="h-4 w-4" />}
+                  appearance="product"
                 />
+              </>
+            ) : null}
 
-                {!isSignupMode ? (
-                  <div className="flex items-center justify-end">
-                    <button
-                      type="button"
-                      className="text-[14px] font-medium tracking-[-0.01em] text-slate-600 transition hover:text-slate-900"
-                      onClick={() =>
-                        setError("Password recovery is not enabled yet.")
-                      }
-                    >
-                      Forgot your password?
-                    </button>
-                  </div>
-                ) : null}
+            <Input
+              name="email"
+              type="email"
+              value={form.email}
+              onChange={onChange}
+              placeholder="Email address"
+              autoComplete="email"
+              leftIcon={<Mail className="h-4 w-4" />}
+              appearance="product"
+            />
 
-                <InlineError message={error} />
-
-                {accountChoices.length ? (
-                  <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
-                    <div className="mb-3 text-[14px] font-semibold tracking-[-0.02em] text-slate-950">
-                      Choose workspace
-                    </div>
-                    <div className="space-y-3">
-                      {accountChoices.map((account) => (
-                        <WorkspaceChoiceCard
-                          key={
-                            s(account?.selectionToken) ||
-                            `${account?.tenantKey}-${account?.role}`
-                          }
-                          account={account}
-                          selected={
-                            s(account?.selectionToken) === selectedAccountToken
-                          }
-                          onSelect={setSelectedAccountToken}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
+            <Input
+              name="password"
+              type={showPassword ? "text" : "password"}
+              value={form.password}
+              onChange={onChange}
+              placeholder="Password"
+              autoComplete={isSignupMode ? "new-password" : "current-password"}
+              leftIcon={<Lock className="h-4 w-4" />}
+              appearance="product"
+              right={
                 <button
-                  type="submit"
-                  disabled={isSignupMode ? isSignupDisabled : isLoginDisabled}
-                  className={cn(
-                    "group relative inline-flex h-[66px] w-full items-center justify-center overflow-hidden rounded-[20px] px-5 text-[16px] font-semibold tracking-[-0.03em] transition duration-200",
-                    isSignupMode ? isSignupDisabled : isLoginDisabled
-                      ? "bg-slate-200 text-slate-400"
-                      : "bg-[linear-gradient(135deg,#5f88ff_0%,#3a67f5_38%,#2a4ed0_100%)] text-white shadow-[0_22px_50px_rgba(37,99,235,0.25)] hover:translate-y-[-1px] hover:shadow-[0_26px_60px_rgba(37,99,235,0.30)]"
-                  )}
+                  type="button"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-soft text-text-subtle transition-colors hover:bg-surface-subtle hover:text-text"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label="Toggle password visibility"
                 >
-                  {!((isSignupMode ? isSignupDisabled : isLoginDisabled)) ? (
-                    <>
-                      <span
-                        className={cn(
-                          "absolute inset-y-0 left-1/2 w-[58%] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.30)_0%,rgba(255,255,255,0.08)_46%,rgba(255,255,255,0)_72%)] blur-xl transition-all duration-500",
-                          submitBurst
-                            ? "scale-[2.1] opacity-0"
-                            : "scale-100 opacity-100"
-                        )}
-                      />
-                      <span
-                        className={cn(
-                          "absolute inset-y-0 left-0 w-1/2 bg-white/10 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                          submitBurst
-                            ? "-translate-x-full opacity-0"
-                            : "translate-x-0 opacity-100"
-                        )}
-                      />
-                      <span
-                        className={cn(
-                          "absolute inset-y-0 right-0 w-1/2 bg-white/10 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                          submitBurst
-                            ? "translate-x-full opacity-0"
-                            : "translate-x-0 opacity-100"
-                        )}
-                      />
-                    </>
-                  ) : null}
-
-                  <span className="relative z-10 inline-flex items-center gap-2">
-                    {loading ? (
-                      <>
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        {isSignupMode ? "Creating..." : "Logging in..."}
-                      </>
-                    ) : isSignupMode ? (
-                      "Create workspace"
-                    ) : accountChoices.length ? (
-                      "Open selected workspace"
-                    ) : (
-                      "Log in"
-                    )}
-                  </span>
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
                 </button>
+              }
+            />
 
-                <div className="pt-1 text-center text-[15px] font-medium tracking-[-0.01em] text-slate-700">
-                  {isSignupMode ? "Already have an account?" : "Don't have an account?"}{" "}
-                  <button
-                    type="button"
-                    className="font-semibold text-slate-950 underline underline-offset-2 transition hover:text-blue-600"
-                    onClick={() => navigate(isSignupMode ? "/login" : "/signup")}
-                  >
-                    {isSignupMode ? "Log in" : "Sign up"}
-                  </button>
+            {!isSignupMode ? (
+              <div className="flex items-center justify-end">
+                <button
+                  type="button"
+                  className="text-[13px] font-medium tracking-[-0.01em] text-text-muted transition-colors hover:text-text"
+                  onClick={() =>
+                    setError("Password recovery is not enabled yet.")
+                  }
+                >
+                  Forgot your password?
+                </button>
+              </div>
+            ) : null}
+
+            {error ? (
+              <InlineNotice
+                tone="danger"
+                title="Authentication issue"
+                description={error}
+                compact
+              />
+            ) : null}
+
+            {accountChoices.length ? (
+              <div className="space-y-3 rounded-panel border border-line-soft bg-surface/74 p-4 backdrop-blur">
+                <div>
+                  <div className="text-[14px] font-semibold tracking-[-0.02em] text-text">
+                    Choose workspace
+                  </div>
+                  <div className="mt-1 text-[12px] leading-5 text-text-muted">
+                    We found more than one workspace for this email.
+                  </div>
                 </div>
-              </form>
+
+                <div className="space-y-3">
+                  {accountChoices.map((account) => (
+                    <WorkspaceChoiceCard
+                      key={
+                        s(account?.selectionToken) ||
+                        `${account?.tenantKey}-${account?.role}`
+                      }
+                      account={account}
+                      selected={s(account?.selectionToken) === selectedAccountToken}
+                      onSelect={setSelectedAccountToken}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <Button
+              type="submit"
+              size="lg"
+              fullWidth
+              disabled={isSignupMode ? isSignupDisabled : isLoginDisabled}
+              rightIcon={
+                loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ArrowRight className="h-4 w-4" />
+                )
+              }
+              className="h-12 text-[14px]"
+            >
+              {loading
+                ? isSignupMode
+                  ? "Creating workspace..."
+                  : "Signing in..."
+                : isSignupMode
+                  ? "Create workspace"
+                  : accountChoices.length
+                    ? "Open selected workspace"
+                    : "Sign in"}
+            </Button>
+
+            <div className="pt-1 text-center text-[14px] text-text-muted">
+              {isSignupMode
+                ? "Already have an account?"
+                : "Don’t have an account?"}{" "}
+              <button
+                type="button"
+                className="font-semibold text-text underline underline-offset-2 transition-colors hover:text-brand"
+                onClick={() => navigate(isSignupMode ? "/login" : "/signup")}
+              >
+                {isSignupMode ? "Sign in" : "Create one"}
+              </button>
             </div>
-          </div>
-        </section>
+          </form>
+        </div>
       </main>
     </div>
   );
