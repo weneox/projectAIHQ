@@ -205,17 +205,53 @@ function buildWebsiteInstallHandoffInstructions({
   ];
 }
 
+function buildWebsiteGtmInstallHandoffInstructions({
+  verifiedDomain = "",
+  loaderScriptUrl = "",
+  apiBase = "",
+} = {}) {
+  const scriptOrigin = normalizeUrl(loaderScriptUrl)?.origin || "";
+  const apiOrigin = normalizeUrl(apiBase)?.origin || "";
+
+  return [
+    `In Google Tag Manager, create a new Custom HTML tag for pages served from ${verifiedDomain}.`,
+    "Paste the GTM Custom HTML block exactly as provided below and keep the widget ID plus API base unchanged.",
+    `Use a Pages trigger that covers the verified domain, then preview and publish the GTM container for ${verifiedDomain}.`,
+    `After publish, load a page on ${verifiedDomain} and confirm Website Chat opens successfully.`,
+    scriptOrigin || apiOrigin
+      ? `If the website uses a strict Content Security Policy, allow ${[scriptOrigin, apiOrigin]
+          .filter(Boolean)
+          .join(" and ")}.`
+      : "If the website uses a strict Content Security Policy, allow the Website Chat loader and API origins.",
+  ];
+}
+
+function buildWebsiteGtmCustomHtmlSnippet({
+  loaderScriptUrl = "",
+  widgetId = "",
+  apiBase = "",
+} = {}) {
+  if (!loaderScriptUrl || !widgetId || !apiBase) return "";
+
+  return [
+    "<!-- Website Chat GTM Custom HTML tag -->",
+    `<script src="${loaderScriptUrl}" data-widget-id="${widgetId}" data-api-base="${apiBase}" async></script>`,
+  ].join("\n");
+}
+
 function buildWebsiteInstallHandoffText({
+  title = "Website Chat developer install handoff",
   verifiedDomain = "",
   widgetId = "",
   loaderScriptUrl = "",
   apiBase = "",
-  embedSnippet = "",
+  packageSnippet = "",
+  snippetLabel = "Embed snippet",
   readiness = {},
   instructions = [],
 } = {}) {
   const lines = [
-    "Website Chat developer install handoff",
+    title,
     "",
     `Verified domain: ${verifiedDomain}`,
     `Widget ID: ${widgetId}`,
@@ -231,8 +267,8 @@ function buildWebsiteInstallHandoffText({
 
   lines.push(
     "",
-    "Embed snippet:",
-    embedSnippet,
+    `${snippetLabel}:`,
+    packageSnippet,
     "",
     "Install instructions:"
   );
@@ -247,7 +283,10 @@ function buildWebsiteInstallHandoffText({
 function buildWebsiteInstallHandoffPayload(
   req,
   status = {},
-  domainVerification = null
+  domainVerification = null,
+  {
+    packageType = "developer",
+  } = {}
 ) {
   const statusPayload = buildWebsiteWidgetStatusPayload(
     req,
@@ -284,11 +323,33 @@ function buildWebsiteInstallHandoffPayload(
     throw createHttpError(message, 409, reasonCode);
   }
 
-  const instructions = buildWebsiteInstallHandoffInstructions({
-    verifiedDomain,
-    loaderScriptUrl: install.scriptUrl,
-    apiBase: install.apiBase,
-  });
+  const safePackageType = s(packageType, "developer").toLowerCase();
+  const packageTitle =
+    safePackageType === "gtm"
+      ? "Website Chat GTM install handoff"
+      : "Website Chat developer install handoff";
+  const packageSnippet =
+    safePackageType === "gtm"
+      ? buildWebsiteGtmCustomHtmlSnippet({
+          loaderScriptUrl: s(install.scriptUrl),
+          widgetId: s(widget.publicWidgetId),
+          apiBase: s(install.apiBase),
+        })
+      : s(install.embedSnippet);
+  const snippetLabel =
+    safePackageType === "gtm" ? "GTM Custom HTML tag" : "Embed snippet";
+  const instructions =
+    safePackageType === "gtm"
+      ? buildWebsiteGtmInstallHandoffInstructions({
+          verifiedDomain,
+          loaderScriptUrl: install.scriptUrl,
+          apiBase: install.apiBase,
+        })
+      : buildWebsiteInstallHandoffInstructions({
+          verifiedDomain,
+          loaderScriptUrl: install.scriptUrl,
+          apiBase: install.apiBase,
+        });
   const readiness = {
     status: s(obj(statusPayload.readiness).status, "ready"),
     message: s(
@@ -304,19 +365,27 @@ function buildWebsiteInstallHandoffPayload(
     ready: true,
     generatedAt: new Date().toISOString(),
     audience: "developer",
+    packageType: safePackageType,
+    packageTitle,
     verifiedDomain,
     widgetId: s(widget.publicWidgetId),
     loaderScriptUrl: s(install.scriptUrl),
     apiBase: s(install.apiBase),
     embedSnippet: s(install.embedSnippet),
+    gtmCustomHtmlSnippet:
+      safePackageType === "gtm" ? packageSnippet : "",
+    packageSnippet,
+    snippetLabel,
     instructions,
     readiness,
     packageText: buildWebsiteInstallHandoffText({
+      title: packageTitle,
       verifiedDomain,
       widgetId: s(widget.publicWidgetId),
       loaderScriptUrl: s(install.scriptUrl),
       apiBase: s(install.apiBase),
-      embedSnippet: s(install.embedSnippet),
+      packageSnippet,
+      snippetLabel,
       readiness,
       instructions,
     }),
@@ -721,6 +790,60 @@ export async function createWebsiteWidgetInstallHandoff({ db, req }) {
       channelType: WEBSITE_DOMAIN_VERIFICATION_CHANNEL,
       verifiedDomain: payload.verifiedDomain,
       widgetId: payload.widgetId,
+    }
+  );
+
+  return payload;
+}
+
+export async function createWebsiteWidgetGtmInstallHandoff({ db, req }) {
+  const tenantKey = getReqTenantKey(req);
+  if (!tenantKey) {
+    throw createHttpError("Missing tenant context", 401);
+  }
+
+  const viewerRole = getNormalizedAuthRole(req);
+  if (!canManageSettings(viewerRole)) {
+    throw createHttpError(
+      "Only owner/admin can prepare a GTM website install handoff",
+      403
+    );
+  }
+
+  const tenant = await getTenantByKey(db, tenantKey);
+  if (!tenant?.id) {
+    throw createHttpError("Tenant not found", 404);
+  }
+
+  const status = await resolveWebsiteWidgetStatus(db, tenantKey);
+  if (!status?.id) {
+    throw createHttpError("Tenant not found", 404);
+  }
+
+  const domainVerification = await loadWebsiteDomainVerificationSurface(db, status, {
+    requestedDomain: obj(req.body).domain || req?.query?.domain || "",
+  });
+  const payload = buildWebsiteInstallHandoffPayload(
+    req,
+    status,
+    domainVerification,
+    {
+      packageType: "gtm",
+    }
+  );
+
+  await auditSafe(
+    db,
+    getReqActor(req),
+    tenant,
+    "settings.channel.webchat.install_handoff.gtm_generated",
+    "tenant_channel",
+    WEBSITE_DOMAIN_VERIFICATION_CHANNEL,
+    {
+      channelType: WEBSITE_DOMAIN_VERIFICATION_CHANNEL,
+      verifiedDomain: payload.verifiedDomain,
+      widgetId: payload.widgetId,
+      packageType: "gtm",
     }
   );
 

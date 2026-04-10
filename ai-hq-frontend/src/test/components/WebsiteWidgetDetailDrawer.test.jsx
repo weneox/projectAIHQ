@@ -7,6 +7,7 @@ const saveWebsiteWidgetConfig = vi.fn();
 const getWebsiteDomainVerificationStatus = vi.fn();
 const createWebsiteDomainVerificationChallenge = vi.fn();
 const checkWebsiteDomainVerification = vi.fn();
+const createWebsiteWidgetGtmInstallHandoff = vi.fn();
 const createWebsiteWidgetInstallHandoff = vi.fn();
 const useWorkspaceTenantKey = vi.fn();
 
@@ -15,6 +16,8 @@ vi.mock("../../api/channelConnect.js", () => ({
     checkWebsiteDomainVerification(...args),
   createWebsiteDomainVerificationChallenge: (...args) =>
     createWebsiteDomainVerificationChallenge(...args),
+  createWebsiteWidgetGtmInstallHandoff: (...args) =>
+    createWebsiteWidgetGtmInstallHandoff(...args),
   createWebsiteWidgetInstallHandoff: (...args) =>
     createWebsiteWidgetInstallHandoff(...args),
   getWebsiteDomainVerificationStatus: (...args) =>
@@ -167,6 +170,54 @@ function buildInstallHandoffPayload() {
   };
 }
 
+function buildGtmInstallHandoffPayload() {
+  return {
+    ready: true,
+    generatedAt: "2026-04-10T11:05:00.000Z",
+    audience: "developer",
+    packageType: "gtm",
+    packageTitle: "Website Chat GTM install handoff",
+    verifiedDomain: "acme.example",
+    widgetId: "ww_acme_widget",
+    loaderScriptUrl: "https://widget.example.test/website-widget-loader.js",
+    apiBase: "https://api.example.test/api",
+    embedSnippet:
+      '<script src="https://widget.example.test/website-widget-loader.js" data-widget-id="ww_acme_widget" data-api-base="https://api.example.test/api" async></script>',
+    gtmCustomHtmlSnippet: [
+      "<!-- Website Chat GTM Custom HTML tag -->",
+      '<script src="https://widget.example.test/website-widget-loader.js" data-widget-id="ww_acme_widget" data-api-base="https://api.example.test/api" async></script>',
+    ].join("\n"),
+    packageSnippet: [
+      "<!-- Website Chat GTM Custom HTML tag -->",
+      '<script src="https://widget.example.test/website-widget-loader.js" data-widget-id="ww_acme_widget" data-api-base="https://api.example.test/api" async></script>',
+    ].join("\n"),
+    snippetLabel: "GTM Custom HTML tag",
+    instructions: [
+      "In Google Tag Manager, create a new Custom HTML tag for pages served from acme.example.",
+      "Paste the GTM Custom HTML block exactly as provided below and keep the widget ID plus API base unchanged.",
+    ],
+    readiness: {
+      status: "ready",
+      message:
+        "Website chat is configured with a publishable install ID, trusted origin controls, and verified domain ownership.",
+      productionInstallReady: true,
+      verificationState: "verified",
+      verifiedAt: "2026-04-10T10:30:00.000Z",
+    },
+    packageText: [
+      "Website Chat GTM install handoff",
+      "",
+      "Verified domain: acme.example",
+      "Widget ID: ww_acme_widget",
+      "Loader script URL: https://widget.example.test/website-widget-loader.js",
+      "API base: https://api.example.test/api",
+      "",
+      "GTM Custom HTML tag:",
+      "<!-- Website Chat GTM Custom HTML tag -->",
+    ].join("\n"),
+  };
+}
+
 function renderDrawer(props = {}) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -260,6 +311,9 @@ describe("WebsiteWidgetDetailDrawer", () => {
     createWebsiteWidgetInstallHandoff.mockResolvedValue(
       buildInstallHandoffPayload()
     );
+    createWebsiteWidgetGtmInstallHandoff.mockResolvedValue(
+      buildGtmInstallHandoffPayload()
+    );
 
     Object.defineProperty(window.navigator, "clipboard", {
       configurable: true,
@@ -275,6 +329,7 @@ describe("WebsiteWidgetDetailDrawer", () => {
     getWebsiteDomainVerificationStatus.mockReset();
     createWebsiteDomainVerificationChallenge.mockReset();
     checkWebsiteDomainVerification.mockReset();
+    createWebsiteWidgetGtmInstallHandoff.mockReset();
     createWebsiteWidgetInstallHandoff.mockReset();
   });
 
@@ -312,6 +367,9 @@ describe("WebsiteWidgetDetailDrawer", () => {
     ).toBeDisabled();
     expect(
       screen.getByRole("button", { name: /prepare developer install/i })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: /install with gtm/i })
     ).toBeDisabled();
   });
 
@@ -443,5 +501,41 @@ describe("WebsiteWidgetDetailDrawer", () => {
         buildInstallHandoffPayload().packageText
       )
     );
+  });
+
+  it("prepares a GTM install package when production install is ready", async () => {
+    getWebsiteWidgetStatus.mockResolvedValueOnce(buildStatusPayload({ verified: true }));
+    renderDrawer();
+
+    const installSection = (
+      await screen.findByText("Embed this widget on the public website")
+    ).closest("section");
+    expect(installSection).not.toBeNull();
+
+    const gtmButton = within(installSection).getByRole("button", {
+      name: /install with gtm/i,
+    });
+
+    await waitFor(() => expect(gtmButton).toBeEnabled());
+    fireEvent.click(gtmButton);
+
+    await waitFor(() =>
+      expect(createWebsiteWidgetGtmInstallHandoff).toHaveBeenCalledWith(
+        expect.objectContaining({
+          domain: "acme.example",
+        }),
+        expect.anything()
+      )
+    );
+
+    expect(
+      await within(installSection).findByDisplayValue(
+        /Website Chat GTM install handoff/i
+      )
+    ).toBeInTheDocument();
+
+    expect(
+      within(installSection).getAllByText("Website Chat GTM install handoff").length
+    ).toBeGreaterThan(0);
   });
 });

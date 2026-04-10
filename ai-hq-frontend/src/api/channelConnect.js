@@ -71,3 +71,7 @@ export async function checkWebsiteDomainVerification(payload = {}) {
 export async function createWebsiteWidgetInstallHandoff(payload = {}) {
   return apiPost("/api/channels/webchat/install-handoff", payload);
 }
+
+export async function createWebsiteWidgetGtmInstallHandoff(payload = {}) {
+  return apiPost("/api/channels/webchat/install-handoff/gtm", payload);
+}

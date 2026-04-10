@@ -24,6 +24,7 @@ import {
 import {
   checkWebsiteDomainVerification,
   createWebsiteDomainVerificationChallenge,
+  createWebsiteWidgetGtmInstallHandoff,
   createWebsiteWidgetInstallHandoff,
   getWebsiteDomainVerificationStatus,
   getWebsiteWidgetStatus,
@@ -290,6 +291,26 @@ export function channelConnectRoutes({ db }) {
           res,
           err,
           "Failed to prepare website developer install handoff",
+          {
+            reasonCode: err?.reasonCode || null,
+          }
+        );
+      }
+    }
+  );
+
+  r.post(
+    "/channels/webchat/install-handoff/gtm",
+    requireUserSession,
+    async (req, res) => {
+      try {
+        const payload = await createWebsiteWidgetGtmInstallHandoff({ db, req });
+        return ok(res, payload);
+      } catch (err) {
+        return respondRouteError(
+          res,
+          err,
+          "Failed to prepare website GTM install handoff",
           {
             reasonCode: err?.reasonCode || null,
           }

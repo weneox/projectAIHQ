@@ -12,6 +12,7 @@ import {
 import {
   checkWebsiteDomainVerification,
   createWebsiteDomainVerificationChallenge,
+  createWebsiteWidgetGtmInstallHandoff,
   createWebsiteWidgetInstallHandoff,
   getWebsiteDomainVerificationStatus,
   getWebsiteWidgetStatus,
@@ -144,6 +145,15 @@ export default function WebsiteWidgetDetailDrawer({
     },
   });
 
+  const gtmHandoffMutation = useMutation({
+    mutationFn: createWebsiteWidgetGtmInstallHandoff,
+    onSuccess(nextPayload) {
+      setHandoffPackage(obj(nextPayload));
+      setHandoffMessage("GTM install package prepared.");
+      setCopyFeedback("");
+    },
+  });
+
   const saveMutation = useMutation({
     mutationFn: saveWebsiteWidgetConfig,
     async onSuccess(payload) {
@@ -156,6 +166,7 @@ export default function WebsiteWidgetDetailDrawer({
       setHandoffMessage("");
       setHandoffPackage(null);
       handoffMutation.reset();
+      gtmHandoffMutation.reset();
       await queryClient.invalidateQueries({
         queryKey: websiteStatusQueryKey,
       });
@@ -177,6 +188,7 @@ export default function WebsiteWidgetDetailDrawer({
       setHandoffMessage("");
       setHandoffPackage(null);
       handoffMutation.reset();
+      gtmHandoffMutation.reset();
       await queryClient.invalidateQueries({
         queryKey: websiteStatusQueryKey,
       });
@@ -194,6 +206,7 @@ export default function WebsiteWidgetDetailDrawer({
       setHandoffMessage("");
       setHandoffPackage(null);
       handoffMutation.reset();
+      gtmHandoffMutation.reset();
       await queryClient.invalidateQueries({
         queryKey: websiteStatusQueryKey,
       });
@@ -215,6 +228,7 @@ export default function WebsiteWidgetDetailDrawer({
       setHandoffMessage("");
       setHandoffPackage(null);
       handoffMutation.reset();
+      gtmHandoffMutation.reset();
       await queryClient.invalidateQueries({
         queryKey: websiteStatusQueryKey,
       });
@@ -265,12 +279,15 @@ export default function WebsiteWidgetDetailDrawer({
     saveAllowed &&
     s(readiness.status).toLowerCase() === "ready" &&
     Boolean(s(install.embedSnippet));
-  const handoffError = s(handoffMutation.error?.message);
+  const handoffError = s(
+    handoffMutation.error?.message || gtmHandoffMutation.error?.message
+  );
   const verificationBusy =
     createChallengeMutation.isPending ||
     checkVerificationMutation.isPending ||
     refreshVerificationMutation.isPending;
-  const handoffBusy = handoffMutation.isPending;
+  const handoffBusy =
+    handoffMutation.isPending || gtmHandoffMutation.isPending;
 
   const headerStatus =
     readiness.status === "ready"
@@ -312,7 +329,9 @@ export default function WebsiteWidgetDetailDrawer({
   function handleCopyHandoffPackage() {
     return copyTextValue(
       handoffSurface.packageText,
-      "Developer install package copied."
+      s(handoffSurface.packageType) === "gtm"
+        ? "GTM install package copied."
+        : "Developer install package copied."
     );
   }
 
@@ -341,6 +360,7 @@ export default function WebsiteWidgetDetailDrawer({
     setHandoffMessage("");
     setHandoffPackage(null);
     handoffMutation.reset();
+    gtmHandoffMutation.reset();
   }
 
   function handleCreateChallenge() {
@@ -368,6 +388,14 @@ export default function WebsiteWidgetDetailDrawer({
     resetHandoffFeedback();
     setCopyFeedback("");
     handoffMutation.mutate(
+      verificationTargetDomain ? { domain: verificationTargetDomain } : {}
+    );
+  }
+
+  function handlePrepareGtmInstall() {
+    resetHandoffFeedback();
+    setCopyFeedback("");
+    gtmHandoffMutation.mutate(
       verificationTargetDomain ? { domain: verificationTargetDomain } : {}
     );
   }
@@ -822,7 +850,7 @@ export default function WebsiteWidgetDetailDrawer({
                 />
               </FieldGroup>
 
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-3">
                 <ChannelActionButton
                   fullWidth
                   showArrow={false}
@@ -832,6 +860,18 @@ export default function WebsiteWidgetDetailDrawer({
                   className="!h-[40px] !rounded-[10px] !text-[10px]"
                 >
                   Prepare developer install
+                </ChannelActionButton>
+
+                <ChannelActionButton
+                  quiet
+                  fullWidth
+                  showArrow={false}
+                  onClick={handlePrepareGtmInstall}
+                  disabled={!handoffReady || statusQuery.isLoading || handoffBusy}
+                  isLoading={gtmHandoffMutation.isPending}
+                  className="!h-[40px] !rounded-[10px] !text-[10px]"
+                >
+                  Install with GTM
                 </ChannelActionButton>
 
                 <ChannelActionButton
@@ -854,8 +894,8 @@ export default function WebsiteWidgetDetailDrawer({
                   tone={productionInstallBlocked ? "warning" : "info"}
                   description={
                     productionInstallBlocked
-                      ? "Complete DNS TXT domain verification before generating a developer install handoff."
-                      : "Developer install handoff becomes available once Website Chat is ready for production install."
+                      ? "Complete DNS TXT domain verification before generating a developer or GTM install handoff."
+                      : "Developer and GTM install handoff become available once Website Chat is ready for production install."
                   }
                   compact
                 />
@@ -864,6 +904,13 @@ export default function WebsiteWidgetDetailDrawer({
               {s(handoffSurface.packageText) ? (
                 <div className="space-y-4">
                   <div className="overflow-hidden rounded-panel border border-line-soft bg-surface">
+                    <DataRow
+                      label="Package type"
+                      value={s(
+                        handoffSurface.packageTitle,
+                        "Developer install package"
+                      )}
+                    />
                     <DataRow
                       label="Verified domain"
                       value={s(handoffSurface.verifiedDomain, "Not available")}
@@ -882,7 +929,10 @@ export default function WebsiteWidgetDetailDrawer({
                   </div>
 
                   <FieldGroup
-                    label="Developer install package"
+                    label={s(
+                      handoffSurface.packageTitle,
+                      "Developer install package"
+                    )}
                     description="Share this directly with the developer or webmaster handling the website code."
                   >
                     <Textarea
