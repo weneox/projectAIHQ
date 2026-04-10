@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   LoaderCircle,
   MessageSquareText,
@@ -98,21 +98,45 @@ function buildPublicErrorMessage(errorCode = "", fallback = "") {
     case "db disabled":
       return safeFallback || "Website chat is temporarily unavailable right now.";
     case "widgetid required":
-      return safeFallback || "Website chat could not start because the widget install ID is missing.";
+      return (
+        safeFallback ||
+        "Website chat could not start because the widget install ID is missing."
+      );
     case "bootstraptoken required":
-      return safeFallback || "Website chat needs a fresh launch token. Reload the website page and open chat again.";
+      return (
+        safeFallback ||
+        "Website chat needs a fresh launch token. Reload the website page and open chat again."
+      );
     case "website_widget_bootstrap_invalid":
-      return safeFallback || "Website chat could not verify this launch request. Reload the website page and try again.";
+      return (
+        safeFallback ||
+        "Website chat could not verify this launch request. Reload the website page and try again."
+      );
     case "website_widget_bootstrap_expired":
-      return safeFallback || "This website chat launch token expired. Reload the website page and open chat again.";
+      return (
+        safeFallback ||
+        "This website chat launch token expired. Reload the website page and open chat again."
+      );
     case "website_widget_session_missing":
-      return safeFallback || "Website chat session is missing. Reload the website page to start a new chat.";
+      return (
+        safeFallback ||
+        "Website chat session is missing. Reload the website page to start a new chat."
+      );
     case "website_widget_session_invalid":
-      return safeFallback || "This website chat session is no longer valid. Reload the website page and try again.";
+      return (
+        safeFallback ||
+        "This website chat session is no longer valid. Reload the website page and try again."
+      );
     case "website_widget_session_expired":
-      return safeFallback || "This website chat session expired. Reload the website page to continue.";
+      return (
+        safeFallback ||
+        "This website chat session expired. Reload the website page to continue."
+      );
     case "website_widget_install_mismatch":
-      return safeFallback || "This website chat launch request no longer matches the current widget installation.";
+      return (
+        safeFallback ||
+        "This website chat launch request no longer matches the current widget installation."
+      );
     case "website_widget_not_found":
     case "tenant not found":
       return safeFallback || "This website chat install is no longer active.";
@@ -123,7 +147,10 @@ function buildPublicErrorMessage(errorCode = "", fallback = "") {
     case "website_request_context_missing":
     case "website_request_context_mismatch":
     case "website_origin_mismatch":
-      return safeFallback || "This website chat install request could not be verified for this page.";
+      return (
+        safeFallback ||
+        "This website chat install request could not be verified for this page."
+      );
     case "message required":
       return safeFallback || "Write a message before sending.";
     default:
@@ -221,19 +248,22 @@ export default function PublicWebsiteWidget() {
   const retryEnvelopeRef = useRef(null);
   const pollInFlightRef = useRef(false);
 
-  function applyConversationPayload(payload = {}) {
-    setError("");
-    if (payload.widget) setWidget(obj(payload.widget));
-    if (payload.automation) setAutomation(obj(payload.automation));
-    setThread(payload.thread || null);
-    setMessages(arr(payload.messages));
+  const applyConversationPayload = useCallback(
+    (payload = {}) => {
+      setError("");
+      if (payload.widget) setWidget(obj(payload.widget));
+      if (payload.automation) setAutomation(obj(payload.automation));
+      setThread(payload.thread || null);
+      setMessages(arr(payload.messages));
 
-    const nextSessionToken = s(payload.sessionToken);
-    if (nextSessionToken) {
-      setSessionToken(nextSessionToken);
-      writeStoredSession(widgetId, nextSessionToken);
-    }
-  }
+      const nextSessionToken = s(payload.sessionToken);
+      if (nextSessionToken) {
+        setSessionToken(nextSessionToken);
+        writeStoredSession(widgetId, nextSessionToken);
+      }
+    },
+    [widgetId]
+  );
 
   const statusView = resolveStatusView(thread || {}, automation || {});
   const canSend = Boolean(widgetId) && Boolean(sessionToken) && !loading;
@@ -290,7 +320,7 @@ export default function PublicWebsiteWidget() {
     return () => {
       cancelled = true;
     };
-  }, [apiBase, bootstrapToken, widgetId]);
+  }, [apiBase, applyConversationPayload, bootstrapToken, widgetId]);
 
   useEffect(() => {
     if (!widgetId || !sessionToken) return undefined;
@@ -332,7 +362,7 @@ export default function PublicWebsiteWidget() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [apiBase, sending, sessionToken, widgetId]);
+  }, [apiBase, applyConversationPayload, sending, sessionToken, widgetId]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
