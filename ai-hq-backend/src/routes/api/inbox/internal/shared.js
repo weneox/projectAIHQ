@@ -43,7 +43,7 @@ export async function resolveTenantRow(client, tenantKey = "") {
 
   const result = await client.query(
     `
-    select id, tenant_key, company_name, timezone, inbox_policy
+    select id, tenant_key, company_name, timezone
     from tenants
     where tenant_key = $1::text
     limit 1
