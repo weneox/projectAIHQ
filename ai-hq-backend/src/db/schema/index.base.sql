@@ -43,3 +43,4 @@
 \i ./94_operational_data_backfill_correction.sql
 \i ./97_inbox_thread_latest_message_index.sql
 \i ./98_website_domain_verifications.sql
+\i ./99_inbox_threads_telegram_channel_check_patch.sql
