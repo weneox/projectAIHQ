@@ -338,12 +338,32 @@ jobs:
         run: npm ci
 
       - name: Trigger Cloudflare Pages production deploy
+        id: trigger_pages_deploy
         env:
           CLOUDFLARE_PAGES_DEPLOY_HOOK: ${{ secrets.CLOUDFLARE_PAGES_DEPLOY_HOOK }}
         run: |
           curl --fail --silent --show-error --request POST "$CLOUDFLARE_PAGES_DEPLOY_HOOK"
 
-      - name: Run optional production prod-spine smoke
+      - name: Run mandatory post-deploy verification
+        id: postdeploy_verify
+        env:
+          AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
+          AIHQ_INTERNAL_TOKEN: ${{ secrets.AIHQ_PROD_INTERNAL_TOKEN }}
+          META_BOT_BASE_URL: ${{ secrets.META_BOT_PROD_BASE_URL }}
+          TWILIO_VOICE_BASE_URL: ${{ secrets.TWILIO_VOICE_PROD_BASE_URL }}
+          POSTDEPLOY_TIMEOUT_MS: "12000"
+          POSTDEPLOY_STRICT_SIDECARS: "0"
+          POSTDEPLOY_FAIL_ON_DEGRADED: "1"
+        shell: bash
+        run: |
+          if [ -z "$AIHQ_BASE_URL" ] || [ -z "$AIHQ_INTERNAL_TOKEN" ]; then
+            echo "AIHQ_PROD_BASE_URL and AIHQ_PROD_INTERNAL_TOKEN are required for mandatory post-deploy verification." >&2
+            exit 1
+          fi
+
+          npm run ops:postdeploy:verify
+
+      - name: Run mandatory production prod-spine smoke
         id: prod_spine_smoke
         env:
           AIHQ_BASE_URL: ${{ secrets.AIHQ_PROD_BASE_URL }}
@@ -354,17 +374,14 @@ jobs:
           PROD_SPINE_SMOKE_DELAY_MS: "15000"
           PROD_SPINE_TIMEOUT_MS: "12000"
           PROD_SPINE_STRICT_SIDECARS: "0"
-          PROD_SPINE_FAIL_ON_DEGRADED: "0"
+          PROD_SPINE_FAIL_ON_DEGRADED: "1"
         shell: bash
         run: |
           if [ -z "$AIHQ_BASE_URL" ] || [ -z "$AIHQ_INTERNAL_TOKEN" ]; then
-            echo "skipped=true" >> "$GITHUB_OUTPUT"
-            echo "reason=missing prod smoke secrets" >> "$GITHUB_OUTPUT"
-            echo "Skipping prod spine smoke because AIHQ_PROD_BASE_URL or AIHQ_PROD_INTERNAL_TOKEN is not configured."
-            exit 0
+            echo "AIHQ_PROD_BASE_URL and AIHQ_PROD_INTERNAL_TOKEN are required for mandatory prod spine smoke." >&2
+            exit 1
           fi
 
-          echo "skipped=false" >> "$GITHUB_OUTPUT"
           npm run ops:prod-spine:smoke
 
       - name: Summarize post-deploy verification references
@@ -376,10 +393,11 @@ jobs:
             echo
             echo "| Item | Status |"
             echo "| --- | --- |"
-            echo "| Deploy hook trigger | \`${{ steps.trigger-cloudflare-pages-deploy.outcome || 'success' }}\` |"
-            echo "| Prod spine smoke skipped | \`${{ steps.prod_spine_smoke.outputs.skipped || 'false' }}\` |"
-            echo "| Prod spine smoke reason | \`${{ steps.prod_spine_smoke.outputs.reason || '' }}\` |"
+            echo "| Deploy hook trigger | \`${{ steps.trigger_pages_deploy.outcome }}\` |"
+            echo "| Post-deploy verify | \`${{ steps.postdeploy_verify.outcome }}\` |"
             echo "| Prod spine smoke step | \`${{ steps.prod_spine_smoke.outcome }}\` |"
+            echo "| Strict sidecars | \`false\` |"
+            echo "| Fail on degraded | \`true\` |"
             echo
             echo "Commands:"
             echo

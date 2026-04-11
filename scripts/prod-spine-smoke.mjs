@@ -461,7 +461,19 @@ async function main() {
   const metaBaseUrl = normalizeBaseUrl(process.env.META_BOT_BASE_URL);
   const twilioBaseUrl = normalizeBaseUrl(process.env.TWILIO_VOICE_BASE_URL);
   const strictSidecars = bool(process.env.PROD_SPINE_STRICT_SIDECARS, false);
-  const failOnDegraded = bool(process.env.PROD_SPINE_FAIL_ON_DEGRADED, false);
+  const failOnDegraded = bool(process.env.PROD_SPINE_FAIL_ON_DEGRADED, true);
+
+  printLine(
+    "#",
+    "Prod spine smoke mode",
+    JSON.stringify({
+      attempts,
+      delayMs,
+      timeoutMs,
+      strictSidecars,
+      failOnDegraded,
+    })
+  );
 
   const envIssues = getRequiredEnvIssues({ aihqBaseUrl, internalToken });
   if (envIssues.length > 0) {

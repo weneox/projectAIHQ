@@ -113,11 +113,15 @@ function summarizeWorkerFleet(json = {}) {
   return {
     status: s(summary.status || json?.workers?.status),
     unavailableCount: n(
-      summary.unavailableCount ?? summary.unavailable ?? summary.requiredUnavailableCount
+      summary.unavailableCount ??
+        summary.unavailable ??
+        summary.requiredUnavailableCount
     ),
     degradedCount: n(summary.degradedCount ?? summary.degraded),
     requiredUnavailableCount: n(
-      summary.requiredUnavailableCount ?? summary.unavailableCount ?? summary.requiredMissingCount
+      summary.requiredUnavailableCount ??
+        summary.unavailableCount ??
+        summary.requiredMissingCount
     ),
   };
 }
@@ -267,7 +271,9 @@ async function verifyAihq({ baseUrl, internalToken, timeoutMs, failOnDegraded })
     ),
     buildResult(
       "aihq_worker_fleet",
-      api.ok && workers.status !== "unavailable" && workers.requiredUnavailableCount === 0,
+      api.ok &&
+        workers.status !== "unavailable" &&
+        workers.requiredUnavailableCount === 0,
       {
         status: workers.status,
         unavailableCount: workers.unavailableCount,
@@ -406,7 +412,17 @@ async function main() {
   const metaBaseUrl = normalizeBaseUrl(process.env.META_BOT_BASE_URL);
   const twilioBaseUrl = normalizeBaseUrl(process.env.TWILIO_VOICE_BASE_URL);
   const strictSidecars = bool(process.env.POSTDEPLOY_STRICT_SIDECARS, false);
-  const failOnDegraded = bool(process.env.POSTDEPLOY_FAIL_ON_DEGRADED, false);
+  const failOnDegraded = bool(process.env.POSTDEPLOY_FAIL_ON_DEGRADED, true);
+
+  printLine(
+    "#",
+    "Post-deploy verification mode",
+    JSON.stringify({
+      timeoutMs,
+      strictSidecars,
+      failOnDegraded,
+    })
+  );
 
   const results = [];
   results.push(...getRequiredEnvIssues({ aihqBaseUrl, internalToken }));
