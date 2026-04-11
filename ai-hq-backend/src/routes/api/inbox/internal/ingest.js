@@ -29,10 +29,84 @@ import {
   emitIngestRealtime,
 } from "./responses.js";
 
+function s(v, d = "") {
+  return String(v ?? d).trim();
+}
+
 function resolveExecutionProviderForChannel(channel = "") {
   return String(channel || "").trim().toLowerCase() === "telegram"
     ? "telegram"
     : "meta";
+}
+
+function buildIngestFailureReasonCode(stage = "", error = null) {
+  const explicit =
+    s(error?.reasonCode) ||
+    s(error?.code) ||
+    s(error?.details?.reasonCode) ||
+    s(error?.details?.code);
+
+  if (explicit) return explicit;
+  if (stage) return `inbox_ingest_${stage}_failed`;
+  return "inbox_ingest_failed";
+}
+
+function buildIngestFailurePayload({
+  stage = "",
+  error = null,
+  input = null,
+  tenantId = "",
+  thread = null,
+  message = null,
+} = {}) {
+  const reasonCode = buildIngestFailureReasonCode(stage, error);
+
+  return {
+    ok: false,
+    error: "Error",
+    reasonCode,
+    stage: s(stage),
+    details: {
+      name: s(error?.name || "Error"),
+      message: s(error?.message || error || "Unknown inbox ingest error"),
+      code: s(error?.code),
+      reasonCode,
+      stage: s(stage),
+      tenantKey: s(input?.tenantKey),
+      channel: s(input?.channel),
+      externalThreadId: s(input?.externalThreadId),
+      externalUserId: s(input?.externalUserId),
+      threadId: s(thread?.id),
+      messageId: s(message?.id),
+      tenantId: s(tenantId),
+      stack: s(error?.stack),
+    },
+    actions: [],
+  };
+}
+
+function logIngestFailure({
+  stage = "",
+  error = null,
+  input = null,
+  tenantId = "",
+  thread = null,
+  message = null,
+} = {}) {
+  const payload = buildIngestFailurePayload({
+    stage,
+    error,
+    input,
+    tenantId,
+    thread,
+    message,
+  });
+
+  try {
+    console.error("[ai-hq] inbox ingest failed", payload.details);
+  } catch {}
+
+  return payload;
 }
 
 export function createInboxIngestHandler({
@@ -54,8 +128,13 @@ export function createInboxIngestHandler({
     if (!validation.ok) return okJson(res, validation.response);
 
     let client = null;
+    let stage = "start";
+    let tenantId = "";
+    let thread = null;
+    let message = null;
 
     try {
+      stage = "db_ready_check";
       if (!isDbReady(db)) {
         return okJson(res, {
           ok: false,
@@ -65,11 +144,15 @@ export function createInboxIngestHandler({
         });
       }
 
+      stage = "db_connect";
       client = await db.connect();
+
+      stage = "begin_transaction";
       await client.query("BEGIN");
 
+      stage = "resolve_tenant";
       const tenantRow = await resolveTenantRow(client, input.tenantKey);
-      const tenantId = String(tenantRow?.id || "").trim();
+      tenantId = String(tenantRow?.id || "").trim();
 
       if (!tenantId) {
         await rollbackAndRelease(client);
@@ -83,7 +166,8 @@ export function createInboxIngestHandler({
         });
       }
 
-      const { thread, threadWasCreated } = await findOrCreateThreadForIngest({
+      stage = "find_or_create_thread";
+      const threadResult = await findOrCreateThreadForIngest({
         client,
         tenantId,
         tenantKey: input.tenantKey,
@@ -95,7 +179,11 @@ export function createInboxIngestHandler({
         meta: input.meta,
       });
 
+      thread = threadResult.thread;
+      const { threadWasCreated } = threadResult;
+
       if (input.externalMessageId && thread?.id) {
+        stage = "find_existing_inbound_message";
         const existingMessage = await findExistingInboundMessage({
           db: client,
           tenantKey: input.tenantKey,
@@ -104,6 +192,7 @@ export function createInboxIngestHandler({
         });
 
         if (existingMessage) {
+          stage = "commit_duplicate_existing_message";
           await client.query("COMMIT");
           client.release();
           client = null;
@@ -119,7 +208,8 @@ export function createInboxIngestHandler({
         }
       }
 
-      const message = await insertInboundMessage({
+      stage = "insert_inbound_message";
+      message = await insertInboundMessage({
         client,
         threadId: thread.id,
         tenantKey: input.tenantKey,
@@ -130,6 +220,7 @@ export function createInboxIngestHandler({
       });
 
       if (message?.duplicate) {
+        stage = "duplicate_message_after_insert";
         await rollbackAndRelease(client);
         client = null;
 
@@ -143,9 +234,13 @@ export function createInboxIngestHandler({
         );
       }
 
+      stage = "load_recent_messages";
       const recentMessages = await loadRecentMessages(client, thread.id);
+
+      stage = "load_prior_thread_state";
       const priorThreadState = await getInboxThreadState(client, thread.id);
 
+      stage = "load_strict_runtime";
       const runtimeState = await loadStrictInboxRuntime({
         client,
         getRuntime,
@@ -156,6 +251,14 @@ export function createInboxIngestHandler({
       });
 
       if (!runtimeState.ok) {
+        logInfo("inbox runtime unavailable", {
+          tenantKey: input.tenantKey,
+          channel: input.channel,
+          externalThreadId: input.externalThreadId,
+          externalUserId: input.externalUserId,
+          runtimeResponse: runtimeState.response,
+        });
+
         await rollbackAndRelease(client);
         client = null;
         return okJson(res, runtimeState.response);
@@ -163,6 +266,7 @@ export function createInboxIngestHandler({
 
       const { tenant, runtime } = runtimeState;
 
+      stage = "build_inbox_actions";
       const brain = await buildActions({
         text: input.text,
         channel: input.channel,
@@ -189,6 +293,7 @@ export function createInboxIngestHandler({
 
       const proposedActions = Array.isArray(brain?.actions) ? brain.actions : [];
 
+      stage = "apply_execution_policy";
       const executionPolicy = applyExecutionPolicyToActions({
         runtime,
         actions: proposedActions,
@@ -226,6 +331,7 @@ export function createInboxIngestHandler({
         executionPolicy: executionPolicy.summary,
       };
 
+      stage = "build_decision_audit";
       const decisionAudit = buildExecutionPolicyDecisionAuditShape({
         tenantId: String(tenant?.id || tenantId),
         tenantKey: input.tenantKey,
@@ -244,6 +350,7 @@ export function createInboxIngestHandler({
         },
       });
 
+      stage = "append_decision_event";
       await safeAppendDecisionEvent(client, {
         ...decisionAudit,
         decisionContext: {
@@ -253,8 +360,12 @@ export function createInboxIngestHandler({
           proposedActionCount: proposedActions.length,
           allowedActionCount: executionPolicy.summary.allowedActionCount,
           filteredActionCount: executionPolicy.summary.filteredActionCount,
-          proposedActionTypes: proposedActions.map((item) => item?.type).filter(Boolean),
-          allowedActionTypes: executionPolicy.actions.map((item) => item?.type).filter(Boolean),
+          proposedActionTypes: proposedActions
+            .map((item) => item?.type)
+            .filter(Boolean),
+          allowedActionTypes: executionPolicy.actions
+            .map((item) => item?.type)
+            .filter(Boolean),
           filteredActionTypes: executionPolicy.filteredActions
             .map((item) => item?.type)
             .filter(Boolean),
@@ -267,6 +378,7 @@ export function createInboxIngestHandler({
           executionPolicy.summary.strictestOutcome
         ) !== "execution_policy_decision"
       ) {
+        stage = "append_blocked_decision_event_prepare";
         const blockedDecisionAudit = buildExecutionPolicyDecisionAuditShape({
           tenantId: String(tenant?.id || tenantId),
           tenantKey: input.tenantKey,
@@ -285,6 +397,7 @@ export function createInboxIngestHandler({
           },
         });
 
+        stage = "append_blocked_decision_event";
         await safeAppendDecisionEvent(client, {
           ...blockedDecisionAudit,
           eventType: mapExecutionOutcomeToDecisionEventType(
@@ -309,6 +422,7 @@ export function createInboxIngestHandler({
         executionPolicyOutcome: executionPolicy.summary.strictestOutcome,
       });
 
+      stage = "persist_lead_actions";
       const leadResults = await persistLead({
         db,
         client,
@@ -317,6 +431,7 @@ export function createInboxIngestHandler({
         actions,
       });
 
+      stage = "apply_handoff_actions";
       const handoffResults = await applyHandoff({
         db,
         client,
@@ -325,6 +440,7 @@ export function createInboxIngestHandler({
         actions,
       });
 
+      stage = "queue_execution_actions";
       const executionResults = await queueExecutionActions({
         client,
         thread,
@@ -335,8 +451,10 @@ export function createInboxIngestHandler({
         actions,
       });
 
+      stage = "refresh_thread";
       const normalizedThread = await refreshThread(client, thread?.id, thread);
 
+      stage = "upsert_thread_state";
       const nextThreadState = await upsertInboxThreadState(
         client,
         buildThreadStateForDecision({
@@ -352,10 +470,12 @@ export function createInboxIngestHandler({
         })
       );
 
+      stage = "commit_transaction";
       await client.query("COMMIT");
       client.release();
       client = null;
 
+      stage = "emit_realtime";
       emitIngestRealtime({
         wsHub,
         threadWasCreated,
@@ -366,6 +486,7 @@ export function createInboxIngestHandler({
         tenantId: String(tenant?.id || tenantId),
       });
 
+      stage = "build_success_response";
       return okJson(
         res,
         buildIngestSuccessResponse({
@@ -383,12 +504,17 @@ export function createInboxIngestHandler({
     } catch (error) {
       if (client) await rollbackAndRelease(client);
 
-      return okJson(res, {
-        ok: false,
-        error: "Error",
-        details: { message: String(error?.message || error) },
-        actions: [],
-      });
+      return okJson(
+        res,
+        logIngestFailure({
+          stage,
+          error,
+          input,
+          tenantId,
+          thread,
+          message,
+        })
+      );
     }
   };
 }
