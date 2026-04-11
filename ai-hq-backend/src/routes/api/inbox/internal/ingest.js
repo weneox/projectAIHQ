@@ -33,6 +33,22 @@ function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
+function obj(v, d = {}) {
+  return v && typeof v === "object" && !Array.isArray(v) ? v : d;
+}
+
+function arr(v, d = []) {
+  return Array.isArray(v) ? v : d;
+}
+
+function lower(v, d = "") {
+  return s(v, d).toLowerCase();
+}
+
+function uniq(values = []) {
+  return [...new Set(arr(values).map((item) => s(item)).filter(Boolean))];
+}
+
 function resolveExecutionProviderForChannel(channel = "") {
   return String(channel || "").trim().toLowerCase() === "telegram"
     ? "telegram"
@@ -107,6 +123,140 @@ function logIngestFailure({
   } catch {}
 
   return payload;
+}
+
+function summarizeRuntimeAuthority(runtime = {}) {
+  const authority = obj(runtime?.authority);
+
+  return {
+    mode: s(authority.mode),
+    required:
+      typeof authority.required === "boolean" ? authority.required : null,
+    available:
+      typeof authority.available === "boolean" ? authority.available : null,
+    source: s(authority.source),
+    runtimeProjectionId: s(
+      authority.runtimeProjectionId || authority.runtime_projection_id
+    ),
+    runtimeProjectionStatus: s(
+      authority.runtimeProjectionStatus || authority.runtime_projection_status
+    ),
+    projectionHash: s(authority.projectionHash || authority.projection_hash),
+    stale: typeof authority.stale === "boolean" ? authority.stale : null,
+    readinessLabel: s(authority.readinessLabel || authority.readiness_label),
+    readinessScore:
+      authority.readinessScore ?? authority.readiness_score ?? null,
+    confidenceLabel: s(authority.confidenceLabel || authority.confidence_label),
+    confidence: authority.confidence ?? null,
+    reasonCode: s(authority.reasonCode || authority.reason_code),
+    reason: s(authority.reason),
+    healthStatus: s(obj(authority.health).status),
+    healthPrimaryReasonCode: s(
+      obj(authority.health).primaryReasonCode ||
+        obj(authority.health).primary_reason_code ||
+        obj(authority.health).reasonCode ||
+        obj(authority.health).reason_code
+    ),
+  };
+}
+
+function summarizeExecutionPolicySurface(runtime = {}, surface = "inbox") {
+  const executionPolicy = obj(runtime?.executionPolicy);
+  const surfaceSummary = obj(executionPolicy?.[surface]);
+
+  return {
+    surface: s(surfaceSummary.surface || surface),
+    channelType: s(surfaceSummary.channelType),
+    lowRiskOutcome: s(surfaceSummary.lowRiskOutcome),
+    mediumRiskOutcome: s(surfaceSummary.mediumRiskOutcome),
+    highRiskOutcome: s(surfaceSummary.highRiskOutcome),
+    blocked: typeof surfaceSummary.blocked === "boolean"
+      ? surfaceSummary.blocked
+      : null,
+    blockedUntilRepair: typeof surfaceSummary.blockedUntilRepair === "boolean"
+      ? surfaceSummary.blockedUntilRepair
+      : null,
+    humanReviewRequired: typeof surfaceSummary.humanReviewRequired === "boolean"
+      ? surfaceSummary.humanReviewRequired
+      : null,
+    handoffRequired: typeof surfaceSummary.handoffRequired === "boolean"
+      ? surfaceSummary.handoffRequired
+      : null,
+    reasonCodes: uniq(surfaceSummary.reasonCodes),
+    signals: {
+      authorityAvailable:
+        surfaceSummary?.signals?.authorityAvailable ?? null,
+      projectionHealthStatus: s(
+        surfaceSummary?.signals?.projectionHealthStatus
+      ),
+      truthApprovalOutcome: s(
+        surfaceSummary?.signals?.truthApprovalOutcome
+      ),
+      truthRiskLevel: s(surfaceSummary?.signals?.truthRiskLevel),
+      policyControlMode: s(surfaceSummary?.signals?.policyControlMode),
+    },
+    policyControl: {
+      controlMode: s(surfaceSummary?.policyControl?.controlMode),
+      policyReason: s(surfaceSummary?.policyControl?.policyReason),
+      operatorNote: s(surfaceSummary?.policyControl?.operatorNote),
+      changedBy: s(surfaceSummary?.policyControl?.changedBy),
+      changedAt: s(surfaceSummary?.policyControl?.changedAt),
+    },
+  };
+}
+
+function summarizePolicyApplication(executionPolicy = {}, actions = []) {
+  const summary = obj(executionPolicy?.summary);
+  const decisions = arr(executionPolicy?.decisions);
+  const filteredActions = arr(executionPolicy?.filteredActions);
+
+  return {
+    strictestOutcome: s(summary.strictestOutcome),
+    requiredExecutionLevel: s(summary.requiredExecutionLevel),
+    allowedActionCount: Number(summary.allowedActionCount || 0),
+    filteredActionCount: Number(summary.filteredActionCount || 0),
+    humanReviewRequired:
+      typeof summary.humanReviewRequired === "boolean"
+        ? summary.humanReviewRequired
+        : null,
+    handoffRequired:
+      typeof summary.handoffRequired === "boolean"
+        ? summary.handoffRequired
+        : null,
+    operatorOnly:
+      typeof summary.operatorOnly === "boolean" ? summary.operatorOnly : null,
+    blocked: typeof summary.blocked === "boolean" ? summary.blocked : null,
+    blockedUntilRepair:
+      typeof summary.blockedUntilRepair === "boolean"
+        ? summary.blockedUntilRepair
+        : null,
+    reasonCodes: uniq(summary.reasonCodes),
+    outcomes: uniq(summary.outcomes),
+    policyControlModes: uniq(summary.policyControlModes),
+    proposedActionTypes: uniq(arr(actions).map((item) => s(item?.type))),
+    filteredActionTypes: uniq(
+      filteredActions.map((item) => s(item?.type))
+    ),
+    decisions: decisions.map((decision) => ({
+      outcome: s(decision?.outcome),
+      actionType: s(decision?.risk?.actionType),
+      intent: s(decision?.risk?.intent),
+      riskLevel: s(decision?.risk?.level),
+      reasonCodes: uniq(decision?.reasonCodes),
+      runtimeAuthorityAvailable:
+        decision?.signals?.runtimeAuthorityAvailable ?? null,
+      runtimeAuthoritySource: s(decision?.signals?.runtimeAuthoritySource),
+      runtimeAuthorityMode: s(decision?.signals?.runtimeAuthorityMode),
+      runtimeProjectionId: s(decision?.signals?.runtimeProjectionId),
+      projectionHealthStatus: s(decision?.signals?.projectionHealthStatus),
+      projectionHealthReasonCode: s(
+        decision?.signals?.projectionHealthReasonCode
+      ),
+      truthApprovalOutcome: s(decision?.signals?.truthApprovalOutcome),
+      truthRiskLevel: s(decision?.signals?.truthRiskLevel),
+      policyControlMode: s(decision?.signals?.policyControlMode),
+    })),
+  };
 }
 
 export function createInboxIngestHandler({
@@ -266,6 +416,22 @@ export function createInboxIngestHandler({
 
       const { tenant, runtime } = runtimeState;
 
+      logInfo("inbox runtime authority", {
+        tenantKey: input.tenantKey,
+        channel: input.channel,
+        externalThreadId: input.externalThreadId,
+        externalUserId: input.externalUserId,
+        authority: summarizeRuntimeAuthority(runtime),
+      });
+
+      logInfo("inbox runtime execution policy surface", {
+        tenantKey: input.tenantKey,
+        channel: input.channel,
+        externalThreadId: input.externalThreadId,
+        externalUserId: input.externalUserId,
+        inbox: summarizeExecutionPolicySurface(runtime, "inbox"),
+      });
+
       stage = "build_inbox_actions";
       const brain = await buildActions({
         text: input.text,
@@ -305,6 +471,14 @@ export function createInboxIngestHandler({
             runtime?.threadState?.handoff_active ??
             thread?.handoff_active,
         },
+      });
+
+      logInfo("inbox execution policy decision", {
+        tenantKey: input.tenantKey,
+        channel: input.channel,
+        externalThreadId: input.externalThreadId,
+        externalUserId: input.externalUserId,
+        policy: summarizePolicyApplication(executionPolicy, proposedActions),
       });
 
       const actions = executionPolicy.actions.length
