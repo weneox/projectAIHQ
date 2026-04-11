@@ -204,7 +204,7 @@ function normalizeTruthSnapshotComparableValue(value) {
 
 function buildComparableTruthVersionSnapshotState(
   version = {},
-  { ignoreIdentity = false } = {}
+  { ignoreIdentity = false, ignoreSourceSummary = false } = {}
 ) {
   const metadataJson = obj(version?.metadataJson || version?.metadata_json);
 
@@ -218,7 +218,9 @@ function buildComparableTruthVersionSnapshotState(
     reviewSessionId: ignoreIdentity
       ? ""
       : s(version?.review_session_id || version?.reviewSessionId),
-    sourceSummary: obj(version?.source_summary_json || version?.sourceSummaryJson),
+    sourceSummary: ignoreSourceSummary
+      ? {}
+      : obj(version?.source_summary_json || version?.sourceSummaryJson),
     profile: obj(version?.profile_snapshot_json || version?.profileSnapshotJson),
     capabilities: obj(
       version?.capabilities_snapshot_json || version?.capabilitiesSnapshotJson
@@ -256,17 +258,17 @@ function buildComparableTruthVersionSnapshotState(
 function truthSnapshotsEquivalent(
   currentVersion = {},
   pendingVersion = null,
-  { ignoreIdentity = false } = {}
+  { ignoreIdentity = false, ignoreSourceSummary = false } = {}
 ) {
   if (!pendingVersion) return false;
 
   const currentComparable = buildComparableTruthVersionSnapshotState(
     currentVersion,
-    { ignoreIdentity }
+    { ignoreIdentity, ignoreSourceSummary }
   );
   const pendingComparable = buildComparableTruthVersionSnapshotState(
     pendingVersion,
-    { ignoreIdentity }
+    { ignoreIdentity, ignoreSourceSummary }
   );
 
   return (
@@ -286,8 +288,17 @@ function truthVersionEquivalentToPending(version = {}, pendingVersion = null) {
     return true;
   }
 
+  if (
+    truthSnapshotsEquivalent(version, pendingVersion, {
+      ignoreIdentity: true,
+    })
+  ) {
+    return true;
+  }
+
   return truthSnapshotsEquivalent(version, pendingVersion, {
     ignoreIdentity: true,
+    ignoreSourceSummary: true,
   });
 }
 
