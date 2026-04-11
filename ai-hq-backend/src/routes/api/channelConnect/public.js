@@ -375,6 +375,29 @@ export function createTelegramWebhookHandler({
         allowRouteTokenFallback: cfg.telegram.allowRouteTokenFallback,
       });
 
+      console.warn(
+        "telegram.webhook.secret_check",
+        buildWebhookDebugMeta(req, {
+          tenantKey,
+          tenantId: s(tenant?.id),
+          channelId: s(channel?.id),
+          routeTokenMatched: true,
+          hasHeaderSecret: Boolean(headerSecret),
+          hasStoredHeaderSecret: Boolean(storedHeaderSecret),
+          headerSecretLength: headerSecret.length,
+          storedHeaderSecretLength: storedHeaderSecret.length,
+          headerSecretFingerprint: fingerprintSecret(headerSecret),
+          storedHeaderSecretFingerprint: fingerprintSecret(storedHeaderSecret),
+          secretHeaderMatched: secretCheck.secretHeaderMatched,
+          shouldReject: secretCheck.shouldReject,
+          accepted: secretCheck.accepted,
+          verificationMode: secretCheck.verificationMode,
+          strictSecretHeaderVerification:
+            secretCheck.strictSecretHeaderVerification,
+          allowRouteTokenFallback: secretCheck.allowRouteTokenFallback,
+        })
+      );
+
       if (!secretCheck.secretHeaderMatched) {
         const mismatchMeta = buildWebhookDebugMeta(req, {
           tenantKey,
