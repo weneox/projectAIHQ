@@ -28,11 +28,6 @@ function deriveHealthUrl(baseUrl = "") {
   return root ? `${root}/health` : "";
 }
 
-function deriveApiHealthUrl(baseUrl = "") {
-  const root = normalizeBaseUrl(baseUrl);
-  return root ? `${root}/api/health` : "";
-}
-
 function deriveRuntimeSignalsUrl(baseUrl = "") {
   const root = normalizeBaseUrl(baseUrl);
   return root ? `${root}/runtime-signals` : "";
@@ -101,7 +96,9 @@ function summarizeReadiness(json = {}) {
         json?.operationalReadiness?.blockers?.total
     ),
     blockerReasonCodes: Array.isArray(readiness?.blockerReasonCodes)
-      ? readiness.blockerReasonCodes.map((item) => s(item).toLowerCase()).filter(Boolean)
+      ? readiness.blockerReasonCodes
+          .map((item) => s(item).toLowerCase())
+          .filter(Boolean)
       : [],
     intentionallyUnavailable:
       readiness?.intentionallyUnavailable === true ||
@@ -197,7 +194,7 @@ function getRequiredEnvIssues({ aihqBaseUrl, internalToken }) {
         env: "AIHQ_INTERNAL_TOKEN",
         reasonCode: "missing_required_env",
         message:
-          "AIHQ_INTERNAL_TOKEN is required for prod spine smoke and this command fails closed when it is missing.",
+          "AIHQ_INTERNAL_TOKEN is required by the current release workflow configuration.",
       },
     });
   }
@@ -205,79 +202,41 @@ function getRequiredEnvIssues({ aihqBaseUrl, internalToken }) {
   return issues;
 }
 
-async function verifyAihq({ baseUrl, internalToken, timeoutMs, failOnDegraded }) {
-  const rootHealthUrl = deriveHealthUrl(baseUrl);
-  const apiHealthUrl = deriveApiHealthUrl(baseUrl);
-  const headers = { "x-internal-token": internalToken };
+async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
+  const healthUrl = deriveHealthUrl(baseUrl);
+  const health = await fetchJson(healthUrl, {}, timeoutMs);
 
-  const root = await fetchJson(rootHealthUrl, headers, timeoutMs);
-  const api = await fetchJson(apiHealthUrl, headers, timeoutMs);
-
-  const rootReadiness = summarizeReadiness(root.json || {});
-  const apiReadiness = summarizeReadiness(api.json || {});
-  const workers = summarizeWorkerFleet(api.json || {});
-  const incidents = summarizeIncidents(api.json || {});
-  const dbOk = api.json?.db?.ok === true;
+  const readiness = summarizeReadiness(health.json || {});
+  const workers = summarizeWorkerFleet(health.json || {});
+  const incidents = summarizeIncidents(health.json || {});
+  const dbOk = health.json?.db?.ok === true;
+  const status = s(health.json?.status).toLowerCase();
 
   const degraded =
-    rootReadiness.status === "degraded" ||
-    apiReadiness.status === "degraded" ||
+    status === "degraded" ||
     workers.status === "degraded" ||
     incidents.status === "degraded";
 
   return [
     buildResult(
-      "aihq_root_health",
-      root.ok &&
-        rootReadiness.intentionallyUnavailable !== true &&
-        rootReadiness.status !== "blocked" &&
-        rootReadiness.status !== "unavailable",
+      "aihq_health",
+      health.ok &&
+        readiness.intentionallyUnavailable !== true &&
+        status !== "blocked" &&
+        status !== "unavailable",
       {
-        url: rootHealthUrl,
-        readinessStatus: rootReadiness.status,
-        reasonCode: rootReadiness.reasonCode,
-        blockersTotal: rootReadiness.blockersTotal,
-      },
-      root.status
-    ),
-    buildResult(
-      "aihq_api_health",
-      api.ok &&
-        apiReadiness.intentionallyUnavailable !== true &&
-        apiReadiness.status !== "blocked" &&
-        apiReadiness.status !== "unavailable",
-      {
-        url: apiHealthUrl,
-        readinessStatus: apiReadiness.status,
-        reasonCode: apiReadiness.reasonCode,
-        blockersTotal: apiReadiness.blockersTotal,
-      },
-      api.status
-    ),
-    buildResult(
-      "aihq_database_ready",
-      api.ok && dbOk,
-      {
+        url: healthUrl,
+        status,
+        readinessStatus: readiness.status,
+        reasonCode: readiness.reasonCode,
+        blockersTotal: readiness.blockersTotal,
         dbOk,
-        status: s(api.json?.status).toLowerCase(),
       },
-      api.status
-    ),
-    buildResult(
-      "aihq_operational_readiness_clear",
-      api.ok &&
-        apiReadiness.intentionallyUnavailable !== true &&
-        apiReadiness.blockersTotal === 0,
-      {
-        blockersTotal: apiReadiness.blockersTotal,
-        blockerReasonCodes: apiReadiness.blockerReasonCodes,
-        readinessStatus: apiReadiness.status,
-      },
-      api.status
+      health.status
     ),
     buildResult(
       "aihq_worker_fleet_ready",
-      api.ok &&
+      health.ok &&
         workers.status !== "unavailable" &&
         workers.requiredUnavailableCount === 0,
       {
@@ -286,30 +245,30 @@ async function verifyAihq({ baseUrl, internalToken, timeoutMs, failOnDegraded })
         degradedCount: workers.degradedCount,
         requiredUnavailableCount: workers.requiredUnavailableCount,
       },
-      api.status
+      health.status
     ),
     buildResult(
       "aihq_prod_spine_acceptance",
-      root.ok &&
-        api.ok &&
+      health.ok &&
         dbOk &&
-        apiReadiness.intentionallyUnavailable !== true &&
-        apiReadiness.blockersTotal === 0 &&
+        readiness.intentionallyUnavailable !== true &&
+        readiness.blockersTotal === 0 &&
+        status !== "unavailable" &&
+        workers.status !== "unavailable" &&
         workers.requiredUnavailableCount === 0 &&
         (!failOnDegraded || !degraded),
       {
-        apiStatus: s(api.json?.status).toLowerCase(),
-        rootStatus: s(root.json?.status).toLowerCase(),
+        status,
         dbOk,
-        blockersTotal: apiReadiness.blockersTotal,
-        blockerReasonCodes: apiReadiness.blockerReasonCodes,
+        blockersTotal: readiness.blockersTotal,
+        blockerReasonCodes: readiness.blockerReasonCodes,
         workerStatus: workers.status,
         requiredUnavailableCount: workers.requiredUnavailableCount,
         incidentStatus: incidents.status,
         incidentErrorCount: incidents.errorCount,
         failOnDegraded,
       },
-      Math.max(root.status, api.status)
+      health.status
     ),
   ];
 }
@@ -339,7 +298,10 @@ async function verifySidecar(prefix, baseUrl, timeoutMs, failOnDegraded) {
   const runtimeSignalsUrl = deriveRuntimeSignalsUrl(baseUrl);
 
   if (!healthUrl) {
-    return buildSkippedSidecarResults(prefix, `${prefix.toUpperCase()}_BASE_URL missing`);
+    return buildSkippedSidecarResults(
+      prefix,
+      `${prefix.toUpperCase()}_BASE_URL missing`
+    );
   }
 
   const health = await fetchJson(healthUrl, {}, timeoutMs);
@@ -410,7 +372,6 @@ async function verifySidecar(prefix, baseUrl, timeoutMs, failOnDegraded) {
 
 async function runAttempt({
   aihqBaseUrl,
-  internalToken,
   metaBaseUrl,
   twilioBaseUrl,
   timeoutMs,
@@ -422,7 +383,6 @@ async function runAttempt({
   results.push(
     ...(await verifyAihq({
       baseUrl: aihqBaseUrl,
-      internalToken,
       timeoutMs,
       failOnDegraded,
     }))
@@ -495,7 +455,6 @@ async function main() {
 
     lastResults = await runAttempt({
       aihqBaseUrl,
-      internalToken,
       metaBaseUrl,
       twilioBaseUrl,
       timeoutMs,
