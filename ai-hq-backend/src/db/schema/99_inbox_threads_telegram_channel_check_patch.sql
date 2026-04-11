@@ -1,6 +1,6 @@
 BEGIN;
 
--- Normalize any stored channel values before re-adding the check.
+-- Normalize any existing values first.
 UPDATE inbox_threads
 SET channel = lower(btrim(channel))
 WHERE channel IS NOT NULL
@@ -10,9 +10,12 @@ DO $$
 DECLARE
   allowed_channels text;
 BEGIN
-  -- Build a safe allowlist from:
-  -- 1) known platform channels we want to support
-  -- 2) any existing rows already present in inbox_threads
+  /*
+    Rebuild the inbox_threads channel check with a safe superset:
+    - known inbox-capable channels we actively use / may use
+    - plus any existing stored channel values already present in the table
+    This avoids breaking older rows while adding telegram support.
+  */
   SELECT string_agg(quote_literal(channel), ', ' ORDER BY channel)
     INTO allowed_channels
   FROM (
