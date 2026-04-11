@@ -8,7 +8,13 @@ import { userLoginRoutes } from "./user.js";
 export function adminAuthRoutes({ db, wsHub } = {}) {
   const r = express.Router();
 
-  r.use(requireTrustedBrowserOriginForCookieAuth);
+  // This router is mounted at /api before the main API router.
+  // Scope browser-origin CSRF checks only to real auth endpoints so
+  // public provider webhooks under /api/* can fall through to their
+  // own public handlers.
+  r.use("/admin-auth", requireTrustedBrowserOriginForCookieAuth);
+  r.use("/auth", requireTrustedBrowserOriginForCookieAuth);
+
   r.use(adminSessionRoutes({ db, wsHub }));
   r.use(adminLoginRoutes({ db, wsHub }));
   r.use(userSignupRoutes({ db, wsHub }));
