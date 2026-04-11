@@ -49,6 +49,48 @@ function fingerprintSecret(value = "") {
   return crypto.createHash("sha256").update(text).digest("hex").slice(0, 12);
 }
 
+function buildTelegramWebhookVerificationMode({
+  strictSecretHeaderVerification = true,
+  allowRouteTokenFallback = false,
+} = {}) {
+  const strict = strictSecretHeaderVerification !== false;
+  const allowFallback = allowRouteTokenFallback === true;
+
+  if (strict && allowFallback) {
+    return "strict_secret_header_with_route_token_fallback";
+  }
+  if (strict) return "strict_secret_header";
+  if (allowFallback) return "route_token_fallback";
+  return "route_token_only";
+}
+
+function evaluateTelegramWebhookSecretCheck({
+  headerSecret = "",
+  storedHeaderSecret = "",
+  strictSecretHeaderVerification = true,
+  allowRouteTokenFallback = false,
+} = {}) {
+  const secretHeaderMatched = safeSecretEquals(
+    headerSecret,
+    storedHeaderSecret
+  );
+  const strict = strictSecretHeaderVerification !== false;
+  const allowFallback = allowRouteTokenFallback === true;
+  const verificationMode = buildTelegramWebhookVerificationMode({
+    strictSecretHeaderVerification: strict,
+    allowRouteTokenFallback: allowFallback,
+  });
+
+  return {
+    secretHeaderMatched,
+    strictSecretHeaderVerification: strict,
+    allowRouteTokenFallback: allowFallback,
+    verificationMode,
+    shouldReject: !secretHeaderMatched && strict && !allowFallback,
+    accepted: secretHeaderMatched || !strict || allowFallback,
+  };
+}
+
 function buildWebhookDebugMeta(req, extra = {}) {
   return {
     method: s(req?.method),
@@ -325,35 +367,43 @@ export function createTelegramWebhookHandler({
       const storedHeaderSecret = s(
         secrets?.[TELEGRAM_WEBHOOK_SECRET_TOKEN_SECRET_KEY]
       );
-      const secretHeaderMatched = safeSecretEquals(
+      const secretCheck = evaluateTelegramWebhookSecretCheck({
         headerSecret,
-        storedHeaderSecret
-      );
+        storedHeaderSecret,
+        strictSecretHeaderVerification:
+          cfg.telegram.strictSecretHeaderVerification,
+        allowRouteTokenFallback: cfg.telegram.allowRouteTokenFallback,
+      });
 
-      if (!secretHeaderMatched) {
-        console.warn(
-          "telegram.webhook.secret_mismatch",
-          buildWebhookDebugMeta(req, {
-            tenantKey,
-            tenantId: s(tenant?.id),
-            channelId: s(channel?.id),
-            routeTokenMatched: true,
-            hasHeaderSecret: Boolean(headerSecret),
-            hasStoredHeaderSecret: Boolean(storedHeaderSecret),
-            headerSecretLength: headerSecret.length,
-            storedHeaderSecretLength: storedHeaderSecret.length,
-            headerSecretFingerprint: fingerprintSecret(headerSecret),
-            storedHeaderSecretFingerprint: fingerprintSecret(storedHeaderSecret),
-            strictSecretHeaderVerification:
-              cfg.telegram.strictSecretHeaderVerification === true,
-            allowRouteTokenFallback:
-              cfg.telegram.allowRouteTokenFallback === true,
-            verificationMode:
-              cfg.telegram.allowRouteTokenFallback === true
-                ? "route_token_primary"
-                : "strict_secret_header",
-          })
-        );
+      if (!secretCheck.secretHeaderMatched) {
+        const mismatchMeta = buildWebhookDebugMeta(req, {
+          tenantKey,
+          tenantId: s(tenant?.id),
+          channelId: s(channel?.id),
+          routeTokenMatched: true,
+          hasHeaderSecret: Boolean(headerSecret),
+          hasStoredHeaderSecret: Boolean(storedHeaderSecret),
+          headerSecretLength: headerSecret.length,
+          storedHeaderSecretLength: storedHeaderSecret.length,
+          headerSecretFingerprint: fingerprintSecret(headerSecret),
+          storedHeaderSecretFingerprint: fingerprintSecret(storedHeaderSecret),
+          verificationMode: secretCheck.verificationMode,
+          strictSecretHeaderVerification:
+            secretCheck.strictSecretHeaderVerification,
+          allowRouteTokenFallback: secretCheck.allowRouteTokenFallback,
+        });
+
+        console.warn("telegram.webhook.secret_mismatch", mismatchMeta);
+
+        if (secretCheck.shouldReject) {
+          return res.status(403).json({
+            ok: false,
+            error: "Forbidden",
+            reasonCode: "telegram_webhook_secret_invalid",
+          });
+        }
+
+        console.warn("telegram.webhook.accepted_via_route_token", mismatchMeta);
       }
 
       const botToken = s(secrets?.[TELEGRAM_BOT_TOKEN_SECRET_KEY]);
@@ -436,9 +486,8 @@ export function createTelegramWebhookHandler({
             externalThreadId: s(normalized?.input?.externalThreadId),
             externalUserId: s(normalized?.input?.externalUserId),
             ingestStatusCode: Number(captureRes.statusCode || 200),
-            secretHeaderMatched,
-            allowRouteTokenFallback:
-              cfg.telegram.allowRouteTokenFallback === true,
+            secretHeaderMatched: secretCheck.secretHeaderMatched,
+            verificationMode: secretCheck.verificationMode,
           })
         );
 
@@ -457,9 +506,8 @@ export function createTelegramWebhookHandler({
           ingestStatusCode: Number(captureRes.statusCode || 503),
           ingestError: s(payload?.error),
           ingestReasonCode: s(payload?.reasonCode),
-          secretHeaderMatched,
-          allowRouteTokenFallback:
-            cfg.telegram.allowRouteTokenFallback === true,
+          secretHeaderMatched: secretCheck.secretHeaderMatched,
+          verificationMode: secretCheck.verificationMode,
         })
       );
 
@@ -517,4 +565,6 @@ export const __test__ = {
   safeSecretEquals,
   buildInternalIngestRequest,
   fingerprintSecret,
+  buildTelegramWebhookVerificationMode,
+  evaluateTelegramWebhookSecretCheck,
 };
