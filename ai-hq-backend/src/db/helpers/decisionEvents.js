@@ -53,6 +53,31 @@ function sanitizeValue(value, depth = 0) {
   return value;
 }
 
+function buildSavepointName(prefix = "decision_events") {
+  const a = Date.now().toString(36);
+  const b = Math.random().toString(36).slice(2, 10);
+  return `sp_${prefix}_${a}_${b}`.replace(/[^a-zA-Z0-9_]/g, "_");
+}
+
+function canUseQuery(db) {
+  return Boolean(db?.query && typeof db.query === "function");
+}
+
+function logSafeDecisionEventFailure(error, input = {}, savepointUsed = false) {
+  try {
+    console.warn("[ai-hq] safeAppendDecisionEvent failed", {
+      message: s(error?.message || error),
+      code: s(error?.code),
+      reasonCode: s(error?.reasonCode),
+      eventType: s(input?.eventType || input?.event_type),
+      surface: s(input?.surface),
+      channelType: s(input?.channelType || input?.channel_type),
+      tenantKey: s(input?.tenantKey || input?.tenant_key),
+      savepointUsed,
+    });
+  } catch {}
+}
+
 export const DECISION_EVENT_TYPES = [
   "truth_publication_decision",
   "approval_policy_decision",
@@ -94,12 +119,16 @@ export function mapDecisionEvent(row = {}) {
 
 export function normalizeDecisionEvent(input = {}) {
   const value = obj(input);
-  const timestamp = iso(value.timestamp || value.eventAt || value.event_at) || new Date().toISOString();
+  const timestamp =
+    iso(value.timestamp || value.eventAt || value.event_at) ||
+    new Date().toISOString();
 
   return {
     tenantId: s(value.tenantId || value.tenant_id),
     tenantKey: lower(value.tenantKey || value.tenant_key),
-    eventType: DECISION_EVENT_TYPES.includes(lower(value.eventType || value.event_type))
+    eventType: DECISION_EVENT_TYPES.includes(
+      lower(value.eventType || value.event_type)
+    )
       ? lower(value.eventType || value.event_type)
       : "execution_policy_decision",
     actor: s(value.actor || "system"),
@@ -107,7 +136,9 @@ export function normalizeDecisionEvent(input = {}) {
     surface: lower(value.surface),
     channelType: lower(value.channelType || value.channel_type),
     policyOutcome: lower(value.policyOutcome || value.policy_outcome),
-    reasonCodes: uniq(value.reasonCodes || value.reason_codes).map((item) => lower(item)),
+    reasonCodes: uniq(value.reasonCodes || value.reason_codes).map((item) =>
+      lower(item)
+    ),
     healthState: sanitizeValue(obj(value.healthState || value.health_state)),
     approvalPosture: sanitizeValue(
       obj(value.approvalPosture || value.approval_posture)
@@ -117,7 +148,9 @@ export function normalizeDecisionEvent(input = {}) {
     ),
     controlState: sanitizeValue(obj(value.controlState || value.control_state)),
     truthVersionId: s(value.truthVersionId || value.truth_version_id),
-    runtimeProjectionId: s(value.runtimeProjectionId || value.runtime_projection_id),
+    runtimeProjectionId: s(
+      value.runtimeProjectionId || value.runtime_projection_id
+    ),
     affectedSurfaces: uniq(value.affectedSurfaces || value.affected_surfaces).map(
       (item) => lower(item)
     ),
@@ -132,7 +165,7 @@ export function normalizeDecisionEvent(input = {}) {
 }
 
 export async function appendDecisionEvent(db, input = {}) {
-  if (!db?.query || typeof db.query !== "function") {
+  if (!canUseQuery(db)) {
     throw new Error("appendDecisionEvent: valid db.query adapter required");
   }
 
@@ -210,9 +243,42 @@ export async function appendDecisionEvent(db, input = {}) {
 }
 
 export async function safeAppendDecisionEvent(db, input = {}) {
+  if (!canUseQuery(db)) return null;
+
+  let savepoint = "";
+  let savepointActive = false;
+
   try {
-    return await appendDecisionEvent(db, input);
-  } catch {
+    savepoint = buildSavepointName();
+
+    try {
+      await db.query(`SAVEPOINT ${savepoint}`);
+      savepointActive = true;
+    } catch {
+      savepoint = "";
+      savepointActive = false;
+    }
+
+    const result = await appendDecisionEvent(db, input);
+
+    if (savepointActive) {
+      try {
+        await db.query(`RELEASE SAVEPOINT ${savepoint}`);
+      } catch {}
+    }
+
+    return result;
+  } catch (error) {
+    if (savepointActive) {
+      try {
+        await db.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+      } catch {}
+      try {
+        await db.query(`RELEASE SAVEPOINT ${savepoint}`);
+      } catch {}
+    }
+
+    logSafeDecisionEventFailure(error, input, savepointActive);
     return null;
   }
 }
@@ -221,7 +287,7 @@ export async function listDecisionEvents(
   db,
   { tenantId = "", tenantKey = "", eventTypes = [], surfaces = [], limit = 25 } = {}
 ) {
-  if (!db?.query || typeof db.query !== "function") {
+  if (!canUseQuery(db)) {
     throw new Error("listDecisionEvents: valid db.query adapter required");
   }
 
@@ -258,4 +324,5 @@ export async function listDecisionEvents(
 export const __test__ = {
   sanitizeValue,
   shouldRedactKey,
+  buildSavepointName,
 };
