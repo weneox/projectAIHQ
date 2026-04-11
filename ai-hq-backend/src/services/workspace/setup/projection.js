@@ -387,7 +387,9 @@ function isReusableTruthVersion(version = {}, { method = "" } = {}) {
       version?.publishedAt ||
         version?.published_at ||
         version?.approvedAt ||
-        version?.approved_at
+        version?.approved_at ||
+        version?.createdAt ||
+        version?.created_at
     )
   ) {
     return true;
@@ -402,8 +404,10 @@ function isReusableTruthVersion(version = {}, { method = "" } = {}) {
       "findReusableVersion",
       "getLatestPublishedVersion",
       "getLatestApprovedVersion",
+      "getLatestVersion",
       "listPublishedVersions",
       "listApprovedVersions",
+      "listVersions",
     ].includes(sourceMethod)
   ) {
     return true;
