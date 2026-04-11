@@ -302,9 +302,7 @@ describe("Truth viewer smoke", () => {
   it("renders the current business truth surface and opens version compare", async () => {
     renderPage();
 
-    expect(
-      screen.getByText(/loading approved business truth/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/loading truth/i)).toBeInTheDocument();
 
     expect(
       await screen.findByRole("heading", { name: /business truth/i })
@@ -319,7 +317,7 @@ describe("Truth viewer smoke", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("+15551112222")).toBeInTheDocument();
     expect(screen.getByText("https://north.example")).toBeInTheDocument();
-    expect(screen.getByText(/reviewer@aihq\.test/i)).toBeInTheDocument();
+    expect(screen.getByText(/^v3$/i)).toBeInTheDocument();
     expect(screen.getAllByText(/^Healthy$/i).length).toBeGreaterThan(0);
     expect(
       screen.getAllByText(/https:\/\/north\.example\/about/i).length
@@ -381,8 +379,8 @@ describe("Truth viewer smoke", () => {
     ).toBeDisabled();
 
     expect(screen.getByText(/^Unavailable$/i)).toBeInTheDocument();
-    expect(screen.getByText(/saved versions/i)).toBeInTheDocument();
-    expect(screen.getByText(/pending review/i)).toBeInTheDocument();
+    expect(screen.getByText(/saved:/i)).toBeInTheDocument();
+    expect(screen.getByText(/pending review:/i)).toBeInTheDocument();
     expect(screen.getAllByText(/^0$/i).length).toBeGreaterThanOrEqual(2);
   });
 

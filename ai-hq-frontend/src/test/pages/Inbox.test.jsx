@@ -9,38 +9,28 @@ const areInternalRoutesEnabled = vi.fn();
 const useInboxComposerSurface = vi.fn();
 const useThreadOutboundAttemptsSurface = vi.fn();
 const useWorkspaceTenantKey = vi.fn();
+const getSettingsTrustView = vi.fn();
+const getMetaChannelStatus = vi.fn();
+const getTelegramChannelStatus = vi.fn();
+const getWebsiteWidgetStatus = vi.fn();
 const mockNavigate = vi.fn();
 const mockSetSearchParams = vi.fn();
 
-vi.mock("react-router-dom", () => ({
-  MemoryRouter: ({ children }) => children,
-  Link: ({ children, to = "#", ...props }) => (
-    <a href={typeof to === "string" ? to : "#"} {...props}>
-      {children}
-    </a>
-  ),
-  NavLink: ({ children, to = "#", ...props }) => (
-    <a href={typeof to === "string" ? to : "#"} {...props}>
-      {typeof children === "function" ? children({ isActive: false }) : children}
-    </a>
-  ),
-  Navigate: () => null,
-  Outlet: ({ children }) => children ?? null,
-  useNavigate: () => mockNavigate,
-  useLocation: () => ({
-    pathname: "/inbox",
-    search: "",
-    hash: "",
-    state: null,
-    key: "test",
-  }),
-  useParams: () => ({}),
-  useSearchParams: () => [new URLSearchParams(), mockSetSearchParams],
-  useMatch: () => null,
-  useResolvedPath: (to) => ({
-    pathname: typeof to === "string" ? to : "/inbox",
-  }),
-}));
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual("react-router-dom");
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+    useLocation: () => ({
+      pathname: "/inbox",
+      search: "",
+      hash: "",
+      state: null,
+      key: "test",
+    }),
+    useSearchParams: () => [new URLSearchParams(), mockSetSearchParams],
+  };
+});
 
 vi.mock("../../hooks/useInboxData.js", () => ({
   useInboxData: (...args) => useInboxData(...args),
@@ -71,6 +61,16 @@ vi.mock("../../lib/appSession.js", () => ({
   getAppSessionContext: (...args) => getAppSessionContext(...args),
 }));
 
+vi.mock("../../api/trust.js", () => ({
+  getSettingsTrustView: (...args) => getSettingsTrustView(...args),
+}));
+
+vi.mock("../../api/channelConnect.js", () => ({
+  getMetaChannelStatus: (...args) => getMetaChannelStatus(...args),
+  getTelegramChannelStatus: (...args) => getTelegramChannelStatus(...args),
+  getWebsiteWidgetStatus: (...args) => getWebsiteWidgetStatus(...args),
+}));
+
 vi.mock("../../lib/appEntry.js", () => ({
   areInternalRoutesEnabled: (...args) => areInternalRoutesEnabled(...args),
 }));
@@ -85,9 +85,13 @@ describe("Inbox", () => {
       loading: false,
       ready: true,
     });
+    getSettingsTrustView.mockRejectedValue(new Error("truth unavailable"));
+    getMetaChannelStatus.mockRejectedValue(new Error("meta unavailable"));
+    getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
+    getWebsiteWidgetStatus.mockRejectedValue(new Error("website unavailable"));
   });
 
-  it("renders the primary conversation-work surface feedback", async () => {
+  it("renders the inbox launch and fallback feedback", async () => {
     getAppSessionContext.mockResolvedValue({
       tenantKey: "acme",
       actorName: "operator",
@@ -214,19 +218,21 @@ describe("Inbox", () => {
     render(<Inbox />);
 
     expect(
-      await screen.findByRole("heading", { name: /operator messaging workspace/i })
+      await screen.findByRole("heading", { name: /live conversation inbox/i })
     ).toBeInTheDocument();
 
-    expect(screen.getByText(/reply accepted/i)).toBeInTheDocument();
     expect(
       screen.getByText(/inbox operations are temporarily unavailable/i)
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/thread-first triage on the left/i)
+      screen.getByText(/inbox launch posture is unavailable/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/fallback mode/i)).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: /all conversations/i })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/conversation workspace/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/select a thread to open the timeline/i)
     ).toBeInTheDocument();
   });
 });

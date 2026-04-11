@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const listDurableExecutions = vi.fn();
@@ -160,7 +161,11 @@ beforeEach(() => {
 
 describe("Executions durable surface", () => {
   it("renders summary, detail, and manual retry flow", async () => {
-    render(<Executions />);
+    render(
+      <MemoryRouter>
+        <Executions />
+      </MemoryRouter>
+    );
 
     expect(
       await screen.findByRole("heading", { name: /^durable executions$/i })
@@ -187,7 +192,11 @@ describe("Executions durable surface", () => {
 
   it("shows honest loading and error states", async () => {
     listDurableExecutions.mockRejectedValueOnce(new Error("backend unavailable"));
-    render(<Executions />);
+    render(
+      <MemoryRouter>
+        <Executions />
+      </MemoryRouter>
+    );
 
     expect(
       await screen.findByText(/durable execution controls are temporarily unavailable/i)

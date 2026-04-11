@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import Sidebar from "../../../components/layout/Sidebar.jsx";
 
 describe("Sidebar", () => {
-  it("makes the launch product primary and keeps support surfaces secondary", () => {
+  it("shows the simplified launch navigation and keeps hidden surfaces out of the shell", () => {
     render(
       <MemoryRouter initialEntries={["/inbox"]}>
         <Sidebar
@@ -21,28 +21,37 @@ describe("Sidebar", () => {
       "href",
       "/inbox"
     );
-    expect(screen.getByRole("link", { name: /pipeline 5/i })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: /channels/i })).toHaveAttribute(
       "href",
-      "/leads"
+      "/channels"
+    );
+    expect(screen.getByRole("link", { name: /truth/i })).toHaveAttribute(
+      "href",
+      "/truth"
     );
 
+    for (const href of ["/home", "/inbox", "/channels", "/truth"]) {
+      expect(document.querySelector(`a[href="${href}"]`)).toBeTruthy();
+    }
+
     for (const href of [
-      "/home",
       "/comments",
       "/voice",
       "/workspace",
-      "/channels",
       "/publish",
-      "/truth",
+      "/leads",
+      "/proposals",
+      "/executions",
     ]) {
-      expect(document.querySelector(`a[href="${href}"]`)).toBeTruthy();
+      expect(document.querySelector(`a[href="${href}"]`)).toBeNull();
     }
 
     const linkOrder = Array.from(document.querySelectorAll('a[href]')).map(
       (link) => link.getAttribute("href")
     );
 
-    expect(linkOrder.indexOf("/inbox")).toBeLessThan(linkOrder.indexOf("/workspace"));
-    expect(linkOrder.indexOf("/voice")).toBeLessThan(linkOrder.indexOf("/channels"));
+    expect(linkOrder.indexOf("/home")).toBeLessThan(linkOrder.indexOf("/inbox"));
+    expect(linkOrder.indexOf("/inbox")).toBeLessThan(linkOrder.indexOf("/channels"));
+    expect(linkOrder.indexOf("/channels")).toBeLessThan(linkOrder.indexOf("/truth"));
   });
 });

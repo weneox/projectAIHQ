@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
 const useVoiceSurface = vi.fn();
@@ -55,7 +56,11 @@ describe("Voice", () => {
       canEnd: false,
     });
 
-    render(<Voice />);
+    render(
+      <MemoryRouter>
+        <Voice />
+      </MemoryRouter>
+    );
 
     expect(screen.getByText(/voice center/i)).toBeInTheDocument();
     expect(screen.getByText(/voice operations are temporarily unavailable/i)).toBeInTheDocument();
