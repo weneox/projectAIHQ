@@ -53,6 +53,8 @@ function buildWebhookDebugMeta(req, extra = {}) {
     method: s(req?.method),
     path: s(req?.path),
     originalUrl: s(req?.originalUrl),
+    tenantKeyParam: lower(req?.params?.tenantKey),
+    hasRouteTokenParam: Boolean(s(req?.params?.routeToken)),
     userAgent: s(req?.get?.("user-agent")),
     contentType: s(req?.get?.("content-type")),
     xForwardedFor: s(req?.get?.("x-forwarded-for")),
