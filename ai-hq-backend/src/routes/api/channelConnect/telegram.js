@@ -67,6 +67,17 @@ function epochSecondsToIso(value) {
     : null;
 }
 
+function isTelegramWebhookDeliveryFailing(webhookInfo = null) {
+  const info = obj(webhookInfo);
+  const pendingUpdateCount = Number(info?.pending_update_count || 0);
+  const lastErrorMessage = s(info?.last_error_message);
+
+  return (
+    pendingUpdateCount > 0 &&
+    /wrong response from the webhook:\s*403\b/i.test(lastErrorMessage)
+  );
+}
+
 function normalizeUrlForCompare(value = "") {
   const raw = s(value);
   if (!raw) return "";
@@ -149,7 +160,9 @@ function getTelegramSnapshot(channel = {}) {
 
   return {
     displayName: s(
-      channel?.display_name || config.last_connected_display_name || TELEGRAM_DEFAULT_NAME
+      channel?.display_name ||
+        config.last_connected_display_name ||
+        TELEGRAM_DEFAULT_NAME
     ),
     botUserId: s(channel?.external_user_id || config.bot_user_id),
     botUsername: s(channel?.external_username || config.bot_username),
@@ -211,7 +224,9 @@ function buildTelegramChannelPayload({
       auth_model: TELEGRAM_AUTH_MODEL,
       bot_user_id: cleanNullable(botUserId),
       bot_username: cleanNullable(botUsername),
-      bot_first_name: cleanNullable(liveBot?.first_name || snapshot.botFirstName),
+      bot_first_name: cleanNullable(
+        liveBot?.first_name || snapshot.botFirstName
+      ),
       bot_last_name: cleanNullable(liveBot?.last_name || snapshot.botLastName),
       bot_can_join_groups:
         liveBot?.can_join_groups === true || snapshot.botCanJoinGroups,
@@ -384,7 +399,11 @@ function buildTelegramRuntimeSurfaceFromRuntime({
       ? channelAllowed
         ? ""
         : "channel_not_allowed"
-      : s(authority?.reasonCode || authority?.reason || "runtime_authority_unavailable"),
+      : s(
+          authority?.reasonCode ||
+            authority?.reason ||
+            "runtime_authority_unavailable"
+        ),
     authority,
   };
 }
@@ -494,6 +513,7 @@ function buildTelegramStatusBlockers({
   botResult = null,
   webhookResult = null,
   webhookUrlMatches = false,
+  webhookDeliveryFailing = false,
   runtime = null,
 } = {}) {
   const blockers = [];
@@ -611,6 +631,16 @@ function buildTelegramStatusBlockers({
           missingFields: ["telegram_webhook_url"],
         })
       );
+    } else if (webhookDeliveryFailing) {
+      blockers.push(
+        buildOperationalRepairGuidance({
+          reasonCode: "telegram_webhook_secret_invalid",
+          title: "Telegram webhook is rejecting live deliveries",
+          subtitle:
+            "Telegram is still pointing at this tenant route, but the webhook is returning 403 to Telegram. Reconnect Telegram or relax strict secret-header verification if a proxy strips the Telegram secret header.",
+          missingFields: ["telegram_webhook_secret_header_verification"],
+        })
+      );
     }
   }
 
@@ -655,13 +685,17 @@ function buildTelegramStatusPayload({
     tenantKey: tenant?.tenant_key,
     routeToken,
   });
-  const actualWebhookUrl = s(webhookResult?.result?.url);
+  const webhookInfo = obj(webhookResult?.result);
+  const actualWebhookUrl = s(webhookInfo?.url);
 
   const webhookUrlMatches =
     Boolean(expectedWebhookUrl) &&
     Boolean(actualWebhookUrl) &&
     normalizeUrlForCompare(expectedWebhookUrl) ===
       normalizeUrlForCompare(actualWebhookUrl);
+
+  const webhookDeliveryFailing =
+    webhookResult?.ok === true && isTelegramWebhookDeliveryFailing(webhookInfo);
 
   const feature = getTelegramFeatureState();
   const botIdentity = botResult?.ok ? obj(botResult.result) : {};
@@ -673,7 +707,8 @@ function buildTelegramStatusPayload({
     botResult?.ok === true &&
     webhookResult?.ok === true &&
     webhookUrlMatches &&
-    Boolean(secretToken);
+    Boolean(secretToken) &&
+    !webhookDeliveryFailing;
 
   let state = "not_connected";
   if (connected) {
@@ -711,6 +746,8 @@ function buildTelegramStatusPayload({
           ? webhookResult.reasonCode
           : !webhookUrlMatches
           ? "telegram_webhook_mismatch"
+          : webhookDeliveryFailing
+          ? "telegram_webhook_secret_invalid"
           : lastConnectFailure?.reasonCode
       );
 
@@ -724,6 +761,7 @@ function buildTelegramStatusPayload({
     botResult,
     webhookResult,
     webhookUrlMatches,
+    webhookDeliveryFailing,
     runtime,
   });
 
@@ -766,25 +804,24 @@ function buildTelegramStatusPayload({
         botResult?.ok === true &&
         webhookResult?.ok === true &&
         webhookUrlMatches &&
-        Boolean(secretToken),
+        Boolean(secretToken) &&
+        !webhookDeliveryFailing,
       expectedUrl: cleanNullable(redactTelegramWebhookUrl(expectedWebhookUrl)),
       actualUrl: cleanNullable(redactTelegramWebhookUrl(actualWebhookUrl)),
       secretHeaderConfigured: Boolean(secretToken),
-      pendingUpdateCount: Number(
-        webhookResult?.result?.pending_update_count || 0
-      ),
+      pendingUpdateCount: Number(webhookInfo?.pending_update_count || 0),
       lastErrorAt: cleanNullable(
-        epochSecondsToIso(webhookResult?.result?.last_error_date)
+        epochSecondsToIso(webhookInfo?.last_error_date)
       ),
-      lastErrorMessage: cleanNullable(
-        webhookResult?.result?.last_error_message
-      ),
-      ipAddress: cleanNullable(webhookResult?.result?.ip_address),
+      lastErrorMessage: cleanNullable(webhookInfo?.last_error_message),
+      ipAddress: cleanNullable(webhookInfo?.ip_address),
       reasonCode:
         webhookResult?.ok === false
           ? s(webhookResult.reasonCode || "")
           : !webhookUrlMatches && expectedWebhookUrl
           ? "telegram_webhook_mismatch"
+          : webhookDeliveryFailing
+          ? "telegram_webhook_secret_invalid"
           : "",
     },
     runtime: {
@@ -806,7 +843,8 @@ function buildTelegramStatusPayload({
     },
     actions: {
       connectAvailable: !connected && feature.enabled,
-      reconnectAvailable: !connected && Boolean(channel?.id || botToken) && feature.enabled,
+      reconnectAvailable:
+        !connected && Boolean(channel?.id || botToken) && feature.enabled,
       disconnectAvailable: Boolean(
         channel?.id || botToken || routeToken || secretToken
       ),
@@ -1350,4 +1388,5 @@ export const __test__ = {
   extractTelegramRuntimeAuthorityPayload,
   getTelegramRuntimeSurface,
   shouldAttemptTelegramRuntimeRepair,
+  isTelegramWebhookDeliveryFailing,
 };
