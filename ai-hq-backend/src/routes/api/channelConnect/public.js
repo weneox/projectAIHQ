@@ -105,6 +105,20 @@ function buildWebhookDebugMeta(req, extra = {}) {
   };
 }
 
+function logWebhookEvent(level = "info", event = "", req, extra = {}) {
+  const payload = buildWebhookDebugMeta(req, extra);
+
+  if (level === "error") {
+    console.error(event, payload);
+    return;
+  }
+  if (level === "warn") {
+    console.warn(event, payload);
+    return;
+  }
+  console.info(event, payload);
+}
+
 function buildTelegramCustomerName(from = {}) {
   const firstName = s(from?.first_name);
   const lastName = s(from?.last_name);
@@ -281,13 +295,15 @@ export function createTelegramWebhookHandler({
 
   return async function telegramWebhookHandler(req, res) {
     try {
+      logWebhookEvent("info", "telegram.webhook.entry", req, {
+        tenantKey: lower(req?.params?.tenantKey),
+        hasRouteToken: Boolean(s(req?.params?.routeToken)),
+      });
+
       if (!isDbReady(db)) {
-        console.error(
-          "telegram.webhook.db_disabled",
-          buildWebhookDebugMeta(req, {
-            reasonCode: "db_disabled",
-          })
-        );
+        logWebhookEvent("error", "telegram.webhook.db_disabled", req, {
+          reasonCode: "db_disabled",
+        });
 
         return res.status(503).json({
           ok: false,
@@ -300,28 +316,31 @@ export function createTelegramWebhookHandler({
       const routeToken = s(req.params?.routeToken);
 
       if (!tenantKey || !routeToken) {
-        console.warn(
-          "telegram.webhook.route_missing",
-          buildWebhookDebugMeta(req, {
-            tenantKey,
-            hasRouteToken: Boolean(routeToken),
-          })
-        );
+        logWebhookEvent("warn", "telegram.webhook.route_missing", req, {
+          tenantKey,
+          hasRouteToken: Boolean(routeToken),
+        });
 
         return res.status(404).json({ ok: false, error: "Not found" });
       }
+
+      logWebhookEvent("info", "telegram.webhook.tenant_lookup_start", req, {
+        tenantKey,
+      });
 
       const tenant = await getTenantByKey(db, tenantKey);
       if (!tenant?.id) {
-        console.warn(
-          "telegram.webhook.tenant_not_found",
-          buildWebhookDebugMeta(req, {
-            tenantKey,
-          })
-        );
+        logWebhookEvent("warn", "telegram.webhook.tenant_not_found", req, {
+          tenantKey,
+        });
 
         return res.status(404).json({ ok: false, error: "Not found" });
       }
+
+      logWebhookEvent("info", "telegram.webhook.tenant_lookup_ok", req, {
+        tenantKey,
+        tenantId: s(tenant?.id),
+      });
 
       const [channel, secrets] = await Promise.all([
         getPrimaryTelegramChannel(db, tenant.id),
@@ -329,39 +348,47 @@ export function createTelegramWebhookHandler({
       ]);
 
       if (!channel?.id || lower(channel?.channel_type) !== TELEGRAM_CHANNEL) {
-        console.warn(
-          "telegram.webhook.channel_not_found",
-          buildWebhookDebugMeta(req, {
-            tenantKey,
-            tenantId: s(tenant?.id),
-            channelId: s(channel?.id),
-            channelType: s(channel?.channel_type),
-          })
-        );
+        logWebhookEvent("warn", "telegram.webhook.channel_not_found", req, {
+          tenantKey,
+          tenantId: s(tenant?.id),
+          channelId: s(channel?.id),
+          channelType: s(channel?.channel_type),
+        });
 
         return res.status(404).json({ ok: false, error: "Not found" });
       }
+
+      logWebhookEvent("info", "telegram.webhook.channel_lookup_ok", req, {
+        tenantKey,
+        tenantId: s(tenant?.id),
+        channelId: s(channel?.id),
+        channelType: s(channel?.channel_type),
+      });
 
       const storedRouteToken = s(
         secrets?.[TELEGRAM_WEBHOOK_ROUTE_TOKEN_SECRET_KEY]
       );
 
       if (!safeSecretEquals(routeToken, storedRouteToken)) {
-        console.warn(
-          "telegram.webhook.route_token_mismatch",
-          buildWebhookDebugMeta(req, {
-            tenantKey,
-            tenantId: s(tenant?.id),
-            channelId: s(channel?.id),
-            routeTokenLength: routeToken.length,
-            storedRouteTokenLength: storedRouteToken.length,
-            routeTokenFingerprint: fingerprintSecret(routeToken),
-            storedRouteTokenFingerprint: fingerprintSecret(storedRouteToken),
-          })
-        );
+        logWebhookEvent("warn", "telegram.webhook.route_token_mismatch", req, {
+          tenantKey,
+          tenantId: s(tenant?.id),
+          channelId: s(channel?.id),
+          routeTokenLength: routeToken.length,
+          storedRouteTokenLength: storedRouteToken.length,
+          routeTokenFingerprint: fingerprintSecret(routeToken),
+          storedRouteTokenFingerprint: fingerprintSecret(storedRouteToken),
+        });
 
         return res.status(404).json({ ok: false, error: "Not found" });
       }
+
+      logWebhookEvent("info", "telegram.webhook.route_token_ok", req, {
+        tenantKey,
+        tenantId: s(tenant?.id),
+        channelId: s(channel?.id),
+        routeTokenFingerprint: fingerprintSecret(routeToken),
+      });
 
       const headerSecret = s(req.get(TELEGRAM_SECRET_HEADER));
       const storedHeaderSecret = s(
@@ -375,31 +402,28 @@ export function createTelegramWebhookHandler({
         allowRouteTokenFallback: cfg.telegram.allowRouteTokenFallback,
       });
 
-      console.warn(
-        "telegram.webhook.secret_check",
-        buildWebhookDebugMeta(req, {
-          tenantKey,
-          tenantId: s(tenant?.id),
-          channelId: s(channel?.id),
-          routeTokenMatched: true,
-          hasHeaderSecret: Boolean(headerSecret),
-          hasStoredHeaderSecret: Boolean(storedHeaderSecret),
-          headerSecretLength: headerSecret.length,
-          storedHeaderSecretLength: storedHeaderSecret.length,
-          headerSecretFingerprint: fingerprintSecret(headerSecret),
-          storedHeaderSecretFingerprint: fingerprintSecret(storedHeaderSecret),
-          secretHeaderMatched: secretCheck.secretHeaderMatched,
-          shouldReject: secretCheck.shouldReject,
-          accepted: secretCheck.accepted,
-          verificationMode: secretCheck.verificationMode,
-          strictSecretHeaderVerification:
-            secretCheck.strictSecretHeaderVerification,
-          allowRouteTokenFallback: secretCheck.allowRouteTokenFallback,
-        })
-      );
+      logWebhookEvent("warn", "telegram.webhook.secret_check", req, {
+        tenantKey,
+        tenantId: s(tenant?.id),
+        channelId: s(channel?.id),
+        routeTokenMatched: true,
+        hasHeaderSecret: Boolean(headerSecret),
+        hasStoredHeaderSecret: Boolean(storedHeaderSecret),
+        headerSecretLength: headerSecret.length,
+        storedHeaderSecretLength: storedHeaderSecret.length,
+        headerSecretFingerprint: fingerprintSecret(headerSecret),
+        storedHeaderSecretFingerprint: fingerprintSecret(storedHeaderSecret),
+        secretHeaderMatched: secretCheck.secretHeaderMatched,
+        shouldReject: secretCheck.shouldReject,
+        accepted: secretCheck.accepted,
+        verificationMode: secretCheck.verificationMode,
+        strictSecretHeaderVerification:
+          secretCheck.strictSecretHeaderVerification,
+        allowRouteTokenFallback: secretCheck.allowRouteTokenFallback,
+      });
 
       if (!secretCheck.secretHeaderMatched) {
-        const mismatchMeta = buildWebhookDebugMeta(req, {
+        const mismatchMeta = {
           tenantKey,
           tenantId: s(tenant?.id),
           channelId: s(channel?.id),
@@ -414,11 +438,21 @@ export function createTelegramWebhookHandler({
           strictSecretHeaderVerification:
             secretCheck.strictSecretHeaderVerification,
           allowRouteTokenFallback: secretCheck.allowRouteTokenFallback,
-        });
+        };
 
-        console.warn("telegram.webhook.secret_mismatch", mismatchMeta);
+        logWebhookEvent(
+          "warn",
+          "telegram.webhook.secret_mismatch",
+          req,
+          mismatchMeta
+        );
 
         if (secretCheck.shouldReject) {
+          logWebhookEvent("error", "telegram.webhook.secret_rejected", req, {
+            ...mismatchMeta,
+            reasonCode: "telegram_webhook_secret_invalid",
+          });
+
           return res.status(403).json({
             ok: false,
             error: "Forbidden",
@@ -426,20 +460,22 @@ export function createTelegramWebhookHandler({
           });
         }
 
-        console.warn("telegram.webhook.accepted_via_route_token", mismatchMeta);
+        logWebhookEvent(
+          "warn",
+          "telegram.webhook.accepted_via_route_token",
+          req,
+          mismatchMeta
+        );
       }
 
       const botToken = s(secrets?.[TELEGRAM_BOT_TOKEN_SECRET_KEY]);
       if (!botToken) {
-        console.error(
-          "telegram.webhook.bot_token_missing",
-          buildWebhookDebugMeta(req, {
-            tenantKey,
-            tenantId: s(tenant?.id),
-            channelId: s(channel?.id),
-            reasonCode: "telegram_bot_token_missing",
-          })
-        );
+        logWebhookEvent("error", "telegram.webhook.bot_token_missing", req, {
+          tenantKey,
+          tenantId: s(tenant?.id),
+          channelId: s(channel?.id),
+          reasonCode: "telegram_bot_token_missing",
+        });
 
         return res.status(503).json({
           ok: false,
@@ -448,22 +484,36 @@ export function createTelegramWebhookHandler({
         });
       }
 
+      logWebhookEvent("info", "telegram.webhook.bot_token_present", req, {
+        tenantKey,
+        tenantId: s(tenant?.id),
+        channelId: s(channel?.id),
+      });
+
       const normalized = normalizeTelegramWebhookUpdate(
         req.body,
         tenant.tenant_key
       );
 
+      logWebhookEvent("info", "telegram.webhook.update_normalized", req, {
+        tenantKey,
+        tenantId: s(tenant?.id),
+        channelId: s(channel?.id),
+        supported: normalized.supported === true,
+        normalizeReasonCode: s(normalized.reasonCode),
+        updateId: s(req?.body?.update_id),
+        externalThreadId: s(normalized?.input?.externalThreadId),
+        externalUserId: s(normalized?.input?.externalUserId),
+      });
+
       if (!normalized.supported) {
-        console.info(
-          "telegram.webhook.ignored_update",
-          buildWebhookDebugMeta(req, {
-            tenantKey,
-            tenantId: s(tenant?.id),
-            channelId: s(channel?.id),
-            reasonCode: s(normalized.reasonCode),
-            updateId: s(req?.body?.update_id),
-          })
-        );
+        logWebhookEvent("info", "telegram.webhook.ignored_update", req, {
+          tenantKey,
+          tenantId: s(tenant?.id),
+          channelId: s(channel?.id),
+          reasonCode: s(normalized.reasonCode),
+          updateId: s(req?.body?.update_id),
+        });
 
         return res.status(200).json({
           ok: true,
@@ -474,22 +524,37 @@ export function createTelegramWebhookHandler({
 
       const validation = validateIngestRequest(normalized.input);
       if (!validation.ok) {
-        console.warn(
-          "telegram.webhook.validation_failed",
-          buildWebhookDebugMeta(req, {
-            tenantKey,
-            tenantId: s(tenant?.id),
-            channelId: s(channel?.id),
-            updateId: s(req?.body?.update_id),
-            externalThreadId: s(normalized?.input?.externalThreadId),
-            externalUserId: s(normalized?.input?.externalUserId),
-          })
-        );
+        logWebhookEvent("warn", "telegram.webhook.validation_failed", req, {
+          tenantKey,
+          tenantId: s(tenant?.id),
+          channelId: s(channel?.id),
+          updateId: s(req?.body?.update_id),
+          externalThreadId: s(normalized?.input?.externalThreadId),
+          externalUserId: s(normalized?.input?.externalUserId),
+        });
 
         return res.status(400).json(validation.response);
       }
 
+      logWebhookEvent("info", "telegram.webhook.validation_ok", req, {
+        tenantKey,
+        tenantId: s(tenant?.id),
+        channelId: s(channel?.id),
+        updateId: s(req?.body?.update_id),
+        externalThreadId: s(normalized?.input?.externalThreadId),
+        externalUserId: s(normalized?.input?.externalUserId),
+      });
+
       const captureRes = createCaptureRes();
+
+      logWebhookEvent("info", "telegram.webhook.ingest_dispatch_start", req, {
+        tenantKey,
+        tenantId: s(tenant?.id),
+        channelId: s(channel?.id),
+        updateId: s(req?.body?.update_id),
+        externalThreadId: s(normalized?.input?.externalThreadId),
+        externalUserId: s(normalized?.input?.externalUserId),
+      });
 
       await inboxIngestHandler(
         buildInternalIngestRequest(req, tenant.tenant_key, normalized.input),
@@ -499,40 +564,34 @@ export function createTelegramWebhookHandler({
       const payload = captureRes.body;
 
       if (payload?.ok === true) {
-        console.info(
-          "telegram.webhook.ingest_succeeded",
-          buildWebhookDebugMeta(req, {
-            tenantKey,
-            tenantId: s(tenant?.id),
-            channelId: s(channel?.id),
-            updateId: s(req?.body?.update_id),
-            externalThreadId: s(normalized?.input?.externalThreadId),
-            externalUserId: s(normalized?.input?.externalUserId),
-            ingestStatusCode: Number(captureRes.statusCode || 200),
-            secretHeaderMatched: secretCheck.secretHeaderMatched,
-            verificationMode: secretCheck.verificationMode,
-          })
-        );
-
-        return res.status(200).json(payload);
-      }
-
-      console.error(
-        "telegram.webhook.ingest_failed",
-        buildWebhookDebugMeta(req, {
+        logWebhookEvent("info", "telegram.webhook.ingest_succeeded", req, {
           tenantKey,
           tenantId: s(tenant?.id),
           channelId: s(channel?.id),
           updateId: s(req?.body?.update_id),
           externalThreadId: s(normalized?.input?.externalThreadId),
           externalUserId: s(normalized?.input?.externalUserId),
-          ingestStatusCode: Number(captureRes.statusCode || 503),
-          ingestError: s(payload?.error),
-          ingestReasonCode: s(payload?.reasonCode),
+          ingestStatusCode: Number(captureRes.statusCode || 200),
           secretHeaderMatched: secretCheck.secretHeaderMatched,
           verificationMode: secretCheck.verificationMode,
-        })
-      );
+        });
+
+        return res.status(200).json(payload);
+      }
+
+      logWebhookEvent("error", "telegram.webhook.ingest_failed", req, {
+        tenantKey,
+        tenantId: s(tenant?.id),
+        channelId: s(channel?.id),
+        updateId: s(req?.body?.update_id),
+        externalThreadId: s(normalized?.input?.externalThreadId),
+        externalUserId: s(normalized?.input?.externalUserId),
+        ingestStatusCode: Number(captureRes.statusCode || 503),
+        ingestError: s(payload?.error),
+        ingestReasonCode: s(payload?.reasonCode),
+        secretHeaderMatched: secretCheck.secretHeaderMatched,
+        verificationMode: secretCheck.verificationMode,
+      });
 
       return res.status(503).json(
         payload || {
@@ -541,13 +600,10 @@ export function createTelegramWebhookHandler({
         }
       );
     } catch (error) {
-      console.error(
-        "telegram.webhook.unhandled_error",
-        buildWebhookDebugMeta(req, {
-          error: s(error?.message || "telegram_webhook_unhandled_error"),
-          stack: s(error?.stack),
-        })
-      );
+      logWebhookEvent("error", "telegram.webhook.unhandled_error", req, {
+        error: s(error?.message || "telegram_webhook_unhandled_error"),
+        stack: s(error?.stack),
+      });
 
       return res.status(500).json({
         ok: false,
