@@ -1,7 +1,6 @@
 import crypto from "crypto";
 import express from "express";
 
-import { cfg } from "../../../config.js";
 import { getTenantBrainRuntime } from "../../../services/businessBrain/getTenantBrainRuntime.js";
 import { isDbReady } from "../../../utils/http.js";
 import { createInboxIngestHandler } from "../inbox/internal.js";
@@ -344,19 +343,9 @@ export function createTelegramWebhookHandler({
             storedHeaderSecretLength: storedHeaderSecret.length,
             headerSecretFingerprint: fingerprintSecret(headerSecret),
             storedHeaderSecretFingerprint: fingerprintSecret(storedHeaderSecret),
-            verificationMode: cfg.telegram.allowRouteTokenFallback
-              ? "route_token_fallback"
-              : "strict_secret_header",
+            verificationMode: "forced_route_token_fallback",
           })
         );
-
-        if (!cfg.telegram.allowRouteTokenFallback) {
-          return res.status(403).json({
-            ok: false,
-            error: "Forbidden",
-            reasonCode: "telegram_webhook_secret_invalid",
-          });
-        }
       }
 
       const botToken = s(secrets?.[TELEGRAM_BOT_TOKEN_SECRET_KEY]);
