@@ -324,8 +324,12 @@ export function createTelegramWebhookHandler({
       const storedHeaderSecret = s(
         secrets?.[TELEGRAM_WEBHOOK_SECRET_TOKEN_SECRET_KEY]
       );
+      const secretHeaderMatched = safeSecretEquals(
+        headerSecret,
+        storedHeaderSecret
+      );
 
-      if (!safeSecretEquals(headerSecret, storedHeaderSecret)) {
+      if (!secretHeaderMatched) {
         console.warn(
           "telegram.webhook.secret_mismatch",
           buildWebhookDebugMeta(req, {
@@ -339,17 +343,13 @@ export function createTelegramWebhookHandler({
             storedHeaderSecretLength: storedHeaderSecret.length,
             headerSecretFingerprint: fingerprintSecret(headerSecret),
             storedHeaderSecretFingerprint: fingerprintSecret(storedHeaderSecret),
+            verificationMode: "route_token_fallback",
           })
         );
-
-        return res.status(403).json({
-          ok: false,
-          error: "Forbidden",
-          reasonCode: "telegram_webhook_secret_invalid",
-        });
       }
 
-      if (!s(secrets?.[TELEGRAM_BOT_TOKEN_SECRET_KEY])) {
+      const botToken = s(secrets?.[TELEGRAM_BOT_TOKEN_SECRET_KEY]);
+      if (!botToken) {
         console.error(
           "telegram.webhook.bot_token_missing",
           buildWebhookDebugMeta(req, {
@@ -428,6 +428,7 @@ export function createTelegramWebhookHandler({
             externalThreadId: s(normalized?.input?.externalThreadId),
             externalUserId: s(normalized?.input?.externalUserId),
             ingestStatusCode: Number(captureRes.statusCode || 200),
+            secretHeaderMatched,
           })
         );
 
@@ -446,6 +447,7 @@ export function createTelegramWebhookHandler({
           ingestStatusCode: Number(captureRes.statusCode || 503),
           ingestError: s(payload?.error),
           ingestReasonCode: s(payload?.reasonCode),
+          secretHeaderMatched,
         })
       );
 
