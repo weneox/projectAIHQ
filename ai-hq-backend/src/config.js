@@ -36,7 +36,10 @@ function prodDefaultBool(v, fallbackProd = true) {
     if (["0", "false", "no", "n", "off"].includes(raw)) return false;
   }
 
-  const env = s(process.env.APP_ENV, process.env.NODE_ENV || "production").toLowerCase();
+  const env = s(
+    process.env.APP_ENV,
+    process.env.NODE_ENV || "production"
+  ).toLowerCase();
   const prodLike = !["", "development", "dev", "test"].includes(env);
   return prodLike ? fallbackProd : false;
 }
@@ -83,7 +86,10 @@ export const cfg = {
     debugApiToken: s(process.env.DEBUG_API_TOKEN, ""),
     debugRoutesEnabled: b(process.env.DEBUG_ROUTES_ENABLED, false),
     aihqInternalToken: s(process.env.AIHQ_INTERNAL_TOKEN, ""),
-    aihqInternalMetaBotToken: s(process.env.AIHQ_INTERNAL_TOKEN_META_BOT, ""),
+    aihqInternalMetaBotToken: s(
+      process.env.AIHQ_INTERNAL_TOKEN_META_BOT,
+      ""
+    ),
     aihqInternalTwilioVoiceToken: s(
       process.env.AIHQ_INTERNAL_TOKEN_TWILIO_VOICE,
       ""
@@ -262,16 +268,47 @@ export const cfg = {
     scheduleDraftUrl: s(process.env.N8N_WEBHOOK_SCHEDULE_DRAFT_URL, ""),
   },
 
+  channels: {
+    publicWebhookBaseUrl: s(
+      process.env.CHANNELS_PUBLIC_WEBHOOK_BASE_URL,
+      process.env.PUBLIC_BASE_URL || ""
+    ),
+    strictWebhookSecretVerification: prodDefaultBool(
+      process.env.CHANNELS_STRICT_WEBHOOK_SECRET_VERIFICATION,
+      true
+    ),
+    allowRouteTokenFallback: b(
+      process.env.CHANNELS_ALLOW_ROUTE_TOKEN_FALLBACK,
+      false
+    ),
+  },
+
   telegram: {
     enabled: b(process.env.TELEGRAM_ENABLED, true),
-    apiBaseUrl: s(process.env.TELEGRAM_API_BASE_URL, "https://api.telegram.org"),
+    apiBaseUrl: s(
+      process.env.TELEGRAM_API_BASE_URL,
+      "https://api.telegram.org"
+    ),
     webhookBaseUrl: s(
       process.env.TELEGRAM_WEBHOOK_BASE_URL,
-      process.env.PUBLIC_BASE_URL || ""
+      process.env.CHANNELS_PUBLIC_WEBHOOK_BASE_URL ||
+        process.env.PUBLIC_BASE_URL ||
+        ""
     ),
     connectTimeoutMs: n(process.env.TELEGRAM_CONNECT_TIMEOUT_MS, 15_000),
     statusTimeoutMs: n(process.env.TELEGRAM_STATUS_TIMEOUT_MS, 10_000),
     sendTimeoutMs: n(process.env.TELEGRAM_SEND_TIMEOUT_MS, 15_000),
+    strictSecretHeaderVerification: prodDefaultBool(
+      process.env.TELEGRAM_STRICT_SECRET_HEADER_VERIFICATION,
+      prodDefaultBool(
+        process.env.CHANNELS_STRICT_WEBHOOK_SECRET_VERIFICATION,
+        true
+      )
+    ),
+    allowRouteTokenFallback: b(
+      process.env.TELEGRAM_WEBHOOK_ALLOW_ROUTE_TOKEN_FALLBACK,
+      b(process.env.CHANNELS_ALLOW_ROUTE_TOKEN_FALLBACK, false)
+    ),
   },
 
   push: {
