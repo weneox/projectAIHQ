@@ -4,6 +4,7 @@ import {
   q,
   refreshRuntimeProjectionBestEffort,
   refreshRuntimeProjectionRequired,
+  resolveTenantIdentity,
   withTx,
 } from "./tenantKnowledge/core.js";
 import {
