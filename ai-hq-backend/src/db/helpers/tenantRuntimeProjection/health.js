@@ -28,10 +28,6 @@ function uniqStrings(values = []) {
   return [...new Set(arr(values).map((item) => s(item)).filter(Boolean))];
 }
 
-function hasTime(value = "") {
-  return !!iso(value);
-}
-
 function laterIso(left = "", right = "") {
   const leftIso = iso(left);
   const rightIso = iso(right);
@@ -283,6 +279,7 @@ function logRuntimeProjectionHealth(model, context = {}) {
       primaryReasonCode: s(model?.primaryReasonCode),
       reasonCodes: arr(model?.reasonCodes),
       autonomousOperation: s(model?.autonomousOperation),
+      truthProvided: Boolean(context?.truthProvided),
       latestTruthVersionId: s(context?.latestTruthVersionId),
       activeReviewSessionId: s(context?.activeReviewSessionId),
       runtimeProjectionId: s(context?.runtimeProjectionId),
@@ -307,13 +304,20 @@ export function buildRuntimeProjectionHealthModel({
   const latest = obj(latestRun);
   const truth = obj(latestTruthVersion);
   const auth = obj(authority);
+  const truthProvided =
+    latestTruthVersion !== null && latestTruthVersion !== undefined;
+
   const reasonCodes = mapFreshnessReasons(fresh);
 
   if (!s(projection.id) && !reasonCodes.includes("projection_missing")) {
     reasonCodes.unshift("projection_missing");
   }
 
-  if (!s(truth.id) && !reasonCodes.includes("approval_required")) {
+  if (
+    truthProvided &&
+    !s(truth.id) &&
+    !reasonCodes.includes("approval_required")
+  ) {
     reasonCodes.push("approval_required");
   }
 
@@ -334,6 +338,7 @@ export function buildRuntimeProjectionHealthModel({
       obj(latestSuccessRun).updated_at ||
       obj(latestSuccessRun).created_at
   );
+
   if (
     latestFailureAt &&
     (!latestSuccessAt ||
@@ -346,7 +351,11 @@ export function buildRuntimeProjectionHealthModel({
     reasonCodes.push("source_dependency_failed");
   }
 
-  if (auth && s(auth.source) && s(auth.source) !== "approved_runtime_projection") {
+  if (
+    auth &&
+    s(auth.source) &&
+    s(auth.source) !== "approved_runtime_projection"
+  ) {
     reasonCodes.push("authority_invalid");
   }
 
@@ -383,10 +392,12 @@ export function buildRuntimeProjectionHealthModel({
     runtimeProjection,
     healthState: status,
   });
+
   const repairActions = buildRepairActions({
     reasonCodes: normalizedReasons,
     activeReviewSession,
   });
+
   const autonomousOperation =
     status === "healthy" ? "continue" : status === "degraded" ? "degrade" : "stop";
 
@@ -441,6 +452,7 @@ export function buildRuntimeProjectionHealthModel({
   };
 
   logRuntimeProjectionHealth(model, {
+    truthProvided,
     latestTruthVersionId: s(truth.id),
     activeReviewSessionId: s(obj(activeReviewSession).id),
     runtimeProjectionId: s(projection.id),
