@@ -19,19 +19,22 @@ function s(v, d = "") {
   return String(v ?? d).trim();
 }
 
-function formatConversationMeta(thread = {}) {
+function formatConversationMeta(thread) {
+  const safeThread =
+    thread && typeof thread === "object" && !Array.isArray(thread) ? thread : {};
+
   const parts = [];
 
   const channel =
-    s(thread.channel_label) ||
-    s(thread.channel_type) ||
-    s(thread.provider) ||
-    s(thread.source_type);
+    s(safeThread.channel_label) ||
+    s(safeThread.channel_type) ||
+    s(safeThread.provider) ||
+    s(safeThread.source_type);
 
   const state =
-    s(thread.status_label) ||
-    s(thread.status) ||
-    (thread?.handoff_active ? "handoff" : "");
+    s(safeThread.status_label) ||
+    s(safeThread.status) ||
+    (safeThread?.handoff_active ? "handoff" : "");
 
   if (channel) parts.push(channel);
   if (state && state.toLowerCase() !== "open") parts.push(state);
@@ -54,11 +57,11 @@ function QuietIconButton({
       aria-label={label}
       title={label}
       className={[
-        "flex h-9 w-9 items-center justify-center rounded-[14px] border transition-colors",
+        "flex h-8 w-8 items-center justify-center rounded-[10px] bg-transparent transition-colors",
         active
-          ? "border-line-strong bg-white text-text"
-          : "border-line bg-white text-text-muted hover:bg-[rgba(15,23,42,0.03)] hover:text-text",
-        disabled ? "cursor-not-allowed opacity-45" : "",
+          ? "text-text"
+          : "text-text-subtle hover:bg-[rgba(15,23,42,0.05)] hover:text-text",
+        disabled ? "cursor-not-allowed opacity-35" : "",
       ].join(" ")}
     >
       {children}
@@ -248,30 +251,34 @@ function ConversationHeader({
   onToggleAutomation,
 }) {
   const hasThread = Boolean(thread?.id);
-  const title = hasThread
-    ? s(thread.customer_name) ||
-      s(thread.external_username) ||
-      s(thread.external_user_id) ||
-      "Conversation"
-    : "Conversation workspace";
-  const meta = hasThread ? formatConversationMeta(thread) : "Select a thread to begin";
+  const title =
+    s(thread?.customer_name) ||
+    s(thread?.external_username) ||
+    s(thread?.external_user_id) ||
+    "Conversation";
+  const meta = formatConversationMeta(thread);
 
   return (
-    <div className="sticky top-0 z-10 border-b border-line-soft bg-[rgba(255,255,255,0.62)] px-5 py-4 backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.54)]">
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
-            Conversation
-          </div>
-          <div className="mt-1 truncate text-[15px] font-semibold text-text">
-            {title}
-          </div>
-          <div className="mt-0.5 truncate text-[12px] text-text-muted">
-            {meta}
-          </div>
+    <div className="sticky top-0 z-10 border-b border-line-soft bg-[rgba(255,255,255,0.84)] px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.76)]">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {hasThread ? (
+            <>
+              <div className="truncate text-[14px] font-semibold text-text">
+                {title}
+              </div>
+              {meta ? (
+                <div className="mt-0.5 truncate text-[12px] text-text-muted">
+                  {meta}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="h-[18px]" />
+          )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1">
           <InboxAutomationSwitch
             automationControl={automationControl}
             onToggle={onToggleAutomation}
@@ -306,12 +313,46 @@ function ConversationHeader({
             {menu}
           </div>
 
-          {unreadCount > 0 ? (
-            <span className="ml-1 inline-flex min-w-[22px] items-center justify-center rounded-pill bg-brand-soft px-2 py-0.5 text-[11px] font-medium text-brand">
+          {hasThread && unreadCount > 0 ? (
+            <span className="ml-1 inline-flex min-w-[20px] items-center justify-center rounded-pill bg-brand-soft px-2 py-0.5 text-[11px] font-medium text-brand">
               {unreadCount}
             </span>
           ) : null}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function EmptyComposerDock() {
+  return (
+    <div className="w-full px-5 pb-5">
+      <div className="w-full rounded-[24px] border border-line bg-white px-5 py-4 shadow-[0_20px_60px_-42px_rgba(15,23,42,0.22)]">
+        <div className="flex items-end gap-4">
+          <textarea
+            disabled
+            rows={1}
+            placeholder="Write a reply"
+            className="min-h-[56px] flex-1 resize-none bg-transparent px-0 py-3 text-[15px] text-text placeholder:text-text-subtle outline-none disabled:cursor-not-allowed"
+          />
+          <button
+            type="button"
+            disabled
+            className="inline-flex h-11 shrink-0 items-center justify-center rounded-[14px] bg-[rgba(15,23,42,0.08)] px-5 text-[13px] font-medium text-text-subtle"
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FloatingComposerSlot({ children }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20">
+      <div className="bg-[linear-gradient(180deg,rgba(245,247,250,0)_0%,rgba(245,247,250,0.68)_34%,rgba(245,247,250,0.92)_72%,rgba(245,247,250,0.98)_100%)] pt-12">
+        <div className="pointer-events-auto">{children}</div>
       </div>
     </div>
   );
@@ -355,7 +396,9 @@ export default function InboxDetailPanel({
 
   function toggleMenu() {
     if (!currentThreadId) return;
-    setOpenMenuThreadId((prev) => (prev === currentThreadId ? "" : currentThreadId));
+    setOpenMenuThreadId((prev) =>
+      prev === currentThreadId ? "" : currentThreadId
+    );
   }
 
   const showSurfaceBanner =
@@ -400,19 +443,33 @@ export default function InboxDetailPanel({
             open={menuOpen}
             anchorRef={menuAnchorRef}
             onClose={closeMenu}
-            onMarkRead={() => markRead(selectedThread.id)}
+            onMarkRead={() => {
+              if (selectedThread?.id) markRead(selectedThread.id);
+            }}
             canMarkRead={canMarkRead}
-            onAssign={() => assignThread(selectedThread.id)}
-            onHandoff={() => activateHandoff(selectedThread.id)}
-            onResolve={() => setThreadStatus(selectedThread.id, "resolved")}
-            onCloseThread={() => setThreadStatus(selectedThread.id, "closed")}
+            onAssign={() => {
+              if (selectedThread?.id) assignThread(selectedThread.id);
+            }}
+            onHandoff={() => {
+              if (selectedThread?.id) activateHandoff(selectedThread.id);
+            }}
+            onResolve={() => {
+              if (selectedThread?.id) {
+                setThreadStatus(selectedThread.id, "resolved");
+              }
+            }}
+            onCloseThread={() => {
+              if (selectedThread?.id) {
+                setThreadStatus(selectedThread.id, "closed");
+              }
+            }}
             disabledMap={disabledMap}
           />
         }
       />
 
       {showSurfaceBanner ? (
-        <div className="pointer-events-none absolute inset-x-0 top-[74px] z-20 flex justify-center px-5 pt-3">
+        <div className="pointer-events-none absolute inset-x-0 top-[62px] z-20 flex justify-center px-5 pt-3">
           <div className="pointer-events-auto w-full max-w-[820px]">
             <SurfaceBanner
               surface={surface}
@@ -423,24 +480,17 @@ export default function InboxDetailPanel({
         </div>
       ) : null}
 
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="relative min-h-0 flex-1">
         <div
           ref={scrollViewportRef}
-          className="min-h-0 flex-1 overflow-y-auto bg-transparent [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="h-full overflow-y-auto bg-transparent pb-[176px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {surface?.loading && !hasThread ? (
             <InboxDetailSkeleton />
           ) : !hasThread ? (
-            <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-8 text-center">
-              <div className="text-[20px] font-semibold tracking-[-0.03em] text-text">
-                Conversation workspace
-              </div>
-              <div className="mt-3 max-w-[30rem] text-[14px] leading-7 text-text-muted">
-                Select a thread to open the timeline.
-              </div>
-            </div>
+            <div className="h-full min-h-[260px] bg-transparent" />
           ) : messages.length === 0 ? (
-            <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-8 text-center">
+            <div className="flex h-full min-h-[260px] flex-col items-center justify-center px-8 text-center">
               <div className="text-[17px] font-semibold text-text">
                 No messages yet
               </div>
@@ -449,7 +499,7 @@ export default function InboxDetailPanel({
               </div>
             </div>
           ) : (
-            <div className="mx-auto w-full max-w-[920px] px-6 py-6">
+            <div className="mx-auto flex min-h-full w-full max-w-[980px] flex-col justify-end px-6 py-5">
               <div className="space-y-3">
                 {messages.map((message) => (
                   <InboxMessageBubble
@@ -463,7 +513,15 @@ export default function InboxDetailPanel({
           )}
         </div>
 
-        {composer}
+        <FloatingComposerSlot>
+          {hasThread && composer ? (
+            <div className="w-full px-5 pb-5 [&>*]:mx-0 [&>*]:w-full [&>*]:max-w-none">
+              {composer}
+            </div>
+          ) : (
+            <EmptyComposerDock />
+          )}
+        </FloatingComposerSlot>
       </div>
     </section>
   );

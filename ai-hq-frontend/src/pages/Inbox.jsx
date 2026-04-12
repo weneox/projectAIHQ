@@ -33,7 +33,6 @@ import {
 import Button from "../components/ui/Button.jsx";
 import {
   InlineNotice,
-  PageCanvas,
   SlidingDetailOverlay,
 } from "../components/ui/AppShellPrimitives.jsx";
 
@@ -83,6 +82,7 @@ function resolveInboxPolicyControl(trustView = null) {
   const controls = trustView?.summary?.policyControls || {};
   const tenantDefault = controls?.tenantDefault || null;
   const scopedItems = Array.isArray(controls?.items) ? controls.items : [];
+
   const inboxControl =
     scopedItems.find((item) => s(item?.surface).toLowerCase() === "inbox") ||
     tenantDefault ||
@@ -166,8 +166,8 @@ function buildInboxAutomationControl({
 
 function LaunchChannelPrompt({ onOpenChannels }) {
   return (
-    <div className="border-b border-line-soft px-1 pb-4">
-      <div className="flex flex-col gap-4 rounded-[22px] border border-[rgba(217,119,6,0.16)] bg-[linear-gradient(180deg,rgba(255,251,235,0.96),rgba(255,247,237,0.92))] px-5 py-4 shadow-[0_18px_50px_-40px_rgba(217,119,6,0.26)] md:flex-row md:items-center md:justify-between">
+    <section className="shrink-0 border-b border-[rgba(217,119,6,0.14)] bg-[linear-gradient(180deg,rgba(255,251,235,0.98),rgba(255,247,237,0.96))]">
+      <div className="flex min-h-[92px] flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
           <div className="text-[15px] font-semibold text-text">
             Connect a launch channel first.
@@ -189,7 +189,7 @@ function LaunchChannelPrompt({ onOpenChannels }) {
           </Button>
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -329,7 +329,8 @@ export default function Inbox() {
         setResolvedTrustState({
           tenantKey: workspace.tenantKey,
           loading: false,
-          trustView: results[0].status === "fulfilled" ? results[0].value : null,
+          trustView:
+            results[0].status === "fulfilled" ? results[0].value : null,
         });
       })
       .catch(() => {
@@ -575,58 +576,58 @@ export default function Inbox() {
   const surfaceNotice = buildSurfaceNotice(surface);
 
   return (
-    <PageCanvas className="space-y-4">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
       {surfaceNotice ? (
-        <InlineNotice
-          tone={surfaceNotice.tone}
-          title={surfaceNotice.title}
-          description={surfaceNotice.description}
-          compact
-        />
+        <div className="mb-4 shrink-0">
+          <InlineNotice
+            tone={surfaceNotice.tone}
+            title={surfaceNotice.title}
+            description={surfaceNotice.description}
+            compact
+          />
+        </div>
       ) : null}
 
       {!hasConnectedLaunchChannel ? (
         <LaunchChannelPrompt onOpenChannels={() => navigate("/channels")} />
       ) : null}
 
-      <div className="overflow-hidden rounded-[28px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.78)] shadow-[0_34px_90px_-60px_rgba(15,23,42,0.22)] backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.7)]">
-        <div className="grid min-h-[700px] grid-cols-[360px_minmax(0,1fr)]">
-          <div className="min-h-0 border-r border-line-soft bg-[rgba(255,255,255,0.46)]">
-            <InboxThreadListPanel
-              threadList={threadList}
-              selectedThreadId={selectedThread?.id || ""}
-              searchQuery=""
-            />
-          </div>
+      <div className="grid min-h-0 flex-1 grid-cols-[388px_minmax(0,1fr)] overflow-hidden">
+        <div className="min-h-0 overflow-hidden border-r border-line-soft bg-transparent">
+          <InboxThreadListPanel
+            threadList={threadList}
+            selectedThreadId={selectedThread?.id || ""}
+            searchQuery=""
+          />
+        </div>
 
-          <div className="min-h-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.34),rgba(248,250,252,0.62))]">
-            <InboxDetailPanel
-              selectedThread={selectedThread}
-              messages={messages}
-              outboundAttempts={threadAttemptSurface.attempts}
-              surface={detailSurface}
-              actionState={actionState}
-              markRead={markRead}
-              assignThread={assignThread}
-              activateHandoff={activateHandoff}
-              setThreadStatus={setThreadStatus}
-              onOpenDetails={() => setDetailOpen(true)}
-              automationControl={inboxAutomationControl}
-              onToggleAutomation={handleToggleInboxAutonomy}
-              composer={
-                <InboxComposer
-                  embedded
-                  selectedThread={selectedThread}
-                  surface={composerSurface}
-                  actionState={actionState}
-                  replyText={replyText}
-                  setReplyText={setReplyText}
-                  onSend={handleSend}
-                  onReleaseHandoff={handleRelease}
-                />
-              }
-            />
-          </div>
+        <div className="min-h-0 overflow-hidden bg-transparent">
+          <InboxDetailPanel
+            selectedThread={selectedThread}
+            messages={messages}
+            outboundAttempts={threadAttemptSurface.attempts}
+            surface={detailSurface}
+            actionState={actionState}
+            markRead={markRead}
+            assignThread={assignThread}
+            activateHandoff={activateHandoff}
+            setThreadStatus={setThreadStatus}
+            onOpenDetails={() => setDetailOpen(true)}
+            automationControl={inboxAutomationControl}
+            onToggleAutomation={handleToggleInboxAutonomy}
+            composer={
+              <InboxComposer
+                embedded
+                selectedThread={selectedThread}
+                surface={composerSurface}
+                actionState={actionState}
+                replyText={replyText}
+                setReplyText={setReplyText}
+                onSend={handleSend}
+                onReleaseHandoff={handleRelease}
+              />
+            }
+          />
         </div>
       </div>
 
@@ -651,6 +652,6 @@ export default function Inbox() {
           />
         </SlidingDetailOverlay>
       ) : null}
-    </PageCanvas>
+    </div>
   );
 }
