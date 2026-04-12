@@ -59,11 +59,11 @@ function formatRelativeTime(value = "") {
 
 function resolveAvatarTone(seed = "") {
   const tones = [
-    "bg-sky-100 text-sky-700",
-    "bg-violet-100 text-violet-700",
-    "bg-amber-100 text-amber-700",
-    "bg-emerald-100 text-emerald-700",
-    "bg-rose-100 text-rose-700",
+    "bg-sky-50 text-sky-700",
+    "bg-violet-50 text-violet-700",
+    "bg-amber-50 text-amber-700",
+    "bg-emerald-50 text-emerald-700",
+    "bg-rose-50 text-rose-700",
   ];
 
   const score = String(seed || "")
@@ -93,15 +93,15 @@ export default function InboxThreadCard({
       type="button"
       onClick={() => onOpen?.(thread)}
       className={[
-        "group flex w-full items-start gap-3 rounded-[18px] px-3 py-3 text-left transition-all duration-base ease-premium",
+        "group flex w-full items-start gap-3 rounded-[14px] px-3 py-2.5 text-left outline-none ring-0 transition-all duration-200",
         selected
-          ? "bg-[rgba(37,99,235,0.08)] shadow-[0_18px_50px_-38px_rgba(37,99,235,0.18)] ring-1 ring-[rgba(37,99,235,0.12)]"
-          : "hover:bg-[rgba(255,255,255,0.72)]",
+          ? "bg-[rgba(37,99,235,0.06)] shadow-[0_10px_30px_-26px_rgba(37,99,235,0.22)] ring-1 ring-[rgba(37,99,235,0.10)]"
+          : "bg-white hover:bg-[rgba(15,23,42,0.025)]",
       ].join(" ")}
     >
       <div
         className={[
-          "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold",
+          "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold",
           resolveAvatarTone(name),
         ].join(" ")}
       >
@@ -111,15 +111,17 @@ export default function InboxThreadCard({
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="truncate text-[14px] font-semibold text-text">
+            <div className="truncate text-[13.5px] font-semibold leading-5 text-text">
               {name}
             </div>
-            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-text-subtle">
+
+            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] leading-4 text-text-subtle">
               {needsAttention ? (
-                <Sparkles className="h-3.5 w-3.5" />
+                <Sparkles className="h-3.5 w-3.5 shrink-0" />
               ) : (
-                <CornerDownLeft className="h-3.5 w-3.5" />
+                <CornerDownLeft className="h-3.5 w-3.5 shrink-0" />
               )}
+
               <span className="truncate">
                 {s(thread.channel_label) ||
                   s(thread.channel_type) ||
@@ -129,23 +131,23 @@ export default function InboxThreadCard({
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 pl-2">
             {timeLabel ? (
-              <span className="inline-flex items-center gap-1 text-[11px] text-text-subtle">
-                <Clock3 className="h-3 w-3" />
-                {timeLabel}
+              <span className="inline-flex items-center gap-1 text-[10.5px] text-text-subtle">
+                <Clock3 className="h-3 w-3 shrink-0" />
+                <span>{timeLabel}</span>
               </span>
             ) : null}
 
             {unreadCount > 0 ? (
-              <span className="inline-flex min-w-[20px] items-center justify-center rounded-pill bg-brand px-1.5 py-0.5 text-[10px] font-semibold text-white">
+              <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
                 {unreadCount}
               </span>
             ) : null}
           </div>
         </div>
 
-        <div className="mt-2 line-clamp-2 text-[12px] leading-6 text-text-muted">
+        <div className="mt-1.5 line-clamp-2 text-[12px] leading-5 text-text-muted">
           {preview}
         </div>
       </div>

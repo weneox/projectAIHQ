@@ -166,13 +166,13 @@ function buildInboxAutomationControl({
 
 function LaunchChannelPrompt({ onOpenChannels }) {
   return (
-    <section className="shrink-0 border-b border-[rgba(217,119,6,0.14)] bg-[linear-gradient(180deg,rgba(255,251,235,0.98),rgba(255,247,237,0.96))]">
-      <div className="flex min-h-[92px] flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between">
+    <section className="shrink-0 border-b border-[rgba(180,83,9,0.16)] bg-[linear-gradient(180deg,rgba(254,243,199,0.96),rgba(255,237,213,0.94))]">
+      <div className="flex min-h-[74px] flex-col gap-2 px-6 py-3.5 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
-          <div className="text-[15px] font-semibold text-text">
+          <div className="text-[14px] font-semibold leading-5 text-[rgba(120,53,15,0.98)]">
             Connect a launch channel first.
           </div>
-          <div className="mt-1 text-[13px] leading-6 text-text-muted">
+          <div className="mt-0.5 text-[12.5px] leading-5 text-[rgba(146,64,14,0.9)]">
             Connect Website chat, Meta, Telegram, or another launch channel to
             activate the live inbox.
           </div>
@@ -576,9 +576,9 @@ export default function Inbox() {
   const surfaceNotice = buildSurfaceNotice(surface);
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-white">
       {surfaceNotice ? (
-        <div className="mb-4 shrink-0">
+        <div className="mb-4 shrink-0 bg-white px-0">
           <InlineNotice
             tone={surfaceNotice.tone}
             title={surfaceNotice.title}
@@ -592,8 +592,8 @@ export default function Inbox() {
         <LaunchChannelPrompt onOpenChannels={() => navigate("/channels")} />
       ) : null}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[388px_minmax(0,1fr)] overflow-hidden">
-        <div className="min-h-0 overflow-hidden border-r border-line-soft bg-transparent">
+      <div className="grid min-h-0 flex-1 grid-cols-[388px_minmax(0,1fr)] overflow-hidden bg-white">
+        <div className="min-h-0 overflow-hidden border-r border-line-soft bg-white">
           <InboxThreadListPanel
             threadList={threadList}
             selectedThreadId={selectedThread?.id || ""}
@@ -601,7 +601,7 @@ export default function Inbox() {
           />
         </div>
 
-        <div className="min-h-0 overflow-hidden bg-transparent">
+        <div className="min-h-0 overflow-hidden bg-white">
           <InboxDetailPanel
             selectedThread={selectedThread}
             messages={messages}

@@ -5,11 +5,11 @@ const useInboxData = vi.fn();
 const useInboxRealtime = vi.fn();
 const useInboxThreadListSurface = vi.fn();
 const getAppSessionContext = vi.fn();
-const areInternalRoutesEnabled = vi.fn();
 const useInboxComposerSurface = vi.fn();
 const useThreadOutboundAttemptsSurface = vi.fn();
 const useWorkspaceTenantKey = vi.fn();
 const getSettingsTrustView = vi.fn();
+const saveSettingsTrustPolicyControl = vi.fn();
 const getMetaChannelStatus = vi.fn();
 const getTelegramChannelStatus = vi.fn();
 const getWebsiteWidgetStatus = vi.fn();
@@ -45,7 +45,8 @@ vi.mock("../../components/inbox/hooks/useInboxComposerSurface.js", () => ({
 }));
 
 vi.mock("../../components/inbox/hooks/useThreadOutboundAttemptsSurface.js", () => ({
-  useThreadOutboundAttemptsSurface: (...args) => useThreadOutboundAttemptsSurface(...args),
+  useThreadOutboundAttemptsSurface: (...args) =>
+    useThreadOutboundAttemptsSurface(...args),
 }));
 
 vi.mock("../../hooks/useInboxRealtime.js", () => ({
@@ -63,6 +64,8 @@ vi.mock("../../lib/appSession.js", () => ({
 
 vi.mock("../../api/trust.js", () => ({
   getSettingsTrustView: (...args) => getSettingsTrustView(...args),
+  saveSettingsTrustPolicyControl: (...args) =>
+    saveSettingsTrustPolicyControl(...args),
 }));
 
 vi.mock("../../api/channelConnect.js", () => ({
@@ -71,8 +74,36 @@ vi.mock("../../api/channelConnect.js", () => ({
   getWebsiteWidgetStatus: (...args) => getWebsiteWidgetStatus(...args),
 }));
 
-vi.mock("../../lib/appEntry.js", () => ({
-  areInternalRoutesEnabled: (...args) => areInternalRoutesEnabled(...args),
+vi.mock("../../components/inbox/InboxThreadListPanel.jsx", () => ({
+  default: ({ selectedThreadId }) => (
+    <section aria-label="Thread list panel">
+      <h2>All conversations</h2>
+      <div>selected-thread:{selectedThreadId || "none"}</div>
+    </section>
+  ),
+}));
+
+vi.mock("../../components/inbox/InboxDetailPanel.jsx", () => ({
+  default: ({ selectedThread, composer, automationControl }) => (
+    <section aria-label="Inbox detail panel">
+      <div>
+        selected-thread-name:
+        {selectedThread?.customer_name || selectedThread?.external_username || "none"}
+      </div>
+      <div>automation-status:{automationControl?.statusLabel || "unknown"}</div>
+      {composer}
+    </section>
+  ),
+}));
+
+vi.mock("../../components/inbox/InboxLeadPanel.jsx", () => ({
+  default: () => <section aria-label="Inbox lead panel">Lead panel</section>,
+}));
+
+vi.mock("../../components/inbox/InboxComposer.jsx", () => ({
+  default: ({ replyText }) => (
+    <div aria-label="Inbox composer">composer:{replyText || ""}</div>
+  ),
 }));
 
 import Inbox from "../../pages/Inbox.jsx";
@@ -80,36 +111,29 @@ import Inbox from "../../pages/Inbox.jsx";
 describe("Inbox", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
     useWorkspaceTenantKey.mockReturnValue({
       tenantKey: "acme",
       loading: false,
       ready: true,
     });
-    getSettingsTrustView.mockRejectedValue(new Error("truth unavailable"));
-    getMetaChannelStatus.mockRejectedValue(new Error("meta unavailable"));
-    getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
-    getWebsiteWidgetStatus.mockRejectedValue(new Error("website unavailable"));
-  });
 
-  it("renders the inbox launch and fallback feedback", async () => {
     getAppSessionContext.mockResolvedValue({
       tenantKey: "acme",
       actorName: "operator",
     });
 
-    areInternalRoutesEnabled.mockReturnValue(false);
+    getSettingsTrustView.mockRejectedValue(new Error("truth unavailable"));
+    getMetaChannelStatus.mockRejectedValue(new Error("meta unavailable"));
+    getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
+    getWebsiteWidgetStatus.mockRejectedValue(new Error("website unavailable"));
 
-    useInboxRealtime.mockReturnValue({
-      connected: false,
-      reconnecting: false,
-      lastMessageAt: "",
-    });
+    useInboxRealtime.mockReturnValue(undefined);
 
     useInboxThreadListSurface.mockReturnValue({
       filter: "all",
       setFilter: vi.fn(),
       deepLinkNotice: "",
-      stats: { open: 0, aiActive: 0, handoff: 0, resolved: 0 },
       filteredThreads: [],
       openThread: vi.fn(),
       surface: {
@@ -131,8 +155,7 @@ describe("Inbox", () => {
         ready: false,
         saving: false,
         saveError: "",
-        saveSuccess:
-          "Reply accepted. Waiting for outbound attempt status to confirm delivery.",
+        saveSuccess: "",
         refresh: vi.fn(),
       },
       handleSend: vi.fn(),
@@ -167,7 +190,6 @@ describe("Inbox", () => {
       setSelectedThread: vi.fn(),
       relatedLead: null,
       setRelatedLead: vi.fn(),
-      dbDisabled: true,
       surface: {
         loading: false,
         error: "",
@@ -175,8 +197,7 @@ describe("Inbox", () => {
         ready: false,
         saving: false,
         saveError: "",
-        saveSuccess:
-          "Reply accepted. Waiting for outbound attempt status to confirm delivery.",
+        saveSuccess: "Reply accepted.",
         refresh: vi.fn(),
       },
       detailSurface: {
@@ -214,25 +235,77 @@ describe("Inbox", () => {
       sendOperatorReply: vi.fn(),
       openLeadDetail: vi.fn(),
     });
+  });
+
+  it("renders surface notice, launch channel prompt, thread list, and detail panel", async () => {
+    render(<Inbox />);
+
+    expect(
+      await screen.findByText(/inbox operations are temporarily unavailable/i)
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(/connect a launch channel first/i)
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(
+        /connect website chat, meta, telegram, or another launch channel to activate the live inbox/i
+      )
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", { name: /open channels/i })
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("heading", { name: /all conversations/i })
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByLabelText(/thread list panel/i)
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByLabelText(/inbox detail panel/i)
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByLabelText(/inbox composer/i)
+    ).toBeInTheDocument();
+
+    expect(screen.getByText(/automation-status:autonomy enabled/i)).toBeInTheDocument();
+    expect(screen.getByText(/selected-thread:none/i)).toBeInTheDocument();
+    expect(screen.getByText(/selected-thread-name:none/i)).toBeInTheDocument();
+  });
+
+  it("does not render the launch prompt when a launch channel is connected", async () => {
+    getMetaChannelStatus.mockResolvedValue({ connected: true });
+    getTelegramChannelStatus.mockResolvedValue({ connected: false });
+    getWebsiteWidgetStatus.mockResolvedValue({ connected: false });
+    getSettingsTrustView.mockResolvedValue({
+      summary: {
+        policyControls: {
+          tenantDefault: {
+            controlMode: "autonomy_enabled",
+            availableModes: [
+              { mode: "autonomy_enabled", allowed: true },
+              { mode: "operator_only_mode", allowed: true },
+            ],
+          },
+          items: [],
+        },
+      },
+    });
 
     render(<Inbox />);
 
     expect(
-      await screen.findByRole("heading", { name: /live conversation inbox/i })
+      await screen.findByRole("heading", { name: /all conversations/i })
     ).toBeInTheDocument();
 
     expect(
-      screen.getByText(/inbox operations are temporarily unavailable/i)
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/inbox launch posture is unavailable/i)
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: /all conversations/i })
-    ).toBeInTheDocument();
-    expect(screen.getByText(/conversation workspace/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/select a thread to open the timeline/i)
-    ).toBeInTheDocument();
+      screen.queryByText(/connect a launch channel first/i)
+    ).not.toBeInTheDocument();
   });
 });
