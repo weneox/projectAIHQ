@@ -53,10 +53,10 @@ function QuietIconButton({
       aria-label={label}
       title={label}
       className={[
-        "flex h-9 w-9 items-center justify-center rounded-soft border transition-colors",
+        "flex h-9 w-9 items-center justify-center rounded-[14px] border transition-colors",
         active
-          ? "border-line-strong bg-surface-subtle text-text"
-          : "border-line bg-surface text-text-muted hover:bg-surface-subtle hover:text-text",
+          ? "border-line-strong bg-white text-text"
+          : "border-line bg-white text-text-muted hover:bg-[rgba(15,23,42,0.03)] hover:text-text",
         disabled ? "cursor-not-allowed opacity-45" : "",
       ].join(" ")}
     >
@@ -148,7 +148,7 @@ function DetailActionMenu({
   return (
     <div
       ref={menuRef}
-      className="absolute right-0 top-[calc(100%+8px)] z-30 w-56 overflow-hidden rounded-panel border border-line bg-surface p-1.5 shadow-panel"
+      className="absolute right-0 top-[calc(100%+8px)] z-30 w-56 overflow-hidden rounded-[18px] border border-line bg-white p-1.5 shadow-[0_18px_60px_-34px_rgba(15,23,42,0.28)]"
     >
       {items.map((item) => {
         const Icon = item.icon;
@@ -162,11 +162,11 @@ function DetailActionMenu({
             }}
             disabled={item.disabled}
             className={[
-              "flex w-full items-center gap-3 rounded-soft px-3 py-2.5 text-left text-[13px] transition-colors",
+              "flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left text-[13px] transition-colors",
               item.tone || "text-text-muted",
               item.disabled
                 ? "cursor-not-allowed opacity-45"
-                : "hover:bg-surface-subtle hover:text-text",
+                : "hover:bg-[rgba(15,23,42,0.04)] hover:text-text",
             ].join(" ")}
           >
             <Icon className="h-4 w-4" />
@@ -185,7 +185,7 @@ function InboxAutomationSwitch({ automationControl, onToggle }) {
   const disabled = automationControl?.disabled === true;
 
   return (
-    <div className="flex items-center gap-2 rounded-pill border border-line bg-surface-subtle px-2.5 py-1.5">
+    <div className="flex items-center gap-2 rounded-pill border border-line bg-white px-2.5 py-1.5">
       <span className="text-[12px] font-medium text-text">Auto-reply</span>
 
       <span
@@ -218,7 +218,7 @@ function InboxAutomationSwitch({ automationControl, onToggle }) {
           "relative inline-flex h-6 w-10 items-center rounded-full border transition-all duration-base ease-premium",
           enabled
             ? "border-brand bg-brand"
-            : "border-line-strong bg-surface",
+            : "border-line-strong bg-[rgba(15,23,42,0.08)]",
           disabled || loading || saving ? "cursor-not-allowed opacity-60" : "",
         ].join(" ")}
       >
@@ -233,7 +233,7 @@ function InboxAutomationSwitch({ automationControl, onToggle }) {
   );
 }
 
-function ConversationTopBar({
+function ConversationHeader({
   thread,
   unreadCount,
   onOpenDetails,
@@ -252,24 +252,22 @@ function ConversationTopBar({
       s(thread.external_username) ||
       s(thread.external_user_id) ||
       "Conversation"
-    : "Conversation";
-  const meta = hasThread ? formatConversationMeta(thread) : "";
+    : "Conversation workspace";
+  const meta = hasThread ? formatConversationMeta(thread) : "Select a thread to begin";
 
   return (
-    <div className="border-b border-line-soft bg-surface px-4 py-3.5">
+    <div className="sticky top-0 z-10 border-b border-line-soft bg-[rgba(249,250,252,0.82)] px-5 py-4 backdrop-blur supports-[backdrop-filter]:bg-[rgba(249,250,252,0.72)]">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <div className="truncate text-[12px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
             Conversation
           </div>
           <div className="mt-1 truncate text-[15px] font-semibold text-text">
             {title}
           </div>
-          {meta ? (
-            <div className="mt-0.5 truncate text-[12px] text-text-muted">
-              {meta}
-            </div>
-          ) : null}
+          <div className="mt-0.5 truncate text-[12px] text-text-muted">
+            {meta}
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
@@ -318,40 +316,6 @@ function ConversationTopBar({
   );
 }
 
-function ConversationContextStrip({ thread }) {
-  const channel =
-    s(thread.channel_label) ||
-    s(thread.channel_type) ||
-    s(thread.provider) ||
-    s(thread.source_type) ||
-    "Conversation";
-
-  const status =
-    s(thread.status_label) ||
-    s(thread.status) ||
-    (thread?.handoff_active ? "handoff" : "open");
-
-  const unreadCount = Number(thread?.unread_count || 0);
-
-  return (
-    <div className="border-b border-line-soft bg-surface px-5 py-2.5">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-5 text-text-subtle">
-        <span>
-          <span className="text-text-muted">Channel:</span> {channel}
-        </span>
-        <span className="text-slate-300">•</span>
-        <span>
-          <span className="text-text-muted">Status:</span> {status}
-        </span>
-        <span className="text-slate-300">•</span>
-        <span>
-          <span className="text-text-muted">Unread:</span> {unreadCount}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 export default function InboxDetailPanel({
   selectedThread,
   messages,
@@ -380,9 +344,9 @@ export default function InboxDetailPanel({
     Boolean(currentThreadId) && openMenuThreadId === currentThreadId;
 
   useEffect(() => {
-    if (!scrollViewportRef.current) return;
+    if (!scrollViewportRef.current || !hasThread) return;
     scrollViewportRef.current.scrollTop = scrollViewportRef.current.scrollHeight;
-  }, [currentThreadId, messages.length]);
+  }, [currentThreadId, messages.length, hasThread]);
 
   function closeMenu() {
     setOpenMenuThreadId("");
@@ -418,8 +382,8 @@ export default function InboxDetailPanel({
   const canMarkRead = hasThread && unreadCount > 0;
 
   return (
-    <section className="relative flex h-full min-h-0 flex-col bg-surface">
-      <ConversationTopBar
+    <section className="relative flex h-full min-h-0 flex-col bg-transparent">
+      <ConversationHeader
         thread={selectedThread}
         unreadCount={unreadCount}
         onOpenDetails={onOpenDetails}
@@ -447,8 +411,8 @@ export default function InboxDetailPanel({
       />
 
       {showSurfaceBanner ? (
-        <div className="pointer-events-none absolute inset-x-0 top-[70px] z-20 flex justify-center px-4 pt-3">
-          <div className="pointer-events-auto w-full max-w-[760px]">
+        <div className="pointer-events-none absolute inset-x-0 top-[74px] z-20 flex justify-center px-5 pt-3">
+          <div className="pointer-events-auto w-full max-w-[820px]">
             <SurfaceBanner
               surface={surface}
               unavailableMessage="Conversation detail is temporarily unavailable."
@@ -461,43 +425,39 @@ export default function InboxDetailPanel({
       <div className="flex min-h-0 flex-1 flex-col">
         <div
           ref={scrollViewportRef}
-          className="min-h-0 flex-1 overflow-y-auto bg-surface-muted [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="min-h-0 flex-1 overflow-y-auto bg-transparent [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {surface?.loading && !hasThread ? (
             <InboxDetailSkeleton />
           ) : !hasThread ? (
-            <div className="flex h-full min-h-[260px] flex-col items-center justify-center px-6 text-center">
-              <div className="text-[16px] font-semibold text-text">
+            <div className="flex h-full min-h-[280px] flex-col items-center justify-center px-8 text-center">
+              <div className="text-[18px] font-semibold tracking-[-0.02em] text-text">
                 Conversation workspace
               </div>
-              <div className="mt-2 max-w-[34rem] text-[13px] leading-6 text-text-muted">
+              <div className="mt-3 max-w-[30rem] text-[14px] leading-7 text-text-muted">
                 Select a thread to open the timeline.
               </div>
             </div>
+          ) : messages.length === 0 ? (
+            <div className="flex h-full min-h-[280px] flex-col items-center justify-center px-8 text-center">
+              <div className="text-[16px] font-semibold text-text">
+                No messages yet
+              </div>
+              <div className="mt-2 max-w-[30rem] text-[14px] leading-7 text-text-muted">
+                This conversation has no message history yet.
+              </div>
+            </div>
           ) : (
-            <div>
-              <ConversationContextStrip thread={selectedThread} />
-
-              {messages.length === 0 ? (
-                <div className="px-6 py-10 text-center">
-                  <div className="text-[15px] font-medium text-text">
-                    No messages yet
-                  </div>
-                  <div className="mt-2 text-[13px] leading-6 text-text-muted">
-                    This conversation has no message history yet.
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3 px-5 py-4">
-                  {messages.map((message) => (
-                    <InboxMessageBubble
-                      key={message.id}
-                      m={message}
-                      attemptsByCorrelation={attemptsByCorrelation}
-                    />
-                  ))}
-                </div>
-              )}
+            <div className="mx-auto w-full max-w-[920px] px-6 py-6">
+              <div className="space-y-3">
+                {messages.map((message) => (
+                  <InboxMessageBubble
+                    key={message.id}
+                    m={message}
+                    attemptsByCorrelation={attemptsByCorrelation}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>

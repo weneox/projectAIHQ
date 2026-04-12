@@ -107,7 +107,7 @@ function ChannelFilterMenu({
   return (
     <div
       ref={menuRef}
-      className="absolute left-0 top-[calc(100%+8px)] z-30 w-[240px] overflow-hidden rounded-panel border border-line bg-surface p-1.5 shadow-panel"
+      className="absolute left-0 top-[calc(100%+8px)] z-30 w-[240px] overflow-hidden rounded-[18px] border border-line bg-white p-1.5 shadow-[0_18px_60px_-34px_rgba(15,23,42,0.28)]"
     >
       {options.map((option) => {
         const active = selectedValue === option.value;
@@ -122,20 +122,19 @@ function ChannelFilterMenu({
               onClose?.();
             }}
             className={[
-              "flex w-full items-center justify-between rounded-soft px-3 py-2 text-left text-[13px] transition-colors",
+              "flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-[13px] transition-colors",
               active
-                ? "bg-surface-subtle text-text"
-                : "text-text-muted hover:bg-surface-subtle hover:text-text",
+                ? "bg-[rgba(15,23,42,0.05)] text-text"
+                : "text-text-muted hover:bg-[rgba(15,23,42,0.04)] hover:text-text",
             ].join(" ")}
           >
             <span className="truncate font-medium">{option.label}</span>
-
             <span
               className={[
                 "inline-flex min-w-[22px] items-center justify-center rounded-pill px-2 py-0.5 text-[11px]",
                 active
-                  ? "bg-surface text-text-muted"
-                  : "bg-surface-subtle text-text-subtle",
+                  ? "bg-white text-text-muted"
+                  : "bg-[rgba(15,23,42,0.05)] text-text-subtle",
               ].join(" ")}
             >
               {count}
@@ -241,9 +240,9 @@ export default function InboxThreadListPanel({
   return (
     <section
       aria-labelledby="inbox-thread-list-title"
-      className="flex h-full min-h-0 flex-col bg-surface"
+      className="flex h-full min-h-0 flex-col bg-transparent"
     >
-      <div className="border-b border-line-soft bg-surface px-4 py-4">
+      <div className="sticky top-0 z-10 bg-[rgba(249,250,252,0.78)] px-4 pb-4 pt-1 backdrop-blur supports-[backdrop-filter]:bg-[rgba(249,250,252,0.68)]">
         <div className="flex items-start justify-between gap-3">
           <div className="relative min-w-0 flex-1" ref={filterAnchorRef}>
             <button
@@ -255,7 +254,7 @@ export default function InboxThreadListPanel({
             >
               <h2
                 id="inbox-thread-list-title"
-                className="truncate text-[16px] font-semibold text-text"
+                className="truncate text-[15px] font-semibold text-text"
               >
                 {selectedChannelLabel}
               </h2>
@@ -283,7 +282,7 @@ export default function InboxThreadListPanel({
             type="button"
             onClick={() => setFilterMenuOpen((prev) => !prev)}
             aria-label="Open conversation filters"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-soft border border-line bg-surface text-text-muted hover:bg-surface-subtle hover:text-text"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-[14px] border border-line bg-white text-text-muted transition-colors hover:bg-[rgba(15,23,42,0.03)] hover:text-text"
           >
             <Funnel className="h-4 w-4" />
           </button>
@@ -319,6 +318,8 @@ export default function InboxThreadListPanel({
             placeholder="Search conversations"
             aria-label="Search conversations"
             leftIcon={<Search className="h-4 w-4" />}
+            appearance="quiet"
+            className="bg-white"
           />
 
           {threadList?.deepLinkNotice ? (
@@ -329,22 +330,20 @@ export default function InboxThreadListPanel({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {threadList?.surface?.loading && !filteredThreads.length ? (
           <InboxThreadListSkeleton />
         ) : !filteredThreads.length ? (
-          <div className="px-4 py-6">
-            <div className="rounded-panel border border-line bg-surface-muted px-5 py-8 text-center">
-              <div className="text-[14px] font-medium text-text">
-                No conversations found
-              </div>
-              <div className="mt-2 text-[13px] leading-6 text-text-muted">
-                New threads will appear here.
-              </div>
+          <div className="px-3 py-8">
+            <div className="text-[14px] font-medium text-text">
+              No conversations found
+            </div>
+            <div className="mt-2 text-[13px] leading-6 text-text-muted">
+              New threads will appear here.
             </div>
           </div>
         ) : (
-          <div>
+          <div className="space-y-1.5">
             {filteredThreads.map((thread) => (
               <InboxThreadCard
                 key={thread.id}

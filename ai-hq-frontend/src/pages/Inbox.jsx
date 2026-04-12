@@ -36,7 +36,6 @@ import {
   InlineNotice,
   PageCanvas,
   SlidingDetailOverlay,
-  Surface,
 } from "../components/ui/AppShellPrimitives.jsx";
 
 const EMPTY_READINESS_STATE = {
@@ -166,32 +165,27 @@ function buildInboxAutomationControl({
   };
 }
 
-function LaunchChannelPrompt({ inboxReadiness, onOpenChannels }) {
+function LaunchChannelPrompt({ onOpenChannels }) {
   return (
-    <div className="border-b border-line-soft bg-[rgba(255,248,238,0.92)] px-5 py-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="min-w-0">
-          <div className="text-[14px] font-semibold text-text">
-            Connect a launch channel first.
-          </div>
-          <div className="mt-1 text-[13px] leading-6 text-text-muted">
-            {s(
-              inboxReadiness?.summary,
-              "Connect Website chat, Meta, Telegram, or another launch channel to activate the live inbox."
-            )}
-          </div>
+    <div className="flex items-center justify-between gap-4 border-b border-line-soft px-1 pb-4">
+      <div className="min-w-0">
+        <div className="text-[14px] font-semibold text-text">
+          Connect a launch channel first.
         </div>
+        <div className="mt-1 text-[13px] leading-6 text-text-muted">
+          Connect Website chat, Meta, Telegram, or another launch channel to activate the live inbox.
+        </div>
+      </div>
 
-        <div className="shrink-0">
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={onOpenChannels}
-            rightIcon={<ArrowRight className="h-4 w-4" />}
-          >
-            Open channels
-          </Button>
-        </div>
+      <div className="shrink-0">
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={onOpenChannels}
+          rightIcon={<ArrowRight className="h-4 w-4" />}
+        >
+          Open channels
+        </Button>
       </div>
     </div>
   );
@@ -576,7 +570,7 @@ export default function Inbox() {
     [launchChannels]
   );
 
-  const inboxReadiness = useMemo(
+  useMemo(
     () =>
       buildChannelTruthLaunchReadiness({
         channels: launchChannels,
@@ -585,31 +579,6 @@ export default function Inbox() {
         copy: {
           channelsPath: "/channels",
           truthPath: "/truth",
-          unavailableTitle: "Inbox launch posture is unavailable.",
-          unavailableSummary:
-            "The inbox surface cannot confirm launch posture right now.",
-          unavailableDetail:
-            "This surface stays intentionally cautious when live inbox data is unavailable.",
-          noChannelSummary:
-            "Connect Website chat, Meta, Telegram, or another launch channel to activate the live inbox.",
-          noChannelDetail:
-            "The inbox stays available as a workspace, but live automation should not be trusted before a launch channel is attached.",
-          deliveryBlockedSummary:
-            "A channel is connected, but delivery is still blocked.",
-          deliveryBlockedDetail:
-            "The inbox can remain visible, but delivery posture is not healthy enough for launch.",
-          truthBlockedApprovalTitle:
-            "Inbox is connected, but approved truth still needs approval.",
-          truthBlockedRuntimeTitle:
-            "Inbox is connected, but runtime still needs repair.",
-          truthBlockedDetail:
-            "Connected channels alone are not enough. Approved truth and healthy runtime must also be aligned.",
-          readyStatusLabel: "Healthy",
-          readyTitle: "Inbox launch posture is healthy.",
-          readySummary:
-            "Channels, approved truth, and runtime are aligned for live inbox operations.",
-          readyDetail:
-            "The current inbox lane is not blocked by channel, truth, or runtime posture.",
         },
       }),
     [launchChannels, readinessState.truth, surface]
@@ -618,7 +587,7 @@ export default function Inbox() {
   const surfaceNotice = buildSurfaceNotice(surface);
 
   return (
-    <PageCanvas className="space-y-3 h-full">
+    <PageCanvas className="flex h-[calc(100vh-104px)] min-h-[620px] flex-col gap-3">
       {surfaceNotice ? (
         <InlineNotice
           tone={surfaceNotice.tone}
@@ -628,80 +597,70 @@ export default function Inbox() {
         />
       ) : null}
 
-      <Surface
-        padded={false}
-        className="overflow-hidden rounded-[22px] h-[calc(100vh-132px)] min-h-[560px]"
-      >
-        <div className="flex h-full min-h-0 flex-col">
-          {!hasConnectedLaunchChannel ? (
-            <LaunchChannelPrompt
-              inboxReadiness={inboxReadiness}
-              onOpenChannels={() => navigate("/channels")}
-            />
-          ) : null}
+      {!hasConnectedLaunchChannel ? (
+        <LaunchChannelPrompt onOpenChannels={() => navigate("/channels")} />
+      ) : null}
 
-          <div className="grid min-h-0 flex-1 overflow-hidden grid-cols-[320px_minmax(0,1fr)] bg-surface">
-            <div className="min-h-0 overflow-hidden border-r border-line-soft bg-surface">
-              <InboxThreadListPanel
-                threadList={threadList}
-                selectedThreadId={selectedThread?.id || ""}
-                searchQuery=""
-              />
-            </div>
-
-            <div className="min-h-0 overflow-hidden bg-surface">
-              <InboxDetailPanel
-                selectedThread={selectedThread}
-                messages={messages}
-                outboundAttempts={threadAttemptSurface.attempts}
-                surface={detailSurface}
-                actionState={actionState}
-                markRead={markRead}
-                assignThread={assignThread}
-                activateHandoff={activateHandoff}
-                setThreadStatus={setThreadStatus}
-                onOpenDetails={() => setDetailOpen(true)}
-                automationControl={inboxAutomationControl}
-                onToggleAutomation={handleToggleInboxAutonomy}
-                composer={
-                  <InboxComposer
-                    embedded
-                    selectedThread={selectedThread}
-                    surface={composerSurface}
-                    actionState={actionState}
-                    replyText={replyText}
-                    setReplyText={setReplyText}
-                    onSend={handleSend}
-                    onReleaseHandoff={handleRelease}
-                  />
-                }
-              />
-            </div>
-
-            {detailOpen ? (
-              <SlidingDetailOverlay
-                open={detailOpen}
-                onClose={() => setDetailOpen(false)}
-                absolute
-                closeLabel="Close conversation details"
-                panelWidthClassName="max-w-[92vw] w-[360px]"
-                className="z-30"
-              >
-                <InboxLeadPanel
-                  selectedThread={selectedThread}
-                  surface={leadSurface}
-                  relatedLead={relatedLead}
-                  openLeadDetail={openLeadDetail}
-                  operatorName={operatorName}
-                  tenantKey={workspace.tenantKey}
-                  wsState={wsState}
-                  onClose={() => setDetailOpen(false)}
-                />
-              </SlidingDetailOverlay>
-            ) : null}
-          </div>
+      <div className="relative grid min-h-0 flex-1 grid-cols-[320px_minmax(0,1fr)] overflow-hidden bg-transparent">
+        <div className="min-h-0 overflow-hidden border-r border-line-soft bg-transparent">
+          <InboxThreadListPanel
+            threadList={threadList}
+            selectedThreadId={selectedThread?.id || ""}
+            searchQuery=""
+          />
         </div>
-      </Surface>
+
+        <div className="min-h-0 overflow-hidden bg-transparent">
+          <InboxDetailPanel
+            selectedThread={selectedThread}
+            messages={messages}
+            outboundAttempts={threadAttemptSurface.attempts}
+            surface={detailSurface}
+            actionState={actionState}
+            markRead={markRead}
+            assignThread={assignThread}
+            activateHandoff={activateHandoff}
+            setThreadStatus={setThreadStatus}
+            onOpenDetails={() => setDetailOpen(true)}
+            automationControl={inboxAutomationControl}
+            onToggleAutomation={handleToggleInboxAutonomy}
+            composer={
+              <InboxComposer
+                embedded
+                selectedThread={selectedThread}
+                surface={composerSurface}
+                actionState={actionState}
+                replyText={replyText}
+                setReplyText={setReplyText}
+                onSend={handleSend}
+                onReleaseHandoff={handleRelease}
+              />
+            }
+          />
+        </div>
+
+        {detailOpen ? (
+          <SlidingDetailOverlay
+            open={detailOpen}
+            onClose={() => setDetailOpen(false)}
+            absolute
+            closeLabel="Close conversation details"
+            panelWidthClassName="max-w-[92vw] w-[360px]"
+            className="z-30"
+          >
+            <InboxLeadPanel
+              selectedThread={selectedThread}
+              surface={leadSurface}
+              relatedLead={relatedLead}
+              openLeadDetail={openLeadDetail}
+              operatorName={operatorName}
+              tenantKey={workspace.tenantKey}
+              wsState={wsState}
+              onClose={() => setDetailOpen(false)}
+            />
+          </SlidingDetailOverlay>
+        ) : null}
+      </div>
     </PageCanvas>
   );
 }
