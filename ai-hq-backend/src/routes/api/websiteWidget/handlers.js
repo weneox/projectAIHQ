@@ -54,7 +54,7 @@ import {
 } from "./session.js";
 
 const WEBSITE_SOURCE = "website_widget";
-const WEBSITE_THREAD_CHANNEL = "web";
+const WEBSITE_THREAD_CHANNEL = "website";
 const WEBSITE_RUNTIME_CHANNEL = "webchat";
 const WEBSITE_PROVIDER = "website_widget";
 const WEBSITE_TRANSCRIPT_LIMIT = 200;

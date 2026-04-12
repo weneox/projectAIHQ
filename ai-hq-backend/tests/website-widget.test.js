@@ -361,7 +361,7 @@ test("website widget message persists the website thread and activates handoff w
     id: "22222222-2222-4222-8222-222222222222",
     tenant_id: tenantRow.id,
     tenant_key: "acme",
-    channel: "web",
+    channel: "website",
     external_thread_id: "website:session-1",
     external_user_id: "visitor-1",
     external_username: null,
@@ -526,7 +526,7 @@ test("website widget message persists the website thread and activates handoff w
 
   assert.equal(res.statusCode, 200);
   assert.equal(res.body?.ok, true);
-  assert.equal(res.body?.thread?.channel, "web");
+  assert.equal(res.body?.thread?.channel, "website");
   assert.equal(res.body?.thread?.handoffActive, true);
   assert.equal(res.body?.delivery?.mode, "operator_only");
   assert.equal(res.body?.messages?.[0]?.text, inboundMessage.text);
@@ -538,7 +538,7 @@ test("website widget transcript only exposes delivered outbound replies", async 
     id: "44444444-4444-4444-8444-444444444444",
     tenant_id: tenantRow.id,
     tenant_key: "acme",
-    channel: "web",
+    channel: "website",
     external_thread_id: "website:session-2",
     external_user_id: "visitor-2",
     external_username: null,
@@ -703,7 +703,7 @@ test("persistOutboundMessage auto-delivers website replies without queueing work
     },
     tenantId: tenantRow.id,
     tenantKey: "acme",
-    channel: "web",
+    channel: "website",
     recipientId: "visitor-3",
     senderType: "operator",
     requestedMessageType: "text",

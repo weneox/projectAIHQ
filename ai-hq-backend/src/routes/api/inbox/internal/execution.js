@@ -82,7 +82,7 @@ function resolveExecutionProvider({ provider = "", channel = "", action = {} } =
     lower(action?.meta?.provider);
 
   if (explicit) return explicit;
-  if (["web", "webchat", WEBSITE_WIDGET_PROVIDER].includes(lower(channel))) {
+  if (["web", "webchat", "website", WEBSITE_WIDGET_PROVIDER].includes(lower(channel))) {
     return WEBSITE_WIDGET_PROVIDER;
   }
   if (lower(channel) === TELEGRAM_PROVIDER) return TELEGRAM_PROVIDER;
