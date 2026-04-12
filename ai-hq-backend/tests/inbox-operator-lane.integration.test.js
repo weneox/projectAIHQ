@@ -111,6 +111,65 @@ async function invokeRoute(router, method, path, req = {}) {
   return { req: fullReq, res };
 }
 
+function createTransactionalRouteDb(client, prefix = "inbox_operator_lane") {
+  let savepointIndex = 0;
+
+  function emptyResult(command) {
+    return {
+      command,
+      rowCount: 0,
+      rows: [],
+      fields: [],
+    };
+  }
+
+  return {
+    query(text, params) {
+      return client.query(text, params);
+    },
+    async connect() {
+      const savepoint = `${prefix}_${savepointIndex += 1}`;
+      let transactionOpen = false;
+      let finalized = false;
+
+      return {
+        async query(text, params) {
+          const sql = s(typeof text === "string" ? text : text?.text);
+          const normalized = sql.toUpperCase();
+
+          if (normalized === "BEGIN" || normalized.startsWith("BEGIN ")) {
+            if (!transactionOpen) {
+              await client.query(`SAVEPOINT ${savepoint}`);
+              transactionOpen = true;
+            }
+            return emptyResult("BEGIN");
+          }
+
+          if (normalized === "COMMIT" || normalized.startsWith("COMMIT ")) {
+            if (transactionOpen && !finalized) {
+              await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+              finalized = true;
+            }
+            return emptyResult("COMMIT");
+          }
+
+          if (normalized === "ROLLBACK" || normalized.startsWith("ROLLBACK ")) {
+            if (transactionOpen && !finalized) {
+              await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+              await client.query(`RELEASE SAVEPOINT ${savepoint}`);
+              finalized = true;
+            }
+            return emptyResult("ROLLBACK");
+          }
+
+          return client.query(text, params);
+        },
+        release() {},
+      };
+    },
+  };
+}
+
 let pool = null;
 let migrationsReady = false;
 
@@ -160,8 +219,9 @@ test(
 
       assert.ok(tenant?.id, "tenant should be created");
 
+      const routeDb = createTransactionalRouteDb(client);
       const router = inboxHandlers({
-        db: client,
+        db: routeDb,
         wsHub: null,
       });
 

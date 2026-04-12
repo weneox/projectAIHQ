@@ -232,7 +232,7 @@ export async function persistOutboundMessage({
     `
     update inbox_threads
     set
-      tenant_id = coalesce(tenant_id, $5::uuid),
+      tenant_id = coalesce(tenant_id, nullif($5::text, '')::uuid),
       last_message_at = case
         when $4::text in (
           'text','image','video','audio','file','document','voice',

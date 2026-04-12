@@ -40,6 +40,11 @@ function getScopedTenantKey(req) {
   return fixText(s(req.auth?.tenantKey || req.user?.tenantKey || "")) || resolveTenantKeyFromReq(req);
 }
 
+function getScopedTenantId(req) {
+  const tenantId = s(req.auth?.tenantId || req.user?.tenantId || "");
+  return isUuid(tenantId) ? tenantId : "";
+}
+
 const STORED_INBOX_MESSAGE_TYPES = new Set([
   "text",
   "image",
@@ -494,6 +499,7 @@ export function inboxHandlers({ db, wsHub }) {
   });
 
   r.post("/inbox/threads", async (req, res) => {
+    const tenantId = getScopedTenantId(req);
     const tenantKey = getScopedTenantKey(req);
     const channel = String(req.body?.channel || "instagram").trim().toLowerCase() || "instagram";
     const externalThreadId = fixText(String(req.body?.externalThreadId || "").trim()) || null;
@@ -513,6 +519,7 @@ export function inboxHandlers({ db, wsHub }) {
       const result = await db.query(
         `
         insert into inbox_threads (
+          tenant_id,
           tenant_key,
           channel,
           external_thread_id,
@@ -526,7 +533,7 @@ export function inboxHandlers({ db, wsHub }) {
           last_message_at
         )
         values (
-          $1::text,
+          nullif($1::text, '')::uuid,
           $2::text,
           $3::text,
           $4::text,
@@ -534,12 +541,14 @@ export function inboxHandlers({ db, wsHub }) {
           $6::text,
           $7::text,
           $8::text,
-          $9::jsonb,
+          $9::text,
           $10::jsonb,
+          $11::jsonb,
           now()
         )
         returning
           id,
+          tenant_id,
           tenant_key,
           channel,
           external_thread_id,
@@ -563,6 +572,7 @@ export function inboxHandlers({ db, wsHub }) {
           updated_at
         `,
         [
+          tenantId,
           tenantKey,
           channel,
           externalThreadId,
@@ -1059,6 +1069,10 @@ export function inboxHandlers({ db, wsHub }) {
         return okJson(res, { ok: false, error: "threadId must be uuid" });
       }
 
+      const existingThread = await getThreadById(db, threadId, tenantKey);
+      if (!existingThread) return okJson(res, { ok: false, error: "thread not found" });
+
+      const previousAssignedTo = fixText(s(existingThread?.assigned_to || "")) || "";
       const updated = await db.query(
         `
         update inbox_threads
@@ -1117,6 +1131,7 @@ export function inboxHandlers({ db, wsHub }) {
               priority,
               at: new Date().toISOString(),
               by: actor,
+              previousAssignedTo: previousAssignedTo || null,
             },
           }),
           tenantKey,
@@ -1171,21 +1186,31 @@ export function inboxHandlers({ db, wsHub }) {
         return okJson(res, { ok: false, error: "threadId must be uuid" });
       }
 
+      const existingThread = await getThreadById(db, threadId, tenantKey);
+      if (!existingThread) return okJson(res, { ok: false, error: "thread not found" });
+
+      const previousAssignedTo =
+        fixText(s(existingThread?.meta?.handoff?.previousAssignedTo || "")) || "";
       const updated = await db.query(
         `
         update inbox_threads
         set
+          assigned_to = case
+            when nullif($3::text, '') is not null then $3::text
+            else assigned_to
+          end,
           handoff_active = false,
           handoff_reason = '',
           handoff_priority = 'normal',
           handoff_at = null,
           handoff_by = null,
-          meta = coalesce(meta, '{}'::jsonb) || '{"handoff":{"active":false,"reason":"","priority":"normal","at":null,"by":null}}'::jsonb,
+          meta = coalesce(meta, '{}'::jsonb) || $4::jsonb,
           updated_at = now()
         where id = $1::uuid
           and tenant_key = $2::text
         returning
           id,
+          tenant_id,
           tenant_key,
           channel,
           external_thread_id,
@@ -1208,7 +1233,21 @@ export function inboxHandlers({ db, wsHub }) {
           created_at,
           updated_at
         `,
-        [threadId, tenantKey]
+        [
+          threadId,
+          tenantKey,
+          previousAssignedTo,
+          JSON.stringify({
+            handoff: {
+              active: false,
+              reason: "",
+              priority: "normal",
+              at: null,
+              by: null,
+              previousAssignedTo: previousAssignedTo || null,
+            },
+          }),
+        ]
       );
 
       const thread = normalizeThread(updated.rows?.[0] || null);
