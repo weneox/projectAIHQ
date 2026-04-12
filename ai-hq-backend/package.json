@@ -18,7 +18,10 @@
     "build": "npm run validate:env && npm run lint",
     "test": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/*.test.js",
     "test:setup-review": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/setup-review-session.test.js",
-    "test:integration:db": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/operational-channel-integration.test.js"
+    "test:integration:db:ops": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/operational-channel-integration.test.js",
+    "test:integration:db:website": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/website-widget-production-lane.test.js",
+    "test:integration:db:inbox": "node --import ../scripts/workspace-module-loader.mjs --test --test-concurrency=1 tests/inbox-operator-lane.integration.test.js",
+    "test:integration:db": "npm run test:integration:db:ops && npm run test:integration:db:website && npm run test:integration:db:inbox"
   },
   "dependencies": {
     "@aihq/shared-contracts": "1.0.0",
