@@ -296,10 +296,14 @@ test(
             tenant_key: tenantKey,
           },
           authority: {
+            mode: "strict",
+            required: true,
             available: true,
-            source: "test_runtime",
+            stale: false,
+            source: "approved_runtime_projection",
             runtimeProjectionId: "proj_test_widget",
           },
+          truthVersionId: "truth_v_test_widget",
           serviceCatalog: [],
           knowledgeEntries: [],
           responsePlaybooks: [],
@@ -310,6 +314,15 @@ test(
           businessContext: "Acme Web Co",
           tone: "professional",
           language: "en",
+          raw: {
+            projection: {
+              projection_hash: "proj_hash_test_widget",
+              truth_version_id: "truth_v_test_widget",
+              metadata_json: {
+                publishedTruthVersionId: "truth_v_test_widget",
+              },
+            },
+          },
         }),
         buildActions: async () => ({
           actions: [],
