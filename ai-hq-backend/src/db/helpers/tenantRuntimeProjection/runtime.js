@@ -383,11 +383,7 @@ export function assessTenantRuntimeProjectionFreshness(
       reasons.push("runtime_status_not_ready");
     }
 
-    if (hasPublishedTruthVersion) {
-      if (!matchesPublishedTruthVersion) {
-        reasons.push("published_truth_version_mismatch");
-      }
-    } else {
+    if (!hasPublishedTruthVersion) {
       if (
         !refsMatch(
           currentSources.sourceSnapshotId,
@@ -396,28 +392,32 @@ export function assessTenantRuntimeProjectionFreshness(
       ) {
         reasons.push("source_snapshot_mismatch");
       }
+    }
 
-      if (
-        !refsMatch(currentSources.sourceProfileId, expectedSources.sourceProfileId)
-      ) {
-        reasons.push("source_profile_mismatch");
-      }
+    if (
+      !refsMatch(currentSources.sourceProfileId, expectedSources.sourceProfileId)
+    ) {
+      reasons.push("source_profile_mismatch");
+    }
 
-      if (
-        !refsMatch(
-          currentSources.sourceCapabilitiesId,
-          expectedSources.sourceCapabilitiesId
-        )
-      ) {
-        reasons.push("source_capabilities_mismatch");
-      }
+    if (
+      !refsMatch(
+        currentSources.sourceCapabilitiesId,
+        expectedSources.sourceCapabilitiesId
+      )
+    ) {
+      reasons.push("source_capabilities_mismatch");
+    }
 
-      if (
-        s(current.projection_hash) !==
-        s(normalizedExpectedProjection?.projection_hash)
-      ) {
-        reasons.push("projection_hash_mismatch");
-      }
+    if (
+      s(current.projection_hash) !==
+      s(normalizedExpectedProjection?.projection_hash)
+    ) {
+      reasons.push("projection_hash_mismatch");
+    }
+
+    if (hasPublishedTruthVersion && !matchesPublishedTruthVersion) {
+      reasons.push("published_truth_version_mismatch");
     }
   }
 

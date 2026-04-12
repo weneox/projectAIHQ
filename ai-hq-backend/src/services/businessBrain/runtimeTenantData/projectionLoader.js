@@ -18,57 +18,15 @@ function lower(v, d = "") {
   return s(v, d).toLowerCase();
 }
 
-function hasSamePublishedTruthVersion(freshness = {}) {
-  const currentId = s(freshness?.currentPublishedTruthVersionId);
-  const expectedId = s(freshness?.expectedPublishedTruthVersionId);
-  return Boolean(currentId && expectedId && currentId === expectedId);
-}
-
-function normalizeFreshnessReasonCodes(freshness = {}) {
-  return [
-    ...new Set(
-      arr(freshness?.reasons).map((item) => lower(item)).filter(Boolean)
-    ),
-  ];
-}
-
-function canUseProjectionDespiteStaleFlag(freshness = {}, projection = null) {
-  const reasonCodes = normalizeFreshnessReasonCodes(freshness);
-  const projectionStatus = lower(projection?.status);
-
-  if (!reasonCodes.length) return true;
-
-  const samePublishedTruthVersion = hasSamePublishedTruthVersion(freshness);
-
-  if (!samePublishedTruthVersion) {
-    return false;
-  }
-
-  const toleratedReasonCodes = new Set([
-    "runtime_status_not_ready",
-    "projection_hash_mismatch",
-    "source_snapshot_mismatch",
-    "source_profile_mismatch",
-    "source_capabilities_mismatch",
-    "published_truth_version_mismatch",
-  ]);
-
-  const hasOnlyToleratedReasons = reasonCodes.every((code) =>
-    toleratedReasonCodes.has(code)
-  );
-
-  if (!hasOnlyToleratedReasons) {
-    return false;
-  }
-
-  return ["ready", "stale"].includes(projectionStatus);
-}
-
 function pickRuntimeProjectionFailureReasonCode(freshness = {}) {
   const healthPrimaryReasonCode = lower(
     freshness?.health?.primaryReasonCode || freshness?.health?.reasonCode
   );
   if (healthPrimaryReasonCode) return healthPrimaryReasonCode;
+
+  if (freshness?.stale === true) {
+    return "runtime_projection_stale";
+  }
 
   const freshnessReason = lower(arr(freshness?.reasons)[0]);
   if (freshnessReason) return freshnessReason;
@@ -102,7 +60,7 @@ async function loadCurrentProjection({ db, tenantId = "", tenantKey = "" }) {
         )
     );
 
-    if (!freshness?.stale || canUseProjectionDespiteStaleFlag(freshness, current)) {
+    if (!freshness?.stale) {
       return { projection: current, freshness };
     }
 
