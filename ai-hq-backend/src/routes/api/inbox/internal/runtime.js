@@ -3,7 +3,6 @@ import {
   isRuntimeAuthorityError,
 } from "../../../../services/businessBrain/getTenantBrainRuntime.js";
 import { buildExecutionPolicySurfaceSummary } from "../../../../services/executionPolicy.js";
-import { refreshTenantRuntimeProjectionStrict } from "../../../../db/helpers/tenantRuntimeProjection.js";
 import { s } from "../shared.js";
 
 function arr(v) {
@@ -22,92 +21,6 @@ function resolveRuntimeChannelType(runtimePack = {}, explicitChannelType = "") {
   )
     .toLowerCase()
     .trim();
-}
-
-function extractRuntimeAuthorityReasonCode(error = null) {
-  return s(
-    error?.runtimeAuthority?.reasonCode ||
-      error?.runtimeAuthority?.reason ||
-      error?.authority?.reasonCode ||
-      error?.authority?.reason ||
-      error?.reasonCode ||
-      error?.reason
-  ).toLowerCase();
-}
-
-function shouldAttemptRuntimeProjectionRepair(error = null) {
-  const reasonCode = extractRuntimeAuthorityReasonCode(error);
-  const errorCode = s(error?.code).toUpperCase();
-
-  return (
-    reasonCode === "runtime_projection_stale" ||
-    reasonCode === "runtime_projection_missing" ||
-    reasonCode === "missing_runtime_projection" ||
-    reasonCode === "runtime_status_not_ready" ||
-    errorCode === "TENANT_RUNTIME_PROJECTION_STALE"
-  );
-}
-
-async function tryRepairRuntimeProjection({
-  tenantKey,
-  service,
-  channelType,
-  reasonCode,
-}) {
-  return refreshTenantRuntimeProjectionStrict({
-    tenantKey,
-    triggerType: "runtime_authority_auto_repair",
-    requestedBy: "system",
-    runnerKey: "inbox.internal.runtime.autoRepair",
-    generatedBy: "system",
-    metadata: {
-      source: "inbox.internal.runtime",
-      service: s(service),
-      channelType: s(channelType),
-      previousReasonCode: s(reasonCode),
-      automaticRepair: true,
-    },
-  });
-}
-
-function buildResolvedRuntimeState(runtimePack, { threadState, service, channelType }) {
-  const tenant = runtimePack?.tenant || null;
-
-  if (!tenant?.id && !tenant?.tenant_key) {
-    return {
-      ok: false,
-      response: {
-        ok: false,
-        error: "runtime_authority_unavailable",
-        details: {
-          service,
-          message:
-            "Approved runtime authority did not provide an authoritative tenant payload.",
-          authority: runtimePack?.authority || null,
-        },
-      },
-    };
-  }
-
-  return {
-    ok: true,
-    tenant,
-    runtimePack,
-    runtime: buildRuntimePayload(
-      {
-        ...runtimePack,
-        tenant,
-        threadState: threadState || runtimePack?.threadState || null,
-        channelType:
-          s(channelType) ||
-          s(runtimePack?.channelType) ||
-          s(runtimePack?.threadState?.channelType) ||
-          s(runtimePack?.threadState?.channel) ||
-          "",
-      },
-      { channelType }
-    ),
-  };
 }
 
 export function buildRuntimePayload(runtimePack, options = {}) {
@@ -220,80 +133,61 @@ export async function loadStrictInboxRuntime({
   service,
   channelType = "",
 }) {
-  const runtimeArgs = {
-    db: client,
-    tenantKey,
-    threadState: threadState || null,
-    authorityMode: "strict",
-  };
-
   try {
-    const runtimePack = await getRuntime(runtimeArgs);
-    return buildResolvedRuntimeState(runtimePack, {
-      threadState,
-      service,
-      channelType,
+    const runtimePack = await getRuntime({
+      db: client,
+      tenantKey,
+      threadState: threadState || null,
+      authorityMode: "strict",
     });
-  } catch (error) {
-    if (!isRuntimeAuthorityError(error)) {
-      throw error;
-    }
 
-    const reasonCode = extractRuntimeAuthorityReasonCode(error);
+    const tenant = runtimePack?.tenant || null;
 
-    if (shouldAttemptRuntimeProjectionRepair(error)) {
-      try {
-        console.warn("[ai-hq] inbox runtime auto-repair attempting", {
-          tenantKey: s(tenantKey),
-          service: s(service),
-          channelType: s(channelType),
-          reasonCode: s(reasonCode),
-        });
-      } catch {}
-
-      try {
-        await tryRepairRuntimeProjection({
-          tenantKey,
-          service,
-          channelType,
-          reasonCode,
-        });
-
-        try {
-          console.warn("[ai-hq] inbox runtime auto-repair completed", {
-            tenantKey: s(tenantKey),
-            service: s(service),
-            channelType: s(channelType),
-            reasonCode: s(reasonCode),
-          });
-        } catch {}
-
-        const runtimePack = await getRuntime(runtimeArgs);
-        return buildResolvedRuntimeState(runtimePack, {
-          threadState,
-          service,
-          channelType,
-        });
-      } catch (repairError) {
-        if (isRuntimeAuthorityError(repairError)) {
-          return {
-            ok: false,
-            response: buildRuntimeAuthorityFailurePayload(repairError, {
-              service,
-              tenantKey,
-            }),
-          };
-        }
-        throw repairError;
-      }
+    if (!tenant?.id && !tenant?.tenant_key) {
+      return {
+        ok: false,
+        response: {
+          ok: false,
+          error: "runtime_authority_unavailable",
+          details: {
+            service,
+            message:
+              "Approved runtime authority did not provide an authoritative tenant payload.",
+            authority: runtimePack?.authority || null,
+          },
+        },
+      };
     }
 
     return {
-      ok: false,
-      response: buildRuntimeAuthorityFailurePayload(error, {
-        service,
-        tenantKey,
-      }),
+      ok: true,
+      tenant,
+      runtimePack,
+      runtime: buildRuntimePayload(
+        {
+          ...runtimePack,
+          tenant,
+          threadState: threadState || runtimePack?.threadState || null,
+          channelType:
+            s(channelType) ||
+            s(runtimePack?.channelType) ||
+            s(runtimePack?.threadState?.channelType) ||
+            s(runtimePack?.threadState?.channel) ||
+            "",
+        },
+        { channelType }
+      ),
     };
+  } catch (error) {
+    if (isRuntimeAuthorityError(error)) {
+      return {
+        ok: false,
+        response: buildRuntimeAuthorityFailurePayload(error, {
+          service,
+          tenantKey,
+        }),
+      };
+    }
+    throw error;
   }
 }
