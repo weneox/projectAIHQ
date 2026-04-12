@@ -162,6 +162,8 @@ test(
     const client = await pool.connect();
     const tenantKey = `web-${randomUUID().slice(0, 8)}`;
     const publicWidgetId = `ww_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
+    const publicDomain = "acme-example.com";
+    const publicOrigin = `https://www.${publicDomain}`;
 
     try {
       await client.query("begin");
@@ -180,7 +182,7 @@ test(
 
       await dbUpsertTenantProfile(client, tenant.id, {
         brand_name: "Acme Web Co",
-        website_url: "https://www.acme.test",
+        website_url: publicOrigin,
       });
 
       await dbUpsertTenantChannel(client, tenant.id, "webchat", {
@@ -191,8 +193,8 @@ test(
         config: {
           enabled: true,
           publicWidgetId,
-          allowedOrigins: ["https://www.acme.test"],
-          allowedDomains: ["acme.test"],
+          allowedOrigins: [publicOrigin],
+          allowedDomains: [publicDomain],
           title: "Acme Web Chat",
           subtitle: "Ask a question.",
           accentColor: "#0f172a",
@@ -204,10 +206,10 @@ test(
         auth: {
           tenantKey,
           role: "owner",
-          email: "owner@acme.test",
+          email: "owner@acme-example.com",
         },
         headers: {
-          host: "app.example.test",
+          host: "app.example.com",
           "x-forwarded-proto": "https",
         },
         protocol: "https",
@@ -221,13 +223,13 @@ test(
         req: {
           ...authReq,
           body: {
-            domain: "acme.test",
+            domain: publicDomain,
           },
         },
       });
 
       assert.equal(s(challengePayload.state).toLowerCase(), "pending");
-      assert.equal(s(challengePayload.domain), "acme.test");
+      assert.equal(s(challengePayload.domain), publicDomain);
       assert.ok(
         s(challengePayload.challenge?.name),
         "challenge TXT host should be present"
@@ -242,14 +244,14 @@ test(
         req: {
           ...authReq,
           body: {
-            domain: "acme.test",
+            domain: publicDomain,
           },
         },
         resolveTxtFn: async () => [s(challengePayload.challenge?.value)],
       });
 
       assert.equal(s(verifiedPayload.state).toLowerCase(), "verified");
-      assert.equal(s(verifiedPayload.domain), "acme.test");
+      assert.equal(s(verifiedPayload.domain), publicDomain);
 
       const statusPayload = await getWebsiteWidgetStatus({
         db: client,
@@ -270,14 +272,14 @@ test(
         req: {
           ...authReq,
           body: {
-            domain: "acme.test",
+            domain: publicDomain,
           },
         },
       });
 
       assert.equal(handoffPayload.ready, true);
       assert.equal(s(handoffPayload.packageType), "developer");
-      assert.equal(s(handoffPayload.targetDomain), "acme.test");
+      assert.equal(s(handoffPayload.targetDomain), publicDomain);
       assert.equal(handoffPayload.productionReady, true);
       assert.match(
         s(handoffPayload.packageText),
@@ -327,16 +329,16 @@ test(
         "/public/widget/install-token",
         {
           headers: {
-            origin: "https://www.acme.test",
-            referer: "https://www.acme.test/pricing",
-            host: "app.example.test",
+            origin: publicOrigin,
+            referer: `${publicOrigin}/pricing`,
+            host: "app.example.com",
             "x-forwarded-proto": "https",
           },
           protocol: "https",
           body: {
             widgetId: publicWidgetId,
             page: {
-              url: "https://www.acme.test/pricing",
+              url: `${publicOrigin}/pricing`,
               title: "Pricing",
               referrer: "https://www.google.com/search?q=acme",
             },
@@ -358,7 +360,7 @@ test(
         "/public/widget/bootstrap",
         {
           headers: {
-            host: "app.example.test",
+            host: "app.example.com",
             "x-forwarded-proto": "https",
           },
           protocol: "https",
@@ -390,7 +392,7 @@ test(
         "/public/widget/message",
         {
           headers: {
-            host: "app.example.test",
+            host: "app.example.com",
             "x-forwarded-proto": "https",
           },
           protocol: "https",
@@ -400,7 +402,7 @@ test(
             messageId: "msg_public_test_1",
             visitor: {
               name: "Taylor",
-              email: "taylor@example.test",
+              email: "taylor@acme-example.com",
             },
           },
         }
@@ -424,7 +426,7 @@ test(
         "/public/widget/transcript",
         {
           headers: {
-            host: "app.example.test",
+            host: "app.example.com",
             "x-forwarded-proto": "https",
           },
           protocol: "https",
