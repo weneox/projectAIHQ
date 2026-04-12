@@ -1,12 +1,12 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../components/inbox/InboxThreadCard.jsx", () => ({
   default: ({ thread, selected, onOpen }) => (
     <button
       type="button"
-      data-testid={`thread-card-${thread.id}`}
       data-selected={selected ? "yes" : "no"}
+      data-testid={`thread-card-${thread.id}`}
       onClick={() => onOpen?.(thread.id)}
     >
       {thread.customer_name || thread.external_username || thread.id}
@@ -59,7 +59,7 @@ describe("InboxThreadListPanel", () => {
     vi.restoreAllMocks();
   });
 
-  it("opens search with slash when focus is not in a typing field", () => {
+  it("opens search with slash when focus is not in a typing field", async () => {
     render(
       <InboxThreadListPanel
         threadList={buildThreadList({
@@ -72,10 +72,16 @@ describe("InboxThreadListPanel", () => {
 
     fireEvent.keyDown(window, { key: "/" });
 
-    expect(screen.getByLabelText(/search conversations/i)).toHaveFocus();
+    const input = screen.getByRole("textbox", {
+      name: /search conversations/i,
+    });
+
+    await waitFor(() => {
+      expect(input).toHaveFocus();
+    });
   });
 
-  it("opens search with ctrl/cmd+k", () => {
+  it("opens search with ctrl/cmd+k", async () => {
     render(
       <InboxThreadListPanel
         threadList={buildThreadList({
@@ -88,7 +94,13 @@ describe("InboxThreadListPanel", () => {
 
     fireEvent.keyDown(window, { key: "k", ctrlKey: true });
 
-    expect(screen.getByLabelText(/search conversations/i)).toHaveFocus();
+    const input = screen.getByRole("textbox", {
+      name: /search conversations/i,
+    });
+
+    await waitFor(() => {
+      expect(input).toHaveFocus();
+    });
   });
 
   it("keeps the selected thread visible even when current search would otherwise hide it", () => {
@@ -118,9 +130,14 @@ describe("InboxThreadListPanel", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /search conversations/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /search conversations/i })
+    );
 
-    const input = screen.getByLabelText(/search conversations/i);
+    const input = screen.getByRole("textbox", {
+      name: /search conversations/i,
+    });
+
     fireEvent.change(input, { target: { value: "banana" } });
 
     expect(screen.getByTestId("thread-card-selected_1")).toBeInTheDocument();
@@ -156,8 +173,12 @@ describe("InboxThreadListPanel", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /all conversations/i }));
-    fireEvent.click(screen.getByRole("button", { name: /telegram/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /all conversations/i })
+    );
+
+    const telegramOptionText = screen.getByText(/^Telegram$/i);
+    fireEvent.click(telegramOptionText.closest("button"));
 
     expect(screen.queryByTestId("thread-card-web_1")).not.toBeInTheDocument();
     expect(screen.getByTestId("thread-card-tg_1")).toBeInTheDocument();
