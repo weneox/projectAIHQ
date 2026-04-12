@@ -238,8 +238,12 @@ async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
   const rawStatus = s(health.json?.status).toLowerCase();
   const readinessPolicy = classifyAihqReadiness(readiness);
   const status = s(readinessPolicy.effectiveStatus || rawStatus).toLowerCase();
+
+  const degradedFromReadiness =
+    status === "degraded" && !readinessPolicy.tolerableOnly;
+
   const degraded =
-    status === "degraded" ||
+    degradedFromReadiness ||
     workers.status === "degraded" ||
     incidents.status === "degraded";
 
@@ -262,6 +266,7 @@ async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
         blockerReasonCodes: readinessPolicy.blockerReasonCodes,
         fatalBlockerReasonCodes: readinessPolicy.fatalBlockerReasonCodes,
         tolerableReadinessOnly: readinessPolicy.tolerableOnly,
+        degradedFromReadiness,
         dbOk,
       },
       health.status
@@ -298,6 +303,7 @@ async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
         blockerReasonCodes: readinessPolicy.blockerReasonCodes,
         fatalBlockerReasonCodes: readinessPolicy.fatalBlockerReasonCodes,
         tolerableReadinessOnly: readinessPolicy.tolerableOnly,
+        degradedFromReadiness,
         workerStatus: workers.status,
         requiredUnavailableCount: workers.requiredUnavailableCount,
         incidentStatus: incidents.status,
@@ -341,9 +347,11 @@ async function verifySidecar(prefix, baseUrl, timeoutMs, failOnDegraded) {
   }
 
   const health = await fetchJson(healthUrl, {}, timeoutMs);
-  const healthReadiness = summarizeReadiness(health.json || {});
   const runtimeSignals = await fetchJson(runtimeSignalsUrl, {}, timeoutMs);
+
+  const healthReadiness = summarizeReadiness(health.json || {});
   const runtimeReadiness = summarizeReadiness(runtimeSignals.json || {});
+
   const degraded =
     s(healthReadiness.status).toLowerCase() === "degraded" ||
     s(runtimeReadiness.status).toLowerCase() === "degraded";
