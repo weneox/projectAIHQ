@@ -5,6 +5,7 @@ import {
   RefreshCw,
   ShieldAlert,
   SlidersHorizontal,
+  Sparkles,
   UserCog,
   XCircle,
 } from "lucide-react";
@@ -131,7 +132,7 @@ function DetailActionMenu({
     {
       key: "resolved",
       label: disabledMap.resolved ? "Resolving..." : "Resolve",
-      icon: ShieldAlert,
+      icon: Sparkles,
       onClick: onResolve,
       disabled: disabledMap.resolved,
     },
@@ -256,7 +257,7 @@ function ConversationHeader({
   const meta = hasThread ? formatConversationMeta(thread) : "Select a thread to begin";
 
   return (
-    <div className="sticky top-0 z-10 border-b border-line-soft bg-[rgba(249,250,252,0.82)] px-5 py-4 backdrop-blur supports-[backdrop-filter]:bg-[rgba(249,250,252,0.72)]">
+    <div className="sticky top-0 z-10 border-b border-line-soft bg-[rgba(255,255,255,0.62)] px-5 py-4 backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.54)]">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-text-subtle">
@@ -382,7 +383,7 @@ export default function InboxDetailPanel({
   const canMarkRead = hasThread && unreadCount > 0;
 
   return (
-    <section className="relative flex h-full min-h-0 flex-col bg-transparent">
+    <section className="relative flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
       <ConversationHeader
         thread={selectedThread}
         unreadCount={unreadCount}
@@ -422,7 +423,7 @@ export default function InboxDetailPanel({
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 flex-1 flex-col">
         <div
           ref={scrollViewportRef}
           className="min-h-0 flex-1 overflow-y-auto bg-transparent [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -430,8 +431,8 @@ export default function InboxDetailPanel({
           {surface?.loading && !hasThread ? (
             <InboxDetailSkeleton />
           ) : !hasThread ? (
-            <div className="flex h-full min-h-[280px] flex-col items-center justify-center px-8 text-center">
-              <div className="text-[18px] font-semibold tracking-[-0.02em] text-text">
+            <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-8 text-center">
+              <div className="text-[20px] font-semibold tracking-[-0.03em] text-text">
                 Conversation workspace
               </div>
               <div className="mt-3 max-w-[30rem] text-[14px] leading-7 text-text-muted">
@@ -439,8 +440,8 @@ export default function InboxDetailPanel({
               </div>
             </div>
           ) : messages.length === 0 ? (
-            <div className="flex h-full min-h-[280px] flex-col items-center justify-center px-8 text-center">
-              <div className="text-[16px] font-semibold text-text">
+            <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-8 text-center">
+              <div className="text-[17px] font-semibold text-text">
                 No messages yet
               </div>
               <div className="mt-2 max-w-[30rem] text-[14px] leading-7 text-text-muted">

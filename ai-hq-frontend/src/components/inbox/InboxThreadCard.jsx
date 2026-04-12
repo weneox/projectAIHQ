@@ -95,8 +95,8 @@ export default function InboxThreadCard({
       className={[
         "group flex w-full items-start gap-3 rounded-[18px] px-3 py-3 text-left transition-all duration-base ease-premium",
         selected
-          ? "bg-white shadow-[0_18px_50px_-34px_rgba(15,23,42,0.24)] ring-1 ring-[rgba(15,23,42,0.06)]"
-          : "hover:bg-white/72 hover:shadow-[0_16px_40px_-36px_rgba(15,23,42,0.2)]",
+          ? "bg-[rgba(37,99,235,0.08)] shadow-[0_18px_50px_-38px_rgba(37,99,235,0.18)] ring-1 ring-[rgba(37,99,235,0.12)]"
+          : "hover:bg-[rgba(255,255,255,0.72)]",
       ].join(" ")}
     >
       <div
@@ -115,7 +115,11 @@ export default function InboxThreadCard({
               {name}
             </div>
             <div className="mt-1 flex items-center gap-1.5 text-[11px] text-text-subtle">
-              {needsAttention ? <Sparkles className="h-3.5 w-3.5" /> : <CornerDownLeft className="h-3.5 w-3.5" />}
+              {needsAttention ? (
+                <Sparkles className="h-3.5 w-3.5" />
+              ) : (
+                <CornerDownLeft className="h-3.5 w-3.5" />
+              )}
               <span className="truncate">
                 {s(thread.channel_label) ||
                   s(thread.channel_type) ||

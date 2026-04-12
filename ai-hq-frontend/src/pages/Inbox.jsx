@@ -25,7 +25,6 @@ import { getAppSessionContext } from "../lib/appSession.js";
 import { s } from "../lib/appUi.js";
 import { useLaunchSliceRefreshToken } from "../lib/launchSliceRefresh.js";
 import {
-  buildChannelTruthLaunchReadiness,
   buildMetaLaunchChannelState,
   buildTelegramLaunchChannelState,
   buildWebsiteLaunchChannelState,
@@ -167,25 +166,28 @@ function buildInboxAutomationControl({
 
 function LaunchChannelPrompt({ onOpenChannels }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-line-soft px-1 pb-4">
-      <div className="min-w-0">
-        <div className="text-[14px] font-semibold text-text">
-          Connect a launch channel first.
+    <div className="border-b border-line-soft px-1 pb-4">
+      <div className="flex flex-col gap-4 rounded-[22px] border border-[rgba(217,119,6,0.16)] bg-[linear-gradient(180deg,rgba(255,251,235,0.96),rgba(255,247,237,0.92))] px-5 py-4 shadow-[0_18px_50px_-40px_rgba(217,119,6,0.26)] md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          <div className="text-[15px] font-semibold text-text">
+            Connect a launch channel first.
+          </div>
+          <div className="mt-1 text-[13px] leading-6 text-text-muted">
+            Connect Website chat, Meta, Telegram, or another launch channel to
+            activate the live inbox.
+          </div>
         </div>
-        <div className="mt-1 text-[13px] leading-6 text-text-muted">
-          Connect Website chat, Meta, Telegram, or another launch channel to activate the live inbox.
-        </div>
-      </div>
 
-      <div className="shrink-0">
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={onOpenChannels}
-          rightIcon={<ArrowRight className="h-4 w-4" />}
-        >
-          Open channels
-        </Button>
+        <div className="shrink-0">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={onOpenChannels}
+            rightIcon={<ArrowRight className="h-4 w-4" />}
+          >
+            Open channels
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -570,24 +572,10 @@ export default function Inbox() {
     [launchChannels]
   );
 
-  useMemo(
-    () =>
-      buildChannelTruthLaunchReadiness({
-        channels: launchChannels,
-        truthState: readinessState.truth,
-        surface,
-        copy: {
-          channelsPath: "/channels",
-          truthPath: "/truth",
-        },
-      }),
-    [launchChannels, readinessState.truth, surface]
-  );
-
   const surfaceNotice = buildSurfaceNotice(surface);
 
   return (
-    <PageCanvas className="flex h-[calc(100vh-104px)] min-h-[620px] flex-col gap-3">
+    <PageCanvas className="space-y-4">
       {surfaceNotice ? (
         <InlineNotice
           tone={surfaceNotice.tone}
@@ -601,66 +589,68 @@ export default function Inbox() {
         <LaunchChannelPrompt onOpenChannels={() => navigate("/channels")} />
       ) : null}
 
-      <div className="relative grid min-h-0 flex-1 grid-cols-[320px_minmax(0,1fr)] overflow-hidden bg-transparent">
-        <div className="min-h-0 overflow-hidden border-r border-line-soft bg-transparent">
-          <InboxThreadListPanel
-            threadList={threadList}
-            selectedThreadId={selectedThread?.id || ""}
-            searchQuery=""
-          />
-        </div>
-
-        <div className="min-h-0 overflow-hidden bg-transparent">
-          <InboxDetailPanel
-            selectedThread={selectedThread}
-            messages={messages}
-            outboundAttempts={threadAttemptSurface.attempts}
-            surface={detailSurface}
-            actionState={actionState}
-            markRead={markRead}
-            assignThread={assignThread}
-            activateHandoff={activateHandoff}
-            setThreadStatus={setThreadStatus}
-            onOpenDetails={() => setDetailOpen(true)}
-            automationControl={inboxAutomationControl}
-            onToggleAutomation={handleToggleInboxAutonomy}
-            composer={
-              <InboxComposer
-                embedded
-                selectedThread={selectedThread}
-                surface={composerSurface}
-                actionState={actionState}
-                replyText={replyText}
-                setReplyText={setReplyText}
-                onSend={handleSend}
-                onReleaseHandoff={handleRelease}
-              />
-            }
-          />
-        </div>
-
-        {detailOpen ? (
-          <SlidingDetailOverlay
-            open={detailOpen}
-            onClose={() => setDetailOpen(false)}
-            absolute
-            closeLabel="Close conversation details"
-            panelWidthClassName="max-w-[92vw] w-[360px]"
-            className="z-30"
-          >
-            <InboxLeadPanel
-              selectedThread={selectedThread}
-              surface={leadSurface}
-              relatedLead={relatedLead}
-              openLeadDetail={openLeadDetail}
-              operatorName={operatorName}
-              tenantKey={workspace.tenantKey}
-              wsState={wsState}
-              onClose={() => setDetailOpen(false)}
+      <div className="overflow-hidden rounded-[28px] border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.78)] shadow-[0_34px_90px_-60px_rgba(15,23,42,0.22)] backdrop-blur supports-[backdrop-filter]:bg-[rgba(255,255,255,0.7)]">
+        <div className="grid min-h-[700px] grid-cols-[360px_minmax(0,1fr)]">
+          <div className="min-h-0 border-r border-line-soft bg-[rgba(255,255,255,0.46)]">
+            <InboxThreadListPanel
+              threadList={threadList}
+              selectedThreadId={selectedThread?.id || ""}
+              searchQuery=""
             />
-          </SlidingDetailOverlay>
-        ) : null}
+          </div>
+
+          <div className="min-h-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.34),rgba(248,250,252,0.62))]">
+            <InboxDetailPanel
+              selectedThread={selectedThread}
+              messages={messages}
+              outboundAttempts={threadAttemptSurface.attempts}
+              surface={detailSurface}
+              actionState={actionState}
+              markRead={markRead}
+              assignThread={assignThread}
+              activateHandoff={activateHandoff}
+              setThreadStatus={setThreadStatus}
+              onOpenDetails={() => setDetailOpen(true)}
+              automationControl={inboxAutomationControl}
+              onToggleAutomation={handleToggleInboxAutonomy}
+              composer={
+                <InboxComposer
+                  embedded
+                  selectedThread={selectedThread}
+                  surface={composerSurface}
+                  actionState={actionState}
+                  replyText={replyText}
+                  setReplyText={setReplyText}
+                  onSend={handleSend}
+                  onReleaseHandoff={handleRelease}
+                />
+              }
+            />
+          </div>
+        </div>
       </div>
+
+      {detailOpen ? (
+        <SlidingDetailOverlay
+          open={detailOpen}
+          onClose={() => setDetailOpen(false)}
+          absolute
+          closeLabel="Close conversation details"
+          panelWidthClassName="max-w-[92vw] w-[360px]"
+          className="z-30"
+        >
+          <InboxLeadPanel
+            selectedThread={selectedThread}
+            surface={leadSurface}
+            relatedLead={relatedLead}
+            openLeadDetail={openLeadDetail}
+            operatorName={operatorName}
+            tenantKey={workspace.tenantKey}
+            wsState={wsState}
+            onClose={() => setDetailOpen(false)}
+          />
+        </SlidingDetailOverlay>
+      ) : null}
     </PageCanvas>
   );
 }

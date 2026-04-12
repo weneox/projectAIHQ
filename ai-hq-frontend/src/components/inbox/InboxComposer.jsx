@@ -88,7 +88,7 @@ function ComposerBody({
         ) : null}
       </div>
 
-      <div className="flex items-end gap-3 rounded-[24px] bg-white/88 px-4 py-3 shadow-[0_18px_50px_-34px_rgba(15,23,42,0.24)] ring-1 ring-[rgba(15,23,42,0.06)] backdrop-blur supports-[backdrop-filter]:bg-white/78">
+      <div className="flex items-end gap-3 rounded-[26px] bg-white/88 px-4 py-3 shadow-[0_24px_70px_-44px_rgba(15,23,42,0.28)] ring-1 ring-[rgba(15,23,42,0.06)] backdrop-blur supports-[backdrop-filter]:bg-white/76">
         <div className="min-w-0 flex-1">
           <textarea
             value={replyText}
@@ -102,7 +102,7 @@ function ComposerBody({
             aria-label={
               hasThread ? "Reply to conversation" : "Select a conversation first"
             }
-            className="block min-h-[56px] max-h-[132px] w-full resize-none border-0 bg-transparent px-0 py-1 text-[14px] leading-7 text-text outline-none placeholder:text-text-subtle disabled:cursor-not-allowed"
+            className="block min-h-[58px] max-h-[132px] w-full resize-none border-0 bg-transparent px-0 py-1 text-[14px] leading-7 text-text outline-none placeholder:text-text-subtle disabled:cursor-not-allowed"
           />
         </div>
 
@@ -115,7 +115,7 @@ function ComposerBody({
             "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-all duration-base ease-premium",
             !hasThread || !replyText.trim() || sending
               ? "cursor-not-allowed bg-[rgba(37,99,235,0.18)] text-white/90"
-              : "bg-brand text-white shadow-[0_18px_38px_-22px_rgba(var(--color-brand),0.75)] hover:translate-y-[-1px]",
+              : "bg-brand text-white shadow-[0_20px_40px_-22px_rgba(var(--color-brand),0.72)] hover:translate-y-[-1px]",
           ].join(" ")}
         >
           <Send className="h-4 w-4" />
@@ -149,14 +149,14 @@ export default function InboxComposer({
 
   if (embedded) {
     return (
-      <div className="border-t border-line-soft bg-[rgba(249,250,252,0.78)] px-5 py-4 backdrop-blur supports-[backdrop-filter]:bg-[rgba(249,250,252,0.7)]">
+      <div className="bg-[linear-gradient(180deg,rgba(248,250,252,0),rgba(248,250,252,0.72)_20%,rgba(248,250,252,0.96)_100%)] px-5 pb-5 pt-6">
         <div className="mx-auto w-full max-w-[920px]">{content}</div>
       </div>
     );
   }
 
   return (
-    <section className="border-t border-line-soft bg-[rgba(249,250,252,0.78)] px-5 py-4 backdrop-blur supports-[backdrop-filter]:bg-[rgba(249,250,252,0.7)]">
+    <section className="bg-[linear-gradient(180deg,rgba(248,250,252,0),rgba(248,250,252,0.72)_20%,rgba(248,250,252,0.96)_100%)] px-5 pb-5 pt-6">
       <div className="mx-auto w-full max-w-[920px]">{content}</div>
     </section>
   );

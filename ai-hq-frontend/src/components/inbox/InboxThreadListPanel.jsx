@@ -3,7 +3,6 @@ import { ChevronDown, Funnel, Search } from "lucide-react";
 
 import InboxThreadCard from "./InboxThreadCard.jsx";
 import { InboxThreadListSkeleton } from "./InboxLoadingSurface.jsx";
-import { InputGroup } from "../ui/Input.jsx";
 
 const TOP_TABS = [
   { label: "Primary", value: "all" },
@@ -242,7 +241,7 @@ export default function InboxThreadListPanel({
       aria-labelledby="inbox-thread-list-title"
       className="flex h-full min-h-0 flex-col bg-transparent"
     >
-      <div className="sticky top-0 z-10 bg-[rgba(249,250,252,0.78)] px-4 pb-4 pt-1 backdrop-blur supports-[backdrop-filter]:bg-[rgba(249,250,252,0.68)]">
+      <div className="border-b border-line-soft px-4 pb-4 pt-4">
         <div className="flex items-start justify-between gap-3">
           <div className="relative min-w-0 flex-1" ref={filterAnchorRef}>
             <button
@@ -312,15 +311,21 @@ export default function InboxThreadListPanel({
         </div>
 
         <div className="pt-4">
-          <InputGroup
-            value={localSearch}
-            onChange={(event) => setLocalSearch(event.target.value)}
-            placeholder="Search conversations"
-            aria-label="Search conversations"
-            leftIcon={<Search className="h-4 w-4" />}
-            appearance="quiet"
-            className="bg-white"
-          />
+          <label className="sr-only" htmlFor="inbox-thread-search">
+            Search conversations
+          </label>
+
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-subtle" />
+            <input
+              id="inbox-thread-search"
+              value={localSearch}
+              onChange={(event) => setLocalSearch(event.target.value)}
+              placeholder="Search conversations"
+              aria-label="Search conversations"
+              className="block h-11 w-full rounded-[16px] border border-line bg-white pl-10 pr-3 text-[14px] text-text outline-none transition-colors placeholder:text-text-subtle focus:border-brand"
+            />
+          </div>
 
           {threadList?.deepLinkNotice ? (
             <p className="pt-2 text-[12px] leading-5 text-warning">
@@ -330,7 +335,7 @@ export default function InboxThreadListPanel({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-3">
         {threadList?.surface?.loading && !filteredThreads.length ? (
           <InboxThreadListSkeleton />
         ) : !filteredThreads.length ? (
