@@ -88,6 +88,7 @@ describe("InboxDetailPanel", () => {
     render(<InboxDetailPanel {...props} />);
 
     expect(screen.getByText(/alex morgan/i)).toBeInTheDocument();
+
     expect(
       screen.getByRole("switch", { name: /enable inbox automatic replies/i })
     ).toBeInTheDocument();
@@ -105,10 +106,17 @@ describe("InboxDetailPanel", () => {
     ).toBeInTheDocument();
 
     expect(screen.getByText(/composer slot/i)).toBeInTheDocument();
-    expect(screen.getByText(/your appointment request is on the way/i)).toBeInTheDocument();
-    expect(screen.getByText(/assigned/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /open detail drawer/i }));
+    expect(
+      screen.getByText(/your appointment request is on the way/i)
+    ).toBeInTheDocument();
+
+    expect(screen.getByText(/^thread assigned\.$/i)).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /open detail drawer/i })
+    );
+
     expect(props.onOpenDetails).toHaveBeenCalledTimes(1);
   });
 
