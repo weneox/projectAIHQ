@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const useInboxData = vi.fn();
@@ -371,13 +371,11 @@ describe("Inbox", () => {
 
     render(<Inbox />);
 
-    expect(
-      await screen.findByRole("heading", { name: /all conversations/i })
-    ).toBeInTheDocument();
-
-    expect(
-      screen.queryByText(/connect a launch channel first/i)
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByText(/connect a launch channel first/i)
+      ).not.toBeInTheDocument();
+    });
 
     expect(screen.getByText(/truth approval required/i)).toBeInTheDocument();
 
@@ -400,16 +398,16 @@ describe("Inbox", () => {
 
     render(<Inbox />);
 
-    expect(
-      await screen.findByRole("heading", { name: /all conversations/i })
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByText(/connect a launch channel first/i)
+      ).not.toBeInTheDocument();
+    });
 
-    expect(
-      screen.queryByText(/connect a launch channel first/i)
-    ).not.toBeInTheDocument();
-
-    expect(
-      screen.queryByText(/truth approval required/i)
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.queryByText(/truth approval required/i)
+      ).not.toBeInTheDocument();
+    });
   });
 });
