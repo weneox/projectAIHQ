@@ -47,6 +47,7 @@ function normalizeReasonCode(reasonCode = "") {
     case "source_snapshot_mismatch":
     case "source_profile_mismatch":
     case "source_capabilities_mismatch":
+    case "published_truth_version_mismatch":
       return "truth_version_drift";
     case "approved_truth_unavailable":
       return "approval_required";
@@ -70,6 +71,8 @@ function normalizeReasonCode(reasonCode = "") {
       return "repair_pending";
     case "consumer_contract_mismatch":
       return "consumer_contract_mismatch";
+    case "low_projection_confidence":
+      return "low_projection_confidence";
     default:
       return lower(reasonCode);
   }
@@ -151,6 +154,10 @@ function buildRepairActions({
       case "repair_pending":
         actions.push("refresh_projection");
         break;
+      case "low_projection_confidence":
+        actions.push("review_truth_quality");
+        actions.push("refresh_projection");
+        break;
       default:
         break;
     }
@@ -201,8 +208,8 @@ function buildLastKnownGood({
       Number.isFinite(Number(projection.readiness_score))
         ? Number(projection.readiness_score)
         : Number.isFinite(Number(sourceSummary.readinessScore))
-        ? Number(sourceSummary.readinessScore)
-        : null,
+          ? Number(sourceSummary.readinessScore)
+          : null,
     confidenceLabel: s(
       projection.confidence_label || sourceSummary.confidenceLabel
     ),
@@ -210,8 +217,8 @@ function buildLastKnownGood({
       Number.isFinite(Number(projection.confidence))
         ? Number(projection.confidence)
         : Number.isFinite(Number(sourceSummary.confidence))
-        ? Number(sourceSummary.confidence)
-        : null,
+          ? Number(sourceSummary.confidence)
+          : null,
     diagnosticOnly: true,
     usableAsAuthority: false,
   };
@@ -359,6 +366,17 @@ export function buildRuntimeProjectionHealthModel({
     reasonCodes.push("authority_invalid");
   }
 
+  const projectionConfidence = num(projection.confidence, 0);
+  const hasLowProjectionConfidence =
+    projectionConfidence > 0 && projectionConfidence < 0.6;
+
+  if (
+    hasLowProjectionConfidence &&
+    !reasonCodes.includes("low_projection_confidence")
+  ) {
+    reasonCodes.push("low_projection_confidence");
+  }
+
   const normalizedReasons = uniqStrings(reasonCodes);
   let status = "healthy";
 
@@ -383,7 +401,7 @@ export function buildRuntimeProjectionHealthModel({
   } else if (
     normalizedReasons.includes("source_dependency_failed") ||
     normalizedReasons.includes("degraded") ||
-    (num(projection.confidence, 0) > 0 && num(projection.confidence, 0) < 0.6)
+    normalizedReasons.includes("low_projection_confidence")
   ) {
     status = "degraded";
   }

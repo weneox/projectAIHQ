@@ -14,6 +14,79 @@ function uniqStrings(values = []) {
   return [...new Set(arr(values).map((item) => s(item)).filter(Boolean))];
 }
 
+function clamp01(value) {
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized)) return 0;
+  return Math.max(0, Math.min(1, normalized));
+}
+
+function hasMeaningfulProfileData(profile = {}) {
+  const value = obj(profile);
+
+  return Boolean(
+    s(
+      value.companyName ||
+        value.company_name ||
+        value.displayName ||
+        value.display_name ||
+        value.summaryShort ||
+        value.summary_short ||
+        value.summaryLong ||
+        value.summary_long ||
+        value.valueProposition ||
+        value.value_proposition ||
+        value.websiteUrl ||
+        value.website_url ||
+        value.industryKey ||
+        value.industry_key
+    )
+  );
+}
+
+function hasCapabilitySignals(capabilities = {}) {
+  const value = obj(capabilities);
+
+  if (Object.keys(value).length === 0) return false;
+
+  const textSignals = [
+    value.replyStyle,
+    value.reply_style,
+    value.replyLength,
+    value.reply_length,
+    value.ctaStyle,
+    value.cta_style,
+    value.primaryLanguage,
+    value.primary_language,
+    value.bookingMode,
+    value.booking_mode,
+    value.pricingMode,
+    value.pricing_mode,
+  ].some((item) => !!s(item));
+
+  const booleanSignals = [
+    value.supportsInstagramDm,
+    value.supports_instagram_dm,
+    value.supportsFacebookMessenger,
+    value.supports_facebook_messenger,
+    value.supportsWhatsapp,
+    value.supports_whatsapp,
+    value.supportsComments,
+    value.supports_comments,
+    value.supportsVoice,
+    value.supports_voice,
+    value.canCaptureLeads,
+    value.can_capture_leads,
+    value.canOfferConsultation,
+    value.can_offer_consultation,
+    value.canOfferBooking,
+    value.can_offer_booking,
+    value.handoffEnabled,
+    value.handoff_enabled,
+  ].some((item) => typeof item === "boolean");
+
+  return textSignals || booleanSignals || Object.keys(value).length > 2;
+}
+
 export function buildReadiness({
   profile,
   contacts,
@@ -59,28 +132,39 @@ export function buildConfidence({
   faq,
   policies,
 }) {
-  const synthesisConfidence = num(synthesis?.confidence, 0);
-  const profileConfidence = num(profile?.confidence, 0);
-  const capabilityWeight = capabilities ? 0.08 : 0;
-  const coverageWeight =
-    (arr(services).length > 0 ? 0.10 : 0) +
-    (arr(contacts).length > 0 ? 0.08 : 0) +
-    (arr(faq).length > 0 ? 0.07 : 0) +
-    (arr(policies).length > 0 ? 0.07 : 0);
+  const synthesisConfidence = clamp01(num(synthesis?.confidence, 0));
+  const profileConfidence = clamp01(num(profile?.confidence, 0));
 
-  const value = Math.max(
-    0,
-    Math.min(
-      1,
-      Number(
-        (
-          synthesisConfidence * 0.45 +
-          profileConfidence * 0.35 +
-          capabilityWeight +
-          coverageWeight
-        ).toFixed(4)
-      )
-    )
+  const profilePresent = hasMeaningfulProfileData(profile);
+  const capabilitiesPresent = hasCapabilitySignals(capabilities);
+  const servicesPresent = arr(services).length > 0;
+  const contactsPresent = arr(contacts).length > 0;
+  const faqPresent = arr(faq).length > 0;
+  const policiesPresent = arr(policies).length > 0;
+
+  const structuredCoverage = clamp01(
+    (profilePresent ? 0.24 : 0) +
+      (capabilitiesPresent ? 0.14 : 0) +
+      (servicesPresent ? 0.20 : 0) +
+      (contactsPresent ? 0.14 : 0) +
+      (faqPresent ? 0.14 : 0) +
+      (policiesPresent ? 0.14 : 0)
+  );
+
+  let evidenceScore = 0;
+
+  if (synthesisConfidence > 0 || profileConfidence > 0) {
+    evidenceScore = clamp01(
+      synthesisConfidence * 0.55 + profileConfidence * 0.45
+    );
+  } else if (profilePresent && capabilitiesPresent) {
+    evidenceScore = 0.58;
+  } else if (profilePresent) {
+    evidenceScore = 0.42;
+  }
+
+  const value = clamp01(
+    Number((structuredCoverage * 0.55 + evidenceScore * 0.45).toFixed(4))
   );
 
   let label = "low";

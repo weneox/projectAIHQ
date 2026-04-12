@@ -151,7 +151,10 @@ export function createTenantRuntimeAuthorityUnavailableError({
     authority.reason || reason || "tenant_runtime_authority_unavailable"
   );
   error.reasonCode = s(
-    authority.reasonCode || authority.reason || reason || "tenant_runtime_authority_unavailable"
+    authority.reasonCode ||
+      authority.reason ||
+      reason ||
+      "tenant_runtime_authority_unavailable"
   );
   error.authority = authority;
   error.runtimeAuthority = {
@@ -171,10 +174,16 @@ export function createTenantRuntimeAuthorityUnavailableError({
     freshnessReasons: arr(obj(freshness).reasons),
     health: obj(obj(freshness).health),
     reasonCode: s(
-      authority.reasonCode || authority.reason || reason || "tenant_runtime_authority_unavailable"
+      authority.reasonCode ||
+        authority.reason ||
+        reason ||
+        "tenant_runtime_authority_unavailable"
     ),
     reason: s(
-      authority.reason || authority.reasonCode || reason || "tenant_runtime_authority_unavailable"
+      authority.reason ||
+        authority.reasonCode ||
+        reason ||
+        "tenant_runtime_authority_unavailable"
     ),
   };
 
@@ -299,6 +308,25 @@ function assertSavedProjectionOrThrow({
   });
 }
 
+function resolveProjectionHealthContext({
+  graph = null,
+  latestTruthVersion = undefined,
+  activeReviewSession = undefined,
+} = {}) {
+  const graphValue = obj(graph);
+
+  return {
+    latestTruthVersion:
+      latestTruthVersion !== undefined
+        ? latestTruthVersion
+        : graphValue.publishedTruthVersion || null,
+    activeReviewSession:
+      activeReviewSession !== undefined
+        ? activeReviewSession
+        : graphValue.activeReviewSession || null,
+  };
+}
+
 export function assessTenantRuntimeProjectionFreshness(
   {
     runtimeProjection = null,
@@ -318,8 +346,8 @@ export function assessTenantRuntimeProjectionFreshness(
     expectedProjection && typeof expectedProjection === "object"
       ? expectedProjection
       : hasCanonicalTenant
-      ? buildTenantRuntimeProjection(graphValue)
-      : null;
+        ? buildTenantRuntimeProjection(graphValue)
+        : null;
   const expectedPublishedTruthVersionId = s(graphValue?.publishedTruthVersion?.id);
   const currentPublishedTruthVersionId =
     normalizePublishedTruthVersionId(current);
@@ -723,15 +751,17 @@ export async function getTenantRuntimeProjectionHealth(
     tenantKey = "",
     runtimeProjection = null,
     freshness = null,
-    latestTruthVersion = null,
-    activeReviewSession = null,
+    latestTruthVersion = undefined,
+    activeReviewSession = undefined,
     authority = null,
     markStale = true,
+    graph = null,
   } = {},
   dbOrClient = db
 ) {
   const client = pickDb(dbOrClient);
   const tenant = await resolveTenant(client, { tenantId, tenantKey });
+
   if (!tenant) {
     return buildRuntimeProjectionHealthModel({
       runtimeProjection: null,
@@ -741,8 +771,10 @@ export async function getTenantRuntimeProjectionHealth(
         tenantId,
         tenantKey,
       },
-      latestTruthVersion,
-      activeReviewSession,
+      latestTruthVersion:
+        latestTruthVersion !== undefined ? latestTruthVersion : null,
+      activeReviewSession:
+        activeReviewSession !== undefined ? activeReviewSession : null,
       authority,
     });
   }
@@ -754,6 +786,25 @@ export async function getTenantRuntimeProjectionHealth(
       client
     ));
 
+  let resolvedGraph = obj(graph);
+  const needsGraphForContext =
+    latestTruthVersion === undefined || activeReviewSession === undefined;
+
+  if (!Object.keys(resolvedGraph).length && (needsGraphForContext || !freshness)) {
+    resolvedGraph = obj(
+      await loadTenantCanonicalGraph(
+        { tenantId: tenant.id, tenantKey: tenant.tenant_key },
+        client
+      )
+    );
+  }
+
+  const healthContext = resolveProjectionHealthContext({
+    graph: resolvedGraph,
+    latestTruthVersion,
+    activeReviewSession,
+  });
+
   const resolvedFreshness =
     freshness ||
     (await getTenantRuntimeProjectionFreshness(
@@ -762,33 +813,34 @@ export async function getTenantRuntimeProjectionHealth(
         tenantKey: tenant.tenant_key,
         runtimeProjection: current,
         markStale,
+        graph: resolvedGraph,
+        latestTruthVersion: healthContext.latestTruthVersion,
+        activeReviewSession: healthContext.activeReviewSession,
       },
       client
     ));
 
-  const [latestRun, latestSuccessRun, latestFailureRun] = await Promise.all([
-    getLatestTenantRuntimeProjectionRun(
-      { tenantId: tenant.id, tenantKey: tenant.tenant_key },
-      client
-    ),
-    getLatestTenantRuntimeProjectionRunByStatus(
-      { tenantId: tenant.id, tenantKey: tenant.tenant_key, statuses: ["success"] },
-      client
-    ),
-    getLatestTenantRuntimeProjectionRunByStatus(
-      { tenantId: tenant.id, tenantKey: tenant.tenant_key, statuses: ["failed", "error"] },
-      client
-    ),
-  ]);
-
   return buildRuntimeProjectionHealthModel({
     runtimeProjection: current,
     freshness: resolvedFreshness,
-    latestRun,
-    latestSuccessRun,
-    latestFailureRun,
-    latestTruthVersion,
-    activeReviewSession,
+    latestRun: await getLatestTenantRuntimeProjectionRun(
+      { tenantId: tenant.id, tenantKey: tenant.tenant_key },
+      client
+    ),
+    latestSuccessRun: await getLatestTenantRuntimeProjectionRunByStatus(
+      { tenantId: tenant.id, tenantKey: tenant.tenant_key, statuses: ["success"] },
+      client
+    ),
+    latestFailureRun: await getLatestTenantRuntimeProjectionRunByStatus(
+      {
+        tenantId: tenant.id,
+        tenantKey: tenant.tenant_key,
+        statuses: ["failed", "error"],
+      },
+      client
+    ),
+    latestTruthVersion: healthContext.latestTruthVersion,
+    activeReviewSession: healthContext.activeReviewSession,
     authority,
   });
 }
@@ -799,6 +851,9 @@ export async function getTenantRuntimeProjectionFreshness(
     tenantKey = "",
     runtimeProjection = null,
     markStale = true,
+    graph = null,
+    latestTruthVersion = undefined,
+    activeReviewSession = undefined,
   } = {},
   dbOrClient = db
 ) {
@@ -813,19 +868,23 @@ export async function getTenantRuntimeProjectionFreshness(
       client
     ));
 
-  const graph = await loadTenantCanonicalGraph(
-    { tenantId: tenant.id, tenantKey: tenant.tenant_key },
-    client
-  );
+  const resolvedGraph =
+    Object.keys(obj(graph)).length > 0
+      ? obj(graph)
+      : obj(
+          await loadTenantCanonicalGraph(
+            { tenantId: tenant.id, tenantKey: tenant.tenant_key },
+            client
+          )
+        );
 
-  const graphValue = obj(graph);
-  const expectedProjection = s(graphValue?.tenant?.id)
-    ? buildTenantRuntimeProjection(graphValue)
+  const expectedProjection = s(resolvedGraph?.tenant?.id)
+    ? buildTenantRuntimeProjection(resolvedGraph)
     : null;
 
   const freshness = assessTenantRuntimeProjectionFreshness({
     runtimeProjection: current,
-    graph: graphValue,
+    graph: resolvedGraph,
     expectedProjection,
   });
 
@@ -836,13 +895,22 @@ export async function getTenantRuntimeProjectionFreshness(
     });
   }
 
+  const healthContext = resolveProjectionHealthContext({
+    graph: resolvedGraph,
+    latestTruthVersion,
+    activeReviewSession,
+  });
+
   const health = await getTenantRuntimeProjectionHealth(
     {
       tenantId: tenant.id,
       tenantKey: tenant.tenant_key,
       runtimeProjection: current,
       freshness,
+      latestTruthVersion: healthContext.latestTruthVersion,
+      activeReviewSession: healthContext.activeReviewSession,
       markStale: false,
+      graph: resolvedGraph,
     },
     client
   );

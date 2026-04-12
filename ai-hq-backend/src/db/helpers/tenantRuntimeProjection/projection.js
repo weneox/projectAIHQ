@@ -16,16 +16,15 @@ import {
 
 export function buildTenantRuntimeProjection(graph) {
   const publishedTruthVersion = graph?.publishedTruthVersion || null;
-  const publishedProfile =
-    publishedTruthVersion?.profile_snapshot_json || null;
+  const publishedTruthVersionId = s(publishedTruthVersion?.id);
+  const publishedProfile = publishedTruthVersion?.profile_snapshot_json || null;
   const publishedCapabilities =
     publishedTruthVersion?.capabilities_snapshot_json || null;
+
   const profileSource = publishedProfile || graph.profile;
   const capabilitiesSource = publishedCapabilities || graph.capabilities;
-  const profile = normalizeProfile(
-    graph.tenant,
-    profileSource
-  );
+
+  const profile = normalizeProfile(graph.tenant, profileSource);
   const capabilities = normalizeCapabilities(
     capabilitiesSource,
     publishedProfile || profile
@@ -47,6 +46,7 @@ export function buildTenantRuntimeProjection(graph) {
   const publishedTruthFacts = arr(graph.publishedTruthFacts);
   const operationalFacts = arr(graph.operationalFacts ?? graph.facts);
   const combinedFacts = [...publishedTruthFacts, ...operationalFacts];
+
   const operationalChannelPolicies = arr(
     graph.operationalChannelPolicies ?? graph.channelPolicies
   );
@@ -134,6 +134,7 @@ export function buildTenantRuntimeProjection(graph) {
     capabilities,
     operationalChannelPolicies
   );
+
   const behaviorJson = buildBehaviorJson(
     profile,
     capabilities,
@@ -175,7 +176,43 @@ export function buildTenantRuntimeProjection(graph) {
     readiness_label: readiness.label,
     confidence: confidence.score,
     confidence_label: confidence.label,
+
     metadata_json: {
+      publishedTruthVersionId,
+      truthSource: publishedTruthVersionId
+        ? "published_truth_version"
+        : "canonical_live_rows",
+      sourceRefs: {
+        synthesisId: s(graph.synthesis?.id),
+        profileId:
+          s(publishedTruthVersion?.business_profile_id) || s(graph.profile?.id),
+        capabilitiesId:
+          s(publishedTruthVersion?.business_capabilities_id) ||
+          s(graph.capabilities?.id),
+      },
+      coverage: {
+        contacts: arr(graph.contacts).length,
+        locations: arr(graph.locations).length,
+        services: arr(graph.services).length,
+        products: arr(graph.products).length,
+        faq: arr(graph.faq).length,
+        policies: arr(graph.policies).length,
+        channels: arr(graph.channels).length,
+        knowledge: arr(graph.knowledge).length,
+        publishedTruthFacts: publishedTruthFacts.length,
+        operationalFacts: operationalFacts.length,
+        retrievalCorpus: retrievalCorpus.length,
+      },
+      confidenceInputs: {
+        synthesisConfidence:
+          typeof graph?.synthesis?.confidence === "number"
+            ? graph.synthesis.confidence
+            : null,
+        profileConfidence:
+          typeof profileSource?.confidence === "number"
+            ? profileSource.confidence
+            : null,
+      },
       publishedTruthFacts,
       operationalFactsCount: operationalFacts.length,
       operationalConfig: {
@@ -196,7 +233,7 @@ export function buildTenantRuntimeProjection(graph) {
       readiness.score >= 0.65
         ? "ready"
         : readiness.score >= 0.35
-        ? "draft"
-        : "draft",
+          ? "draft"
+          : "draft",
   };
 }
