@@ -85,7 +85,7 @@ function formatConversationMeta(thread = {}) {
   if (channel) parts.push(channel);
   if (state && state.toLowerCase() !== "open") parts.push(state);
 
-  return parts.filter(Boolean).join(" | ");
+  return parts.filter(Boolean).join(" • ");
 }
 
 function QuietIconButton({
@@ -271,7 +271,9 @@ function ConversationTopBar({
           )}
 
           <div className="min-w-0">
-            <div className="truncate text-[15px] font-semibold text-text">{name}</div>
+            <div className="truncate text-[15px] font-semibold text-text">
+              {name}
+            </div>
             {meta ? (
               <div className="truncate text-[12px] text-text-muted">{meta}</div>
             ) : null}
@@ -319,36 +321,36 @@ function ConversationTopBar({
   );
 }
 
-function ConversationProfileIntro({ thread }) {
-  const name = resolveDisplayName(thread);
-  const meta = formatConversationMeta(thread);
-  const avatarUrl = resolveAvatarUrl(thread);
+function ConversationContextStrip({ thread }) {
+  const channel =
+    s(thread.channel_label) ||
+    s(thread.channel_type) ||
+    s(thread.provider) ||
+    s(thread.source_type) ||
+    "Conversation";
+
+  const status =
+    s(thread.status_label) ||
+    s(thread.status) ||
+    (thread?.handoff_active ? "handoff" : "open");
+
+  const unreadCount = Number(thread?.unread_count || 0);
 
   return (
-    <div className="flex flex-col items-center border-b border-line-soft px-6 pb-6 pt-6 text-center">
-      {avatarUrl ? (
-        <img
-          src={avatarUrl}
-          alt={name}
-          className="h-16 w-16 rounded-full object-cover"
-          loading="lazy"
-        />
-      ) : (
-        <div
-          className={[
-            "flex h-16 w-16 items-center justify-center rounded-full text-[20px] font-semibold",
-            avatarTone(name),
-          ].join(" ")}
-        >
-          {initialsFromName(name)}
-        </div>
-      )}
-
-      <div className="mt-3 text-[16px] font-semibold text-text">{name}</div>
-
-      {meta ? (
-        <div className="mt-1 text-[13px] text-text-muted">{meta}</div>
-      ) : null}
+    <div className="border-b border-line-soft bg-surface px-5 py-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-5 text-text-subtle">
+        <span>
+          <span className="text-text-muted">Channel:</span> {channel}
+        </span>
+        <span className="text-slate-300">•</span>
+        <span>
+          <span className="text-text-muted">Status:</span> {status}
+        </span>
+        <span className="text-slate-300">•</span>
+        <span>
+          <span className="text-text-muted">Unread:</span> {unreadCount}
+        </span>
+      </div>
     </div>
   );
 }
@@ -373,8 +375,15 @@ export default function InboxDetailPanel({
 
   const [openMenuThreadId, setOpenMenuThreadId] = useState("");
   const menuAnchorRef = useRef(null);
+  const scrollViewportRef = useRef(null);
 
-  const menuOpen = Boolean(currentThreadId) && openMenuThreadId === currentThreadId;
+  const menuOpen =
+    Boolean(currentThreadId) && openMenuThreadId === currentThreadId;
+
+  useEffect(() => {
+    if (!scrollViewportRef.current) return;
+    scrollViewportRef.current.scrollTop = scrollViewportRef.current.scrollHeight;
+  }, [currentThreadId, messages.length]);
 
   function closeMenu() {
     setOpenMenuThreadId("");
@@ -385,13 +394,13 @@ export default function InboxDetailPanel({
     setOpenMenuThreadId((prev) => (prev === currentThreadId ? "" : currentThreadId));
   }
 
-  const showSurfaceBanner = hasThread && (
-    surface?.unavailable ||
-    surface?.availability === "unavailable" ||
-    surface?.error ||
-    surface?.saveError ||
-    surface?.saveSuccess
-  );
+  const showSurfaceBanner =
+    hasThread &&
+    (surface?.unavailable ||
+      surface?.availability === "unavailable" ||
+      surface?.error ||
+      surface?.saveError ||
+      surface?.saveSuccess);
 
   const attemptsByCorrelation = useMemo(
     () => indexAttemptsByMessageCorrelation(outboundAttempts),
@@ -473,7 +482,10 @@ export default function InboxDetailPanel({
       ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 overflow-y-auto bg-surface-muted [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div
+          ref={scrollViewportRef}
+          className="min-h-0 flex-1 overflow-y-auto bg-surface-muted [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
           {surface?.loading && !hasThread ? (
             <InboxDetailSkeleton />
           ) : !hasThread ? (
@@ -487,7 +499,7 @@ export default function InboxDetailPanel({
             </div>
           ) : (
             <div>
-              <ConversationProfileIntro thread={selectedThread} />
+              <ConversationContextStrip thread={selectedThread} />
 
               {messages.length === 0 ? (
                 <div className="px-6 py-10 text-center">
@@ -499,7 +511,7 @@ export default function InboxDetailPanel({
                   </div>
                 </div>
               ) : (
-                <div className="space-y-4 px-6 py-6">
+                <div className="space-y-3 px-5 py-5">
                   {messages.map((message) => (
                     <InboxMessageBubble
                       key={message.id}

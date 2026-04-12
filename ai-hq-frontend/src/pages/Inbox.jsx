@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, PanelRightOpen } from "lucide-react";
 
@@ -7,7 +7,10 @@ import {
   getTelegramChannelStatus,
   getWebsiteWidgetStatus,
 } from "../api/channelConnect.js";
-import { getSettingsTrustView } from "../api/trust.js";
+import {
+  getSettingsTrustView,
+  saveSettingsTrustPolicyControl,
+} from "../api/trust.js";
 import InboxComposer from "../components/inbox/InboxComposer.jsx";
 import { useInboxComposerSurface } from "../components/inbox/hooks/useInboxComposerSurface.js";
 import { useInboxThreadListSurface } from "../components/inbox/hooks/useInboxThreadListSurface.js";
@@ -43,6 +46,12 @@ const EMPTY_READINESS_STATE = {
   meta: null,
   telegram: null,
   website: null,
+};
+
+const EMPTY_TRUST_STATE = {
+  tenantKey: "",
+  loading: false,
+  trustView: null,
 };
 
 function buildSurfaceNotice(surface = {}) {
@@ -107,6 +116,87 @@ function MetaLine({
   );
 }
 
+function resolveInboxPolicyControl(trustView = null) {
+  const controls = trustView?.summary?.policyControls || {};
+  const tenantDefault = controls?.tenantDefault || null;
+  const scopedItems = Array.isArray(controls?.items) ? controls.items : [];
+  const inboxControl =
+    scopedItems.find((item) => s(item?.surface).toLowerCase() === "inbox") ||
+    tenantDefault ||
+    null;
+
+  const availableModes = Array.isArray(inboxControl?.availableModes)
+    ? inboxControl.availableModes
+    : [];
+
+  const controlMode = s(inboxControl?.controlMode || "autonomy_enabled").toLowerCase();
+  const enableRule = availableModes.find(
+    (item) => s(item?.mode).toLowerCase() === "autonomy_enabled"
+  );
+  const disableRule = availableModes.find(
+    (item) => s(item?.mode).toLowerCase() === "operator_only_mode"
+  );
+
+  return {
+    controlMode,
+    enabled: controlMode === "autonomy_enabled",
+    changedAt: s(inboxControl?.changedAt),
+    changedBy: s(inboxControl?.changedBy),
+    policyReason: s(inboxControl?.policyReason),
+    operatorNote: s(inboxControl?.operatorNote),
+    canEnable: enableRule ? enableRule.allowed === true : true,
+    canDisable: disableRule ? disableRule.allowed === true : true,
+    enableUnavailableReason: s(enableRule?.unavailableReason),
+    disableUnavailableReason: s(disableRule?.unavailableReason),
+  };
+}
+
+function buildInboxAutomationControl({
+  workspaceReady = false,
+  trustLoading = false,
+  trustView = null,
+  mutation = {},
+}) {
+  const resolved = resolveInboxPolicyControl(trustView);
+  const enabled = resolved.enabled;
+  const saving = mutation?.saving === true;
+
+  const targetCanApply = enabled ? resolved.canDisable : resolved.canEnable;
+  const unavailableReason = enabled
+    ? resolved.disableUnavailableReason
+    : resolved.enableUnavailableReason;
+
+  const statusLabel =
+    resolved.controlMode === "autonomy_enabled"
+      ? "Autonomy enabled"
+      : resolved.controlMode === "operator_only_mode"
+        ? "Operator only"
+        : resolved.controlMode
+          ? resolved.controlMode
+              .replace(/[_-]+/g, " ")
+              .replace(/\b\w/g, (char) => char.toUpperCase())
+          : "Unknown";
+
+  return {
+    loading: !workspaceReady || trustLoading,
+    saving,
+    enabled,
+    controlMode: resolved.controlMode,
+    statusLabel,
+    disabled:
+      !workspaceReady ||
+      trustLoading ||
+      saving ||
+      targetCanApply === false,
+    disabledReason: unavailableReason,
+    saveError: s(mutation?.error),
+    saveSuccess: s(mutation?.success),
+    changedAt: resolved.changedAt,
+    changedBy: resolved.changedBy,
+    policyReason: resolved.policyReason,
+  };
+}
+
 export default function Inbox() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -125,6 +215,13 @@ export default function Inbox() {
   });
   const [resolvedReadinessState, setResolvedReadinessState] =
     useState(EMPTY_READINESS_STATE);
+  const [resolvedTrustState, setResolvedTrustState] =
+    useState(EMPTY_TRUST_STATE);
+  const [automationMutation, setAutomationMutation] = useState({
+    saving: false,
+    error: "",
+    success: "",
+  });
 
   const requestedThreadId = String(
     location.state?.selectedThreadId || searchParams.get("threadId") || ""
@@ -156,19 +253,63 @@ export default function Inbox() {
     };
   }, [refreshToken, workspace.ready, workspace.tenantKey]);
 
+  const loadOperationalState = useCallback(async () => {
+    if (!workspace.ready) return;
+
+    setResolvedTrustState((prev) => ({
+      ...prev,
+      tenantKey: workspace.tenantKey,
+      loading: true,
+    }));
+
+    const results = await Promise.allSettled([
+      getSettingsTrustView({ limit: 8 }),
+      getMetaChannelStatus(),
+      getTelegramChannelStatus(),
+      getWebsiteWidgetStatus(),
+    ]);
+
+    setResolvedReadinessState({
+      tenantKey: workspace.tenantKey,
+      truth:
+        results[0].status === "fulfilled"
+          ? buildTruthOperationalState(results[0].value)
+          : buildTruthOperationalState(null),
+      meta:
+        results[1].status === "fulfilled"
+          ? buildMetaLaunchChannelState(results[1].value)
+          : buildMetaLaunchChannelState({}),
+      telegram:
+        results[2].status === "fulfilled"
+          ? buildTelegramLaunchChannelState(results[2].value)
+          : buildTelegramLaunchChannelState({}),
+      website:
+        results[3].status === "fulfilled"
+          ? buildWebsiteLaunchChannelState(results[3].value)
+          : buildWebsiteLaunchChannelState({}),
+    });
+
+    setResolvedTrustState({
+      tenantKey: workspace.tenantKey,
+      loading: false,
+      trustView: results[0].status === "fulfilled" ? results[0].value : null,
+    });
+  }, [workspace.ready, workspace.tenantKey]);
+
   useEffect(() => {
     if (!workspace.ready) return undefined;
 
     let alive = true;
 
     Promise.allSettled([
-      getSettingsTrustView({ limit: 4 }),
+      getSettingsTrustView({ limit: 8 }),
       getMetaChannelStatus(),
       getTelegramChannelStatus(),
       getWebsiteWidgetStatus(),
     ])
       .then((results) => {
         if (!alive) return;
+
         setResolvedReadinessState({
           tenantKey: workspace.tenantKey,
           truth:
@@ -188,9 +329,16 @@ export default function Inbox() {
               ? buildWebsiteLaunchChannelState(results[3].value)
               : buildWebsiteLaunchChannelState({}),
         });
+
+        setResolvedTrustState({
+          tenantKey: workspace.tenantKey,
+          loading: false,
+          trustView: results[0].status === "fulfilled" ? results[0].value : null,
+        });
       })
       .catch(() => {
         if (!alive) return;
+
         setResolvedReadinessState({
           tenantKey: workspace.tenantKey,
           truth: buildTruthOperationalState(null),
@@ -198,12 +346,18 @@ export default function Inbox() {
           telegram: buildTelegramLaunchChannelState({}),
           website: buildWebsiteLaunchChannelState({}),
         });
+
+        setResolvedTrustState({
+          tenantKey: workspace.tenantKey,
+          loading: false,
+          trustView: null,
+        });
       });
 
     return () => {
       alive = false;
     };
-  }, [workspace.ready, workspace.tenantKey]);
+  }, [workspace.ready, workspace.tenantKey, refreshToken]);
 
   const operatorName = workspace.ready
     ? (operatorState.tenantKey === workspace.tenantKey
@@ -240,6 +394,73 @@ export default function Inbox() {
       website: resolvedReadinessState.website,
     };
   }, [workspace.ready, workspace.tenantKey, resolvedReadinessState]);
+
+  const trustView = useMemo(() => {
+    if (!workspace.ready) return null;
+    if (resolvedTrustState.tenantKey !== workspace.tenantKey) return null;
+    return resolvedTrustState.trustView;
+  }, [workspace.ready, workspace.tenantKey, resolvedTrustState]);
+
+  const inboxAutomationControl = useMemo(
+    () =>
+      buildInboxAutomationControl({
+        workspaceReady: workspace.ready,
+        trustLoading:
+          resolvedTrustState.loading &&
+          resolvedTrustState.tenantKey === workspace.tenantKey,
+        trustView,
+        mutation: automationMutation,
+      }),
+    [
+      workspace.ready,
+      workspace.tenantKey,
+      resolvedTrustState.loading,
+      resolvedTrustState.tenantKey,
+      trustView,
+      automationMutation,
+    ]
+  );
+
+  async function handleToggleInboxAutonomy(nextEnabled) {
+    if (!workspace.ready) return;
+    if (automationMutation.saving) return;
+
+    setAutomationMutation({
+      saving: true,
+      error: "",
+      success: "",
+    });
+
+    try {
+      await saveSettingsTrustPolicyControl({
+        surface: "inbox",
+        controlMode: nextEnabled ? "autonomy_enabled" : "operator_only_mode",
+        policyReason: nextEnabled
+          ? "Inbox OpenAI autonomy enabled from inbox workspace"
+          : "Inbox OpenAI autonomy disabled from inbox workspace",
+        operatorNote: nextEnabled
+          ? "Inbox automatic OpenAI replies enabled"
+          : "Inbox automatic OpenAI replies disabled",
+      });
+
+      await loadOperationalState();
+
+      setAutomationMutation({
+        saving: false,
+        error: "",
+        success: nextEnabled
+          ? "Inbox automatic replies are enabled."
+          : "Inbox automatic replies are disabled.",
+      });
+    } catch (error) {
+      setAutomationMutation({
+        saving: false,
+        error:
+          s(error?.message) || "Failed to update inbox automation control.",
+        success: "",
+      });
+    }
+  }
 
   const {
     threads,
@@ -433,11 +654,11 @@ export default function Inbox() {
 
       <Surface
         padded={false}
-        className="overflow-hidden rounded-[22px] h-[calc(100vh-220px)] min-h-[620px]"
+        className="overflow-hidden rounded-[22px] h-[calc(100vh-184px)] min-h-[560px]"
       >
         <div className="flex h-full min-h-0 flex-col">
           <div className="border-b border-line-soft px-5 py-4">
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div className="min-w-0">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
                   <Badge tone={toneFromReadiness(inboxReadiness)}>
@@ -448,15 +669,15 @@ export default function Inbox() {
                   </div>
                 </div>
 
-                <h1 className="text-[1.55rem] font-semibold leading-tight tracking-[-0.03em] text-text md:text-[1.75rem]">
+                <h1 className="text-[1.45rem] font-semibold leading-tight tracking-[-0.03em] text-text md:text-[1.65rem]">
                   Live conversation inbox.
                 </h1>
 
-                <p className="mt-2 max-w-[760px] text-[14px] leading-6 text-text-muted">
+                <p className="mt-2 max-w-[720px] text-[13px] leading-6 text-text-muted">
                   {compactSentence(
                     selectedThread?.id
-                      ? "Review the selected conversation and reply from a single live surface."
-                      : "Pick a thread and work from one clear live conversation surface.",
+                      ? "Review the selected conversation, keep context in view, and reply from one compact workspace."
+                      : "Pick a thread and work from one clean live conversation surface.",
                     "Review live conversation work."
                   )}
                 </p>
@@ -528,6 +749,8 @@ export default function Inbox() {
                     setReplyText={setReplyText}
                     onSend={handleSend}
                     onReleaseHandoff={handleRelease}
+                    automationControl={inboxAutomationControl}
+                    onToggleAutomation={handleToggleInboxAutonomy}
                   />
                 }
               />
