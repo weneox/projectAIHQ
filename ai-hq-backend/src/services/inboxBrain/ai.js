@@ -13,6 +13,44 @@ import { matchKnowledgeEntries, matchPlaybook } from "./matchers.js";
 
 let openaiSingleton = null;
 
+function summarizeOpenAIConfig() {
+  const apiKey = s(cfg?.ai?.openaiApiKey || "");
+  const model = s(cfg?.ai?.openaiModel || "gpt-5") || "gpt-5";
+  const maxOutputTokens = Number(cfg?.ai?.openaiMaxOutputTokens || 800);
+
+  return {
+    hasApiKey: Boolean(apiKey),
+    apiKeyLength: apiKey.length,
+    model,
+    maxOutputTokens,
+  };
+}
+
+function safePreview(value = "", max = 280) {
+  const text = s(value);
+  if (!text) return "";
+  if (text.length <= max) return text;
+  return `${text.slice(0, max)}…`;
+}
+
+function logInboxAi(event = "", payload = {}) {
+  try {
+    console.info(`[ai-hq] inbox ai ${event}`, payload);
+  } catch {}
+}
+
+function logInboxAiWarn(event = "", payload = {}) {
+  try {
+    console.warn(`[ai-hq] inbox ai ${event}`, payload);
+  } catch {}
+}
+
+function logInboxAiError(event = "", payload = {}) {
+  try {
+    console.error(`[ai-hq] inbox ai ${event}`, payload);
+  } catch {}
+}
+
 function ensureOpenAI() {
   const key = s(cfg?.ai?.openaiApiKey || "");
   if (!key) return null;
@@ -46,11 +84,23 @@ export async function aiDecideInbox({
   threadState = null,
   runtime = null,
 }) {
+  const openAiConfig = summarizeOpenAIConfig();
   const openai = ensureOpenAI();
-  if (!openai) return null;
 
-  const model = s(cfg?.ai?.openaiModel || "gpt-5") || "gpt-5";
-  const max_output_tokens = Number(cfg?.ai?.openaiMaxOutputTokens || 800);
+  if (!openai) {
+    logInboxAiWarn("unavailable", {
+      tenantKey: s(tenantKey),
+      channel: s(channel || "inbox"),
+      reason: "openai_api_key_missing",
+      model: openAiConfig.model,
+      hasApiKey: openAiConfig.hasApiKey,
+      apiKeyLength: openAiConfig.apiKeyLength,
+    });
+    return null;
+  }
+
+  const model = openAiConfig.model;
+  const max_output_tokens = openAiConfig.maxOutputTokens;
   const historySnippet = buildHistorySnippet(recentMessages, 6);
 
   const resolvedRuntime =
@@ -76,7 +126,11 @@ export async function aiDecideInbox({
   const servicesLine = buildServiceLine(profile);
   const disabledServicesLine = buildDisabledServiceLine(profile);
   const resolvedTenantKey = getResolvedTenantKey(tenantKey);
-  const matchedKnowledge = matchKnowledgeEntries(text, resolvedRuntime.knowledgeEntries, 5);
+  const matchedKnowledge = matchKnowledgeEntries(
+    text,
+    resolvedRuntime.knowledgeEntries,
+    5
+  );
   const matchedPlaybook = matchPlaybook(text, resolvedRuntime.responsePlaybooks);
 
   const promptBundle = buildPromptBundle("inbox.reply", {
@@ -179,6 +233,18 @@ STRICT BUSINESS RULES:
   "noReply": boolean
 }`;
 
+  logInboxAi("request_start", {
+    tenantKey: resolvedTenantKey,
+    channel: s(channel || "inbox"),
+    model,
+    maxOutputTokens: max_output_tokens,
+    quietHoursApplied: Boolean(quietHoursApplied),
+    matchedKnowledgeCount: matchedKnowledge.length,
+    hasMatchedPlaybook: Boolean(matchedPlaybook),
+    threadId: s(thread?.id),
+    messageId: s(message?.id),
+  });
+
   try {
     const resp = await openai.responses.create({
       model,
@@ -199,16 +265,30 @@ STRICT BUSINESS RULES:
 
     const raw = extractText(resp);
     const parsed = parseJsonLoose(raw);
-    if (!parsed || typeof parsed !== "object") return null;
 
-    return {
+    if (!parsed || typeof parsed !== "object") {
+      logInboxAiWarn("invalid_json", {
+        tenantKey: resolvedTenantKey,
+        channel: s(channel || "inbox"),
+        model,
+        rawPreview: safePreview(raw),
+      });
+      return null;
+    }
+
+    const result = {
       intent: s(parsed.intent || "general") || "general",
       replyText: sanitizeReplyText(parsed.replyText || ""),
-      leadScore: Math.max(0, Math.min(100, Math.round(Number(parsed.leadScore || 0)))),
+      leadScore: Math.max(
+        0,
+        Math.min(100, Math.round(Number(parsed.leadScore || 0)))
+      ),
       createLead: Boolean(parsed.createLead),
       handoff: Boolean(parsed.handoff),
       handoffReason: s(parsed.handoffReason || ""),
-      handoffPriority: ["low", "normal", "high", "urgent"].includes(String(parsed.handoffPriority || "normal").toLowerCase())
+      handoffPriority: ["low", "normal", "high", "urgent"].includes(
+        String(parsed.handoffPriority || "normal").toLowerCase()
+      )
         ? String(parsed.handoffPriority || "normal").toLowerCase()
         : "normal",
       noReply: Boolean(parsed.noReply),
@@ -281,7 +361,38 @@ STRICT BUSINESS RULES:
         },
       }),
     };
-  } catch {
+
+    logInboxAi("decision", {
+      tenantKey: resolvedTenantKey,
+      channel: s(channel || "inbox"),
+      model,
+      intent: result.intent,
+      noReply: result.noReply,
+      createLead: result.createLead,
+      handoff: result.handoff,
+      handoffReason: result.handoffReason,
+      handoffPriority: result.handoffPriority,
+      leadScore: result.leadScore,
+      replyPreview: safePreview(result.replyText, 180),
+    });
+
+    return result;
+  } catch (error) {
+    logInboxAiError("failed", {
+      tenantKey: resolvedTenantKey,
+      channel: s(channel || "inbox"),
+      model,
+      errorName: s(error?.name || "Error"),
+      errorMessage: s(error?.message || "Unknown OpenAI error"),
+      errorCode: s(error?.code),
+      errorType: s(error?.type),
+      errorStatus:
+        Number.isFinite(Number(error?.status)) ? Number(error.status) : null,
+      errorParam: s(error?.param),
+      errorRawType: s(error?.error?.type),
+      errorRawCode: s(error?.error?.code),
+      errorRawMessage: s(error?.error?.message),
+    });
     return null;
   }
 }
