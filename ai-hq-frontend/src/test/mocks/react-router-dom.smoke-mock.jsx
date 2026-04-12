@@ -371,12 +371,21 @@ export function NavLink({
   className,
   style,
   children,
+  end = false,
   ...rest
 }) {
   const location = useLocation();
   const href = useHref(to);
   const target = useResolvedPath(to);
-  const isActive = location.pathname === target.pathname;
+
+  const currentPath = location.pathname || "/";
+  const targetPath = target.pathname || "/";
+
+  const isActive = end
+    ? currentPath === targetPath
+    : targetPath === "/"
+      ? currentPath === "/"
+      : currentPath === targetPath || currentPath.startsWith(`${targetPath}/`);
 
   const resolvedClassName =
     typeof className === "function"
