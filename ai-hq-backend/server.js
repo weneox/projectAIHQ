@@ -127,6 +127,7 @@ function createAuditLogger(db) {
 async function main() {
   assertConfigValid(console);
   printFeatureReport(console);
+
   const processWorkerCapable = cfg.app.processRole !== "web";
   const logger = createLogger({ service: "ai-hq-backend", env: cfg.app.env });
   const runtimeIncidentRetentionPolicy = {
@@ -134,6 +135,7 @@ async function main() {
     maxRows: 5000,
     pruneIntervalHours: 6,
   };
+
   let startupOperationalReadiness = {
     ok: false,
     enabled: false,
@@ -154,7 +156,10 @@ async function main() {
     })
   );
 
-  const allowedOrigins = buildAllowedCorsOrigins(cfg.urls.corsOrigin, cfg.app.env);
+  const allowedOrigins = buildAllowedCorsOrigins(
+    cfg.urls.corsOrigin,
+    cfg.app.env
+  );
 
   const baseCorsOptions = {
     credentials: true,
@@ -175,6 +180,7 @@ async function main() {
 
   const corsOptions = (req, cb) => {
     const origin = s(req?.headers?.origin);
+
     if (!origin) {
       return cb(null, {
         ...baseCorsOptions,
@@ -201,6 +207,7 @@ async function main() {
       allowedOrigins,
       path: normalizeRequestPath(req),
     });
+
     return cb(new Error(`CORS blocked for origin: ${origin}`));
   };
 
@@ -210,6 +217,7 @@ async function main() {
   app.use(express.json({ limit: "8mb" }));
   app.use(express.urlencoded({ extended: false }));
   app.use(requestContextMiddleware({ logger }));
+
   const diagnosticsGuard = (req, res, next) =>
     requireSafeDiagnostics(req, res, next, { env: cfg.app.env });
 
@@ -282,6 +290,7 @@ async function main() {
   app.get("/health", async (_req, res) => {
     const hasDbUrl = Boolean(s(cfg.db.url));
     const db = getDb();
+
     const workerConfigured = {
       "source-sync-worker": {
         enabled: !!cfg.workers.sourceSyncWorkerEnabled,
@@ -300,10 +309,12 @@ async function main() {
         required: false,
       },
     };
+
     const processRole = buildProcessRoleOperationalState({
       processRole: cfg.app.processRole,
       workerConfigured,
     });
+
     const out = await buildRootHealthResponse({
       db,
       startupOperationalReadiness,
@@ -315,7 +326,8 @@ async function main() {
       },
       workers: {
         sourceSyncWorkerEnabled: !!cfg.workers.sourceSyncWorkerEnabled,
-        durableExecutionWorkerEnabled: !!cfg.workers.durableExecutionWorkerEnabled,
+        durableExecutionWorkerEnabled:
+          !!cfg.workers.durableExecutionWorkerEnabled,
         draftScheduleEnabled: !!cfg.workers.draftScheduleWorkerEnabled,
         mediaJobWorkerEnabled: !!cfg.workers.mediaJobWorkerEnabled,
       },
@@ -326,6 +338,7 @@ async function main() {
         sourceSync: null,
       },
     });
+
     out.db.ok = false;
     out.status = out.ok ? "ready" : "unavailable";
     out.degraded = false;
@@ -333,9 +346,7 @@ async function main() {
     out.reasonCodes = Array.isArray(out?.operationalReadiness?.blockerReasonCodes)
       ? [...out.operationalReadiness.blockerReasonCodes]
       : [];
-    out.summary = {
-      message: "",
-    };
+    out.summary = { message: "" };
     out.incidents = {
       status: "clear",
       total: 0,
@@ -372,18 +383,22 @@ async function main() {
     try {
       const draftScheduleWorkerState =
         app.locals?.draftScheduleWorker?.getState?.() || null;
-      const mediaJobWorkerState = app.locals?.mediaJobWorker?.getState?.() || null;
+      const mediaJobWorkerState =
+        app.locals?.mediaJobWorker?.getState?.() || null;
       const durableWorkerState =
         app.locals?.durableExecutionWorker?.getState?.() || null;
       const sourceSyncWorkerState =
         app.locals?.sourceSyncWorker?.getState?.() || null;
+
       const helpers = createDurableExecutionHelpers({ db });
       const durableSummary = await helpers.getExecutionSummary();
+
       const operational = buildDurableOperationalStatus({
         summary: durableSummary,
         durableWorker: durableWorkerState,
         sourceSyncWorker: sourceSyncWorkerState,
       });
+
       const workerStates = {
         "source-sync-worker": buildWorkerOperationalState({
           workerName: "source-sync-worker",
@@ -394,7 +409,8 @@ async function main() {
         }),
         "durable-execution-worker": buildWorkerOperationalState({
           workerName: "durable-execution-worker",
-          configuredEnabled: workerConfigured["durable-execution-worker"].enabled,
+          configuredEnabled:
+            workerConfigured["durable-execution-worker"].enabled,
           required: workerConfigured["durable-execution-worker"].required,
           state: durableWorkerState,
           processWorkerCapable,
@@ -414,6 +430,7 @@ async function main() {
           processWorkerCapable,
         }),
       };
+
       const workerSummary = summarizeWorkerFleet(Object.values(workerStates));
       const recentIncidents = await listRecentRuntimeIncidents({
         db,
@@ -442,6 +459,7 @@ async function main() {
         workerSummary,
         incidents: incidentSummary,
       };
+
       out.workers = {
         ...out.workers,
         summary: workerSummary,
@@ -485,7 +503,10 @@ async function main() {
 
     if (out?.incidents?.status === "degraded" && out.status === "ready") {
       out.status = "degraded";
-    } else if (out?.incidents?.status === "attention" && out.status === "ready") {
+    } else if (
+      out?.incidents?.status === "attention" &&
+      out.status === "ready"
+    ) {
       out.status = "degraded";
     }
 
@@ -497,12 +518,15 @@ async function main() {
       if (!entry?.reasonCode) continue;
       pushUnique(out.reasonCodes, entry.reasonCode);
     }
+
     for (const code of out?.incidents?.reasonCodes || []) {
       pushUnique(out.reasonCodes, code);
     }
+
     if (out?.operational?.status === "attention") {
       pushUnique(out.reasonCodes, "operational_attention");
     }
+
     if (processRole.reasonCode) {
       pushUnique(out.reasonCodes, processRole.reasonCode);
     }
@@ -532,6 +556,7 @@ async function main() {
         const helpers = createDurableExecutionHelpers({ db });
         durableSummary = await helpers.getExecutionSummary();
       } catch {}
+
       try {
         durableIncidents = await listRecentRuntimeIncidents({
           db,
@@ -557,6 +582,7 @@ async function main() {
 
   try {
     await initDb();
+
     if (getDb()) {
       configureRuntimeSignalPersistence((incident) =>
         persistRuntimeIncident({
@@ -567,12 +593,14 @@ async function main() {
           },
         })
       );
+
       const pruneOutcome = await pruneRuntimeIncidentTrail({
         db: getDb(),
         retainDays: runtimeIncidentRetentionPolicy.retainDays,
         maxRows: runtimeIncidentRetentionPolicy.maxRows,
       });
       logger.info("runtime_incident_trail.pruned", pruneOutcome);
+
       const pruneTimer = setInterval(async () => {
         try {
           const outcome = await pruneRuntimeIncidentTrail({
@@ -580,6 +608,7 @@ async function main() {
             retainDays: runtimeIncidentRetentionPolicy.retainDays,
             maxRows: runtimeIncidentRetentionPolicy.maxRows,
           });
+
           if (
             Number(outcome.deletedByAge || 0) > 0 ||
             Number(outcome.deletedByCount || 0) > 0
@@ -594,11 +623,14 @@ async function main() {
           });
         }
       }, runtimeIncidentRetentionPolicy.pruneIntervalHours * 60 * 60 * 1000);
+
       pruneTimer.unref?.();
+
       const migrationStatus = await getMigrationStatus();
       const pendingMigrations = Array.isArray(migrationStatus?.pending)
         ? migrationStatus.pending.map((item) => s(item?.name)).filter(Boolean)
         : [];
+
       const startupMigrationPolicy = decideStartupMigrationPolicy({
         env: cfg.app.env,
         autoMigrateOnStartup: cfg?.db?.autoMigrateOnStartup,
@@ -630,7 +662,9 @@ async function main() {
             ? "Applied schema migration files have drifted from the recorded ledger. Resolve migration drift before starting the app."
             : `Pending schema migrations detected (${Number(
                 migrationStatus?.pendingCount || 0
-              )}): ${pendingMigrations.join(", ") || "unknown"}. Run 'npm run migrate' before starting the app.`
+              )}): ${
+                pendingMigrations.join(", ") || "unknown"
+              }. Run 'npm run migrate' before starting the app.`
         );
       } else {
         logger.info("app.migrate.status", {
@@ -658,6 +692,7 @@ async function main() {
   }
 
   const db = getDb();
+
   if (db) {
     const enforceOperationalReadiness =
       shouldEnforceOperationalReadinessOnStartup({
@@ -676,6 +711,7 @@ async function main() {
       startupOperationalReadiness = {
         ...readinessSummary,
         ok: true,
+        enabled: true,
         enforced: enforceOperationalReadiness,
         status: hasTenantScopedOperationalBlockers ? "attention" : "ready",
         tenantScopedBlockersDetected: hasTenantScopedOperationalBlockers,
@@ -697,6 +733,7 @@ async function main() {
       startupOperationalReadiness = {
         ...startupOperationalReadiness,
         ok: false,
+        enabled: true,
         enforced: false,
         status: "attention",
         error: String(err?.message || err || "operational_readiness_failed"),
@@ -812,6 +849,7 @@ async function main() {
 
   app.use((err, req, res, _next) => {
     const msg = String(err?.message || err || "Server error");
+
     (req?.log || logger).error("http.request.failed", err, {
       path: req?.originalUrl || req?.url || "",
       method: req?.method || "",
@@ -836,6 +874,7 @@ async function main() {
 
   server.listen(cfg.app.port, () => {
     const hasDb = Boolean(db);
+
     logger.info("app.started", {
       port: cfg.app.port,
       hasDb,
