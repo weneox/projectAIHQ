@@ -396,7 +396,7 @@ test(
       );
       assert.equal(
         s(bootstrapCall.res.body?.automation?.mode),
-        "assistant_available"
+        "handoff_required"
       );
 
       const postMessageCall = await invokeRoute(
