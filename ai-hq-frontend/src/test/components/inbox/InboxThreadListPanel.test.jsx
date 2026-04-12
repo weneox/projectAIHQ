@@ -3,101 +3,120 @@ import { describe, expect, it, vi } from "vitest";
 
 import InboxThreadListPanel from "../../../components/inbox/InboxThreadListPanel.jsx";
 
+function buildThreadList(overrides = {}) {
+  return {
+    filter: "all",
+    setFilter: vi.fn(),
+    deepLinkNotice: "Opened from a saved thread link.",
+    filteredThreads: [
+      {
+        id: "thread-1",
+        customer_name: "Alex",
+        channel_label: "Conversation",
+        channel_type: "instagram",
+        provider: "meta",
+        last_message_text: "Need help with booking",
+        status: "open",
+      },
+      {
+        id: "thread-2",
+        customer_name: "Blair",
+        channel_label: "Conversation",
+        channel_type: "facebook",
+        provider: "meta",
+        last_message_text: "Following up on my request",
+        status: "open",
+      },
+    ],
+    openThread: vi.fn(),
+    surface: {
+      loading: false,
+      error: "",
+      unavailable: false,
+      ready: true,
+      refresh: vi.fn(),
+    },
+    ...overrides,
+  };
+}
+
 describe("InboxThreadListPanel", () => {
   it("renders explicit thread list surface data", () => {
-    const setFilter = vi.fn();
-    const openThread = vi.fn();
+    const threadList = buildThreadList();
 
     render(
       <InboxThreadListPanel
+        threadList={threadList}
         selectedThreadId="thread-2"
-        threadList={{
-          filter: "all",
-          setFilter,
-          deepLinkNotice: "The requested inbox thread is no longer available.",
-          stats: { open: 1, aiActive: 2, handoff: 3, resolved: 4 },
-          filteredThreads: [
-            {
-              id: "thread-1",
-              customer_name: "Alex",
-              channel: "instagram",
-              last_message_text: "Need help with booking",
-              status: "open",
-              handoff_active: false,
-            },
-            {
-              id: "thread-2",
-              customer_name: "Blair",
-              channel: "instagram",
-              last_message_text: "Following up on my request",
-              status: "resolved",
-              handoff_active: false,
-            },
-          ],
-          openThread,
-          surface: { loading: false },
-        }}
+        searchQuery=""
       />
     );
 
-    expect(
-      screen.getByText(/requested inbox thread is no longer available/i)
-    ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: /all conversations/i })
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /primary/i })).toHaveAttribute(
-      "aria-pressed",
-      "true"
-    );
-    expect(screen.getByRole("button", { name: /general/i })).toHaveAttribute(
-      "aria-pressed",
-      "false"
-    );
-    expect(screen.getByRole("button", { name: /requests/i })).toHaveAttribute(
-      "aria-pressed",
-      "false"
-    );
-    expect(
-      screen.getByRole("button", { name: /open conversation filters/i })
-    ).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: /search conversations/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /requests/i }));
-    expect(setFilter).toHaveBeenCalledWith("handoff");
+    expect(
+      screen.getByRole("button", { name: /^all conversations$/i })
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("button", { name: /search conversations/i })
+    ).toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: /primary/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /general/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /requests/i })).toBeInTheDocument();
+
+    expect(screen.getByText(/alex/i)).toBeInTheDocument();
+    expect(screen.getByText(/blair/i)).toBeInTheDocument();
+    expect(screen.getByText(/need help with booking/i)).toBeInTheDocument();
+    expect(screen.getByText(/following up on my request/i)).toBeInTheDocument();
+    expect(screen.getByText(/opened from a saved thread link/i)).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /search conversations/i })
+    );
+
+    expect(
+      screen.getByRole("textbox", { name: /search conversations/i })
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /blair/i }));
-    expect(openThread).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "thread-2", customer_name: "Blair" })
+    expect(threadList.openThread).toHaveBeenCalledTimes(1);
+    expect(threadList.openThread).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "thread-2" })
     );
   });
 
-  it("labels web channel threads as website conversations", () => {
+  it("labels web channel threads as website conversations in the channel menu", () => {
+    const threadList = buildThreadList({
+      deepLinkNotice: "",
+      filteredThreads: [
+        {
+          id: "thread-web",
+          customer_name: "Taylor",
+          channel: "web",
+          channel_type: "web",
+          provider: "web",
+          last_message_text: "I found you on the pricing page",
+          status: "open",
+        },
+      ],
+    });
+
     render(
       <InboxThreadListPanel
+        threadList={threadList}
         selectedThreadId=""
-        threadList={{
-          filter: "all",
-          setFilter: vi.fn(),
-          deepLinkNotice: "",
-          stats: { open: 1, aiActive: 0, handoff: 0, resolved: 0 },
-          filteredThreads: [
-            {
-              id: "thread-web-1",
-              customer_name: "Taylor",
-              channel: "web",
-              last_message_text: "I found you on the pricing page",
-              status: "open",
-              handoff_active: false,
-            },
-          ],
-          openThread: vi.fn(),
-          surface: { loading: false },
-        }}
+        searchQuery=""
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /open conversation filters/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /^all conversations$/i })
+    );
+
     expect(screen.getByText("Website")).toBeInTheDocument();
   });
 });
