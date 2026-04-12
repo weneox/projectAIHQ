@@ -204,7 +204,7 @@ export default function Inbox() {
   );
 
   const [wsState, setWsState] = useState("idle");
-  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailThreadId, setDetailThreadId] = useState("");
   const [operatorState, setOperatorState] = useState({
     tenantKey: "",
     name: "",
@@ -570,15 +570,12 @@ export default function Inbox() {
     }
   }, [selectedThread?.id, loadMessages, loadRelatedLead]);
 
-  useEffect(() => {
-    if (detailOpen && !selectedThread?.id) {
-      setDetailOpen(false);
-    }
-  }, [detailOpen, selectedThread?.id]);
+  const detailOpen =
+    Boolean(selectedThread?.id) && detailThreadId === selectedThread?.id;
 
   useEffect(() => {
     function onKeyDown(event) {
-      if (event.key === "Escape") setDetailOpen(false);
+      if (event.key === "Escape") setDetailThreadId("");
     }
 
     if (!detailOpen) return undefined;
@@ -653,7 +650,11 @@ export default function Inbox() {
             assignThread={assignThread}
             activateHandoff={activateHandoff}
             setThreadStatus={setThreadStatus}
-            onOpenDetails={() => setDetailOpen(true)}
+            onOpenDetails={() => {
+              if (selectedThread?.id) {
+                setDetailThreadId(selectedThread.id);
+              }
+            }}
             automationControl={inboxAutomationControl}
             onToggleAutomation={handleToggleInboxAutonomy}
             composer={
@@ -675,7 +676,7 @@ export default function Inbox() {
       {detailOpen ? (
         <SlidingDetailOverlay
           open={detailOpen}
-          onClose={() => setDetailOpen(false)}
+          onClose={() => setDetailThreadId("")}
           absolute
           closeLabel="Close conversation details"
           panelWidthClassName="max-w-[92vw] w-[360px]"
@@ -689,7 +690,7 @@ export default function Inbox() {
             operatorName={operatorName}
             tenantKey={workspace.tenantKey}
             wsState={wsState}
-            onClose={() => setDetailOpen(false)}
+            onClose={() => setDetailThreadId("")}
           />
         </SlidingDetailOverlay>
       ) : null}
