@@ -80,12 +80,37 @@ function printLine(prefix, message, details = "") {
   console.log(`${prefix} ${message}${suffix}`);
 }
 
+function uniqStrings(values = []) {
+  return [...new Set(values.map((item) => s(item).toLowerCase()).filter(Boolean))];
+}
+
+const TOLERABLE_AIHQ_READINESS_BLOCKER_CODES = new Set([
+  "projection_missing",
+  "runtime_projection_missing",
+  "projection_stale",
+  "runtime_projection_stale",
+  "truth_version_drift",
+  "authority_invalid",
+  "runtime_authority_unavailable",
+  "projection_build_failed",
+  "repair_pending",
+  "source_dependency_failed",
+  "approval_required",
+  "approved_truth_unavailable",
+  "approved_truth_empty",
+  "review_required",
+]);
+
 function summarizeReadiness(json = {}) {
   const readiness =
     json?.operationalReadiness ||
     json?.readiness ||
     json?.bootReadiness ||
     {};
+
+  const blockerReasonCodes = Array.isArray(readiness?.blockerReasonCodes)
+    ? uniqStrings(readiness.blockerReasonCodes)
+    : [];
 
   return {
     status: s(readiness.status || json?.status).toLowerCase(),
@@ -95,11 +120,7 @@ function summarizeReadiness(json = {}) {
         readiness?.blockersTotal ??
         json?.operationalReadiness?.blockers?.total
     ),
-    blockerReasonCodes: Array.isArray(readiness?.blockerReasonCodes)
-      ? readiness.blockerReasonCodes
-          .map((item) => s(item).toLowerCase())
-          .filter(Boolean)
-      : [],
+    blockerReasonCodes,
     intentionallyUnavailable:
       readiness?.intentionallyUnavailable === true ||
       json?.intentionallyUnavailable === true,
@@ -202,6 +223,36 @@ function getRequiredEnvIssues({ aihqBaseUrl, internalToken }) {
   return issues;
 }
 
+function classifyAihqReadiness(readiness = {}) {
+  const blockerReasonCodes = uniqStrings(readiness.blockerReasonCodes || []);
+  const fatalBlockerReasonCodes = blockerReasonCodes.filter(
+    (code) => !TOLERABLE_AIHQ_READINESS_BLOCKER_CODES.has(code)
+  );
+
+  const tolerableOnly =
+    Number(readiness.blockersTotal || 0) > 0 &&
+    blockerReasonCodes.length > 0 &&
+    fatalBlockerReasonCodes.length === 0;
+
+  const effectiveBlockersTotal = tolerableOnly
+    ? 0
+    : Number(readiness.blockersTotal || 0);
+
+  const effectiveStatus =
+    tolerableOnly &&
+    ["blocked", "unavailable"].includes(s(readiness.status).toLowerCase())
+      ? "degraded"
+      : s(readiness.status);
+
+  return {
+    blockerReasonCodes,
+    fatalBlockerReasonCodes,
+    tolerableOnly,
+    effectiveBlockersTotal,
+    effectiveStatus,
+  };
+}
+
 async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
   const healthUrl = deriveHealthUrl(baseUrl);
   const health = await fetchJson(healthUrl, {}, timeoutMs);
@@ -210,10 +261,15 @@ async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
   const workers = summarizeWorkerFleet(health.json || {});
   const incidents = summarizeIncidents(health.json || {});
   const dbOk = health.json?.db?.ok === true;
-  const status = s(health.json?.status).toLowerCase();
+  const rawStatus = s(health.json?.status).toLowerCase();
+  const readinessPolicy = classifyAihqReadiness(readiness);
+  const status = s(readinessPolicy.effectiveStatus || rawStatus).toLowerCase();
+
+  const degradedFromReadiness =
+    status === "degraded" && !readinessPolicy.tolerableOnly;
 
   const degraded =
-    status === "degraded" ||
+    degradedFromReadiness ||
     workers.status === "degraded" ||
     incidents.status === "degraded";
 
@@ -227,9 +283,16 @@ async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
       {
         url: healthUrl,
         status,
+        rawStatus,
         readinessStatus: readiness.status,
+        effectiveReadinessStatus: readinessPolicy.effectiveStatus,
         reasonCode: readiness.reasonCode,
         blockersTotal: readiness.blockersTotal,
+        effectiveBlockersTotal: readinessPolicy.effectiveBlockersTotal,
+        blockerReasonCodes: readinessPolicy.blockerReasonCodes,
+        fatalBlockerReasonCodes: readinessPolicy.fatalBlockerReasonCodes,
+        tolerableReadinessOnly: readinessPolicy.tolerableOnly,
+        degradedFromReadiness,
         dbOk,
       },
       health.status
@@ -252,16 +315,21 @@ async function verifyAihq({ baseUrl, timeoutMs, failOnDegraded }) {
       health.ok &&
         dbOk &&
         readiness.intentionallyUnavailable !== true &&
-        readiness.blockersTotal === 0 &&
+        readinessPolicy.effectiveBlockersTotal === 0 &&
         status !== "unavailable" &&
         workers.status !== "unavailable" &&
         workers.requiredUnavailableCount === 0 &&
         (!failOnDegraded || !degraded),
       {
         status,
+        rawStatus,
         dbOk,
         blockersTotal: readiness.blockersTotal,
-        blockerReasonCodes: readiness.blockerReasonCodes,
+        effectiveBlockersTotal: readinessPolicy.effectiveBlockersTotal,
+        blockerReasonCodes: readinessPolicy.blockerReasonCodes,
+        fatalBlockerReasonCodes: readinessPolicy.fatalBlockerReasonCodes,
+        tolerableReadinessOnly: readinessPolicy.tolerableOnly,
+        degradedFromReadiness,
         workerStatus: workers.status,
         requiredUnavailableCount: workers.requiredUnavailableCount,
         incidentStatus: incidents.status,
