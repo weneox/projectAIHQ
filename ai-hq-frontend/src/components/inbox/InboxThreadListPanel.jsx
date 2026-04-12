@@ -170,15 +170,36 @@ export default function InboxThreadListPanel({
   }, [searchOpen]);
 
   useEffect(() => {
-    function handleEscape(event) {
+    function handleKeyDown(event) {
+      const target = event.target;
+      const tagName = String(target?.tagName || "").toLowerCase();
+      const isTypingField =
+        tagName === "input" ||
+        tagName === "textarea" ||
+        target?.isContentEditable === true;
+
       if (event.key === "Escape") {
         setFilterMenuOpen(false);
         setSearchOpen(false);
+        return;
+      }
+
+      if (!isTypingField && event.key === "/") {
+        event.preventDefault();
+        setFilterMenuOpen(false);
+        setSearchOpen(true);
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setFilterMenuOpen(false);
+        setSearchOpen(true);
       }
     }
 
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const baseThreads = useMemo(
@@ -187,6 +208,11 @@ export default function InboxThreadListPanel({
         ? threadList.filteredThreads
         : [],
     [threadList?.filteredThreads]
+  );
+
+  const selectedThread = useMemo(
+    () => baseThreads.find((thread) => s(thread?.id) === s(selectedThreadId)) || null,
+    [baseThreads, selectedThreadId]
   );
 
   const channelOptions = useMemo(
@@ -238,27 +264,38 @@ export default function InboxThreadListPanel({
           });
 
     const needle = String(localSearch || "").trim().toLowerCase();
-    if (!needle) return byChannel;
+    const bySearch = !needle
+      ? byChannel
+      : byChannel.filter((thread) => {
+          const haystack = [
+            thread?.customer_name,
+            thread?.external_username,
+            thread?.external_user_id,
+            thread?.last_message_text,
+            thread?.assigned_to,
+            thread?.channel,
+            thread?.subject,
+            thread?.title,
+            thread?.conversation_title,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
 
-    return byChannel.filter((thread) => {
-      const haystack = [
-        thread?.customer_name,
-        thread?.external_username,
-        thread?.external_user_id,
-        thread?.last_message_text,
-        thread?.assigned_to,
-        thread?.channel,
-        thread?.subject,
-        thread?.title,
-        thread?.conversation_title,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
+          return haystack.includes(needle);
+        });
 
-      return haystack.includes(needle);
-    });
-  }, [baseThreads, channelFilter, localSearch]);
+    if (!selectedThread) return bySearch;
+
+    const selectedId = s(selectedThread.id);
+    const alreadyVisible = bySearch.some((thread) => s(thread?.id) === selectedId);
+    if (alreadyVisible) return bySearch;
+
+    const hasActiveConstraint = channelFilter !== "all" || Boolean(needle);
+    if (!hasActiveConstraint) return bySearch;
+
+    return [selectedThread, ...bySearch];
+  }, [baseThreads, channelFilter, localSearch, selectedThread]);
 
   function handleToggleFilterMenu() {
     setSearchOpen(false);

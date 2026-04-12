@@ -28,6 +28,7 @@ import {
   LoadingSurface,
   PageCanvas,
   SlidingDetailOverlay,
+  Surface,
 } from "../components/ui/AppShellPrimitives.jsx";
 import { compactSentence, s } from "../lib/appUi.js";
 import {
@@ -53,7 +54,7 @@ const CONNECTOR_COPY = {
   website: {
     label: "Website",
     title: "Widget + trusted origin",
-    summary: "Public site conversations in the shared inbox.",
+    summary: "Public website conversations.",
     tone:
       "border-[rgba(15,23,42,0.10)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))]",
     accent: "bg-slate-900",
@@ -63,17 +64,18 @@ const CONNECTOR_COPY = {
   instagram: {
     label: "Instagram",
     title: "DM automation",
-    summary: "Business account conversations with tenant runtime.",
+    summary: "Business account conversations.",
     tone:
       "border-[rgba(236,72,153,0.14)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(255,247,251,0.98))]",
-    accent: "bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%,#8134af_75%,#515bd4_100%)]",
+    accent:
+      "bg-[linear-gradient(135deg,#f58529_0%,#dd2a7b_45%,#8134af_75%,#515bd4_100%)]",
     glow: "from-pink-100/70 via-white to-white",
     Icon: Sparkles,
   },
   telegram: {
     label: "Telegram",
     title: "Bot conversations",
-    summary: "Private chat intake through the same inbox lane.",
+    summary: "Private chat intake.",
     tone:
       "border-[rgba(14,165,233,0.14)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(240,249,255,0.98))]",
     accent: "bg-sky-500",
@@ -99,21 +101,21 @@ function normalizeStatus(runtime = null) {
   const raw = s(runtime?.statusLabel);
   const lower = raw.toLowerCase();
 
+  if (runtime?.connected === true) {
+    return {
+      label: raw || "Ready",
+      tone: "success",
+      connected: true,
+      blocked: false,
+    };
+  }
+
   if (!raw || lower === "unknown") {
     return {
       label: "Connect",
       tone: "warning",
-    };
-  }
-
-  if (
-    lower.includes("connected") ||
-    lower.includes("ready") ||
-    lower.includes("live")
-  ) {
-    return {
-      label: raw,
-      tone: "success",
+      connected: false,
+      blocked: false,
     };
   }
 
@@ -126,6 +128,8 @@ function normalizeStatus(runtime = null) {
     return {
       label: raw,
       tone: "danger",
+      connected: false,
+      blocked: true,
     };
   }
 
@@ -133,21 +137,83 @@ function normalizeStatus(runtime = null) {
     return {
       label: raw,
       tone: "warning",
+      connected: false,
+      blocked: false,
     };
   }
 
   return {
     label: raw,
     tone: "neutral",
+    connected: false,
+    blocked: false,
   };
 }
 
-function CompactHeader({ title, subtitle, onOpenTruth }) {
+function resolveTruthReady(truth = null) {
+  return s(truth?.status).toLowerCase() === "ready";
+}
+
+function resolveTopAction({ hasConnectedLaunchChannel, truth }) {
+  if (hasConnectedLaunchChannel && resolveTruthReady(truth)) {
+    return {
+      label: "Open inbox",
+      target: "inbox",
+    };
+  }
+
+  if (hasConnectedLaunchChannel && !resolveTruthReady(truth)) {
+    return {
+      label: "Open truth",
+      target: "truth",
+    };
+  }
+
+  return {
+    label: "Choose channel",
+    target: "none",
+  };
+}
+
+function resolveChannelPrimaryAction(channel, runtime) {
+  const status = normalizeStatus(runtime);
+
+  if (status.connected) {
+    return {
+      label: "Open inbox",
+      mode: "inbox",
+    };
+  }
+
+  if (status.blocked) {
+    return {
+      label: "Fix",
+      mode: "details",
+    };
+  }
+
+  return {
+    label: "Connect",
+    mode: "details",
+  };
+}
+
+function CompactHeader({
+  title,
+  subtitle,
+  truth = null,
+  topAction,
+  onPrimaryAction,
+}) {
+  const truthReady = resolveTruthReady(truth);
+
   return (
     <section className="flex flex-col gap-4 border-b border-line-soft pb-4 md:flex-row md:items-center md:justify-between">
       <div className="min-w-0">
         <div className="mb-1 flex items-center gap-2">
-          <Badge tone="warning">Connect required</Badge>
+          <Badge tone={truthReady ? "success" : "warning"}>
+            {truthReady ? "Launch ready" : "Approval required"}
+          </Badge>
           <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
             Channels
           </span>
@@ -160,23 +226,32 @@ function CompactHeader({ title, subtitle, onOpenTruth }) {
         <p className="mt-1 text-[14px] leading-6 text-text-muted">{subtitle}</p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <Button type="button" size="sm" variant="secondary" onClick={onOpenTruth}>
-          Open truth
-        </Button>
-      </div>
+      {topAction?.target !== "none" ? (
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            onClick={onPrimaryAction}
+            rightIcon={<ArrowRight className="h-4 w-4" />}
+          >
+            {topAction.label}
+          </Button>
+        </div>
+      ) : null}
     </section>
   );
 }
 
-function StageStrip({ connectedCount = 0 }) {
+function StageStrip({ connectedCount = 0, truth = null }) {
+  const truthReady = resolveTruthReady(truth);
+
   return (
     <section className="grid gap-3 md:grid-cols-3">
       <div className="rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-white px-4 py-3">
         <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
-          Launch channels
+          Channels
         </div>
-        <div className="mt-1 text-[15px] font-semibold text-text">3 configured</div>
+        <div className="mt-1 text-[15px] font-semibold text-text">3 live surfaces</div>
       </div>
 
       <div className="rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-white px-4 py-3">
@@ -190,10 +265,10 @@ function StageStrip({ connectedCount = 0 }) {
 
       <div className="rounded-[18px] border border-[rgba(15,23,42,0.08)] bg-white px-4 py-3">
         <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
-          Scope
+          Truth
         </div>
         <div className="mt-1 text-[15px] font-semibold text-text">
-          Website, Instagram, Telegram
+          {truthReady ? "Approved" : "Needs approval"}
         </div>
       </div>
     </section>
@@ -203,6 +278,7 @@ function StageStrip({ connectedCount = 0 }) {
 function LaunchCard({ channel, runtime, onInspect, onRunPrimaryAction }) {
   const copy = CONNECTOR_COPY[channel.id] || CONNECTOR_COPY.website;
   const status = normalizeStatus(runtime);
+  const action = resolveChannelPrimaryAction(channel, runtime);
   const statusSummary = compactSentence(
     runtime?.summary || copy.summary,
     copy.summary
@@ -262,10 +338,10 @@ function LaunchCard({ channel, runtime, onInspect, onRunPrimaryAction }) {
           <Button
             type="button"
             size="sm"
-            onClick={() => onRunPrimaryAction?.(channel)}
+            onClick={() => onRunPrimaryAction?.(channel, action)}
             rightIcon={<ArrowRight className="h-4 w-4" />}
           >
-            {s(channel.primaryAction?.label, "Open")}
+            {action.label}
           </Button>
         </div>
       </div>
@@ -424,22 +500,21 @@ export default function ChannelCatalog() {
       effectiveReadinessState.telegram,
     ];
 
-    return items.reduce((sum, item) => {
-      const lower = s(item?.statusLabel).toLowerCase();
-      if (
-        lower.includes("connected") ||
-        lower.includes("ready") ||
-        lower.includes("live")
-      ) {
-        return sum + 1;
-      }
-      return sum;
-    }, 0);
+    return items.reduce(
+      (sum, item) => (item?.connected === true ? sum + 1 : sum),
+      0
+    );
   }, [
     effectiveReadinessState.website,
     effectiveReadinessState.meta,
     effectiveReadinessState.telegram,
   ]);
+
+  const hasConnectedLaunchChannel = connectedCount > 0;
+  const topAction = resolveTopAction({
+    hasConnectedLaunchChannel,
+    truth: effectiveReadinessState.truth,
+  });
 
   function updateSelectedChannel(channelId = "") {
     const nextParams = new URLSearchParams(searchParams);
@@ -453,8 +528,24 @@ export default function ChannelCatalog() {
     setSearchParams(nextParams);
   }
 
-  function handlePrimaryAction(channel) {
+  function handleTopAction() {
+    if (topAction.target === "inbox") {
+      navigate("/inbox");
+      return;
+    }
+
+    if (topAction.target === "truth") {
+      navigate("/truth");
+    }
+  }
+
+  function handlePrimaryAction(channel, action) {
     if (!channel?.id) return;
+
+    if (action?.mode === "inbox") {
+      navigate("/inbox");
+      return;
+    }
 
     if (closeTimerRef.current) {
       window.clearTimeout(closeTimerRef.current);
@@ -507,18 +598,35 @@ export default function ChannelCatalog() {
 
         <CompactHeader
           title="Choose a launch channel"
-          subtitle="Connect the first live surface and continue setup from there."
-          onOpenTruth={() => navigate("/truth")}
+          subtitle="Connect one surface. Go live fast."
+          truth={effectiveReadinessState.truth}
+          topAction={topAction}
+          onPrimaryAction={handleTopAction}
         />
 
-        <StageStrip connectedCount={connectedCount} />
+        <StageStrip
+          connectedCount={connectedCount}
+          truth={effectiveReadinessState.truth}
+        />
+
+        {hasConnectedLaunchChannel &&
+        !resolveTruthReady(effectiveReadinessState.truth) ? (
+          <InlineNotice
+            tone="warning"
+            title="Channel is live. Truth still needs approval."
+            description="Open truth before trusting autonomous replies."
+            compact
+          />
+        ) : null}
 
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-              Launch channels
+              Live surfaces
             </div>
-            <div className="text-[12px] text-text-subtle">3 available</div>
+            <div className="text-[12px] text-text-subtle">
+              {launchChannels.length} available
+            </div>
           </div>
 
           <div className="grid gap-4 xl:grid-cols-3">
@@ -533,6 +641,39 @@ export default function ChannelCatalog() {
             ))}
           </div>
         </section>
+
+        <Surface padded="md" className="rounded-[22px]" tone="muted">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-subtle">
+                Fast path
+              </div>
+              <div className="mt-1 text-[14px] font-semibold text-text">
+                Connect → approve truth → open inbox
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => navigate("/truth")}
+              >
+                Open truth
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => navigate("/inbox")}
+                rightIcon={<ArrowRight className="h-4 w-4" />}
+                disabled={!hasConnectedLaunchChannel}
+              >
+                Open inbox
+              </Button>
+            </div>
+          </div>
+        </Surface>
       </PageCanvas>
 
       {drawerChannel ? (

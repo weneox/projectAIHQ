@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Bot, Plus, Send, Smile, Sparkles } from "lucide-react";
 import SurfaceBanner from "../feedback/SurfaceBanner.jsx";
 import Button from "../ui/Button.jsx";
@@ -25,13 +26,46 @@ function ComposerBody({
   const sending = actionState?.isActionPending?.("reply");
   const releasing = actionState?.isActionPending?.("release");
   const showBanner = hasThread && shouldRenderSurfaceBanner(surface);
+  const textareaRef = useRef(null);
+  const [isComposing, setIsComposing] = useState(false);
+
+  const sendDisabled = useMemo(
+    () =>
+      !hasThread ||
+      !replyText.trim() ||
+      sending ||
+      surface?.unavailable === true,
+    [hasThread, replyText, sending, surface?.unavailable]
+  );
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "0px";
+    const nextHeight = Math.max(58, Math.min(textarea.scrollHeight, 132));
+    textarea.style.height = `${nextHeight}px`;
+  }, [replyText, hasThread]);
 
   function handleKeyDown(event) {
     if (event.key !== "Enter") return;
     if (event.shiftKey) return;
+    if (event.nativeEvent?.isComposing || isComposing) return;
     event.preventDefault();
-    if (!hasThread || !replyText.trim() || sending) return;
+    if (sendDisabled) return;
     onSend?.();
+  }
+
+  function handleSendClick() {
+    if (sendDisabled) return;
+    onSend?.();
+
+    const textarea = textareaRef.current;
+    if (textarea) {
+      window.requestAnimationFrame(() => {
+        textarea.style.height = "58px";
+      });
+    }
   }
 
   return (
@@ -91,10 +125,13 @@ function ComposerBody({
       <div className="flex items-end gap-3 rounded-[26px] bg-white/88 px-4 py-3 shadow-[0_24px_70px_-44px_rgba(15,23,42,0.28)] ring-1 ring-[rgba(15,23,42,0.06)] backdrop-blur supports-[backdrop-filter]:bg-white/76">
         <div className="min-w-0 flex-1">
           <textarea
+            ref={textareaRef}
             value={replyText}
             onChange={(event) => setReplyText(event.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={!hasThread || sending}
+            onCompositionStart={() => setIsComposing(true)}
+            onCompositionEnd={() => setIsComposing(false)}
+            disabled={!hasThread || sending || surface?.unavailable === true}
             rows={1}
             placeholder={
               hasThread ? "Write a reply" : "Select a conversation to reply"
@@ -102,18 +139,18 @@ function ComposerBody({
             aria-label={
               hasThread ? "Reply to conversation" : "Select a conversation first"
             }
-            className="block min-h-[58px] max-h-[132px] w-full resize-none border-0 bg-transparent px-0 py-1 text-[14px] leading-7 text-text outline-none placeholder:text-text-subtle disabled:cursor-not-allowed"
+            className="block min-h-[58px] max-h-[132px] w-full resize-none overflow-y-auto border-0 bg-transparent px-0 py-1 text-[14px] leading-7 text-text outline-none placeholder:text-text-subtle disabled:cursor-not-allowed"
           />
         </div>
 
         <button
           type="button"
-          onClick={onSend}
-          disabled={!hasThread || !replyText.trim() || sending}
+          onClick={handleSendClick}
+          disabled={sendDisabled}
           aria-label={sending ? "Sending operator reply" : "Send operator reply"}
           className={[
             "inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-all duration-base ease-premium",
-            !hasThread || !replyText.trim() || sending
+            sendDisabled
               ? "cursor-not-allowed bg-[rgba(37,99,235,0.18)] text-white/90"
               : "bg-brand text-white shadow-[0_20px_40px_-22px_rgba(var(--color-brand),0.72)] hover:translate-y-[-1px]",
           ].join(" ")}

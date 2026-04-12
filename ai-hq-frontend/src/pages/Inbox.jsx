@@ -356,6 +356,23 @@ export default function Inbox() {
     };
   }, [workspace.ready, workspace.tenantKey, refreshToken]);
 
+  useEffect(() => {
+    if (!automationMutation.success) return undefined;
+
+    const timer = window.setTimeout(() => {
+      setAutomationMutation((prev) =>
+        prev.success
+          ? {
+              ...prev,
+              success: "",
+            }
+          : prev
+      );
+    }, 2600);
+
+    return () => window.clearTimeout(timer);
+  }, [automationMutation.success]);
+
   const operatorName = workspace.ready
     ? (operatorState.tenantKey === workspace.tenantKey
         ? operatorState.name
@@ -554,6 +571,12 @@ export default function Inbox() {
   }, [selectedThread?.id, loadMessages, loadRelatedLead]);
 
   useEffect(() => {
+    if (detailOpen && !selectedThread?.id) {
+      setDetailOpen(false);
+    }
+  }, [detailOpen, selectedThread?.id]);
+
+  useEffect(() => {
     function onKeyDown(event) {
       if (event.key === "Escape") setDetailOpen(false);
     }
@@ -573,6 +596,13 @@ export default function Inbox() {
     [launchChannels]
   );
 
+  const truthReady = useMemo(
+    () => s(readinessState.truth?.status).toLowerCase() === "ready",
+    [readinessState.truth]
+  );
+
+  const showTruthApprovalNotice = hasConnectedLaunchChannel && !truthReady;
+
   const surfaceNotice = buildSurfaceNotice(surface);
 
   return (
@@ -590,6 +620,17 @@ export default function Inbox() {
 
       {!hasConnectedLaunchChannel ? (
         <LaunchChannelPrompt onOpenChannels={() => navigate("/channels")} />
+      ) : null}
+
+      {showTruthApprovalNotice ? (
+        <div className="mb-4 shrink-0 bg-white px-0">
+          <InlineNotice
+            tone="warning"
+            title="Truth approval required"
+            description="A channel is live, but approved truth is not ready yet. Review truth before trusting autonomous replies."
+            compact
+          />
+        </div>
       ) : null}
 
       <div className="grid min-h-0 flex-1 grid-cols-[388px_minmax(0,1fr)] overflow-hidden bg-white">

@@ -381,14 +381,51 @@ export default function InboxDetailPanel({
   const [openMenuThreadId, setOpenMenuThreadId] = useState("");
   const menuAnchorRef = useRef(null);
   const scrollViewportRef = useRef(null);
+  const shouldStickToBottomRef = useRef(true);
+  const lastThreadIdRef = useRef("");
 
   const menuOpen =
     Boolean(currentThreadId) && openMenuThreadId === currentThreadId;
 
   useEffect(() => {
-    if (!scrollViewportRef.current || !hasThread) return;
-    scrollViewportRef.current.scrollTop = scrollViewportRef.current.scrollHeight;
+    if (!hasThread) {
+      shouldStickToBottomRef.current = true;
+      lastThreadIdRef.current = "";
+      return;
+    }
+
+    const viewport = scrollViewportRef.current;
+    if (!viewport) return;
+
+    const threadChanged = lastThreadIdRef.current !== currentThreadId;
+    if (threadChanged || shouldStickToBottomRef.current) {
+      viewport.scrollTop = viewport.scrollHeight;
+    }
+
+    lastThreadIdRef.current = currentThreadId;
   }, [currentThreadId, messages.length, hasThread]);
+
+  useEffect(() => {
+    const viewport = scrollViewportRef.current;
+    if (!viewport) return undefined;
+
+    function updateStickState() {
+      const distanceFromBottom =
+        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      shouldStickToBottomRef.current = distanceFromBottom <= 120;
+    }
+
+    updateStickState();
+    viewport.addEventListener("scroll", updateStickState, { passive: true });
+
+    return () => {
+      viewport.removeEventListener("scroll", updateStickState);
+    };
+  }, [currentThreadId]);
+
+  useEffect(() => {
+    setOpenMenuThreadId("");
+  }, [currentThreadId]);
 
   function closeMenu() {
     setOpenMenuThreadId("");

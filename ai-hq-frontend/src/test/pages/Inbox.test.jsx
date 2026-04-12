@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const useInboxData = vi.fn();
@@ -107,6 +107,27 @@ vi.mock("../../components/inbox/InboxComposer.jsx", () => ({
 }));
 
 import Inbox from "../../pages/Inbox.jsx";
+
+function buildTrustView({
+  status = "",
+  controlMode = "autonomy_enabled",
+} = {}) {
+  return {
+    status,
+    summary: {
+      policyControls: {
+        tenantDefault: {
+          controlMode,
+          availableModes: [
+            { mode: "autonomy_enabled", allowed: true },
+            { mode: "operator_only_mode", allowed: true },
+          ],
+        },
+        items: [],
+      },
+    },
+  };
+}
 
 describe("Inbox", () => {
   beforeEach(() => {
@@ -237,7 +258,7 @@ describe("Inbox", () => {
     });
   });
 
-  it("renders surface notice, launch channel prompt, thread list, and detail panel", async () => {
+  it("renders the launch prompt when no launch channel is connected", async () => {
     render(<Inbox />);
 
     expect(
@@ -254,49 +275,40 @@ describe("Inbox", () => {
       )
     ).toBeInTheDocument();
 
-    expect(
-      screen.getByRole("button", { name: /open channels/i })
-    ).toBeInTheDocument();
+    const openChannelsButton = screen.getByRole("button", {
+      name: /open channels/i,
+    });
+
+    expect(openChannelsButton).toBeInTheDocument();
+
+    fireEvent.click(openChannelsButton);
+
+    expect(mockNavigate).toHaveBeenCalledWith("/channels");
 
     expect(
       screen.getByRole("heading", { name: /all conversations/i })
     ).toBeInTheDocument();
 
-    expect(
-      screen.getByLabelText(/thread list panel/i)
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/thread list panel/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/inbox detail panel/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/inbox composer/i)).toBeInTheDocument();
 
     expect(
-      screen.getByLabelText(/inbox detail panel/i)
+      screen.getByText(/automation-status:autonomy enabled/i)
     ).toBeInTheDocument();
-
-    expect(
-      screen.getByLabelText(/inbox composer/i)
-    ).toBeInTheDocument();
-
-    expect(screen.getByText(/automation-status:autonomy enabled/i)).toBeInTheDocument();
     expect(screen.getByText(/selected-thread:none/i)).toBeInTheDocument();
     expect(screen.getByText(/selected-thread-name:none/i)).toBeInTheDocument();
   });
 
-  it("does not render the launch prompt when a launch channel is connected", async () => {
+  it("shows truth approval notice when a launch channel is connected but truth is not ready", async () => {
     getMetaChannelStatus.mockResolvedValue({ connected: true });
     getTelegramChannelStatus.mockResolvedValue({ connected: false });
     getWebsiteWidgetStatus.mockResolvedValue({ connected: false });
-    getSettingsTrustView.mockResolvedValue({
-      summary: {
-        policyControls: {
-          tenantDefault: {
-            controlMode: "autonomy_enabled",
-            availableModes: [
-              { mode: "autonomy_enabled", allowed: true },
-              { mode: "operator_only_mode", allowed: true },
-            ],
-          },
-          items: [],
-        },
-      },
-    });
+    getSettingsTrustView.mockResolvedValue(
+      buildTrustView({
+        status: "blocked",
+      })
+    );
 
     render(<Inbox />);
 
@@ -306,6 +318,41 @@ describe("Inbox", () => {
 
     expect(
       screen.queryByText(/connect a launch channel first/i)
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.getByText(/truth approval required/i)
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByText(
+        /a channel is live, but approved truth is not ready yet\. review truth before trusting autonomous replies\./i
+      )
+    ).toBeInTheDocument();
+  });
+
+  it("does not show the truth approval notice when a launch channel is connected and truth is ready", async () => {
+    getMetaChannelStatus.mockResolvedValue({ connected: true });
+    getTelegramChannelStatus.mockResolvedValue({ connected: false });
+    getWebsiteWidgetStatus.mockResolvedValue({ connected: false });
+    getSettingsTrustView.mockResolvedValue(
+      buildTrustView({
+        status: "ready",
+      })
+    );
+
+    render(<Inbox />);
+
+    expect(
+      await screen.findByRole("heading", { name: /all conversations/i })
+    ).toBeInTheDocument();
+
+    expect(
+      screen.queryByText(/connect a launch channel first/i)
+    ).not.toBeInTheDocument();
+
+    expect(
+      screen.queryByText(/truth approval required/i)
     ).not.toBeInTheDocument();
   });
 });
