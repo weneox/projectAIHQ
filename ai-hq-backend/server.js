@@ -49,7 +49,6 @@ import {
 } from "./src/services/runtimeIncidentTrail.js";
 import { createDurableExecutionHelpers } from "./src/db/helpers/durableExecutions.js";
 import {
-  buildOperationalReadinessBlockerError,
   getOperationalReadinessSummary,
   hasOperationalReadinessBlockers,
   shouldEnforceOperationalReadinessOnStartup,
@@ -371,10 +370,13 @@ async function main() {
     }
 
     try {
-      const draftScheduleWorkerState = app.locals?.draftScheduleWorker?.getState?.() || null;
+      const draftScheduleWorkerState =
+        app.locals?.draftScheduleWorker?.getState?.() || null;
       const mediaJobWorkerState = app.locals?.mediaJobWorker?.getState?.() || null;
-      const durableWorkerState = app.locals?.durableExecutionWorker?.getState?.() || null;
-      const sourceSyncWorkerState = app.locals?.sourceSyncWorker?.getState?.() || null;
+      const durableWorkerState =
+        app.locals?.durableExecutionWorker?.getState?.() || null;
+      const sourceSyncWorkerState =
+        app.locals?.sourceSyncWorker?.getState?.() || null;
       const helpers = createDurableExecutionHelpers({ db });
       const durableSummary = await helpers.getExecutionSummary();
       const operational = buildDurableOperationalStatus({
@@ -454,7 +456,10 @@ async function main() {
 
     if (out?.operationalReadiness?.status === "blocked") {
       out.status = "unavailable";
-    } else if (out?.operationalReadiness?.status === "attention" && out.status !== "unavailable") {
+    } else if (
+      out?.operationalReadiness?.status === "attention" &&
+      out.status !== "unavailable"
+    ) {
       out.status = "degraded";
     }
 
@@ -471,7 +476,10 @@ async function main() {
 
     if (processRole.readinessImpact === "unavailable") {
       out.status = "unavailable";
-    } else if (processRole.readinessImpact === "degraded" && out.status === "ready") {
+    } else if (
+      processRole.readinessImpact === "degraded" &&
+      out.status === "ready"
+    ) {
       out.status = "degraded";
     }
 
@@ -506,8 +514,8 @@ async function main() {
       out.status === "ready"
         ? "Readiness, worker fleet, and recent incident signals are currently healthy."
         : out.status === "unavailable"
-        ? "The control plane is not ready to advertise healthy availability because required runtime dependencies are blocked or unavailable."
-        : "The control plane is reachable but degraded. Operators should review worker or recent incident signals before trusting normal runtime behavior.";
+          ? "The control plane is not ready to advertise healthy availability because required runtime dependencies are blocked or unavailable."
+          : "The control plane is reachable but degraded. Operators should review worker or recent incident signals before trusting normal runtime behavior.";
 
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     return res.status(200).json(out);
@@ -572,12 +580,17 @@ async function main() {
             retainDays: runtimeIncidentRetentionPolicy.retainDays,
             maxRows: runtimeIncidentRetentionPolicy.maxRows,
           });
-          if (Number(outcome.deletedByAge || 0) > 0 || Number(outcome.deletedByCount || 0) > 0) {
+          if (
+            Number(outcome.deletedByAge || 0) > 0 ||
+            Number(outcome.deletedByCount || 0) > 0
+          ) {
             logger.info("runtime_incident_trail.pruned", outcome);
           }
         } catch (error) {
           logger.warn("runtime_incident_trail.prune_failed", {
-            error: String(error?.message || error || "runtime_incident_trail_prune_failed"),
+            error: String(
+              error?.message || error || "runtime_incident_trail_prune_failed"
+            ),
           });
         }
       }, runtimeIncidentRetentionPolicy.pruneIntervalHours * 60 * 60 * 1000);
@@ -608,7 +621,10 @@ async function main() {
             `Auto-migration failed: ${m?.error || m?.reason || "unknown"}`
           );
         }
-      } else if (startupMigrationPolicy.shouldBlock && isDbRequiredAppEnv(cfg.app.env)) {
+      } else if (
+        startupMigrationPolicy.shouldBlock &&
+        isDbRequiredAppEnv(cfg.app.env)
+      ) {
         throw new Error(
           startupMigrationPolicy.reason === "schema_drift_detected"
             ? "Applied schema migration files have drifted from the recorded ledger. Resolve migration drift before starting the app."
@@ -643,47 +659,55 @@ async function main() {
 
   const db = getDb();
   if (db) {
-    const enforceOperationalReadiness = shouldEnforceOperationalReadinessOnStartup({
-      appEnv: cfg.app.env,
-      enforceFlag: cfg.operational.enforceReadinessOnStartup,
-    });
+    const enforceOperationalReadiness =
+      shouldEnforceOperationalReadinessOnStartup({
+        appEnv: cfg.app.env,
+        enforceFlag: cfg.operational.enforceReadinessOnStartup,
+      });
 
     try {
       const readinessSummary = await getOperationalReadinessSummary(db, {
         enforced: enforceOperationalReadiness,
       });
+
+      const hasTenantScopedOperationalBlockers =
+        hasOperationalReadinessBlockers(readinessSummary);
+
       startupOperationalReadiness = {
         ...readinessSummary,
+        ok: true,
         enforced: enforceOperationalReadiness,
-        status: hasOperationalReadinessBlockers(readinessSummary)
-          ? "blocked"
-          : "ready",
+        status: hasTenantScopedOperationalBlockers ? "attention" : "ready",
+        tenantScopedBlockersDetected: hasTenantScopedOperationalBlockers,
       };
 
-      if (
-        enforceOperationalReadiness &&
-        hasOperationalReadinessBlockers(readinessSummary)
-      ) {
-        throw buildOperationalReadinessBlockerError(readinessSummary);
+      if (hasTenantScopedOperationalBlockers) {
+        logger.warn("app.operational_readiness.attention", {
+          blockersTotal: Number(readinessSummary?.blockers?.total || 0),
+          blockerReasonCodes: Array.isArray(
+            readinessSummary?.blockerReasonCodes
+          )
+            ? readinessSummary.blockerReasonCodes
+            : [],
+          message:
+            "Tenant-scoped operational blockers were detected, but startup will continue so the control plane stays reachable.",
+        });
       }
     } catch (err) {
       startupOperationalReadiness = {
         ...startupOperationalReadiness,
         ok: false,
-        enforced: enforceOperationalReadiness,
-        status: enforceOperationalReadiness ? "blocked" : "attention",
+        enforced: false,
+        status: "attention",
         error: String(err?.message || err || "operational_readiness_failed"),
       };
-
-      if (enforceOperationalReadiness) {
-        throw err;
-      }
 
       logger.warn("app.operational_readiness.skipped", {
         error: startupOperationalReadiness.error,
       });
     }
   }
+
   const dbDisabled = !db;
   const audit = createAuditLogger(db);
 
@@ -696,43 +720,37 @@ async function main() {
     logger: logger.child({ component: "realtime" }),
   });
 
-  app.post(
-    "/api/__voice-test",
-    diagnosticsGuard,
-    (req, res) => {
-      (req.log || logger).info("http.voice_test.hit", {
-        body: req.body,
-        hasInternalToken: !!req.headers["x-internal-token"],
-        hasWebhookToken: !!req.headers["x-webhook-token"],
-      });
-
-      return res.status(200).json({
-        ok: true,
-        route: "__voice-test",
-        marker: "VOICE_TEST_BUILD_V4_FEATURES",
-        body: req.body || null,
-        hasInternalToken: !!req.headers["x-internal-token"],
-        hasWebhookToken: !!req.headers["x-webhook-token"],
-      });
+  app.post("/api/__voice-test", diagnosticsGuard, (req, res) => {
+    (req.log || logger).info("http.voice_test.hit", {
+      body: req.body,
+      hasInternalToken: !!req.headers["x-internal-token"],
+      hasWebhookToken: !!req.headers["x-webhook-token"],
     });
 
-  app.get(
-    "/api/__buildcheck",
-    diagnosticsGuard,
-    (_req, res) => {
-      res.setHeader("Content-Type", "application/json; charset=utf-8");
-      return res.status(200).json({
-        ok: true,
-        service: "ai-hq-backend",
-        marker: "API_BUILD_CHECK_V4_FEATURES",
-        env: cfg.app.env,
-        port: cfg.app.port,
-        time: new Date().toISOString(),
-        publicBaseUrl: s(cfg.urls.publicBaseUrl),
-        userSessionCookieName: s(cfg.auth.userSessionCookieName),
-        hasUserSessionSecret: Boolean(s(cfg.auth.userSessionSecret)),
-      });
+    return res.status(200).json({
+      ok: true,
+      route: "__voice-test",
+      marker: "VOICE_TEST_BUILD_V4_FEATURES",
+      body: req.body || null,
+      hasInternalToken: !!req.headers["x-internal-token"],
+      hasWebhookToken: !!req.headers["x-webhook-token"],
     });
+  });
+
+  app.get("/api/__buildcheck", diagnosticsGuard, (_req, res) => {
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    return res.status(200).json({
+      ok: true,
+      service: "ai-hq-backend",
+      marker: "API_BUILD_CHECK_V4_FEATURES",
+      env: cfg.app.env,
+      port: cfg.app.port,
+      time: new Date().toISOString(),
+      publicBaseUrl: s(cfg.urls.publicBaseUrl),
+      userSessionCookieName: s(cfg.auth.userSessionCookieName),
+      hasUserSessionSecret: Boolean(s(cfg.auth.userSessionSecret)),
+    });
+  });
 
   app.use("/api", adminAuthRoutes({ db, wsHub }));
 
@@ -826,9 +844,15 @@ async function main() {
       corsOrigin: cfg.urls.corsOrigin,
       allowedOrigins,
       sourceSyncWorkerEnabled: !!cfg.workers.sourceSyncWorkerEnabled,
-      sourceSyncWorkerIntervalMs: Number(cfg.workers.sourceSyncWorkerIntervalMs || 5000),
-      sourceSyncWorkerBatchSize: Number(cfg.workers.sourceSyncWorkerBatchSize || 4),
-      sourceSyncWorkerLeaseMs: Number(cfg.workers.sourceSyncWorkerLeaseMs || 600000),
+      sourceSyncWorkerIntervalMs: Number(
+        cfg.workers.sourceSyncWorkerIntervalMs || 5000
+      ),
+      sourceSyncWorkerBatchSize: Number(
+        cfg.workers.sourceSyncWorkerBatchSize || 4
+      ),
+      sourceSyncWorkerLeaseMs: Number(
+        cfg.workers.sourceSyncWorkerLeaseMs || 600000
+      ),
       durableExecutionWorkerEnabled: !!cfg.workers.durableExecutionWorkerEnabled,
       durableExecutionWorkerIntervalMs: Number(
         cfg.workers.durableExecutionWorkerIntervalMs || 15_000
