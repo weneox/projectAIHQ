@@ -35,6 +35,10 @@ function refsMatch(left = "", right = "") {
   return s(left) === s(right);
 }
 
+function lower(value, fallback = "") {
+  return s(value, fallback).toLowerCase();
+}
+
 function normalizeProjectionRunRow(row = {}) {
   const value = obj(row);
   return {
@@ -91,9 +95,7 @@ function buildAuthorityScopeSummary({
     reason: resolvedReason,
     reasonCode: resolvedReason,
     tenantId: s(
-      graphTenantScope.tenantId ||
-        tenantScope.tenantId ||
-        freshnessValue.tenantId
+      graphTenantScope.tenantId || tenantScope.tenantId || freshnessValue.tenantId
     ),
     tenantKey: s(
       graphTenantScope.tenantKey ||
@@ -110,9 +112,7 @@ function buildAuthorityScopeSummary({
     expectedSources: obj(freshnessValue.expectedSources),
     hasTenant: Boolean(
       s(
-        graphTenantScope.tenantId ||
-          tenantScope.tenantId ||
-          freshnessValue.tenantId
+        graphTenantScope.tenantId || tenantScope.tenantId || freshnessValue.tenantId
       )
     ),
     hasCanonicalTenant: Boolean(s(graphTenantScope.tenantId)),
@@ -268,11 +268,7 @@ function pickAuthorityUnavailableReasonFromFreshness(freshness = {}) {
   return "tenant_runtime_authority_unavailable";
 }
 
-function assertProjectionRunOrThrow({
-  run = null,
-  tenant = null,
-  graph = null,
-} = {}) {
+function assertProjectionRunOrThrow({ run = null, tenant = null, graph = null } = {}) {
   const runId = s(run?.id);
   if (runId) return runId;
 
@@ -499,6 +495,45 @@ async function markTenantRuntimeProjectionStale(
         ),
         expectedSources: obj(obj(freshness).expectedSources),
         currentSources: obj(obj(freshness).currentSources),
+      }),
+    ]
+  );
+}
+
+async function markTenantRuntimeProjectionReady(
+  client,
+  { runtimeProjectionId = "", freshness = {} } = {}
+) {
+  const projectionId = s(runtimeProjectionId);
+  if (!projectionId) return null;
+
+  return await one(
+    client,
+    `
+    update tenant_business_runtime_projection
+    set
+      status = 'ready',
+      last_refreshed_at = now(),
+      metadata_json = coalesce(metadata_json, '{}'::jsonb) || $2::jsonb,
+      updated_at = now()
+    where id = $1
+    returning *
+    `,
+    [
+      projectionId,
+      JSON.stringify({
+        readinessRecoveredAt: new Date().toISOString(),
+        readinessRecoveredBy: "getTenantRuntimeProjectionFreshness",
+        recoveredFromStatus: "stale",
+        freshnessReasons: arr(obj(freshness).reasons),
+        expectedProjectionHash: s(obj(freshness).expectedProjectionHash),
+        currentProjectionHash: s(obj(freshness).currentProjectionHash),
+        expectedPublishedTruthVersionId: s(
+          obj(freshness).expectedPublishedTruthVersionId
+        ),
+        currentPublishedTruthVersionId: s(
+          obj(freshness).currentPublishedTruthVersionId
+        ),
       }),
     ]
   );
@@ -905,6 +940,19 @@ export async function getTenantRuntimeProjectionFreshness(
       runtimeProjectionId: s(current.id),
       freshness,
     });
+  } else if (
+    !freshness.stale &&
+    lower(current?.status) === "stale" &&
+    s(current?.id)
+  ) {
+    const recovered = await markTenantRuntimeProjectionReady(client, {
+      runtimeProjectionId: s(current.id),
+      freshness,
+    });
+
+    if (recovered?.id) {
+      Object.assign(current, recovered);
+    }
   }
 
   const healthContext = resolveProjectionHealthContext({

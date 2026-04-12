@@ -1659,8 +1659,7 @@ export async function createTruthVersionInternal(db, input = {}) {
     business_profile_id:
       s(input.businessProfileId || input.business_profile_id) || null,
     business_capabilities_id:
-      s(input.businessCapabilitiesId || input.business_capabilities_id) ||
-      null,
+      s(input.businessCapabilitiesId || input.business_capabilities_id) || null,
     review_session_id:
       s(input.reviewSessionId || input.review_session_id) || null,
     source_summary_json: snapshot.sourceSummary,
@@ -1703,8 +1702,7 @@ export async function createTruthVersionInternal(db, input = {}) {
       tenant.tenant_id,
       tenant.tenant_key,
       s(input.businessProfileId || input.business_profile_id) || null,
-      s(input.businessCapabilitiesId || input.business_capabilities_id) ||
-        null,
+      s(input.businessCapabilitiesId || input.business_capabilities_id) || null,
       s(input.reviewSessionId || input.review_session_id) || null,
       approvedAt,
       approvedBy,
@@ -1716,7 +1714,40 @@ export async function createTruthVersionInternal(db, input = {}) {
     ]
   );
 
-  return normalizeVersionRow(r.rows?.[0]);
+  const version = normalizeVersionRow(r.rows?.[0]);
+
+  if (!version?.id) {
+    return version;
+  }
+
+  if (input.skipRuntimeRefresh === true) {
+    return version;
+  }
+
+  await refreshRuntimeProjectionBestEffort(db, {
+    tenantId: s(version.tenant_id || tenant.tenant_id),
+    tenantKey: s(version.tenant_key || tenant.tenant_key),
+    triggerType: "truth_version_create",
+    requestedBy: s(approvedBy || "tenantTruthVersions"),
+    runnerKey: "tenantTruthVersions.createTruthVersionInternal",
+    generatedBy: s(approvedBy || "system"),
+    metadata: {
+      source: "tenantTruthVersions.createTruthVersionInternal",
+      truthVersionId: s(version.id),
+      businessProfileId: s(
+        version.business_profile_id ||
+          input.businessProfileId ||
+          input.business_profile_id
+      ),
+      businessCapabilitiesId: s(
+        version.business_capabilities_id ||
+          input.businessCapabilitiesId ||
+          input.business_capabilities_id
+      ),
+    },
+  });
+
+  return version;
 }
 
 export async function executeTruthVersionRollbackInternal(
@@ -1932,6 +1963,7 @@ export async function executeTruthVersionRollbackInternal(
       capabilities: savedCapabilities,
       sourceSummaryJson,
       metadataJson: rollbackMetadata,
+      skipRuntimeRefresh: true,
     });
 
     return {
@@ -2094,36 +2126,7 @@ export function createTenantTruthVersionHelpers({ db }) {
     },
 
     async createVersion(input = {}) {
-      const version = await createTruthVersionInternal(db, input);
-
-      if (!version?.id) {
-        return version;
-      }
- 
-      await refreshRuntimeProjectionBestEffort(db, {
-        tenantId: s(version.tenant_id || input.tenantId || input.tenant_id),
-        tenantKey: s(version.tenant_key || input.tenantKey || input.tenant_key),
-        triggerType: "truth_version_create",
-        requestedBy: s(input.approvedBy || input.approved_by || "tenantTruthVersions"),
-        runnerKey: "tenantTruthVersions.createVersion",
-        generatedBy: s(input.approvedBy || input.approved_by || "system"),
-        metadata: {
-          source: "tenantTruthVersions.createVersion",
-          truthVersionId: s(version.id),
-          businessProfileId: s(
-            version.business_profile_id ||
-            input.businessProfileId ||
-            input.business_profile_id
-          ),
-          businessCapabilitiesId: s(
-            version.business_capabilities_id ||
-              input.businessCapabilitiesId ||
-              input.business_capabilities_id
-          ),
-        },
-      });
-
-      return version;
+      return createTruthVersionInternal(db, input);
     },
 
     async compareVersions({
