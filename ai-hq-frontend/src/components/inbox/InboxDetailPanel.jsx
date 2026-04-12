@@ -5,7 +5,6 @@ import {
   RefreshCw,
   ShieldAlert,
   SlidersHorizontal,
-  Sparkles,
   UserCog,
   XCircle,
 } from "lucide-react";
@@ -17,55 +16,6 @@ import { indexAttemptsByMessageCorrelation } from "./outboundAttemptTruth.js";
 
 function s(v, d = "") {
   return String(v ?? d).trim();
-}
-
-function initialsFromName(value = "") {
-  const parts = String(value || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-
-  if (!parts.length) return "U";
-
-  return parts
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("");
-}
-
-function avatarTone(seed = "") {
-  const tones = [
-    "bg-amber-100 text-amber-700",
-    "bg-rose-100 text-rose-700",
-    "bg-sky-100 text-sky-700",
-    "bg-violet-100 text-violet-700",
-    "bg-emerald-100 text-emerald-700",
-  ];
-
-  const score = String(seed || "")
-    .split("")
-    .reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-
-  return tones[score % tones.length];
-}
-
-function resolveDisplayName(thread = {}) {
-  return (
-    s(thread.customer_name) ||
-    s(thread.external_username) ||
-    s(thread.external_user_id) ||
-    "Conversation"
-  );
-}
-
-function resolveAvatarUrl(thread = {}) {
-  return (
-    s(thread.avatar_url) ||
-    s(thread.profile_image_url) ||
-    s(thread.customer_avatar_url) ||
-    s(thread.external_avatar_url) ||
-    s(thread.photo_url)
-  );
 }
 
 function formatConversationMeta(thread = {}) {
@@ -181,7 +131,7 @@ function DetailActionMenu({
     {
       key: "resolved",
       label: disabledMap.resolved ? "Resolving..." : "Resolve",
-      icon: Sparkles,
+      icon: ShieldAlert,
       onClick: onResolve,
       disabled: disabledMap.resolved,
     },
@@ -228,6 +178,61 @@ function DetailActionMenu({
   );
 }
 
+function InboxAutomationSwitch({ automationControl, onToggle }) {
+  const loading = automationControl?.loading === true;
+  const saving = automationControl?.saving === true;
+  const enabled = automationControl?.enabled === true;
+  const disabled = automationControl?.disabled === true;
+
+  return (
+    <div className="flex items-center gap-2 rounded-pill border border-line bg-surface-subtle px-2.5 py-1.5">
+      <span className="text-[12px] font-medium text-text">Auto-reply</span>
+
+      <span
+        className={[
+          "hidden md:inline-flex rounded-pill px-2 py-0.5 text-[10px] font-medium",
+          enabled
+            ? "bg-[rgba(var(--color-success),0.12)] text-[rgb(var(--color-success))]"
+            : "bg-[rgba(var(--color-warning),0.14)] text-[rgb(var(--color-warning))]",
+        ].join(" ")}
+      >
+        {loading ? "Checking" : enabled ? "On" : "Off"}
+      </span>
+
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label={
+          enabled
+            ? "Disable inbox automatic replies"
+            : "Enable inbox automatic replies"
+        }
+        title={s(automationControl?.disabledReason)}
+        onClick={() => {
+          if (disabled || loading || saving) return;
+          onToggle?.(!enabled);
+        }}
+        disabled={disabled || loading || saving}
+        className={[
+          "relative inline-flex h-6 w-10 items-center rounded-full border transition-all duration-base ease-premium",
+          enabled
+            ? "border-brand bg-brand"
+            : "border-line-strong bg-surface",
+          disabled || loading || saving ? "cursor-not-allowed opacity-60" : "",
+        ].join(" ")}
+      >
+        <span
+          className={[
+            "inline-block h-4.5 w-4.5 rounded-full bg-white shadow-[0_8px_20px_-12px_rgba(15,23,42,0.45)] transition-transform duration-base ease-premium",
+            enabled ? "translate-x-[20px]" : "translate-x-[3px]",
+          ].join(" ")}
+        />
+      </button>
+    </div>
+  );
+}
+
 function ConversationTopBar({
   thread,
   unreadCount,
@@ -238,52 +243,44 @@ function ConversationTopBar({
   menuAnchorRef,
   menu,
   surface,
+  automationControl,
+  onToggleAutomation,
 }) {
-  const name = resolveDisplayName(thread);
-  const meta = formatConversationMeta(thread);
-  const avatarUrl = resolveAvatarUrl(thread);
+  const hasThread = Boolean(thread?.id);
+  const title = hasThread
+    ? s(thread.customer_name) ||
+      s(thread.external_username) ||
+      s(thread.external_user_id) ||
+      "Conversation"
+    : "Conversation";
+  const meta = hasThread ? formatConversationMeta(thread) : "";
 
   return (
-    <div className="border-b border-line-soft bg-surface px-4 py-4">
+    <div className="border-b border-line-soft bg-surface px-4 py-3.5">
       <div className="flex items-center justify-between gap-4">
-        <button
-          type="button"
-          onClick={onOpenDetails}
-          aria-label="Open conversation details"
-          className="group flex min-w-0 items-center gap-3 text-left"
-        >
-          {avatarUrl ? (
-            <img
-              src={avatarUrl}
-              alt={name}
-              className="h-10 w-10 rounded-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <div
-              className={[
-                "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
-                avatarTone(name),
-              ].join(" ")}
-            >
-              {initialsFromName(name)}
-            </div>
-          )}
-
-          <div className="min-w-0">
-            <div className="truncate text-[15px] font-semibold text-text">
-              {name}
-            </div>
-            {meta ? (
-              <div className="truncate text-[12px] text-text-muted">{meta}</div>
-            ) : null}
+        <div className="min-w-0">
+          <div className="truncate text-[12px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
+            Conversation
           </div>
-        </button>
+          <div className="mt-1 truncate text-[15px] font-semibold text-text">
+            {title}
+          </div>
+          {meta ? (
+            <div className="mt-0.5 truncate text-[12px] text-text-muted">
+              {meta}
+            </div>
+          ) : null}
+        </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1.5">
+          <InboxAutomationSwitch
+            automationControl={automationControl}
+            onToggle={onToggleAutomation}
+          />
+
           <QuietIconButton
             onClick={onRefresh}
-            disabled={!thread?.id || surface?.loading || surface?.saving}
+            disabled={!hasThread || surface?.loading || surface?.saving}
             label="Refresh conversation"
           >
             <RefreshCw className="h-4 w-4" />
@@ -291,7 +288,7 @@ function ConversationTopBar({
 
           <QuietIconButton
             onClick={onOpenDetails}
-            disabled={!thread?.id}
+            disabled={!hasThread}
             label="Open detail drawer"
           >
             <SlidersHorizontal className="h-4 w-4" />
@@ -300,7 +297,7 @@ function ConversationTopBar({
           <div className="relative" ref={menuAnchorRef}>
             <QuietIconButton
               onClick={onMenuToggle}
-              disabled={!thread?.id}
+              disabled={!hasThread}
               label="Conversation actions"
               active={menuOpen}
             >
@@ -337,7 +334,7 @@ function ConversationContextStrip({ thread }) {
   const unreadCount = Number(thread?.unread_count || 0);
 
   return (
-    <div className="border-b border-line-soft bg-surface px-5 py-3">
+    <div className="border-b border-line-soft bg-surface px-5 py-2.5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-5 text-text-subtle">
         <span>
           <span className="text-text-muted">Channel:</span> {channel}
@@ -366,6 +363,8 @@ export default function InboxDetailPanel({
   activateHandoff,
   setThreadStatus,
   onOpenDetails,
+  automationControl,
+  onToggleAutomation,
   composer = null,
 }) {
   const hasThread = Boolean(selectedThread?.id);
@@ -420,57 +419,35 @@ export default function InboxDetailPanel({
 
   return (
     <section className="relative flex h-full min-h-0 flex-col bg-surface">
-      {hasThread ? (
-        <ConversationTopBar
-          thread={selectedThread}
-          unreadCount={unreadCount}
-          onOpenDetails={onOpenDetails}
-          onRefresh={surface?.refresh}
-          onMenuToggle={toggleMenu}
-          menuOpen={menuOpen}
-          menuAnchorRef={menuAnchorRef}
-          surface={surface}
-          menu={
-            <DetailActionMenu
-              open={menuOpen}
-              anchorRef={menuAnchorRef}
-              onClose={closeMenu}
-              onMarkRead={() => markRead(selectedThread.id)}
-              canMarkRead={canMarkRead}
-              onAssign={() => assignThread(selectedThread.id)}
-              onHandoff={() => activateHandoff(selectedThread.id)}
-              onResolve={() => setThreadStatus(selectedThread.id, "resolved")}
-              onCloseThread={() => setThreadStatus(selectedThread.id, "closed")}
-              disabledMap={disabledMap}
-            />
-          }
-        />
-      ) : surface?.loading && !hasThread ? (
-        <div className="border-b border-line-soft bg-surface px-4 py-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="h-10 w-10 animate-pulse rounded-full bg-surface-subtle" />
-              <div className="min-w-0 space-y-2">
-                <div className="h-4 w-36 animate-pulse rounded-md bg-surface-subtle" />
-                <div className="h-3 w-24 animate-pulse rounded-md bg-surface-subtle" />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <div className="h-9 w-9 animate-pulse rounded-soft bg-surface-subtle" />
-              <div className="h-9 w-9 animate-pulse rounded-soft bg-surface-subtle" />
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="border-b border-line-soft bg-surface px-4 py-4">
-          <div className="text-[12px] font-medium uppercase tracking-[0.12em] text-text-subtle">
-            Conversation
-          </div>
-        </div>
-      )}
+      <ConversationTopBar
+        thread={selectedThread}
+        unreadCount={unreadCount}
+        onOpenDetails={onOpenDetails}
+        onRefresh={surface?.refresh}
+        onMenuToggle={toggleMenu}
+        menuOpen={menuOpen}
+        menuAnchorRef={menuAnchorRef}
+        surface={surface}
+        automationControl={automationControl}
+        onToggleAutomation={onToggleAutomation}
+        menu={
+          <DetailActionMenu
+            open={menuOpen}
+            anchorRef={menuAnchorRef}
+            onClose={closeMenu}
+            onMarkRead={() => markRead(selectedThread.id)}
+            canMarkRead={canMarkRead}
+            onAssign={() => assignThread(selectedThread.id)}
+            onHandoff={() => activateHandoff(selectedThread.id)}
+            onResolve={() => setThreadStatus(selectedThread.id, "resolved")}
+            onCloseThread={() => setThreadStatus(selectedThread.id, "closed")}
+            disabledMap={disabledMap}
+          />
+        }
+      />
 
       {showSurfaceBanner ? (
-        <div className="pointer-events-none absolute inset-x-0 top-[74px] z-20 flex justify-center px-4 pt-3">
+        <div className="pointer-events-none absolute inset-x-0 top-[70px] z-20 flex justify-center px-4 pt-3">
           <div className="pointer-events-auto w-full max-w-[760px]">
             <SurfaceBanner
               surface={surface}
@@ -489,7 +466,7 @@ export default function InboxDetailPanel({
           {surface?.loading && !hasThread ? (
             <InboxDetailSkeleton />
           ) : !hasThread ? (
-            <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-6 text-center">
+            <div className="flex h-full min-h-[260px] flex-col items-center justify-center px-6 text-center">
               <div className="text-[16px] font-semibold text-text">
                 Conversation workspace
               </div>
@@ -511,7 +488,7 @@ export default function InboxDetailPanel({
                   </div>
                 </div>
               ) : (
-                <div className="space-y-3 px-5 py-5">
+                <div className="space-y-3 px-5 py-4">
                   {messages.map((message) => (
                     <InboxMessageBubble
                       key={message.id}

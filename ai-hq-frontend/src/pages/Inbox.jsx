@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, PanelRightOpen } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 
 import {
   getMetaChannelStatus,
@@ -22,7 +22,7 @@ import { useInboxData } from "../hooks/useInboxData.js";
 import { useInboxRealtime } from "../hooks/useInboxRealtime.js";
 import useWorkspaceTenantKey from "../hooks/useWorkspaceTenantKey.js";
 import { getAppSessionContext } from "../lib/appSession.js";
-import { compactSentence, s, toneFromReadiness } from "../lib/appUi.js";
+import { s } from "../lib/appUi.js";
 import { useLaunchSliceRefreshToken } from "../lib/launchSliceRefresh.js";
 import {
   buildChannelTruthLaunchReadiness,
@@ -32,7 +32,6 @@ import {
   buildTruthOperationalState,
 } from "../lib/readinessViewModel.js";
 import Button from "../components/ui/Button.jsx";
-import Badge from "../components/ui/Badge.jsx";
 import {
   InlineNotice,
   PageCanvas,
@@ -82,40 +81,6 @@ function buildSurfaceNotice(surface = {}) {
   return null;
 }
 
-function MetaLine({
-  inboxReadiness,
-  threadCount = 0,
-  unreadCount = 0,
-  selectedThread,
-  wsState = "idle",
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] leading-5 text-text-subtle">
-      <span>
-        <span className="text-text-muted">Launch:</span>{" "}
-        {s(inboxReadiness?.statusLabel, "Unknown")}
-      </span>
-      <span className="text-slate-300">•</span>
-      <span>
-        <span className="text-text-muted">Threads:</span> {threadCount}
-      </span>
-      <span className="text-slate-300">•</span>
-      <span>
-        <span className="text-text-muted">Unread:</span> {unreadCount}
-      </span>
-      <span className="text-slate-300">•</span>
-      <span>
-        <span className="text-text-muted">Selected:</span>{" "}
-        {selectedThread?.id ? "Open" : "None"}
-      </span>
-      <span className="text-slate-300">•</span>
-      <span>
-        <span className="text-text-muted">Realtime:</span> {s(wsState, "idle")}
-      </span>
-    </div>
-  );
-}
-
 function resolveInboxPolicyControl(trustView = null) {
   const controls = trustView?.summary?.policyControls || {};
   const tenantDefault = controls?.tenantDefault || null;
@@ -129,13 +94,26 @@ function resolveInboxPolicyControl(trustView = null) {
     ? inboxControl.availableModes
     : [];
 
-  const controlMode = s(inboxControl?.controlMode || "autonomy_enabled").toLowerCase();
+  const controlMode = s(
+    inboxControl?.controlMode || "autonomy_enabled"
+  ).toLowerCase();
+
   const enableRule = availableModes.find(
     (item) => s(item?.mode).toLowerCase() === "autonomy_enabled"
   );
   const disableRule = availableModes.find(
     (item) => s(item?.mode).toLowerCase() === "operator_only_mode"
   );
+
+  const labelMap = {
+    autonomy_enabled: "Autonomy enabled",
+    operator_only_mode: "Operator only",
+    human_review_required: "Human review",
+    handoff_preferred: "Handoff preferred",
+    handoff_required: "Handoff required",
+    blocked_until_repair: "Blocked until repair",
+    emergency_stop: "Emergency stop",
+  };
 
   return {
     controlMode,
@@ -144,6 +122,11 @@ function resolveInboxPolicyControl(trustView = null) {
     changedBy: s(inboxControl?.changedBy),
     policyReason: s(inboxControl?.policyReason),
     operatorNote: s(inboxControl?.operatorNote),
+    statusLabel:
+      labelMap[controlMode] ||
+      controlMode
+        .replace(/[_-]+/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase()),
     canEnable: enableRule ? enableRule.allowed === true : true,
     canDisable: disableRule ? disableRule.allowed === true : true,
     enableUnavailableReason: s(enableRule?.unavailableReason),
@@ -166,28 +149,14 @@ function buildInboxAutomationControl({
     ? resolved.disableUnavailableReason
     : resolved.enableUnavailableReason;
 
-  const statusLabel =
-    resolved.controlMode === "autonomy_enabled"
-      ? "Autonomy enabled"
-      : resolved.controlMode === "operator_only_mode"
-        ? "Operator only"
-        : resolved.controlMode
-          ? resolved.controlMode
-              .replace(/[_-]+/g, " ")
-              .replace(/\b\w/g, (char) => char.toUpperCase())
-          : "Unknown";
-
   return {
     loading: !workspaceReady || trustLoading,
     saving,
     enabled,
     controlMode: resolved.controlMode,
-    statusLabel,
+    statusLabel: resolved.statusLabel,
     disabled:
-      !workspaceReady ||
-      trustLoading ||
-      saving ||
-      targetCanApply === false,
+      !workspaceReady || trustLoading || saving || targetCanApply === false,
     disabledReason: unavailableReason,
     saveError: s(mutation?.error),
     saveSuccess: s(mutation?.success),
@@ -195,6 +164,37 @@ function buildInboxAutomationControl({
     changedBy: resolved.changedBy,
     policyReason: resolved.policyReason,
   };
+}
+
+function LaunchChannelPrompt({ inboxReadiness, onOpenChannels }) {
+  return (
+    <div className="border-b border-line-soft bg-[rgba(255,248,238,0.92)] px-5 py-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="min-w-0">
+          <div className="text-[14px] font-semibold text-text">
+            Connect a launch channel first.
+          </div>
+          <div className="mt-1 text-[13px] leading-6 text-text-muted">
+            {s(
+              inboxReadiness?.summary,
+              "Connect Website chat, Meta, Telegram, or another launch channel to activate the live inbox."
+            )}
+          </div>
+        </div>
+
+        <div className="shrink-0">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={onOpenChannels}
+            rightIcon={<ArrowRight className="h-4 w-4" />}
+          >
+            Open channels
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function Inbox() {
@@ -566,14 +566,20 @@ export default function Inbox() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [detailOpen]);
 
+  const launchChannels = useMemo(
+    () => [readinessState.meta, readinessState.telegram, readinessState.website],
+    [readinessState.meta, readinessState.telegram, readinessState.website]
+  );
+
+  const hasConnectedLaunchChannel = useMemo(
+    () => launchChannels.some((item) => item?.connected === true),
+    [launchChannels]
+  );
+
   const inboxReadiness = useMemo(
     () =>
       buildChannelTruthLaunchReadiness({
-        channels: [
-          readinessState.meta,
-          readinessState.telegram,
-          readinessState.website,
-        ],
+        channels: launchChannels,
         truthState: readinessState.truth,
         surface,
         copy: {
@@ -585,9 +591,9 @@ export default function Inbox() {
           unavailableDetail:
             "This surface stays intentionally cautious when live inbox data is unavailable.",
           noChannelSummary:
-            "No launch channel is currently connected. Connect website chat, Meta, or Telegram before trusting live inbox automation.",
+            "Connect Website chat, Meta, Telegram, or another launch channel to activate the live inbox.",
           noChannelDetail:
-            "The inbox can still be inspected, but live launch posture is blocked until a launch channel is attached.",
+            "The inbox stays available as a workspace, but live automation should not be trusted before a launch channel is attached.",
           deliveryBlockedSummary:
             "A channel is connected, but delivery is still blocked.",
           deliveryBlockedDetail:
@@ -598,36 +604,18 @@ export default function Inbox() {
             "Inbox is connected, but runtime still needs repair.",
           truthBlockedDetail:
             "Connected channels alone are not enough. Approved truth and healthy runtime must also be aligned.",
-          readyStatusLabel: selectedThread?.id ? "Live and ready" : "Launch ready",
-          readyTitle: selectedThread?.id
-            ? "Inbox launch posture is healthy and a live thread is selected."
-            : "Inbox launch posture is healthy.",
-          readySummary: selectedThread?.id
-            ? "Channels, approved truth, and runtime are aligned for the selected thread."
-            : "Channels, approved truth, and runtime are aligned for live inbox operations.",
+          readyStatusLabel: "Healthy",
+          readyTitle: "Inbox launch posture is healthy.",
+          readySummary:
+            "Channels, approved truth, and runtime are aligned for live inbox operations.",
           readyDetail:
             "The current inbox lane is not blocked by channel, truth, or runtime posture.",
         },
       }),
-    [
-      readinessState.meta,
-      readinessState.telegram,
-      readinessState.website,
-      readinessState.truth,
-      surface,
-      selectedThread,
-    ]
+    [launchChannels, readinessState.truth, surface]
   );
 
   const surfaceNotice = buildSurfaceNotice(surface);
-
-  const threadCount = Array.isArray(threads) ? threads.length : 0;
-  const unreadCount = Array.isArray(threads)
-    ? threads.reduce(
-        (sum, thread) => sum + Number(thread?.unread_count || 0),
-        0
-      )
-    : 0;
 
   return (
     <PageCanvas className="space-y-3 h-full">
@@ -640,83 +628,17 @@ export default function Inbox() {
         />
       ) : null}
 
-      {s(inboxReadiness.status).toLowerCase() !== "ready" ? (
-        <InlineNotice
-          tone={toneFromReadiness(inboxReadiness)}
-          title={s(inboxReadiness.title, "Inbox posture")}
-          description={compactSentence(
-            inboxReadiness.summary,
-            "Inbox launch posture still needs review."
-          )}
-          compact
-        />
-      ) : null}
-
       <Surface
         padded={false}
-        className="overflow-hidden rounded-[22px] h-[calc(100vh-184px)] min-h-[560px]"
+        className="overflow-hidden rounded-[22px] h-[calc(100vh-132px)] min-h-[560px]"
       >
         <div className="flex h-full min-h-0 flex-col">
-          <div className="border-b border-line-soft px-5 py-4">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div className="min-w-0">
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <Badge tone={toneFromReadiness(inboxReadiness)}>
-                    {s(inboxReadiness.statusLabel, "Inbox")}
-                  </Badge>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-subtle">
-                    Inbox
-                  </div>
-                </div>
-
-                <h1 className="text-[1.45rem] font-semibold leading-tight tracking-[-0.03em] text-text md:text-[1.65rem]">
-                  Live conversation inbox.
-                </h1>
-
-                <p className="mt-2 max-w-[720px] text-[13px] leading-6 text-text-muted">
-                  {compactSentence(
-                    selectedThread?.id
-                      ? "Review the selected conversation, keep context in view, and reply from one compact workspace."
-                      : "Pick a thread and work from one clean live conversation surface.",
-                    "Review live conversation work."
-                  )}
-                </p>
-
-                <div className="mt-3">
-                  <MetaLine
-                    inboxReadiness={inboxReadiness}
-                    threadCount={threadCount}
-                    unreadCount={unreadCount}
-                    selectedThread={selectedThread}
-                    wsState={wsState}
-                  />
-                </div>
-              </div>
-
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
-                {inboxReadiness.action?.path ? (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => navigate(inboxReadiness.action.path)}
-                    rightIcon={<ArrowRight className="h-4 w-4" />}
-                  >
-                    {inboxReadiness.action.label}
-                  </Button>
-                ) : null}
-
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setDetailOpen(true)}
-                  disabled={!selectedThread?.id}
-                  leftIcon={<PanelRightOpen className="h-4 w-4" />}
-                >
-                  Details
-                </Button>
-              </div>
-            </div>
-          </div>
+          {!hasConnectedLaunchChannel ? (
+            <LaunchChannelPrompt
+              inboxReadiness={inboxReadiness}
+              onOpenChannels={() => navigate("/channels")}
+            />
+          ) : null}
 
           <div className="grid min-h-0 flex-1 overflow-hidden grid-cols-[320px_minmax(0,1fr)] bg-surface">
             <div className="min-h-0 overflow-hidden border-r border-line-soft bg-surface">
@@ -739,6 +661,8 @@ export default function Inbox() {
                 activateHandoff={activateHandoff}
                 setThreadStatus={setThreadStatus}
                 onOpenDetails={() => setDetailOpen(true)}
+                automationControl={inboxAutomationControl}
+                onToggleAutomation={handleToggleInboxAutonomy}
                 composer={
                   <InboxComposer
                     embedded
@@ -749,8 +673,6 @@ export default function Inbox() {
                     setReplyText={setReplyText}
                     onSend={handleSend}
                     onReleaseHandoff={handleRelease}
-                    automationControl={inboxAutomationControl}
-                    onToggleAutomation={handleToggleInboxAutonomy}
                   />
                 }
               />
