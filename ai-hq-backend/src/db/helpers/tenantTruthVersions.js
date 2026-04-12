@@ -2,7 +2,6 @@ import {
   getBusinessCapabilitiesInternal,
   getBusinessProfileInternal,
   q,
-  refreshRuntimeProjectionBestEffort,
   refreshRuntimeProjectionRequired,
   resolveTenantIdentity,
   withTx,
@@ -1715,40 +1714,7 @@ export async function createTruthVersionInternal(db, input = {}) {
     ]
   );
 
-  const version = normalizeVersionRow(r.rows?.[0]);
-
-  if (!version?.id) {
-    return version;
-  }
-
-  if (input.skipRuntimeRefresh === true) {
-    return version;
-  }
-
-  await refreshRuntimeProjectionBestEffort(db, {
-    tenantId: s(version.tenant_id || tenant.tenant_id),
-    tenantKey: s(version.tenant_key || tenant.tenant_key),
-    triggerType: "truth_version_create",
-    requestedBy: s(approvedBy || "tenantTruthVersions"),
-    runnerKey: "tenantTruthVersions.createTruthVersionInternal",
-    generatedBy: s(approvedBy || "system"),
-    metadata: {
-      source: "tenantTruthVersions.createTruthVersionInternal",
-      truthVersionId: s(version.id),
-      businessProfileId: s(
-        version.business_profile_id ||
-          input.businessProfileId ||
-          input.business_profile_id
-      ),
-      businessCapabilitiesId: s(
-        version.business_capabilities_id ||
-          input.businessCapabilitiesId ||
-          input.business_capabilities_id
-      ),
-    },
-  });
-
-  return version;
+  return normalizeVersionRow(r.rows?.[0]);
 }
 
 export async function executeTruthVersionRollbackInternal(
