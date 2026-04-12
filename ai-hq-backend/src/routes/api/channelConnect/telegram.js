@@ -1239,6 +1239,7 @@ export async function connectTelegram({ db, req } = {}) {
 
 export async function getTelegramStatus({ db, req } = {}) {
   const tenant = await getScopedTelegramTenant(db, req);
+  const actor = getReqActor(req);
   const { channel, secrets } = await loadTelegramStatusContext(db, tenant.id);
   const botToken = s(secrets?.[TELEGRAM_BOT_TOKEN_SECRET_KEY]);
 
@@ -1268,6 +1269,9 @@ export async function getTelegramStatus({ db, req } = {}) {
     runtime: await getTelegramRuntimeSurface({
       db,
       tenantKey: tenant.tenant_key,
+      allowRepair: true,
+      repairTrigger: "telegram_status",
+      requestedBy: s(actor || "system"),
     }),
   });
 }
