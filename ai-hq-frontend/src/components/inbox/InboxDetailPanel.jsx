@@ -398,6 +398,7 @@ export default function InboxDetailPanel({
     if (!viewport) return;
 
     const threadChanged = lastThreadIdRef.current !== currentThreadId;
+
     if (threadChanged || shouldStickToBottomRef.current) {
       viewport.scrollTop = viewport.scrollHeight;
     }
@@ -421,10 +422,6 @@ export default function InboxDetailPanel({
     return () => {
       viewport.removeEventListener("scroll", updateStickState);
     };
-  }, [currentThreadId]);
-
-  useEffect(() => {
-    setOpenMenuThreadId("");
   }, [currentThreadId]);
 
   function closeMenu() {

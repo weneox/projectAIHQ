@@ -1,13 +1,6 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Copy,
-  Globe2,
-  RefreshCw,
-  ShieldAlert,
-  ShieldCheck,
-  X,
-} from "lucide-react";
+import { Copy, RefreshCw, ShieldAlert, ShieldCheck, X } from "lucide-react";
 
 import {
   checkWebsiteDomainVerification,
@@ -452,16 +445,12 @@ export default function WebsiteWidgetDetailDrawer({
         ? "blocked"
         : "not_connected";
 
-  const posture = useMemo(
-    () =>
-      buildPosture({
-        widget,
-        install,
-        verificationSurface,
-        readiness,
-      }),
-    [widget, install, verificationSurface, readiness]
-  );
+  const posture = buildPosture({
+    widget,
+    install,
+    verificationSurface,
+    readiness,
+  });
 
   function updateForm(updater) {
     setDraftForm((current) => {
@@ -826,7 +815,9 @@ export default function WebsiteWidgetDetailDrawer({
                   fullWidth
                   showArrow={false}
                   onClick={handleCreateChallenge}
-                  disabled={!saveAllowed || statusQuery.isLoading || verificationBusy}
+                  disabled={
+                    !saveAllowed || statusQuery.isLoading || verificationBusy
+                  }
                   isLoading={createChallengeMutation.isPending}
                   className="!h-[40px] !rounded-[12px] !text-[11px]"
                 >
@@ -837,7 +828,9 @@ export default function WebsiteWidgetDetailDrawer({
                   fullWidth
                   showArrow={false}
                   onClick={handleVerifyNow}
-                  disabled={!saveAllowed || statusQuery.isLoading || verificationBusy}
+                  disabled={
+                    !saveAllowed || statusQuery.isLoading || verificationBusy
+                  }
                   isLoading={checkVerificationMutation.isPending}
                   className="!h-[40px] !rounded-[12px] !text-[11px]"
                 >
@@ -929,7 +922,9 @@ export default function WebsiteWidgetDetailDrawer({
                   fullWidth
                   showArrow={false}
                   onClick={handlePrepareDeveloperInstall}
-                  disabled={!developerHandoffReady || statusQuery.isLoading || handoffBusy}
+                  disabled={
+                    !developerHandoffReady || statusQuery.isLoading || handoffBusy
+                  }
                   isLoading={handoffMutation.isPending}
                   className="!h-[42px] !rounded-[12px] !text-[11px]"
                 >
@@ -953,7 +948,11 @@ export default function WebsiteWidgetDetailDrawer({
                   fullWidth
                   showArrow={false}
                   onClick={handlePrepareWordpressInstall}
-                  disabled={!wordpressHandoffReady || statusQuery.isLoading || handoffBusy}
+                  disabled={
+                    !wordpressHandoffReady ||
+                    statusQuery.isLoading ||
+                    handoffBusy
+                  }
                   isLoading={wordpressHandoffMutation.isPending}
                   className="!h-[42px] !rounded-[12px] !text-[11px]"
                 >
