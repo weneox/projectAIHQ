@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowRight } from "lucide-react";
 
 import {
@@ -35,20 +36,6 @@ import {
   InlineNotice,
   SlidingDetailOverlay,
 } from "../components/ui/AppShellPrimitives.jsx";
-
-const EMPTY_READINESS_STATE = {
-  tenantKey: "",
-  truth: null,
-  meta: null,
-  telegram: null,
-  website: null,
-};
-
-const EMPTY_TRUST_STATE = {
-  tenantKey: "",
-  loading: false,
-  trustView: null,
-};
 
 function buildSurfaceNotice(surface = {}) {
   if (surface?.unavailable) {
@@ -193,80 +180,17 @@ function LaunchChannelPrompt({ onOpenChannels }) {
   );
 }
 
-export default function Inbox() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const workspace = useWorkspaceTenantKey();
-  const refreshToken = useLaunchSliceRefreshToken(
-    workspace.tenantKey,
-    workspace.ready
-  );
+async function loadInboxOperationalState() {
+  const results = await Promise.allSettled([
+    getSettingsTrustView({ limit: 8 }),
+    getMetaChannelStatus(),
+    getTelegramChannelStatus(),
+    getWebsiteWidgetStatus(),
+  ]);
 
-  const [wsState, setWsState] = useState("idle");
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [operatorState, setOperatorState] = useState({
-    tenantKey: "",
-    name: "",
-  });
-  const [resolvedReadinessState, setResolvedReadinessState] =
-    useState(EMPTY_READINESS_STATE);
-  const [resolvedTrustState, setResolvedTrustState] =
-    useState(EMPTY_TRUST_STATE);
-  const [automationMutation, setAutomationMutation] = useState({
-    saving: false,
-    error: "",
-    success: "",
-  });
-
-  const requestedThreadId = String(
-    location.state?.selectedThreadId || searchParams.get("threadId") || ""
-  ).trim();
-
-  useEffect(() => {
-    if (!workspace.ready) return undefined;
-
-    let alive = true;
-
-    getAppSessionContext()
-      .then((next) => {
-        if (!alive) return;
-        setOperatorState({
-          tenantKey: workspace.tenantKey,
-          name: String(next?.actorName || "operator").trim() || "operator",
-        });
-      })
-      .catch(() => {
-        if (!alive) return;
-        setOperatorState({
-          tenantKey: workspace.tenantKey,
-          name: "operator",
-        });
-      });
-
-    return () => {
-      alive = false;
-    };
-  }, [refreshToken, workspace.ready, workspace.tenantKey]);
-
-  const loadOperationalState = useCallback(async () => {
-    if (!workspace.ready) return;
-
-    setResolvedTrustState((prev) => ({
-      ...prev,
-      tenantKey: workspace.tenantKey,
-      loading: true,
-    }));
-
-    const results = await Promise.allSettled([
-      getSettingsTrustView({ limit: 8 }),
-      getMetaChannelStatus(),
-      getTelegramChannelStatus(),
-      getWebsiteWidgetStatus(),
-    ]);
-
-    setResolvedReadinessState({
-      tenantKey: workspace.tenantKey,
+  return {
+    trustView: results[0].status === "fulfilled" ? results[0].value : null,
+    readiness: {
       truth:
         results[0].status === "fulfilled"
           ? buildTruthOperationalState(results[0].value)
@@ -283,101 +207,64 @@ export default function Inbox() {
         results[3].status === "fulfilled"
           ? buildWebsiteLaunchChannelState(results[3].value)
           : buildWebsiteLaunchChannelState({}),
-    });
+    },
+  };
+}
 
-    setResolvedTrustState({
-      tenantKey: workspace.tenantKey,
-      loading: false,
-      trustView: results[0].status === "fulfilled" ? results[0].value : null,
-    });
-  }, [workspace.ready, workspace.tenantKey]);
+export default function Inbox() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const workspace = useWorkspaceTenantKey();
+  const refreshToken = useLaunchSliceRefreshToken(
+    workspace.tenantKey,
+    workspace.ready
+  );
+
+  const [wsState, setWsState] = useState("idle");
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [automationMutation, setAutomationMutation] = useState({
+    saving: false,
+    error: "",
+    success: "",
+  });
+  const automationSuccessTimerRef = useRef(null);
+
+  const requestedThreadId = String(
+    location.state?.selectedThreadId || searchParams.get("threadId") || ""
+  ).trim();
+
+  const sessionContextQuery = useQuery({
+    queryKey: ["app-session-context", workspace.tenantKey, refreshToken],
+    queryFn: getAppSessionContext,
+    enabled: workspace.ready,
+    staleTime: 15_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const operationalQuery = useQuery({
+    queryKey: ["inbox-operational-state", workspace.tenantKey, refreshToken],
+    queryFn: loadInboxOperationalState,
+    enabled: workspace.ready,
+    staleTime: 10_000,
+    refetchOnWindowFocus: false,
+  });
 
   useEffect(() => {
-    if (!workspace.ready) return undefined;
-
-    let alive = true;
-
-    Promise.allSettled([
-      getSettingsTrustView({ limit: 8 }),
-      getMetaChannelStatus(),
-      getTelegramChannelStatus(),
-      getWebsiteWidgetStatus(),
-    ])
-      .then((results) => {
-        if (!alive) return;
-
-        setResolvedReadinessState({
-          tenantKey: workspace.tenantKey,
-          truth:
-            results[0].status === "fulfilled"
-              ? buildTruthOperationalState(results[0].value)
-              : buildTruthOperationalState(null),
-          meta:
-            results[1].status === "fulfilled"
-              ? buildMetaLaunchChannelState(results[1].value)
-              : buildMetaLaunchChannelState({}),
-          telegram:
-            results[2].status === "fulfilled"
-              ? buildTelegramLaunchChannelState(results[2].value)
-              : buildTelegramLaunchChannelState({}),
-          website:
-            results[3].status === "fulfilled"
-              ? buildWebsiteLaunchChannelState(results[3].value)
-              : buildWebsiteLaunchChannelState({}),
-        });
-
-        setResolvedTrustState({
-          tenantKey: workspace.tenantKey,
-          loading: false,
-          trustView:
-            results[0].status === "fulfilled" ? results[0].value : null,
-        });
-      })
-      .catch(() => {
-        if (!alive) return;
-
-        setResolvedReadinessState({
-          tenantKey: workspace.tenantKey,
-          truth: buildTruthOperationalState(null),
-          meta: buildMetaLaunchChannelState({}),
-          telegram: buildTelegramLaunchChannelState({}),
-          website: buildWebsiteLaunchChannelState({}),
-        });
-
-        setResolvedTrustState({
-          tenantKey: workspace.tenantKey,
-          loading: false,
-          trustView: null,
-        });
-      });
-
     return () => {
-      alive = false;
+      if (automationSuccessTimerRef.current) {
+        window.clearTimeout(automationSuccessTimerRef.current);
+      }
     };
-  }, [workspace.ready, workspace.tenantKey, refreshToken]);
+  }, []);
 
-  useEffect(() => {
-    if (!automationMutation.success) return undefined;
-
-    const timer = window.setTimeout(() => {
-      setAutomationMutation((prev) =>
-        prev.success
-          ? {
-              ...prev,
-              success: "",
-            }
-          : prev
-      );
-    }, 2600);
-
-    return () => window.clearTimeout(timer);
-  }, [automationMutation.success]);
-
-  const operatorName = workspace.ready
-    ? (operatorState.tenantKey === workspace.tenantKey
-        ? operatorState.name
-        : "operator") || "operator"
-    : "";
+  const operatorName = useMemo(() => {
+    if (!workspace.ready) return "";
+    return (
+      String(sessionContextQuery.data?.actorName || "operator").trim() ||
+      "operator"
+    );
+  }, [workspace.ready, sessionContextQuery.data?.actorName]);
 
   const readinessState = useMemo(() => {
     if (!workspace.ready) {
@@ -390,7 +277,7 @@ export default function Inbox() {
       };
     }
 
-    if (resolvedReadinessState.tenantKey !== workspace.tenantKey) {
+    if (operationalQuery.isLoading && !operationalQuery.data) {
       return {
         loading: true,
         truth: null,
@@ -401,80 +288,112 @@ export default function Inbox() {
     }
 
     return {
-      loading: false,
-      truth: resolvedReadinessState.truth,
-      meta: resolvedReadinessState.meta,
-      telegram: resolvedReadinessState.telegram,
-      website: resolvedReadinessState.website,
+      loading: operationalQuery.isFetching,
+      truth: operationalQuery.data?.readiness?.truth || null,
+      meta: operationalQuery.data?.readiness?.meta || null,
+      telegram: operationalQuery.data?.readiness?.telegram || null,
+      website: operationalQuery.data?.readiness?.website || null,
     };
-  }, [workspace.ready, workspace.tenantKey, resolvedReadinessState]);
+  }, [
+    workspace.ready,
+    operationalQuery.isLoading,
+    operationalQuery.isFetching,
+    operationalQuery.data,
+  ]);
 
-  const trustView = useMemo(() => {
-    if (!workspace.ready) return null;
-    if (resolvedTrustState.tenantKey !== workspace.tenantKey) return null;
-    return resolvedTrustState.trustView;
-  }, [workspace.ready, workspace.tenantKey, resolvedTrustState]);
+  const trustView = operationalQuery.data?.trustView || null;
 
   const inboxAutomationControl = useMemo(
     () =>
       buildInboxAutomationControl({
         workspaceReady: workspace.ready,
-        trustLoading:
-          resolvedTrustState.loading &&
-          resolvedTrustState.tenantKey === workspace.tenantKey,
+        trustLoading: operationalQuery.isLoading || operationalQuery.isFetching,
         trustView,
         mutation: automationMutation,
       }),
     [
       workspace.ready,
-      workspace.tenantKey,
-      resolvedTrustState.loading,
-      resolvedTrustState.tenantKey,
+      operationalQuery.isLoading,
+      operationalQuery.isFetching,
       trustView,
       automationMutation,
     ]
   );
 
-  async function handleToggleInboxAutonomy(nextEnabled) {
-    if (!workspace.ready) return;
-    if (automationMutation.saving) return;
+  const clearAutomationSuccessLater = useCallback(() => {
+    if (automationSuccessTimerRef.current) {
+      window.clearTimeout(automationSuccessTimerRef.current);
+    }
 
-    setAutomationMutation({
-      saving: true,
-      error: "",
-      success: "",
-    });
+    automationSuccessTimerRef.current = window.setTimeout(() => {
+      setAutomationMutation((prev) =>
+        prev.success
+          ? {
+              ...prev,
+              success: "",
+            }
+          : prev
+      );
+      automationSuccessTimerRef.current = null;
+    }, 2600);
+  }, []);
 
-    try {
-      await saveSettingsTrustPolicyControl({
-        surface: "inbox",
-        controlMode: nextEnabled ? "autonomy_enabled" : "operator_only_mode",
-        policyReason: nextEnabled
-          ? "Inbox OpenAI autonomy enabled from inbox workspace"
-          : "Inbox OpenAI autonomy disabled from inbox workspace",
-        operatorNote: nextEnabled
-          ? "Inbox automatic OpenAI replies enabled"
-          : "Inbox automatic OpenAI replies disabled",
-      });
+  const refreshOperationalState = useCallback(async () => {
+    await operationalQuery.refetch();
+  }, [operationalQuery]);
 
-      await loadOperationalState();
+  const handleToggleInboxAutonomy = useCallback(
+    async (nextEnabled) => {
+      if (!workspace.ready) return;
+      if (automationMutation.saving) return;
 
       setAutomationMutation({
-        saving: false,
+        saving: true,
         error: "",
-        success: nextEnabled
-          ? "Inbox automatic replies are enabled."
-          : "Inbox automatic replies are disabled.",
-      });
-    } catch (error) {
-      setAutomationMutation({
-        saving: false,
-        error:
-          s(error?.message) || "Failed to update inbox automation control.",
         success: "",
       });
-    }
-  }
+
+      try {
+        await saveSettingsTrustPolicyControl({
+          surface: "inbox",
+          controlMode: nextEnabled
+            ? "autonomy_enabled"
+            : "operator_only_mode",
+          policyReason: nextEnabled
+            ? "Inbox OpenAI autonomy enabled from inbox workspace"
+            : "Inbox OpenAI autonomy disabled from inbox workspace",
+          operatorNote: nextEnabled
+            ? "Inbox automatic OpenAI replies enabled"
+            : "Inbox automatic OpenAI replies disabled",
+        });
+
+        await refreshOperationalState();
+
+        setAutomationMutation({
+          saving: false,
+          error: "",
+          success: nextEnabled
+            ? "Inbox automatic replies are enabled."
+            : "Inbox automatic replies are disabled.",
+        });
+
+        clearAutomationSuccessLater();
+      } catch (error) {
+        setAutomationMutation({
+          saving: false,
+          error:
+            s(error?.message) || "Failed to update inbox automation control.",
+          success: "",
+        });
+      }
+    },
+    [
+      workspace.ready,
+      automationMutation.saving,
+      refreshOperationalState,
+      clearAutomationSuccessLater,
+    ]
+  );
 
   const {
     threads,
@@ -551,40 +470,23 @@ export default function Inbox() {
   });
 
   useEffect(() => {
-    if (!requestedThreadId) return;
-    setSearchParams(
-      (prev) => {
-        if (prev.get("threadId") === requestedThreadId) return prev;
-        const next = new URLSearchParams(prev);
-        next.set("threadId", requestedThreadId);
-        return next;
-      },
-      { replace: true }
-    );
-  }, [requestedThreadId, setSearchParams]);
-
-  useEffect(() => {
     if (selectedThread?.id) {
       loadMessages(selectedThread.id);
       loadRelatedLead(selectedThread.id);
     }
   }, [selectedThread?.id, loadMessages, loadRelatedLead]);
 
-  useEffect(() => {
-    if (detailOpen && !selectedThread?.id) {
-      setDetailOpen(false);
-    }
-  }, [detailOpen, selectedThread?.id]);
+  const isDetailOverlayOpen = detailOpen && Boolean(selectedThread?.id);
 
   useEffect(() => {
     function onKeyDown(event) {
       if (event.key === "Escape") setDetailOpen(false);
     }
 
-    if (!detailOpen) return undefined;
+    if (!isDetailOverlayOpen) return undefined;
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [detailOpen]);
+  }, [isDetailOverlayOpen]);
 
   const launchChannels = useMemo(
     () => [readinessState.meta, readinessState.telegram, readinessState.website],
@@ -602,7 +504,6 @@ export default function Inbox() {
   );
 
   const showTruthApprovalNotice = hasConnectedLaunchChannel && !truthReady;
-
   const surfaceNotice = buildSurfaceNotice(surface);
 
   return (
@@ -672,9 +573,9 @@ export default function Inbox() {
         </div>
       </div>
 
-      {detailOpen ? (
+      {isDetailOverlayOpen ? (
         <SlidingDetailOverlay
-          open={detailOpen}
+          open={isDetailOverlayOpen}
           onClose={() => setDetailOpen(false)}
           absolute
           closeLabel="Close conversation details"
