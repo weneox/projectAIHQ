@@ -88,7 +88,9 @@ vi.mock("../../components/inbox/InboxDetailPanel.jsx", () => ({
     <section aria-label="Inbox detail panel">
       <div>
         selected-thread-name:
-        {selectedThread?.customer_name || selectedThread?.external_username || "none"}
+        {selectedThread?.customer_name ||
+          selectedThread?.external_username ||
+          "none"}
       </div>
       <div>automation-status:{automationControl?.statusLabel || "unknown"}</div>
       {composer}
@@ -109,12 +111,67 @@ vi.mock("../../components/inbox/InboxComposer.jsx", () => ({
 import Inbox from "../../pages/Inbox.jsx";
 
 function buildTrustView({
-  status = "",
+  status = "blocked",
   controlMode = "autonomy_enabled",
 } = {}) {
+  const ready = String(status || "").trim().toLowerCase() === "ready";
+
   return {
-    status,
     summary: {
+      truth: {
+        latestVersionId: ready ? "truth_v_123" : "",
+        readiness: {
+          status: ready ? "ready" : "blocked",
+          reasonCode: ready ? "" : "approved_truth_unavailable",
+          message: ready
+            ? "Approved truth is ready."
+            : "Approved truth is not ready yet.",
+          blockers: ready
+            ? []
+            : [
+                {
+                  blocked: true,
+                  title: "Approval required",
+                  subtitle: "Approved truth is not ready yet.",
+                  reasonCode: "approved_truth_unavailable",
+                },
+              ],
+        },
+      },
+      runtimeProjection: {
+        readiness: {
+          status: ready ? "ready" : "blocked",
+          reasonCode: ready ? "" : "runtime_repair_required",
+          message: ready
+            ? "Runtime projection is ready."
+            : "Runtime projection still needs repair.",
+          blockers: ready
+            ? []
+            : [
+                {
+                  blocked: true,
+                  title: "Runtime repair required",
+                  subtitle: "Runtime projection still needs repair.",
+                  reasonCode: "runtime_repair_required",
+                },
+              ],
+        },
+        health: {
+          usable: ready,
+          autonomousAllowed: ready,
+          reasonCode: ready ? "" : "runtime_repair_required",
+          lastFailure: ready
+            ? null
+            : {
+                errorCode: "runtime_repair_required",
+                errorMessage: "Runtime projection still needs repair.",
+              },
+        },
+        authority: {
+          available: ready,
+          runtimeProjectionId: ready ? "runtime_proj_123" : "",
+        },
+      },
       policyControls: {
         tenantDefault: {
           controlMode,
@@ -146,7 +203,9 @@ describe("Inbox", () => {
 
     getSettingsTrustView.mockRejectedValue(new Error("truth unavailable"));
     getMetaChannelStatus.mockRejectedValue(new Error("meta unavailable"));
-    getTelegramChannelStatus.mockRejectedValue(new Error("telegram unavailable"));
+    getTelegramChannelStatus.mockRejectedValue(
+      new Error("telegram unavailable")
+    );
     getWebsiteWidgetStatus.mockRejectedValue(new Error("website unavailable"));
 
     useInboxRealtime.mockReturnValue(undefined);
@@ -320,9 +379,7 @@ describe("Inbox", () => {
       screen.queryByText(/connect a launch channel first/i)
     ).not.toBeInTheDocument();
 
-    expect(
-      screen.getByText(/truth approval required/i)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/truth approval required/i)).toBeInTheDocument();
 
     expect(
       screen.getByText(
