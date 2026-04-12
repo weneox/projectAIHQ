@@ -39,6 +39,57 @@ function lower(value, fallback = "") {
   return s(value, fallback).toLowerCase();
 }
 
+const ALLOWED_RUNTIME_PROJECTION_RUN_TRIGGER_TYPES = new Set([
+  "manual",
+  "scheduled",
+  "source_change",
+  "review_approval",
+  "system",
+  "retry",
+]);
+
+function normalizeRuntimeProjectionRunTriggerType(triggerType = "") {
+  const raw = lower(triggerType || "manual");
+
+  if (ALLOWED_RUNTIME_PROJECTION_RUN_TRIGGER_TYPES.has(raw)) {
+    return raw;
+  }
+
+  if (
+    raw === "schedule" ||
+    raw === "cron" ||
+    raw === "heartbeat" ||
+    raw === "periodic"
+  ) {
+    return "scheduled";
+  }
+
+  if (
+    raw.includes("review") ||
+    raw.includes("approval") ||
+    raw.includes("publish") ||
+    raw.includes("finalize")
+  ) {
+    return "review_approval";
+  }
+
+  if (
+    raw.includes("source") ||
+    raw.includes("sync") ||
+    raw.includes("import") ||
+    raw.includes("crawl") ||
+    raw.includes("extract")
+  ) {
+    return "source_change";
+  }
+
+  if (raw.includes("retry") || raw.includes("replay")) {
+    return "retry";
+  }
+
+  return "system";
+}
+
 function normalizeProjectionRunRow(row = {}) {
   const value = obj(row);
   return {
@@ -1076,6 +1127,15 @@ export async function refreshTenantRuntimeProjection(
       });
     }
 
+    const normalizedTriggerType =
+      normalizeRuntimeProjectionRunTriggerType(triggerType);
+
+    const effectiveMetadata = {
+      ...obj(metadata),
+      requestedTriggerType: s(triggerType || "manual"),
+      normalizedTriggerType,
+    };
+
     const rawGraph = await loadTenantCanonicalGraph(
       {
         tenantId: tenant.id,
@@ -1124,7 +1184,7 @@ export async function refreshTenantRuntimeProjection(
       [
         graph.tenant.id,
         s(graph.tenant.tenant_key),
-        s(triggerType || "manual"),
+        normalizedTriggerType,
         s(requestedBy),
         s(runnerKey || "runtime_projection"),
         JSON.stringify({
@@ -1137,7 +1197,7 @@ export async function refreshTenantRuntimeProjection(
             s(graph.capabilities?.id),
           publishedTruthVersionId,
         }),
-        JSON.stringify(obj(metadata)),
+        JSON.stringify(effectiveMetadata),
       ]
     );
 
@@ -1168,7 +1228,7 @@ export async function refreshTenantRuntimeProjection(
           generatedBy,
           approvedBy: s(approvedBy || generatedBy || "system"),
           metadata: {
-            ...obj(metadata),
+            ...effectiveMetadata,
             source: "refreshTenantRuntimeProjection",
             refreshedByRuntimeProjection: true,
             publishedTruthVersionId,
