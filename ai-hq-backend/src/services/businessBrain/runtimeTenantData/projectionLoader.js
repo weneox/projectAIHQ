@@ -19,14 +19,14 @@ function lower(v, d = "") {
 }
 
 function pickRuntimeProjectionFailureReasonCode(freshness = {}) {
+  if (freshness?.stale === true) {
+    return "runtime_projection_stale";
+  }
+
   const healthPrimaryReasonCode = lower(
     freshness?.health?.primaryReasonCode || freshness?.health?.reasonCode
   );
   if (healthPrimaryReasonCode) return healthPrimaryReasonCode;
-
-  if (freshness?.stale === true) {
-    return "runtime_projection_stale";
-  }
 
   const freshnessReason = lower(arr(freshness?.reasons)[0]);
   if (freshnessReason) return freshnessReason;
