@@ -252,10 +252,10 @@ function buildTelegramChannelPayload({
           (status === "connected"
             ? "authorized"
             : status === "connecting"
-            ? "connecting"
-            : status === "disconnected"
-            ? "disconnected"
-            : "reconnect_required")
+              ? "connecting"
+              : status === "disconnected"
+                ? "disconnected"
+                : "reconnect_required")
       ),
       reason_code: cleanNullable(reasonCode),
       last_verified_at: nowIso(),
@@ -339,37 +339,91 @@ function getTelegramFeatureState() {
     reasonCode: !enabled
       ? "telegram_disabled"
       : !webhookBaseReady
-      ? "telegram_webhook_base_url_missing"
-      : "",
+        ? "telegram_webhook_base_url_missing"
+        : "",
   };
+}
+
+function normalizeTelegramReasonCodes(values = []) {
+  return [
+    ...new Set(
+      (Array.isArray(values) ? values : [])
+        .map((item) => lower(item))
+        .filter(Boolean)
+    ),
+  ];
 }
 
 function extractTelegramRuntimeAuthorityPayload(error = {}) {
   const authority = obj(error?.runtimeAuthority || error?.authority);
-  const reasonCode = s(
+  const health = obj(authority?.health);
+  const wrapperReasonCode = lower(
     authority?.reasonCode ||
       authority?.reason ||
       error?.reasonCode ||
       error?.reason ||
       "runtime_authority_unavailable"
   );
+  const healthPrimaryReasonCode = lower(
+    health?.primaryReasonCode || health?.reasonCode
+  );
+  const healthReasonCodes = normalizeTelegramReasonCodes(health?.reasonCodes);
+  const freshnessReasonCodes = normalizeTelegramReasonCodes(
+    authority?.freshnessReasons || authority?.reasons || error?.freshness?.reasons
+  );
+
+  const reasonCode =
+    healthPrimaryReasonCode ||
+    healthReasonCodes[0] ||
+    freshnessReasonCodes[0] ||
+    wrapperReasonCode ||
+    "runtime_authority_unavailable";
 
   return {
     reasonCode,
+    wrapperReasonCode,
+    healthPrimaryReasonCode,
+    healthReasonCodes,
+    freshnessReasonCodes,
     authority: Object.keys(authority).length ? authority : null,
     error: s(error?.message || error),
   };
 }
 
-function shouldAttemptTelegramRuntimeRepair(reasonCode = "", error = {}) {
-  const reason = s(reasonCode).toLowerCase();
-  const code = s(error?.code).toUpperCase();
+function shouldAttemptTelegramRuntimeRepair(failure = {}, error = {}) {
+  const repairableReasonCodes = new Set([
+    "projection_missing",
+    "runtime_projection_missing",
+    "projection_stale",
+    "runtime_projection_stale",
+    "truth_version_drift",
+    "projection_build_failed",
+    "runtime_status_not_ready",
+    "published_truth_version_mismatch",
+    "source_snapshot_mismatch",
+    "source_profile_mismatch",
+    "source_capabilities_mismatch",
+    "authority_invalid",
+  ]);
 
-  return (
-    reason === "runtime_projection_missing" ||
-    reason === "runtime_projection_stale" ||
-    reason === "runtime_status_not_ready" ||
-    code === "TENANT_RUNTIME_PROJECTION_STALE"
+  const candidateReasonCodes = normalizeTelegramReasonCodes([
+    failure?.reasonCode,
+    failure?.wrapperReasonCode,
+    failure?.healthPrimaryReasonCode,
+    ...(Array.isArray(failure?.healthReasonCodes)
+      ? failure.healthReasonCodes
+      : []),
+    ...(Array.isArray(failure?.freshnessReasonCodes)
+      ? failure.freshnessReasonCodes
+      : []),
+  ]);
+
+  if (s(error?.code).toUpperCase() === "TENANT_RUNTIME_PROJECTION_STALE") {
+    return true;
+  }
+
+  return candidateReasonCodes.some((code) =>
+    repairableReasonCodes.has(code)
   );
 }
 
@@ -435,6 +489,7 @@ async function getTelegramRuntimeSurface({
       tenantKey,
       authorityMode: "strict",
     });
+
     return buildTelegramRuntimeSurfaceFromRuntime({
       runtime,
       tenantKey,
@@ -445,9 +500,21 @@ async function getTelegramRuntimeSurface({
 
     if (
       allowRepair &&
-      shouldAttemptTelegramRuntimeRepair(failure.reasonCode, error) &&
+      shouldAttemptTelegramRuntimeRepair(failure, error) &&
       typeof refreshRuntimeProjection === "function"
     ) {
+      try {
+        console.warn("[ai-hq] telegram runtime repair attempting", {
+          tenantKey: s(tenantKey),
+          repairTrigger: s(repairTrigger),
+          requestedBy: s(requestedBy || "system"),
+          wrapperReasonCode: s(failure.wrapperReasonCode),
+          reasonCode: s(failure.reasonCode),
+          healthReasonCodes: failure.healthReasonCodes || [],
+          freshnessReasonCodes: failure.freshnessReasonCodes || [],
+        });
+      } catch {}
+
       try {
         await refreshRuntimeProjection(
           {
@@ -459,7 +526,10 @@ async function getTelegramRuntimeSurface({
             metadata: {
               source: "channelConnect.telegram",
               repairTrigger: s(repairTrigger || "telegram_status"),
-              previousReasonCode: failure.reasonCode,
+              previousWrapperReasonCode: s(failure.wrapperReasonCode),
+              previousReasonCode: s(failure.reasonCode),
+              previousHealthReasonCodes: failure.healthReasonCodes || [],
+              previousFreshnessReasonCodes: failure.freshnessReasonCodes || [],
             },
           },
           db
@@ -471,6 +541,13 @@ async function getTelegramRuntimeSurface({
           authorityMode: "strict",
         });
 
+        try {
+          console.warn("[ai-hq] telegram runtime repair completed", {
+            tenantKey: s(tenantKey),
+            repairTrigger: s(repairTrigger),
+          });
+        } catch {}
+
         return buildTelegramRuntimeSurfaceFromRuntime({
           runtime,
           tenantKey,
@@ -478,6 +555,18 @@ async function getTelegramRuntimeSurface({
         });
       } catch (repairError) {
         const repairFailure = extractTelegramRuntimeAuthorityPayload(repairError);
+
+        try {
+          console.warn("[ai-hq] telegram runtime repair failed", {
+            tenantKey: s(tenantKey),
+            repairTrigger: s(repairTrigger),
+            wrapperReasonCode: s(repairFailure.wrapperReasonCode),
+            reasonCode: s(repairFailure.reasonCode),
+            healthReasonCodes: repairFailure.healthReasonCodes || [],
+            freshnessReasonCodes: repairFailure.freshnessReasonCodes || [],
+            error: s(repairFailure.error),
+          });
+        } catch {}
 
         return {
           ready: false,
@@ -731,24 +820,24 @@ function buildTelegramStatusPayload({
         !feature.ready
           ? feature.reasonCode
           : !channel?.id && botToken
-          ? "tenant_channel_missing"
-          : !botToken
-          ? lastConnectFailure?.reasonCode || "telegram_bot_token_missing"
-          : botResult?.ok === false
-          ? botResult.reasonCode
-          : !routeToken
-          ? "telegram_webhook_route_missing"
-          : !secretToken
-          ? "telegram_webhook_secret_missing"
-          : !expectedWebhookUrl
-          ? "telegram_webhook_base_url_missing"
-          : webhookResult?.ok === false
-          ? webhookResult.reasonCode
-          : !webhookUrlMatches
-          ? "telegram_webhook_mismatch"
-          : webhookDeliveryFailing
-          ? "telegram_webhook_secret_invalid"
-          : lastConnectFailure?.reasonCode
+            ? "tenant_channel_missing"
+            : !botToken
+              ? lastConnectFailure?.reasonCode || "telegram_bot_token_missing"
+              : botResult?.ok === false
+                ? botResult.reasonCode
+                : !routeToken
+                  ? "telegram_webhook_route_missing"
+                  : !secretToken
+                    ? "telegram_webhook_secret_missing"
+                    : !expectedWebhookUrl
+                      ? "telegram_webhook_base_url_missing"
+                      : webhookResult?.ok === false
+                        ? webhookResult.reasonCode
+                        : !webhookUrlMatches
+                          ? "telegram_webhook_mismatch"
+                          : webhookDeliveryFailing
+                            ? "telegram_webhook_secret_invalid"
+                            : lastConnectFailure?.reasonCode
       );
 
   const blockers = buildTelegramStatusBlockers({
@@ -819,10 +908,10 @@ function buildTelegramStatusPayload({
         webhookResult?.ok === false
           ? s(webhookResult.reasonCode || "")
           : !webhookUrlMatches && expectedWebhookUrl
-          ? "telegram_webhook_mismatch"
-          : webhookDeliveryFailing
-          ? "telegram_webhook_secret_invalid"
-          : "",
+            ? "telegram_webhook_mismatch"
+            : webhookDeliveryFailing
+              ? "telegram_webhook_secret_invalid"
+              : "",
     },
     runtime: {
       ready: Boolean(runtime?.ready),
@@ -1393,4 +1482,5 @@ export const __test__ = {
   getTelegramRuntimeSurface,
   shouldAttemptTelegramRuntimeRepair,
   isTelegramWebhookDeliveryFailing,
+  normalizeTelegramReasonCodes,
 };

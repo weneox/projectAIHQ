@@ -43,36 +43,45 @@ function normalizeReasonCode(reasonCode = "") {
     case "missing_runtime_projection":
     case "runtime_projection_missing":
       return "projection_missing";
+
     case "projection_hash_mismatch":
     case "source_snapshot_mismatch":
     case "source_profile_mismatch":
     case "source_capabilities_mismatch":
     case "published_truth_version_mismatch":
       return "truth_version_drift";
+
     case "approved_truth_unavailable":
       return "approval_required";
+
     case "runtime_status_not_ready":
-      return "projection_build_failed";
+    case "runtime_projection_stale":
+      return "projection_stale";
+
     case "tenant_runtime_authority_unavailable":
     case "runtime_authority_unavailable":
     case "runtime_authority_mode_invalid":
     case "runtime_authority_source_invalid":
       return "authority_invalid";
-    case "runtime_projection_stale":
-      return "projection_stale";
+
     case "runtime_projection_run_unavailable":
     case "runtime_projection_persist_unavailable":
       return "projection_build_failed";
+
     case "provider_secret_missing":
     case "channel_identifiers_missing":
     case "voice_settings_missing":
       return "source_dependency_failed";
+
     case "repair_pending":
       return "repair_pending";
+
     case "consumer_contract_mismatch":
       return "consumer_contract_mismatch";
+
     case "low_projection_confidence":
       return "low_projection_confidence";
+
     default:
       return lower(reasonCode);
   }
@@ -91,6 +100,24 @@ function mapFreshnessReasons(freshness = {}) {
   }
 
   return uniqStrings(currentReasons);
+}
+
+function hasSamePublishedTruthVersion(freshness = {}) {
+  const currentId = s(freshness?.currentPublishedTruthVersionId);
+  const expectedId = s(freshness?.expectedPublishedTruthVersionId);
+  return Boolean(currentId && expectedId && currentId === expectedId);
+}
+
+function normalizeReasonCodesForSameTruth(reasonCodes = [], freshness = {}) {
+  const normalized = uniqStrings(reasonCodes);
+
+  if (!hasSamePublishedTruthVersion(freshness)) {
+    return normalized;
+  }
+
+  return normalized.filter(
+    (code) => !["truth_version_drift", "projection_build_failed"].includes(code)
+  );
 }
 
 function buildAffectedSurfaces({
@@ -114,7 +141,7 @@ function buildAffectedSurfaces({
   const channels = arr(projection.channels_json);
   if (
     channels.some((item) =>
-      ["instagram", "facebook", "messenger"].includes(
+      ["instagram", "facebook", "messenger", "telegram"].includes(
         lower(item?.channelType || item?.channel_type)
       )
     )
@@ -139,25 +166,31 @@ function buildRepairActions({
       case "truth_version_drift":
         actions.push("refresh_projection");
         break;
+
       case "approval_required":
         actions.push(reviewActive ? "re-run_finalize" : "verify_truth_publish");
         break;
+
       case "source_dependency_failed":
         actions.push("investigate_dependency_failure");
         actions.push("reconnect_provider");
         break;
+
       case "projection_build_failed":
       case "authority_invalid":
       case "consumer_contract_mismatch":
         actions.push("rebuild_runtime");
         break;
+
       case "repair_pending":
         actions.push("refresh_projection");
         break;
+
       case "low_projection_confidence":
         actions.push("review_truth_quality");
         actions.push("refresh_projection");
         break;
+
       default:
         break;
     }
@@ -367,8 +400,11 @@ export function buildRuntimeProjectionHealthModel({
   }
 
   const projectionConfidence = num(projection.confidence, 0);
+  const samePublishedTruthVersion = hasSamePublishedTruthVersion(fresh);
   const hasLowProjectionConfidence =
-    projectionConfidence > 0 && projectionConfidence < 0.6;
+    projectionConfidence > 0 &&
+    projectionConfidence < 0.6 &&
+    !samePublishedTruthVersion;
 
   if (
     hasLowProjectionConfidence &&
@@ -377,14 +413,17 @@ export function buildRuntimeProjectionHealthModel({
     reasonCodes.push("low_projection_confidence");
   }
 
-  const normalizedReasons = uniqStrings(reasonCodes);
+  const normalizedReasons = normalizeReasonCodesForSameTruth(
+    uniqStrings(reasonCodes),
+    fresh
+  );
+
   let status = "healthy";
 
   if (normalizedReasons.includes("projection_missing")) {
     status = "missing";
   } else if (
     normalizedReasons.includes("authority_invalid") ||
-    normalizedReasons.includes("projection_build_failed") ||
     normalizedReasons.includes("consumer_contract_mismatch")
   ) {
     status = "invalid";
@@ -400,8 +439,8 @@ export function buildRuntimeProjectionHealthModel({
     status = "stale";
   } else if (
     normalizedReasons.includes("source_dependency_failed") ||
-    normalizedReasons.includes("degraded") ||
-    normalizedReasons.includes("low_projection_confidence")
+    normalizedReasons.includes("low_projection_confidence") ||
+    normalizedReasons.includes("projection_build_failed")
   ) {
     status = "degraded";
   }
@@ -417,7 +456,11 @@ export function buildRuntimeProjectionHealthModel({
   });
 
   const autonomousOperation =
-    status === "healthy" ? "continue" : status === "degraded" ? "degrade" : "stop";
+    status === "healthy"
+      ? "continue"
+      : status === "degraded"
+        ? "degrade"
+        : "stop";
 
   const model = {
     status,
@@ -484,6 +527,8 @@ export const __test__ = {
   buildAffectedSurfaces,
   buildRepairActions,
   buildRuntimeProjectionHealthModel,
+  hasSamePublishedTruthVersion,
   mapFreshnessReasons,
   normalizeReasonCode,
+  normalizeReasonCodesForSameTruth,
 };

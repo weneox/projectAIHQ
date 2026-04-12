@@ -2,8 +2,8 @@ import {
   getBusinessCapabilitiesInternal,
   getBusinessProfileInternal,
   q,
+  refreshRuntimeProjectionBestEffort,
   refreshRuntimeProjectionRequired,
-  resolveTenantIdentity,
   withTx,
 } from "./tenantKnowledge/core.js";
 import {
@@ -1523,7 +1523,10 @@ export function hasTruthVersionChanged(previous = null, next = null) {
   );
 }
 
-export async function getLatestTruthVersionInternal(db, { tenantId, tenantKey } = {}) {
+export async function getLatestTruthVersionInternal(
+  db,
+  { tenantId, tenantKey } = {}
+) {
   const tenant = await resolveTenantIdentity(db, { tenantId, tenantKey });
   if (!tenant) return null;
 
@@ -1533,7 +1536,8 @@ export async function getLatestTruthVersionInternal(db, { tenantId, tenantKey } 
     select *
     from tenant_business_profile_versions
     where tenant_id = $1
-    order by approved_at desc, created_at desc
+      and approved_at is not null
+    order by approved_at desc nulls last, created_at desc
     limit 1
     `,
     [tenant.tenant_id]
@@ -1558,12 +1562,13 @@ export async function listTruthVersionsInternal(
         v.*,
         lag(v.id) over (
           partition by v.tenant_id
-          order by v.approved_at asc, v.created_at asc
+          order by v.approved_at asc nulls last, v.created_at asc
         ) as previous_version_id
       from tenant_business_profile_versions v
       where v.tenant_id = $1
+        and v.approved_at is not null
     ) versions
-    order by approved_at desc, created_at desc
+    order by approved_at desc nulls last, created_at desc
     limit $2
     offset $3
     `,
@@ -1593,10 +1598,11 @@ export async function getTruthVersionByIdInternal(
         v.*,
         lag(v.id) over (
           partition by v.tenant_id
-          order by v.approved_at asc, v.created_at asc
+          order by v.approved_at asc nulls last, v.created_at asc
         ) as previous_version_id
       from tenant_business_profile_versions v
       where v.tenant_id = $1
+        and v.approved_at is not null
     ) versions
     where id = $2
     limit 1
@@ -2088,7 +2094,36 @@ export function createTenantTruthVersionHelpers({ db }) {
     },
 
     async createVersion(input = {}) {
-      return createTruthVersionInternal(db, input);
+      const version = await createTruthVersionInternal(db, input);
+
+      if (!version?.id) {
+        return version;
+      }
+ 
+      await refreshRuntimeProjectionBestEffort(db, {
+        tenantId: s(version.tenant_id || input.tenantId || input.tenant_id),
+        tenantKey: s(version.tenant_key || input.tenantKey || input.tenant_key),
+        triggerType: "truth_version_create",
+        requestedBy: s(input.approvedBy || input.approved_by || "tenantTruthVersions"),
+        runnerKey: "tenantTruthVersions.createVersion",
+        generatedBy: s(input.approvedBy || input.approved_by || "system"),
+        metadata: {
+          source: "tenantTruthVersions.createVersion",
+          truthVersionId: s(version.id),
+          businessProfileId: s(
+            version.business_profile_id ||
+            input.businessProfileId ||
+            input.business_profile_id
+          ),
+          businessCapabilitiesId: s(
+            version.business_capabilities_id ||
+              input.businessCapabilitiesId ||
+              input.business_capabilities_id
+          ),
+        },
+      });
+
+      return version;
     },
 
     async compareVersions({

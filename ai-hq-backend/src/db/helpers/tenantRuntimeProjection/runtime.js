@@ -348,6 +348,7 @@ export function assessTenantRuntimeProjectionFreshness(
       : hasCanonicalTenant
         ? buildTenantRuntimeProjection(graphValue)
         : null;
+
   const expectedPublishedTruthVersionId = s(graphValue?.publishedTruthVersion?.id);
   const currentPublishedTruthVersionId =
     normalizePublishedTruthVersionId(current);
@@ -364,6 +365,11 @@ export function assessTenantRuntimeProjectionFreshness(
 
   const currentSources = normalizeProjectionSources(current);
   const reasons = [];
+  const hasPublishedTruthVersion = Boolean(expectedPublishedTruthVersionId);
+  const runtimeStatus = s(current.status).toLowerCase();
+  const matchesPublishedTruthVersion =
+    hasPublishedTruthVersion &&
+    refsMatch(currentPublishedTruthVersionId, expectedPublishedTruthVersionId);
 
   if (!hasCanonicalTenant) {
     reasons.push("approved_truth_unavailable");
@@ -372,44 +378,50 @@ export function assessTenantRuntimeProjectionFreshness(
   if (!runtimeProjectionId) {
     reasons.push("missing_runtime_projection");
   } else if (hasCanonicalTenant) {
-    if (s(current.status) !== "ready") {
+    const blocksByStatus =
+      !runtimeStatus ||
+      (runtimeStatus !== "ready" &&
+        !(matchesPublishedTruthVersion && runtimeStatus === "stale"));
+
+    if (blocksByStatus) {
       reasons.push("runtime_status_not_ready");
     }
 
-    if (
-      !expectedPublishedTruthVersionId &&
-      !refsMatch(currentSources.sourceSnapshotId, expectedSources.sourceSnapshotId)
-    ) {
-      reasons.push("source_snapshot_mismatch");
-    }
+    if (hasPublishedTruthVersion) {
+      if (!matchesPublishedTruthVersion) {
+        reasons.push("published_truth_version_mismatch");
+      }
+    } else {
+      if (
+        !refsMatch(
+          currentSources.sourceSnapshotId,
+          expectedSources.sourceSnapshotId
+        )
+      ) {
+        reasons.push("source_snapshot_mismatch");
+      }
 
-    if (
-      !refsMatch(currentSources.sourceProfileId, expectedSources.sourceProfileId)
-    ) {
-      reasons.push("source_profile_mismatch");
-    }
+      if (
+        !refsMatch(currentSources.sourceProfileId, expectedSources.sourceProfileId)
+      ) {
+        reasons.push("source_profile_mismatch");
+      }
 
-    if (
-      !refsMatch(
-        currentSources.sourceCapabilitiesId,
-        expectedSources.sourceCapabilitiesId
-      )
-    ) {
-      reasons.push("source_capabilities_mismatch");
-    }
+      if (
+        !refsMatch(
+          currentSources.sourceCapabilitiesId,
+          expectedSources.sourceCapabilitiesId
+        )
+      ) {
+        reasons.push("source_capabilities_mismatch");
+      }
 
-    if (
-      s(current.projection_hash) !==
-      s(normalizedExpectedProjection?.projection_hash)
-    ) {
-      reasons.push("projection_hash_mismatch");
-    }
-
-    if (
-      expectedPublishedTruthVersionId &&
-      !refsMatch(currentPublishedTruthVersionId, expectedPublishedTruthVersionId)
-    ) {
-      reasons.push("published_truth_version_mismatch");
+      if (
+        s(current.projection_hash) !==
+        s(normalizedExpectedProjection?.projection_hash)
+      ) {
+        reasons.push("projection_hash_mismatch");
+      }
     }
   }
 

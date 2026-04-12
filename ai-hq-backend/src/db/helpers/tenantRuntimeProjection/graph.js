@@ -16,7 +16,10 @@ import {
   normalizeChannelPolicies,
 } from "./normalizers.js";
 
-export async function resolveTenant(client, { tenantId = "", tenantKey = "" } = {}) {
+export async function resolveTenant(
+  client,
+  { tenantId = "", tenantKey = "" } = {}
+) {
   if (!s(tenantId) && !s(tenantKey)) {
     throw new Error("tenantId or tenantKey is required");
   }
@@ -69,8 +72,14 @@ export async function loadTenantCanonicalGraph(
     channelPolicyRows,
     latestTruthVersion,
   ] = await Promise.all([
-    one(client, `select * from tenant_business_profile where tenant_id = $1 limit 1`, [tenant.id]),
-    one(client, `select * from tenant_business_capabilities where tenant_id = $1 limit 1`, [tenant.id]),
+    one(client, `select * from tenant_business_profile where tenant_id = $1 limit 1`, [
+      tenant.id,
+    ]),
+    one(
+      client,
+      `select * from tenant_business_capabilities where tenant_id = $1 limit 1`,
+      [tenant.id]
+    ),
     one(
       client,
       `
@@ -221,7 +230,8 @@ export async function loadTenantCanonicalGraph(
       select *
       from tenant_business_profile_versions
       where tenant_id = $1
-      order by approved_at desc, created_at desc
+        and approved_at is not null
+      order by approved_at desc nulls last, created_at desc
       limit 1
       `,
       [tenant.id]
@@ -231,56 +241,83 @@ export async function loadTenantCanonicalGraph(
   const publishedTruthMetadata = latestTruthVersion
     ? parseObject(latestTruthVersion.metadata_json)
     : null;
+
   const publishedTruthVersion = latestTruthVersion
     ? {
         ...latestTruthVersion,
-        profile_snapshot_json: parseObject(latestTruthVersion.profile_snapshot_json),
+        profile_snapshot_json: parseObject(
+          latestTruthVersion.profile_snapshot_json
+        ),
         capabilities_snapshot_json: parseObject(
           latestTruthVersion.capabilities_snapshot_json
         ),
-        source_summary_json: parseObject(latestTruthVersion.source_summary_json),
-        field_provenance_json: parseObject(latestTruthVersion.field_provenance_json),
+        source_summary_json: parseObject(
+          latestTruthVersion.source_summary_json
+        ),
+        field_provenance_json: parseObject(
+          latestTruthVersion.field_provenance_json
+        ),
         metadata_json: publishedTruthMetadata,
         has_services_snapshot:
-          Object.prototype.hasOwnProperty.call(publishedTruthMetadata || {}, "servicesSnapshot") ||
+          Object.prototype.hasOwnProperty.call(
+            publishedTruthMetadata || {},
+            "servicesSnapshot"
+          ) ||
           Object.prototype.hasOwnProperty.call(
             publishedTruthMetadata || {},
             "services_snapshot_json"
           ),
-        services_snapshot_json: Array.isArray(publishedTruthMetadata?.servicesSnapshot)
+        services_snapshot_json: Array.isArray(
+          publishedTruthMetadata?.servicesSnapshot
+        )
           ? publishedTruthMetadata.servicesSnapshot
           : Array.isArray(publishedTruthMetadata?.services_snapshot_json)
             ? publishedTruthMetadata.services_snapshot_json
             : [],
         has_contacts_snapshot:
-          Object.prototype.hasOwnProperty.call(publishedTruthMetadata || {}, "contactsSnapshot") ||
+          Object.prototype.hasOwnProperty.call(
+            publishedTruthMetadata || {},
+            "contactsSnapshot"
+          ) ||
           Object.prototype.hasOwnProperty.call(
             publishedTruthMetadata || {},
             "contacts_snapshot_json"
           ),
-        contacts_snapshot_json: Array.isArray(publishedTruthMetadata?.contactsSnapshot)
+        contacts_snapshot_json: Array.isArray(
+          publishedTruthMetadata?.contactsSnapshot
+        )
           ? publishedTruthMetadata.contactsSnapshot
           : Array.isArray(publishedTruthMetadata?.contacts_snapshot_json)
             ? publishedTruthMetadata.contacts_snapshot_json
             : [],
         has_locations_snapshot:
-          Object.prototype.hasOwnProperty.call(publishedTruthMetadata || {}, "locationsSnapshot") ||
+          Object.prototype.hasOwnProperty.call(
+            publishedTruthMetadata || {},
+            "locationsSnapshot"
+          ) ||
           Object.prototype.hasOwnProperty.call(
             publishedTruthMetadata || {},
             "locations_snapshot_json"
           ),
-        locations_snapshot_json: Array.isArray(publishedTruthMetadata?.locationsSnapshot)
+        locations_snapshot_json: Array.isArray(
+          publishedTruthMetadata?.locationsSnapshot
+        )
           ? publishedTruthMetadata.locationsSnapshot
           : Array.isArray(publishedTruthMetadata?.locations_snapshot_json)
             ? publishedTruthMetadata.locations_snapshot_json
             : [],
         has_truth_facts_snapshot:
-          Object.prototype.hasOwnProperty.call(publishedTruthMetadata || {}, "truthFactsSnapshot") ||
+          Object.prototype.hasOwnProperty.call(
+            publishedTruthMetadata || {},
+            "truthFactsSnapshot"
+          ) ||
           Object.prototype.hasOwnProperty.call(
             publishedTruthMetadata || {},
             "truth_facts_snapshot_json"
           ),
-        truth_facts_snapshot_json: Array.isArray(publishedTruthMetadata?.truthFactsSnapshot)
+        truth_facts_snapshot_json: Array.isArray(
+          publishedTruthMetadata?.truthFactsSnapshot
+        )
           ? publishedTruthMetadata.truthFactsSnapshot
           : Array.isArray(publishedTruthMetadata?.truth_facts_snapshot_json)
             ? publishedTruthMetadata.truth_facts_snapshot_json
@@ -291,38 +328,42 @@ export async function loadTenantCanonicalGraph(
   const operationalFacts = normalizeFacts(
     factsRows.filter((row) => {
       const meta = parseObject(row.meta);
-      return s(meta.factSurface || meta.fact_surface).toLowerCase() === "runtime_retrieval";
+      return (
+        s(meta.factSurface || meta.fact_surface).toLowerCase() ===
+        "runtime_retrieval"
+      );
     })
   );
+
   const legacyFacts = normalizeFacts(
     factsRows.filter((row) => {
       const meta = parseObject(row.meta);
-      return s(meta.factSurface || meta.fact_surface).toLowerCase() !== "runtime_retrieval";
+      return (
+        s(meta.factSurface || meta.fact_surface).toLowerCase() !==
+        "runtime_retrieval"
+      );
     })
   );
-  const publishedTruthFacts =
-    publishedTruthVersion?.has_truth_facts_snapshot
-      ? normalizeFacts(publishedTruthVersion.truth_facts_snapshot_json)
-      : legacyFacts;
+
+  const publishedTruthFacts = publishedTruthVersion?.has_truth_facts_snapshot
+    ? normalizeFacts(publishedTruthVersion.truth_facts_snapshot_json)
+    : legacyFacts;
 
   return {
     tenant,
     profile,
     capabilities,
     synthesis,
-    contacts:
-      publishedTruthVersion?.has_contacts_snapshot
-        ? normalizeContacts(publishedTruthVersion.contacts_snapshot_json)
-        : normalizeContacts(contactsRows),
-    locations:
-      publishedTruthVersion?.has_locations_snapshot
-        ? normalizeLocations(publishedTruthVersion.locations_snapshot_json)
-        : normalizeLocations(locationsRows),
+    contacts: publishedTruthVersion?.has_contacts_snapshot
+      ? normalizeContacts(publishedTruthVersion.contacts_snapshot_json)
+      : normalizeContacts(contactsRows),
+    locations: publishedTruthVersion?.has_locations_snapshot
+      ? normalizeLocations(publishedTruthVersion.locations_snapshot_json)
+      : normalizeLocations(locationsRows),
     hours: normalizeHours(hoursRows),
-    services:
-      publishedTruthVersion?.has_services_snapshot
-        ? normalizeServices(publishedTruthVersion.services_snapshot_json)
-        : normalizeServices(servicesRows),
+    services: publishedTruthVersion?.has_services_snapshot
+      ? normalizeServices(publishedTruthVersion.services_snapshot_json)
+      : normalizeServices(servicesRows),
     products: normalizeProducts(productsRows),
     faq: normalizeFaq(faqRows),
     policies: normalizePolicies(policiesRows),

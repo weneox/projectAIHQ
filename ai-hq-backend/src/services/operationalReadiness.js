@@ -828,18 +828,36 @@ export async function getOperationalReadinessSummary(db, options = {}) {
     with latest_truth as (
       select distinct on (tenant_id)
         tenant_id,
-        tenant_key
+        tenant_key,
+        id as truth_version_id
       from tenant_business_profile_versions
+      where approved_at is not null
       order by tenant_id, approved_at desc nulls last, created_at desc
     ),
     runtime_projection as (
-      select tenant_id, tenant_key, id, status
+      select
+        tenant_id,
+        tenant_key,
+        id,
+        status,
+        coalesce(
+          metadata_json->>'publishedTruthVersionId',
+          metadata_json->>'published_truth_version_id',
+          ''
+        ) as published_truth_version_id
       from tenant_business_runtime_projection
       where is_current = true
     )
     select
       count(*) filter (where rp.id is null) as missing_projection,
-      count(*) filter (where lower(coalesce(rp.status, '')) = 'stale') as stale_projection,
+      count(*) filter (
+        where rp.id is not null
+          and lower(coalesce(rp.status, '')) = 'stale'
+          and (
+            btrim(coalesce(rp.published_truth_version_id, '')) = ''
+            or rp.published_truth_version_id <> lt.truth_version_id::text
+          )
+      ) as stale_projection,
       count(*) filter (
         where rp.id is not null
           and lower(coalesce(rp.status, '')) not in ('ready', 'stale')
@@ -852,13 +870,24 @@ export async function getOperationalReadinessSummary(db, options = {}) {
             'reasonCode',
             case
               when rp.id is null then 'projection_missing'
-              when lower(coalesce(rp.status, '')) = 'stale' then 'projection_stale'
+              when lower(coalesce(rp.status, '')) = 'stale'
+                   and (
+                     btrim(coalesce(rp.published_truth_version_id, '')) = ''
+                     or rp.published_truth_version_id <> lt.truth_version_id::text
+                   )
+                then 'projection_stale'
               else 'authority_invalid'
             end
           )
         ) filter (
           where rp.id is null
-             or lower(coalesce(rp.status, '')) = 'stale'
+             or (
+               lower(coalesce(rp.status, '')) = 'stale'
+               and (
+                 btrim(coalesce(rp.published_truth_version_id, '')) = ''
+                 or rp.published_truth_version_id <> lt.truth_version_id::text
+               )
+             )
              or lower(coalesce(rp.status, '')) not in ('ready', 'stale')
         ),
         '[]'::jsonb
@@ -1007,7 +1036,9 @@ export function buildReadinessSurface({
     .filter(Boolean);
 
   return {
-    status: lower(status || (items.some((item) => item.blocked) ? "blocked" : "ready")),
+    status: lower(
+      status || (items.some((item) => item.blocked) ? "blocked" : "ready")
+    ),
     blocked: items.some((item) => item.blocked),
     message: s(message),
     blockers: items,
