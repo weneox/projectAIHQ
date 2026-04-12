@@ -84,7 +84,10 @@ function mapFreshnessReasons(freshness = {}) {
     .map((item) => normalizeReasonCode(item))
     .filter(Boolean);
 
-  if (currentReasons.includes("truth_version_drift") && !currentReasons.includes("projection_stale")) {
+  if (
+    currentReasons.includes("truth_version_drift") &&
+    !currentReasons.includes("projection_stale")
+  ) {
     currentReasons.unshift("projection_stale");
   }
 
@@ -112,7 +115,9 @@ function buildAffectedSurfaces({
   const channels = arr(projection.channels_json);
   if (
     channels.some((item) =>
-      ["instagram", "facebook", "messenger"].includes(lower(item?.channelType || item?.channel_type))
+      ["instagram", "facebook", "messenger"].includes(
+        lower(item?.channelType || item?.channel_type)
+      )
     )
   ) {
     surfaces.push("meta");
@@ -172,13 +177,14 @@ function buildLastKnownGood({
   const sourceSummary = obj(successRun.output_summary_json);
 
   const runtimeProjectionId =
-    s(projection.id) ||
-    s(successRun.runtime_projection_id);
+    s(projection.id) || s(successRun.runtime_projection_id);
   const projectionHash =
     s(projection.projection_hash) ||
     s(sourceSummary.projectionHash || sourceSummary.projection_hash);
   const lastGoodAt = laterIso(
-    projection.status === "ready" ? projection.updated_at || projection.created_at : "",
+    projection.status === "ready"
+      ? projection.updated_at || projection.created_at
+      : "",
     successRun.finished_at || successRun.updated_at || successRun.created_at
   );
 
@@ -192,20 +198,24 @@ function buildLastKnownGood({
     status: s(projection.status || "ready"),
     lastGoodAt,
     runId: s(successRun.id),
-    readinessLabel: s(projection.readiness_label || sourceSummary.readinessLabel),
+    readinessLabel: s(
+      projection.readiness_label || sourceSummary.readinessLabel
+    ),
     readinessScore:
       Number.isFinite(Number(projection.readiness_score))
         ? Number(projection.readiness_score)
         : Number.isFinite(Number(sourceSummary.readinessScore))
-          ? Number(sourceSummary.readinessScore)
-          : null,
-    confidenceLabel: s(projection.confidence_label || sourceSummary.confidenceLabel),
+        ? Number(sourceSummary.readinessScore)
+        : null,
+    confidenceLabel: s(
+      projection.confidence_label || sourceSummary.confidenceLabel
+    ),
     confidence:
       Number.isFinite(Number(projection.confidence))
         ? Number(projection.confidence)
         : Number.isFinite(Number(sourceSummary.confidence))
-          ? Number(sourceSummary.confidence)
-          : null,
+        ? Number(sourceSummary.confidence)
+        : null,
     diagnosticOnly: true,
     usableAsAuthority: false,
   };
@@ -236,8 +246,12 @@ function buildReasonHistory({
   if (s(failure.id)) {
     history.push({
       kind: "last_failure",
-      reasonCode: normalizeReasonCode(failure.error_code || "projection_build_failed"),
-      observedAt: iso(failure.finished_at || failure.updated_at || failure.created_at),
+      reasonCode: normalizeReasonCode(
+        failure.error_code || "projection_build_failed"
+      ),
+      observedAt: iso(
+        failure.finished_at || failure.updated_at || failure.created_at
+      ),
       details: {
         runId: s(failure.id),
         message: s(failure.error_message),
@@ -249,7 +263,9 @@ function buildReasonHistory({
     history.push({
       kind: "last_success",
       reasonCode: "refresh_projection",
-      observedAt: iso(success.finished_at || success.updated_at || success.created_at),
+      observedAt: iso(
+        success.finished_at || success.updated_at || success.created_at
+      ),
       details: {
         runId: s(success.id),
         runtimeProjectionId: s(success.runtime_projection_id),
@@ -258,6 +274,22 @@ function buildReasonHistory({
   }
 
   return history.filter((item) => item.reasonCode);
+}
+
+function logRuntimeProjectionHealth(model, context = {}) {
+  try {
+    console.warn("[ai-hq] runtime projection health", {
+      status: s(model?.status),
+      primaryReasonCode: s(model?.primaryReasonCode),
+      reasonCodes: arr(model?.reasonCodes),
+      autonomousOperation: s(model?.autonomousOperation),
+      latestTruthVersionId: s(context?.latestTruthVersionId),
+      activeReviewSessionId: s(context?.activeReviewSessionId),
+      runtimeProjectionId: s(context?.runtimeProjectionId),
+      runtimeProjectionStatus: s(context?.runtimeProjectionStatus),
+      repairActions: arr(model?.repairActions).map((item) => s(item?.action)),
+    });
+  } catch {}
 }
 
 export function buildRuntimeProjectionHealthModel({
@@ -285,15 +317,28 @@ export function buildRuntimeProjectionHealthModel({
     reasonCodes.push("approval_required");
   }
 
-  if (s(latest.id) && ["running", "queued", "pending"].includes(lower(latest.status))) {
+  if (
+    s(latest.id) &&
+    ["running", "queued", "pending"].includes(lower(latest.status))
+  ) {
     reasonCodes.push("repair_pending");
   }
 
-  const latestFailureAt = iso(obj(latestFailureRun).finished_at || obj(latestFailureRun).updated_at || obj(latestFailureRun).created_at);
-  const latestSuccessAt = iso(obj(latestSuccessRun).finished_at || obj(latestSuccessRun).updated_at || obj(latestSuccessRun).created_at);
+  const latestFailureAt = iso(
+    obj(latestFailureRun).finished_at ||
+      obj(latestFailureRun).updated_at ||
+      obj(latestFailureRun).created_at
+  );
+  const latestSuccessAt = iso(
+    obj(latestSuccessRun).finished_at ||
+      obj(latestSuccessRun).updated_at ||
+      obj(latestSuccessRun).created_at
+  );
   if (
     latestFailureAt &&
-    (!latestSuccessAt || new Date(latestFailureAt).getTime() > new Date(latestSuccessAt || 0).getTime()) &&
+    (!latestSuccessAt ||
+      new Date(latestFailureAt).getTime() >
+        new Date(latestSuccessAt || 0).getTime()) &&
     s(projection.id) &&
     lower(projection.status) === "ready" &&
     fresh.stale !== true
@@ -301,11 +346,7 @@ export function buildRuntimeProjectionHealthModel({
     reasonCodes.push("source_dependency_failed");
   }
 
-  if (
-    auth &&
-    s(auth.source) &&
-    s(auth.source) !== "approved_runtime_projection"
-  ) {
+  if (auth && s(auth.source) && s(auth.source) !== "approved_runtime_projection") {
     reasonCodes.push("authority_invalid");
   }
 
@@ -330,13 +371,13 @@ export function buildRuntimeProjectionHealthModel({
     normalizedReasons.includes("truth_version_drift")
   ) {
     status = "stale";
-    } else if (
-      normalizedReasons.includes("source_dependency_failed") ||
-      normalizedReasons.includes("degraded") ||
-      (num(projection.confidence, 0) > 0 && num(projection.confidence, 0) < 0.6)
-    ) {
-      status = "degraded";
-    }
+  } else if (
+    normalizedReasons.includes("source_dependency_failed") ||
+    normalizedReasons.includes("degraded") ||
+    (num(projection.confidence, 0) > 0 && num(projection.confidence, 0) < 0.6)
+  ) {
+    status = "degraded";
+  }
 
   const affectedSurfaces = buildAffectedSurfaces({
     runtimeProjection,
@@ -349,7 +390,7 @@ export function buildRuntimeProjectionHealthModel({
   const autonomousOperation =
     status === "healthy" ? "continue" : status === "degraded" ? "degrade" : "stop";
 
-  return {
+  const model = {
     status,
     primaryReasonCode: normalizedReasons[0] || "",
     reasonCodes: normalizedReasons,
@@ -371,14 +412,22 @@ export function buildRuntimeProjectionHealthModel({
     lastSuccess: obj(latestSuccessRun).id
       ? {
           runId: s(obj(latestSuccessRun).id),
-          finishedAt: iso(obj(latestSuccessRun).finished_at || obj(latestSuccessRun).updated_at || obj(latestSuccessRun).created_at),
+          finishedAt: iso(
+            obj(latestSuccessRun).finished_at ||
+              obj(latestSuccessRun).updated_at ||
+              obj(latestSuccessRun).created_at
+          ),
           runtimeProjectionId: s(obj(latestSuccessRun).runtime_projection_id),
         }
       : null,
     lastFailure: obj(latestFailureRun).id
       ? {
           runId: s(obj(latestFailureRun).id),
-          finishedAt: iso(obj(latestFailureRun).finished_at || obj(latestFailureRun).updated_at || obj(latestFailureRun).created_at),
+          finishedAt: iso(
+            obj(latestFailureRun).finished_at ||
+              obj(latestFailureRun).updated_at ||
+              obj(latestFailureRun).created_at
+          ),
           errorCode: s(obj(latestFailureRun).error_code),
           errorMessage: s(obj(latestFailureRun).error_message),
         }
@@ -390,6 +439,15 @@ export function buildRuntimeProjectionHealthModel({
       latestFailureRun,
     }),
   };
+
+  logRuntimeProjectionHealth(model, {
+    latestTruthVersionId: s(truth.id),
+    activeReviewSessionId: s(obj(activeReviewSession).id),
+    runtimeProjectionId: s(projection.id),
+    runtimeProjectionStatus: s(projection.status),
+  });
+
+  return model;
 }
 
 export const __test__ = {
