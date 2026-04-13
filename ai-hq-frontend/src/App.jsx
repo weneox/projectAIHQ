@@ -33,6 +33,17 @@ const AdminTeam = lazy(() => import("./pages/AdminTeam.jsx"));
 const AdminSecrets = lazy(() => import("./pages/AdminSecrets.jsx"));
 const SelectWorkspace = lazy(() => import("./pages/SelectWorkspace.jsx"));
 
+const LEGACY_LAUNCH_FREEZE_ROUTES = [
+  "workspace",
+  "leads",
+  "comments",
+  "voice",
+  "publish",
+  "proposals",
+  "executions",
+  "incidents",
+];
+
 function RouteFallback() {
   return (
     <PageCanvas className="px-4 py-8 md:px-6 md:py-10">
@@ -143,8 +154,23 @@ function renderInternalRouteRedirects() {
   );
 }
 
-function HiddenSurfaceRedirect() {
-  return <Navigate to="/home" replace />;
+function renderLegacyLaunchFreezeRedirects() {
+  return (
+    <>
+      {LEGACY_LAUNCH_FREEZE_ROUTES.flatMap((path) => [
+        <Route
+          key={path}
+          path={path}
+          element={<Navigate to="/home" replace />}
+        />,
+        <Route
+          key={`${path}-wildcard`}
+          path={`${path}/*`}
+          element={<Navigate to="/home" replace />}
+        />,
+      ])}
+    </>
+  );
 }
 
 export default function App() {
@@ -227,15 +253,7 @@ export default function App() {
             }
           />
 
-          <Route path="workspace" element={<HiddenSurfaceRedirect />} />
-          <Route path="leads" element={<HiddenSurfaceRedirect />} />
-          <Route path="comments" element={<HiddenSurfaceRedirect />} />
-          <Route path="voice" element={<HiddenSurfaceRedirect />} />
-          <Route path="publish" element={<HiddenSurfaceRedirect />} />
-          <Route path="proposals" element={<HiddenSurfaceRedirect />} />
-          <Route path="executions" element={<HiddenSurfaceRedirect />} />
-          <Route path="incidents" element={<HiddenSurfaceRedirect />} />
-
+          {renderLegacyLaunchFreezeRedirects()}
           {renderInternalRouteRedirects()}
         </Route>
 

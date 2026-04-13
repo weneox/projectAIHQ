@@ -151,8 +151,8 @@ export default function Welcome() {
     <AuthFrame
       aside={
         <div className="grid w-full gap-3 self-center">
-          <MetricCard label="Step" value="1" tone="brand" hint="Identity first." />
-          <MetricCard label="Outcome" value="Home" hint="Then straight into the product." />
+          <MetricCard label="Step" value="Identity" tone="brand" hint="One small pass." />
+          <MetricCard label="Next" value="Launch lane" hint="Then straight into the product." />
         </div>
       }
     >
@@ -164,7 +164,7 @@ export default function Welcome() {
           A quick identity pass.
         </h1>
         <p className="mt-2 text-[15px] leading-7 text-text-muted">
-          Just the essentials, then the real product.
+          Just the essentials, then into the launch lane.
         </p>
 
         <div className="mt-8">

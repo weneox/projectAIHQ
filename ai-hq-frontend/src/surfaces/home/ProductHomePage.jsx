@@ -100,7 +100,7 @@ function StateMetaLine({ home }) {
       ? `v${home.truthRuntime.truthVersionId}`
       : s(home.truthRuntime?.statusLabel, "Needs review");
 
-  const liveValue = home.launchReady
+  const inboxValue = home.launchReady
     ? "Ready"
     : s(home.inboxState?.statusLabel, "Waiting");
 
@@ -115,7 +115,7 @@ function StateMetaLine({ home }) {
       </span>
       <span>·</span>
       <span>
-        <span className="text-text-muted">Live</span> {liveValue}
+        <span className="text-text-muted">Inbox</span> {inboxValue}
       </span>
     </div>
   );
@@ -210,19 +210,21 @@ export default function ProductHomePage() {
       : steps.filter((step) => step.complete !== true).length;
 
   const topLabel = home.launchReady
-    ? "Ready"
+    ? "Launch lane ready"
     : blockerCount === 1
-      ? "1 blocker remains"
-      : `${blockerCount} blockers remain`;
+      ? "1 launch step left"
+      : `${blockerCount} launch steps left`;
 
   const headline = home.launchReady
-    ? "Everything important is aligned."
-    : s(nextStep?.label, "Review the next step.");
+    ? "Launch slice is ready."
+    : s(nextStep?.label, "Finish the next launch step.");
 
   const summary = compactSentence(
     home.launchReady
-      ? home.launchSummary || "Channel, setup, truth, and runtime are aligned."
-      : nextStep?.summary || home.launchSummary,
+      ? home.launchSummary ||
+          "Setup, truth, one live channel, and inbox are aligned for the current launch slice."
+      : nextStep?.summary ||
+          "Only the current launch slice matters right now: setup, truth, one channel, inbox.",
     "Review the next launch step."
   );
 
@@ -231,7 +233,7 @@ export default function ProductHomePage() {
       {home.availabilityNote ? (
         <InlineNotice
           tone="warning"
-          title={s(home.availabilityNote.title, "Limited context")}
+          title={s(home.availabilityNote.title, "Some launch signals are limited")}
           description={compactSentence(home.availabilityNote.description)}
           compact
         />
@@ -260,7 +262,7 @@ export default function ProductHomePage() {
 
             {assistantRequested ? (
               <div className="mt-3 text-[12px] font-medium text-brand">
-                Setup assistant is open.
+                Setup draft is open.
               </div>
             ) : null}
           </div>

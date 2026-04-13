@@ -38,7 +38,7 @@ describe("resolveAuthenticatedLanding", () => {
     expect(target).toBe("/home");
   });
 
-  it("routes completed workspaces into backend-provided core route", () => {
+  it("routes completed workspaces into the bounded launch slice", () => {
     const target = resolveAuthenticatedLanding({
       bootstrap: {
         workspace: {
@@ -70,7 +70,7 @@ describe("resolveAuthenticatedLanding", () => {
     expect(target).toBe("/home");
   });
 
-  it("falls back to workspace when completed workspace points at non-product root", () => {
+  it("falls back to home when completed workspace points at non-product root", () => {
     const target = resolveAuthenticatedLanding({
       bootstrap: {
         workspace: {
@@ -101,12 +101,8 @@ describe("resolveAuthenticatedLanding", () => {
   it("defines a bounded production route list and a separate internal-only route list", () => {
     expect(CORE_APP_ROUTES).toEqual([
       "/home",
-      "/workspace",
       "/truth",
-      "/publish",
       "/inbox",
-      "/comments",
-      "/voice",
       "/channels",
     ]);
 
@@ -129,7 +125,7 @@ describe("resolveAuthenticatedLanding", () => {
     expect(isForcedWorkspaceEntryEnabled()).toBe(false);
   });
 
-  it("falls back to truth when backend points a completed workspace at operator-only surfaces", () => {
+  it("falls back to home when backend points a completed workspace at hidden legacy surfaces", () => {
     const target = resolveAuthenticatedLanding({
       bootstrap: {
         workspace: {
@@ -143,7 +139,7 @@ describe("resolveAuthenticatedLanding", () => {
     expect(target).toBe("/home");
   });
 
-  it("promotes workspace as the default completed landing when no better core route is provided", () => {
+  it("promotes home as the default completed landing when no better core route is provided", () => {
     const target = resolveAuthenticatedLanding({
       bootstrap: {
         workspace: {
@@ -157,7 +153,7 @@ describe("resolveAuthenticatedLanding", () => {
     expect(target).toBe("/home");
   });
 
-  it("accepts workspace as a first-class authenticated route", () => {
+  it("normalizes legacy workspace routes back into home for the launch slice", () => {
     const target = resolveAuthenticatedLanding({
       bootstrap: {
         workspace: {
@@ -194,4 +190,3 @@ describe("resolveAuthenticatedLanding", () => {
     );
   });
 });
-

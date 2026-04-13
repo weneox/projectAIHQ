@@ -20,7 +20,20 @@ function splitRoute(value = "") {
   };
 }
 
-export const SETUP_WIDGET_ROUTE = "/home?assistant=setup";
+export const PRODUCT_HOME_ROUTE = "/home";
+export const SETUP_WIDGET_ROUTE = `${PRODUCT_HOME_ROUTE}?assistant=setup`;
+export const WORKSPACE_SELECTION_ROUTE = "/select-workspace";
+
+const LEGACY_PRODUCT_HOME_ROUTES = Object.freeze([
+  "/workspace",
+  "/leads",
+  "/comments",
+  "/voice",
+  "/publish",
+  "/proposals",
+  "/executions",
+  "/incidents",
+]);
 
 function normalizeSetupRoute(_target = "") {
   return SETUP_WIDGET_ROUTE;
@@ -39,10 +52,19 @@ function normalizeLegacyAppRoute(target = "") {
     return SETUP_WIDGET_ROUTE;
   }
 
+  for (const legacyPath of LEGACY_PRODUCT_HOME_ROUTES) {
+    if (
+      normalizedPath === legacyPath ||
+      normalizedPath.startsWith(`${legacyPath}/`)
+    ) {
+      return PRODUCT_HOME_ROUTE;
+    }
+  }
+
   return raw;
 }
 
-function normalizeRoute(target = "", fallback = "/workspace") {
+function normalizeRoute(target = "", fallback = PRODUCT_HOME_ROUTE) {
   const value = normalizeLegacyAppRoute(target);
   if (!value) return fallback;
   if (value.startsWith("/")) return value;
@@ -70,17 +92,11 @@ function hasWorkspaceSignal(workspace = {}) {
 }
 
 export const CORE_APP_ROUTES = Object.freeze([
-  "/home",
-  "/workspace",
+  PRODUCT_HOME_ROUTE,
   "/truth",
-  "/publish",
   "/inbox",
-  "/comments",
-  "/voice",
   "/channels",
 ]);
-
-export const PRODUCT_HOME_ROUTE = "/home";
 
 export const INTERNAL_ONLY_APP_ROUTES = Object.freeze([
   "/command-demo",
@@ -88,8 +104,6 @@ export const INTERNAL_ONLY_APP_ROUTES = Object.freeze([
   "/agents",
   "/threads",
 ]);
-
-export const WORKSPACE_SELECTION_ROUTE = "/select-workspace";
 
 const CORE_APP_ROUTE_SET = new Set(CORE_APP_ROUTES);
 const INTERNAL_ONLY_ROUTE_SET = new Set(INTERNAL_ONLY_APP_ROUTES);
@@ -140,7 +154,7 @@ export function getCanonicalWorkspaceContract(payload = {}) {
     destination,
     routeHint: normalizeRoute(source.routeHint || destination.path, ""),
     nextRoute: normalizeRoute(
-      destination.path || source.routeHint || source.nextRoute || "/workspace"
+      destination.path || source.routeHint || source.nextRoute || PRODUCT_HOME_ROUTE
     ),
     nextSetupRoute: normalizeSetupRoute(
       source.nextSetupRoute || destination.path || source.routeHint || SETUP_WIDGET_ROUTE
@@ -192,22 +206,18 @@ export function hasMultipleWorkspaceChoices(auth = {}) {
 export function resolveWorkspaceContractRoute(payload = {}) {
   const workspace = getCanonicalWorkspaceContract(payload);
   const setupCompleted = workspace.workspaceReady;
-  const nextRoute = normalizeRoute(workspace.nextRoute || "/workspace");
+  const nextRoute = normalizeRoute(workspace.nextRoute || PRODUCT_HOME_ROUTE);
   const nextSetupRoute = normalizeSetupRoute(workspace.nextSetupRoute);
 
   if (!setupCompleted) {
     return nextSetupRoute;
   }
 
-  if (nextRoute === "/workspace") {
-    return "/workspace";
-  }
-
   if (isCoreAppPath(nextRoute) && !isInternalOnlyPath(nextRoute)) {
     return nextRoute;
   }
 
-  return "/workspace";
+  return PRODUCT_HOME_ROUTE;
 }
 
 export function resolveAuthenticatedLanding({
