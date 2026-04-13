@@ -20,7 +20,7 @@ function obj(value, fallback = {}) {
     : fallback;
 }
 
-function compactText(value, max = 160) {
+function compactText(value, max = 180) {
   const text = s(value).replace(/\s+/g, " ").trim();
   if (!text) return "";
   return text.length <= max ? text : `${text.slice(0, max - 1).trim()}...`;
@@ -38,32 +38,26 @@ const SOURCE_OPTIONS = [
     key: "website",
     label: "Website",
     placeholder: "https://example.com",
-    actionLabel: "Use source",
+    actionLabel: "Continue",
   },
   {
     key: "instagram",
     label: "Instagram",
     placeholder: "https://instagram.com/brand",
-    actionLabel: "Use source",
+    actionLabel: "Continue",
   },
   {
     key: "facebook",
     label: "Facebook",
     placeholder: "https://facebook.com/page",
-    actionLabel: "Use source",
-  },
-  {
-    key: "google_maps",
-    label: "Google Maps",
-    placeholder: "https://maps.google.com/...",
-    actionLabel: "Use source",
+    actionLabel: "Continue",
   },
   {
     key: "manual",
     label: "Manual note",
     placeholder:
       "Qadın gözəllik salonudur. Əsas xidmətlər saç baxımı, kəsim, dırnaq xidməti və makiyajdır.",
-    actionLabel: "Use note",
+    actionLabel: "Continue",
     multiline: true,
   },
 ];
@@ -71,7 +65,7 @@ const SOURCE_OPTIONS = [
 const QUESTION_META = {
   company: {
     title: "Business name",
-    prompt: "Bu biznesin public adı necə görünməlidir?",
+    prompt: "Bu biznesin adı necə görünməlidir?",
     placeholder: "Məsələn: Saytpro",
     quickAnswers: [],
   },
@@ -82,23 +76,17 @@ const QUESTION_META = {
       "Məsələn: Website hazırlanması, reklam və branding xidmətləri göstərən digital şirkət",
     quickAnswers: [],
   },
-  website: {
-    title: "Main website",
-    prompt: "Əsas public website hansıdır?",
-    placeholder: "https://example.com",
-    quickAnswers: [],
-  },
   services: {
     title: "Core services",
     prompt: "Əsas xidmətləri sadalayın.",
     placeholder: "Website hazırlanması, reklam, branding...",
     quickAnswers: [],
   },
-  hours: {
-    title: "Opening hours",
-    prompt: "Müştəriyə hansı iş saatları deyilməlidir?",
-    placeholder: "B.e.-C. 10:00-19:00",
-    quickAnswers: ["24/7", "Appointment only", "Mon-Fri 10:00-19:00"],
+  audience: {
+    title: "Audience",
+    prompt: "Əsasən kimlərə xidmət göstərirsiniz?",
+    placeholder: "Kiçik bizneslər, şirkətlər, fərdi brendlər...",
+    quickAnswers: ["Kiçik bizneslər", "Şirkətlər", "Fərdi brendlər", "Hamısı"],
   },
   pricing: {
     title: "Pricing posture",
@@ -130,13 +118,15 @@ const QUESTION_META = {
   },
 };
 
-function normalizeQuestionKey(value = "") {
-  const key = lower(value);
-  if (!key) return "";
-  if (key === "profile") return "company";
-  if (key === "contact") return "contacts";
-  return key;
-}
+const QUESTION_ORDER = [
+  "company",
+  "description",
+  "services",
+  "audience",
+  "pricing",
+  "contacts",
+  "handoff",
+];
 
 function buildCurrentSource(assistant = {}, reviewPayload = null) {
   const sourceMetadata = obj(assistant.draft?.sourceMetadata);
@@ -150,25 +140,23 @@ function buildCurrentSource(assistant = {}, reviewPayload = null) {
   const sourceUrl =
     s(primaryBundle?.sourceUrl || sourceMetadata.primarySourceUrl) ||
     s(assistant.websitePrefill?.websiteUrl);
+
   const sourceLabel =
     s(primaryBundle?.label || arr(sourceMetadata.sourceLabels)[0]) ||
-    (sourceType === "google_maps"
-      ? "Google Maps"
-      : sourceType === "instagram"
-        ? "Instagram"
-        : sourceType === "facebook_page" || sourceType === "facebook"
-          ? "Facebook"
-          : sourceType === "manual"
-            ? "Manual note"
-            : sourceType === "website"
-              ? "Website"
-              : "");
+    (sourceType === "instagram"
+      ? "Instagram"
+      : sourceType === "facebook_page" || sourceType === "facebook"
+        ? "Facebook"
+        : sourceType === "manual"
+          ? "Manual note"
+          : sourceType === "website"
+            ? "Website"
+            : "");
 
   return {
     type: sourceType,
     label: sourceLabel,
     url: sourceUrl,
-    insight: arr(sourceMetadata.evidenceSummary)[0] || "",
     hasSource: Boolean(sourceType || sourceUrl || sourceLabel),
   };
 }
@@ -225,7 +213,7 @@ function buildDraftModel(assistant = {}, reviewPayload = null) {
     s(profile.companySummaryShort) ||
     s(profile.companySummary);
 
-  const model = {
+  return {
     name: s(profile.companyName || profile.displayName),
     description,
     website: s(profile.websiteUrl),
@@ -243,85 +231,45 @@ function buildDraftModel(assistant = {}, reviewPayload = null) {
     handoff,
     serviceList: services,
   };
-
-  model.fieldCount = [
-    model.name,
-    model.description,
-    model.website,
-    model.coreOffer,
-    model.audience,
-    model.contacts.length ? "contacts" : "",
-    model.hours.length ? "hours" : "",
-    model.pricing,
-    model.handoff,
-  ].filter(Boolean).length;
-
-  return model;
 }
 
-function buildQuestionState(assistant = {}, draftModel = {}) {
-  const nextQuestion = normalizeQuestionKey(assistant.assistant?.nextQuestion?.key);
+function buildQuestionState(draftModel = {}) {
+  for (const key of QUESTION_ORDER) {
+    if (key === "company" && !s(draftModel.name)) {
+      return { key, ...QUESTION_META[key] };
+    }
 
-  if (nextQuestion && QUESTION_META[nextQuestion]) {
-    return {
-      key: nextQuestion,
-      ...QUESTION_META[nextQuestion],
-    };
-  }
+    if (key === "description" && !s(draftModel.description)) {
+      return { key, ...QUESTION_META[key] };
+    }
 
-  if (!s(draftModel.name)) return { key: "company", ...QUESTION_META.company };
-  if (!s(draftModel.description)) {
-    return { key: "description", ...QUESTION_META.description };
+    if (key === "services" && !draftModel.serviceList?.length) {
+      return { key, ...QUESTION_META[key] };
+    }
+
+    if (key === "audience" && !s(draftModel.audience)) {
+      return { key, ...QUESTION_META[key] };
+    }
+
+    if (key === "pricing" && !s(draftModel.pricing)) {
+      return { key, ...QUESTION_META[key] };
+    }
+
+    if (key === "contacts" && !draftModel.contacts?.length) {
+      return { key, ...QUESTION_META[key] };
+    }
+
+    if (key === "handoff" && !s(draftModel.handoff)) {
+      return { key, ...QUESTION_META[key] };
+    }
   }
-  if (!draftModel.serviceList?.length) {
-    return { key: "services", ...QUESTION_META.services };
-  }
-  if (!s(draftModel.pricing)) return { key: "pricing", ...QUESTION_META.pricing };
-  if (!draftModel.contacts?.length) {
-    return { key: "contacts", ...QUESTION_META.contacts };
-  }
-  if (!s(draftModel.handoff)) return { key: "handoff", ...QUESTION_META.handoff };
 
   return null;
-}
-
-function buildInterviewSummary(source = {}, draftModel = {}) {
-  const lines = [];
-
-  if (source.label || source.url) {
-    lines.push(
-      source.url
-        ? `${source.label || "Source"} qəbul olundu: ${source.url}`
-        : `${source.label || "Source"} qəbul olundu.`
-    );
-  }
-
-  if (draftModel.name) {
-    lines.push(`Hazırda gördüyüm brend adı: ${draftModel.name}`);
-  }
-
-  if (draftModel.description) {
-    lines.push(`İlkin anlayış: ${compactText(draftModel.description, 120)}`);
-  }
-
-  if (draftModel.serviceList?.length) {
-    lines.push(`Görünən xidmətlər: ${listPreview(draftModel.serviceList, 4)}`);
-  }
-
-  if (!lines.length) {
-    lines.push("Mən source-dan siqnalları yığıram və business draft qururam.");
-  }
-
-  return lines;
 }
 
 function getSourcePrefillValue(mode = "", source = {}, assistant = {}, draftModel = {}) {
   if (mode === "website") {
     return s(assistant.websitePrefill?.websiteUrl || draftModel.website);
-  }
-
-  if (mode === "google_maps" && lower(source.type) === "google_maps" && source.url) {
-    return source.url;
   }
 
   if (mode === "instagram" && lower(source.type) === "instagram" && source.url) {
@@ -354,13 +302,13 @@ function SourceComposer({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={option.placeholder}
-          className="min-h-[128px] w-full resize-none border-b border-[rgba(15,23,42,0.12)] bg-transparent px-0 py-2 text-[14px] leading-7 text-text outline-none placeholder:text-text-subtle"
+          className="min-h-[140px] w-full resize-none border-b border-[rgba(15,23,42,0.12)] bg-transparent px-0 py-2 text-[15px] leading-7 text-text outline-none placeholder:text-text-subtle"
         />
         <button
           type="button"
           onClick={onSubmit}
           disabled={!s(value) || busy}
-          className="inline-flex h-10 items-center gap-2 bg-slate-950 px-3.5 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+          className="inline-flex h-10 items-center gap-2 bg-slate-950 px-4 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
         >
           {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
           <span>{option.actionLabel}</span>
@@ -375,13 +323,13 @@ function SourceComposer({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={option.placeholder}
-        className="h-11 w-full bg-transparent px-0 text-[14px] text-text outline-none placeholder:text-text-subtle"
+        className="h-12 w-full bg-transparent px-0 text-[15px] text-text outline-none placeholder:text-text-subtle"
       />
       <button
         type="button"
         onClick={onSubmit}
         disabled={!s(value) || busy}
-        className="inline-flex h-10 shrink-0 items-center gap-2 bg-slate-950 px-3.5 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+        className="inline-flex h-10 shrink-0 items-center gap-2 bg-slate-950 px-4 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
       >
         {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
         <span>{option.actionLabel}</span>
@@ -394,6 +342,7 @@ function ReplyComposer({
   value,
   busy,
   placeholder,
+  buttonLabel = "Continue",
   onChange,
   onSubmit,
 }) {
@@ -401,7 +350,7 @@ function ReplyComposer({
     <div className="border-t border-[rgba(15,23,42,0.08)] pt-4">
       <div className="flex items-end gap-3 border-b border-[rgba(15,23,42,0.12)] py-2">
         <textarea
-          rows={3}
+          rows={4}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
@@ -411,16 +360,16 @@ function ReplyComposer({
             }
           }}
           placeholder={placeholder}
-          className="min-h-[84px] w-full resize-none bg-transparent px-0 py-1 text-[14px] leading-7 text-text outline-none placeholder:text-text-subtle"
+          className="min-h-[98px] w-full resize-none bg-transparent px-0 py-1 text-[15px] leading-7 text-text outline-none placeholder:text-text-subtle"
         />
         <button
           type="button"
           onClick={onSubmit}
           disabled={!s(value) || busy}
-          className="inline-flex h-10 shrink-0 items-center gap-2 bg-slate-950 px-3.5 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+          className="inline-flex h-10 shrink-0 items-center gap-2 bg-slate-950 px-4 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
         >
           {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-          <span>Continue</span>
+          <span>{buttonLabel}</span>
         </button>
       </div>
     </div>
@@ -429,23 +378,23 @@ function ReplyComposer({
 
 function AssistantBubble({ eyebrow = "", title = "", body = "", children = null }) {
   return (
-    <div className="border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(248,250,252,0.82),rgba(255,255,255,0.98))] px-4 py-4 text-text">
+    <div className="border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(248,250,252,0.82),rgba(255,255,255,0.98))] px-5 py-5 text-text">
       {s(eyebrow) ? (
         <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted">
           {eyebrow}
         </div>
       ) : null}
       {s(title) ? (
-        <div className="mt-1 text-[18px] font-semibold tracking-[-0.03em] text-text">
+        <div className="mt-1 text-[28px] font-semibold tracking-[-0.05em] text-text">
           {title}
         </div>
       ) : null}
       {s(body) ? (
-        <div className="mt-2 whitespace-pre-wrap text-[14px] leading-7 text-text-muted">
+        <div className="mt-3 whitespace-pre-wrap text-[15px] leading-8 text-text-muted">
           {body}
         </div>
       ) : null}
-      {children ? <div className="mt-4">{children}</div> : null}
+      {children ? <div className="mt-5">{children}</div> : null}
     </div>
   );
 }
@@ -472,8 +421,8 @@ export default function SetupAssistantSections({
   );
 
   const question = useMemo(
-    () => buildQuestionState(assistant, draftModel),
-    [assistant, draftModel]
+    () => buildQuestionState(draftModel),
+    [draftModel]
   );
 
   const [sourceMode, setSourceMode] = useState("website");
@@ -492,14 +441,17 @@ export default function SetupAssistantSections({
   }));
   const [replyInput, setReplyInput] = useState("");
   const [localError, setLocalError] = useState("");
+  const [sourceStarted, setSourceStarted] = useState(false);
+  const [pendingSource, setPendingSource] = useState(null);
 
   const busy = saving || finalizing || capturingSource;
-  const interviewReady = source.hasSource;
+  const interviewReady = sourceStarted || source.hasSource;
   const draftReady =
     assistant.review?.finalizeAvailable === true ||
     assistant.review?.readyForReview === true ||
     assistant.assistant?.completion?.ready === true ||
-    (!question && draftModel.fieldCount >= 3);
+    (!question && interviewReady);
+
   const stage = !interviewReady ? "source" : draftReady ? "draft" : "interview";
 
   const selectedSource =
@@ -513,6 +465,10 @@ export default function SetupAssistantSections({
   const sourceInput =
     resolvedSourceInputState.values[sourceMode] ??
     getSourcePrefillValue(sourceMode, source, assistant, draftModel);
+
+  const displaySource = source.hasSource
+    ? source
+    : pendingSource || source;
 
   function setSourceInput(nextValue) {
     setSourceInputState((prev) => {
@@ -535,6 +491,13 @@ export default function SetupAssistantSections({
     const value = s(sourceInput);
     if (!value || busy) return;
     setLocalError("");
+    setSourceStarted(true);
+    setPendingSource({
+      type: sourceMode,
+      label: selectedSource.label,
+      url: value,
+      hasSource: true,
+    });
 
     try {
       await onCaptureSource?.({
@@ -543,6 +506,10 @@ export default function SetupAssistantSections({
       });
       setReplyInput("");
     } catch (error) {
+      if (!source.hasSource) {
+        setSourceStarted(false);
+        setPendingSource(null);
+      }
       setLocalError(s(error?.message, "Source intake failed."));
     }
   }
@@ -554,7 +521,7 @@ export default function SetupAssistantSections({
 
     try {
       await onParseMessage?.({
-        step: stage === "draft" ? "profile" : question?.key || "profile",
+        step: draftReady ? "profile" : question?.key || "profile",
         text: value,
       });
       setReplyInput("");
@@ -591,46 +558,46 @@ export default function SetupAssistantSections({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
-      <div className="border-b border-[rgba(15,23,42,0.08)] px-4 pb-4 pt-3">
+      <div className="border-b border-[rgba(15,23,42,0.08)] px-6 pb-5 pt-4">
         <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-muted">
           Setup Studio
         </div>
-        <div className="mt-1 text-[19px] font-semibold tracking-[-0.04em] text-text">
+        <div className="mt-1 text-[24px] font-semibold tracking-[-0.04em] text-text">
           {stage === "source"
             ? "Start from one good source"
             : stage === "interview"
-              ? "I’m building the business draft"
-              : "Review the final draft"}
+              ? "Conversation setup"
+              : "Final draft"}
         </div>
-        <div className="mt-2 text-[12px] leading-5 text-text-muted">
-          {source.hasSource
-            ? source.url
-              ? `${source.label || "Source"} · ${source.url}`
-              : source.label
-            : "Website, social profile, map link, or a short note is enough to begin."}
+        <div className="mt-2 text-[13px] leading-6 text-text-muted">
+          {displaySource?.hasSource
+            ? displaySource.url
+              ? `${displaySource.label || "Source"} · ${displaySource.url}`
+              : displaySource.label
+            : "Website, Instagram, Facebook və ya qısa qeyd kifayətdir."}
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 py-5">
+      <div className="flex-1 overflow-auto px-6 py-6">
         {s(localError || errorMessage) ? (
-          <div className="mb-4 border-l-2 border-[rgba(var(--color-danger),0.78)] bg-danger-soft px-3 py-2 text-[12px] leading-5 text-danger">
+          <div className="mb-5 border-l-2 border-[rgba(var(--color-danger),0.78)] bg-danger-soft px-3 py-2 text-[12px] leading-6 text-danger">
             {localError || errorMessage}
           </div>
         ) : null}
 
         {stage === "source" ? (
-          <div className="space-y-5">
+          <div className="space-y-6">
             <AssistantBubble
-              eyebrow="Setup"
-              title="Give me the first signal"
-              body="Mən source-ları və cavablarını birləşdirib business draft hazırlayacağam. Hələ xam field-lər doldurmağa ehtiyac yoxdur."
+              eyebrow="First step"
+              title="Mənə ilk siqnalı ver"
+              body="Bir düzgün başlanğıc kifayətdir. Source arxa planda analiz olunacaq, sonra sənə hazır suallar verəcəyəm."
             >
-              <div className="flex flex-wrap gap-x-4 gap-y-2 border-b border-[rgba(15,23,42,0.08)] pb-2">
+              <div className="flex flex-wrap gap-x-5 gap-y-2 border-b border-[rgba(15,23,42,0.08)] pb-2">
                 {SOURCE_OPTIONS.map((option) => (
                   <button
                     key={option.key}
                     type="button"
-                    className={`border-b pb-1 text-[12px] font-semibold transition-colors ${
+                    className={`border-b pb-1 text-[13px] font-semibold transition-colors ${
                       sourceMode === option.key
                         ? "border-slate-900 text-text"
                         : "border-transparent text-text-muted"
@@ -681,17 +648,18 @@ export default function SetupAssistantSections({
         ) : null}
 
         {stage === "interview" ? (
-          <div className="space-y-5">
+          <div className="space-y-6">
             <AssistantBubble
-              eyebrow="Current understanding"
+              eyebrow="Question"
               title={question?.title || "Next question"}
               body={[
-                ...buildInterviewSummary(source, draftModel),
-                "",
+                displaySource?.hasSource
+                  ? `${displaySource.label || "Source"} qəbul olundu.`
+                  : "",
                 question?.prompt || "Mənə növbəti vacib detalı yaz.",
               ]
                 .filter(Boolean)
-                .join("\n")}
+                .join("\n\n")}
             >
               {arr(question?.quickAnswers).length ? (
                 <div className="flex flex-wrap gap-2">
@@ -700,7 +668,7 @@ export default function SetupAssistantSections({
                       key={option}
                       type="button"
                       disabled={busy}
-                      className="inline-flex h-8 items-center border border-[rgba(15,23,42,0.08)] bg-white px-2.5 text-[12px] font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45"
+                      className="inline-flex h-9 items-center border border-[rgba(15,23,42,0.08)] bg-white px-3 text-[12px] font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45"
                       onClick={() => handleQuickAnswer(option)}
                     >
                       {option}
@@ -713,8 +681,8 @@ export default function SetupAssistantSections({
             {busy ? (
               <AssistantBubble
                 eyebrow="Thinking"
-                title="I’m updating the draft"
-                body="Source siqnalları və sənin cavabın birləşdirilir."
+                title="Arxa planda draft qurulur"
+                body="Source analiz olunur və cavabların uyğun yerlərə yığılır."
               />
             ) : null}
 
@@ -729,7 +697,7 @@ export default function SetupAssistantSections({
         ) : null}
 
         {stage === "draft" ? (
-          <div className="space-y-5">
+          <div className="space-y-6">
             <SetupReviewActivationPanel
               reviewPayload={reviewPayload}
               assistantReview={assistant.review}
@@ -739,14 +707,14 @@ export default function SetupAssistantSections({
 
             <AssistantBubble
               eyebrow="Refine"
-              title="Dəyişiklik istəyirsənsə mənə yaz"
-              body="Məsələn: əsas xidməti dəyiş, branding-i sil, pricing hissəsini yumşalt, bizi software partner kimi göstər."
+              title="Dəyişmək istədiyini yaz"
+              body="Məsələn: əsas xidməti dəyiş, branding-i sil, bizi software partner kimi göstər, pricing hissəsini yumşalt."
             />
 
             {busy ? (
               <AssistantBubble
                 eyebrow="Thinking"
-                title="I’m rebuilding the draft"
+                title="Draft yenidən qurulur"
                 body="Source-lar, əvvəlki cavablar və yeni düzəliş birləşdirilir."
               />
             ) : null}
@@ -755,6 +723,7 @@ export default function SetupAssistantSections({
               value={replyInput}
               busy={busy}
               placeholder="Nəyi dəyişmək istədiyini yaz"
+              buttonLabel="Update draft"
               onChange={setReplyInput}
               onSubmit={handleReplySubmit}
             />

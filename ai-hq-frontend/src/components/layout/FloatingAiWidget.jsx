@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Bot, SendHorizontal, X } from "lucide-react";
+import { ArrowRight, SendHorizontal, X } from "lucide-react";
 import {
   analyzeSetupIntake,
   finalizeSetupAssistantSession,
   getCurrentSetupAssistantSession,
   getCurrentSetupReview,
-  importGoogleMapsForSetup,
   importWebsiteForSetup,
   sendSetupAssistantMessage,
   startSetupAssistantSession,
@@ -322,7 +321,7 @@ function buildSupportReply(rawText = "", assistantState = {}) {
   if (/setup|draft|source|business|services|hours|pricing|contact/.test(text)) {
     return {
       text:
-        "Open setup to continue source intake, answer the next question, or approve truth.",
+        "Open setup to continue the interview, edit the final draft, or approve truth.",
       actions: [context.setupAction].filter(Boolean),
       suggestions: ["Open setup", "Open truth"],
     };
@@ -375,7 +374,7 @@ function buildManualSourceMetadata(type = "", value = "") {
       : sourceType === "facebook_page"
         ? "Facebook"
         : sourceType === "manual"
-          ? "Operator note"
+          ? "Manual note"
           : "Source";
 
   return {
@@ -384,7 +383,7 @@ function buildManualSourceMetadata(type = "", value = "") {
     sourceLabels: [sourceLabel],
     evidenceSummary: [
       sourceType === "manual"
-        ? "Operator note captured"
+        ? "Manual note captured"
         : `${sourceLabel} supplied by operator`,
     ],
   };
@@ -451,8 +450,8 @@ function SupportThread({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div ref={scrollRef} className="flex-1 overflow-auto px-4 py-5">
-        <div className="flex flex-col gap-3.5">
+      <div ref={scrollRef} className="flex-1 overflow-auto px-5 py-6">
+        <div className="flex flex-col gap-4">
           {messages.map((message, index) => {
             const isUser = message.role === "user";
             const showActions =
@@ -473,7 +472,7 @@ function SupportThread({
                 style={{ animationDelay: `${Math.min(index * 24, 160)}ms` }}
               >
                 <div
-                  className={`max-w-[90%] px-3.5 py-3 text-[13px] leading-6 ${
+                  className={`max-w-[86%] px-4 py-3.5 text-[14px] leading-7 ${
                     isUser
                       ? "bg-slate-950 text-white shadow-[0_10px_24px_rgba(15,23,42,0.12)]"
                       : "border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(248,250,252,0.8),rgba(255,255,255,0.98))] text-text"
@@ -526,8 +525,8 @@ function SupportThread({
         </div>
       </div>
 
-      <div className="border-t border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.82))] px-4 py-4">
-        <div className="flex items-end gap-2 border-b border-[rgba(15,23,42,0.1)] px-0 py-2">
+      <div className="border-t border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.82))] px-5 py-4">
+        <div className="flex items-end gap-3 border-b border-[rgba(15,23,42,0.1)] py-2">
           <textarea
             rows={1}
             value={input}
@@ -539,14 +538,14 @@ function SupportThread({
               }
             }}
             placeholder="Ask about setup, truth, channels, inbox, comments, or voice..."
-            className="min-h-[22px] w-full resize-none bg-transparent text-[13px] leading-6 text-text outline-none placeholder:text-text-subtle"
+            className="min-h-[22px] w-full resize-none bg-transparent text-[14px] leading-7 text-text outline-none placeholder:text-text-subtle"
           />
 
           <button
             type="button"
             onClick={() => onSend?.(input)}
             disabled={!s(input) || busy}
-            className="inline-flex h-9 w-9 items-center justify-center bg-slate-950 text-white disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-10 w-10 items-center justify-center bg-slate-950 text-white disabled:cursor-not-allowed disabled:opacity-45"
             aria-label="Send support message"
           >
             <SendHorizontal className="h-4 w-4" strokeWidth={2.1} />
@@ -566,7 +565,6 @@ export default function FloatingAiWidget({
   presentation = "floating",
 }) {
   const queryClient = useQueryClient();
-  const rootRef = useRef(null);
   const assistantRef = useRef(normalizeAssistantState(assistant));
   const pageMode = presentation === "page";
   const panelOpen = pageMode ? true : open;
@@ -591,6 +589,7 @@ export default function FloatingAiWidget({
     () => buildWorkspaceScopedQueryKey(["product-home"], workspace.tenantKey),
     [workspace.tenantKey]
   );
+
   const setupAssistantSessionQueryKey = useMemo(
     () =>
       buildWorkspaceScopedQueryKey(
@@ -599,6 +598,7 @@ export default function FloatingAiWidget({
       ),
     [workspace.tenantKey]
   );
+
   const setupReviewQueryKey = useMemo(
     () =>
       buildWorkspaceScopedQueryKey(
@@ -607,6 +607,7 @@ export default function FloatingAiWidget({
       ),
     [workspace.tenantKey]
   );
+
   const telegramStatusQueryKey = useMemo(
     () =>
       buildWorkspaceScopedQueryKey(
@@ -615,6 +616,7 @@ export default function FloatingAiWidget({
       ),
     [workspace.tenantKey]
   );
+
   const metaStatusQueryKey = useMemo(
     () => buildWorkspaceScopedQueryKey(["meta-channel-status"], workspace.tenantKey),
     [workspace.tenantKey]
@@ -686,17 +688,6 @@ export default function FloatingAiWidget({
   }, [clientAssistant]);
 
   useEffect(() => {
-    if (!panelOpen || pageMode) return;
-    const onPointerDown = (event) => {
-      if (!rootRef.current?.contains(event.target)) {
-        onOpenChange?.(false);
-      }
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [onOpenChange, pageMode, panelOpen]);
-
-  useEffect(() => {
     if (panelOpen && clientAssistant.launchPosture === "runtime_repair_needed") {
       setSurfaceMode("support");
     }
@@ -738,6 +729,7 @@ export default function FloatingAiWidget({
     const cachedSession = normalizeAssistantState(
       queryClient.getQueryData(setupAssistantSessionQueryKey)
     );
+
     if (s(cachedSession.session?.id)) {
       assistantRef.current = cachedSession;
       setClientAssistant(cachedSession);
@@ -758,6 +750,7 @@ export default function FloatingAiWidget({
     if (saving || finalizing || capturingSource) return null;
     setSaving(true);
     setSetupError("");
+
     try {
       await ensureSession();
       const response = await updateCurrentSetupAssistantDraft(payload);
@@ -780,6 +773,7 @@ export default function FloatingAiWidget({
     if (!answer || saving || finalizing || capturingSource) return null;
     setSaving(true);
     setSetupError("");
+
     try {
       await ensureSession();
       const response = await sendSetupAssistantMessage({
@@ -804,6 +798,7 @@ export default function FloatingAiWidget({
     if (saving || finalizing || capturingSource) return null;
     setFinalizing(true);
     setSetupError("");
+
     try {
       await ensureSession();
       const response = await finalizeSetupAssistantSession({});
@@ -812,10 +807,12 @@ export default function FloatingAiWidget({
           s(response?.reason || response?.error, "Failed to finalize setup")
         );
       }
+
       await refreshWidgetWorkspaceState({
         includeChannelStatus: true,
         emitReason: "setup-finalized",
       });
+
       setClientAssistant((prev) =>
         normalizeAssistantState({
           ...prev,
@@ -830,6 +827,7 @@ export default function FloatingAiWidget({
           },
         })
       );
+
       return response;
     } catch (error) {
       setSetupError(s(error?.message, "Business truth could not be approved."));
@@ -863,17 +861,6 @@ export default function FloatingAiWidget({
             s(response?.reason || response?.error, "Website import failed")
           );
         }
-      } else if (sourceType === "google_maps") {
-        const response = await importGoogleMapsForSetup({
-          url: sourceValue,
-          allowSessionReuse: true,
-          waitForCompletion: true,
-        });
-        if (response?.ok === false) {
-          throw new Error(
-            s(response?.reason || response?.error, "Google Maps import failed")
-          );
-        }
       } else {
         const patchResponse = await updateCurrentSetupAssistantDraft({
           sourceMetadata: buildManualSourceMetadata(sourceType, sourceValue),
@@ -884,6 +871,7 @@ export default function FloatingAiWidget({
         const analyzeResponse = await analyzeSetupIntake(
           buildManualAnalyzePayload(sourceType, sourceValue)
         );
+
         if (analyzeResponse?.ok === false) {
           throw new Error(
             s(analyzeResponse?.reason || analyzeResponse?.error, "Source intake failed")
@@ -937,143 +925,121 @@ export default function FloatingAiWidget({
     onOpenChange?.(false);
   }
 
-  const headerTitle = surfaceMode === "setup" ? "Setup Studio" : "Operator Support";
-  const headerSummary =
+  const shellTitle = surfaceMode === "setup" ? "Ask AI" : "Support";
+  const shellSummary =
     surfaceMode === "setup"
-      ? s(clientAssistant.summary, "One good source is enough.")
+      ? "Source-first setup. Conversation-first refinement."
       : "Channels, truth, inbox, comments, or voice.";
 
-  const containerStyle = pageMode
-    ? {
-        position: "relative",
-        right: "auto",
-        bottom: "auto",
-        width: "100%",
-        zIndex: "auto",
-      }
-    : undefined;
+  const wrapperClass = pageMode
+    ? "relative h-full w-full"
+    : "fixed inset-0 z-[95]";
 
-  const panelStyle = pageMode
-    ? {
-        position: "relative",
-        right: "auto",
-        bottom: "auto",
-        width: "100%",
-        maxWidth: "none",
-        height: "100%",
-        minHeight: "720px",
-      }
-    : undefined;
+  const backdrop = !pageMode ? (
+    <button
+      type="button"
+      aria-label="Close Ask AI"
+      className="absolute inset-0 bg-[rgba(15,23,42,0.2)]"
+      onClick={() => onOpenChange?.(false)}
+    />
+  ) : null;
 
   return (
-    <div
-      ref={rootRef}
-      className="fixed bottom-[22px] right-[22px] z-[92]"
-      style={containerStyle}
-    >
+    <div className={wrapperClass}>
       {panelOpen ? (
-        <section
-          className="absolute bottom-[78px] right-0 h-[min(780px,calc(100vh-116px))] w-[min(468px,calc(100vw-26px))] overflow-hidden border border-[rgba(15,23,42,0.05)] bg-white shadow-[0_34px_84px_rgba(15,23,42,0.14)]"
-          role={pageMode ? "region" : "dialog"}
-          aria-modal={pageMode ? undefined : "false"}
-          aria-label={pageMode ? "Setup workspace" : "AI assistant"}
-          style={panelStyle}
-        >
-          <div className="border-b border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.998),rgba(249,250,251,0.985))] px-4 pb-3 pt-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-text-muted">
-                  AI HQ
+        <>
+          {backdrop}
+
+          <section
+            className={
+              pageMode
+                ? "relative ml-auto flex h-full w-full max-w-[720px] flex-col border-l border-[rgba(15,23,42,0.06)] bg-white"
+                : "absolute right-0 top-0 flex h-screen w-[min(720px,100vw)] flex-col border-l border-[rgba(15,23,42,0.06)] bg-white shadow-[-24px_0_64px_rgba(15,23,42,0.14)]"
+            }
+            role={pageMode ? "region" : "dialog"}
+            aria-modal={pageMode ? undefined : "true"}
+            aria-label={pageMode ? "Setup workspace" : "Ask AI panel"}
+          >
+            <div className="border-b border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.998),rgba(249,250,251,0.985))] px-6 pb-4 pt-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-text-muted">
+                    AI HQ
+                  </div>
+                  <div className="mt-1 text-[32px] font-semibold tracking-[-0.05em] text-text">
+                    {shellTitle}
+                  </div>
+                  <div className="mt-2 max-w-[42ch] text-[13px] leading-6 text-text-muted">
+                    {shellSummary}
+                  </div>
                 </div>
-                <div className="mt-1 text-[22px] font-semibold tracking-[-0.04em] text-text">
-                  {headerTitle}
-                </div>
-                <div className="mt-1 max-w-[31ch] text-[12px] leading-5 text-text-muted">
-                  {headerSummary}
-                </div>
+
+                {!pageMode ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenChange?.(false)}
+                    className="inline-flex h-9 w-9 items-center justify-center text-text-muted transition-colors hover:text-text"
+                    aria-label="Close Ask AI panel"
+                  >
+                    <X className="h-5 w-5" strokeWidth={2} />
+                  </button>
+                ) : null}
               </div>
 
-              {!pageMode ? (
+              <div className="mt-5 flex items-center gap-6 border-t border-[rgba(15,23,42,0.08)] pt-3">
                 <button
                   type="button"
-                  onClick={() => onOpenChange?.(false)}
-                  className="inline-flex h-8 w-8 items-center justify-center text-text-muted transition-colors hover:text-text"
-                  aria-label="Close AI assistant"
+                  className={`inline-flex border-b-[1.5px] pb-2 text-[13px] font-semibold tracking-[0.01em] ${
+                    surfaceMode === "setup"
+                      ? "border-slate-900 text-text"
+                      : "border-transparent text-text-muted"
+                  }`}
+                  onClick={() => setSurfaceMode("setup")}
                 >
-                  <X className="h-4 w-4" strokeWidth={2} />
+                  <span>Setup</span>
                 </button>
-              ) : null}
+
+                <button
+                  type="button"
+                  className={`inline-flex border-b-[1.5px] pb-2 text-[13px] font-semibold tracking-[0.01em] ${
+                    surfaceMode === "support"
+                      ? "border-slate-900 text-text"
+                      : "border-transparent text-text-muted"
+                  }`}
+                  onClick={() => setSurfaceMode("support")}
+                >
+                  <span>Support</span>
+                </button>
+              </div>
             </div>
 
-            <div className="mt-4 flex items-center gap-6 border-t border-[rgba(15,23,42,0.08)] pt-2.5">
-              <button
-                type="button"
-                className={`inline-flex border-b-[1.5px] pb-2 text-[12px] font-semibold tracking-[0.01em] ${
-                  surfaceMode === "setup"
-                    ? "border-slate-900 text-text"
-                    : "border-transparent text-text-muted"
-                }`}
-                onClick={() => setSurfaceMode("setup")}
-              >
-                <span>Setup</span>
-              </button>
-
-              <button
-                type="button"
-                className={`inline-flex border-b-[1.5px] pb-2 text-[12px] font-semibold tracking-[0.01em] ${
-                  surfaceMode === "support"
-                    ? "border-slate-900 text-text"
-                    : "border-transparent text-text-muted"
-                }`}
-                onClick={() => setSurfaceMode("support")}
-              >
-                <span>Support</span>
-              </button>
+            <div className="min-h-0 flex-1">
+              {surfaceMode === "setup" ? (
+                <SetupAssistantSections
+                  assistant={clientAssistant}
+                  reviewPayload={reviewQuery.data}
+                  saving={saving}
+                  finalizing={finalizing}
+                  capturingSource={capturingSource}
+                  errorMessage={setupError}
+                  onCaptureSource={handleSetupCaptureSource}
+                  onParseMessage={handleSetupParseMessage}
+                  onFinalize={handleSetupFinalize}
+                  onPatchDraft={handleSetupPatchDraft}
+                />
+              ) : (
+                <SupportThread
+                  messages={supportMessages}
+                  busy={supportBusy}
+                  input={supportInput}
+                  onInputChange={setSupportInput}
+                  onSend={handleSupportSend}
+                  onAction={handleSupportAction}
+                />
+              )}
             </div>
-          </div>
-
-          <div className="h-[calc(100%-112px)] min-h-0">
-            {surfaceMode === "setup" ? (
-              <SetupAssistantSections
-                assistant={clientAssistant}
-                reviewPayload={reviewQuery.data}
-                saving={saving}
-                finalizing={finalizing}
-                capturingSource={capturingSource}
-                errorMessage={setupError}
-                onCaptureSource={handleSetupCaptureSource}
-                onPatchDraft={handleSetupPatchDraft}
-                onParseMessage={handleSetupParseMessage}
-                onFinalize={handleSetupFinalize}
-              />
-            ) : (
-              <SupportThread
-                messages={supportMessages}
-                busy={supportBusy}
-                input={supportInput}
-                onInputChange={setSupportInput}
-                onSend={handleSupportSend}
-                onAction={handleSupportAction}
-              />
-            )}
-          </div>
-        </section>
-      ) : null}
-
-      {!pageMode && !panelOpen ? (
-        <button
-          type="button"
-          onClick={() => onOpenChange?.(true)}
-          aria-label="Open AI assistant"
-          aria-expanded={false}
-          className="relative h-[62px] w-[62px] border-0 p-0"
-        >
-          <span className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_30%_28%,rgba(255,255,255,0.24),transparent_42%),linear-gradient(160deg,rgba(15,23,42,0.98),rgba(30,41,59,0.98))] shadow-[0_18px_42px_rgba(15,23,42,0.28)]" />
-          <span className="absolute inset-[-5px] rounded-full border border-slate-900/10" />
-          <span className="relative flex h-full w-full items-center justify-center text-white">
-            <Bot className="h-6 w-6" strokeWidth={2.05} />
-          </span>
-        </button>
+          </section>
+        </>
       ) : null}
     </div>
   );

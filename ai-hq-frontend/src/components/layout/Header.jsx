@@ -1,5 +1,5 @@
 import { Dropdown } from "antd";
-import { Bell, ChevronDown, Menu } from "lucide-react";
+import { Bell, ChevronDown, Menu, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { logoutUser } from "../../api/auth.js";
 import {
@@ -7,7 +7,6 @@ import {
   getAppSessionContext,
 } from "../../lib/appSession.js";
 import { cx } from "../../lib/cx.js";
-import CommandMenu from "./CommandMenu.jsx";
 import NotificationsPanel from "./NotificationsPanel.jsx";
 import { SHELL_TOPBAR_HEIGHT } from "./Sidebar.jsx";
 
@@ -18,6 +17,22 @@ function getInitials(value = "") {
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
     .join("");
+}
+
+function AskAiButton() {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        window.location.assign("/home?assistant=setup");
+      }}
+      className="inline-flex h-10 items-center gap-2 rounded-soft border border-line bg-white px-3.5 text-[13px] font-semibold text-text transition-[background-color,color,border-color] duration-base ease-premium hover:border-line-strong hover:bg-surface-subtle"
+      aria-label="Open Ask AI"
+    >
+      <Sparkles className="h-4 w-4" strokeWidth={2} />
+      <span className="hidden sm:inline">Ask AI</span>
+    </button>
+  );
 }
 
 function WorkspaceControl({ notifications }) {
@@ -212,7 +227,7 @@ export default function Header({ onMenuClick, notifications }) {
           </div>
 
           <div className="flex items-center gap-1.5 md:gap-2">
-            <CommandMenu />
+            <AskAiButton />
             <NotificationsButton notifications={notifications} />
             <WorkspaceControl notifications={notifications} />
           </div>

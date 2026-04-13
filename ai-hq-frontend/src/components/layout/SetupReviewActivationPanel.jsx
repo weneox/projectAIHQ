@@ -44,7 +44,6 @@ function formatPath(url = "") {
 
 function sourceTypeLabel(value = "") {
   const key = lower(value);
-  if (key === "google_maps") return "Google Maps";
   if (key === "instagram") return "Instagram";
   if (key === "facebook_page" || key === "facebook") return "Facebook";
   if (key === "manual") return "Manual note";
@@ -56,23 +55,21 @@ function buildReviewModel(reviewPayload = {}, assistantReview = {}) {
   const review = obj(root.review || reviewPayload);
   const draft = obj(review.draft);
   const profile = obj(draft.businessProfile);
+
   const services = arr(draft.services)
     .map((item) => s(item.title || item.name || item.label))
     .filter(Boolean);
+
   const contacts = arr(draft.contacts)
     .map((item) => s(item.label || item.channel || item.value || item.type))
     .filter(Boolean);
-  const sourceRows = arr(root.bundleSources).map((item, index) => ({
-    key: s(item.sourceId || item.runId || `${item.sourceType}-${index}`),
-    label: s(item.label || sourceTypeLabel(item.sourceType)),
-    type: sourceTypeLabel(item.sourceType),
-    url: s(item.sourceUrl),
-  }));
 
   const hours = arr(profile.hours).length
     ? listPreview(arr(profile.hours), 3)
     : listPreview(
-        arr(draft.hours).map((item) => s(item.notes || `${item.day} ${item.openTime}-${item.closeTime}`)),
+        arr(draft.hours).map((item) =>
+          s(item.notes || `${item.day} ${item.openTime}-${item.closeTime}`)
+        ),
         3
       );
 
@@ -98,8 +95,12 @@ function buildReviewModel(reviewPayload = {}, assistantReview = {}) {
     s(profile.companySummaryShort) ||
     s(profile.companySummary);
 
-  const coreOffer = services[0] || "";
-  const additionalServices = services.slice(1);
+  const sourceRows = arr(root.bundleSources).map((item, index) => ({
+    key: s(item.sourceId || item.runId || `${item.sourceType}-${index}`),
+    label: s(item.label || sourceTypeLabel(item.sourceType)),
+    type: sourceTypeLabel(item.sourceType),
+    url: s(item.sourceUrl),
+  }));
 
   const fields = [
     {
@@ -115,12 +116,12 @@ function buildReviewModel(reviewPayload = {}, assistantReview = {}) {
     {
       key: "core-offer",
       label: "Core offer",
-      value: coreOffer,
+      value: services[0] || "",
     },
     {
       key: "additional-services",
       label: "Additional services",
-      value: additionalServices.length ? listPreview(additionalServices, 5) : "",
+      value: services.length > 1 ? listPreview(services.slice(1), 5) : "",
     },
     {
       key: "audience",
@@ -133,7 +134,7 @@ function buildReviewModel(reviewPayload = {}, assistantReview = {}) {
       value: s(profile.websiteUrl),
     },
     {
-      key: "contact-routes",
+      key: "contacts",
       label: "Contact routes",
       value: listPreview(
         [
@@ -162,9 +163,7 @@ function buildReviewModel(reviewPayload = {}, assistantReview = {}) {
     },
   ].filter((item) => s(item.value));
 
-  if (!fields.length && !sourceRows.length) {
-    return null;
-  }
+  if (!fields.length && !sourceRows.length) return null;
 
   const canFinalize =
     obj(obj(root.permissions).setupReviewFinalize).allowed !== false &&
@@ -191,20 +190,20 @@ export default function SetupReviewActivationPanel({
 
   return (
     <section
-      className="border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(248,250,252,0.82),rgba(255,255,255,0.98))] px-4 py-4"
+      className="border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(248,250,252,0.82),rgba(255,255,255,0.98))] px-5 py-5"
       aria-label="Business truth review"
       role="region"
     >
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted">
-            Business draft
+            Final draft
           </div>
-          <div className="mt-1 text-[19px] font-semibold tracking-[-0.04em] text-text">
+          <div className="mt-1 text-[28px] font-semibold tracking-[-0.05em] text-text">
             Approve business truth
           </div>
-          <div className="mt-2 max-w-[34ch] text-[12px] leading-5 text-text-muted">
-            Source-lar və cavabların birləşdirilib. Yekun truth yazılmazdan əvvəl bunu yoxla.
+          <div className="mt-3 max-w-[40ch] text-[14px] leading-7 text-text-muted">
+            Source-lar və cavabların birləşdirilib. Hər şey düz görünürsə, bunu təsdiqlə.
           </div>
         </div>
 
@@ -213,23 +212,23 @@ export default function SetupReviewActivationPanel({
             type="button"
             onClick={() => onFinalize?.()}
             disabled={finalizing}
-            className="inline-flex h-10 items-center bg-slate-950 px-3.5 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-10 items-center bg-slate-950 px-4 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
           >
             {finalizing ? "Approving..." : "Approve truth"}
           </button>
         ) : null}
       </div>
 
-      <div className="mt-5 border-t border-[rgba(15,23,42,0.08)]">
+      <div className="mt-6 border-t border-[rgba(15,23,42,0.08)]">
         {model.fields.map((field) => (
           <div
             key={field.key}
-            className="border-b border-[rgba(15,23,42,0.08)] py-3"
+            className="border-b border-[rgba(15,23,42,0.08)] py-4"
           >
             <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
               {field.label}
             </div>
-            <div className="mt-1 text-[14px] leading-7 text-text">
+            <div className="mt-1 text-[15px] leading-8 text-text">
               {field.value}
             </div>
           </div>
@@ -244,7 +243,7 @@ export default function SetupReviewActivationPanel({
 
           <div className="mt-2 space-y-2">
             {model.sourceRows.map((row) => (
-              <div key={row.key} className="text-[13px] leading-6 text-text">
+              <div key={row.key} className="text-[14px] leading-7 text-text">
                 <span className="font-semibold">{row.label}</span>
                 {s(row.url) ? (
                   <span className="text-text-muted"> · {formatPath(row.url)}</span>
@@ -255,8 +254,8 @@ export default function SetupReviewActivationPanel({
         </div>
       ) : null}
 
-      <div className="mt-4 text-[12px] leading-5 text-text-muted">
-        Dəyişmək istədiyin məlumatları mənə yaz. Mən draft-ı yenidən quracağam.
+      <div className="mt-5 text-[13px] leading-6 text-text-muted">
+        Dəyişmək istədiyin məlumatları mənə yaz. Draft yenidən qurulacaq.
       </div>
     </section>
   );
