@@ -948,9 +948,9 @@ export default function FloatingAiWidget({
     surfaceMode === "setup"
       ? s(
           clientAssistant.summary,
-          "Start from one source, confirm the next missing field, then approve business truth."
+          "One source in. Governed truth out."
         )
-      : "Ask about setup posture, channels, truth, inbox, comments, or voice.";
+      : "Channels, truth, inbox, comments, or voice.";
 
   const containerStyle = pageMode
     ? {
@@ -981,22 +981,22 @@ export default function FloatingAiWidget({
     >
       {panelOpen ? (
         <section
-          className="absolute bottom-[78px] right-0 h-[min(780px,calc(100vh-116px))] w-[min(468px,calc(100vw-26px))] overflow-hidden border border-line bg-white shadow-[0_24px_64px_rgba(15,23,42,0.18)]"
+          className="absolute bottom-[78px] right-0 h-[min(780px,calc(100vh-116px))] w-[min(468px,calc(100vw-26px))] overflow-hidden border border-[rgba(15,23,42,0.08)] bg-white shadow-[0_28px_72px_rgba(15,23,42,0.18)]"
           role={pageMode ? "region" : "dialog"}
           aria-modal={pageMode ? undefined : "false"}
           aria-label={pageMode ? "Setup workspace" : "AI assistant"}
           style={panelStyle}
         >
-          <div className="border-b border-line bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))] px-4 py-4">
+          <div className="border-b border-line bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(249,250,251,0.98))] px-4 pb-3 pt-4">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-text-muted">
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-text-muted">
                   AI HQ
                 </div>
-                <div className="mt-1 text-[20px] font-semibold tracking-[-0.03em] text-text">
+                <div className="mt-1 text-[22px] font-semibold tracking-[-0.04em] text-text">
                   {headerTitle}
                 </div>
-                <div className="mt-1 text-[12px] leading-5 text-text-muted">
+                <div className="mt-1 max-w-[31ch] text-[12px] leading-5 text-text-muted">
                   {headerSummary}
                 </div>
               </div>
@@ -1005,7 +1005,7 @@ export default function FloatingAiWidget({
                 <button
                   type="button"
                   onClick={() => onOpenChange?.(false)}
-                  className="inline-flex h-8 w-8 items-center justify-center border border-line bg-white text-text-muted"
+                  className="inline-flex h-8 w-8 items-center justify-center text-text-muted"
                   aria-label="Close AI assistant"
                 >
                   <X className="h-4 w-4" strokeWidth={2} />
@@ -1013,13 +1013,13 @@ export default function FloatingAiWidget({
               ) : null}
             </div>
 
-            <div className="mt-4 inline-flex items-center gap-1 border border-line bg-surface p-1">
+            <div className="mt-4 flex items-center gap-5 border-t border-line/80 pt-2.5">
               <button
                 type="button"
-                className={`inline-flex h-8 items-center gap-1.5 px-3 text-[12px] font-bold ${
+                className={`inline-flex items-center gap-1.5 border-b-2 pb-2 text-[12px] font-semibold ${
                   surfaceMode === "setup"
-                    ? "bg-slate-900 text-white"
-                    : "text-text-muted"
+                    ? "border-slate-900 text-text"
+                    : "border-transparent text-text-muted"
                 }`}
                 onClick={() => setSurfaceMode("setup")}
               >
@@ -1029,10 +1029,10 @@ export default function FloatingAiWidget({
 
               <button
                 type="button"
-                className={`inline-flex h-8 items-center gap-1.5 px-3 text-[12px] font-bold ${
+                className={`inline-flex items-center gap-1.5 border-b-2 pb-2 text-[12px] font-semibold ${
                   surfaceMode === "support"
-                    ? "bg-slate-900 text-white"
-                    : "text-text-muted"
+                    ? "border-slate-900 text-text"
+                    : "border-transparent text-text-muted"
                 }`}
                 onClick={() => setSurfaceMode("support")}
               >
@@ -1042,7 +1042,7 @@ export default function FloatingAiWidget({
             </div>
           </div>
 
-          <div className="h-[calc(100%-120px)] min-h-0">
+          <div className="h-[calc(100%-112px)] min-h-0">
             {surfaceMode === "setup" ? (
               <SetupAssistantSections
                 assistant={clientAssistant}

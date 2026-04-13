@@ -1,5 +1,3 @@
-import Button from "../ui/Button.jsx";
-
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
@@ -110,7 +108,9 @@ function buildTruthRows(draft = {}) {
       key: "hours",
       label: "Opening hours",
       value: listPreview(
-        arr(profile.hours).length ? arr(profile.hours) : arr(safeDraft.hours).map((item) => s(item.notes)),
+        arr(profile.hours).length
+          ? arr(profile.hours)
+          : arr(safeDraft.hours).map((item) => s(item.notes)),
         2
       ),
     },
@@ -188,7 +188,6 @@ function buildReviewModel(reviewPayload = {}, assistantReview = {}) {
     .map((item, index) => ({
       key: s(item.url || item.title || index),
       title: compactText(item.title || item.url, 72),
-      type: sourceTypeLabel(item.pageType || "website"),
       path: formatPath(item.url),
     }))
     .filter((item) => item.key);
@@ -211,17 +210,18 @@ function buildReviewModel(reviewPayload = {}, assistantReview = {}) {
     truthRows,
     evidenceRows,
     provenanceNotes,
-    pageCount: Number(websiteKnowledge.pageCount || 0),
     summary: compactText(
       [
-        sourceRows.length ? `${sourceRows.length} source${sourceRows.length > 1 ? "s" : ""}` : "",
+        sourceRows.length
+          ? `${sourceRows.length} source${sourceRows.length > 1 ? "s" : ""}`
+          : "",
         truthRows.length ? `${truthRows.length} truth fields` : "",
         Number(websiteKnowledge.pageCount || 0) > 0
           ? `${Number(websiteKnowledge.pageCount)} site pages`
           : "",
       ]
         .filter(Boolean)
-        .join(" / "),
+        .join(", "),
       180
     ),
     statusLabel: canFinalize ? "Ready" : "In progress",
@@ -241,52 +241,50 @@ export default function SetupReviewActivationPanel({
 
   return (
     <section
-      className="border-b border-line pb-4"
+      className="border-b border-line py-5"
       aria-label="Business truth review"
       role="region"
     >
-      <div className="border border-line bg-surface px-3 py-3">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-text-muted">
-              Review
-            </div>
-            <div className="mt-1 text-[16px] font-semibold tracking-[-0.02em] text-text">
-              Approve business truth
-            </div>
-            <div className="mt-1 text-[12px] leading-5 text-text-muted">
-              {model.summary || "Check the captured source evidence and approve the governed draft."}
-            </div>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted">
+            Governed review
           </div>
-
-          <div className="shrink-0 text-right">
-            <div className="text-[16px] font-semibold tracking-[-0.02em] text-text">
-              {model.statusLabel}
-            </div>
-            <div className="text-[11px] uppercase tracking-[0.12em] text-text-muted">
-              review
-            </div>
+          <div className="mt-1 text-[19px] font-semibold tracking-[-0.04em] text-text">
+            Approve business truth
+          </div>
+          <div className="mt-1 max-w-[32ch] text-[12px] leading-5 text-text-muted">
+            {model.summary ||
+              "Check the captured source evidence and approve the governed draft."}
           </div>
         </div>
 
-        {model.canFinalize && typeof onFinalize === "function" ? (
-          <div className="mt-3">
-            <Button type="button" size="sm" onClick={() => onFinalize?.()} isLoading={finalizing}>
-              Approve truth
-            </Button>
+        <div className="shrink-0 text-right">
+          <div className="text-[16px] font-semibold tracking-[-0.03em] text-text">
+            {model.statusLabel}
           </div>
-        ) : null}
+          {model.canFinalize && typeof onFinalize === "function" ? (
+            <button
+              type="button"
+              onClick={() => onFinalize?.()}
+              disabled={finalizing}
+              className="mt-3 inline-flex h-10 items-center bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              Approve truth
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {model.sourceRows.length ? (
-        <div className="mt-3 border border-line">
+        <div className="mt-4 border-t border-line">
           {model.sourceRows.map((row) => (
             <div
               key={row.key}
-              className="flex items-start justify-between gap-4 border-b border-line px-3 py-3 last:border-b-0"
+              className="flex items-start justify-between gap-4 border-b border-line py-3"
             >
               <div className="min-w-0">
-                <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
                   {row.role === "primary" ? "Primary source" : row.type}
                 </div>
                 <div className="mt-1 text-[13px] font-semibold text-text">
@@ -300,7 +298,7 @@ export default function SetupReviewActivationPanel({
               </div>
 
               {s(row.url) ? (
-                <div className="max-w-[44%] truncate text-[12px] text-text-muted">
+                <div className="max-w-[42%] truncate text-[12px] text-text-muted">
                   {formatPath(row.url)}
                 </div>
               ) : null}
@@ -310,13 +308,13 @@ export default function SetupReviewActivationPanel({
       ) : null}
 
       {model.truthRows.length ? (
-        <div className="mt-3 border border-line">
+        <div className="border-b border-line">
           {model.truthRows.map((row) => (
             <div
               key={row.key}
-              className="flex items-start justify-between gap-4 border-b border-line px-3 py-3 last:border-b-0"
+              className="flex items-start justify-between gap-4 border-t border-line py-3"
             >
-              <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
                 {row.label}
               </div>
               <div className="max-w-[66%] text-right text-[13px] leading-6 text-text">
@@ -328,25 +326,25 @@ export default function SetupReviewActivationPanel({
       ) : null}
 
       {model.evidenceRows.length ? (
-        <div className="mt-3 border border-line">
-          {model.evidenceRows.map((row) => (
-            <div
-              key={row.key}
-              className="flex items-start justify-between gap-4 border-b border-line px-3 py-3 last:border-b-0"
-            >
-              <div className="min-w-0">
-                <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-text-muted">
-                  Website evidence
-                </div>
-                <div className="mt-1 text-[13px] font-semibold text-text">
+        <div className="mt-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+            Website evidence
+          </div>
+          <div className="mt-2 border-t border-line">
+            {model.evidenceRows.map((row) => (
+              <div
+                key={row.key}
+                className="flex items-start justify-between gap-4 border-b border-line py-3"
+              >
+                <div className="min-w-0 text-[13px] font-semibold text-text">
                   {row.title}
                 </div>
+                <div className="max-w-[42%] truncate text-[12px] text-text-muted">
+                  {row.path}
+                </div>
               </div>
-              <div className="max-w-[42%] truncate text-[12px] text-text-muted">
-                {row.path}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       ) : null}
 
@@ -360,4 +358,3 @@ export default function SetupReviewActivationPanel({
     </section>
   );
 }
-

@@ -71,37 +71,37 @@ const SOURCE_OPTIONS = [
 const STEP_META = {
   company: {
     label: "Business name",
-    prompt: "Confirm the legal or public business name.",
+    prompt: "Confirm the public business name.",
     placeholder: "Luna Smile Studio",
     options: [],
   },
   description: {
     label: "Short description",
-    prompt: "Store one sentence that explains what the business actually does.",
+    prompt: "Store the one-sentence business description.",
     placeholder: "Cosmetic dentistry, implants, whitening, and family care in Baku.",
     options: [],
   },
   website: {
     label: "Website",
-    prompt: "Confirm the main website used as public truth.",
+    prompt: "Confirm the main public website.",
     placeholder: "https://lunasmile.az",
     options: [],
   },
   services: {
     label: "Services",
-    prompt: "Capture the services AI is allowed to mention.",
+    prompt: "Capture the services AI can safely mention.",
     placeholder: "Smile design, implants, whitening, consultation",
     options: [],
   },
   hours: {
     label: "Opening hours",
-    prompt: "Store the hours exactly as customers should hear them.",
+    prompt: "Lock the customer-facing hours.",
     placeholder: "Mon-Fri 09:00-18:00, Sat 10:00-14:00, Sun closed",
     options: ["Mon-Fri 09:00-18:00", "24/7", "Appointment only"],
   },
   pricing: {
     label: "Pricing posture",
-    prompt: "State only what is safe to say publicly about pricing.",
+    prompt: "State the exact public pricing posture.",
     placeholder: "Consultation from 30 AZN. Exact treatment pricing requires a quote.",
     options: [
       "Exact pricing requires a quote.",
@@ -111,13 +111,13 @@ const STEP_META = {
   },
   contacts: {
     label: "Contact routes",
-    prompt: "Confirm the public routes customers should be sent to.",
+    prompt: "Confirm the routes customers should use.",
     placeholder: "+994 50 555 12 12, hello@lunasmile.az, WhatsApp",
     options: [],
   },
   handoff: {
     label: "Handoff rules",
-    prompt: "State when AI must hand the conversation to a human.",
+    prompt: "Define when AI must hand off to a human.",
     placeholder: "Complaints, urgent requests, treatment-specific quotes, payment issues",
     options: [
       "Complaints should be escalated to a human.",
@@ -127,7 +127,7 @@ const STEP_META = {
   },
   finalize: {
     label: "Approval",
-    prompt: "Approve business truth once the structured draft is clean.",
+    prompt: "Approve the governed draft.",
     placeholder: "",
     options: [],
   },
@@ -149,7 +149,10 @@ function buildMetrics(assistant = {}, reviewPayload = null) {
     (item) => lower(item?.status) === "ready"
   ).length;
   const blockerCount = Number(
-    summary.blockerCount ?? assistant.review?.blockerCount ?? reviewRoot.blockerCount ?? 0
+    summary.blockerCount ??
+      assistant.review?.blockerCount ??
+      reviewRoot.blockerCount ??
+      0
   );
 
   return {
@@ -193,7 +196,9 @@ function buildPricingSummary(pricing = {}) {
 
 function buildContactsSummary(contacts = []) {
   return listPreview(
-    arr(contacts).map((item) => s(item.label || item.type || item.value || item.channel)),
+    arr(contacts).map((item) =>
+      s(item.label || item.type || item.value || item.channel)
+    ),
     3
   );
 }
@@ -262,7 +267,10 @@ function buildTruthRows(assistant = {}) {
     {
       key: "services",
       label: "Services",
-      value: listPreview(arr(draft.services).map((item) => s(item.title || item.name || item.label)), 3),
+      value: listPreview(
+        arr(draft.services).map((item) => s(item.title || item.name || item.label)),
+        3
+      ),
       step: "services",
     },
     {
@@ -332,38 +340,55 @@ function getSourcePrefill(type = "", assistant = {}, reviewPayload = null) {
   return "";
 }
 
-function SourceInput({
-  option,
-  value,
-  busy,
-  onChange,
-  onSubmit,
-}) {
+function hasReviewMaterial(reviewPayload = null) {
+  const root = obj(reviewPayload);
+  const review = obj(root.review || reviewPayload);
+  return Boolean(
+    arr(root.bundleSources).length ||
+      Object.keys(obj(review.draft)).length ||
+      arr(obj(review.reviewDebug).websiteKnowledge?.topPages).length
+  );
+}
+
+function SourceInput({ option, value, busy, onChange, onSubmit }) {
   if (option.multiline) {
     return (
-      <textarea
-        rows={4}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={option.placeholder}
-        className="min-h-[108px] w-full resize-none border border-line bg-white px-3 py-2 text-[13px] leading-6 text-text outline-none placeholder:text-text-subtle"
-      />
+      <div>
+        <textarea
+          rows={4}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={option.placeholder}
+          className="min-h-[108px] w-full resize-none border border-line bg-[rgba(248,250,252,0.7)] px-3 py-3 text-[13px] leading-6 text-text outline-none placeholder:text-text-subtle"
+        />
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={!s(value) || busy}
+            className="inline-flex h-10 items-center gap-1.5 bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+            <span>{option.actionLabel}</span>
+          </button>
+        </div>
+      </div>
     );
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 border-b border-line">
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={option.placeholder}
-        className="h-11 w-full border border-line bg-white px-3 text-[13px] text-text outline-none placeholder:text-text-subtle"
+        className="h-11 w-full bg-transparent px-0 text-[13px] text-text outline-none placeholder:text-text-subtle"
       />
       <button
         type="button"
         onClick={onSubmit}
         disabled={!s(value) || busy}
-        className="inline-flex h-11 shrink-0 items-center gap-1.5 bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+        className="inline-flex h-10 shrink-0 items-center gap-1.5 bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
       >
         {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
         <span>{option.actionLabel}</span>
@@ -392,6 +417,10 @@ export default function SetupAssistantSections({
     [assistant, reviewPayload]
   );
   const truthRows = useMemo(() => buildTruthRows(assistant), [assistant]);
+  const reviewVisible = useMemo(
+    () => hasReviewMaterial(reviewPayload),
+    [reviewPayload]
+  );
   const [sourceMode, setSourceMode] = useState("website");
   const [sourceInput, setSourceInput] = useState("");
   const [focusStep, setFocusStep] = useState("");
@@ -454,36 +483,36 @@ export default function SetupAssistantSections({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
-      <div className="border-b border-line px-4 py-4">
+      <div className="border-b border-line px-4 pb-4 pt-3">
         <div className="flex items-end justify-between gap-4">
           <div>
-            <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-text-muted">
-              Business truth
+            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted">
+              Truth studio
             </div>
-            <div className="mt-1 text-[18px] font-semibold tracking-[-0.03em] text-text">
-              Source-first intake
+            <div className="mt-1 text-[19px] font-semibold tracking-[-0.04em] text-text">
+              Source intake
             </div>
           </div>
 
           <div className="text-right">
-            <div className="text-[18px] font-semibold tracking-[-0.03em] text-text">
+            <div className="text-[19px] font-semibold tracking-[-0.04em] text-text">
               {metrics.readySections}/{metrics.sectionCount}
             </div>
-            <div className="text-[11px] uppercase tracking-[0.12em] text-text-muted">
+            <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted">
               ready
             </div>
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-b border-line/80 pb-2">
           {SOURCE_OPTIONS.map((option) => (
             <button
               key={option.key}
               type="button"
-              className={`inline-flex h-8 items-center px-2.5 text-[12px] font-semibold ${
+              className={`border-b pb-1 text-[12px] font-semibold transition-colors ${
                 sourceMode === option.key
-                  ? "bg-slate-900 text-white"
-                  : "border border-line bg-surface text-text-muted"
+                  ? "border-slate-900 text-text"
+                  : "border-transparent text-text-muted"
               }`}
               onClick={() => {
                 setSourceMode(option.key);
@@ -495,31 +524,27 @@ export default function SetupAssistantSections({
           ))}
         </div>
 
-        <div className="mt-4 border border-line bg-surface px-3 py-3">
-          <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+        <div className="mt-3">
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-text-muted">
-                Active source
-              </div>
-              <div className="mt-1 text-[13px] font-semibold text-text">
+              <div className="text-[13px] font-semibold text-text">
                 {currentSource.label}
               </div>
+              {s(currentSource.insight) ? (
+                <div className="mt-1 text-[12px] leading-5 text-text-muted">
+                  {currentSource.insight}
+                </div>
+              ) : null}
             </div>
 
             {s(currentSource.url) ? (
-              <div className="max-w-[55%] truncate text-[12px] text-text-muted">
+              <div className="max-w-[52%] truncate text-[12px] text-text-muted">
                 {currentSource.url}
               </div>
             ) : null}
           </div>
 
-          {s(currentSource.insight) ? (
-            <div className="pt-3 text-[12px] leading-5 text-text-muted">
-              {currentSource.insight}
-            </div>
-          ) : null}
-
-          <div className="pt-3">
+          <div className="mt-3">
             <SourceInput
               option={sourceOption}
               value={sourceInput}
@@ -531,9 +556,9 @@ export default function SetupAssistantSections({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 pb-6 pt-4">
+      <div className="flex-1 overflow-auto px-4 pb-6 pt-3">
         {s(localError || errorMessage) ? (
-          <div className="border border-[rgba(var(--color-danger),0.18)] bg-danger-soft px-3 py-2 text-[12px] leading-5 text-danger">
+          <div className="border-l-2 border-[rgba(var(--color-danger),0.75)] bg-danger-soft px-3 py-2 text-[12px] leading-5 text-danger">
             {localError || errorMessage}
           </div>
         ) : null}
@@ -545,26 +570,26 @@ export default function SetupAssistantSections({
           finalizing={finalizing}
         />
 
-        <section className="border-b border-line py-4">
+        <section className="border-b border-line py-5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-text-muted">
-                Now confirming
+              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted">
+                Current decision
               </div>
-              <div className="mt-1 text-[16px] font-semibold tracking-[-0.02em] text-text">
+              <div className="mt-1 text-[19px] font-semibold tracking-[-0.04em] text-text">
                 {activeMeta.label}
               </div>
-              <div className="mt-1 text-[12px] leading-5 text-text-muted">
+              <div className="mt-1 max-w-[33ch] text-[12px] leading-5 text-text-muted">
                 {activeMeta.prompt}
               </div>
             </div>
 
             {metrics.blockerCount > 0 ? (
-              <div className="text-right">
-                <div className="text-[16px] font-semibold tracking-[-0.02em] text-text">
+              <div className="shrink-0 text-right">
+                <div className="text-[16px] font-semibold tracking-[-0.03em] text-text">
                   {metrics.blockerCount}
                 </div>
-                <div className="text-[11px] uppercase tracking-[0.12em] text-text-muted">
+                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted">
                   open
                 </div>
               </div>
@@ -572,26 +597,34 @@ export default function SetupAssistantSections({
           </div>
 
           {s(blockersLine) ? (
-            <div className="mt-3 text-[12px] leading-5 text-text-muted">
-              Waiting on: {blockersLine}
+            <div className="mt-2 text-[12px] leading-5 text-text-muted">
+              {blockersLine}
             </div>
           ) : null}
 
           {activeStep === "finalize" ? (
-            <div className="mt-4 flex items-center justify-between gap-3 border border-line bg-surface px-3 py-3">
-              <div className="text-[13px] leading-6 text-text">
-                Approve business truth and refresh the governed runtime.
+            reviewVisible ? (
+              <div className="mt-4 border-t border-line pt-4 text-[13px] leading-6 text-text">
+                Review is ready for approval.
               </div>
-              <button
-                type="button"
-                onClick={handleFinalize}
-                disabled={busy}
-                className="inline-flex h-10 items-center gap-1.5 bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                {finalizing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-                <span>Approve truth</span>
-              </button>
-            </div>
+            ) : (
+              <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-4">
+                <div className="max-w-[26ch] text-[13px] leading-6 text-text">
+                  Approve business truth and refresh the governed runtime.
+                </div>
+                <button
+                  type="button"
+                  onClick={handleFinalize}
+                  disabled={busy}
+                  className="inline-flex h-10 items-center gap-1.5 bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {finalizing ? (
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                  ) : null}
+                  <span>Approve truth</span>
+                </button>
+              </div>
+            )
           ) : (
             <>
               {activeMeta.options.length ? (
@@ -601,7 +634,7 @@ export default function SetupAssistantSections({
                       key={option}
                       type="button"
                       disabled={busy}
-                      className="inline-flex h-8 items-center border border-line bg-white px-2.5 text-[12px] font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45"
+                      className="inline-flex h-8 items-center border border-line bg-[rgba(248,250,252,0.75)] px-2.5 text-[12px] font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45"
                       onClick={() => handleAnswerSubmit(option)}
                     >
                       {option}
@@ -610,39 +643,42 @@ export default function SetupAssistantSections({
                 </div>
               ) : null}
 
-              <div className="mt-4 flex items-end gap-2">
-                <textarea
-                  rows={3}
-                  value={answerInput}
-                  onChange={(event) => setAnswerInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && !event.shiftKey) {
-                      event.preventDefault();
-                      handleAnswerSubmit();
-                    }
-                  }}
-                  placeholder={activeMeta.placeholder}
-                  className="min-h-[88px] w-full resize-none border border-line bg-white px-3 py-2 text-[13px] leading-6 text-text outline-none placeholder:text-text-subtle"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleAnswerSubmit()}
-                  disabled={!s(answerInput) || busy}
-                  className="inline-flex h-11 shrink-0 items-center gap-1.5 bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-                  <span>Store</span>
-                </button>
+              <div className="mt-4 border-t border-line pt-4">
+                <div className="flex items-end gap-2">
+                  <textarea
+                    rows={3}
+                    value={answerInput}
+                    onChange={(event) => setAnswerInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        handleAnswerSubmit();
+                      }
+                    }}
+                    placeholder={activeMeta.placeholder}
+                    className="min-h-[92px] w-full resize-none border-b border-line bg-transparent px-0 py-2 text-[13px] leading-6 text-text outline-none placeholder:text-text-subtle"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleAnswerSubmit()}
+                    disabled={!s(answerInput) || busy}
+                    className="inline-flex h-10 shrink-0 items-center gap-1.5 bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                    <span>Store</span>
+                  </button>
+                </div>
               </div>
             </>
           )}
         </section>
 
         <section className="py-4">
-          <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-text-muted">
-            Draft ledger
+          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted">
+            Ledger
           </div>
-          <div className="mt-3 border border-line">
+
+          <div className="mt-2 border-t border-line">
             {truthRows.map((row) => {
               const filled = Boolean(s(row.value));
               const active = row.step === activeStep;
@@ -652,29 +688,28 @@ export default function SetupAssistantSections({
                   key={row.key}
                   type="button"
                   onClick={() => setFocusStep(row.step)}
-                  className={`flex w-full items-start justify-between gap-4 border-b border-line px-3 py-3 text-left last:border-b-0 ${
-                    active ? "bg-surface" : "bg-white"
+                  className={`group flex w-full items-center justify-between gap-4 border-b border-line px-0 py-3 text-left ${
+                    active ? "text-slate-950" : "text-text"
                   }`}
                 >
                   <div className="min-w-0">
-                    <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
                       {row.label}
                     </div>
-                    <div className="mt-1 text-[13px] leading-6 text-text">
+                    <div
+                      className={`mt-1 text-[13px] leading-6 ${
+                        filled ? "text-text" : "text-text-subtle"
+                      }`}
+                    >
                       {row.value || "Pending"}
                     </div>
                   </div>
 
-                  <div className="mt-[2px] shrink-0">
+                  <div className="shrink-0 text-text-muted transition-colors group-hover:text-text">
                     {filled ? (
-                      <span className="inline-flex h-7 w-7 items-center justify-center border border-line bg-surface text-text">
-                        <Check className="h-3.5 w-3.5" />
-                      </span>
+                      <Check className="h-4 w-4" />
                     ) : (
-                      <span className="inline-flex h-7 items-center gap-1 text-[12px] font-semibold text-text-muted">
-                        <span>Edit</span>
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </span>
+                      <ArrowRight className="h-4 w-4" />
                     )}
                   </div>
                 </button>
