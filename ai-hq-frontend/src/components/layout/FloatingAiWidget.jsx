@@ -9,9 +9,11 @@ import {
   X,
 } from "lucide-react";
 import {
+  analyzeSetupIntake,
   finalizeSetupAssistantSession,
   getCurrentSetupAssistantSession,
   getCurrentSetupReview,
+  importGoogleMapsForSetup,
   importWebsiteForSetup,
   sendSetupAssistantMessage,
   startSetupAssistantSession,
@@ -70,7 +72,7 @@ function buildHoursDraft(value = []) {
 function buildDefaultAssistant() {
   return {
     mode: "setup",
-    title: "Setup",
+    title: "Truth studio",
     summary: "",
     primaryAction: null,
     secondaryAction: null,
@@ -114,13 +116,14 @@ function buildDefaultAssistant() {
     setupNeeded: false,
     launchChannel: {},
     truthRuntime: {},
+    statusLabel: "",
   };
 }
 
 function buildLoadingAssistantSeed() {
   return {
     ...buildDefaultAssistant(),
-    title: "Loading AI setup",
+    title: "Loading setup studio",
     statusLabel: "Loading",
     summary: "Loading the current workspace setup state.",
   };
@@ -133,7 +136,7 @@ function normalizeAssistantState(input = null) {
 
   return {
     mode: s(source.mode, "setup"),
-    title: s(source.title, "Setup"),
+    title: s(source.title, "Truth studio"),
     summary: s(source.summary),
     statusLabel: s(source.statusLabel),
     primaryAction: obj(source.primaryAction),
@@ -201,1062 +204,232 @@ function normalizeUiAction(action = null, fallback = null) {
   };
 }
 
-function buildChannelDisplay(context = {}) {
-  const source = obj(context);
-  const channelLabel = s(source.channelLabel || "Launch channel");
-  const displayName = s(source.accountDisplayName);
-  const handle = s(source.accountHandle);
-  const parts = [displayName, handle].filter(Boolean);
-  const identity = parts.join(" · ");
+function buildSupportContext(assistantState = {}) {
+  const source = normalizeAssistantState(assistantState);
+  const launchChannel = obj(source.launchChannel);
+  const truthRuntime = obj(source.truthRuntime);
+  const channelLabel = s(launchChannel.channelLabel || "Launch channel");
 
   return {
+    launchPosture: lower(source.launchPosture),
+    setupNeeded: source.setupNeeded === true,
+    channelConnected: launchChannel.connected === true,
     channelLabel,
-    identity,
-    provider: lower(source.provider),
-    action: normalizeUiAction(source.action, {
+    channelSummary: s(launchChannel.summary),
+    truthTitle: s(truthRuntime.title, "Business truth"),
+    truthSummary: s(truthRuntime.summary),
+    blockedBy: lower(truthRuntime.blockedBy),
+    channelAction: normalizeUiAction(launchChannel.action, {
       label: "Open channels",
       path: "/channels",
     }),
-  };
-}
-
-function buildSupportContext(assistantState = {}) {
-  const source = normalizeAssistantState(assistantState);
-  const launchPosture = lower(source.launchPosture);
-  const launchChannel = obj(source.launchChannel);
-  const truthRuntime = obj(source.truthRuntime);
-  const channelView = buildChannelDisplay(launchChannel);
-
-  const channelAction = normalizeUiAction(launchChannel.action, {
-    label: channelView.channelLabel
-      ? `Open ${channelView.channelLabel}`
-      : "Open channels",
-    path: "/channels",
-  });
-
-  const truthAction = normalizeUiAction(truthRuntime.action, {
-    label: "Open truth",
-    path: "/truth",
-  });
-
-  const setupAction = normalizeUiAction(source.primaryAction, {
-    label: "Open AI setup",
-    path: SETUP_WIDGET_ROUTE,
-  });
-
-  const secondaryAction = normalizeUiAction(source.secondaryAction, {
-    label: "Open home",
-    path: "/home",
-  });
-
-  return {
-    launchPosture,
-    setupNeeded: source.setupNeeded === true,
-    channelConnected: launchChannel.connected === true,
-    channelAvailable: launchChannel.available !== false,
-    channelStatus: s(launchChannel.statusLabel || launchChannel.status),
-    channelSummary: s(launchChannel.summary),
-    channelDetail: s(launchChannel.detail),
-    channelLabel: channelView.channelLabel,
-    channelIdentity: channelView.identity,
-    channelProvider: channelView.provider,
-    truthReady: truthRuntime.truthReady === true,
-    runtimeReady: truthRuntime.runtimeReady === true,
-    deliveryReady: truthRuntime.deliveryReady === true,
-    truthStatus: s(truthRuntime.statusLabel || truthRuntime.status),
-    truthSummary: s(truthRuntime.summary),
-    truthTitle: s(truthRuntime.title),
-    truthDetail: s(truthRuntime.detail),
-    blockedBy: lower(truthRuntime.blockedBy),
-    leadReason: lower(truthRuntime.leadReason),
-    setupAction,
-    truthAction,
-    channelAction,
-    secondaryAction,
+    truthAction: normalizeUiAction(truthRuntime.action, {
+      label: "Open truth",
+      path: "/truth",
+    }),
+    setupAction: normalizeUiAction(source.primaryAction, {
+      label: "Open setup",
+      path: SETUP_WIDGET_ROUTE,
+    }),
+    inboxAction: { label: "Open inbox", path: "/inbox" },
+    commentsAction: { label: "Open comments", path: "/comments" },
+    voiceAction: { label: "Open voice", path: "/voice" },
   };
 }
 
 function buildSupportWelcomeFromAssistant(assistantState = {}) {
   const context = buildSupportContext(assistantState);
-  const launchLabel = context.channelLabel || "launch channel";
-  const identityText = context.channelIdentity
-    ? ` ${context.channelIdentity}`
-    : "";
 
-  if (context.launchPosture === "connect_channel" || !context.channelConnected) {
+  if (!context.channelConnected) {
     return [
       {
-        id: "support-welcome-connect",
+        id: "support-connect",
         role: "assistant",
-        title: `Connect ${launchLabel} first.`,
+        title: `Connect ${context.channelLabel.toLowerCase()} first`,
         text:
           context.channelSummary ||
-          `The fastest next move is to connect ${launchLabel.toLowerCase()} before starting live AI operations.${identityText}`,
+          `Setup stays available here, but live operation still needs ${context.channelLabel.toLowerCase()} connected.`,
         actions: [context.channelAction].filter(Boolean),
-        suggestions: [
-          `Open ${launchLabel}`,
-          "Why is setup blocked?",
-          "How do I start AI setup?",
-        ],
+        suggestions: ["Open channels", "Open setup"],
       },
     ];
   }
 
   if (
     context.launchPosture === "runtime_repair_needed" ||
-    context.blockedBy === "runtime" ||
-    context.blockedBy === "truth"
+    context.blockedBy === "truth" ||
+    context.blockedBy === "runtime"
   ) {
     return [
       {
-        id: "support-welcome-runtime",
+        id: "support-truth",
         role: "assistant",
-        title: context.truthTitle || "Truth or runtime still needs repair.",
+        title: context.truthTitle || "Truth needs attention",
         text:
           context.truthSummary ||
-          `Approved truth exists, but live automation on ${launchLabel.toLowerCase()} should wait until truth/runtime repair finishes.`,
-        actions: [context.truthAction, context.channelAction].filter(Boolean),
-        suggestions: [
-          "Why is runtime blocked?",
-          "Open truth",
-          `Open ${launchLabel}`,
-        ],
+          "Approved truth or runtime still needs review before live automation should be trusted.",
+        actions: [context.truthAction, context.setupAction].filter(Boolean),
+        suggestions: ["Open truth", "Open setup"],
       },
     ];
   }
 
-  if (context.launchPosture === "setup_needed" || context.setupNeeded) {
+  if (context.setupNeeded || context.launchPosture === "setup_needed") {
     return [
       {
-        id: "support-welcome-setup",
+        id: "support-setup",
         role: "assistant",
-        title: "Continue the setup draft.",
+        title: "Continue the draft",
         text:
-          `The current launch channel is ${launchLabel.toLowerCase()}. Continue the structured setup draft before you expect live automation to behave consistently.` +
-          (identityText ? ` Connected identity: ${identityText}.` : ""),
+          "Business truth still deserves one governed pass before you rely on live behavior.",
         actions: [context.setupAction, context.truthAction].filter(Boolean),
-        suggestions: [
-          "Open AI setup",
-          "What still needs confirmation?",
-          "Open truth",
-        ],
+        suggestions: ["Open setup", "Open truth"],
       },
     ];
   }
 
   return [
     {
-      id: "support-welcome-ready",
+      id: "support-ready",
       role: "assistant",
-      title: "Live surfaces are available.",
+      title: "Live surfaces are available",
       text:
-        `Truth and runtime look aligned for ${launchLabel.toLowerCase()}. Open the live surfaces or ask about channels, inbox, comments, voice, setup, or runtime.` +
-        (identityText ? ` Connected identity: ${identityText}.` : ""),
-      actions: [
-        { label: "Open inbox", path: "/inbox" },
-        { label: "Open comments", path: "/comments" },
-      ],
-      suggestions: [
-        "Open inbox",
-        "Open comments",
-        "Open voice",
-        "Open truth",
-      ],
+        "Truth, channels, and operator surfaces look ready. Pick the surface you need.",
+      actions: [context.inboxAction, context.commentsAction].filter(Boolean),
+      suggestions: ["Open inbox", "Open comments", "Open voice", "Open truth"],
     },
   ];
 }
 
-function buildSupportFallbackReply(context) {
-  const launchLabel = context.channelLabel || "launch channel";
+function buildSupportReply(rawText = "", assistantState = {}) {
+  const text = lower(rawText);
+  const context = buildSupportContext(assistantState);
 
-  if (context.launchPosture === "connect_channel" || !context.channelConnected) {
+  if (/channel|connect|instagram|facebook|telegram|oauth|meta/.test(text)) {
     return {
-      text:
-        context.channelSummary ||
-        `The next move is still to connect ${launchLabel.toLowerCase()} before the rest of the setup flow matters.`,
+      text: context.channelConnected
+        ? `${context.channelLabel} looks connected. Open Channels if you want to inspect or reconnect it.`
+        : context.channelSummary ||
+          `${context.channelLabel} still needs to be connected before launch is clean.`,
       actions: [context.channelAction].filter(Boolean),
-      suggestions: [`Open ${launchLabel}`, "Why is setup blocked?"],
+      suggestions: ["Open channels", "Open setup"],
     };
   }
 
-  if (
-    context.launchPosture === "runtime_repair_needed" ||
-    context.blockedBy === "runtime" ||
-    context.blockedBy === "truth"
-  ) {
+  if (/truth|runtime|review|approve|finalize|publish/.test(text)) {
     return {
       text:
         context.truthSummary ||
-        `Truth/runtime repair still comes before trusting live automation on ${launchLabel.toLowerCase()}.`,
-      actions: [context.truthAction, context.channelAction].filter(Boolean),
-      suggestions: ["Open truth", "What should I repair?"],
-    };
-  }
-
-  if (context.launchPosture === "setup_needed" || context.setupNeeded) {
-    return {
-      text:
-        `The current launch channel is ${launchLabel.toLowerCase()}, but the structured setup draft still deserves attention before you treat automation as fully ready.`,
-      actions: [context.setupAction, context.truthAction].filter(Boolean),
-      suggestions: ["Open AI setup", "Open truth"],
-    };
-  }
-
-  return {
-    text:
-      "Pick the surface you need: inbox, comments, voice, channels, truth, or setup.",
-    actions: [
-      { label: "Open inbox", path: "/inbox" },
-      { label: "Open truth", path: "/truth" },
-    ],
-    suggestions: [
-      "Open inbox",
-      "Open comments",
-      "Open voice",
-      "Open channels",
-    ],
-  };
-}
-
-function buildSupportReply(rawText = "", assistantState = {}) {
-  const text = s(rawText);
-  const lowerText = text.toLowerCase();
-  const context = buildSupportContext(assistantState);
-  const launchLabel = context.channelLabel || "launch channel";
-
-  if (
-    /channel|channels|connect|connected|telegram|meta|instagram|facebook|oauth|token|secret/.test(
-      lowerText
-    )
-  ) {
-    if (!context.channelConnected || context.launchPosture === "connect_channel") {
-      return {
-        text:
-          context.channelSummary ||
-          `${launchLabel} is not ready yet. Start from Channels and finish the connect flow first.`,
-        actions: [context.channelAction].filter(Boolean),
-        suggestions: [`Open ${launchLabel}`, "How do I start AI setup?"],
-      };
-    }
-
-    if (
-      context.launchPosture === "runtime_repair_needed" ||
-      context.blockedBy === "runtime" ||
-      context.blockedBy === "truth"
-    ) {
-      return {
-        text:
-          `${launchLabel} is attached, but live automation is still blocked by truth/runtime posture.`,
-        actions: [context.truthAction, context.channelAction].filter(Boolean),
-        suggestions: ["Why is runtime blocked?", "Open truth"],
-      };
-    }
-
-    return {
-      text:
-        `${launchLabel} looks connected. Open Channels if you want to inspect identities, delivery posture, or reconnect state.`,
-      actions: [context.channelAction].filter(Boolean),
-      suggestions: [`Open ${launchLabel}`, "Open inbox"],
-    };
-  }
-
-  if (
-    /truth|runtime|projection|repair|blocked|approval|approve|publish|review|memory/.test(
-      lowerText
-    )
-  ) {
-    if (
-      context.launchPosture === "runtime_repair_needed" ||
-      context.blockedBy === "runtime" ||
-      context.blockedBy === "truth"
-    ) {
-      return {
-        text:
-          context.truthSummary ||
-          "Approved truth exists, but runtime still needs repair before live automation should be trusted.",
-        actions: [context.truthAction].filter(Boolean),
-        suggestions: ["Open truth", "What should I repair?"],
-      };
-    }
-
-    if (context.launchPosture === "setup_needed" || context.setupNeeded) {
-      return {
-        text:
-          "Truth is still downstream of the setup draft. Continue setup first, then review and publish truth.",
-        actions: [context.setupAction, context.truthAction].filter(Boolean),
-        suggestions: ["Open AI setup", "Open truth"],
-      };
-    }
-
-    return {
-      text:
-        "Truth and runtime already look aligned from the current assistant posture. Open Truth if you want the full review surface.",
+        "Open the truth surface when you need the governed review and approval posture.",
       actions: [context.truthAction].filter(Boolean),
-      suggestions: ["Open truth", "Open inbox"],
+      suggestions: ["Open truth", "Open setup"],
     };
   }
 
-  if (/setup|draft|website|business|service|services|company|profile/.test(lowerText)) {
-    if (!context.channelConnected || context.launchPosture === "connect_channel") {
-      return {
-        text:
-          `Setup is available, but the cleanest first move is still to connect ${launchLabel.toLowerCase()}.`,
-        actions: [context.channelAction, context.setupAction].filter(Boolean),
-        suggestions: [`Open ${launchLabel}`, "Open AI setup"],
-      };
-    }
-
-    if (context.launchPosture === "runtime_repair_needed") {
-      return {
-        text:
-          "You can still inspect the draft, but the more urgent issue is truth/runtime repair before trusting live automation.",
-        actions: [context.truthAction, context.setupAction].filter(Boolean),
-        suggestions: ["Open truth", "Open AI setup"],
-      };
-    }
-
+  if (/setup|draft|source|business|services|hours|pricing|contact/.test(text)) {
     return {
       text:
-        "Open the AI setup flow to continue the structured draft and confirm the business details that shape runtime.",
+        "Open setup to continue source intake, confirm the next missing truth field, or approve truth.",
       actions: [context.setupAction].filter(Boolean),
-      suggestions: ["Open AI setup", "What still needs confirmation?"],
+      suggestions: ["Open setup", "Open truth"],
     };
   }
 
-  if (/inbox|dm|message|messages|reply/.test(lowerText)) {
-    if (!context.channelConnected || context.launchPosture === "connect_channel") {
-      return {
-        text:
-          "The inbox surface exists, but the system still wants a connected launch channel first.",
-        actions: [context.channelAction].filter(Boolean),
-        suggestions: ["Open channels", "Open inbox"],
-      };
-    }
-
-    if (
-      context.launchPosture === "runtime_repair_needed" ||
-      context.blockedBy === "runtime" ||
-      context.blockedBy === "truth"
-    ) {
-      return {
-        text:
-          "You can inspect inbox activity, but live automation should still be treated cautiously until truth/runtime repair finishes.",
-        actions: [
-          context.truthAction,
-          { label: "Open inbox", path: "/inbox" },
-        ].filter(Boolean),
-        suggestions: ["Open truth", "Open inbox"],
-      };
-    }
-
+  if (/voice|call|phone/.test(text)) {
     return {
-      text:
-        "Inbox is the main live surface for conversation triage and follow-up.",
-      actions: [{ label: "Open inbox", path: "/inbox" }],
-      suggestions: ["Open inbox", "Open comments"],
-    };
-  }
-
-  if (/comment|comments|moderation|post/.test(lowerText)) {
-    if (
-      context.launchPosture === "runtime_repair_needed" ||
-      context.blockedBy === "runtime" ||
-      context.blockedBy === "truth"
-    ) {
-      return {
-        text:
-          "Comments can still be inspected, but live automation should wait for truth/runtime repair.",
-        actions: [
-          context.truthAction,
-          { label: "Open comments", path: "/comments" },
-        ].filter(Boolean),
-        suggestions: ["Open truth", "Open comments"],
-      };
-    }
-
-    return {
-      text:
-        "Comments remain a separate operator surface. Open it when you want moderation and reply review.",
-      actions: [{ label: "Open comments", path: "/comments" }],
-      suggestions: ["Open comments", "Open inbox"],
-    };
-  }
-
-  if (/voice|call|phone|twilio|receptionist/.test(lowerText)) {
-    return {
-      text:
-        "Voice stays available as its own surface. Open it when you need receptionist posture, live call handling, or phone readiness.",
-      actions: [{ label: "Open voice", path: "/voice" }],
+      text: "Voice remains a separate operator surface for phone posture and call handling.",
+      actions: [context.voiceAction],
       suggestions: ["Open voice", "Open truth"],
     };
   }
 
-  return buildSupportFallbackReply(context);
+  if (/comment|post|moderation/.test(text)) {
+    return {
+      text: "Comments stay available as an operator surface for moderation and reply review.",
+      actions: [context.commentsAction],
+      suggestions: ["Open comments", "Open inbox"],
+    };
+  }
+
+  if (/inbox|message|reply|dm/.test(text)) {
+    return {
+      text: "Inbox is the main live surface for conversations, follow-up, and operator review.",
+      actions: [context.inboxAction],
+      suggestions: ["Open inbox", "Open comments"],
+    };
+  }
+
+  return {
+    text: "Pick the surface you need: setup, truth, inbox, comments, voice, or channels.",
+    actions: [context.setupAction, context.truthAction].filter(Boolean),
+    suggestions: ["Open setup", "Open truth", "Open inbox", "Open channels"],
+  };
 }
 
-function useWidgetStyles() {
-  return useMemo(
-    () => `
-      .ai-widget-root {
-        position: fixed;
-        right: 22px;
-        bottom: 22px;
-        z-index: 92;
-      }
-
-      .ai-widget-launcher {
-        position: relative;
-        width: 66px;
-        height: 66px;
-        border: 0;
-        padding: 0;
-        background: transparent;
-        cursor: pointer;
-      }
-
-      .ai-widget-launcher-core {
-        position: absolute;
-        inset: 0;
-        border-radius: 999px;
-        border: 1px solid rgba(209,213,219,0.98);
-        background: rgba(255,255,255,0.98);
-        box-shadow: 0 10px 24px rgba(15,23,42,0.12);
-      }
-
-      .ai-widget-launcher-badge {
-        position: absolute;
-        top: 7px;
-        right: 7px;
-        width: 10px;
-        height: 10px;
-        border-radius: 999px;
-        border: 2px solid rgba(255,255,255,0.98);
-        background: #2563eb;
-      }
-
-      .ai-widget-glyph {
-        position: absolute;
-        inset: 0;
-        display: grid;
-        place-items: center;
-        z-index: 2;
-      }
-
-      .ai-widget-panel {
-        position: absolute;
-        right: 0;
-        bottom: calc(100% + 14px);
-        width: min(calc(100vw - 28px), 414px);
-        height: min(82vh, 760px);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        border-radius: 12px;
-        border: 1px solid rgba(229,231,235,0.98);
-        background: rgba(255,255,255,0.99);
-        box-shadow: 0 18px 34px rgba(15,23,42,0.12);
-        animation: aiWidgetPanelIn .22s cubic-bezier(.22,1,.36,1);
-      }
-
-      .ai-widget-header {
-        flex: 0 0 auto;
-        padding: 16px 16px 12px;
-        border-bottom: 1px solid rgba(229,231,235,0.98);
-        background: rgba(255,255,255,0.98);
-      }
-
-      .ai-widget-header-top {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-      }
-
-      .ai-widget-title {
-        font-size: 15px;
-        line-height: 1.1;
-        font-weight: 700;
-        letter-spacing: -.03em;
-        color: #111827;
-      }
-
-      .ai-widget-close {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 38px;
-        height: 38px;
-        border-radius: 10px;
-        border: 1px solid rgba(209,213,219,0.98);
-        background: rgba(255,255,255,0.96);
-        color: #6b7280;
-        transition: all .18s ease;
-      }
-
-      .ai-widget-close:hover {
-        color: #111827;
-      }
-
-      .ai-widget-switch {
-        display: inline-flex;
-        gap: 4px;
-        margin-top: 12px;
-        padding: 4px;
-        border-radius: 10px;
-        background: rgba(243,244,246,0.98);
-        border: 1px solid rgba(229,231,235,0.98);
-      }
-
-      .ai-widget-switch-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        min-width: 112px;
-        min-height: 36px;
-        padding: 0 12px;
-        border: 0;
-        border-radius: 8px;
-        background: transparent;
-        color: #6b7280;
-        font-size: 13px;
-        font-weight: 600;
-        letter-spacing: -.02em;
-        transition: all .18s ease;
-      }
-
-      .ai-widget-switch-btn.active {
-        background: rgba(255,255,255,0.98);
-        color: #111827;
-      }
-
-      .ai-widget-body {
-        flex: 1 1 auto;
-        min-height: 0;
-        display: flex;
-      }
-
-      .ai-thread-wrap {
-        flex: 1 1 auto;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-      }
-
-      .ai-thread-scroll {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
-        padding: 16px;
-        scroll-behavior: smooth;
-      }
-
-      .ai-thread-scroll::-webkit-scrollbar {
-        width: 10px;
-      }
-
-      .ai-thread-scroll::-webkit-scrollbar-thumb {
-        border-radius: 999px;
-        background: rgba(199, 207, 220, 0.58);
-        border: 2px solid transparent;
-        background-clip: padding-box;
-      }
-
-      .ai-thread-stack {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-
-      .ai-row {
-        display: flex;
-        width: 100%;
-        animation: aiWidgetBubbleIn .34s cubic-bezier(.22,1,.36,1) both;
-      }
-
-      .ai-row.assistant {
-        justify-content: flex-start;
-      }
-
-      .ai-row.user {
-        justify-content: flex-end;
-      }
-
-      .ai-bubble {
-        max-width: 78%;
-        padding: 14px 15px;
-        border-radius: 12px;
-        position: relative;
-        border: 1px solid rgba(229,231,235,0.98);
-      }
-
-      .ai-bubble.assistant {
-        background: rgba(255,255,255,0.98);
-        color: #111827;
-      }
-
-      .ai-bubble.user {
-        background: rgba(239,246,255,0.98);
-        color: #111827;
-      }
-
-      .ai-bubble-title {
-        font-size: 15px;
-        line-height: 1.32;
-        font-weight: 700;
-        letter-spacing: -.03em;
-      }
-
-      .ai-bubble-text {
-        margin-top: 2px;
-        font-size: 14px;
-        line-height: 1.68;
-        white-space: pre-wrap;
-      }
-
-      .ai-bubble-helper {
-        margin-top: 6px;
-        font-size: 12px;
-        line-height: 1.55;
-        opacity: .62;
-      }
-
-      .ai-quick-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 10px;
-      }
-
-      .ai-quick-chip,
-      .ai-action-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        min-height: 34px;
-        padding: 0 12px;
-        border-radius: 999px;
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: -.02em;
-        transition: all .18s ease;
-      }
-
-      .ai-quick-chip {
-        border: 1px solid rgba(209,213,219,0.98);
-        background: rgba(243,244,246,0.98);
-        color: #4b5563;
-      }
-
-      .ai-action-link {
-        border: 1px solid rgba(209,213,219,0.98);
-        background: rgba(255,255,255,0.96);
-        color: #111827;
-      }
-
-      .ai-quick-chip:hover,
-      .ai-action-link:hover {}
-
-      .ai-review-sheet {
-        border: 1px solid rgba(229,231,235,0.98);
-        background: rgba(249,250,251,0.98);
-        border-radius: 12px;
-        padding: 16px 16px 14px;
-        box-shadow: none;
-      }
-
-      .ai-review-kicker {
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: .16em;
-        text-transform: uppercase;
-        color: rgba(15,23,42,0.34);
-      }
-
-      .ai-review-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 12px;
-        margin-top: 8px;
-      }
-
-      .ai-review-title-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
-
-      .ai-review-title {
-        margin: 0;
-        font-size: 18px;
-        line-height: 1.12;
-        font-weight: 700;
-        letter-spacing: -.04em;
-        color: rgba(15,23,42,0.96);
-      }
-
-      .ai-review-status {
-        display: inline-flex;
-        align-items: center;
-        min-height: 24px;
-        padding: 0 9px;
-        border-radius: 999px;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: -.02em;
-        border: 1px solid rgba(15,23,42,0.07);
-        background: rgba(255,255,255,0.88);
-        color: rgba(15,23,42,0.68);
-      }
-
-      .ai-review-status.strong {
-        border-color: rgba(22,101,52,0.12);
-        background: rgba(236,253,245,0.9);
-        color: rgba(22,101,52,0.9);
-      }
-
-      .ai-review-status.partial {
-        border-color: rgba(180,83,9,0.12);
-        background: rgba(255,251,235,0.94);
-        color: rgba(180,83,9,0.9);
-      }
-
-      .ai-review-status.weak {
-        border-color: rgba(185,28,28,0.12);
-        background: rgba(254,242,242,0.92);
-        color: rgba(185,28,28,0.88);
-      }
-
-      .ai-review-summary {
-        margin: 8px 0 0;
-        font-size: 13px;
-        line-height: 1.7;
-        color: rgba(15,23,42,0.58);
-      }
-
-      .ai-review-action {
-        flex: 0 0 auto;
-      }
-
-      .ai-review-stats {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 14px;
-        margin-top: 14px;
-        padding-top: 14px;
-        border-top: 1px solid rgba(15,23,42,0.06);
-      }
-
-      .ai-review-stat {
-        min-width: 0;
-      }
-
-      .ai-review-stat-label {
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: .14em;
-        text-transform: uppercase;
-        color: rgba(15,23,42,0.32);
-      }
-
-      .ai-review-stat-value {
-        margin-top: 6px;
-        font-size: 14px;
-        line-height: 1.35;
-        font-weight: 700;
-        letter-spacing: -.03em;
-        color: rgba(15,23,42,0.94);
-      }
-
-      .ai-review-block {
-        margin-top: 14px;
-        padding-top: 14px;
-        border-top: 1px solid rgba(15,23,42,0.06);
-      }
-
-      .ai-review-block-title {
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: .14em;
-        text-transform: uppercase;
-        color: rgba(15,23,42,0.34);
-      }
-
-      .ai-review-rows {
-        margin-top: 10px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-      }
-
-      .ai-review-row {
-        display: grid;
-        grid-template-columns: 68px minmax(0, 1fr);
-        gap: 10px;
-      }
-
-      .ai-review-row-label {
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: -.01em;
-        color: rgba(15,23,42,0.54);
-      }
-
-      .ai-review-row-value {
-        min-width: 0;
-        font-size: 13px;
-        line-height: 1.6;
-        color: rgba(15,23,42,0.86);
-      }
-
-      .ai-review-row-value.multiline {
-        line-height: 1.72;
-      }
-
-      .ai-review-pages {
-        margin-top: 10px;
-        display: flex;
-        flex-direction: column;
-      }
-
-      .ai-review-page {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 12px;
-        padding: 10px 0;
-        border-top: 1px solid rgba(15,23,42,0.05);
-      }
-
-      .ai-review-page:first-child {
-        border-top: 0;
-        padding-top: 0;
-      }
-
-      .ai-review-page:last-child {
-        padding-bottom: 0;
-      }
-
-      .ai-review-page-main {
-        min-width: 0;
-        flex: 1 1 auto;
-      }
-
-      .ai-review-page-title {
-        font-size: 13px;
-        line-height: 1.45;
-        font-weight: 700;
-        letter-spacing: -.02em;
-        color: rgba(15,23,42,0.94);
-      }
-
-      .ai-review-page-meta {
-        margin-top: 3px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        font-size: 11px;
-        line-height: 1.45;
-        color: rgba(15,23,42,0.42);
-      }
-
-      .ai-review-page-note {
-        flex: 0 0 auto;
-        max-width: 132px;
-        text-align: right;
-        font-size: 11px;
-        line-height: 1.5;
-        color: rgba(15,23,42,0.54);
-      }
-
-      .ai-review-footer {
-        margin-top: 14px;
-        padding-top: 14px;
-        border-top: 1px solid rgba(15,23,42,0.06);
-        display: flex;
-        flex-direction: column;
-        gap: 7px;
-      }
-
-      .ai-review-footnote {
-        font-size: 12px;
-        line-height: 1.6;
-        color: rgba(15,23,42,0.6);
-      }
-
-      .ai-typing-bubble {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 14px 15px;
-        border-radius: 12px;
-        border: 1px solid rgba(229,231,235,0.98);
-        background: rgba(255,255,255,0.98);
-      }
-
-      .ai-typing-dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 999px;
-        background: rgba(100,116,139,0.82);
-        animation: aiWidgetTyping 1s ease-in-out infinite;
-      }
-
-      .ai-typing-dot:nth-child(2) { animation-delay: .14s; }
-      .ai-typing-dot:nth-child(3) { animation-delay: .28s; }
-
-      .ai-composer {
-        flex: 0 0 auto;
-        padding: 12px 16px 16px;
-        border-top: 1px solid rgba(229,231,235,0.98);
-        background: rgba(249,250,251,0.98);
-      }
-
-      .ai-composer-shell {
-        display: flex;
-        align-items: flex-end;
-        gap: 10px;
-        padding: 10px 10px 10px 14px;
-        border-radius: 12px;
-        border: 1px solid rgba(209,213,219,0.98);
-        background: #ffffff;
-      }
-
-      .ai-composer-input {
-        flex: 1 1 auto;
-        min-height: 24px;
-        max-height: 140px;
-        border: 0;
-        outline: 0;
-        resize: none;
-        background: transparent;
-        color: #111827;
-        font-size: 14px;
-        line-height: 1.65;
-        padding: 2px 0 0;
-      }
-
-      .ai-composer-input::placeholder {
-        color: #94a3b8;
-      }
-
-      .ai-send-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex: 0 0 auto;
-        width: 44px;
-        height: 44px;
-        border-radius: 10px;
-        border: 1px solid rgba(37,99,235,0.36);
-        color: #ffffff;
-        background: #2563eb;
-        box-shadow: none;
-        transition: transform .18s ease, opacity .18s ease;
-      }
-
-      .ai-send-btn:hover:not(:disabled) {}
-
-      .ai-send-btn:disabled {
-        opacity: .46;
-        cursor: default;
-      }
-
-      @keyframes aiWidgetPanelIn {
-        from {
-          opacity: 0;
-          transform: translateY(10px) scale(.986);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0) scale(1);
-        }
-      }
-
-      @keyframes aiWidgetBubbleIn {
-        from {
-          opacity: 0;
-          transform: translateY(14px) scale(.988);
-          filter: blur(5px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0) scale(1);
-          filter: blur(0);
-        }
-      }
-
-      @keyframes aiWidgetTyping {
-        0%, 80%, 100% {
-          transform: translateY(0);
-          opacity: .4;
-        }
-        40% {
-          transform: translateY(-4px);
-          opacity: 1;
-        }
-      }
-
-      @media (max-width: 640px) {
-        .ai-widget-root {
-          right: 14px;
-          bottom: 14px;
-        }
-
-        .ai-widget-panel {
-          width: min(calc(100vw - 18px), 100vw);
-          height: min(84vh, 720px);
-        }
-
-        .ai-widget-switch-btn {
-          min-width: 0;
-          flex: 1 1 0;
-        }
-
-        .ai-bubble {
-          max-width: 86%;
-        }
-
-        .ai-review-header {
-          flex-direction: column;
-          align-items: flex-start;
-        }
-
-        .ai-review-action {
-          width: 100%;
-        }
-
-        .ai-review-page {
-          flex-direction: column;
-        }
-
-        .ai-review-page-note {
-          max-width: none;
-          text-align: left;
-        }
-      }
-    `,
-    []
-  );
+function normalizeManualSourceType(value = "") {
+  const key = lower(value);
+  if (key === "note" || key === "manual") return "manual";
+  if (key === "facebook") return "facebook_page";
+  return key;
 }
 
-function LauncherGlyph() {
-  return (
-    <div className="ai-widget-glyph" aria-hidden="true">
-      <Bot className="h-[20px] w-[20px] text-white" strokeWidth={2.1} />
-    </div>
-  );
+function buildManualSourceMetadata(type = "", value = "") {
+  const sourceType = normalizeManualSourceType(type);
+  const sourceUrl = sourceType === "manual" ? "" : s(value);
+  const sourceLabel =
+    sourceType === "instagram"
+      ? "Instagram"
+      : sourceType === "facebook_page"
+        ? "Facebook"
+        : sourceType === "manual"
+          ? "Operator note"
+          : "Source";
+
+  return {
+    primarySourceType: sourceType,
+    primarySourceUrl: sourceUrl,
+    sourceLabels: [sourceLabel],
+    evidenceSummary: [
+      sourceType === "manual"
+        ? "Operator note captured"
+        : `${sourceLabel} supplied by operator`,
+    ],
+  };
+}
+
+function buildManualAnalyzePayload(type = "", value = "") {
+  const sourceType = normalizeManualSourceType(type);
+  const input = s(value);
+
+  if (sourceType === "instagram") {
+    return {
+      manualText: `Instagram: ${input}`,
+      answers: { instagramUrl: input },
+      note: "instagram source",
+    };
+  }
+
+  if (sourceType === "facebook_page") {
+    return {
+      manualText: `Facebook: ${input}`,
+      answers: { facebookUrl: input },
+      note: "facebook source",
+    };
+  }
+
+  return {
+    manualText: input,
+    note: sourceType === "manual" ? "manual business note" : `${sourceType} source`,
+  };
 }
 
 function TypingBubble() {
   return (
-    <div className="ai-row assistant">
-      <div className="ai-typing-bubble" aria-hidden="true">
-        <span className="ai-typing-dot" />
-        <span className="ai-typing-dot" />
-        <span className="ai-typing-dot" />
+    <div className="flex">
+      <div className="inline-flex h-10 items-center gap-1.5 border border-line bg-surface px-3 text-text-muted">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current [animation-delay:120ms]" />
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current [animation-delay:240ms]" />
       </div>
     </div>
   );
@@ -1283,14 +456,10 @@ function SupportThread({
     });
   }, [messages, busy]);
 
-  function handleSubmit() {
-    onSend?.(input);
-  }
-
   return (
-    <div className="ai-thread-wrap">
-      <div ref={scrollRef} className="ai-thread-scroll">
-        <div className="ai-thread-stack">
+    <div className="flex h-full min-h-0 flex-col">
+      <div ref={scrollRef} className="flex-1 overflow-auto px-4 py-4">
+        <div className="flex flex-col gap-3">
           {messages.map((message, index) => {
             const isUser = message.role === "user";
             const showActions =
@@ -1307,23 +476,31 @@ function SupportThread({
             return (
               <div
                 key={message.id}
-                className={`ai-row ${isUser ? "user" : "assistant"}`}
-                style={{ animationDelay: `${Math.min(index * 36, 180)}ms` }}
+                className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+                style={{ animationDelay: `${Math.min(index * 24, 160)}ms` }}
               >
-                <div className={`ai-bubble ${isUser ? "user" : "assistant"}`}>
+                <div
+                  className={`max-w-[92%] border px-3 py-3 text-[13px] leading-6 ${
+                    isUser
+                      ? "border-slate-900 bg-slate-900 text-white"
+                      : "border-line bg-surface text-text"
+                  }`}
+                >
                   {s(message.title) ? (
-                    <div className="ai-bubble-title">{message.title}</div>
+                    <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] opacity-65">
+                      {message.title}
+                    </div>
                   ) : null}
 
-                  <div className="ai-bubble-text">{message.text}</div>
+                  <div className="whitespace-pre-wrap">{message.text}</div>
 
                   {showActions ? (
-                    <div className="ai-quick-row">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       {arr(message.actions).map((action) => (
                         <button
                           key={`${message.id}-${action.path}-${action.label}`}
                           type="button"
-                          className="ai-action-link"
+                          className="inline-flex h-8 items-center gap-1.5 border border-line bg-white px-2.5 text-[12px] font-semibold text-text"
                           onClick={() => onAction?.(action.path)}
                         >
                           <span>{action.label}</span>
@@ -1334,12 +511,12 @@ function SupportThread({
                   ) : null}
 
                   {showSuggestions ? (
-                    <div className="ai-quick-row">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       {arr(message.suggestions).map((suggestion) => (
                         <button
                           key={`${message.id}-${suggestion}`}
                           type="button"
-                          className="ai-quick-chip"
+                          className="inline-flex h-8 items-center border border-line bg-white px-2.5 text-[12px] font-semibold text-text"
                           onClick={() => onSend?.(suggestion)}
                         >
                           {suggestion}
@@ -1356,8 +533,8 @@ function SupportThread({
         </div>
       </div>
 
-      <div className="ai-composer">
-        <div className="ai-composer-shell">
+      <div className="border-t border-line bg-white px-4 py-4">
+        <div className="flex items-end gap-2 border border-line bg-surface px-3 py-2">
           <textarea
             rows={1}
             value={input}
@@ -1365,18 +542,18 @@ function SupportThread({
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                handleSubmit();
+                onSend?.(input);
               }
             }}
-            placeholder="Ask about setup, runtime, channels, inbox, comments, or voice..."
-            className="ai-composer-input"
+            placeholder="Ask about setup, truth, channels, inbox, comments, or voice..."
+            className="min-h-[22px] w-full resize-none bg-transparent text-[13px] leading-6 text-text outline-none placeholder:text-text-subtle"
           />
 
           <button
             type="button"
-            onClick={handleSubmit}
+            onClick={() => onSend?.(input)}
             disabled={!s(input) || busy}
-            className="ai-send-btn"
+            className="inline-flex h-9 w-9 items-center justify-center bg-slate-900 text-white disabled:cursor-not-allowed disabled:opacity-45"
             aria-label="Send support message"
           >
             <SendHorizontal className="h-4 w-4" strokeWidth={2.1} />
@@ -1395,15 +572,12 @@ export default function FloatingAiWidget({
   assistant = null,
   presentation = "floating",
 }) {
-  const styles = useWidgetStyles();
   const queryClient = useQueryClient();
   const rootRef = useRef(null);
   const assistantRef = useRef(normalizeAssistantState(assistant));
   const pageMode = presentation === "page";
   const panelOpen = pageMode ? true : open;
-  const workspace = useWorkspaceTenantKey({
-    enabled: panelOpen,
-  });
+  const workspace = useWorkspaceTenantKey({ enabled: panelOpen });
 
   const [clientAssistant, setClientAssistant] = useState(
     normalizeAssistantState(assistant)
@@ -1411,15 +585,15 @@ export default function FloatingAiWidget({
   const [surfaceMode, setSurfaceMode] = useState("setup");
   const [saving, setSaving] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
-  const [importingWebsite, setImportingWebsite] = useState(false);
-  const [importError, setImportError] = useState("");
-  const lastTenantKeyRef = useRef("");
-
+  const [capturingSource, setCapturingSource] = useState(false);
+  const [setupError, setSetupError] = useState("");
   const [supportMessages, setSupportMessages] = useState(
     buildSupportWelcomeFromAssistant(assistantRef.current)
   );
   const [supportInput, setSupportInput] = useState("");
   const [supportBusy, setSupportBusy] = useState(false);
+  const lastTenantKeyRef = useRef("");
+
   const productHomeQueryKey = useMemo(
     () => buildWorkspaceScopedQueryKey(["product-home"], workspace.tenantKey),
     [workspace.tenantKey]
@@ -1452,6 +626,7 @@ export default function FloatingAiWidget({
     () => buildWorkspaceScopedQueryKey(["meta-channel-status"], workspace.tenantKey),
     [workspace.tenantKey]
   );
+
   const sessionQuery = useQuery({
     queryKey: setupAssistantSessionQueryKey,
     queryFn: () => getCurrentSetupAssistantSession(),
@@ -1466,12 +641,12 @@ export default function FloatingAiWidget({
     retry: false,
     staleTime: 30_000,
   });
+
   const baseAssistant = useMemo(() => {
     const sessionAssistant = normalizeAssistantState(sessionQuery.data);
-    if (s(sessionAssistant.session?.id)) {
-      return sessionAssistant;
-    }
-    return normalizeAssistantState(assistant);
+    return s(sessionAssistant.session?.id)
+      ? sessionAssistant
+      : normalizeAssistantState(assistant);
   }, [assistant, sessionQuery.data]);
 
   useEffect(() => {
@@ -1485,65 +660,50 @@ export default function FloatingAiWidget({
 
   useEffect(() => {
     const nextTenantKey = lower(workspace.tenantKey);
-
     if (!nextTenantKey) {
       lastTenantKeyRef.current = "";
       return;
     }
-
     if (!lastTenantKeyRef.current) {
       lastTenantKeyRef.current = nextTenantKey;
       return;
     }
-
-    if (lastTenantKeyRef.current === nextTenantKey) {
-      return;
-    }
+    if (lastTenantKeyRef.current === nextTenantKey) return;
 
     lastTenantKeyRef.current = nextTenantKey;
-
     const loadingAssistant = normalizeAssistantState(buildLoadingAssistantSeed());
     assistantRef.current = loadingAssistant;
     setClientAssistant(loadingAssistant);
     setSurfaceMode("setup");
     setSaving(false);
     setFinalizing(false);
-    setImportingWebsite(false);
-    setImportError("");
+    setCapturingSource(false);
+    setSetupError("");
     setSupportMessages(buildSupportWelcomeFromAssistant(loadingAssistant));
     setSupportInput("");
     setSupportBusy(false);
   }, [workspace.tenantKey]);
 
-  const supportWelcomeMessages = useMemo(
-    () => buildSupportWelcomeFromAssistant(clientAssistant),
-    [clientAssistant]
-  );
-
   useEffect(() => {
     setSupportMessages((current) => {
-      const hasUserMessages = current.some((item) => item.role === "user");
-      if (hasUserMessages) return current;
-      return supportWelcomeMessages;
+      if (current.some((item) => item.role === "user")) return current;
+      return buildSupportWelcomeFromAssistant(clientAssistant);
     });
-  }, [supportWelcomeMessages]);
+  }, [clientAssistant]);
 
   useEffect(() => {
     if (!panelOpen || pageMode) return;
-
     const onPointerDown = (event) => {
       if (!rootRef.current?.contains(event.target)) {
         onOpenChange?.(false);
       }
     };
-
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [onOpenChange, pageMode, panelOpen]);
 
   useEffect(() => {
-    if (!panelOpen) return;
-    if (clientAssistant.launchPosture === "runtime_repair_needed") {
+    if (panelOpen && clientAssistant.launchPosture === "runtime_repair_needed") {
       setSurfaceMode("support");
     }
   }, [clientAssistant.launchPosture, panelOpen]);
@@ -1579,14 +739,11 @@ export default function FloatingAiWidget({
 
   async function ensureSession() {
     const current = assistantRef.current;
-    if (s(current.session?.id)) {
-      return current;
-    }
+    if (s(current.session?.id)) return current;
 
     const cachedSession = normalizeAssistantState(
       queryClient.getQueryData(setupAssistantSessionQueryKey)
     );
-
     if (s(cachedSession.session?.id)) {
       assistantRef.current = cachedSession;
       setClientAssistant(cachedSession);
@@ -1595,30 +752,30 @@ export default function FloatingAiWidget({
 
     const response = await startSetupAssistantSession();
     let nextAssistant = null;
-
     setClientAssistant((prev) => {
       nextAssistant = buildAssistantFromApi(prev, response);
       return nextAssistant;
     });
     queryClient.setQueryData(setupAssistantSessionQueryKey, response);
-
     return nextAssistant || assistantRef.current;
   }
 
   async function handleSetupPatchDraft(payload = {}) {
-    if (saving || finalizing || importingWebsite) return null;
-
+    if (saving || finalizing || capturingSource) return null;
     setSaving(true);
-    setImportError("");
+    setSetupError("");
     try {
       await ensureSession();
       const response = await updateCurrentSetupAssistantDraft(payload);
-
       setClientAssistant((prev) => buildAssistantFromApi(prev, response));
       queryClient.setQueryData(setupAssistantSessionQueryKey, response);
-
       await refreshWidgetWorkspaceState();
       return response;
+    } catch (error) {
+      setSetupError(
+        s(error?.message, "The draft could not be updated. Please try again.")
+      );
+      throw error;
     } finally {
       setSaving(false);
     }
@@ -1626,47 +783,45 @@ export default function FloatingAiWidget({
 
   async function handleSetupParseMessage({ text, step }) {
     const answer = s(text);
-    if (!answer || saving || finalizing || importingWebsite) return null;
-
+    if (!answer || saving || finalizing || capturingSource) return null;
     setSaving(true);
-    setImportError("");
+    setSetupError("");
     try {
       await ensureSession();
       const response = await sendSetupAssistantMessage({
         step: s(step, "profile"),
         answer,
       });
-
       setClientAssistant((prev) => buildAssistantFromApi(prev, response));
       queryClient.setQueryData(setupAssistantSessionQueryKey, response);
-
       await refreshWidgetWorkspaceState();
       return response;
+    } catch (error) {
+      setSetupError(
+        s(error?.message, "The answer could not be processed. Please try again.")
+      );
+      throw error;
     } finally {
       setSaving(false);
     }
   }
 
   async function handleSetupFinalize() {
-    if (saving || finalizing || importingWebsite) return null;
-
+    if (saving || finalizing || capturingSource) return null;
     setFinalizing(true);
-    setImportError("");
+    setSetupError("");
     try {
       await ensureSession();
       const response = await finalizeSetupAssistantSession({});
-
       if (response?.ok === false) {
         throw new Error(
           s(response?.reason || response?.error, "Failed to finalize setup")
         );
       }
-
       await refreshWidgetWorkspaceState({
         includeChannelStatus: true,
         emitReason: "setup-finalized",
       });
-
       setClientAssistant((prev) =>
         normalizeAssistantState({
           ...prev,
@@ -1677,60 +832,78 @@ export default function FloatingAiWidget({
             readyForApproval: false,
             finalizeAvailable: false,
             message:
-              "Setup finalized. Approved truth and strict runtime projection were refreshed.",
-          },
-          assistant: {
-            ...obj(prev.assistant),
-            completion: {
-              ready: false,
-              action: null,
-              message:
-                "Setup finalized. Approved truth and strict runtime projection were refreshed.",
-            },
+              "Business truth was approved. Runtime and approved truth were refreshed.",
           },
         })
       );
-
       return response;
+    } catch (error) {
+      setSetupError(s(error?.message, "Business truth could not be approved."));
+      throw error;
     } finally {
       setFinalizing(false);
     }
   }
 
-  async function handleImportWebsite(url = "") {
-    const websiteUrl =
-      s(url) ||
-      s(assistantRef.current?.websitePrefill?.websiteUrl) ||
-      s(assistantRef.current?.draft?.businessProfile?.websiteUrl);
-
-    if (!websiteUrl || saving || finalizing || importingWebsite) {
+  async function handleSetupCaptureSource({ type, value }) {
+    const sourceType = lower(type);
+    const sourceValue = s(value);
+    if (!sourceType || !sourceValue || saving || finalizing || capturingSource) {
       return null;
     }
 
-    setImportError("");
-    setImportingWebsite(true);
+    setCapturingSource(true);
+    setSetupError("");
+
     try {
       await ensureSession();
-      const response = await importWebsiteForSetup({
-        websiteUrl,
-        allowSessionReuse: true,
-        waitForCompletion: true,
-      });
 
-      if (response?.ok === false) {
-        throw new Error(
-          s(response?.reason || response?.error, "Website scan failed")
+      if (sourceType === "website") {
+        const response = await importWebsiteForSetup({
+          websiteUrl: sourceValue,
+          allowSessionReuse: true,
+          waitForCompletion: true,
+        });
+        if (response?.ok === false) {
+          throw new Error(
+            s(response?.reason || response?.error, "Website import failed")
+          );
+        }
+      } else if (sourceType === "google_maps") {
+        const response = await importGoogleMapsForSetup({
+          url: sourceValue,
+          allowSessionReuse: true,
+          waitForCompletion: true,
+        });
+        if (response?.ok === false) {
+          throw new Error(
+            s(response?.reason || response?.error, "Google Maps import failed")
+          );
+        }
+      } else {
+        const patchResponse = await updateCurrentSetupAssistantDraft({
+          sourceMetadata: buildManualSourceMetadata(sourceType, sourceValue),
+        });
+        setClientAssistant((prev) => buildAssistantFromApi(prev, patchResponse));
+        queryClient.setQueryData(setupAssistantSessionQueryKey, patchResponse);
+
+        const analyzeResponse = await analyzeSetupIntake(
+          buildManualAnalyzePayload(sourceType, sourceValue)
         );
+        if (analyzeResponse?.ok === false) {
+          throw new Error(
+            s(analyzeResponse?.reason || analyzeResponse?.error, "Source intake failed")
+          );
+        }
       }
 
       await refreshWidgetWorkspaceState();
-
-      return response;
+      return true;
     } catch (error) {
-      setImportError(s(error?.message, "Website scan failed"));
-      return null;
+      setSetupError(s(error?.message, "Source intake failed."));
+      throw error;
     } finally {
-      setImportingWebsite(false);
+      setCapturingSource(false);
     }
   }
 
@@ -1740,17 +913,13 @@ export default function FloatingAiWidget({
 
     setSupportMessages((current) => [
       ...current,
-      {
-        id: `support-user-${Date.now()}`,
-        role: "user",
-        text,
-      },
+      { id: `support-user-${Date.now()}`, role: "user", text },
     ]);
     setSupportInput("");
     setSupportBusy(true);
 
     const reply = buildSupportReply(text, assistantRef.current);
-    await new Promise((resolve) => window.setTimeout(resolve, 240));
+    await new Promise((resolve) => window.setTimeout(resolve, 220));
 
     setSupportMessages((current) => [
       ...current,
@@ -1774,131 +943,148 @@ export default function FloatingAiWidget({
     onOpenChange?.(false);
   }
 
+  const headerTitle = surfaceMode === "setup" ? "Truth Studio" : "Operator Support";
+  const headerSummary =
+    surfaceMode === "setup"
+      ? s(
+          clientAssistant.summary,
+          "Start from one source, confirm the next missing field, then approve business truth."
+        )
+      : "Ask about setup posture, channels, truth, inbox, comments, or voice.";
+
+  const containerStyle = pageMode
+    ? {
+        position: "relative",
+        right: "auto",
+        bottom: "auto",
+        width: "100%",
+        zIndex: "auto",
+      }
+    : undefined;
+  const panelStyle = pageMode
+    ? {
+        position: "relative",
+        right: "auto",
+        bottom: "auto",
+        width: "100%",
+        maxWidth: "none",
+        height: "100%",
+        minHeight: "720px",
+      }
+    : undefined;
+
   return (
-    <>
-      <style>{styles}</style>
-
-      <div
-        ref={rootRef}
-        className="ai-widget-root"
-        style={
-          pageMode
-            ? {
-                position: "relative",
-                right: "auto",
-                bottom: "auto",
-                width: "100%",
-                zIndex: "auto",
-              }
-            : undefined
-        }
-      >
-        {panelOpen ? (
-          <section
-            className="ai-widget-panel"
-            role={pageMode ? "region" : "dialog"}
-            aria-modal={pageMode ? undefined : "false"}
-            aria-label={pageMode ? "Setup workspace" : "AI assistant"}
-            style={
-              pageMode
-                ? {
-                    position: "relative",
-                    right: "auto",
-                    bottom: "auto",
-                    width: "100%",
-                    maxWidth: "none",
-                    height: "100%",
-                    minHeight: "720px",
-                    animation: "none",
-                  }
-                : undefined
-            }
-          >
-            <div className="ai-widget-header">
-              <div className="ai-widget-header-top">
-                <div className="ai-widget-title">
-                  {surfaceMode === "setup" ? "Setup" : "Support"}
+    <div
+      ref={rootRef}
+      className="fixed bottom-[22px] right-[22px] z-[92]"
+      style={containerStyle}
+    >
+      {panelOpen ? (
+        <section
+          className="absolute bottom-[78px] right-0 h-[min(780px,calc(100vh-116px))] w-[min(468px,calc(100vw-26px))] overflow-hidden border border-line bg-white shadow-[0_24px_64px_rgba(15,23,42,0.18)]"
+          role={pageMode ? "region" : "dialog"}
+          aria-modal={pageMode ? undefined : "false"}
+          aria-label={pageMode ? "Setup workspace" : "AI assistant"}
+          style={panelStyle}
+        >
+          <div className="border-b border-line bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))] px-4 py-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-text-muted">
+                  AI HQ
                 </div>
-
-                {!pageMode ? (
-                  <button
-                    type="button"
-                    onClick={() => onOpenChange?.(false)}
-                    className="ai-widget-close"
-                    aria-label="Close AI assistant"
-                  >
-                    <X className="h-4 w-4" strokeWidth={2} />
-                  </button>
-                ) : null}
+                <div className="mt-1 text-[20px] font-semibold tracking-[-0.03em] text-text">
+                  {headerTitle}
+                </div>
+                <div className="mt-1 text-[12px] leading-5 text-text-muted">
+                  {headerSummary}
+                </div>
               </div>
 
-              <div className="ai-widget-switch">
+              {!pageMode ? (
                 <button
                   type="button"
-                  className={`ai-widget-switch-btn ${
-                    surfaceMode === "setup" ? "active" : ""
-                  }`}
-                  onClick={() => setSurfaceMode("setup")}
+                  onClick={() => onOpenChange?.(false)}
+                  className="inline-flex h-8 w-8 items-center justify-center border border-line bg-white text-text-muted"
+                  aria-label="Close AI assistant"
                 >
-                  <Sparkles className="h-4 w-4" strokeWidth={2.05} />
-                  <span>Setup</span>
+                  <X className="h-4 w-4" strokeWidth={2} />
                 </button>
-
-                <button
-                  type="button"
-                  className={`ai-widget-switch-btn ${
-                    surfaceMode === "support" ? "active" : ""
-                  }`}
-                  onClick={() => setSurfaceMode("support")}
-                >
-                  <LifeBuoy className="h-4 w-4" strokeWidth={2.05} />
-                  <span>Support</span>
-                </button>
-              </div>
+              ) : null}
             </div>
 
-            <div className="ai-widget-body">
-              {surfaceMode === "setup" ? (
-                <SetupAssistantSections
-                  assistant={clientAssistant}
-                  reviewPayload={reviewQuery.data}
-                  saving={saving}
-                  finalizing={finalizing}
-                  importingWebsite={importingWebsite}
-                  importError={importError}
-                  onImportWebsite={handleImportWebsite}
-                  onPatchDraft={handleSetupPatchDraft}
-                  onParseMessage={handleSetupParseMessage}
-                  onFinalize={handleSetupFinalize}
-                />
-              ) : (
-                <SupportThread
-                  messages={supportMessages}
-                  busy={supportBusy}
-                  input={supportInput}
-                  onInputChange={setSupportInput}
-                  onSend={handleSupportSend}
-                  onAction={handleSupportAction}
-                />
-              )}
-            </div>
-          </section>
-        ) : null}
+            <div className="mt-4 inline-flex items-center gap-1 border border-line bg-surface p-1">
+              <button
+                type="button"
+                className={`inline-flex h-8 items-center gap-1.5 px-3 text-[12px] font-bold ${
+                  surfaceMode === "setup"
+                    ? "bg-slate-900 text-white"
+                    : "text-text-muted"
+                }`}
+                onClick={() => setSurfaceMode("setup")}
+              >
+                <Sparkles className="h-4 w-4" strokeWidth={2.05} />
+                <span>Setup</span>
+              </button>
 
-        {!pageMode && !panelOpen ? (
-          <button
-            type="button"
-            onClick={() => onOpenChange?.(true)}
-            aria-label="Open AI assistant"
-            aria-expanded={false}
-            className="ai-widget-launcher"
-          >
-            <span className="ai-widget-launcher-core" />
-            <span className="ai-widget-launcher-badge" />
-            <LauncherGlyph />
-          </button>
-        ) : null}
-      </div>
-    </>
+              <button
+                type="button"
+                className={`inline-flex h-8 items-center gap-1.5 px-3 text-[12px] font-bold ${
+                  surfaceMode === "support"
+                    ? "bg-slate-900 text-white"
+                    : "text-text-muted"
+                }`}
+                onClick={() => setSurfaceMode("support")}
+              >
+                <LifeBuoy className="h-4 w-4" strokeWidth={2.05} />
+                <span>Support</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="h-[calc(100%-120px)] min-h-0">
+            {surfaceMode === "setup" ? (
+              <SetupAssistantSections
+                assistant={clientAssistant}
+                reviewPayload={reviewQuery.data}
+                saving={saving}
+                finalizing={finalizing}
+                capturingSource={capturingSource}
+                errorMessage={setupError}
+                onCaptureSource={handleSetupCaptureSource}
+                onPatchDraft={handleSetupPatchDraft}
+                onParseMessage={handleSetupParseMessage}
+                onFinalize={handleSetupFinalize}
+              />
+            ) : (
+              <SupportThread
+                messages={supportMessages}
+                busy={supportBusy}
+                input={supportInput}
+                onInputChange={setSupportInput}
+                onSend={handleSupportSend}
+                onAction={handleSupportAction}
+              />
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {!pageMode && !panelOpen ? (
+        <button
+          type="button"
+          onClick={() => onOpenChange?.(true)}
+          aria-label="Open AI assistant"
+          aria-expanded={false}
+          className="relative h-[62px] w-[62px] border-0 p-0"
+        >
+          <span className="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_30%_28%,rgba(255,255,255,0.24),transparent_42%),linear-gradient(160deg,rgba(15,23,42,0.98),rgba(30,41,59,0.98))] shadow-[0_18px_42px_rgba(15,23,42,0.28)]" />
+          <span className="absolute inset-[-5px] rounded-full border border-slate-900/10" />
+          <span className="relative flex h-full w-full items-center justify-center text-white">
+            <Bot className="h-6 w-6" strokeWidth={2.05} />
+          </span>
+        </button>
+      ) : null}
+    </div>
   );
 }

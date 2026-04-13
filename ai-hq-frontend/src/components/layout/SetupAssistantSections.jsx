@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { SendHorizontal } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowRight, Check, LoaderCircle } from "lucide-react";
 import SetupReviewActivationPanel from "./SetupReviewActivationPanel.jsx";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
+}
+
+function lower(value, fallback = "") {
+  return s(value, fallback).toLowerCase();
 }
 
 function arr(value, fallback = []) {
@@ -16,1058 +20,669 @@ function obj(value, fallback = {}) {
     : fallback;
 }
 
-function n(value, fallback = 0) {
-  const next = Number(value);
-  return Number.isFinite(next) ? next : fallback;
+function compactText(value, max = 120) {
+  const text = s(value).replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length <= max ? text : `${text.slice(0, max - 1).trim()}...`;
 }
 
-function uid(prefix = "id") {
-  return `${prefix}-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+function listPreview(items = [], max = 3) {
+  const safe = arr(items).map((item) => compactText(item, 60)).filter(Boolean);
+  if (!safe.length) return "";
+  if (safe.length <= max) return safe.join(", ");
+  return `${safe.slice(0, max).join(", ")} +${safe.length - max}`;
 }
 
-const STEP_ORDER = [
-  "company",
-  "description",
-  "website",
-  "services",
-  "hours",
-  "pricing",
-  "contacts",
-  "handoff",
-];
-
-const REQUIRED_STEPS = [
-  "company",
-  "description",
-  "website",
-  "services",
-  "hours",
-  "pricing",
-  "contacts",
+const SOURCE_OPTIONS = [
+  {
+    key: "website",
+    label: "Website",
+    placeholder: "https://example.com",
+    actionLabel: "Pull website",
+  },
+  {
+    key: "instagram",
+    label: "Instagram",
+    placeholder: "https://instagram.com/brand",
+    actionLabel: "Use source",
+  },
+  {
+    key: "facebook",
+    label: "Facebook",
+    placeholder: "https://facebook.com/page",
+    actionLabel: "Use source",
+  },
+  {
+    key: "google_maps",
+    label: "Google Maps",
+    placeholder: "https://maps.google.com/...",
+    actionLabel: "Pull map",
+  },
+  {
+    key: "manual",
+    label: "Note",
+    placeholder:
+      "Business name: Luna Smile Studio\nDescription: Cosmetic dentistry in Baku\nHours: Mon-Fri 09:00-18:00",
+    actionLabel: "Use note",
+    multiline: true,
+  },
 ];
 
 const STEP_META = {
   company: {
-    question: "What is the business name?",
-    helper: "Keep it exact.",
-    placeholder: "e.g. Neox Company",
+    label: "Business name",
+    prompt: "Confirm the legal or public business name.",
+    placeholder: "Luna Smile Studio",
     options: [],
   },
   description: {
-    question: "What does the business mainly do?",
-    helper: "One clean sentence is enough.",
-    placeholder:
-      "e.g. AI automation, chatbot systems, and workflow solutions for businesses.",
+    label: "Short description",
+    prompt: "Store one sentence that explains what the business actually does.",
+    placeholder: "Cosmetic dentistry, implants, whitening, and family care in Baku.",
     options: [],
   },
   website: {
-    question: "What is the main website?",
-    helper: "This becomes a truth anchor later.",
-    placeholder: "e.g. https://neox.az",
+    label: "Website",
+    prompt: "Confirm the main website used as public truth.",
+    placeholder: "https://lunasmile.az",
     options: [],
   },
   services: {
-    question: "What services should AI talk about?",
-    helper: "List only the real ones.",
-    placeholder:
-      "e.g. AI chatbot setup, automation consulting, WhatsApp integration",
+    label: "Services",
+    prompt: "Capture the services AI is allowed to mention.",
+    placeholder: "Smile design, implants, whitening, consultation",
     options: [],
   },
   hours: {
-    question: "When is the business open?",
-    helper: "Use a clear weekly format.",
-    placeholder:
-      "e.g. Mon-Fri 09:00-18:00, Sat 10:00-14:00, Sun closed",
-    options: [
-      {
-        id: "hours-1",
-        label: "Mon-Fri 09:00-18:00",
-        value: "Mon-Fri 09:00-18:00",
-      },
-      { id: "hours-2", label: "24/7", value: "24/7" },
-      {
-        id: "hours-3",
-        label: "Appointment only",
-        value: "Appointment only",
-      },
-    ],
+    label: "Opening hours",
+    prompt: "Store the hours exactly as customers should hear them.",
+    placeholder: "Mon-Fri 09:00-18:00, Sat 10:00-14:00, Sun closed",
+    options: ["Mon-Fri 09:00-18:00", "24/7", "Appointment only"],
   },
   pricing: {
-    question: "What is safe to say about pricing?",
-    helper: "Public summary or quote rule.",
-    placeholder: "e.g. Starts from 50 AZN. Exact prices require a quote.",
+    label: "Pricing posture",
+    prompt: "State only what is safe to say publicly about pricing.",
+    placeholder: "Consultation from 30 AZN. Exact treatment pricing requires a quote.",
     options: [
-      {
-        id: "pricing-1",
-        label: "Quote required",
-        value: "Exact prices require a quote.",
-      },
-      {
-        id: "pricing-2",
-        label: "Starts from 50 AZN",
-        value: "Starts from 50 AZN. Exact prices require a quote.",
-      },
-      {
-        id: "pricing-3",
-        label: "Operator handles pricing",
-        value: "Pricing should be handled by an operator.",
-      },
+      "Exact pricing requires a quote.",
+      "Consultation from 30 AZN. Exact treatment pricing requires a quote.",
+      "Pricing should be handled by an operator.",
     ],
   },
   contacts: {
-    question: "Where should AI send customers?",
-    helper: "Add the real public contact routes.",
-    placeholder: "e.g. +994..., WhatsApp link, hello@company.com",
+    label: "Contact routes",
+    prompt: "Confirm the public routes customers should be sent to.",
+    placeholder: "+994 50 555 12 12, hello@lunasmile.az, WhatsApp",
     options: [],
   },
   handoff: {
-    question: "When should AI escalate to a human?",
-    helper: "Optional but useful.",
-    placeholder:
-      "e.g. Complaints, urgent requests, custom quotes, payment issues",
+    label: "Handoff rules",
+    prompt: "State when AI must hand the conversation to a human.",
+    placeholder: "Complaints, urgent requests, treatment-specific quotes, payment issues",
     options: [
-      {
-        id: "handoff-1",
-        label: "Complaints",
-        value: "Complaints should be escalated to a human.",
-      },
-      {
-        id: "handoff-2",
-        label: "Custom quotes",
-        value: "Custom quotes should be escalated to a human.",
-      },
-      {
-        id: "handoff-3",
-        label: "Urgent requests",
-        value: "Urgent requests should be escalated to a human.",
-      },
+      "Complaints should be escalated to a human.",
+      "Custom quotes should be escalated to a human.",
+      "Urgent requests should be escalated to a human.",
     ],
   },
-};
-
-const CLARIFIERS = {
-  company: {
-    text: "I still need the exact business name.",
-    helper: "Example: Neox Company",
+  finalize: {
+    label: "Approval",
+    prompt: "Approve business truth once the structured draft is clean.",
+    placeholder: "",
+    options: [],
   },
-  description: {
-    text: "I still need a clearer short description.",
-    helper: "Example: AI automation and chatbot systems for businesses.",
-  },
-  website: {
-    text: "I still need the website in a clearer form.",
-    helper: "Example: https://neox.az",
-  },
-  services: {
-    text: "I still need the service list in a clearer form.",
-    helper:
-      "Example: AI chatbot setup, automation consulting, WhatsApp integration",
-  },
-  hours: {
-    text: "I still need opening hours in a clearer format.",
-    helper:
-      "Example: Mon-Fri 09:00-18:00, Sat 10:00-14:00, Sun closed",
-  },
-  pricing: {
-    text: "I still need a pricing rule I can safely store.",
-    helper: "Example: Starts from 50 AZN. Exact prices require a quote.",
-  },
-  contacts: {
-    text: "I still need at least one real contact route.",
-    helper: "Example: +994..., WhatsApp link, hello@company.com",
-  },
-  handoff: {
-    text: "I still need clearer escalation rules.",
-    helper: "Example: Complaints, urgent requests, payment issues",
-  },
-};
-
-const STEP_LABELS = {
-  company: "business name",
-  description: "business description",
-  website: "main website",
-  services: "services",
-  hours: "opening hours",
-  pricing: "pricing rule",
-  contacts: "public contact routes",
-  handoff: "handoff rules",
 };
 
 function normalizeStep(value = "") {
-  const key = s(value).toLowerCase();
+  const key = lower(value);
+  if (!key) return "";
   if (key === "profile") return "company";
-  if (STEP_ORDER.includes(key)) return key;
-  return "";
+  if (key === "contact") return "contacts";
+  return key;
 }
 
-function buildAssistantLike(response = {}) {
+function buildMetrics(assistant = {}, reviewPayload = null) {
+  const summary = obj(assistant.setupSummary);
+  const reviewRoot = obj(reviewPayload?.review || reviewPayload);
+  const sectionStatus = obj(summary.sectionStatus);
+  const readySections = Object.values(sectionStatus).filter(
+    (item) => lower(item?.status) === "ready"
+  ).length;
+  const blockerCount = Number(
+    summary.blockerCount ?? assistant.review?.blockerCount ?? reviewRoot.blockerCount ?? 0
+  );
+
   return {
-    session: obj(response.session),
-    draft: obj(response.setup?.draft),
-    assistant: obj(response.setup?.assistant),
-    websitePrefill: obj(response.setup?.websitePrefill),
-    review: obj(response.setup?.review),
-    setupSummary: obj(response.setup?.summary),
+    readySections,
+    blockerCount,
+    sectionCount: Object.keys(sectionStatus).length || 8,
   };
 }
 
 function buildHoursSummary(hours = []) {
-  const count = arr(hours).filter(
+  const active = arr(hours).filter(
     (item) =>
       item?.enabled === true ||
       item?.allDay === true ||
-      item?.appointmentOnly === true
-  ).length;
-
-  return count ? `${count} day${count > 1 ? "s" : ""} configured` : "";
-}
-
-function stepAnswered(step = "", assistantState = {}) {
-  const profile = obj(assistantState?.draft?.businessProfile);
-  const services = arr(assistantState?.draft?.services);
-  const hours = arr(assistantState?.draft?.hours);
-  const pricing = obj(assistantState?.draft?.pricingPosture);
-  const contacts = arr(assistantState?.draft?.contacts);
-  const handoff = obj(assistantState?.draft?.handoffRules);
-
-  switch (step) {
-    case "company":
-      return Boolean(s(profile.companyName));
-    case "description":
-      return Boolean(s(profile.description));
-    case "website":
-      return Boolean(s(profile.websiteUrl));
-    case "services":
-      return services.length > 0;
-    case "hours":
-      return Boolean(buildHoursSummary(hours));
-    case "pricing":
-      return Boolean(s(pricing.pricingMode) && s(pricing.publicSummary));
-    case "contacts":
-      return contacts.length > 0;
-    case "handoff":
-      return Boolean(
-        handoff.enabled === true ||
-          s(handoff.summary) ||
-          arr(handoff.triggers).length > 0
-      );
-    default:
-      return false;
-  }
-}
-
-function hasAnyProgress(assistantState = {}) {
-  return STEP_ORDER.some((step) => stepAnswered(step, assistantState));
-}
-
-function countReadySectionsFromStatus(sectionStatus = {}) {
-  return Object.values(obj(sectionStatus)).filter(
-    (item) => s(item?.status).toLowerCase() === "ready"
-  ).length;
-}
-
-function getNormalizedReviewRoot(reviewPayload = null) {
-  const reviewPayloadObj = obj(reviewPayload);
-  return obj(reviewPayloadObj.review, reviewPayloadObj);
-}
-
-function buildProgressSnapshot(assistantState = {}, reviewPayload = null) {
-  const draft = obj(assistantState?.draft);
-  const draftProgress = obj(draft.progress);
-  const setupSummary = obj(assistantState?.setupSummary);
-  const reviewRoot = getNormalizedReviewRoot(reviewPayload);
-  const reviewObj = obj(assistantState?.review);
-
-  const answeredCount = STEP_ORDER.filter((step) =>
-    stepAnswered(step, assistantState)
-  ).length;
-  const missingRequiredCount = REQUIRED_STEPS.filter(
-    (step) => !stepAnswered(step, assistantState)
-  ).length;
-
-  const sectionStatus = obj(setupSummary.sectionStatus);
-  const hasSectionStatus = Object.keys(sectionStatus).length > 0;
-  const derivedReadyFromSummary = hasSectionStatus
-    ? countReadySectionsFromStatus(sectionStatus)
-    : -1;
-
-  const explicitReadySections = n(
-    setupSummary.readySections,
-    n(
-      reviewObj.readySections,
-      n(reviewRoot.readySections, n(draftProgress.readySections, -1))
-    )
+      item?.appointmentOnly === true ||
+      item?.closed === true ||
+      s(item?.notes)
   );
 
-  const explicitBlockerCount = n(
-    setupSummary.blockerCount,
-    n(
-      reviewObj.blockerCount,
-      n(reviewRoot.blockerCount, n(draftProgress.blockerCount, -1))
-    )
+  if (!active.length) return "";
+
+  return listPreview(
+    active.map((item) => {
+      if (item.allDay) return `${item.day} 24 hours`;
+      if (item.appointmentOnly) return `${item.day} appointment only`;
+      if (item.closed) return `${item.day} closed`;
+      if (s(item.notes)) return `${item.day} ${item.notes}`;
+      return `${item.day} ${s(item.openTime)}-${s(item.closeTime)}`;
+    }),
+    2
   );
+}
+
+function buildPricingSummary(pricing = {}) {
+  const source = obj(pricing);
+  return compactText(
+    source.publicSummary || source.note || source.summary || source.pricingMode,
+    120
+  );
+}
+
+function buildContactsSummary(contacts = []) {
+  return listPreview(
+    arr(contacts).map((item) => s(item.label || item.type || item.value || item.channel)),
+    3
+  );
+}
+
+function buildHandoffSummary(handoff = {}) {
+  const source = obj(handoff);
+  return compactText(
+    source.summary || arr(source.triggers).join(", ") || source.escalationTarget,
+    120
+  );
+}
+
+function buildCurrentSource(assistant = {}, reviewPayload = null) {
+  const sourceMetadata = obj(assistant.draft?.sourceMetadata);
+  const bundleSources = arr(reviewPayload?.bundleSources);
+  const primaryBundle =
+    bundleSources.find((item) => lower(item.role) === "primary") || bundleSources[0];
+  const sourceType =
+    lower(primaryBundle?.sourceType || sourceMetadata.primarySourceType) || "manual";
+  const sourceUrl =
+    s(primaryBundle?.sourceUrl || sourceMetadata.primarySourceUrl) ||
+    s(assistant.websitePrefill?.websiteUrl);
+  const sourceLabel =
+    s(primaryBundle?.label || arr(sourceMetadata.sourceLabels)[0]) ||
+    (sourceType === "google_maps"
+      ? "Google Maps"
+      : sourceType === "instagram"
+        ? "Instagram"
+        : sourceType === "facebook_page" || sourceType === "facebook"
+          ? "Facebook"
+          : sourceType === "manual"
+            ? "Operator note"
+            : "Website");
 
   return {
-    answeredCount,
-    missingRequiredCount,
-    readySections:
-      explicitReadySections >= 0
-        ? explicitReadySections
-        : derivedReadyFromSummary >= 0
-          ? derivedReadyFromSummary
-          : answeredCount,
-    blockerCount:
-      explicitBlockerCount >= 0 ? explicitBlockerCount : missingRequiredCount,
+    type: sourceType,
+    label: sourceLabel,
+    url: sourceUrl,
+    insight: arr(sourceMetadata.evidenceSummary)[0] || "",
   };
 }
 
-function buildProgressHelper(assistantState = {}, reviewPayload = null) {
-  const snapshot = buildProgressSnapshot(assistantState, reviewPayload);
-
-  if (!hasAnyProgress(assistantState)) {
-    return "";
-  }
-
-  if (snapshot.blockerCount <= 0) {
-    return snapshot.readySections > 0
-      ? `${snapshot.readySections} sections already look captured. You can review the last details when ready.`
-      : "An existing draft is available.";
-  }
-
-  return `${snapshot.readySections} sections already look captured. ${snapshot.blockerCount} blocker${
-    snapshot.blockerCount > 1 ? "s remain" : " remains"
-  }.`;
-}
-
-function getNaturalStep(assistantState = {}) {
-  const completion = obj(assistantState?.assistant?.completion);
-  if (completion.ready === true) return "finalize";
-
-  const nextQuestion = obj(assistantState?.assistant?.nextQuestion);
-  const nextKey = normalizeStep(nextQuestion.key);
-
-  if (nextKey && !stepAnswered(nextKey, assistantState)) {
-    return nextKey;
-  }
-
-  const firstMissingRequired = REQUIRED_STEPS.find(
-    (step) => !stepAnswered(step, assistantState)
-  );
-  if (firstMissingRequired) return firstMissingRequired;
-
-  if (!stepAnswered("handoff", assistantState)) return "handoff";
-
-  return "finalize";
-}
-
-function buildQuestionSignature(
-  assistantState = {},
-  reviewPayload = null,
-  step = ""
-) {
-  const sessionId = s(assistantState?.session?.id || "default");
-  const version = Number(assistantState?.draft?.version || 0);
-  const snapshot = buildProgressSnapshot(assistantState, reviewPayload);
+function buildTruthRows(assistant = {}) {
+  const draft = obj(assistant.draft);
+  const profile = obj(draft.businessProfile);
 
   return [
-    "question",
-    sessionId,
-    version,
-    step,
-    snapshot.readySections,
-    snapshot.blockerCount,
-    snapshot.answeredCount,
-  ].join(":");
+    {
+      key: "company",
+      label: "Business name",
+      value: s(profile.companyName),
+      step: "company",
+    },
+    {
+      key: "description",
+      label: "Short description",
+      value: compactText(profile.description, 140),
+      step: "description",
+    },
+    {
+      key: "website",
+      label: "Website",
+      value: s(profile.websiteUrl),
+      step: "website",
+    },
+    {
+      key: "services",
+      label: "Services",
+      value: listPreview(arr(draft.services).map((item) => s(item.title || item.name || item.label)), 3),
+      step: "services",
+    },
+    {
+      key: "hours",
+      label: "Opening hours",
+      value: buildHoursSummary(draft.hours),
+      step: "hours",
+    },
+    {
+      key: "pricing",
+      label: "Pricing posture",
+      value: buildPricingSummary(draft.pricingPosture),
+      step: "pricing",
+    },
+    {
+      key: "contacts",
+      label: "Contact routes",
+      value: buildContactsSummary(draft.contacts),
+      step: "contacts",
+    },
+    {
+      key: "handoff",
+      label: "Handoff rules",
+      value: buildHandoffSummary(draft.handoffRules),
+      step: "handoff",
+    },
+  ];
 }
 
-function buildFinalizeSignature(assistantState = {}, reviewPayload = null) {
-  const sessionId = s(assistantState?.session?.id || "default");
-  const version = Number(assistantState?.draft?.version || 0);
-  const snapshot = buildProgressSnapshot(assistantState, reviewPayload);
-
-  return [
-    "finalize",
-    sessionId,
-    version,
-    snapshot.readySections,
-    snapshot.blockerCount,
-    snapshot.answeredCount,
-  ].join(":");
-}
-
-function buildWelcomeMessage(assistantState = {}, reviewPayload = null) {
-  if (hasAnyProgress(assistantState)) {
-    const snapshot = buildProgressSnapshot(assistantState, reviewPayload);
-    const helper =
-      buildProgressHelper(assistantState, reviewPayload) ||
-      `${snapshot.readySections} sections already look captured.`;
-
-    return {
-      id: uid("assistant"),
-      role: "assistant",
-      text:
-        snapshot.blockerCount > 0
-          ? "I found your current setup draft. Ready to continue?"
-          : "I found your current setup draft. Ready to review the final details?",
-      helper,
-      options: [
-        { id: "continue", label: "Continue setup", kind: "start" },
-        { id: "later", label: "Maybe later", kind: "later" },
-      ],
-      kind: "welcome",
-    };
+function getDominantStep(assistant = {}) {
+  const completion = obj(assistant.assistant?.completion);
+  if (completion.ready === true || assistant.review?.readyForReview === true) {
+    return "finalize";
   }
 
-  return {
-    id: uid("assistant"),
-    role: "assistant",
-    text: "Ready to set up your business now?",
-    helper: "",
-    options: [
-      { id: "start", label: "Start setup", kind: "start" },
-      { id: "later", label: "Maybe later", kind: "later" },
-    ],
-    kind: "welcome",
-  };
+  const nextQuestion = normalizeStep(assistant.assistant?.nextQuestion?.key);
+  if (nextQuestion && STEP_META[nextQuestion]) return nextQuestion;
+
+  const firstMissing = buildTruthRows(assistant).find((row) => !s(row.value));
+  return firstMissing?.step || "finalize";
 }
 
-function buildPauseMessage() {
-  return {
-    id: uid("assistant"),
-    role: "assistant",
-    text: "Okay. Say start whenever you want to continue.",
-    helper: "",
-    options: [{ id: "resume", label: "Start setup", kind: "start" }],
-    kind: "pause",
-  };
-}
+function getSourcePrefill(type = "", assistant = {}, reviewPayload = null) {
+  const currentSource = buildCurrentSource(assistant, reviewPayload);
+  const profile = obj(assistant.draft?.businessProfile);
 
-function buildResumeQuestionMeta(
-  step = "",
-  assistantState = {},
-  reviewPayload = null
-) {
-  const progressHelper = buildProgressHelper(assistantState, reviewPayload);
-  const baseHelper = s(STEP_META[step]?.helper);
-  const mergedHelper = [progressHelper, baseHelper].filter(Boolean).join(" ");
-
-  switch (step) {
-    case "company":
-      return {
-        question: "Let’s continue with the business name.",
-        helper: mergedHelper || "Keep it exact.",
-      };
-    case "description":
-      return {
-        question: "Let’s continue with the business description.",
-        helper: mergedHelper || "One clean sentence is enough.",
-      };
-    case "website":
-      return {
-        question: "Let’s continue with the main website.",
-        helper: mergedHelper || "This becomes a truth anchor later.",
-      };
-    case "services":
-      return {
-        question: "Let’s continue with the real services AI should mention.",
-        helper: mergedHelper || "List only the real ones.",
-      };
-    case "hours":
-      return {
-        question: "Let’s continue with the opening hours.",
-        helper: mergedHelper || "Use a clear weekly format.",
-      };
-    case "pricing":
-      return {
-        question: "Let’s continue with the safe pricing rule.",
-        helper: mergedHelper || "Public summary or quote rule.",
-      };
-    case "contacts":
-      return {
-        question: "Let’s continue with the public contact routes.",
-        helper: mergedHelper || "Add the real public contact routes.",
-      };
-    case "handoff":
-      return {
-        question: "Let’s continue with the handoff rules.",
-        helper: mergedHelper || "Optional but useful.",
-      };
-    default:
-      return {
-        question: `Let’s continue with ${STEP_LABELS[step] || "the next detail"}.`,
-        helper: mergedHelper,
-      };
+  if (type === "website") {
+    return (
+      s(assistant.websitePrefill?.websiteUrl) ||
+      s(profile.websiteUrl) ||
+      (currentSource.type === "website" ? currentSource.url : "")
+    );
   }
+
+  if (type === "google_maps" && currentSource.type === "google_maps") {
+    return currentSource.url;
+  }
+
+  if (
+    (type === "instagram" && currentSource.type === "instagram") ||
+    (type === "facebook" &&
+      ["facebook", "facebook_page"].includes(currentSource.type))
+  ) {
+    return currentSource.url;
+  }
+
+  return "";
 }
 
-function buildQuestionMessage(
-  step = "",
-  assistantState = {},
-  reviewPayload = null
-) {
-  const meta = STEP_META[step] || STEP_META.company;
-  const resumeAware =
-    hasAnyProgress(assistantState) && stepAnswered(step, assistantState) === false;
-  const questionMeta = resumeAware
-    ? buildResumeQuestionMeta(step, assistantState, reviewPayload)
-    : meta;
+function SourceInput({
+  option,
+  value,
+  busy,
+  onChange,
+  onSubmit,
+}) {
+  if (option.multiline) {
+    return (
+      <textarea
+        rows={4}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={option.placeholder}
+        className="min-h-[108px] w-full resize-none border border-line bg-white px-3 py-2 text-[13px] leading-6 text-text outline-none placeholder:text-text-subtle"
+      />
+    );
+  }
 
-  return {
-    id: uid("assistant"),
-    role: "assistant",
-    text: questionMeta.question,
-    helper: questionMeta.helper,
-    options: arr(meta.options),
-    step,
-    kind: "question",
-  };
-}
-
-function buildClarifierMessage(step = "") {
-  const item = CLARIFIERS[step] || CLARIFIERS.company;
-  return {
-    id: uid("assistant"),
-    role: "assistant",
-    text: item.text,
-    helper: item.helper,
-    options: [],
-    step,
-    kind: "clarifier",
-  };
-}
-
-function buildFinalizeMessage(assistantState = {}, reviewPayload = null) {
-  const completion = obj(assistantState?.assistant?.completion);
-  const progressHelper = buildProgressHelper(assistantState, reviewPayload);
-
-  return {
-    id: uid("assistant"),
-    role: "assistant",
-    text: s(completion.message, "Setup looks complete. Finish now?"),
-    helper: progressHelper,
-    options: [{ id: "finish", label: "Finish setup", kind: "finish" }],
-    kind: "finalize",
-  };
-}
-
-function isAffirmative(value = "") {
-  return /^(yes|yeah|yep|ok|okay|start|continue|bəli|hə|hazıram|başla)$/i.test(
-    s(value)
-  );
-}
-
-function isNegative(value = "") {
-  return /^(no|nah|later|not now|skip|yox|sonra)$/i.test(s(value));
-}
-
-function TypingBubble() {
   return (
-    <div className="ai-row assistant">
-      <div className="ai-typing-bubble" aria-hidden="true">
-        <span className="ai-typing-dot" />
-        <span className="ai-typing-dot" />
-        <span className="ai-typing-dot" />
-      </div>
+    <div className="flex items-center gap-2">
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={option.placeholder}
+        className="h-11 w-full border border-line bg-white px-3 text-[13px] text-text outline-none placeholder:text-text-subtle"
+      />
+      <button
+        type="button"
+        onClick={onSubmit}
+        disabled={!s(value) || busy}
+        className="inline-flex h-11 shrink-0 items-center gap-1.5 bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+      >
+        {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+        <span>{option.actionLabel}</span>
+      </button>
     </div>
   );
 }
 
-function scrollThread(container, top, behavior = "auto") {
-  if (!container) return;
-
-  if (typeof container.scrollTo === "function") {
-    container.scrollTo({ top, behavior });
-    return;
-  }
-
-  container.scrollTop = top;
-}
-
-function MessageRow({ message, index, busy, onOptionClick }) {
-  const isUser = message.role === "user";
-  const options = arr(message.options);
-
-  return (
-    <div
-      className={`ai-row ${isUser ? "user" : "assistant"}`}
-      style={{ animationDelay: `${Math.min(index * 34, 170)}ms` }}
-    >
-      <div className={`ai-bubble ${isUser ? "user" : "assistant"}`}>
-        <div className="ai-bubble-text">{message.text}</div>
-
-        {s(message.helper) ? (
-          <div className="ai-bubble-helper">{message.helper}</div>
-        ) : null}
-
-        {!isUser && options.length ? (
-          <div className="ai-quick-row">
-            {options.map((option) => (
-              <button
-                key={`${message.id}-${option.id}`}
-                type="button"
-                className="ai-quick-chip"
-                onClick={() => onOptionClick(option, s(message.step).toLowerCase())}
-                disabled={busy}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function SetupAssistantSession({
+export default function SetupAssistantSections({
   assistant,
   reviewPayload = null,
   saving = false,
   finalizing = false,
-  importingWebsite = false,
-  importError = "",
-  onImportWebsite,
+  capturingSource = false,
+  errorMessage = "",
+  onCaptureSource,
   onParseMessage,
   onFinalize,
 }) {
-  const scrollRef = useRef(null);
-  const askedRef = useRef(new Set());
-  const introShownRef = useRef(false);
-  const typingFrameRef = useRef(null);
-  const messageTimerRef = useRef(null);
-  const initialReviewScrollRef = useRef(false);
-
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
-  const [started, setStarted] = useState(false);
-  const [paused, setPaused] = useState(false);
-  const [typing, setTyping] = useState(false);
+  const metrics = useMemo(
+    () => buildMetrics(assistant, reviewPayload),
+    [assistant, reviewPayload]
+  );
+  const currentSource = useMemo(
+    () => buildCurrentSource(assistant, reviewPayload),
+    [assistant, reviewPayload]
+  );
+  const truthRows = useMemo(() => buildTruthRows(assistant), [assistant]);
+  const [sourceMode, setSourceMode] = useState("website");
+  const [sourceInput, setSourceInput] = useState("");
+  const [focusStep, setFocusStep] = useState("");
+  const [answerInput, setAnswerInput] = useState("");
   const [localError, setLocalError] = useState("");
 
-  const busy = saving || finalizing || importingWebsite;
-  const currentStep = started && !paused ? getNaturalStep(assistant) : "";
-  const canFinalize = currentStep === "finalize";
-  const normalizedReviewRoot = getNormalizedReviewRoot(reviewPayload);
-  const hasWebsiteReview =
-    Object.keys(obj(obj(obj(normalizedReviewRoot).reviewDebug).websiteKnowledge))
-      .length > 0;
-  const websiteUrl = s(
-    assistant?.websitePrefill?.websiteUrl ||
-      assistant?.draft?.businessProfile?.websiteUrl
-  );
-  const showWebsiteImportCard =
-    Boolean(websiteUrl) && !hasWebsiteReview && typeof onImportWebsite === "function";
-  const composerError = s(localError || importError);
-
-  const latestVisibleQuestionStep = [...messages]
-    .reverse()
-    .find(
-      (item) =>
-        item?.role === "assistant" &&
-        (item?.kind === "question" || item?.kind === "clarifier") &&
-        s(item?.step)
-    )?.step;
-
-  const activePromptStep =
-    s(latestVisibleQuestionStep).toLowerCase() ||
-    s(currentStep).toLowerCase();
-
-  const clearQueuedAssistant = useCallback(() => {
-    if (
-      typingFrameRef.current != null &&
-      typeof window !== "undefined" &&
-      typeof window.cancelAnimationFrame === "function"
-    ) {
-      window.cancelAnimationFrame(typingFrameRef.current);
-      typingFrameRef.current = null;
-    }
-
-    if (messageTimerRef.current != null) {
-      window.clearTimeout(messageTimerRef.current);
-      messageTimerRef.current = null;
-    }
-  }, []);
-
-  const queueAssistantMessage = useCallback(
-    (message, signature, delay = 420) => {
-      if (!message || !signature) return;
-      if (askedRef.current.has(signature)) return;
-
-      askedRef.current.add(signature);
-      clearQueuedAssistant();
-
-      if (
-        typeof window !== "undefined" &&
-        typeof window.requestAnimationFrame === "function"
-      ) {
-        typingFrameRef.current = window.requestAnimationFrame(() => {
-          setTyping(true);
-          typingFrameRef.current = null;
-        });
-      } else {
-        messageTimerRef.current = window.setTimeout(() => {
-          setTyping(true);
-        }, 0);
-      }
-
-      messageTimerRef.current = window.setTimeout(() => {
-        setMessages((current) => [...current, message]);
-        setTyping(false);
-        messageTimerRef.current = null;
-      }, delay);
-    },
-    [clearQueuedAssistant]
-  );
+  const busy = saving || finalizing || capturingSource;
+  const activeStep = focusStep || getDominantStep(assistant);
+  const activeMeta = STEP_META[activeStep] || STEP_META.company;
+  const sourceOption =
+    SOURCE_OPTIONS.find((item) => item.key === sourceMode) || SOURCE_OPTIONS[0];
+  const blockersLine = arr(assistant.assistant?.confirmationBlockers)
+    .slice(0, 3)
+    .map((item) => s(item.label || item.title))
+    .filter(Boolean)
+    .join(", ");
 
   useEffect(() => {
-    return () => {
-      clearQueuedAssistant();
-    };
-  }, [clearQueuedAssistant]);
+    setSourceInput(getSourcePrefill(sourceMode, assistant, reviewPayload));
+  }, [assistant, reviewPayload, sourceMode]);
 
-  useEffect(() => {
-    if (introShownRef.current) return;
-    introShownRef.current = true;
-
-    queueAssistantMessage(
-      buildWelcomeMessage(assistant, reviewPayload),
-      `welcome:${hasAnyProgress(assistant) ? "continue" : "start"}`,
-      520
-    );
-  }, [assistant, reviewPayload, queueAssistantMessage]);
-
-  useEffect(() => {
-    if (!started || paused || busy || canFinalize) return;
-    if (!currentStep) return;
-
-    queueAssistantMessage(
-      buildQuestionMessage(currentStep, assistant, reviewPayload),
-      buildQuestionSignature(assistant, reviewPayload, currentStep),
-      360
-    );
-  }, [
-    started,
-    paused,
-    busy,
-    canFinalize,
-    currentStep,
-    assistant,
-    reviewPayload,
-    queueAssistantMessage,
-  ]);
-
-  useEffect(() => {
-    if (!started || paused || busy || !canFinalize) return;
-
-    queueAssistantMessage(
-      buildFinalizeMessage(assistant, reviewPayload),
-      buildFinalizeSignature(assistant, reviewPayload),
-      360
-    );
-  }, [
-    started,
-    paused,
-    busy,
-    canFinalize,
-    assistant,
-    reviewPayload,
-    queueAssistantMessage,
-  ]);
-
-  useEffect(() => {
-    if (!scrollRef.current) return;
-
-    if (hasWebsiteReview && (!initialReviewScrollRef.current || !started)) {
-      scrollThread(scrollRef.current, 0, "auto");
-      initialReviewScrollRef.current = true;
-      return;
-    }
-
-    scrollThread(scrollRef.current, scrollRef.current.scrollHeight, "smooth");
-  }, [messages, typing, busy, hasWebsiteReview, started]);
-
-  async function handleSetupAnswer(rawText, forcedStep = "") {
-    const text = s(rawText);
-    const step = s(forcedStep || activePromptStep || currentStep).toLowerCase();
-
-    if (!text || !step || step === "finalize" || busy) return;
-
+  async function handleSourceSubmit() {
+    if (!s(sourceInput) || busy) return;
     setLocalError("");
-
-    setMessages((current) => [
-      ...current,
-      {
-        id: uid("user"),
-        role: "user",
-        text,
-      },
-    ]);
-    setInput("");
-
     try {
-      const response = await onParseMessage?.({
-        step,
-        text,
-      });
-
-      const nextAssistant = buildAssistantLike(response);
-      const nextReviewPayload = obj(response?.setup?.review, reviewPayload);
-
-      if (!stepAnswered(step, nextAssistant)) {
-        queueAssistantMessage(
-          buildClarifierMessage(step),
-          uid(`clarifier-${step}`),
-          260
-        );
-        return;
-      }
-
-      const nextStep = getNaturalStep(nextAssistant);
-
-      if (nextStep === "finalize") {
-        queueAssistantMessage(
-          buildFinalizeMessage(nextAssistant, nextReviewPayload),
-          buildFinalizeSignature(nextAssistant, nextReviewPayload),
-          260
-        );
-        return;
-      }
-
-      if (nextStep && nextStep !== step) {
-        queueAssistantMessage(
-          buildQuestionMessage(nextStep, nextAssistant, nextReviewPayload),
-          buildQuestionSignature(nextAssistant, nextReviewPayload, nextStep),
-          260
-        );
+      await onCaptureSource?.({ type: sourceMode, value: sourceInput });
+      if (sourceMode === "manual") {
+        setFocusStep(getDominantStep(assistant));
       }
     } catch (error) {
-      const reason = s(
-        error?.message,
-        "The answer could not be processed. Please try again."
-      );
-      setLocalError(reason);
-      queueAssistantMessage(
-        {
-          id: uid("assistant"),
-          role: "assistant",
-          text: reason,
-          helper: "",
-          options: [],
-          kind: "error",
-        },
-        uid("error"),
-        200
-      );
+      setLocalError(s(error?.message, "Source intake failed."));
     }
   }
 
-  async function handleStartFromUser(rawText = "") {
-    const text = s(rawText);
-
-    if (!text) return;
-
-    if (isNegative(text)) {
-      setMessages((current) => [
-        ...current,
-        {
-          id: uid("user"),
-          role: "user",
-          text,
-        },
-      ]);
-      setPaused(true);
-      queueAssistantMessage(buildPauseMessage(), uid("pause"), 250);
-      setInput("");
-      return;
-    }
-
-    if (isAffirmative(text)) {
-      setMessages((current) => [
-        ...current,
-        {
-          id: uid("user"),
-          role: "user",
-          text,
-        },
-      ]);
-      setStarted(true);
-      setPaused(false);
-      setInput("");
-      return;
-    }
-
-    setStarted(true);
-    setPaused(false);
-    await handleSetupAnswer(
-      text,
-      hasAnyProgress(assistant) ? getNaturalStep(assistant) : "company"
-    );
-  }
-
-  async function handleOptionClick(option = {}, optionStep = "") {
-    const kind = s(option.kind).toLowerCase();
-
-    if (kind === "start") {
-      await handleStartFromUser(option.label || "Start setup");
-      return;
-    }
-
-    if (kind === "later") {
-      await handleStartFromUser(option.label || "Maybe later");
-      return;
-    }
-
-    if (kind === "finish") {
-      if (busy) return;
-
-      setMessages((current) => [
-        ...current,
-        {
-          id: uid("user"),
-          role: "user",
-          text: option.label || "Finish setup",
-        },
-      ]);
-
-      try {
-        await onFinalize?.();
-        queueAssistantMessage(
-          {
-            id: uid("assistant"),
-            role: "assistant",
-            text:
-              "Setup finished. Approved truth and strict runtime were refreshed.",
-            helper: "",
-            options: [],
-            kind: "done",
-          },
-          uid("done"),
-          260
-        );
-      } catch (error) {
-        setLocalError(s(error?.message, "Setup could not be finalized."));
-      }
-      return;
-    }
-
-    if (s(option.value)) {
-      await handleSetupAnswer(
-        option.value,
-        s(optionStep || option.step || activePromptStep).toLowerCase()
-      );
-    }
-  }
-
-  async function handleComposerSubmit() {
-    const text = s(input);
+  async function handleAnswerSubmit(value = answerInput) {
+    const text = s(value);
     if (!text || busy) return;
-
-    if (!started || paused) {
-      await handleStartFromUser(text);
-      return;
+    setLocalError("");
+    try {
+      await onParseMessage?.({
+        step: activeStep,
+        text,
+      });
+      setAnswerInput("");
+      setFocusStep("");
+    } catch (error) {
+      setLocalError(s(error?.message, "The draft could not be updated."));
     }
-
-    if (canFinalize && isAffirmative(text)) {
-      await handleOptionClick({ kind: "finish", label: text });
-      return;
-    }
-
-    await handleSetupAnswer(text);
   }
 
-  const placeholder = !started
-    ? "Reply here..."
-    : paused
-      ? "Type start whenever you're ready..."
-      : STEP_META[activePromptStep]?.placeholder || "Type your answer...";
+  async function handleFinalize() {
+    if (busy) return;
+    setLocalError("");
+    try {
+      await onFinalize?.();
+    } catch (error) {
+      setLocalError(s(error?.message, "Business truth could not be approved."));
+    }
+  }
 
   return (
-    <div className="ai-thread-wrap">
-      <div ref={scrollRef} className="ai-thread-scroll">
-        <div className="ai-thread-stack">
-          {showWebsiteImportCard ? (
-            <section className="rounded-panel border border-line bg-surface px-4 py-3">
-              <div className="text-[12px] font-semibold text-text">
-                Scan the website into this draft
-              </div>
-              <div className="mt-1 text-[12px] leading-5 text-text-muted">
-                Import the current website into the same setup review before final truth approval.
-              </div>
-              <div className="mt-3 flex items-center gap-2">
-                <button
-                  type="button"
-                  className="ai-quick-chip"
-                  onClick={() => onImportWebsite?.(websiteUrl)}
-                  disabled={busy}
-                >
-                  {importingWebsite ? "Scanning website..." : "Scan website"}
-                </button>
-                <span className="text-[11px] text-text-subtle">{websiteUrl}</span>
-              </div>
-            </section>
-          ) : null}
+    <div className="flex h-full min-h-0 flex-col bg-white">
+      <div className="border-b border-line px-4 py-4">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-text-muted">
+              Business truth
+            </div>
+            <div className="mt-1 text-[18px] font-semibold tracking-[-0.03em] text-text">
+              Source-first intake
+            </div>
+          </div>
 
-          {hasWebsiteReview ? (
-            <SetupReviewActivationPanel
-              reviewPayload={reviewPayload}
-              assistantReview={assistant?.review}
-              onFinalize={onFinalize}
-              finalizing={finalizing}
-            />
-          ) : null}
+          <div className="text-right">
+            <div className="text-[18px] font-semibold tracking-[-0.03em] text-text">
+              {metrics.readySections}/{metrics.sectionCount}
+            </div>
+            <div className="text-[11px] uppercase tracking-[0.12em] text-text-muted">
+              ready
+            </div>
+          </div>
+        </div>
 
-          {messages.map((message, index) => (
-            <MessageRow
-              key={message.id}
-              message={message}
-              index={index}
-              busy={busy}
-              onOptionClick={handleOptionClick}
-            />
+        <div className="mt-4 flex flex-wrap gap-2">
+          {SOURCE_OPTIONS.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              className={`inline-flex h-8 items-center px-2.5 text-[12px] font-semibold ${
+                sourceMode === option.key
+                  ? "bg-slate-900 text-white"
+                  : "border border-line bg-surface text-text-muted"
+              }`}
+              onClick={() => {
+                setSourceMode(option.key);
+                setLocalError("");
+              }}
+            >
+              {option.label}
+            </button>
           ))}
+        </div>
 
-          {typing || busy ? <TypingBubble /> : null}
+        <div className="mt-4 border border-line bg-surface px-3 py-3">
+          <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-text-muted">
+                Active source
+              </div>
+              <div className="mt-1 text-[13px] font-semibold text-text">
+                {currentSource.label}
+              </div>
+            </div>
+
+            {s(currentSource.url) ? (
+              <div className="max-w-[55%] truncate text-[12px] text-text-muted">
+                {currentSource.url}
+              </div>
+            ) : null}
+          </div>
+
+          {s(currentSource.insight) ? (
+            <div className="pt-3 text-[12px] leading-5 text-text-muted">
+              {currentSource.insight}
+            </div>
+          ) : null}
+
+          <div className="pt-3">
+            <SourceInput
+              option={sourceOption}
+              value={sourceInput}
+              busy={capturingSource}
+              onChange={setSourceInput}
+              onSubmit={handleSourceSubmit}
+            />
+          </div>
         </div>
       </div>
 
-      <div className="ai-composer">
-        {composerError ? (
-          <div className="mb-3 rounded-panel border border-[rgba(var(--color-danger),0.18)] bg-danger-soft px-3 py-2.5 text-[12px] leading-5 text-danger">
-            {composerError}
+      <div className="flex-1 overflow-auto px-4 pb-6 pt-4">
+        {s(localError || errorMessage) ? (
+          <div className="border border-[rgba(var(--color-danger),0.18)] bg-danger-soft px-3 py-2 text-[12px] leading-5 text-danger">
+            {localError || errorMessage}
           </div>
         ) : null}
 
-        <div className="ai-composer-shell">
-          <textarea
-            rows={1}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                handleComposerSubmit();
-              }
-            }}
-            placeholder={placeholder}
-            className="ai-composer-input"
-          />
+        <SetupReviewActivationPanel
+          reviewPayload={reviewPayload}
+          assistantReview={assistant.review}
+          onFinalize={onFinalize ? handleFinalize : undefined}
+          finalizing={finalizing}
+        />
 
-          <button
-            type="button"
-            onClick={handleComposerSubmit}
-            disabled={!s(input) || busy}
-            className="ai-send-btn"
-            aria-label="Send setup reply"
-          >
-            <SendHorizontal className="h-4 w-4" strokeWidth={2.1} />
-          </button>
-        </div>
+        <section className="border-b border-line py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-text-muted">
+                Now confirming
+              </div>
+              <div className="mt-1 text-[16px] font-semibold tracking-[-0.02em] text-text">
+                {activeMeta.label}
+              </div>
+              <div className="mt-1 text-[12px] leading-5 text-text-muted">
+                {activeMeta.prompt}
+              </div>
+            </div>
+
+            {metrics.blockerCount > 0 ? (
+              <div className="text-right">
+                <div className="text-[16px] font-semibold tracking-[-0.02em] text-text">
+                  {metrics.blockerCount}
+                </div>
+                <div className="text-[11px] uppercase tracking-[0.12em] text-text-muted">
+                  open
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          {s(blockersLine) ? (
+            <div className="mt-3 text-[12px] leading-5 text-text-muted">
+              Waiting on: {blockersLine}
+            </div>
+          ) : null}
+
+          {activeStep === "finalize" ? (
+            <div className="mt-4 flex items-center justify-between gap-3 border border-line bg-surface px-3 py-3">
+              <div className="text-[13px] leading-6 text-text">
+                Approve business truth and refresh the governed runtime.
+              </div>
+              <button
+                type="button"
+                onClick={handleFinalize}
+                disabled={busy}
+                className="inline-flex h-10 items-center gap-1.5 bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {finalizing ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                <span>Approve truth</span>
+              </button>
+            </div>
+          ) : (
+            <>
+              {activeMeta.options.length ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {activeMeta.options.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      disabled={busy}
+                      className="inline-flex h-8 items-center border border-line bg-white px-2.5 text-[12px] font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45"
+                      onClick={() => handleAnswerSubmit(option)}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="mt-4 flex items-end gap-2">
+                <textarea
+                  rows={3}
+                  value={answerInput}
+                  onChange={(event) => setAnswerInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      handleAnswerSubmit();
+                    }
+                  }}
+                  placeholder={activeMeta.placeholder}
+                  className="min-h-[88px] w-full resize-none border border-line bg-white px-3 py-2 text-[13px] leading-6 text-text outline-none placeholder:text-text-subtle"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleAnswerSubmit()}
+                  disabled={!s(answerInput) || busy}
+                  className="inline-flex h-11 shrink-0 items-center gap-1.5 bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                  <span>Store</span>
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+
+        <section className="py-4">
+          <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-text-muted">
+            Draft ledger
+          </div>
+          <div className="mt-3 border border-line">
+            {truthRows.map((row) => {
+              const filled = Boolean(s(row.value));
+              const active = row.step === activeStep;
+
+              return (
+                <button
+                  key={row.key}
+                  type="button"
+                  onClick={() => setFocusStep(row.step)}
+                  className={`flex w-full items-start justify-between gap-4 border-b border-line px-3 py-3 text-left last:border-b-0 ${
+                    active ? "bg-surface" : "bg-white"
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-text-muted">
+                      {row.label}
+                    </div>
+                    <div className="mt-1 text-[13px] leading-6 text-text">
+                      {row.value || "Pending"}
+                    </div>
+                  </div>
+
+                  <div className="mt-[2px] shrink-0">
+                    {filled ? (
+                      <span className="inline-flex h-7 w-7 items-center justify-center border border-line bg-surface text-text">
+                        <Check className="h-3.5 w-3.5" />
+                      </span>
+                    ) : (
+                      <span className="inline-flex h-7 items-center gap-1 text-[12px] font-semibold text-text-muted">
+                        <span>Edit</span>
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
       </div>
     </div>
   );
-}
-
-export default function SetupAssistantSections(props) {
-  const sessionKey = s(props?.assistant?.session?.id || "setup-session");
-  return <SetupAssistantSession key={sessionKey} {...props} />;
 }

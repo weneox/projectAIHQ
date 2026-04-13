@@ -9,100 +9,67 @@ function createReviewPayload() {
     review: {
       draft: {
         businessProfile: {
+          companyName: "Luna Smile Studio",
+          description:
+            "Cosmetic dentistry, implants, whitening, and family care in Baku.",
+          websiteUrl: "https://lunasmile.az",
           primaryPhone: "+994 50 555 12 12",
           primaryEmail: "hello@lunasmile.az",
           primaryAddress: "14 Nizami Street, Baku",
           hours: ["Mon-Fri 09:00-18:00"],
-          pricingPolicy: "Consultation-first pricing with quoted treatment plans.",
+          pricingPolicy:
+            "Consultation from 30 AZN. Exact treatment pricing requires a quote.",
         },
-        knowledgeItems: [
-          {
-            category: "faq",
-            title: "Do you offer weekend appointments?",
-          },
+        services: [
+          { title: "Smile design" },
+          { title: "Dental implants" },
+          { title: "Teeth whitening" },
         ],
+        sourceSummary: {
+          primarySourceType: "website",
+          primarySourceUrl: "https://lunasmile.az",
+        },
       },
       fieldProvenance: {
+        companyName: {
+          sourceType: "website",
+          label: "Website",
+          observedValue: "Luna Smile Studio",
+        },
         primaryPhone: {
           sourceType: "website",
-          sourceUrl: "https://lunasmile.az/contact",
-        },
-        services: {
-          sourceType: "website",
-          sourceUrl: "https://lunasmile.az/services",
+          label: "Website",
+          observedValue: "+994 50 555 12 12",
         },
       },
       reviewDebug: {
         websiteKnowledge: {
-          finalUrl: "https://lunasmile.az",
           pageCount: 4,
-          artifactCount: 5,
-          siteQuality: {
-            score: 82,
-            band: "strong",
-          },
-          chunkCount: 24,
-          pageTypeCounts: {
-            home: 1,
-            services: 1,
-            pricing: 1,
-            contact: 1,
-          },
-          coverage: {
-            pagesRequested: 6,
-            pagesSucceeded: 4,
-            pagesKept: 4,
-          },
-          signalCounts: {
-            services: 4,
-            faqItems: 1,
-            pricingHints: 1,
-            policies: 1,
-            contactSignals: 3,
-          },
-          draftSections: {
-            summaryShort:
-              "Luna Smile Studio is a Baku dental clinic focused on cosmetic dentistry, implants, whitening, and family care.",
-            servicesDraft: [
-              "Smile design",
-              "Dental implants",
-              "Teeth whitening",
-            ],
-            faqQuestions: ["Do you offer weekend appointments?"],
-            policyHighlights: [
-              "Please notify us 24 hours in advance for treatment changes.",
-            ],
-            pricingHints: ["Consultation from 30 AZN."],
-          },
           topPages: [
             {
               url: "https://lunasmile.az/services",
               title: "Services",
               pageType: "services",
-              serviceHintCount: 4,
-            },
-            {
-              url: "https://lunasmile.az/pricing",
-              title: "Pricing",
-              pageType: "pricing",
-              pricingHintCount: 2,
             },
             {
               url: "https://lunasmile.az/contact",
               title: "Contact",
               pageType: "contact",
-              contactSignalCount: 3,
-              hourCount: 1,
             },
           ],
-          pageAdmissions: [{ url: "https://lunasmile.az/contact", admitted: true }],
         },
       },
     },
-    reviewDraftSummary: {
-      websitePageCount: 4,
-      websiteArtifactCount: 5,
-    },
+    bundleSources: [
+      {
+        sourceId: "source-1",
+        sourceType: "website",
+        role: "primary",
+        label: "Main website",
+        sourceUrl: "https://lunasmile.az",
+        observationCount: 18,
+      },
+    ],
     permissions: {
       setupReviewFinalize: {
         allowed: true,
@@ -117,7 +84,7 @@ function createReviewPayload() {
 }
 
 describe("SetupReviewActivationPanel", () => {
-  it("renders a compact website review summary, sections, and top pages", () => {
+  it("renders a serious business truth review with sources, fields, and evidence", () => {
     const onFinalize = vi.fn();
 
     render(
@@ -128,27 +95,22 @@ describe("SetupReviewActivationPanel", () => {
     );
 
     expect(
-      screen.getByRole("region", { name: "Website knowledge review" })
+      screen.getByRole("region", { name: "Business truth review" })
     ).toBeInTheDocument();
-    expect(screen.getByText("Website draft")).toBeInTheDocument();
-    expect(screen.getByText("What the site seems to mean")).toBeInTheDocument();
-    expect(screen.getByText("Strong")).toBeInTheDocument();
-    expect(screen.getByText("Draft sections")).toBeInTheDocument();
-    expect(screen.getByText("Top pages")).toBeInTheDocument();
-    expect(screen.getByText(/Smile design/i)).toBeInTheDocument();
-    expect(screen.getByText(/Do you offer weekend appointments/i)).toBeInTheDocument();
-    expect(screen.getAllByText("Services").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Pricing").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Contact").length).toBeGreaterThan(0);
+    expect(screen.getByText("Approve business truth")).toBeInTheDocument();
+    expect(screen.getByText("Main website")).toBeInTheDocument();
+    expect(screen.getByText("Business name")).toBeInTheDocument();
+    expect(screen.getAllByText(/Luna Smile Studio/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Website evidence").length).toBeGreaterThan(0);
     expect(
-      screen.getByRole("button", { name: "Finish setup" })
+      screen.getByRole("button", { name: "Approve truth" })
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Finish setup" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve truth" }));
     expect(onFinalize).toHaveBeenCalledTimes(1);
   });
 
-  it("stays hidden when website-derived review data is absent", () => {
+  it("stays hidden when review material is absent", () => {
     const { container } = render(
       <SetupReviewActivationPanel
         reviewPayload={{
@@ -162,30 +124,37 @@ describe("SetupReviewActivationPanel", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("does not dump raw debug keys into the operator view", () => {
-    render(<SetupReviewActivationPanel reviewPayload={createReviewPayload()} />);
-
-    expect(screen.queryByText(/pageAdmissions/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/chunkCount/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/signalCounts/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/reviewDebug/i)).not.toBeInTheDocument();
-  });
-
-  it("uses the existing setup review state for finalize readiness", () => {
-    const reviewPayload = createReviewPayload();
-    delete reviewPayload.setup;
-    delete reviewPayload.permissions;
-
+  it("supports non-website review payloads as long as truth rows exist", () => {
     render(
       <SetupReviewActivationPanel
-        reviewPayload={reviewPayload}
-        assistantReview={{ finalizeAvailable: true }}
-        onFinalize={() => {}}
+        reviewPayload={{
+          review: {
+            draft: {
+              businessProfile: {
+                companyName: "Manual Clinic",
+                description: "Walk-in care and appointments.",
+              },
+              sourceSummary: {
+                primarySourceType: "manual",
+              },
+            },
+          },
+        }}
       />
     );
 
     expect(
-      screen.getByRole("button", { name: "Finish setup" })
+      screen.getByRole("region", { name: "Business truth review" })
     ).toBeInTheDocument();
+    expect(screen.getByText("Operator note")).toBeInTheDocument();
+    expect(screen.getByText("Manual Clinic")).toBeInTheDocument();
+  });
+
+  it("does not dump raw debug keys into the operator view", () => {
+    render(<SetupReviewActivationPanel reviewPayload={createReviewPayload()} />);
+
+    expect(screen.queryByText(/reviewDebug/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/pageCount/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/topPages/i)).not.toBeInTheDocument();
   });
 });

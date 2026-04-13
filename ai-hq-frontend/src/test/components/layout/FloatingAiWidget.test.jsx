@@ -6,17 +6,22 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 
 import FloatingAiWidget from "../../../components/layout/FloatingAiWidget.jsx";
 import {
+  analyzeSetupIntake,
   getCurrentSetupAssistantSession,
   getCurrentSetupReview,
+  importGoogleMapsForSetup,
   importWebsiteForSetup,
+  updateCurrentSetupAssistantDraft,
 } from "../../../api/setup.js";
 
 const useWorkspaceTenantKey = vi.fn();
 
 vi.mock("../../../api/setup.js", () => ({
+  analyzeSetupIntake: vi.fn(),
   finalizeSetupAssistantSession: vi.fn(),
   getCurrentSetupAssistantSession: vi.fn(),
   getCurrentSetupReview: vi.fn(),
+  importGoogleMapsForSetup: vi.fn(),
   importWebsiteForSetup: vi.fn(),
   sendSetupAssistantMessage: vi.fn(),
   startSetupAssistantSession: vi.fn(),
@@ -36,11 +41,11 @@ vi.mock("../../../hooks/useWorkspaceTenantKey.js", () => ({
 function createAssistant(overrides = {}) {
   return {
     mode: "setup",
-    title: "Structured setup",
+    title: "Truth studio",
     statusLabel: "In progress",
-    summary: "Confirm the draft before anything reaches approved truth.",
+    summary: "Approve business truth after source intake and confirmation.",
     primaryAction: {
-      label: "Open AI setup",
+      label: "Open setup",
       path: "/home?assistant=setup",
     },
     secondaryAction: {
@@ -49,8 +54,8 @@ function createAssistant(overrides = {}) {
     },
     review: {
       message: "Draft work stays separate from approved truth until review.",
-      readyForReview: true,
-      finalizeAvailable: true,
+      readyForReview: false,
+      finalizeAvailable: false,
     },
     launchPosture: "setup_needed",
     setupNeeded: true,
@@ -80,12 +85,15 @@ function createAssistant(overrides = {}) {
     },
     assistant: {
       nextQuestion: {
-        key: "profile",
+        key: "company",
       },
-      confirmationBlockers: [],
+      confirmationBlockers: [
+        { label: "Business name" },
+        { label: "Short description" },
+      ],
       sections: [],
       completion: {
-        ready: true,
+        ready: false,
       },
       servicesCatalog: {
         items: [],
@@ -109,56 +117,56 @@ function createWebsiteReviewPayload() {
     review: {
       draft: {
         businessProfile: {
+          companyName: "Luna Smile Studio",
+          description:
+            "Cosmetic dentistry, implants, whitening, and family care in Baku.",
+          websiteUrl: "https://lunasmile.az",
           primaryPhone: "+994 50 555 12 12",
           primaryEmail: "hello@lunasmile.az",
           primaryAddress: "14 Nizami Street, Baku",
           hours: ["Mon-Fri 09:00-18:00"],
+          pricingPolicy:
+            "Consultation from 30 AZN. Exact treatment pricing requires a quote.",
+        },
+        services: [
+          { title: "Smile design" },
+          { title: "Dental implants" },
+        ],
+        sourceSummary: {
+          primarySourceType: "website",
+          primarySourceUrl: "https://lunasmile.az",
         },
       },
       reviewDebug: {
         websiteKnowledge: {
-          finalUrl: "https://lunasmile.az",
           pageCount: 4,
-          artifactCount: 5,
-          coverage: {
-            pagesRequested: 6,
-            pagesSucceeded: 4,
-            pagesKept: 4,
-          },
-          siteQuality: {
-            score: 82,
-            band: "strong",
-          },
-          pageTypeCounts: {
-            home: 1,
-            services: 1,
-            pricing: 1,
-            contact: 1,
-          },
-          draftSections: {
-            summaryShort:
-              "Luna Smile Studio is a Baku dental clinic focused on cosmetic dentistry, implants, whitening, and family care.",
-            servicesDraft: ["Smile design", "Dental implants"],
-            pricingHints: ["Consultation from 30 AZN."],
-          },
           topPages: [
             {
               url: "https://lunasmile.az/services",
               title: "Services",
               pageType: "services",
-              serviceHintCount: 4,
-            },
-            {
-              url: "https://lunasmile.az/contact",
-              title: "Contact",
-              pageType: "contact",
-              contactSignalCount: 3,
-              hourCount: 1,
             },
           ],
         },
       },
+      fieldProvenance: {
+        companyName: {
+          sourceType: "website",
+          label: "Website",
+          observedValue: "Luna Smile Studio",
+        },
+      },
     },
+    bundleSources: [
+      {
+        sourceId: "source-1",
+        sourceType: "website",
+        role: "primary",
+        label: "Main website",
+        sourceUrl: "https://lunasmile.az",
+        observationCount: 18,
+      },
+    ],
     permissions: {
       setupReviewFinalize: {
         allowed: true,
@@ -260,9 +268,22 @@ describe("FloatingAiWidget", () => {
       },
     });
     vi.mocked(importWebsiteForSetup).mockResolvedValue({ ok: true });
+    vi.mocked(importGoogleMapsForSetup).mockResolvedValue({ ok: true });
+    vi.mocked(analyzeSetupIntake).mockResolvedValue({ ok: true });
+    vi.mocked(updateCurrentSetupAssistantDraft).mockResolvedValue({
+      session: { id: "session-1" },
+      setup: {
+        draft: {
+          sourceMetadata: {
+            primarySourceType: "instagram",
+            primarySourceUrl: "https://instagram.com/lunasmile",
+          },
+        },
+      },
+    });
   });
 
-  it("opens the assistant and loads the website review scene when review data exists", async () => {
+  it("opens the assistant and loads the business truth review when review data exists", async () => {
     vi.mocked(getCurrentSetupReview).mockResolvedValue(createWebsiteReviewPayload());
 
     renderWidget();
@@ -274,11 +295,10 @@ describe("FloatingAiWidget", () => {
     ).toBeInTheDocument();
 
     expect(
-      await screen.findByRole("region", { name: "Website knowledge review" })
+      await screen.findByRole("region", { name: "Business truth review" })
     ).toBeInTheDocument();
-    expect(screen.getByText("What the site seems to mean")).toBeInTheDocument();
-    expect(screen.getByText("Top pages")).toBeInTheDocument();
-    expect(screen.getAllByText("Services").length).toBeGreaterThan(0);
+    expect(screen.getByText("Approve business truth")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve truth" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Close AI assistant" }));
 
@@ -289,8 +309,8 @@ describe("FloatingAiWidget", () => {
     });
   });
 
-  it("keeps the website review scene hidden when no website knowledge is available", async () => {
-    renderWidget();
+  it("keeps the review surface hidden when no review material is available", async () => {
+    renderWidget(createAssistant({ websitePrefill: { supported: true, status: "awaiting_input", websiteUrl: "" } }));
 
     fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
 
@@ -299,11 +319,11 @@ describe("FloatingAiWidget", () => {
     });
 
     expect(
-      screen.queryByRole("region", { name: "Website knowledge review" })
+      screen.queryByRole("region", { name: "Business truth review" })
     ).not.toBeInTheDocument();
   });
 
-  it("scans the website from the setup widget and refreshes the review payload", async () => {
+  it("pulls the website from the source rail and refreshes the review payload", async () => {
     vi.mocked(getCurrentSetupReview)
       .mockResolvedValueOnce({
         review: {
@@ -317,10 +337,10 @@ describe("FloatingAiWidget", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
 
     expect(
-      await screen.findByRole("button", { name: "Scan website" })
+      await screen.findByDisplayValue("https://lunasmile.az")
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Scan website" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pull website" }));
 
     await waitFor(() =>
       expect(importWebsiteForSetup).toHaveBeenCalledWith({
@@ -331,8 +351,62 @@ describe("FloatingAiWidget", () => {
     );
 
     expect(
-      await screen.findByRole("region", { name: "Website knowledge review" })
+      await screen.findByRole("region", { name: "Business truth review" })
     ).toBeInTheDocument();
+  });
+
+  it("supports google maps as a first source inside the widget", async () => {
+    renderWidget();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+    fireEvent.click(screen.getByRole("button", { name: "Google Maps" }));
+    fireEvent.change(screen.getByPlaceholderText("https://maps.google.com/..."), {
+      target: { value: "https://maps.google.com/?cid=123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Pull map" }));
+
+    await waitFor(() =>
+      expect(importGoogleMapsForSetup).toHaveBeenCalledWith({
+        url: "https://maps.google.com/?cid=123",
+        allowSessionReuse: true,
+        waitForCompletion: true,
+      })
+    );
+  });
+
+  it("captures instagram intake through the existing analyze flow", async () => {
+    renderWidget();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
+    fireEvent.click(screen.getByRole("button", { name: "Instagram" }));
+    fireEvent.change(
+      screen.getByPlaceholderText("https://instagram.com/brand"),
+      {
+        target: { value: "https://instagram.com/lunasmile" },
+      }
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Use source" }));
+
+    await waitFor(() =>
+      expect(updateCurrentSetupAssistantDraft).toHaveBeenCalledWith({
+        sourceMetadata: {
+          primarySourceType: "instagram",
+          primarySourceUrl: "https://instagram.com/lunasmile",
+          sourceLabels: ["Instagram"],
+          evidenceSummary: ["Instagram supplied by operator"],
+        },
+      })
+    );
+
+    await waitFor(() =>
+      expect(analyzeSetupIntake).toHaveBeenCalledWith({
+        manualText: "Instagram: https://instagram.com/lunasmile",
+        answers: {
+          instagramUrl: "https://instagram.com/lunasmile",
+        },
+        note: "instagram source",
+      })
+    );
   });
 
   it("does not reuse setup-review cache across workspaces", async () => {
@@ -433,7 +507,7 @@ describe("FloatingAiWidget", () => {
     });
   });
 
-  it("drops stale setup session content while the widget switches tenants", async () => {
+  it("drops stale setup content while the widget switches tenants", async () => {
     const queryClient = createQueryClient();
     const nextSessionPromise = new Promise(() => {});
     const nextReviewPromise = new Promise(() => {});
@@ -459,8 +533,7 @@ describe("FloatingAiWidget", () => {
       open: true,
     });
 
-    expect(await screen.findByText("https://lunasmile.az")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Scan website" })).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("https://lunasmile.az")).toBeInTheDocument();
 
     useWorkspaceTenantKey.mockReturnValue({
       tenantKey: "globex",
@@ -474,7 +547,7 @@ describe("FloatingAiWidget", () => {
 
     view.rerenderWidget(
       createAssistant({
-        title: "Loading AI setup",
+        title: "Loading setup studio",
         statusLabel: "Loading",
         summary: "Loading the current workspace setup state.",
         session: {},
@@ -503,9 +576,8 @@ describe("FloatingAiWidget", () => {
       expect(getCurrentSetupAssistantSession).toHaveBeenCalledTimes(2);
     });
 
-    expect(screen.queryByText("https://lunasmile.az")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Scan website" })
+      screen.queryByDisplayValue("https://lunasmile.az")
     ).not.toBeInTheDocument();
   });
 });
