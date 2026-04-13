@@ -1,0 +1,888 @@
+{
+  "nav.home": "Ana səhifə",
+  "nav.about": "Haqqımızda",
+  "nav.services": "Xidmətlər",
+  "nav.useCases": "Ssenarilər",
+  "nav.blog": "Resurslar",
+  "nav.contact": "Əlaqə",
+
+  "common": {
+    "close": "Bağla"
+  },
+
+  "home": {
+    "cta": {
+      "start": "Başlayaq →",
+      "how": "Necə işləyir →",
+      "demo": "Demo quraq →"
+    },
+    "hero": {
+      "kicker": "NEOX / AI AVTOMASİYA",
+      "title": { "line1": "AI sənin", "line2": "əməliyyatını idarə edir." },
+      "sub": "AI agentlər və workflow-larla satış, dəstək və ops proseslərini avtomatlaşdırırıq — daha az manual iş, daha çox sürət."
+    },
+    "strip": {
+      "aria": "Terminal zolağı",
+      "ticks": [
+        "AI AGENLƏR",
+        "WORKFLOW AVTOMASİYA",
+        "CRM OPS",
+        "MÜŞTƏRİ DƏSTƏYİ",
+        "SMM AVTOMASİYA",
+        "ANALİTİKA",
+        "İNTEQRASİYALAR",
+        "LEAD TOPLAMA",
+        "SATIŞ OPS",
+        "TICKET ROUTING",
+        "KONTENT MOTORU",
+        "RPA + API",
+        "DASHBOARD",
+        "AUDIT LOGS"
+      ]
+    },
+    "social": {
+      "aria": "Sosial avtomasiya",
+      "kicker": "NEOX / SOSİAL AVTOMASİYA",
+      "title": {
+        "p1": "24/7",
+        "grad1": "chatbot",
+        "p2": "mesaj axını",
+        "grad2": "satışa",
+        "p3": "çevrilir"
+      },
+      "lead": "WhatsApp Business, Facebook Messenger və Instagram DM — hamısı bir sistemdə. AI sualları cavablayır, lead toplayır, satışa yönləndirir və lazım olduqda komandana “handoff” edir.",
+      "agentName": "NEOX",
+      "clientName": { "whatsapp": "Orxan", "default": "Müştəri" },
+      "typing": "yazır…",
+      "now": "indi",
+      "threadAria": "{{platform}} mesajları",
+      "demos": {
+        "WHATSAPP": [
+          { "from": "client", "text": "Salam, çatdırılma neçə günə olur?" },
+          { "from": "ai", "text": "Salam! Bakı daxili 24 saat, bölgələr 2–3 gün. İstəsən sifariş linkini göndərim." },
+          { "from": "client", "text": "Ödəniş necədir?" },
+          { "from": "ai", "text": "Kart, köçürmə və qapıda ödəniş var. Hansı modeli seçmisiniz?" },
+          { "from": "client", "text": "iPhone 15 Pro." },
+          { "from": "ai", "text": "Əla! Rəng (Natural/Black) və yaddaş (128/256/512) seçin — linki dərhal çıxarım." }
+        ],
+        "FACEBOOK": [
+          { "from": "client", "text": "Qiymətlər hardadır? Paket var?" },
+          { "from": "ai", "text": "Bəli. 3 paket var: Start / Pro / Enterprise. Hansı sahə üçündür (shop, xidmət, klinika)?" },
+          { "from": "client", "text": "Shop üçün." },
+          { "from": "ai", "text": "Super. Start ilə 24/7 cavab + lead toplama quraq. İndi sayt linkini atın." },
+          { "from": "client", "text": "weneox.com" },
+          { "from": "ai", "text": "Aldım. 24 saat içində demo qurub nəticələri göndərəcəyik." }
+        ],
+        "INSTAGRAM": [
+          { "from": "client", "text": "Sifariş vermişəm, status nədir?" },
+          { "from": "ai", "text": "İzləmə üçün nömrənizi yazın — dərhal yoxlayım." },
+          { "from": "client", "text": "+994 50 XXX XX XX" },
+          { "from": "ai", "text": "Tapdım ✅ Kuryerə verilib. Bu gün 19:00–22:00 arası çatdırılacaq." },
+          { "from": "client", "text": "Çox sağ olun" },
+          { "from": "ai", "text": "Buyurun! İstəsən qapıda ödənişi də aktiv edim." }
+        ]
+      }
+    },
+    "pipeline": {
+      "aria": "Məlumat axını",
+      "kicker": "NECƏ İŞLƏYİR?",
+      "title": {
+        "p1": "Mesaj gəlir → intent çıxır →",
+        "grad": "CRM-ə",
+        "p2": "yazılır → satış axını başlayır"
+      },
+      "copy": "NEOX inbox mesajlarını qəbul edir, təmizləyir, intent çıxarır və lead yaradır. Sonra satış axınına yönləndirir və CRM statusunu yeniləyir.",
+      "brief": "Sürətli brif al →",
+      "platforms": { "whatsapp": "WhatsApp", "messenger": "Messenger", "instagram": "Instagram" },
+      "core": {
+        "mid": "Birləşdir • Anla • Yönləndir",
+        "bot": "Normalize → Skorla → Handoff"
+      },
+      "sinks": {
+        "crm": { "title": "CRM", "sub": "Lead qeydiyyatı", "mini": "tag • skor • status" },
+        "ops": { "title": "OPS / ANALİTİKA", "sub": "İzləmə", "mini": "SLA • konversiya • log" }
+      }
+    },
+    "smm": {
+      "aria": "SMM avtomasiya",
+      "kicker": "NEOX / SMM AVTOMASİYA",
+      "title": { "p1": "AI kontent istehsalını avtomatlaşdırır və paylaşımı", "grad": "sistemləşdirir" },
+      "copy": "Fikir → ssenari → format → paylaşım planı → ölçüm. Daha az manual iş, daha stabil nəticə.",
+      "cta": { "primary": "Kontent axınını quraq →", "secondary": "Plan soruş →" },
+      "diagram": {
+        "top": { "idea": "FİKİR", "prepare": "HAZIRLA", "publish": "PAYLAŞ" },
+        "src": { "instagram": "Reels / Story / Post", "youtube": "Shorts / Uzun", "facebook": "Səhifə / Reklam" },
+        "core": { "mid": "Kontent fabriki", "bot": "mövzu → ssenari → edit → plan" },
+        "sinks": {
+          "calendar": { "title": "Təqvim", "sub": "Vaxt / Slot" },
+          "brand": { "title": "Brend qaydaları", "sub": "ton • format • CTA" },
+          "report": { "title": "Hesabat", "sub": "baxış • lead" }
+        },
+        "foot": { "caption": "auto-caption", "hashtag": "auto-hashtag", "plan": "auto-plan", "report": "auto-hesabat" }
+      }
+    },
+    "ops": {
+      "aria": "Audit və izləmə",
+      "kicker": "NEOX / AUDIT & OPS",
+      "title": { "p1": "Workflow-u qururuq — sonra", "grad": "24/7", "p2": "izləyir və optimizə edirik" },
+      "copy": "Sistem davamlı ölçülür: SLA, konversiya, loglar, xəbərdarlıqlar və həftəlik optimizasiya planı.",
+      "cta": "Audit üçün müraciət et →",
+      "diagram": {
+        "line": { "audit": "Audit", "build": "Qur", "monitor": "İzlə" },
+        "boxes": {
+          "signals": { "k": "Siqnallar", "v": "Inbox • Form • Zəng" },
+          "core": { "v": "Avtomasiya nəzarəti", "mini": "qaydalar • routing • QA" },
+          "result": { "k": "Nəticə", "v": "Vaxt • ROI" }
+        },
+        "metrics": {
+          "sla": { "top": "SLA", "bot": "daha sürətli cavab" },
+          "quality": { "top": "Keyfiyyət", "bot": "stabil axın" },
+          "cost": { "top": "Xərc", "bot": "daha az manual iş" }
+        }
+      }
+    },
+    "final": {
+      "aria": "Biznes sistemi",
+      "kicker": "NEOX / BİZNES SİSTEMİ",
+      "title": { "p1": "Biznes sistemini quraq —", "grad1": "vaxt", "p2": "və", "grad2": "büdcə", "p3": "real qənaət" },
+      "copy": "Sən biznesə fokuslan. Biz bütün sistemi qururuq: inbox → AI cavab → lead → CRM → satış axını → ölçüm və optimizasiya.",
+      "blocks": {
+        "a": { "top": "Lead ↑", "mid": { "p1": "Daha çox", "grad": "müştəri" }, "bot": "inbox → cavab → təklif → satış" },
+        "b": { "top": "KPI + SLA", "mid": { "p1": "Ölç, izlə,", "grad": "tənzimlə", "p2": "" }, "bot": "panel • xəbərdarlıq • həftəlik optimizasiya" },
+        "c": { "top": "Ops ↓", "mid": { "p1": "Daha az", "grad": "manual", "p2": "iş" }, "bot": "routing • handoff • audit izi" }
+      },
+      "cta": { "primary": "Sistemi quraq →", "secondary": "Sürətli brif →" }
+    }
+  },
+
+  "footer": {
+    "aria": "Footer",
+    "brand": {
+      "badge": "AI AVTOMASİYA",
+      "copy": "AI agentlər və avtomasiya ilə iş axınlarını sistemləşdiririk — inbox-dan CRM-ə qədər. Daha az manual iş. Daha sürətli cavab. Daha yaxşı nəticə."
+    },
+    "contact": {
+      "aria": "Əlaqə",
+      "emailAria": "Email göndər",
+      "phoneAria": "Zəng et"
+    },
+    "social": {
+      "aria": "Sosial keçidlər",
+      "twitter": "Twitter",
+      "linkedin": "LinkedIn",
+      "github": "GitHub"
+    },
+    "company": {
+      "title": "Şirkət",
+      "links": {
+        "about": "Haqqımızda",
+        "services": "Xidmətlər",
+        "useCases": "Ssenarilər"
+      }
+    },
+    "resources": {
+      "title": "Resurslar",
+      "links": {
+        "blog": "Blog",
+        "contact": "Əlaqə",
+        "privacy": "Məxfilik siyasəti"
+      }
+    },
+    "bottom": {
+      "copy": "© {{year}} NEOX — Ağıllı avtomasiya sistemləri"
+    }
+  },
+
+  "intro": {
+    "wakeText": "Oyan, Dünya...",
+    "mainText": "NEOX sistemə daxil oldu..."
+  },
+
+  "about": {
+    "hero": {
+      "aria": "Haqqımızda hero",
+      "kicker": "NEOX / HAQQIMIZDA",
+      "title": {
+        "0": "AI-nı sadəcə ",
+        "glowNice": "gözəl görünsün",
+        "1": " deyə qurmuruq.",
+        "2": "Biz ",
+        "glowWorking": "işləyən",
+        "glowMeasurable": "ölçülən",
+        "glowControlled": "nəzarətli",
+        "3": " sistem qururuq."
+      },
+      "sub": "NEOX — AI avtomasiya və agent sistemləri studiyası. Inbox → intent → routing → CRM → ölçüm. Məqsəd: daha az manual iş, daha sürətli cavab, daha çox satış.",
+      "ctaPrimary": "Brif göndər",
+      "ctaSecondary": "Xidmətlər",
+      "chips": ["AI Agentlər", "Workflow avtomasiya", "24/7 Chatbot", "CRM əməliyyatları", "SMM avtomasiya"]
+    },
+
+    "strip": {
+      "aria": "Siqnal zolağı",
+      "foundation": "ƏSAS",
+      "agents": "AGENTLƏR",
+      "workflow": "WORKFLOW",
+      "rules": "QAYDALAR",
+      "monitoring": "İZLƏMƏ",
+      "integration": "İNTEQRASİYA",
+      "crm": "CRM",
+      "sla": "SLA"
+    },
+
+    "foundation": {
+      "aria": "Əsas",
+      "kicker": "ƏSAS",
+      "title": {
+        "0": "İşimizin əsası: ",
+        "glowSystem": "sistem",
+        "glowControl": "nəzarət",
+        "1": " və ",
+        "glowResult": "nəticə"
+      },
+      "sub": "Biz agentləri sadəcə “cavab yazan bot” kimi qurmuruq. Agent + inteqrasiya + qayda + monitorinq birlikdə qurulur.",
+      "cards": {
+        "resultFirst": {
+          "title": "Əvvəl nəticə",
+          "desc": "AI bizim üçün dekor deyil — nəticə motorudur. Hədəf: daha çox lead, daha sürətli cavab, daha az manual iş.",
+          "bullets": ["Konversiya ↑", "Manual yük ↓", "24/7 davamlılıq"]
+        },
+        "workflowEngineering": {
+          "title": "Workflow mühəndisliyi",
+          "desc": "Prosesləri xəritələyirik, dar boğazları təmizləyirik və addımları agent tapşırığına çeviririk. Axın pozulmur.",
+          "bullets": ["Xəritələmə", "Routing + handoff", "Sistemləşdirmə"]
+        },
+        "observability": {
+          "title": "İzləmə (Observability)",
+          "desc": "Sistem “qara qutu” deyil. SLA, cavab keyfiyyəti, səhv səbəbləri və konversiya paneldə — tuning data ilə edilir.",
+          "bullets": ["SLA xəbərdarlıqları", "Keyfiyyət skoru", "A/B tuning"]
+        },
+        "security": {
+          "title": "Təhlükəsizlik və nəzarət",
+          "desc": "Agentin sərhədləri var: rol əsaslı giriş, audit izi, policy və riskdə operatora eskalasiya. Nəzarət itmir.",
+          "bullets": ["RBAC", "Audit log", "Fail-safe axınlar"]
+        }
+      },
+      "badges": {
+        "tools": "alətlər: aktiv",
+        "metrics": "metriklər: live",
+        "policy": "policy: tətbiq olunur",
+        "integrations": "inteqrasiyalar: hazır"
+      }
+    },
+
+    "arch": {
+      "aria": "Arxitektura",
+      "kicker": "SİSTEM",
+      "title": { "0": "Agent sisteminin ", "glow": "arxitekturası" },
+      "sub": "Agent + inteqrasiya + qayda + monitorinq birlikdə qurulanda sistem stabil işləyir. Mesaj gələndə sadəcə “cavab” yox — intent çıxır, aksiya seçilir, CRM-ə yazılır, risk varsa handoff olur.",
+      "bullets": [
+        "Intent motoru: satış / dəstək / operator",
+        "Tooling: CRM, sheets, API, webhook",
+        "Qaydalar: policy + fallback + QA",
+        "İzləmə: SLA, keyfiyyət, loglar, alerts"
+      ],
+      "ctaServices": "Xidmətlərə bax",
+      "ctaAsk": "NEOX AI-yə soruş →",
+      "diagram": {
+        "top": ["INBOX", "AGENT", "CRM", "OPS"],
+        "nodes": {
+          "inbox": { "title": "WhatsApp / IG / FB", "sub": "mesaj • form • DM" },
+          "crm": { "title": "CRM", "sub": "lead • status • tarixçə" },
+          "ops": { "title": "Ops panel", "sub": "SLA • keyfiyyət • loglar" },
+          "rules": { "title": "Qaydalar", "sub": "policy • fallback" },
+          "integrations": { "title": "İnteqrasiyalar", "sub": "API • webhook • alətlər" }
+        },
+        "core": { "top": "NEOX AGENT", "mid": "intent → aksiya", "bot": "route → reply → handoff" },
+        "foot": ["intent tanınır", "tool çağırışları", "operator handoff", "audit izi"]
+      }
+    },
+
+    "process": {
+      "aria": "Proses",
+      "kicker": "PROSES",
+      "status": "CANLI QURULUM • NƏZARƏTLİ",
+      "ctaBrief": "Brif göndər",
+      "stepLabel": "addım",
+      "steps": [
+        {
+          "n": "01",
+          "title": "Kəşf və Audit",
+          "desc": "Axınları xəritələyirik, data mənbələrini çıxarırıq və quick-win plan hazırlayırıq.",
+          "points": ["Proses xəritəsi", "Data inventarı", "Risk çərçivəsi", "Roadmap + prioritet"]
+        },
+        {
+          "n": "02",
+          "title": "Sistemi Qururuq",
+          "desc": "Agent + workflow nüvəsini qururuq: inteqrasiya, routing, handoff, guardrails, loglama.",
+          "points": ["CRM / Inbox / Web", "Qaydalar + alətlər", "Handoff + fallback", "Loglar + alerts"]
+        },
+        {
+          "n": "03",
+          "title": "Böyüt və Optimallaşdır",
+          "desc": "Sistem işlədikcə optimallaşdırırıq: cavab keyfiyyəti, konversiya, SLA, xərc — hamısı ölçülür.",
+          "points": ["KPI panel", "Prompt/flow tuning", "Sürətli iterasiya", "Ops dəstəyi"]
+        }
+      ],
+      "metrics": {
+        "timeToValue": {
+          "label": "Dəyərə çatma müddəti",
+          "valueStrong": "7–21",
+          "valueSuffix": "gün",
+          "chips": ["Sürətli iterasiya", "İzləmə", "İnteqrasiya"]
+        },
+        "supportModel": {
+          "label": "Dəstək modeli",
+          "value": { "0": "Ops + ", "glow": "QA" },
+          "chips": ["Həftəlik tuning", "Alerting", "Qayda yoxlaması"]
+        },
+        "fit": {
+          "label": "Uyğun",
+          "value": "SME → Scale",
+          "chips": ["E-commerce", "Xidmət", "Dəstək", "SMM"]
+        }
+      }
+    },
+
+    "final": {
+      "aria": "Çağırış",
+      "kicker": "NEOX / BAŞLA",
+      "title": {
+        "0": "Sistemi quraq — ",
+        "glowTime": "vaxtına",
+        "1": " və ",
+        "glowBudget": "büdcənə",
+        "2": " qənaət et"
+      },
+      "sub": "Brif yaz — 24 saat içində quick-win plan və inteqrasiya xəritəsi çıxaraq.",
+      "proofs": [
+        { "top": "Stabil", "midGlow": "Qaydalar", "bot": "policy + fallback + audit izi" },
+        { "top": "Ölçülən", "mid": ["KPI", "SLA"], "bot": "panel + alerts + tuning" },
+        { "top": "Nəticə", "midGlow": "Lead", "bot": "daha sürətli cavab, daha çox satış" }
+      ],
+      "ctaPrimary": "Brif göndər",
+      "ctaSecondary": "Xidmətlərə bax"
+    }
+  },
+
+  "services": {
+    "seo": {
+      "title": "NEOX Xidmətlər — AI Agentlər, Workflow və Avtomatlaşdırma Modulları",
+      "description": "NEOX xidmət kataloqu: unified inbox + AI cavab, CRM yazma, workflow/təsdiqlər, RPA sənəd avtomatlaşdırma, SMM kontent fabriki, KPI dashboard, observability və inteqrasiyalar."
+    },
+    "structuredData": {
+      "name": "NEOX Xidmətlər",
+      "description": "AI agentlər, workflow avtomatlaşdırma, CRM ops, RPA sənəd avtomatlaşdırma, SMM və analitika modulları."
+    },
+    "hero": {
+      "aria": "Xidmətlər",
+      "breadcrumbAria": "Breadcrumb",
+      "breadcrumbText": "NEOX / XİDMƏTLƏR",
+      "titleBefore": "Paket deyil — ",
+      "titleHighlight": "biznes sistemi",
+      "titleAfter": ".",
+      "sub": "Inbox → AI cavab → lead → CRM → workflow/təsdiq → ölçüm. Məqsəd: manual işi azaltmaq, cavabı sürətləndirmək və dönüşümü artırmaq.",
+      "primaryCta": "Demo istə",
+      "primaryAria": "Demo istə",
+      "secondaryCta": "Xidmət kataloqu",
+      "secondaryAria": "Xidmət kataloquna keç",
+      "chips": ["routing: smart", "handoff: instant", "təsdiq: gated", "ops: monitored"]
+    },
+    "catalog": {
+      "aria": "Xidmət kataloqu",
+      "crumb": "XİDMƏT KATALOQU",
+      "headingBefore": "Avtomatlaşdırma xidmətləri — ",
+      "headingHighlight": "modul kimi",
+      "headingAfter": "",
+      "desc": "Xidmətləri “paket” kimi yox, biznesinə uyğun modullar kimi qoşuruq. Hər modul ölçülə bilən KPI və audit ilə gəlir.",
+      "tabsAria": "Xidmət qrupları",
+      "tabsAll": "Hamısı",
+      "searchAria": "Xidmət axtarışı",
+      "searchPlaceholder": "Axtar: routing, invoice, təsdiq, CRM..."
+    },
+    "groups": {
+      "inbox_support": "Inbox & Dəstək",
+      "crm_sales_ops": "CRM & Satış Ops",
+      "workflow_approvals": "Workflow & Təsdiqlər",
+      "rpa_docs": "RPA & Sənədlər",
+      "marketing_smm": "Marketinq & SMM",
+      "analytics_ops": "Analitika & Ops",
+      "integrations": "İnteqrasiyalar",
+      "industry_packs": "Sənaye Paketləri"
+    },
+    "tags": {
+      "alwaysOn": "7/24",
+      "triage": "triage",
+      "sales": "satış",
+      "ops": "ops",
+      "approval": "təsdiq",
+      "it": "IT",
+      "rpa": "RPA",
+      "idp": "IDP",
+      "growth": "growth",
+      "content": "kontent",
+      "kpi": "KPI",
+      "alert": "alert",
+      "secure": "təhlükəsiz",
+      "api": "API",
+      "sync": "sync",
+      "pack": "paket"
+    },
+    "cards": {
+      "connectModule": "Bu modulu qoş",
+      "connectModuleAria": "{{title}} modulunu qoşmaq üçün əlaqə",
+      "whyNeox": "Niyə NEOX?",
+      "whyNeoxAria": "NEOX haqqında səhifə"
+    },
+    "bottom": {
+      "primaryCta": "Seçdiyin modulu qoşaq",
+      "primaryAria": "Modul seçib qoşmaq üçün əlaqə",
+      "secondaryCta": "Niyə NEOX?",
+      "secondaryAria": "NEOX haqqında"
+    },
+    "list": {
+      "inbox_unify": {
+        "title": "Unified Inbox + AI Cavab",
+        "desc": "WhatsApp / Instagram / Messenger mesajlarını bir yerdə topla, AI ilə cavablat, qayda ilə yönləndir.",
+        "bullets": ["Niyyət analizi (intent)", "Avto cavab + routing", "Operator handoff", "Spam/abuse filtri"]
+      },
+      "call_triage": {
+        "title": "Zəng / Lead Triage",
+        "desc": "Zəng, form və DM-ləri prioritetləndir, növbəyə sal, uyğun operatora ötür.",
+        "bullets": ["Prioritet/SLA", "Lead enrichment", "Queue routing", "Missed-call follow-up"]
+      },
+      "crm_writeback": {
+        "title": "CRM Yazma + Lead Scoring",
+        "desc": "Mesaj → niyyət → lead → CRM status. Satış axınında avtomatik scoring və follow-up.",
+        "bullets": ["Lead scoring", "Pipeline yenilənməsi", "Avto tapşırıqlar", "Follow-up sekansları"]
+      },
+      "quote_to_cash_lite": {
+        "title": "Təklif → Sifariş Avtomatlaşdırma",
+        "desc": "Təklif, sifariş, təsdiq, bildiriş və çatdırılma statuslarını sistemləşdir.",
+        "bullets": ["Avto təklif draft", "Approval qapısı", "Status bildirişi", "Qaytarma routing"]
+      },
+      "approvals": {
+        "title": "Təsdiq Axınları (Approvals)",
+        "desc": "Məzuniyyət, sənəd imzası, satış təsdiqi, xərclər — hamısını təsdiq axınına çevir.",
+        "bullets": ["Multi-step approvals", "Teams/Email bildiriş", "Audit izi", "Eskalasiya qaydaları"]
+      },
+      "it_ops_automations": {
+        "title": "IT Ops Avtomatlaşdırma",
+        "desc": "Daxili sorğular, access request, ticket açma, bildiriş və rutin əməliyyatları avtomatlaşdır.",
+        "bullets": ["Access requests", "Ticket routing", "On-call notify", "Runbook triggers"]
+      },
+      "invoice_docs": {
+        "title": "Faktura / Sənəd Avtomatlaşdırma",
+        "desc": "Faktura, müqavilə, qaimə, form — oxu, çıxart, yoxla, sistemə yaz (IDP + RPA).",
+        "bullets": ["PDF/Şəkil extraction", "Validation qaydaları", "Exception queue", "ERP/CRM posting"]
+      },
+      "doc_routing": {
+        "title": "Sənəd Yönləndirmə & Arxiv",
+        "desc": "Sənədləri avtomatik qovluqlara böl, adlandır, metadata yaz, axtarışa hazır et.",
+        "bullets": ["Auto classification", "Naming rules", "Storage sync", "Retention policy"]
+      },
+      "marketing_ops": {
+        "title": "Marketinq Avtomatlaşdırma",
+        "desc": "Lead capture → CRM → email sequence → task. Kampaniya işlərini axına çevir.",
+        "bullets": ["Lead routing", "Email sekansları", "Segmentləşdirmə", "UTM + attribution"]
+      },
+      "smm_factory": {
+        "title": "SMM Kontent Fabriki",
+        "desc": "İdeya → ssenari → caption/CTA → plan → paylaşım → report. Sistemli kontent istehsalı.",
+        "bullets": ["30 günlük plan", "Caption/CTA", "Format guidance", "Həftəlik report"]
+      },
+      "dashboards": {
+        "title": "KPI Dashboard + SLA",
+        "desc": "Cavab sürəti, conversion, lead keyfiyyəti, SLA pozuntuları — paneldə görün.",
+        "bullets": ["SLA tracking", "Conversion funnel", "Quality scoring", "Həftəlik insights"]
+      },
+      "alerts_observability": {
+        "title": "Alertlər & Observability",
+        "desc": "Anomaliya, downtime, cavab keyfiyyəti düşməsi — avtomatik xəbərdarlıq və eskalasiya.",
+        "bullets": ["Threshold alerts", "Anomaly watch", "Eskalasiya", "Audit loglar"]
+      },
+      "security_guardrails": {
+        "title": "Təhlükəsizlik & QA Guardrails",
+        "desc": "Policy, limitlər, risk intent bloklama, operatora eskalasiya, test planı.",
+        "bullets": ["RBAC əsasları", "Policy qaydaları", "Fallback axınları", "QA ssenariləri"]
+      },
+      "integrations": {
+        "title": "İnteqrasiyalar (API/Webhook/RPA)",
+        "desc": "CRM, ERP, Sheets, payment, delivery, booking — hamısını bir-birinə bağla.",
+        "bullets": ["API/Webhook", "Data sync", "Retry logic", "Logging"]
+      },
+      "data_sync": {
+        "title": "Data Sync & Təmizləmə",
+        "desc": "Dublikatlar, formatlar, statuslar — data təmizliyi və sinxron axın.",
+        "bullets": ["Dedup qaydaları", "Field mapping", "Normalization", "Planlı sync"]
+      },
+      "ecom_pack": {
+        "title": "E-commerce Paket",
+        "desc": "Sifariş statusu, kargo, qapıda ödəniş, qaytarma — hamısı avto cavab və routing ilə.",
+        "bullets": ["Status bot", "Return routing", "Stok sualları", "COD/Payment skriptləri"]
+      },
+      "clinic_pack": {
+        "title": "Klinika / Randevu Paket",
+        "desc": "Randevu, xatırlatma, nəticə sorğusu, operator handoff — klinika axını.",
+        "bullets": ["Randevu", "Xatırlatma", "FAQ triage", "Operator eskalasiya"]
+      },
+      "service_pack": {
+        "title": "Xidmət Biznesi Paket",
+        "desc": "Təmir/xidmət üçün: sorğu → qiymət → təsdiq → planlama → report.",
+        "bullets": ["Quote capture", "Approval gate", "Schedule", "Post-service follow-up"]
+      },
+      "hr_pack": {
+        "title": "HR Ops Paket",
+        "desc": "Məzuniyyət, onboarding, sənəd, təsdiq — daxili HR işləri üçün axın.",
+        "bullets": ["Məzuniyyət təsdiqləri", "Onboarding checklist", "Sənəd routing", "Bildirişlər"]
+      }
+    }
+  },
+
+  "useCases": {
+    "seo": {
+      "title": "NEOX Use Cases — Real Nəticələr və Avtomatlaşdırma Ssenariləri",
+      "description": "NEOX use Ssenarilər: e-commerce support avtomatlaşdırma, maliyyədə sənəd emalı, klinikada randevu/reminder, logistika koordinasiyası. Real KPI və nəticələr."
+    },
+    "ld": {
+      "name": "NEOX Use Cases",
+      "description": "Real avtomatlaşdırma ssenariləri və KPI nəticələri."
+    },
+    "aria": {
+      "hero": "Use cases hero",
+      "contact": "Əlaqə",
+      "services": "Xidmətlər",
+      "caseStudies": "Case studies",
+      "more": "Digər sahələr",
+      "finalCta": "Final CTA"
+    },
+    "labels": {
+      "case": "case",
+      "realScenario": "Real istifadə ssenarisi"
+    },
+    "cta": {
+      "ownCase": "Öz case-ni danış",
+      "services": "Xidmətlər",
+      "schedule": "Görüş təyin et"
+    },
+    "hud": {
+      "metricLabel": "metric",
+      "statusLabel": "status",
+      "statusValue": "live",
+      "chips": {
+        "a": "automation",
+        "b": "routing",
+        "c": "kpi"
+      }
+    },
+    "hero": {
+      "crumb": "NEOX / USE CASES",
+      "title": {
+        "before": "Real nəticə — ",
+        "highlight": "sadəcə demo deyil",
+        "after": "."
+      },
+      "subtitle": "Sənayedən asılı deyil: proses + data varsa, agentlərlə nəticəni ölçmək olur. Aşağıdakı case-lər real istifadə ssenarisi kimi yazılıb — öz prosesini göndər, eynisini sənin üçün quraq."
+    },
+    "cases": [
+      {
+        "sektor": "E-commerce",
+        "basliq": "RetailCo: Support xərci −70%, cavab 2 dəqiqəyə",
+        "hekayə": "Gündəlik yüksək order axınında support ticket-lər yığılıb qalırdı. NEOX agentləri order statusu, qaytarma və FAQ axınını avtomatlaşdırdı.",
+        "maddeler": [
+          "Sorğuların ~80%-i avtomatik cavablandı",
+          "Order tracking + returns flow avtomatlaşdırıldı",
+          "Cavab vaxtı: 4 saat → 2 dəqiqə"
+        ],
+        "neticeler": [
+          { "k": "−70%", "v": "Xərc azalması", "sub": "support əməliyyat xərci" },
+          { "k": "+95%", "v": "CSAT", "sub": "müştəri məmnuniyyəti" }
+        ]
+      },
+      {
+        "sektor": "Maliyyə",
+        "basliq": "FinanceHub: sənəd emalı 5 gün → 2 saat",
+        "hekayə": "Kredit müraciətləri üçün sənədlərin yoxlanması manual idi. Agentlər extraction + validation + compliance check işlərini sistemləşdirdi.",
+        "maddeler": [
+          "Sənəd extraction + validation",
+          "Compliance + risk yoxlaması",
+          "Emal müddəti: 5 gün → 2 saat"
+        ],
+        "neticeler": [
+          { "k": "90%", "v": "Daha sürətli", "sub": "emal sürəti artdı" },
+          { "k": "99.5%", "v": "Dəqiqlik", "sub": "daha az səhv" }
+        ]
+      },
+      {
+        "sektor": "Səhiyyə",
+        "basliq": "MediCare: no-show −50%, staff time +85%",
+        "hekayə": "25 klinikada randevu, reminder və suallar böyük yük idi. NEOX scheduling + reminder + common inquiry bot axınını qurdu.",
+        "maddeler": [
+          "Randevu + xatırlatma",
+          "Resept yeniləmə axını",
+          "24/7 pasiyent Q&A dəstəyi"
+        ],
+        "neticeler": [
+          { "k": "−50%", "v": "No-show azaldı", "sub": "gəlməmələr azaldı" },
+          { "k": "+85%", "v": "Vaxt qənaəti", "sub": "staff vaxtı geri qayıtdı" }
+        ]
+      },
+      {
+        "sektor": "Logistika",
+        "basliq": "GlobalShip: çatdırılma +40%, illik $2M qənaət",
+        "hekayə": "40 ölkədə supply chain koordinasiyası manual idi. Agentlər delay proqnozu, reroute və müştəri update axınını avtomatlaşdırdı.",
+        "maddeler": [
+          "Delay prediction + auto reroute",
+          "Gömrük sənədləri + compliance",
+          "Real-time tracking bildirişləri"
+        ],
+        "neticeler": [
+          { "k": "+40%", "v": "Daha sürətli çatdırılma", "sub": "çatdırılma sürəti" },
+          { "k": "$2M", "v": "İllik qənaət", "sub": "illik qənaət" }
+        ]
+      }
+    ],
+    "moreSection": {
+      "pill": "ƏHATƏ",
+      "title": "Digər sahələr",
+      "subtitle": {
+        "before": "Bu siyahı böyüyür — əsas ideya: ",
+        "highlight": "“proses var → agent var”",
+        "after": "."
+      }
+    },
+    "more": [
+      { "title": "Əmlak", "text": "Lead qualification, property management, tenant kommunikasiya axınları." },
+      { "title": "Təhsil", "text": "Tələbə dəstəyi, qəbul triage, kurs admin prosesləri." },
+      { "title": "Marketinq", "text": "Lead scoring, kampaniya avtomatlaşdırma, kontent ops və hesabat." },
+      { "title": "İstehsalat", "text": "Keyfiyyət yoxlaması, inventar, proqnoz siqnalları." }
+    ],
+    "final": {
+      "pill": "hazırsan?",
+      "title": {
+        "before": "Gəl ",
+        "highlight": "“success story”",
+        "after": "-ni sənin biznes üçün yazaq."
+      },
+      "subtitle": "Prosesi təsvir et — biz KPI, plan və pilot axınını hazırlayaq. Sonra stabil prod və scale."
+    }
+  },
+
+  "blog": {
+    "seo": {
+      "title": "NEOX Blog — AI Avtomatlaşdırma, Agentlər və Praktik Bələdçilər",
+      "description": "AI avtomatlaşdırma, agentlər, workflow-lar, təhlükəsizlik və real case study-lər. Qısa, praktik, nəticəyə fokus kontent."
+    },
+    "ld": {
+      "name": "NEOX Blog",
+      "description": "Praktik AI avtomatlaşdırma yazıları və insaytlar."
+    },
+    "aria": {
+      "hero": "Blog başlıq",
+      "posts": "Blog yazıları",
+      "newsletter": "Abunəlik"
+    },
+    "hero": {
+      "crumb": "NEOX / BLOG",
+      "title": {
+        "before": "Resurslar &",
+        "highlight": "İnsaytlar"
+      },
+      "subtitle": "AI avtomatlaşdırma, agentlər, satış sistemləri və real use-case-lər. Qısa, praktik, nəticəyə fokus."
+    },
+    "filters": {
+      "searchPlaceholder": "Yazılarda axtar...",
+      "searchAria": "Axtarış",
+      "categoryAria": "Kateqoriya filtri",
+      "all": "Hamısı",
+      "general": "Ümumi"
+    },
+    "actions": {
+      "read": "Oxu",
+      "readAria": "Yazını oxu"
+    },
+    "empty": {
+      "title": "Heç nə tapılmadı",
+      "subtitle": "Axtarışı dəyiş və ya “Hamısı” seç.",
+      "clearSearch": "Axtarışı təmizlə",
+      "resetFilter": "Filtri sıfırla"
+    },
+    "newsletter": {
+      "pill": "abunəlik",
+      "title": {
+        "before": "Həftəlik AI & Avtomatlaşdırma qeydləri —",
+        "highlight": "qısa və faydalı"
+      },
+      "subtitle": "Yeni yazılar, use-case-lər və “nəyi necə avtomatlaşdırmaq olar” tipli praktik nüanslar.",
+      "emailPlaceholder": "E-poçt ünvanı",
+      "emailAria": "E-poçt",
+      "button": "Abunə ol"
+    }
+  },
+
+  "contact": {
+    "seo": {
+      "title": "NEOX — Əlaqə | Demo və AI Avtomatlaşdırma",
+      "description": "AI avtomatlaşdırma, agentlər, satış və support prosesləri üçün demo və konsultasiya. 24 saat içində cavab."
+    },
+    "aria": {
+      "hero": "Əlaqə — başlıq bölməsi",
+      "content": "Əlaqə — məzmun bölməsi",
+      "cta": "Əlaqə — yekun çağırış"
+    },
+    "common": {
+      "copy": "Kopyala",
+      "copied": "Kopyalandı"
+    },
+    "whatsapp": {
+      "text": "Salam! NEOX-dan demo istəyirəm. ✅\n\nQısa məlumat:\n• Biznes sahəsi:\n• Avtomatlaşdırmaq istədiyim proses:\n• Hədəf nəticə/KPI (məs: cavab vaxtı, CSAT, xərc):\n• Əlaqə üçün uyğun saat:\n\nƏgər mümkündürsə, 30 dəqiqəlik demo üçün vaxt təklif edin. Təşəkkürlər!"
+    },
+    "hero": {
+      "breadcrumb": "NEOX / ƏLAQƏ",
+      "title": {
+        "before": "Gəlin",
+        "highlight": "danışaq"
+      },
+      "subtitle": "AI avtomatlaşdırma, agentlər, satış və support prosesləri — konkret nəticə üçün.",
+      "cta_whatsapp": "Demo üçün yaz",
+      "cta_whatsapp_aria": "WhatsApp ilə demo üçün yaz",
+      "cta_email_aria": "Email ilə əlaqə"
+    },
+    "left": {
+      "title": "Əlaqə kanalları",
+      "subtitle": "İstər yeni başlayırsan, istər mövcud prosesi böyüdürsən — sənin üçün ən sürətli “quick win” çıxardırıq.",
+      "channels": {
+        "email": {
+          "title": "Email",
+          "copy_aria": "Emaili kopyala",
+          "note": "Qısa yaz — biz sualları düzgün soracağıq."
+        },
+        "phone": {
+          "title": "Telefon",
+          "copy_aria": "Telefon nömrəsini kopyala",
+          "note": "Həftəiçi 10:00–19:00"
+        },
+        "location": {
+          "title": "Lokasiya",
+          "value": "Bakı, Azərbaycan",
+          "note": "Onlayn görüşlər mümkündür"
+        }
+      },
+      "expect": {
+        "title": "Nə gözləyəsən?",
+        "items": [
+          "24 saat içində cavab",
+          "Biznesinə uyğun təklif",
+          "1–2 həftəyə ilk nəticə (MVP)"
+        ]
+      },
+      "footer_note": "Qısa yazmaq kifayətdir — məqsəd və proses konturu olsun."
+    },
+    "form": {
+      "title": "Mesaj göndər",
+      "subtitle": "Nə avtomatlaşdırmaq istəyirsən və hansı nəticə lazımdır? (məs: cavab vaxtı, xərclər, lead conversion)",
+      "badge": {
+        "label": "Cavab",
+        "value": "≤ 24 saat"
+      },
+      "status": {
+        "success_title": "Uğurla göndərildi!",
+        "success_desc": "Tezliklə geri dönüş edəcəyik.",
+        "error_title": "Xəta",
+        "loading_title": "Göndərilir...",
+        "loading_desc": "Bir neçə saniyə gözlə."
+      },
+      "fields": {
+        "name": {
+          "label": "Ad *",
+          "placeholder": "Ad Soyad"
+        },
+        "email": {
+          "label": "Email *",
+          "placeholder": "email@company.com"
+        },
+        "company": {
+          "label": "Şirkət",
+          "placeholder": "Şirkət adı"
+        },
+        "phone": {
+          "label": "Telefon",
+          "placeholder": "+994 ..."
+        },
+        "message": {
+          "label": "Mesaj *",
+          "placeholder": "Məs: WhatsApp/Instagram-dan gələn lead-lər CRM-ə düşsün, avtomatik follow-up olsun, operatora yalnız keyfiyyətli lead getsin..."
+        }
+      },
+      "hint": "Nə qədər konkret olsa, bir o qədər tez “quick win” tapırıq.",
+      "message_meter_aria": "Mesaj uzunluğu göstəricisi",
+      "submit": "Göndər",
+      "submit_loading": "Göndərilir...",
+      "submit_aria": "Mesajı göndər",
+      "legal": "Göndərməklə, məlumatların yalnız əlaqə məqsədi ilə istifadə olunmasını qəbul edirsən.",
+      "demo_prefill": "Demo istəyirəm.\n\nBiznes sahəsi:\nAvtomatlaşdırmaq istədiyim proses:\nHədəf KPI (məs: cavab vaxtı, CSAT, xərc):\nƏlaqə üçün uyğun saat:\n",
+      "errors": {
+        "fill_required": "Zəhmət olmasa ad, email və mesajı düzgün doldur.",
+        "send_failed": "Göndərilmədi. Zəhmət olmasa yenidən yoxla və təkrar göndər.",
+        "name_short": "Ad ən az 2 simvol olmalıdır.",
+        "email_bad": "Email formatı düzgün deyil.",
+        "message_short": "Mesaj ən az 10 simvol olmalıdır."
+      }
+    },
+    "final": {
+      "title": "Demo istəsən — 30 dəqiqə kifayətdir",
+      "subtitle": "Prosesini dinləyirik, ən sürətli “quick win” çıxardırıq və 1 həftə içində ilk avtomatlaşdırmanı işə salırıq.",
+      "cta": "Demo üçün yaz",
+      "cta_aria": "WhatsApp ilə demo üçün yaz"
+    }
+  },
+
+  "neoxAi": {
+    "brand": "NEOX AI",
+    "status": "LIVE",
+    "subtitle": "Sosial Inbox → Lead → CRM",
+    "welcome": "NEOX AI burdadı. Sən sual ver — sosial inbox mesajlarını necə lead-ə çevirib CRM-ə yazdığımızı izah edim, ya da hazır reply şablonları hazırlayım.",
+    "fabAria": "NEOX AI aç",
+    "panelAria": "NEOX AI paneli",
+    "tabs": {
+      "chat": "Chat",
+      "quick": "Hazır suallar"
+    },
+    "join": {
+      "label": "Cata qoşul →",
+      "title": "Canlı operatora qoşul",
+      "href": "https://wa.me/"
+    },
+    "quick": {
+      "title": "Bir kliklə soruş:",
+      "items": [
+        "Instagram DM-ləri necə avtomatik cavablandıra bilərik?",
+        "WhatsApp-dan gələn mesajları CRM-ə necə yazırsınız?",
+        "Lead score necə hesablanır? Nələrə baxırsınız?",
+        "Operatora nə vaxt route edirsiniz?",
+        "Məhsul soruşan müştəriyə nümunə cavab yaz.",
+        "Bir kampaniya üçün 3 hazır reply şablonu ver."
+      ]
+    },
+    "chat": {
+      "you": "Sən",
+      "ai": "NEOX AI"
+    },
+    "input": {
+      "placeholder": "Sualını yaz… (məs: CRM-ə necə yazılır?)",
+      "send": "Göndər →"
+    },
+    "ai": {
+      "basePlan": "Qısa plan:\n• Mesajı normalize edirik (niyyət, məhsul, kontekst)\n• Lead yaradıb score veririk\n• Uyğun operator/axına route edirik\n• CRM-ə status + tarixçə yazırıq",
+      "templates3": "3 nümunə reply:\n1) Salam! Hansı məhsulu axtarırsınız? Büdcəniz nə qədərdir?\n2) Çatdırılma var. Ünvanı yazın, dəqiq qiymət çıxarım.\n3) Kampaniya aktivdir — sizə uyğun variantları siyahı şəklində göndərim?",
+      "followupQuestion": "İstəsən bunu 10 dəqiqəyə sənin biznesinə uyğun qururuq: kanallar → intent çıxarışı → lead score → CRM write. Hansı CRM istifadə edirsən?"
+    },
+    "neoxAi": {
+      "errors": {
+        "fail": "Xəta baş verdi. Server cavab vermir və ya API açarları düzgün deyil. Zəhmət olmasa bir az sonra yenidən cəhd edin.",
+        "sessionReset": "Xəta oldu və sessiya yeniləndi. Zəhmət olmasa mesajı yenidən yazın.",
+        "generic": "Xəta oldu. Bir az sonra yenidən cəhd edin."
+      }
+    }
+  }
+}

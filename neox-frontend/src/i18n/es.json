@@ -1,0 +1,877 @@
+{
+  "nav.home": "Inicio",
+  "nav.about": "Nosotros",
+  "nav.services": "Servicios",
+  "nav.useCases": "Casos de uso",
+  "nav.blog": "Recursos",
+  "nav.contact": "Contacto",
+
+  "home": {
+    "cta": {
+      "start": "Empecemos →",
+      "how": "Cómo funciona →",
+      "demo": "Crear demo →"
+    },
+    "hero": {
+      "kicker": "NEOX / AUTOMATIZACIÓN AI",
+      "title": { "line1": "La AI gestiona", "line2": "tu operación." },
+      "sub": "Automatizamos procesos con agentes AI y workflows: ventas, soporte, operaciones y contenido — menos trabajo manual, más velocidad."
+    },
+    "strip": {
+      "aria": "Franja terminal",
+      "ticks": [
+        "AGENTES AI",
+        "AUTOMATIZACIÓN WORKFLOW",
+        "CRM OPS",
+        "SOPORTE AL CLIENTE",
+        "AUTOMATIZACIÓN SMM",
+        "ANALÍTICA",
+        "INTEGRACIONES",
+        "CAPTURA DE LEADS",
+        "SALES OPS",
+        "TICKET ROUTING",
+        "MOTOR DE CONTENIDO",
+        "RPA + API",
+        "DASHBOARD",
+        "AUDIT LOGS"
+      ]
+    },
+    "social": {
+      "aria": "Automatización social",
+      "kicker": "NEOX / AUTOMATIZACIÓN SOCIAL",
+      "title": {
+        "p1": "24/7",
+        "grad1": "chatbot",
+        "p2": "un flujo de mensajes que",
+        "grad2": "convierte",
+        "p3": "en ventas"
+      },
+      "lead": "WhatsApp Business, Facebook Messenger e Instagram DM — todo en un solo sistema. La AI responde, captura leads, enruta a ventas y hace “handoff” a tu equipo cuando hace falta.",
+      "agentName": "NEOX",
+      "clientName": { "whatsapp": "Orkhan", "default": "Cliente" },
+      "typing": "escribiendo…",
+      "now": "ahora",
+      "threadAria": "mensajes de {{platform}}",
+      "demos": {
+        "WHATSAPP": [
+          { "from": "client", "text": "Hola, ¿cuántos días tarda la entrega?" },
+          { "from": "ai", "text": "¡Hola! En Bakú: 24 horas; regiones: 2–3 días. ¿Te envío el enlace para pedir?" },
+          { "from": "client", "text": "¿Cómo puedo pagar?" },
+          { "from": "ai", "text": "Tarjeta, transferencia y pago contra entrega. ¿Qué modelo elegiste?" },
+          { "from": "client", "text": "iPhone 15 Pro." },
+          { "from": "ai", "text": "¡Perfecto! Elige color (Natural/Black) y almacenamiento (128/256/512) — genero el enlace al instante." }
+        ],
+        "FACEBOOK": [
+          { "from": "client", "text": "¿Dónde están los precios? ¿Tienen paquetes?" },
+          { "from": "ai", "text": "Sí. Hay 3 paquetes: Start / Pro / Enterprise. ¿Para qué sector (tienda, servicios, clínica)?" },
+          { "from": "client", "text": "Para una tienda." },
+          { "from": "ai", "text": "Genial. Con Start montamos respuestas 24/7 + captura de leads. Envíame tu web." },
+          { "from": "client", "text": "weneox.com" },
+          { "from": "ai", "text": "Recibido. Montamos una demo y enviamos resultados en 24 horas." }
+        ],
+        "INSTAGRAM": [
+          { "from": "client", "text": "Hice un pedido — ¿cuál es el estado?" },
+          { "from": "ai", "text": "Envíame tu número para tracking — lo reviso al instante." },
+          { "from": "client", "text": "+994 50 XXX XX XX" },
+          { "from": "ai", "text": "Encontrado ✅ Entregado al mensajero. Hoy entre 19:00–22:00." },
+          { "from": "client", "text": "Gracias" },
+          { "from": "ai", "text": "¡De nada! ¿Activo también pago contra entrega?" }
+        ]
+      }
+    },
+    "pipeline": {
+      "aria": "Flujo de datos",
+      "kicker": "¿CÓMO FUNCIONA?",
+      "title": {
+        "p1": "Llega el mensaje → extraemos intención →",
+        "grad": "CRM",
+        "p2": "se actualiza → empieza ventas"
+      },
+      "copy": "NEOX recibe mensajes, los limpia, extrae intención y crea un lead. Luego enruta al flujo de ventas y actualiza el estado en CRM.",
+      "brief": "Brief rápido →",
+      "platforms": { "whatsapp": "WhatsApp", "messenger": "Messenger", "instagram": "Instagram" },
+      "core": {
+        "mid": "Unifica • Entiende • Enruta",
+        "bot": "Normaliza → Puntúa → Transfiere"
+      },
+      "sinks": {
+        "crm": { "title": "CRM", "sub": "Registro de lead", "mini": "tag • score • estado" },
+        "ops": { "title": "OPS / ANALÍTICA", "sub": "Monitoreo", "mini": "SLA • conversión • logs" }
+      }
+    },
+    "smm": {
+      "aria": "Automatización SMM",
+      "kicker": "NEOX / AUTOMATIZACIÓN SMM",
+      "title": { "p1": "La AI prepara contenido automáticamente y", "grad": "lo sistematiza" },
+      "copy": "Idea → guion → formato → plan de publicación → medición. Menos trabajo manual, resultados más estables.",
+      "cta": { "primary": "Montar el flujo de contenido →", "secondary": "Pedir un plan →" },
+      "diagram": {
+        "top": { "idea": "IDEA", "prepare": "PREPARAR", "publish": "PUBLICAR" },
+        "src": { "instagram": "Reels / Story / Post", "youtube": "Shorts / Largo", "facebook": "Página / Ads" },
+        "core": { "mid": "Fábrica de contenido", "bot": "tema → guion → edición → plan" },
+        "sinks": {
+          "calendar": { "title": "Calendario", "sub": "Tiempo / Slot" },
+          "brand": { "title": "Reglas de marca", "sub": "tono • formato • CTA" },
+          "report": { "title": "Reporte", "sub": "vistas • leads" }
+        },
+        "foot": { "caption": "auto-caption", "hashtag": "auto-hashtag", "plan": "auto-plan", "report": "auto-reporte" }
+      }
+    },
+    "ops": {
+      "aria": "Auditoría y monitoreo",
+      "kicker": "NEOX / AUDIT & OPS",
+      "title": { "p1": "Construimos el workflow — luego", "grad": "24/7", "p2": "monitoreamos y optimizamos" },
+      "copy": "El sistema se mide continuamente: SLA, conversión, logs, alertas y un plan semanal de optimización.",
+      "cta": "Solicitar auditoría →",
+      "diagram": {
+        "line": { "audit": "Auditar", "build": "Construir", "monitor": "Monitorear" },
+        "boxes": {
+          "signals": { "k": "Señales", "v": "Inbox • Formulario • Llamadas" },
+          "core": { "v": "Control de automatización", "mini": "reglas • routing • QA" },
+          "result": { "k": "Resultado", "v": "Tiempo • ROI" }
+        },
+        "metrics": {
+          "sla": { "top": "SLA", "bot": "respuestas más rápidas" },
+          "quality": { "top": "Calidad", "bot": "flujo estable" },
+          "cost": { "top": "Coste", "bot": "menos trabajo manual" }
+        }
+      }
+    },
+    "final": {
+      "aria": "Sistema de negocio",
+      "kicker": "NEOX / SISTEMA DE NEGOCIO",
+      "title": { "p1": "Construyamos el sistema —", "grad1": "ahorra tiempo", "p2": "y", "grad2": "presupuesto", "p3": "de verdad" },
+      "copy": "Tú te enfocas en el negocio. Nosotros construimos el sistema completo: inbox → respuesta AI → lead → CRM → flujo de ventas → medición y optimización.",
+      "blocks": {
+        "a": { "top": "Leads ↑", "mid": { "p1": "Más", "grad": "clientes" }, "bot": "inbox → respuesta → oferta → venta" },
+        "b": { "top": "KPI + SLA", "mid": { "p1": "Mide, monitorea,", "grad": "ajusta", "p2": "" }, "bot": "dashboard • alertas • optimización semanal" },
+        "c": { "top": "Ops ↓", "mid": { "p1": "Menos", "grad": "manual", "p2": "trabajo" }, "bot": "routing • handoff • audit trail" }
+      },
+      "cta": { "primary": "Construyamos el sistema →", "secondary": "Brief rápido →" }
+    }
+  },
+
+  "footer": {
+    "aria": "Pie de página",
+    "brand": {
+      "badge": "AUTOMATIZACIÓN AI",
+      "copy": "Sistematizamos flujos con agentes AI y automatización — de inbox a CRM. Menos trabajo manual. Respuestas más rápidas. Mejores resultados."
+    },
+    "contact": {
+      "aria": "Contacto",
+      "emailAria": "Enviar email",
+      "phoneAria": "Llamar"
+    },
+    "social": {
+      "aria": "Redes",
+      "twitter": "Twitter",
+      "linkedin": "LinkedIn",
+      "github": "GitHub"
+    },
+    "company": {
+      "title": "Empresa",
+      "links": {
+        "about": "Nosotros",
+        "services": "Servicios",
+        "useCases": "Casos de uso"
+      }
+    },
+    "resources": {
+      "title": "Recursos",
+      "links": {
+        "blog": "Blog",
+        "contact": "Contacto",
+        "privacy": "Política de privacidad"
+      }
+    },
+    "bottom": {
+      "copy": "© {{year}} NEOX — Sistemas inteligentes de automatización"
+    }
+  },
+
+  "intro": {
+    "wakeText": "Despierta, mundo...",
+    "mainText": "NEOX ha entrado al sistema..."
+  },
+
+  "about": {
+    "hero": {
+      "aria": "Hero: Nosotros",
+      "kicker": "NEOX / NOSOTROS",
+      "title": {
+        "0": "No construimos AI solo para que ",
+        "glowNice": "se vea bonito",
+        "1": ".",
+        "2": "Construimos un sistema ",
+        "glowWorking": "que funciona",
+        "glowMeasurable": "medible",
+        "glowControlled": "controlado",
+        "3": "."
+      },
+      "sub": "NEOX es un estudio de automatización AI y sistemas de agentes. Inbox → intención → routing → CRM → medición. Nuestro objetivo: simplificar operaciones, reducir carga del equipo y ejecutar ventas 24/7.",
+      "ctaPrimary": "Empezar el proyecto",
+      "ctaSecondary": "Servicios",
+      "chips": ["Agentes AI", "Automatización workflow", "Chatbot 24/7", "CRM ops", "Automatización SMM"]
+    },
+
+    "strip": {
+      "aria": "Franja de señal",
+      "foundation": "BASE",
+      "agents": "AGENTES",
+      "workflow": "WORKFLOW",
+      "rules": "REGLAS",
+      "monitoring": "MONITOREO",
+      "integration": "INTEGRACIÓN",
+      "crm": "CRM",
+      "sla": "SLA"
+    },
+
+    "foundation": {
+      "aria": "Base",
+      "kicker": "BASE",
+      "title": {
+        "0": "Nuestra base: ",
+        "glowSystem": "sistema",
+        "glowControl": "control",
+        "1": " y ",
+        "glowResult": "resultado"
+      },
+      "sub": "No construimos agentes como simples “bots que responden”. Agente + integraciones + reglas + monitoreo se construyen juntos.",
+      "cards": {
+        "resultFirst": {
+          "title": "Primero el resultado",
+          "desc": "La AI no es decoración — es motor de resultados. Meta: más leads, respuestas más rápidas, menos trabajo manual.",
+          "bullets": ["Conversión ↑", "Carga manual ↓", "Continuidad 24/7"]
+        },
+        "workflowEngineering": {
+          "title": "Ingeniería de workflow",
+          "desc": "Mapeamos procesos, eliminamos cuellos de botella y convertimos pasos en tareas para agentes. El flujo no se rompe.",
+          "bullets": ["Mapeo", "Routing + handoff", "Sistematización"]
+        },
+        "observability": {
+          "title": "Observabilidad",
+          "desc": "El sistema no es una caja negra. SLA, calidad, errores y conversión se siguen en panel — el tuning es por datos.",
+          "bullets": ["Alertas SLA", "Score de calidad", "A/B tuning"]
+        },
+        "security": {
+          "title": "Seguridad y control",
+          "desc": "Los agentes tienen límites: acceso por roles, audit trail, políticas y escalación al operador si hay riesgo. No se pierde control.",
+          "bullets": ["RBAC", "Audit log", "Flujos fail-safe"]
+        }
+      },
+      "badges": {
+        "tools": "herramientas: activas",
+        "metrics": "métricas: live",
+        "policy": "policy: aplicada",
+        "integrations": "integraciones: listas"
+      }
+    },
+
+    "arch": {
+      "aria": "Arquitectura",
+      "kicker": "SISTEMA",
+      "title": { "0": "Arquitectura del ", "glow": "sistema de agentes" },
+      "sub": "Cuando agente + integraciones + reglas + monitoreo están juntos, el sistema es estable. Al llegar un mensaje no solo hay “respuesta”: intención, acción, escritura en CRM y handoff si hay riesgo.",
+      "bullets": [
+        "Motor de intención: ventas / soporte / operador",
+        "Tooling: CRM, sheets, API, webhook",
+        "Reglas: policy + fallback + QA",
+        "Monitoreo: SLA, calidad, logs, alerts"
+      ],
+      "ctaServices": "Ver servicios",
+      "ctaAsk": "Preguntar a NEOX AI →",
+      "diagram": {
+        "top": ["INBOX", "AGENT", "CRM", "OPS"],
+        "nodes": {
+          "inbox": { "title": "WhatsApp / IG / FB", "sub": "mensaje • formulario • DM" },
+          "crm": { "title": "CRM", "sub": "lead • estado • historial" },
+          "ops": { "title": "Panel Ops", "sub": "SLA • calidad • logs" },
+          "rules": { "title": "Reglas", "sub": "policy • fallback" },
+          "integrations": { "title": "Integraciones", "sub": "API • webhook • tools" }
+        },
+        "core": { "top": "NEOX AGENT", "mid": "intención → acción", "bot": "route → reply → handoff" },
+        "foot": ["intención detectada", "llamadas a tools", "handoff a operador", "audit trail"]
+      }
+    },
+
+    "process": {
+      "aria": "Proceso",
+      "kicker": "PROCESO",
+      "status": "SETUP EN VIVO • CONTROLADO",
+      "ctaBrief": "Enviar brief",
+      "stepLabel": "paso",
+      "steps": [
+        {
+          "n": "01",
+          "title": "Descubrimiento & Auditoría",
+          "desc": "Mapeamos flujos, listamos fuentes de datos y preparamos un plan quick-win.",
+          "points": ["Mapa de procesos", "Inventario de datos", "Marco de riesgos", "Roadmap + prioridades"]
+        },
+        {
+          "n": "02",
+          "title": "Construimos el sistema",
+          "desc": "Construimos el núcleo agente + workflow: integraciones, routing, handoff, guardrails, logs.",
+          "points": ["CRM / Inbox / Web", "Reglas + tools", "Handoff + fallback", "Logs + alerts"]
+        },
+        {
+          "n": "03",
+          "title": "Escala & Optimiza",
+          "desc": "Optimizamos mientras corre: calidad, conversión, SLA, coste — todo se mide.",
+          "points": ["Panel KPI", "Prompt/flow tuning", "Iteración rápida", "Soporte Ops"]
+        }
+      ],
+      "metrics": {
+        "timeToValue": {
+          "label": "Tiempo a valor",
+          "valueStrong": "7–21",
+          "valueSuffix": "días",
+          "chips": ["Iteración rápida", "Monitoreo", "Integración"]
+        },
+        "supportModel": {
+          "label": "Modelo de soporte",
+          "value": { "0": "Ops + ", "glow": "QA" },
+          "chips": ["Tuning semanal", "Alerting", "Revisión de reglas"]
+        },
+        "fit": {
+          "label": "Encaja",
+          "value": "SME → Scale",
+          "chips": ["E-commerce", "Servicios", "Soporte", "SMM"]
+        }
+      }
+    },
+
+    "final": {
+      "aria": "Llamado a la acción",
+      "kicker": "NEOX / EMPEZAR",
+      "title": {
+        "0": "Construyamos el sistema — ahorra ",
+        "glowTime": "tiempo",
+        "1": " y ",
+        "glowBudget": "presupuesto",
+        "2": ""
+      },
+      "sub": "Envía un brief — en 24 horas compartimos un plan quick-win + mapa de integraciones.",
+      "proofs": [
+        { "top": "Estable", "midGlow": "Reglas", "bot": "policy + fallback + audit trail" },
+        { "top": "Medible", "mid": ["KPI", "SLA"], "bot": "panel + alerts + tuning" },
+        { "top": "Resultado", "midGlow": "Leads", "bot": "respuestas más rápidas, más ventas" }
+      ],
+      "ctaPrimary": "Enviar brief",
+      "ctaSecondary": "Ver servicios"
+    }
+  },
+
+  "services": {
+    "seo": {
+      "title": "Servicios NEOX — Agentes de IA, Workflows y Módulos de Automatización",
+      "description": "Catálogo de servicios NEOX: inbox unificado + respuestas con IA, escritura a CRM, workflows/aprobaciones, automatización de documentos RPA, fábrica de contenido SMM, dashboards KPI, observabilidad e integraciones."
+    },
+    "structuredData": {
+      "name": "Servicios NEOX",
+      "description": "Agentes de IA, automatización de workflows, CRM ops, automatización documental RPA, módulos de SMM y analítica."
+    },
+    "hero": {
+      "aria": "Servicios",
+      "breadcrumbAria": "Navegación",
+      "breadcrumbText": "NEOX / SERVICIOS",
+      "titleBefore": "No es un paquete — ",
+      "titleHighlight": "es un sistema de negocio",
+      "titleAfter": ".",
+      "sub": "Inbox → respuesta IA → lead → CRM → workflow/aprobación → medición. Objetivo: menos trabajo manual, respuestas más rápidas y mayor conversión.",
+      "primaryCta": "Pedir demo",
+      "primaryAria": "Pedir demo",
+      "secondaryCta": "Catálogo de servicios",
+      "secondaryAria": "Ir al catálogo",
+      "chips": ["routing: smart", "handoff: instant", "approval: gated", "ops: monitored"]
+    },
+    "catalog": {
+      "aria": "Catálogo de servicios",
+      "crumb": "CATÁLOGO DE SERVICIOS",
+      "headingBefore": "Servicios de automatización — ",
+      "headingHighlight": "como módulos",
+      "headingAfter": "",
+      "desc": "Conectamos servicios como módulos ajustados a tu negocio, no como “paquetes”. Cada módulo incluye KPI medibles y auditoría.",
+      "tabsAria": "Grupos de servicios",
+      "tabsAll": "Todos",
+      "searchAria": "Búsqueda de servicios",
+      "searchPlaceholder": "Buscar: routing, invoice, aprobación, CRM..."
+    },
+    "groups": {
+      "inbox_support": "Inbox y Soporte",
+      "crm_sales_ops": "CRM y Sales Ops",
+      "workflow_approvals": "Workflows y Aprobaciones",
+      "rpa_docs": "RPA y Documentos",
+      "marketing_smm": "Marketing y SMM",
+      "analytics_ops": "Analítica y Ops",
+      "integrations": "Integraciones",
+      "industry_packs": "Paquetes por industria"
+    },
+    "tags": {
+      "alwaysOn": "24/7",
+      "triage": "triage",
+      "sales": "ventas",
+      "ops": "ops",
+      "approval": "aprobación",
+      "it": "IT",
+      "rpa": "RPA",
+      "idp": "IDP",
+      "growth": "growth",
+      "content": "contenido",
+      "kpi": "KPI",
+      "alert": "alerta",
+      "secure": "seguro",
+      "api": "API",
+      "sync": "sync",
+      "pack": "paquete"
+    },
+    "cards": {
+      "connectModule": "Activar este módulo",
+      "connectModuleAria": "Contactar para activar el módulo {{title}}",
+      "whyNeox": "¿Por qué NEOX?",
+      "whyNeoxAria": "Página sobre NEOX"
+    },
+    "bottom": {
+      "primaryCta": "Activemos tu módulo elegido",
+      "primaryAria": "Contactar para activar un módulo",
+      "secondaryCta": "¿Por qué NEOX?",
+      "secondaryAria": "Sobre NEOX"
+    },
+    "list": {
+      "inbox_unify": {
+        "title": "Inbox Unificado + Respuestas IA",
+        "desc": "Reúne WhatsApp / Instagram / Messenger en un solo lugar, responde con IA y enruta con reglas.",
+        "bullets": ["Análisis de intención", "Respuesta automática + routing", "Derivación a operador", "Filtro de spam/abuso"]
+      },
+      "call_triage": {
+        "title": "Llamadas / Lead Triage",
+        "desc": "Prioriza llamadas, formularios y DMs, ponlos en cola y pásalos al operador correcto.",
+        "bullets": ["Prioridad/SLA", "Enriquecimiento de lead", "Queue routing", "Seguimiento de llamadas perdidas"]
+      },
+      "crm_writeback": {
+        "title": "Escritura en CRM + Lead Scoring",
+        "desc": "Mensaje → intención → lead → estado CRM. Scoring y follow-up automáticos en ventas.",
+        "bullets": ["Lead scoring", "Actualización del pipeline", "Tareas automáticas", "Secuencias de follow-up"]
+      },
+      "quote_to_cash_lite": {
+        "title": "Cotización → Pedido (Automatización)",
+        "desc": "Estandariza cotizaciones, pedidos, aprobaciones, notificaciones y estados de entrega.",
+        "bullets": ["Borrador automático de cotización", "Puerta de aprobación", "Notificación de estado", "Routing de devoluciones"]
+      },
+      "approvals": {
+        "title": "Flujos de Aprobación",
+        "desc": "Vacaciones, firmas, aprobaciones de ventas, gastos — conviértelo en workflows de aprobación.",
+        "bullets": ["Aprobaciones multi-step", "Notificaciones Teams/Email", "Rastro de auditoría", "Reglas de escalación"]
+      },
+      "it_ops_automations": {
+        "title": "Automatización IT Ops",
+        "desc": "Automatiza solicitudes internas, accesos, creación de tickets, alertas y tareas rutinarias.",
+        "bullets": ["Access requests", "Ticket routing", "On-call notify", "Runbook triggers"]
+      },
+      "invoice_docs": {
+        "title": "Automatización de Facturas/Documentos",
+        "desc": "Facturas, contratos, albaranes, formularios — extrae, valida y registra en sistemas (IDP + RPA).",
+        "bullets": ["Extracción PDF/imagen", "Reglas de validación", "Cola de excepciones", "Publicación en ERP/CRM"]
+      },
+      "doc_routing": {
+        "title": "Enrutado y Archivo de Documentos",
+        "desc": "Clasifica en carpetas, renombra, añade metadatos y deja todo listo para búsqueda.",
+        "bullets": ["Clasificación automática", "Reglas de nombres", "Storage sync", "Política de retención"]
+      },
+      "marketing_ops": {
+        "title": "Automatización de Marketing",
+        "desc": "Lead capture → CRM → secuencia de emails → tareas. Convierte campañas en workflow.",
+        "bullets": ["Lead routing", "Secuencias de email", "Segmentación", "UTM + atribución"]
+      },
+      "smm_factory": {
+        "title": "Fábrica de Contenido SMM",
+        "desc": "Idea → guion → caption/CTA → plan → publicación → reporte. Producción sistemática.",
+        "bullets": ["Plan de 30 días", "Caption/CTA", "Guía de formatos", "Reporte semanal"]
+      },
+      "dashboards": {
+        "title": "Dashboard KPI + SLA",
+        "desc": "Velocidad de respuesta, conversión, calidad del lead, incumplimientos SLA — todo en un panel.",
+        "bullets": ["Seguimiento SLA", "Embudo de conversión", "Scoring de calidad", "Insights semanales"]
+      },
+      "alerts_observability": {
+        "title": "Alertas y Observabilidad",
+        "desc": "Anomalías, caídas, bajada de calidad — alertas automáticas y escalación.",
+        "bullets": ["Threshold alerts", "Vigilancia de anomalías", "Escalación", "Logs de auditoría"]
+      },
+      "security_guardrails": {
+        "title": "Seguridad y QA Guardrails",
+        "desc": "Políticas, límites, bloqueo de intención riesgosa, escalación a operador y plan de pruebas.",
+        "bullets": ["RBAC básico", "Reglas de política", "Flujos fallback", "Escenarios QA"]
+      },
+      "integrations": {
+        "title": "Integraciones (API/Webhook/RPA)",
+        "desc": "CRM, ERP, Sheets, pagos, entregas, reservas — conecta todo.",
+        "bullets": ["API/Webhook", "Data sync", "Retry logic", "Logging"]
+      },
+      "data_sync": {
+        "title": "Data Sync y Limpieza",
+        "desc": "Duplicados, formatos, estados — datos limpios y sincronizados.",
+        "bullets": ["Reglas dedup", "Field mapping", "Normalización", "Sync programado"]
+      },
+      "ecom_pack": {
+        "title": "Paquete E-commerce",
+        "desc": "Estado de pedido, envío, pago contra entrega, devoluciones — con auto respuestas y routing.",
+        "bullets": ["Bot de estado", "Routing de devoluciones", "Preguntas de stock", "Scripts COD/Pago"]
+      },
+      "clinic_pack": {
+        "title": "Paquete Clínica / Citas",
+        "desc": "Citas, recordatorios, consultas de resultados, handoff a operador — flujo para clínicas.",
+        "bullets": ["Citas", "Recordatorios", "FAQ triage", "Escalación a operador"]
+      },
+      "service_pack": {
+        "title": "Paquete de Servicios",
+        "desc": "Para reparación/servicio: solicitud → precio → aprobación → agenda → reporte.",
+        "bullets": ["Captura de cotización", "Puerta de aprobación", "Agendamiento", "Follow-up post-servicio"]
+      },
+      "hr_pack": {
+        "title": "Paquete HR Ops",
+        "desc": "Vacaciones, onboarding, documentos, aprobaciones — flujo para RR.HH. interno.",
+        "bullets": ["Aprobaciones de vacaciones", "Checklist de onboarding", "Routing de documentos", "Notificaciones"]
+      }
+    }
+  },
+
+  "useCases": {
+    "seo": {
+      "title": "NEOX Use Cases — Resultados reales y escenarios de automatización",
+      "description": "Use cases de NEOX: automatización de soporte en e-commerce, procesamiento de documentos en finanzas, citas/recordatorios en clínicas y coordinación logística. KPI y resultados reales."
+    },
+    "ld": {
+      "name": "NEOX Use Cases",
+      "description": "Escenarios reales de automatización y resultados con KPI."
+    },
+    "aria": {
+      "hero": "Use cases hero",
+      "contact": "Contacto",
+      "services": "Servicios",
+      "caseStudies": "Casos de uso",
+      "more": "Más industrias",
+      "finalCta": "CTA final"
+    },
+    "labels": {
+      "case": "case",
+      "realScenario": "Escenario real"
+    },
+    "cta": {
+      "ownCase": "Cuéntanos tu caso",
+      "services": "Servicios",
+      "schedule": "Agendar una llamada"
+    },
+    "hud": {
+      "metricLabel": "metric",
+      "statusLabel": "status",
+      "statusValue": "live",
+      "chips": {
+        "a": "automation",
+        "b": "routing",
+        "c": "kpi"
+      }
+    },
+    "hero": {
+      "crumb": "NEOX / USE CASES",
+      "title": {
+        "before": "Resultados reales — ",
+        "highlight": "no solo una demo",
+        "after": "."
+      },
+      "subtitle": "La industria no importa: si hay proceso + datos, los agentes pueden lograr resultados medibles. Estos casos están escritos como escenarios reales — envía tu proceso y lo construiremos para ti."
+    },
+    "cases": [
+      {
+        "sektor": "E-commerce",
+        "basliq": "RetailCo: costo de soporte −70%, respuesta en 2 minutos",
+        "hekayə": "Con alto volumen diario de pedidos, los tickets se acumulaban. Los agentes de NEOX automatizaron estado de pedido, devoluciones y FAQ.",
+        "maddeler": [
+          "~80% de consultas respondidas automáticamente",
+          "Flujo de tracking + devoluciones automatizado",
+          "Tiempo de respuesta: 4 horas → 2 minutos"
+        ],
+        "neticeler": [
+          { "k": "−70%", "v": "Reducción de costo", "sub": "gasto operativo de soporte" },
+          { "k": "+95%", "v": "CSAT", "sub": "satisfacción del cliente" }
+        ]
+      },
+      {
+        "sektor": "Finanzas",
+        "basliq": "FinanceHub: procesamiento de documentos 5 días → 2 horas",
+        "hekayə": "La verificación de documentos para préstamos era manual. Los agentes estandarizaron extracción + validación + controles de compliance.",
+        "maddeler": [
+          "Extracción + validación de documentos",
+          "Compliance + verificación de riesgo",
+          "Tiempo de proceso: 5 días → 2 horas"
+        ],
+        "neticeler": [
+          { "k": "90%", "v": "Más rápido", "sub": "mejoró el throughput" },
+          { "k": "99.5%", "v": "Precisión", "sub": "menos errores" }
+        ]
+      },
+      {
+        "sektor": "Salud",
+        "basliq": "MediCare: no-shows −50%, tiempo del staff +85%",
+        "hekayə": "En 25 clínicas, citas, recordatorios y preguntas eran una gran carga. NEOX implementó citas + recordatorios + bot de consultas frecuentes.",
+        "maddeler": [
+          "Citas + recordatorios",
+          "Flujo de renovación de receta",
+          "Soporte de preguntas 24/7"
+        ],
+        "neticeler": [
+          { "k": "−50%", "v": "Menos no-shows", "sub": "menos ausencias" },
+          { "k": "+85%", "v": "Ahorro de tiempo", "sub": "capacidad del staff recuperada" }
+        ]
+      },
+      {
+        "sektor": "Logística",
+        "basliq": "GlobalShip: velocidad de entrega +40%, $2M ahorro anual",
+        "hekayə": "La coordinación de supply chain en 40 países era manual. Los agentes automatizaron predicción de retrasos, reroute y actualizaciones al cliente.",
+        "maddeler": [
+          "Predicción de retrasos + reroute automático",
+          "Documentos aduaneros + compliance",
+          "Notificaciones de tracking en tiempo real"
+        ],
+        "neticeler": [
+          { "k": "+40%", "v": "Entrega más rápida", "sub": "velocidad de entrega" },
+          { "k": "$2M", "v": "Ahorro anual", "sub": "ahorro por año" }
+        ]
+      }
+    ],
+    "moreSection": {
+      "pill": "COBERTURA",
+      "title": "Más industrias",
+      "subtitle": {
+        "before": "Esta lista sigue creciendo — la idea clave: ",
+        "highlight": "“hay proceso → hay agentes”",
+        "after": "."
+      }
+    },
+    "more": [
+      { "title": "Bienes raíces", "text": "Calificación de leads, gestión de propiedades, flujos de comunicación con inquilinos." },
+      { "title": "Educación", "text": "Soporte a estudiantes, triage de admisiones, operaciones administrativas de cursos." },
+      { "title": "Marketing", "text": "Lead scoring, automatización de campañas, operaciones de contenido y reporting." },
+      { "title": "Manufactura", "text": "Control de calidad, inventario, señales de pronóstico." }
+    ],
+    "final": {
+      "pill": "¿listo?",
+      "title": {
+        "before": "Escribamos tu ",
+        "highlight": "“success story”",
+        "after": "."
+      },
+      "subtitle": "Describe tu proceso — proponemos KPI, plan y un piloto. Luego producción estable y escala."
+    }
+  },
+
+  "blog": {
+    "seo": {
+      "title": "NEOX Blog — Automatización con IA, Agentes y Guías Prácticas",
+      "description": "Automatización con IA, agentes, workflows, seguridad y casos reales. Contenido corto, práctico y enfocado en resultados."
+    },
+    "ld": {
+      "name": "NEOX Blog",
+      "description": "Artículos prácticos e ideas sobre automatización con IA."
+    },
+    "aria": {
+      "hero": "Encabezado del blog",
+      "posts": "Publicaciones del blog",
+      "newsletter": "Suscripción"
+    },
+    "hero": {
+      "crumb": "NEOX / BLOG",
+      "title": {
+        "before": "Recursos &",
+        "highlight": "Insights"
+      },
+      "subtitle": "Automatización con IA, agentes, sistemas de ventas y casos reales. Corto, práctico y orientado a resultados."
+    },
+    "filters": {
+      "searchPlaceholder": "Buscar en los artículos...",
+      "searchAria": "Búsqueda",
+      "categoryAria": "Filtro de categoría",
+      "all": "Todos",
+      "general": "General"
+    },
+    "actions": {
+      "read": "Leer",
+      "readAria": "Leer el artículo"
+    },
+    "empty": {
+      "title": "No se encontró nada",
+      "subtitle": "Cambia la búsqueda o elige “Todos”.",
+      "clearSearch": "Limpiar búsqueda",
+      "resetFilter": "Restablecer filtro"
+    },
+    "newsletter": {
+      "pill": "suscripción",
+      "title": {
+        "before": "Notas semanales de IA y automatización —",
+        "highlight": "cortas y útiles"
+      },
+      "subtitle": "Nuevos artículos, casos de uso y consejos prácticos sobre qué automatizar y cómo.",
+      "emailPlaceholder": "Correo electrónico",
+      "emailAria": "Correo",
+      "button": "Suscribirme"
+    }
+  },
+
+  "contact": {
+    "seo": {
+      "title": "NEOX — Contacto | Demo y Automatización con IA",
+      "description": "Demo y consultoría para automatización con IA, agentes, ventas y soporte. Respuesta en 24 horas."
+    },
+    "aria": {
+      "hero": "Contacto — sección principal",
+      "content": "Contacto — sección de contenido",
+      "cta": "Contacto — llamada final a la acción"
+    },
+    "common": {
+      "copy": "Copiar",
+      "copied": "Copiado"
+    },
+    "whatsapp": {
+      "text": "¡Hola! Quiero una demo de NEOX. ✅\n\nInfo rápida:\n• Sector del negocio:\n• Proceso que quiero automatizar:\n• Objetivo/KPI (p. ej., tiempo de respuesta, CSAT, coste):\n• Mejor hora para contactarme:\n\nSi es posible, sugieran un horario para una demo de 30 minutos. ¡Gracias!"
+    },
+    "hero": {
+      "breadcrumb": "NEOX / CONTACTO",
+      "title": {
+        "before": "Hablemos",
+        "highlight": ""
+      },
+      "subtitle": "Automatización con IA, agentes, ventas y soporte — enfocada en resultados medibles.",
+      "cta_whatsapp": "Escribir para una demo",
+      "cta_whatsapp_aria": "Escribir por WhatsApp para una demo",
+      "cta_email_aria": "Contactar por email"
+    },
+    "left": {
+      "title": "Canales de contacto",
+      "subtitle": "Tanto si empiezas como si escalas un proceso existente — encontraremos el “quick win” más rápido para ti.",
+      "channels": {
+        "email": {
+          "title": "Email",
+          "copy_aria": "Copiar email",
+          "note": "Escribe corto — nosotros haremos las preguntas correctas."
+        },
+        "phone": {
+          "title": "Teléfono",
+          "copy_aria": "Copiar número de teléfono",
+          "note": "Laborables 10:00–19:00"
+        },
+        "location": {
+          "title": "Ubicación",
+          "value": "Bakú, Azerbaiyán",
+          "note": "Reuniones online disponibles"
+        }
+      },
+      "expect": {
+        "title": "¿Qué puedes esperar?",
+        "items": [
+          "Respuesta en 24 horas",
+          "Propuesta adaptada a tu negocio",
+          "Primer resultado en 1–2 semanas (MVP)"
+        ]
+      },
+      "footer_note": "Un mensaje corto es suficiente — incluye el objetivo y el esquema del proceso."
+    },
+    "form": {
+      "title": "Enviar mensaje",
+      "subtitle": "¿Qué quieres automatizar y qué resultado necesitas? (p. ej., tiempo de respuesta, coste, conversión de leads)",
+      "badge": {
+        "label": "Respuesta",
+        "value": "≤ 24 h"
+      },
+      "status": {
+        "success_title": "¡Enviado!",
+        "success_desc": "Te responderemos pronto.",
+        "error_title": "Error",
+        "loading_title": "Enviando...",
+        "loading_desc": "Espera unos segundos."
+      },
+      "fields": {
+        "name": {
+          "label": "Nombre *",
+          "placeholder": "Nombre y apellido"
+        },
+        "email": {
+          "label": "Email *",
+          "placeholder": "email@company.com"
+        },
+        "company": {
+          "label": "Empresa",
+          "placeholder": "Nombre de la empresa"
+        },
+        "phone": {
+          "label": "Teléfono",
+          "placeholder": "+994 ..."
+        },
+        "message": {
+          "label": "Mensaje *",
+          "placeholder": "Ej.: que los leads de WhatsApp/Instagram entren al CRM, follow-up automático, solo leads cualificados al operador..."
+        }
+      },
+      "hint": "Cuanto más específico seas, más rápido encontramos un “quick win”.",
+      "message_meter_aria": "Indicador de longitud del mensaje",
+      "submit": "Enviar",
+      "submit_loading": "Enviando...",
+      "submit_aria": "Enviar mensaje",
+      "legal": "Al enviar, aceptas que tus datos se usarán solo con fines de contacto.",
+      "demo_prefill": "Quiero una demo.\n\nSector del negocio:\nProceso que quiero automatizar:\nKPI objetivo (p. ej., tiempo de respuesta, CSAT, coste):\nMejor hora para contactarme:\n",
+      "errors": {
+        "fill_required": "Por favor, completa correctamente nombre, email y mensaje.",
+        "send_failed": "No se envió. Revisa e inténtalo de nuevo.",
+        "name_short": "El nombre debe tener al menos 2 caracteres.",
+        "email_bad": "El formato de email no es válido.",
+        "message_short": "El mensaje debe tener al menos 10 caracteres."
+      }
+    },
+    "final": {
+      "title": "Si quieres una demo — 30 minutos bastan",
+      "subtitle": "Revisamos tu proceso, encontramos el “quick win” más rápido y lanzamos la primera automatización en 1 semana.",
+      "cta": "Escribir para una demo",
+      "cta_aria": "Escribir por WhatsApp para una demo"
+    }
+  },
+
+  "neoxAi": {
+    "brand": "NEOX AI",
+    "status": "LIVE",
+    "subtitle": "Inbox social → Lead → CRM",
+    "welcome": "NEOX AI está aquí. Haz una pregunta — puedo explicar cómo convertimos mensajes de redes sociales en leads para CRM o preparar plantillas de respuesta.",
+    "fabAria": "Abrir NEOX AI",
+    "panelAria": "Panel NEOX AI",
+    "tabs": {
+      "chat": "Chat",
+      "quick": "Preguntas rápidas"
+    },
+    "join": {
+      "label": "Unirse al chat →",
+      "title": "Conectar con operador",
+      "href": "https://wa.me/"
+    },
+    "quick": {
+      "title": "Pregunta con un clic:",
+      "items": [
+        "¿Cómo automatizar respuestas en Instagram DM?",
+        "¿Cómo guardan mensajes de WhatsApp en el CRM?",
+        "¿Cómo se calcula el lead score?",
+        "¿Cuándo se deriva a un operador?",
+        "Escribe un ejemplo de respuesta a una consulta de producto.",
+        "Dame 3 plantillas de respuesta para una campaña."
+      ]
+    },
+    "chat": {
+      "you": "Tú",
+      "ai": "NEOX AI"
+    },
+    "input": {
+      "placeholder": "Escribe tu pregunta… (ej: ¿cómo se guarda en CRM?)",
+      "send": "Enviar →"
+    },
+    "ai": {
+      "basePlan": "Plan corto:\n• Normalizamos el mensaje (intención, producto, contexto)\n• Creamos el lead y asignamos score\n• Derivamos al flujo u operador adecuado\n• Guardamos estado e historial en CRM",
+      "templates3": "3 respuestas de ejemplo:\n1) ¡Hola! ¿Qué producto buscas y cuál es tu presupuesto?\n2) Hay envío disponible — envía la dirección y calculo el precio.\n3) La campaña está activa — ¿te envío opciones adecuadas?",
+      "followupQuestion": "Podemos adaptarlo a tu negocio en 10 minutos. ¿Qué CRM utilizas?"
+    }
+  }
+}

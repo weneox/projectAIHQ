@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset
+  xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <!-- HOME -->
+  <url><loc>https://weneox.com/az</loc></url>
+  <url><loc>https://weneox.com/en</loc></url>
+  <url><loc>https://weneox.com/tr</loc></url>
+  <url><loc>https://weneox.com/ru</loc></url>
+  <url><loc>https://weneox.com/es</loc></url>
+
+  <!-- ABOUT -->
+  <url><loc>https://weneox.com/az/about</loc></url>
+  <url><loc>https://weneox.com/en/about</loc></url>
+  <url><loc>https://weneox.com/tr/about</loc></url>
+  <url><loc>https://weneox.com/ru/about</loc></url>
+  <url><loc>https://weneox.com/es/about</loc></url>
+
+  <!-- SERVICES -->
+  <url><loc>https://weneox.com/az/services</loc></url>
+  <url><loc>https://weneox.com/en/services</loc></url>
+  <url><loc>https://weneox.com/tr/services</loc></url>
+  <url><loc>https://weneox.com/ru/services</loc></url>
+  <url><loc>https://weneox.com/es/services</loc></url>
+
+  <!-- SCENARIOS -->
+  <url><loc>https://weneox.com/az/scenarios</loc></url>
+  <url><loc>https://weneox.com/en/scenarios</loc></url>
+  <url><loc>https://weneox.com/tr/scenarios</loc></url>
+  <url><loc>https://weneox.com/ru/scenarios</loc></url>
+  <url><loc>https://weneox.com/es/scenarios</loc></url>
+
+  <!-- RESOURCES -->
+  <url><loc>https://weneox.com/az/resources</loc></url>
+  <url><loc>https://weneox.com/en/resources</loc></url>
+  <url><loc>https://weneox.com/tr/resources</loc></url>
+  <url><loc>https://weneox.com/ru/resources</loc></url>
+  <url><loc>https://weneox.com/es/resources</loc></url>
+
+  <!-- CONTACT -->
+  <url><loc>https://weneox.com/az/contact</loc></url>
+  <url><loc>https://weneox.com/en/contact</loc></url>
+  <url><loc>https://weneox.com/tr/contact</loc></url>
+  <url><loc>https://weneox.com/ru/contact</loc></url>
+  <url><loc>https://weneox.com/es/contact</loc></url>
+
+</urlset>

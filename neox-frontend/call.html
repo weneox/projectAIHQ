@@ -1,0 +1,197 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NEOX Browser Call</title>
+
+    <style>
+      body { font-family: Arial, sans-serif; padding: 16px; }
+      button { padding: 10px 14px; margin-right: 8px; }
+      #log {
+        white-space: pre-wrap;
+        background: #111;
+        color: #0f0;
+        padding: 12px;
+        border-radius: 8px;
+        margin-top: 12px;
+        min-height: 160px;
+        line-height: 1.35;
+      }
+      .row { margin-top: 10px; }
+      input { padding: 10px 12px; width: 560px; max-width: 100%; }
+      .muted { color: #666; font-size: 12px; }
+    </style>
+  </head>
+
+  <body>
+    <h2>NEOX Browser Call</h2>
+
+    <div class="row">
+      <button id="btnInit">1) Init Device</button>
+      <button id="btnCall" disabled>2) Call</button>
+      <button id="btnHangup" disabled>Hangup</button>
+      <button id="btnClear" style="float:right">Clear Log</button>
+    </div>
+
+    <div class="row">
+      Backend URL:<br />
+      <input id="backendUrl" value="https://neox-backend-production.up.railway.app" />
+      <div class="muted">
+        Tip: local backend test edəcəksənsə buranı məsələn <b>http://localhost:3001</b> et.
+      </div>
+    </div>
+
+    <div id="log"></div>
+
+    <script type="module">
+      import { Device } from "@twilio/voice-sdk";
+
+      const logEl = document.getElementById("log");
+      const log = (...a) => (logEl.textContent += a.join(" ") + "\n");
+
+      const btnInit = document.getElementById("btnInit");
+      const btnCall = document.getElementById("btnCall");
+      const btnHangup = document.getElementById("btnHangup");
+      const btnClear = document.getElementById("btnClear");
+      const backendInput = document.getElementById("backendUrl");
+
+      let device = null;
+      let conn = null;
+
+      function resetUI() {
+        btnCall.disabled = true;
+        btnHangup.disabled = true;
+      }
+
+      function cleanupDevice() {
+        try { if (conn) conn.disconnect(); } catch {}
+        try { if (device) device.disconnectAll(); } catch {}
+        try { if (device) device.destroy(); } catch {}
+        conn = null;
+        device = null;
+        resetUI();
+      }
+
+      async function fetchJson(url, opts = {}) {
+        const r = await fetch(url, opts);
+        const ct = (r.headers.get("content-type") || "").toLowerCase();
+        let body = null;
+
+        if (ct.includes("application/json")) {
+          body = await r.json().catch(() => null);
+        } else {
+          const t = await r.text().catch(() => "");
+          body = { _raw: t };
+        }
+
+        return { r, body };
+      }
+
+      async function init() {
+        resetUI();
+        cleanupDevice();
+
+        try {
+          log("\n=== INIT START ===");
+
+          const BACKEND = String(backendInput.value || "").trim().replace(/\/+$/, "");
+          if (!BACKEND.startsWith("http")) throw new Error("Backend URL invalid");
+
+          log("Voice SDK loaded ✅", typeof Device);
+
+          // ✅ TOKEN: POST /twilio/token
+          const identity = `browser-${Math.random().toString(16).slice(2)}-${Date.now().toString(36)}`;
+
+          log("Fetching token (POST):", `${BACKEND}/twilio/token`);
+          const { r, body } = await fetchJson(`${BACKEND}/twilio/token`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ identity }),
+          });
+
+          log("Token HTTP status:", r.status);
+          log("Token JSON:", JSON.stringify(body));
+
+          if (!r.ok) throw new Error(`Token request failed (HTTP ${r.status})`);
+          if (!body) throw new Error("Token response empty");
+          if (body.ok === false) throw new Error(body.message || body.error || "Token response ok=false");
+          if (!body.token) throw new Error("Token missing in response");
+
+          // ✅ Device
+          log("Creating Device...");
+          device = new Device(body.token, {
+            debug: true,
+            edge: "roaming",
+          });
+
+          device.on("registered", () => log("Device registered ✅"));
+          device.on("unregistered", () => log("Device unregistered"));
+          device.on("error", (e) => {
+            log("Device error:", e?.message || String(e));
+            console.error("Device error:", e);
+          });
+          device.on("incoming", () => log("Incoming call..."));
+
+          log("Registering device (mic permission may pop)...");
+          await device.register();
+
+          btnCall.disabled = false;
+          log("Call enabled ✅");
+          log("=== INIT DONE ===");
+        } catch (e) {
+          log("INIT FAILED:", e?.message || String(e));
+          console.error(e);
+          cleanupDevice();
+        }
+      }
+
+      async function call() {
+        try {
+          if (!device) return log("Init first.");
+
+          log("\nCalling...");
+          conn = await device.connect({ params: { To: "neox" } });
+          btnHangup.disabled = false;
+
+          try {
+            conn.on("accept", () => log("Call accepted ✅"));
+            conn.on("disconnect", () => {
+              log("Call disconnected ✅");
+              resetUI();
+            });
+            conn.on("error", (e) => {
+              log("Call error:", e?.message || String(e));
+              console.error("Call error:", e);
+            });
+          } catch {}
+
+          log("Connected ✅");
+        } catch (e) {
+          log("CALL FAILED:", e?.message || String(e));
+          console.error(e);
+        }
+      }
+
+      function hangup() {
+        try { if (conn) conn.disconnect(); } catch {}
+        try { if (device) device.disconnectAll(); } catch {}
+        conn = null;
+        log("Hangup.");
+        resetUI();
+      }
+
+      btnInit.onclick = () => init();
+      btnCall.onclick = () => call();
+      btnHangup.onclick = () => hangup();
+      btnClear.onclick = () => (logEl.textContent = "");
+
+      window.addEventListener("beforeunload", () => {
+        try { cleanupDevice(); } catch {}
+      });
+
+      resetUI();
+      log("Ready. Click: 1) Init Device");
+    </script>
+  </body>
+</html>

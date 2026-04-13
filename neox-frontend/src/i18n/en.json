@@ -1,0 +1,877 @@
+{
+  "nav.home": "Home",
+  "nav.about": "About",
+  "nav.services": "Services",
+  "nav.useCases": "Use Cases",
+  "nav.blog": "Resources",
+  "nav.contact": "Contact",
+
+  "home": {
+    "cta": {
+      "start": "Let’s start →",
+      "how": "How it works →",
+      "demo": "Build a demo →"
+    },
+    "hero": {
+      "kicker": "NEOX / AI AUTOMATION",
+      "title": { "line1": "AI runs your", "line2": "operations." },
+      "sub": "We automate processes with AI agents and workflows: sales, support, operations and content — less manual work, more speed."
+    },
+    "strip": {
+      "aria": "Terminal strip",
+      "ticks": [
+        "AI AGENTS",
+        "WORKFLOW AUTOMATION",
+        "CRM OPS",
+        "CUSTOMER SUPPORT",
+        "SMM AUTOMATION",
+        "ANALYTICS",
+        "INTEGRATIONS",
+        "LEAD CAPTURE",
+        "SALES OPS",
+        "TICKET ROUTING",
+        "CONTENT ENGINE",
+        "RPA + API",
+        "DASHBOARD",
+        "AUDIT LOGS"
+      ]
+    },
+    "social": {
+      "aria": "Social automation",
+      "kicker": "NEOX / SOCIAL AUTOMATION",
+      "title": {
+        "p1": "24/7",
+        "grad1": "chatbot",
+        "p2": "a message flow that",
+        "grad2": "converts",
+        "p3": "into sales"
+      },
+      "lead": "WhatsApp Business, Facebook Messenger and Instagram DM — all in one system. AI answers questions, captures leads, routes to sales, and “hands off” to your team when needed.",
+      "agentName": "NEOX",
+      "clientName": { "whatsapp": "Orkhan", "default": "Customer" },
+      "typing": "typing…",
+      "now": "now",
+      "threadAria": "{{platform}} messages",
+      "demos": {
+        "WHATSAPP": [
+          { "from": "client", "text": "Hi, how many days does delivery take?" },
+          { "from": "ai", "text": "Hi! Baku: within 24 hours, regions: 2–3 days. Want me to send the order link?" },
+          { "from": "client", "text": "How can I pay?" },
+          { "from": "ai", "text": "Card, bank transfer, and cash on delivery. Which model did you choose?" },
+          { "from": "client", "text": "iPhone 15 Pro." },
+          { "from": "ai", "text": "Great! Choose color (Natural/Black) and storage (128/256/512) — I’ll generate the link right away." }
+        ],
+        "FACEBOOK": [
+          { "from": "client", "text": "Where are the prices? Do you have packages?" },
+          { "from": "ai", "text": "Yes. There are 3 packages: Start / Pro / Enterprise. What is it for (shop, services, clinic)?" },
+          { "from": "client", "text": "For a shop." },
+          { "from": "ai", "text": "Perfect. With Start we can set up 24/7 replies + lead capture. Share your website link." },
+          { "from": "client", "text": "weneox.com" },
+          { "from": "ai", "text": "Got it. We’ll build a demo and send results within 24 hours." }
+        ],
+        "INSTAGRAM": [
+          { "from": "client", "text": "I placed an order — what’s the status?" },
+          { "from": "ai", "text": "Send your phone number for tracking — I’ll check it instantly." },
+          { "from": "client", "text": "+994 50 XXX XX XX" },
+          { "from": "ai", "text": "Found it ✅ Handed to courier. Delivery today between 19:00–22:00." },
+          { "from": "client", "text": "Thanks" },
+          { "from": "ai", "text": "You’re welcome! Want me to enable cash on delivery as well?" }
+        ]
+      }
+    },
+    "pipeline": {
+      "aria": "Data flow",
+      "kicker": "HOW IT WORKS?",
+      "title": {
+        "p1": "Message arrives → intent extracted →",
+        "grad": "CRM",
+        "p2": "updated → sales flow starts"
+      },
+      "copy": "NEOX receives inbox messages, cleans them, extracts intent and creates a lead. Then it routes into your sales flow and updates the CRM status.",
+      "brief": "Get a quick brief →",
+      "platforms": { "whatsapp": "WhatsApp", "messenger": "Messenger", "instagram": "Instagram" },
+      "core": {
+        "mid": "Unify • Understand • Route",
+        "bot": "Normalize → Score → Hand off"
+      },
+      "sinks": {
+        "crm": { "title": "CRM", "sub": "Lead record", "mini": "tag • score • status" },
+        "ops": { "title": "OPS / ANALYTICS", "sub": "Monitoring", "mini": "SLA • conversion • logs" }
+      }
+    },
+    "smm": {
+      "aria": "SMM automation",
+      "kicker": "NEOX / SMM AUTOMATION",
+      "title": { "p1": "AI prepares content automatically and", "grad": "systemizes" },
+      "copy": "Idea → script → format → posting plan → measurement. Less manual work, more consistent results.",
+      "cta": { "primary": "Build the content flow →", "secondary": "Ask for a plan →" },
+      "diagram": {
+        "top": { "idea": "IDEA", "prepare": "PREPARE", "publish": "PUBLISH" },
+        "src": { "instagram": "Reels / Story / Post", "youtube": "Shorts / Long", "facebook": "Page / Ads" },
+        "core": { "mid": "Content factory", "bot": "topic → script → edit → plan" },
+        "sinks": {
+          "calendar": { "title": "Calendar", "sub": "Time / Slot" },
+          "brand": { "title": "Brand rules", "sub": "tone • format • CTA" },
+          "report": { "title": "Report", "sub": "views • leads" }
+        },
+        "foot": { "caption": "auto-caption", "hashtag": "auto-hashtag", "plan": "auto-plan", "report": "auto-report" }
+      }
+    },
+    "ops": {
+      "aria": "Audit & monitoring",
+      "kicker": "NEOX / AUDIT & OPS",
+      "title": { "p1": "We build the workflow — then", "grad": "24/7", "p2": "monitor and optimize" },
+      "copy": "The system is continuously measured: SLA, conversion, logs, alerts, and a weekly optimization plan.",
+      "cta": "Apply for an audit →",
+      "diagram": {
+        "line": { "audit": "Audit", "build": "Build", "monitor": "Monitor" },
+        "boxes": {
+          "signals": { "k": "Signals", "v": "Inbox • Form • Calls" },
+          "core": { "v": "Automation control", "mini": "rules • routing • QA" },
+          "result": { "k": "Outcome", "v": "Time • ROI" }
+        },
+        "metrics": {
+          "sla": { "top": "SLA", "bot": "faster replies" },
+          "quality": { "top": "Quality", "bot": "stable flow" },
+          "cost": { "top": "Cost", "bot": "less manual work" }
+        }
+      }
+    },
+    "final": {
+      "aria": "Business system",
+      "kicker": "NEOX / BUSINESS SYSTEM",
+      "title": { "p1": "Let’s build the business system —", "grad1": "save time", "p2": "and", "grad2": "budget", "p3": "for real" },
+      "copy": "You focus on the business. We build the full system: inbox → AI reply → lead → CRM → sales flow → measurement and optimization.",
+      "blocks": {
+        "a": { "top": "Lead ↑", "mid": { "p1": "More", "grad": "customers" }, "bot": "inbox → reply → offer → sale" },
+        "b": { "top": "KPI + SLA", "mid": { "p1": "Measure, monitor,", "grad": "tune", "p2": "it" }, "bot": "dashboard • alerts • weekly optimization" },
+        "c": { "top": "Ops ↓", "mid": { "p1": "Less", "grad": "manual", "p2": "work" }, "bot": "routing • handoff • audit trail" }
+      },
+      "cta": { "primary": "Let’s build the system →", "secondary": "Quick brief →" }
+    }
+  },
+
+  "footer": {
+    "aria": "Footer",
+    "brand": {
+      "badge": "AI AUTOMATION",
+      "copy": "We systemize business flows with AI agents and automation — from inbox to CRM. Less manual work. Faster responses. Better outcomes."
+    },
+    "contact": {
+      "aria": "Contact",
+      "emailAria": "Send email",
+      "phoneAria": "Call"
+    },
+    "social": {
+      "aria": "Social links",
+      "twitter": "Twitter",
+      "linkedin": "LinkedIn",
+      "github": "GitHub"
+    },
+    "company": {
+      "title": "Company",
+      "links": {
+        "about": "About",
+        "services": "Services",
+        "useCases": "Use Cases"
+      }
+    },
+    "resources": {
+      "title": "Resources",
+      "links": {
+        "blog": "Blog",
+        "contact": "Contact",
+        "privacy": "Privacy Policy"
+      }
+    },
+    "bottom": {
+      "copy": "© {{year}} NEOX — Intelligent Automation Systems"
+    }
+  },
+
+  "intro": {
+    "wakeText": "Wake up, World...",
+    "mainText": "NEOX has entered the system..."
+  },
+
+  "about": {
+    "hero": {
+      "aria": "About hero",
+      "kicker": "NEOX / ABOUT",
+      "title": {
+        "0": "We don’t build AI just so it ",
+        "glowNice": "looks nice",
+        "1": ".",
+        "2": "We build a ",
+        "glowWorking": "working",
+        "glowMeasurable": "measurable",
+        "glowControlled": "controlled",
+        "3": " system."
+      },
+      "sub": "NEOX is an AI automation & agent systems studio. Inbox → intent → routing → CRM → measurement. Our goal: simplify operations, reduce team load, and run sales flow 24/7.",
+      "ctaPrimary": "Start the project",
+      "ctaSecondary": "Services",
+      "chips": ["AI Agents", "Workflow automation", "24/7 Chatbot", "CRM ops", "SMM automation"]
+    },
+
+    "strip": {
+      "aria": "Signal strip",
+      "foundation": "FOUNDATION",
+      "agents": "AGENTS",
+      "workflow": "WORKFLOW",
+      "rules": "RULES",
+      "monitoring": "MONITORING",
+      "integration": "INTEGRATION",
+      "crm": "CRM",
+      "sla": "SLA"
+    },
+
+    "foundation": {
+      "aria": "Foundation",
+      "kicker": "FOUNDATION",
+      "title": {
+        "0": "Our foundation: ",
+        "glowSystem": "system",
+        "glowControl": "control",
+        "1": " and ",
+        "glowResult": "results"
+      },
+      "sub": "We don’t build agents as simple “reply bots”. Agent + integrations + rules + monitoring are built together.",
+      "cards": {
+        "resultFirst": {
+          "title": "Result-first",
+          "desc": "AI is not decoration — it’s a results engine. Goal: more leads, faster replies, less manual work.",
+          "bullets": ["Conversion ↑", "Manual load ↓", "24/7 continuity"]
+        },
+        "workflowEngineering": {
+          "title": "Workflow engineering",
+          "desc": "We map processes, remove bottlenecks and turn steps into agent tasks. The flow doesn’t break.",
+          "bullets": ["Process mapping", "Routing + handoff", "Systemization"]
+        },
+        "observability": {
+          "title": "Observability",
+          "desc": "The system is not a black box. SLA, reply quality, error reasons and conversion are tracked — tuning is data-driven.",
+          "bullets": ["SLA alerts", "Quality score", "A/B tuning"]
+        },
+        "security": {
+          "title": "Security & control",
+          "desc": "Agents have boundaries: role-based access, audit trail, policies and operator escalation on risk. Control stays intact.",
+          "bullets": ["RBAC", "Audit log", "Fail-safe flows"]
+        }
+      },
+      "badges": {
+        "tools": "tools: active",
+        "metrics": "metrics: live",
+        "policy": "policy: enforced",
+        "integrations": "integrations: ready"
+      }
+    },
+
+    "arch": {
+      "aria": "Architecture",
+      "kicker": "SYSTEM",
+      "title": { "0": "Agent system ", "glow": "architecture" },
+      "sub": "When agent + integrations + rules + monitoring are built together, the system stays stable. A message triggers not just a reply — intent, action selection, CRM write, and handoff if risky.",
+      "bullets": [
+        "Intent engine: sales / support / operator",
+        "Tooling: CRM, sheets, API, webhook",
+        "Rules: policy + fallback + QA",
+        "Monitoring: SLA, quality, logs, alerts"
+      ],
+      "ctaServices": "See services",
+      "ctaAsk": "Ask NEOX AI →",
+      "diagram": {
+        "top": ["INBOX", "AGENT", "CRM", "OPS"],
+        "nodes": {
+          "inbox": { "title": "WhatsApp / IG / FB", "sub": "message • form • DM" },
+          "crm": { "title": "CRM", "sub": "lead • status • history" },
+          "ops": { "title": "Ops panel", "sub": "SLA • quality • logs" },
+          "rules": { "title": "Rules", "sub": "policy • fallback" },
+          "integrations": { "title": "Integrations", "sub": "API • webhook • tools" }
+        },
+        "core": { "top": "NEOX AGENT", "mid": "intent → action", "bot": "route → reply → handoff" },
+        "foot": ["intent detected", "tool calls", "operator handoff", "audit trail"]
+      }
+    },
+
+    "process": {
+      "aria": "Process",
+      "kicker": "PROCESS",
+      "status": "LIVE SETUP • CONTROLLED",
+      "ctaBrief": "Send a brief",
+      "stepLabel": "step",
+      "steps": [
+        {
+          "n": "01",
+          "title": "Discovery & Audit",
+          "desc": "We map flows, list data sources and create a quick-win plan.",
+          "points": ["Process map", "Data inventory", "Risk framework", "Roadmap + priorities"]
+        },
+        {
+          "n": "02",
+          "title": "We build the system",
+          "desc": "We build the agent + workflow core: integrations, routing, handoff, guardrails, logging.",
+          "points": ["CRM / Inbox / Web", "Rules + tools", "Handoff + fallback", "Logs + alerts"]
+        },
+        {
+          "n": "03",
+          "title": "Scale & Optimize",
+          "desc": "As the system runs, we optimize: reply quality, conversion, SLA, cost — all measured.",
+          "points": ["KPI dashboard", "Prompt/flow tuning", "Fast iterations", "Ops support"]
+        }
+      ],
+      "metrics": {
+        "timeToValue": {
+          "label": "Time to value",
+          "valueStrong": "7–21",
+          "valueSuffix": "days",
+          "chips": ["Fast iteration", "Monitoring", "Integration"]
+        },
+        "supportModel": {
+          "label": "Support model",
+          "value": { "0": "Ops + ", "glow": "QA" },
+          "chips": ["Weekly tuning", "Alerting", "Rules review"]
+        },
+        "fit": {
+          "label": "Fit",
+          "value": "SME → Scale",
+          "chips": ["E-commerce", "Services", "Support", "SMM"]
+        }
+      }
+    },
+
+    "final": {
+      "aria": "Call to action",
+      "kicker": "NEOX / START",
+      "title": {
+        "0": "Let’s build the system — save ",
+        "glowTime": "time",
+        "1": " and ",
+        "glowBudget": "budget",
+        "2": ""
+      },
+      "sub": "Send a brief — within 24 hours we’ll share a quick-win plan + integration map.",
+      "proofs": [
+        { "top": "Stable", "midGlow": "Rules", "bot": "policy + fallback + audit trail" },
+        { "top": "Measurable", "mid": ["KPI", "SLA"], "bot": "dashboard + alerts + tuning" },
+        { "top": "Result", "midGlow": "Leads", "bot": "faster replies, more sales" }
+      ],
+      "ctaPrimary": "Send a brief",
+      "ctaSecondary": "See services"
+    }
+  },
+  
+  "services": {
+    "seo": {
+      "title": "NEOX Services — AI Agents, Workflows and Automation Modules",
+      "description": "NEOX service catalog: unified inbox + AI replies, CRM writeback, workflows/approvals, RPA document automation, SMM content factory, KPI dashboards, observability and integrations."
+    },
+    "structuredData": {
+      "name": "NEOX Services",
+      "description": "AI agents, workflow automation, CRM ops, RPA document automation, SMM and analytics modules."
+    },
+    "hero": {
+      "aria": "Services",
+      "breadcrumbAria": "Breadcrumb",
+      "breadcrumbText": "NEOX / SERVICES",
+      "titleBefore": "Not a package — ",
+      "titleHighlight": "a business system",
+      "titleAfter": ".",
+      "sub": "Inbox → AI reply → lead → CRM → workflow/approval → measurement. Goal: reduce manual work, speed up responses, and increase conversion.",
+      "primaryCta": "Request a demo",
+      "primaryAria": "Request a demo",
+      "secondaryCta": "Service catalog",
+      "secondaryAria": "Go to service catalog",
+      "chips": ["routing: smart", "handoff: instant", "approval: gated", "ops: monitored"]
+    },
+    "catalog": {
+      "aria": "Service catalog",
+      "crumb": "SERVICE CATALOG",
+      "headingBefore": "Automation services — ",
+      "headingHighlight": "as modules",
+      "headingAfter": "",
+      "desc": "We connect services as business-fit modules, not “packages”. Every module comes with measurable KPIs and audit.",
+      "tabsAria": "Service groups",
+      "tabsAll": "All",
+      "searchAria": "Service search",
+      "searchPlaceholder": "Search: routing, invoice, approval, CRM..."
+    },
+    "groups": {
+      "inbox_support": "Inbox & Support",
+      "crm_sales_ops": "CRM & Sales Ops",
+      "workflow_approvals": "Workflows & Approvals",
+      "rpa_docs": "RPA & Documents",
+      "marketing_smm": "Marketing & SMM",
+      "analytics_ops": "Analytics & Ops",
+      "integrations": "Integrations",
+      "industry_packs": "Industry Packs"
+    },
+    "tags": {
+      "alwaysOn": "24/7",
+      "triage": "triage",
+      "sales": "sales",
+      "ops": "ops",
+      "approval": "approval",
+      "it": "IT",
+      "rpa": "RPA",
+      "idp": "IDP",
+      "growth": "growth",
+      "content": "content",
+      "kpi": "KPI",
+      "alert": "alert",
+      "secure": "secure",
+      "api": "API",
+      "sync": "sync",
+      "pack": "pack"
+    },
+    "cards": {
+      "connectModule": "Enable this module",
+      "connectModuleAria": "Contact to enable the {{title}} module",
+      "whyNeox": "Why NEOX?",
+      "whyNeoxAria": "About NEOX page"
+    },
+    "bottom": {
+      "primaryCta": "Let’s enable your chosen module",
+      "primaryAria": "Contact to enable a selected module",
+      "secondaryCta": "Why NEOX?",
+      "secondaryAria": "About NEOX"
+    },
+    "list": {
+      "inbox_unify": {
+        "title": "Unified Inbox + AI Replies",
+        "desc": "Bring WhatsApp / Instagram / Messenger messages into one place, reply with AI, and route by rules.",
+        "bullets": ["Intent analysis", "Auto reply + routing", "Operator handoff", "Spam/abuse filter"]
+      },
+      "call_triage": {
+        "title": "Calls / Lead Triage",
+        "desc": "Prioritize calls, forms and DMs, queue them, and hand off to the right operator.",
+        "bullets": ["Priority/SLA", "Lead enrichment", "Queue routing", "Missed-call follow-up"]
+      },
+      "crm_writeback": {
+        "title": "CRM Writeback + Lead Scoring",
+        "desc": "Message → intent → lead → CRM status. Automatic scoring and follow-up in the sales flow.",
+        "bullets": ["Lead scoring", "Pipeline updates", "Auto tasks", "Follow-up sequences"]
+      },
+      "quote_to_cash_lite": {
+        "title": "Quote → Order Automation",
+        "desc": "Systemize quoting, ordering, approvals, notifications and delivery statuses.",
+        "bullets": ["Auto quote draft", "Approval gate", "Status notifications", "Returns routing"]
+      },
+      "approvals": {
+        "title": "Approval Flows",
+        "desc": "Leave requests, document signing, sales approvals, expenses — turn them into approval workflows.",
+        "bullets": ["Multi-step approvals", "Teams/Email notifications", "Audit trail", "Escalation rules"]
+      },
+      "it_ops_automations": {
+        "title": "IT Ops Automation",
+        "desc": "Automate internal requests, access requests, ticket creation, alerts and routine operations.",
+        "bullets": ["Access requests", "Ticket routing", "On-call notify", "Runbook triggers"]
+      },
+      "invoice_docs": {
+        "title": "Invoice / Document Automation",
+        "desc": "Invoices, contracts, delivery notes, forms — extract, validate, and post to systems (IDP + RPA).",
+        "bullets": ["PDF/Image extraction", "Validation rules", "Exception queue", "ERP/CRM posting"]
+      },
+      "doc_routing": {
+        "title": "Document Routing & Archive",
+        "desc": "Auto-sort documents into folders, rename, write metadata, and make them searchable.",
+        "bullets": ["Auto classification", "Naming rules", "Storage sync", "Retention policy"]
+      },
+      "marketing_ops": {
+        "title": "Marketing Automation",
+        "desc": "Lead capture → CRM → email sequence → task. Turn campaign work into a workflow.",
+        "bullets": ["Lead routing", "Email sequences", "Segmentation", "UTM + attribution"]
+      },
+      "smm_factory": {
+        "title": "SMM Content Factory",
+        "desc": "Idea → script → caption/CTA → plan → publish → report. Systematic content production.",
+        "bullets": ["30-day plan", "Caption/CTA", "Format guidance", "Weekly report"]
+      },
+      "dashboards": {
+        "title": "KPI Dashboard + SLA",
+        "desc": "Response speed, conversion, lead quality, SLA breaches — see it all in one dashboard.",
+        "bullets": ["SLA tracking", "Conversion funnel", "Quality scoring", "Weekly insights"]
+      },
+      "alerts_observability": {
+        "title": "Alerts & Observability",
+        "desc": "Anomalies, downtime, reply-quality drops — automatic alerts and escalation.",
+        "bullets": ["Threshold alerts", "Anomaly watch", "Escalation", "Audit logs"]
+      },
+      "security_guardrails": {
+        "title": "Security & QA Guardrails",
+        "desc": "Policies, limits, risky intent blocking, operator escalation, and a test plan.",
+        "bullets": ["RBAC basics", "Policy rules", "Fallback flows", "QA scenarios"]
+      },
+      "integrations": {
+        "title": "Integrations (API/Webhook/RPA)",
+        "desc": "CRM, ERP, Sheets, payments, delivery, booking — connect everything together.",
+        "bullets": ["API/Webhook", "Data sync", "Retry logic", "Logging"]
+      },
+      "data_sync": {
+        "title": "Data Sync & Cleanup",
+        "desc": "Duplicates, formats, statuses — keep data clean and synced.",
+        "bullets": ["Dedup rules", "Field mapping", "Normalization", "Scheduled sync"]
+      },
+      "ecom_pack": {
+        "title": "E-commerce Pack",
+        "desc": "Order status, shipping, cash-on-delivery, returns — with auto replies and routing.",
+        "bullets": ["Status bot", "Return routing", "Stock questions", "COD/Payment scripts"]
+      },
+      "clinic_pack": {
+        "title": "Clinic / Appointment Pack",
+        "desc": "Appointments, reminders, result inquiries, operator handoff — a clinic-ready flow.",
+        "bullets": ["Appointments", "Reminders", "FAQ triage", "Operator escalation"]
+      },
+      "service_pack": {
+        "title": "Service Business Pack",
+        "desc": "For repair/service: request → quote → approval → scheduling → report.",
+        "bullets": ["Quote capture", "Approval gate", "Scheduling", "Post-service follow-up"]
+      },
+      "hr_pack": {
+        "title": "HR Ops Pack",
+        "desc": "Leave, onboarding, documents, approvals — workflow for internal HR operations.",
+        "bullets": ["Leave approvals", "Onboarding checklist", "Document routing", "Notifications"]
+      }
+    }
+  },
+
+  "useCases": {
+    "seo": {
+      "title": "NEOX Use Cases — Real Outcomes & Automation Scenarios",
+      "description": "NEOX use cases: e-commerce support automation, finance document processing, clinic scheduling/reminders, logistics coordination. Real KPIs and outcomes."
+    },
+    "ld": {
+      "name": "NEOX Use Cases",
+      "description": "Real automation scenarios and KPI outcomes."
+    },
+    "aria": {
+      "hero": "Use cases hero",
+      "contact": "Contact",
+      "services": "Services",
+      "caseStudies": "Case studies",
+      "more": "More industries",
+      "finalCta": "Final CTA"
+    },
+    "labels": {
+      "case": "case",
+      "realScenario": "Real-world scenario"
+    },
+    "cta": {
+      "ownCase": "Share your case",
+      "services": "Services",
+      "schedule": "Book a call"
+    },
+    "hud": {
+      "metricLabel": "metric",
+      "statusLabel": "status",
+      "statusValue": "live",
+      "chips": {
+        "a": "automation",
+        "b": "routing",
+        "c": "kpi"
+      }
+    },
+    "hero": {
+      "crumb": "NEOX / USE CASES",
+      "title": {
+        "before": "Real outcomes — ",
+        "highlight": "not just a demo",
+        "after": "."
+      },
+      "subtitle": "Industry doesn’t matter: if you have process + data, agents can produce measurable results. These cases are written like real scenarios — share your process and we’ll build the same for you."
+    },
+    "cases": [
+      {
+        "sektor": "E-commerce",
+        "basliq": "RetailCo: Support cost −70%, replies in 2 minutes",
+        "hekayə": "With high daily order volume, tickets piled up. NEOX agents automated order status, returns, and FAQ flows.",
+        "maddeler": [
+          "~80% of inquiries answered automatically",
+          "Order tracking + returns flow automated",
+          "Response time: 4 hours → 2 minutes"
+        ],
+        "neticeler": [
+          { "k": "−70%", "v": "Cost reduction", "sub": "support ops spend" },
+          { "k": "+95%", "v": "CSAT", "sub": "customer satisfaction" }
+        ]
+      },
+      {
+        "sektor": "Finance",
+        "basliq": "FinanceHub: document processing 5 days → 2 hours",
+        "hekayə": "Loan application document checks were manual. Agents standardized extraction + validation + compliance checks.",
+        "maddeler": [
+          "Document extraction + validation",
+          "Compliance + risk checks",
+          "Processing time: 5 days → 2 hours"
+        ],
+        "neticeler": [
+          { "k": "90%", "v": "Faster", "sub": "throughput improved" },
+          { "k": "99.5%", "v": "Accuracy", "sub": "fewer errors" }
+        ]
+      },
+      {
+        "sektor": "Healthcare",
+        "basliq": "MediCare: no-shows −50%, staff time +85%",
+        "hekayə": "Across 25 clinics, scheduling, reminders, and questions were a heavy load. NEOX built scheduling + reminders + common inquiry flows.",
+        "maddeler": [
+          "Appointments + reminders",
+          "Prescription renewal flow",
+          "24/7 patient Q&A support"
+        ],
+        "neticeler": [
+          { "k": "−50%", "v": "No-shows down", "sub": "missed visits reduced" },
+          { "k": "+85%", "v": "Time saved", "sub": "staff capacity restored" }
+        ]
+      },
+      {
+        "sektor": "Logistics",
+        "basliq": "GlobalShip: delivery speed +40%, $2M annual savings",
+        "hekayə": "Supply chain coordination across 40 countries was manual. Agents automated delay prediction, rerouting, and customer updates.",
+        "maddeler": [
+          "Delay prediction + auto reroute",
+          "Customs docs + compliance",
+          "Real-time tracking notifications"
+        ],
+        "neticeler": [
+          { "k": "+40%", "v": "Faster delivery", "sub": "delivery speed" },
+          { "k": "$2M", "v": "Annual savings", "sub": "yearly cost savings" }
+        ]
+      }
+    ],
+    "moreSection": {
+      "pill": "COVERAGE",
+      "title": "More industries",
+      "subtitle": {
+        "before": "This list keeps growing — the core idea: ",
+        "highlight": "“process exists → agents exist”",
+        "after": "."
+      }
+    },
+    "more": [
+      { "title": "Real Estate", "text": "Lead qualification, property management, tenant communication flows." },
+      { "title": "Education", "text": "Student support, admissions triage, course admin operations." },
+      { "title": "Marketing", "text": "Lead scoring, campaign automation, content ops and reporting." },
+      { "title": "Manufacturing", "text": "Quality checks, inventory, forecasting signals." }
+    ],
+    "final": {
+      "pill": "ready?",
+      "title": {
+        "before": "Let’s write your ",
+        "highlight": "“success story”",
+        "after": "."
+      },
+      "subtitle": "Describe your process — we’ll propose KPIs, a plan, and a pilot flow. Then stable production and scale."
+    }
+  },
+
+  "blog": {
+    "seo": {
+      "title": "NEOX Blog — AI Automation, Agents, and Practical Guides",
+      "description": "AI automation, agents, workflows, security, and real case studies. Short, practical, results-focused content."
+    },
+    "ld": {
+      "name": "NEOX Blog",
+      "description": "Practical AI automation posts and insights."
+    },
+    "aria": {
+      "hero": "Blog header",
+      "posts": "Blog posts",
+      "newsletter": "Subscription"
+    },
+    "hero": {
+      "crumb": "NEOX / BLOG",
+      "title": {
+        "before": "Resources &",
+        "highlight": "Insights"
+      },
+      "subtitle": "AI automation, agents, sales systems, and real use cases. Short, practical, and results-driven."
+    },
+    "filters": {
+      "searchPlaceholder": "Search posts...",
+      "searchAria": "Search",
+      "categoryAria": "Category filter",
+      "all": "All",
+      "general": "General"
+    },
+    "actions": {
+      "read": "Read",
+      "readAria": "Read the post"
+    },
+    "empty": {
+      "title": "Nothing found",
+      "subtitle": "Change your search or choose “All”.",
+      "clearSearch": "Clear search",
+      "resetFilter": "Reset filter"
+    },
+    "newsletter": {
+      "pill": "subscribe",
+      "title": {
+        "before": "Weekly AI & Automation notes —",
+        "highlight": "short and useful"
+      },
+      "subtitle": "New posts, use cases, and practical tips on what to automate and how.",
+      "emailPlaceholder": "Email address",
+      "emailAria": "Email",
+      "button": "Subscribe"
+    }
+  },
+
+  "contact": {
+    "seo": {
+      "title": "NEOX — Contact | Demo & AI Automation",
+      "description": "Demo and consulting for AI automation, agents, sales and support workflows. Reply within 24 hours."
+    },
+    "aria": {
+      "hero": "Contact — hero section",
+      "content": "Contact — content section",
+      "cta": "Contact — final call to action"
+    },
+    "common": {
+      "copy": "Copy",
+      "copied": "Copied"
+    },
+    "whatsapp": {
+      "text": "Hi! I’d like a demo from NEOX. ✅\n\nQuick info:\n• Business area:\n• Process I want to automate:\n• Target outcome/KPI (e.g., response time, CSAT, cost):\n• Best time to reach me:\n\nIf possible, please suggest a time for a 30-minute demo. Thank you!"
+    },
+    "hero": {
+      "breadcrumb": "NEOX / CONTACT",
+      "title": {
+        "before": "Let’s",
+        "highlight": "talk"
+      },
+      "subtitle": "AI automation, agents, sales and support workflows — focused on measurable outcomes.",
+      "cta_whatsapp": "Message for a demo",
+      "cta_whatsapp_aria": "Message on WhatsApp for a demo",
+      "cta_email_aria": "Contact via email"
+    },
+    "left": {
+      "title": "Contact channels",
+      "subtitle": "Whether you’re starting fresh or scaling an existing process — we’ll identify the fastest “quick win” for you.",
+      "channels": {
+        "email": {
+          "title": "Email",
+          "copy_aria": "Copy email",
+          "note": "Keep it short — we’ll ask the right questions."
+        },
+        "phone": {
+          "title": "Phone",
+          "copy_aria": "Copy phone number",
+          "note": "Weekdays 10:00–19:00"
+        },
+        "location": {
+          "title": "Location",
+          "value": "Baku, Azerbaijan",
+          "note": "Online meetings available"
+        }
+      },
+      "expect": {
+        "title": "What to expect",
+        "items": [
+          "Reply within 24 hours",
+          "A proposal tailored to your business",
+          "First result in 1–2 weeks (MVP)"
+        ]
+      },
+      "footer_note": "A short message is enough — just include the goal and the process outline."
+    },
+    "form": {
+      "title": "Send a message",
+      "subtitle": "What do you want to automate and what outcome do you need? (e.g., response time, cost, lead conversion)",
+      "badge": {
+        "label": "Reply",
+        "value": "≤ 24h"
+      },
+      "status": {
+        "success_title": "Sent successfully!",
+        "success_desc": "We’ll get back to you soon.",
+        "error_title": "Error",
+        "loading_title": "Sending...",
+        "loading_desc": "Please wait a few seconds."
+      },
+      "fields": {
+        "name": {
+          "label": "Name *",
+          "placeholder": "Full name"
+        },
+        "email": {
+          "label": "Email *",
+          "placeholder": "email@company.com"
+        },
+        "company": {
+          "label": "Company",
+          "placeholder": "Company name"
+        },
+        "phone": {
+          "label": "Phone",
+          "placeholder": "+994 ..."
+        },
+        "message": {
+          "label": "Message *",
+          "placeholder": "E.g., leads from WhatsApp/Instagram should be pushed into CRM, auto follow-ups, only qualified leads go to an operator..."
+        }
+      },
+      "hint": "The more specific you are, the faster we find a “quick win”.",
+      "message_meter_aria": "Message length indicator",
+      "submit": "Send",
+      "submit_loading": "Sending...",
+      "submit_aria": "Send message",
+      "legal": "By sending, you agree that your data will be used only for contact purposes.",
+      "demo_prefill": "I want a demo.\n\nBusiness area:\nProcess I want to automate:\nTarget KPI (e.g., response time, CSAT, cost):\nBest time to reach me:\n",
+      "errors": {
+        "fill_required": "Please fill in name, email and message correctly.",
+        "send_failed": "Not sent. Please check and try again.",
+        "name_short": "Name must be at least 2 characters.",
+        "email_bad": "Email format is invalid.",
+        "message_short": "Message must be at least 10 characters."
+      }
+    },
+    "final": {
+      "title": "If you want a demo — 30 minutes is enough",
+      "subtitle": "We’ll review your process, identify the fastest “quick win”, and launch the first automation within 1 week.",
+      "cta": "Message for a demo",
+      "cta_aria": "Message on WhatsApp for a demo"
+    }
+  },
+    
+  "neoxAi": {
+    "brand": "NEOX AI",
+    "status": "LIVE",
+    "subtitle": "Social Inbox → Lead → CRM",
+    "welcome": "NEOX AI is here. Ask a question — I can explain how we turn social inbox messages into CRM leads or prepare ready-to-use reply templates.",
+    "fabAria": "Open NEOX AI",
+    "panelAria": "NEOX AI panel",
+    "tabs": {
+      "chat": "Chat",
+      "quick": "Quick questions"
+    },
+    "join": {
+      "label": "Join chat →",
+      "title": "Connect to live operator",
+      "href": "https://wa.me/"
+    },
+    "quick": {
+      "title": "Ask with one click:",
+      "items": [
+        "How can we auto-reply to Instagram DMs?",
+        "How do you log WhatsApp messages into the CRM?",
+        "How is lead scoring calculated?",
+        "When do you route to a human operator?",
+        "Write a sample reply for a product inquiry.",
+        "Give 3 ready-made reply templates for a campaign."
+      ]
+    },
+    "chat": {
+      "you": "You",
+      "ai": "NEOX AI"
+    },
+    "input": {
+      "placeholder": "Type your question… (e.g. how is it saved to CRM?)",
+      "send": "Send →"
+    },
+    "ai": {
+      "basePlan": "Short plan:\n• Normalize the message (intent, product, context)\n• Create a lead and assign a score\n• Route to the right operator or flow\n• Write status and history to CRM",
+      "templates3": "3 sample replies:\n1) Hi! Which product are you looking for and what’s your budget?\n2) Delivery is available — send your address for an exact price.\n3) The campaign is active — want me to send you suitable options?",
+      "followupQuestion": "We can tailor this to your business in 10 minutes: channels → intent extraction → lead scoring → CRM write. Which CRM do you use?"
+    }
+  }
+}
