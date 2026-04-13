@@ -5,10 +5,6 @@ function s(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
 
-function lower(value, fallback = "") {
-  return s(value ?? fallback).toLowerCase();
-}
-
 function arr(value, fallback = []) {
   return Array.isArray(value) ? value : fallback;
 }
@@ -98,39 +94,6 @@ function classifySourceInput(value = "") {
     return "website";
   }
   return "manual";
-}
-
-function buildCurrentSource(assistant = {}, reviewPayload = null) {
-  const sourceMetadata = obj(assistant.draft?.sourceMetadata);
-  const bundleSources = arr(reviewPayload?.bundleSources);
-  const primaryBundle =
-    bundleSources.find((item) => lower(item.role) === "primary") ||
-    bundleSources[0];
-
-  const sourceType =
-    lower(primaryBundle?.sourceType || sourceMetadata.primarySourceType) || "";
-  const sourceUrl =
-    s(primaryBundle?.sourceUrl || sourceMetadata.primarySourceUrl) ||
-    s(assistant.websitePrefill?.websiteUrl);
-
-  const sourceLabel =
-    s(primaryBundle?.label || arr(sourceMetadata.sourceLabels)[0]) ||
-    (sourceType === "instagram"
-      ? "Instagram"
-      : sourceType === "facebook_page" || sourceType === "facebook"
-        ? "Facebook"
-        : sourceType === "manual"
-          ? "Qısa qeyd"
-          : sourceType === "website"
-            ? "Website"
-            : "");
-
-  return {
-    type: sourceType,
-    label: sourceLabel,
-    url: sourceUrl,
-    hasSource: Boolean(sourceType || sourceUrl || sourceLabel),
-  };
 }
 
 function buildDraftModel(assistant = {}, reviewPayload = null, localAnswers = {}) {
@@ -253,7 +216,7 @@ function MessageBubble({
 function DraftBubble({ draftModel, reviewReady, finalizing, onFinalize }) {
   const lines = [
     ["Business name", draftModel.name],
-    ["What this business is", draftModel.description],
+    ["What the business is", draftModel.description],
     ["Core services", listPreview(draftModel.services, 6)],
     ["Audience", draftModel.audience],
     ["Pricing posture", draftModel.pricing],
@@ -269,9 +232,7 @@ function DraftBubble({ draftModel, reviewReady, finalizing, onFinalize }) {
             <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
               {label}
             </div>
-            <div className="mt-1 text-[15px] leading-8 text-text">
-              {value}
-            </div>
+            <div className="mt-1 text-[15px] leading-8 text-text">{value}</div>
           </div>
         ))}
 
@@ -345,10 +306,6 @@ export default function SetupAssistantSections({
   onFinalize,
 }) {
   const scrollRef = useRef(null);
-  const source = useMemo(
-    () => buildCurrentSource(assistant, reviewPayload),
-    [assistant, reviewPayload]
-  );
 
   const [sourceSubmitted, setSourceSubmitted] = useState(false);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -407,8 +364,8 @@ export default function SetupAssistantSections({
     }
   }
 
-  async function handleQuestionSubmit() {
-    const text = s(composerValue);
+  async function handleQuestionSubmit(textValue = composerValue) {
+    const text = s(textValue);
     if (!text || busy || !currentQuestion) return;
 
     setLocalError("");
@@ -477,11 +434,7 @@ export default function SetupAssistantSections({
           <MessageBubble role="assistant" body={initialPrompt} />
 
           {transcript.map((item) => (
-            <MessageBubble
-              key={item.id}
-              role={item.role}
-              body={item.text}
-            />
+            <MessageBubble key={item.id} role={item.role} body={item.text} />
           ))}
 
           {sourceSubmitted && currentQuestion ? (
@@ -504,10 +457,7 @@ export default function SetupAssistantSections({
           ) : null}
 
           {s(localError || errorMessage) ? (
-            <MessageBubble
-              role="assistant"
-              body={localError || errorMessage}
-            />
+            <MessageBubble role="assistant" body={localError || errorMessage} />
           ) : null}
         </div>
       </div>
