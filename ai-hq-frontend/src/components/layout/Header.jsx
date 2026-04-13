@@ -24,7 +24,11 @@ function AskAiButton() {
     <button
       type="button"
       onClick={() => {
-        window.location.assign("/home?assistant=setup");
+        window.dispatchEvent(
+          new CustomEvent("aihq:open-assistant", {
+            detail: { mode: "setup" },
+          })
+        );
       }}
       className="inline-flex h-10 items-center gap-2 rounded-soft border border-line bg-white px-3.5 text-[13px] font-semibold text-text transition-[background-color,color,border-color] duration-base ease-premium hover:border-line-strong hover:bg-surface-subtle"
       aria-label="Open Ask AI"

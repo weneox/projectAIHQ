@@ -193,10 +193,7 @@ function extractWorkspaceMeta(payload) {
   );
 
   const user = obj(
-    root.user ||
-      root.profile ||
-      obj(root.session).user ||
-      obj(root.auth).user
+    root.user || root.profile || obj(root.session).user || obj(root.auth).user
   );
 
   const membership = obj(arr(root.memberships)[0]);
@@ -246,8 +243,14 @@ function extractWorkspaceMeta(payload) {
 
 function mergeWorkspaceMeta(currentMeta, nextMeta) {
   return {
-    workspaceName: pickFirstString(nextMeta?.workspaceName, currentMeta?.workspaceName),
-    workspaceKey: pickFirstString(nextMeta?.workspaceKey, currentMeta?.workspaceKey),
+    workspaceName: pickFirstString(
+      nextMeta?.workspaceName,
+      currentMeta?.workspaceName
+    ),
+    workspaceKey: pickFirstString(
+      nextMeta?.workspaceKey,
+      currentMeta?.workspaceKey
+    ),
     userName: pickFirstString(nextMeta?.userName, currentMeta?.userName),
     userEmail: pickFirstString(nextMeta?.userEmail, currentMeta?.userEmail),
   };
@@ -360,7 +363,9 @@ export default function Shell() {
         setWorkspaceMeta((prev) => mergeWorkspaceMeta(prev, extracted));
       } catch {
         if (cancelled) return;
-        setWorkspaceMeta((prev) => mergeWorkspaceMeta(prev, buildHostFallbackMeta()));
+        setWorkspaceMeta((prev) =>
+          mergeWorkspaceMeta(prev, buildHostFallbackMeta())
+        );
       }
     };
 
@@ -411,6 +416,20 @@ export default function Shell() {
       window.cancelAnimationFrame(frame);
     };
   }, [assistantRequested]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const handleOpenAssistant = () => {
+      setWidgetOpen(true);
+    };
+
+    window.addEventListener("aihq:open-assistant", handleOpenAssistant);
+
+    return () => {
+      window.removeEventListener("aihq:open-assistant", handleOpenAssistant);
+    };
+  }, []);
 
   useEffect(() => {
     const unsubscribeStatus = realtimeStore.subscribeStatus((status) => {
@@ -520,7 +539,10 @@ export default function Shell() {
           style={{ minHeight: contentMinHeight }}
         >
           {shellMode === "immersive" ? (
-            <div style={{ height: contentMinHeight }} className="min-h-0 overflow-hidden">
+            <div
+              style={{ height: contentMinHeight }}
+              className="min-h-0 overflow-hidden"
+            >
               <Outlet />
             </div>
           ) : (
