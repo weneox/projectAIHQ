@@ -15,14 +15,14 @@ function obj(value, fallback = {}) {
     : fallback;
 }
 
-function compactText(value, max = 180) {
+function compactText(value, max = 220) {
   const text = s(value).replace(/\s+/g, " ").trim();
   if (!text) return "";
   return text.length <= max ? text : `${text.slice(0, max - 1).trim()}...`;
 }
 
 function listPreview(items = [], max = 6) {
-  const safe = arr(items).map((item) => compactText(item, 60)).filter(Boolean);
+  const safe = arr(items).map((item) => compactText(item, 80)).filter(Boolean);
   if (!safe.length) return "";
   if (safe.length <= max) return safe.join(", ");
   return `${safe.slice(0, max).join(", ")} +${safe.length - max}`;
@@ -62,7 +62,8 @@ const QUESTIONS = [
     step: "pricing",
     title: "Pricing posture",
     prompt: "Qiymət necə təqdim olunmalıdır?",
-    placeholder: "Məsələn: qiymətlər xidmətə görə dəyişir",
+    placeholder:
+      "Məsələn: qiymətlər xidmətə görə dəyişir, dəqiq qiymət üçün müraciət edilməlidir",
   },
   {
     key: "contacts",
@@ -76,7 +77,8 @@ const QUESTIONS = [
     step: "handoff",
     title: "Human handoff",
     prompt: "AI hansı hallarda insana ötürməlidir?",
-    placeholder: "Məsələn: şikayət, fərdi qiymət sorğusu, təcili müraciət",
+    placeholder:
+      "Məsələn: şikayət, fərdi qiymət sorğusu, təcili müraciət, ödəniş problemi",
   },
 ];
 
@@ -96,7 +98,7 @@ function classifySourceInput(value = "") {
   return "manual";
 }
 
-function buildDraftModel(assistant = {}, reviewPayload = null, localAnswers = {}) {
+function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers = {}) {
   const review = obj(reviewPayload?.review || reviewPayload);
   const draft = Object.keys(obj(review.draft)).length
     ? obj(review.draft)
@@ -111,63 +113,118 @@ function buildDraftModel(assistant = {}, reviewPayload = null, localAnswers = {}
     .map((item) => s(item.label || item.channel || item.value || item.type))
     .filter(Boolean);
 
-  const pricing =
-    s(profile.pricingPolicy) ||
-    s(draft.pricingPosture?.publicSummary) ||
-    s(draft.pricingPosture?.note) ||
-    s(draft.pricingPosture?.summary) ||
-    s(localAnswers.pricing);
+  const businessName = s(
+    profile.companyName || profile.displayName || localAnswers.company
+  );
 
-  const handoff =
-    s(draft.handoffRules?.summary) ||
-    listPreview(arr(draft.handoffRules?.triggers), 3) ||
-    s(draft.handoffRules?.escalationTarget) ||
-    s(localAnswers.handoff);
+  const description = s(
+    profile.description ||
+      profile.companySummaryShort ||
+      profile.companySummary ||
+      localAnswers.description
+  );
 
-  const audience =
-    s(profile.targetAudience) ||
-    s(profile.audience) ||
-    s(profile.customerType) ||
-    s(profile.customerTypes) ||
-    s(localAnswers.audience);
+  const audience = s(
+    profile.targetAudience ||
+      profile.audience ||
+      profile.customerType ||
+      profile.customerTypes ||
+      localAnswers.audience
+  );
 
-  const description =
-    s(profile.description) ||
-    s(profile.companySummaryShort) ||
-    s(profile.companySummary) ||
-    s(localAnswers.description);
+  const pricingPosture = s(
+    profile.pricingPolicy ||
+      draft.pricingPosture?.publicSummary ||
+      draft.pricingPosture?.note ||
+      draft.pricingPosture?.summary ||
+      localAnswers.pricing
+  );
 
-  const name = s(profile.companyName || profile.displayName || localAnswers.company);
+  const humanHandoff = s(
+    draft.handoffRules?.summary ||
+      arr(draft.handoffRules?.triggers).join(", ") ||
+      localAnswers.handoff
+  );
 
-  const allServices = services.length
+  const resolvedServices = services.length
     ? services
     : s(localAnswers.services)
-        .split(",")
+        .split(/[,;\n]/)
         .map((item) => s(item))
         .filter(Boolean);
 
-  const allContacts = [
+  const resolvedContacts = [
     s(profile.primaryPhone),
     s(profile.primaryEmail),
     s(profile.primaryAddress),
     ...contacts,
   ].filter(Boolean);
 
-  const resolvedContacts = allContacts.length
-    ? allContacts
+  const finalContacts = resolvedContacts.length
+    ? resolvedContacts
     : s(localAnswers.contacts)
-        .split(",")
+        .split(/[,;\n]/)
         .map((item) => s(item))
         .filter(Boolean);
 
   return {
-    name,
-    description,
-    services: allServices,
+    businessName,
+    whatThisBusinessIs: description,
+    coreServices: resolvedServices,
     audience,
-    contacts: resolvedContacts,
-    pricing,
-    handoff,
+    pricingPosture,
+    contactRoutes: finalContacts,
+    humanHandoff,
+  };
+}
+
+function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswers = {} }) {
+  const reviewAssistant = obj(reviewPayload?.assistant || reviewPayload?.assistantBrain);
+  const recommendation = obj(reviewAssistant.recommendation);
+  const confidence = obj(reviewAssistant.confidence);
+  const sourceSignals = obj(reviewAssistant.sourceSignals);
+  const draft = obj(reviewAssistant.draft);
+
+  const fallback = buildFallbackDraft(reviewPayload, assistant, localAnswers);
+
+  const resolvedDraft = {
+    businessName: s(draft.businessName || fallback.businessName),
+    whatThisBusinessIs: s(draft.whatThisBusinessIs || fallback.whatThisBusinessIs),
+    coreServices: arr(draft.coreServices).length
+      ? arr(draft.coreServices)
+      : arr(fallback.coreServices),
+    audience: s(draft.audience || fallback.audience),
+    pricingPosture: s(draft.pricingPosture || fallback.pricingPosture),
+    contactRoutes: arr(draft.contactRoutes).length
+      ? arr(draft.contactRoutes)
+      : arr(fallback.contactRoutes),
+    humanHandoff: s(draft.humanHandoff || fallback.humanHandoff),
+    languages: arr(draft.languages),
+    tone: s(draft.tone),
+    hours: arr(draft.hours),
+  };
+
+  return {
+    message: s(reviewAssistant.message || reviewAssistant.assistantMessage),
+    readyForApproval:
+      reviewAssistant.readyForApproval === true ||
+      assistant.review?.finalizeAvailable === true ||
+      assistant.review?.readyForReview === true ||
+      assistant.assistant?.completion?.ready === true,
+    draft: resolvedDraft,
+    confidence: {
+      strong: arr(confidence.strong),
+      unclear: arr(confidence.unclear),
+      contradictions: arr(confidence.contradictions),
+    },
+    recommendationNotes: arr(recommendation.notes),
+    sourceSignals: {
+      primarySourceType: s(sourceSignals.primarySourceType),
+      primarySourceLabel: s(sourceSignals.primarySourceLabel),
+      primarySourceUrl: s(sourceSignals.primarySourceUrl),
+      pageCount: Number(sourceSignals.pageCount || 0) || 0,
+      sourceTypes: arr(sourceSignals.sourceTypes),
+    },
   };
 }
 
@@ -213,34 +270,120 @@ function MessageBubble({
   );
 }
 
-function DraftBubble({ draftModel, reviewReady, finalizing, onFinalize }) {
-  const lines = [
-    ["Business name", draftModel.name],
-    ["What the business is", draftModel.description],
-    ["Core services", listPreview(draftModel.services, 6)],
-    ["Audience", draftModel.audience],
-    ["Pricing posture", draftModel.pricing],
-    ["Contact routes", listPreview(draftModel.contacts, 6)],
-    ["Human handoff", draftModel.handoff],
+function SmartDraftBubble({
+  model,
+  finalizing,
+  onFinalize,
+}) {
+  const draft = obj(model.draft);
+  const confidence = obj(model.confidence);
+
+  const draftRows = [
+    ["Business name", draft.businessName],
+    ["What this business is", draft.whatThisBusinessIs],
+    ["Core services", listPreview(draft.coreServices, 6)],
+    ["Audience", draft.audience],
+    ["Pricing posture", draft.pricingPosture],
+    ["Contact routes", listPreview(draft.contactRoutes, 6)],
+    ["Human handoff", draft.humanHandoff],
+    ["Languages", listPreview(draft.languages, 4)],
+    ["Tone", draft.tone],
+    ["Hours", listPreview(draft.hours, 4)],
   ].filter(([, value]) => s(value));
+
+  const hasSignals =
+    s(model.sourceSignals.primarySourceLabel) || s(model.sourceSignals.primarySourceUrl);
 
   return (
     <MessageBubble role="assistant" title="Draft">
-      <div className="space-y-3">
-        {lines.map(([label, value]) => (
-          <div key={label}>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
-              {label}
-            </div>
-            <div className="mt-1 text-[15px] leading-8 text-text">{value}</div>
+      <div className="space-y-5">
+        {s(model.message) ? (
+          <div className="text-[14px] leading-7 text-text-muted whitespace-pre-wrap">
+            {model.message}
           </div>
-        ))}
+        ) : null}
 
-        <div className="pt-2 text-[13px] leading-6 text-text-muted">
+        {hasSignals ? (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+              Source context
+            </div>
+            <div className="mt-1 text-[15px] leading-8 text-text">
+              {[model.sourceSignals.primarySourceLabel, model.sourceSignals.primarySourceUrl]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="space-y-3">
+          {draftRows.map(([label, value]) => (
+            <div key={label}>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+                {label}
+              </div>
+              <div className="mt-1 text-[15px] leading-8 text-text">{value}</div>
+            </div>
+          ))}
+        </div>
+
+        {arr(confidence.strong).length ? (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+              What looks strong
+            </div>
+            <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
+              {arr(confidence.strong).map((item) => (
+                <div key={item}>• {item}</div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {arr(confidence.unclear).length ? (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+              What still looks unclear
+            </div>
+            <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
+              {arr(confidence.unclear).map((item) => (
+                <div key={item}>• {item}</div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {arr(confidence.contradictions).length ? (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+              What may be inconsistent
+            </div>
+            <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
+              {arr(confidence.contradictions).map((item) => (
+                <div key={item}>• {item}</div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {arr(model.recommendationNotes).length ? (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+              Recommendation
+            </div>
+            <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
+              {arr(model.recommendationNotes).map((item) => (
+                <div key={item}>• {item}</div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="pt-1 text-[13px] leading-6 text-text-muted">
           Dəyişmək istədiyini yaz və ya təsdiqlə.
         </div>
 
-        {reviewReady ? (
+        {model.readyForApproval ? (
           <button
             type="button"
             onClick={onFinalize}
@@ -317,14 +460,15 @@ export default function SetupAssistantSections({
   const busy = saving || finalizing || capturingSource;
   const currentQuestion = QUESTIONS[questionIndex] || null;
   const draftReady = sourceSubmitted && !currentQuestion;
-  const reviewReady =
-    assistant.review?.finalizeAvailable === true ||
-    assistant.review?.readyForReview === true ||
-    assistant.assistant?.completion?.ready === true;
 
-  const draftModel = useMemo(
-    () => buildDraftModel(assistant, reviewPayload, localAnswers),
-    [assistant, reviewPayload, localAnswers]
+  const finalModel = useMemo(
+    () =>
+      buildFinalViewModel({
+        reviewPayload,
+        assistant,
+        localAnswers,
+      }),
+    [reviewPayload, assistant, localAnswers]
   );
 
   useEffect(() => {
@@ -333,7 +477,7 @@ export default function SetupAssistantSections({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [transcript, currentQuestion, draftReady, busy, localError, errorMessage]);
+  }, [transcript, currentQuestion, draftReady, busy, localError, errorMessage, finalModel]);
 
   async function handleInitialSourceSubmit() {
     const text = s(composerValue);
@@ -448,9 +592,8 @@ export default function SetupAssistantSections({
           {busy ? <MessageBubble role="assistant" body="..." /> : null}
 
           {draftReady ? (
-            <DraftBubble
-              draftModel={draftModel}
-              reviewReady={reviewReady}
+            <SmartDraftBubble
+              model={finalModel}
               finalizing={finalizing}
               onFinalize={onFinalize}
             />

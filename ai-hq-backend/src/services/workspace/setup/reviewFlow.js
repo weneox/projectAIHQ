@@ -1,6 +1,42 @@
+import {
+  buildSetupAssistantBrainState,
+  buildSetupAssistantFirstPrompt,
+} from "./assistantBrain.js";
 import { buildFrontendReviewShape } from "./reviewShape.js";
 import { arr, compactObject, obj, s, toFiniteNumber } from "./utils.js";
 import { can, normalizeRole } from "../../../utils/roles.js";
+
+function buildAssistantBrainPayload({
+  review = null,
+  frontendReview = null,
+} = {}) {
+  const rawReview = obj(review);
+  const reviewDraft = obj(rawReview.draft);
+  const reviewSession = obj(rawReview.session);
+  const reviewSources = arr(rawReview.sources);
+
+  const hasMeaningfulReview =
+    Boolean(s(reviewSession.id)) ||
+    Object.keys(reviewDraft).length > 0 ||
+    reviewSources.length > 0;
+
+  if (!hasMeaningfulReview) {
+    return buildSetupAssistantFirstPrompt();
+  }
+
+  const brain = buildSetupAssistantBrainState({
+    session: reviewSession,
+    draft: reviewDraft,
+    sources: reviewSources,
+    review: frontendReview || rawReview,
+  });
+
+  return {
+    ...brain,
+    reviewSessionId: s(reviewSession.id),
+    draftVersion: toFiniteNumber(reviewDraft.version, 0) || 0,
+  };
+}
 
 export async function loadCurrentReviewPayload(
   { db, actor, eventLimit = 30 },
@@ -28,8 +64,13 @@ export async function loadCurrentReviewPayload(
     sources: arr(review?.sources),
     events,
   });
+
   const viewerRole = normalizeRole(actor?.role);
   const canFinalize = can(viewerRole, "workspace", "manage");
+  const assistantBrain = buildAssistantBrainPayload({
+    review,
+    frontendReview,
+  });
 
   return {
     review: frontendReview,
@@ -47,6 +88,19 @@ export async function loadCurrentReviewPayload(
     contributionSummary: frontendReview.contributionSummary,
     fieldProvenance: frontendReview.fieldProvenance,
     reviewDraftSummary: frontendReview.reviewDraftSummary,
+    assistantBrain,
+    assistant: {
+      phase: s(assistantBrain.phase),
+      message: s(assistantBrain.assistantMessage),
+      nextQuestion: obj(assistantBrain.nextQuestion),
+      draft: obj(assistantBrain.draft),
+      confidence: obj(assistantBrain.confidence),
+      recommendation: obj(assistantBrain.recommendation),
+      readyForApproval: assistantBrain.readyForApproval === true,
+      sourceSignals: obj(assistantBrain.sourceSignals),
+      reviewSessionId: s(assistantBrain.reviewSessionId),
+      draftVersion: toFiniteNumber(assistantBrain.draftVersion, 0) || 0,
+    },
     setup,
   };
 }
