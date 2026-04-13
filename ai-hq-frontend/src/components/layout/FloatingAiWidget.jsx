@@ -693,7 +693,7 @@ export default function FloatingAiWidget({
     }
   }, [clientAssistant.launchPosture, panelOpen]);
 
-  if (hidden) return null;
+  if (hidden || !panelOpen) return null;
 
   async function refreshWidgetWorkspaceState({
     includeChannelStatus = false,
@@ -946,101 +946,97 @@ export default function FloatingAiWidget({
 
   return (
     <div className={wrapperClass}>
-      {panelOpen ? (
-        <>
-          {backdrop}
+      {backdrop}
 
-          <section
-            className={
-              pageMode
-                ? "relative ml-auto flex h-full w-full max-w-[720px] flex-col border-l border-[rgba(15,23,42,0.06)] bg-white"
-                : "absolute right-0 top-0 flex h-screen w-[min(720px,100vw)] flex-col border-l border-[rgba(15,23,42,0.06)] bg-white shadow-[-24px_0_64px_rgba(15,23,42,0.14)]"
-            }
-            role={pageMode ? "region" : "dialog"}
-            aria-modal={pageMode ? undefined : "true"}
-            aria-label={pageMode ? "Setup workspace" : "Ask AI panel"}
-          >
-            <div className="border-b border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.998),rgba(249,250,251,0.985))] px-6 pb-4 pt-5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-text-muted">
-                    AI HQ
-                  </div>
-                  <div className="mt-1 text-[32px] font-semibold tracking-[-0.05em] text-text">
-                    {shellTitle}
-                  </div>
-                  <div className="mt-2 max-w-[42ch] text-[13px] leading-6 text-text-muted">
-                    {shellSummary}
-                  </div>
-                </div>
-
-                {!pageMode ? (
-                  <button
-                    type="button"
-                    onClick={() => onOpenChange?.(false)}
-                    className="inline-flex h-9 w-9 items-center justify-center text-text-muted transition-colors hover:text-text"
-                    aria-label="Close Ask AI panel"
-                  >
-                    <X className="h-5 w-5" strokeWidth={2} />
-                  </button>
-                ) : null}
+      <section
+        className={
+          pageMode
+            ? "relative ml-auto flex h-full w-full max-w-[720px] flex-col border-l border-[rgba(15,23,42,0.06)] bg-white"
+            : "absolute right-0 top-0 flex h-screen w-[min(720px,100vw)] flex-col border-l border-[rgba(15,23,42,0.06)] bg-white shadow-[-24px_0_64px_rgba(15,23,42,0.14)]"
+        }
+        role={pageMode ? "region" : "dialog"}
+        aria-modal={pageMode ? undefined : "true"}
+        aria-label={pageMode ? "Setup workspace" : "Ask AI panel"}
+      >
+        <div className="border-b border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.998),rgba(249,250,251,0.985))] px-6 pb-4 pt-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-text-muted">
+                AI HQ
               </div>
-
-              <div className="mt-5 flex items-center gap-6 border-t border-[rgba(15,23,42,0.08)] pt-3">
-                <button
-                  type="button"
-                  className={`inline-flex border-b-[1.5px] pb-2 text-[13px] font-semibold tracking-[0.01em] ${
-                    surfaceMode === "setup"
-                      ? "border-slate-900 text-text"
-                      : "border-transparent text-text-muted"
-                  }`}
-                  onClick={() => setSurfaceMode("setup")}
-                >
-                  <span>Setup</span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`inline-flex border-b-[1.5px] pb-2 text-[13px] font-semibold tracking-[0.01em] ${
-                    surfaceMode === "support"
-                      ? "border-slate-900 text-text"
-                      : "border-transparent text-text-muted"
-                  }`}
-                  onClick={() => setSurfaceMode("support")}
-                >
-                  <span>Support</span>
-                </button>
+              <div className="mt-1 text-[32px] font-semibold tracking-[-0.05em] text-text">
+                {shellTitle}
+              </div>
+              <div className="mt-2 max-w-[42ch] text-[13px] leading-6 text-text-muted">
+                {shellSummary}
               </div>
             </div>
 
-            <div className="min-h-0 flex-1">
-              {surfaceMode === "setup" ? (
-                <SetupAssistantSections
-                  assistant={clientAssistant}
-                  reviewPayload={reviewQuery.data}
-                  saving={saving}
-                  finalizing={finalizing}
-                  capturingSource={capturingSource}
-                  errorMessage={setupError}
-                  onCaptureSource={handleSetupCaptureSource}
-                  onParseMessage={handleSetupParseMessage}
-                  onFinalize={handleSetupFinalize}
-                  onPatchDraft={handleSetupPatchDraft}
-                />
-              ) : (
-                <SupportThread
-                  messages={supportMessages}
-                  busy={supportBusy}
-                  input={supportInput}
-                  onInputChange={setSupportInput}
-                  onSend={handleSupportSend}
-                  onAction={handleSupportAction}
-                />
-              )}
-            </div>
-          </section>
-        </>
-      ) : null}
+            {!pageMode ? (
+              <button
+                type="button"
+                onClick={() => onOpenChange?.(false)}
+                className="inline-flex h-9 w-9 items-center justify-center text-text-muted transition-colors hover:text-text"
+                aria-label="Close Ask AI panel"
+              >
+                <X className="h-5 w-5" strokeWidth={2} />
+              </button>
+            ) : null}
+          </div>
+
+          <div className="mt-5 flex items-center gap-6 border-t border-[rgba(15,23,42,0.08)] pt-3">
+            <button
+              type="button"
+              className={`inline-flex border-b-[1.5px] pb-2 text-[13px] font-semibold tracking-[0.01em] ${
+                surfaceMode === "setup"
+                  ? "border-slate-900 text-text"
+                  : "border-transparent text-text-muted"
+              }`}
+              onClick={() => setSurfaceMode("setup")}
+            >
+              <span>Setup</span>
+            </button>
+
+            <button
+              type="button"
+              className={`inline-flex border-b-[1.5px] pb-2 text-[13px] font-semibold tracking-[0.01em] ${
+                surfaceMode === "support"
+                  ? "border-slate-900 text-text"
+                  : "border-transparent text-text-muted"
+              }`}
+              onClick={() => setSurfaceMode("support")}
+            >
+              <span>Support</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1">
+          {surfaceMode === "setup" ? (
+            <SetupAssistantSections
+              assistant={clientAssistant}
+              reviewPayload={reviewQuery.data}
+              saving={saving}
+              finalizing={finalizing}
+              capturingSource={capturingSource}
+              errorMessage={setupError}
+              onCaptureSource={handleSetupCaptureSource}
+              onParseMessage={handleSetupParseMessage}
+              onFinalize={handleSetupFinalize}
+              onPatchDraft={handleSetupPatchDraft}
+            />
+          ) : (
+            <SupportThread
+              messages={supportMessages}
+              busy={supportBusy}
+              input={supportInput}
+              onInputChange={setSupportInput}
+              onSend={handleSupportSend}
+              onAction={handleSupportAction}
+            />
+          )}
+        </div>
+      </section>
     </div>
   );
 }
