@@ -3,9 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   Bot,
-  LifeBuoy,
   SendHorizontal,
-  Sparkles,
   X,
 } from "lucide-react";
 import {
@@ -426,7 +424,7 @@ function buildManualAnalyzePayload(type = "", value = "") {
 function TypingBubble() {
   return (
     <div className="flex">
-      <div className="inline-flex h-10 items-center gap-1.5 border border-line bg-surface px-3 text-text-muted">
+      <div className="inline-flex h-10 items-center gap-1.5 border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.72)] px-3 text-text-muted">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current [animation-delay:120ms]" />
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current [animation-delay:240ms]" />
@@ -458,8 +456,8 @@ function SupportThread({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div ref={scrollRef} className="flex-1 overflow-auto px-4 py-4">
-        <div className="flex flex-col gap-3">
+      <div ref={scrollRef} className="flex-1 overflow-auto px-4 py-5">
+        <div className="flex flex-col gap-3.5">
           {messages.map((message, index) => {
             const isUser = message.role === "user";
             const showActions =
@@ -480,14 +478,14 @@ function SupportThread({
                 style={{ animationDelay: `${Math.min(index * 24, 160)}ms` }}
               >
                 <div
-                  className={`max-w-[92%] border px-3 py-3 text-[13px] leading-6 ${
+                  className={`max-w-[90%] px-3.5 py-3 text-[13px] leading-6 ${
                     isUser
-                      ? "border-slate-900 bg-slate-900 text-white"
-                      : "border-line bg-surface text-text"
+                      ? "bg-slate-950 text-white shadow-[0_10px_24px_rgba(15,23,42,0.12)]"
+                      : "border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(248,250,252,0.8),rgba(255,255,255,0.98))] text-text"
                   }`}
                 >
                   {s(message.title) ? (
-                    <div className="mb-1 text-[11px] font-bold uppercase tracking-[0.12em] opacity-65">
+                    <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] opacity-60">
                       {message.title}
                     </div>
                   ) : null}
@@ -500,7 +498,7 @@ function SupportThread({
                         <button
                           key={`${message.id}-${action.path}-${action.label}`}
                           type="button"
-                          className="inline-flex h-8 items-center gap-1.5 border border-line bg-white px-2.5 text-[12px] font-semibold text-text"
+                          className="inline-flex h-8 items-center gap-1.5 border border-[rgba(15,23,42,0.08)] bg-white px-2.5 text-[12px] font-semibold tracking-[0.01em] text-text"
                           onClick={() => onAction?.(action.path)}
                         >
                           <span>{action.label}</span>
@@ -516,7 +514,7 @@ function SupportThread({
                         <button
                           key={`${message.id}-${suggestion}`}
                           type="button"
-                          className="inline-flex h-8 items-center border border-line bg-white px-2.5 text-[12px] font-semibold text-text"
+                          className="inline-flex h-8 items-center border border-[rgba(15,23,42,0.08)] bg-[rgba(255,255,255,0.82)] px-2.5 text-[12px] font-semibold tracking-[0.01em] text-text"
                           onClick={() => onSend?.(suggestion)}
                         >
                           {suggestion}
@@ -533,8 +531,8 @@ function SupportThread({
         </div>
       </div>
 
-      <div className="border-t border-line bg-white px-4 py-4">
-        <div className="flex items-end gap-2 border border-line bg-surface px-3 py-2">
+      <div className="border-t border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,252,0.82))] px-4 py-4">
+        <div className="flex items-end gap-2 border-b border-[rgba(15,23,42,0.1)] px-0 py-2">
           <textarea
             rows={1}
             value={input}
@@ -553,7 +551,7 @@ function SupportThread({
             type="button"
             onClick={() => onSend?.(input)}
             disabled={!s(input) || busy}
-            className="inline-flex h-9 w-9 items-center justify-center bg-slate-900 text-white disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-9 w-9 items-center justify-center bg-slate-950 text-white disabled:cursor-not-allowed disabled:opacity-45"
             aria-label="Send support message"
           >
             <SendHorizontal className="h-4 w-4" strokeWidth={2.1} />
@@ -943,12 +941,12 @@ export default function FloatingAiWidget({
     onOpenChange?.(false);
   }
 
-  const headerTitle = surfaceMode === "setup" ? "Truth Studio" : "Operator Support";
+  const headerTitle = surfaceMode === "setup" ? "Business Truth" : "Operator Support";
   const headerSummary =
     surfaceMode === "setup"
       ? s(
           clientAssistant.summary,
-          "One source in. Governed truth out."
+          "Source intake. Governed approval."
         )
       : "Channels, truth, inbox, comments, or voice.";
 
@@ -981,16 +979,16 @@ export default function FloatingAiWidget({
     >
       {panelOpen ? (
         <section
-          className="absolute bottom-[78px] right-0 h-[min(780px,calc(100vh-116px))] w-[min(468px,calc(100vw-26px))] overflow-hidden border border-[rgba(15,23,42,0.08)] bg-white shadow-[0_28px_72px_rgba(15,23,42,0.18)]"
+          className="absolute bottom-[78px] right-0 h-[min(780px,calc(100vh-116px))] w-[min(468px,calc(100vw-26px))] overflow-hidden border border-[rgba(15,23,42,0.05)] bg-white shadow-[0_34px_84px_rgba(15,23,42,0.14)]"
           role={pageMode ? "region" : "dialog"}
           aria-modal={pageMode ? undefined : "false"}
           aria-label={pageMode ? "Setup workspace" : "AI assistant"}
           style={panelStyle}
         >
-          <div className="border-b border-line bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(249,250,251,0.98))] px-4 pb-3 pt-4">
+          <div className="border-b border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,0.998),rgba(249,250,251,0.985))] px-4 pb-3 pt-4">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-text-muted">
+                <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-text-muted">
                   AI HQ
                 </div>
                 <div className="mt-1 text-[22px] font-semibold tracking-[-0.04em] text-text">
@@ -1005,7 +1003,7 @@ export default function FloatingAiWidget({
                 <button
                   type="button"
                   onClick={() => onOpenChange?.(false)}
-                  className="inline-flex h-8 w-8 items-center justify-center text-text-muted"
+                  className="inline-flex h-8 w-8 items-center justify-center text-text-muted transition-colors hover:text-text"
                   aria-label="Close AI assistant"
                 >
                   <X className="h-4 w-4" strokeWidth={2} />
@@ -1013,30 +1011,28 @@ export default function FloatingAiWidget({
               ) : null}
             </div>
 
-            <div className="mt-4 flex items-center gap-5 border-t border-line/80 pt-2.5">
+            <div className="mt-4 flex items-center gap-6 border-t border-[rgba(15,23,42,0.08)] pt-2.5">
               <button
                 type="button"
-                className={`inline-flex items-center gap-1.5 border-b-2 pb-2 text-[12px] font-semibold ${
+                className={`inline-flex border-b-[1.5px] pb-2 text-[12px] font-semibold tracking-[0.01em] ${
                   surfaceMode === "setup"
                     ? "border-slate-900 text-text"
                     : "border-transparent text-text-muted"
                 }`}
                 onClick={() => setSurfaceMode("setup")}
               >
-                <Sparkles className="h-4 w-4" strokeWidth={2.05} />
                 <span>Setup</span>
               </button>
 
               <button
                 type="button"
-                className={`inline-flex items-center gap-1.5 border-b-2 pb-2 text-[12px] font-semibold ${
+                className={`inline-flex border-b-[1.5px] pb-2 text-[12px] font-semibold tracking-[0.01em] ${
                   surfaceMode === "support"
                     ? "border-slate-900 text-text"
                     : "border-transparent text-text-muted"
                 }`}
                 onClick={() => setSurfaceMode("support")}
               >
-                <LifeBuoy className="h-4 w-4" strokeWidth={2.05} />
                 <span>Support</span>
               </button>
             </div>

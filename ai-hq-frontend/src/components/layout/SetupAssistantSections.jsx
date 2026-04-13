@@ -359,14 +359,14 @@ function SourceInput({ option, value, busy, onChange, onSubmit }) {
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={option.placeholder}
-          className="min-h-[108px] w-full resize-none border border-line bg-[rgba(248,250,252,0.7)] px-3 py-3 text-[13px] leading-6 text-text outline-none placeholder:text-text-subtle"
+          className="min-h-[104px] w-full resize-none border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(248,250,252,0.82),rgba(255,255,255,0.98))] px-3 py-3 text-[13px] leading-6 text-text outline-none placeholder:text-text-subtle"
         />
         <div className="mt-3 flex justify-end">
           <button
             type="button"
             onClick={onSubmit}
             disabled={!s(value) || busy}
-            className="inline-flex h-10 items-center gap-1.5 bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-10 items-center gap-1.5 bg-slate-900 px-3.5 text-[12px] font-semibold tracking-[0.01em] text-white disabled:cursor-not-allowed disabled:opacity-45"
           >
             {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
             <span>{option.actionLabel}</span>
@@ -377,7 +377,7 @@ function SourceInput({ option, value, busy, onChange, onSubmit }) {
   }
 
   return (
-    <div className="flex items-center gap-2 border-b border-line">
+    <div className="flex items-center gap-2 border-b border-[rgba(15,23,42,0.12)]">
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -388,7 +388,7 @@ function SourceInput({ option, value, busy, onChange, onSubmit }) {
         type="button"
         onClick={onSubmit}
         disabled={!s(value) || busy}
-        className="inline-flex h-10 shrink-0 items-center gap-1.5 bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+        className="inline-flex h-10 shrink-0 items-center gap-1.5 bg-slate-900 px-3.5 text-[12px] font-semibold tracking-[0.01em] text-white disabled:cursor-not-allowed disabled:opacity-45"
       >
         {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
         <span>{option.actionLabel}</span>
@@ -483,33 +483,33 @@ export default function SetupAssistantSections({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
-      <div className="border-b border-line px-4 pb-4 pt-3">
+      <div className="border-b border-[rgba(15,23,42,0.08)] px-4 pb-4 pt-3">
         <div className="flex items-end justify-between gap-4">
           <div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted">
-              Truth studio
+            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-muted">
+              Business truth
             </div>
-            <div className="mt-1 text-[19px] font-semibold tracking-[-0.04em] text-text">
-              Source intake
+            <div className="mt-1 text-[20px] font-semibold tracking-[-0.045em] text-text">
+              Intake
             </div>
           </div>
 
           <div className="text-right">
-            <div className="text-[19px] font-semibold tracking-[-0.04em] text-text">
+            <div className="text-[18px] font-semibold tracking-[-0.04em] text-text">
               {metrics.readySections}/{metrics.sectionCount}
             </div>
-            <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-text-muted">
               ready
             </div>
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-b border-line/80 pb-2">
+        <div className="mt-4 flex flex-wrap gap-x-3 gap-y-2 border-b border-[rgba(15,23,42,0.08)] pb-2">
           {SOURCE_OPTIONS.map((option) => (
             <button
               key={option.key}
               type="button"
-              className={`border-b pb-1 text-[12px] font-semibold transition-colors ${
+              className={`border-b-[1.5px] pb-1 text-[11px] font-semibold tracking-[0.015em] transition-colors ${
                 sourceMode === option.key
                   ? "border-slate-900 text-text"
                   : "border-transparent text-text-muted"
@@ -527,18 +527,18 @@ export default function SetupAssistantSections({
         <div className="mt-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-[13px] font-semibold text-text">
+              <div className="text-[13px] font-semibold tracking-[-0.015em] text-text">
                 {currentSource.label}
               </div>
               {s(currentSource.insight) ? (
-                <div className="mt-1 text-[12px] leading-5 text-text-muted">
+                <div className="mt-1 max-w-[34ch] text-[12px] leading-5 text-text-muted">
                   {currentSource.insight}
                 </div>
               ) : null}
             </div>
 
             {s(currentSource.url) ? (
-              <div className="max-w-[52%] truncate text-[12px] text-text-muted">
+              <div className="max-w-[50%] truncate text-[12px] text-text-muted">
                 {currentSource.url}
               </div>
             ) : null}
@@ -570,16 +570,16 @@ export default function SetupAssistantSections({
           finalizing={finalizing}
         />
 
-        <section className="border-b border-line py-5">
+        <section className="border-b border-[rgba(15,23,42,0.08)] py-5">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted">
-                Current decision
+              <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-muted">
+                Current focus
               </div>
-              <div className="mt-1 text-[19px] font-semibold tracking-[-0.04em] text-text">
+              <div className="mt-1 text-[20px] font-semibold tracking-[-0.045em] text-text">
                 {activeMeta.label}
               </div>
-              <div className="mt-1 max-w-[33ch] text-[12px] leading-5 text-text-muted">
+              <div className="mt-1 max-w-[30ch] text-[12px] leading-5 text-text-muted">
                 {activeMeta.prompt}
               </div>
             </div>
@@ -589,34 +589,34 @@ export default function SetupAssistantSections({
                 <div className="text-[16px] font-semibold tracking-[-0.03em] text-text">
                   {metrics.blockerCount}
                 </div>
-                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted">
-                  open
+                <div className="text-[10px] uppercase tracking-[0.18em] text-text-muted">
+                  remaining
                 </div>
               </div>
             ) : null}
           </div>
 
           {s(blockersLine) ? (
-            <div className="mt-2 text-[12px] leading-5 text-text-muted">
+            <div className="mt-2 max-w-[36ch] text-[12px] leading-5 text-text-muted">
               {blockersLine}
             </div>
           ) : null}
 
           {activeStep === "finalize" ? (
             reviewVisible ? (
-              <div className="mt-4 border-t border-line pt-4 text-[13px] leading-6 text-text">
-                Review is ready for approval.
+              <div className="mt-4 border-t border-[rgba(15,23,42,0.08)] pt-4 text-[13px] leading-6 text-text">
+                Approval is ready below.
               </div>
             ) : (
-              <div className="mt-4 flex items-center justify-between gap-3 border-t border-line pt-4">
-                <div className="max-w-[26ch] text-[13px] leading-6 text-text">
+              <div className="mt-4 flex items-center justify-between gap-3 border-t border-[rgba(15,23,42,0.08)] pt-4">
+                <div className="max-w-[24ch] text-[13px] leading-6 text-text">
                   Approve business truth and refresh the governed runtime.
                 </div>
                 <button
                   type="button"
                   onClick={handleFinalize}
                   disabled={busy}
-                  className="inline-flex h-10 items-center gap-1.5 bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+                  className="inline-flex h-10 items-center gap-1.5 bg-slate-900 px-3.5 text-[12px] font-semibold tracking-[0.01em] text-white disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   {finalizing ? (
                     <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -634,7 +634,7 @@ export default function SetupAssistantSections({
                       key={option}
                       type="button"
                       disabled={busy}
-                      className="inline-flex h-8 items-center border border-line bg-[rgba(248,250,252,0.75)] px-2.5 text-[12px] font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45"
+                      className="inline-flex h-8 items-center border border-[rgba(15,23,42,0.08)] bg-[rgba(248,250,252,0.52)] px-2.5 text-[12px] font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45"
                       onClick={() => handleAnswerSubmit(option)}
                     >
                       {option}
@@ -643,7 +643,7 @@ export default function SetupAssistantSections({
                 </div>
               ) : null}
 
-              <div className="mt-4 border-t border-line pt-4">
+              <div className="mt-4 border-t border-[rgba(15,23,42,0.08)] pt-4">
                 <div className="flex items-end gap-2">
                   <textarea
                     rows={3}
@@ -656,13 +656,13 @@ export default function SetupAssistantSections({
                       }
                     }}
                     placeholder={activeMeta.placeholder}
-                    className="min-h-[92px] w-full resize-none border-b border-line bg-transparent px-0 py-2 text-[13px] leading-6 text-text outline-none placeholder:text-text-subtle"
+                    className="min-h-[84px] w-full resize-none border-b border-[rgba(15,23,42,0.12)] bg-[linear-gradient(180deg,rgba(248,250,252,0.46),rgba(255,255,255,0))] px-0 py-2 text-[13px] leading-6 text-text outline-none placeholder:text-text-subtle"
                   />
                   <button
                     type="button"
                     onClick={() => handleAnswerSubmit()}
                     disabled={!s(answerInput) || busy}
-                    className="inline-flex h-10 shrink-0 items-center gap-1.5 bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+                    className="inline-flex h-10 shrink-0 items-center gap-1.5 bg-slate-900 px-3.5 text-[12px] font-semibold tracking-[0.01em] text-white disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
                     <span>Store</span>
@@ -674,11 +674,11 @@ export default function SetupAssistantSections({
         </section>
 
         <section className="py-4">
-          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted">
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-muted">
             Ledger
           </div>
 
-          <div className="mt-2 border-t border-line">
+          <div className="mt-2 border-t border-[rgba(15,23,42,0.08)]">
             {truthRows.map((row) => {
               const filled = Boolean(s(row.value));
               const active = row.step === activeStep;
@@ -688,12 +688,14 @@ export default function SetupAssistantSections({
                   key={row.key}
                   type="button"
                   onClick={() => setFocusStep(row.step)}
-                  className={`group flex w-full items-center justify-between gap-4 border-b border-line px-0 py-3 text-left ${
-                    active ? "text-slate-950" : "text-text"
+                  className={`group flex w-full items-center justify-between gap-4 border-b border-[rgba(15,23,42,0.08)] px-0 py-3 text-left transition-colors ${
+                    active
+                      ? "bg-[rgba(248,250,252,0.56)] text-slate-950"
+                      : "text-text"
                   }`}
                 >
                   <div className="min-w-0">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.09em] text-text-muted">
                       {row.label}
                     </div>
                     <div
@@ -705,11 +707,15 @@ export default function SetupAssistantSections({
                     </div>
                   </div>
 
-                  <div className="shrink-0 text-text-muted transition-colors group-hover:text-text">
+                  <div
+                    className={`shrink-0 transition-colors group-hover:text-text ${
+                      active ? "text-text" : "text-text-muted"
+                    }`}
+                  >
                     {filled ? (
-                      <Check className="h-4 w-4" />
+                      <Check className="h-3.5 w-3.5" />
                     ) : (
-                      <ArrowRight className="h-4 w-4" />
+                      <ArrowRight className="h-3.5 w-3.5" />
                     )}
                   </div>
                 </button>

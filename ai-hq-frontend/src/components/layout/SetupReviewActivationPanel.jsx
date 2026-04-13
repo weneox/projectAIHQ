@@ -241,26 +241,26 @@ export default function SetupReviewActivationPanel({
 
   return (
     <section
-      className="border-b border-line py-5"
+      className="border-b border-[rgba(15,23,42,0.08)] py-5"
       aria-label="Business truth review"
       role="region"
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted">
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-muted">
             Governed review
           </div>
-          <div className="mt-1 text-[19px] font-semibold tracking-[-0.04em] text-text">
+          <div className="mt-1 text-[20px] font-semibold tracking-[-0.045em] text-text">
             Approve business truth
           </div>
-          <div className="mt-1 max-w-[32ch] text-[12px] leading-5 text-text-muted">
+          <div className="mt-1 max-w-[30ch] text-[12px] leading-5 text-text-muted">
             {model.summary ||
               "Check the captured source evidence and approve the governed draft."}
           </div>
         </div>
 
         <div className="shrink-0 text-right">
-          <div className="text-[16px] font-semibold tracking-[-0.03em] text-text">
+          <div className="text-[15px] font-semibold tracking-[-0.03em] text-text">
             {model.statusLabel}
           </div>
           {model.canFinalize && typeof onFinalize === "function" ? (
@@ -268,7 +268,7 @@ export default function SetupReviewActivationPanel({
               type="button"
               onClick={() => onFinalize?.()}
               disabled={finalizing}
-              className="mt-3 inline-flex h-10 items-center bg-slate-900 px-3 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+              className="mt-3 inline-flex h-10 items-center bg-slate-950 px-3.5 text-[12px] font-semibold tracking-[0.015em] text-white shadow-[0_12px_28px_rgba(15,23,42,0.14)] disabled:cursor-not-allowed disabled:opacity-45"
             >
               Approve truth
             </button>
@@ -277,14 +277,14 @@ export default function SetupReviewActivationPanel({
       </div>
 
       {model.sourceRows.length ? (
-        <div className="mt-4 border-t border-line">
+        <div className="mt-4 border-t border-[rgba(15,23,42,0.08)]">
           {model.sourceRows.map((row) => (
             <div
               key={row.key}
-              className="flex items-start justify-between gap-4 border-b border-line py-3"
+              className="flex items-start justify-between gap-4 border-b border-[rgba(15,23,42,0.08)] py-3"
             >
               <div className="min-w-0">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.09em] text-text-muted">
                   {row.role === "primary" ? "Primary source" : row.type}
                 </div>
                 <div className="mt-1 text-[13px] font-semibold text-text">
@@ -308,13 +308,13 @@ export default function SetupReviewActivationPanel({
       ) : null}
 
       {model.truthRows.length ? (
-        <div className="border-b border-line">
+        <div className="border-b border-[rgba(15,23,42,0.08)]">
           {model.truthRows.map((row) => (
             <div
               key={row.key}
-              className="flex items-start justify-between gap-4 border-t border-line py-3"
+              className="flex items-start justify-between gap-4 border-t border-[rgba(15,23,42,0.08)] py-3"
             >
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.09em] text-text-muted">
                 {row.label}
               </div>
               <div className="max-w-[66%] text-right text-[13px] leading-6 text-text">
@@ -327,14 +327,14 @@ export default function SetupReviewActivationPanel({
 
       {model.evidenceRows.length ? (
         <div className="mt-4">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.09em] text-text-muted">
             Website evidence
           </div>
-          <div className="mt-2 border-t border-line">
+          <div className="mt-2 border-t border-[rgba(15,23,42,0.08)]">
             {model.evidenceRows.map((row) => (
               <div
                 key={row.key}
-                className="flex items-start justify-between gap-4 border-b border-line py-3"
+                className="flex items-start justify-between gap-4 border-b border-[rgba(15,23,42,0.08)] py-3"
               >
                 <div className="min-w-0 text-[13px] font-semibold text-text">
                   {row.title}
