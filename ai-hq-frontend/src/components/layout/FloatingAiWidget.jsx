@@ -858,7 +858,7 @@ export default function FloatingAiWidget({
 
       if (sourceType === "website") {
         const response = await importWebsiteForSetup({
-          websiteUrl: sourceValue,
+          url: sourceValue,
           allowSessionReuse: true,
           waitForCompletion: true,
         });

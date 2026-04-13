@@ -344,7 +344,7 @@ describe("FloatingAiWidget", () => {
 
     await waitFor(() =>
       expect(importWebsiteForSetup).toHaveBeenCalledWith({
-        websiteUrl: "https://lunasmile.az",
+        url: "https://lunasmile.az",
         allowSessionReuse: true,
         waitForCompletion: true,
       })

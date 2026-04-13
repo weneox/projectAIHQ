@@ -667,6 +667,122 @@ test("setup import routes keep sourceType in generic import responses", async ()
   assert.equal(res.body.message, "website import completed");
 });
 
+test("setup import routes accept websiteUrl for website imports", async () => {
+  const router = createRouter();
+
+  registerSetupImportRoutes(router, {
+    db: {},
+    requireSetupActor() {
+      return { tenantId: "tenant-1" };
+    },
+    resolveSourceUrlFromBody() {
+      return "";
+    },
+    resolveInstagramBundleUrl() {
+      return "";
+    },
+    normalizeIncomingSourceType() {
+      return "";
+    },
+    async importWebsiteSource() {
+      throw new Error("not expected");
+    },
+    async importGoogleMapsSource() {
+      throw new Error("not expected");
+    },
+    async importSource() {
+      throw new Error("not expected");
+    },
+    async importSourceBundle() {
+      throw new Error("not expected");
+    },
+    async executeSetupImport(input) {
+      assert.equal(input.executeImport.name, "importWebsiteSource");
+      assert.equal(input.executeArgs.url, "https://website-field.example");
+      return {
+        status: 202,
+        body: {
+          ok: true,
+          accepted: true,
+          message: "Website import accepted",
+        },
+      };
+    },
+    s(value) {
+      return String(value ?? "").trim();
+    },
+  });
+
+  const handler = getRoute(router, "POST", "/setup/import/website");
+  const req = createReq({
+    body: { websiteUrl: "https://website-field.example" },
+  });
+  const res = createRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 202);
+  assert.equal(res.body.accepted, true);
+});
+
+test("setup import routes accept website_url for website imports", async () => {
+  const router = createRouter();
+
+  registerSetupImportRoutes(router, {
+    db: {},
+    requireSetupActor() {
+      return { tenantId: "tenant-1" };
+    },
+    resolveSourceUrlFromBody() {
+      return "";
+    },
+    resolveInstagramBundleUrl() {
+      return "";
+    },
+    normalizeIncomingSourceType() {
+      return "";
+    },
+    async importWebsiteSource() {
+      throw new Error("not expected");
+    },
+    async importGoogleMapsSource() {
+      throw new Error("not expected");
+    },
+    async importSource() {
+      throw new Error("not expected");
+    },
+    async importSourceBundle() {
+      throw new Error("not expected");
+    },
+    async executeSetupImport(input) {
+      assert.equal(input.executeImport.name, "importWebsiteSource");
+      assert.equal(input.executeArgs.url, "https://website-snake.example");
+      return {
+        status: 202,
+        body: {
+          ok: true,
+          accepted: true,
+          message: "Website import accepted",
+        },
+      };
+    },
+    s(value) {
+      return String(value ?? "").trim();
+    },
+  });
+
+  const handler = getRoute(router, "POST", "/setup/import/website");
+  const req = createReq({
+    body: { website_url: "https://website-snake.example" },
+  });
+  const res = createRes();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 202);
+  assert.equal(res.body.accepted, true);
+});
+
 test("setup staging routes keep canonical writes deferred for service creation", async () => {
   const router = createRouter();
 

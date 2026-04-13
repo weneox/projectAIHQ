@@ -50,12 +50,16 @@ export function registerSetupImportRoutes(
     };
   }
 
+  function resolveWebsiteImportUrlFromBody(body = {}) {
+    return s(body?.websiteUrl || body?.website_url || resolveSourceUrlFromBody(body));
+  }
+
   router.post("/setup/import/website", async (req, res) => {
     const actor = requireSetupActor(req, res);
     if (!actor) return;
 
     const body = req.body || {};
-    const url = resolveSourceUrlFromBody(body);
+    const url = resolveWebsiteImportUrlFromBody(body);
 
     if (!url) {
       return res.status(400).json(
