@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Check, LoaderCircle } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import SetupReviewActivationPanel from "./SetupReviewActivationPanel.jsx";
 
 function s(value, fallback = "") {
@@ -20,13 +20,13 @@ function obj(value, fallback = {}) {
     : fallback;
 }
 
-function compactText(value, max = 120) {
+function compactText(value, max = 160) {
   const text = s(value).replace(/\s+/g, " ").trim();
   if (!text) return "";
   return text.length <= max ? text : `${text.slice(0, max - 1).trim()}...`;
 }
 
-function listPreview(items = [], max = 3) {
+function listPreview(items = [], max = 4) {
   const safe = arr(items).map((item) => compactText(item, 60)).filter(Boolean);
   if (!safe.length) return "";
   if (safe.length <= max) return safe.join(", ");
@@ -38,7 +38,7 @@ const SOURCE_OPTIONS = [
     key: "website",
     label: "Website",
     placeholder: "https://example.com",
-    actionLabel: "Pull website",
+    actionLabel: "Use source",
   },
   {
     key: "instagram",
@@ -56,84 +56,79 @@ const SOURCE_OPTIONS = [
     key: "google_maps",
     label: "Google Maps",
     placeholder: "https://maps.google.com/...",
-    actionLabel: "Pull map",
+    actionLabel: "Use source",
   },
   {
     key: "manual",
-    label: "Note",
+    label: "Manual note",
     placeholder:
-      "Business name: Luna Smile Studio\nDescription: Cosmetic dentistry in Baku\nHours: Mon-Fri 09:00-18:00",
+      "Qadın gözəllik salonudur. Əsas xidmətlər saç baxımı, kəsim, dırnaq xidməti və makiyajdır.",
     actionLabel: "Use note",
     multiline: true,
   },
 ];
 
-const STEP_META = {
+const QUESTION_META = {
   company: {
-    label: "Business name",
-    prompt: "Confirm the public business name.",
-    placeholder: "Luna Smile Studio",
-    options: [],
+    title: "Business name",
+    prompt: "Bu biznesin public adı necə görünməlidir?",
+    placeholder: "Məsələn: Saytpro",
+    quickAnswers: [],
   },
   description: {
-    label: "Short description",
-    prompt: "Store the one-sentence business description.",
-    placeholder: "Cosmetic dentistry, implants, whitening, and family care in Baku.",
-    options: [],
+    title: "What the business is",
+    prompt: "Bu biznesi bir-iki cümlə ilə necə təqdim etməliyəm?",
+    placeholder:
+      "Məsələn: Website hazırlanması, reklam və branding xidmətləri göstərən digital şirkət",
+    quickAnswers: [],
   },
   website: {
-    label: "Website",
-    prompt: "Confirm the main public website.",
-    placeholder: "https://lunasmile.az",
-    options: [],
+    title: "Main website",
+    prompt: "Əsas public website hansıdır?",
+    placeholder: "https://example.com",
+    quickAnswers: [],
   },
   services: {
-    label: "Services",
-    prompt: "Capture the services AI can safely mention.",
-    placeholder: "Smile design, implants, whitening, consultation",
-    options: [],
+    title: "Core services",
+    prompt: "Əsas xidmətləri sadalayın.",
+    placeholder: "Website hazırlanması, reklam, branding...",
+    quickAnswers: [],
   },
   hours: {
-    label: "Opening hours",
-    prompt: "Lock the customer-facing hours.",
-    placeholder: "Mon-Fri 09:00-18:00, Sat 10:00-14:00, Sun closed",
-    options: ["Mon-Fri 09:00-18:00", "24/7", "Appointment only"],
+    title: "Opening hours",
+    prompt: "Müştəriyə hansı iş saatları deyilməlidir?",
+    placeholder: "B.e.-C. 10:00-19:00",
+    quickAnswers: ["24/7", "Appointment only", "Mon-Fri 10:00-19:00"],
   },
   pricing: {
-    label: "Pricing posture",
-    prompt: "State the exact public pricing posture.",
-    placeholder: "Consultation from 30 AZN. Exact treatment pricing requires a quote.",
-    options: [
-      "Exact pricing requires a quote.",
-      "Consultation from 30 AZN. Exact treatment pricing requires a quote.",
-      "Pricing should be handled by an operator.",
+    title: "Pricing posture",
+    prompt: "Qiymət necə təqdim olunmalıdır?",
+    placeholder: "Qiymətlər xidmətə görə dəyişir. Dəqiq qiymət üçün müraciət edin.",
+    quickAnswers: [
+      "Qiymətlər xidmətə görə dəyişir.",
+      "Dəqiq qiymət üçün müraciət edilməlidir.",
+      "Qiymət operator tərəfindən paylaşılmalıdır.",
     ],
   },
   contacts: {
-    label: "Contact routes",
-    prompt: "Confirm the routes customers should use.",
-    placeholder: "+994 50 555 12 12, hello@lunasmile.az, WhatsApp",
-    options: [],
+    title: "Contact routes",
+    prompt: "Müştəri hansı əlaqə yollarına yönləndirilməlidir?",
+    placeholder: "+994..., WhatsApp, Instagram DM, email...",
+    quickAnswers: [],
   },
   handoff: {
-    label: "Handoff rules",
-    prompt: "Define when AI must hand off to a human.",
-    placeholder: "Complaints, urgent requests, treatment-specific quotes, payment issues",
-    options: [
-      "Complaints should be escalated to a human.",
-      "Custom quotes should be escalated to a human.",
-      "Urgent requests should be escalated to a human.",
+    title: "Human handoff",
+    prompt: "AI hansı hallarda mütləq insana ötürməlidir?",
+    placeholder: "Şikayət, fərdi qiymət sorğusu, təcili müraciət, ödəniş problemi",
+    quickAnswers: [
+      "Şikayətlər insana ötürülsün.",
+      "Fərdi qiymət sorğuları insana ötürülsün.",
+      "Təcili hallarda insana ötürülsün.",
     ],
-  },
-  finalize: {
-    label: "Approval",
-    prompt: "Approve the governed draft.",
-    placeholder: "",
-    options: [],
   },
 };
 
-function normalizeStep(value = "") {
+function normalizeQuestionKey(value = "") {
   const key = lower(value);
   if (!key) return "";
   if (key === "profile") return "company";
@@ -141,83 +136,14 @@ function normalizeStep(value = "") {
   return key;
 }
 
-function buildMetrics(assistant = {}, reviewPayload = null) {
-  const summary = obj(assistant.setupSummary);
-  const reviewRoot = obj(reviewPayload?.review || reviewPayload);
-  const sectionStatus = obj(summary.sectionStatus);
-  const readySections = Object.values(sectionStatus).filter(
-    (item) => lower(item?.status) === "ready"
-  ).length;
-  const blockerCount = Number(
-    summary.blockerCount ??
-      assistant.review?.blockerCount ??
-      reviewRoot.blockerCount ??
-      0
-  );
-
-  return {
-    readySections,
-    blockerCount,
-    sectionCount: Object.keys(sectionStatus).length || 8,
-  };
-}
-
-function buildHoursSummary(hours = []) {
-  const active = arr(hours).filter(
-    (item) =>
-      item?.enabled === true ||
-      item?.allDay === true ||
-      item?.appointmentOnly === true ||
-      item?.closed === true ||
-      s(item?.notes)
-  );
-
-  if (!active.length) return "";
-
-  return listPreview(
-    active.map((item) => {
-      if (item.allDay) return `${item.day} 24 hours`;
-      if (item.appointmentOnly) return `${item.day} appointment only`;
-      if (item.closed) return `${item.day} closed`;
-      if (s(item.notes)) return `${item.day} ${item.notes}`;
-      return `${item.day} ${s(item.openTime)}-${s(item.closeTime)}`;
-    }),
-    2
-  );
-}
-
-function buildPricingSummary(pricing = {}) {
-  const source = obj(pricing);
-  return compactText(
-    source.publicSummary || source.note || source.summary || source.pricingMode,
-    120
-  );
-}
-
-function buildContactsSummary(contacts = []) {
-  return listPreview(
-    arr(contacts).map((item) =>
-      s(item.label || item.type || item.value || item.channel)
-    ),
-    3
-  );
-}
-
-function buildHandoffSummary(handoff = {}) {
-  const source = obj(handoff);
-  return compactText(
-    source.summary || arr(source.triggers).join(", ") || source.escalationTarget,
-    120
-  );
-}
-
 function buildCurrentSource(assistant = {}, reviewPayload = null) {
   const sourceMetadata = obj(assistant.draft?.sourceMetadata);
   const bundleSources = arr(reviewPayload?.bundleSources);
   const primaryBundle =
     bundleSources.find((item) => lower(item.role) === "primary") || bundleSources[0];
+
   const sourceType =
-    lower(primaryBundle?.sourceType || sourceMetadata.primarySourceType) || "manual";
+    lower(primaryBundle?.sourceType || sourceMetadata.primarySourceType) || "";
   const sourceUrl =
     s(primaryBundle?.sourceUrl || sourceMetadata.primarySourceUrl) ||
     s(assistant.websitePrefill?.websiteUrl);
@@ -230,169 +156,266 @@ function buildCurrentSource(assistant = {}, reviewPayload = null) {
         : sourceType === "facebook_page" || sourceType === "facebook"
           ? "Facebook"
           : sourceType === "manual"
-            ? "Operator note"
-            : "Website");
+            ? "Manual note"
+            : sourceType === "website"
+              ? "Website"
+              : "");
 
   return {
     type: sourceType,
     label: sourceLabel,
     url: sourceUrl,
     insight: arr(sourceMetadata.evidenceSummary)[0] || "",
+    hasSource: Boolean(sourceType || sourceUrl || sourceLabel),
   };
 }
 
-function buildTruthRows(assistant = {}) {
-  const draft = obj(assistant.draft);
+function buildDraftModel(assistant = {}, reviewPayload = null) {
+  const review = obj(reviewPayload?.review || reviewPayload);
+  const draft = Object.keys(obj(review.draft)).length
+    ? obj(review.draft)
+    : obj(assistant.draft);
   const profile = obj(draft.businessProfile);
+  const services = arr(draft.services)
+    .map((item) => s(item.title || item.name || item.label))
+    .filter(Boolean);
+  const contacts = arr(draft.contacts)
+    .map((item) => s(item.label || item.channel || item.value || item.type))
+    .filter(Boolean);
 
-  return [
-    {
-      key: "company",
-      label: "Business name",
-      value: s(profile.companyName),
-      step: "company",
-    },
-    {
-      key: "description",
-      label: "Short description",
-      value: compactText(profile.description, 140),
-      step: "description",
-    },
-    {
-      key: "website",
-      label: "Website",
-      value: s(profile.websiteUrl),
-      step: "website",
-    },
-    {
-      key: "services",
-      label: "Services",
-      value: listPreview(
-        arr(draft.services).map((item) => s(item.title || item.name || item.label)),
-        3
-      ),
-      step: "services",
-    },
-    {
-      key: "hours",
-      label: "Opening hours",
-      value: buildHoursSummary(draft.hours),
-      step: "hours",
-    },
-    {
-      key: "pricing",
-      label: "Pricing posture",
-      value: buildPricingSummary(draft.pricingPosture),
-      step: "pricing",
-    },
-    {
-      key: "contacts",
-      label: "Contact routes",
-      value: buildContactsSummary(draft.contacts),
-      step: "contacts",
-    },
-    {
-      key: "handoff",
-      label: "Handoff rules",
-      value: buildHandoffSummary(draft.handoffRules),
-      step: "handoff",
-    },
-  ];
+  const hours = arr(profile.hours).length
+    ? arr(profile.hours).map((item) => s(item))
+    : arr(draft.hours)
+        .map((item) => {
+          if (item?.allDay) return `${item.day} 24 hours`;
+          if (item?.appointmentOnly) return `${item.day} appointment only`;
+          if (item?.closed) return `${item.day} closed`;
+          if (s(item?.notes)) return `${item.day} ${s(item.notes)}`;
+          if (s(item?.openTime) || s(item?.closeTime)) {
+            return `${item.day} ${s(item.openTime)}-${s(item.closeTime)}`;
+          }
+          return "";
+        })
+        .filter(Boolean);
+
+  const pricing =
+    s(profile.pricingPolicy) ||
+    s(draft.pricingPosture?.publicSummary) ||
+    s(draft.pricingPosture?.note) ||
+    s(draft.pricingPosture?.summary);
+
+  const handoff =
+    s(draft.handoffRules?.summary) ||
+    listPreview(arr(draft.handoffRules?.triggers), 3) ||
+    s(draft.handoffRules?.escalationTarget);
+
+  const audience =
+    s(profile.targetAudience) ||
+    s(profile.audience) ||
+    s(profile.customerType) ||
+    s(profile.customerTypes);
+
+  const description =
+    s(profile.description) ||
+    s(profile.companySummaryShort) ||
+    s(profile.companySummary);
+
+  const model = {
+    name: s(profile.companyName || profile.displayName),
+    description,
+    website: s(profile.websiteUrl),
+    coreOffer: services[0] || "",
+    additionalServices: services.slice(1),
+    audience,
+    contacts: [
+      s(profile.primaryPhone),
+      s(profile.primaryEmail),
+      s(profile.primaryAddress),
+      ...contacts,
+    ].filter(Boolean),
+    hours,
+    pricing,
+    handoff,
+    serviceList: services,
+  };
+
+  model.fieldCount = [
+    model.name,
+    model.description,
+    model.website,
+    model.coreOffer,
+    model.audience,
+    model.contacts.length ? "contacts" : "",
+    model.hours.length ? "hours" : "",
+    model.pricing,
+    model.handoff,
+  ].filter(Boolean).length;
+
+  return model;
 }
 
-function getDominantStep(assistant = {}) {
-  const completion = obj(assistant.assistant?.completion);
-  if (completion.ready === true || assistant.review?.readyForReview === true) {
-    return "finalize";
+function buildQuestionState(assistant = {}, draftModel = {}) {
+  const nextQuestion = normalizeQuestionKey(assistant.assistant?.nextQuestion?.key);
+  if (nextQuestion && QUESTION_META[nextQuestion]) {
+    return {
+      key: nextQuestion,
+      ...QUESTION_META[nextQuestion],
+    };
   }
 
-  const nextQuestion = normalizeStep(assistant.assistant?.nextQuestion?.key);
-  if (nextQuestion && STEP_META[nextQuestion]) return nextQuestion;
+  if (!s(draftModel.name)) return { key: "company", ...QUESTION_META.company };
+  if (!s(draftModel.description)) {
+    return { key: "description", ...QUESTION_META.description };
+  }
+  if (!draftModel.serviceList?.length) {
+    return { key: "services", ...QUESTION_META.services };
+  }
+  if (!s(draftModel.pricing)) return { key: "pricing", ...QUESTION_META.pricing };
+  if (!draftModel.contacts?.length) {
+    return { key: "contacts", ...QUESTION_META.contacts };
+  }
+  if (!s(draftModel.handoff)) return { key: "handoff", ...QUESTION_META.handoff };
 
-  const firstMissing = buildTruthRows(assistant).find((row) => !s(row.value));
-  return firstMissing?.step || "finalize";
+  return null;
 }
 
-function getSourcePrefill(type = "", assistant = {}, reviewPayload = null) {
-  const currentSource = buildCurrentSource(assistant, reviewPayload);
-  const profile = obj(assistant.draft?.businessProfile);
+function buildInterviewSummary(source = {}, draftModel = {}) {
+  const lines = [];
 
-  if (type === "website") {
-    return (
-      s(assistant.websitePrefill?.websiteUrl) ||
-      s(profile.websiteUrl) ||
-      (currentSource.type === "website" ? currentSource.url : "")
+  if (source.label || source.url) {
+    lines.push(
+      source.url
+        ? `${source.label || "Source"} qəbul olundu: ${source.url}`
+        : `${source.label || "Source"} qəbul olundu.`
     );
   }
 
-  if (type === "google_maps" && currentSource.type === "google_maps") {
-    return currentSource.url;
+  if (draftModel.name) {
+    lines.push(`Hazırda gördüyüm brend adı: ${draftModel.name}`);
   }
 
-  if (
-    (type === "instagram" && currentSource.type === "instagram") ||
-    (type === "facebook" &&
-      ["facebook", "facebook_page"].includes(currentSource.type))
-  ) {
-    return currentSource.url;
+  if (draftModel.description) {
+    lines.push(`İlkin anlayış: ${compactText(draftModel.description, 120)}`);
   }
 
-  return "";
+  if (draftModel.serviceList?.length) {
+    lines.push(`Görünən xidmətlər: ${listPreview(draftModel.serviceList, 4)}`);
+  }
+
+  if (!lines.length) {
+    lines.push("Mən source-dan siqnalları yığıram və business draft qururam.");
+  }
+
+  return lines;
 }
 
-function hasReviewMaterial(reviewPayload = null) {
-  const root = obj(reviewPayload);
-  const review = obj(root.review || reviewPayload);
-  return Boolean(
-    arr(root.bundleSources).length ||
-      Object.keys(obj(review.draft)).length ||
-      arr(obj(review.reviewDebug).websiteKnowledge?.topPages).length
-  );
-}
-
-function SourceInput({ option, value, busy, onChange, onSubmit }) {
+function SourceComposer({
+  option,
+  value,
+  busy,
+  onChange,
+  onSubmit,
+}) {
   if (option.multiline) {
     return (
-      <div>
+      <div className="space-y-3">
         <textarea
-          rows={4}
+          rows={5}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           placeholder={option.placeholder}
-          className="min-h-[104px] w-full resize-none border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(248,250,252,0.82),rgba(255,255,255,0.98))] px-3 py-3 text-[13px] leading-6 text-text outline-none placeholder:text-text-subtle"
+          className="min-h-[128px] w-full resize-none border-b border-[rgba(15,23,42,0.12)] bg-transparent px-0 py-2 text-[14px] leading-7 text-text outline-none placeholder:text-text-subtle"
         />
-        <div className="mt-3 flex justify-end">
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={!s(value) || busy}
-            className="inline-flex h-10 items-center gap-1.5 bg-slate-900 px-3.5 text-[12px] font-semibold tracking-[0.01em] text-white disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-            <span>{option.actionLabel}</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={!s(value) || busy}
+          className="inline-flex h-10 items-center gap-2 bg-slate-950 px-3.5 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+          <span>{option.actionLabel}</span>
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="flex items-center gap-2 border-b border-[rgba(15,23,42,0.12)]">
+    <div className="flex items-end gap-3 border-b border-[rgba(15,23,42,0.12)] py-2">
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={option.placeholder}
-        className="h-11 w-full bg-transparent px-0 text-[13px] text-text outline-none placeholder:text-text-subtle"
+        className="h-11 w-full bg-transparent px-0 text-[14px] text-text outline-none placeholder:text-text-subtle"
       />
       <button
         type="button"
         onClick={onSubmit}
         disabled={!s(value) || busy}
-        className="inline-flex h-10 shrink-0 items-center gap-1.5 bg-slate-900 px-3.5 text-[12px] font-semibold tracking-[0.01em] text-white disabled:cursor-not-allowed disabled:opacity-45"
+        className="inline-flex h-10 shrink-0 items-center gap-2 bg-slate-950 px-3.5 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
       >
         {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
         <span>{option.actionLabel}</span>
       </button>
+    </div>
+  );
+}
+
+function ReplyComposer({
+  value,
+  busy,
+  placeholder,
+  onChange,
+  onSubmit,
+}) {
+  return (
+    <div className="border-t border-[rgba(15,23,42,0.08)] pt-4">
+      <div className="flex items-end gap-3 border-b border-[rgba(15,23,42,0.12)] py-2">
+        <textarea
+          rows={3}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              onSubmit();
+            }
+          }}
+          placeholder={placeholder}
+          className="min-h-[84px] w-full resize-none bg-transparent px-0 py-1 text-[14px] leading-7 text-text outline-none placeholder:text-text-subtle"
+        />
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={!s(value) || busy}
+          className="inline-flex h-10 shrink-0 items-center gap-2 bg-slate-950 px-3.5 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+          <span>Continue</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AssistantBubble({ eyebrow = "", title = "", body = "", children = null }) {
+  return (
+    <div className="border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(248,250,252,0.82),rgba(255,255,255,0.98))] px-4 py-4 text-text">
+      {s(eyebrow) ? (
+        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted">
+          {eyebrow}
+        </div>
+      ) : null}
+      {s(title) ? (
+        <div className="mt-1 text-[18px] font-semibold tracking-[-0.03em] text-text">
+          {title}
+        </div>
+      ) : null}
+      {s(body) ? (
+        <div className="mt-2 whitespace-pre-wrap text-[14px] leading-7 text-text-muted">
+          {body}
+        </div>
+      ) : null}
+      {children ? <div className="mt-4">{children}</div> : null}
     </div>
   );
 }
@@ -408,64 +431,119 @@ export default function SetupAssistantSections({
   onParseMessage,
   onFinalize,
 }) {
-  const metrics = useMemo(
-    () => buildMetrics(assistant, reviewPayload),
-    [assistant, reviewPayload]
-  );
-  const currentSource = useMemo(
+  const source = useMemo(
     () => buildCurrentSource(assistant, reviewPayload),
     [assistant, reviewPayload]
   );
-  const truthRows = useMemo(() => buildTruthRows(assistant), [assistant]);
-  const reviewVisible = useMemo(
-    () => hasReviewMaterial(reviewPayload),
-    [reviewPayload]
+  const draftModel = useMemo(
+    () => buildDraftModel(assistant, reviewPayload),
+    [assistant, reviewPayload]
   );
+  const question = useMemo(
+    () => buildQuestionState(assistant, draftModel),
+    [assistant, draftModel]
+  );
+
   const [sourceMode, setSourceMode] = useState("website");
   const [sourceInput, setSourceInput] = useState("");
-  const [focusStep, setFocusStep] = useState("");
-  const [answerInput, setAnswerInput] = useState("");
+  const [replyInput, setReplyInput] = useState("");
   const [localError, setLocalError] = useState("");
 
   const busy = saving || finalizing || capturingSource;
-  const activeStep = focusStep || getDominantStep(assistant);
-  const activeMeta = STEP_META[activeStep] || STEP_META.company;
-  const sourceOption =
+  const interviewReady = source.hasSource;
+  const draftReady =
+    assistant.review?.finalizeAvailable === true ||
+    assistant.review?.readyForReview === true ||
+    assistant.assistant?.completion?.ready === true ||
+    (!question && draftModel.fieldCount >= 3);
+  const stage = !interviewReady ? "source" : draftReady ? "draft" : "interview";
+
+  const selectedSource =
     SOURCE_OPTIONS.find((item) => item.key === sourceMode) || SOURCE_OPTIONS[0];
-  const blockersLine = arr(assistant.assistant?.confirmationBlockers)
-    .slice(0, 3)
-    .map((item) => s(item.label || item.title))
-    .filter(Boolean)
-    .join(", ");
 
   useEffect(() => {
-    setSourceInput(getSourcePrefill(sourceMode, assistant, reviewPayload));
-  }, [assistant, reviewPayload, sourceMode]);
+    if (sourceMode === "website") {
+      setSourceInput(s(assistant.websitePrefill?.websiteUrl || draftModel.website));
+      return;
+    }
+
+    if (
+      sourceMode === "google_maps" &&
+      lower(source.type) === "google_maps" &&
+      source.url
+    ) {
+      setSourceInput(source.url);
+      return;
+    }
+
+    if (
+      sourceMode === "instagram" &&
+      lower(source.type) === "instagram" &&
+      source.url
+    ) {
+      setSourceInput(source.url);
+      return;
+    }
+
+    if (
+      sourceMode === "facebook" &&
+      ["facebook", "facebook_page"].includes(lower(source.type)) &&
+      source.url
+    ) {
+      setSourceInput(source.url);
+      return;
+    }
+
+    if (sourceMode === "manual" && lower(source.type) === "manual") {
+      setSourceInput("");
+      return;
+    }
+
+    setSourceInput("");
+  }, [assistant, draftModel.website, source.type, source.url, sourceMode]);
 
   async function handleSourceSubmit() {
-    if (!s(sourceInput) || busy) return;
+    const value = s(sourceInput);
+    if (!value || busy) return;
     setLocalError("");
     try {
-      await onCaptureSource?.({ type: sourceMode, value: sourceInput });
-      if (sourceMode === "manual") {
-        setFocusStep(getDominantStep(assistant));
-      }
+      await onCaptureSource?.({
+        type: sourceMode,
+        value,
+      });
+      setReplyInput("");
     } catch (error) {
       setLocalError(s(error?.message, "Source intake failed."));
     }
   }
 
-  async function handleAnswerSubmit(value = answerInput) {
-    const text = s(value);
-    if (!text || busy) return;
+  async function handleReplySubmit() {
+    const value = s(replyInput);
+    if (!value || busy) return;
     setLocalError("");
+
     try {
       await onParseMessage?.({
-        step: activeStep,
-        text,
+        step: stage === "draft" ? "profile" : question?.key || "profile",
+        text: value,
       });
-      setAnswerInput("");
-      setFocusStep("");
+      setReplyInput("");
+    } catch (error) {
+      setLocalError(s(error?.message, "The draft could not be updated."));
+    }
+  }
+
+  async function handleQuickAnswer(value = "") {
+    if (!s(value) || busy) return;
+    setReplyInput(value);
+    setLocalError("");
+
+    try {
+      await onParseMessage?.({
+        step: question?.key || "profile",
+        text: value,
+      });
+      setReplyInput("");
     } catch (error) {
       setLocalError(s(error?.message, "The draft could not be updated."));
     }
@@ -484,245 +562,152 @@ export default function SetupAssistantSections({
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
       <div className="border-b border-[rgba(15,23,42,0.08)] px-4 pb-4 pt-3">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-muted">
-              Business truth
-            </div>
-            <div className="mt-1 text-[20px] font-semibold tracking-[-0.045em] text-text">
-              Intake
-            </div>
-          </div>
-
-          <div className="text-right">
-            <div className="text-[18px] font-semibold tracking-[-0.04em] text-text">
-              {metrics.readySections}/{metrics.sectionCount}
-            </div>
-            <div className="text-[10px] uppercase tracking-[0.18em] text-text-muted">
-              ready
-            </div>
-          </div>
+        <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-muted">
+          Setup Studio
         </div>
-
-        <div className="mt-4 flex flex-wrap gap-x-3 gap-y-2 border-b border-[rgba(15,23,42,0.08)] pb-2">
-          {SOURCE_OPTIONS.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              className={`border-b-[1.5px] pb-1 text-[11px] font-semibold tracking-[0.015em] transition-colors ${
-                sourceMode === option.key
-                  ? "border-slate-900 text-text"
-                  : "border-transparent text-text-muted"
-              }`}
-              onClick={() => {
-                setSourceMode(option.key);
-                setLocalError("");
-              }}
-            >
-              {option.label}
-            </button>
-          ))}
+        <div className="mt-1 text-[19px] font-semibold tracking-[-0.04em] text-text">
+          {stage === "source"
+            ? "Start from one good source"
+            : stage === "interview"
+              ? "I’m building the business draft"
+              : "Review the final draft"}
         </div>
-
-        <div className="mt-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-[13px] font-semibold tracking-[-0.015em] text-text">
-                {currentSource.label}
-              </div>
-              {s(currentSource.insight) ? (
-                <div className="mt-1 max-w-[34ch] text-[12px] leading-5 text-text-muted">
-                  {currentSource.insight}
-                </div>
-              ) : null}
-            </div>
-
-            {s(currentSource.url) ? (
-              <div className="max-w-[50%] truncate text-[12px] text-text-muted">
-                {currentSource.url}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="mt-3">
-            <SourceInput
-              option={sourceOption}
-              value={sourceInput}
-              busy={capturingSource}
-              onChange={setSourceInput}
-              onSubmit={handleSourceSubmit}
-            />
-          </div>
+        <div className="mt-2 text-[12px] leading-5 text-text-muted">
+          {source.hasSource
+            ? source.url
+              ? `${source.label || "Source"} · ${source.url}`
+              : source.label
+            : "Website, social profile, map link, or a short note is enough to begin."}
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 pb-6 pt-3">
+      <div className="flex-1 overflow-auto px-4 py-5">
         {s(localError || errorMessage) ? (
-          <div className="border-l-2 border-[rgba(var(--color-danger),0.75)] bg-danger-soft px-3 py-2 text-[12px] leading-5 text-danger">
+          <div className="mb-4 border-l-2 border-[rgba(var(--color-danger),0.78)] bg-danger-soft px-3 py-2 text-[12px] leading-5 text-danger">
             {localError || errorMessage}
           </div>
         ) : null}
 
-        <SetupReviewActivationPanel
-          reviewPayload={reviewPayload}
-          assistantReview={assistant.review}
-          onFinalize={onFinalize ? handleFinalize : undefined}
-          finalizing={finalizing}
-        />
+        {stage === "source" ? (
+          <div className="space-y-5">
+            <AssistantBubble
+              eyebrow="Setup"
+              title="Give me the first signal"
+              body="Mən source-ları və cavablarını birləşdirib business draft hazırlayacağam. Hələ xam field-lər doldurmağa ehtiyac yoxdur."
+            >
+              <div className="flex flex-wrap gap-x-4 gap-y-2 border-b border-[rgba(15,23,42,0.08)] pb-2">
+                {SOURCE_OPTIONS.map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    className={`border-b pb-1 text-[12px] font-semibold transition-colors ${
+                      sourceMode === option.key
+                        ? "border-slate-900 text-text"
+                        : "border-transparent text-text-muted"
+                    }`}
+                    onClick={() => {
+                      setSourceMode(option.key);
+                      setLocalError("");
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
 
-        <section className="border-b border-[rgba(15,23,42,0.08)] py-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-muted">
-                Current focus
+              <div className="pt-2">
+                <SourceComposer
+                  option={selectedSource}
+                  value={sourceInput}
+                  busy={capturingSource}
+                  onChange={setSourceInput}
+                  onSubmit={handleSourceSubmit}
+                />
               </div>
-              <div className="mt-1 text-[20px] font-semibold tracking-[-0.045em] text-text">
-                {activeMeta.label}
-              </div>
-              <div className="mt-1 max-w-[30ch] text-[12px] leading-5 text-text-muted">
-                {activeMeta.prompt}
-              </div>
-            </div>
-
-            {metrics.blockerCount > 0 ? (
-              <div className="shrink-0 text-right">
-                <div className="text-[16px] font-semibold tracking-[-0.03em] text-text">
-                  {metrics.blockerCount}
-                </div>
-                <div className="text-[10px] uppercase tracking-[0.18em] text-text-muted">
-                  remaining
-                </div>
-              </div>
-            ) : null}
+            </AssistantBubble>
           </div>
+        ) : null}
 
-          {s(blockersLine) ? (
-            <div className="mt-2 max-w-[36ch] text-[12px] leading-5 text-text-muted">
-              {blockersLine}
-            </div>
-          ) : null}
-
-          {activeStep === "finalize" ? (
-            reviewVisible ? (
-              <div className="mt-4 border-t border-[rgba(15,23,42,0.08)] pt-4 text-[13px] leading-6 text-text">
-                Approval is ready below.
-              </div>
-            ) : (
-              <div className="mt-4 flex items-center justify-between gap-3 border-t border-[rgba(15,23,42,0.08)] pt-4">
-                <div className="max-w-[24ch] text-[13px] leading-6 text-text">
-                  Approve business truth and refresh the governed runtime.
-                </div>
-                <button
-                  type="button"
-                  onClick={handleFinalize}
-                  disabled={busy}
-                  className="inline-flex h-10 items-center gap-1.5 bg-slate-900 px-3.5 text-[12px] font-semibold tracking-[0.01em] text-white disabled:cursor-not-allowed disabled:opacity-45"
-                >
-                  {finalizing ? (
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                  ) : null}
-                  <span>Approve truth</span>
-                </button>
-              </div>
-            )
-          ) : (
-            <>
-              {activeMeta.options.length ? (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {activeMeta.options.map((option) => (
+        {stage === "interview" ? (
+          <div className="space-y-5">
+            <AssistantBubble
+              eyebrow="Current understanding"
+              title={question?.title || "Next question"}
+              body={[
+                ...buildInterviewSummary(source, draftModel),
+                "",
+                question?.prompt || "Mənə növbəti vacib detalı yaz.",
+              ]
+                .filter(Boolean)
+                .join("\n")}
+            >
+              {arr(question?.quickAnswers).length ? (
+                <div className="flex flex-wrap gap-2">
+                  {arr(question.quickAnswers).map((option) => (
                     <button
                       key={option}
                       type="button"
                       disabled={busy}
-                      className="inline-flex h-8 items-center border border-[rgba(15,23,42,0.08)] bg-[rgba(248,250,252,0.52)] px-2.5 text-[12px] font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45"
-                      onClick={() => handleAnswerSubmit(option)}
+                      className="inline-flex h-8 items-center border border-[rgba(15,23,42,0.08)] bg-white px-2.5 text-[12px] font-semibold text-text disabled:cursor-not-allowed disabled:opacity-45"
+                      onClick={() => handleQuickAnswer(option)}
                     >
                       {option}
                     </button>
                   ))}
                 </div>
               ) : null}
+            </AssistantBubble>
 
-              <div className="mt-4 border-t border-[rgba(15,23,42,0.08)] pt-4">
-                <div className="flex items-end gap-2">
-                  <textarea
-                    rows={3}
-                    value={answerInput}
-                    onChange={(event) => setAnswerInput(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" && !event.shiftKey) {
-                        event.preventDefault();
-                        handleAnswerSubmit();
-                      }
-                    }}
-                    placeholder={activeMeta.placeholder}
-                    className="min-h-[84px] w-full resize-none border-b border-[rgba(15,23,42,0.12)] bg-[linear-gradient(180deg,rgba(248,250,252,0.46),rgba(255,255,255,0))] px-0 py-2 text-[13px] leading-6 text-text outline-none placeholder:text-text-subtle"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleAnswerSubmit()}
-                    disabled={!s(answerInput) || busy}
-                    className="inline-flex h-10 shrink-0 items-center gap-1.5 bg-slate-900 px-3.5 text-[12px] font-semibold tracking-[0.01em] text-white disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-                    <span>Store</span>
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-        </section>
+            {busy ? (
+              <AssistantBubble
+                eyebrow="Thinking"
+                title="I’m updating the draft"
+                body="Source siqnalları və sənin cavabın birləşdirilir."
+              />
+            ) : null}
 
-        <section className="py-4">
-          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-muted">
-            Ledger
+            <ReplyComposer
+              value={replyInput}
+              busy={busy}
+              placeholder={question?.placeholder || "Cavabını yaz"}
+              onChange={setReplyInput}
+              onSubmit={handleReplySubmit}
+            />
           </div>
+        ) : null}
 
-          <div className="mt-2 border-t border-[rgba(15,23,42,0.08)]">
-            {truthRows.map((row) => {
-              const filled = Boolean(s(row.value));
-              const active = row.step === activeStep;
+        {stage === "draft" ? (
+          <div className="space-y-5">
+            <SetupReviewActivationPanel
+              reviewPayload={reviewPayload}
+              assistantReview={assistant.review}
+              onFinalize={onFinalize ? handleFinalize : undefined}
+              finalizing={finalizing}
+            />
 
-              return (
-                <button
-                  key={row.key}
-                  type="button"
-                  onClick={() => setFocusStep(row.step)}
-                  className={`group flex w-full items-center justify-between gap-4 border-b border-[rgba(15,23,42,0.08)] px-0 py-3 text-left transition-colors ${
-                    active
-                      ? "bg-[rgba(248,250,252,0.56)] text-slate-950"
-                      : "text-text"
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.09em] text-text-muted">
-                      {row.label}
-                    </div>
-                    <div
-                      className={`mt-1 text-[13px] leading-6 ${
-                        filled ? "text-text" : "text-text-subtle"
-                      }`}
-                    >
-                      {row.value || "Pending"}
-                    </div>
-                  </div>
+            <AssistantBubble
+              eyebrow="Refine"
+              title="Dəyişiklik istəyirsənsə mənə yaz"
+              body="Məsələn: əsas xidməti dəyiş, branding-i sil, pricing hissəsini yumşalt, bizi software partner kimi göstər."
+            />
 
-                  <div
-                    className={`shrink-0 transition-colors group-hover:text-text ${
-                      active ? "text-text" : "text-text-muted"
-                    }`}
-                  >
-                    {filled ? (
-                      <Check className="h-3.5 w-3.5" />
-                    ) : (
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+            {busy ? (
+              <AssistantBubble
+                eyebrow="Thinking"
+                title="I’m rebuilding the draft"
+                body="Source-lar, əvvəlki cavablar və yeni düzəliş birləşdirilir."
+              />
+            ) : null}
+
+            <ReplyComposer
+              value={replyInput}
+              busy={busy}
+              placeholder="Nəyi dəyişmək istədiyini yaz"
+              onChange={setReplyInput}
+              onSubmit={handleReplySubmit}
+            />
           </div>
-        </section>
+        ) : null}
       </div>
     </div>
   );

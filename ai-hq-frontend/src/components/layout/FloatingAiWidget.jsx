@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ArrowRight,
-  Bot,
-  SendHorizontal,
-  X,
-} from "lucide-react";
+import { ArrowRight, Bot, SendHorizontal, X } from "lucide-react";
 import {
   analyzeSetupIntake,
   finalizeSetupAssistantSession,
@@ -70,7 +65,7 @@ function buildHoursDraft(value = []) {
 function buildDefaultAssistant() {
   return {
     mode: "setup",
-    title: "Truth studio",
+    title: "Setup studio",
     summary: "",
     primaryAction: null,
     secondaryAction: null,
@@ -134,7 +129,7 @@ function normalizeAssistantState(input = null) {
 
   return {
     mode: s(source.mode, "setup"),
-    title: s(source.title, "Truth studio"),
+    title: s(source.title, "Setup studio"),
     summary: s(source.summary),
     statusLabel: s(source.statusLabel),
     primaryAction: obj(source.primaryAction),
@@ -327,7 +322,7 @@ function buildSupportReply(rawText = "", assistantState = {}) {
   if (/setup|draft|source|business|services|hours|pricing|contact/.test(text)) {
     return {
       text:
-        "Open setup to continue source intake, confirm the next missing truth field, or approve truth.",
+        "Open setup to continue source intake, answer the next question, or approve truth.",
       actions: [context.setupAction].filter(Boolean),
       suggestions: ["Open setup", "Open truth"],
     };
@@ -632,6 +627,7 @@ export default function FloatingAiWidget({
     retry: false,
     staleTime: 30_000,
   });
+
   const reviewQuery = useQuery({
     queryKey: setupReviewQueryKey,
     queryFn: () => getCurrentSetupReview({ eventLimit: 12 }),
@@ -941,13 +937,10 @@ export default function FloatingAiWidget({
     onOpenChange?.(false);
   }
 
-  const headerTitle = surfaceMode === "setup" ? "Business Truth" : "Operator Support";
+  const headerTitle = surfaceMode === "setup" ? "Setup Studio" : "Operator Support";
   const headerSummary =
     surfaceMode === "setup"
-      ? s(
-          clientAssistant.summary,
-          "Source intake. Governed approval."
-        )
+      ? s(clientAssistant.summary, "One good source is enough.")
       : "Channels, truth, inbox, comments, or voice.";
 
   const containerStyle = pageMode
@@ -959,6 +952,7 @@ export default function FloatingAiWidget({
         zIndex: "auto",
       }
     : undefined;
+
   const panelStyle = pageMode
     ? {
         position: "relative",
