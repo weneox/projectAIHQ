@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowRight,
   Building2,
@@ -202,6 +202,31 @@ function WorkspaceChoiceCard({ account, selected, onSelect }) {
         ) : null}
       </span>
     </button>
+  );
+}
+
+function LegalFooter() {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 pt-2 text-[12px] text-text-subtle">
+      <Link
+        to="/privacy"
+        className="font-medium transition-colors hover:text-text"
+      >
+        Privacy
+      </Link>
+      <Link
+        to="/terms"
+        className="font-medium transition-colors hover:text-text"
+      >
+        Terms
+      </Link>
+      <Link
+        to="/contact"
+        className="font-medium transition-colors hover:text-text"
+      >
+        Contact
+      </Link>
+    </div>
   );
 }
 
@@ -546,6 +571,8 @@ export default function Login() {
                 {isSignupMode ? "Sign in" : "Create one"}
               </button>
             </div>
+
+            <LegalFooter />
           </form>
         </div>
       </main>
