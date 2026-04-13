@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import SetupReviewActivationPanel from "./SetupReviewActivationPanel.jsx";
 
@@ -7,7 +7,7 @@ function s(value, fallback = "") {
 }
 
 function lower(value, fallback = "") {
-  return s(value, fallback).toLowerCase();
+  return s(value ?? fallback).toLowerCase();
 }
 
 function arr(value, fallback = []) {
@@ -103,7 +103,8 @@ const QUESTION_META = {
   pricing: {
     title: "Pricing posture",
     prompt: "Qiymət necə təqdim olunmalıdır?",
-    placeholder: "Qiymətlər xidmətə görə dəyişir. Dəqiq qiymət üçün müraciət edin.",
+    placeholder:
+      "Qiymətlər xidmətə görə dəyişir. Dəqiq qiymət üçün müraciət edin.",
     quickAnswers: [
       "Qiymətlər xidmətə görə dəyişir.",
       "Dəqiq qiymət üçün müraciət edilməlidir.",
@@ -119,7 +120,8 @@ const QUESTION_META = {
   handoff: {
     title: "Human handoff",
     prompt: "AI hansı hallarda mütləq insana ötürməlidir?",
-    placeholder: "Şikayət, fərdi qiymət sorğusu, təcili müraciət, ödəniş problemi",
+    placeholder:
+      "Şikayət, fərdi qiymət sorğusu, təcili müraciət, ödəniş problemi",
     quickAnswers: [
       "Şikayətlər insana ötürülsün.",
       "Fərdi qiymət sorğuları insana ötürülsün.",
@@ -140,7 +142,8 @@ function buildCurrentSource(assistant = {}, reviewPayload = null) {
   const sourceMetadata = obj(assistant.draft?.sourceMetadata);
   const bundleSources = arr(reviewPayload?.bundleSources);
   const primaryBundle =
-    bundleSources.find((item) => lower(item.role) === "primary") || bundleSources[0];
+    bundleSources.find((item) => lower(item.role) === "primary") ||
+    bundleSources[0];
 
   const sourceType =
     lower(primaryBundle?.sourceType || sourceMetadata.primarySourceType) || "";
@@ -176,9 +179,11 @@ function buildDraftModel(assistant = {}, reviewPayload = null) {
     ? obj(review.draft)
     : obj(assistant.draft);
   const profile = obj(draft.businessProfile);
+
   const services = arr(draft.services)
     .map((item) => s(item.title || item.name || item.label))
     .filter(Boolean);
+
   const contacts = arr(draft.contacts)
     .map((item) => s(item.label || item.channel || item.value || item.type))
     .filter(Boolean);
@@ -256,6 +261,7 @@ function buildDraftModel(assistant = {}, reviewPayload = null) {
 
 function buildQuestionState(assistant = {}, draftModel = {}) {
   const nextQuestion = normalizeQuestionKey(assistant.assistant?.nextQuestion?.key);
+
   if (nextQuestion && QUESTION_META[nextQuestion]) {
     return {
       key: nextQuestion,
@@ -307,6 +313,30 @@ function buildInterviewSummary(source = {}, draftModel = {}) {
   }
 
   return lines;
+}
+
+function getSourcePrefillValue(mode = "", source = {}, assistant = {}, draftModel = {}) {
+  if (mode === "website") {
+    return s(assistant.websitePrefill?.websiteUrl || draftModel.website);
+  }
+
+  if (mode === "google_maps" && lower(source.type) === "google_maps" && source.url) {
+    return source.url;
+  }
+
+  if (mode === "instagram" && lower(source.type) === "instagram" && source.url) {
+    return source.url;
+  }
+
+  if (
+    mode === "facebook" &&
+    ["facebook", "facebook_page"].includes(lower(source.type)) &&
+    source.url
+  ) {
+    return source.url;
+  }
+
+  return "";
 }
 
 function SourceComposer({
@@ -435,17 +465,31 @@ export default function SetupAssistantSections({
     () => buildCurrentSource(assistant, reviewPayload),
     [assistant, reviewPayload]
   );
+
   const draftModel = useMemo(
     () => buildDraftModel(assistant, reviewPayload),
     [assistant, reviewPayload]
   );
+
   const question = useMemo(
     () => buildQuestionState(assistant, draftModel),
     [assistant, draftModel]
   );
 
   const [sourceMode, setSourceMode] = useState("website");
-  const [sourceInput, setSourceInput] = useState("");
+  const sessionKey = s(
+    assistant.session?.id ||
+      assistant.websitePrefill?.websiteUrl ||
+      source.url ||
+      assistant.draft?.version ||
+      "default"
+  );
+  const [sourceInputState, setSourceInputState] = useState(() => ({
+    sessionKey,
+    values: {
+      website: getSourcePrefillValue("website", source, assistant, draftModel),
+    },
+  }));
   const [replyInput, setReplyInput] = useState("");
   const [localError, setLocalError] = useState("");
 
@@ -461,51 +505,37 @@ export default function SetupAssistantSections({
   const selectedSource =
     SOURCE_OPTIONS.find((item) => item.key === sourceMode) || SOURCE_OPTIONS[0];
 
-  useEffect(() => {
-    if (sourceMode === "website") {
-      setSourceInput(s(assistant.websitePrefill?.websiteUrl || draftModel.website));
-      return;
-    }
+  const resolvedSourceInputState =
+    sourceInputState.sessionKey === sessionKey
+      ? sourceInputState
+      : { sessionKey, values: {} };
 
-    if (
-      sourceMode === "google_maps" &&
-      lower(source.type) === "google_maps" &&
-      source.url
-    ) {
-      setSourceInput(source.url);
-      return;
-    }
+  const sourceInput =
+    resolvedSourceInputState.values[sourceMode] ??
+    getSourcePrefillValue(sourceMode, source, assistant, draftModel);
 
-    if (
-      sourceMode === "instagram" &&
-      lower(source.type) === "instagram" &&
-      source.url
-    ) {
-      setSourceInput(source.url);
-      return;
-    }
+  function setSourceInput(nextValue) {
+    setSourceInputState((prev) => {
+      const current =
+        prev.sessionKey === sessionKey
+          ? prev
+          : { sessionKey, values: {} };
 
-    if (
-      sourceMode === "facebook" &&
-      ["facebook", "facebook_page"].includes(lower(source.type)) &&
-      source.url
-    ) {
-      setSourceInput(source.url);
-      return;
-    }
-
-    if (sourceMode === "manual" && lower(source.type) === "manual") {
-      setSourceInput("");
-      return;
-    }
-
-    setSourceInput("");
-  }, [assistant, draftModel.website, source.type, source.url, sourceMode]);
+      return {
+        sessionKey,
+        values: {
+          ...current.values,
+          [sourceMode]: nextValue,
+        },
+      };
+    });
+  }
 
   async function handleSourceSubmit() {
     const value = s(sourceInput);
     if (!value || busy) return;
     setLocalError("");
+
     try {
       await onCaptureSource?.({
         type: sourceMode,
@@ -606,7 +636,29 @@ export default function SetupAssistantSections({
                         : "border-transparent text-text-muted"
                     }`}
                     onClick={() => {
-                      setSourceMode(option.key);
+                      const nextMode = option.key;
+                      setSourceMode(nextMode);
+                      setSourceInputState((prev) => {
+                        const current =
+                          prev.sessionKey === sessionKey
+                            ? prev
+                            : { sessionKey, values: {} };
+
+                        return {
+                          sessionKey,
+                          values: {
+                            ...current.values,
+                            [nextMode]:
+                              current.values[nextMode] ??
+                              getSourcePrefillValue(
+                                nextMode,
+                                source,
+                                assistant,
+                                draftModel
+                              ),
+                          },
+                        };
+                      });
                       setLocalError("");
                     }}
                   >
