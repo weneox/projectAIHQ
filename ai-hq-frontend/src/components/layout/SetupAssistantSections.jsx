@@ -362,7 +362,7 @@ function SmartDraftBubble({
     .filter(Boolean)
     .join(" · ");
 
-  const sourceMetaLine = [
+  const _sourceMetaLine = [
     Number(sourceSignals.pageCount || 0) > 0
       ? `${Number(sourceSignals.pageCount || 0)} pages`
       : "",
