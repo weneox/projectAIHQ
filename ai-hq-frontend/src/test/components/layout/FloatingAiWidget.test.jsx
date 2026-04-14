@@ -1,8 +1,7 @@
-import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
-import { describe, expect, it, beforeEach, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import FloatingAiWidget from "../../../components/layout/FloatingAiWidget.jsx";
 import {
@@ -11,6 +10,7 @@ import {
   getCurrentSetupReview,
   importGoogleMapsForSetup,
   importWebsiteForSetup,
+  startSetupAssistantSession,
   updateCurrentSetupAssistantDraft,
 } from "../../../api/setup.js";
 
@@ -29,7 +29,6 @@ vi.mock("../../../api/setup.js", () => ({
 }));
 
 vi.mock("../../../hooks/useWorkspaceTenantKey.js", () => ({
-  default: (...args) => useWorkspaceTenantKey(...args),
   useWorkspaceTenantKey: (...args) => useWorkspaceTenantKey(...args),
   buildWorkspaceScopedQueryKey: (baseKey, tenantKey) => [
     ...(Array.isArray(baseKey) ? baseKey : [baseKey]),
@@ -41,27 +40,25 @@ vi.mock("../../../hooks/useWorkspaceTenantKey.js", () => ({
 function createAssistant(overrides = {}) {
   return {
     mode: "setup",
-    title: "Truth studio",
-    statusLabel: "In progress",
-    summary: "Approve business truth after source intake and confirmation.",
-    primaryAction: {
-      label: "Open setup",
-      path: "/home?assistant=setup",
-    },
-    secondaryAction: {
-      label: "Open truth",
-      path: "/truth",
-    },
+    title: "Setup studio",
+    summary: "Start from sources, then confirm only the important fields.",
+    primaryAction: { label: "Open setup", path: "/home?assistant=setup" },
+    secondaryAction: null,
     review: {
-      message: "Draft work stays separate from approved truth until review.",
+      message: "Draft work stays separate from approved truth until finalize.",
       readyForReview: false,
       finalizeAvailable: false,
     },
-    launchPosture: "setup_needed",
-    setupNeeded: true,
+    websitePrefill: {
+      supported: true,
+      status: "awaiting_input",
+      websiteUrl: "",
+    },
     session: {
       id: "session-1",
+      draftVersion: 1,
     },
+    setupSummary: {},
     draft: {
       businessProfile: {},
       services: [],
@@ -69,31 +66,20 @@ function createAssistant(overrides = {}) {
       hours: [],
       pricingPosture: {},
       handoffRules: {},
-      sourceMetadata: {
-        primarySourceType: "website",
-      },
-      assistantState: {
-        activeSection: "profile",
-      },
-      version: 2,
+      sourceMetadata: {},
+      assistantState: {},
+      progress: {},
+      version: 1,
       updatedAt: null,
     },
-    websitePrefill: {
-      supported: true,
-      status: "captured",
-      websiteUrl: "https://lunasmile.az",
-    },
     assistant: {
-      nextQuestion: {
-        key: "company",
-      },
-      confirmationBlockers: [
-        { label: "Business name" },
-        { label: "Short description" },
-      ],
+      nextQuestion: {},
+      confirmationBlockers: [],
       sections: [],
       completion: {
         ready: false,
+        action: null,
+        message: "",
       },
       servicesCatalog: {
         items: [],
@@ -102,81 +88,12 @@ function createAssistant(overrides = {}) {
       },
       sourceInsights: [],
     },
-    launchChannel: {
-      connected: true,
-    },
-    truthRuntime: {
-      ready: false,
-    },
+    launchPosture: "setup_needed",
+    setupNeeded: true,
+    launchChannel: { connected: true },
+    truthRuntime: { ready: false },
+    statusLabel: "In progress",
     ...overrides,
-  };
-}
-
-function createWebsiteReviewPayload() {
-  return {
-    review: {
-      draft: {
-        businessProfile: {
-          companyName: "Luna Smile Studio",
-          description:
-            "Cosmetic dentistry, implants, whitening, and family care in Baku.",
-          websiteUrl: "https://lunasmile.az",
-          primaryPhone: "+994 50 555 12 12",
-          primaryEmail: "hello@lunasmile.az",
-          primaryAddress: "14 Nizami Street, Baku",
-          hours: ["Mon-Fri 09:00-18:00"],
-          pricingPolicy:
-            "Consultation from 30 AZN. Exact treatment pricing requires a quote.",
-        },
-        services: [
-          { title: "Smile design" },
-          { title: "Dental implants" },
-        ],
-        sourceSummary: {
-          primarySourceType: "website",
-          primarySourceUrl: "https://lunasmile.az",
-        },
-      },
-      reviewDebug: {
-        websiteKnowledge: {
-          pageCount: 4,
-          topPages: [
-            {
-              url: "https://lunasmile.az/services",
-              title: "Services",
-              pageType: "services",
-            },
-          ],
-        },
-      },
-      fieldProvenance: {
-        companyName: {
-          sourceType: "website",
-          label: "Website",
-          observedValue: "Luna Smile Studio",
-        },
-      },
-    },
-    bundleSources: [
-      {
-        sourceId: "source-1",
-        sourceType: "website",
-        role: "primary",
-        label: "Main website",
-        sourceUrl: "https://lunasmile.az",
-        observationCount: 18,
-      },
-    ],
-    permissions: {
-      setupReviewFinalize: {
-        allowed: true,
-      },
-    },
-    setup: {
-      review: {
-        finalizeAvailable: true,
-      },
-    },
   };
 }
 
@@ -190,157 +107,59 @@ function createQueryClient() {
   });
 }
 
-function renderControlledWidget(
-  assistant = createAssistant(),
-  { queryClient = null, open = true } = {}
-) {
-  const client = queryClient || createQueryClient();
-  const navigate = vi.fn();
-  const onOpenChange = vi.fn();
-  const view = render(
+function renderWidget(assistant = createAssistant()) {
+  const client = createQueryClient();
+
+  return render(
     <QueryClientProvider client={client}>
       <FloatingAiWidget
-        open={open}
-        onOpenChange={onOpenChange}
-        onNavigate={navigate}
+        open
+        onOpenChange={vi.fn()}
         assistant={assistant}
       />
     </QueryClientProvider>
   );
-
-  return {
-    client,
-    navigate,
-    onOpenChange,
-    rerenderWidget(nextAssistant = assistant, nextOptions = {}) {
-      view.rerender(
-        <QueryClientProvider client={client}>
-          <FloatingAiWidget
-            open={nextOptions.open ?? open}
-            onOpenChange={onOpenChange}
-            onNavigate={navigate}
-            assistant={nextAssistant}
-          />
-        </QueryClientProvider>
-      );
-    },
-    ...view,
-  };
 }
 
-function renderWidget(assistant = createAssistant(), { queryClient = null } = {}) {
-  const client = queryClient || createQueryClient();
-  const navigate = vi.fn();
-
-  function Harness() {
-    const [open, setOpen] = useState(false);
-
-    return (
-      <QueryClientProvider client={client}>
-        <FloatingAiWidget
-          open={open}
-          onOpenChange={setOpen}
-          onNavigate={navigate}
-          assistant={assistant}
-        />
-      </QueryClientProvider>
-    );
-  }
-
-  return {
-    navigate,
-    ...render(<Harness />),
-  };
-}
-
-describe("FloatingAiWidget", () => {
+describe("FloatingAiWidget source intake", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.HTMLElement.prototype.scrollTo = vi.fn();
+
     useWorkspaceTenantKey.mockReturnValue({
       tenantKey: "acme",
       loading: false,
       ready: true,
     });
+
     vi.mocked(getCurrentSetupAssistantSession).mockResolvedValue(null);
-    vi.mocked(getCurrentSetupReview).mockResolvedValue({
-      review: {
-        reviewDebug: {},
-      },
+    vi.mocked(getCurrentSetupReview).mockResolvedValue({ review: {} });
+    vi.mocked(startSetupAssistantSession).mockResolvedValue({
+      ok: true,
+      session: { id: "session-1", draftVersion: 1 },
+      setup: { draft: {} },
     });
     vi.mocked(importWebsiteForSetup).mockResolvedValue({ ok: true });
     vi.mocked(importGoogleMapsForSetup).mockResolvedValue({ ok: true });
-    vi.mocked(analyzeSetupIntake).mockResolvedValue({ ok: true });
     vi.mocked(updateCurrentSetupAssistantDraft).mockResolvedValue({
-      session: { id: "session-1" },
+      ok: true,
+      session: { id: "session-1", draftVersion: 2 },
       setup: {
         draft: {
-          sourceMetadata: {
-            primarySourceType: "instagram",
-            primarySourceUrl: "https://instagram.com/lunasmile",
-          },
+          sourceMetadata: {},
         },
       },
     });
+    vi.mocked(analyzeSetupIntake).mockResolvedValue({ ok: true });
   });
 
-  it("opens the assistant and loads the business truth review when review data exists", async () => {
-    vi.mocked(getCurrentSetupReview).mockResolvedValue(createWebsiteReviewPayload());
-
+  it("routes website intake through the website import path", async () => {
     renderWidget();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
-
-    expect(
-      screen.getByRole("dialog", { name: "AI assistant" })
-    ).toBeInTheDocument();
-
-    expect(
-      await screen.findByRole("region", { name: "Business truth review" })
-    ).toBeInTheDocument();
-    expect(screen.getByText("Approve business truth")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Approve truth" })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Close AI assistant" }));
-
-    await waitFor(() => {
-      expect(
-        screen.queryByRole("dialog", { name: "AI assistant" })
-      ).not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("Website və ya source link yaz"), {
+      target: { value: "lunasmile.az" },
     });
-  });
-
-  it("keeps the review surface hidden when no review material is available", async () => {
-    renderWidget(createAssistant({ websitePrefill: { supported: true, status: "awaiting_input", websiteUrl: "" } }));
-
-    fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
-
-    await waitFor(() => {
-      expect(getCurrentSetupReview).toHaveBeenCalled();
-    });
-
-    expect(
-      screen.queryByRole("region", { name: "Business truth review" })
-    ).not.toBeInTheDocument();
-  });
-
-  it("pulls the website from the source rail and refreshes the review payload", async () => {
-    vi.mocked(getCurrentSetupReview)
-      .mockResolvedValueOnce({
-        review: {
-          reviewDebug: {},
-        },
-      })
-      .mockResolvedValue(createWebsiteReviewPayload());
-
-    renderWidget();
-
-    fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
-
-    expect(
-      await screen.findByDisplayValue("https://lunasmile.az")
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Pull website" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     await waitFor(() =>
       expect(importWebsiteForSetup).toHaveBeenCalledWith({
@@ -350,20 +169,18 @@ describe("FloatingAiWidget", () => {
       })
     );
 
-    expect(
-      await screen.findByRole("region", { name: "Business truth review" })
-    ).toBeInTheDocument();
+    expect(importGoogleMapsForSetup).not.toHaveBeenCalled();
+    expect(updateCurrentSetupAssistantDraft).not.toHaveBeenCalled();
+    expect(analyzeSetupIntake).not.toHaveBeenCalled();
   });
 
-  it("supports google maps as a first source inside the widget", async () => {
+  it("routes google maps intake through the maps import path", async () => {
     renderWidget();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
-    fireEvent.click(screen.getByRole("button", { name: "Google Maps" }));
-    fireEvent.change(screen.getByPlaceholderText("https://maps.google.com/..."), {
+    fireEvent.change(screen.getByPlaceholderText("Website və ya source link yaz"), {
       target: { value: "https://maps.google.com/?cid=123" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Pull map" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     await waitFor(() =>
       expect(importGoogleMapsForSetup).toHaveBeenCalledWith({
@@ -372,20 +189,19 @@ describe("FloatingAiWidget", () => {
         waitForCompletion: true,
       })
     );
+
+    expect(importWebsiteForSetup).not.toHaveBeenCalled();
+    expect(updateCurrentSetupAssistantDraft).not.toHaveBeenCalled();
+    expect(analyzeSetupIntake).not.toHaveBeenCalled();
   });
 
-  it("captures instagram intake through the existing analyze flow", async () => {
+  it("keeps instagram handles out of the website import path", async () => {
     renderWidget();
 
-    fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
-    fireEvent.click(screen.getByRole("button", { name: "Instagram" }));
-    fireEvent.change(
-      screen.getByPlaceholderText("https://instagram.com/brand"),
-      {
-        target: { value: "https://instagram.com/lunasmile" },
-      }
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Use source" }));
+    fireEvent.change(screen.getByPlaceholderText("Website və ya source link yaz"), {
+      target: { value: "@lunasmile" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     await waitFor(() =>
       expect(updateCurrentSetupAssistantDraft).toHaveBeenCalledWith({
@@ -407,177 +223,74 @@ describe("FloatingAiWidget", () => {
         note: "instagram source",
       })
     );
+
+    expect(importWebsiteForSetup).not.toHaveBeenCalled();
+    expect(importGoogleMapsForSetup).not.toHaveBeenCalled();
   });
 
-  it("does not reuse setup-review cache across workspaces", async () => {
-    const queryClient = createQueryClient();
+  it("keeps facebook links out of the website import path", async () => {
+    renderWidget();
 
-    useWorkspaceTenantKey.mockReturnValue({
-      tenantKey: "acme",
-      loading: false,
-      ready: true,
+    fireEvent.change(screen.getByPlaceholderText("Website və ya source link yaz"), {
+      target: { value: "https://facebook.com/lunasmileclinic" },
     });
-    vi.mocked(getCurrentSetupReview).mockResolvedValueOnce({
-      review: {
-        reviewDebug: {},
-      },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
 
-    const first = renderWidget(createAssistant(), { queryClient });
-    fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
-
-    await waitFor(() => {
-      expect(getCurrentSetupReview).toHaveBeenCalledTimes(1);
-    });
-
-    first.unmount();
-
-    useWorkspaceTenantKey.mockReturnValue({
-      tenantKey: "globex",
-      loading: false,
-      ready: true,
-    });
-    vi.mocked(getCurrentSetupReview).mockResolvedValueOnce({
-      review: {
-        reviewDebug: {},
-      },
-    });
-
-    renderWidget(createAssistant(), { queryClient });
-    fireEvent.click(screen.getByRole("button", { name: "Open AI assistant" }));
-
-    await waitFor(() => {
-      expect(getCurrentSetupReview).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  it("does not reuse setup-session cache across workspaces", async () => {
-    const queryClient = createQueryClient();
-
-    useWorkspaceTenantKey.mockReturnValue({
-      tenantKey: "acme",
-      loading: false,
-      ready: true,
-    });
-    vi.mocked(getCurrentSetupAssistantSession).mockResolvedValueOnce({
-      session: {
-        id: "session-acme",
-      },
-      setup: {
-        websitePrefill: {
-          websiteUrl: "https://lunasmile.az",
+    await waitFor(() =>
+      expect(updateCurrentSetupAssistantDraft).toHaveBeenCalledWith({
+        sourceMetadata: {
+          primarySourceType: "facebook",
+          primarySourceUrl: "https://facebook.com/lunasmileclinic",
+          sourceLabels: ["Facebook"],
+          evidenceSummary: ["Facebook supplied by operator"],
         },
-      },
-    });
-
-    const first = renderControlledWidget(createAssistant(), {
-      queryClient,
-      open: true,
-    });
-
-    await waitFor(() => {
-      expect(getCurrentSetupAssistantSession).toHaveBeenCalledTimes(1);
-    });
-
-    first.unmount();
-
-    useWorkspaceTenantKey.mockReturnValue({
-      tenantKey: "globex",
-      loading: false,
-      ready: true,
-    });
-    vi.mocked(getCurrentSetupAssistantSession).mockResolvedValueOnce({
-      session: {
-        id: "session-globex",
-      },
-      setup: {
-        websitePrefill: {
-          websiteUrl: "https://globex.example",
-        },
-      },
-    });
-
-    renderControlledWidget(createAssistant(), {
-      queryClient,
-      open: true,
-    });
-
-    await waitFor(() => {
-      expect(getCurrentSetupAssistantSession).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  it("drops stale setup content while the widget switches tenants", async () => {
-    const queryClient = createQueryClient();
-    const nextSessionPromise = new Promise(() => {});
-    const nextReviewPromise = new Promise(() => {});
-
-    vi.mocked(getCurrentSetupAssistantSession).mockResolvedValueOnce({
-      session: {
-        id: "session-acme",
-      },
-      setup: {
-        websitePrefill: {
-          websiteUrl: "https://lunasmile.az",
-        },
-      },
-    });
-    vi.mocked(getCurrentSetupReview).mockResolvedValueOnce({
-      review: {
-        reviewDebug: {},
-      },
-    });
-
-    const view = renderControlledWidget(createAssistant(), {
-      queryClient,
-      open: true,
-    });
-
-    expect(await screen.findByDisplayValue("https://lunasmile.az")).toBeInTheDocument();
-
-    useWorkspaceTenantKey.mockReturnValue({
-      tenantKey: "globex",
-      loading: false,
-      ready: true,
-    });
-    vi.mocked(getCurrentSetupAssistantSession).mockImplementationOnce(
-      () => nextSessionPromise
-    );
-    vi.mocked(getCurrentSetupReview).mockImplementationOnce(() => nextReviewPromise);
-
-    view.rerenderWidget(
-      createAssistant({
-        title: "Loading setup studio",
-        statusLabel: "Loading",
-        summary: "Loading the current workspace setup state.",
-        session: {},
-        draft: {
-          businessProfile: {},
-          services: [],
-          contacts: [],
-          hours: [],
-          pricingPosture: {},
-          handoffRules: {},
-          sourceMetadata: {},
-          assistantState: {},
-          version: 0,
-          updatedAt: null,
-        },
-        websitePrefill: {
-          supported: true,
-          status: "awaiting_input",
-          websiteUrl: "",
-        },
-      }),
-      { open: true }
+      })
     );
 
-    await waitFor(() => {
-      expect(getCurrentSetupAssistantSession).toHaveBeenCalledTimes(2);
-    });
+    await waitFor(() =>
+      expect(analyzeSetupIntake).toHaveBeenCalledWith({
+        manualText: "Facebook: https://facebook.com/lunasmileclinic",
+        answers: {
+          facebookUrl: "https://facebook.com/lunasmileclinic",
+        },
+        note: "facebook source",
+      })
+    );
 
-    expect(
-      screen.queryByDisplayValue("https://lunasmile.az")
-    ).not.toBeInTheDocument();
+    expect(importWebsiteForSetup).not.toHaveBeenCalled();
+    expect(importGoogleMapsForSetup).not.toHaveBeenCalled();
+  });
+
+  it("keeps manual notes in the fallback analyze path", async () => {
+    renderWidget();
+
+    fireEvent.change(screen.getByPlaceholderText("Website və ya source link yaz"), {
+      target: {
+        value: "Premium dental clinic in Baku with WhatsApp bookings and cosmetic care.",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() =>
+      expect(updateCurrentSetupAssistantDraft).toHaveBeenCalledWith({
+        sourceMetadata: {
+          primarySourceType: "manual",
+          primarySourceUrl: "",
+          sourceLabels: ["Manual note"],
+          evidenceSummary: ["Manual note captured"],
+        },
+      })
+    );
+
+    await waitFor(() =>
+      expect(analyzeSetupIntake).toHaveBeenCalledWith({
+        manualText:
+          "Premium dental clinic in Baku with WhatsApp bookings and cosmetic care.",
+        note: "manual business note",
+      })
+    );
+
+    expect(importWebsiteForSetup).not.toHaveBeenCalled();
+    expect(importGoogleMapsForSetup).not.toHaveBeenCalled();
   });
 });

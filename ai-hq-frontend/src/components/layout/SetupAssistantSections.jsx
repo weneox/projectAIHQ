@@ -4,6 +4,7 @@ import {
   SETUP_INTERVIEW_QUESTIONS,
   SETUP_SOURCE_PROMPT,
 } from "./setupInterviewQuestions.js";
+import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -32,24 +33,8 @@ function listPreview(items = [], max = 6) {
   return `${safe.slice(0, max).join(", ")} +${safe.length - max}`;
 }
 
-function classifySourceInput(value = "") {
-  const text = s(value).toLowerCase();
-
-  if (!text) return "manual";
-  if (text.includes("instagram.com") || text.startsWith("@")) return "instagram";
-  if (text.includes("facebook.com")) return "facebook";
-  if (
-    text.includes("http://") ||
-    text.includes("https://") ||
-    /^[a-z0-9-]+\.[a-z]{2,}/i.test(text)
-  ) {
-    return "website";
-  }
-  return "manual";
-}
-
 function groupLabel(group = "") {
-  if (group === "ai_behavior") return "AI behavior";
+  if (group === "operator_rules") return "Operator rules";
   return "Business truth";
 }
 
@@ -93,14 +78,6 @@ function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers =
       profile.companySummaryShort ||
       profile.companySummary ||
       localAnswers.description
-  );
-
-  const audience = s(
-    profile.targetAudience ||
-      profile.audience ||
-      profile.customerType ||
-      profile.customerTypes ||
-      localAnswers.audience
   );
 
   const pricingPosture = s(
@@ -155,7 +132,6 @@ function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers =
     businessName,
     whatThisBusinessIs: description,
     coreServices: resolvedServices,
-    audience,
     pricingPosture,
     contactRoutes: finalContacts,
     humanHandoff,
@@ -165,8 +141,6 @@ function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers =
           .split(/[,;\n]/)
           .map((item) => s(item))
           .filter(Boolean),
-    greetingStyle: s(localAnswers.greeting),
-    afterHoursBehavior: s(localAnswers.after_hours),
   };
 }
 
@@ -210,19 +184,12 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
     coreServices: arr(draft.coreServices).length
       ? arr(draft.coreServices)
       : arr(fallback.coreServices),
-    audience: s(draft.audience || fallback.audience),
     pricingPosture: s(draft.pricingPosture || fallback.pricingPosture),
     contactRoutes: arr(draft.contactRoutes).length
       ? arr(draft.contactRoutes)
       : arr(fallback.contactRoutes),
     humanHandoff: s(draft.humanHandoff || fallback.humanHandoff),
-    languages: arr(draft.languages),
-    tone: s(draft.tone),
     hours: arr(draft.hours).length ? arr(draft.hours) : arr(fallback.hours),
-    greetingStyle: s(draft.greetingStyle || fallback.greetingStyle),
-    afterHoursBehavior: s(
-      draft.afterHoursBehavior || fallback.afterHoursBehavior
-    ),
   };
 
   return {
@@ -277,12 +244,9 @@ function hasBackendSmartDraft(model = {}) {
     Boolean(s(draft.businessName)) ||
     Boolean(s(draft.whatThisBusinessIs)) ||
     arr(draft.coreServices).length > 0 ||
-    Boolean(s(draft.audience)) ||
     Boolean(s(draft.pricingPosture)) ||
     arr(draft.contactRoutes).length > 0 ||
-    Boolean(s(draft.humanHandoff)) ||
-    Boolean(s(draft.greetingStyle)) ||
-    Boolean(s(draft.afterHoursBehavior));
+    Boolean(s(draft.humanHandoff));
 
   return hasGuidance && (hasSourceWork || hasStructuredDraft);
 }
@@ -366,15 +330,10 @@ function SmartDraftBubble({
     ["Business name", draft.businessName],
     ["What the business is", draft.whatThisBusinessIs],
     ["Core services", listPreview(draft.coreServices, 6)],
-    ["Audience", draft.audience],
     ["Pricing posture", draft.pricingPosture],
     ["Contact routes", listPreview(draft.contactRoutes, 6)],
     ["Availability", listPreview(draft.hours, 4)],
     ["Human handoff", draft.humanHandoff],
-    ["Languages", listPreview(draft.languages, 4)],
-    ["Tone", draft.tone],
-    ["Opening style", draft.greetingStyle],
-    ["After-hours behavior", draft.afterHoursBehavior],
   ].filter(([, value]) => s(value));
 
   const sourceContextLine = [
@@ -644,19 +603,6 @@ export default function SetupAssistantSections({
     [assistantControl.interviewPlan, currentQuestion]
   );
 
-  const aiBehaviorAnswered = useMemo(
-    () =>
-      SETUP_INTERVIEW_QUESTIONS.filter((item) => item.group === "ai_behavior").some(
-        (item) => Boolean(s(localAnswers[item.key]))
-      ),
-    [localAnswers]
-  );
-
-  const showAiBehaviorTransition =
-    sourceSubmitted &&
-    currentQuestion?.group === "ai_behavior" &&
-    !aiBehaviorAnswered;
-
   useEffect(() => {
     if (!scrollRef.current) return;
     scrollRef.current.scrollTo({
@@ -672,14 +618,13 @@ export default function SetupAssistantSections({
     errorMessage,
     finalModel,
     smartDraftReady,
-    showAiBehaviorTransition,
   ]);
 
   async function handleInitialSourceSubmit() {
     const text = s(composerValue);
     if (!text || busy) return;
 
-    const sourceType = classifySourceInput(text);
+    const resolvedSource = resolveSetupSourceInput(text);
 
     setLocalError("");
     setSourceSubmitted(true);
@@ -695,8 +640,8 @@ export default function SetupAssistantSections({
 
     try {
       await onCaptureSource?.({
-        type: sourceType,
-        value: text,
+        type: resolvedSource.type,
+        value: resolvedSource.value,
       });
     } catch (error) {
       setLocalError(s(error?.message, "Source intake failed."));
@@ -776,14 +721,6 @@ export default function SetupAssistantSections({
             />
           ))}
 
-          {showAiBehaviorTransition ? (
-            <MessageBubble
-              role="assistant"
-              eyebrow="AI behavior"
-              body="İndi AI-nin necə danışacağını, necə yönləndirəcəyini və nə vaxt insana ötürəcəyini quraq."
-            />
-          ) : null}
-
           {sourceSubmitted && currentQuestion ? (
             <MessageBubble
               role="assistant"
@@ -828,7 +765,7 @@ export default function SetupAssistantSections({
         <Composer
           value={composerValue}
           busy={busy}
-          placeholder="Link və ya qısa izah yaz"
+          placeholder="Website və ya source link yaz"
           buttonLabel="Continue"
           onChange={setComposerValue}
           onSubmit={handleInitialSourceSubmit}

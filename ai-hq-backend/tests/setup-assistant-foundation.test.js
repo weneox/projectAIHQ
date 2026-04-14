@@ -4,6 +4,7 @@ import express from "express";
 
 import { registerSetupAssistantRoutes } from "../src/routes/api/workspace/setupRoutesAssistant.js";
 import {
+  __test__ as setupAssistantTest,
   loadCurrentSetupAssistantSession,
   startSetupAssistantSession,
   updateSetupAssistantDraft,
@@ -455,4 +456,135 @@ test("setup assistant routes wire start, current, and update through the tenant-
   assert.equal(routeCalls[0].type, "start");
   assert.equal(routeCalls[1].type, "current");
   assert.equal(routeCalls[2].type, "update");
+});
+
+test("setup assistant source answers never store instagram, facebook, or google maps as website URLs", () => {
+  const instagramPatch = setupAssistantTest.patchFromAnswer(
+    "website",
+    "https://instagram.com/acmeclinic",
+    { sourceMetadata: {} }
+  );
+  const facebookPatch = setupAssistantTest.patchFromAnswer(
+    "website",
+    "https://facebook.com/acmeclinic",
+    { sourceMetadata: {} }
+  );
+  const mapsPatch = setupAssistantTest.patchFromAnswer(
+    "website",
+    "https://maps.google.com/?cid=123",
+    { sourceMetadata: {} }
+  );
+
+  assert.equal(instagramPatch.businessProfile?.websiteUrl || "", "");
+  assert.equal(instagramPatch.sourceMetadata?.primarySourceType, "instagram");
+  assert.equal(
+    instagramPatch.sourceMetadata?.primarySourceUrl,
+    "https://instagram.com/acmeclinic"
+  );
+
+  assert.equal(facebookPatch.businessProfile?.websiteUrl || "", "");
+  assert.equal(facebookPatch.sourceMetadata?.primarySourceType, "facebook");
+  assert.equal(
+    facebookPatch.sourceMetadata?.primarySourceUrl,
+    "https://facebook.com/acmeclinic"
+  );
+
+  assert.equal(mapsPatch.businessProfile?.websiteUrl || "", "");
+  assert.equal(mapsPatch.sourceMetadata?.primarySourceType, "google_maps");
+  assert.equal(
+    mapsPatch.sourceMetadata?.primarySourceUrl,
+    "https://maps.google.com/?cid=123"
+  );
+
+  assert.deepEqual(
+    setupAssistantTest.parseProfileAnswer("https://instagram.com/acmeclinic", {
+      businessProfile: {},
+    }),
+    {}
+  );
+});
+
+test("setup assistant treats google maps as a valid source identity but still requires handoff before finalize", () => {
+  const reviewBase = {
+    session: {
+      id: "session-1",
+      status: "draft",
+      mode: "setup",
+      currentStep: "handoff",
+    },
+    draft: {
+      version: 4,
+      draftPayload: {
+        setupAssistant: {
+          businessProfile: {
+            companyName: "Acme Clinic",
+            description: "Dental clinic in Baku",
+            websiteUrl: "",
+          },
+          services: [{ key: "consultation", title: "Consultation" }],
+          contacts: [
+            {
+              type: "phone",
+              label: "Phone",
+              value: "+994555555555",
+              preferred: true,
+            },
+          ],
+          hours: [
+            {
+              day: "monday",
+              enabled: true,
+              closed: false,
+              allDay: false,
+              appointmentOnly: false,
+              openTime: "09:00",
+              closeTime: "18:00",
+              notes: "",
+            },
+          ],
+          pricingPosture: {
+            pricingMode: "quote_required",
+            publicSummary: "Exact pricing requires a quote.",
+          },
+          sourceMetadata: {
+            primarySourceType: "google_maps",
+            primarySourceUrl: "https://maps.google.com/?cid=123",
+            sourceLabels: ["Google Maps"],
+          },
+        },
+      },
+    },
+  };
+
+  const withoutHandoff = setupAssistantTest.buildSetupAssistantSessionPayload(
+    reviewBase
+  );
+  const withHandoff = setupAssistantTest.buildSetupAssistantSessionPayload({
+    ...reviewBase,
+    draft: {
+      ...reviewBase.draft,
+      draftPayload: {
+        setupAssistant: {
+          ...reviewBase.draft.draftPayload.setupAssistant,
+          handoffRules: {
+            enabled: true,
+            summary: "Complaints and custom quotes go to an operator.",
+            triggers: ["complaints", "custom quotes"],
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(withoutHandoff.setup.review.finalizeAvailable, false);
+  assert.equal(withoutHandoff.setup.assistant.nextQuestion?.key, "handoff");
+  assert.equal(withoutHandoff.setup.websitePrefill.status, "awaiting_input");
+  assert.equal(
+    withoutHandoff.setup.draft.sourceMetadata.primarySourceType,
+    "google_maps"
+  );
+
+  assert.equal(withHandoff.setup.review.finalizeAvailable, true);
+  assert.equal(withHandoff.setup.assistant.nextQuestion, null);
+  assert.equal(withHandoff.setup.draft.businessProfile.websiteUrl || "", "");
 });

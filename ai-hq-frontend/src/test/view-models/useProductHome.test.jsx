@@ -2,7 +2,6 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const getSetupState = vi.fn();
 const getCurrentSetupAssistantSession = vi.fn();
 const getSettingsTrustView = vi.fn();
 const listInboxThreads = vi.fn();
@@ -18,7 +17,6 @@ let workspaceScope = {
 };
 
 vi.mock("../../api/setup.js", () => ({
-  getSetupState: (...args) => getSetupState(...args),
   getCurrentSetupAssistantSession: (...args) =>
     getCurrentSetupAssistantSession(...args),
 }));
@@ -133,7 +131,6 @@ describe("useProductHome", () => {
       ready: true,
     };
 
-    getSetupState.mockResolvedValue({});
     getSettingsTrustView.mockResolvedValue(createTrustView());
     listInboxThreads.mockResolvedValue({ threads: [] });
     getOutboundSummary.mockResolvedValue({ pendingCount: 0 });
@@ -165,7 +162,7 @@ describe("useProductHome", () => {
 
     expect(result.current.launchChannel.connected).toBe(false);
     expect(result.current.assistant.launchPosture).toBe("connect_channel");
-    expect(result.current.primaryAction.path).toBe("/channels?channel=telegram");
+    expect(result.current.primaryAction.path).toBe("/channels");
   });
 
   it("switches to setup-needed posture when Telegram is connected but truth/runtime is not ready", async () => {
@@ -349,7 +346,6 @@ describe("useProductHome", () => {
       loading: false,
       ready: true,
     };
-    getSetupState.mockResolvedValueOnce({});
 
     const first = renderHook(() => useProductHome(), { wrapper });
 
@@ -357,7 +353,7 @@ describe("useProductHome", () => {
       expect(first.result.current.loading).toBe(false);
     });
 
-    expect(getSetupState).toHaveBeenCalledTimes(1);
+    expect(getCurrentSetupAssistantSession).toHaveBeenCalledTimes(1);
     first.unmount();
 
     workspaceScope = {
@@ -365,7 +361,6 @@ describe("useProductHome", () => {
       loading: false,
       ready: true,
     };
-    getSetupState.mockResolvedValueOnce({});
 
     const second = renderHook(() => useProductHome(), { wrapper });
 
@@ -373,16 +368,13 @@ describe("useProductHome", () => {
       expect(second.result.current.loading).toBe(false);
     });
 
-    expect(getSetupState).toHaveBeenCalledTimes(2);
+    expect(getCurrentSetupAssistantSession).toHaveBeenCalledTimes(2);
   });
 
   it("refreshes home posture when a launch-slice mutation is emitted for the active tenant", async () => {
     const queryClient = createQueryClient();
     const wrapper = createWrapper(queryClient);
 
-    getSetupState
-      .mockResolvedValueOnce({})
-      .mockResolvedValueOnce({});
     getSettingsTrustView
       .mockResolvedValueOnce(createTrustView())
       .mockResolvedValueOnce(
@@ -443,7 +435,6 @@ describe("useProductHome", () => {
     const queryClient = createQueryClient();
     const wrapper = createWrapper(queryClient);
 
-    getSetupState.mockResolvedValueOnce({});
     getSettingsTrustView.mockResolvedValueOnce(createTrustView());
 
     const { result } = renderHook(() => useProductHome(), {
@@ -552,7 +543,7 @@ describe("useProductHome", () => {
     expect(result.current.launchReady).toBe(false);
     expect(result.current.truthRuntime.truthReady).toBe(false);
     expect(result.current.assistant.launchPosture).toBe("setup_needed");
-    expect(result.current.launchPhaseLabel).toBe("Create or continue setup draft");
+    expect(result.current.nextStep?.id).toBe("setup");
   });
 
   it("does not demote a healthy launch path just because a fresh rescan draft exists", async () => {

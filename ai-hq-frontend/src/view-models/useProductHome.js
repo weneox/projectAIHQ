@@ -1,10 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getOutboundSummary, listInboxThreads } from "../api/inbox.js";
-import {
-  getCurrentSetupAssistantSession,
-  getSetupState,
-} from "../api/setup.js";
+import { getCurrentSetupAssistantSession } from "../api/setup.js";
 import {
   getMetaChannelStatus,
   getTelegramChannelStatus,
@@ -868,7 +865,6 @@ function buildRuntimeRepairDetail({ trustPayload, launchChannel }) {
 
 async function loadProductHomePayloads() {
   const requests = {
-    setup: getSetupState(),
     trust: getSettingsTrustView({ limit: 4 }),
     inboxThreads: listInboxThreads({ limit: 10 }),
     inboxOutbound: getOutboundSummary(),
@@ -1303,7 +1299,7 @@ function buildAvailabilityNote({
 }) {
   const details = [];
 
-  if (sourceStatus.setup?.available === false) {
+  if (sourceStatus.setupAssistantSession?.available === false) {
     details.push("Setup progress is unavailable.");
   }
 
@@ -1636,7 +1632,6 @@ function buildLaunchLaneModel({
 }
 
 const DEFAULT_PRODUCT_HOME_PAYLOADS = {
-  setup: null,
   trust: null,
   inboxThreads: null,
   inboxOutbound: null,
@@ -1647,7 +1642,6 @@ const DEFAULT_PRODUCT_HOME_PAYLOADS = {
 };
 
 const DEFAULT_PRODUCT_HOME_SOURCE_STATUS = {
-  setup: { available: true },
   trust: { available: true },
   inboxThreads: { available: true },
   inboxOutbound: { available: true },

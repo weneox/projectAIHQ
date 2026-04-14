@@ -37,20 +37,18 @@ const SECTION_ORDER = [
   "handoff",
 ];
 
-const PROFILE_FIELDS_ORDER = ["company", "description", "website"];
-
 const SECTION_META = {
   profile: {
     label: "Business profile",
     title: "Confirm who the business is",
     missing:
-      "Add the core business identity so future AI replies can anchor on real business truth.",
+      "Add the business name and a reliable short description so future AI replies can anchor on real business truth.",
     review:
-      "Core identity exists, but some profile fields still need confirmation or polish.",
+      "Core identity exists, but some profile fields or source details still need confirmation.",
     ready: "Core business identity is captured in the draft.",
     prompt:
-      "Confirm the business profile first: website, business name, and a reliable short description.",
-    placeholder: "Paste a website or describe the business in one line",
+      "Confirm the business name and a reliable short description first. Add the website if the business has one.",
+    placeholder: "Describe the business in one line",
   },
   company: {
     label: "Business name",
@@ -176,6 +174,157 @@ function normalizeWebsiteUrl(value = "") {
   if (/^https?:\/\//i.test(raw)) return raw;
   if (raw.includes(".") && !raw.includes(" ")) return `https://${raw}`;
   return raw;
+}
+
+const SOURCE_PRIORITY = {
+  "": 0,
+  manual: 1,
+  facebook: 2,
+  instagram: 2,
+  google_maps: 3,
+  website: 4,
+};
+
+function normalizeSourceType(value = "") {
+  const type = s(value).toLowerCase();
+  if (type === "facebook_page") return "facebook";
+  return type;
+}
+
+function buildUrlCandidate(value = "") {
+  const text = s(value);
+  if (!text || /\s/.test(text)) return "";
+  if (/^https?:\/\//i.test(text)) return text;
+  if (
+    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(?:[/?#].*)?$/i.test(
+      text
+    )
+  ) {
+    return `https://${text}`;
+  }
+  return "";
+}
+
+function safeParseUrl(value = "") {
+  const candidate = buildUrlCandidate(value);
+  if (!candidate) return null;
+
+  try {
+    return new URL(candidate);
+  } catch {
+    return null;
+  }
+}
+
+function normalizedHost(url = null) {
+  return s(url?.host).toLowerCase().replace(/^www\./, "");
+}
+
+function isGoogleMapsUrl(url = null) {
+  const host = normalizedHost(url);
+  const path = s(url?.pathname).toLowerCase();
+
+  if (host === "maps.google.com") return true;
+  if (host === "maps.app.goo.gl") return true;
+  if (host === "g.page") return true;
+  if (host === "goo.gl" && path.startsWith("/maps")) return true;
+  if ((host === "google.com" || host.endsWith(".google.com")) && path.startsWith("/maps")) {
+    return true;
+  }
+
+  return false;
+}
+
+function isInstagramUrl(url = null) {
+  const host = normalizedHost(url);
+  return host === "instagram.com" || host === "instagr.am";
+}
+
+function isFacebookUrl(url = null) {
+  const host = s(url?.host).toLowerCase();
+  return (
+    host === "facebook.com" ||
+    host === "www.facebook.com" ||
+    host === "m.facebook.com" ||
+    host === "fb.com" ||
+    host === "www.fb.com"
+  );
+}
+
+function classifySetupSourceValue(value = "") {
+  const text = s(value);
+  if (!text) return "";
+  if (/^@[\w.]{1,30}$/i.test(text)) return "instagram";
+
+  const url = safeParseUrl(text);
+  if (!url) return "";
+
+  if (isGoogleMapsUrl(url)) return "google_maps";
+  if (isInstagramUrl(url)) return "instagram";
+  if (isFacebookUrl(url)) return "facebook";
+  return "website";
+}
+
+function sourceTypeLabel(value = "") {
+  const type = normalizeSourceType(value);
+  if (type === "google_maps") return "Google Maps";
+  if (type === "instagram") return "Instagram";
+  if (type === "facebook") return "Facebook";
+  if (type === "website") return "Website";
+  if (type === "manual") return "Manual note";
+  return "Source";
+}
+
+function buildAssistantSourceMetadataPatch(
+  sourceType = "",
+  sourceValue = "",
+  current = {}
+) {
+  const nextType = normalizeSourceType(sourceType);
+  if (!nextType) return {};
+
+  const currentSource = sanitizeSourceMetadata(obj(current));
+  const currentType = normalizeSourceType(currentSource.primarySourceType);
+  const nextPriority = SOURCE_PRIORITY[nextType] || 0;
+  const currentPriority = SOURCE_PRIORITY[currentType] || 0;
+  const promote =
+    nextPriority > currentPriority ||
+    (!s(currentSource.primarySourceUrl) && nextType !== "manual");
+  const label = sourceTypeLabel(nextType);
+
+  return sanitizeSourceMetadata({
+    ...currentSource,
+    primarySourceType: promote ? nextType : currentType,
+    primarySourceUrl:
+      promote && nextType !== "manual"
+        ? normalizeWebsiteUrl(sourceValue)
+        : s(currentSource.primarySourceUrl),
+    sourceLabels: uniqueStrings([...arr(currentSource.sourceLabels), label], 12),
+    evidenceSummary: uniqueStrings(
+      [
+        ...arr(currentSource.evidenceSummary),
+        nextType === "manual"
+          ? "Manual note captured"
+          : `${label} supplied by operator`,
+      ],
+      12
+    ),
+  });
+}
+
+function buildRecognizedSourceCandidate(text = "") {
+  const match = s(text).match(WEBSITE_PATTERN);
+  if (!match?.[1]) return null;
+
+  const value = normalizeWebsiteUrl(match[1]);
+  const type = classifySetupSourceValue(value);
+  if (!type) return null;
+
+  return {
+    type,
+    value,
+    raw: match[1],
+  };
 }
 
 function normalizeStringArray(value = [], limit = 24) {
@@ -416,7 +565,9 @@ function sanitizeProgress(value = {}) {
 function sanitizeSourceMetadata(value = {}) {
   const source = obj(value);
   return compactDraftObject({
-    primarySourceType: s(source.primarySourceType || source.primary_source_type),
+    primarySourceType: normalizeSourceType(
+      source.primarySourceType || source.primary_source_type
+    ),
     primarySourceUrl: s(source.primarySourceUrl || source.primary_source_url),
     sourceLabels: uniqueStrings(source.sourceLabels, 12),
     evidenceSummary: uniqueStrings(source.evidenceSummary, 12),
@@ -567,17 +718,17 @@ function buildHandoffFromAnswer(answer = "") {
 }
 
 function extractWebsiteCandidate(text = "") {
-  const match = s(text).match(WEBSITE_PATTERN);
-  if (!match?.[1]) return "";
-  return normalizeWebsiteUrl(match[1]);
+  const candidate = buildRecognizedSourceCandidate(text);
+  if (!candidate || candidate.type !== "website") return "";
+  return candidate.value;
 }
 
-function stripWebsiteFromText(text = "") {
+function stripRecognizedSourceFromText(text = "") {
   const value = s(text);
-  const website = extractWebsiteCandidate(value);
-  if (!website) return value;
+  const candidate = buildRecognizedSourceCandidate(value);
+  if (!candidate?.raw) return value;
 
-  return s(value.replace(WEBSITE_PATTERN, " ").replace(/\s{2,}/g, " "));
+  return s(value.replace(candidate.raw, " ").replace(/\s{2,}/g, " "));
 }
 
 function splitProfileLines(text = "") {
@@ -593,7 +744,7 @@ function parseProfileAnswer(answer = "", current = {}) {
   if (!text) return {};
 
   const websiteUrl = extractWebsiteCandidate(text);
-  const stripped = stripWebsiteFromText(text);
+  const stripped = stripRecognizedSourceFromText(text);
   const lines = splitProfileLines(stripped);
   const out = {};
 
@@ -681,12 +832,11 @@ function buildAppointmentOnlyHoursPatch() {
   );
 }
 
-function deriveProfileNextMissingField(profile = {}) {
-  const safe = obj(profile);
+function deriveProfileNextMissingField(draft = {}) {
+  const safe = obj(obj(draft).businessProfile || draft);
 
   if (!s(safe.companyName)) return "company";
   if (!s(safe.description)) return "description";
-  if (!s(safe.websiteUrl)) return "website";
   return "profile";
 }
 
@@ -728,9 +878,10 @@ function resolveIntentOnlyPatch(step = "", answer = "", current = {}) {
 
   if (intent === "__continue__") {
     if (safeStep === "profile") {
-      return buildStepIntentPatch(
-        deriveProfileNextMissingField(obj(current.businessProfile))
-      );
+      return buildStepIntentPatch(deriveProfileNextMissingField(current));
+    }
+    if (safeStep === "website") {
+      return buildStepIntentPatch("profile");
     }
     return buildStepIntentPatch(safeStep || "profile");
   }
@@ -881,8 +1032,9 @@ function buildSourceMetadataFromReview(review = {}) {
   ]);
 
   return sanitizeSourceMetadata({
-    primarySourceType:
-      summary.primarySourceType || latestImport.sourceType || latestAnalyze.sourceType,
+    primarySourceType: normalizeSourceType(
+      summary.primarySourceType || latestImport.sourceType || latestAnalyze.sourceType
+    ),
     primarySourceUrl: summary.primarySourceUrl || latestImport.sourceUrl,
     sourceLabels,
     evidenceSummary,
@@ -913,11 +1065,19 @@ function buildSetupAssistantSeedFromReview(review = {}) {
   };
 }
 
+function hasNonManualSourceIdentity(sourceMetadata = {}) {
+  const sourceType = normalizeSourceType(sourceMetadata.primarySourceType);
+  if (!sourceType || sourceType === "manual") return false;
+  return Boolean(s(sourceMetadata.primarySourceUrl) || arr(sourceMetadata.sourceLabels).length);
+}
+
 function deriveWebsitePrefillDraft(core = {}) {
   const businessProfile = obj(core.businessProfile);
   const sourceMetadata = obj(core.sourceMetadata);
-  const websiteUrl = s(
-    businessProfile.websiteUrl || sourceMetadata.primarySourceUrl
+  const websiteUrl = s(businessProfile.websiteUrl) || (
+    normalizeSourceType(sourceMetadata.primarySourceType) === "website"
+      ? s(sourceMetadata.primarySourceUrl)
+      : ""
   );
 
   return {
@@ -931,28 +1091,31 @@ function deriveWebsitePrefillDraft(core = {}) {
 
 function buildSectionStatus(draft = {}) {
   const businessProfile = obj(draft.businessProfile);
+  const sourceMetadata = obj(draft.sourceMetadata);
   const pricing = obj(draft.pricingPosture);
   const handoff = obj(draft.handoffRules);
   const enabledHours = arr(draft.hours).filter(
     (item) =>
       item.enabled === true || item.allDay === true || item.appointmentOnly === true
   );
+  const sourceIdentityPresent = hasNonManualSourceIdentity(sourceMetadata);
 
   const sections = {
     profile: {
       completed: Boolean(
         s(businessProfile.companyName) &&
-          s(businessProfile.description) &&
-          s(businessProfile.websiteUrl)
+          s(businessProfile.description)
       ),
       partial: Boolean(
         s(businessProfile.companyName) ||
           s(businessProfile.description) ||
-          s(businessProfile.websiteUrl)
+          s(businessProfile.websiteUrl) ||
+          sourceIdentityPresent
       ),
       metric: [
         s(businessProfile.companyName) ? "name" : "",
         s(businessProfile.websiteUrl) ? "website" : "",
+        !s(businessProfile.websiteUrl) && sourceIdentityPresent ? "source" : "",
         s(businessProfile.description) ? "summary" : "",
       ]
         .filter(Boolean)
@@ -1029,7 +1192,9 @@ function buildConfirmationBlockers(draft = {}, sectionStatus = {}) {
       metric: s(sectionStatus[key]?.metric),
       sourceHint:
         key === "profile" && s(sourceMetadata.primarySourceType)
-          ? `Signals already exist from ${sourceMetadata.primarySourceType}.`
+          ? `Signals already exist from ${sourceTypeLabel(
+              sourceMetadata.primarySourceType
+            )}.`
           : key === "services" && arr(sourceMetadata.evidenceSummary).length
           ? arr(sourceMetadata.evidenceSummary)[0]
           : "",
@@ -1046,7 +1211,14 @@ function buildSummary(draft = {}) {
   const hasAnyDraft =
     completionCount > 0 ||
     Object.values(sectionStatus).some((item) => item.partial === true);
-  const readyForReview = ["profile", "services", "hours", "pricing", "contacts"].every(
+  const readyForReview = [
+    "profile",
+    "services",
+    "hours",
+    "pricing",
+    "contacts",
+    "handoff",
+  ].every(
     (key) => sectionStatus[key]?.status === "ready"
   );
 
@@ -1104,9 +1276,10 @@ function buildAssistantSections(draft = {}, summary = {}, servicesCatalog = {}) 
   });
 }
 
-function resolveProfileQuestion(profile = {}, progress = {}) {
+function resolveProfileQuestion(draft = {}, progress = {}) {
   const currentQuestionKey = s(progress.currentQuestionKey).toLowerCase();
-  const safeProfile = obj(profile);
+  const safeDraft = obj(draft);
+  const safeProfile = obj(safeDraft.businessProfile);
 
   if (
     currentQuestionKey === "company" &&
@@ -1162,15 +1335,6 @@ function resolveProfileQuestion(profile = {}, progress = {}) {
     };
   }
 
-  if (!s(safeProfile.websiteUrl)) {
-    return {
-      key: "website",
-      label: SECTION_META.website.label,
-      prompt: SECTION_META.website.prompt,
-      placeholder: SECTION_META.website.placeholder,
-    };
-  }
-
   return {
     key: "profile",
     label: SECTION_META.profile.label,
@@ -1187,7 +1351,7 @@ function getNextQuestion(summary = {}, draft = {}, progress = {}) {
   const sectionStatus = obj(summary.sectionStatus);
 
   if (sectionStatus.profile?.status !== "ready") {
-    return resolveProfileQuestion(obj(draft.businessProfile), progress);
+    return resolveProfileQuestion(draft, progress);
   }
 
   const blocker = arr(summary.confirmationBlockers)[0];
@@ -1329,32 +1493,60 @@ function isMessageSkip(body = {}) {
   return body?.skip === true || s(body?.intent).toLowerCase() === "skip";
 }
 
+function buildSourceCandidateFromAnswer(answer = "") {
+  const text = s(answer);
+  if (!text) return null;
+
+  if (/^@[\w.]{1,30}$/i.test(text)) {
+    return {
+      type: "instagram",
+      value: `https://instagram.com/${text.replace(/^@/, "")}`,
+      raw: text,
+    };
+  }
+
+  return buildRecognizedSourceCandidate(text);
+}
+
 function patchFromAnswer(step = "", answer = "", current = {}) {
   const key = s(step).toLowerCase();
   const text = s(answer);
   const currentDraft = obj(current);
+  const sourceCandidate = buildSourceCandidateFromAnswer(text);
+  const sourceMetadataPatch = sourceCandidate
+    ? buildAssistantSourceMetadataPatch(
+        sourceCandidate.type,
+        sourceCandidate.value,
+        currentDraft.sourceMetadata
+      )
+    : {};
 
   if (!key || !text) return {};
 
   switch (key) {
     case "profile":
-      return {
+      return compactDraftObject({
         businessProfile: parseProfileAnswer(text, currentDraft),
+        sourceMetadata: sourceMetadataPatch,
         assistantState: {
           lastUpdatedSection: "profile",
           activeSection: "profile",
         },
-      };
+      });
     case "website":
-      return {
-        businessProfile: {
-          websiteUrl: normalizeWebsiteUrl(text),
-        },
+      return compactDraftObject({
+        businessProfile:
+          sourceCandidate?.type === "website"
+            ? {
+                websiteUrl: sourceCandidate.value,
+              }
+            : {},
+        sourceMetadata: sourceMetadataPatch,
         assistantState: {
           lastUpdatedSection: "profile",
           activeSection: "website",
         },
-      };
+      });
     case "company":
       return {
         businessProfile: {
@@ -1944,15 +2136,29 @@ function buildCanonicalContactsFromSetupAssistant(contacts = []) {
 }
 
 function buildCanonicalSourceSummaryFromSetupAssistant(setup = {}) {
+  const businessProfile = obj(setup.businessProfile);
   const sourceMetadata = obj(setup.sourceMetadata);
+  const websiteUrl = normalizeWebsiteUrl(s(businessProfile.websiteUrl));
+  const primarySourceType = websiteUrl
+    ? "website"
+    : normalizeSourceType(sourceMetadata.primarySourceType);
+  const primarySourceUrl = websiteUrl || s(sourceMetadata.primarySourceUrl);
+  const sourceLabels = uniqueStrings(
+    [
+      ...arr(sourceMetadata.sourceLabels),
+      websiteUrl ? "Website" : "",
+    ],
+    12
+  );
 
   return {
-    primarySourceType: s(sourceMetadata.primarySourceType),
-    primarySourceUrl: s(sourceMetadata.primarySourceUrl),
-    sourceLabels: uniqueStrings(sourceMetadata.sourceLabels, 12),
+    primarySourceType,
+    primarySourceUrl,
+    sourceLabels,
     evidenceSummary: uniqueStrings(sourceMetadata.evidenceSummary, 12),
     warningCount: Number(sourceMetadata.warningCount || 0) || 0,
-    sourceCount: Number(sourceMetadata.sourceCount || 0) || 0,
+    sourceCount:
+      Math.max(Number(sourceMetadata.sourceCount || 0) || 0, primarySourceUrl ? 1 : 0),
   };
 }
 

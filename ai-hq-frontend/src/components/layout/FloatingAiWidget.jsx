@@ -7,6 +7,7 @@ import {
   finalizeSetupAssistantSession,
   getCurrentSetupAssistantSession,
   getCurrentSetupReview,
+  importGoogleMapsForSetup,
   importWebsiteForSetup,
   sendSetupAssistantMessage,
   startSetupAssistantSession,
@@ -18,6 +19,7 @@ import {
 } from "../../hooks/useWorkspaceTenantKey.js";
 import { emitLaunchSliceRefresh } from "../../lib/launchSliceRefresh.js";
 import SetupAssistantSections from "./SetupAssistantSections.jsx";
+import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -238,7 +240,6 @@ function buildMergedReviewPayload(reviewPayload = null, assistantState = {}) {
 function normalizeManualSourceType(value = "") {
   const key = lower(value);
   if (key === "note" || key === "manual") return "manual";
-  if (key === "facebook") return "facebook_page";
   return key;
 }
 
@@ -248,9 +249,9 @@ function buildManualSourceMetadata(type = "", value = "") {
   const sourceLabel =
     sourceType === "instagram"
       ? "Instagram"
-      : sourceType === "facebook_page"
+      : sourceType === "facebook"
         ? "Facebook"
-        : sourceType === "manual"
+      : sourceType === "manual"
           ? "Manual note"
           : "Source";
 
@@ -278,7 +279,7 @@ function buildManualAnalyzePayload(type = "", value = "") {
     };
   }
 
-  if (sourceType === "facebook_page") {
+  if (sourceType === "facebook") {
     return {
       manualText: `Facebook: ${input}`,
       answers: { facebookUrl: input },
@@ -537,8 +538,12 @@ export default function FloatingAiWidget({
   }
 
   async function handleSetupCaptureSource({ type, value }) {
-    const sourceType = lower(type);
     const sourceValue = s(value);
+    const resolvedSource = resolveSetupSourceInput(sourceValue);
+    const sourceType = lower(type) === lower(resolvedSource.type)
+      ? lower(type)
+      : lower(resolvedSource.type);
+    const normalizedSourceValue = s(resolvedSource.value || sourceValue);
     if (!sourceType || !sourceValue || saving || finalizing || capturingSource) {
       return null;
     }
@@ -551,7 +556,7 @@ export default function FloatingAiWidget({
 
       if (sourceType === "website") {
         const response = await importWebsiteForSetup({
-          url: sourceValue,
+          url: normalizedSourceValue,
           allowSessionReuse: true,
           waitForCompletion: true,
         });
@@ -560,15 +565,29 @@ export default function FloatingAiWidget({
             s(response?.reason || response?.error, "Website import failed")
           );
         }
+      } else if (sourceType === "google_maps") {
+        const response = await importGoogleMapsForSetup({
+          url: normalizedSourceValue,
+          allowSessionReuse: true,
+          waitForCompletion: true,
+        });
+        if (response?.ok === false) {
+          throw new Error(
+            s(response?.reason || response?.error, "Google Maps import failed")
+          );
+        }
       } else {
         const patchResponse = await updateCurrentSetupAssistantDraft({
-          sourceMetadata: buildManualSourceMetadata(sourceType, sourceValue),
+          sourceMetadata: buildManualSourceMetadata(
+            sourceType,
+            normalizedSourceValue
+          ),
         });
         setClientAssistant((prev) => buildAssistantFromApi(prev, patchResponse));
         queryClient.setQueryData(setupAssistantSessionQueryKey, patchResponse);
 
         const analyzeResponse = await analyzeSetupIntake(
-          buildManualAnalyzePayload(sourceType, sourceValue)
+          buildManualAnalyzePayload(sourceType, normalizedSourceValue)
         );
 
         if (analyzeResponse?.ok === false) {
