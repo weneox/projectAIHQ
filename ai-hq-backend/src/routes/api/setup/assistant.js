@@ -1,0 +1,1 @@
+export { setupAssistantRoutes, __test__ } from "./assistant/index.js";
