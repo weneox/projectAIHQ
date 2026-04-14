@@ -177,6 +177,7 @@ function normalizeAssistantControl(reviewPayload = null, assistant = {}) {
     interviewPlan: obj(source.interviewPlan),
     aiBehavior: obj(source.aiBehavior),
     readyForApproval: source.readyForApproval === true,
+    draftVersion: Number(source.draftVersion || 0),
   };
 }
 
@@ -208,6 +209,7 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
   const model = {
     message: s(reviewAssistant.message || reviewAssistant.assistantMessage),
     readyForApproval: reviewAssistant.readyForApproval === true,
+    draftVersion: Number(reviewAssistant.draftVersion || 0),
     draft: resolvedDraft,
     confidence: {
       strong: arr(confidence.strong),
@@ -296,6 +298,14 @@ function setIntroSeen() {
   }
 }
 
+function bubbleClasses(role = "assistant") {
+  if (role === "user") {
+    return "bg-[linear-gradient(180deg,#2563eb,#1d4ed8)] text-white rounded-[26px] rounded-br-[10px] shadow-[0_18px_40px_rgba(37,99,235,0.28)]";
+  }
+
+  return "border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.97))] text-text rounded-[26px] rounded-bl-[10px] shadow-[0_10px_30px_rgba(15,23,42,0.06)]";
+}
+
 const bubbleMotion = {
   hidden: { opacity: 0, y: 16, scale: 0.985 },
   visible: {
@@ -308,14 +318,6 @@ const bubbleMotion = {
     },
   },
 };
-
-function bubbleClasses(role = "assistant") {
-  if (role === "user") {
-    return "bg-[linear-gradient(180deg,#2563eb,#1d4ed8)] text-white rounded-[26px] rounded-br-[10px] shadow-[0_18px_40px_rgba(37,99,235,0.28)]";
-  }
-
-  return "border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.97))] text-text rounded-[26px] rounded-bl-[10px] shadow-[0_10px_30px_rgba(15,23,42,0.06)]";
-}
 
 function MessageBubble({
   role = "assistant",
@@ -481,6 +483,25 @@ function SmartDraftBubble({ model, finalizing, onFinalize }) {
   );
 }
 
+function TypingBubble() {
+  return (
+    <motion.div
+      variants={bubbleMotion}
+      initial="hidden"
+      animate="visible"
+      className="flex justify-start"
+    >
+      <div className="rounded-[22px] rounded-bl-[10px] border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.97))] px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+        <div className="flex items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-pulse" />
+          <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-pulse [animation-delay:120ms]" />
+          <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-pulse [animation-delay:240ms]" />
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
 function Composer({
   value,
   busy,
@@ -507,6 +528,7 @@ function Composer({
             }}
             placeholder={placeholder}
             className="min-h-[92px] flex-1 resize-none appearance-none border-0 bg-transparent px-2 py-2 text-[15px] leading-7 text-text shadow-none outline-none ring-0 placeholder:text-text-subtle focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+            style={{ boxShadow: "none" }}
           />
 
           <button
@@ -532,6 +554,29 @@ function Composer({
   );
 }
 
+function hasExistingSetupProgress({ assistant, reviewPayload, finalModel, rawCurrentQuestion }) {
+  const reviewDraft = obj(reviewPayload?.review?.draft || reviewPayload?.draft);
+  const reviewProfile = obj(reviewDraft.businessProfile);
+  const reviewSourceMetadata = obj(reviewDraft.sourceMetadata);
+
+  const assistantDraft = obj(assistant?.draft);
+  const assistantProfile = obj(assistantDraft.businessProfile);
+  const assistantSourceMetadata = obj(assistantDraft.sourceMetadata);
+
+  return Boolean(
+    rawCurrentQuestion ||
+      s(reviewProfile.websiteUrl) ||
+      s(assistantProfile.websiteUrl) ||
+      s(reviewSourceMetadata.primarySourceUrl) ||
+      s(assistantSourceMetadata.primarySourceUrl) ||
+      s(reviewSourceMetadata.primarySourceType) ||
+      s(assistantSourceMetadata.primarySourceType) ||
+      s(finalModel.draft.businessName) ||
+      s(finalModel.draft.whatThisBusinessIs) ||
+      arr(finalModel.draft.coreServices).length
+  );
+}
+
 export default function SetupAssistantSections({
   assistant,
   reviewPayload = null,
@@ -544,6 +589,9 @@ export default function SetupAssistantSections({
   onFinalize,
 }) {
   const scrollRef = useRef(null);
+  const lastQuestionSignatureRef = useRef("");
+  const lastDraftSignatureRef = useRef("");
+  const lastErrorSignatureRef = useRef("");
 
   const [sourceSubmitted, setSourceSubmitted] = useState(false);
   const [composerValue, setComposerValue] = useState("");
@@ -551,6 +599,7 @@ export default function SetupAssistantSections({
   const [transcript, setTranscript] = useState([]);
   const [localAnswers, setLocalAnswers] = useState({});
   const [introAnimated, setIntroAnimated] = useState(() => getIntroSeen());
+  const [awaitingAssistant, setAwaitingAssistant] = useState(false);
 
   const busy = saving || finalizing || capturingSource;
 
@@ -574,9 +623,8 @@ export default function SetupAssistantSections({
     [finalModel]
   );
 
-  const currentQuestion = useMemo(() => {
+  const rawCurrentQuestion = useMemo(() => {
     const nextQuestion = obj(assistantControl.nextQuestion);
-    if (!sourceSubmitted) return null;
     if (!s(nextQuestion.key) || !s(nextQuestion.prompt)) return null;
 
     const meta = obj(QUESTION_META_MAP[nextQuestion.key]);
@@ -589,12 +637,9 @@ export default function SetupAssistantSections({
       group: s(nextQuestion.group || meta.group),
       placeholder: s(meta.placeholder),
     };
-  }, [assistantControl.nextQuestion, sourceSubmitted]);
+  }, [assistantControl.nextQuestion]);
 
-  const questionsFinished =
-    sourceSubmitted &&
-    !currentQuestion &&
-    (assistantControl.readyForApproval === true || smartDraftReady);
+  const currentQuestion = sourceSubmitted ? rawCurrentQuestion : null;
 
   const currentGroupProgress = useMemo(
     () =>
@@ -605,22 +650,119 @@ export default function SetupAssistantSections({
     [assistantControl.interviewPlan, currentQuestion]
   );
 
+  const questionsFinished =
+    sourceSubmitted &&
+    !currentQuestion &&
+    (assistantControl.readyForApproval === true || smartDraftReady);
+
+  const hasExistingProgress = useMemo(
+    () =>
+      hasExistingSetupProgress({
+        assistant,
+        reviewPayload,
+        finalModel,
+        rawCurrentQuestion,
+      }),
+    [assistant, reviewPayload, finalModel, rawCurrentQuestion]
+  );
+
+  useEffect(() => {
+    if (!sourceSubmitted && hasExistingProgress) {
+      setSourceSubmitted(true);
+    }
+  }, [hasExistingProgress, sourceSubmitted]);
+
   useEffect(() => {
     if (!scrollRef.current) return;
     scrollRef.current.scrollTo({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
+  }, [transcript, awaitingAssistant, localError, errorMessage]);
+
+  useEffect(() => {
+    if (!sourceSubmitted || !currentQuestion) return;
+
+    const signature = [
+      assistantControl.draftVersion || 0,
+      currentQuestion.key,
+      currentQuestion.prompt,
+    ].join("|");
+
+    if (lastQuestionSignatureRef.current === signature) return;
+    lastQuestionSignatureRef.current = signature;
+
+    setTranscript((current) => [
+      ...current,
+      {
+        id: `assistant-question-${Date.now()}`,
+        type: "message",
+        role: "assistant",
+        eyebrow: `${currentGroupProgress.label} · ${currentGroupProgress.position}/${currentGroupProgress.total}`,
+        title: currentQuestion.title,
+        body: currentQuestion.prompt,
+      },
+    ]);
+    setAwaitingAssistant(false);
   }, [
-    transcript,
+    sourceSubmitted,
     currentQuestion,
-    questionsFinished,
-    busy,
-    localError,
-    errorMessage,
-    finalModel,
-    smartDraftReady,
+    currentGroupProgress.label,
+    currentGroupProgress.position,
+    currentGroupProgress.total,
+    assistantControl.draftVersion,
   ]);
+
+  useEffect(() => {
+    if (!sourceSubmitted || !questionsFinished || !smartDraftReady) return;
+
+    const signature = JSON.stringify({
+      draftVersion: finalModel.draftVersion || assistantControl.draftVersion || 0,
+      readyForApproval: finalModel.readyForApproval,
+      draft: finalModel.draft,
+      notes: finalModel.compactNotes,
+      message: finalModel.message,
+    });
+
+    if (lastDraftSignatureRef.current === signature) return;
+    lastDraftSignatureRef.current = signature;
+
+    setTranscript((current) => [
+      ...current,
+      {
+        id: `assistant-draft-${Date.now()}`,
+        type: "draft",
+        role: "assistant",
+        model: finalModel,
+      },
+    ]);
+    setAwaitingAssistant(false);
+  }, [
+    sourceSubmitted,
+    questionsFinished,
+    smartDraftReady,
+    finalModel,
+    assistantControl.draftVersion,
+  ]);
+
+  useEffect(() => {
+    const message = s(localError || errorMessage);
+    if (!message) return;
+
+    if (lastErrorSignatureRef.current === message) return;
+    lastErrorSignatureRef.current = message;
+
+    setTranscript((current) => [
+      ...current,
+      {
+        id: `assistant-error-${Date.now()}`,
+        type: "message",
+        role: "assistant",
+        body: message,
+      },
+    ]);
+    setAwaitingAssistant(false);
+  }, [localError, errorMessage]);
 
   async function handleInitialSourceSubmit() {
     const text = s(composerValue);
@@ -630,12 +772,14 @@ export default function SetupAssistantSections({
 
     setLocalError("");
     setSourceSubmitted(true);
+    setAwaitingAssistant(true);
     setTranscript((current) => [
       ...current,
       {
         id: `source-${Date.now()}`,
+        type: "message",
         role: "user",
-        text,
+        body: text,
       },
     ]);
     setComposerValue("");
@@ -655,12 +799,14 @@ export default function SetupAssistantSections({
     if (!text || busy || !currentQuestion) return;
 
     setLocalError("");
+    setAwaitingAssistant(true);
     setTranscript((current) => [
       ...current,
       {
         id: `answer-${currentQuestion.key}-${Date.now()}`,
+        type: "message",
         role: "user",
-        text,
+        body: text,
       },
     ]);
     setLocalAnswers((current) => ({
@@ -684,12 +830,14 @@ export default function SetupAssistantSections({
     if (!text || busy) return;
 
     setLocalError("");
+    setAwaitingAssistant(true);
     setTranscript((current) => [
       ...current,
       {
         id: `edit-${Date.now()}`,
+        type: "message",
         role: "user",
-        text,
+        body: text,
       },
     ]);
     setComposerValue("");
@@ -703,10 +851,6 @@ export default function SetupAssistantSections({
       setLocalError(s(error?.message, "The draft could not be updated."));
     }
   }
-
-  const questionPrompt = currentQuestion
-    ? `${currentQuestion.title}\n${currentQuestion.prompt}`
-    : "";
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,#ffffff,#f8fafc)]">
@@ -725,61 +869,32 @@ export default function SetupAssistantSections({
           />
 
           <AnimatePresence initial={false}>
-            {transcript.map((item) => (
-              <MessageBubble
-                key={item.id}
-                role={item.role}
-                eyebrow={item.eyebrow}
-                body={item.text || item.body}
-                animate
-              />
-            ))}
+            {transcript.map((item) => {
+              if (item.type === "draft") {
+                return (
+                  <SmartDraftBubble
+                    key={item.id}
+                    model={item.model}
+                    finalizing={finalizing}
+                    onFinalize={onFinalize}
+                  />
+                );
+              }
+
+              return (
+                <MessageBubble
+                  key={item.id}
+                  role={item.role}
+                  eyebrow={item.eyebrow}
+                  title={item.title}
+                  body={item.body}
+                  animate
+                />
+              );
+            })}
           </AnimatePresence>
 
-          {sourceSubmitted && currentQuestion ? (
-            <MessageBubble
-              role="assistant"
-              eyebrow={`${currentGroupProgress.label} · ${currentGroupProgress.position}/${currentGroupProgress.total}`}
-              body={questionPrompt}
-              animate
-            />
-          ) : null}
-
-          {busy ? <MessageBubble role="assistant" body="..." animate /> : null}
-
-          {sourceSubmitted && !currentQuestion && !questionsFinished ? (
-            <MessageBubble
-              role="assistant"
-              eyebrow="Thinking"
-              body="Mənbələr və cavabların birlikdə analiz olunur. Növbəti sual hazırlanır..."
-              animate
-            />
-          ) : null}
-
-          {questionsFinished && !smartDraftReady ? (
-            <MessageBubble
-              role="assistant"
-              eyebrow="Thinking"
-              body="Mənbələr və cavabların birlikdə analiz olunur. Yekun draft hazırlanır..."
-              animate
-            />
-          ) : null}
-
-          {questionsFinished && smartDraftReady ? (
-            <SmartDraftBubble
-              model={finalModel}
-              finalizing={finalizing}
-              onFinalize={onFinalize}
-            />
-          ) : null}
-
-          {s(localError || errorMessage) ? (
-            <MessageBubble
-              role="assistant"
-              body={localError || errorMessage}
-              animate
-            />
-          ) : null}
+          {awaitingAssistant ? <TypingBubble /> : null}
         </div>
       </div>
 
