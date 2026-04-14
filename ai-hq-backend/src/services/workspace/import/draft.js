@@ -15,6 +15,7 @@ import {
   sourceTypeLabel,
   sourceAuthorityClass,
 } from "./shared.js";
+import { buildReasonedDraft } from "./reasonedDraft.js";
 
 const GENERIC_DRAFT_LABELS = new Set([
   "service",
@@ -2393,7 +2394,7 @@ export function buildDiffFromCanonical({
   });
 }
 
-export function deriveDraftPatch({
+export async function deriveDraftPatch({
   currentDraft = {},
   session = {},
   source = {},
@@ -2404,6 +2405,8 @@ export function deriveDraftPatch({
   sourceUrl = "",
   intakeContext = {},
   collector = {},
+  agentKernel = null,
+  runBusinessDraftSynthesis = null,
 }) {
   const current = obj(currentDraft);
 
@@ -2423,13 +2426,13 @@ export function deriveDraftPatch({
     currentSourceType === s(sourceType) &&
     currentSourceUrl === s(sourceUrl);
 
-  const derivedServices = arr(collector?.candidates)
+  const candidateServiceItems = arr(collector?.candidates)
     .flatMap((item) =>
       isServiceLikeCandidate(item) ? buildDraftServicesFromCandidate(item, sourceType) : []
     )
     .filter(Boolean);
 
-  const derivedKnowledge = arr(collector?.candidates)
+  const candidateKnowledgeItems = arr(collector?.candidates)
     .map((item) =>
       isServiceLikeCandidate(item) ? null : buildDraftKnowledgeFromCandidate(item, sourceType)
     )
@@ -2446,18 +2449,29 @@ export function deriveDraftPatch({
       ? buildArtifactProfileFromResult(result, sourceType, sourceUrl)
       : {};
 
-  const mergedProfile = mergeBusinessProfiles(
+  const rawMergedProfile = mergeBusinessProfiles(
     compactObject(
-      mergeDeep(
-        {},
-        obj(collector?.profilePatch),
-        sourceProfilePatch
-      )
+      mergeDeep({}, obj(collector?.profilePatch), sourceProfilePatch)
     ),
     artifactProfilePatch
   );
 
-  const businessProfile = sanitizeSetupBusinessProfile(mergedProfile);
+  const reasonedDraft = await buildReasonedDraft({
+    sourceType,
+    sourceUrl,
+    rawBusinessProfile: rawMergedProfile,
+    candidateServices: candidateServiceItems,
+    candidateKnowledge: candidateKnowledgeItems,
+    collector,
+    result,
+    intakeContext,
+    agentKernel,
+    runBusinessDraftSynthesis,
+  });
+
+  const businessProfile = sanitizeSetupBusinessProfile(
+    obj(reasonedDraft.businessProfile)
+  );
 
   if (Object.keys(businessProfile).length) {
     businessProfile.fieldSources = buildDraftFieldSources(
@@ -2484,18 +2498,71 @@ export function deriveDraftPatch({
     ? stripSourceDerivedDraftItems(arr(current.knowledgeItems))
     : [];
 
+  const synthesizedServices = arr(reasonedDraft.services).map((item, index) => ({
+    key:
+      s(item?.key) ||
+      normalizeDraftKey(
+        `${sourceType || "service"}_${s(item?.title)}_${index + 1}`,
+        "service"
+      ),
+    title: cleanDisplayText(item?.title, 180),
+    description: cleanDisplayText(item?.description, 320),
+    category: s(item?.category || "service"),
+    valueJson: obj(item?.valueJson),
+    normalizedJson: obj(item?.normalizedJson),
+    confidence:
+      typeof item?.confidence === "number"
+        ? item.confidence
+        : Number(item?.confidence || 0) || 0,
+    confidenceLabel: s(item?.confidenceLabel || "reasoned"),
+    status: s(item?.status || "pending"),
+    reviewReason: s(item?.reviewReason || item?.reasoning || "reasoned_synthesis"),
+    sourceId: s(item?.sourceId),
+    sourceRunId: s(item?.sourceRunId),
+    sourceType: s(item?.sourceType || sourceType),
+    evidence: arr(item?.evidence),
+    origin: s(item?.origin || "reasoned_draft"),
+  }));
+
+  const synthesizedKnowledge = arr(reasonedDraft.knowledgeItems).map((item, index) => ({
+    key:
+      s(item?.key) ||
+      normalizeDraftKey(
+        `${sourceType || "knowledge"}_${s(item?.category)}_${s(item?.title)}_${index + 1}`,
+        "knowledge"
+      ),
+    category: s(item?.category || "general"),
+    title: cleanDisplayText(item?.title, 220),
+    valueText: cleanDisplayText(item?.valueText, 700),
+    valueJson: obj(item?.valueJson),
+    normalizedText: cleanDisplayText(item?.normalizedText || item?.valueText, 320),
+    normalizedJson: obj(item?.normalizedJson),
+    confidence:
+      typeof item?.confidence === "number"
+        ? item.confidence
+        : Number(item?.confidence || 0) || 0,
+    confidenceLabel: s(item?.confidenceLabel || "reasoned"),
+    status: s(item?.status || "pending"),
+    reviewReason: s(item?.reviewReason || item?.reasoning || "reasoned_synthesis"),
+    sourceId: s(item?.sourceId),
+    sourceRunId: s(item?.sourceRunId),
+    sourceType: s(item?.sourceType || sourceType),
+    evidence: arr(item?.evidence),
+    origin: s(item?.origin || "reasoned_draft"),
+  }));
+
   const fallbackServices = buildDraftServicesFromProfile(businessProfile, sourceType);
   const fallbackKnowledge = buildDraftKnowledgeFromProfile(businessProfile, sourceType);
 
   const services = mergeDraftItems(
     preservedServices,
-    [...derivedServices, ...fallbackServices],
+    [...synthesizedServices, ...fallbackServices],
     ["key", "title"]
   );
 
   const knowledgeItems = mergeDraftItems(
     preservedKnowledgeItems,
-    [...derivedKnowledge, ...fallbackKnowledge],
+    [...synthesizedKnowledge, ...fallbackKnowledge],
     ["key", "title", "category"]
   );
 
@@ -2503,6 +2570,7 @@ export function deriveDraftPatch({
     [
       ...(sameSourceSession ? arr(current.warnings) : []),
       ...arr(result?.warnings).map((x) => cleanDisplayText(x, 220)),
+      ...arr(reasonedDraft.warnings).map((x) => cleanDisplayText(x, 220)),
     ].filter(Boolean)
   );
 
@@ -2519,7 +2587,7 @@ export function deriveDraftPatch({
     result,
   });
 
-  const draftPayload = buildDraftPayloadFromResult({
+  const baseDraftPayload = buildDraftPayloadFromResult({
     session,
     result,
     requestId,
@@ -2528,6 +2596,16 @@ export function deriveDraftPatch({
     intakeContext,
     collector,
     businessProfileOverride: businessProfile,
+  });
+
+  const draftPayload = mergeDeep(baseDraftPayload, {
+    reasoningSummary: s(reasonedDraft.reasoningSummary),
+    unknowns: arr(reasonedDraft.unknowns),
+    rejections: arr(reasonedDraft.rejections),
+    followupQuestions: arr(reasonedDraft.followupQuestions),
+    evidenceStats: obj(reasonedDraft.evidenceStats),
+    usedAgentKernel: !!reasonedDraft.usedAgentKernel,
+    agent: obj(reasonedDraft.agent),
   });
 
   const completeness = calculateCompleteness({
@@ -2566,6 +2644,14 @@ export function deriveDraftPatch({
     confidenceSummary,
     diffFromCanonical,
     lastSnapshotId: collector?.lastSnapshotId || current.lastSnapshotId || null,
+
+    reasoningSummary: s(reasonedDraft.reasoningSummary),
+    unknowns: arr(reasonedDraft.unknowns),
+    rejections: arr(reasonedDraft.rejections),
+    followupQuestions: arr(reasonedDraft.followupQuestions),
+    evidenceStats: obj(reasonedDraft.evidenceStats),
+    usedAgentKernel: !!reasonedDraft.usedAgentKernel,
+    agent: obj(reasonedDraft.agent),
   };
 }
 

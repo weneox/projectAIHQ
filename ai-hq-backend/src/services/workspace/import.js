@@ -1077,6 +1077,8 @@ async function completeImportSourceByType({
   createdRun,
   collector,
   deferFailureStatus = false,
+  agentKernel = null,
+  runBusinessDraftSynthesis = null,
 }) {
   const logger = createLogger({
     component: "workspace-import-complete",
@@ -1090,9 +1092,9 @@ async function completeImportSourceByType({
   });
 
   const result = await runSourceSync({
-      db,
-      source: ensured.source,
-      run: createdRun.run,
+    db,
+    source: ensured.source,
+    run: createdRun.run,
     requestedBy: actor.auditValue,
     reviewSessionId: session.id,
     setupReviewSessionId: session.id,
@@ -1110,17 +1112,17 @@ async function completeImportSourceByType({
       reviewSessionId: session.id,
       collector,
     }),
-      fusion: buildFusionAdapter({
-        db,
-        scope: {
-          tenantId: scope.tenantId,
-          tenantKey: scope.tenantKey,
-        },
-        reviewSessionId: session.id,
-        collector,
-      }),
-      artifacts: createTenantSourceArtifactsHelpers({ db }),
-    });
+    fusion: buildFusionAdapter({
+      db,
+      scope: {
+        tenantId: scope.tenantId,
+        tenantKey: scope.tenantKey,
+      },
+      reviewSessionId: session.id,
+      collector,
+    }),
+    artifacts: createTenantSourceArtifactsHelpers({ db }),
+  });
 
   let warnings = arr(result?.warnings).map((x) => s(x)).filter(Boolean);
   let mode = s(result?.mode || "success");
@@ -1136,7 +1138,7 @@ async function completeImportSourceByType({
       tenantId: scope.tenantId,
     })) || {};
 
-  const importedPatch = deriveDraftPatch({
+  const importedPatch = await deriveDraftPatch({
     currentDraft,
     session,
     source: result?.source || ensured.source,
@@ -1147,6 +1149,8 @@ async function completeImportSourceByType({
     sourceUrl: normalizedUrl,
     intakeContext,
     collector,
+    agentKernel,
+    runBusinessDraftSynthesis,
   });
 
   const draftPatch = mergeImportedDraftPatch({
@@ -1496,6 +1500,8 @@ async function importSourceByType({
   allowSessionReuse = false,
   waitForCompletion = false,
   requestId: requestIdOverride = "",
+  agentKernel = null,
+  runBusinessDraftSynthesis = null,
 }) {
   const normalizedUrl = normalizeUrl(url);
   const normalizedType = normalizeSourceType(sourceType);
@@ -1775,6 +1781,8 @@ async function importSourceByType({
       ensured,
       createdRun,
       collector,
+      agentKernel,
+      runBusinessDraftSynthesis,
     };
 
     if (waitForCompletion) {
@@ -1841,6 +1849,8 @@ export async function resumeAcceptedImportRun({
   db,
   runId = "",
   deferFailureStatus = false,
+  agentKernel = null,
+  runBusinessDraftSynthesis = null,
 } = {}) {
   const safeRunId = s(runId);
   if (!safeRunId) {
@@ -1962,6 +1972,8 @@ export async function resumeAcceptedImportRun({
     },
     collector,
     deferFailureStatus,
+    agentKernel,
+    runBusinessDraftSynthesis,
   };
 
   logger.info("setup_import.resume.started");
