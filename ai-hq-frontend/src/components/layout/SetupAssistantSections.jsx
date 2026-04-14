@@ -38,6 +38,27 @@ function groupLabel(group = "") {
   return "Business truth";
 }
 
+function uniqueTexts(items = [], max = 6) {
+  return Array.from(
+    new Set(
+      arr(items)
+        .map((item) => compactText(item, 140))
+        .filter(Boolean)
+    )
+  ).slice(0, max);
+}
+
+function buildFollowUpNotes(confidence = {}, recommendation = {}) {
+  return uniqueTexts(
+    [
+      ...arr(confidence.contradictions),
+      ...arr(confidence.unclear),
+      ...arr(recommendation.notes),
+    ],
+    3
+  );
+}
+
 function buildQuestionMetaMap() {
   return Object.fromEntries(
     SETUP_INTERVIEW_QUESTIONS.map((item) => [
@@ -167,6 +188,7 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
   const confidence = obj(reviewAssistant.confidence);
   const sourceSignals = obj(reviewAssistant.sourceSignals);
   const draft = obj(reviewAssistant.draft);
+  const followUpNotes = buildFollowUpNotes(confidence, recommendation);
 
   const fallback = buildFallbackDraft(reviewPayload, assistant, localAnswers);
 
@@ -189,15 +211,15 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
     readyForApproval:
       reviewAssistant.readyForApproval === true ||
       assistant.review?.finalizeAvailable === true ||
-      assistant.review?.readyForReview === true ||
       assistant.assistant?.completion?.ready === true,
     draft: resolvedDraft,
     confidence: {
-      strong: arr(confidence.strong),
-      unclear: arr(confidence.unclear),
-      contradictions: arr(confidence.contradictions),
+      strong: [],
+      unclear: [],
+      contradictions: [],
     },
-    recommendationNotes: arr(recommendation.notes),
+    recommendationNotes: [],
+    followUpNotes,
     sourceSignals: {
       primarySourceType: s(sourceSignals.primarySourceType),
       primarySourceLabel: s(sourceSignals.primarySourceLabel),
@@ -205,8 +227,8 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
       primarySourceAuthorityClass: s(sourceSignals.primarySourceAuthorityClass),
       pageCount: Number(sourceSignals.pageCount || 0) || 0,
       sourceTypes: arr(sourceSignals.sourceTypes),
-      strongestEvidence: arr(sourceSignals.strongestEvidence),
-      discoveredPublicClaims: arr(sourceSignals.discoveredPublicClaims),
+      strongestEvidence: [],
+      discoveredPublicClaims: [],
     },
   };
 }
@@ -218,7 +240,7 @@ function hasBackendSmartDraft(model = {}) {
 
   const hasGuidance =
     Boolean(s(model.message)) ||
-    arr(model.recommendationNotes).length > 0 ||
+    arr(model.followUpNotes).length > 0 ||
     arr(confidence.strong).length > 0 ||
     arr(confidence.unclear).length > 0 ||
     arr(confidence.contradictions).length > 0;
@@ -317,6 +339,11 @@ function SmartDraftBubble({
   const draft = obj(model.draft);
   const confidence = obj(model.confidence);
   const sourceSignals = obj(model.sourceSignals);
+  const followUpNotes = arr(model.followUpNotes);
+  const showSourceContext =
+    (Boolean(s(sourceSignals.primarySourceLabel)) ||
+      Boolean(s(sourceSignals.primarySourceUrl))) &&
+    s(sourceSignals.primarySourceType) !== "manual";
 
   const draftRows = [
     ["Business name", draft.businessName],
@@ -356,19 +383,14 @@ function SmartDraftBubble({
           </div>
         ) : null}
 
-        {sourceContextLine ? (
+        {showSourceContext ? (
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
-              Source context
+              Source
             </div>
             <div className="mt-1 text-[15px] leading-8 text-text">
               {sourceContextLine}
             </div>
-            {sourceMetaLine ? (
-              <div className="mt-1 text-[13px] leading-6 text-text-muted">
-                {sourceMetaLine}
-              </div>
-            ) : null}
           </div>
         ) : null}
 
@@ -382,6 +404,19 @@ function SmartDraftBubble({
             </div>
           ))}
         </div>
+
+        {followUpNotes.length ? (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+              {model.readyForApproval ? "Final notes" : "Still to confirm"}
+            </div>
+            <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
+              {followUpNotes.map((item) => (
+                <div key={item}>- {item}</div>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {arr(sourceSignals.strongestEvidence).length ? (
           <div>

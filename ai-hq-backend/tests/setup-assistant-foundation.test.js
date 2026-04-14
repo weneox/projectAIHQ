@@ -646,9 +646,54 @@ test("setup assistant keeps the primary question scope canonical and does not bl
 
   assert.equal(payload.setup.review.finalizeAvailable, true);
   assert.equal(payload.setup.assistant.readyForApproval, true);
+  assert.equal(payload.setup.assistant.completion.ready, true);
   assert.equal(payload.setup.assistant.nextQuestion, null);
   assert.deepEqual(payload.setup.assistant.interviewPlan.activeQuestionKeys, []);
   assert.equal(payload.setup.assistant.sourceSignals.primarySourceType, "instagram");
+});
+
+test("setup assistant collapses profile follow-up into one combined question when a strong public source already exists", () => {
+  const payload = setupAssistantTest.buildSetupAssistantSessionPayload({
+    session: {
+      id: "session-1",
+      status: "draft",
+      mode: "setup",
+      currentStep: "description",
+    },
+    draft: {
+      version: 4,
+      draftPayload: {
+        setupAssistant: {
+          businessProfile: {
+            companyName: "",
+            description: "",
+            websiteUrl: "",
+          },
+          services: [],
+          contacts: [],
+          hours: [],
+          pricingPosture: {},
+          handoffRules: {},
+          sourceMetadata: {
+            primarySourceType: "google_maps",
+            primarySourceUrl: "https://maps.google.com/?cid=123",
+            sourceLabels: ["Google Maps"],
+            evidenceSummary: ["Imported place listing with operating hours and public contact details."],
+          },
+          progress: {
+            currentQuestionKey: "description",
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(payload.setup.assistant.nextQuestion?.key, "profile");
+  assert.equal(payload.setup.assistant.nextQuestion?.step, "profile");
+  assert.equal(
+    payload.setup.assistant.nextQuestion?.prompt,
+    "Confirm the business name and a reliable short description first. Add the website if the business has one."
+  );
 });
 
 test("setup assistant requires a real source identity before profile is ready", () => {

@@ -83,6 +83,7 @@ test("review flow uses the canonical setup assistant authority for next question
   assert.equal(payload.assistant.nextQuestion?.step, "handoff");
   assert.equal(payload.assistant.readyForApproval, false);
   assert.equal(payload.assistantBrain.nextQuestion?.key, "handoff");
+  assert.strictEqual(payload.assistantBrain, payload.assistant);
   assert.ok(!payload.assistant.interviewPlan.activeQuestionKeys.includes("languages"));
   assert.ok(!payload.assistant.interviewPlan.activeQuestionKeys.includes("tone"));
   assert.ok(!payload.assistant.interviewPlan.activeQuestionKeys.includes("greeting"));

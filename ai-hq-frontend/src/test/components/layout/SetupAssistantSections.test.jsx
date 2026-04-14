@@ -97,4 +97,118 @@ describe("SetupAssistantSections", () => {
 
     expect(screen.queryByText("Legacy languages question")).not.toBeInTheDocument();
   });
+
+  it("keeps the smart draft curated and hides the old analysis-heavy headings", async () => {
+    render(
+      <SetupAssistantSections
+        assistant={createAssistant({
+          assistant: {
+            nextQuestion: {},
+            interviewPlan: {
+              activeQuestions: [],
+            },
+            draft: {
+              businessName: "Alpha Clinic",
+              whatThisBusinessIs: "Dental clinic in Baku",
+              coreServices: ["Consultation", "Cleaning"],
+              pricingPosture: "Exact pricing requires a quote.",
+              contactRoutes: ["+994555555555"],
+              humanHandoff: "Complaints and custom quotes go to an operator.",
+            },
+            sourceSignals: {
+              primarySourceType: "website",
+              primarySourceLabel: "Website",
+              primarySourceUrl: "https://alpha.example",
+              strongestEvidence: ["Homepage and contact page imported"],
+              discoveredPublicClaims: ["WhatsApp bookings"],
+            },
+            confidence: {
+              strong: ["Business identity is anchored on a confirmed public source."],
+              unclear: ["Business hours still need confirmation."],
+              contradictions: ["Pricing wording needs one final check."],
+            },
+            recommendation: {
+              notes: ["Keep the public pricing reply policy concise."],
+            },
+            message: "This draft is ready for a final operator pass.",
+            readyForApproval: true,
+          },
+        })}
+        onCaptureSource={vi.fn().mockResolvedValue(true)}
+        onParseMessage={vi.fn()}
+        onFinalize={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "https://alpha.example" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Draft")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Final notes")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve truth" })).toBeInTheDocument();
+    expect(screen.queryByText("Strongest evidence")).not.toBeInTheDocument();
+    expect(screen.queryByText("What the system noticed")).not.toBeInTheDocument();
+    expect(screen.queryByText("What looks strong")).not.toBeInTheDocument();
+    expect(screen.queryByText("What still looks unclear")).not.toBeInTheDocument();
+    expect(screen.queryByText("What may be inconsistent")).not.toBeInTheDocument();
+    expect(screen.queryByText("Recommendation")).not.toBeInTheDocument();
+  });
+
+  it("does not treat legacy review readiness as approval readiness", async () => {
+    render(
+      <SetupAssistantSections
+        assistant={createAssistant({
+          review: {
+            finalizeAvailable: false,
+            readyForReview: true,
+          },
+          assistant: {
+            nextQuestion: {},
+            interviewPlan: {
+              activeQuestions: [],
+            },
+            draft: {
+              businessName: "Alpha Clinic",
+              whatThisBusinessIs: "Dental clinic in Baku",
+              coreServices: ["Consultation"],
+            },
+            sourceSignals: {
+              primarySourceType: "website",
+              primarySourceLabel: "Website",
+              primarySourceUrl: "https://alpha.example",
+            },
+            confidence: {
+              strong: [],
+              unclear: ["Business hours still need confirmation."],
+              contradictions: [],
+            },
+            recommendation: {
+              notes: [],
+            },
+            message: "A few launch-critical details still need confirmation.",
+            readyForApproval: false,
+          },
+        })}
+        onCaptureSource={vi.fn().mockResolvedValue(true)}
+        onParseMessage={vi.fn()}
+        onFinalize={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByRole("textbox"), {
+      target: { value: "https://alpha.example" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Draft")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("button", { name: "Approve truth" })).not.toBeInTheDocument();
+  });
 });

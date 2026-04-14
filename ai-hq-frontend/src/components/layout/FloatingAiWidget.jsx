@@ -180,7 +180,6 @@ function normalizeAssistantState(input = null) {
       updatedAt: draft.updatedAt || null,
     },
     assistant: decisionAssistant,
-    assistantBrain: decisionAssistant,
   };
 }
 
@@ -196,10 +195,6 @@ function buildAssistantFromApi(base = {}, response = {}) {
     setupSummary: obj(setup.summary),
     draft: obj(setup.draft),
     assistant:
-      Object.keys(obj(setup.assistant)).length
-        ? obj(setup.assistant)
-        : obj(root.assistant),
-    assistantBrain:
       Object.keys(obj(setup.assistant)).length
         ? obj(setup.assistant)
         : obj(root.assistant),
@@ -222,7 +217,6 @@ function buildMergedReviewPayload(reviewPayload = null, assistantState = {}) {
     fieldProvenance: obj(reviewRoot.fieldProvenance),
     reviewDraftSummary: obj(reviewRoot.reviewDraftSummary),
     assistant,
-    assistantBrain: assistant,
   };
 }
 
