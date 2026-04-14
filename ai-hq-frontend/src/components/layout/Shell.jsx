@@ -3,10 +3,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { apiGet } from "../../api/client.js";
 import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js";
-import { SETUP_WIDGET_ROUTE } from "../../lib/appEntry.js";
 import { cx } from "../../lib/cx.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
-import useProductHome from "../../view-models/useProductHome.js";
 import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
 import FloatingAiWidget from "./FloatingAiWidget.jsx";
 import Sidebar, {
@@ -43,33 +41,6 @@ const SHELL_REFRESH_EVENT_TYPES = new Set([
 ]);
 
 const SIDEBAR_STORAGE_KEY = "aihq.sidebar.collapsed";
-
-const HOME_ASSISTANT_FALLBACK = {
-  mode: "setup",
-  title: "AI setup lives on Home",
-  statusLabel: "Home",
-  summary:
-    "Open Home to connect the active launch channel, continue setup, and inspect truth and runtime posture.",
-  primaryAction: {
-    label: "Open home assistant",
-    path: SETUP_WIDGET_ROUTE,
-  },
-  secondaryAction: {
-    label: "Open channels",
-    path: "/channels",
-  },
-};
-
-const LOADING_ASSISTANT_FALLBACK = {
-  ...HOME_ASSISTANT_FALLBACK,
-  title: "Loading AI setup",
-  statusLabel: "Loading",
-  summary: "Preparing the current Home setup state for the assistant.",
-  primaryAction: {
-    label: "Open home",
-    path: "/home",
-  },
-};
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -289,32 +260,19 @@ export default function Shell() {
   const location = useLocation();
   const navigate = useNavigate();
   const notifications = useNotificationsSurface();
-  const homeRouteActive = location.pathname === "/home";
-
-  const assistantRequested = useMemo(() => {
-    if (!homeRouteActive) return false;
-    const params = new URLSearchParams(location.search || "");
-    return s(params.get("assistant")).toLowerCase() === "setup";
-  }, [homeRouteActive, location.search]);
-
-  const homeDataEnabled = homeRouteActive || widgetOpen;
-  const home = useProductHome({
-    enabled: homeDataEnabled,
-  });
 
   const refreshTimerRef = useRef(0);
   const statsRequestRef = useRef(null);
+
+  const assistantRequested = useMemo(() => {
+    const params = new URLSearchParams(location.search || "");
+    return s(params.get("assistant")).toLowerCase() === "setup";
+  }, [location.search]);
+
   const shellMode = useMemo(
     () => resolveShellMode(location.pathname),
     [location.pathname]
   );
-
-  const assistantModel = useMemo(() => {
-    if (home.assistant) return home.assistant;
-    return homeDataEnabled && home.loading
-      ? LOADING_ASSISTANT_FALLBACK
-      : HOME_ASSISTANT_FALLBACK;
-  }, [home.assistant, home.loading, homeDataEnabled]);
 
   const loadShellStats = useCallback(async () => {
     if (statsRequestRef.current) return statsRequestRef.current;
@@ -472,21 +430,12 @@ export default function Shell() {
     [assistantRequested, location.pathname, location.search, navigate]
   );
 
-  const handleAssistantNavigate = useCallback(
-    (path = "") => {
-      const target = s(path);
-      if (!target) return;
-      setWidgetOpen(false);
-      navigate(target);
-    },
-    [navigate]
-  );
-
   const shellSidebarWidth = sidebarCollapsed
     ? SIDEBAR_COLLAPSED_WIDTH
     : SIDEBAR_WIDTH;
 
   const contentMinHeight = `calc(100vh - ${SHELL_TOPBAR_HEIGHT}px)`;
+
   const pageTransition = {
     duration: 0.2,
     ease: [0.22, 1, 0.36, 1],
@@ -567,8 +516,6 @@ export default function Shell() {
         <FloatingAiWidget
           open={widgetOpen}
           onOpenChange={handleWidgetOpenChange}
-          onNavigate={handleAssistantNavigate}
-          assistant={assistantModel}
         />
       </div>
     </div>
