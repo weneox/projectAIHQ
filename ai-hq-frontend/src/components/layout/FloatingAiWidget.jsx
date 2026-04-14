@@ -133,7 +133,6 @@ function normalizeDecisionAssistant(value = {}) {
     completion: obj(source.completion),
     servicesCatalog: obj(source.servicesCatalog),
     sourceInsights: arr(source.sourceInsights),
-
     phase: s(source.phase),
     message: s(source.message || source.assistantMessage),
     draft: obj(source.draft),
@@ -394,6 +393,21 @@ export default function FloatingAiWidget({
     [reviewQuery.data, clientAssistant]
   );
 
+  const sessionHydrated = useMemo(() => {
+    if (!panelOpen || !workspace.ready) return false;
+    return !sessionQuery.isLoading && !reviewQuery.isLoading;
+  }, [
+    panelOpen,
+    workspace.ready,
+    sessionQuery.isLoading,
+    reviewQuery.isLoading,
+  ]);
+
+  const conversationStorageKey = useMemo(
+    () => `setup-assistant-timeline:${lower(workspace.tenantKey || "workspace")}`,
+    [workspace.tenantKey]
+  );
+
   if (hidden) return null;
 
   async function refreshWidgetWorkspaceState({
@@ -421,6 +435,16 @@ export default function FloatingAiWidget({
         reason: emitReason,
       });
     }
+  }
+
+  async function syncLatestAssistantSession() {
+    const latestSession = await getCurrentSetupAssistantSession();
+    if (latestSession) {
+      queryClient.setQueryData(setupAssistantSessionQueryKey, latestSession);
+      setClientAssistant((prev) => buildAssistantFromApi(prev, latestSession));
+      return latestSession;
+    }
+    return null;
   }
 
   async function ensureSession() {
@@ -582,7 +606,7 @@ export default function FloatingAiWidget({
       }
 
       await refreshWidgetWorkspaceState();
-      return true;
+      return await syncLatestAssistantSession();
     } catch (error) {
       setSetupError(s(error?.message, "Source intake failed."));
       throw error;
@@ -648,6 +672,9 @@ export default function FloatingAiWidget({
 
             <div className="min-h-0 flex-1">
               <SetupAssistantSections
+                key={conversationStorageKey}
+                storageKey={conversationStorageKey}
+                sessionHydrated={sessionHydrated}
                 assistant={clientAssistant}
                 reviewPayload={mergedReviewPayload}
                 saving={saving}

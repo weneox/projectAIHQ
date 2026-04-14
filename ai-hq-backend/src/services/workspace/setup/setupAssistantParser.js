@@ -10,28 +10,46 @@ const WEEK_DAYS = [
   "sunday",
 ];
 
+const AZ_CHAR_MAP = {
+  ə: "e",
+  Ə: "e",
+  ç: "c",
+  Ç: "c",
+  ğ: "g",
+  Ğ: "g",
+  ı: "i",
+  I: "i",
+  İ: "i",
+  ö: "o",
+  Ö: "o",
+  ş: "s",
+  Ş: "s",
+  ü: "u",
+  Ü: "u",
+};
+
 const DAY_ALIASES = {
-  monday: ["mon", "monday"],
-  tuesday: ["tue", "tues", "tuesday"],
-  wednesday: ["wed", "wednesday"],
-  thursday: ["thu", "thur", "thurs", "thursday"],
-  friday: ["fri", "friday"],
-  saturday: ["sat", "saturday"],
-  sunday: ["sun", "sunday"],
+  monday: ["mon", "monday", "bazar ertesi", "b e", "be"],
+  tuesday: ["tue", "tues", "tuesday", "cersenbe axsami"],
+  wednesday: ["wed", "wednesday", "cersenbe"],
+  thursday: ["thu", "thur", "thurs", "thursday", "cume axsami"],
+  friday: ["fri", "friday", "cume"],
+  saturday: ["sat", "saturday", "senbe"],
+  sunday: ["sun", "sunday", "bazar"],
 };
 
 const CURRENCY_ALIASES = {
-  "$": "USD",
+  $: "USD",
   usd: "USD",
   dollar: "USD",
   dollars: "USD",
-  "\u20ac": "EUR",
+  "€": "EUR",
   eur: "EUR",
   euro: "EUR",
-  "\u20bc": "AZN",
+  "₼": "AZN",
   azn: "AZN",
   manat: "AZN",
-  "\u00a3": "GBP",
+  "£": "GBP",
   gbp: "GBP",
   pound: "GBP",
 };
@@ -61,6 +79,46 @@ function uniqueStrings(value = [], limit = 16) {
   );
 }
 
+function escapeRegex(value = "") {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeLocaleText(value = "") {
+  const mapped = String(value || "")
+    .split("")
+    .map((char) => AZ_CHAR_MAP[char] ?? char)
+    .join("");
+
+  return mapped
+    .toLowerCase()
+    .replace(/[–—]/g, "-")
+    .replace(/[.,]/g, (match) => (match === "." ? " " : match))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const NORMALIZED_DAY_ALIASES = Object.fromEntries(
+  Object.entries(DAY_ALIASES).map(([day, aliases]) => [
+    day,
+    aliases.map((alias) => normalizeLocaleText(alias)),
+  ])
+);
+
+const DAY_ALIAS_TO_DAY = Object.entries(NORMALIZED_DAY_ALIASES).reduce(
+  (acc, [day, aliases]) => {
+    for (const alias of aliases) {
+      acc[alias] = day;
+    }
+    return acc;
+  },
+  {}
+);
+
+const DAY_PATTERN = Object.keys(DAY_ALIAS_TO_DAY)
+  .sort((a, b) => b.length - a.length)
+  .map((alias) => escapeRegex(alias))
+  .join("|");
+
 function findCurrency(text = "") {
   const raw = s(text).toLowerCase();
   for (const [needle, currency] of Object.entries(CURRENCY_ALIASES)) {
@@ -77,44 +135,105 @@ function parseAmount(value = "") {
   return Number.isFinite(number) ? number : null;
 }
 
-function formatTimePart(value = "") {
+function parseTimeToken(value = "", meridiemHint = "") {
   const text = s(value).toLowerCase();
-  const match = text.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
-  if (!match) return "";
+  const match = text.match(/^(\d{1,2})(?::(\d{2}))?$/);
+  if (!match) {
+    return {
+      formatted: "",
+      hour: null,
+      minute: null,
+      explicitMeridiem: s(meridiemHint).toLowerCase(),
+    };
+  }
 
   let hour = Number.parseInt(match[1], 10);
   const minute = Number.parseInt(match[2] || "0", 10);
-  const meridiem = s(match[3]).toLowerCase();
+  const meridiem = s(meridiemHint).toLowerCase();
 
   if (meridiem === "pm" && hour < 12) hour += 12;
   if (meridiem === "am" && hour === 12) hour = 0;
 
-  if (!Number.isFinite(hour) || hour < 0 || hour > 23) return "";
-  if (!Number.isFinite(minute) || minute < 0 || minute > 59) return "";
+  if (!Number.isFinite(hour) || hour < 0 || hour > 23) {
+    return {
+      formatted: "",
+      hour: null,
+      minute: null,
+      explicitMeridiem: meridiem,
+    };
+  }
 
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  if (!Number.isFinite(minute) || minute < 0 || minute > 59) {
+    return {
+      formatted: "",
+      hour: null,
+      minute: null,
+      explicitMeridiem: meridiem,
+    };
+  }
+
+  return {
+    formatted: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+    hour,
+    minute,
+    explicitMeridiem: meridiem,
+  };
 }
 
 function parseTimeRange(text = "") {
-  const match = String(text || "").match(
-    /(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*(?:-|to)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i
+  const normalized = normalizeLocaleText(text);
+
+  const match = normalized.match(
+    /(?:\bsaat\s*)?(\d{1,2}(?::\d{2})?)\s*(am|pm)?\s*(?:-|to|through|thru|dan|den|dek|kimi|qeder|qederki|a|ya)\s*(\d{1,2}(?::\d{2})?)\s*(am|pm)?/i
   );
-  if (!match) return { openTime: "", closeTime: "" };
+
+  if (!match) {
+    return { openTime: "", closeTime: "" };
+  }
+
+  const start = parseTimeToken(match[1], match[2]);
+  const end = parseTimeToken(match[3], match[4]);
+
+  if (!start.formatted || !end.formatted) {
+    return { openTime: "", closeTime: "" };
+  }
+
+  let endHour = end.hour;
+  const bothImplicit = !start.explicitMeridiem && !end.explicitMeridiem;
+
+  if (
+    bothImplicit &&
+    Number.isFinite(start.hour) &&
+    Number.isFinite(end.hour) &&
+    endHour <= start.hour &&
+    endHour < 12
+  ) {
+    endHour += 12;
+  }
+
+  const closeTime = `${String(endHour).padStart(2, "0")}:${String(
+    end.minute
+  ).padStart(2, "0")}`;
 
   return {
-    openTime: formatTimePart(match[1]),
-    closeTime: formatTimePart(match[2]),
+    openTime: start.formatted,
+    closeTime,
   };
 }
 
 function parseBreakRange(text = "") {
-  const match = String(text || "").match(
-    /(?:break|lunch)\s*(?:from)?\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\s*(?:-|to)\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)/i
+  const normalized = normalizeLocaleText(text);
+  const match = normalized.match(
+    /(?:break|lunch|fasil[eə])\s*(?:from)?\s*(\d{1,2}(?::\d{2})?)\s*(am|pm)?\s*(?:-|to|dan|den|dek|kimi|qeder)\s*(\d{1,2}(?::\d{2})?)\s*(am|pm)?/i
   );
   if (!match) return { breakStart: "", breakEnd: "" };
+
+  const start = parseTimeToken(match[1], match[2]);
+  const end = parseTimeToken(match[3], match[4]);
+
   return {
-    breakStart: formatTimePart(match[1]),
-    breakEnd: formatTimePart(match[2]),
+    breakStart: start.formatted,
+    breakEnd: end.formatted,
   };
 }
 
@@ -127,34 +246,46 @@ function expandDayRange(start = "", end = "") {
 }
 
 function parseDaysFromText(text = "") {
-  const lower = s(text).toLowerCase();
+  const lower = normalizeLocaleText(text);
   if (!lower) return [];
+
   if (
-    /\b(every day|daily|7 days|all week|each day)\b/i.test(lower) ||
-    /\b24\/7\b/i.test(lower)
+    /\b(every day|daily|7 days|all week|each day|her gun|hergun)\b/i.test(lower) ||
+    /\b(24\/7|7\/24)\b/i.test(lower)
   ) {
     return [...WEEK_DAYS];
   }
 
-  const directMatches = [];
-  for (const [day, aliases] of Object.entries(DAY_ALIASES)) {
-    if (aliases.some((alias) => new RegExp(`\\b${alias}\\b`, "i").test(lower))) {
-      directMatches.push(day);
-    }
+  if (
+    /\b(weekdays|is gunleri|heftede 5 gun|5 gun)\b/i.test(lower)
+  ) {
+    return WEEK_DAYS.slice(0, 5);
+  }
+
+  if (/\b(weekend|heftesonu|hefte sonu)\b/i.test(lower)) {
+    return ["saturday", "sunday"];
   }
 
   const rangeMatch = lower.match(
-    /\b(mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:rs|rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b\s*(?:-|to|through|thru)\s*\b(mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:rs|rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)\b/i
+    new RegExp(
+      `\\b(${DAY_PATTERN})\\b\\s*(?:-|to|through|thru|dan|den|dek|qeder)\\s*\\b(${DAY_PATTERN})\\b`,
+      "i"
+    )
   );
 
   if (rangeMatch) {
-    const start = Object.entries(DAY_ALIASES).find(([, aliases]) =>
-      aliases.includes(s(rangeMatch[1]).toLowerCase())
-    )?.[0];
-    const end = Object.entries(DAY_ALIASES).find(([, aliases]) =>
-      aliases.includes(s(rangeMatch[2]).toLowerCase())
-    )?.[0];
-    return expandDayRange(start, end);
+    const start = DAY_ALIAS_TO_DAY[s(rangeMatch[1]).toLowerCase()];
+    const end = DAY_ALIAS_TO_DAY[s(rangeMatch[2]).toLowerCase()];
+    if (start && end) {
+      return expandDayRange(start, end);
+    }
+  }
+
+  const directMatches = [];
+  for (const [day, aliases] of Object.entries(NORMALIZED_DAY_ALIASES)) {
+    if (aliases.some((alias) => new RegExp(`\\b${escapeRegex(alias)}\\b`, "i").test(lower))) {
+      directMatches.push(day);
+    }
   }
 
   return Array.from(new Set(directMatches));
@@ -221,37 +352,47 @@ export function sanitizeStructuredHours(value = []) {
 }
 
 function applyHoursLine(baseRows, line = "") {
-  const lower = s(line).toLowerCase();
+  const lower = normalizeLocaleText(line);
   if (!lower) return;
 
-  const allDays = /\b24\/7\b/i.test(lower);
-  const days = allDays ? [...WEEK_DAYS] : parseDaysFromText(lower);
-  if (!days.length) return;
+  const allDays =
+    /\b(24\/7|7\/24|24h|24 hours|all day|gece gunduz)\b/i.test(lower);
+  let days = allDays ? [...WEEK_DAYS] : parseDaysFromText(lower);
 
-  const isClosed = /\b(closed|off)\b/i.test(lower);
-  const appointmentOnly = /\bappointment only\b/i.test(lower);
-  const isAllDay = /\b(24h|24 hours|all day|24\/7)\b/i.test(lower);
+  const isClosed = /\b(closed|off|bagli|baqli)\b/i.test(lower);
+  const appointmentOnly =
+    /\b(appointment only|yalniz rezervasiya ile|yalniz qebul ile)\b/i.test(lower);
+  const isAllDay = /\b(24\/7|7\/24|24h|24 hours|all day)\b/i.test(lower);
   const { openTime, closeTime } = parseTimeRange(lower);
   const { breakStart, breakEnd } = parseBreakRange(lower);
 
+  if (!days.length && (isAllDay || appointmentOnly || openTime || closeTime)) {
+    days = WEEK_DAYS.slice(0, 5);
+  }
+
+  if (!days.length) return;
+
   for (const day of days) {
     const current = obj(baseRows.get(day), createDefaultHour(day));
-    baseRows.set(day, compactDraftObject({
-      ...current,
+    baseRows.set(
       day,
-      enabled: !isClosed && (isAllDay || Boolean(openTime) || appointmentOnly),
-      closed: isClosed,
-      openTime: isClosed || isAllDay || appointmentOnly ? "" : openTime,
-      closeTime: isClosed || isAllDay || appointmentOnly ? "" : closeTime,
-      breakStart: breakStart || current.breakStart,
-      breakEnd: breakEnd || current.breakEnd,
-      allDay: isAllDay,
-      appointmentOnly,
-      notes:
-        appointmentOnly || (!openTime && !closeTime && !isClosed && !isAllDay)
-          ? compactSentence(line, 120)
-          : s(current.notes),
-    }));
+      compactDraftObject({
+        ...current,
+        day,
+        enabled: !isClosed && (isAllDay || Boolean(openTime) || appointmentOnly),
+        closed: isClosed,
+        openTime: isClosed || isAllDay || appointmentOnly ? "" : openTime,
+        closeTime: isClosed || isAllDay || appointmentOnly ? "" : closeTime,
+        breakStart: breakStart || current.breakStart,
+        breakEnd: breakEnd || current.breakEnd,
+        allDay: isAllDay,
+        appointmentOnly,
+        notes:
+          appointmentOnly || (!openTime && !closeTime && !isClosed && !isAllDay)
+            ? compactSentence(line, 120)
+            : s(current.notes),
+      })
+    );
   }
 }
 
@@ -271,7 +412,7 @@ export function parseHoursNote(note = "", currentHours = []) {
 
   if (!segments.length) return sanitizeStructuredHours(currentHours);
 
-  if (segments.length === 1 && /\b24\/7\b/i.test(segments[0])) {
+  if (segments.length === 1 && /\b(24\/7|7\/24)\b/i.test(normalizeLocaleText(segments[0]))) {
     return WEEK_DAYS.map((day) =>
       compactDraftObject({
         day,
@@ -376,7 +517,15 @@ export function parseServicesNote(note = "", currentServices = []) {
   return out.slice(0, 40);
 }
 
-function buildPublicSummary({ mode, startingAt, minPrice, maxPrice, currency, perServicePricing, note }) {
+function buildPublicSummary({
+  mode,
+  startingAt,
+  minPrice,
+  maxPrice,
+  currency,
+  perServicePricing,
+  note,
+}) {
   const symbol = currency ? `${currency} ` : "";
 
   if (mode === "fixed_price" && minPrice != null) {
@@ -386,7 +535,7 @@ function buildPublicSummary({ mode, startingAt, minPrice, maxPrice, currency, pe
     return `Public replies can say pricing starts from ${symbol}${startingAt}.`.trim();
   }
   if (mode === "variable_by_service" && arr(perServicePricing).length) {
-    return `Public replies can share starting labels per service, but exact pricing may vary by selected service.`;
+    return "Public replies can share starting labels per service, but exact pricing may vary by selected service.";
   }
   if (mode === "promotional" && minPrice != null) {
     return `A promotional starting price of ${symbol}${minPrice} is available, subject to terms.`.trim();
@@ -482,18 +631,18 @@ export function parsePricingNote(note = "", currentPricing = {}, currentServices
         : arr(existing.perServicePricing).filter((item) =>
             arr(currentServices).some(
               (service) =>
-                s(service?.key).toLowerCase() ===
-                  s(item?.serviceKey).toLowerCase() ||
-                s(service?.title).toLowerCase() ===
-                  s(item?.title).toLowerCase()
+                s(service?.key).toLowerCase() === s(item?.serviceKey).toLowerCase() ||
+                s(service?.title).toLowerCase() === s(item?.title).toLowerCase()
             )
           ),
     allowPublicPriceReplies:
       pricingMode !== "operator_only" && pricingMode !== "quote_required",
-    requiresOperatorForExactQuote:
-      ["quote_required", "operator_only", "variable_by_service", "promotional"].includes(
-        pricingMode
-      ),
+    requiresOperatorForExactQuote: [
+      "quote_required",
+      "operator_only",
+      "variable_by_service",
+      "promotional",
+    ].includes(pricingMode),
     pricingNotes: compactSentence(text, 260),
     pricingConfidence:
       servicePairs.length > 1 || amounts.length > 0

@@ -7,8 +7,8 @@ import {
 } from "./setupInterviewQuestions.js";
 import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
-const INTRO_SEEN_STORAGE_KEY = "setup_assistant_intro_seen_v2";
-const TIMELINE_STORAGE_KEY = "setup_assistant_timeline_v2";
+const INTRO_SEEN_STORAGE_PREFIX = "setup_assistant_intro_seen";
+const TIMELINE_STORAGE_PREFIX = "setup_assistant_timeline";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -264,25 +264,33 @@ function buildProgressLabel(currentQuestion = null) {
   return groupLabel(group);
 }
 
-function getIntroSeen() {
+function getIntroStorageKey(storageKey = "") {
+  return `${INTRO_SEEN_STORAGE_PREFIX}:${s(storageKey, "default")}`;
+}
+
+function getTimelineStorageKey(storageKey = "") {
+  return `${TIMELINE_STORAGE_PREFIX}:${s(storageKey, "default")}`;
+}
+
+function getIntroSeen(storageKey = "") {
   try {
-    return window.sessionStorage.getItem(INTRO_SEEN_STORAGE_KEY) === "1";
+    return window.sessionStorage.getItem(getIntroStorageKey(storageKey)) === "1";
   } catch {
     return false;
   }
 }
 
-function setIntroSeen() {
+function setIntroSeen(storageKey = "") {
   try {
-    window.sessionStorage.setItem(INTRO_SEEN_STORAGE_KEY, "1");
+    window.sessionStorage.setItem(getIntroStorageKey(storageKey), "1");
   } catch {
     return;
   }
 }
 
-function loadStoredTimeline() {
+function loadStoredTimeline(storageKey = "") {
   try {
-    const raw = window.sessionStorage.getItem(TIMELINE_STORAGE_KEY);
+    const raw = window.sessionStorage.getItem(getTimelineStorageKey(storageKey));
     const parsed = JSON.parse(raw || "[]");
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -290,17 +298,12 @@ function loadStoredTimeline() {
   }
 }
 
-function saveStoredTimeline(timeline = []) {
+function saveStoredTimeline(storageKey = "", timeline = []) {
   try {
-    window.sessionStorage.setItem(TIMELINE_STORAGE_KEY, JSON.stringify(timeline));
-  } catch {
-    return;
-  }
-}
-
-function clearStoredTimeline() {
-  try {
-    window.sessionStorage.removeItem(TIMELINE_STORAGE_KEY);
+    window.sessionStorage.setItem(
+      getTimelineStorageKey(storageKey),
+      JSON.stringify(timeline)
+    );
   } catch {
     return;
   }
@@ -563,121 +566,6 @@ function Composer({
   );
 }
 
-function buildQuestionSignature(question = {}, draftVersion = 0) {
-  return [
-    "question",
-    Number(draftVersion || 0),
-    s(question.key),
-    s(question.prompt),
-  ].join("|");
-}
-
-function buildDraftSignature(model = {}) {
-  return JSON.stringify({
-    type: "draft",
-    draftVersion: Number(model.draftVersion || 0),
-    readyForApproval: model.readyForApproval === true,
-    message: s(model.message),
-    draft: obj(model.draft),
-    notes: arr(model.compactNotes),
-  });
-}
-
-function sanitizeTimelineItem(item = {}) {
-  const source = obj(item);
-  const type = s(source.type);
-  if (!type) return null;
-
-  if (type === "draft") {
-    return {
-      id: s(source.id) || `draft-${Date.now()}`,
-      type,
-      role: "assistant",
-      signature: s(source.signature),
-      model: obj(source.model),
-    };
-  }
-
-  return {
-    id: s(source.id) || `${type}-${Date.now()}`,
-    type,
-    role: s(source.role),
-    eyebrow: s(source.eyebrow),
-    title: s(source.title),
-    body: s(source.body),
-    signature: s(source.signature),
-  };
-}
-
-function appendTimelineItem(current = [], item = null) {
-  const normalized = sanitizeTimelineItem(item);
-  if (!normalized) return current;
-
-  if (
-    normalized.signature &&
-    current.some((entry) => s(entry.signature) === normalized.signature)
-  ) {
-    return current;
-  }
-
-  return [...current, normalized];
-}
-
-function extractAssistantStateFromPayload(payload = null) {
-  const root = obj(payload);
-  const setup = obj(root.setup);
-  if (Object.keys(obj(setup.assistant)).length) return obj(setup.assistant);
-  if (Object.keys(obj(root.assistant)).length) return obj(root.assistant);
-  return {};
-}
-
-function buildAssistantQuestionItem(question = {}, draftVersion = 0) {
-  const questionKey = s(question.key).toLowerCase();
-  if (!questionKey || !s(question.prompt)) return null;
-
-  const meta = obj(QUESTION_META_MAP[questionKey]);
-  const group = s(question.group || meta.group || "business_truth");
-
-  return {
-    id: `assistant-question-${Date.now()}`,
-    type: "message",
-    role: "assistant",
-    signature: buildQuestionSignature(question, draftVersion),
-    eyebrow: buildProgressLabel({ group }),
-    title: s(question.title || meta.title),
-    body: s(question.prompt || meta.prompt),
-  };
-}
-
-function buildAssistantDraftItem(model = {}) {
-  if (!hasBackendSmartDraft(model)) return null;
-
-  return {
-    id: `assistant-draft-${Date.now()}`,
-    type: "draft",
-    role: "assistant",
-    signature: buildDraftSignature(model),
-    model,
-  };
-}
-
-function buildAssistantItemsFromResponse(payload = null, finalModel = null) {
-  const assistantState = extractAssistantStateFromPayload(payload);
-  const draftVersion = Number(assistantState.draftVersion || 0);
-
-  if (assistantState.readyForApproval === true && finalModel) {
-    const item = buildAssistantDraftItem(finalModel);
-    return item ? [item] : [];
-  }
-
-  const questionItem = buildAssistantQuestionItem(
-    obj(assistantState.nextQuestion),
-    draftVersion
-  );
-
-  return questionItem ? [questionItem] : [];
-}
-
 function hasExistingSetupProgress({
   assistant,
   reviewPayload,
@@ -706,7 +594,73 @@ function hasExistingSetupProgress({
   );
 }
 
+function buildQuestionSignature(question = {}, draftVersion = 0) {
+  return [
+    "question",
+    Number(draftVersion || 0),
+    s(question.key),
+    s(question.prompt),
+  ].join("|");
+}
+
+function buildDraftSignature(model = {}) {
+  return JSON.stringify({
+    type: "draft",
+    draftVersion: Number(model.draftVersion || 0),
+    readyForApproval: model.readyForApproval === true,
+    message: s(model.message),
+    draft: obj(model.draft),
+    notes: arr(model.compactNotes),
+  });
+}
+
+function buildQuestionTimelineItem(question = {}, draftVersion = 0) {
+  const questionKey = s(question.key).toLowerCase();
+  if (!questionKey || !s(question.prompt)) return null;
+
+  const meta = obj(QUESTION_META_MAP[questionKey]);
+
+  return {
+    id: `assistant-question-${Date.now()}`,
+    type: "message",
+    role: "assistant",
+    signature: buildQuestionSignature(question, draftVersion),
+    eyebrow: buildProgressLabel({
+      group: s(question.group || meta.group),
+    }),
+    title: s(question.title || meta.title),
+    body: s(question.prompt || meta.prompt),
+  };
+}
+
+function buildDraftTimelineItem(model = {}) {
+  if (!hasBackendSmartDraft(model)) return null;
+
+  return {
+    id: `assistant-draft-${Date.now()}`,
+    type: "draft",
+    role: "assistant",
+    signature: buildDraftSignature(model),
+    model,
+  };
+}
+
+function appendTimelineItem(current = [], item = null) {
+  if (!item) return current;
+
+  if (
+    s(item.signature) &&
+    current.some((entry) => s(entry.signature) === s(item.signature))
+  ) {
+    return current;
+  }
+
+  return [...current, item];
+}
+
 export default function SetupAssistantSections({
+  storageKey = "default",
+  sessionHydrated = false,
   assistant,
   reviewPayload = null,
   saving = false,
@@ -721,9 +675,9 @@ export default function SetupAssistantSections({
 
   const [composerValue, setComposerValue] = useState("");
   const [localError, setLocalError] = useState("");
-  const [timeline, setTimeline] = useState(() => loadStoredTimeline());
+  const [timeline, setTimeline] = useState(() => loadStoredTimeline(storageKey));
   const [localAnswers, setLocalAnswers] = useState({});
-  const [introAnimated, setIntroAnimated] = useState(() => getIntroSeen());
+  const [introAnimated, setIntroAnimated] = useState(() => getIntroSeen(storageKey));
   const [awaitingAssistant, setAwaitingAssistant] = useState(false);
 
   const busy = saving || finalizing || capturingSource;
@@ -788,7 +742,7 @@ export default function SetupAssistantSections({
   const liveQuestionItem = useMemo(() => {
     if (!currentQuestion) return null;
 
-    const item = buildAssistantQuestionItem(
+    const item = buildQuestionTimelineItem(
       currentQuestion,
       assistantControl.draftVersion
     );
@@ -797,30 +751,33 @@ export default function SetupAssistantSections({
     const existsInTimeline = timeline.some(
       (entry) => s(entry.signature) === s(item.signature)
     );
+
     return existsInTimeline ? null : item;
   }, [currentQuestion, assistantControl.draftVersion, timeline]);
 
   const liveDraftItem = useMemo(() => {
     if (!questionsFinished || !smartDraftReady) return null;
 
-    const item = buildAssistantDraftItem(finalModel);
+    const item = buildDraftTimelineItem(finalModel);
     if (!item) return null;
 
     const existsInTimeline = timeline.some(
       (entry) => s(entry.signature) === s(item.signature)
     );
+
     return existsInTimeline ? null : item;
   }, [questionsFinished, smartDraftReady, finalModel, timeline]);
 
   const showIntro =
+    sessionHydrated &&
     !sourceSubmitted &&
-    !awaitingAssistant &&
     timeline.length === 0 &&
+    !awaitingAssistant &&
     !s(localError || errorMessage);
 
   useEffect(() => {
-    saveStoredTimeline(timeline);
-  }, [timeline]);
+    saveStoredTimeline(storageKey, timeline);
+  }, [storageKey, timeline]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -851,21 +808,10 @@ export default function SetupAssistantSections({
     setComposerValue("");
 
     try {
-      const response = await onCaptureSource?.({
+      await onCaptureSource?.({
         type: resolvedSource.type,
         value: resolvedSource.value,
       });
-
-      const assistantItems = buildAssistantItemsFromResponse(response, finalModel);
-      if (assistantItems.length) {
-        setTimeline((current) => {
-          let next = current;
-          for (const item of assistantItems) {
-            next = appendTimelineItem(next, item);
-          }
-          return next;
-        });
-      }
     } catch (error) {
       setLocalError(s(error?.message, "Source intake failed."));
     } finally {
@@ -877,15 +823,15 @@ export default function SetupAssistantSections({
     const text = s(textValue);
     if (!text || busy || !currentQuestion) return;
 
-    const liveItem = liveQuestionItem;
+    const committedQuestion = liveQuestionItem;
 
     setLocalError("");
     setAwaitingAssistant(true);
 
     setTimeline((current) => {
       let next = current;
-      if (liveItem) {
-        next = appendTimelineItem(next, liveItem);
+      if (committedQuestion) {
+        next = appendTimelineItem(next, committedQuestion);
       }
       next = appendTimelineItem(next, {
         id: `answer-${currentQuestion.key}-${Date.now()}`,
@@ -900,33 +846,14 @@ export default function SetupAssistantSections({
       ...current,
       [currentQuestion.key]: text,
     }));
+
     setComposerValue("");
 
     try {
-      const response = await onParseMessage?.({
+      await onParseMessage?.({
         step: currentQuestion.step,
         text,
       });
-
-      const nextFinalModel = buildFinalViewModel({
-        reviewPayload: response ? obj(response.setup || response).reviewPayload : reviewPayload,
-        assistant,
-        localAnswers: {
-          ...localAnswers,
-          [currentQuestion.key]: text,
-        },
-      });
-
-      const assistantItems = buildAssistantItemsFromResponse(response, nextFinalModel);
-      if (assistantItems.length) {
-        setTimeline((current) => {
-          let next = current;
-          for (const item of assistantItems) {
-            next = appendTimelineItem(next, item);
-          }
-          return next;
-        });
-      }
     } catch (error) {
       setLocalError(s(error?.message, "The answer could not be processed."));
     } finally {
@@ -938,15 +865,15 @@ export default function SetupAssistantSections({
     const text = s(composerValue);
     if (!text || busy) return;
 
-    const liveItem = liveDraftItem;
+    const committedDraft = liveDraftItem;
 
     setLocalError("");
     setAwaitingAssistant(true);
 
     setTimeline((current) => {
       let next = current;
-      if (liveItem) {
-        next = appendTimelineItem(next, liveItem);
+      if (committedDraft) {
+        next = appendTimelineItem(next, committedDraft);
       }
       next = appendTimelineItem(next, {
         id: `edit-${Date.now()}`,
@@ -960,30 +887,15 @@ export default function SetupAssistantSections({
     setComposerValue("");
 
     try {
-      const response = await onParseMessage?.({
+      await onParseMessage?.({
         step: "profile",
         text,
       });
-
-      const assistantItems = buildAssistantItemsFromResponse(response, finalModel);
-      if (assistantItems.length) {
-        setTimeline((current) => {
-          let next = current;
-          for (const item of assistantItems) {
-            next = appendTimelineItem(next, item);
-          }
-          return next;
-        });
-      }
     } catch (error) {
       setLocalError(s(error?.message, "The draft could not be updated."));
     } finally {
       setAwaitingAssistant(false);
     }
-  }
-
-  function handleCloseReset() {
-    clearStoredTimeline();
   }
 
   return (
@@ -997,7 +909,7 @@ export default function SetupAssistantSections({
               animate={!introAnimated}
               onAnimationComplete={() => {
                 if (!introAnimated) {
-                  setIntroSeen();
+                  setIntroSeen(storageKey);
                   setIntroAnimated(true);
                 }
               }}
@@ -1060,7 +972,7 @@ export default function SetupAssistantSections({
         </div>
       </div>
 
-      {!sourceSubmitted ? (
+      {!sourceSubmitted && sessionHydrated ? (
         <Composer
           value={composerValue}
           busy={busy}
@@ -1092,8 +1004,6 @@ export default function SetupAssistantSections({
           onSubmit={handleDraftUpdate}
         />
       ) : null}
-
-      <button type="button" onClick={handleCloseReset} className="hidden" aria-hidden="true" />
     </div>
   );
 }
