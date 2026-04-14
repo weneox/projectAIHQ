@@ -2,7 +2,7 @@
 
 import {
   getCurrentSetupReview,
-} from "../../db/helpers/tenantSetupReview.js";
+} from "../../../db/helpers/tenantSetupReview.js";
 
 import { resolveTenantScope } from "./dbRows.js";
 import { arr, obj, s, compactObject } from "./shared.js";
