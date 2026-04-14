@@ -38,27 +38,6 @@ function groupLabel(group = "") {
   return "Business truth";
 }
 
-function uniqueTexts(items = [], max = 6) {
-  return Array.from(
-    new Set(
-      arr(items)
-        .map((item) => compactText(item, 140))
-        .filter(Boolean)
-    )
-  ).slice(0, max);
-}
-
-function buildFollowUpNotes(confidence = {}, recommendation = {}) {
-  return uniqueTexts(
-    [
-      ...arr(confidence.contradictions),
-      ...arr(confidence.unclear),
-      ...arr(recommendation.notes),
-    ],
-    3
-  );
-}
-
 function buildQuestionMetaMap() {
   return Object.fromEntries(
     SETUP_INTERVIEW_QUESTIONS.map((item) => [
@@ -75,6 +54,27 @@ function buildQuestionMetaMap() {
 }
 
 const QUESTION_META_MAP = buildQuestionMetaMap();
+
+function uniqueStrings(items = [], max = 8) {
+  return [...new Set(arr(items).map((item) => s(item)).filter(Boolean))].slice(
+    0,
+    max
+  );
+}
+
+function buildCompactNotes(model = {}) {
+  const confidence = obj(model.confidence);
+  const notes = uniqueStrings(
+    [
+      ...arr(confidence.unclear),
+      ...arr(model.recommendationNotes),
+      ...arr(confidence.contradictions),
+    ],
+    6
+  );
+
+  return notes;
+}
 
 function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers = {}) {
   const review = obj(reviewPayload?.review || reviewPayload);
@@ -169,7 +169,6 @@ function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers =
 function normalizeAssistantControl(reviewPayload = null, assistant = {}) {
   const primary = obj(reviewPayload?.assistant);
   const fallback = obj(assistant.assistant);
-
   const source = Object.keys(primary).length ? primary : fallback;
 
   return {
@@ -188,7 +187,6 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
   const confidence = obj(reviewAssistant.confidence);
   const sourceSignals = obj(reviewAssistant.sourceSignals);
   const draft = obj(reviewAssistant.draft);
-  const followUpNotes = buildFollowUpNotes(confidence, recommendation);
 
   const fallback = buildFallbackDraft(reviewPayload, assistant, localAnswers);
 
@@ -206,20 +204,16 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
     hours: arr(draft.hours).length ? arr(draft.hours) : arr(fallback.hours),
   };
 
-  return {
+  const model = {
     message: s(reviewAssistant.message || reviewAssistant.assistantMessage),
-    readyForApproval:
-      reviewAssistant.readyForApproval === true ||
-      assistant.review?.finalizeAvailable === true ||
-      assistant.assistant?.completion?.ready === true,
+    readyForApproval: reviewAssistant.readyForApproval === true,
     draft: resolvedDraft,
     confidence: {
-      strong: [],
-      unclear: [],
-      contradictions: [],
+      strong: arr(confidence.strong),
+      unclear: arr(confidence.unclear),
+      contradictions: arr(confidence.contradictions),
     },
-    recommendationNotes: [],
-    followUpNotes,
+    recommendationNotes: arr(recommendation.notes),
     sourceSignals: {
       primarySourceType: s(sourceSignals.primarySourceType),
       primarySourceLabel: s(sourceSignals.primarySourceLabel),
@@ -227,32 +221,28 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
       primarySourceAuthorityClass: s(sourceSignals.primarySourceAuthorityClass),
       pageCount: Number(sourceSignals.pageCount || 0) || 0,
       sourceTypes: arr(sourceSignals.sourceTypes),
-      strongestEvidence: [],
-      discoveredPublicClaims: [],
+      strongestEvidence: arr(sourceSignals.strongestEvidence),
+      discoveredPublicClaims: arr(sourceSignals.discoveredPublicClaims),
     },
+  };
+
+  return {
+    ...model,
+    compactNotes: buildCompactNotes(model),
   };
 }
 
 function hasBackendSmartDraft(model = {}) {
   const sourceSignals = obj(model.sourceSignals);
-  const confidence = obj(model.confidence);
   const draft = obj(model.draft);
 
-  const hasGuidance =
-    Boolean(s(model.message)) ||
-    arr(model.followUpNotes).length > 0 ||
-    arr(confidence.strong).length > 0 ||
-    arr(confidence.unclear).length > 0 ||
-    arr(confidence.contradictions).length > 0;
-
+  const hasMessage = Boolean(s(model.message));
   const hasSourceWork =
     Boolean(s(sourceSignals.primarySourceType)) ||
     Boolean(s(sourceSignals.primarySourceLabel)) ||
     Boolean(s(sourceSignals.primarySourceUrl)) ||
     Number(sourceSignals.pageCount || 0) > 0 ||
-    arr(sourceSignals.sourceTypes).length > 0 ||
-    arr(sourceSignals.strongestEvidence).length > 0 ||
-    arr(sourceSignals.discoveredPublicClaims).length > 0;
+    arr(sourceSignals.sourceTypes).length > 0;
 
   const hasStructuredDraft =
     Boolean(s(draft.businessName)) ||
@@ -262,7 +252,7 @@ function hasBackendSmartDraft(model = {}) {
     arr(draft.contactRoutes).length > 0 ||
     Boolean(s(draft.humanHandoff));
 
-  return hasStructuredDraft && (hasGuidance || hasSourceWork || model.readyForApproval);
+  return hasStructuredDraft && (hasMessage || hasSourceWork || model.readyForApproval);
 }
 
 function buildProgressFromInterviewPlan(interviewPlan = {}, currentQuestion = null) {
@@ -337,13 +327,7 @@ function SmartDraftBubble({
   onFinalize,
 }) {
   const draft = obj(model.draft);
-  const confidence = obj(model.confidence);
   const sourceSignals = obj(model.sourceSignals);
-  const followUpNotes = arr(model.followUpNotes);
-  const showSourceContext =
-    (Boolean(s(sourceSignals.primarySourceLabel)) ||
-      Boolean(s(sourceSignals.primarySourceUrl))) &&
-    s(sourceSignals.primarySourceType) !== "manual";
 
   const draftRows = [
     ["Business name", draft.businessName],
@@ -362,14 +346,13 @@ function SmartDraftBubble({
     .filter(Boolean)
     .join(" · ");
 
-  const _sourceMetaLine = [
+  const sourceMetaLine = [
     Number(sourceSignals.pageCount || 0) > 0
       ? `${Number(sourceSignals.pageCount || 0)} pages`
       : "",
     arr(sourceSignals.sourceTypes).length
       ? listPreview(sourceSignals.sourceTypes, 4)
       : "",
-    s(sourceSignals.primarySourceAuthorityClass),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -383,14 +366,19 @@ function SmartDraftBubble({
           </div>
         ) : null}
 
-        {showSourceContext ? (
+        {sourceContextLine ? (
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
-              Source
+              Source context
             </div>
             <div className="mt-1 text-[15px] leading-8 text-text">
               {sourceContextLine}
             </div>
+            {sourceMetaLine ? (
+              <div className="mt-1 text-[13px] leading-6 text-text-muted">
+                {sourceMetaLine}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -405,95 +393,13 @@ function SmartDraftBubble({
           ))}
         </div>
 
-        {followUpNotes.length ? (
+        {arr(model.compactNotes).length ? (
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
-              {model.readyForApproval ? "Final notes" : "Still to confirm"}
+              Follow-up notes
             </div>
             <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
-              {followUpNotes.map((item) => (
-                <div key={item}>- {item}</div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {arr(sourceSignals.strongestEvidence).length ? (
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
-              Strongest evidence
-            </div>
-            <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
-              {arr(sourceSignals.strongestEvidence)
-                .slice(0, 6)
-                .map((item) => (
-                  <div key={item}>• {item}</div>
-                ))}
-            </div>
-          </div>
-        ) : null}
-
-        {arr(sourceSignals.discoveredPublicClaims).length ? (
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
-              What the system noticed
-            </div>
-            <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
-              {arr(sourceSignals.discoveredPublicClaims)
-                .slice(0, 8)
-                .map((item) => (
-                  <div key={item}>• {item}</div>
-                ))}
-            </div>
-          </div>
-        ) : null}
-
-        {arr(confidence.strong).length ? (
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
-              What looks strong
-            </div>
-            <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
-              {arr(confidence.strong).map((item) => (
-                <div key={item}>• {item}</div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {arr(confidence.unclear).length ? (
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
-              What still looks unclear
-            </div>
-            <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
-              {arr(confidence.unclear).map((item) => (
-                <div key={item}>• {item}</div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {arr(confidence.contradictions).length ? (
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
-              What may be inconsistent
-            </div>
-            <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
-              {arr(confidence.contradictions).map((item) => (
-                <div key={item}>• {item}</div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {arr(model.recommendationNotes).length ? (
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
-              Recommendation
-            </div>
-            <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
-              {arr(model.recommendationNotes).map((item) => (
+              {arr(model.compactNotes).map((item) => (
                 <div key={item}>• {item}</div>
               ))}
             </div>

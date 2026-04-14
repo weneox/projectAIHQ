@@ -234,7 +234,7 @@ function buildManualSourceMetadata(type = "", value = "") {
       ? "Instagram"
       : sourceType === "facebook"
         ? "Facebook"
-      : sourceType === "manual"
+        : sourceType === "manual"
           ? "Manual note"
           : "Source";
 
@@ -523,9 +523,10 @@ export default function FloatingAiWidget({
   async function handleSetupCaptureSource({ type, value }) {
     const sourceValue = s(value);
     const resolvedSource = resolveSetupSourceInput(sourceValue);
-    const sourceType = lower(type) === lower(resolvedSource.type)
-      ? lower(type)
-      : lower(resolvedSource.type);
+    const sourceType =
+      lower(type) === lower(resolvedSource.type)
+        ? lower(type)
+        : lower(resolvedSource.type);
     const normalizedSourceValue = s(resolvedSource.value || sourceValue);
     if (!sourceType || !sourceValue || saving || finalizing || capturingSource) {
       return null;
