@@ -154,6 +154,8 @@ function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers =
           .split(/[,;\n]/)
           .map((item) => s(item))
           .filter(Boolean),
+    greetingStyle: s(localAnswers.greeting),
+    afterHoursBehavior: s(localAnswers.after_hours),
   };
 }
 
@@ -181,6 +183,10 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
     languages: arr(draft.languages),
     tone: s(draft.tone),
     hours: arr(draft.hours).length ? arr(draft.hours) : arr(fallback.hours),
+    greetingStyle: s(draft.greetingStyle || fallback.greetingStyle),
+    afterHoursBehavior: s(
+      draft.afterHoursBehavior || fallback.afterHoursBehavior
+    ),
   };
 
   return {
@@ -238,7 +244,9 @@ function hasBackendSmartDraft(model = {}) {
     Boolean(s(draft.audience)) ||
     Boolean(s(draft.pricingPosture)) ||
     arr(draft.contactRoutes).length > 0 ||
-    Boolean(s(draft.humanHandoff));
+    Boolean(s(draft.humanHandoff)) ||
+    Boolean(s(draft.greetingStyle)) ||
+    Boolean(s(draft.afterHoursBehavior));
 
   return hasGuidance && (hasSourceWork || hasStructuredDraft);
 }
@@ -312,10 +320,10 @@ function shouldSkipQuestion(question = {}, model = {}) {
       return Boolean(s(draft.tone));
 
     case "greeting":
-      return false;
+      return Boolean(s(draft.greetingStyle));
 
     case "after_hours":
-      return false;
+      return Boolean(s(draft.afterHoursBehavior));
 
     default:
       return false;
@@ -429,6 +437,8 @@ function SmartDraftBubble({
     ["Human handoff", draft.humanHandoff],
     ["Languages", listPreview(draft.languages, 4)],
     ["Tone", draft.tone],
+    ["Opening style", draft.greetingStyle],
+    ["After-hours behavior", draft.afterHoursBehavior],
   ].filter(([, value]) => s(value));
 
   const sourceContextLine = [

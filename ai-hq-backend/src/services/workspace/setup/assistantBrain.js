@@ -52,12 +52,40 @@ function sourceTypeLabel(type = "") {
   return "Website";
 }
 
-function signalExists(values = []) {
-  return uniqueStrings(values).length > 0;
-}
-
 function signalStrong(values = [], minCount = 1) {
   return uniqueStrings(values).length >= minCount;
+}
+
+function extractBehaviorSignals({ draft = {}, review = null } = {}) {
+  const safeDraft = obj(draft);
+  const reviewRoot = obj(review);
+  const reviewDraft = obj(reviewRoot.review?.draft || reviewRoot.draft);
+
+  const draftAssistantState = obj(safeDraft.assistantState);
+  const reviewAssistantState = obj(reviewDraft.assistantState);
+
+  const greetingCandidates = uniqueStrings([
+    draftAssistantState.greeting,
+    draftAssistantState.greetingStyle,
+    draftAssistantState.openingStyle,
+    reviewAssistantState.greeting,
+    reviewAssistantState.greetingStyle,
+    reviewAssistantState.openingStyle,
+  ]);
+
+  const afterHoursCandidates = uniqueStrings([
+    draftAssistantState.afterHours,
+    draftAssistantState.afterHoursBehavior,
+    draftAssistantState.afterHoursReply,
+    reviewAssistantState.afterHours,
+    reviewAssistantState.afterHoursBehavior,
+    reviewAssistantState.afterHoursReply,
+  ]);
+
+  return {
+    greetingCandidates,
+    afterHoursCandidates,
+  };
 }
 
 function buildSourceSignals({ session = {}, draft = {}, sources = [], review = null } = {}) {
@@ -74,6 +102,7 @@ function buildSourceSignals({ session = {}, draft = {}, sources = [], review = n
   const websiteKnowledge = obj(
     sourceSignalSummary.website || reviewDebug.websiteKnowledge
   );
+  const behaviorSignals = extractBehaviorSignals({ draft, review });
 
   const sourceRows = arr(sources).map((item) =>
     compactObject({
@@ -232,6 +261,8 @@ function buildSourceSignals({ session = {}, draft = {}, sources = [], review = n
     descriptionCandidates,
     languagesCandidates,
     toneCandidates,
+    greetingCandidates: behaviorSignals.greetingCandidates,
+    afterHoursCandidates: behaviorSignals.afterHoursCandidates,
   };
 }
 
@@ -239,6 +270,8 @@ function buildDraftState({ draft = {}, review = null } = {}) {
   const businessProfile = obj(draft.businessProfile);
   const reviewRoot = obj(review);
   const reviewDraft = obj(reviewRoot.review?.draft || reviewRoot.draft);
+  const draftAssistantState = obj(draft.assistantState);
+  const reviewAssistantState = obj(reviewDraft.assistantState);
 
   const mergedProfile = {
     ...obj(reviewDraft.businessProfile),
@@ -303,6 +336,22 @@ function buildDraftState({ draft = {}, review = null } = {}) {
       ...arr(mergedProfile.languages),
     ]),
     tone: s(mergedProfile.brandTone || mergedProfile.tone),
+    greetingStyle: s(
+      draftAssistantState.greeting ||
+        draftAssistantState.greetingStyle ||
+        draftAssistantState.openingStyle ||
+        reviewAssistantState.greeting ||
+        reviewAssistantState.greetingStyle ||
+        reviewAssistantState.openingStyle
+    ),
+    afterHoursBehavior: s(
+      draftAssistantState.afterHours ||
+        draftAssistantState.afterHoursBehavior ||
+        draftAssistantState.afterHoursReply ||
+        reviewAssistantState.afterHours ||
+        reviewAssistantState.afterHoursBehavior ||
+        reviewAssistantState.afterHoursReply
+    ),
   };
 }
 
@@ -333,6 +382,10 @@ function mergeSourceInferredDraft(draftState, sourceSignals) {
       ? draftState.languages
       : sourceSignals.languagesCandidates.slice(0, 4),
     tone: s(draftState.tone) || s(sourceSignals.toneCandidates[0]),
+    greetingStyle:
+      s(draftState.greetingStyle) || s(sourceSignals.greetingCandidates[0]),
+    afterHoursBehavior:
+      s(draftState.afterHoursBehavior) || s(sourceSignals.afterHoursCandidates[0]),
   };
 }
 
@@ -448,8 +501,22 @@ function buildConfidenceBuckets({ draftState, sourceSignals, contradictions }) {
     unclear.push("AI-nin hansı dillərdə işləyəcəyi hələ dəqiq deyil.");
   }
 
-  if (!draftState.tone) {
+  if (draftState.tone) {
+    strong.push("AI tonu formalaşıb.");
+  } else {
     unclear.push("AI tonu hələ dəqiq formalaşmayıb.");
+  }
+
+  if (draftState.greetingStyle) {
+    strong.push("Açılış davranışı görünür.");
+  } else {
+    unclear.push("AI-nin söhbətə necə başlayacağı hələ aydın deyil.");
+  }
+
+  if (draftState.afterHoursBehavior) {
+    strong.push("İş saatından kənar davranış formalaşıb.");
+  } else {
+    unclear.push("İş saatından kənar cavab qaydası hələ müəyyənləşməyib.");
   }
 
   if (
@@ -531,6 +598,18 @@ function buildRecommendation({ draftState, sourceSignals, contradictions }) {
     );
   }
 
+  if (!draftState.greetingStyle) {
+    notes.push(
+      "AI ilk cavabda qısa salam verib birbaşa kömək mövzusuna keçməlidir; greeting ayrıca formalaşdırılmalıdır."
+    );
+  }
+
+  if (!draftState.afterHoursBehavior) {
+    notes.push(
+      "İş saatından kənar yazan və ya zəng edən istifadəçi üçün ayrıca after-hours cavab qaydası lazımdır."
+    );
+  }
+
   if (contradictions.length) {
     notes.push(
       "Source ilə verilən cavablar arasında uyğunsuzluq var; təsdiqdən əvvəl bunları bağlamaq daha doğrudur."
@@ -561,7 +640,8 @@ function buildRecommendation({ draftState, sourceSignals, contradictions }) {
 }
 
 function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) {
-  const strongWebsite = sourceSignals.primarySourceType === "website" && sourceSignals.pageCount >= 4;
+  const strongWebsite =
+    sourceSignals.primarySourceType === "website" && sourceSignals.pageCount >= 4;
   const strongNameSource = signalStrong(sourceSignals.companyNameCandidates, 1);
   const strongDescriptionSource = signalStrong(sourceSignals.descriptionCandidates, 1);
   const strongServicesSource = signalStrong(sourceSignals.serviceCandidates, 2);
@@ -570,6 +650,9 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
   const strongPricingSource = signalStrong(sourceSignals.pricingCandidates, 1);
   const strongLanguageSource = signalStrong(sourceSignals.languagesCandidates, 1);
   const strongToneSource = signalStrong(sourceSignals.toneCandidates, 1);
+  const strongGreetingSource = signalStrong(sourceSignals.greetingCandidates, 1);
+  const strongAfterHoursSource = signalStrong(sourceSignals.afterHoursCandidates, 1);
+
   const needsHours =
     sourceSignals.primarySourceType === "google_maps" ||
     draftState.contacts.some((item) => /address|street|office|baku|az/i.test(item));
@@ -666,6 +749,24 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       when: !draftState.tone && !strongToneSource,
     },
     {
+      key: "greeting",
+      step: "profile",
+      title: "Opening style",
+      prompt:
+        "AI söhbətə necə başlamalıdır? Qısa qarşılamanı necə hiss etdirmək istəyirsən?",
+      priority: 78,
+      when: !draftState.greetingStyle && !strongGreetingSource,
+    },
+    {
+      key: "after_hours",
+      step: "handoff",
+      title: "After-hours behavior",
+      prompt:
+        "İş saatından kənar yazan və ya zəng edən istifadəçiyə AI necə cavab verməlidir?",
+      priority: 77,
+      when: !draftState.afterHoursBehavior && !strongAfterHoursSource,
+    },
+    {
       key: "business_name",
       step: "company",
       title: "Business name",
@@ -734,6 +835,10 @@ function buildAssistantMessage({
       ? `Languages: ${listPreview(draftState.languages, 4)}`
       : "",
     draftState.tone ? `Tone: ${draftState.tone}` : "",
+    draftState.greetingStyle ? `Opening style: ${draftState.greetingStyle}` : "",
+    draftState.afterHoursBehavior
+      ? `After-hours behavior: ${draftState.afterHoursBehavior}`
+      : "",
   ].filter(Boolean);
 
   const guidance = [
@@ -796,7 +901,9 @@ export function buildSetupAssistantBrainState({
         draftState.services.length &&
         draftState.contacts.length &&
         draftState.pricingPosture &&
-        draftState.humanHandoff
+        draftState.humanHandoff &&
+        draftState.greetingStyle &&
+        draftState.afterHoursBehavior
     );
 
   const phase = readyForApproval ? "ready" : "interview";
@@ -823,6 +930,8 @@ export function buildSetupAssistantBrainState({
       languages: draftState.languages,
       tone: draftState.tone,
       hours: draftState.hours,
+      greetingStyle: draftState.greetingStyle,
+      afterHoursBehavior: draftState.afterHoursBehavior,
     }),
     confidence,
     recommendation: {
