@@ -51,7 +51,6 @@ export async function loadCurrentReviewPayload(
     fieldProvenance: frontendReview.fieldProvenance,
     reviewDraftSummary: frontendReview.reviewDraftSummary,
     assistant,
-    assistantBrain: assistant, // Compatibility mirror for older review consumers.
     setup,
   };
 }
