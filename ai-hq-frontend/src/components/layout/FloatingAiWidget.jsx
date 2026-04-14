@@ -1,59 +1,694 @@
-import { useEffect, useRef } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { SETUP_WIDGET_ROUTE } from "../../lib/appEntry.js";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence, motion } from "framer-motion";
+import { X } from "lucide-react";
+import {
+  analyzeSetupIntake,
+  finalizeSetupAssistantSession,
+  getCurrentSetupAssistantSession,
+  getCurrentSetupReview,
+  importGoogleMapsForSetup,
+  importWebsiteForSetup,
+  sendSetupAssistantMessage,
+  startSetupAssistantSession,
+  updateCurrentSetupAssistantDraft,
+} from "../../api/setup.js";
+import {
+  buildWorkspaceScopedQueryKey,
+  useWorkspaceTenantKey,
+} from "../../hooks/useWorkspaceTenantKey.js";
+import { emitLaunchSliceRefresh } from "../../lib/launchSliceRefresh.js";
+import SetupAssistantSections from "./SetupAssistantSections.jsx";
+import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
+}
+
+function lower(value, fallback = "") {
+  return s(value, fallback).toLowerCase();
+}
+
+function arr(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
+
+function obj(value, fallback = {}) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value
+    : fallback;
+}
+
+function buildHoursDraft(value = []) {
+  const existing = arr(value);
+  const order = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+  ];
+
+  return order.map((day, index) => ({
+    day,
+    enabled: existing[index]?.enabled === true,
+    closed: existing[index]?.closed !== false,
+    openTime: s(existing[index]?.openTime),
+    closeTime: s(existing[index]?.closeTime),
+    allDay: existing[index]?.allDay === true,
+    appointmentOnly: existing[index]?.appointmentOnly === true,
+    notes: s(existing[index]?.notes),
+  }));
+}
+
+function buildDefaultAssistant() {
+  return {
+    mode: "setup",
+    title: "Setup studio",
+    summary: "",
+    primaryAction: null,
+    secondaryAction: null,
+    review: {},
+    websitePrefill: {
+      supported: true,
+      status: "awaiting_input",
+      websiteUrl: "",
+    },
+    session: {},
+    setupSummary: {},
+    draft: {
+      businessProfile: {},
+      services: [],
+      contacts: [],
+      hours: buildHoursDraft([]),
+      pricingPosture: {},
+      handoffRules: {},
+      sourceMetadata: {},
+      assistantState: {},
+      progress: {},
+      version: 0,
+    },
+    assistant: {
+      nextQuestion: {},
+      confirmationBlockers: [],
+      sections: [],
+      completion: {
+        ready: false,
+        action: null,
+        message: "",
+      },
+      servicesCatalog: {
+        items: [],
+        packs: [],
+        suggestedServices: [],
+      },
+      sourceInsights: [],
+    },
+    launchPosture: "",
+    setupNeeded: false,
+    launchChannel: {},
+    truthRuntime: {},
+    statusLabel: "",
+  };
+}
+
+function buildLoadingAssistantSeed() {
+  return {
+    ...buildDefaultAssistant(),
+    title: "Loading setup studio",
+    statusLabel: "Loading",
+    summary: "Loading the current workspace setup state.",
+  };
+}
+
+function normalizeDecisionAssistant(value = {}) {
+  const source = obj(value);
+
+  return {
+    nextQuestion: obj(source.nextQuestion),
+    confirmationBlockers: arr(source.confirmationBlockers),
+    sections: arr(source.sections),
+    completion: obj(source.completion),
+    servicesCatalog: obj(source.servicesCatalog),
+    sourceInsights: arr(source.sourceInsights),
+    phase: s(source.phase),
+    message: s(source.message || source.assistantMessage),
+    draft: obj(source.draft),
+    confidence: obj(source.confidence),
+    recommendation: obj(source.recommendation),
+    readyForApproval: source.readyForApproval === true,
+    sourceSignals: obj(source.sourceSignals),
+    reviewSessionId: s(source.reviewSessionId),
+    draftVersion: Number(source.draftVersion || 0),
+  };
+}
+
+function normalizeAssistantState(input = null) {
+  const source = input || buildDefaultAssistant();
+  const draft = obj(source.draft);
+  const decisionAssistant = normalizeDecisionAssistant(obj(source.assistant));
+
+  return {
+    mode: s(source.mode, "setup"),
+    title: s(source.title, "Setup studio"),
+    summary: s(source.summary),
+    statusLabel: s(source.statusLabel),
+    primaryAction: obj(source.primaryAction),
+    secondaryAction: source.secondaryAction ? obj(source.secondaryAction) : null,
+    review: obj(source.review),
+    websitePrefill: obj(source.websitePrefill),
+    session: obj(source.session),
+    setupSummary: obj(source.setupSummary),
+    launchPosture: s(source.launchPosture),
+    setupNeeded: source.setupNeeded === true,
+    launchChannel: obj(source.launchChannel),
+    truthRuntime: obj(source.truthRuntime),
+    draft: {
+      businessProfile: obj(draft.businessProfile),
+      services: arr(draft.services),
+      contacts: arr(draft.contacts),
+      hours: buildHoursDraft(draft.hours),
+      pricingPosture: obj(draft.pricingPosture),
+      handoffRules: obj(draft.handoffRules),
+      sourceMetadata: obj(draft.sourceMetadata),
+      assistantState: obj(draft.assistantState),
+      progress: obj(draft.progress),
+      version: Number(draft.version || 0),
+      updatedAt: draft.updatedAt || null,
+    },
+    assistant: decisionAssistant,
+  };
+}
+
+function buildAssistantFromApi(base = {}, response = {}) {
+  const root = obj(response);
+  const setup = obj(root.setup);
+
+  return normalizeAssistantState({
+    ...base,
+    session: obj(root.session),
+    review: obj(setup.review),
+    websitePrefill: obj(setup.websitePrefill),
+    setupSummary: obj(setup.summary),
+    draft: obj(setup.draft),
+    assistant:
+      Object.keys(obj(setup.assistant)).length
+        ? obj(setup.assistant)
+        : obj(root.assistant),
+  });
+}
+
+function buildMergedReviewPayload(reviewPayload = null, assistantState = {}) {
+  const reviewRoot = obj(reviewPayload);
+  const assistant = normalizeDecisionAssistant(
+    Object.keys(obj(reviewRoot.assistant)).length
+      ? reviewRoot.assistant
+      : obj(assistantState.assistant)
+  );
+
+  return {
+    ...reviewRoot,
+    review: obj(reviewRoot.review),
+    bundleSources: arr(reviewRoot.bundleSources),
+    contributionSummary: obj(reviewRoot.contributionSummary),
+    fieldProvenance: obj(reviewRoot.fieldProvenance),
+    reviewDraftSummary: obj(reviewRoot.reviewDraftSummary),
+    assistant,
+  };
+}
+
+function normalizeManualSourceType(value = "") {
+  const key = lower(value);
+  if (key === "note" || key === "manual") return "manual";
+  return key;
+}
+
+function buildManualSourceMetadata(type = "", value = "") {
+  const sourceType = normalizeManualSourceType(type);
+  const sourceUrl = sourceType === "manual" ? "" : s(value);
+  const sourceLabel =
+    sourceType === "instagram"
+      ? "Instagram"
+      : sourceType === "facebook"
+        ? "Facebook"
+        : sourceType === "manual"
+          ? "Manual note"
+          : "Source";
+
+  return {
+    primarySourceType: sourceType,
+    primarySourceUrl: sourceUrl,
+    sourceLabels: [sourceLabel],
+    evidenceSummary: [
+      sourceType === "manual"
+        ? "Manual note captured"
+        : `${sourceLabel} supplied by operator`,
+    ],
+  };
+}
+
+function buildManualAnalyzePayload(type = "", value = "") {
+  const sourceType = normalizeManualSourceType(type);
+  const input = s(value);
+
+  if (sourceType === "instagram") {
+    return {
+      manualText: `Instagram: ${input}`,
+      answers: { instagramUrl: input },
+      note: "instagram source",
+    };
+  }
+
+  if (sourceType === "facebook") {
+    return {
+      manualText: `Facebook: ${input}`,
+      answers: { facebookUrl: input },
+      note: "facebook source",
+    };
+  }
+
+  return {
+    manualText: input,
+    note: sourceType === "manual" ? "manual business note" : `${sourceType} source`,
+  };
 }
 
 export default function FloatingAiWidget({
   hidden = false,
   open = false,
   onOpenChange,
+  assistant = null,
+  presentation = "floating",
 }) {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const redirectedRef = useRef(false);
+  const queryClient = useQueryClient();
+  const assistantRef = useRef(normalizeAssistantState(assistant));
+  const pageMode = presentation === "page";
+  const panelOpen = pageMode ? true : open;
+  const workspace = useWorkspaceTenantKey({ enabled: panelOpen });
+
+  const [clientAssistant, setClientAssistant] = useState(
+    normalizeAssistantState(assistant)
+  );
+  const [saving, setSaving] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
+  const [capturingSource, setCapturingSource] = useState(false);
+  const [setupError, setSetupError] = useState("");
+  const lastTenantKeyRef = useRef("");
+
+  const productHomeQueryKey = useMemo(
+    () => buildWorkspaceScopedQueryKey(["product-home"], workspace.tenantKey),
+    [workspace.tenantKey]
+  );
+
+  const setupAssistantSessionQueryKey = useMemo(
+    () =>
+      buildWorkspaceScopedQueryKey(
+        ["setup-assistant-session-current", "widget"],
+        workspace.tenantKey
+      ),
+    [workspace.tenantKey]
+  );
+
+  const setupReviewQueryKey = useMemo(
+    () =>
+      buildWorkspaceScopedQueryKey(
+        ["setup-review-current", "widget"],
+        workspace.tenantKey
+      ),
+    [workspace.tenantKey]
+  );
+
+  const telegramStatusQueryKey = useMemo(
+    () =>
+      buildWorkspaceScopedQueryKey(
+        ["telegram-channel-status"],
+        workspace.tenantKey
+      ),
+    [workspace.tenantKey]
+  );
+
+  const metaStatusQueryKey = useMemo(
+    () => buildWorkspaceScopedQueryKey(["meta-channel-status"], workspace.tenantKey),
+    [workspace.tenantKey]
+  );
+
+  const sessionQuery = useQuery({
+    queryKey: setupAssistantSessionQueryKey,
+    queryFn: () => getCurrentSetupAssistantSession(),
+    enabled: panelOpen && workspace.ready,
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  const reviewQuery = useQuery({
+    queryKey: setupReviewQueryKey,
+    queryFn: () => getCurrentSetupReview({ eventLimit: 12 }),
+    enabled: panelOpen && workspace.ready,
+    retry: false,
+    staleTime: 30_000,
+  });
+
+  const baseAssistant = useMemo(() => {
+    const sessionAssistant = normalizeAssistantState(sessionQuery.data);
+    return s(sessionAssistant.session?.id)
+      ? sessionAssistant
+      : normalizeAssistantState(assistant);
+  }, [assistant, sessionQuery.data]);
 
   useEffect(() => {
-    if (hidden) {
-      redirectedRef.current = false;
+    assistantRef.current = baseAssistant;
+    setClientAssistant(baseAssistant);
+  }, [baseAssistant]);
+
+  useEffect(() => {
+    assistantRef.current = clientAssistant;
+  }, [clientAssistant]);
+
+  useEffect(() => {
+    const nextTenantKey = lower(workspace.tenantKey);
+    if (!nextTenantKey) {
+      lastTenantKeyRef.current = "";
       return;
     }
-
-    if (!open) {
-      redirectedRef.current = false;
+    if (!lastTenantKeyRef.current) {
+      lastTenantKeyRef.current = nextTenantKey;
       return;
     }
+    if (lastTenantKeyRef.current === nextTenantKey) return;
 
-    const currentPath = `${s(location.pathname)}${s(location.search)}`;
-    const targetPath = s(SETUP_WIDGET_ROUTE);
+    lastTenantKeyRef.current = nextTenantKey;
+    const loadingAssistant = normalizeAssistantState(buildLoadingAssistantSeed());
+    assistantRef.current = loadingAssistant;
+    setClientAssistant(loadingAssistant);
+    setSaving(false);
+    setFinalizing(false);
+    setCapturingSource(false);
+    setSetupError("");
+  }, [workspace.tenantKey]);
 
-    if (!targetPath) {
-      if (typeof onOpenChange === "function") {
-        onOpenChange(false);
+  const mergedReviewPayload = useMemo(
+    () => buildMergedReviewPayload(reviewQuery.data, clientAssistant),
+    [reviewQuery.data, clientAssistant]
+  );
+
+  const sessionHydrated = useMemo(() => {
+    if (!panelOpen || !workspace.ready) return false;
+    return !sessionQuery.isLoading && !reviewQuery.isLoading;
+  }, [
+    panelOpen,
+    workspace.ready,
+    sessionQuery.isLoading,
+    reviewQuery.isLoading,
+  ]);
+
+  const conversationStorageKey = useMemo(
+    () => `setup-assistant-timeline:${lower(workspace.tenantKey || "workspace")}`,
+    [workspace.tenantKey]
+  );
+
+  if (hidden) return null;
+
+  async function refreshWidgetWorkspaceState({
+    includeChannelStatus = false,
+    emitReason = "",
+  } = {}) {
+    const refreshTasks = [
+      queryClient.invalidateQueries({ queryKey: productHomeQueryKey }),
+      queryClient.invalidateQueries({ queryKey: setupAssistantSessionQueryKey }),
+      queryClient.invalidateQueries({ queryKey: setupReviewQueryKey }),
+    ];
+
+    if (includeChannelStatus) {
+      refreshTasks.push(
+        queryClient.invalidateQueries({ queryKey: telegramStatusQueryKey }),
+        queryClient.invalidateQueries({ queryKey: metaStatusQueryKey })
+      );
+    }
+
+    await Promise.all(refreshTasks);
+
+    if (emitReason) {
+      emitLaunchSliceRefresh({
+        tenantKey: workspace.tenantKey,
+        reason: emitReason,
+      });
+    }
+  }
+
+  async function syncLatestAssistantSession() {
+    const latestSession = await getCurrentSetupAssistantSession();
+    if (latestSession) {
+      queryClient.setQueryData(setupAssistantSessionQueryKey, latestSession);
+      setClientAssistant((prev) => buildAssistantFromApi(prev, latestSession));
+      return latestSession;
+    }
+    return null;
+  }
+
+  async function ensureSession() {
+    const current = assistantRef.current;
+    if (s(current.session?.id)) return current;
+
+    const cachedSession = normalizeAssistantState(
+      queryClient.getQueryData(setupAssistantSessionQueryKey)
+    );
+
+    if (s(cachedSession.session?.id)) {
+      assistantRef.current = cachedSession;
+      setClientAssistant(cachedSession);
+      return cachedSession;
+    }
+
+    const response = await startSetupAssistantSession();
+    let nextAssistant = null;
+    setClientAssistant((prev) => {
+      nextAssistant = buildAssistantFromApi(prev, response);
+      return nextAssistant;
+    });
+    queryClient.setQueryData(setupAssistantSessionQueryKey, response);
+    return nextAssistant || assistantRef.current;
+  }
+
+  async function handleSetupParseMessage({ text, step }) {
+    const answer = s(text);
+    if (!answer || saving || finalizing || capturingSource) return null;
+    setSaving(true);
+    setSetupError("");
+
+    try {
+      await ensureSession();
+      const response = await sendSetupAssistantMessage({
+        step: s(step, "profile"),
+        answer,
+      });
+      setClientAssistant((prev) => buildAssistantFromApi(prev, response));
+      queryClient.setQueryData(setupAssistantSessionQueryKey, response);
+      await refreshWidgetWorkspaceState();
+      return response;
+    } catch (error) {
+      setSetupError(
+        s(error?.message, "The answer could not be processed. Please try again.")
+      );
+      throw error;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSetupFinalize() {
+    if (saving || finalizing || capturingSource) return null;
+    setFinalizing(true);
+    setSetupError("");
+
+    try {
+      await ensureSession();
+      const response = await finalizeSetupAssistantSession({});
+      if (response?.ok === false) {
+        throw new Error(
+          s(response?.reason || response?.error, "Failed to finalize setup")
+        );
       }
-      redirectedRef.current = false;
-      return;
+
+      await refreshWidgetWorkspaceState({
+        includeChannelStatus: true,
+        emitReason: "setup-finalized",
+      });
+
+      setClientAssistant((prev) =>
+        normalizeAssistantState({
+          ...prev,
+          review: {
+            ...obj(prev.review),
+            finalized: true,
+            readyForReview: false,
+            readyForApproval: false,
+            finalizeAvailable: false,
+            message:
+              "Business truth was approved. Runtime and approved truth were refreshed.",
+          },
+          assistant: {
+            ...obj(prev.assistant),
+            readyForApproval: false,
+          },
+        })
+      );
+
+      return response;
+    } catch (error) {
+      setSetupError(s(error?.message, "Business truth could not be approved."));
+      throw error;
+    } finally {
+      setFinalizing(false);
+    }
+  }
+
+  async function handleSetupCaptureSource({ type, value }) {
+    const sourceValue = s(value);
+    const resolvedSource = resolveSetupSourceInput(sourceValue);
+    const sourceType =
+      lower(type) === lower(resolvedSource.type)
+        ? lower(type)
+        : lower(resolvedSource.type);
+    const normalizedSourceValue = s(resolvedSource.value || sourceValue);
+    if (!sourceType || !sourceValue || saving || finalizing || capturingSource) {
+      return null;
     }
 
-    if (currentPath === targetPath) {
-      if (typeof onOpenChange === "function") {
-        onOpenChange(false);
+    setCapturingSource(true);
+    setSetupError("");
+
+    try {
+      await ensureSession();
+
+      if (sourceType === "website") {
+        const response = await importWebsiteForSetup({
+          url: normalizedSourceValue,
+          allowSessionReuse: true,
+          waitForCompletion: true,
+        });
+        if (response?.ok === false) {
+          throw new Error(
+            s(response?.reason || response?.error, "Website import failed")
+          );
+        }
+      } else if (sourceType === "google_maps") {
+        const response = await importGoogleMapsForSetup({
+          url: normalizedSourceValue,
+          allowSessionReuse: true,
+          waitForCompletion: true,
+        });
+        if (response?.ok === false) {
+          throw new Error(
+            s(response?.reason || response?.error, "Google Maps import failed")
+          );
+        }
+      } else {
+        const patchResponse = await updateCurrentSetupAssistantDraft({
+          sourceMetadata: buildManualSourceMetadata(
+            sourceType,
+            normalizedSourceValue
+          ),
+        });
+        setClientAssistant((prev) => buildAssistantFromApi(prev, patchResponse));
+        queryClient.setQueryData(setupAssistantSessionQueryKey, patchResponse);
+
+        const analyzeResponse = await analyzeSetupIntake(
+          buildManualAnalyzePayload(sourceType, normalizedSourceValue)
+        );
+
+        if (analyzeResponse?.ok === false) {
+          throw new Error(
+            s(analyzeResponse?.reason || analyzeResponse?.error, "Source intake failed")
+          );
+        }
       }
-      redirectedRef.current = false;
-      return;
+
+      await refreshWidgetWorkspaceState();
+      return await syncLatestAssistantSession();
+    } catch (error) {
+      setSetupError(s(error?.message, "Source intake failed."));
+      throw error;
+    } finally {
+      setCapturingSource(false);
     }
+  }
 
-    if (redirectedRef.current) return;
-    redirectedRef.current = true;
+  const wrapperClass = pageMode
+    ? "relative h-full w-full"
+    : "fixed inset-0 z-[95] pointer-events-none";
 
-    navigate(targetPath);
+  return (
+    <AnimatePresence>
+      {panelOpen ? (
+        <div className={wrapperClass}>
+          {!pageMode ? (
+            <motion.button
+              type="button"
+              aria-label="Close setup"
+              className="absolute inset-0 bg-[rgba(15,23,42,0.16)] pointer-events-auto"
+              onClick={() => onOpenChange?.(false)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            />
+          ) : null}
 
-    if (typeof onOpenChange === "function") {
-      onOpenChange(false);
-    }
-  }, [hidden, open, onOpenChange, navigate, location.pathname, location.search]);
+          <motion.section
+            className={
+              pageMode
+                ? "relative ml-auto flex h-full w-full max-w-[760px] flex-col border-l border-[rgba(15,23,42,0.06)] bg-white"
+                : "absolute right-0 top-0 flex h-screen w-[min(760px,100vw)] flex-col border-l border-[rgba(15,23,42,0.06)] bg-white shadow-[-24px_0_64px_rgba(15,23,42,0.14)] pointer-events-auto"
+            }
+            role={pageMode ? "region" : "dialog"}
+            aria-modal={pageMode ? undefined : "true"}
+            aria-label="Setup"
+            initial={{ x: "100%", opacity: 0.98 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: "100%", opacity: 0.98 }}
+            transition={{
+              duration: 0.28,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+          >
+            <div className="flex items-center justify-between border-b border-[rgba(15,23,42,0.08)] px-6 py-4">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+                Setup
+              </div>
 
-  return null;
+              {!pageMode ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenChange?.(false)}
+                  className="inline-flex h-9 w-9 items-center justify-center text-text-muted transition-colors hover:text-text"
+                  aria-label="Close setup"
+                >
+                  <X className="h-5 w-5" strokeWidth={2} />
+                </button>
+              ) : null}
+            </div>
+
+            <div className="min-h-0 flex-1">
+              <SetupAssistantSections
+                key={conversationStorageKey}
+                storageKey={conversationStorageKey}
+                sessionHydrated={sessionHydrated}
+                assistant={clientAssistant}
+                reviewPayload={mergedReviewPayload}
+                saving={saving}
+                finalizing={finalizing}
+                capturingSource={capturingSource}
+                errorMessage={setupError}
+                onCaptureSource={handleSetupCaptureSource}
+                onParseMessage={handleSetupParseMessage}
+                onFinalize={handleSetupFinalize}
+              />
+            </div>
+          </motion.section>
+        </div>
+      ) : null}
+    </AnimatePresence>
+  );
 }

@@ -6,7 +6,9 @@ import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js"
 import { SETUP_WIDGET_ROUTE } from "../../lib/appEntry.js";
 import { cx } from "../../lib/cx.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
+import useProductHome from "../../view-models/useProductHome.js";
 import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
+import FloatingAiWidget from "./FloatingAiWidget.jsx";
 import Sidebar, {
   SHELL_TOPBAR_HEIGHT,
   SIDEBAR_COLLAPSED_WIDTH,
@@ -41,6 +43,33 @@ const SHELL_REFRESH_EVENT_TYPES = new Set([
 ]);
 
 const SIDEBAR_STORAGE_KEY = "aihq.sidebar.collapsed";
+
+const HOME_ASSISTANT_FALLBACK = {
+  mode: "setup",
+  title: "AI setup lives on Home",
+  statusLabel: "Home",
+  summary:
+    "Open Home to connect the active launch channel, continue setup, and inspect truth and runtime posture.",
+  primaryAction: {
+    label: "Open home assistant",
+    path: SETUP_WIDGET_ROUTE,
+  },
+  secondaryAction: {
+    label: "Open channels",
+    path: "/channels",
+  },
+};
+
+const LOADING_ASSISTANT_FALLBACK = {
+  ...HOME_ASSISTANT_FALLBACK,
+  title: "Loading AI setup",
+  statusLabel: "Loading",
+  summary: "Preparing the current Home setup state for the assistant.",
+  primaryAction: {
+    label: "Open home",
+    path: "/home",
+  },
+};
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -248,6 +277,7 @@ function getInitialCollapsedState() {
 
 export default function Shell() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [widgetOpen, setWidgetOpen] = useState(false);
   const [shellStats, setShellStats] = useState(INITIAL_SHELL_STATS);
   const [workspaceMeta, setWorkspaceMeta] = useState(() =>
     mergeWorkspaceMeta(INITIAL_WORKSPACE_META, buildHostFallbackMeta())
@@ -259,14 +289,32 @@ export default function Shell() {
   const location = useLocation();
   const navigate = useNavigate();
   const notifications = useNotificationsSurface();
+  const homeRouteActive = location.pathname === "/home";
+
+  const assistantRequested = useMemo(() => {
+    if (!homeRouteActive) return false;
+    const params = new URLSearchParams(location.search || "");
+    return s(params.get("assistant")).toLowerCase() === "setup";
+  }, [homeRouteActive, location.search]);
+
+  const homeDataEnabled = homeRouteActive || widgetOpen;
+  const home = useProductHome({
+    enabled: homeDataEnabled,
+  });
 
   const refreshTimerRef = useRef(0);
   const statsRequestRef = useRef(null);
-
   const shellMode = useMemo(
     () => resolveShellMode(location.pathname),
     [location.pathname]
   );
+
+  const assistantModel = useMemo(() => {
+    if (home.assistant) return home.assistant;
+    return homeDataEnabled && home.loading
+      ? LOADING_ASSISTANT_FALLBACK
+      : HOME_ASSISTANT_FALLBACK;
+  }, [home.assistant, home.loading, homeDataEnabled]);
 
   const loadShellStats = useCallback(async () => {
     if (statsRequestRef.current) return statsRequestRef.current;
@@ -350,19 +398,30 @@ export default function Shell() {
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    document.body.style.overflow = mobileOpen || widgetOpen ? "hidden" : "";
 
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [mobileOpen]);
+  }, [mobileOpen, widgetOpen]);
+
+  useEffect(() => {
+    if (!assistantRequested) return undefined;
+
+    const frame = window.requestAnimationFrame(() => {
+      setWidgetOpen(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [assistantRequested]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
     const handleOpenAssistant = () => {
-      setMobileOpen(false);
-      navigate(SETUP_WIDGET_ROUTE);
+      setWidgetOpen(true);
     };
 
     window.addEventListener("aihq:open-assistant", handleOpenAssistant);
@@ -370,7 +429,7 @@ export default function Shell() {
     return () => {
       window.removeEventListener("aihq:open-assistant", handleOpenAssistant);
     };
-  }, [navigate]);
+  }, []);
 
   useEffect(() => {
     const unsubscribeStatus = realtimeStore.subscribeStatus((status) => {
@@ -394,12 +453,40 @@ export default function Shell() {
     };
   }, [scheduleShellRefresh]);
 
+  const handleWidgetOpenChange = useCallback(
+    (nextOpen) => {
+      setWidgetOpen(Boolean(nextOpen));
+
+      if (!nextOpen && assistantRequested) {
+        const params = new URLSearchParams(location.search || "");
+        params.delete("assistant");
+        navigate(
+          {
+            pathname: location.pathname,
+            search: params.toString() ? `?${params.toString()}` : "",
+          },
+          { replace: true }
+        );
+      }
+    },
+    [assistantRequested, location.pathname, location.search, navigate]
+  );
+
+  const handleAssistantNavigate = useCallback(
+    (path = "") => {
+      const target = s(path);
+      if (!target) return;
+      setWidgetOpen(false);
+      navigate(target);
+    },
+    [navigate]
+  );
+
   const shellSidebarWidth = sidebarCollapsed
     ? SIDEBAR_COLLAPSED_WIDTH
     : SIDEBAR_WIDTH;
 
   const contentMinHeight = `calc(100vh - ${SHELL_TOPBAR_HEIGHT}px)`;
-
   const pageTransition = {
     duration: 0.2,
     ease: [0.22, 1, 0.36, 1],
@@ -476,6 +563,13 @@ export default function Shell() {
             </div>
           )}
         </main>
+
+        <FloatingAiWidget
+          open={widgetOpen}
+          onOpenChange={handleWidgetOpenChange}
+          onNavigate={handleAssistantNavigate}
+          assistant={assistantModel}
+        />
       </div>
     </div>
   );
