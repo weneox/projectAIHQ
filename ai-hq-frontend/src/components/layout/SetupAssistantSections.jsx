@@ -64,7 +64,7 @@ function uniqueStrings(items = [], max = 8) {
 
 function buildCompactNotes(model = {}) {
   const confidence = obj(model.confidence);
-  const notes = uniqueStrings(
+  return uniqueStrings(
     [
       ...arr(confidence.unclear),
       ...arr(model.recommendationNotes),
@@ -72,8 +72,6 @@ function buildCompactNotes(model = {}) {
     ],
     6
   );
-
-  return notes;
 }
 
 function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers = {}) {
@@ -279,6 +277,14 @@ function buildProgressFromInterviewPlan(interviewPlan = {}, currentQuestion = nu
   };
 }
 
+function bubbleClasses(role = "assistant") {
+  if (role === "user") {
+    return "bg-[linear-gradient(180deg,#0f172a,#020617)] text-white rounded-[26px] rounded-br-[10px] shadow-[0_18px_40px_rgba(2,6,23,0.22)]";
+  }
+
+  return "border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.96))] text-text rounded-[26px] rounded-bl-[10px] shadow-[0_10px_30px_rgba(15,23,42,0.06)]";
+}
+
 function MessageBubble({
   role = "assistant",
   eyebrow = "",
@@ -290,27 +296,29 @@ function MessageBubble({
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div
-        className={`max-w-[86%] px-4 py-3.5 text-[15px] leading-8 ${
-          isUser
-            ? "bg-slate-950 text-white"
-            : "border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(248,250,252,0.82),rgba(255,255,255,0.98))] text-text"
-        }`}
-      >
+      <div className={`max-w-[82%] px-4 py-3.5 ${bubbleClasses(role)}`}>
         {s(eyebrow) ? (
-          <div className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] opacity-60">
+          <div
+            className={`mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+              isUser ? "text-white/60" : "text-text-muted"
+            }`}
+          >
             {eyebrow}
           </div>
         ) : null}
 
         {s(title) ? (
-          <div className="text-[22px] font-semibold tracking-[-0.04em]">
+          <div className="text-[20px] font-semibold tracking-[-0.04em]">
             {title}
           </div>
         ) : null}
 
         {s(body) ? (
-          <div className={title ? "mt-2 whitespace-pre-wrap" : "whitespace-pre-wrap"}>
+          <div
+            className={`whitespace-pre-wrap text-[15px] leading-7 ${
+              title ? "mt-2" : ""
+            } ${isUser ? "text-white/95" : "text-text"}`}
+          >
             {body}
           </div>
         ) : null}
@@ -321,11 +329,18 @@ function MessageBubble({
   );
 }
 
-function SmartDraftBubble({
-  model,
-  finalizing,
-  onFinalize,
-}) {
+function DraftRow({ label, value }) {
+  return (
+    <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.85)] px-3.5 py-3">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
+        {label}
+      </div>
+      <div className="mt-1.5 text-[14px] leading-7 text-text">{value}</div>
+    </div>
+  );
+}
+
+function SmartDraftBubble({ model, finalizing, onFinalize }) {
   const draft = obj(model.draft);
   const sourceSignals = obj(model.sourceSignals);
 
@@ -359,7 +374,7 @@ function SmartDraftBubble({
 
   return (
     <MessageBubble role="assistant" title="Draft">
-      <div className="space-y-5">
+      <div className="space-y-4">
         {s(model.message) ? (
           <div className="text-[14px] leading-7 text-text-muted whitespace-pre-wrap">
             {model.message}
@@ -367,11 +382,11 @@ function SmartDraftBubble({
         ) : null}
 
         {sourceContextLine ? (
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+          <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.78)] px-3.5 py-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
               Source context
             </div>
-            <div className="mt-1 text-[15px] leading-8 text-text">
+            <div className="mt-1.5 text-[14px] leading-7 text-text">
               {sourceContextLine}
             </div>
             {sourceMetaLine ? (
@@ -382,20 +397,15 @@ function SmartDraftBubble({
           </div>
         ) : null}
 
-        <div className="space-y-3">
+        <div className="grid gap-3">
           {draftRows.map(([label, value]) => (
-            <div key={label}>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
-                {label}
-              </div>
-              <div className="mt-1 text-[15px] leading-8 text-text">{value}</div>
-            </div>
+            <DraftRow key={label} label={label} value={value} />
           ))}
         </div>
 
         {arr(model.compactNotes).length ? (
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+          <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.78)] px-3.5 py-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
               Follow-up notes
             </div>
             <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
@@ -415,7 +425,7 @@ function SmartDraftBubble({
             type="button"
             onClick={onFinalize}
             disabled={finalizing}
-            className="inline-flex h-10 items-center bg-slate-950 px-4 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-11 items-center rounded-full bg-slate-950 px-5 text-[12px] font-semibold text-white transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-45"
           >
             {finalizing ? "Approving..." : "Approve truth"}
           </button>
@@ -434,31 +444,33 @@ function Composer({
   onSubmit,
 }) {
   return (
-    <div className="border-t border-[rgba(15,23,42,0.08)] bg-white px-6 py-4">
-      <div className="flex items-end gap-3 border-b border-[rgba(15,23,42,0.12)] py-2">
-        <textarea
-          rows={4}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              onSubmit();
-            }
-          }}
-          placeholder={placeholder}
-          className="min-h-[98px] w-full resize-none bg-transparent px-0 py-1 text-[15px] leading-7 text-text outline-none placeholder:text-text-subtle"
-        />
+    <div className="border-t border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(248,250,252,0.98))] px-5 py-4">
+      <div className="rounded-[28px] border border-[rgba(15,23,42,0.08)] bg-white px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+        <div className="flex items-end gap-3">
+          <textarea
+            rows={3}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                onSubmit();
+              }
+            }}
+            placeholder={placeholder}
+            className="min-h-[92px] w-full resize-none bg-transparent px-0 py-1 text-[15px] leading-7 text-text outline-none placeholder:text-text-subtle"
+          />
 
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={!s(value) || busy}
-          className="inline-flex h-10 shrink-0 items-center gap-2 bg-slate-950 px-4 text-[12px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-45"
-        >
-          {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-          <span>{buttonLabel}</span>
-        </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={!s(value) || busy}
+            className="inline-flex h-11 shrink-0 items-center gap-2 rounded-full bg-slate-950 px-5 text-[12px] font-semibold text-white transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+            <span>{buttonLabel}</span>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -640,8 +652,8 @@ export default function SetupAssistantSections({
     : "";
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
-      <div ref={scrollRef} className="flex-1 overflow-auto px-6 py-6">
+    <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,#ffffff,#f8fafc)]">
+      <div ref={scrollRef} className="flex-1 overflow-auto px-5 py-5">
         <div className="space-y-4">
           <MessageBubble role="assistant" body={SETUP_SOURCE_PROMPT} />
 
