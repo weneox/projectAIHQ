@@ -29,6 +29,7 @@ import {
   buildAssistantSections,
   buildAssistantSourceSignals,
 } from "./setupAssistantAuthorityView.js";
+import { buildSetupAssistantBrainState } from "./assistantBrain.js";
 
 const REVIEW_MESSAGE =
   "Setup drafts stay separate from approved truth and the strict runtime until a later review and approval step is completed.";
@@ -69,7 +70,8 @@ const SECTION_META = {
     label: "Business summary",
     title: "Describe what the business does",
     prompt: "In one or two lines, what does the business mainly do?",
-    placeholder: "e.g. Premium AI automation and customer operations for local businesses.",
+    placeholder:
+      "e.g. Premium AI automation and customer operations for local businesses.",
   },
   website: {
     label: "Website",
@@ -417,8 +419,7 @@ function sanitizeServiceItem(value = {}) {
     ),
     aliases: uniqueStrings(source.aliases, 12),
     availabilityStatus:
-      s(source.availabilityStatus || source.availability_status).toLowerCase() ||
-      "available",
+      s(source.availabilityStatus || source.availability_status).toLowerCase() || "available",
     operatorNotes: s(source.operatorNotes || source.operator_notes),
   });
 }
@@ -470,9 +471,9 @@ function normalizeCurrency(value = "") {
   const upper = s(value).toUpperCase();
   if (!upper) return "";
   if (upper === "$") return "USD";
-  if (upper === "\u20ac") return "EUR";
-  if (upper === "\u20bc") return "AZN";
-  if (upper === "\u00a3") return "GBP";
+  if (upper === "€") return "EUR";
+  if (upper === "₼") return "AZN";
+  if (upper === "£") return "GBP";
   return upper;
 }
 
@@ -520,16 +521,16 @@ function sanitizePricingPosture(value = {}) {
       typeof source.allowPublicPriceReplies === "boolean"
         ? source.allowPublicPriceReplies
         : typeof source.allow_public_price_replies === "boolean"
-        ? source.allow_public_price_replies
-        : pricingMode && !["operator_only", "quote_required"].includes(pricingMode),
+          ? source.allow_public_price_replies
+          : pricingMode && !["operator_only", "quote_required"].includes(pricingMode),
     requiresOperatorForExactQuote:
       typeof source.requiresOperatorForExactQuote === "boolean"
         ? source.requiresOperatorForExactQuote
         : typeof source.requires_operator_for_exact_quote === "boolean"
-        ? source.requires_operator_for_exact_quote
-        : ["quote_required", "operator_only", "variable_by_service", "promotional"].includes(
-            pricingMode
-          ),
+          ? source.requires_operator_for_exact_quote
+          : ["quote_required", "operator_only", "variable_by_service", "promotional"].includes(
+              pricingMode
+            ),
     pricingNotes: s(
       source.pricingNotes || source.pricing_notes || source.notes || source.summary
     ),
@@ -1170,8 +1171,8 @@ function buildSectionStatus(draft = {}) {
       metric: arr(handoff.triggers).length
         ? `${arr(handoff.triggers).length} triggers`
         : s(handoff.summary)
-        ? "configured"
-        : "recommended",
+          ? "configured"
+          : "recommended",
     },
   };
 
@@ -1206,8 +1207,8 @@ function buildConfirmationBlockers(draft = {}, sectionStatus = {}) {
               sourceMetadata.primarySourceType
             )}.`
           : key === "services" && arr(sourceMetadata.evidenceSummary).length
-          ? arr(sourceMetadata.evidenceSummary)[0]
-          : "",
+            ? arr(sourceMetadata.evidenceSummary)[0]
+            : "",
     })
   );
 }
@@ -1485,8 +1486,8 @@ function normalizeDirectPatchBody(body = {}) {
   const root = obj(body?.draft)
     ? obj(body.draft)
     : obj(body?.setup)
-    ? obj(body.setup)
-    : obj(body);
+      ? obj(body.setup)
+      : obj(body);
 
   const out = {};
 
@@ -1888,6 +1889,205 @@ export function buildSetupAssistantSessionPayload(review = {}) {
         version: safeDraftVersion(draftRow),
         updatedAt: draftRow.updatedAt || draftRow.updated_at || null,
       },
+    },
+  };
+}
+
+function buildAssistantCompatQuestion(assistant = {}) {
+  const nextQuestion = obj(assistant.nextQuestion);
+  if (!s(nextQuestion.key)) return null;
+
+  return compactDraftObject({
+    key: s(nextQuestion.key),
+    questionKey: s(nextQuestion.key),
+    question: s(nextQuestion.prompt || nextQuestion.title),
+    title: s(nextQuestion.title),
+    prompt: s(nextQuestion.prompt),
+    category: s(nextQuestion.group),
+    group: s(nextQuestion.group),
+    groupLabel: s(nextQuestion.groupLabel),
+    priority: Number(nextQuestion.priority || 0),
+    totalRemainingQuestions: arr(obj(assistant.interviewPlan).activeQuestions).length,
+  });
+}
+
+function buildAssistantCompatFollowupQueue(assistant = {}) {
+  const nextKey = s(obj(assistant.nextQuestion).key);
+
+  return arr(obj(assistant.interviewPlan).activeQuestions)
+    .filter((item) => s(item.key) && s(item.key) !== nextKey)
+    .map((item) =>
+      compactDraftObject({
+        key: s(item.key),
+        question: s(item.title),
+        title: s(item.title),
+        category: s(item.group),
+        group: s(item.group),
+        groupLabel: s(item.groupLabel),
+        priority: Number(item.priority || 0),
+      })
+    );
+}
+
+function pickContactRouteValue(routes = [], matcher = () => false) {
+  return s(arr(routes).find((item) => matcher(s(item).toLowerCase())) || "");
+}
+
+function buildAssistantCompatBusinessFacts(assistant = {}) {
+  const draft = obj(assistant.draft);
+  const contactRoutes = arr(draft.contactRoutes);
+  const pricingPosture = s(draft.pricingPosture);
+
+  return compactDraftObject({
+    companyName: s(draft.businessName),
+    summaryShort: s(draft.whatThisBusinessIs),
+    summaryLong: s(draft.whatThisBusinessIs),
+    services: arr(draft.coreServices),
+    pricingPolicy: pricingPosture,
+    pricingHints: pricingPosture ? [pricingPosture] : [],
+    primaryPhone: pickContactRouteValue(contactRoutes, (value) => /(\+|[0-9])/.test(value)),
+    primaryEmail: pickContactRouteValue(contactRoutes, (value) => value.includes("@")),
+    primaryAddress: "",
+    hours: arr(draft.hours),
+    languages: arr(draft.languages),
+    faqQuestions: [],
+    reasoningSummary: arr(obj(assistant.recommendation).notes).join(" "),
+  });
+}
+
+function buildAssistantCompatConversationStatus(assistant = {}) {
+  const confidence = obj(assistant.confidence);
+  const interviewPlan = obj(assistant.interviewPlan);
+
+  return compactDraftObject({
+    phase: s(assistant.phase || "interview"),
+    unresolvedCount: arr(confidence.unclear).length,
+    followupCount: arr(interviewPlan.activeQuestions).length,
+    hasReasoningSummary: arr(obj(assistant.recommendation).notes).length > 0,
+    readyForApproval: assistant.readyForApproval === true,
+  });
+}
+
+export async function readSetupAssistantView(
+  { db, actor },
+  deps = {}
+) {
+  const loadSession =
+    deps.loadCurrentSetupAssistantSession || loadCurrentSetupAssistantSession;
+  const getCurrentReviewHelper =
+    deps.getCurrentSetupReview || getCurrentSetupReview;
+
+  const sessionResult = await loadSession({ db, actor }, deps);
+
+  if (
+    !sessionResult ||
+    Number(sessionResult.status || 500) !== 200 ||
+    sessionResult.body?.ok === false
+  ) {
+    return sessionResult;
+  }
+
+  const review = await getCurrentReviewHelper(actor.tenantId);
+  const baseBody = obj(sessionResult.body);
+  const session = obj(baseBody.session);
+  const setup = obj(baseBody.setup);
+  const assistant = obj(setup.assistant);
+  const draft = obj(setup.draft);
+  const sources = arr(review?.sources);
+
+  const brain = buildSetupAssistantBrainState({
+    session,
+    draft,
+    sources,
+    review,
+  });
+
+  const mergedAssistant = compactDraftObject({
+    ...assistant,
+    mode: "brain_v1",
+    phase: s(brain.phase || assistant.phase),
+    message: s(brain.assistantMessage || assistant.message || assistant.assistantMessage),
+    assistantMessage: s(
+      brain.assistantMessage || assistant.assistantMessage || assistant.message
+    ),
+    nextQuestion: obj(brain.nextQuestion),
+    confidence: obj(brain.confidence),
+    recommendation: obj(brain.recommendation),
+    sourceSignals: obj(brain.sourceSignals),
+    interviewPlan: obj(brain.interviewPlan),
+    aiBehavior: obj(brain.aiBehavior),
+    readyForApproval: brain.readyForApproval === true,
+    finalizeAvailable: brain.readyForApproval === true,
+    draft: obj(brain.draft),
+    currentQuestionKey: s(obj(brain.nextQuestion).key),
+  });
+
+  const compatQuestion = buildAssistantCompatQuestion(mergedAssistant);
+  const compatFollowupQueue = buildAssistantCompatFollowupQueue(mergedAssistant);
+  const compatBusinessFacts = buildAssistantCompatBusinessFacts(mergedAssistant);
+  const compatConversationStatus =
+    buildAssistantCompatConversationStatus(mergedAssistant);
+
+  const mergedReview = {
+    ...obj(setup.review),
+    readyForApproval: brain.readyForApproval === true,
+    finalizeAvailable: brain.readyForApproval === true,
+    message:
+      brain.readyForApproval === true
+        ? "The setup draft is complete enough to finalize into approved truth and runtime."
+        : s(obj(setup.review).message || REVIEW_MESSAGE),
+  };
+
+  const mergedSession = {
+    ...session,
+    currentStep:
+      s(obj(brain.nextQuestion).step) ||
+      s(obj(brain.nextQuestion).key) ||
+      s(session.currentStep),
+  };
+
+  return {
+    status: 200,
+    body: {
+      ...baseBody,
+      ok: true,
+      session: mergedSession,
+      setup: {
+        ...setup,
+        assistant: mergedAssistant,
+        review: mergedReview,
+      },
+
+      // compat surface for older clients while canonical session endpoints stay the same
+      assistant: mergedAssistant,
+      turn: {
+        role: "assistant",
+        text: s(brain.assistantMessage),
+        questionKey: s(obj(brain.nextQuestion).key),
+        questionCategory: s(obj(brain.nextQuestion).group),
+        payload: compactDraftObject({
+          mode: mergedAssistant.mode,
+          phase: mergedAssistant.phase,
+          nextQuestion: obj(brain.nextQuestion),
+          confidence: obj(brain.confidence),
+          recommendation: obj(brain.recommendation),
+          sourceSignals: obj(brain.sourceSignals),
+          interviewPlan: obj(brain.interviewPlan),
+          aiBehavior: obj(brain.aiBehavior),
+          readyForApproval: brain.readyForApproval === true,
+          draft: obj(brain.draft),
+        }),
+      },
+      question: compatQuestion,
+      primaryQuestion: compatQuestion,
+      conversationStatus: compatConversationStatus,
+      followupQueue: compatFollowupQueue,
+      businessFacts: compatBusinessFacts,
+      reasoningSummary: arr(obj(brain.recommendation).notes).join(" "),
+      unknowns: arr(obj(brain.confidence).unclear),
+      assistantHints: arr(obj(brain.sourceSignals).strongestEvidence),
+      guardrails: [],
+      review: mergedReview,
     },
   };
 }
@@ -2349,10 +2549,15 @@ export const __test__ = {
   buildSetupAssistantSeedFromReview,
   buildSetupAssistantSessionPayload,
   buildStoredSetupAssistantPayload,
+  buildAssistantCompatQuestion,
+  buildAssistantCompatFollowupQueue,
+  buildAssistantCompatBusinessFacts,
+  buildAssistantCompatConversationStatus,
   getNextQuestion,
   mergeSetupAssistantDraft,
   normalizeSetupAssistantDraftPatchBody,
   patchFromAnswer,
   parseProfileAnswer,
+  readSetupAssistantView,
   resolveIntentOnlyPatch,
 };
