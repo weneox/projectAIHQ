@@ -53,6 +53,11 @@ function textHasAny(value = "", patterns = []) {
   return patterns.some((pattern) => text.includes(String(pattern).toLowerCase()));
 }
 
+function groupLabel(group = "") {
+  if (group === "ai_behavior") return "AI behavior";
+  return "Business truth";
+}
+
 function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers = {}) {
   const review = obj(reviewPayload?.review || reviewPayload);
   const draft = Object.keys(obj(review.draft)).length
@@ -273,15 +278,13 @@ function shouldSkipQuestion(question = {}, model = {}) {
     case "contacts":
       return Boolean(
         arr(draft.contactRoutes).length >= 1 &&
-          (
-            strongWebsite ||
+          (strongWebsite ||
             strongEvidence.some((item) =>
               textHasAny(item, ["phone", "email", "whatsapp", "address", "+994", "@"])
             ) ||
             noticedClaims.some((item) =>
               textHasAny(item, ["phone", "email", "whatsapp", "address", "+994", "@"])
-            )
-          )
+            ))
       );
 
     case "hours":
@@ -290,12 +293,10 @@ function shouldSkipQuestion(question = {}, model = {}) {
     case "pricing":
       return Boolean(
         s(draft.pricingPosture) &&
-          (
-            strongWebsite ||
+          (strongWebsite ||
             strongEvidence.some((item) =>
               textHasAny(item, ["price", "pricing", "azn", "quote", "consultation"])
-            )
-          )
+            ))
       );
 
     case "audience":
@@ -303,6 +304,18 @@ function shouldSkipQuestion(question = {}, model = {}) {
 
     case "handoff":
       return Boolean(s(draft.humanHandoff));
+
+    case "languages":
+      return Boolean(arr(draft.languages).length >= 1);
+
+    case "tone":
+      return Boolean(s(draft.tone));
+
+    case "greeting":
+      return false;
+
+    case "after_hours":
+      return false;
 
     default:
       return false;
@@ -317,6 +330,41 @@ function getNextQuestionIndex(startIndex = 0, model = {}) {
     }
   }
   return SETUP_INTERVIEW_QUESTIONS.length;
+}
+
+function buildGroupProgress(questionIndex, model = {}) {
+  const question = SETUP_INTERVIEW_QUESTIONS[questionIndex];
+  if (!question) {
+    return {
+      label: "",
+      position: 0,
+      total: 0,
+    };
+  }
+
+  const activeIndexes = SETUP_INTERVIEW_QUESTIONS.map((item, index) => ({
+    item,
+    index,
+  }))
+    .filter(
+      ({ item }) =>
+        item.group === question.group && !shouldSkipQuestion(item, model)
+    )
+    .map(({ index }) => index);
+
+  const position = activeIndexes.indexOf(questionIndex) + 1;
+
+  return {
+    label: groupLabel(question.group),
+    position: position > 0 ? position : 1,
+    total: activeIndexes.length || 1,
+  };
+}
+
+function getFirstGroupQuestionIndex(group = "", model = {}) {
+  return SETUP_INTERVIEW_QUESTIONS.findIndex(
+    (question) => question.group === group && !shouldSkipQuestion(question, model)
+  );
 }
 
 function MessageBubble({
@@ -630,6 +678,28 @@ export default function SetupAssistantSections({
     sourceSubmitted &&
     currentQuestionIndex >= SETUP_INTERVIEW_QUESTIONS.length;
 
+  const currentGroupProgress = useMemo(() => {
+    if (!currentQuestion) {
+      return {
+        label: "",
+        position: 0,
+        total: 0,
+      };
+    }
+    return buildGroupProgress(currentQuestionIndex, finalModel);
+  }, [currentQuestion, currentQuestionIndex, finalModel]);
+
+  const firstAiBehaviorQuestionIndex = useMemo(
+    () => getFirstGroupQuestionIndex("ai_behavior", finalModel),
+    [finalModel]
+  );
+
+  const showAiBehaviorTransition =
+    sourceSubmitted &&
+    currentQuestion?.group === "ai_behavior" &&
+    currentQuestionIndex === firstAiBehaviorQuestionIndex &&
+    firstAiBehaviorQuestionIndex >= 0;
+
   useEffect(() => {
     if (!scrollRef.current) return;
     scrollRef.current.scrollTo({
@@ -645,6 +715,7 @@ export default function SetupAssistantSections({
     errorMessage,
     finalModel,
     smartDraftReady,
+    showAiBehaviorTransition,
   ]);
 
   async function handleInitialSourceSubmit() {
@@ -743,13 +814,26 @@ export default function SetupAssistantSections({
           <MessageBubble role="assistant" body={SETUP_SOURCE_PROMPT} />
 
           {transcript.map((item) => (
-            <MessageBubble key={item.id} role={item.role} body={item.text} />
+            <MessageBubble
+              key={item.id}
+              role={item.role}
+              eyebrow={item.eyebrow}
+              body={item.text || item.body}
+            />
           ))}
+
+          {showAiBehaviorTransition ? (
+            <MessageBubble
+              role="assistant"
+              eyebrow="AI behavior"
+              body="İndi AI-nin necə danışacağını, necə yönləndirəcəyini və nə vaxt insana ötürəcəyini quraq."
+            />
+          ) : null}
 
           {sourceSubmitted && currentQuestion ? (
             <MessageBubble
               role="assistant"
-              eyebrow={`Setup · ${currentQuestionIndex + 1}/${SETUP_INTERVIEW_QUESTIONS.length}`}
+              eyebrow={`${currentGroupProgress.label} · ${currentGroupProgress.position}/${currentGroupProgress.total}`}
               body={questionPrompt}
             />
           ) : null}
