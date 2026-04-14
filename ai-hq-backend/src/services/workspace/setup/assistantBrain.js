@@ -52,12 +52,232 @@ function sourceTypeLabel(type = "") {
   return "Website";
 }
 
-function signalStrong(values = [], minCount = 1) {
-  return uniqueStrings(values).length >= minCount;
-}
-
 function groupLabel(group = "") {
   return group === "ai_behavior" ? "AI behavior" : "Business truth";
+}
+
+function normalizedCandidate(value = "") {
+  return s(value)
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function looksLikeUrlOrDomain(value = "") {
+  const text = s(value).toLowerCase();
+  if (!text) return false;
+  if (/^https?:\/\//i.test(text)) return true;
+  if (/^(www\.)?[a-z0-9-]+\.[a-z]{2,}(\/.*)?$/i.test(text)) return true;
+  return false;
+}
+
+function looksLikeEmail(value = "") {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(s(value));
+}
+
+function looksLikePhone(value = "") {
+  return /(?:\+?\d[\d()\-\s]{6,}\d)/.test(s(value));
+}
+
+function looksLikeHoursText(value = "") {
+  const text = s(value).toLowerCase();
+  if (!text) return false;
+  return (
+    /(mon|tue|wed|thu|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday)/.test(
+      text
+    ) ||
+    /\b\d{1,2}[:.]\d{2}\b/.test(text) ||
+    /\bclosed\b/.test(text) ||
+    /\b24\/7\b/.test(text) ||
+    /\bappointment\b/.test(text)
+  );
+}
+
+function looksLikePricingText(value = "") {
+  const text = s(value).toLowerCase();
+  if (!text) return false;
+  return (
+    /(azn|usd|eur|gbp|\$|€|₼|£)/.test(text) ||
+    /\bprice\b/.test(text) ||
+    /\bpricing\b/.test(text) ||
+    /\bquote\b/.test(text) ||
+    /\bfrom\b/.test(text) ||
+    /\bstarting\b/.test(text)
+  );
+}
+
+function looksLikeServiceJunk(value = "") {
+  const text = normalizedCandidate(value);
+  if (!text) return true;
+  if (looksLikeUrlOrDomain(text)) return true;
+  if (looksLikeEmail(text)) return true;
+  if (looksLikePhone(text)) return true;
+  if (looksLikeHoursText(text)) return true;
+  if (looksLikePricingText(text)) return true;
+
+  const lowerText = text.toLowerCase();
+  if (
+    [
+      "home",
+      "about",
+      "contact",
+      "services",
+      "pricing",
+      "menu",
+      "blog",
+      "faq",
+      "map",
+      "instagram",
+      "facebook",
+      "google maps",
+    ].includes(lowerText)
+  ) {
+    return true;
+  }
+
+  const wordCount = tokenize(text).length;
+  if (!wordCount || wordCount > 8) return true;
+  return false;
+}
+
+function looksLikeCompanyJunk(value = "") {
+  const text = normalizedCandidate(value);
+  if (!text) return true;
+  if (looksLikeUrlOrDomain(text)) return true;
+  if (looksLikeEmail(text)) return true;
+
+  const lowerText = text.toLowerCase();
+  if (
+    [
+      "website",
+      "instagram",
+      "facebook",
+      "google maps",
+      "contact",
+      "home",
+      "about",
+      "services",
+    ].includes(lowerText)
+  ) {
+    return true;
+  }
+
+  return tokenize(text).length > 8;
+}
+
+function looksLikeDescriptionJunk(value = "") {
+  const text = normalizedCandidate(value);
+  if (!text) return true;
+  if (looksLikeUrlOrDomain(text)) return true;
+  if (looksLikeEmail(text)) return true;
+  if (looksLikePhone(text)) return true;
+
+  const tokenCount = tokenize(text).length;
+  return tokenCount < 4;
+}
+
+function looksLikeContactText(value = "") {
+  const text = normalizedCandidate(value);
+  if (!text) return false;
+  if (looksLikeEmail(text) || looksLikePhone(text)) return true;
+  if (/whatsapp|telegram|wa\.me|contact|call|email/i.test(text)) return true;
+  if (/instagram\.com|facebook\.com|m\.me/i.test(text)) return true;
+  return false;
+}
+
+function sanitizeCompanyCandidate(value = "") {
+  const text = normalizedCandidate(value);
+  if (!text || looksLikeCompanyJunk(text)) return "";
+  return text;
+}
+
+function sanitizeDescriptionCandidate(value = "") {
+  const text = normalizedCandidate(value);
+  if (!text || looksLikeDescriptionJunk(text)) return "";
+  return text;
+}
+
+function sanitizeServiceCandidate(value = "") {
+  const text = normalizedCandidate(value);
+  if (!text || looksLikeServiceJunk(text)) return "";
+  return text;
+}
+
+function sanitizeContactCandidate(value = "") {
+  const text = normalizedCandidate(value);
+  if (!text || !looksLikeContactText(text)) return "";
+  return text;
+}
+
+function sanitizeHoursCandidate(value = "") {
+  const text = normalizedCandidate(value);
+  if (!text || !looksLikeHoursText(text)) return "";
+  return text;
+}
+
+function sanitizePricingCandidate(value = "") {
+  const text = normalizedCandidate(value);
+  if (!text || !looksLikePricingText(text)) return "";
+  return text;
+}
+
+function sanitizeLanguageCandidate(value = "") {
+  const text = normalizedCandidate(value);
+  if (!text) return "";
+  const tokenCount = tokenize(text).length;
+  if (!tokenCount || tokenCount > 4) return "";
+  return text;
+}
+
+function sanitizeToneCandidate(value = "") {
+  const text = normalizedCandidate(value);
+  if (!text) return "";
+  const tokenCount = tokenize(text).length;
+  if (!tokenCount || tokenCount > 8) return "";
+  return text;
+}
+
+function weightedUniqueStrings(entries = [], sanitizer = (value) => s(value)) {
+  const scores = new Map();
+  const order = [];
+  let index = 0;
+
+  for (const entry of arr(entries)) {
+    const rawValue =
+      typeof entry === "object" && entry !== null ? entry.value : entry;
+    const weight =
+      typeof entry === "object" && entry !== null
+        ? Number(entry.weight || 0) || 0
+        : 1;
+    const sanitized = sanitizer(rawValue);
+    if (!sanitized) continue;
+
+    if (!scores.has(sanitized)) {
+      scores.set(sanitized, { score: 0, firstIndex: index });
+      order.push(sanitized);
+    }
+    const current = scores.get(sanitized);
+    current.score += Math.max(1, weight);
+    index += 1;
+  }
+
+  return order.sort((a, b) => {
+    const sa = scores.get(a);
+    const sb = scores.get(b);
+    if (sb.score !== sa.score) return sb.score - sa.score;
+    return sa.firstIndex - sb.firstIndex;
+  });
+}
+
+function topCandidate(values = []) {
+  return arr(values)[0] || "";
+}
+
+function sourceAuthorityWeight(value = "") {
+  const key = lower(value);
+  if (key === "high") return 5;
+  if (key === "medium") return 3;
+  if (key === "low") return 1;
+  return 2;
 }
 
 function extractBehaviorSignals({ draft = {}, review = null } = {}) {
@@ -68,23 +288,29 @@ function extractBehaviorSignals({ draft = {}, review = null } = {}) {
   const draftAssistantState = obj(safeDraft.assistantState);
   const reviewAssistantState = obj(reviewDraft.assistantState);
 
-  const greetingCandidates = uniqueStrings([
-    draftAssistantState.greeting,
-    draftAssistantState.greetingStyle,
-    draftAssistantState.openingStyle,
-    reviewAssistantState.greeting,
-    reviewAssistantState.greetingStyle,
-    reviewAssistantState.openingStyle,
-  ]);
+  const greetingCandidates = weightedUniqueStrings(
+    [
+      { value: draftAssistantState.greeting, weight: 2 },
+      { value: draftAssistantState.greetingStyle, weight: 2 },
+      { value: draftAssistantState.openingStyle, weight: 2 },
+      { value: reviewAssistantState.greeting, weight: 2 },
+      { value: reviewAssistantState.greetingStyle, weight: 2 },
+      { value: reviewAssistantState.openingStyle, weight: 2 },
+    ],
+    sanitizeToneCandidate
+  );
 
-  const afterHoursCandidates = uniqueStrings([
-    draftAssistantState.afterHours,
-    draftAssistantState.afterHoursBehavior,
-    draftAssistantState.afterHoursReply,
-    reviewAssistantState.afterHours,
-    reviewAssistantState.afterHoursBehavior,
-    reviewAssistantState.afterHoursReply,
-  ]);
+  const afterHoursCandidates = weightedUniqueStrings(
+    [
+      { value: draftAssistantState.afterHours, weight: 2 },
+      { value: draftAssistantState.afterHoursBehavior, weight: 2 },
+      { value: draftAssistantState.afterHoursReply, weight: 2 },
+      { value: reviewAssistantState.afterHours, weight: 2 },
+      { value: reviewAssistantState.afterHoursBehavior, weight: 2 },
+      { value: reviewAssistantState.afterHoursReply, weight: 2 },
+    ],
+    sanitizeDescriptionCandidate
+  );
 
   return {
     greetingCandidates,
@@ -120,8 +346,7 @@ function buildSourceSignals({ session = {}, draft = {}, sources = [], review = n
   );
 
   const primarySource =
-    obj(sourceSignalSummary.primarySource).sourceType ||
-    obj(sourceSignalSummary.primarySource).sourceUrl
+    obj(sourceSignalSummary.primarySource).sourceType || obj(sourceSignalSummary.primarySource).sourceUrl
       ? obj(sourceSignalSummary.primarySource)
       : sourceRows.find((item) => lower(item.role) === "primary") || sourceRows[0] || {};
 
@@ -131,103 +356,145 @@ function buildSourceSignals({ session = {}, draft = {}, sources = [], review = n
     s(sourceSummary.primarySourceUrl) ||
     s(primarySource.sourceUrl);
 
-  const companyNameCandidates = uniqueStrings([
-    businessProfile.companyName,
-    businessProfile.displayName,
-    reviewDraft.businessProfile?.companyName,
-    reviewDraft.businessProfile?.displayName,
-    sourceSummary.businessName,
-    primarySource.label,
-    session.businessName,
-    assistantState.inferredBusinessName,
-    reviewFieldProvenance.companyName?.observedValue,
-    reviewFieldProvenance.displayName?.observedValue,
-  ]);
+  const primaryAuthorityWeight = sourceAuthorityWeight(
+    primarySource.sourceAuthorityClass
+  );
 
-  const serviceCandidates = uniqueStrings([
-    ...arr(draft.services).map((item) => s(item.title || item.name || item.label)),
-    ...arr(reviewDraft.services).map((item) => s(item.title || item.name || item.label)),
-    ...arr(draft.serviceCatalog).map((item) => s(item.title || item.name || item.label)),
-    ...arr(websiteKnowledge.topPages).map((item) => s(item.title)),
-    ...arr(sourceSignalSummary.discoveredPublicClaims),
-    reviewFieldProvenance.services?.observedValue,
-  ]);
+  const companyNameCandidates = weightedUniqueStrings(
+    [
+      { value: reviewFieldProvenance.companyName?.observedValue, weight: 7 },
+      { value: reviewFieldProvenance.displayName?.observedValue, weight: 7 },
+      { value: sourceSummary.businessName, weight: 6 },
+      { value: session.businessName, weight: 5 },
+      { value: primarySource.label, weight: primaryAuthorityWeight + 1 },
+      ...sourceRows.map((item) => ({
+        value: item.label,
+        weight: sourceAuthorityWeight(item.sourceAuthorityClass),
+      })),
+    ],
+    sanitizeCompanyCandidate
+  );
 
-  const contactCandidates = uniqueStrings([
-    businessProfile.primaryPhone,
-    businessProfile.primaryEmail,
-    businessProfile.primaryAddress,
-    ...arr(draft.contacts).map((item) => s(item.label || item.value || item.channel)),
-    ...arr(reviewDraft.contacts).map((item) => s(item.label || item.value || item.channel)),
-    reviewFieldProvenance.primaryPhone?.observedValue,
-    reviewFieldProvenance.primaryEmail?.observedValue,
-    reviewFieldProvenance.primaryAddress?.observedValue,
-  ]);
+  const descriptionCandidates = weightedUniqueStrings(
+    [
+      { value: reviewFieldProvenance.description?.observedValue, weight: 7 },
+      { value: reviewFieldProvenance.companySummaryShort?.observedValue, weight: 7 },
+      { value: businessProfile.companySummaryShort, weight: 3 },
+      { value: businessProfile.companySummary, weight: 3 },
+      { value: reviewDraft.businessProfile?.description, weight: 2 },
+    ],
+    sanitizeDescriptionCandidate
+  );
 
-  const hoursCandidates = uniqueStrings([
-    ...arr(businessProfile.hours),
-    ...arr(reviewDraft.businessProfile?.hours),
-    ...arr(draft.hours).map((item) => {
-      if (item?.allDay) return `${item.day} 24 hours`;
-      if (item?.appointmentOnly) return `${item.day} appointment only`;
-      if (item?.closed) return `${item.day} closed`;
-      if (s(item?.notes)) return `${item.day} ${s(item.notes)}`;
-      if (s(item?.openTime) || s(item?.closeTime)) {
-        return `${item.day} ${s(item.openTime)}-${s(item.closeTime)}`;
-      }
-      return "";
-    }),
-  ]);
+  const serviceCandidates = weightedUniqueStrings(
+    [
+      ...arr(sourceSignalSummary.discoveredPublicClaims).map((value) => ({
+        value,
+        weight: 5,
+      })),
+      ...arr(reviewFieldProvenance.services?.observedValues).map((value) => ({
+        value,
+        weight: 6,
+      })),
+      ...(s(reviewFieldProvenance.services?.observedValue)
+        ? [{ value: reviewFieldProvenance.services?.observedValue, weight: 5 }]
+        : []),
+      ...arr(websiteKnowledge.topPages).map((item) => ({
+        value: s(item.title),
+        weight: 2,
+      })),
+      ...sourceRows.map((item) => ({
+        value: item.label,
+        weight: 1,
+      })),
+    ],
+    sanitizeServiceCandidate
+  );
 
-  const pricingCandidates = uniqueStrings([
-    businessProfile.pricingPolicy,
-    draft.pricingPosture?.publicSummary,
-    draft.pricingPosture?.note,
-    reviewDraft.businessProfile?.pricingPolicy,
-    reviewFieldProvenance.pricingHints?.observedValue,
-  ]);
+  const contactCandidates = weightedUniqueStrings(
+    [
+      { value: reviewFieldProvenance.primaryPhone?.observedValue, weight: 7 },
+      { value: reviewFieldProvenance.primaryEmail?.observedValue, weight: 7 },
+      { value: reviewFieldProvenance.primaryAddress?.observedValue, weight: 5 },
+      ...sourceRows.flatMap((item) => [
+        { value: item.label, weight: 1 },
+        { value: item.sourceUrl, weight: 1 },
+      ]),
+    ],
+    sanitizeContactCandidate
+  );
 
-  const handoffCandidates = uniqueStrings([
-    draft.handoffRules?.summary,
-    ...arr(draft.handoffRules?.triggers),
-    reviewDraft.handoffRules?.summary,
-    ...arr(reviewDraft.handoffRules?.triggers),
-  ]);
+  const hoursCandidates = weightedUniqueStrings(
+    [
+      ...(s(reviewFieldProvenance.hours?.observedValue)
+        ? [{ value: reviewFieldProvenance.hours?.observedValue, weight: 7 }]
+        : []),
+      ...(s(reviewFieldProvenance.businessHours?.observedValue)
+        ? [{ value: reviewFieldProvenance.businessHours?.observedValue, weight: 7 }]
+        : []),
+      ...(s(reviewFieldProvenance.openingHours?.observedValue)
+        ? [{ value: reviewFieldProvenance.openingHours?.observedValue, weight: 7 }]
+        : []),
+      ...arr(sourceSignalSummary.discoveredPublicClaims).map((value) => ({
+        value,
+        weight: 1,
+      })),
+    ],
+    sanitizeHoursCandidate
+  );
 
-  const audienceCandidates = uniqueStrings([
-    businessProfile.targetAudience,
-    businessProfile.audience,
-    reviewDraft.businessProfile?.targetAudience,
-    reviewDraft.businessProfile?.audience,
-  ]);
+  const pricingCandidates = weightedUniqueStrings(
+    [
+      { value: reviewFieldProvenance.pricingHints?.observedValue, weight: 7 },
+      { value: reviewFieldProvenance.pricingPolicy?.observedValue, weight: 7 },
+      ...(s(reviewFieldProvenance.price?.observedValue)
+        ? [{ value: reviewFieldProvenance.price?.observedValue, weight: 6 }]
+        : []),
+      ...arr(sourceSignalSummary.discoveredPublicClaims).map((value) => ({
+        value,
+        weight: 1,
+      })),
+    ],
+    sanitizePricingCandidate
+  );
 
-  const descriptionCandidates = uniqueStrings([
-    businessProfile.description,
-    businessProfile.companySummaryShort,
-    businessProfile.companySummary,
-    reviewDraft.businessProfile?.description,
-    reviewDraft.businessProfile?.companySummaryShort,
-    reviewDraft.businessProfile?.companySummary,
-    reviewFieldProvenance.description?.observedValue,
-    reviewFieldProvenance.companySummaryShort?.observedValue,
-  ]);
+  const handoffCandidates = weightedUniqueStrings(
+    [
+      { value: reviewDraft.handoffRules?.summary, weight: 2 },
+      ...arr(reviewDraft.handoffRules?.triggers).map((value) => ({
+        value,
+        weight: 2,
+      })),
+    ],
+    sanitizeDescriptionCandidate
+  );
 
-  const languagesCandidates = uniqueStrings([
-    ...arr(businessProfile.supportedLanguages),
-    ...arr(businessProfile.languages),
-    ...arr(reviewDraft.businessProfile?.supportedLanguages),
-    ...arr(reviewDraft.businessProfile?.languages),
-    reviewFieldProvenance.language?.observedValue,
-    reviewFieldProvenance.mainLanguage?.observedValue,
-    reviewFieldProvenance.primaryLanguage?.observedValue,
-  ]);
+  const audienceCandidates = weightedUniqueStrings(
+    [
+      { value: reviewFieldProvenance.targetAudience?.observedValue, weight: 6 },
+      { value: reviewFieldProvenance.audience?.observedValue, weight: 6 },
+      { value: reviewDraft.businessProfile?.targetAudience, weight: 2 },
+      { value: reviewDraft.businessProfile?.audience, weight: 2 },
+    ],
+    sanitizeDescriptionCandidate
+  );
 
-  const toneCandidates = uniqueStrings([
-    businessProfile.brandTone,
-    businessProfile.tone,
-    reviewDraft.businessProfile?.brandTone,
-    reviewDraft.businessProfile?.tone,
-  ]);
+  const languagesCandidates = weightedUniqueStrings(
+    [
+      { value: reviewFieldProvenance.language?.observedValue, weight: 6 },
+      { value: reviewFieldProvenance.mainLanguage?.observedValue, weight: 6 },
+      { value: reviewFieldProvenance.primaryLanguage?.observedValue, weight: 6 },
+    ],
+    sanitizeLanguageCandidate
+  );
+
+  const toneCandidates = weightedUniqueStrings(
+    [
+      { value: reviewDraft.businessProfile?.brandTone, weight: 2 },
+      { value: reviewDraft.businessProfile?.tone, weight: 2 },
+    ],
+    sanitizeToneCandidate
+  );
 
   const sourceTypes = uniqueStrings(
     sourceSignalSummary.sourceTypes?.length
@@ -235,14 +502,31 @@ function buildSourceSignals({ session = {}, draft = {}, sources = [], review = n
       : sourceRows.map((item) => item.sourceType)
   );
 
-  const strongestEvidence = uniqueStrings(sourceSignalSummary.strongestEvidence);
-  const discoveredPublicClaims = uniqueStrings(
-    sourceSignalSummary.discoveredPublicClaims
-  );
-  const pageCount =
-    Number(sourceSignalSummary.website?.pageCount || 0) ||
-    Number(websiteKnowledge.pageCount || 0) ||
-    0;
+  const strongestEvidence = uniqueStrings([
+    primarySource.sourceUrl
+      ? `${sourceTypeLabel(primarySource.sourceType)} source: ${primarySource.sourceUrl}`
+      : "",
+    Number(sourceSignalSummary.website?.pageCount || websiteKnowledge.pageCount || 0) > 0
+      ? `Website pages analyzed: ${Number(
+          sourceSignalSummary.website?.pageCount || websiteKnowledge.pageCount || 0
+        )}`
+      : "",
+    topCandidate(companyNameCandidates)
+      ? `Source suggests business name: ${topCandidate(companyNameCandidates)}`
+      : "",
+    serviceCandidates.length
+      ? `Source service signals: ${listPreview(serviceCandidates, 4)}`
+      : "",
+    contactCandidates.length
+      ? `Source contact signals: ${listPreview(contactCandidates, 3)}`
+      : "",
+    hoursCandidates.length
+      ? `Source hours signals: ${listPreview(hoursCandidates, 2)}`
+      : "",
+    pricingCandidates.length
+      ? `Source pricing signals: ${listPreview(pricingCandidates, 2)}`
+      : "",
+  ]);
 
   return {
     sourceRows,
@@ -252,17 +536,20 @@ function buildSourceSignals({ session = {}, draft = {}, sources = [], review = n
     primarySourceUrl: s(primarySource.sourceUrl || websiteUrl),
     primarySourceAuthorityClass: s(primarySource.sourceAuthorityClass),
     sourceTypes,
-    pageCount,
+    pageCount:
+      Number(sourceSignalSummary.website?.pageCount || 0) ||
+      Number(websiteKnowledge.pageCount || 0) ||
+      0,
     strongestEvidence,
-    discoveredPublicClaims,
+    discoveredPublicClaims: uniqueStrings(sourceSignalSummary.discoveredPublicClaims),
     companyNameCandidates,
+    descriptionCandidates,
     serviceCandidates,
     contactCandidates,
     hoursCandidates,
     pricingCandidates,
     handoffCandidates,
     audienceCandidates,
-    descriptionCandidates,
     languagesCandidates,
     toneCandidates,
     greetingCandidates: behaviorSignals.greetingCandidates,
@@ -285,7 +572,7 @@ function buildDraftState({ draft = {}, review = null } = {}) {
   const services = uniqueStrings([
     ...arr(reviewDraft.services).map((item) => s(item.title || item.name || item.label)),
     ...arr(draft.services).map((item) => s(item.title || item.name || item.label)),
-  ]);
+  ]).filter((value) => !looksLikeServiceJunk(value));
 
   const contacts = uniqueStrings([
     mergedProfile.primaryPhone,
@@ -293,7 +580,7 @@ function buildDraftState({ draft = {}, review = null } = {}) {
     mergedProfile.primaryAddress,
     ...arr(reviewDraft.contacts).map((item) => s(item.label || item.value || item.channel)),
     ...arr(draft.contacts).map((item) => s(item.label || item.value || item.channel)),
-  ]);
+  ]).filter((value) => sanitizeContactCandidate(value));
 
   const hours = uniqueStrings([
     ...arr(mergedProfile.hours),
@@ -307,7 +594,12 @@ function buildDraftState({ draft = {}, review = null } = {}) {
       }
       return "";
     }),
-  ]);
+  ]).filter((value) => sanitizeHoursCandidate(value));
+
+  const languages = uniqueStrings([
+    ...arr(mergedProfile.supportedLanguages),
+    ...arr(mergedProfile.languages),
+  ]).filter((value) => sanitizeLanguageCandidate(value));
 
   return {
     businessName: s(mergedProfile.companyName || mergedProfile.displayName),
@@ -335,10 +627,7 @@ function buildDraftState({ draft = {}, review = null } = {}) {
     humanHandoff: s(
       draft.handoffRules?.summary || arr(draft.handoffRules?.triggers).join(", ")
     ),
-    languages: uniqueStrings([
-      ...arr(mergedProfile.supportedLanguages),
-      ...arr(mergedProfile.languages),
-    ]),
+    languages,
     tone: s(mergedProfile.brandTone || mergedProfile.tone),
     greetingStyle: s(
       draftAssistantState.greeting ||
@@ -359,76 +648,46 @@ function buildDraftState({ draft = {}, review = null } = {}) {
   };
 }
 
-function mergeSourceInferredDraft(draftState, sourceSignals) {
-  return {
-    businessName:
-      s(draftState.businessName) || s(sourceSignals.companyNameCandidates[0]),
-    description:
-      s(draftState.description) || s(sourceSignals.descriptionCandidates[0]),
-    websiteUrl:
-      s(draftState.websiteUrl) || s(sourceSignals.primarySourceUrl),
-    services: draftState.services.length
-      ? draftState.services
-      : sourceSignals.serviceCandidates.slice(0, 6),
-    audience:
-      s(draftState.audience) || s(sourceSignals.audienceCandidates[0]),
-    pricingPosture:
-      s(draftState.pricingPosture) || s(sourceSignals.pricingCandidates[0]),
-    contacts: draftState.contacts.length
-      ? draftState.contacts
-      : sourceSignals.contactCandidates.slice(0, 6),
-    hours: draftState.hours.length
-      ? draftState.hours
-      : sourceSignals.hoursCandidates.slice(0, 4),
-    humanHandoff:
-      s(draftState.humanHandoff) || s(sourceSignals.handoffCandidates[0]),
-    languages: draftState.languages.length
-      ? draftState.languages
-      : sourceSignals.languagesCandidates.slice(0, 4),
-    tone: s(draftState.tone) || s(sourceSignals.toneCandidates[0]),
-    greetingStyle:
-      s(draftState.greetingStyle) || s(sourceSignals.greetingCandidates[0]),
-    afterHoursBehavior:
-      s(draftState.afterHoursBehavior) || s(sourceSignals.afterHoursCandidates[0]),
-  };
-}
-
 function detectContradictions({ draftState, sourceSignals }) {
   const contradictions = [];
 
-  const draftName = draftState.businessName;
-  const sourceName = sourceSignals.companyNameCandidates[0];
-  if (draftName && sourceName && overlapScore(draftName, sourceName) < 0.35) {
+  const sourceName = topCandidate(sourceSignals.companyNameCandidates);
+  const sourceWebsiteHost = urlHost(sourceSignals.primarySourceUrl);
+  const draftWebsiteHost = urlHost(draftState.websiteUrl);
+
+  if (
+    draftState.businessName &&
+    sourceName &&
+    overlapScore(draftState.businessName, sourceName) < 0.4
+  ) {
     contradictions.push({
       key: "business_name_conflict",
-      severity: "medium",
-      message: `Mənbədə görünən ad "${sourceName}" kimi görünür, draft isə "${draftName}" deyir.`,
+      severity: "high",
+      message: `Source-larda biznes adı "${sourceName}" kimi görünür, amma draft "${draftState.businessName}" deyir.`,
     });
   }
 
-  const draftHost = urlHost(draftState.websiteUrl);
-  const sourceHost = urlHost(sourceSignals.primarySourceUrl);
-  if (draftHost && sourceHost && draftHost !== sourceHost) {
+  if (draftWebsiteHost && sourceWebsiteHost && draftWebsiteHost !== sourceWebsiteHost) {
     contradictions.push({
       key: "website_conflict",
-      severity: "medium",
-      message: `Draft website "${draftHost}" kimi görünür, əsas source isə "${sourceHost}" göstərir.`,
+      severity: "high",
+      message: `Draft website "${draftWebsiteHost}" kimi görünür, əsas source isə "${sourceWebsiteHost}" göstərir.`,
     });
   }
 
-  if (draftState.services.length && sourceSignals.serviceCandidates.length) {
-    const overlap = draftState.services.some((service) =>
+  if (draftState.services.length && sourceSignals.serviceCandidates.length >= 2) {
+    const overlapFound = draftState.services.some((service) =>
       sourceSignals.serviceCandidates.some(
-        (candidate) => overlapScore(service, candidate) >= 0.4
+        (candidate) => overlapScore(service, candidate) >= 0.45
       )
     );
 
-    if (!overlap) {
+    if (!overlapFound) {
       contradictions.push({
         key: "services_conflict",
         severity: "medium",
         message:
-          "Mənbələrdən görünən xidmətlər ilə draft xidmətləri arasında güclü uyğunluq görünmür.",
+          "Draft xidmətləri ilə source-lardan çıxan xidmət siqnalları arasında güclü uyğunluq görünmür.",
       });
     }
   }
@@ -443,9 +702,26 @@ function detectContradictions({ draftState, sourceSignals }) {
     if (!contactOverlap) {
       contradictions.push({
         key: "contact_conflict",
+        severity: "medium",
+        message:
+          "Draft contact marşrutu ilə source-lardan görünən əlaqə siqnalları üst-üstə düşmür.",
+      });
+    }
+  }
+
+  if (draftState.hours.length && sourceSignals.hoursCandidates.length) {
+    const hoursOverlap = draftState.hours.some((item) =>
+      sourceSignals.hoursCandidates.some(
+        (candidate) => overlapScore(item, candidate) >= 0.35
+      )
+    );
+
+    if (!hoursOverlap) {
+      contradictions.push({
+        key: "hours_conflict",
         severity: "low",
         message:
-          "Draft contact marşrutu ilə source-lardan görünən əlaqə siqnalları tam üst-üstə düşmür.",
+          "Draft iş saatları ilə source-lardan görünən saat siqnalları tam oturmur.",
       });
     }
   }
@@ -458,77 +734,95 @@ function buildConfidenceBuckets({ draftState, sourceSignals, contradictions }) {
   const unclear = [];
 
   if (draftState.businessName) {
-    strong.push(`Biznes adı formalaşıb: ${draftState.businessName}`);
+    strong.push(`Biznes adı draftda var: ${draftState.businessName}`);
+  } else if (topCandidate(sourceSignals.companyNameCandidates)) {
+    unclear.push(
+      `Source biznes adı kimi "${topCandidate(
+        sourceSignals.companyNameCandidates
+      )}" göstərir, amma bu hələ təsdiqlənməyib.`
+    );
   } else {
     unclear.push("Biznes adı hələ dəqiq deyil.");
   }
 
   if (draftState.description) {
-    strong.push("Biznesin təqdimat cümləsi formalaşıb.");
+    strong.push("Biznesin qısa təqdimatı draftda var.");
+  } else if (topCandidate(sourceSignals.descriptionCandidates)) {
+    unclear.push("Source-larda təqdimat siqnalı var, amma hələ operator tərəfindən təsdiqlənməyib.");
   } else {
     unclear.push("Biznesin qısa təqdimatı hələ aydın deyil.");
   }
 
   if (draftState.services.length) {
-    strong.push(`Əsas xidmətlər görünür: ${listPreview(draftState.services, 4)}`);
+    strong.push(`Əsas xidmətlər draftda var: ${listPreview(draftState.services, 4)}`);
+  } else if (sourceSignals.serviceCandidates.length >= 2) {
+    unclear.push(
+      `Source xidmət siqnalları verir: ${listPreview(sourceSignals.serviceCandidates, 4)}.`
+    );
   } else {
     unclear.push("Əsas xidmətlər hələ təsdiqlənməyib.");
   }
 
   if (draftState.contacts.length) {
-    strong.push("Əlaqə/booking yönləndirməsi görünür.");
+    strong.push("Əsas əlaqə/booking marşrutu draftda var.");
+  } else if (sourceSignals.contactCandidates.length) {
+    unclear.push(
+      `Source əlaqə siqnalları verir: ${listPreview(sourceSignals.contactCandidates, 3)}.`
+    );
   } else {
     unclear.push("Müştərinin hara yönləndiriləcəyi hələ aydın deyil.");
   }
 
   if (draftState.pricingPosture) {
-    strong.push("Qiymətin necə təqdim olunacağı müəyyənləşib.");
+    strong.push("Qiymət təqdimatı draftda müəyyənləşib.");
+  } else if (sourceSignals.pricingCandidates.length) {
+    unclear.push(
+      `Qiymətə aid source siqnalları var: ${listPreview(sourceSignals.pricingCandidates, 2)}.`
+    );
   } else {
     unclear.push("Qiymət siyasətinin necə təqdim olunacağı hələ aydın deyil.");
   }
 
   if (draftState.humanHandoff) {
-    strong.push("İnsana ötürmə qaydaları müəyyənləşib.");
+    strong.push("İnsana ötürmə qaydası draftda formalaşıb.");
   } else {
     unclear.push("AI-nin hansı hallarda insana ötürəcəyi hələ müəyyənləşməyib.");
   }
 
   if (draftState.hours.length) {
-    strong.push("İş/cavab saatları görünür.");
+    strong.push("İş/cavab saatları draftda görünür.");
+  } else if (sourceSignals.hoursCandidates.length) {
+    unclear.push("Source iş saatı siqnalı verir, amma hələ təsdiqlənməyib.");
   } else {
     unclear.push("İş və ya cavab saatları hələ aydın deyil.");
   }
 
   if (draftState.languages.length) {
-    strong.push(`İşləmə dilləri görünür: ${listPreview(draftState.languages, 3)}`);
+    strong.push(`İşləmə dilləri draftda var: ${listPreview(draftState.languages, 3)}`);
+  } else if (sourceSignals.languagesCandidates.length) {
+    unclear.push(
+      `Source dil siqnalı verir: ${listPreview(sourceSignals.languagesCandidates, 3)}.`
+    );
   } else {
     unclear.push("AI-nin hansı dillərdə işləyəcəyi hələ dəqiq deyil.");
   }
 
   if (draftState.tone) {
-    strong.push("AI tonu formalaşıb.");
+    strong.push("AI tonu draftda formalaşıb.");
   } else {
     unclear.push("AI tonu hələ dəqiq formalaşmayıb.");
   }
 
   if (draftState.greetingStyle) {
-    strong.push("Açılış davranışı görünür.");
+    strong.push("Açılış davranışı draftda görünür.");
   } else {
     unclear.push("AI-nin söhbətə necə başlayacağı hələ aydın deyil.");
   }
 
   if (draftState.afterHoursBehavior) {
-    strong.push("İş saatından kənar davranış formalaşıb.");
+    strong.push("İş saatından kənar davranış draftda formalaşıb.");
   } else {
     unclear.push("İş saatından kənar cavab qaydası hələ müəyyənləşməyib.");
-  }
-
-  if (
-    sourceSignals.primarySourceType === "website" &&
-    sourceSignals.pageCount > 0 &&
-    !draftState.websiteUrl
-  ) {
-    unclear.push("Website source var, amma public website draftda hələ oturmayıb.");
   }
 
   if (
@@ -554,15 +848,15 @@ function buildConfidenceBuckets({ draftState, sourceSignals, contradictions }) {
 function buildRecommendation({ draftState, sourceSignals, contradictions }) {
   const notes = [];
 
-  if (draftState.services.length) {
+  if (sourceSignals.primarySourceType === "website" && sourceSignals.pageCount < 2) {
     notes.push(
-      `Məncə AI ilk növbədə "${draftState.services[0]}" xətti üzərindən danışmalıdır.`
+      "Website siqnalı zəifdirsə, system həmin source-a həddindən artıq güvənməməlidir."
     );
   }
 
-  if (draftState.services.length > 3) {
+  if (!draftState.services.length && sourceSignals.serviceCandidates.length >= 2) {
     notes.push(
-      "Çox xidmət varsa, AI ilk cavablarda yalnız əsas xidmət klasterini vurğulayıb, qalanlarını sonradan açmalıdır."
+      "Source xidmət siqnalları var, amma onları birbaşa truth kimi yox, operator təsdiqi kimi götürmək daha doğrudur."
     );
   }
 
@@ -574,7 +868,7 @@ function buildRecommendation({ draftState, sourceSignals, contradictions }) {
 
   if (!draftState.humanHandoff) {
     notes.push(
-      "Voice receptionist və chatbot üçün şikayət, fərdi qiymət, təcili hal və ödəniş kimi mövzular ayrıca handoff qaydası istəyir."
+      "Şikayət, fərdi qiymət, təcili hal və ödəniş mövzuları üçün ayrıca handoff qaydası lazımdır."
     );
   }
 
@@ -584,15 +878,15 @@ function buildRecommendation({ draftState, sourceSignals, contradictions }) {
     );
   }
 
-  if (!draftState.hours.length) {
+  if (!draftState.hours.length && sourceSignals.primarySourceType === "google_maps") {
     notes.push(
-      "Voice receptionist üçün iş/cavab saatı ayrıca göstərilməlidir; əks halda zəng tərəfdə qeyri-müəyyənlik yaranacaq."
+      "Google Maps source varsa, iş saatlarını ayrıca təsdiqləmək daha təhlükəsizdir."
     );
   }
 
   if (!draftState.languages.length) {
     notes.push(
-      "AI və voice receptionist üçün dil seçimi ayrıca dəqiqləşdirilməlidir; əks halda cavablar qeyri-sabit görünə bilər."
+      "AI və voice receptionist üçün dil seçimi ayrıca dəqiqləşdirilməlidir."
     );
   }
 
@@ -616,213 +910,268 @@ function buildRecommendation({ draftState, sourceSignals, contradictions }) {
 
   if (contradictions.length) {
     notes.push(
-      "Source ilə verilən cavablar arasında uyğunsuzluq var; təsdiqdən əvvəl bunları bağlamaq daha doğrudur."
-    );
-  }
-
-  if (
-    sourceSignals.primarySourceType === "website" &&
-    sourceSignals.pageCount >= 3 &&
-    draftState.description &&
-    draftState.services.length
-  ) {
-    notes.push(
-      "Website siqnalları kifayət qədərdirsə, əlavə sualları minimum saxlamaq və tez draft çıxarmaq daha professional görünür."
-    );
-  }
-
-  if (
-    sourceSignals.primarySourceAuthorityClass &&
-    lower(sourceSignals.primarySourceAuthorityClass) === "high"
-  ) {
-    notes.push(
-      "Əsas source yüksək authority göstərirsə, public təqdimatda həmin source siqnallarına daha çox güvənmək olar."
+      "Source ilə draft arasında uyğunsuzluq var; təsdiqdən əvvəl bunları bağlamaq daha doğrudur."
     );
   }
 
   return notes;
 }
 
+function buildConfirmQuestion({
+  key,
+  step,
+  title,
+  group = "business_truth",
+  candidate = "",
+  fallbackPrompt = "",
+  sourceLabel = "",
+}) {
+  const prompt = candidate
+    ? `${sourceLabel ? `${sourceLabel} ` : "Source "}bu məlumatı göstərir: "${candidate}". Doğrudursa təsdiqlə, deyilsə düz yaz.`
+    : fallbackPrompt;
+
+  return {
+    key,
+    step,
+    title,
+    group,
+    prompt,
+  };
+}
+
 function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) {
-  const strongWebsite =
-    sourceSignals.primarySourceType === "website" && sourceSignals.pageCount >= 4;
-  const strongNameSource = signalStrong(sourceSignals.companyNameCandidates, 1);
-  const strongDescriptionSource = signalStrong(sourceSignals.descriptionCandidates, 1);
-  const strongServicesSource = signalStrong(sourceSignals.serviceCandidates, 2);
-  const strongContactSource = signalStrong(sourceSignals.contactCandidates, 1);
-  const strongHoursSource = signalStrong(sourceSignals.hoursCandidates, 1);
-  const strongPricingSource = signalStrong(sourceSignals.pricingCandidates, 1);
-  const strongLanguageSource = signalStrong(sourceSignals.languagesCandidates, 1);
-  const strongToneSource = signalStrong(sourceSignals.toneCandidates, 1);
-  const strongGreetingSource = signalStrong(sourceSignals.greetingCandidates, 1);
-  const strongAfterHoursSource = signalStrong(sourceSignals.afterHoursCandidates, 1);
+  const candidates = [];
+  const primarySourceLabel =
+    sourceSignals.primarySourceLabel || sourceTypeLabel(sourceSignals.primarySourceType);
 
-  const needsHours =
-    sourceSignals.primarySourceType === "google_maps" ||
-    draftState.contacts.some((item) => /address|street|office|baku|az/i.test(item));
+  const companyNameCandidate = topCandidate(sourceSignals.companyNameCandidates);
+  const descriptionCandidate = topCandidate(sourceSignals.descriptionCandidates);
+  const contactCandidate = topCandidate(sourceSignals.contactCandidates);
+  const hoursCandidate = topCandidate(sourceSignals.hoursCandidates);
+  const pricingCandidate = topCandidate(sourceSignals.pricingCandidates);
 
-  const candidates = [
-    {
+  const businessNameConflict = contradictions.find(
+    (item) => item.key === "business_name_conflict"
+  );
+  if (businessNameConflict) {
+    candidates.push({
       key: "business_name_conflict",
       step: "company",
       title: "Business name",
       group: "business_truth",
-      prompt: contradictions.find((item) => item.key === "business_name_conflict")
-        ?.message,
+      prompt: businessNameConflict.message,
       priority: 100,
-      when: contradictions.some((item) => item.key === "business_name_conflict"),
-    },
-    {
+    });
+  }
+
+  const websiteConflict = contradictions.find((item) => item.key === "website_conflict");
+  if (websiteConflict) {
+    candidates.push({
       key: "website_conflict",
       step: "website",
       title: "Main website",
       group: "business_truth",
-      prompt: contradictions.find((item) => item.key === "website_conflict")
-        ?.message,
+      prompt: websiteConflict.message,
       priority: 98,
-      when: contradictions.some((item) => item.key === "website_conflict"),
-    },
-    {
+    });
+  }
+
+  const servicesConflict = contradictions.find((item) => item.key === "services_conflict");
+  if (servicesConflict) {
+    candidates.push({
       key: "services_conflict",
       step: "services",
       title: "Core services",
       group: "business_truth",
-      prompt:
-        contradictions.find((item) => item.key === "services_conflict")?.message ||
-        "Əsas xidmətlər source ilə tam oturmur. Düz xidmətləri yaz.",
+      prompt: servicesConflict.message,
       priority: 96,
-      when: contradictions.some((item) => item.key === "services_conflict"),
-    },
-    {
+    });
+  }
+
+  const contactConflict = contradictions.find((item) => item.key === "contact_conflict");
+  if (contactConflict) {
+    candidates.push({
       key: "contact_conflict",
       step: "contacts",
       title: "Contact route",
       group: "business_truth",
-      prompt:
-        contradictions.find((item) => item.key === "contact_conflict")?.message ||
-        "Əsas əlaqə marşrutunu dəqiqləşdir.",
-      priority: 92,
-      when: contradictions.some((item) => item.key === "contact_conflict"),
-    },
-    {
+      prompt: contactConflict.message,
+      priority: 94,
+    });
+  }
+
+  if (!draftState.businessName) {
+    candidates.push({
+      key: "business_name",
+      step: "company",
+      title: "Business name",
+      group: "business_truth",
+      prompt: companyNameCandidate
+        ? buildConfirmQuestion({
+            key: "business_name",
+            step: "company",
+            title: "Business name",
+            candidate: companyNameCandidate,
+            sourceLabel: primarySourceLabel,
+          }).prompt
+        : "Biznesin adı necə görünməlidir?",
+      priority: 90,
+    });
+  }
+
+  if (!draftState.description) {
+    candidates.push({
+      key: "positioning",
+      step: "description",
+      title: "What the business is",
+      group: "business_truth",
+      prompt: descriptionCandidate
+        ? buildConfirmQuestion({
+            key: "positioning",
+            step: "description",
+            title: "What the business is",
+            candidate: descriptionCandidate,
+            sourceLabel: primarySourceLabel,
+          }).prompt
+        : "Bu biznesi bir-iki cümlə ilə necə təqdim etməliyəm?",
+      priority: 88,
+    });
+  }
+
+  if (!draftState.services.length) {
+    candidates.push({
+      key: "services",
+      step: "services",
+      title: "Core services",
+      group: "business_truth",
+      prompt: sourceSignals.serviceCandidates.length >= 2
+        ? `Source xidmət siqnalları göstərir: ${listPreview(
+            sourceSignals.serviceCandidates,
+            5
+          )}. Hansıları əsas xidmət kimi saxlamalıyam?`
+        : "Əsas xidmətləri yaz.",
+      priority: 86,
+    });
+  }
+
+  if (!draftState.contacts.length) {
+    candidates.push({
       key: "contact_route",
       step: "contacts",
       title: "Primary conversion route",
       group: "business_truth",
-      prompt:
-        "Müştəri sonda əsasən hara yönləndirilməlidir? Birinci prioritet route-u yaz.",
-      priority: 90,
-      when: !draftState.contacts.length && !strongContactSource,
-    },
-    {
+      prompt: contactCandidate
+        ? `Source əlaqə siqnalı göstərir: ${contactCandidate}. Müştəri üçün əsas əlaqə marşrutu budursa təsdiqlə, deyilsə düz yaz.`
+        : "Müştəri sonda əsasən hara yönləndirilməlidir? Birinci prioritet route-u yaz.",
+      priority: 84,
+    });
+  }
+
+  const hoursNeeded =
+    sourceSignals.primarySourceType === "google_maps" ||
+    sourceSignals.hoursCandidates.length > 0;
+
+  if (!draftState.hours.length && hoursNeeded) {
+    candidates.push({
+      key: "availability",
+      step: "hours",
+      title: "Hours",
+      group: "business_truth",
+      prompt: hoursCandidate
+        ? `Source iş saatı siqnalı göstərir: ${hoursCandidate}. Doğrudursa təsdiqlə, deyilsə düz saatları yaz.`
+        : "İş və ya cavab saatları necə göstərilməlidir?",
+      priority: 82,
+    });
+  }
+
+  if (!draftState.pricingPosture) {
+    candidates.push({
+      key: "pricing_posture",
+      step: "pricing",
+      title: "Pricing posture",
+      group: "business_truth",
+      prompt: pricingCandidate
+        ? `Source qiymət siqnalı göstərir: ${pricingCandidate}. AI bunu necə təqdim etməlidir?`
+        : "Qiymət necə təqdim olunmalıdır? AI birbaşa rəqəm desin, yoxsa sorğuya/operatora yönləndirsin?",
+      priority: 80,
+    });
+  }
+
+  if (!draftState.humanHandoff) {
+    candidates.push({
       key: "handoff_rules",
       step: "handoff",
       title: "Human handoff",
       group: "ai_behavior",
       prompt: "AI hansı hallarda mütləq insana ötürməlidir?",
-      priority: 88,
-      when: !draftState.humanHandoff,
-    },
-    {
-      key: "availability",
-      step: "hours",
-      title: "Hours",
-      group: "business_truth",
-      prompt:
-        "İş və ya cavab saatları necə göstərilməlidir? Voice receptionist bunu necə deməlidir?",
-      priority: 86,
-      when: !draftState.hours.length && needsHours && !strongHoursSource,
-    },
-    {
-      key: "pricing_posture",
-      step: "pricing",
-      title: "Pricing posture",
-      group: "business_truth",
-      prompt:
-        "Qiymət necə təqdim olunmalıdır? AI birbaşa rəqəm desin, yoxsa sorğuya/operatora yönləndirsin?",
-      priority: 84,
-      when: !draftState.pricingPosture && !strongPricingSource,
-    },
-    {
+      priority: 78,
+    });
+  }
+
+  if (!draftState.languages.length) {
+    candidates.push({
       key: "languages",
       step: "profile",
       title: "Languages",
       group: "ai_behavior",
-      prompt: "AI hansı dillərdə danışmalıdır?",
-      priority: 82,
-      when: !draftState.languages.length && !strongLanguageSource,
-    },
-    {
+      prompt: sourceSignals.languagesCandidates.length
+        ? `Source dil siqnalı göstərir: ${listPreview(
+            sourceSignals.languagesCandidates,
+            3
+          )}. AI hansı dillərdə işləsin?`
+        : "AI hansı dillərdə danışmalıdır?",
+      priority: 76,
+    });
+  }
+
+  if (!draftState.tone) {
+    candidates.push({
       key: "tone",
       step: "profile",
       title: "Tone",
       group: "ai_behavior",
       prompt:
         "AI-nin tonu necə olmalıdır? (premium, mehriban, qısa, satış yönümlü və s.)",
-      priority: 80,
-      when: !draftState.tone && !strongToneSource,
-    },
-    {
+      priority: 74,
+    });
+  }
+
+  if (!draftState.greetingStyle) {
+    candidates.push({
       key: "greeting",
       step: "profile",
       title: "Opening style",
       group: "ai_behavior",
       prompt:
         "AI söhbətə necə başlamalıdır? Qısa qarşılamanı necə hiss etdirmək istəyirsən?",
-      priority: 78,
-      when: !draftState.greetingStyle && !strongGreetingSource,
-    },
-    {
+      priority: 72,
+    });
+  }
+
+  if (!draftState.afterHoursBehavior) {
+    candidates.push({
       key: "after_hours",
       step: "handoff",
       title: "After-hours behavior",
       group: "ai_behavior",
       prompt:
         "İş saatından kənar yazan və ya zəng edən istifadəçiyə AI necə cavab verməlidir?",
-      priority: 77,
-      when: !draftState.afterHoursBehavior && !strongAfterHoursSource,
-    },
-    {
-      key: "business_name",
-      step: "company",
-      title: "Business name",
-      group: "business_truth",
-      prompt: "Biznesin adı necə görünməlidir?",
-      priority: 76,
-      when: !draftState.businessName && !strongNameSource,
-    },
-    {
-      key: "positioning",
-      step: "description",
-      title: "What the business is",
-      group: "business_truth",
-      prompt: "Bu biznesi bir-iki cümlə ilə necə təqdim etməliyəm?",
-      priority: 74,
-      when: !draftState.description && !(strongDescriptionSource && strongWebsite),
-    },
-    {
-      key: "services",
-      step: "services",
-      title: "Core services",
-      group: "business_truth",
-      prompt: "Əsas xidmətləri yaz.",
-      priority: 72,
-      when: !draftState.services.length && !(strongServicesSource && strongWebsite),
-    },
-    {
+      priority: 70,
+    });
+  }
+
+  if (!draftState.audience) {
+    candidates.push({
       key: "audience",
       step: "profile",
       title: "Audience",
       group: "business_truth",
       prompt: "Əsasən kimlərə xidmət göstərirsiniz?",
-      priority: 70,
-      when: !draftState.audience,
-    },
-  ];
+      priority: 68,
+    });
+  }
 
-  return candidates
-    .filter((item) => item.when)
-    .sort((a, b) => b.priority - a.priority);
+  return candidates.sort((a, b) => b.priority - a.priority);
 }
 
 function buildAiBehaviorPolicy(draftState = {}) {
@@ -866,9 +1215,13 @@ function buildAssistantMessage({
   draftState,
   confidence,
   recommendations,
+  sourceSignals,
 }) {
   if (phase === "interview" && nextQuestion) {
-    return nextQuestion.prompt;
+    const evidenceLine = sourceSignals.strongestEvidence.length
+      ? `\n\nSource evidence:\n- ${sourceSignals.strongestEvidence.slice(0, 3).join("\n- ")}`
+      : "";
+    return `${nextQuestion.prompt}${evidenceLine}`;
   }
 
   const draftLines = [
@@ -923,8 +1276,7 @@ export function buildSetupAssistantBrainState({
   review = null,
 } = {}) {
   const sourceSignals = buildSourceSignals({ session, draft, sources, review });
-  const rawDraftState = buildDraftState({ draft, review });
-  const draftState = mergeSourceInferredDraft(rawDraftState, sourceSignals);
+  const draftState = buildDraftState({ draft, review });
   const contradictions = detectContradictions({ draftState, sourceSignals });
   const confidence = buildConfidenceBuckets({
     draftState,
@@ -957,6 +1309,8 @@ export function buildSetupAssistantBrainState({
         draftState.contacts.length &&
         draftState.pricingPosture &&
         draftState.humanHandoff &&
+        draftState.languages.length &&
+        draftState.tone &&
         draftState.greetingStyle &&
         draftState.afterHoursBehavior
     );
@@ -1005,6 +1359,14 @@ export function buildSetupAssistantBrainState({
       sourceTypes: sourceSignals.sourceTypes,
       strongestEvidence: sourceSignals.strongestEvidence,
       discoveredPublicClaims: sourceSignals.discoveredPublicClaims,
+      companyNameCandidates: sourceSignals.companyNameCandidates,
+      descriptionCandidates: sourceSignals.descriptionCandidates,
+      serviceCandidates: sourceSignals.serviceCandidates,
+      contactCandidates: sourceSignals.contactCandidates,
+      hoursCandidates: sourceSignals.hoursCandidates,
+      pricingCandidates: sourceSignals.pricingCandidates,
+      audienceCandidates: sourceSignals.audienceCandidates,
+      languagesCandidates: sourceSignals.languagesCandidates,
     },
     readyForApproval,
     assistantMessage: buildAssistantMessage({
@@ -1013,6 +1375,7 @@ export function buildSetupAssistantBrainState({
       draftState,
       confidence,
       recommendations,
+      sourceSignals,
     }),
   };
 }
