@@ -554,7 +554,12 @@ function Composer({
   );
 }
 
-function hasExistingSetupProgress({ assistant, reviewPayload, finalModel, rawCurrentQuestion }) {
+function hasExistingSetupProgress({
+  assistant,
+  reviewPayload,
+  finalModel,
+  rawCurrentQuestion,
+}) {
   const reviewDraft = obj(reviewPayload?.review?.draft || reviewPayload?.draft);
   const reviewProfile = obj(reviewDraft.businessProfile);
   const reviewSourceMetadata = obj(reviewDraft.sourceMetadata);
@@ -593,7 +598,6 @@ export default function SetupAssistantSections({
   const lastDraftSignatureRef = useRef("");
   const lastErrorSignatureRef = useRef("");
 
-  const [sourceSubmitted, setSourceSubmitted] = useState(false);
   const [composerValue, setComposerValue] = useState("");
   const [localError, setLocalError] = useState("");
   const [transcript, setTranscript] = useState([]);
@@ -639,6 +643,20 @@ export default function SetupAssistantSections({
     };
   }, [assistantControl.nextQuestion]);
 
+  const hasExistingProgress = useMemo(
+    () =>
+      hasExistingSetupProgress({
+        assistant,
+        reviewPayload,
+        finalModel,
+        rawCurrentQuestion,
+      }),
+    [assistant, reviewPayload, finalModel, rawCurrentQuestion]
+  );
+
+  const sourceSubmitted =
+    transcript.some((item) => item.role === "user") || hasExistingProgress;
+
   const currentQuestion = sourceSubmitted ? rawCurrentQuestion : null;
 
   const currentGroupProgress = useMemo(
@@ -654,23 +672,6 @@ export default function SetupAssistantSections({
     sourceSubmitted &&
     !currentQuestion &&
     (assistantControl.readyForApproval === true || smartDraftReady);
-
-  const hasExistingProgress = useMemo(
-    () =>
-      hasExistingSetupProgress({
-        assistant,
-        reviewPayload,
-        finalModel,
-        rawCurrentQuestion,
-      }),
-    [assistant, reviewPayload, finalModel, rawCurrentQuestion]
-  );
-
-  useEffect(() => {
-    if (!sourceSubmitted && hasExistingProgress) {
-      setSourceSubmitted(true);
-    }
-  }, [hasExistingProgress, sourceSubmitted]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -692,18 +693,22 @@ export default function SetupAssistantSections({
     if (lastQuestionSignatureRef.current === signature) return;
     lastQuestionSignatureRef.current = signature;
 
-    setTranscript((current) => [
-      ...current,
-      {
-        id: `assistant-question-${Date.now()}`,
-        type: "message",
-        role: "assistant",
-        eyebrow: `${currentGroupProgress.label} · ${currentGroupProgress.position}/${currentGroupProgress.total}`,
-        title: currentQuestion.title,
-        body: currentQuestion.prompt,
-      },
-    ]);
-    setAwaitingAssistant(false);
+    const timer = window.setTimeout(() => {
+      setTranscript((current) => [
+        ...current,
+        {
+          id: `assistant-question-${Date.now()}`,
+          type: "message",
+          role: "assistant",
+          eyebrow: `${currentGroupProgress.label} · ${currentGroupProgress.position}/${currentGroupProgress.total}`,
+          title: currentQuestion.title,
+          body: currentQuestion.prompt,
+        },
+      ]);
+      setAwaitingAssistant(false);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [
     sourceSubmitted,
     currentQuestion,
@@ -727,16 +732,20 @@ export default function SetupAssistantSections({
     if (lastDraftSignatureRef.current === signature) return;
     lastDraftSignatureRef.current = signature;
 
-    setTranscript((current) => [
-      ...current,
-      {
-        id: `assistant-draft-${Date.now()}`,
-        type: "draft",
-        role: "assistant",
-        model: finalModel,
-      },
-    ]);
-    setAwaitingAssistant(false);
+    const timer = window.setTimeout(() => {
+      setTranscript((current) => [
+        ...current,
+        {
+          id: `assistant-draft-${Date.now()}`,
+          type: "draft",
+          role: "assistant",
+          model: finalModel,
+        },
+      ]);
+      setAwaitingAssistant(false);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [
     sourceSubmitted,
     questionsFinished,
@@ -752,16 +761,20 @@ export default function SetupAssistantSections({
     if (lastErrorSignatureRef.current === message) return;
     lastErrorSignatureRef.current = message;
 
-    setTranscript((current) => [
-      ...current,
-      {
-        id: `assistant-error-${Date.now()}`,
-        type: "message",
-        role: "assistant",
-        body: message,
-      },
-    ]);
-    setAwaitingAssistant(false);
+    const timer = window.setTimeout(() => {
+      setTranscript((current) => [
+        ...current,
+        {
+          id: `assistant-error-${Date.now()}`,
+          type: "message",
+          role: "assistant",
+          body: message,
+        },
+      ]);
+      setAwaitingAssistant(false);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [localError, errorMessage]);
 
   async function handleInitialSourceSubmit() {
@@ -771,7 +784,6 @@ export default function SetupAssistantSections({
     const resolvedSource = resolveSetupSourceInput(text);
 
     setLocalError("");
-    setSourceSubmitted(true);
     setAwaitingAssistant(true);
     setTranscript((current) => [
       ...current,
