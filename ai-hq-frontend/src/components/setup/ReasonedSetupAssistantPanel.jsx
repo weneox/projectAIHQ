@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import {
   ArrowRight,
   Brain,
@@ -231,13 +230,12 @@ export default function ReasonedSetupAssistantPanel({
   const assistantHints = arr(payload.assistantHints || data.assistantHints);
   const guardrails = arr(payload.guardrails || data.guardrails);
 
-  const currentQuestionKey = useMemo(
-    () =>
-      s(primaryQuestion.key) ||
-      s(turn.questionKey) ||
-      s(assistant.currentQuestionKey),
-    [primaryQuestion.key, turn.questionKey, assistant.currentQuestionKey]
-  );
+  const primaryQuestionKey = s(primaryQuestion.key);
+  const turnQuestionKey = s(turn.questionKey);
+  const assistantQuestionKey = s(assistant.currentQuestionKey);
+
+  const currentQuestionKey =
+    primaryQuestionKey || turnQuestionKey || assistantQuestionKey;
 
   if (assistant.isLoading) {
     return (
@@ -285,7 +283,9 @@ export default function ReasonedSetupAssistantPanel({
       <PanelHeader
         phase={s(conversationStatus.phase)}
         unresolvedCount={Number(conversationStatus.unresolvedCount || 0)}
-        followupCount={Number(conversationStatus.followupCount || followupQueue.length || 0)}
+        followupCount={Number(
+          conversationStatus.followupCount || followupQueue.length || 0
+        )}
         onRefresh={assistant.refresh}
         isRefreshing={assistant.isFetching}
       />

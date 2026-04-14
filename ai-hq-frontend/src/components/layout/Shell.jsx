@@ -6,7 +6,6 @@ import { useNotificationsSurface } from "../../hooks/useNotificationsSurface.js"
 import { SETUP_WIDGET_ROUTE } from "../../lib/appEntry.js";
 import { cx } from "../../lib/cx.js";
 import { realtimeStore } from "../../lib/realtime/realtimeStore.js";
-import useProductHome from "../../view-models/useProductHome.js";
 import { InlineNotice } from "../ui/AppShellPrimitives.jsx";
 import Sidebar, {
   SHELL_TOPBAR_HEIGHT,
@@ -260,11 +259,6 @@ export default function Shell() {
   const location = useLocation();
   const navigate = useNavigate();
   const notifications = useNotificationsSurface();
-  const homeRouteActive = location.pathname === "/home";
-
-  const home = useProductHome({
-    enabled: homeRouteActive,
-  });
 
   const refreshTimerRef = useRef(0);
   const statsRequestRef = useRef(null);
