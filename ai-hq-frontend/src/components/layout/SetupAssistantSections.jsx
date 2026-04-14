@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { ArrowUp, LoaderCircle } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   SETUP_INTERVIEW_QUESTIONS,
   SETUP_SOURCE_PROMPT,
 } from "./setupInterviewQuestions.js";
 import { resolveSetupSourceInput } from "./setupSourceIntake.js";
+
+const INTRO_SEEN_STORAGE_KEY = "setup_assistant_intro_seen_v1";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -277,12 +280,39 @@ function buildProgressFromInterviewPlan(interviewPlan = {}, currentQuestion = nu
   };
 }
 
+function getIntroSeen() {
+  try {
+    return window.sessionStorage.getItem(INTRO_SEEN_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function setIntroSeen() {
+  try {
+    window.sessionStorage.setItem(INTRO_SEEN_STORAGE_KEY, "1");
+  } catch {}
+}
+
+const bubbleMotion = {
+  hidden: { opacity: 0, y: 16, scale: 0.985 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.3,
+      ease: [0.22, 1, 0.36, 1],
+    },
+  },
+};
+
 function bubbleClasses(role = "assistant") {
   if (role === "user") {
-    return "bg-[linear-gradient(180deg,#0f172a,#020617)] text-white rounded-[26px] rounded-br-[10px] shadow-[0_18px_40px_rgba(2,6,23,0.22)]";
+    return "bg-[linear-gradient(180deg,#2563eb,#1d4ed8)] text-white rounded-[26px] rounded-br-[10px] shadow-[0_18px_40px_rgba(37,99,235,0.28)]";
   }
 
-  return "border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.96))] text-text rounded-[26px] rounded-bl-[10px] shadow-[0_10px_30px_rgba(15,23,42,0.06)]";
+  return "border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.97))] text-text rounded-[26px] rounded-bl-[10px] shadow-[0_10px_30px_rgba(15,23,42,0.06)]";
 }
 
 function MessageBubble({
@@ -291,16 +321,17 @@ function MessageBubble({
   title = "",
   body = "",
   children = null,
+  animate = true,
+  onAnimationComplete = null,
 }) {
   const isUser = role === "user";
-
-  return (
+  const content = (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div className={`max-w-[82%] px-4 py-3.5 ${bubbleClasses(role)}`}>
         {s(eyebrow) ? (
           <div
             className={`mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${
-              isUser ? "text-white/60" : "text-text-muted"
+              isUser ? "text-white/65" : "text-text-muted"
             }`}
           >
             {eyebrow}
@@ -326,6 +357,19 @@ function MessageBubble({
         {children ? <div className="mt-4">{children}</div> : null}
       </div>
     </div>
+  );
+
+  if (!animate) return content;
+
+  return (
+    <motion.div
+      variants={bubbleMotion}
+      initial="hidden"
+      animate="visible"
+      onAnimationComplete={onAnimationComplete || undefined}
+    >
+      {content}
+    </motion.div>
   );
 }
 
@@ -373,7 +417,7 @@ function SmartDraftBubble({ model, finalizing, onFinalize }) {
     .join(" · ");
 
   return (
-    <MessageBubble role="assistant" title="Draft">
+    <MessageBubble role="assistant" title="Draft" animate>
       <div className="space-y-4">
         {s(model.message) ? (
           <div className="text-[14px] leading-7 text-text-muted whitespace-pre-wrap">
@@ -443,9 +487,11 @@ function Composer({
   onChange,
   onSubmit,
 }) {
+  const disabled = !s(value) || busy;
+
   return (
-    <div className="border-t border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,0.94),rgba(248,250,252,0.98))] px-5 py-4">
-      <div className="rounded-[28px] border border-[rgba(15,23,42,0.08)] bg-white px-4 py-3 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+    <div className="bg-transparent px-5 pb-5 pt-3">
+      <div className="rounded-[34px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.98))] px-4 py-4 shadow-[0_16px_50px_rgba(15,23,42,0.07)]">
         <div className="flex items-end gap-3">
           <textarea
             rows={3}
@@ -458,17 +504,25 @@ function Composer({
               }
             }}
             placeholder={placeholder}
-            className="min-h-[92px] w-full resize-none bg-transparent px-0 py-1 text-[15px] leading-7 text-text outline-none placeholder:text-text-subtle"
+            className="min-h-[92px] flex-1 resize-none appearance-none border-0 bg-transparent px-2 py-2 text-[15px] leading-7 text-text shadow-none outline-none ring-0 placeholder:text-text-subtle focus:border-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
           />
 
           <button
             type="button"
             onClick={onSubmit}
-            disabled={!s(value) || busy}
-            className="inline-flex h-11 shrink-0 items-center gap-2 rounded-full bg-slate-950 px-5 text-[12px] font-semibold text-white transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-45"
+            disabled={disabled}
+            aria-label={buttonLabel}
+            className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition-all ${
+              disabled
+                ? "bg-[rgba(15,23,42,0.12)] text-white/80 shadow-none"
+                : "bg-[linear-gradient(180deg,#0f172a,#020617)] text-white shadow-[0_16px_34px_rgba(2,6,23,0.22)] hover:scale-[1.03]"
+            }`}
           >
-            {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-            <span>{buttonLabel}</span>
+            {busy ? (
+              <LoaderCircle className="h-4.5 w-4.5 animate-spin" />
+            ) : (
+              <ArrowUp className="h-4.5 w-4.5" strokeWidth={2.4} />
+            )}
           </button>
         </div>
       </div>
@@ -494,6 +548,7 @@ export default function SetupAssistantSections({
   const [localError, setLocalError] = useState("");
   const [transcript, setTranscript] = useState([]);
   const [localAnswers, setLocalAnswers] = useState({});
+  const [introAnimated, setIntroAnimated] = useState(() => getIntroSeen());
 
   const busy = saving || finalizing || capturingSource;
 
@@ -653,34 +708,49 @@ export default function SetupAssistantSections({
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,#ffffff,#f8fafc)]">
-      <div ref={scrollRef} className="flex-1 overflow-auto px-5 py-5">
-        <div className="space-y-4">
-          <MessageBubble role="assistant" body={SETUP_SOURCE_PROMPT} />
+      <div ref={scrollRef} className="flex-1 overflow-auto px-5 pt-5">
+        <div className="space-y-4 pb-4">
+          <MessageBubble
+            role="assistant"
+            body={SETUP_SOURCE_PROMPT}
+            animate={!introAnimated}
+            onAnimationComplete={() => {
+              if (!introAnimated) {
+                setIntroSeen();
+                setIntroAnimated(true);
+              }
+            }}
+          />
 
-          {transcript.map((item) => (
-            <MessageBubble
-              key={item.id}
-              role={item.role}
-              eyebrow={item.eyebrow}
-              body={item.text || item.body}
-            />
-          ))}
+          <AnimatePresence initial={false}>
+            {transcript.map((item) => (
+              <MessageBubble
+                key={item.id}
+                role={item.role}
+                eyebrow={item.eyebrow}
+                body={item.text || item.body}
+                animate
+              />
+            ))}
+          </AnimatePresence>
 
           {sourceSubmitted && currentQuestion ? (
             <MessageBubble
               role="assistant"
               eyebrow={`${currentGroupProgress.label} · ${currentGroupProgress.position}/${currentGroupProgress.total}`}
               body={questionPrompt}
+              animate
             />
           ) : null}
 
-          {busy ? <MessageBubble role="assistant" body="..." /> : null}
+          {busy ? <MessageBubble role="assistant" body="..." animate /> : null}
 
           {sourceSubmitted && !currentQuestion && !questionsFinished ? (
             <MessageBubble
               role="assistant"
               eyebrow="Thinking"
               body="Mənbələr və cavabların birlikdə analiz olunur. Növbəti sual hazırlanır..."
+              animate
             />
           ) : null}
 
@@ -689,6 +759,7 @@ export default function SetupAssistantSections({
               role="assistant"
               eyebrow="Thinking"
               body="Mənbələr və cavabların birlikdə analiz olunur. Yekun draft hazırlanır..."
+              animate
             />
           ) : null}
 
@@ -701,7 +772,11 @@ export default function SetupAssistantSections({
           ) : null}
 
           {s(localError || errorMessage) ? (
-            <MessageBubble role="assistant" body={localError || errorMessage} />
+            <MessageBubble
+              role="assistant"
+              body={localError || errorMessage}
+              animate
+            />
           ) : null}
         </div>
       </div>
@@ -711,7 +786,7 @@ export default function SetupAssistantSections({
           value={composerValue}
           busy={busy}
           placeholder="Website və ya source link yaz"
-          buttonLabel="Continue"
+          buttonLabel="Send"
           onChange={setComposerValue}
           onSubmit={handleInitialSourceSubmit}
         />
@@ -722,7 +797,7 @@ export default function SetupAssistantSections({
           value={composerValue}
           busy={busy}
           placeholder={currentQuestion.placeholder || "Cavabını yaz"}
-          buttonLabel="Continue"
+          buttonLabel="Send"
           onChange={setComposerValue}
           onSubmit={handleQuestionSubmit}
         />
@@ -733,7 +808,7 @@ export default function SetupAssistantSections({
           value={composerValue}
           busy={busy}
           placeholder="Dəyişmək istədiyini yaz"
-          buttonLabel="Update"
+          buttonLabel="Send"
           onChange={setComposerValue}
           onSubmit={handleDraftUpdate}
         />
