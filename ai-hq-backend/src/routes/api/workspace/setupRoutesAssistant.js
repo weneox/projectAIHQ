@@ -11,11 +11,16 @@ export function registerSetupAssistantRoutes(
     s,
   }
 ) {
+  function responseOk(result) {
+    return Number(result?.status || 500) === 200 && result?.body?.ok !== false;
+  }
+
   async function runReadView(req, res, actor) {
     try {
       const result = await readSetupAssistantView({
         db,
         actor,
+      }, {
         loadCurrentSetupAssistantSession,
       });
 
@@ -37,18 +42,27 @@ export function registerSetupAssistantRoutes(
         body: req.body || {},
       });
 
-      if (Number(updated?.status || 500) !== 200 || updated?.body?.ok === false) {
+      if (!responseOk(updated)) {
         return res.status(updated.status).json(updated.body);
       }
 
-      const view = await readSetupAssistantView({
-        db,
-        actor,
-        loadCurrentSetupAssistantSession,
-      });
+      try {
+        const view = await readSetupAssistantView({
+          db,
+          actor,
+          loadCurrentSetupAssistantSession,
+        });
 
-      return res.status(view.status).json({
-        ...view.body,
+        if (responseOk(view)) {
+          return res.status(view.status).json({
+            ...view.body,
+            message: s(updated?.body?.message || "Setup assistant draft updated"),
+          });
+        }
+      } catch {}
+
+      return res.status(updated.status).json({
+        ...updated.body,
         message: s(updated?.body?.message || "Setup assistant draft updated"),
       });
     } catch (error) {
@@ -70,18 +84,28 @@ export function registerSetupAssistantRoutes(
         actor,
       });
 
-      if (Number(started?.status || 500) !== 200 || started?.body?.ok === false) {
+      if (!responseOk(started)) {
         return res.status(started.status).json(started.body);
       }
 
-      const view = await readSetupAssistantView({
-        db,
-        actor,
-        loadCurrentSetupAssistantSession,
-      });
+      try {
+        const view = await readSetupAssistantView({
+          db,
+          actor,
+          loadCurrentSetupAssistantSession,
+        });
 
-      return res.status(view.status).json({
-        ...view.body,
+        if (responseOk(view)) {
+          return res.status(view.status).json({
+            ...view.body,
+            created: started?.body?.created === true,
+            message: s(started?.body?.message || "Setup assistant session started"),
+          });
+        }
+      } catch {}
+
+      return res.status(started.status).json({
+        ...started.body,
         created: started?.body?.created === true,
         message: s(started?.body?.message || "Setup assistant session started"),
       });
