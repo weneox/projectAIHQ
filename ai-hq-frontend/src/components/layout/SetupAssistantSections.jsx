@@ -291,7 +291,9 @@ function getIntroSeen() {
 function setIntroSeen() {
   try {
     window.sessionStorage.setItem(INTRO_SEEN_STORAGE_KEY, "1");
-  } catch {}
+  } catch {
+    return;
+  }
 }
 
 const bubbleMotion = {
