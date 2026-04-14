@@ -56,6 +56,10 @@ function signalStrong(values = [], minCount = 1) {
   return uniqueStrings(values).length >= minCount;
 }
 
+function groupLabel(group = "") {
+  return group === "ai_behavior" ? "AI behavior" : "Business truth";
+}
+
 function extractBehaviorSignals({ draft = {}, review = null } = {}) {
   const safeDraft = obj(draft);
   const reviewRoot = obj(review);
@@ -662,6 +666,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "business_name_conflict",
       step: "company",
       title: "Business name",
+      group: "business_truth",
       prompt: contradictions.find((item) => item.key === "business_name_conflict")
         ?.message,
       priority: 100,
@@ -671,6 +676,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "website_conflict",
       step: "website",
       title: "Main website",
+      group: "business_truth",
       prompt: contradictions.find((item) => item.key === "website_conflict")
         ?.message,
       priority: 98,
@@ -680,6 +686,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "services_conflict",
       step: "services",
       title: "Core services",
+      group: "business_truth",
       prompt:
         contradictions.find((item) => item.key === "services_conflict")?.message ||
         "Əsas xidmətlər source ilə tam oturmur. Düz xidmətləri yaz.",
@@ -690,6 +697,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "contact_conflict",
       step: "contacts",
       title: "Contact route",
+      group: "business_truth",
       prompt:
         contradictions.find((item) => item.key === "contact_conflict")?.message ||
         "Əsas əlaqə marşrutunu dəqiqləşdir.",
@@ -700,6 +708,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "contact_route",
       step: "contacts",
       title: "Primary conversion route",
+      group: "business_truth",
       prompt:
         "Müştəri sonda əsasən hara yönləndirilməlidir? Birinci prioritet route-u yaz.",
       priority: 90,
@@ -709,6 +718,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "handoff_rules",
       step: "handoff",
       title: "Human handoff",
+      group: "ai_behavior",
       prompt: "AI hansı hallarda mütləq insana ötürməlidir?",
       priority: 88,
       when: !draftState.humanHandoff,
@@ -717,6 +727,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "availability",
       step: "hours",
       title: "Hours",
+      group: "business_truth",
       prompt:
         "İş və ya cavab saatları necə göstərilməlidir? Voice receptionist bunu necə deməlidir?",
       priority: 86,
@@ -726,6 +737,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "pricing_posture",
       step: "pricing",
       title: "Pricing posture",
+      group: "business_truth",
       prompt:
         "Qiymət necə təqdim olunmalıdır? AI birbaşa rəqəm desin, yoxsa sorğuya/operatora yönləndirsin?",
       priority: 84,
@@ -735,6 +747,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "languages",
       step: "profile",
       title: "Languages",
+      group: "ai_behavior",
       prompt: "AI hansı dillərdə danışmalıdır?",
       priority: 82,
       when: !draftState.languages.length && !strongLanguageSource,
@@ -743,6 +756,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "tone",
       step: "profile",
       title: "Tone",
+      group: "ai_behavior",
       prompt:
         "AI-nin tonu necə olmalıdır? (premium, mehriban, qısa, satış yönümlü və s.)",
       priority: 80,
@@ -752,6 +766,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "greeting",
       step: "profile",
       title: "Opening style",
+      group: "ai_behavior",
       prompt:
         "AI söhbətə necə başlamalıdır? Qısa qarşılamanı necə hiss etdirmək istəyirsən?",
       priority: 78,
@@ -761,6 +776,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "after_hours",
       step: "handoff",
       title: "After-hours behavior",
+      group: "ai_behavior",
       prompt:
         "İş saatından kənar yazan və ya zəng edən istifadəçiyə AI necə cavab verməlidir?",
       priority: 77,
@@ -770,6 +786,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "business_name",
       step: "company",
       title: "Business name",
+      group: "business_truth",
       prompt: "Biznesin adı necə görünməlidir?",
       priority: 76,
       when: !draftState.businessName && !strongNameSource,
@@ -778,6 +795,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "positioning",
       step: "description",
       title: "What the business is",
+      group: "business_truth",
       prompt: "Bu biznesi bir-iki cümlə ilə necə təqdim etməliyəm?",
       priority: 74,
       when: !draftState.description && !(strongDescriptionSource && strongWebsite),
@@ -786,6 +804,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "services",
       step: "services",
       title: "Core services",
+      group: "business_truth",
       prompt: "Əsas xidmətləri yaz.",
       priority: 72,
       when: !draftState.services.length && !(strongServicesSource && strongWebsite),
@@ -794,6 +813,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       key: "audience",
       step: "profile",
       title: "Audience",
+      group: "business_truth",
       prompt: "Əsasən kimlərə xidmət göstərirsiniz?",
       priority: 70,
       when: !draftState.audience,
@@ -803,6 +823,41 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
   return candidates
     .filter((item) => item.when)
     .sort((a, b) => b.priority - a.priority);
+}
+
+function buildAiBehaviorPolicy(draftState = {}) {
+  return compactObject({
+    languages: arr(draftState.languages),
+    tone: s(draftState.tone),
+    greetingStyle: s(draftState.greetingStyle),
+    afterHoursBehavior: s(draftState.afterHoursBehavior),
+    escalationPolicy: s(draftState.humanHandoff),
+    pricingDisclosurePolicy: s(draftState.pricingPosture),
+    contactRoutingPolicy: arr(draftState.contacts),
+  });
+}
+
+function buildInterviewPlan(questionCandidates = [], nextQuestion = null) {
+  const activeQuestions = arr(questionCandidates).map((item) =>
+    compactObject({
+      key: item.key,
+      step: item.step,
+      title: item.title,
+      group: item.group,
+      groupLabel: groupLabel(item.group),
+      priority: item.priority,
+    })
+  );
+
+  return {
+    activeQuestionKeys: activeQuestions.map((item) => item.key),
+    activeQuestions,
+    remainingQuestionKeys: activeQuestions
+      .filter((item) => item.key !== s(nextQuestion?.key))
+      .map((item) => item.key),
+    nextGroup: s(nextQuestion?.group),
+    nextGroupLabel: groupLabel(nextQuestion?.group),
+  };
 }
 
 function buildAssistantMessage({
@@ -917,6 +972,8 @@ export function buildSetupAssistantBrainState({
           title: nextQuestion.title,
           prompt: nextQuestion.prompt,
           priority: nextQuestion.priority,
+          group: nextQuestion.group,
+          groupLabel: groupLabel(nextQuestion.group),
         })
       : null,
     draft: compactObject({
@@ -933,6 +990,8 @@ export function buildSetupAssistantBrainState({
       greetingStyle: draftState.greetingStyle,
       afterHoursBehavior: draftState.afterHoursBehavior,
     }),
+    aiBehavior: buildAiBehaviorPolicy(draftState),
+    interviewPlan: buildInterviewPlan(questionCandidates, nextQuestion),
     confidence,
     recommendation: {
       notes: recommendations,
@@ -969,7 +1028,17 @@ export function buildSetupAssistantFirstPrompt() {
       title: "Source",
       prompt:
         "Biznesin linkini və ya qısa izahını göndər. (website, instagram, facebook, qısa qeyd)",
+      group: "business_truth",
+      groupLabel: "Business truth",
     },
+    interviewPlan: {
+      activeQuestionKeys: [],
+      activeQuestions: [],
+      remainingQuestionKeys: [],
+      nextGroup: "business_truth",
+      nextGroupLabel: "Business truth",
+    },
+    aiBehavior: {},
     readyForApproval: false,
   };
 }

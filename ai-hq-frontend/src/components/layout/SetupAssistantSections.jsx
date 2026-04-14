@@ -48,15 +48,26 @@ function classifySourceInput(value = "") {
   return "manual";
 }
 
-function textHasAny(value = "", patterns = []) {
-  const text = s(value).toLowerCase();
-  return patterns.some((pattern) => text.includes(String(pattern).toLowerCase()));
-}
-
 function groupLabel(group = "") {
   if (group === "ai_behavior") return "AI behavior";
   return "Business truth";
 }
+
+function buildQuestionMetaMap() {
+  return Object.fromEntries(
+    SETUP_INTERVIEW_QUESTIONS.map((item) => [
+      item.key,
+      {
+        placeholder: item.placeholder,
+        title: item.title,
+        prompt: item.prompt,
+        group: item.group,
+      },
+    ])
+  );
+}
+
+const QUESTION_META_MAP = buildQuestionMetaMap();
 
 function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers = {}) {
   const review = obj(reviewPayload?.review || reviewPayload);
@@ -159,6 +170,31 @@ function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers =
   };
 }
 
+function normalizeAssistantControl(reviewPayload = null, assistant = {}) {
+  const primary =
+    obj(reviewPayload?.assistant).nextQuestion ||
+    obj(reviewPayload?.assistant).interviewPlan ||
+    obj(reviewPayload?.assistant).aiBehavior
+      ? obj(reviewPayload?.assistant)
+      : obj(reviewPayload?.assistantBrain);
+
+  const fallback =
+    obj(assistant.assistant).nextQuestion ||
+    obj(assistant.assistant).interviewPlan ||
+    obj(assistant.assistant).aiBehavior
+      ? obj(assistant.assistant)
+      : obj(assistant.assistantBrain);
+
+  const source = Object.keys(primary).length ? primary : fallback;
+
+  return {
+    nextQuestion: obj(source.nextQuestion),
+    interviewPlan: obj(source.interviewPlan),
+    aiBehavior: obj(source.aiBehavior),
+    readyForApproval: source.readyForApproval === true,
+  };
+}
+
 function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswers = {} }) {
   const reviewAssistant = obj(reviewPayload?.assistant || reviewPayload?.assistantBrain);
   const recommendation = obj(reviewAssistant.recommendation);
@@ -251,128 +287,28 @@ function hasBackendSmartDraft(model = {}) {
   return hasGuidance && (hasSourceWork || hasStructuredDraft);
 }
 
-function shouldSkipQuestion(question = {}, model = {}) {
-  const draft = obj(model.draft);
-  const sourceSignals = obj(model.sourceSignals);
-
-  const strongWebsite = Number(sourceSignals.pageCount || 0) >= 4;
-  const strongEvidence = arr(sourceSignals.strongestEvidence);
-  const noticedClaims = arr(sourceSignals.discoveredPublicClaims);
-  const primarySourceType = s(sourceSignals.primarySourceType).toLowerCase();
-
-  switch (question.key) {
-    case "company":
-      return Boolean(
-        s(draft.businessName) &&
-          (strongWebsite ||
-            strongEvidence.length > 0 ||
-            primarySourceType === "website" ||
-            primarySourceType === "instagram" ||
-            primarySourceType === "facebook")
-      );
-
-    case "description":
-      return Boolean(
-        s(draft.whatThisBusinessIs) &&
-          (strongWebsite || noticedClaims.length >= 2)
-      );
-
-    case "services":
-      return Boolean(
-        arr(draft.coreServices).length >= 2 &&
-          (strongWebsite || noticedClaims.length >= 3)
-      );
-
-    case "contacts":
-      return Boolean(
-        arr(draft.contactRoutes).length >= 1 &&
-          (strongWebsite ||
-            strongEvidence.some((item) =>
-              textHasAny(item, ["phone", "email", "whatsapp", "address", "+994", "@"])
-            ) ||
-            noticedClaims.some((item) =>
-              textHasAny(item, ["phone", "email", "whatsapp", "address", "+994", "@"])
-            ))
-      );
-
-    case "hours":
-      return Boolean(arr(draft.hours).length >= 1);
-
-    case "pricing":
-      return Boolean(
-        s(draft.pricingPosture) &&
-          (strongWebsite ||
-            strongEvidence.some((item) =>
-              textHasAny(item, ["price", "pricing", "azn", "quote", "consultation"])
-            ))
-      );
-
-    case "audience":
-      return Boolean(s(draft.audience) && strongWebsite);
-
-    case "handoff":
-      return Boolean(s(draft.humanHandoff));
-
-    case "languages":
-      return Boolean(arr(draft.languages).length >= 1);
-
-    case "tone":
-      return Boolean(s(draft.tone));
-
-    case "greeting":
-      return Boolean(s(draft.greetingStyle));
-
-    case "after_hours":
-      return Boolean(s(draft.afterHoursBehavior));
-
-    default:
-      return false;
-  }
-}
-
-function getNextQuestionIndex(startIndex = 0, model = {}) {
-  for (let i = startIndex; i < SETUP_INTERVIEW_QUESTIONS.length; i += 1) {
-    const question = SETUP_INTERVIEW_QUESTIONS[i];
-    if (!shouldSkipQuestion(question, model)) {
-      return i;
-    }
-  }
-  return SETUP_INTERVIEW_QUESTIONS.length;
-}
-
-function buildGroupProgress(questionIndex, model = {}) {
-  const question = SETUP_INTERVIEW_QUESTIONS[questionIndex];
-  if (!question) {
+function buildProgressFromInterviewPlan(interviewPlan = {}, currentQuestion = null) {
+  const activeQuestions = arr(interviewPlan.activeQuestions);
+  if (!activeQuestions.length || !currentQuestion?.key) {
     return {
-      label: "",
-      position: 0,
-      total: 0,
+      label: groupLabel(currentQuestion?.group),
+      position: 1,
+      total: 1,
     };
   }
 
-  const activeIndexes = SETUP_INTERVIEW_QUESTIONS.map((item, index) => ({
-    item,
-    index,
-  }))
-    .filter(
-      ({ item }) =>
-        item.group === question.group && !shouldSkipQuestion(item, model)
-    )
-    .map(({ index }) => index);
-
-  const position = activeIndexes.indexOf(questionIndex) + 1;
+  const currentGroup = s(currentQuestion.group || activeQuestions[0]?.group);
+  const groupQuestions = activeQuestions.filter(
+    (item) => s(item.group) === currentGroup
+  );
+  const position =
+    groupQuestions.findIndex((item) => s(item.key) === s(currentQuestion.key)) + 1;
 
   return {
-    label: groupLabel(question.group),
+    label: groupLabel(currentGroup),
     position: position > 0 ? position : 1,
-    total: activeIndexes.length || 1,
+    total: groupQuestions.length || 1,
   };
-}
-
-function getFirstGroupQuestionIndex(group = "", model = {}) {
-  return SETUP_INTERVIEW_QUESTIONS.findIndex(
-    (question) => question.group === group && !shouldSkipQuestion(question, model)
-  );
 }
 
 function MessageBubble({
@@ -650,7 +586,6 @@ export default function SetupAssistantSections({
   const scrollRef = useRef(null);
 
   const [sourceSubmitted, setSourceSubmitted] = useState(false);
-  const [baseQuestionIndex, setBaseQuestionIndex] = useState(0);
   const [composerValue, setComposerValue] = useState("");
   const [localError, setLocalError] = useState("");
   const [transcript, setTranscript] = useState([]);
@@ -668,47 +603,59 @@ export default function SetupAssistantSections({
     [reviewPayload, assistant, localAnswers]
   );
 
+  const assistantControl = useMemo(
+    () => normalizeAssistantControl(reviewPayload, assistant),
+    [reviewPayload, assistant]
+  );
+
   const smartDraftReady = useMemo(
     () => hasBackendSmartDraft(finalModel),
     [finalModel]
   );
 
-  const currentQuestionIndex = useMemo(() => {
-    if (!sourceSubmitted) return -1;
-    return getNextQuestionIndex(baseQuestionIndex, finalModel);
-  }, [sourceSubmitted, baseQuestionIndex, finalModel]);
+  const currentQuestion = useMemo(() => {
+    const nextQuestion = obj(assistantControl.nextQuestion);
+    if (!sourceSubmitted) return null;
+    if (!s(nextQuestion.key) || !s(nextQuestion.prompt)) return null;
 
-  const currentQuestion =
-    currentQuestionIndex >= 0 &&
-    currentQuestionIndex < SETUP_INTERVIEW_QUESTIONS.length
-      ? SETUP_INTERVIEW_QUESTIONS[currentQuestionIndex]
-      : null;
+    const meta = obj(QUESTION_META_MAP[nextQuestion.key]);
+
+    return {
+      key: s(nextQuestion.key),
+      step: s(nextQuestion.step),
+      title: s(nextQuestion.title || meta.title),
+      prompt: s(nextQuestion.prompt || meta.prompt),
+      group: s(nextQuestion.group || meta.group),
+      placeholder: s(meta.placeholder),
+    };
+  }, [assistantControl.nextQuestion, sourceSubmitted]);
 
   const questionsFinished =
     sourceSubmitted &&
-    currentQuestionIndex >= SETUP_INTERVIEW_QUESTIONS.length;
+    !currentQuestion &&
+    (assistantControl.readyForApproval === true || smartDraftReady);
 
-  const currentGroupProgress = useMemo(() => {
-    if (!currentQuestion) {
-      return {
-        label: "",
-        position: 0,
-        total: 0,
-      };
-    }
-    return buildGroupProgress(currentQuestionIndex, finalModel);
-  }, [currentQuestion, currentQuestionIndex, finalModel]);
+  const currentGroupProgress = useMemo(
+    () =>
+      buildProgressFromInterviewPlan(
+        assistantControl.interviewPlan,
+        currentQuestion
+      ),
+    [assistantControl.interviewPlan, currentQuestion]
+  );
 
-  const firstAiBehaviorQuestionIndex = useMemo(
-    () => getFirstGroupQuestionIndex("ai_behavior", finalModel),
-    [finalModel]
+  const aiBehaviorAnswered = useMemo(
+    () =>
+      SETUP_INTERVIEW_QUESTIONS.filter((item) => item.group === "ai_behavior").some(
+        (item) => Boolean(s(localAnswers[item.key]))
+      ),
+    [localAnswers]
   );
 
   const showAiBehaviorTransition =
     sourceSubmitted &&
     currentQuestion?.group === "ai_behavior" &&
-    currentQuestionIndex === firstAiBehaviorQuestionIndex &&
-    firstAiBehaviorQuestionIndex >= 0;
+    !aiBehaviorAnswered;
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -745,7 +692,6 @@ export default function SetupAssistantSections({
       },
     ]);
     setComposerValue("");
-    setBaseQuestionIndex(0);
 
     try {
       await onCaptureSource?.({
@@ -784,8 +730,6 @@ export default function SetupAssistantSections({
     } catch (error) {
       setLocalError(s(error?.message, "The answer could not be processed."));
     }
-
-    setBaseQuestionIndex(currentQuestionIndex + 1);
   }
 
   async function handleDraftUpdate() {
@@ -850,6 +794,14 @@ export default function SetupAssistantSections({
 
           {busy ? <MessageBubble role="assistant" body="..." /> : null}
 
+          {sourceSubmitted && !currentQuestion && !questionsFinished ? (
+            <MessageBubble
+              role="assistant"
+              eyebrow="Thinking"
+              body="Mənbələr və cavabların birlikdə analiz olunur. Növbəti sual hazırlanır..."
+            />
+          ) : null}
+
           {questionsFinished && !smartDraftReady ? (
             <MessageBubble
               role="assistant"
@@ -887,7 +839,7 @@ export default function SetupAssistantSections({
         <Composer
           value={composerValue}
           busy={busy}
-          placeholder={currentQuestion.placeholder}
+          placeholder={currentQuestion.placeholder || "Cavabını yaz"}
           buttonLabel="Continue"
           onChange={setComposerValue}
           onSubmit={handleQuestionSubmit}
