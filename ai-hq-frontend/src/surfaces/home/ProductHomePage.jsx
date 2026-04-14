@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import Button from "../../components/ui/Button.jsx";
+import ReasonedSetupAssistantPanel from "../../components/setup/ReasonedSetupAssistantPanel.jsx";
 import {
   InlineNotice,
   LoadingSurface,
@@ -182,7 +183,9 @@ export default function ProductHomePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const home = useProductHome();
+
   const assistantRequested = searchParams.get("assistant") === "setup";
+  const setupReviewSessionId = s(searchParams.get("reviewSessionId"));
 
   function navigateFromAction(action = null) {
     const nextAction = normalizeNavigationAction(action);
@@ -262,7 +265,7 @@ export default function ProductHomePage() {
 
             {assistantRequested ? (
               <div className="mt-3 text-[12px] font-medium text-brand">
-                Setup draft is open.
+                Setup assistant is active.
               </div>
             ) : null}
           </div>
@@ -290,6 +293,12 @@ export default function ProductHomePage() {
           </div>
         </div>
       </section>
+
+      {assistantRequested ? (
+        <ReasonedSetupAssistantPanel
+          reviewSessionId={setupReviewSessionId}
+        />
+      ) : null}
 
       <section className="border-t border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.22),rgba(255,255,255,0.08))]">
         {steps.map((step, index) => (
