@@ -588,3 +588,121 @@ test("setup assistant treats google maps as a valid source identity but still re
   assert.equal(withHandoff.setup.assistant.nextQuestion, null);
   assert.equal(withHandoff.setup.draft.businessProfile.websiteUrl || "", "");
 });
+
+test("setup assistant keeps the primary question scope canonical and does not block on extra AI-behavior fields", () => {
+  const payload = setupAssistantTest.buildSetupAssistantSessionPayload({
+    session: {
+      id: "session-1",
+      status: "draft",
+      mode: "setup",
+      currentStep: "handoff",
+    },
+    draft: {
+      version: 6,
+      draftPayload: {
+        setupAssistant: {
+          businessProfile: {
+            companyName: "Alpha Studio",
+            description: "Creative studio for local brands",
+            websiteUrl: "",
+          },
+          services: [{ key: "branding", title: "Branding" }],
+          contacts: [{ type: "phone", label: "Phone", value: "+994555555555" }],
+          hours: [
+            {
+              day: "monday",
+              enabled: true,
+              closed: false,
+              allDay: false,
+              appointmentOnly: false,
+              openTime: "09:00",
+              closeTime: "18:00",
+              notes: "",
+            },
+          ],
+          pricingPosture: {
+            pricingMode: "quote_required",
+            publicSummary: "Exact pricing requires a quote.",
+          },
+          handoffRules: {
+            enabled: true,
+            summary: "Complaints and custom quotes go to an operator.",
+            triggers: ["complaints", "custom quotes"],
+          },
+          sourceMetadata: {
+            primarySourceType: "instagram",
+            primarySourceUrl: "https://instagram.com/alphastudio",
+            sourceLabels: ["Instagram"],
+          },
+          assistantState: {
+            tone: "",
+            greeting: "",
+            afterHoursBehavior: "",
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(payload.setup.review.finalizeAvailable, true);
+  assert.equal(payload.setup.assistant.readyForApproval, true);
+  assert.equal(payload.setup.assistant.nextQuestion, null);
+  assert.deepEqual(payload.setup.assistant.interviewPlan.activeQuestionKeys, []);
+  assert.equal(payload.setup.assistant.sourceSignals.primarySourceType, "instagram");
+});
+
+test("setup assistant requires a real source identity before profile is ready", () => {
+  const payload = setupAssistantTest.buildSetupAssistantSessionPayload({
+    session: {
+      id: "session-1",
+      status: "draft",
+      mode: "setup",
+      currentStep: "website",
+    },
+    draft: {
+      version: 3,
+      draftPayload: {
+        setupAssistant: {
+          businessProfile: {
+            companyName: "Manual Studio",
+            description: "Brand strategy studio",
+            websiteUrl: "",
+          },
+          services: [{ key: "branding", title: "Branding" }],
+          contacts: [{ type: "phone", label: "Phone", value: "+994555555555" }],
+          hours: [
+            {
+              day: "monday",
+              enabled: true,
+              closed: false,
+              allDay: false,
+              appointmentOnly: false,
+              openTime: "09:00",
+              closeTime: "18:00",
+              notes: "",
+            },
+          ],
+          pricingPosture: {
+            pricingMode: "quote_required",
+            publicSummary: "Exact pricing requires a quote.",
+          },
+          handoffRules: {
+            enabled: true,
+            summary: "Complaints go to an operator.",
+            triggers: ["complaints"],
+          },
+          sourceMetadata: {
+            primarySourceType: "manual",
+            primarySourceUrl: "",
+            sourceLabels: ["Manual note"],
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(payload.setup.review.finalizeAvailable, false);
+  assert.equal(payload.setup.summary.sectionStatus.profile.status, "needs_review");
+  assert.equal(payload.setup.assistant.nextQuestion?.key, "website");
+  assert.equal(payload.setup.assistant.nextQuestion?.step, "website");
+});

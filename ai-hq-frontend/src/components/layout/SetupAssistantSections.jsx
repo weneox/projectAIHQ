@@ -43,6 +43,7 @@ function buildQuestionMetaMap() {
     SETUP_INTERVIEW_QUESTIONS.map((item) => [
       item.key,
       {
+        step: item.step,
         placeholder: item.placeholder,
         title: item.title,
         prompt: item.prompt,
@@ -145,19 +146,8 @@ function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers =
 }
 
 function normalizeAssistantControl(reviewPayload = null, assistant = {}) {
-  const primary =
-    obj(reviewPayload?.assistant).nextQuestion ||
-    obj(reviewPayload?.assistant).interviewPlan ||
-    obj(reviewPayload?.assistant).aiBehavior
-      ? obj(reviewPayload?.assistant)
-      : obj(reviewPayload?.assistantBrain);
-
-  const fallback =
-    obj(assistant.assistant).nextQuestion ||
-    obj(assistant.assistant).interviewPlan ||
-    obj(assistant.assistant).aiBehavior
-      ? obj(assistant.assistant)
-      : obj(assistant.assistantBrain);
+  const primary = obj(reviewPayload?.assistant);
+  const fallback = obj(assistant.assistant);
 
   const source = Object.keys(primary).length ? primary : fallback;
 
@@ -170,7 +160,9 @@ function normalizeAssistantControl(reviewPayload = null, assistant = {}) {
 }
 
 function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswers = {} }) {
-  const reviewAssistant = obj(reviewPayload?.assistant || reviewPayload?.assistantBrain);
+  const reviewAssistant = Object.keys(obj(reviewPayload?.assistant)).length
+    ? obj(reviewPayload?.assistant)
+    : obj(assistant.assistant);
   const recommendation = obj(reviewAssistant.recommendation);
   const confidence = obj(reviewAssistant.confidence);
   const sourceSignals = obj(reviewAssistant.sourceSignals);
@@ -248,7 +240,7 @@ function hasBackendSmartDraft(model = {}) {
     arr(draft.contactRoutes).length > 0 ||
     Boolean(s(draft.humanHandoff));
 
-  return hasGuidance && (hasSourceWork || hasStructuredDraft);
+  return hasStructuredDraft && (hasGuidance || hasSourceWork || model.readyForApproval);
 }
 
 function buildProgressFromInterviewPlan(interviewPlan = {}, currentQuestion = null) {
@@ -581,7 +573,7 @@ export default function SetupAssistantSections({
 
     return {
       key: s(nextQuestion.key),
-      step: s(nextQuestion.step),
+      step: s(nextQuestion.step || meta.step || nextQuestion.key),
       title: s(nextQuestion.title || meta.title),
       prompt: s(nextQuestion.prompt || meta.prompt),
       group: s(nextQuestion.group || meta.group),

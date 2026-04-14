@@ -40,7 +40,7 @@ export const SETUP_INTERVIEW_QUESTIONS = [
   },
   {
     key: "hours",
-    step: "profile",
+    step: "hours",
     title: "Business hours",
     prompt:
       "İş və cavab saatları necədir? Chatbot və voice receptionist bunu necə deməlidir?",

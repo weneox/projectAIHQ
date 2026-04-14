@@ -163,6 +163,24 @@ test("finalize setup review emits truth publication and approval policy decision
         },
       }),
       auditSetupAction: async () => {},
+      buildSetupFinalizeReadiness: () => ({
+        review: {
+          finalizeAvailable: true,
+          message: "The setup draft is structurally complete enough to finalize.",
+        },
+        assistant: {
+          nextQuestion: null,
+          readyForApproval: true,
+        },
+        summary: {
+          blockerCount: 0,
+        },
+        setup: {
+          review: {
+            finalizeAvailable: true,
+          },
+        },
+      }),
     }
   );
 

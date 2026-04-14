@@ -149,9 +149,7 @@ function normalizeDecisionAssistant(value = {}) {
 function normalizeAssistantState(input = null) {
   const source = input || buildDefaultAssistant();
   const draft = obj(source.draft);
-  const decisionAssistant = normalizeDecisionAssistant(
-    obj(source.assistantBrain || source.assistant)
-  );
+  const decisionAssistant = normalizeDecisionAssistant(obj(source.assistant));
 
   return {
     mode: s(source.mode, "setup"),
@@ -198,31 +196,22 @@ function buildAssistantFromApi(base = {}, response = {}) {
     setupSummary: obj(setup.summary),
     draft: obj(setup.draft),
     assistant:
-      obj(setup.assistant).phase ||
-      obj(setup.assistant).message ||
-      obj(setup.assistant).readyForApproval !== false
+      Object.keys(obj(setup.assistant)).length
         ? obj(setup.assistant)
         : obj(root.assistant),
     assistantBrain:
-      obj(setup.assistantBrain).phase ||
-      obj(setup.assistantBrain).message ||
-      obj(setup.assistantBrain).readyForApproval !== false
-        ? obj(setup.assistantBrain)
-        : obj(root.assistantBrain),
+      Object.keys(obj(setup.assistant)).length
+        ? obj(setup.assistant)
+        : obj(root.assistant),
   });
 }
 
 function buildMergedReviewPayload(reviewPayload = null, assistantState = {}) {
   const reviewRoot = obj(reviewPayload);
   const assistant = normalizeDecisionAssistant(
-    obj(reviewRoot.assistant).phase || obj(reviewRoot.assistant).message
+    Object.keys(obj(reviewRoot.assistant)).length
       ? reviewRoot.assistant
       : obj(assistantState.assistant)
-  );
-  const assistantBrain = normalizeDecisionAssistant(
-    obj(reviewRoot.assistantBrain).phase || obj(reviewRoot.assistantBrain).message
-      ? reviewRoot.assistantBrain
-      : assistant
   );
 
   return {
@@ -233,7 +222,7 @@ function buildMergedReviewPayload(reviewPayload = null, assistantState = {}) {
     fieldProvenance: obj(reviewRoot.fieldProvenance),
     reviewDraftSummary: obj(reviewRoot.reviewDraftSummary),
     assistant,
-    assistantBrain,
+    assistantBrain: assistant,
   };
 }
 

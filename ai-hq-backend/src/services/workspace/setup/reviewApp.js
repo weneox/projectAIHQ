@@ -6,6 +6,7 @@ import {
   loadCurrentReviewPayload,
 } from "./reviewFlow.js";
 import { compactDraftObject, safeUuidOrNull } from "./draftShared.js";
+import { buildSetupAssistantSessionPayload } from "./setupAssistantApp.js";
 import { arr, obj, s } from "./utils.js";
 import { can, normalizeRole } from "../../../utils/roles.js";
 import { safeAppendDecisionEvent } from "../../../db/helpers/decisionEvents.js";
@@ -233,6 +234,18 @@ function buildFinalizeReviewer(actor = {}) {
   };
 }
 
+function buildSetupFinalizeReadiness(current = {}) {
+  const payload = buildSetupAssistantSessionPayload(current);
+  const setup = obj(payload.setup);
+
+  return {
+    setup,
+    assistant: obj(setup.assistant),
+    review: obj(setup.review),
+    summary: obj(setup.summary),
+  };
+}
+
 export async function finalizeSetupReviewComposition(
   { db, actor, body = {}, log = null },
   deps = {}
@@ -248,6 +261,8 @@ export async function finalizeSetupReviewComposition(
   const reviewConcurrency = deps.buildReviewConcurrencyInfo || buildReviewConcurrencyInfo;
   const finalizeProtection =
     deps.buildFinalizeProtectionInfo || buildFinalizeProtectionInfo;
+  const buildFinalizeReadiness =
+    deps.buildSetupFinalizeReadiness || buildSetupFinalizeReadiness;
 
   let current = null;
 
@@ -292,6 +307,48 @@ export async function finalizeSetupReviewComposition(
           finalizeProtection: current ? finalizeProtection(current) : {},
         },
       };
+    }
+
+    if (current?.session?.id) {
+      const readiness = buildFinalizeReadiness(current);
+
+      if (readiness.review.finalizeAvailable !== true) {
+        await auditSetupAction(
+          db,
+          actor,
+          "setup.review.finalize",
+          "tenant_setup_review_session",
+          current.session.id,
+          {
+            outcome: "blocked",
+            reasonCode: "setup_review_not_ready",
+            targetArea: "setup_review",
+            reviewSessionId: s(current.session.id),
+            blockerCount: Number(readiness.summary.blockerCount || 0),
+            nextQuestion: s(readiness.assistant.nextQuestion?.key),
+            reason: s(body?.reason),
+          }
+        );
+
+        return {
+          status: 409,
+          body: {
+            ok: false,
+            error: "SetupReviewNotReady",
+            reason:
+              s(readiness.review.message) ||
+              "The setup draft is not ready to finalize.",
+            code: "SETUP_REVIEW_NOT_READY",
+            reasonCode: "setup_review_not_ready",
+            viewerRole: actorRole,
+            requiredRoles: ["owner", "admin"],
+            concurrency: reviewConcurrency(current),
+            finalizeProtection: finalizeProtection(current),
+            setup: readiness.setup,
+            assistant: readiness.assistant,
+          },
+        };
+      }
     }
 
     log?.info?.("setup.review.finalize.requested", {

@@ -19,6 +19,27 @@ import {
 import { executeSetupImport } from "../src/services/workspace/setup/importApp.js";
 import { buildFrontendReviewShape } from "../src/services/workspace/setup/reviewShape.js";
 
+function createFinalizeReadyState() {
+  return {
+    review: {
+      finalizeAvailable: true,
+      message: "The setup draft is structurally complete enough to finalize.",
+    },
+    assistant: {
+      nextQuestion: null,
+      readyForApproval: true,
+    },
+    summary: {
+      blockerCount: 0,
+    },
+    setup: {
+      review: {
+        finalizeAvailable: true,
+      },
+    },
+  };
+}
+
 test("review app normalizes patch aliases into canonical draft patch fields", () => {
   const patch = normalizeReviewPatchBody({
     patch: {
@@ -151,6 +172,9 @@ test("review finalize composition audits finalized session and truth version cre
       async auditSetupAction(...args) {
         auditCalls.push(args);
       },
+      buildSetupFinalizeReadiness() {
+        return createFinalizeReadyState();
+      },
       buildReviewConcurrencyInfo() {
         return { draftVersion: 9 };
       },
@@ -233,6 +257,9 @@ test("review finalize composition returns the projection summary back through th
         return { progress: { nextRoute: "/truth" } };
       },
       async auditSetupAction() {},
+      buildSetupFinalizeReadiness() {
+        return createFinalizeReadyState();
+      },
       buildReviewConcurrencyInfo() {
         return {};
       },
@@ -304,6 +331,9 @@ test("review finalize composition surfaces the strict runtime projection in the 
         return { progress: { nextRoute: "/inbox" } };
       },
       async auditSetupAction() {},
+      buildSetupFinalizeReadiness() {
+        return createFinalizeReadyState();
+      },
       buildReviewConcurrencyInfo() {
         return {};
       },
@@ -368,6 +398,9 @@ test("review finalize composition audits failed finalize attempts with outcome m
           async auditSetupAction(...args) {
             auditCalls.push(args);
           },
+          buildSetupFinalizeReadiness() {
+            return createFinalizeReadyState();
+          },
         }
       ),
     /baseline drift/
@@ -419,6 +452,9 @@ test("review finalize composition blocks insufficient roles and audits the denia
       async auditSetupAction(...args) {
         auditCalls.push(args);
       },
+      buildSetupFinalizeReadiness() {
+        return createFinalizeReadyState();
+      },
     }
   );
 
@@ -430,6 +466,97 @@ test("review finalize composition blocks insufficient roles and audits the denia
   assert.equal(auditCalls[0][5].outcome, "blocked");
   assert.equal(auditCalls[0][5].reasonCode, "insufficient_role");
   assert.equal(auditCalls[0][5].attemptedRole, "operator");
+});
+
+test("review finalize composition stays aligned with canonical setup readiness", async () => {
+  let finalizeCalled = false;
+  const auditCalls = [];
+
+  const result = await finalizeSetupReviewComposition(
+    {
+      db: {},
+      actor: {
+        tenantId: "tenant-1",
+        tenantKey: "alpha",
+        role: "owner",
+        tenant: null,
+        user: {
+          email: "ops@example.com",
+          name: "Ops",
+        },
+      },
+      body: { reason: "ship it" },
+    },
+    {
+      async getCurrentSetupReview() {
+        return {
+          session: { id: "session-1", status: "draft", mode: "setup" },
+          draft: {
+            version: 9,
+            draftPayload: {
+              setupAssistant: {
+                businessProfile: {
+                  companyName: "Alpha Studio",
+                  description: "Creative brand studio",
+                },
+                services: [{ key: "branding", title: "Branding" }],
+                contacts: [{ type: "phone", label: "Phone", value: "+994555555555" }],
+                hours: [
+                  {
+                    day: "monday",
+                    enabled: true,
+                    closed: false,
+                    allDay: false,
+                    appointmentOnly: false,
+                    openTime: "09:00",
+                    closeTime: "18:00",
+                    notes: "",
+                  },
+                ],
+                pricingPosture: {
+                  pricingMode: "quote_required",
+                  publicSummary: "Exact pricing requires a quote.",
+                },
+                sourceMetadata: {
+                  primarySourceType: "google_maps",
+                  primarySourceUrl: "https://maps.google.com/?cid=123",
+                  sourceLabels: ["Google Maps"],
+                },
+              },
+            },
+          },
+          sources: [],
+        };
+      },
+      async finalizeSetupReviewSession() {
+        finalizeCalled = true;
+        throw new Error("not expected");
+      },
+      async auditSetupAction(...args) {
+        auditCalls.push(args);
+      },
+      buildReviewConcurrencyInfo(current) {
+        return {
+          sessionId: current?.session?.id || null,
+          draftVersion: current?.draft?.version || 0,
+        };
+      },
+      buildFinalizeProtectionInfo(current) {
+        return {
+          sessionStatus: current?.session?.status || "unknown",
+        };
+      },
+    }
+  );
+
+  assert.equal(result.status, 409);
+  assert.equal(result.body.ok, false);
+  assert.equal(result.body.code, "SETUP_REVIEW_NOT_READY");
+  assert.equal(result.body.assistant.nextQuestion.key, "handoff");
+  assert.equal(result.body.setup.review.finalizeAvailable, false);
+  assert.equal(finalizeCalled, false);
+  assert.equal(auditCalls.length, 1);
+  assert.equal(auditCalls[0][5].reasonCode, "setup_review_not_ready");
 });
 
 test("read app injects setup status builder into truth payload loaders", async () => {

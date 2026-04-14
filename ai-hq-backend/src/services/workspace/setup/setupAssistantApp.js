@@ -1104,7 +1104,8 @@ function buildSectionStatus(draft = {}) {
     profile: {
       completed: Boolean(
         s(businessProfile.companyName) &&
-          s(businessProfile.description)
+          s(businessProfile.description) &&
+          (s(businessProfile.websiteUrl) || sourceIdentityPresent)
       ),
       partial: Boolean(
         s(businessProfile.companyName) ||
@@ -1253,6 +1254,259 @@ function buildReviewState(draft = {}, summary = {}) {
   };
 }
 
+function buildAssistantQuestion(key = "", overrides = {}) {
+  const questionKey = s(key).toLowerCase();
+  const meta = SECTION_META[questionKey] || {};
+
+  return compactDraftObject({
+    key: questionKey,
+    step: s(overrides.step || questionKey).toLowerCase(),
+    label: s(overrides.label || meta.label),
+    title: s(overrides.title || meta.title || meta.label),
+    prompt: s(overrides.prompt || meta.prompt),
+    placeholder: s(overrides.placeholder || meta.placeholder),
+    group: s(overrides.group || "business_truth"),
+    groupLabel: "Business truth",
+  });
+}
+
+function buildAssistantDraftPreview(setup = {}) {
+  const businessProfile = obj(setup.businessProfile);
+  const pricing = obj(setup.pricingPosture);
+  const handoff = obj(setup.handoffRules);
+
+  return {
+    businessName: s(businessProfile.companyName),
+    whatThisBusinessIs: s(businessProfile.description),
+    coreServices: arr(setup.services)
+      .map((item) => s(item.title || item.name || item.label))
+      .filter(Boolean),
+    pricingPosture: s(pricing.publicSummary),
+    contactRoutes: arr(setup.contacts)
+      .map((item) => s(item.value || item.label || item.type))
+      .filter(Boolean),
+    humanHandoff: s(handoff.summary || arr(handoff.triggers).join(", ")),
+    hours: formatSetupAssistantHoursForCanonical(setup.hours),
+  };
+}
+
+function buildAssistantSourceSignals(setup = {}) {
+  const businessProfile = obj(setup.businessProfile);
+  const sourceMetadata = obj(setup.sourceMetadata);
+  const websiteUrl = normalizeWebsiteUrl(s(businessProfile.websiteUrl));
+  const primarySourceType = websiteUrl
+    ? "website"
+    : normalizeSourceType(sourceMetadata.primarySourceType);
+  const primarySourceUrl = websiteUrl || s(sourceMetadata.primarySourceUrl);
+  const sourceTypes = uniqueStrings(
+    [
+      primarySourceType,
+      ...arr(sourceMetadata.sourceLabels)
+        .map((label) => normalizeSourceType(label))
+        .filter(Boolean),
+    ],
+    8
+  );
+
+  return {
+    primarySourceType,
+    primarySourceLabel:
+      s(arr(sourceMetadata.sourceLabels)[0]) || sourceTypeLabel(primarySourceType),
+    primarySourceUrl,
+    primarySourceAuthorityClass: "",
+    pageCount: 0,
+    sourceTypes,
+    strongestEvidence: uniqueStrings(
+      [
+        ...arr(sourceMetadata.evidenceSummary),
+        primarySourceUrl ? `Primary source: ${primarySourceUrl}` : "",
+      ],
+      12
+    ),
+    discoveredPublicClaims: [],
+  };
+}
+
+function buildAssistantConfidence(summary = {}, setup = {}) {
+  const sectionStatus = obj(summary.sectionStatus);
+  const sourceSignals = buildAssistantSourceSignals(setup);
+  const strong = [];
+  const unclear = [];
+
+  if (sectionStatus.profile?.status === "ready") {
+    strong.push("Business identity is anchored on a confirmed public source.");
+  } else {
+    unclear.push("Business identity still needs a confirmed name, description, and source.");
+  }
+
+  if (sectionStatus.services?.status === "ready") {
+    strong.push("Core services are drafted.");
+  } else {
+    unclear.push("Core services still need confirmation.");
+  }
+
+  if (sectionStatus.hours?.status === "ready") {
+    strong.push("Business hours are structured.");
+  } else {
+    unclear.push("Business hours still need confirmation.");
+  }
+
+  if (sectionStatus.pricing?.status === "ready") {
+    strong.push("Pricing posture is defined.");
+  } else {
+    unclear.push("Pricing posture still needs a safe public reply policy.");
+  }
+
+  if (sectionStatus.contacts?.status === "ready") {
+    strong.push("A primary customer contact route is present.");
+  } else {
+    unclear.push("A primary customer contact route is still missing.");
+  }
+
+  if (sectionStatus.handoff?.status === "ready") {
+    strong.push("Operator handoff rules are present.");
+  } else {
+    unclear.push("Operator handoff rules still need confirmation.");
+  }
+
+  if (!s(sourceSignals.primarySourceType) || sourceSignals.primarySourceType === "manual") {
+    unclear.push("A reliable public source identity is still missing.");
+  }
+
+  return {
+    strong,
+    unclear,
+    contradictions: [],
+  };
+}
+
+function buildAssistantRecommendation(summary = {}) {
+  const blocker = arr(summary.confirmationBlockers)[0];
+  if (!blocker?.key) {
+    return {
+      notes: [],
+    };
+  }
+
+  const notesByKey = {
+    profile: "Use the main website or best public source so setup anchors on real business identity.",
+    services: "Keep only the launch-critical services AI should confidently talk about.",
+    hours: "Capture the real public hours so AI does not promise the wrong availability.",
+    pricing: "Define a safe public pricing posture before AI answers price questions.",
+    contacts: "Choose one primary contact route so AI can hand customers somewhere real.",
+    handoff: "Set the human escalation cases before treating the setup draft as launch-ready.",
+  };
+
+  return {
+    notes: notesByKey[blocker.key] ? [notesByKey[blocker.key]] : [],
+  };
+}
+
+function buildAssistantInterviewPlan(summary = {}, nextQuestion = null) {
+  const currentQuestion = obj(nextQuestion);
+  const activeQuestions = [
+    currentQuestion.key ? currentQuestion : null,
+    ...arr(summary.confirmationBlockers)
+      .filter((item) => s(item.key) && s(item.key) !== s(currentQuestion.key))
+      .map((item) => buildAssistantQuestion(item.key)),
+  ].filter(Boolean);
+
+  return {
+    activeQuestionKeys: activeQuestions.map((item) => item.key),
+    activeQuestions: activeQuestions.map((item, index) => ({
+      key: item.key,
+      step: item.step,
+      title: item.title,
+      group: item.group || "business_truth",
+      groupLabel: item.groupLabel || "Business truth",
+      priority: Math.max(1, activeQuestions.length - index),
+    })),
+    remainingQuestionKeys: activeQuestions
+      .filter((item) => item.key !== s(currentQuestion.key))
+      .map((item) => item.key),
+    nextGroup: s(currentQuestion.group || "business_truth"),
+    nextGroupLabel: currentQuestion.key ? "Business truth" : "",
+  };
+}
+
+function buildAssistantMessage(summary = {}, nextQuestion = null) {
+  const question = obj(nextQuestion);
+  if (s(question.prompt)) {
+    return s(question.prompt);
+  }
+
+  if (summary.readyForReview === true) {
+    return "The setup draft is structurally complete enough to finalize into approved truth and strict runtime.";
+  }
+
+  const blocker = arr(summary.confirmationBlockers)[0];
+  if (s(blocker?.reason)) {
+    return s(blocker.reason);
+  }
+
+  return REVIEW_MESSAGE;
+}
+
+function buildSetupAssistantAuthorityState({
+  session = {},
+  draftRow = {},
+  setup = {},
+  summary = {},
+  servicesCatalog = {},
+  reviewState = {},
+} = {}) {
+  const nextQuestion = getNextQuestion(summary, setup, obj(setup.progress));
+  const question = nextQuestion
+    ? buildAssistantQuestion(nextQuestion.key, nextQuestion)
+    : null;
+  const readyForApproval = obj(reviewState).finalizeAvailable === true;
+
+  return {
+    mode: "structured_v2",
+    nextQuestion: question,
+    confirmationBlockers: arr(summary.confirmationBlockers),
+    sections: buildAssistantSections(setup, summary, servicesCatalog),
+    completion: {
+      ready: readyForApproval,
+      action: readyForApproval
+        ? {
+            id: "finalize_setup",
+            label: "Finish setup",
+            intent: "finalize_review",
+          }
+        : null,
+      message: readyForApproval
+        ? "The draft is complete enough to finalize into approved truth and strict runtime."
+        : REVIEW_MESSAGE,
+    },
+    quickCapture: Object.fromEntries(
+      SECTION_ORDER.map((key) => [
+        key,
+        {
+          step: key,
+          label: SECTION_META[key].label,
+          placeholder: SECTION_META[key].placeholder,
+        },
+      ])
+    ),
+    servicesCatalog,
+    sourceInsights: arr(obj(setup.sourceMetadata).evidenceSummary),
+    phase: summary.hasAnyDraft ? (readyForApproval ? "ready" : "interview") : "source_capture",
+    message: buildAssistantMessage(summary, question),
+    assistantMessage: buildAssistantMessage(summary, question),
+    draft: buildAssistantDraftPreview(setup),
+    confidence: buildAssistantConfidence(summary, setup),
+    recommendation: buildAssistantRecommendation(summary),
+    sourceSignals: buildAssistantSourceSignals(setup),
+    interviewPlan: buildAssistantInterviewPlan(summary, question),
+    aiBehavior: {},
+    readyForApproval,
+    finalizeAvailable: readyForApproval,
+    reviewSessionId: s(session.id),
+    draftVersion: safeDraftVersion(draftRow),
+  };
+}
+
 function buildAssistantSections(draft = {}, summary = {}, servicesCatalog = {}) {
   return SECTION_ORDER.map((key) => {
     const meta = SECTION_META[key];
@@ -1280,67 +1534,45 @@ function resolveProfileQuestion(draft = {}, progress = {}) {
   const currentQuestionKey = s(progress.currentQuestionKey).toLowerCase();
   const safeDraft = obj(draft);
   const safeProfile = obj(safeDraft.businessProfile);
+  const sourceIdentityPresent = hasNonManualSourceIdentity(
+    obj(safeDraft.sourceMetadata)
+  );
 
   if (
     currentQuestionKey === "company" &&
     !s(safeProfile.companyName)
   ) {
-    return {
-      key: "company",
-      label: SECTION_META.company.label,
-      prompt: SECTION_META.company.prompt,
-      placeholder: SECTION_META.company.placeholder,
-    };
+    return buildAssistantQuestion("company");
   }
 
   if (
     currentQuestionKey === "description" &&
     !s(safeProfile.description)
   ) {
-    return {
-      key: "description",
-      label: SECTION_META.description.label,
-      prompt: SECTION_META.description.prompt,
-      placeholder: SECTION_META.description.placeholder,
-    };
+    return buildAssistantQuestion("description");
   }
 
   if (
     currentQuestionKey === "website" &&
-    !s(safeProfile.websiteUrl)
+    !s(safeProfile.websiteUrl) &&
+    !sourceIdentityPresent
   ) {
-    return {
-      key: "website",
-      label: SECTION_META.website.label,
-      prompt: SECTION_META.website.prompt,
-      placeholder: SECTION_META.website.placeholder,
-    };
+    return buildAssistantQuestion("website");
   }
 
   if (!s(safeProfile.companyName)) {
-    return {
-      key: "company",
-      label: SECTION_META.company.label,
-      prompt: SECTION_META.company.prompt,
-      placeholder: SECTION_META.company.placeholder,
-    };
+    return buildAssistantQuestion("company");
   }
 
   if (!s(safeProfile.description)) {
-    return {
-      key: "description",
-      label: SECTION_META.description.label,
-      prompt: SECTION_META.description.prompt,
-      placeholder: SECTION_META.description.placeholder,
-    };
+    return buildAssistantQuestion("description");
   }
 
-  return {
-    key: "profile",
-    label: SECTION_META.profile.label,
-    prompt: SECTION_META.profile.prompt,
-    placeholder: SECTION_META.profile.placeholder,
-  };
+  if (!s(safeProfile.websiteUrl) && !sourceIdentityPresent) {
+    return buildAssistantQuestion("website");
+  }
+
+  return buildAssistantQuestion("profile");
 }
 
 function getNextQuestion(summary = {}, draft = {}, progress = {}) {
@@ -1357,13 +1589,7 @@ function getNextQuestion(summary = {}, draft = {}, progress = {}) {
   const blocker = arr(summary.confirmationBlockers)[0];
   if (!blocker) return null;
 
-  const meta = SECTION_META[blocker.key] || SECTION_META.profile;
-  return {
-    key: blocker.key,
-    label: meta.label,
-    prompt: meta.prompt,
-    placeholder: meta.placeholder,
-  };
+  return buildAssistantQuestion(blocker.key);
 }
 
 function resolveSessionCurrentStep(review = {}, setup = {}, nextQuestion = null) {
@@ -1769,12 +1995,21 @@ export function buildSetupAssistantSessionPayload(review = {}) {
     seed
   );
   const summary = buildSummary(setup);
+  const reviewState = buildReviewState(setup, summary);
   const servicesCatalog = buildSetupAssistantServiceCatalog({
     businessProfile: setup.businessProfile,
     currentServices: setup.services,
     sourceServices: seed.services,
   });
-  const nextQuestion = getNextQuestion(summary, setup, obj(setup.progress));
+  const assistant = buildSetupAssistantAuthorityState({
+    session,
+    draftRow,
+    setup,
+    summary,
+    servicesCatalog,
+    reviewState,
+  });
+  const nextQuestion = obj(assistant.nextQuestion);
 
   return {
     session: {
@@ -1803,39 +2038,8 @@ export function buildSetupAssistantSessionPayload(review = {}) {
       namespace: SETUP_ASSISTANT_NAMESPACE,
       summary,
       websitePrefill: obj(setup.websitePrefill),
-      review: obj(setup.review),
-      assistant: {
-        mode: "structured_v2",
-        nextQuestion,
-        confirmationBlockers: arr(summary.confirmationBlockers),
-        sections: buildAssistantSections(setup, summary, servicesCatalog),
-        completion: {
-          ready: summary.readyForReview === true,
-          action: summary.readyForReview
-            ? {
-                id: "finalize_setup",
-                label: "Finish setup",
-                intent: "finalize_review",
-              }
-            : null,
-          message:
-            summary.readyForReview === true
-              ? "The draft is complete enough to finalize into approved truth and strict runtime."
-              : REVIEW_MESSAGE,
-        },
-        quickCapture: Object.fromEntries(
-          SECTION_ORDER.map((key) => [
-            key,
-            {
-              step: key,
-              label: SECTION_META[key].label,
-              placeholder: SECTION_META[key].placeholder,
-            },
-          ])
-        ),
-        servicesCatalog,
-        sourceInsights: arr(obj(setup.sourceMetadata).evidenceSummary),
-      },
+      review: reviewState,
+      assistant,
       draft: {
         businessProfile: obj(setup.businessProfile),
         services: arr(setup.services),
@@ -2301,6 +2505,7 @@ export async function updateSetupAssistantDraft(
 }
 
 export const __test__ = {
+  buildSetupAssistantAuthorityState,
   buildCanonicalBusinessProfileFromSetupAssistant,
   buildCanonicalContactsFromSetupAssistant,
   buildCanonicalReviewDraftPatchFromSetupAssistant,
