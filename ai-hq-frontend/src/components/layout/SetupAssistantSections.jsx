@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle } from "lucide-react";
+import {
+  SETUP_INTERVIEW_QUESTIONS,
+  SETUP_SOURCE_PROMPT,
+} from "./setupInterviewQuestions.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -28,60 +32,6 @@ function listPreview(items = [], max = 6) {
   return `${safe.slice(0, max).join(", ")} +${safe.length - max}`;
 }
 
-const QUESTIONS = [
-  {
-    key: "company",
-    step: "company",
-    title: "Business name",
-    prompt: "Biznesin adı necə görünməlidir?",
-    placeholder: "Məsələn: Saytpro",
-  },
-  {
-    key: "description",
-    step: "description",
-    title: "What the business is",
-    prompt: "Bu biznesi qısa necə təqdim etməliyəm?",
-    placeholder: "Bir-iki cümlə ilə yaz",
-  },
-  {
-    key: "services",
-    step: "services",
-    title: "Core services",
-    prompt: "Əsas xidmətləri yaz.",
-    placeholder: "Məsələn: website hazırlanması, reklam, branding",
-  },
-  {
-    key: "audience",
-    step: "profile",
-    title: "Audience",
-    prompt: "Əsasən kimlərə xidmət göstərirsiniz?",
-    placeholder: "Məsələn: kiçik bizneslər, şirkətlər, fərdi brendlər",
-  },
-  {
-    key: "pricing",
-    step: "pricing",
-    title: "Pricing posture",
-    prompt: "Qiymət necə təqdim olunmalıdır?",
-    placeholder:
-      "Məsələn: qiymətlər xidmətə görə dəyişir, dəqiq qiymət üçün müraciət edilməlidir",
-  },
-  {
-    key: "contacts",
-    step: "contacts",
-    title: "Contact routes",
-    prompt: "Müştəri hara yönləndirilməlidir?",
-    placeholder: "Məsələn: WhatsApp, telefon, email, Instagram DM",
-  },
-  {
-    key: "handoff",
-    step: "handoff",
-    title: "Human handoff",
-    prompt: "AI hansı hallarda insana ötürməlidir?",
-    placeholder:
-      "Məsələn: şikayət, fərdi qiymət sorğusu, təcili müraciət, ödəniş problemi",
-  },
-];
-
 function classifySourceInput(value = "") {
   const text = s(value).toLowerCase();
 
@@ -96,6 +46,11 @@ function classifySourceInput(value = "") {
     return "website";
   }
   return "manual";
+}
+
+function textHasAny(value = "", patterns = []) {
+  const text = s(value).toLowerCase();
+  return patterns.some((pattern) => text.includes(String(pattern).toLowerCase()));
 }
 
 function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers = {}) {
@@ -146,6 +101,19 @@ function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers =
       localAnswers.handoff
   );
 
+  const hours = arr(draft.hours)
+    .map((item) => {
+      if (item?.allDay) return `${item.day} 24 hours`;
+      if (item?.appointmentOnly) return `${item.day} appointment only`;
+      if (item?.closed) return `${item.day} closed`;
+      if (s(item?.notes)) return `${item.day} ${s(item.notes)}`;
+      if (s(item?.openTime) || s(item?.closeTime)) {
+        return `${item.day} ${s(item.openTime)}-${s(item.closeTime)}`;
+      }
+      return "";
+    })
+    .filter(Boolean);
+
   const resolvedServices = services.length
     ? services
     : s(localAnswers.services)
@@ -175,6 +143,12 @@ function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers =
     pricingPosture,
     contactRoutes: finalContacts,
     humanHandoff,
+    hours: hours.length
+      ? hours
+      : s(localAnswers.hours)
+          .split(/[,;\n]/)
+          .map((item) => s(item))
+          .filter(Boolean),
   };
 }
 
@@ -201,7 +175,7 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
     humanHandoff: s(draft.humanHandoff || fallback.humanHandoff),
     languages: arr(draft.languages),
     tone: s(draft.tone),
-    hours: arr(draft.hours),
+    hours: arr(draft.hours).length ? arr(draft.hours) : arr(fallback.hours),
   };
 
   return {
@@ -222,10 +196,127 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
       primarySourceType: s(sourceSignals.primarySourceType),
       primarySourceLabel: s(sourceSignals.primarySourceLabel),
       primarySourceUrl: s(sourceSignals.primarySourceUrl),
+      primarySourceAuthorityClass: s(sourceSignals.primarySourceAuthorityClass),
       pageCount: Number(sourceSignals.pageCount || 0) || 0,
       sourceTypes: arr(sourceSignals.sourceTypes),
+      strongestEvidence: arr(sourceSignals.strongestEvidence),
+      discoveredPublicClaims: arr(sourceSignals.discoveredPublicClaims),
     },
   };
+}
+
+function hasBackendSmartDraft(model = {}) {
+  const sourceSignals = obj(model.sourceSignals);
+  const confidence = obj(model.confidence);
+  const draft = obj(model.draft);
+
+  const hasGuidance =
+    Boolean(s(model.message)) ||
+    arr(model.recommendationNotes).length > 0 ||
+    arr(confidence.strong).length > 0 ||
+    arr(confidence.unclear).length > 0 ||
+    arr(confidence.contradictions).length > 0;
+
+  const hasSourceWork =
+    Boolean(s(sourceSignals.primarySourceType)) ||
+    Boolean(s(sourceSignals.primarySourceLabel)) ||
+    Boolean(s(sourceSignals.primarySourceUrl)) ||
+    Number(sourceSignals.pageCount || 0) > 0 ||
+    arr(sourceSignals.sourceTypes).length > 0 ||
+    arr(sourceSignals.strongestEvidence).length > 0 ||
+    arr(sourceSignals.discoveredPublicClaims).length > 0;
+
+  const hasStructuredDraft =
+    Boolean(s(draft.businessName)) ||
+    Boolean(s(draft.whatThisBusinessIs)) ||
+    arr(draft.coreServices).length > 0 ||
+    Boolean(s(draft.audience)) ||
+    Boolean(s(draft.pricingPosture)) ||
+    arr(draft.contactRoutes).length > 0 ||
+    Boolean(s(draft.humanHandoff));
+
+  return hasGuidance && (hasSourceWork || hasStructuredDraft);
+}
+
+function shouldSkipQuestion(question = {}, model = {}) {
+  const draft = obj(model.draft);
+  const sourceSignals = obj(model.sourceSignals);
+
+  const strongWebsite = Number(sourceSignals.pageCount || 0) >= 4;
+  const strongEvidence = arr(sourceSignals.strongestEvidence);
+  const noticedClaims = arr(sourceSignals.discoveredPublicClaims);
+  const primarySourceType = s(sourceSignals.primarySourceType).toLowerCase();
+
+  switch (question.key) {
+    case "company":
+      return Boolean(
+        s(draft.businessName) &&
+          (strongWebsite ||
+            strongEvidence.length > 0 ||
+            primarySourceType === "website" ||
+            primarySourceType === "instagram" ||
+            primarySourceType === "facebook")
+      );
+
+    case "description":
+      return Boolean(
+        s(draft.whatThisBusinessIs) &&
+          (strongWebsite || noticedClaims.length >= 2)
+      );
+
+    case "services":
+      return Boolean(
+        arr(draft.coreServices).length >= 2 &&
+          (strongWebsite || noticedClaims.length >= 3)
+      );
+
+    case "contacts":
+      return Boolean(
+        arr(draft.contactRoutes).length >= 1 &&
+          (
+            strongWebsite ||
+            strongEvidence.some((item) =>
+              textHasAny(item, ["phone", "email", "whatsapp", "address", "+994", "@"])
+            ) ||
+            noticedClaims.some((item) =>
+              textHasAny(item, ["phone", "email", "whatsapp", "address", "+994", "@"])
+            )
+          )
+      );
+
+    case "hours":
+      return Boolean(arr(draft.hours).length >= 1);
+
+    case "pricing":
+      return Boolean(
+        s(draft.pricingPosture) &&
+          (
+            strongWebsite ||
+            strongEvidence.some((item) =>
+              textHasAny(item, ["price", "pricing", "azn", "quote", "consultation"])
+            )
+          )
+      );
+
+    case "audience":
+      return Boolean(s(draft.audience) && strongWebsite);
+
+    case "handoff":
+      return Boolean(s(draft.humanHandoff));
+
+    default:
+      return false;
+  }
+}
+
+function getNextQuestionIndex(startIndex = 0, model = {}) {
+  for (let i = startIndex; i < SETUP_INTERVIEW_QUESTIONS.length; i += 1) {
+    const question = SETUP_INTERVIEW_QUESTIONS[i];
+    if (!shouldSkipQuestion(question, model)) {
+      return i;
+    }
+  }
+  return SETUP_INTERVIEW_QUESTIONS.length;
 }
 
 function MessageBubble({
@@ -277,22 +368,39 @@ function SmartDraftBubble({
 }) {
   const draft = obj(model.draft);
   const confidence = obj(model.confidence);
+  const sourceSignals = obj(model.sourceSignals);
 
   const draftRows = [
     ["Business name", draft.businessName],
-    ["What this business is", draft.whatThisBusinessIs],
+    ["What the business is", draft.whatThisBusinessIs],
     ["Core services", listPreview(draft.coreServices, 6)],
     ["Audience", draft.audience],
     ["Pricing posture", draft.pricingPosture],
     ["Contact routes", listPreview(draft.contactRoutes, 6)],
+    ["Availability", listPreview(draft.hours, 4)],
     ["Human handoff", draft.humanHandoff],
     ["Languages", listPreview(draft.languages, 4)],
     ["Tone", draft.tone],
-    ["Hours", listPreview(draft.hours, 4)],
   ].filter(([, value]) => s(value));
 
-  const hasSignals =
-    s(model.sourceSignals.primarySourceLabel) || s(model.sourceSignals.primarySourceUrl);
+  const sourceContextLine = [
+    s(sourceSignals.primarySourceLabel),
+    s(sourceSignals.primarySourceUrl),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const sourceMetaLine = [
+    Number(sourceSignals.pageCount || 0) > 0
+      ? `${Number(sourceSignals.pageCount || 0)} pages`
+      : "",
+    arr(sourceSignals.sourceTypes).length
+      ? listPreview(sourceSignals.sourceTypes, 4)
+      : "",
+    s(sourceSignals.primarySourceAuthorityClass),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <MessageBubble role="assistant" title="Draft">
@@ -303,16 +411,19 @@ function SmartDraftBubble({
           </div>
         ) : null}
 
-        {hasSignals ? (
+        {sourceContextLine ? (
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
               Source context
             </div>
             <div className="mt-1 text-[15px] leading-8 text-text">
-              {[model.sourceSignals.primarySourceLabel, model.sourceSignals.primarySourceUrl]
-                .filter(Boolean)
-                .join(" · ")}
+              {sourceContextLine}
             </div>
+            {sourceMetaLine ? (
+              <div className="mt-1 text-[13px] leading-6 text-text-muted">
+                {sourceMetaLine}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -326,6 +437,36 @@ function SmartDraftBubble({
             </div>
           ))}
         </div>
+
+        {arr(sourceSignals.strongestEvidence).length ? (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+              Strongest evidence
+            </div>
+            <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
+              {arr(sourceSignals.strongestEvidence)
+                .slice(0, 6)
+                .map((item) => (
+                  <div key={item}>• {item}</div>
+                ))}
+            </div>
+          </div>
+        ) : null}
+
+        {arr(sourceSignals.discoveredPublicClaims).length ? (
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+              What the system noticed
+            </div>
+            <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
+              {arr(sourceSignals.discoveredPublicClaims)
+                .slice(0, 8)
+                .map((item) => (
+                  <div key={item}>• {item}</div>
+                ))}
+            </div>
+          </div>
+        ) : null}
 
         {arr(confidence.strong).length ? (
           <div>
@@ -451,15 +592,13 @@ export default function SetupAssistantSections({
   const scrollRef = useRef(null);
 
   const [sourceSubmitted, setSourceSubmitted] = useState(false);
-  const [questionIndex, setQuestionIndex] = useState(0);
+  const [baseQuestionIndex, setBaseQuestionIndex] = useState(0);
   const [composerValue, setComposerValue] = useState("");
   const [localError, setLocalError] = useState("");
   const [transcript, setTranscript] = useState([]);
   const [localAnswers, setLocalAnswers] = useState({});
 
   const busy = saving || finalizing || capturingSource;
-  const currentQuestion = QUESTIONS[questionIndex] || null;
-  const draftReady = sourceSubmitted && !currentQuestion;
 
   const finalModel = useMemo(
     () =>
@@ -471,13 +610,42 @@ export default function SetupAssistantSections({
     [reviewPayload, assistant, localAnswers]
   );
 
+  const smartDraftReady = useMemo(
+    () => hasBackendSmartDraft(finalModel),
+    [finalModel]
+  );
+
+  const currentQuestionIndex = useMemo(() => {
+    if (!sourceSubmitted) return -1;
+    return getNextQuestionIndex(baseQuestionIndex, finalModel);
+  }, [sourceSubmitted, baseQuestionIndex, finalModel]);
+
+  const currentQuestion =
+    currentQuestionIndex >= 0 &&
+    currentQuestionIndex < SETUP_INTERVIEW_QUESTIONS.length
+      ? SETUP_INTERVIEW_QUESTIONS[currentQuestionIndex]
+      : null;
+
+  const questionsFinished =
+    sourceSubmitted &&
+    currentQuestionIndex >= SETUP_INTERVIEW_QUESTIONS.length;
+
   useEffect(() => {
     if (!scrollRef.current) return;
     scrollRef.current.scrollTo({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [transcript, currentQuestion, draftReady, busy, localError, errorMessage, finalModel]);
+  }, [
+    transcript,
+    currentQuestion,
+    questionsFinished,
+    busy,
+    localError,
+    errorMessage,
+    finalModel,
+    smartDraftReady,
+  ]);
 
   async function handleInitialSourceSubmit() {
     const text = s(composerValue);
@@ -496,7 +664,7 @@ export default function SetupAssistantSections({
       },
     ]);
     setComposerValue("");
-    setQuestionIndex(0);
+    setBaseQuestionIndex(0);
 
     try {
       await onCaptureSource?.({
@@ -536,7 +704,7 @@ export default function SetupAssistantSections({
       setLocalError(s(error?.message, "The answer could not be processed."));
     }
 
-    setQuestionIndex((index) => index + 1);
+    setBaseQuestionIndex(currentQuestionIndex + 1);
   }
 
   async function handleDraftUpdate() {
@@ -564,9 +732,6 @@ export default function SetupAssistantSections({
     }
   }
 
-  const initialPrompt =
-    "Biznesin linkini və ya qısa izahını göndər. (website, instagram, facebook, qısa qeyd)";
-
   const questionPrompt = currentQuestion
     ? `${currentQuestion.title}\n${currentQuestion.prompt}`
     : "";
@@ -575,7 +740,7 @@ export default function SetupAssistantSections({
     <div className="flex h-full min-h-0 flex-col bg-white">
       <div ref={scrollRef} className="flex-1 overflow-auto px-6 py-6">
         <div className="space-y-4">
-          <MessageBubble role="assistant" body={initialPrompt} />
+          <MessageBubble role="assistant" body={SETUP_SOURCE_PROMPT} />
 
           {transcript.map((item) => (
             <MessageBubble key={item.id} role={item.role} body={item.text} />
@@ -584,14 +749,22 @@ export default function SetupAssistantSections({
           {sourceSubmitted && currentQuestion ? (
             <MessageBubble
               role="assistant"
-              eyebrow={`Setup · ${questionIndex + 1}/${QUESTIONS.length}`}
+              eyebrow={`Setup · ${currentQuestionIndex + 1}/${SETUP_INTERVIEW_QUESTIONS.length}`}
               body={questionPrompt}
             />
           ) : null}
 
           {busy ? <MessageBubble role="assistant" body="..." /> : null}
 
-          {draftReady ? (
+          {questionsFinished && !smartDraftReady ? (
+            <MessageBubble
+              role="assistant"
+              eyebrow="Thinking"
+              body="Mənbələr və cavabların birlikdə analiz olunur. Yekun draft hazırlanır..."
+            />
+          ) : null}
+
+          {questionsFinished && smartDraftReady ? (
             <SmartDraftBubble
               model={finalModel}
               finalizing={finalizing}
@@ -627,7 +800,7 @@ export default function SetupAssistantSections({
         />
       ) : null}
 
-      {draftReady ? (
+      {questionsFinished && smartDraftReady ? (
         <Composer
           value={composerValue}
           busy={busy}

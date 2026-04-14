@@ -12,13 +12,54 @@ function firstObservedValue(source = {}) {
   );
 }
 
-function sumWebsitePageTypes(list = []) {
+function sumNumericMaps(list = []) {
   return arr(list).reduce((acc, item) => {
     for (const [key, value] of Object.entries(obj(item))) {
       acc[key] = Number(acc[key] || 0) + Number(value || 0);
     }
     return acc;
   }, {});
+}
+
+function mergeShallowObjects(list = []) {
+  return arr(list).reduce((acc, item) => {
+    for (const [key, value] of Object.entries(obj(item))) {
+      if (
+        value &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        typeof acc[key] === "object" &&
+        !Array.isArray(acc[key])
+      ) {
+        acc[key] = {
+          ...acc[key],
+          ...value,
+        };
+      } else if (value !== undefined && value !== null && value !== "") {
+        acc[key] = value;
+      }
+    }
+    return acc;
+  }, {});
+}
+
+function takeDistinctTopPages(list = [], limit = 8) {
+  const seen = new Set();
+  const output = [];
+
+  for (const item of arr(list)) {
+    const page = obj(item);
+    const key =
+      s(page.url) ||
+      `${s(page.title)}|${s(page.pageType)}|${s(page.path)}`;
+
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    output.push(page);
+    if (output.length >= limit) break;
+  }
+
+  return output;
 }
 
 function normalizeWebsiteKnowledge(draft = {}) {
@@ -45,6 +86,9 @@ function normalizeWebsiteKnowledge(draft = {}) {
   }
 
   return compactObject({
+    finalUrl: s(
+      contributionItems.find((item) => s(item.finalUrl))?.finalUrl
+    ),
     pageCount: contributionItems.reduce(
       (sum, item) => sum + Number(item.pageCount || 0),
       0
@@ -57,8 +101,22 @@ function normalizeWebsiteKnowledge(draft = {}) {
       (sum, item) => sum + Number(item.chunkCount || 0),
       0
     ),
-    pageTypeCounts: sumWebsitePageTypes(
+    pageTypeCounts: sumNumericMaps(
       contributionItems.map((item) => obj(item.pageTypeCounts))
+    ),
+    coverage: mergeShallowObjects(contributionItems.map((item) => obj(item.coverage))),
+    signalCounts: sumNumericMaps(
+      contributionItems.map((item) => obj(item.signalCounts))
+    ),
+    draftSections: mergeShallowObjects(
+      contributionItems.map((item) => obj(item.draftSections))
+    ),
+    siteQuality: mergeShallowObjects(
+      contributionItems.map((item) => obj(item.siteQuality))
+    ),
+    topPages: takeDistinctTopPages(
+      contributionItems.flatMap((item) => arr(item.topPages)),
+      8
     ),
   });
 }
@@ -71,7 +129,11 @@ function normalizeBundleSources({ session = {}, draft = {}, sources = [] } = {})
 
   for (const item of linkedSources) {
     const sourceId = s(item.sourceId || item.id);
-    const key = sourceId || `${String(item.sourceType || "").toLowerCase()}|${String(item.label || "").toLowerCase()}`;
+    const key =
+      sourceId ||
+      `${String(item.sourceType || "").toLowerCase()}|${String(
+        item.label || ""
+      ).toLowerCase()}`;
     sourceMap.set(key, {
       sourceId,
       sourceType: s(item.sourceType),
@@ -84,7 +146,10 @@ function normalizeBundleSources({ session = {}, draft = {}, sources = [] } = {})
 
   for (const item of imports) {
     const key =
-      s(item.sourceId) || `${String(item.sourceType || "").toLowerCase()}|${String(item.sourceUrl || "").toLowerCase()}`;
+      s(item.sourceId) ||
+      `${String(item.sourceType || "").toLowerCase()}|${String(
+        item.sourceUrl || ""
+      ).toLowerCase()}`;
     const current = obj(sourceMap.get(key));
     sourceMap.set(
       key,
@@ -113,7 +178,10 @@ function normalizeBundleSources({ session = {}, draft = {}, sources = [] } = {})
   }
 
   const output = [...sourceMap.values()];
-  output.sort((a, b) => (b.role === "primary" ? 1 : 0) - (a.role === "primary" ? 1 : 0));
+  output.sort(
+    (a, b) =>
+      (b.role === "primary" ? 1 : 0) - (a.role === "primary" ? 1 : 0)
+  );
   return output;
 }
 
@@ -146,6 +214,7 @@ function normalizeContributionSummary(draft = {}) {
       websiteArtifactCount: Number(websiteKnowledge.artifactCount || 0),
       websiteChunkCount: Number(websiteKnowledge.chunkCount || 0),
       websitePageTypes: obj(websiteKnowledge.pageTypeCounts),
+      topPages: arr(websiteKnowledge.topPages).slice(0, 4),
       latestRunId: latestImport.runId || null,
       lastSnapshotId: latestImport.lastSnapshotId || null,
     });
@@ -188,10 +257,16 @@ function normalizeFieldProvenance(draft = {}) {
       .map((field) => [
         field,
         compactObject({
-          sourceType: s(fieldSources[field].sourceType || fieldSources[field].source_type),
-          sourceUrl: s(fieldSources[field].sourceUrl || fieldSources[field].source_url),
+          sourceType: s(
+            fieldSources[field].sourceType || fieldSources[field].source_type
+          ),
+          sourceUrl: s(
+            fieldSources[field].sourceUrl || fieldSources[field].source_url
+          ),
           authorityRank: Number(
-            fieldSources[field].authorityRank || fieldSources[field].authority_rank || 0
+            fieldSources[field].authorityRank ||
+              fieldSources[field].authority_rank ||
+              0
           ),
           label: s(
             fieldSources[field].sourceLabel ||
@@ -262,6 +337,81 @@ function normalizeReviewDebug(draft = {}) {
   });
 }
 
+function normalizeSourceSignalSummary({
+  session = null,
+  draft = null,
+  sources = [],
+} = {}) {
+  const safeDraft = obj(draft);
+  const safeSession = obj(session);
+  const bundleSources = normalizeBundleSources({
+    session: safeSession,
+    draft: safeDraft,
+    sources,
+  });
+  const fieldProvenance = normalizeFieldProvenance(safeDraft);
+  const websiteKnowledge = normalizeWebsiteKnowledge(safeDraft);
+  const businessProfile = obj(safeDraft.businessProfile);
+
+  const primarySource =
+    bundleSources.find((item) => s(item.role).toLowerCase() === "primary") ||
+    bundleSources[0] ||
+    {};
+
+  const strongestEvidence = [
+    ...Object.entries(fieldProvenance)
+      .slice(0, 6)
+      .map(([field, value]) => {
+        const info = obj(value);
+        const observed = s(info.observedValue || info.value);
+        if (!observed) return "";
+        return `${field}: ${observed}`;
+      }),
+    ...arr(websiteKnowledge.topPages)
+      .slice(0, 4)
+      .map((item) => {
+        const page = obj(item);
+        return s(page.title || page.url);
+      }),
+  ].filter(Boolean);
+
+  const discoveredPublicClaims = [
+    s(businessProfile.companyName || businessProfile.displayName),
+    s(
+      businessProfile.description ||
+        businessProfile.companySummaryShort ||
+        businessProfile.companySummary
+    ),
+    s(businessProfile.primaryPhone),
+    s(businessProfile.primaryEmail),
+    s(businessProfile.primaryAddress),
+    ...arr(safeDraft.services).map((item) => s(item.title || item.name || item.label)),
+  ].filter(Boolean);
+
+  return compactObject({
+    primarySource: compactObject({
+      sourceId: s(primarySource.sourceId),
+      sourceType: s(primarySource.sourceType),
+      label: s(primarySource.label),
+      sourceUrl: s(primarySource.sourceUrl),
+      sourceAuthorityClass: s(primarySource.sourceAuthorityClass),
+    }),
+    sourceTypes: [...new Set(bundleSources.map((item) => s(item.sourceType)).filter(Boolean))],
+    sourceCount: bundleSources.length,
+    website: compactObject({
+      finalUrl: s(websiteKnowledge.finalUrl),
+      pageCount: Number(websiteKnowledge.pageCount || 0),
+      artifactCount: Number(websiteKnowledge.artifactCount || 0),
+      chunkCount: Number(websiteKnowledge.chunkCount || 0),
+      pageTypeCounts: obj(websiteKnowledge.pageTypeCounts),
+      signalCounts: obj(websiteKnowledge.signalCounts),
+      topPages: arr(websiteKnowledge.topPages).slice(0, 6),
+    }),
+    strongestEvidence: strongestEvidence.slice(0, 8),
+    discoveredPublicClaims: discoveredPublicClaims.slice(0, 12),
+  });
+}
+
 function normalizeReviewDraftSummary(draft = {}) {
   const payload = obj(draft?.draftPayload);
   const fieldSources = {
@@ -309,5 +459,10 @@ export function buildFrontendReviewShape({
     fieldProvenance: normalizeFieldProvenance(safeDraft),
     reviewDraftSummary: normalizeReviewDraftSummary(safeDraft),
     reviewDebug: normalizeReviewDebug(safeDraft),
+    sourceSignalSummary: normalizeSourceSignalSummary({
+      session,
+      draft: safeDraft,
+      sources,
+    }),
   };
 }

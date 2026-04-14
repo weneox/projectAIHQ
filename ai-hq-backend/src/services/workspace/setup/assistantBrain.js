@@ -1,7 +1,7 @@
 import { arr, compactObject, lower, obj, s } from "./utils.js";
 
 function uniqueStrings(values = []) {
-  return [...new Set(arr(values).map((v) => s(v)).filter(Boolean))];
+  return [...new Set(arr(values).map((value) => s(value)).filter(Boolean))];
 }
 
 function tokenize(value = "") {
@@ -16,19 +16,20 @@ function overlapScore(a = "", b = "") {
   const ta = new Set(tokenize(a));
   const tb = new Set(tokenize(b));
   if (!ta.size || !tb.size) return 0;
+
   let hits = 0;
   for (const token of ta) {
     if (tb.has(token)) hits += 1;
   }
+
   return hits / Math.max(ta.size, tb.size);
 }
 
-function parseCsvLike(value = "") {
-  return uniqueStrings(
-    s(value)
-      .split(/[,;\n]/)
-      .map((item) => s(item))
-  );
+function listPreview(items = [], max = 4) {
+  const safe = uniqueStrings(items);
+  if (!safe.length) return "";
+  if (safe.length <= max) return safe.join(", ");
+  return `${safe.slice(0, max).join(", ")} +${safe.length - max}`;
 }
 
 function urlHost(value = "") {
@@ -51,6 +52,14 @@ function sourceTypeLabel(type = "") {
   return "Website";
 }
 
+function signalExists(values = []) {
+  return uniqueStrings(values).length > 0;
+}
+
+function signalStrong(values = [], minCount = 1) {
+  return uniqueStrings(values).length >= minCount;
+}
+
 function buildSourceSignals({ session = {}, draft = {}, sources = [], review = null } = {}) {
   const businessProfile = obj(draft.businessProfile);
   const sourceSummary = obj(draft.sourceSummary);
@@ -58,7 +67,13 @@ function buildSourceSignals({ session = {}, draft = {}, sources = [], review = n
   const reviewRoot = obj(review);
   const reviewDraft = obj(reviewRoot.review?.draft || reviewRoot.draft);
   const reviewDebug = obj(reviewRoot.review?.reviewDebug || reviewRoot.reviewDebug);
-  const websiteKnowledge = obj(reviewDebug.websiteKnowledge);
+  const reviewFieldProvenance = obj(
+    reviewRoot.fieldProvenance || reviewRoot.review?.fieldProvenance
+  );
+  const sourceSignalSummary = obj(reviewRoot.sourceSignalSummary);
+  const websiteKnowledge = obj(
+    sourceSignalSummary.website || reviewDebug.websiteKnowledge
+  );
 
   const sourceRows = arr(sources).map((item) =>
     compactObject({
@@ -67,11 +82,15 @@ function buildSourceSignals({ session = {}, draft = {}, sources = [], review = n
       role: s(item.role),
       label: s(item.label),
       sourceUrl: s(item.sourceUrl || item.url),
+      sourceAuthorityClass: s(item.sourceAuthorityClass),
     })
   );
 
   const primarySource =
-    sourceRows.find((item) => lower(item.role) === "primary") || sourceRows[0] || {};
+    obj(sourceSignalSummary.primarySource).sourceType ||
+    obj(sourceSignalSummary.primarySource).sourceUrl
+      ? obj(sourceSignalSummary.primarySource)
+      : sourceRows.find((item) => lower(item.role) === "primary") || sourceRows[0] || {};
 
   const websiteUrl =
     s(businessProfile.websiteUrl) ||
@@ -88,6 +107,8 @@ function buildSourceSignals({ session = {}, draft = {}, sources = [], review = n
     primarySource.label,
     session.businessName,
     assistantState.inferredBusinessName,
+    reviewFieldProvenance.companyName?.observedValue,
+    reviewFieldProvenance.displayName?.observedValue,
   ]);
 
   const serviceCandidates = uniqueStrings([
@@ -95,6 +116,8 @@ function buildSourceSignals({ session = {}, draft = {}, sources = [], review = n
     ...arr(reviewDraft.services).map((item) => s(item.title || item.name || item.label)),
     ...arr(draft.serviceCatalog).map((item) => s(item.title || item.name || item.label)),
     ...arr(websiteKnowledge.topPages).map((item) => s(item.title)),
+    ...arr(sourceSignalSummary.discoveredPublicClaims),
+    reviewFieldProvenance.services?.observedValue,
   ]);
 
   const contactCandidates = uniqueStrings([
@@ -103,6 +126,9 @@ function buildSourceSignals({ session = {}, draft = {}, sources = [], review = n
     businessProfile.primaryAddress,
     ...arr(draft.contacts).map((item) => s(item.label || item.value || item.channel)),
     ...arr(reviewDraft.contacts).map((item) => s(item.label || item.value || item.channel)),
+    reviewFieldProvenance.primaryPhone?.observedValue,
+    reviewFieldProvenance.primaryEmail?.observedValue,
+    reviewFieldProvenance.primaryAddress?.observedValue,
   ]);
 
   const hoursCandidates = uniqueStrings([
@@ -125,6 +151,7 @@ function buildSourceSignals({ session = {}, draft = {}, sources = [], review = n
     draft.pricingPosture?.publicSummary,
     draft.pricingPosture?.note,
     reviewDraft.businessProfile?.pricingPolicy,
+    reviewFieldProvenance.pricingHints?.observedValue,
   ]);
 
   const handoffCandidates = uniqueStrings([
@@ -148,18 +175,53 @@ function buildSourceSignals({ session = {}, draft = {}, sources = [], review = n
     reviewDraft.businessProfile?.description,
     reviewDraft.businessProfile?.companySummaryShort,
     reviewDraft.businessProfile?.companySummary,
+    reviewFieldProvenance.description?.observedValue,
+    reviewFieldProvenance.companySummaryShort?.observedValue,
   ]);
 
-  const sourceTypes = uniqueStrings(sourceRows.map((item) => item.sourceType));
-  const pageCount = Number(websiteKnowledge.pageCount || 0) || 0;
+  const languagesCandidates = uniqueStrings([
+    ...arr(businessProfile.supportedLanguages),
+    ...arr(businessProfile.languages),
+    ...arr(reviewDraft.businessProfile?.supportedLanguages),
+    ...arr(reviewDraft.businessProfile?.languages),
+    reviewFieldProvenance.language?.observedValue,
+    reviewFieldProvenance.mainLanguage?.observedValue,
+    reviewFieldProvenance.primaryLanguage?.observedValue,
+  ]);
+
+  const toneCandidates = uniqueStrings([
+    businessProfile.brandTone,
+    businessProfile.tone,
+    reviewDraft.businessProfile?.brandTone,
+    reviewDraft.businessProfile?.tone,
+  ]);
+
+  const sourceTypes = uniqueStrings(
+    sourceSignalSummary.sourceTypes?.length
+      ? sourceSignalSummary.sourceTypes
+      : sourceRows.map((item) => item.sourceType)
+  );
+
+  const strongestEvidence = uniqueStrings(sourceSignalSummary.strongestEvidence);
+  const discoveredPublicClaims = uniqueStrings(
+    sourceSignalSummary.discoveredPublicClaims
+  );
+  const pageCount =
+    Number(sourceSignalSummary.website?.pageCount || 0) ||
+    Number(websiteKnowledge.pageCount || 0) ||
+    0;
 
   return {
     sourceRows,
     primarySourceType: s(primarySource.sourceType || session.primarySourceType),
-    primarySourceLabel: sourceTypeLabel(primarySource.sourceType),
+    primarySourceLabel:
+      s(primarySource.label) || sourceTypeLabel(primarySource.sourceType),
     primarySourceUrl: s(primarySource.sourceUrl || websiteUrl),
+    primarySourceAuthorityClass: s(primarySource.sourceAuthorityClass),
     sourceTypes,
     pageCount,
+    strongestEvidence,
+    discoveredPublicClaims,
     companyNameCandidates,
     serviceCandidates,
     contactCandidates,
@@ -168,6 +230,8 @@ function buildSourceSignals({ session = {}, draft = {}, sources = [], review = n
     handoffCandidates,
     audienceCandidates,
     descriptionCandidates,
+    languagesCandidates,
+    toneCandidates,
   };
 }
 
@@ -242,16 +306,42 @@ function buildDraftState({ draft = {}, review = null } = {}) {
   };
 }
 
+function mergeSourceInferredDraft(draftState, sourceSignals) {
+  return {
+    businessName:
+      s(draftState.businessName) || s(sourceSignals.companyNameCandidates[0]),
+    description:
+      s(draftState.description) || s(sourceSignals.descriptionCandidates[0]),
+    websiteUrl:
+      s(draftState.websiteUrl) || s(sourceSignals.primarySourceUrl),
+    services: draftState.services.length
+      ? draftState.services
+      : sourceSignals.serviceCandidates.slice(0, 6),
+    audience:
+      s(draftState.audience) || s(sourceSignals.audienceCandidates[0]),
+    pricingPosture:
+      s(draftState.pricingPosture) || s(sourceSignals.pricingCandidates[0]),
+    contacts: draftState.contacts.length
+      ? draftState.contacts
+      : sourceSignals.contactCandidates.slice(0, 6),
+    hours: draftState.hours.length
+      ? draftState.hours
+      : sourceSignals.hoursCandidates.slice(0, 4),
+    humanHandoff:
+      s(draftState.humanHandoff) || s(sourceSignals.handoffCandidates[0]),
+    languages: draftState.languages.length
+      ? draftState.languages
+      : sourceSignals.languagesCandidates.slice(0, 4),
+    tone: s(draftState.tone) || s(sourceSignals.toneCandidates[0]),
+  };
+}
+
 function detectContradictions({ draftState, sourceSignals }) {
   const contradictions = [];
 
   const draftName = draftState.businessName;
   const sourceName = sourceSignals.companyNameCandidates[0];
-  if (
-    draftName &&
-    sourceName &&
-    overlapScore(draftName, sourceName) < 0.35
-  ) {
+  if (draftName && sourceName && overlapScore(draftName, sourceName) < 0.35) {
     contradictions.push({
       key: "business_name_conflict",
       severity: "medium",
@@ -282,6 +372,23 @@ function detectContradictions({ draftState, sourceSignals }) {
         severity: "medium",
         message:
           "Mənbələrdən görünən xidmətlər ilə draft xidmətləri arasında güclü uyğunluq görünmür.",
+      });
+    }
+  }
+
+  if (draftState.contacts.length && sourceSignals.contactCandidates.length) {
+    const contactOverlap = draftState.contacts.some((contact) =>
+      sourceSignals.contactCandidates.some(
+        (candidate) => overlapScore(contact, candidate) >= 0.45
+      )
+    );
+
+    if (!contactOverlap) {
+      contradictions.push({
+        key: "contact_conflict",
+        severity: "low",
+        message:
+          "Draft contact marşrutu ilə source-lardan görünən əlaqə siqnalları tam üst-üstə düşmür.",
       });
     }
   }
@@ -317,12 +424,32 @@ function buildConfidenceBuckets({ draftState, sourceSignals, contradictions }) {
     unclear.push("Müştərinin hara yönləndiriləcəyi hələ aydın deyil.");
   }
 
-  if (!draftState.humanHandoff) {
+  if (draftState.pricingPosture) {
+    strong.push("Qiymətin necə təqdim olunacağı müəyyənləşib.");
+  } else {
+    unclear.push("Qiymət siyasətinin necə təqdim olunacağı hələ aydın deyil.");
+  }
+
+  if (draftState.humanHandoff) {
+    strong.push("İnsana ötürmə qaydaları müəyyənləşib.");
+  } else {
     unclear.push("AI-nin hansı hallarda insana ötürəcəyi hələ müəyyənləşməyib.");
   }
 
-  if (!draftState.pricingPosture) {
-    unclear.push("Qiymət siyasətinin necə təqdim olunacağı hələ aydın deyil.");
+  if (draftState.hours.length) {
+    strong.push("İş/cavab saatları görünür.");
+  } else {
+    unclear.push("İş və ya cavab saatları hələ aydın deyil.");
+  }
+
+  if (draftState.languages.length) {
+    strong.push(`İşləmə dilləri görünür: ${listPreview(draftState.languages, 3)}`);
+  } else {
+    unclear.push("AI-nin hansı dillərdə işləyəcəyi hələ dəqiq deyil.");
+  }
+
+  if (!draftState.tone) {
+    unclear.push("AI tonu hələ dəqiq formalaşmayıb.");
   }
 
   if (
@@ -331,6 +458,19 @@ function buildConfidenceBuckets({ draftState, sourceSignals, contradictions }) {
     !draftState.websiteUrl
   ) {
     unclear.push("Website source var, amma public website draftda hələ oturmayıb.");
+  }
+
+  if (
+    sourceSignals.primarySourceType === "website" &&
+    sourceSignals.pageCount >= 3
+  ) {
+    strong.push(
+      `Website source kifayət qədər siqnal verib (${sourceSignals.pageCount} səhifə).`
+    );
+  }
+
+  if (sourceSignals.strongestEvidence.length) {
+    strong.push("Source-lardan konkret dəlillər çıxarılıb.");
   }
 
   return {
@@ -346,6 +486,12 @@ function buildRecommendation({ draftState, sourceSignals, contradictions }) {
   if (draftState.services.length) {
     notes.push(
       `Məncə AI ilk növbədə "${draftState.services[0]}" xətti üzərindən danışmalıdır.`
+    );
+  }
+
+  if (draftState.services.length > 3) {
+    notes.push(
+      "Çox xidmət varsa, AI ilk cavablarda yalnız əsas xidmət klasterini vurğulayıb, qalanlarını sonradan açmalıdır."
     );
   }
 
@@ -367,6 +513,24 @@ function buildRecommendation({ draftState, sourceSignals, contradictions }) {
     );
   }
 
+  if (!draftState.hours.length) {
+    notes.push(
+      "Voice receptionist üçün iş/cavab saatı ayrıca göstərilməlidir; əks halda zəng tərəfdə qeyri-müəyyənlik yaranacaq."
+    );
+  }
+
+  if (!draftState.languages.length) {
+    notes.push(
+      "AI və voice receptionist üçün dil seçimi ayrıca dəqiqləşdirilməlidir; əks halda cavablar qeyri-sabit görünə bilər."
+    );
+  }
+
+  if (!draftState.tone) {
+    notes.push(
+      "Brand tonu göstərilməyibsə, sistem default olaraq qısa, aydın və professional tonla işləməlidir."
+    );
+  }
+
   if (contradictions.length) {
     notes.push(
       "Source ilə verilən cavablar arasında uyğunsuzluq var; təsdiqdən əvvəl bunları bağlamaq daha doğrudur."
@@ -384,10 +548,28 @@ function buildRecommendation({ draftState, sourceSignals, contradictions }) {
     );
   }
 
+  if (
+    sourceSignals.primarySourceAuthorityClass &&
+    lower(sourceSignals.primarySourceAuthorityClass) === "high"
+  ) {
+    notes.push(
+      "Əsas source yüksək authority göstərirsə, public təqdimatda həmin source siqnallarına daha çox güvənmək olar."
+    );
+  }
+
   return notes;
 }
 
 function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) {
+  const strongWebsite = sourceSignals.primarySourceType === "website" && sourceSignals.pageCount >= 4;
+  const strongNameSource = signalStrong(sourceSignals.companyNameCandidates, 1);
+  const strongDescriptionSource = signalStrong(sourceSignals.descriptionCandidates, 1);
+  const strongServicesSource = signalStrong(sourceSignals.serviceCandidates, 2);
+  const strongContactSource = signalStrong(sourceSignals.contactCandidates, 1);
+  const strongHoursSource = signalStrong(sourceSignals.hoursCandidates, 1);
+  const strongPricingSource = signalStrong(sourceSignals.pricingCandidates, 1);
+  const strongLanguageSource = signalStrong(sourceSignals.languagesCandidates, 1);
+  const strongToneSource = signalStrong(sourceSignals.toneCandidates, 1);
   const needsHours =
     sourceSignals.primarySourceType === "google_maps" ||
     draftState.contacts.some((item) => /address|street|office|baku|az/i.test(item));
@@ -422,84 +604,98 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       when: contradictions.some((item) => item.key === "services_conflict"),
     },
     {
-      key: "business_name",
-      step: "company",
-      title: "Business name",
-      prompt: "Biznesin adı necə görünməlidir?",
-      priority: 90,
-      when: !draftState.businessName,
-    },
-    {
-      key: "positioning",
-      step: "description",
-      title: "What the business is",
-      prompt: "Bu biznesi bir-iki cümlə ilə necə təqdim etməliyəm?",
-      priority: 88,
-      when: !draftState.description,
-    },
-    {
-      key: "services",
-      step: "services",
-      title: "Core services",
-      prompt: "Əsas xidmətləri yaz.",
-      priority: 86,
-      when: !draftState.services.length,
-    },
-    {
-      key: "booking_route",
+      key: "contact_conflict",
       step: "contacts",
       title: "Contact route",
-      prompt: "Müştəri sonda hara yönləndirilməlidir? (WhatsApp, telefon, DM, email və s.)",
-      priority: 84,
-      when: !draftState.contacts.length,
+      prompt:
+        contradictions.find((item) => item.key === "contact_conflict")?.message ||
+        "Əsas əlaqə marşrutunu dəqiqləşdir.",
+      priority: 92,
+      when: contradictions.some((item) => item.key === "contact_conflict"),
     },
     {
-      key: "pricing_posture",
-      step: "pricing",
-      title: "Pricing posture",
-      prompt: "Qiymət necə təqdim olunmalıdır? AI birbaşa rəqəm desin, yoxsa sorğuya/operatora yönləndirsin?",
-      priority: 82,
-      when: !draftState.pricingPosture,
+      key: "contact_route",
+      step: "contacts",
+      title: "Primary conversion route",
+      prompt:
+        "Müştəri sonda əsasən hara yönləndirilməlidir? Birinci prioritet route-u yaz.",
+      priority: 90,
+      when: !draftState.contacts.length && !strongContactSource,
     },
     {
       key: "handoff_rules",
       step: "handoff",
       title: "Human handoff",
       prompt: "AI hansı hallarda mütləq insana ötürməlidir?",
-      priority: 80,
+      priority: 88,
       when: !draftState.humanHandoff,
     },
     {
-      key: "audience",
-      step: "profile",
-      title: "Audience",
-      prompt: "Əsasən kimlərə xidmət göstərirsiniz?",
-      priority: 76,
-      when: !draftState.audience,
-    },
-    {
-      key: "hours",
+      key: "availability",
       step: "hours",
       title: "Hours",
-      prompt: "İş saatları və ya qəbul saatları necə göstərilməlidir?",
-      priority: 70,
-      when: needsHours && !draftState.hours.length,
+      prompt:
+        "İş və ya cavab saatları necə göstərilməlidir? Voice receptionist bunu necə deməlidir?",
+      priority: 86,
+      when: !draftState.hours.length && needsHours && !strongHoursSource,
+    },
+    {
+      key: "pricing_posture",
+      step: "pricing",
+      title: "Pricing posture",
+      prompt:
+        "Qiymət necə təqdim olunmalıdır? AI birbaşa rəqəm desin, yoxsa sorğuya/operatora yönləndirsin?",
+      priority: 84,
+      when: !draftState.pricingPosture && !strongPricingSource,
     },
     {
       key: "languages",
       step: "profile",
       title: "Languages",
       prompt: "AI hansı dillərdə danışmalıdır?",
-      priority: 66,
-      when: !draftState.languages.length,
+      priority: 82,
+      when: !draftState.languages.length && !strongLanguageSource,
     },
     {
       key: "tone",
       step: "profile",
       title: "Tone",
-      prompt: "AI-nin tonu necə olmalıdır? (premium, mehriban, qısa, satış yönümlü və s.)",
-      priority: 60,
-      when: !draftState.tone,
+      prompt:
+        "AI-nin tonu necə olmalıdır? (premium, mehriban, qısa, satış yönümlü və s.)",
+      priority: 80,
+      when: !draftState.tone && !strongToneSource,
+    },
+    {
+      key: "business_name",
+      step: "company",
+      title: "Business name",
+      prompt: "Biznesin adı necə görünməlidir?",
+      priority: 76,
+      when: !draftState.businessName && !strongNameSource,
+    },
+    {
+      key: "positioning",
+      step: "description",
+      title: "What the business is",
+      prompt: "Bu biznesi bir-iki cümlə ilə necə təqdim etməliyəm?",
+      priority: 74,
+      when: !draftState.description && !(strongDescriptionSource && strongWebsite),
+    },
+    {
+      key: "services",
+      step: "services",
+      title: "Core services",
+      prompt: "Əsas xidmətləri yaz.",
+      priority: 72,
+      when: !draftState.services.length && !(strongServicesSource && strongWebsite),
+    },
+    {
+      key: "audience",
+      step: "profile",
+      title: "Audience",
+      prompt: "Əsasən kimlərə xidmət göstərirsiniz?",
+      priority: 70,
+      when: !draftState.audience,
     },
   ];
 
@@ -530,16 +726,29 @@ function buildAssistantMessage({
     draftState.contacts.length
       ? `Contact routes: ${listPreview(draftState.contacts, 6)}`
       : "",
+    draftState.hours.length
+      ? `Availability: ${listPreview(draftState.hours, 4)}`
+      : "",
     draftState.humanHandoff ? `Human handoff: ${draftState.humanHandoff}` : "",
+    draftState.languages.length
+      ? `Languages: ${listPreview(draftState.languages, 4)}`
+      : "",
+    draftState.tone ? `Tone: ${draftState.tone}` : "",
   ].filter(Boolean);
 
   const guidance = [
-    confidence.strong.length ? `What I’m confident about:\n- ${confidence.strong.join("\n- ")}` : "",
-    confidence.unclear.length ? `What still looks unclear:\n- ${confidence.unclear.join("\n- ")}` : "",
+    confidence.strong.length
+      ? `What I’m confident about:\n- ${confidence.strong.join("\n- ")}`
+      : "",
+    confidence.unclear.length
+      ? `What still looks unclear:\n- ${confidence.unclear.join("\n- ")}`
+      : "",
     confidence.contradictions.length
       ? `What may be inconsistent:\n- ${confidence.contradictions.join("\n- ")}`
       : "",
-    recommendations.length ? `My recommendation:\n- ${recommendations.join("\n- ")}` : "",
+    recommendations.length
+      ? `My recommendation:\n- ${recommendations.join("\n- ")}`
+      : "",
   ].filter(Boolean);
 
   return [draftLines.join("\n"), guidance.join("\n\n")]
@@ -554,7 +763,8 @@ export function buildSetupAssistantBrainState({
   review = null,
 } = {}) {
   const sourceSignals = buildSourceSignals({ session, draft, sources, review });
-  const draftState = buildDraftState({ draft, review });
+  const rawDraftState = buildDraftState({ draft, review });
+  const draftState = mergeSourceInferredDraft(rawDraftState, sourceSignals);
   const contradictions = detectContradictions({ draftState, sourceSignals });
   const confidence = buildConfidenceBuckets({
     draftState,
@@ -573,13 +783,19 @@ export function buildSetupAssistantBrainState({
   });
 
   const nextQuestion = questionCandidates[0] || null;
+  const blockingContradictions = contradictions.filter(
+    (item) => lower(item.severity) !== "low"
+  );
+
   const readyForApproval =
     !nextQuestion &&
+    !blockingContradictions.length &&
     Boolean(
       draftState.businessName &&
         draftState.description &&
         draftState.services.length &&
         draftState.contacts.length &&
+        draftState.pricingPosture &&
         draftState.humanHandoff
     );
 
@@ -616,8 +832,11 @@ export function buildSetupAssistantBrainState({
       primarySourceType: sourceSignals.primarySourceType,
       primarySourceLabel: sourceSignals.primarySourceLabel,
       primarySourceUrl: sourceSignals.primarySourceUrl,
+      primarySourceAuthorityClass: sourceSignals.primarySourceAuthorityClass,
       pageCount: sourceSignals.pageCount,
       sourceTypes: sourceSignals.sourceTypes,
+      strongestEvidence: sourceSignals.strongestEvidence,
+      discoveredPublicClaims: sourceSignals.discoveredPublicClaims,
     },
     readyForApproval,
     assistantMessage: buildAssistantMessage({

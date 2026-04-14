@@ -121,10 +121,35 @@ function buildLoadingAssistantSeed() {
   };
 }
 
+function normalizeDecisionAssistant(value = {}) {
+  const source = obj(value);
+
+  return {
+    nextQuestion: obj(source.nextQuestion),
+    confirmationBlockers: arr(source.confirmationBlockers),
+    sections: arr(source.sections),
+    completion: obj(source.completion),
+    servicesCatalog: obj(source.servicesCatalog),
+    sourceInsights: arr(source.sourceInsights),
+
+    phase: s(source.phase),
+    message: s(source.message || source.assistantMessage),
+    draft: obj(source.draft),
+    confidence: obj(source.confidence),
+    recommendation: obj(source.recommendation),
+    readyForApproval: source.readyForApproval === true,
+    sourceSignals: obj(source.sourceSignals),
+    reviewSessionId: s(source.reviewSessionId),
+    draftVersion: Number(source.draftVersion || 0),
+  };
+}
+
 function normalizeAssistantState(input = null) {
   const source = input || buildDefaultAssistant();
   const draft = obj(source.draft);
-  const assistant = obj(source.assistant);
+  const decisionAssistant = normalizeDecisionAssistant(
+    obj(source.assistantBrain || source.assistant)
+  );
 
   return {
     mode: s(source.mode, "setup"),
@@ -154,27 +179,60 @@ function normalizeAssistantState(input = null) {
       version: Number(draft.version || 0),
       updatedAt: draft.updatedAt || null,
     },
-    assistant: {
-      nextQuestion: obj(assistant.nextQuestion),
-      confirmationBlockers: arr(assistant.confirmationBlockers),
-      sections: arr(assistant.sections),
-      completion: obj(assistant.completion),
-      servicesCatalog: obj(assistant.servicesCatalog),
-      sourceInsights: arr(assistant.sourceInsights),
-    },
+    assistant: decisionAssistant,
+    assistantBrain: decisionAssistant,
   };
 }
 
 function buildAssistantFromApi(base = {}, response = {}) {
+  const root = obj(response);
+  const setup = obj(root.setup);
+
   return normalizeAssistantState({
     ...base,
-    session: obj(response.session),
-    review: obj(response.setup?.review),
-    websitePrefill: obj(response.setup?.websitePrefill),
-    setupSummary: obj(response.setup?.summary),
-    draft: obj(response.setup?.draft),
-    assistant: obj(response.setup?.assistant),
+    session: obj(root.session),
+    review: obj(setup.review),
+    websitePrefill: obj(setup.websitePrefill),
+    setupSummary: obj(setup.summary),
+    draft: obj(setup.draft),
+    assistant:
+      obj(setup.assistant).phase ||
+      obj(setup.assistant).message ||
+      obj(setup.assistant).readyForApproval !== false
+        ? obj(setup.assistant)
+        : obj(root.assistant),
+    assistantBrain:
+      obj(setup.assistantBrain).phase ||
+      obj(setup.assistantBrain).message ||
+      obj(setup.assistantBrain).readyForApproval !== false
+        ? obj(setup.assistantBrain)
+        : obj(root.assistantBrain),
   });
+}
+
+function buildMergedReviewPayload(reviewPayload = null, assistantState = {}) {
+  const reviewRoot = obj(reviewPayload);
+  const assistant = normalizeDecisionAssistant(
+    obj(reviewRoot.assistant).phase || obj(reviewRoot.assistant).message
+      ? reviewRoot.assistant
+      : obj(assistantState.assistant)
+  );
+  const assistantBrain = normalizeDecisionAssistant(
+    obj(reviewRoot.assistantBrain).phase || obj(reviewRoot.assistantBrain).message
+      ? reviewRoot.assistantBrain
+      : assistant
+  );
+
+  return {
+    ...reviewRoot,
+    review: obj(reviewRoot.review),
+    bundleSources: arr(reviewRoot.bundleSources),
+    contributionSummary: obj(reviewRoot.contributionSummary),
+    fieldProvenance: obj(reviewRoot.fieldProvenance),
+    reviewDraftSummary: obj(reviewRoot.reviewDraftSummary),
+    assistant,
+    assistantBrain,
+  };
 }
 
 function normalizeManualSourceType(value = "") {
@@ -347,6 +405,11 @@ export default function FloatingAiWidget({
     setSetupError("");
   }, [workspace.tenantKey]);
 
+  const mergedReviewPayload = useMemo(
+    () => buildMergedReviewPayload(reviewQuery.data, clientAssistant),
+    [reviewQuery.data, clientAssistant]
+  );
+
   if (hidden) return null;
 
   async function refreshWidgetWorkspaceState({
@@ -456,6 +519,10 @@ export default function FloatingAiWidget({
             finalizeAvailable: false,
             message:
               "Business truth was approved. Runtime and approved truth were refreshed.",
+          },
+          assistant: {
+            ...obj(prev.assistant),
+            readyForApproval: false,
           },
         })
       );
@@ -579,7 +646,7 @@ export default function FloatingAiWidget({
             <div className="min-h-0 flex-1">
               <SetupAssistantSections
                 assistant={clientAssistant}
-                reviewPayload={reviewQuery.data}
+                reviewPayload={mergedReviewPayload}
                 saving={saving}
                 finalizing={finalizing}
                 capturingSource={capturingSource}
