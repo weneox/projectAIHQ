@@ -42,7 +42,7 @@ describe("SetupAssistantSections", () => {
     window.HTMLElement.prototype.scrollTo = vi.fn();
   });
 
-  it("reads the canonical assistant state instead of legacy assistantBrain fallback", async () => {
+  it("reads the canonical assistant state without any legacy assistantBrain fallback", async () => {
     render(
       <SetupAssistantSections
         assistant={createAssistant()}
@@ -67,16 +67,6 @@ describe("SetupAssistantSections", () => {
             },
             readyForApproval: false,
           },
-          assistantBrain: {
-            nextQuestion: {
-              key: "languages",
-              step: "languages",
-              title: "Languages",
-              prompt: "Legacy languages question",
-              group: "business_truth",
-            },
-            readyForApproval: false,
-          },
         }}
         onCaptureSource={vi.fn().mockResolvedValue(true)}
         onParseMessage={vi.fn()}
@@ -94,8 +84,6 @@ describe("SetupAssistantSections", () => {
         screen.getByText((content) => content.includes("Canonical handoff question"))
       ).toBeInTheDocument();
     });
-
-    expect(screen.queryByText("Legacy languages question")).not.toBeInTheDocument();
   });
 
   it("keeps the smart draft curated and hides the old analysis-heavy headings", async () => {
@@ -149,7 +137,7 @@ describe("SetupAssistantSections", () => {
       expect(screen.getByText("Draft")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Final notes")).toBeInTheDocument();
+    expect(screen.getByText("Follow-up notes")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Approve truth" })).toBeInTheDocument();
     expect(screen.queryByText("Strongest evidence")).not.toBeInTheDocument();
     expect(screen.queryByText("What the system noticed")).not.toBeInTheDocument();
@@ -209,6 +197,8 @@ describe("SetupAssistantSections", () => {
       expect(screen.getByText("Draft")).toBeInTheDocument();
     });
 
-    expect(screen.queryByRole("button", { name: "Approve truth" })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Approve truth" })
+    ).not.toBeInTheDocument();
   });
 });
