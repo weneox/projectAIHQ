@@ -49,95 +49,107 @@ const SECTION_ORDER = [
 
 const SECTION_META = {
   profile: {
-    label: "Business profile",
-    title: "Confirm who the business is",
+    label: "Business identity",
+    title: "Confirm the business identity",
     missing:
-      "Add the business name and a reliable short description so future AI replies can anchor on real business truth.",
+      "The business identity is still too weak. Lock the exact public name and one clean sentence describing what the business does.",
     review:
-      "Core identity exists, but some profile fields or source details still need confirmation.",
-    ready: "Core business identity is captured in the draft.",
+      "There are identity signals, but the public business identity still needs a cleaner confirmation.",
+    ready:
+      "The public business identity is already captured in a usable form.",
     prompt:
-      "Confirm the business name and a reliable short description first. Add the website if the business has one.",
-    placeholder: "Describe the business in one line",
+      "Send the exact public business name and one clean sentence describing what the business does.",
+    placeholder:
+      "Məsələn: Neox Studio — AI avtomasiya, website və rəqəmsal təqdimat həlləri qururuq.",
   },
   company: {
     label: "Business name",
     title: "Confirm the business name",
-    prompt: "What is the business name?",
-    placeholder: "e.g. Neox Studio",
+    prompt: "Send the exact public business name.",
+    placeholder: "Məsələn: Neox Studio",
   },
   description: {
-    label: "Business summary",
+    label: "Business description",
     title: "Describe what the business does",
-    prompt: "In one or two lines, what does the business mainly do?",
+    prompt: "Send one clean public sentence describing what the business does.",
     placeholder:
-      "e.g. Premium AI automation and customer operations for local businesses.",
+      "Məsələn: Lokal bizneslər üçün AI avtomasiya və rəqəmsal təqdimat həlləri qururuq.",
   },
   website: {
     label: "Website",
     title: "Add the main website",
-    prompt: "What is the main website URL?",
-    placeholder: "e.g. https://example.com",
+    prompt: "Send the main website URL if the business has one.",
+    placeholder: "Məsələn: yourbusiness.com",
   },
   services: {
     label: "Services",
     title: "Curate the service menu",
     missing:
-      "Select the real services the business wants AI to talk about. Avoid giant generic lists.",
+      "Core services are still missing. Keep only the real customer-facing services AI should confidently talk about.",
     review:
-      "Services exist, but they still need confirmation, cleanup, or stronger structure.",
-    ready: "Service coverage is already drafted in a structured form.",
+      "Service signals exist, but they still need cleanup before approval.",
+    ready:
+      "Core services are already drafted in a usable form.",
     prompt:
-      "List the core services in plain language, and I will convert them into structured service items.",
-    placeholder: "e.g. Consultation, Tax filing, Payroll support",
+      "Send only the real customer-facing services you want AI to talk about.",
+    placeholder:
+      "Məsələn: website hazırlanması, reklam idarəetməsi, branding",
   },
   hours: {
     label: "Business hours",
-    title: "Lock in structured weekly hours",
+    title: "Lock the public hours",
     missing:
-      "Business hours are still missing. Structured hours matter for accurate reply promises.",
+      "Public business hours are still missing. AI should not promise the wrong availability.",
     review:
-      "Hours exist, but they still need confirmation before the system should rely on them.",
-    ready: "Weekly hours are drafted in a structured schedule.",
+      "Hour signals exist, but they still need confirmation.",
+    ready:
+      "Public business hours are already structured.",
     prompt:
-      "Paste rough opening hours and I will convert them into a weekly schedule.",
-    placeholder: "Mon-Fri 09:00-18:00; Sat 10:00-14:00; Sun closed",
+      "Send the public weekly hours in one line.",
+    placeholder:
+      "Məsələn: B.e.–Cümə 10:00–19:00, Şənbə 11:00–16:00, Bazar bağlı",
   },
   pricing: {
-    label: "Pricing",
-    title: "Choose a safe pricing posture",
+    label: "Pricing posture",
+    title: "Define the pricing posture",
     missing:
-      "Pricing still needs a structured reply policy so AI does not improvise unsafe price answers.",
+      "Pricing posture is still missing. AI needs a safe public rule for answering price questions.",
     review:
-      "Pricing posture exists, but it still needs confirmation or refinement.",
-    ready: "Pricing has a structured public reply posture.",
+      "Pricing signals exist, but the public reply policy still needs refinement.",
+    ready:
+      "Pricing posture is already defined.",
     prompt:
-      "Paste a rough pricing note and I will turn it into a structured pricing policy.",
-    placeholder: "Starts from 50 AZN. Exact quotes depend on the service.",
+      "How should AI speak publicly about pricing?",
+    placeholder:
+      "Məsələn: starting price deyilə bilər, dəqiq quote üçün müraciət istənməlidir",
   },
   contacts: {
     label: "Contacts",
-    title: "Set the main customer contact lanes",
+    title: "Set the main customer contact lane",
     missing:
-      "At least one reliable public contact is needed so AI can hand customers to a real channel.",
+      "A real public customer contact lane is still missing.",
     review:
-      "Contacts exist, but they still need confirmation or stronger prioritization.",
-    ready: "A reliable customer contact path is present in the draft.",
+      "Contact details exist, but the main routing lane still needs confirmation.",
+    ready:
+      "A customer contact route is already present.",
     prompt:
-      "Add the best public contact routes for customers, like phone, WhatsApp, or email.",
-    placeholder: "Phone +994..., WhatsApp link, support@company.com",
+      "Send the main public contact route customers should be sent to first.",
+    placeholder:
+      "Məsələn: WhatsApp, telefon zəngi, form və ya email",
   },
   handoff: {
     label: "Operator handoff",
     title: "Define when AI should escalate",
     missing:
-      "Operator handoff rules are still light. Capture the cases where AI should stop and bring in a human.",
+      "Operator handoff rules are still missing.",
     review:
-      "Handoff rules exist, but they still need stronger escalation detail.",
-    ready: "Operator escalation rules are present in the draft.",
+      "Escalation logic exists, but it still needs stronger boundaries.",
+    ready:
+      "Operator escalation rules are already present.",
     prompt:
-      "Describe when AI should escalate to an operator or manager.",
-    placeholder: "Complaints, urgent requests, custom quotes, payment disputes",
+      "Describe when AI should stop and escalate to a human.",
+    placeholder:
+      "Məsələn: şikayət, fərdi quote, ödəniş problemi, təcili iş, anlaşılmaz sorğu",
   },
 };
 
@@ -1189,27 +1201,39 @@ function buildSectionStatus(draft = {}) {
 
 function buildConfirmationBlockers(draft = {}, sectionStatus = {}) {
   const sourceMetadata = obj(draft.sourceMetadata);
+  const sourceLabel = sourceTypeLabel(sourceMetadata.primarySourceType);
+  const sourceHint =
+    s(sourceMetadata.primarySourceType) && s(sourceMetadata.primarySourceUrl)
+      ? `${sourceLabel} source is already attached (${s(
+          sourceMetadata.primarySourceUrl
+        )}).`
+      : s(sourceMetadata.primarySourceType)
+        ? `${sourceLabel} source is already attached.`
+        : "";
 
   return SECTION_ORDER.filter((key) => sectionStatus[key]?.status !== "ready").map(
-    (key) => ({
-      key,
-      label: SECTION_META[key].label,
-      title: SECTION_META[key].title,
-      severity: sectionStatus[key]?.status === "missing" ? "high" : "medium",
-      reason:
-        sectionStatus[key]?.status === "missing"
-          ? SECTION_META[key].missing
-          : SECTION_META[key].review,
-      metric: s(sectionStatus[key]?.metric),
-      sourceHint:
-        key === "profile" && s(sourceMetadata.primarySourceType)
-          ? `Signals already exist from ${sourceTypeLabel(
-              sourceMetadata.primarySourceType
-            )}.`
-          : key === "services" && arr(sourceMetadata.evidenceSummary).length
-            ? arr(sourceMetadata.evidenceSummary)[0]
-            : "",
-    })
+    (key) => {
+      const meta = obj(SECTION_META[key]);
+      const state = obj(sectionStatus[key]);
+
+      return {
+        key,
+        label: meta.label,
+        title: meta.title,
+        severity: state.status === "missing" ? "high" : "medium",
+        reason:
+          state.status === "missing"
+            ? s(meta.missing)
+            : s(meta.review),
+        metric: s(state.metric),
+        sourceHint:
+          key === "profile"
+            ? sourceHint
+            : key === "services" && arr(sourceMetadata.evidenceSummary).length
+              ? s(arr(sourceMetadata.evidenceSummary)[0])
+              : "",
+      };
+    }
   );
 }
 
@@ -1259,14 +1283,14 @@ function buildReviewState(draft = {}, summary = {}) {
     finalizeAvailable: summary.readyForReview === true,
     message:
       summary.readyForReview === true
-        ? "The setup draft is structurally complete enough to be finalized into approved truth and strict runtime."
+        ? "The setup draft is structurally complete enough to move into review and approval."
         : REVIEW_MESSAGE,
   };
 }
 
 function buildAssistantQuestion(key = "", overrides = {}) {
   const questionKey = s(key).toLowerCase();
-  const meta = SECTION_META[questionKey] || {};
+  const meta = obj(SECTION_META[questionKey]);
 
   return compactDraftObject({
     key: questionKey,
@@ -1277,6 +1301,7 @@ function buildAssistantQuestion(key = "", overrides = {}) {
     placeholder: s(overrides.placeholder || meta.placeholder),
     group: s(overrides.group || "business_truth"),
     groupLabel: "Business truth",
+    priority: Number(overrides.priority || 0) || undefined,
   });
 }
 
@@ -1289,20 +1314,20 @@ function buildSetupAssistantAuthorityState({
   reviewState = {},
 } = {}) {
   const nextQuestion = getNextQuestion(summary, setup, obj(setup.progress));
-  const question = nextQuestion
-    ? buildAssistantQuestion(nextQuestion.key, nextQuestion)
-    : null;
+  const question = nextQuestion ? buildAssistantQuestion(nextQuestion.key, nextQuestion) : null;
   const readyForApproval = obj(reviewState).finalizeAvailable === true;
+
   const sourceSignals = buildAssistantSourceSignals(setup, {
     normalizeWebsiteUrl,
     normalizeSourceType,
     sourceTypeLabel,
     uniqueStrings,
   });
+
   const assistantMessage = buildAssistantMessage(summary, question, REVIEW_MESSAGE);
 
   return {
-    mode: "structured_v2",
+    mode: "structured_v3",
     nextQuestion: question,
     confirmationBlockers: arr(summary.confirmationBlockers),
     sections: buildAssistantSections(
@@ -1321,7 +1346,7 @@ function buildSetupAssistantAuthorityState({
           }
         : null,
       message: readyForApproval
-        ? "The draft is complete enough to finalize into approved truth and strict runtime."
+        ? "The draft is complete enough to move into review and approval."
         : REVIEW_MESSAGE,
     },
     quickCapture: Object.fromEntries(
@@ -1336,7 +1361,11 @@ function buildSetupAssistantAuthorityState({
     ),
     servicesCatalog,
     sourceInsights: arr(obj(setup.sourceMetadata).evidenceSummary),
-    phase: summary.hasAnyDraft ? (readyForApproval ? "ready" : "interview") : "source_capture",
+    phase: summary.hasAnyDraft
+      ? readyForApproval
+        ? "ready"
+        : "interview"
+      : "source_capture",
     message: assistantMessage,
     assistantMessage,
     draft: buildAssistantDraftPreview(setup, {
@@ -1356,59 +1385,49 @@ function buildSetupAssistantAuthorityState({
   };
 }
 
-function resolveProfileQuestion(draft = {}, progress = {}) {
-  const currentQuestionKey = s(progress.currentQuestionKey).toLowerCase();
-  const safeDraft = obj(draft);
-  const safeProfile = obj(safeDraft.businessProfile);
-  const safeSourceMetadata = obj(safeDraft.sourceMetadata);
-  const sourceIdentityPresent = hasNonManualSourceIdentity(safeSourceMetadata);
-  const canUseCombinedProfileQuestion =
-    sourceIdentityPresent &&
-    (Boolean(s(safeSourceMetadata.primarySourceUrl)) ||
-      arr(safeSourceMetadata.evidenceSummary).length > 0);
+function hasSetupSignalForInterview(draft = {}) {
+  const businessProfile = obj(draft.businessProfile);
+  const sourceMetadata = obj(draft.sourceMetadata);
 
-  if (
-    canUseCombinedProfileQuestion &&
-    (!s(safeProfile.companyName) || !s(safeProfile.description))
-  ) {
-    return buildAssistantQuestion("profile");
+  return Boolean(
+    s(businessProfile.companyName) ||
+      s(businessProfile.description) ||
+      s(businessProfile.websiteUrl) ||
+      arr(draft.services).length ||
+      arr(draft.contacts).length ||
+      arr(draft.hours).length ||
+      s(obj(draft.pricingPosture).publicSummary) ||
+      s(obj(draft.handoffRules).summary) ||
+      s(sourceMetadata.primarySourceType) ||
+      s(sourceMetadata.primarySourceUrl) ||
+      arr(sourceMetadata.sourceLabels).length
+  );
+}
+
+function buildProfileQuestionPrompt(draft = {}) {
+  const businessProfile = obj(draft.businessProfile);
+  const sourceMetadata = obj(draft.sourceMetadata);
+
+  const sourceLabel = sourceTypeLabel(sourceMetadata.primarySourceType);
+  const parts = [];
+
+  if (s(sourceMetadata.primarySourceType) && s(sourceMetadata.primarySourceUrl)) {
+    parts.push(`${sourceLabel} source is already attached (${s(sourceMetadata.primarySourceUrl)})`);
+  } else if (s(sourceMetadata.primarySourceType)) {
+    parts.push(`${sourceLabel} source is already attached`);
   }
 
-  if (
-    currentQuestionKey === "company" &&
-    !s(safeProfile.companyName)
-  ) {
-    return buildAssistantQuestion("company");
+  if (s(businessProfile.companyName)) {
+    parts.push(`current name signal: ${s(businessProfile.companyName)}`);
   }
 
-  if (
-    currentQuestionKey === "description" &&
-    !s(safeProfile.description)
-  ) {
-    return buildAssistantQuestion("description");
+  if (s(businessProfile.description)) {
+    parts.push("description signal already exists");
   }
 
-  if (
-    currentQuestionKey === "website" &&
-    !s(safeProfile.websiteUrl) &&
-    !sourceIdentityPresent
-  ) {
-    return buildAssistantQuestion("website");
-  }
+  const contextLine = parts.length ? `${parts.join(" • ")}.` : "";
 
-  if (!s(safeProfile.companyName)) {
-    return buildAssistantQuestion("company");
-  }
-
-  if (!s(safeProfile.description)) {
-    return buildAssistantQuestion("description");
-  }
-
-  if (!s(safeProfile.websiteUrl) && !sourceIdentityPresent) {
-    return buildAssistantQuestion("website");
-  }
-
-  return buildAssistantQuestion("profile");
+  return `${contextLine ? `${contextLine} ` : ""}Send the exact public business name and one clean sentence describing what the business does.${!s(businessProfile.websiteUrl) && !s(sourceMetadata.primarySourceUrl) ? " Include the main website if the business has one." : ""}`.trim();
 }
 
 function getNextQuestion(summary = {}, draft = {}, progress = {}) {
@@ -1416,16 +1435,73 @@ function getNextQuestion(summary = {}, draft = {}, progress = {}) {
     return null;
   }
 
+  if (!hasSetupSignalForInterview(draft)) {
+    return null;
+  }
+
   const sectionStatus = obj(summary.sectionStatus);
 
   if (sectionStatus.profile?.status !== "ready") {
-    return resolveProfileQuestion(draft, progress);
+    return buildAssistantQuestion("profile", {
+      title: "Confirm the business identity",
+      prompt: buildProfileQuestionPrompt(draft),
+      priority: 100,
+    });
   }
 
   const blocker = arr(summary.confirmationBlockers)[0];
-  if (!blocker) return null;
+  if (!blocker?.key) return null;
 
-  return buildAssistantQuestion(blocker.key);
+  if (blocker.key === "services") {
+    return buildAssistantQuestion("services", {
+      prompt:
+        s(blocker.sourceHint) || s(blocker.metric)
+          ? `${[s(blocker.sourceHint), s(blocker.metric)].filter(Boolean).join(" ")} Send only the real customer-facing services you want AI to talk about.`
+          : SECTION_META.services.prompt,
+      priority: 88,
+    });
+  }
+
+  if (blocker.key === "contacts") {
+    return buildAssistantQuestion("contacts", {
+      prompt:
+        s(blocker.metric)
+          ? `Current signal: ${s(blocker.metric)}. Send the main public contact route customers should be sent to first.`
+          : SECTION_META.contacts.prompt,
+      priority: 86,
+    });
+  }
+
+  if (blocker.key === "hours") {
+    return buildAssistantQuestion("hours", {
+      prompt:
+        s(blocker.metric)
+          ? `Current signal: ${s(blocker.metric)}. Send the public weekly hours in one line.`
+          : SECTION_META.hours.prompt,
+      priority: 84,
+    });
+  }
+
+  if (blocker.key === "pricing") {
+    return buildAssistantQuestion("pricing", {
+      prompt:
+        s(blocker.metric)
+          ? `Current signal: ${s(blocker.metric)}. How should AI speak publicly about pricing?`
+          : SECTION_META.pricing.prompt,
+      priority: 82,
+    });
+  }
+
+  if (blocker.key === "handoff") {
+    return buildAssistantQuestion("handoff", {
+      prompt: SECTION_META.handoff.prompt,
+      priority: 80,
+    });
+  }
+
+  return buildAssistantQuestion(blocker.key, {
+    prompt: s(blocker.reason) || SECTION_META[blocker.key]?.prompt,
+  });
 }
 
 function resolveSessionCurrentStep(review = {}, setup = {}, nextQuestion = null) {
