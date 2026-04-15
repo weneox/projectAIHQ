@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
-import { X } from "lucide-react";
+import { RotateCcw, X } from "lucide-react";
 import {
   analyzeSetupIntake,
+  discardCurrentSetupReview,
   finalizeSetupAssistantSession,
   getCurrentSetupAssistantSession,
   getCurrentSetupReview,
@@ -105,6 +106,19 @@ function buildDefaultAssistant() {
         suggestedServices: [],
       },
       sourceInsights: [],
+      phase: "source_capture",
+      message: "",
+      draft: {},
+      confidence: {},
+      recommendation: {},
+      readyForApproval: false,
+      sourceSignals: {},
+      interviewPlan: {},
+      rejectedInputs: [],
+      provider: "",
+      model: "",
+      usedFallback: false,
+      error: "",
     },
     launchPosture: "",
     setupNeeded: false,
@@ -135,13 +149,20 @@ function normalizeDecisionAssistant(value = {}) {
     sourceInsights: arr(source.sourceInsights),
     phase: s(source.phase),
     message: s(source.message || source.assistantMessage),
+    assistantMessage: s(source.assistantMessage || source.message),
     draft: obj(source.draft),
     confidence: obj(source.confidence),
     recommendation: obj(source.recommendation),
     readyForApproval: source.readyForApproval === true,
     sourceSignals: obj(source.sourceSignals),
+    interviewPlan: obj(source.interviewPlan),
     reviewSessionId: s(source.reviewSessionId),
     draftVersion: Number(source.draftVersion || 0),
+    rejectedInputs: arr(source.rejectedInputs),
+    provider: s(source.provider),
+    model: s(source.model),
+    usedFallback: source.usedFallback === true,
+    error: s(source.error),
   };
 }
 
@@ -275,6 +296,49 @@ function buildManualAnalyzePayload(type = "", value = "") {
   };
 }
 
+function getConversationStorageKey(tenantKey = "") {
+  return `setup-assistant-timeline:${lower(tenantKey || "workspace")}`;
+}
+
+function clearSetupConversationStorage(tenantKey = "") {
+  try {
+    const storageKey = getConversationStorageKey(tenantKey);
+    window.sessionStorage.removeItem(`setup_assistant_timeline:${storageKey}`);
+  } catch {
+    return;
+  }
+}
+
+function hasVisibleSetupState(state = {}) {
+  const assistant = obj(state.assistant);
+  const draft = obj(state.draft);
+  const profile = obj(draft.businessProfile);
+  const sourceMetadata = obj(draft.sourceMetadata);
+
+  return Boolean(
+    s(obj(state.session).id) ||
+      s(profile.companyName) ||
+      s(profile.description) ||
+      s(profile.websiteUrl) ||
+      arr(draft.services).length ||
+      arr(draft.contacts).length ||
+      arr(draft.hours).some(
+        (item) =>
+          item?.enabled === true ||
+          item?.closed === true ||
+          item?.allDay === true ||
+          item?.appointmentOnly === true ||
+          s(item?.notes)
+      ) ||
+      s(obj(draft.pricingPosture).publicSummary) ||
+      s(obj(draft.handoffRules).summary) ||
+      s(sourceMetadata.primarySourceType) ||
+      s(sourceMetadata.primarySourceUrl) ||
+      s(obj(assistant.nextQuestion).key) ||
+      assistant.readyForApproval === true
+  );
+}
+
 export default function FloatingAiWidget({
   hidden = false,
   open = false,
@@ -294,6 +358,7 @@ export default function FloatingAiWidget({
   const [saving, setSaving] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [capturingSource, setCapturingSource] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [setupError, setSetupError] = useState("");
   const lastTenantKeyRef = useRef("");
 
@@ -385,6 +450,7 @@ export default function FloatingAiWidget({
     setSaving(false);
     setFinalizing(false);
     setCapturingSource(false);
+    setResetting(false);
     setSetupError("");
   }, [workspace.tenantKey]);
 
@@ -404,8 +470,13 @@ export default function FloatingAiWidget({
   ]);
 
   const conversationStorageKey = useMemo(
-    () => `setup-assistant-timeline:${lower(workspace.tenantKey || "workspace")}`,
+    () => getConversationStorageKey(workspace.tenantKey),
     [workspace.tenantKey]
+  );
+
+  const canReset = useMemo(
+    () => hasVisibleSetupState(clientAssistant),
+    [clientAssistant]
   );
 
   if (hidden) return null;
@@ -444,6 +515,10 @@ export default function FloatingAiWidget({
       setClientAssistant((prev) => buildAssistantFromApi(prev, latestSession));
       return latestSession;
     }
+
+    const emptyAssistant = normalizeAssistantState(buildDefaultAssistant());
+    queryClient.setQueryData(setupAssistantSessionQueryKey, null);
+    setClientAssistant(emptyAssistant);
     return null;
   }
 
@@ -473,7 +548,7 @@ export default function FloatingAiWidget({
 
   async function handleSetupParseMessage({ text, step }) {
     const answer = s(text);
-    if (!answer || saving || finalizing || capturingSource) return null;
+    if (!answer || saving || finalizing || capturingSource || resetting) return null;
     setSaving(true);
     setSetupError("");
 
@@ -498,7 +573,7 @@ export default function FloatingAiWidget({
   }
 
   async function handleSetupFinalize() {
-    if (saving || finalizing || capturingSource) return null;
+    if (saving || finalizing || capturingSource || resetting) return null;
     setFinalizing(true);
     setSetupError("");
 
@@ -544,6 +619,41 @@ export default function FloatingAiWidget({
     }
   }
 
+  async function handleSetupReset() {
+    if (saving || finalizing || capturingSource || resetting) return null;
+
+    setResetting(true);
+    setSetupError("");
+
+    try {
+      await discardCurrentSetupReview({
+        reason: "fresh setup restart",
+      });
+
+      clearSetupConversationStorage(workspace.tenantKey);
+
+      queryClient.setQueryData(setupAssistantSessionQueryKey, null);
+      queryClient.setQueryData(setupReviewQueryKey, null);
+
+      const emptyAssistant = normalizeAssistantState(buildDefaultAssistant());
+      assistantRef.current = emptyAssistant;
+      setClientAssistant(emptyAssistant);
+
+      await refreshWidgetWorkspaceState({
+        emitReason: "setup-reset",
+      });
+
+      return true;
+    } catch (error) {
+      setSetupError(
+        s(error?.message, "The setup session could not be reset.")
+      );
+      throw error;
+    } finally {
+      setResetting(false);
+    }
+  }
+
   async function handleSetupCaptureSource({ type, value }) {
     const sourceValue = s(value);
     const resolvedSource = resolveSetupSourceInput(sourceValue);
@@ -552,7 +662,14 @@ export default function FloatingAiWidget({
         ? lower(type)
         : lower(resolvedSource.type);
     const normalizedSourceValue = s(resolvedSource.value || sourceValue);
-    if (!sourceType || !sourceValue || saving || finalizing || capturingSource) {
+    if (
+      !sourceType ||
+      !sourceValue ||
+      saving ||
+      finalizing ||
+      capturingSource ||
+      resetting
+    ) {
       return null;
     }
 
@@ -654,15 +771,29 @@ export default function FloatingAiWidget({
             }}
           >
             <div className="flex items-center justify-between border-b border-[rgba(15,23,42,0.08)] px-6 py-4">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-                Setup
+              <div className="flex items-center gap-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+                  Setup
+                </div>
+
+                {canReset ? (
+                  <button
+                    type="button"
+                    onClick={handleSetupReset}
+                    disabled={resetting || saving || finalizing || capturingSource}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-medium text-text-muted transition-colors hover:bg-[rgba(15,23,42,0.04)] hover:text-text disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.1} />
+                    {resetting ? "Resetting" : "Fresh start"}
+                  </button>
+                ) : null}
               </div>
 
               {!pageMode ? (
                 <button
                   type="button"
                   onClick={() => onOpenChange?.(false)}
-                  className="inline-flex h-9 w-9 items-center justify-center text-text-muted transition-colors hover:text-text"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-[rgba(15,23,42,0.04)] hover:text-text"
                   aria-label="Close setup"
                 >
                   <X className="h-5 w-5" strokeWidth={2} />
@@ -679,7 +810,7 @@ export default function FloatingAiWidget({
                 reviewPayload={mergedReviewPayload}
                 saving={saving}
                 finalizing={finalizing}
-                capturingSource={capturingSource}
+                capturingSource={capturingSource || resetting}
                 errorMessage={setupError}
                 onCaptureSource={handleSetupCaptureSource}
                 onParseMessage={handleSetupParseMessage}

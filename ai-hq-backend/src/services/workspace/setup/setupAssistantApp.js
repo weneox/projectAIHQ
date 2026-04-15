@@ -29,7 +29,7 @@ import {
   buildAssistantSections,
   buildAssistantSourceSignals,
 } from "./setupAssistantAuthorityView.js";
-import { buildSetupAssistantBrainState } from "./assistantBrain.js";
+import { runSetupAssistantOpenAIOrchestrator } from "./setupAssistantOpenAIOrchestrator.js";
 
 const REVIEW_MESSAGE =
   "Setup drafts stay separate from approved truth and the strict runtime until a later review and approval step is completed.";
@@ -419,7 +419,8 @@ function sanitizeServiceItem(value = {}) {
     ),
     aliases: uniqueStrings(source.aliases, 12),
     availabilityStatus:
-      s(source.availabilityStatus || source.availability_status).toLowerCase() || "available",
+      s(source.availabilityStatus || source.availability_status).toLowerCase() ||
+      "available",
     operatorNotes: s(source.operatorNotes || source.operator_notes),
   });
 }
@@ -1968,269 +1969,75 @@ function buildAssistantCompatConversationStatus(assistant = {}) {
   });
 }
 
-export async function readSetupAssistantView(
-  { db, actor },
-  deps = {}
-) {
-  const loadSession =
-    deps.loadCurrentSetupAssistantSession || loadCurrentSetupAssistantSession;
-  const getCurrentReviewHelper =
-    deps.getCurrentSetupReview || getCurrentSetupReview;
+function extractIncomingStep(body = {}) {
+  return s(body.step || body.questionKey || body.field).toLowerCase();
+}
 
-  const sessionResult = await loadSession({ db, actor }, deps);
+function extractIncomingMessage(body = {}) {
+  return s(body.answer || body.message || body.text || body.value);
+}
 
-  if (
-    !sessionResult ||
-    Number(sessionResult.status || 500) !== 200 ||
-    sessionResult.body?.ok === false
-  ) {
-    return sessionResult;
-  }
+function isMessageModeBody(body = {}) {
+  const step = extractIncomingStep(body);
+  const answer = extractIncomingMessage(body);
+  return Boolean(step && (answer || isMessageSkip(body)));
+}
 
-  const review = await getCurrentReviewHelper(actor.tenantId);
-  const baseBody = obj(sessionResult.body);
-  const session = obj(baseBody.session);
-  const setup = obj(baseBody.setup);
-  const assistant = obj(setup.assistant);
-  const draft = obj(setup.draft);
-  const sources = arr(review?.sources);
+function buildSetupAssistantPatchFromOrchestrator(turn = {}, current = {}) {
+  const safeTurn = obj(turn);
+  const safeDraft = obj(safeTurn.draft);
+  const currentDraft = normalizeStoredSetupAssistantPayload(current, current);
+  const serviceLines = arr(safeDraft.coreServices).map((item) => s(item)).filter(Boolean);
+  const contactLines = arr(safeDraft.contactRoutes).map((item) => s(item)).filter(Boolean);
+  const hourLines = arr(safeDraft.hours).map((item) => s(item)).filter(Boolean);
+  const nextStep = s(
+    obj(safeTurn.nextQuestion).step ||
+      obj(safeTurn.nextQuestion).key ||
+      obj(currentDraft.progress).currentQuestionKey ||
+      "profile"
+  ).toLowerCase();
 
-  const brain = buildSetupAssistantBrainState({
-    session,
-    draft,
-    sources,
-    review,
+  const services =
+    serviceLines.length > 0
+      ? parseServicesNote(serviceLines.join("; "), currentDraft.services)
+      : currentDraft.services;
+
+  return compactDraftObject({
+    businessProfile: sanitizeBusinessProfile({
+      ...obj(currentDraft.businessProfile),
+      companyName: s(safeDraft.businessName),
+      description: s(safeDraft.whatThisBusinessIs),
+      websiteUrl: normalizeWebsiteUrl(s(safeDraft.websiteUrl)),
+    }),
+    services,
+    contacts:
+      contactLines.length > 0
+        ? buildContactsFromAnswer(contactLines.join("; "))
+        : currentDraft.contacts,
+    hours:
+      hourLines.length > 0
+        ? parseHoursNote(hourLines.join("; "), currentDraft.hours)
+        : currentDraft.hours,
+    pricingPosture: s(safeDraft.pricingPosture)
+      ? parsePricingNote(
+          s(safeDraft.pricingPosture),
+          currentDraft.pricingPosture,
+          services
+        )
+      : currentDraft.pricingPosture,
+    handoffRules: s(safeDraft.humanHandoff)
+      ? buildHandoffFromAnswer(s(safeDraft.humanHandoff))
+      : currentDraft.handoffRules,
+    assistantState: {
+      activeSection: nextStep,
+      lastUpdatedSection: nextStep,
+    },
+    progress: {
+      lastAnsweredStep: s(obj(safeTurn.latestUserInput).step).toLowerCase(),
+      currentQuestionKey: nextStep,
+      updatedAt: nowIso(),
+    },
   });
-
-  const mergedAssistant = compactDraftObject({
-    ...assistant,
-    mode: "brain_v1",
-    phase: s(brain.phase || assistant.phase),
-    message: s(brain.assistantMessage || assistant.message || assistant.assistantMessage),
-    assistantMessage: s(
-      brain.assistantMessage || assistant.assistantMessage || assistant.message
-    ),
-    nextQuestion: obj(brain.nextQuestion),
-    confidence: obj(brain.confidence),
-    recommendation: obj(brain.recommendation),
-    sourceSignals: obj(brain.sourceSignals),
-    interviewPlan: obj(brain.interviewPlan),
-    aiBehavior: obj(brain.aiBehavior),
-    readyForApproval: brain.readyForApproval === true,
-    finalizeAvailable: brain.readyForApproval === true,
-    draft: obj(brain.draft),
-    currentQuestionKey: s(obj(brain.nextQuestion).key),
-  });
-
-  const compatQuestion = buildAssistantCompatQuestion(mergedAssistant);
-  const compatFollowupQueue = buildAssistantCompatFollowupQueue(mergedAssistant);
-  const compatBusinessFacts = buildAssistantCompatBusinessFacts(mergedAssistant);
-  const compatConversationStatus =
-    buildAssistantCompatConversationStatus(mergedAssistant);
-
-  const mergedReview = {
-    ...obj(setup.review),
-    readyForApproval: brain.readyForApproval === true,
-    finalizeAvailable: brain.readyForApproval === true,
-    message:
-      brain.readyForApproval === true
-        ? "The setup draft is complete enough to finalize into approved truth and runtime."
-        : s(obj(setup.review).message || REVIEW_MESSAGE),
-  };
-
-  const mergedSession = {
-    ...session,
-    currentStep:
-      s(obj(brain.nextQuestion).step) ||
-      s(obj(brain.nextQuestion).key) ||
-      s(session.currentStep),
-  };
-
-  return {
-    status: 200,
-    body: {
-      ...baseBody,
-      ok: true,
-      session: mergedSession,
-      setup: {
-        ...setup,
-        assistant: mergedAssistant,
-        review: mergedReview,
-      },
-
-      // compat surface for older clients while canonical session endpoints stay the same
-      assistant: mergedAssistant,
-      turn: {
-        role: "assistant",
-        text: s(brain.assistantMessage),
-        questionKey: s(obj(brain.nextQuestion).key),
-        questionCategory: s(obj(brain.nextQuestion).group),
-        payload: compactDraftObject({
-          mode: mergedAssistant.mode,
-          phase: mergedAssistant.phase,
-          nextQuestion: obj(brain.nextQuestion),
-          confidence: obj(brain.confidence),
-          recommendation: obj(brain.recommendation),
-          sourceSignals: obj(brain.sourceSignals),
-          interviewPlan: obj(brain.interviewPlan),
-          aiBehavior: obj(brain.aiBehavior),
-          readyForApproval: brain.readyForApproval === true,
-          draft: obj(brain.draft),
-        }),
-      },
-      question: compatQuestion,
-      primaryQuestion: compatQuestion,
-      conversationStatus: compatConversationStatus,
-      followupQueue: compatFollowupQueue,
-      businessFacts: compatBusinessFacts,
-      reasoningSummary: arr(obj(brain.recommendation).notes).join(" "),
-      unknowns: arr(obj(brain.confidence).unclear),
-      assistantHints: arr(obj(brain.sourceSignals).strongestEvidence),
-      guardrails: [],
-      review: mergedReview,
-    },
-  };
-}
-
-function resolveStartedBy(actor = {}) {
-  return (
-    safeUuidOrNull(actor?.user?.id) ||
-    safeUuidOrNull(actor?.user?.userId) ||
-    safeUuidOrNull(actor?.user?.user_id) ||
-    null
-  );
-}
-
-function isDatabaseNotInitializedError(error) {
-  const message = s(error?.message).toLowerCase();
-  return message.includes("database is not initialized");
-}
-
-async function maybeUpdateReviewSessionStep({
-  reviewSessionId,
-  nextQuestion,
-  deps = {},
-}) {
-  const injectedUpdateSession = deps.updateSetupReviewSession;
-  const updateSession =
-    typeof injectedUpdateSession === "function"
-      ? injectedUpdateSession
-      : updateSetupReviewSession;
-
-  if (typeof updateSession !== "function" || !s(reviewSessionId)) return;
-
-  try {
-    await updateSession(reviewSessionId, {
-      currentStep: s(
-        nextQuestion?.key || SETUP_ASSISTANT_CURRENT_STEP
-      ).toLowerCase(),
-    });
-  } catch (error) {
-    if (
-      typeof injectedUpdateSession !== "function" &&
-      isDatabaseNotInitializedError(error)
-    ) {
-      return;
-    }
-    throw error;
-  }
-}
-
-export async function startSetupAssistantSession({ db, actor }, deps = {}) {
-  const getCurrentReview = deps.getCurrentSetupReview || getCurrentSetupReview;
-  const getOrCreateSession =
-    deps.getOrCreateActiveSetupReviewSession ||
-    getOrCreateActiveSetupReviewSession;
-  const audit = deps.auditSetupAction || auditSetupAction;
-
-  let review = await getCurrentReview(actor.tenantId);
-  let created = false;
-
-  if (!review?.session?.id) {
-    await getOrCreateSession({
-      tenantId: actor.tenantId,
-      mode: "setup",
-      currentStep: SETUP_ASSISTANT_CURRENT_STEP,
-      startedBy: resolveStartedBy(actor),
-      title: "Setup assistant v2",
-      notes: "",
-      metadata: {
-        setupAssistantShell: true,
-        setupAssistantNamespace: "draftPayload.setupAssistant",
-        setupAssistantDraftOnly: true,
-        runtimeActivationDeferred: true,
-        truthApprovalDeferred: true,
-        sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
-        namespace: SETUP_ASSISTANT_NAMESPACE,
-      },
-      ensureDraft: true,
-    });
-    review = await getCurrentReview(actor.tenantId);
-    created = true;
-  }
-
-  const payload = buildSetupAssistantSessionPayload(review);
-
-  await audit(
-    db,
-    actor,
-    created
-      ? "setup_assistant.session.started"
-      : "setup_assistant.session.reused",
-    "tenant_setup_review_session",
-    s(review?.session?.id),
-    {
-      reviewSessionId: s(review?.session?.id),
-      currentStep: s(
-        payload?.session?.currentStep || SETUP_ASSISTANT_CURRENT_STEP
-      ),
-      source: "home_widget",
-      sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
-      namespace: SETUP_ASSISTANT_NAMESPACE,
-      draftOnly: true,
-    }
-  );
-
-  return {
-    status: 200,
-    body: {
-      ok: true,
-      created,
-      message: created
-        ? "Setup assistant session started"
-        : "Setup assistant session loaded",
-      ...payload,
-    },
-  };
-}
-
-export async function loadCurrentSetupAssistantSession(
-  { db, actor },
-  deps = {}
-) {
-  const getCurrentReview = deps.getCurrentSetupReview || getCurrentSetupReview;
-  const review = await getCurrentReview(actor.tenantId);
-
-  if (!review?.session?.id) {
-    return {
-      status: 404,
-      body: {
-        ok: false,
-        error: "SetupAssistantSessionNotFound",
-        reason: "no active setup assistant session was found",
-        session: null,
-        setup: null,
-      },
-    };
-  }
-
-  return {
-    status: 200,
-    body: {
-      ok: true,
-      ...buildSetupAssistantSessionPayload(review),
-    },
-  };
 }
 
 function formatSetupAssistantHoursForCanonical(hours = []) {
@@ -2410,6 +2217,300 @@ function buildCanonicalReviewDraftPatchFromSetupAssistant(setup = {}) {
   };
 }
 
+export async function readSetupAssistantView(
+  { db, actor },
+  deps = {}
+) {
+  const loadSession =
+    deps.loadCurrentSetupAssistantSession || loadCurrentSetupAssistantSession;
+  const getCurrentReviewHelper =
+    deps.getCurrentSetupReview || getCurrentSetupReview;
+  const runSetupBrain =
+    deps.runSetupAssistantOpenAIOrchestrator || runSetupAssistantOpenAIOrchestrator;
+
+  const sessionResult = await loadSession({ db, actor }, deps);
+
+  if (
+    !sessionResult ||
+    Number(sessionResult.status || 500) !== 200 ||
+    sessionResult.body?.ok === false
+  ) {
+    return sessionResult;
+  }
+
+  const review = await getCurrentReviewHelper(actor.tenantId);
+  const baseBody = obj(sessionResult.body);
+  const session = obj(baseBody.session);
+  const setup = obj(baseBody.setup);
+  const assistant = obj(setup.assistant);
+  const draft = obj(setup.draft);
+  const sources = arr(review?.sources);
+
+  const turn = await runSetupBrain({
+    session,
+    draft,
+    sources,
+    review,
+    latestStep: s(session.currentStep),
+    latestMessage: "",
+  });
+
+  const mergedAssistant = compactDraftObject({
+    ...assistant,
+    mode: "brain_v2",
+    phase: s(turn.phase || assistant.phase),
+    message: s(turn.assistantMessage || assistant.message || assistant.assistantMessage),
+    assistantMessage: s(
+      turn.assistantMessage || assistant.assistantMessage || assistant.message
+    ),
+    nextQuestion: obj(turn.nextQuestion),
+    confidence: obj(turn.confidence),
+    recommendation: obj(turn.recommendation),
+    sourceSignals: obj(turn.sourceSignals),
+    interviewPlan: obj(turn.interviewPlan),
+    aiBehavior: obj(turn.aiBehavior),
+    readyForApproval: turn.readyForApproval === true,
+    finalizeAvailable: turn.readyForApproval === true,
+    draft: obj(turn.draft),
+    currentQuestionKey: s(obj(turn.nextQuestion).key),
+    rejectedInputs: arr(turn.rejectedInputs),
+    provider: s(turn.provider),
+    model: s(turn.model),
+    usedFallback: turn.usedFallback === true,
+    error: s(turn.error),
+    sourceInsights: arr(obj(turn.sourceSignals).strongestEvidence),
+    completion: {
+      ready: turn.readyForApproval === true,
+      action:
+        turn.readyForApproval === true
+          ? {
+              id: "finalize_setup",
+              label: "Finish setup",
+              intent: "finalize_review",
+            }
+          : null,
+      message:
+        turn.readyForApproval === true
+          ? "The draft is complete enough to finalize into approved truth and strict runtime."
+          : s(turn.assistantMessage || REVIEW_MESSAGE),
+    },
+  });
+
+  const compatQuestion = buildAssistantCompatQuestion(mergedAssistant);
+  const compatFollowupQueue = buildAssistantCompatFollowupQueue(mergedAssistant);
+  const compatBusinessFacts = buildAssistantCompatBusinessFacts(mergedAssistant);
+  const compatConversationStatus =
+    buildAssistantCompatConversationStatus(mergedAssistant);
+
+  const mergedReview = {
+    ...obj(setup.review),
+    readyForApproval: turn.readyForApproval === true,
+    finalizeAvailable: turn.readyForApproval === true,
+    message:
+      turn.readyForApproval === true
+        ? "The setup draft is complete enough to finalize into approved truth and runtime."
+        : s(obj(setup.review).message || REVIEW_MESSAGE),
+  };
+
+  const mergedSession = {
+    ...session,
+    currentStep:
+      s(obj(turn.nextQuestion).step) ||
+      s(obj(turn.nextQuestion).key) ||
+      s(session.currentStep),
+  };
+
+  return {
+    status: 200,
+    body: {
+      ...baseBody,
+      ok: true,
+      session: mergedSession,
+      setup: {
+        ...setup,
+        assistant: mergedAssistant,
+        review: mergedReview,
+      },
+
+      assistant: mergedAssistant,
+      turn: {
+        role: "assistant",
+        text: s(turn.assistantMessage),
+        questionKey: s(obj(turn.nextQuestion).key),
+        questionCategory: s(obj(turn.nextQuestion).group),
+        payload: compactDraftObject({
+          mode: mergedAssistant.mode,
+          phase: mergedAssistant.phase,
+          nextQuestion: obj(turn.nextQuestion),
+          confidence: obj(turn.confidence),
+          recommendation: obj(turn.recommendation),
+          sourceSignals: obj(turn.sourceSignals),
+          interviewPlan: obj(turn.interviewPlan),
+          aiBehavior: obj(turn.aiBehavior),
+          readyForApproval: turn.readyForApproval === true,
+          draft: obj(turn.draft),
+          rejectedInputs: arr(turn.rejectedInputs),
+          provider: s(turn.provider),
+          model: s(turn.model),
+          usedFallback: turn.usedFallback === true,
+          error: s(turn.error),
+        }),
+      },
+      question: compatQuestion,
+      primaryQuestion: compatQuestion,
+      conversationStatus: compatConversationStatus,
+      followupQueue: compatFollowupQueue,
+      businessFacts: compatBusinessFacts,
+      reasoningSummary: arr(obj(turn.recommendation).notes).join(" "),
+      unknowns: arr(obj(turn.confidence).unclear),
+      assistantHints: arr(obj(turn.sourceSignals).strongestEvidence),
+      guardrails: [],
+      review: mergedReview,
+    },
+  };
+}
+
+function resolveStartedBy(actor = {}) {
+  return (
+    safeUuidOrNull(actor?.user?.id) ||
+    safeUuidOrNull(actor?.user?.userId) ||
+    safeUuidOrNull(actor?.user?.user_id) ||
+    null
+  );
+}
+
+function isDatabaseNotInitializedError(error) {
+  const message = s(error?.message).toLowerCase();
+  return message.includes("database is not initialized");
+}
+
+async function maybeUpdateReviewSessionStep({
+  reviewSessionId,
+  nextQuestion,
+  deps = {},
+}) {
+  const injectedUpdateSession = deps.updateSetupReviewSession;
+  const updateSession =
+    typeof injectedUpdateSession === "function"
+      ? injectedUpdateSession
+      : updateSetupReviewSession;
+
+  if (typeof updateSession !== "function" || !s(reviewSessionId)) return;
+
+  try {
+    await updateSession(reviewSessionId, {
+      currentStep: s(
+        nextQuestion?.step || nextQuestion?.key || SETUP_ASSISTANT_CURRENT_STEP
+      ).toLowerCase(),
+    });
+  } catch (error) {
+    if (
+      typeof injectedUpdateSession !== "function" &&
+      isDatabaseNotInitializedError(error)
+    ) {
+      return;
+    }
+    throw error;
+  }
+}
+
+export async function startSetupAssistantSession({ db, actor }, deps = {}) {
+  const getCurrentReview = deps.getCurrentSetupReview || getCurrentSetupReview;
+  const getOrCreateSession =
+    deps.getOrCreateActiveSetupReviewSession ||
+    getOrCreateActiveSetupReviewSession;
+  const audit = deps.auditSetupAction || auditSetupAction;
+
+  let review = await getCurrentReview(actor.tenantId);
+  let created = false;
+
+  if (!review?.session?.id) {
+    await getOrCreateSession({
+      tenantId: actor.tenantId,
+      mode: "setup",
+      currentStep: SETUP_ASSISTANT_CURRENT_STEP,
+      startedBy: resolveStartedBy(actor),
+      title: "Setup assistant v2",
+      notes: "",
+      metadata: {
+        setupAssistantShell: true,
+        setupAssistantNamespace: "draftPayload.setupAssistant",
+        setupAssistantDraftOnly: true,
+        runtimeActivationDeferred: true,
+        truthApprovalDeferred: true,
+        sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
+        namespace: SETUP_ASSISTANT_NAMESPACE,
+      },
+      ensureDraft: true,
+    });
+    review = await getCurrentReview(actor.tenantId);
+    created = true;
+  }
+
+  const payload = buildSetupAssistantSessionPayload(review);
+
+  await audit(
+    db,
+    actor,
+    created
+      ? "setup_assistant.session.started"
+      : "setup_assistant.session.reused",
+    "tenant_setup_review_session",
+    s(review?.session?.id),
+    {
+      reviewSessionId: s(review?.session?.id),
+      currentStep: s(
+        payload?.session?.currentStep || SETUP_ASSISTANT_CURRENT_STEP
+      ),
+      source: "home_widget",
+      sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
+      namespace: SETUP_ASSISTANT_NAMESPACE,
+      draftOnly: true,
+    }
+  );
+
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      created,
+      message: created
+        ? "Setup assistant session started"
+        : "Setup assistant session loaded",
+      ...payload,
+    },
+  };
+}
+
+export async function loadCurrentSetupAssistantSession(
+  { db, actor },
+  deps = {}
+) {
+  const getCurrentReview = deps.getCurrentSetupReview || getCurrentSetupReview;
+  const review = await getCurrentReview(actor.tenantId);
+
+  if (!review?.session?.id) {
+    return {
+      status: 404,
+      body: {
+        ok: false,
+        error: "SetupAssistantSessionNotFound",
+        reason: "no active setup assistant session was found",
+        session: null,
+        setup: null,
+      },
+    };
+  }
+
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      ...buildSetupAssistantSessionPayload(review),
+    },
+  };
+}
+
 export async function updateSetupAssistantDraft(
   { db, actor, body = {} },
   deps = {}
@@ -2420,6 +2521,8 @@ export async function updateSetupAssistantDraft(
     deps.patchReview ||
     patchSetupReviewDraft;
   const audit = deps.auditSetupAction || auditSetupAction;
+  const runSetupBrain =
+    deps.runSetupAssistantOpenAIOrchestrator || runSetupAssistantOpenAIOrchestrator;
 
   const review = await getCurrentReview(actor.tenantId);
 
@@ -2440,34 +2543,67 @@ export async function updateSetupAssistantDraft(
     readStoredSetupAssistantDraftPayload(existingDraftPayload),
     seed
   );
-  const patch = normalizeSetupAssistantDraftPatchBody(
-    body,
-    currentSetupAssistant
-  );
 
-  if (!Object.keys(patch).length) {
-    return {
-      status: 400,
-      body: {
-        ok: false,
-        error: "SetupAssistantDraftInvalid",
-        reason: "no valid setup assistant draft fields were provided",
-      },
-    };
+  const latestStep = extractIncomingStep(body);
+  const latestMessage = extractIncomingMessage(body);
+  const messageMode = isMessageModeBody(body);
+
+  let mergedSetupAssistant = currentSetupAssistant;
+  let nextQuestion = null;
+  let brainTurn = null;
+
+  if (messageMode) {
+    brainTurn = await runSetupBrain({
+      session: obj(review.session),
+      draft: currentSetupAssistant,
+      sources: arr(review.sources),
+      review,
+      latestStep,
+      latestMessage: latestMessage || (isMessageSkip(body) ? "Let's continue." : ""),
+    });
+
+    const orchestratorPatch = buildSetupAssistantPatchFromOrchestrator(
+      brainTurn,
+      currentSetupAssistant
+    );
+
+    mergedSetupAssistant = mergeSetupAssistantDraft(
+      currentSetupAssistant,
+      orchestratorPatch,
+      seed
+    );
+
+    nextQuestion = obj(brainTurn.nextQuestion);
+  } else {
+    const patch = normalizeSetupAssistantDraftPatchBody(
+      body,
+      currentSetupAssistant
+    );
+
+    if (!Object.keys(patch).length) {
+      return {
+        status: 400,
+        body: {
+          ok: false,
+          error: "SetupAssistantDraftInvalid",
+          reason: "no valid setup assistant draft fields were provided",
+        },
+      };
+    }
+
+    mergedSetupAssistant = mergeSetupAssistantDraft(
+      currentSetupAssistant,
+      patch,
+      seed
+    );
+
+    const nextSummary = buildSummary(mergedSetupAssistant);
+    nextQuestion = getNextQuestion(
+      nextSummary,
+      mergedSetupAssistant,
+      obj(mergedSetupAssistant.progress)
+    );
   }
-
-  const mergedSetupAssistant = mergeSetupAssistantDraft(
-    currentSetupAssistant,
-    patch,
-    seed
-  );
-
-  const nextSummary = buildSummary(mergedSetupAssistant);
-  const nextQuestion = getNextQuestion(
-    nextSummary,
-    mergedSetupAssistant,
-    obj(mergedSetupAssistant.progress)
-  );
 
   const nextDraftPayload = mergeDraftState(
     stripLegacySetupAssistantPayloadKeys(existingDraftPayload),
@@ -2513,19 +2649,28 @@ export async function updateSetupAssistantDraft(
       draftVersion: Number(
         refreshed?.draft?.version || review?.draft?.version || 0
       ),
-      updatedFields: Object.keys(patch),
+      updatedFields: messageMode
+        ? [
+            "businessProfile",
+            "services",
+            "contacts",
+            "hours",
+            "pricingPosture",
+            "handoffRules",
+          ]
+        : Object.keys(normalizeSetupAssistantDraftPatchBody(body, currentSetupAssistant)),
       source: "home_widget",
       sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
       namespace: SETUP_ASSISTANT_NAMESPACE,
       draftOnly: true,
-      messageMode: Boolean(
-        s(body.step || body.questionKey || body.field) &&
-          (s(body.answer || body.message || body.text || body.value) ||
-            isMessageSkip(body))
-      ),
+      messageMode,
       skipped: isMessageSkip(body),
       nextQuestion: s(nextQuestion?.key),
       canonicalBridge: true,
+      brainProvider: s(brainTurn?.provider),
+      brainModel: s(brainTurn?.model),
+      brainUsedFallback: brainTurn?.usedFallback === true,
+      brainError: s(brainTurn?.error),
     }
   );
 
@@ -2546,6 +2691,7 @@ export const __test__ = {
   buildCanonicalReviewDraftPatchFromSetupAssistant,
   buildCanonicalServicesFromSetupAssistant,
   buildConfirmationBlockers,
+  buildSetupAssistantPatchFromOrchestrator,
   buildSetupAssistantSeedFromReview,
   buildSetupAssistantSessionPayload,
   buildStoredSetupAssistantPayload,

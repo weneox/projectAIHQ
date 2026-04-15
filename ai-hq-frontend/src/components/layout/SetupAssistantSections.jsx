@@ -29,8 +29,21 @@ function compactText(value, max = 220) {
   return text.length <= max ? text : `${text.slice(0, max - 1).trim()}...`;
 }
 
+function uniqueStrings(items = [], max = 12) {
+  return [...new Set(arr(items).map((item) => s(item)).filter(Boolean))].slice(
+    0,
+    max
+  );
+}
+
 function listPreview(items = [], max = 6) {
-  const safe = arr(items).map((item) => compactText(item, 80)).filter(Boolean);
+  const safe = uniqueStrings(
+    arr(items).map((item) =>
+      typeof item === "string" ? compactText(item, 80) : compactText(String(item), 80)
+    ),
+    24
+  );
+
   if (!safe.length) return "";
   if (safe.length <= max) return safe.join(", ");
   return `${safe.slice(0, max).join(", ")} +${safe.length - max}`;
@@ -60,19 +73,14 @@ function buildQuestionMetaMap() {
 
 const QUESTION_META_MAP = buildQuestionMetaMap();
 
-function uniqueStrings(items = [], max = 8) {
-  return [...new Set(arr(items).map((item) => s(item)).filter(Boolean))].slice(
-    0,
-    max
-  );
-}
-
 function buildCompactNotes(model = {}) {
   const confidence = obj(model.confidence);
+  const recommendation = obj(model.recommendation);
+
   return uniqueStrings(
     [
       ...arr(confidence.unclear),
-      ...arr(model.recommendationNotes),
+      ...arr(recommendation.notes),
       ...arr(confidence.contradictions),
     ],
     6
@@ -81,47 +89,49 @@ function buildCompactNotes(model = {}) {
 
 function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers = {}) {
   const review = obj(reviewPayload?.review || reviewPayload);
-  const draft = Object.keys(obj(review.draft)).length
-    ? obj(review.draft)
-    : obj(assistant.draft);
-  const profile = obj(draft.businessProfile);
+  const reviewDraft = obj(review.draft);
+  const assistantRoot = obj(assistant);
+  const assistantDraft = obj(obj(assistantRoot.assistant).draft);
+  const setupDraft = obj(assistantRoot.draft);
+  const profile = obj(reviewDraft.businessProfile);
 
-  const services = arr(draft.services)
+  const services = arr(reviewDraft.services)
     .map((item) => s(item.title || item.name || item.label))
     .filter(Boolean);
 
-  const contacts = arr(draft.contacts)
+  const contacts = arr(reviewDraft.contacts)
     .map((item) => s(item.label || item.channel || item.value || item.type))
     .filter(Boolean);
 
   const businessName = s(
-    profile.companyName || profile.displayName || localAnswers.company
+    profile.companyName ||
+      obj(setupDraft.businessProfile).companyName ||
+      assistantDraft.businessName ||
+      localAnswers.company
   );
 
   const description = s(
     profile.description ||
-      profile.companySummaryShort ||
-      profile.companySummary ||
+      obj(setupDraft.businessProfile).description ||
+      assistantDraft.whatThisBusinessIs ||
       localAnswers.description
   );
 
   const pricingPosture = s(
-    profile.pricingPolicy ||
-      draft.pricingPosture?.publicSummary ||
-      draft.pricingPosture?.note ||
-      draft.pricingPosture?.summary ||
+    obj(setupDraft.pricingPosture).publicSummary ||
+      assistantDraft.pricingPosture ||
       localAnswers.pricing
   );
 
   const humanHandoff = s(
-    draft.handoffRules?.summary ||
-      arr(draft.handoffRules?.triggers).join(", ") ||
+    obj(setupDraft.handoffRules).summary ||
+      assistantDraft.humanHandoff ||
       localAnswers.handoff
   );
 
-  const hours = arr(draft.hours)
+  const hours = arr(setupDraft.hours)
     .map((item) => {
-      if (item?.allDay) return `${item.day} 24 hours`;
+      if (item?.allDay) return `${item.day} 24/7`;
       if (item?.appointmentOnly) return `${item.day} appointment only`;
       if (item?.closed) return `${item.day} closed`;
       if (s(item?.notes)) return `${item.day} ${s(item.notes)}`;
@@ -134,20 +144,22 @@ function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers =
 
   const resolvedServices = services.length
     ? services
-    : s(localAnswers.services)
-        .split(/[,;\n]/)
-        .map((item) => s(item))
-        .filter(Boolean);
+    : arr(assistantDraft.coreServices).length
+      ? arr(assistantDraft.coreServices)
+      : s(localAnswers.services)
+          .split(/[,;\n]/)
+          .map((item) => s(item))
+          .filter(Boolean);
 
   const resolvedContacts = [
     s(profile.primaryPhone),
     s(profile.primaryEmail),
-    s(profile.primaryAddress),
     ...contacts,
+    ...arr(assistantDraft.contactRoutes),
   ].filter(Boolean);
 
   const finalContacts = resolvedContacts.length
-    ? resolvedContacts
+    ? uniqueStrings(resolvedContacts, 10)
     : s(localAnswers.contacts)
         .split(/[,;\n]/)
         .map((item) => s(item))
@@ -162,16 +174,25 @@ function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers =
     humanHandoff,
     hours: hours.length
       ? hours
-      : s(localAnswers.hours)
-          .split(/[,;\n]/)
-          .map((item) => s(item))
-          .filter(Boolean),
+      : arr(assistantDraft.hours).length
+        ? arr(assistantDraft.hours)
+        : s(localAnswers.hours)
+            .split(/[,;\n]/)
+            .map((item) => s(item))
+            .filter(Boolean),
+    websiteUrl: s(
+      assistantDraft.websiteUrl || obj(setupDraft.businessProfile).websiteUrl
+    ),
+    languages: arr(assistantDraft.languages),
+    tone: s(assistantDraft.tone),
+    greetingStyle: s(assistantDraft.greetingStyle),
+    afterHoursBehavior: s(assistantDraft.afterHoursBehavior),
   };
 }
 
 function normalizeAssistantControl(reviewPayload = null, assistant = {}) {
   const primary = obj(reviewPayload?.assistant);
-  const fallback = obj(assistant.assistant);
+  const fallback = obj(obj(assistant).assistant);
   const source = Object.keys(primary).length ? primary : fallback;
   const nextQuestion = obj(source.nextQuestion);
   const activeQuestions = arr(obj(source.interviewPlan).activeQuestions);
@@ -185,23 +206,28 @@ function normalizeAssistantControl(reviewPayload = null, assistant = {}) {
     draftVersion: Number(source.draftVersion || 0),
     phase: s(source.phase),
     message: s(source.message || source.assistantMessage),
+    provider: s(source.provider),
+    model: s(source.model),
+    usedFallback: source.usedFallback === true,
+    error: s(source.error),
+    rejectedInputs: arr(source.rejectedInputs),
   };
 }
 
 function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswers = {} }) {
   const reviewAssistant = Object.keys(obj(reviewPayload?.assistant)).length
     ? obj(reviewPayload?.assistant)
-    : obj(assistant.assistant);
+    : obj(obj(assistant).assistant);
   const recommendation = obj(reviewAssistant.recommendation);
   const confidence = obj(reviewAssistant.confidence);
   const sourceSignals = obj(reviewAssistant.sourceSignals);
   const draft = obj(reviewAssistant.draft);
-
   const fallback = buildFallbackDraft(reviewPayload, assistant, localAnswers);
 
   const resolvedDraft = {
     businessName: s(draft.businessName || fallback.businessName),
     whatThisBusinessIs: s(draft.whatThisBusinessIs || fallback.whatThisBusinessIs),
+    websiteUrl: s(draft.websiteUrl || fallback.websiteUrl),
     coreServices: arr(draft.coreServices).length
       ? arr(draft.coreServices)
       : arr(fallback.coreServices),
@@ -211,6 +237,12 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
       : arr(fallback.contactRoutes),
     humanHandoff: s(draft.humanHandoff || fallback.humanHandoff),
     hours: arr(draft.hours).length ? arr(draft.hours) : arr(fallback.hours),
+    languages: arr(draft.languages).length ? arr(draft.languages) : arr(fallback.languages),
+    tone: s(draft.tone || fallback.tone),
+    greetingStyle: s(draft.greetingStyle || fallback.greetingStyle),
+    afterHoursBehavior: s(
+      draft.afterHoursBehavior || fallback.afterHoursBehavior
+    ),
   };
 
   const model = {
@@ -218,13 +250,18 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
     readyForApproval: reviewAssistant.readyForApproval === true,
     draftVersion: Number(reviewAssistant.draftVersion || 0),
     phase: s(reviewAssistant.phase),
+    provider: s(reviewAssistant.provider),
+    model: s(reviewAssistant.model),
+    usedFallback: reviewAssistant.usedFallback === true,
+    error: s(reviewAssistant.error),
+    rejectedInputs: arr(reviewAssistant.rejectedInputs),
     draft: resolvedDraft,
     confidence: {
       strong: arr(confidence.strong),
       unclear: arr(confidence.unclear),
       contradictions: arr(confidence.contradictions),
     },
-    recommendationNotes: arr(recommendation.notes),
+    recommendation,
     sourceSignals: {
       primarySourceType: s(sourceSignals.primarySourceType),
       primarySourceLabel: s(sourceSignals.primarySourceLabel),
@@ -379,18 +416,32 @@ function DraftRow({ label, value }) {
   );
 }
 
+function MetaPill({ children }) {
+  return (
+    <div className="inline-flex items-center rounded-full border border-[rgba(15,23,42,0.07)] bg-[rgba(248,250,252,0.9)] px-2.5 py-1 text-[11px] font-medium text-text-muted">
+      {children}
+    </div>
+  );
+}
+
 function SmartDraftBubble({ model, finalizing, onFinalize }) {
   const draft = obj(model.draft);
   const sourceSignals = obj(model.sourceSignals);
+  const recommendation = obj(model.recommendation);
 
   const draftRows = [
     ["Business name", draft.businessName],
     ["What the business is", draft.whatThisBusinessIs],
+    ["Website", draft.websiteUrl],
     ["Core services", listPreview(draft.coreServices, 6)],
     ["Pricing posture", draft.pricingPosture],
     ["Contact routes", listPreview(draft.contactRoutes, 6)],
     ["Availability", listPreview(draft.hours, 4)],
     ["Human handoff", draft.humanHandoff],
+    ["Languages", listPreview(draft.languages, 4)],
+    ["Tone", draft.tone],
+    ["Greeting style", draft.greetingStyle],
+    ["After-hours behavior", draft.afterHoursBehavior],
   ].filter(([, value]) => s(value));
 
   const sourceContextLine = [
@@ -411,6 +462,14 @@ function SmartDraftBubble({ model, finalizing, onFinalize }) {
     .filter(Boolean)
     .join(" · ");
 
+  const rejectedInputs = arr(model.rejectedInputs)
+    .map((item) => ({
+      input: s(item.input),
+      reason: s(item.reason),
+    }))
+    .filter((item) => item.input || item.reason)
+    .slice(0, 3);
+
   return (
     <MessageBubble role="assistant" title="Draft" animate>
       <div className="space-y-4">
@@ -419,6 +478,15 @@ function SmartDraftBubble({ model, finalizing, onFinalize }) {
             {model.message}
           </div>
         ) : null}
+
+        <div className="flex flex-wrap gap-2">
+          {s(model.provider) ? (
+            <MetaPill>
+              {model.usedFallback ? "Fallback" : "Brain"} · {model.provider}
+            </MetaPill>
+          ) : null}
+          {s(model.model) ? <MetaPill>{model.model}</MetaPill> : null}
+        </div>
 
         {sourceContextLine ? (
           <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.78)] px-3.5 py-3">
@@ -449,6 +517,37 @@ function SmartDraftBubble({ model, finalizing, onFinalize }) {
             </div>
             <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
               {arr(model.compactNotes).map((item) => (
+                <div key={item}>• {item}</div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {rejectedInputs.length ? (
+          <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.78)] px-3.5 py-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
+              Not accepted
+            </div>
+            <div className="mt-2 space-y-2 text-[14px] leading-7 text-text">
+              {rejectedInputs.map((item) => (
+                <div key={`${item.input}|${item.reason}`}>
+                  <div>{item.input}</div>
+                  {item.reason ? (
+                    <div className="text-[13px] text-text-muted">{item.reason}</div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {arr(recommendation.notes).length ? (
+          <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.78)] px-3.5 py-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
+              Recommendation
+            </div>
+            <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
+              {arr(recommendation.notes).slice(0, 3).map((item) => (
                 <div key={item}>• {item}</div>
               ))}
             </div>
@@ -550,7 +649,8 @@ function hasExistingSetupProgress({ assistant, reviewPayload, finalModel }) {
   const reviewProfile = obj(reviewDraft.businessProfile);
   const reviewSourceMetadata = obj(reviewDraft.sourceMetadata);
 
-  const assistantDraft = obj(assistant?.draft);
+  const assistantRoot = obj(assistant);
+  const assistantDraft = obj(assistantRoot.draft);
   const assistantProfile = obj(assistantDraft.businessProfile);
   const assistantSourceMetadata = obj(assistantDraft.sourceMetadata);
 
@@ -584,6 +684,8 @@ function buildDraftSignature(model = {}) {
     message: s(model.message),
     draft: obj(model.draft),
     notes: arr(model.compactNotes),
+    provider: s(model.provider),
+    usedFallback: model.usedFallback === true,
   });
 }
 
@@ -827,7 +929,6 @@ export default function SetupAssistantSections({
     if (!s(nextQuestion.key)) return null;
 
     const meta = obj(QUESTION_META_MAP[nextQuestion.key]);
-
     const prompt = s(nextQuestion.prompt || meta.prompt);
     if (!prompt) return null;
 
