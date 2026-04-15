@@ -237,7 +237,9 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
       : arr(fallback.contactRoutes),
     humanHandoff: s(draft.humanHandoff || fallback.humanHandoff),
     hours: arr(draft.hours).length ? arr(draft.hours) : arr(fallback.hours),
-    languages: arr(draft.languages).length ? arr(draft.languages) : arr(fallback.languages),
+    languages: arr(draft.languages).length
+      ? arr(draft.languages)
+      : arr(fallback.languages),
     tone: s(draft.tone || fallback.tone),
     greetingStyle: s(draft.greetingStyle || fallback.greetingStyle),
     afterHoursBehavior: s(
@@ -693,19 +695,27 @@ function buildStatusSignature(message = "", draftVersion = 0) {
   return ["status", Number(draftVersion || 0), s(message)].join("|");
 }
 
-function buildIntroSignature(storageKey = "") {
-  return `intro|${s(storageKey, "default")}`;
+function buildGreetingSignature(storageKey = "", mode = "fresh") {
+  return `greeting|${s(storageKey, "default")}|${s(mode, "fresh")}`;
 }
 
-function buildIntroTimelineItem({ storageKey = "" }) {
+function buildGreetingTimelineItem({
+  storageKey = "",
+  continueMode = false,
+}) {
   return {
-    id: `assistant-intro-${s(storageKey, "default")}`,
+    id: `assistant-greeting-${s(storageKey, "default")}`,
     type: "message",
     role: "assistant",
-    signature: buildIntroSignature(storageKey),
+    signature: buildGreetingSignature(
+      storageKey,
+      continueMode ? "continue" : "fresh"
+    ),
     eyebrow: "Setup",
-    title: "Let’s set up the business",
-    body: SETUP_SOURCE_PROMPT,
+    title: continueMode ? "Salam" : "Salam, başlayaq",
+    body: continueMode
+      ? "Mövcud setup draftına baxdım. Gəl bunu səliqəli şəkildə tamamlayıq — mən hər dəfə yalnız bir vacib şeyi soruşacağam."
+      : "Sənin biznesini düzgün qurmaq üçün əvvəl əsas məlumatı yığaq. Bir source və ya qısa qeyd göndər, mən də bunu addım-addım təmiz şəkildə formalaşdırım.",
   };
 }
 
@@ -779,16 +789,14 @@ function isAssistantQuestionItem(item = {}) {
   return item?.role === "assistant" && Boolean(s(item?.step));
 }
 
-function pruneAnsweredQuestionItems(timeline = [], step = "") {
-  const safeStep = s(step);
-  if (!safeStep) return timeline;
-  return timeline.filter(
-    (item) => !(isAssistantQuestionItem(item) && s(item.step) === safeStep)
-  );
-}
-
 function pruneQuestionHistoryForDraft(timeline = []) {
   return timeline.filter((item) => !isAssistantQuestionItem(item));
+}
+
+function commitAssistantQuestion(current = [], question = null, draftVersion = 0) {
+  const item = buildQuestionTimelineItem(question, draftVersion);
+  if (!item) return current;
+  return appendTimelineItem(current, item);
 }
 
 function isContinueStyleAnswer(value = "") {
@@ -895,6 +903,7 @@ export default function SetupAssistantSections({
   onFinalize,
 }) {
   const scrollRef = useRef(null);
+  const bootSequenceStartedRef = useRef(false);
 
   const [composerValue, setComposerValue] = useState("");
   const [localError, setLocalError] = useState("");
@@ -902,6 +911,7 @@ export default function SetupAssistantSections({
   const [localAnswers, setLocalAnswers] = useState({});
   const [awaitingAssistant, setAwaitingAssistant] = useState(false);
   const [suppressedQuestionSignature, setSuppressedQuestionSignature] = useState("");
+  const [bootTyping, setBootTyping] = useState(false);
 
   const busy = saving || finalizing || capturingSource;
 
@@ -958,37 +968,18 @@ export default function SetupAssistantSections({
     return buildQuestionSignature(rawCurrentQuestion, assistantControl.draftVersion);
   }, [rawCurrentQuestion, assistantControl.draftVersion]);
 
-  const activeSuppressedQuestionSignature =
-    currentQuestionSignature &&
-    suppressedQuestionSignature === currentQuestionSignature
+  const effectiveSuppressedQuestionSignature = useMemo(() => {
+    if (!currentQuestionSignature) return "";
+    return suppressedQuestionSignature === currentQuestionSignature
       ? suppressedQuestionSignature
       : "";
+  }, [currentQuestionSignature, suppressedQuestionSignature]);
 
-  const shouldShowIntro = useMemo(() => {
-    if (!sessionHydrated) return false;
-    if (timeline.length > 0) return false;
-    if (rawCurrentQuestion) return false;
-    if (assistantControl.readyForApproval === true) return false;
-    if (smartDraftReady) return false;
-    if (hasExistingProgress) return false;
-    return true;
-  }, [
-    sessionHydrated,
-    timeline.length,
-    rawCurrentQuestion,
-    assistantControl.readyForApproval,
-    smartDraftReady,
-    hasExistingProgress,
-  ]);
+  const hasGreetingInTimeline = useMemo(() => {
+    return timeline.some((item) => String(item?.signature || "").startsWith("greeting|"));
+  }, [timeline]);
 
-  const introItem = useMemo(() => {
-    if (!shouldShowIntro) return null;
-    return buildIntroTimelineItem({ storageKey });
-  }, [shouldShowIntro, storageKey]);
-
-  const renderedTimeline = useMemo(() => {
-    return appendTimelineItem(timeline, introItem);
-  }, [timeline, introItem]);
+  const renderedTimeline = timeline;
 
   const sourceSubmitted =
     renderedTimeline.some((item) => item.role === "user") ||
@@ -1013,8 +1004,66 @@ export default function SetupAssistantSections({
     !questionsFinished &&
     !awaitingAssistant;
 
+  const bootSequencePending =
+    sessionHydrated && renderedTimeline.length === 0 && !hasGreetingInTimeline;
+
+  useEffect(() => {
+    if (!sessionHydrated) return;
+    if (renderedTimeline.length > 0) return;
+    if (bootSequenceStartedRef.current) return;
+
+    bootSequenceStartedRef.current = true;
+
+    const continueMode =
+      hasExistingProgress ||
+      Boolean(rawCurrentQuestion) ||
+      assistantControl.readyForApproval === true ||
+      smartDraftReady;
+
+    const greetingItem = buildGreetingTimelineItem({
+      storageKey,
+      continueMode,
+    });
+
+    const initialQuestionItem =
+      rawCurrentQuestion && assistantControl.readyForApproval !== true
+        ? buildQuestionTimelineItem(rawCurrentQuestion, assistantControl.draftVersion)
+        : null;
+
+    const typingTimer = window.setTimeout(() => {
+      setBootTyping(true);
+    }, 0);
+
+    const greetingTimer = window.setTimeout(() => {
+      setTimeline((current) => appendTimelineItem(current, greetingItem));
+      setBootTyping(false);
+    }, 420);
+
+    const questionTimer = initialQuestionItem
+      ? window.setTimeout(() => {
+          setTimeline((current) => appendTimelineItem(current, initialQuestionItem));
+        }, 760)
+      : null;
+
+    return () => {
+      window.clearTimeout(typingTimer);
+      window.clearTimeout(greetingTimer);
+      if (questionTimer) window.clearTimeout(questionTimer);
+    };
+  }, [
+    sessionHydrated,
+    renderedTimeline.length,
+    hasExistingProgress,
+    rawCurrentQuestion,
+    assistantControl.readyForApproval,
+    assistantControl.draftVersion,
+    smartDraftReady,
+    storageKey,
+  ]);
+
   const liveQuestionItem = useMemo(() => {
     if (!currentQuestion) return null;
+    if (bootSequencePending) return null;
 
     const item = buildQuestionTimelineItem(
       currentQuestion,
@@ -1022,18 +1071,21 @@ export default function SetupAssistantSections({
     );
 
     if (!item) return null;
+
     if (
       s(item.signature) &&
-      s(item.signature) === s(activeSuppressedQuestionSignature)
+      s(item.signature) === s(effectiveSuppressedQuestionSignature)
     ) {
       return null;
     }
+
     return hasTimelineSignature(timeline, item.signature) ? null : item;
   }, [
     currentQuestion,
     assistantControl.draftVersion,
     timeline,
-    activeSuppressedQuestionSignature,
+    effectiveSuppressedQuestionSignature,
+    bootSequencePending,
   ]);
 
   const liveDraftItem = useMemo(() => {
@@ -1046,11 +1098,12 @@ export default function SetupAssistantSections({
 
   const liveFallbackAssistantItem = useMemo(() => {
     if (!needsFallbackContinue) return null;
+    if (bootSequencePending) return null;
 
     const item = buildFallbackAssistantItem(finalModel);
     if (!item) return null;
     return hasTimelineSignature(timeline, item.signature) ? null : item;
-  }, [needsFallbackContinue, finalModel, timeline]);
+  }, [needsFallbackContinue, finalModel, timeline, bootSequencePending]);
 
   const lastAssistantQuestionStep = useMemo(() => {
     const reversed = [...renderedTimeline].reverse();
@@ -1073,6 +1126,7 @@ export default function SetupAssistantSections({
   }, [
     renderedTimeline,
     awaitingAssistant,
+    bootTyping,
     localError,
     errorMessage,
     liveQuestionItem,
@@ -1182,7 +1236,11 @@ export default function SetupAssistantSections({
 
     setTimeline((current) =>
       appendTimelineItem(
-        pruneAnsweredQuestionItems(current, currentQuestion.step),
+        commitAssistantQuestion(
+          current,
+          currentQuestion,
+          assistantControl.draftVersion
+        ),
         {
           id: `answer-${currentQuestion.key}-${Date.now()}`,
           type: "message",
@@ -1225,15 +1283,12 @@ export default function SetupAssistantSections({
     setAwaitingAssistant(true);
 
     setTimeline((current) =>
-      appendTimelineItem(
-        pruneAnsweredQuestionItems(current, lastAssistantQuestionStep),
-        {
-          id: `freeform-${Date.now()}`,
-          type: "message",
-          role: "user",
-          body: text,
-        }
-      )
+      appendTimelineItem(current, {
+        id: `freeform-${Date.now()}`,
+        type: "message",
+        role: "user",
+        body: text,
+      })
     );
 
     setComposerValue("");
@@ -1248,6 +1303,8 @@ export default function SetupAssistantSections({
       setAwaitingAssistant(false);
     }
   }
+
+  const composerReady = sessionHydrated && !bootSequencePending && !bootTyping;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,#ffffff,#f8fafc)]">
@@ -1279,7 +1336,7 @@ export default function SetupAssistantSections({
             })}
           </AnimatePresence>
 
-          {awaitingAssistant ? <TypingBubble /> : null}
+          {bootTyping || awaitingAssistant ? <TypingBubble /> : null}
 
           {s(localError || errorMessage) ? (
             <MessageBubble
@@ -1293,7 +1350,7 @@ export default function SetupAssistantSections({
         </div>
       </div>
 
-      {!sourceSubmitted && sessionHydrated ? (
+      {!sourceSubmitted && composerReady ? (
         <Composer
           value={composerValue}
           busy={busy}
@@ -1304,7 +1361,7 @@ export default function SetupAssistantSections({
         />
       ) : null}
 
-      {sourceSubmitted && currentQuestion ? (
+      {sourceSubmitted && currentQuestion && composerReady ? (
         <Composer
           value={composerValue}
           busy={busy}
@@ -1315,7 +1372,7 @@ export default function SetupAssistantSections({
         />
       ) : null}
 
-      {sourceSubmitted && !currentQuestion && !questionsFinished ? (
+      {sourceSubmitted && !currentQuestion && !questionsFinished && composerReady ? (
         <Composer
           value={composerValue}
           busy={busy}
@@ -1326,7 +1383,7 @@ export default function SetupAssistantSections({
         />
       ) : null}
 
-      {questionsFinished ? (
+      {questionsFinished && composerReady ? (
         <Composer
           value={composerValue}
           busy={busy}
