@@ -1,13 +1,77 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, LoaderCircle } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  SETUP_INTERVIEW_QUESTIONS,
-  SETUP_SOURCE_PROMPT,
-} from "./setupInterviewQuestions.js";
 import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
 const TIMELINE_STORAGE_PREFIX = "setup_assistant_timeline";
+
+const QUESTION_COPY = {
+  profile: {
+    prompt:
+      "Biznesin adını və nə iş gördüyünü birlikdə yaz. Qısa, dəqiq, public görünəcək formada olsun.",
+    placeholder:
+      "Məsələn: Neox Studio — AI avtomasiya, website və rəqəmsal təqdimat həlləri qururuq.",
+    reason:
+      "Bu hissə sabit olmadan AI biznesi hər yerdə eyni və düzgün təqdim edə bilməz.",
+  },
+  company: {
+    prompt: "AI-in müştəriyə göstərəcəyi dəqiq biznes adını yaz.",
+    placeholder: "Məsələn: Neox Studio",
+    reason:
+      "Rəsmi ad sabit olmadan qalan bütün təqdimat zəifləyir.",
+  },
+  description: {
+    prompt:
+      "Bu biznesi bir-iki cümlə ilə necə təqdim etməli olduğumuzu yaz.",
+    placeholder:
+      "Məsələn: Lokal bizneslər üçün AI avtomasiya və digital growth sistemləri qururuq.",
+    reason:
+      "AI-in nə etdiyinizi uydurmaması üçün bu positioning cümləsi lazımdır.",
+  },
+  website: {
+    prompt: "Əsas website domenini və ya linkini göndər.",
+    placeholder: "Məsələn: yourbusiness.com",
+    reason:
+      "Əsas public mənbə sabit olanda sonrakı draft daha etibarlı qurulur.",
+  },
+  services: {
+    prompt: "Əsas xidmətləri ən vacibdən yaz.",
+    placeholder:
+      "Məsələn: website hazırlanması, reklam idarəetməsi, branding",
+    reason:
+      "AI nədən danışmalı olduğunu dəqiq bilməlidir, yoxsa generic cavab verir.",
+  },
+  hours: {
+    prompt: "İş və cavab saatlarını yaz.",
+    placeholder:
+      "Məsələn: B.e.–Cümə 10:00–19:00, Şənbə 11:00–16:00, Bazar bağlı",
+    reason:
+      "AI saatlarla bağlı səhv promise verməməlidir.",
+  },
+  pricing: {
+    prompt: "AI qiymət barədə nə deyə biləcəyini yaz.",
+    placeholder:
+      "Məsələn: starting price deyilə bilər, dəqiq quote üçün müraciət istənməlidir",
+    reason:
+      "Qiymət mövqeyi dəqiq olmazsa AI təhlükəli improvizasiya edə bilər.",
+  },
+  contacts: {
+    prompt:
+      "Müştərini yönləndirəcəyimiz əsas əlaqə yolunu yaz.",
+    placeholder:
+      "Məsələn: WhatsApp, telefon zəngi, form və ya email",
+    reason:
+      "Sonda müştərini hara ötürəcəyimiz aydın olmalıdır.",
+  },
+  handoff: {
+    prompt:
+      "AI-in hansı hallarda dayanmadan insana ötürməli olduğunu yaz.",
+    placeholder:
+      "Məsələn: şikayət, fərdi quote, ödəniş problemi, təcili iş, anlaşılmaz sorğu",
+    reason:
+      "Handoff qaydası olmadan AI lazım olanda geri çəkilməyə bilər.",
+  },
+};
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -23,10 +87,10 @@ function obj(value, fallback = {}) {
     : fallback;
 }
 
-function compactText(value, max = 220) {
+function compactText(value, max = 320) {
   const text = s(value).replace(/\s+/g, " ").trim();
   if (!text) return "";
-  return text.length <= max ? text : `${text.slice(0, max - 1).trim()}...`;
+  return text.length <= max ? text : `${text.slice(0, max - 1).trim()}…`;
 }
 
 function uniqueStrings(items = [], max = 12) {
@@ -39,7 +103,9 @@ function uniqueStrings(items = [], max = 12) {
 function listPreview(items = [], max = 6) {
   const safe = uniqueStrings(
     arr(items).map((item) =>
-      typeof item === "string" ? compactText(item, 80) : compactText(String(item), 80)
+      typeof item === "string"
+        ? compactText(item, 80)
+        : compactText(String(item), 80)
     ),
     24
   );
@@ -47,44 +113,6 @@ function listPreview(items = [], max = 6) {
   if (!safe.length) return "";
   if (safe.length <= max) return safe.join(", ");
   return `${safe.slice(0, max).join(", ")} +${safe.length - max}`;
-}
-
-function groupLabel(group = "") {
-  if (group === "operator_rules" || group === "ai_behavior") {
-    return "AI behavior";
-  }
-  return "Business truth";
-}
-
-function buildQuestionMetaMap() {
-  return Object.fromEntries(
-    SETUP_INTERVIEW_QUESTIONS.map((item) => [
-      item.key,
-      {
-        step: item.step,
-        placeholder: item.placeholder,
-        title: item.title,
-        prompt: item.prompt,
-        group: item.group,
-      },
-    ])
-  );
-}
-
-const QUESTION_META_MAP = buildQuestionMetaMap();
-
-function buildCompactNotes(model = {}) {
-  const confidence = obj(model.confidence);
-  const recommendation = obj(model.recommendation);
-
-  return uniqueStrings(
-    [
-      ...arr(confidence.unclear),
-      ...arr(recommendation.notes),
-      ...arr(confidence.contradictions),
-    ],
-    6
-  );
 }
 
 function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers = {}) {
@@ -214,10 +242,29 @@ function normalizeAssistantControl(reviewPayload = null, assistant = {}) {
   };
 }
 
-function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswers = {} }) {
+function buildCompactNotes(model = {}) {
+  const confidence = obj(model.confidence);
+  const recommendation = obj(model.recommendation);
+
+  return uniqueStrings(
+    [
+      ...arr(confidence.unclear),
+      ...arr(recommendation.notes),
+      ...arr(confidence.contradictions),
+    ],
+    6
+  );
+}
+
+function buildFinalViewModel({
+  reviewPayload = null,
+  assistant = {},
+  localAnswers = {},
+}) {
   const reviewAssistant = Object.keys(obj(reviewPayload?.assistant)).length
     ? obj(reviewPayload?.assistant)
     : obj(obj(assistant).assistant);
+
   const recommendation = obj(reviewAssistant.recommendation);
   const confidence = obj(reviewAssistant.confidence);
   const sourceSignals = obj(reviewAssistant.sourceSignals);
@@ -302,53 +349,22 @@ function hasBackendSmartDraft(model = {}) {
   return model.readyForApproval === true && hasStructuredDraft;
 }
 
-function buildProgressLabel(currentQuestion = null) {
-  const group = s(currentQuestion?.group);
-  if (!group) return "";
-  return groupLabel(group);
-}
-
-function getTimelineStorageKey(storageKey = "") {
-  return `${TIMELINE_STORAGE_PREFIX}:${s(storageKey, "default")}`;
-}
-
-function loadStoredTimeline(storageKey = "") {
-  try {
-    const raw = window.sessionStorage.getItem(getTimelineStorageKey(storageKey));
-    const parsed = JSON.parse(raw || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveStoredTimeline(storageKey = "", timeline = []) {
-  try {
-    window.sessionStorage.setItem(
-      getTimelineStorageKey(storageKey),
-      JSON.stringify(timeline)
-    );
-  } catch {
-    return;
-  }
-}
-
 function bubbleClasses(role = "assistant") {
   if (role === "user") {
-    return "bg-[linear-gradient(180deg,#2563eb,#1d4ed8)] text-white rounded-[26px] rounded-br-[10px] shadow-[0_18px_40px_rgba(37,99,235,0.28)]";
+    return "rounded-[26px] rounded-br-[10px] bg-[linear-gradient(180deg,#2563eb,#1d4ed8)] text-white shadow-[0_18px_40px_rgba(37,99,235,0.26)]";
   }
 
-  return "border border-[rgba(15,23,42,0.08)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.97))] text-text rounded-[26px] rounded-bl-[10px] shadow-[0_10px_30px_rgba(15,23,42,0.06)]";
+  return "rounded-[26px] rounded-bl-[10px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.98))] text-text shadow-[0_12px_30px_rgba(15,23,42,0.06)]";
 }
 
 const bubbleMotion = {
-  hidden: { opacity: 0, y: 16, scale: 0.985 },
+  hidden: { opacity: 0, y: 14, scale: 0.988 },
   visible: {
     opacity: 1,
     y: 0,
     scale: 1,
     transition: {
-      duration: 0.28,
+      duration: 0.24,
       ease: [0.22, 1, 0.36, 1],
     },
   },
@@ -360,56 +376,49 @@ function MessageBubble({
   title = "",
   body = "",
   children = null,
-  animate = true,
 }) {
   const isUser = role === "user";
 
-  const content = (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-      <div className={`max-w-[82%] px-4 py-3.5 ${bubbleClasses(role)}`}>
-        {s(eyebrow) ? (
-          <div
-            className={`mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${
-              isUser ? "text-white/65" : "text-text-muted"
-            }`}
-          >
-            {eyebrow}
-          </div>
-        ) : null}
-
-        {s(title) ? (
-          <div className="text-[20px] font-semibold tracking-[-0.04em]">
-            {title}
-          </div>
-        ) : null}
-
-        {s(body) ? (
-          <div
-            className={`whitespace-pre-wrap text-[15px] leading-7 ${
-              title ? "mt-2" : ""
-            } ${isUser ? "text-white/95" : "text-text"}`}
-          >
-            {body}
-          </div>
-        ) : null}
-
-        {children ? <div className="mt-4">{children}</div> : null}
-      </div>
-    </div>
-  );
-
-  if (!animate) return content;
-
   return (
     <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
-      {content}
+      <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+        <div className={`max-w-[84%] px-4 py-3.5 ${bubbleClasses(role)}`}>
+          {s(eyebrow) ? (
+            <div
+              className={`mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] ${
+                isUser ? "text-white/65" : "text-text-muted"
+              }`}
+            >
+              {eyebrow}
+            </div>
+          ) : null}
+
+          {s(title) ? (
+            <div className="text-[18px] font-semibold tracking-[-0.04em]">
+              {title}
+            </div>
+          ) : null}
+
+          {s(body) ? (
+            <div
+              className={`whitespace-pre-wrap text-[15px] leading-7 ${
+                title ? "mt-2" : ""
+              } ${isUser ? "text-white/95" : "text-text"}`}
+            >
+              {body}
+            </div>
+          ) : null}
+
+          {children ? <div className="mt-4">{children}</div> : null}
+        </div>
+      </div>
     </motion.div>
   );
 }
 
 function DraftRow({ label, value }) {
   return (
-    <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.85)] px-3.5 py-3">
+    <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.82)] px-3.5 py-3">
       <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
         {label}
       </div>
@@ -420,7 +429,7 @@ function DraftRow({ label, value }) {
 
 function MetaPill({ children }) {
   return (
-    <div className="inline-flex items-center rounded-full border border-[rgba(15,23,42,0.07)] bg-[rgba(248,250,252,0.9)] px-2.5 py-1 text-[11px] font-medium text-text-muted">
+    <div className="inline-flex items-center rounded-full border border-[rgba(15,23,42,0.07)] bg-[rgba(248,250,252,0.92)] px-2.5 py-1 text-[11px] font-medium text-text-muted">
       {children}
     </div>
   );
@@ -432,30 +441,27 @@ function SmartDraftBubble({ model, finalizing, onFinalize }) {
   const recommendation = obj(model.recommendation);
 
   const draftRows = [
-    ["Business name", draft.businessName],
-    ["What the business is", draft.whatThisBusinessIs],
+    ["Biznes adı", draft.businessName],
+    ["Biznes nə edir", draft.whatThisBusinessIs],
     ["Website", draft.websiteUrl],
-    ["Core services", listPreview(draft.coreServices, 6)],
-    ["Pricing posture", draft.pricingPosture],
-    ["Contact routes", listPreview(draft.contactRoutes, 6)],
-    ["Availability", listPreview(draft.hours, 4)],
-    ["Human handoff", draft.humanHandoff],
-    ["Languages", listPreview(draft.languages, 4)],
-    ["Tone", draft.tone],
-    ["Greeting style", draft.greetingStyle],
-    ["After-hours behavior", draft.afterHoursBehavior],
+    ["Əsas xidmətlər", listPreview(draft.coreServices, 6)],
+    ["Qiymət mövqeyi", draft.pricingPosture],
+    ["Əlaqə yolları", listPreview(draft.contactRoutes, 6)],
+    ["İş saatları", listPreview(draft.hours, 4)],
+    ["İnsana ötürmə", draft.humanHandoff],
+    ["Dillər", listPreview(draft.languages, 4)],
+    ["Ton", draft.tone],
+    ["Salamlama üslubu", draft.greetingStyle],
+    ["İş saatından sonra davranış", draft.afterHoursBehavior],
   ].filter(([, value]) => s(value));
 
-  const sourceContextLine = [
-    s(sourceSignals.primarySourceLabel),
-    s(sourceSignals.primarySourceUrl),
-  ]
+  const sourceContextLine = [s(sourceSignals.primarySourceLabel), s(sourceSignals.primarySourceUrl)]
     .filter(Boolean)
     .join(" · ");
 
   const sourceMetaLine = [
     Number(sourceSignals.pageCount || 0) > 0
-      ? `${Number(sourceSignals.pageCount || 0)} pages`
+      ? `${Number(sourceSignals.pageCount || 0)} səhifə`
       : "",
     arr(sourceSignals.sourceTypes).length
       ? listPreview(sourceSignals.sourceTypes, 4)
@@ -473,13 +479,11 @@ function SmartDraftBubble({ model, finalizing, onFinalize }) {
     .slice(0, 3);
 
   return (
-    <MessageBubble role="assistant" title="Draft" animate>
+    <MessageBubble role="assistant" eyebrow="Draft" title="Mən bunu strukturlaşdırdım">
       <div className="space-y-4">
-        {s(model.message) ? (
-          <div className="text-[14px] leading-7 text-text-muted whitespace-pre-wrap">
-            {model.message}
-          </div>
-        ) : null}
+        <div className="text-[14px] leading-7 text-text-muted">
+          Aşağıda hazırkı setup draftı var. Dəyişmək istədiyini birbaşa yaza bilərsən. Hər şey doğrudursa, təsdiqləyib davam et.
+        </div>
 
         <div className="flex flex-wrap gap-2">
           {s(model.provider) ? (
@@ -493,7 +497,7 @@ function SmartDraftBubble({ model, finalizing, onFinalize }) {
         {sourceContextLine ? (
           <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.78)] px-3.5 py-3">
             <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
-              Source context
+              Mənbə konteksti
             </div>
             <div className="mt-1.5 text-[14px] leading-7 text-text">
               {sourceContextLine}
@@ -515,7 +519,7 @@ function SmartDraftBubble({ model, finalizing, onFinalize }) {
         {arr(model.compactNotes).length ? (
           <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.78)] px-3.5 py-3">
             <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
-              Follow-up notes
+              Yoxlanmalı qeydlər
             </div>
             <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
               {arr(model.compactNotes).map((item) => (
@@ -528,7 +532,7 @@ function SmartDraftBubble({ model, finalizing, onFinalize }) {
         {rejectedInputs.length ? (
           <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.78)] px-3.5 py-3">
             <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
-              Not accepted
+              Qəbul edilməyənlər
             </div>
             <div className="mt-2 space-y-2 text-[14px] leading-7 text-text">
               {rejectedInputs.map((item) => (
@@ -546,7 +550,7 @@ function SmartDraftBubble({ model, finalizing, onFinalize }) {
         {arr(recommendation.notes).length ? (
           <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.78)] px-3.5 py-3">
             <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
-              Recommendation
+              Tövsiyə
             </div>
             <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
               {arr(recommendation.notes).slice(0, 3).map((item) => (
@@ -556,20 +560,14 @@ function SmartDraftBubble({ model, finalizing, onFinalize }) {
           </div>
         ) : null}
 
-        <div className="pt-1 text-[13px] leading-6 text-text-muted">
-          Dəyişmək istədiyini yaz və ya təsdiqlə.
-        </div>
-
-        {model.readyForApproval ? (
-          <button
-            type="button"
-            onClick={onFinalize}
-            disabled={finalizing}
-            className="inline-flex h-11 items-center rounded-full bg-slate-950 px-5 text-[12px] font-semibold text-white transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            {finalizing ? "Approving..." : "Approve truth"}
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={onFinalize}
+          disabled={finalizing}
+          className="inline-flex h-11 items-center rounded-full bg-slate-950 px-5 text-[12px] font-semibold text-white transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {finalizing ? "Təsdiqlənir..." : "Təsdiqlə və setup-ı bitir"}
+        </button>
       </div>
     </MessageBubble>
   );
@@ -669,101 +667,103 @@ function hasExistingSetupProgress({ assistant, reviewPayload, finalModel }) {
   );
 }
 
-function buildQuestionSignature(question = {}, draftVersion = 0) {
-  return [
-    "question",
-    Number(draftVersion || 0),
-    s(question.key),
-    s(question.prompt),
-  ].join("|");
+function buildQuestionCopy(question = {}) {
+  const key = s(question?.key).toLowerCase();
+  return obj(QUESTION_COPY[key]);
 }
 
-function buildDraftSignature(model = {}) {
-  return JSON.stringify({
-    type: "draft",
-    draftVersion: Number(model.draftVersion || 0),
-    readyForApproval: model.readyForApproval === true,
-    message: s(model.message),
-    draft: obj(model.draft),
-    notes: arr(model.compactNotes),
-    provider: s(model.provider),
-    usedFallback: model.usedFallback === true,
-  });
+function buildQuestionPrompt(question = {}) {
+  const custom = s(buildQuestionCopy(question).prompt);
+  return custom || s(question.prompt);
 }
 
-function buildStatusSignature(message = "", draftVersion = 0) {
-  return ["status", Number(draftVersion || 0), s(message)].join("|");
+function buildQuestionPlaceholder(question = {}) {
+  const custom = s(buildQuestionCopy(question).placeholder);
+  return custom || s(question.placeholder) || "Cavabını yaz";
 }
 
-function buildGreetingSignature(storageKey = "", mode = "fresh") {
-  return `greeting|${s(storageKey, "default")}|${s(mode, "fresh")}`;
+function buildQuestionReason(question = {}) {
+  return s(buildQuestionCopy(question).reason);
 }
 
-function buildGreetingTimelineItem({
-  storageKey = "",
-  continueMode = false,
+function buildSourceLead(finalModel = {}, hasExistingProgress = false) {
+  const sourceSignals = obj(finalModel.sourceSignals);
+  const label = s(sourceSignals.primarySourceLabel);
+  const url = s(sourceSignals.primarySourceUrl);
+
+  if (label && url) return `${label} mənbəyinə baxdım`;
+  if (label) return `${label} üzərindən draftı yoxladım`;
+  if (url) return "Mənbəyə baxdım";
+  if (hasExistingProgress) return "Mövcud draftı yoxladım";
+  return "Bunu səliqəli şəkildə quraq";
+}
+
+function buildKnownStateLine(finalModel = {}) {
+  const draft = obj(finalModel.draft);
+  const bits = [];
+
+  if (s(draft.businessName)) bits.push(`ad olaraq "${draft.businessName}" görünür`);
+  if (s(draft.whatThisBusinessIs)) bits.push("biznes təsviri qismən oturub");
+  if (arr(draft.coreServices).length) {
+    bits.push(`${arr(draft.coreServices).length} xidmət siqnalı var`);
+  }
+  if (arr(draft.contactRoutes).length) bits.push("əlaqə yolu görünür");
+  if (arr(draft.hours).length) bits.push("iş saatı siqnalı var");
+
+  return bits.slice(0, 3).join(", ");
+}
+
+function buildAssistantTurnBody({
+  sourceSubmitted = false,
+  currentQuestion = null,
+  finalModel = {},
+  assistantControl = {},
+  smartDraftReady = false,
+  hasExistingProgress = false,
 }) {
-  return {
-    id: `assistant-greeting-${s(storageKey, "default")}`,
-    type: "message",
-    role: "assistant",
-    signature: buildGreetingSignature(
-      storageKey,
-      continueMode ? "continue" : "fresh"
-    ),
-    eyebrow: "Setup",
-    title: continueMode ? "Salam" : "Salam, başlayaq",
-    body: continueMode
-      ? "Mövcud setup draftına baxdım. Gəl bunu səliqəli şəkildə tamamlayıq — mən hər dəfə yalnız bir vacib şeyi soruşacağam."
-      : "Sənin biznesini düzgün qurmaq üçün əvvəl əsas məlumatı yığaq. Bir source və ya qısa qeyd göndər, mən də bunu addım-addım təmiz şəkildə formalaşdırım.",
-  };
+  if (!sourceSubmitted) {
+    return "Başlamaq üçün website, Google Maps, Instagram, Facebook və ya qısa biznes qeydi göndər. Mən əvvəl nəyi dəqiq bildiyimi çıxaracağam, sonra yalnız həqiqətən lazım olan növbəti şeyi soruşacağam.";
+  }
+
+  const lead = buildSourceLead(finalModel, hasExistingProgress);
+  const knownState = buildKnownStateLine(finalModel);
+
+  if (smartDraftReady) {
+    return `${lead}.${knownState ? ` Hazırda ${knownState}.` : ""} Mən bunu artıq strukturlaşdırdım və əsas draftı aşağıda topladım. Dəyişmək istədiyini yaz və ya hər şey doğrudursa təsdiqlə.`;
+  }
+
+  if (currentQuestion) {
+    const prompt = buildQuestionPrompt(currentQuestion);
+    const reason = buildQuestionReason(currentQuestion);
+
+    return `${lead}.${knownState ? ` Hazırda ${knownState}.` : ""} İndi növbəti ən vacib boşluq budur: ${prompt}${reason ? ` ${reason}` : ""}`;
+  }
+
+  const assistantMessage = compactText(
+    finalModel.message || assistantControl.message,
+    520
+  );
+
+  if (assistantMessage) {
+    return `${lead}.${knownState ? ` Hazırda ${knownState}.` : ""} ${assistantMessage}`;
+  }
+
+  return `${lead}.${knownState ? ` Hazırda ${knownState}.` : ""} Əlavə detal və ya düzəliş yaza bilərsən.`;
 }
 
-function buildQuestionTimelineItem(question = {}, draftVersion = 0) {
-  const questionKey = s(question.key).toLowerCase();
-  if (!questionKey || !s(question.prompt)) return null;
-
-  const meta = obj(QUESTION_META_MAP[questionKey]);
-
-  return {
-    id: `assistant-question-${questionKey}-${draftVersion || Date.now()}`,
-    type: "message",
-    role: "assistant",
-    signature: buildQuestionSignature(question, draftVersion),
-    eyebrow: buildProgressLabel({
-      group: s(question.group || meta.group),
-    }),
-    title: s(question.title || meta.title),
-    body: s(question.prompt || meta.prompt),
-    step: s(question.step || meta.step || questionKey),
-  };
-}
-
-function buildDraftTimelineItem(model = {}) {
-  if (!hasBackendSmartDraft(model)) return null;
-
-  return {
-    id: `assistant-draft-${Date.now()}`,
-    type: "draft",
-    role: "assistant",
-    signature: buildDraftSignature(model),
-    model,
-  };
-}
-
-function buildFallbackAssistantItem(model = {}) {
-  const body = s(model.message);
-  if (!body || model.readyForApproval === true) return null;
-
-  return {
-    id: `assistant-status-${Date.now()}`,
-    type: "message",
-    role: "assistant",
-    signature: buildStatusSignature(body, model.draftVersion),
-    eyebrow: "Setup",
-    title: "Let’s keep going",
-    body,
-  };
+function buildAssistantSignature({
+  sourceSubmitted = false,
+  currentQuestion = null,
+  body = "",
+  smartDraftReady = false,
+}) {
+  return JSON.stringify({
+    type: "assistant_turn",
+    sourceSubmitted,
+    questionKey: s(currentQuestion?.key),
+    ready: smartDraftReady === true,
+    body: s(body),
+  });
 }
 
 function appendTimelineItem(current = [], item = null) {
@@ -779,42 +779,72 @@ function appendTimelineItem(current = [], item = null) {
   return [...current, item];
 }
 
-function hasTimelineSignature(timeline = [], signature = "") {
-  const safeSignature = s(signature);
-  if (!safeSignature) return false;
-  return timeline.some((item) => s(item.signature) === safeSignature);
+function getTimelineStorageKey(storageKey = "") {
+  return `${TIMELINE_STORAGE_PREFIX}:${s(storageKey, "default")}`;
 }
 
-function isAssistantQuestionItem(item = {}) {
-  return item?.role === "assistant" && Boolean(s(item?.step));
+function isLegacyTimeline(items = []) {
+  return arr(items).some((item) => {
+    const id = s(item?.id);
+    const signature = s(item?.signature);
+    return (
+      signature.startsWith("greeting|") ||
+      id.includes("assistant-question-") ||
+      id.includes("assistant-greeting-")
+    );
+  });
 }
 
-function pruneQuestionHistoryForDraft(timeline = []) {
-  return timeline.filter((item) => !isAssistantQuestionItem(item));
+function sanitizeStoredTimeline(items = []) {
+  const safe = arr(items)
+    .map((item) =>
+      obj(item, {
+        id: "",
+        role: "",
+        eyebrow: "",
+        title: "",
+        body: "",
+        signature: "",
+      })
+    )
+    .filter((item) => {
+      const role = s(item.role);
+      if (role !== "assistant" && role !== "user") return false;
+      if (!s(item.body) && !s(item.title)) return false;
+      return true;
+    })
+    .map((item, index) => ({
+      id: s(item.id) || `stored-${index + 1}`,
+      role: s(item.role),
+      eyebrow: s(item.eyebrow),
+      title: s(item.title),
+      body: s(item.body),
+      signature: s(item.signature),
+    }));
+
+  if (isLegacyTimeline(safe)) return [];
+  return safe;
 }
 
-function commitAssistantQuestion(current = [], question = null, draftVersion = 0) {
-  const item = buildQuestionTimelineItem(question, draftVersion);
-  if (!item) return current;
-  return appendTimelineItem(current, item);
+function loadStoredTimeline(storageKey = "") {
+  try {
+    const raw = window.sessionStorage.getItem(getTimelineStorageKey(storageKey));
+    const parsed = JSON.parse(raw || "[]");
+    return sanitizeStoredTimeline(parsed);
+  } catch {
+    return [];
+  }
 }
 
-function isContinueStyleAnswer(value = "") {
-  const text = s(value).toLowerCase();
-  return [
-    "ok",
-    "okay",
-    "ok davam",
-    "davam",
-    "continue",
-    "next",
-    "beli",
-    "bəli",
-    "he",
-    "hə",
-    "oldu",
-    "tamam",
-  ].includes(text);
+function saveStoredTimeline(storageKey = "", timeline = []) {
+  try {
+    window.sessionStorage.setItem(
+      getTimelineStorageKey(storageKey),
+      JSON.stringify(timeline)
+    );
+  } catch {
+    return;
+  }
 }
 
 function looksLikeUrlOrDomain(value = "") {
@@ -837,6 +867,7 @@ function looksLikeEmail(value = "") {
 function looksLikeHoursText(value = "") {
   const text = s(value).toLowerCase();
   if (!text) return false;
+
   return (
     /(mon|tue|wed|thu|fri|sat|sun|b\.e|be|cümə|şənbə|bazar)/.test(text) ||
     /\b\d{1,2}[:.]?\d{0,2}\s*(?:-|to|dan|den|dek|qeder)\s*\d{1,2}[:.]?\d{0,2}\b/.test(
@@ -851,6 +882,7 @@ function looksLikeHoursText(value = "") {
 function looksLikePricingText(value = "") {
   const text = s(value).toLowerCase();
   if (!text) return false;
+
   return (
     /(azn|usd|eur|gbp|\$|€|₼|£)/.test(text) ||
     /\bprice\b/.test(text) ||
@@ -867,21 +899,26 @@ function resolveFreeformStepFromText(value = "", fallbackStep = "profile") {
   const lowerText = text.toLowerCase();
 
   if (looksLikeUrlOrDomain(text)) return "website";
+
   if (
     looksLikePhone(text) ||
     looksLikeEmail(text) ||
-    /whatsapp|telegram|contact/i.test(lowerText)
+    /whatsapp|telegram|contact|əlaqə/i.test(lowerText)
   ) {
     return "contacts";
   }
+
   if (looksLikeHoursText(text)) return "hours";
   if (looksLikePricingText(text)) return "pricing";
+
   if (/şikayət|complaint|refund|payment|operator|handoff|escalat/i.test(lowerText)) {
     return "handoff";
   }
+
   if (/[,\n;]/.test(text) && text.split(/[,;\n]/).filter((item) => s(item)).length >= 2) {
     return "services";
   }
+
   if (text.split(/\s+/).filter(Boolean).length <= 4) {
     return "company";
   }
@@ -903,15 +940,12 @@ export default function SetupAssistantSections({
   onFinalize,
 }) {
   const scrollRef = useRef(null);
-  const bootSequenceStartedRef = useRef(false);
 
   const [composerValue, setComposerValue] = useState("");
   const [localError, setLocalError] = useState("");
   const [timeline, setTimeline] = useState(() => loadStoredTimeline(storageKey));
   const [localAnswers, setLocalAnswers] = useState({});
   const [awaitingAssistant, setAwaitingAssistant] = useState(false);
-  const [suppressedQuestionSignature, setSuppressedQuestionSignature] = useState("");
-  const [bootTyping, setBootTyping] = useState(false);
 
   const busy = saving || finalizing || capturingSource;
 
@@ -925,31 +959,30 @@ export default function SetupAssistantSections({
     [reviewPayload, assistant, localAnswers]
   );
 
-  const smartDraftReady = useMemo(
-    () => hasBackendSmartDraft(finalModel),
-    [finalModel]
-  );
-
   const assistantControl = useMemo(
     () => normalizeAssistantControl(reviewPayload, assistant),
     [reviewPayload, assistant]
+  );
+
+  const smartDraftReady = useMemo(
+    () => hasBackendSmartDraft(finalModel),
+    [finalModel]
   );
 
   const rawCurrentQuestion = useMemo(() => {
     const nextQuestion = obj(assistantControl.nextQuestion);
     if (!s(nextQuestion.key)) return null;
 
-    const meta = obj(QUESTION_META_MAP[nextQuestion.key]);
-    const prompt = s(nextQuestion.prompt || meta.prompt);
-    if (!prompt) return null;
+    const key = s(nextQuestion.key).toLowerCase();
+    const copy = buildQuestionCopy(nextQuestion);
 
     return {
-      key: s(nextQuestion.key),
-      step: s(nextQuestion.step || meta.step || nextQuestion.key),
-      title: s(nextQuestion.title || meta.title),
-      prompt,
-      group: s(nextQuestion.group || meta.group),
-      placeholder: s(nextQuestion.placeholder || meta.placeholder),
+      key,
+      step: s(nextQuestion.step || key),
+      title: s(copy.title || nextQuestion.title),
+      prompt: s(copy.prompt || nextQuestion.prompt),
+      placeholder: s(copy.placeholder || nextQuestion.placeholder),
+      group: s(nextQuestion.group || "business_truth"),
     };
   }, [assistantControl.nextQuestion]);
 
@@ -963,231 +996,150 @@ export default function SetupAssistantSections({
     [assistant, reviewPayload, finalModel]
   );
 
-  const currentQuestionSignature = useMemo(() => {
-    if (!rawCurrentQuestion) return "";
-    return buildQuestionSignature(rawCurrentQuestion, assistantControl.draftVersion);
-  }, [rawCurrentQuestion, assistantControl.draftVersion]);
-
-  const effectiveSuppressedQuestionSignature = useMemo(() => {
-    if (!currentQuestionSignature) return "";
-    return suppressedQuestionSignature === currentQuestionSignature
-      ? suppressedQuestionSignature
-      : "";
-  }, [currentQuestionSignature, suppressedQuestionSignature]);
-
-  const hasGreetingInTimeline = useMemo(() => {
-    return timeline.some((item) => String(item?.signature || "").startsWith("greeting|"));
-  }, [timeline]);
-
-  const renderedTimeline = timeline;
-
-  const sourceSubmitted =
-    renderedTimeline.some((item) => item.role === "user") ||
-    hasExistingProgress ||
-    Boolean(rawCurrentQuestion) ||
-    assistantControl.readyForApproval === true ||
-    smartDraftReady;
+  const sourceSubmitted = useMemo(() => {
+    return Boolean(
+      hasExistingProgress ||
+        rawCurrentQuestion ||
+        assistantControl.readyForApproval === true ||
+        smartDraftReady ||
+        timeline.some((item) => item.role === "user")
+    );
+  }, [
+    hasExistingProgress,
+    rawCurrentQuestion,
+    assistantControl.readyForApproval,
+    smartDraftReady,
+    timeline,
+  ]);
 
   const currentQuestion =
     sourceSubmitted && assistantControl.readyForApproval !== true
       ? rawCurrentQuestion
       : null;
 
-  const questionsFinished =
-    sourceSubmitted &&
-    assistantControl.readyForApproval === true &&
-    smartDraftReady;
+  const assistantTurnBody = useMemo(
+    () =>
+      buildAssistantTurnBody({
+        sourceSubmitted,
+        currentQuestion,
+        finalModel,
+        assistantControl,
+        smartDraftReady,
+        hasExistingProgress,
+      }),
+    [
+      sourceSubmitted,
+      currentQuestion,
+      finalModel,
+      assistantControl,
+      smartDraftReady,
+      hasExistingProgress,
+    ]
+  );
 
-  const needsFallbackContinue =
-    sourceSubmitted &&
-    !currentQuestion &&
-    !questionsFinished &&
-    !awaitingAssistant;
+  const assistantTurnItem = useMemo(() => {
+    if (!sessionHydrated) return null;
+    const body = s(assistantTurnBody);
+    if (!body) return null;
 
-  const bootSequencePending =
-    sessionHydrated && renderedTimeline.length === 0 && !hasGreetingInTimeline;
-
-  useEffect(() => {
-    if (!sessionHydrated) return;
-    if (renderedTimeline.length > 0) return;
-    if (bootSequenceStartedRef.current) return;
-
-    bootSequenceStartedRef.current = true;
-
-    const continueMode =
-      hasExistingProgress ||
-      Boolean(rawCurrentQuestion) ||
-      assistantControl.readyForApproval === true ||
-      smartDraftReady;
-
-    const greetingItem = buildGreetingTimelineItem({
-      storageKey,
-      continueMode,
-    });
-
-    const initialQuestionItem =
-      rawCurrentQuestion && assistantControl.readyForApproval !== true
-        ? buildQuestionTimelineItem(rawCurrentQuestion, assistantControl.draftVersion)
-        : null;
-
-    const typingTimer = window.setTimeout(() => {
-      setBootTyping(true);
-    }, 0);
-
-    const greetingTimer = window.setTimeout(() => {
-      setTimeline((current) => appendTimelineItem(current, greetingItem));
-      setBootTyping(false);
-    }, 420);
-
-    const questionTimer = initialQuestionItem
-      ? window.setTimeout(() => {
-          setTimeline((current) => appendTimelineItem(current, initialQuestionItem));
-        }, 760)
-      : null;
-
-    return () => {
-      window.clearTimeout(typingTimer);
-      window.clearTimeout(greetingTimer);
-      if (questionTimer) window.clearTimeout(questionTimer);
+    return {
+      id: `assistant-${Date.now()}`,
+      role: "assistant",
+      eyebrow: "Setup",
+      title: "",
+      body,
+      signature: buildAssistantSignature({
+        sourceSubmitted,
+        currentQuestion,
+        body,
+        smartDraftReady,
+      }),
     };
   }, [
     sessionHydrated,
-    renderedTimeline.length,
-    hasExistingProgress,
-    rawCurrentQuestion,
-    assistantControl.readyForApproval,
-    assistantControl.draftVersion,
-    smartDraftReady,
-    storageKey,
-  ]);
-
-  const liveQuestionItem = useMemo(() => {
-    if (!currentQuestion) return null;
-    if (bootSequencePending) return null;
-
-    const item = buildQuestionTimelineItem(
-      currentQuestion,
-      assistantControl.draftVersion
-    );
-
-    if (!item) return null;
-
-    if (
-      s(item.signature) &&
-      s(item.signature) === s(effectiveSuppressedQuestionSignature)
-    ) {
-      return null;
-    }
-
-    return hasTimelineSignature(timeline, item.signature) ? null : item;
-  }, [
+    assistantTurnBody,
+    sourceSubmitted,
     currentQuestion,
-    assistantControl.draftVersion,
-    timeline,
-    effectiveSuppressedQuestionSignature,
-    bootSequencePending,
+    smartDraftReady,
   ]);
-
-  const liveDraftItem = useMemo(() => {
-    if (!questionsFinished || !smartDraftReady) return null;
-
-    const item = buildDraftTimelineItem(finalModel);
-    if (!item) return null;
-    return hasTimelineSignature(timeline, item.signature) ? null : item;
-  }, [questionsFinished, smartDraftReady, finalModel, timeline]);
-
-  const liveFallbackAssistantItem = useMemo(() => {
-    if (!needsFallbackContinue) return null;
-    if (bootSequencePending) return null;
-
-    const item = buildFallbackAssistantItem(finalModel);
-    if (!item) return null;
-    return hasTimelineSignature(timeline, item.signature) ? null : item;
-  }, [needsFallbackContinue, finalModel, timeline, bootSequencePending]);
 
   const lastAssistantQuestionStep = useMemo(() => {
-    const reversed = [...renderedTimeline].reverse();
-    const questionItem = reversed.find(
-      (item) => item.role === "assistant" && s(item.step)
-    );
-    return s(questionItem?.step, "profile");
-  }, [renderedTimeline]);
+    const reversed = [...timeline].reverse();
+    const assistantMessage = reversed.find((item) => item.role === "assistant");
+    const text = s(assistantMessage?.body).toLowerCase();
+
+    if (text.includes("qiymət")) return "pricing";
+    if (text.includes("iş və cavab saat")) return "hours";
+    if (text.includes("əlaqə")) return "contacts";
+    if (text.includes("insana ötür")) return "handoff";
+    if (text.includes("xidmət")) return "services";
+    if (text.includes("website")) return "website";
+    if (text.includes("biznes ad")) return "company";
+    return "profile";
+  }, [timeline]);
+
+  const composerPlaceholder = useMemo(() => {
+    if (!sourceSubmitted) {
+      return "Website, Google Maps, Instagram, Facebook və ya qısa biznes qeydi yaz";
+    }
+
+    if (currentQuestion) {
+      return buildQuestionPlaceholder(currentQuestion);
+    }
+
+    if (smartDraftReady) {
+      return "Dəyişmək istədiyin detalı yaz";
+    }
+
+    return "Əlavə detail, düzəliş və ya correction yaz";
+  }, [sourceSubmitted, currentQuestion, smartDraftReady]);
+
+  useEffect(() => {
+    setTimeline(loadStoredTimeline(storageKey));
+    setComposerValue("");
+    setLocalError("");
+    setAwaitingAssistant(false);
+  }, [storageKey]);
 
   useEffect(() => {
     saveStoredTimeline(storageKey, timeline);
   }, [storageKey, timeline]);
 
   useEffect(() => {
+    if (!sessionHydrated || !assistantTurnItem) return;
+
+    setTimeline((current) => appendTimelineItem(current, assistantTurnItem));
+  }, [sessionHydrated, assistantTurnItem]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const raw = window.sessionStorage.getItem(getTimelineStorageKey(storageKey));
+    if (
+      !raw &&
+      timeline.length > 0 &&
+      !sourceSubmitted &&
+      !smartDraftReady &&
+      assistantControl.readyForApproval !== true
+    ) {
+      setTimeline([]);
+    }
+  }, [
+    storageKey,
+    timeline.length,
+    sourceSubmitted,
+    smartDraftReady,
+    assistantControl.readyForApproval,
+  ]);
+
+  useEffect(() => {
     if (!scrollRef.current) return;
+
     scrollRef.current.scrollTo({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [
-    renderedTimeline,
-    awaitingAssistant,
-    bootTyping,
-    localError,
-    errorMessage,
-    liveQuestionItem,
-    liveDraftItem,
-    liveFallbackAssistantItem,
-  ]);
-
-  useEffect(() => {
-    if (!liveQuestionItem) return;
-
-    const timer = window.setTimeout(() => {
-      setTimeline((current) => appendTimelineItem(current, liveQuestionItem));
-      setAwaitingAssistant(false);
-    }, awaitingAssistant ? 220 : 0);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [liveQuestionItem, awaitingAssistant]);
-
-  useEffect(() => {
-    if (!liveDraftItem) return;
-
-    const timer = window.setTimeout(() => {
-      setTimeline((current) =>
-        appendTimelineItem(pruneQuestionHistoryForDraft(current), liveDraftItem)
-      );
-      setAwaitingAssistant(false);
-    }, awaitingAssistant ? 220 : 0);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [liveDraftItem, awaitingAssistant]);
-
-  useEffect(() => {
-    if (!liveFallbackAssistantItem) return;
-
-    const timer = window.setTimeout(() => {
-      setTimeline((current) =>
-        appendTimelineItem(current, liveFallbackAssistantItem)
-      );
-      setAwaitingAssistant(false);
-    }, awaitingAssistant ? 220 : 0);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [liveFallbackAssistantItem, awaitingAssistant]);
-
-  useEffect(() => {
-    if (!s(localError || errorMessage)) return;
-
-    const timer = window.setTimeout(() => {
-      setAwaitingAssistant(false);
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [localError, errorMessage]);
+  }, [timeline, awaitingAssistant, localError, errorMessage, smartDraftReady]);
 
   async function handleInitialSourceSubmit() {
     const text = s(composerValue);
@@ -1200,8 +1152,7 @@ export default function SetupAssistantSections({
 
     setTimeline((current) =>
       appendTimelineItem(current, {
-        id: `source-${Date.now()}`,
-        type: "message",
+        id: `user-source-${Date.now()}`,
         role: "user",
         body: text,
       })
@@ -1216,6 +1167,7 @@ export default function SetupAssistantSections({
       });
     } catch (error) {
       setLocalError(s(error?.message, "Source intake failed."));
+    } finally {
       setAwaitingAssistant(false);
     }
   }
@@ -1224,30 +1176,15 @@ export default function SetupAssistantSections({
     const text = s(textValue);
     if (!text || busy || !currentQuestion) return;
 
-    const requestText = isContinueStyleAnswer(text) ? "Let's continue." : text;
-    const currentSignature = buildQuestionSignature(
-      currentQuestion,
-      assistantControl.draftVersion
-    );
-
     setLocalError("");
     setAwaitingAssistant(true);
-    setSuppressedQuestionSignature(currentSignature);
 
     setTimeline((current) =>
-      appendTimelineItem(
-        commitAssistantQuestion(
-          current,
-          currentQuestion,
-          assistantControl.draftVersion
-        ),
-        {
-          id: `answer-${currentQuestion.key}-${Date.now()}`,
-          type: "message",
-          role: "user",
-          body: text,
-        }
-      )
+      appendTimelineItem(current, {
+        id: `user-answer-${currentQuestion.key}-${Date.now()}`,
+        role: "user",
+        body: text,
+      })
     );
 
     setLocalAnswers((current) => ({
@@ -1259,13 +1196,13 @@ export default function SetupAssistantSections({
 
     try {
       await onParseMessage?.({
-        step: currentQuestion.step,
-        text: requestText,
+        step: s(currentQuestion.step, currentQuestion.key),
+        text,
       });
     } catch (error) {
       setLocalError(s(error?.message, "The answer could not be processed."));
+    } finally {
       setAwaitingAssistant(false);
-      setSuppressedQuestionSignature("");
     }
   }
 
@@ -1273,19 +1210,14 @@ export default function SetupAssistantSections({
     const text = s(textValue);
     if (!text || busy) return;
 
-    const requestText = isContinueStyleAnswer(text) ? "Let's continue." : text;
-    const resolvedStep = resolveFreeformStepFromText(
-      requestText,
-      lastAssistantQuestionStep
-    );
+    const resolvedStep = resolveFreeformStepFromText(text, lastAssistantQuestionStep);
 
     setLocalError("");
     setAwaitingAssistant(true);
 
     setTimeline((current) =>
       appendTimelineItem(current, {
-        id: `freeform-${Date.now()}`,
-        type: "message",
+        id: `user-freeform-${Date.now()}`,
         role: "user",
         body: text,
       })
@@ -1296,101 +1228,76 @@ export default function SetupAssistantSections({
     try {
       await onParseMessage?.({
         step: resolvedStep,
-        text: requestText,
+        text,
       });
     } catch (error) {
       setLocalError(s(error?.message, "The update could not be processed."));
+    } finally {
       setAwaitingAssistant(false);
     }
   }
 
-  const composerReady = sessionHydrated && !bootSequencePending && !bootTyping;
+  function handleSubmit() {
+    if (!sourceSubmitted) {
+      handleInitialSourceSubmit();
+      return;
+    }
+
+    if (currentQuestion) {
+      handleQuestionSubmit();
+      return;
+    }
+
+    handleFreeformContinue();
+  }
+
+  const composerReady = sessionHydrated;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,#ffffff,#f8fafc)]">
       <div ref={scrollRef} className="flex-1 overflow-auto px-5 pt-5">
         <div className="space-y-4 pb-4">
           <AnimatePresence initial={false}>
-            {renderedTimeline.map((item) => {
-              if (item.type === "draft") {
-                return (
-                  <SmartDraftBubble
-                    key={item.id}
-                    model={item.model}
-                    finalizing={finalizing}
-                    onFinalize={onFinalize}
-                  />
-                );
-              }
-
-              return (
-                <MessageBubble
-                  key={item.id}
-                  role={item.role}
-                  eyebrow={item.eyebrow}
-                  title={item.title}
-                  body={item.body}
-                  animate
-                />
-              );
-            })}
+            {timeline.map((item) => (
+              <MessageBubble
+                key={item.id}
+                role={item.role}
+                eyebrow={item.eyebrow}
+                title={item.title}
+                body={item.body}
+              />
+            ))}
           </AnimatePresence>
 
-          {bootTyping || awaitingAssistant ? <TypingBubble /> : null}
+          {awaitingAssistant ? <TypingBubble /> : null}
+
+          {smartDraftReady ? (
+            <SmartDraftBubble
+              model={finalModel}
+              finalizing={finalizing}
+              onFinalize={onFinalize}
+            />
+          ) : null}
 
           {s(localError || errorMessage) ? (
             <MessageBubble
               role="assistant"
               eyebrow="Setup"
-              title="I need one more try"
+              title="Bir şey alınmadı"
               body={localError || errorMessage}
-              animate
             />
           ) : null}
         </div>
       </div>
 
-      {!sourceSubmitted && composerReady ? (
+      {composerReady ? (
         <Composer
           value={composerValue}
           busy={busy}
-          placeholder="Website, Google Maps, Instagram, Facebook və ya qısa qeyd yaz"
+          placeholder={composerPlaceholder}
           buttonLabel="Send"
           onChange={setComposerValue}
-          onSubmit={handleInitialSourceSubmit}
-        />
-      ) : null}
-
-      {sourceSubmitted && currentQuestion && composerReady ? (
-        <Composer
-          value={composerValue}
-          busy={busy}
-          placeholder={currentQuestion.placeholder || "Cavabını yaz"}
-          buttonLabel="Send"
-          onChange={setComposerValue}
-          onSubmit={handleQuestionSubmit}
-        />
-      ) : null}
-
-      {sourceSubmitted && !currentQuestion && !questionsFinished && composerReady ? (
-        <Composer
-          value={composerValue}
-          busy={busy}
-          placeholder="Əlavə detal və ya düzəliş yaz"
-          buttonLabel="Send"
-          onChange={setComposerValue}
-          onSubmit={handleFreeformContinue}
-        />
-      ) : null}
-
-      {questionsFinished && composerReady ? (
-        <Composer
-          value={composerValue}
-          busy={busy}
-          placeholder="Dəyişmək istədiyini yaz"
-          buttonLabel="Send"
-          onChange={setComposerValue}
-          onSubmit={handleFreeformContinue}
+          onSubmit={handleSubmit}
         />
       ) : null}
     </div>
