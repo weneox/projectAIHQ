@@ -3,73 +3,43 @@ import { ArrowUp, LoaderCircle } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
-const TIMELINE_STORAGE_PREFIX = "setup_assistant_timeline";
+const STORAGE_PREFIX = "setup_assistant_history_v3";
 
-const QUESTION_COPY = {
+const QUESTION_FALLBACKS = {
   profile: {
     prompt:
-      "Biznesin adını və nə iş gördüyünü birlikdə yaz. Qısa, dəqiq, public görünəcək formada olsun.",
+      "Biznesin public adını və nə iş gördüyünü bir yerdə yaz.",
     placeholder:
       "Məsələn: Neox Studio — AI avtomasiya, website və rəqəmsal təqdimat həlləri qururuq.",
-    reason:
-      "Bu hissə sabit olmadan AI biznesi hər yerdə eyni və düzgün təqdim edə bilməz.",
-  },
-  company: {
-    prompt: "AI-in müştəriyə göstərəcəyi dəqiq biznes adını yaz.",
-    placeholder: "Məsələn: Neox Studio",
-    reason:
-      "Rəsmi ad sabit olmadan qalan bütün təqdimat zəifləyir.",
-  },
-  description: {
-    prompt:
-      "Bu biznesi bir-iki cümlə ilə necə təqdim etməli olduğumuzu yaz.",
-    placeholder:
-      "Məsələn: Lokal bizneslər üçün AI avtomasiya və digital growth sistemləri qururuq.",
-    reason:
-      "AI-in nə etdiyinizi uydurmaması üçün bu positioning cümləsi lazımdır.",
   },
   website: {
-    prompt: "Əsas website domenini və ya linkini göndər.",
+    prompt: "Əsas website linkini göndər.",
     placeholder: "Məsələn: yourbusiness.com",
-    reason:
-      "Əsas public mənbə sabit olanda sonrakı draft daha etibarlı qurulur.",
   },
   services: {
-    prompt: "Əsas xidmətləri ən vacibdən yaz.",
+    prompt: "Əsas xidmətləri qısa yaz.",
     placeholder:
       "Məsələn: website hazırlanması, reklam idarəetməsi, branding",
-    reason:
-      "AI nədən danışmalı olduğunu dəqiq bilməlidir, yoxsa generic cavab verir.",
-  },
-  hours: {
-    prompt: "İş və cavab saatlarını yaz.",
-    placeholder:
-      "Məsələn: B.e.–Cümə 10:00–19:00, Şənbə 11:00–16:00, Bazar bağlı",
-    reason:
-      "AI saatlarla bağlı səhv promise verməməlidir.",
-  },
-  pricing: {
-    prompt: "AI qiymət barədə nə deyə biləcəyini yaz.",
-    placeholder:
-      "Məsələn: starting price deyilə bilər, dəqiq quote üçün müraciət istənməlidir",
-    reason:
-      "Qiymət mövqeyi dəqiq olmazsa AI təhlükəli improvizasiya edə bilər.",
   },
   contacts: {
-    prompt:
-      "Müştərini yönləndirəcəyimiz əsas əlaqə yolunu yaz.",
+    prompt: "Müştərini yönləndirəcəyimiz əsas əlaqə yolunu yaz.",
     placeholder:
       "Məsələn: WhatsApp, telefon zəngi, form və ya email",
-    reason:
-      "Sonda müştərini hara ötürəcəyimiz aydın olmalıdır.",
+  },
+  hours: {
+    prompt: "İş və cavab saatlarını bir sətirdə yaz.",
+    placeholder:
+      "Məsələn: B.e.–Cümə 10:00–19:00, Şənbə 11:00–16:00, Bazar bağlı",
+  },
+  pricing: {
+    prompt: "AI qiymət barədə nə deyə bilər?",
+    placeholder:
+      "Məsələn: starting price deyilə bilər, dəqiq quote üçün müraciət istənməlidir",
   },
   handoff: {
-    prompt:
-      "AI-in hansı hallarda dayanmadan insana ötürməli olduğunu yaz.",
+    prompt: "Hansı hallarda insana ötürməliyəm?",
     placeholder:
       "Məsələn: şikayət, fərdi quote, ödəniş problemi, təcili iş, anlaşılmaz sorğu",
-    reason:
-      "Handoff qaydası olmadan AI lazım olanda geri çəkilməyə bilər.",
   },
 };
 
@@ -135,6 +105,7 @@ function buildFallbackDraft(reviewPayload = null, assistant = {}, localAnswers =
     profile.companyName ||
       obj(setupDraft.businessProfile).companyName ||
       assistantDraft.businessName ||
+      localAnswers.profile ||
       localAnswers.company
   );
 
@@ -349,6 +320,139 @@ function hasBackendSmartDraft(model = {}) {
   return model.readyForApproval === true && hasStructuredDraft;
 }
 
+function loadStoredHistory(storageKey = "") {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.sessionStorage.getItem(
+      `${STORAGE_PREFIX}:${s(storageKey, "default")}`
+    );
+    const parsed = JSON.parse(raw || "[]");
+
+    return arr(parsed)
+      .map((item, index) => ({
+        id: s(item.id) || `msg-${index + 1}`,
+        role: "user",
+        body: s(item.body),
+      }))
+      .filter((item) => s(item.body));
+  } catch {
+    return [];
+  }
+}
+
+function saveStoredHistory(storageKey = "", history = []) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.sessionStorage.setItem(
+      `${STORAGE_PREFIX}:${s(storageKey, "default")}`,
+      JSON.stringify(
+        arr(history).map((item) => ({
+          id: s(item.id),
+          role: "user",
+          body: s(item.body),
+        }))
+      )
+    );
+  } catch {
+    return;
+  }
+}
+
+function looksLikeUrlOrDomain(value = "") {
+  const text = s(value);
+  if (!text) return false;
+  return (
+    /^https?:\/\//i.test(text) ||
+    /^(www\.)?[a-z0-9-]+\.[a-z]{2,}(\/.*)?$/i.test(text)
+  );
+}
+
+function looksLikePhone(value = "") {
+  return /(?:\+?\d[\d()\-\s]{6,}\d)/.test(s(value));
+}
+
+function looksLikeEmail(value = "") {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(s(value));
+}
+
+function looksLikeHoursText(value = "") {
+  const text = s(value).toLowerCase();
+  if (!text) return false;
+
+  return (
+    /(mon|tue|wed|thu|fri|sat|sun|b\.e|be|cümə|şənbə|bazar)/.test(text) ||
+    /\b\d{1,2}[:.]?\d{0,2}\s*(?:-|to|dan|den|dek|qeder)\s*\d{1,2}[:.]?\d{0,2}\b/.test(
+      text
+    ) ||
+    /\bclosed\b/.test(text) ||
+    /\b24\/7\b/.test(text) ||
+    /\bappointment\b/.test(text)
+  );
+}
+
+function looksLikePricingText(value = "") {
+  const text = s(value).toLowerCase();
+  if (!text) return false;
+
+  return (
+    /(azn|usd|eur|gbp|\$|€|₼|£)/.test(text) ||
+    /\bprice\b/.test(text) ||
+    /\bpricing\b/.test(text) ||
+    /\bquote\b/.test(text) ||
+    /\bstarting\b/.test(text) ||
+    /\bbaşlayır\b/.test(text) ||
+    /\bqiymət\b/.test(text)
+  );
+}
+
+function resolveFreeformStepFromText(value = "", fallbackStep = "profile") {
+  const text = s(value);
+  const lowerText = text.toLowerCase();
+
+  if (looksLikeUrlOrDomain(text)) return "website";
+
+  if (
+    looksLikePhone(text) ||
+    looksLikeEmail(text) ||
+    /whatsapp|telegram|contact|əlaqə/i.test(lowerText)
+  ) {
+    return "contacts";
+  }
+
+  if (looksLikeHoursText(text)) return "hours";
+  if (looksLikePricingText(text)) return "pricing";
+
+  if (/şikayət|complaint|refund|payment|operator|handoff|escalat/i.test(lowerText)) {
+    return "handoff";
+  }
+
+  if (/[,\n;]/.test(text) && text.split(/[,;\n]/).filter((item) => s(item)).length >= 2) {
+    return "services";
+  }
+
+  if (text.split(/\s+/).filter(Boolean).length <= 4) {
+    return "profile";
+  }
+
+  return s(fallbackStep, "profile");
+}
+
+function buildQuestionPrompt(question = {}) {
+  const key = s(question?.key).toLowerCase();
+  return s(question.prompt) || s(obj(QUESTION_FALLBACKS[key]).prompt);
+}
+
+function buildQuestionPlaceholder(question = {}) {
+  const key = s(question?.key).toLowerCase();
+  return (
+    s(question.placeholder) ||
+    s(obj(QUESTION_FALLBACKS[key]).placeholder) ||
+    "Cavabını yaz"
+  );
+}
+
 function bubbleClasses(role = "assistant") {
   if (role === "user") {
     return "rounded-[26px] rounded-br-[10px] bg-[linear-gradient(180deg,#2563eb,#1d4ed8)] text-white shadow-[0_18px_40px_rgba(37,99,235,0.26)]";
@@ -416,6 +520,22 @@ function MessageBubble({
   );
 }
 
+function MetaPill({ children }) {
+  return (
+    <div className="inline-flex items-center rounded-full border border-[rgba(15,23,42,0.07)] bg-[rgba(248,250,252,0.92)] px-2.5 py-1 text-[11px] font-medium text-text-muted">
+      {children}
+    </div>
+  );
+}
+
+function StatusPill({ children }) {
+  return (
+    <div className="inline-flex items-center rounded-full border border-[rgba(15,23,42,0.08)] bg-white px-2.5 py-1 text-[11px] font-medium text-text-muted">
+      {children}
+    </div>
+  );
+}
+
 function DraftRow({ label, value }) {
   return (
     <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.82)] px-3.5 py-3">
@@ -423,14 +543,6 @@ function DraftRow({ label, value }) {
         {label}
       </div>
       <div className="mt-1.5 text-[14px] leading-7 text-text">{value}</div>
-    </div>
-  );
-}
-
-function MetaPill({ children }) {
-  return (
-    <div className="inline-flex items-center rounded-full border border-[rgba(15,23,42,0.07)] bg-[rgba(248,250,252,0.92)] px-2.5 py-1 text-[11px] font-medium text-text-muted">
-      {children}
     </div>
   );
 }
@@ -470,22 +582,17 @@ function SmartDraftBubble({ model, finalizing, onFinalize }) {
     .filter(Boolean)
     .join(" · ");
 
-  const rejectedInputs = arr(model.rejectedInputs)
-    .map((item) => ({
-      input: s(item.input),
-      reason: s(item.reason),
-    }))
-    .filter((item) => item.input || item.reason)
-    .slice(0, 3);
-
   return (
-    <MessageBubble role="assistant" eyebrow="Draft" title="Mən bunu strukturlaşdırdım">
+    <MessageBubble
+      role="assistant"
+      eyebrow="Setup"
+      title="Draft hazırdır"
+      body="Əsas draftı yığdım. Aşağıda yoxla. Dəyişmək istədiyini yaza bilərsən, hər şey doğrudursa təsdiqlə."
+    >
       <div className="space-y-4">
-        <div className="text-[14px] leading-7 text-text-muted">
-          Aşağıda hazırkı setup draftı var. Dəyişmək istədiyini birbaşa yaza bilərsən. Hər şey doğrudursa, təsdiqləyib davam et.
-        </div>
-
         <div className="flex flex-wrap gap-2">
+          {sourceContextLine ? <MetaPill>{sourceContextLine}</MetaPill> : null}
+          {sourceMetaLine ? <MetaPill>{sourceMetaLine}</MetaPill> : null}
           {s(model.provider) ? (
             <MetaPill>
               {model.usedFallback ? "Fallback" : "Brain"} · {model.provider}
@@ -493,22 +600,6 @@ function SmartDraftBubble({ model, finalizing, onFinalize }) {
           ) : null}
           {s(model.model) ? <MetaPill>{model.model}</MetaPill> : null}
         </div>
-
-        {sourceContextLine ? (
-          <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.78)] px-3.5 py-3">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
-              Mənbə konteksti
-            </div>
-            <div className="mt-1.5 text-[14px] leading-7 text-text">
-              {sourceContextLine}
-            </div>
-            {sourceMetaLine ? (
-              <div className="mt-1 text-[13px] leading-6 text-text-muted">
-                {sourceMetaLine}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
 
         <div className="grid gap-3">
           {draftRows.map(([label, value]) => (
@@ -524,24 +615,6 @@ function SmartDraftBubble({ model, finalizing, onFinalize }) {
             <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
               {arr(model.compactNotes).map((item) => (
                 <div key={item}>• {item}</div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {rejectedInputs.length ? (
-          <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.78)] px-3.5 py-3">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
-              Qəbul edilməyənlər
-            </div>
-            <div className="mt-2 space-y-2 text-[14px] leading-7 text-text">
-              {rejectedInputs.map((item) => (
-                <div key={`${item.input}|${item.reason}`}>
-                  <div>{item.input}</div>
-                  {item.reason ? (
-                    <div className="text-[13px] text-text-muted">{item.reason}</div>
-                  ) : null}
-                </div>
               ))}
             </div>
           </div>
@@ -644,286 +717,80 @@ function Composer({
   );
 }
 
-function hasExistingSetupProgress({ assistant, reviewPayload, finalModel }) {
-  const reviewDraft = obj(reviewPayload?.review?.draft || reviewPayload?.draft);
-  const reviewProfile = obj(reviewDraft.businessProfile);
-  const reviewSourceMetadata = obj(reviewDraft.sourceMetadata);
-
-  const assistantRoot = obj(assistant);
-  const assistantDraft = obj(assistantRoot.draft);
-  const assistantProfile = obj(assistantDraft.businessProfile);
-  const assistantSourceMetadata = obj(assistantDraft.sourceMetadata);
-
-  return Boolean(
-    s(reviewProfile.websiteUrl) ||
-      s(assistantProfile.websiteUrl) ||
-      s(reviewSourceMetadata.primarySourceUrl) ||
-      s(assistantSourceMetadata.primarySourceUrl) ||
-      s(reviewSourceMetadata.primarySourceType) ||
-      s(assistantSourceMetadata.primarySourceType) ||
-      s(finalModel.draft.businessName) ||
-      s(finalModel.draft.whatThisBusinessIs) ||
-      arr(finalModel.draft.coreServices).length
-  );
-}
-
-function buildQuestionCopy(question = {}) {
-  const key = s(question?.key).toLowerCase();
-  return obj(QUESTION_COPY[key]);
-}
-
-function buildQuestionPrompt(question = {}) {
-  const custom = s(buildQuestionCopy(question).prompt);
-  return custom || s(question.prompt);
-}
-
-function buildQuestionPlaceholder(question = {}) {
-  const custom = s(buildQuestionCopy(question).placeholder);
-  return custom || s(question.placeholder) || "Cavabını yaz";
-}
-
-function buildQuestionReason(question = {}) {
-  return s(buildQuestionCopy(question).reason);
-}
-
-function buildSourceLead(finalModel = {}, hasExistingProgress = false) {
-  const sourceSignals = obj(finalModel.sourceSignals);
-  const label = s(sourceSignals.primarySourceLabel);
-  const url = s(sourceSignals.primarySourceUrl);
-
-  if (label && url) return `${label} mənbəyinə baxdım`;
-  if (label) return `${label} üzərindən draftı yoxladım`;
-  if (url) return "Mənbəyə baxdım";
-  if (hasExistingProgress) return "Mövcud draftı yoxladım";
-  return "Bunu səliqəli şəkildə quraq";
-}
-
-function buildKnownStateLine(finalModel = {}) {
+function buildStatusPills(finalModel = {}) {
   const draft = obj(finalModel.draft);
-  const bits = [];
+  const sourceSignals = obj(finalModel.sourceSignals);
+  const pills = [];
 
-  if (s(draft.businessName)) bits.push(`ad olaraq "${draft.businessName}" görünür`);
-  if (s(draft.whatThisBusinessIs)) bits.push("biznes təsviri qismən oturub");
-  if (arr(draft.coreServices).length) {
-    bits.push(`${arr(draft.coreServices).length} xidmət siqnalı var`);
+  if (s(sourceSignals.primarySourceLabel)) {
+    pills.push(sourceSignals.primarySourceLabel);
   }
-  if (arr(draft.contactRoutes).length) bits.push("əlaqə yolu görünür");
-  if (arr(draft.hours).length) bits.push("iş saatı siqnalı var");
 
-  return bits.slice(0, 3).join(", ");
+  if (s(draft.businessName)) {
+    pills.push(`ad: ${draft.businessName}`);
+  }
+
+  if (arr(draft.coreServices).length) {
+    pills.push(`${arr(draft.coreServices).length} xidmət`);
+  }
+
+  if (arr(draft.contactRoutes).length) {
+    pills.push("əlaqə var");
+  }
+
+  if (arr(draft.hours).length) {
+    pills.push("saat var");
+  }
+
+  if (s(draft.pricingPosture)) {
+    pills.push("pricing var");
+  }
+
+  return pills.slice(0, 5);
 }
 
-function buildAssistantTurnBody({
+function buildLiveAssistantState({
   sourceSubmitted = false,
   currentQuestion = null,
   finalModel = {},
   assistantControl = {},
   smartDraftReady = false,
-  hasExistingProgress = false,
 }) {
   if (!sourceSubmitted) {
-    return "Başlamaq üçün website, Google Maps, Instagram, Facebook və ya qısa biznes qeydi göndər. Mən əvvəl nəyi dəqiq bildiyimi çıxaracağam, sonra yalnız həqiqətən lazım olan növbəti şeyi soruşacağam.";
+    return {
+      title: "Başlayaq",
+      body:
+        "Website, Google Maps, Instagram, Facebook və ya qısa biznes qeydi göndər. Mən əvvəl nəyin oturduğunu çıxaracağam, sonra yalnız həqiqətən lazım olan növbəti şeyi soruşacağam.",
+    };
   }
 
-  const lead = buildSourceLead(finalModel, hasExistingProgress);
-  const knownState = buildKnownStateLine(finalModel);
-
   if (smartDraftReady) {
-    return `${lead}.${knownState ? ` Hazırda ${knownState}.` : ""} Mən bunu artıq strukturlaşdırdım və əsas draftı aşağıda topladım. Dəyişmək istədiyini yaz və ya hər şey doğrudursa təsdiqlə.`;
+    return {
+      title: "Draft hazırdır",
+      body:
+        "Əsas draftı aşağıda topladım. Düzəlişini yaza və ya birbaşa təsdiqləyə bilərsən.",
+    };
   }
 
   if (currentQuestion) {
-    const prompt = buildQuestionPrompt(currentQuestion);
-    const reason = buildQuestionReason(currentQuestion);
-
-    return `${lead}.${knownState ? ` Hazırda ${knownState}.` : ""} İndi növbəti ən vacib boşluq budur: ${prompt}${reason ? ` ${reason}` : ""}`;
+    return {
+      title: buildQuestionPrompt(currentQuestion),
+      body:
+        "Bir cavabda lazım olan bütün detalları yaza bilərsən — mən onu strukturlaşdıracağam.",
+    };
   }
 
-  const assistantMessage = compactText(
+  const fallbackMessage = compactText(
     finalModel.message || assistantControl.message,
-    520
+    280
   );
 
-  if (assistantMessage) {
-    return `${lead}.${knownState ? ` Hazırda ${knownState}.` : ""} ${assistantMessage}`;
-  }
-
-  return `${lead}.${knownState ? ` Hazırda ${knownState}.` : ""} Əlavə detal və ya düzəliş yaza bilərsən.`;
-}
-
-function buildAssistantSignature({
-  sourceSubmitted = false,
-  currentQuestion = null,
-  body = "",
-  smartDraftReady = false,
-}) {
-  return JSON.stringify({
-    type: "assistant_turn",
-    sourceSubmitted,
-    questionKey: s(currentQuestion?.key),
-    ready: smartDraftReady === true,
-    body: s(body),
-  });
-}
-
-function appendTimelineItem(current = [], item = null) {
-  if (!item) return current;
-
-  if (
-    s(item.signature) &&
-    current.some((entry) => s(entry.signature) === s(item.signature))
-  ) {
-    return current;
-  }
-
-  return [...current, item];
-}
-
-function getTimelineStorageKey(storageKey = "") {
-  return `${TIMELINE_STORAGE_PREFIX}:${s(storageKey, "default")}`;
-}
-
-function isLegacyTimeline(items = []) {
-  return arr(items).some((item) => {
-    const id = s(item?.id);
-    const signature = s(item?.signature);
-    return (
-      signature.startsWith("greeting|") ||
-      id.includes("assistant-question-") ||
-      id.includes("assistant-greeting-")
-    );
-  });
-}
-
-function sanitizeStoredTimeline(items = []) {
-  const safe = arr(items)
-    .map((item) =>
-      obj(item, {
-        id: "",
-        role: "",
-        eyebrow: "",
-        title: "",
-        body: "",
-        signature: "",
-      })
-    )
-    .filter((item) => {
-      const role = s(item.role);
-      if (role !== "assistant" && role !== "user") return false;
-      if (!s(item.body) && !s(item.title)) return false;
-      return true;
-    })
-    .map((item, index) => ({
-      id: s(item.id) || `stored-${index + 1}`,
-      role: s(item.role),
-      eyebrow: s(item.eyebrow),
-      title: s(item.title),
-      body: s(item.body),
-      signature: s(item.signature),
-    }));
-
-  if (isLegacyTimeline(safe)) return [];
-  return safe;
-}
-
-function loadStoredTimeline(storageKey = "") {
-  try {
-    const raw = window.sessionStorage.getItem(getTimelineStorageKey(storageKey));
-    const parsed = JSON.parse(raw || "[]");
-    return sanitizeStoredTimeline(parsed);
-  } catch {
-    return [];
-  }
-}
-
-function saveStoredTimeline(storageKey = "", timeline = []) {
-  try {
-    window.sessionStorage.setItem(
-      getTimelineStorageKey(storageKey),
-      JSON.stringify(timeline)
-    );
-  } catch {
-    return;
-  }
-}
-
-function looksLikeUrlOrDomain(value = "") {
-  const text = s(value);
-  if (!text) return false;
-  return (
-    /^https?:\/\//i.test(text) ||
-    /^(www\.)?[a-z0-9-]+\.[a-z]{2,}(\/.*)?$/i.test(text)
-  );
-}
-
-function looksLikePhone(value = "") {
-  return /(?:\+?\d[\d()\-\s]{6,}\d)/.test(s(value));
-}
-
-function looksLikeEmail(value = "") {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(s(value));
-}
-
-function looksLikeHoursText(value = "") {
-  const text = s(value).toLowerCase();
-  if (!text) return false;
-
-  return (
-    /(mon|tue|wed|thu|fri|sat|sun|b\.e|be|cümə|şənbə|bazar)/.test(text) ||
-    /\b\d{1,2}[:.]?\d{0,2}\s*(?:-|to|dan|den|dek|qeder)\s*\d{1,2}[:.]?\d{0,2}\b/.test(
-      text
-    ) ||
-    /\bclosed\b/.test(text) ||
-    /\b24\/7\b/.test(text) ||
-    /\bappointment\b/.test(text)
-  );
-}
-
-function looksLikePricingText(value = "") {
-  const text = s(value).toLowerCase();
-  if (!text) return false;
-
-  return (
-    /(azn|usd|eur|gbp|\$|€|₼|£)/.test(text) ||
-    /\bprice\b/.test(text) ||
-    /\bpricing\b/.test(text) ||
-    /\bquote\b/.test(text) ||
-    /\bstarting\b/.test(text) ||
-    /\bbaşlayır\b/.test(text) ||
-    /\bqiymət\b/.test(text)
-  );
-}
-
-function resolveFreeformStepFromText(value = "", fallbackStep = "profile") {
-  const text = s(value);
-  const lowerText = text.toLowerCase();
-
-  if (looksLikeUrlOrDomain(text)) return "website";
-
-  if (
-    looksLikePhone(text) ||
-    looksLikeEmail(text) ||
-    /whatsapp|telegram|contact|əlaqə/i.test(lowerText)
-  ) {
-    return "contacts";
-  }
-
-  if (looksLikeHoursText(text)) return "hours";
-  if (looksLikePricingText(text)) return "pricing";
-
-  if (/şikayət|complaint|refund|payment|operator|handoff|escalat/i.test(lowerText)) {
-    return "handoff";
-  }
-
-  if (/[,\n;]/.test(text) && text.split(/[,;\n]/).filter((item) => s(item)).length >= 2) {
-    return "services";
-  }
-
-  if (text.split(/\s+/).filter(Boolean).length <= 4) {
-    return "company";
-  }
-
-  return s(fallbackStep, "profile");
+  return {
+    title: "Davam edək",
+    body:
+      fallbackMessage ||
+      "Əlavə detail və ya düzəliş yaza bilərsən.",
+  };
 }
 
 export default function SetupAssistantSections({
@@ -943,7 +810,7 @@ export default function SetupAssistantSections({
 
   const [composerValue, setComposerValue] = useState("");
   const [localError, setLocalError] = useState("");
-  const [timeline, setTimeline] = useState(() => loadStoredTimeline(storageKey));
+  const [history, setHistory] = useState(() => loadStoredHistory(storageKey));
   const [localAnswers, setLocalAnswers] = useState({});
   const [awaitingAssistant, setAwaitingAssistant] = useState(false);
 
@@ -974,58 +841,59 @@ export default function SetupAssistantSections({
     if (!s(nextQuestion.key)) return null;
 
     const key = s(nextQuestion.key).toLowerCase();
-    const copy = buildQuestionCopy(nextQuestion);
 
     return {
       key,
       step: s(nextQuestion.step || key),
-      title: s(copy.title || nextQuestion.title),
-      prompt: s(copy.prompt || nextQuestion.prompt),
-      placeholder: s(copy.placeholder || nextQuestion.placeholder),
+      title: s(nextQuestion.title),
+      prompt: buildQuestionPrompt(nextQuestion),
+      placeholder: buildQuestionPlaceholder(nextQuestion),
       group: s(nextQuestion.group || "business_truth"),
     };
   }, [assistantControl.nextQuestion]);
 
-  const hasExistingProgress = useMemo(
-    () =>
-      hasExistingSetupProgress({
-        assistant,
-        reviewPayload,
-        finalModel,
-      }),
-    [assistant, reviewPayload, finalModel]
+  const hasExistingProgress = useMemo(() => {
+    const draft = obj(finalModel.draft);
+    const sourceSignals = obj(finalModel.sourceSignals);
+
+    return Boolean(
+      s(draft.businessName) ||
+        s(draft.whatThisBusinessIs) ||
+        s(draft.websiteUrl) ||
+        arr(draft.coreServices).length ||
+        arr(draft.contactRoutes).length ||
+        arr(draft.hours).length ||
+        s(draft.pricingPosture) ||
+        s(draft.humanHandoff) ||
+        s(sourceSignals.primarySourceUrl) ||
+        s(sourceSignals.primarySourceType)
+    );
+  }, [finalModel]);
+
+  const hasRealSessionState = Boolean(
+    hasExistingProgress ||
+      rawCurrentQuestion ||
+      assistantControl.readyForApproval === true ||
+      smartDraftReady
   );
 
-  const sourceSubmitted = useMemo(() => {
-    return Boolean(
-      hasExistingProgress ||
-        rawCurrentQuestion ||
-        assistantControl.readyForApproval === true ||
-        smartDraftReady ||
-        timeline.some((item) => item.role === "user")
-    );
-  }, [
-    hasExistingProgress,
-    rawCurrentQuestion,
-    assistantControl.readyForApproval,
-    smartDraftReady,
-    timeline,
-  ]);
+  const sourceSubmitted = Boolean(
+    hasRealSessionState || history.length > 0
+  );
 
   const currentQuestion =
     sourceSubmitted && assistantControl.readyForApproval !== true
       ? rawCurrentQuestion
       : null;
 
-  const assistantTurnBody = useMemo(
+  const liveAssistant = useMemo(
     () =>
-      buildAssistantTurnBody({
+      buildLiveAssistantState({
         sourceSubmitted,
         currentQuestion,
         finalModel,
         assistantControl,
         smartDraftReady,
-        hasExistingProgress,
       }),
     [
       sourceSubmitted,
@@ -1033,50 +901,27 @@ export default function SetupAssistantSections({
       finalModel,
       assistantControl,
       smartDraftReady,
-      hasExistingProgress,
     ]
   );
 
-  const assistantTurnItem = useMemo(() => {
-    if (!sessionHydrated) return null;
-    const body = s(assistantTurnBody);
-    if (!body) return null;
-
-    return {
-      id: `assistant-${Date.now()}`,
-      role: "assistant",
-      eyebrow: "Setup",
-      title: "",
-      body,
-      signature: buildAssistantSignature({
-        sourceSubmitted,
-        currentQuestion,
-        body,
-        smartDraftReady,
-      }),
-    };
-  }, [
-    sessionHydrated,
-    assistantTurnBody,
-    sourceSubmitted,
-    currentQuestion,
-    smartDraftReady,
-  ]);
+  const statusPills = useMemo(
+    () => buildStatusPills(finalModel),
+    [finalModel]
+  );
 
   const lastAssistantQuestionStep = useMemo(() => {
-    const reversed = [...timeline].reverse();
-    const assistantMessage = reversed.find((item) => item.role === "assistant");
-    const text = s(assistantMessage?.body).toLowerCase();
+    if (currentQuestion?.step) return s(currentQuestion.step).toLowerCase();
+
+    const text = s(liveAssistant.title || liveAssistant.body).toLowerCase();
 
     if (text.includes("qiymət")) return "pricing";
-    if (text.includes("iş və cavab saat")) return "hours";
+    if (text.includes("saat")) return "hours";
     if (text.includes("əlaqə")) return "contacts";
-    if (text.includes("insana ötür")) return "handoff";
+    if (text.includes("ötür")) return "handoff";
     if (text.includes("xidmət")) return "services";
     if (text.includes("website")) return "website";
-    if (text.includes("biznes ad")) return "company";
     return "profile";
-  }, [timeline]);
+  }, [currentQuestion, liveAssistant]);
 
   const composerPlaceholder = useMemo(() => {
     if (!sourceSubmitted) {
@@ -1091,46 +936,30 @@ export default function SetupAssistantSections({
       return "Dəyişmək istədiyin detalı yaz";
     }
 
-    return "Əlavə detail, düzəliş və ya correction yaz";
+    return "Əlavə detail və ya correction yaz";
   }, [sourceSubmitted, currentQuestion, smartDraftReady]);
 
   useEffect(() => {
-    setTimeline(loadStoredTimeline(storageKey));
+    setHistory(loadStoredHistory(storageKey));
     setComposerValue("");
     setLocalError("");
     setAwaitingAssistant(false);
   }, [storageKey]);
 
   useEffect(() => {
-    saveStoredTimeline(storageKey, timeline);
-  }, [storageKey, timeline]);
+    saveStoredHistory(storageKey, history);
+  }, [storageKey, history]);
 
   useEffect(() => {
-    if (!sessionHydrated || !assistantTurnItem) return;
-
-    setTimeline((current) => appendTimelineItem(current, assistantTurnItem));
-  }, [sessionHydrated, assistantTurnItem]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const raw = window.sessionStorage.getItem(getTimelineStorageKey(storageKey));
     if (
-      !raw &&
-      timeline.length > 0 &&
-      !sourceSubmitted &&
-      !smartDraftReady &&
-      assistantControl.readyForApproval !== true
+      sessionHydrated &&
+      !hasRealSessionState &&
+      history.length > 0 &&
+      !awaitingAssistant
     ) {
-      setTimeline([]);
+      setHistory([]);
     }
-  }, [
-    storageKey,
-    timeline.length,
-    sourceSubmitted,
-    smartDraftReady,
-    assistantControl.readyForApproval,
-  ]);
+  }, [sessionHydrated, hasRealSessionState, history.length, awaitingAssistant]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -1139,7 +968,7 @@ export default function SetupAssistantSections({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [timeline, awaitingAssistant, localError, errorMessage, smartDraftReady]);
+  }, [history, awaitingAssistant, localError, errorMessage, liveAssistant, smartDraftReady]);
 
   async function handleInitialSourceSubmit() {
     const text = s(composerValue);
@@ -1150,13 +979,14 @@ export default function SetupAssistantSections({
     setLocalError("");
     setAwaitingAssistant(true);
 
-    setTimeline((current) =>
-      appendTimelineItem(current, {
+    setHistory((current) => [
+      ...current,
+      {
         id: `user-source-${Date.now()}`,
         role: "user",
         body: text,
-      })
-    );
+      },
+    ]);
 
     setComposerValue("");
 
@@ -1179,13 +1009,14 @@ export default function SetupAssistantSections({
     setLocalError("");
     setAwaitingAssistant(true);
 
-    setTimeline((current) =>
-      appendTimelineItem(current, {
-        id: `user-answer-${currentQuestion.key}-${Date.now()}`,
+    setHistory((current) => [
+      ...current,
+      {
+        id: `user-answer-${Date.now()}`,
         role: "user",
         body: text,
-      })
-    );
+      },
+    ]);
 
     setLocalAnswers((current) => ({
       ...current,
@@ -1215,13 +1046,14 @@ export default function SetupAssistantSections({
     setLocalError("");
     setAwaitingAssistant(true);
 
-    setTimeline((current) =>
-      appendTimelineItem(current, {
+    setHistory((current) => [
+      ...current,
+      {
         id: `user-freeform-${Date.now()}`,
         role: "user",
         body: text,
-      })
-    );
+      },
+    ]);
 
     setComposerValue("");
 
@@ -1258,18 +1090,33 @@ export default function SetupAssistantSections({
       <div ref={scrollRef} className="flex-1 overflow-auto px-5 pt-5">
         <div className="space-y-4 pb-4">
           <AnimatePresence initial={false}>
-            {timeline.map((item) => (
+            {history.map((item) => (
               <MessageBubble
                 key={item.id}
                 role={item.role}
-                eyebrow={item.eyebrow}
-                title={item.title}
                 body={item.body}
               />
             ))}
           </AnimatePresence>
 
           {awaitingAssistant ? <TypingBubble /> : null}
+
+          {!smartDraftReady ? (
+            <MessageBubble
+              role="assistant"
+              eyebrow="Setup"
+              title={liveAssistant.title}
+              body={liveAssistant.body}
+            >
+              {statusPills.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {statusPills.map((pill) => (
+                    <StatusPill key={pill}>{pill}</StatusPill>
+                  ))}
+                </div>
+              ) : null}
+            </MessageBubble>
+          ) : null}
 
           {smartDraftReady ? (
             <SmartDraftBubble
