@@ -689,15 +689,14 @@ function mergeProgress(left = {}, right = {}) {
 function mergeSetupAssistantCore(left = {}, right = {}) {
   const a = sanitizeSetupAssistantCore(left);
   const b = sanitizeSetupAssistantCore(right);
+  const rightSource = obj(right);
+  const rightHasHours = hasOwn(rightSource, "hours");
 
   return {
     businessProfile: mergeBusinessProfile(a.businessProfile, b.businessProfile),
     services: b.services.length ? sanitizeServices(b.services) : a.services,
     contacts: b.contacts.length ? sanitizeContacts(b.contacts) : a.contacts,
-    hours:
-      b.hours.length && b.hours.some((row) => row.enabled || row.closed || row.notes)
-        ? sanitizeStructuredHours(b.hours)
-        : a.hours,
+    hours: rightHasHours ? sanitizeStructuredHours(b.hours) : a.hours,
     pricingPosture: mergePricingPosture(a.pricingPosture, b.pricingPosture),
     handoffRules: mergeHandoffRules(a.handoffRules, b.handoffRules),
     sourceMetadata: mergeSourceMetadata(a.sourceMetadata, b.sourceMetadata),
