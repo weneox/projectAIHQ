@@ -58,7 +58,7 @@ const SECTION_META = {
     ready:
       "The public business identity is already captured in a usable form.",
     prompt:
-      "Send the exact public business name and one clean sentence describing what the business does.",
+      "Confirm the business name and a reliable short description first. Add the website if the business has one.",
     placeholder:
       "Məsələn: Neox Studio — AI avtomasiya, website və rəqəmsal təqdimat həlləri qururuq.",
   },
@@ -1327,7 +1327,7 @@ function buildSetupAssistantAuthorityState({
   const assistantMessage = buildAssistantMessage(summary, question, REVIEW_MESSAGE);
 
   return {
-    mode: "structured_v3",
+    mode: "structured_v2",
     nextQuestion: question,
     confirmationBlockers: arr(summary.confirmationBlockers),
     sections: buildAssistantSections(
@@ -1430,6 +1430,55 @@ function buildProfileQuestionPrompt(draft = {}) {
   return `${contextLine ? `${contextLine} ` : ""}Send the exact public business name and one clean sentence describing what the business does.${!s(businessProfile.websiteUrl) && !s(sourceMetadata.primarySourceUrl) ? " Include the main website if the business has one." : ""}`.trim();
 }
 
+function resolveProfileQuestion(draft = {}, progress = {}) {
+  const currentQuestionKey = s(progress.currentQuestionKey).toLowerCase();
+  const safeDraft = obj(draft);
+  const safeProfile = obj(safeDraft.businessProfile);
+  const safeSourceMetadata = obj(safeDraft.sourceMetadata);
+  const sourceIdentityPresent = hasNonManualSourceIdentity(safeSourceMetadata);
+  const canUseCombinedProfileQuestion =
+    sourceIdentityPresent &&
+    (Boolean(s(safeSourceMetadata.primarySourceUrl)) ||
+      arr(safeSourceMetadata.evidenceSummary).length > 0);
+
+  if (
+    canUseCombinedProfileQuestion &&
+    (!s(safeProfile.companyName) || !s(safeProfile.description))
+  ) {
+    return buildAssistantQuestion("profile");
+  }
+
+  if (currentQuestionKey === "company" && !s(safeProfile.companyName)) {
+    return buildAssistantQuestion("company");
+  }
+
+  if (currentQuestionKey === "description" && !s(safeProfile.description)) {
+    return buildAssistantQuestion("description");
+  }
+
+  if (
+    currentQuestionKey === "website" &&
+    !s(safeProfile.websiteUrl) &&
+    !sourceIdentityPresent
+  ) {
+    return buildAssistantQuestion("website");
+  }
+
+  if (!s(safeProfile.companyName)) {
+    return buildAssistantQuestion("company");
+  }
+
+  if (!s(safeProfile.description)) {
+    return buildAssistantQuestion("description");
+  }
+
+  if (!s(safeProfile.websiteUrl) && !sourceIdentityPresent) {
+    return buildAssistantQuestion("website");
+  }
+
+  return buildAssistantQuestion("profile");
+}
+
 function getNextQuestion(summary = {}, draft = {}, progress = {}) {
   if (summary.readyForReview === true) {
     return null;
@@ -1442,11 +1491,7 @@ function getNextQuestion(summary = {}, draft = {}, progress = {}) {
   const sectionStatus = obj(summary.sectionStatus);
 
   if (sectionStatus.profile?.status !== "ready") {
-    return buildAssistantQuestion("profile", {
-      title: "Confirm the business identity",
-      prompt: buildProfileQuestionPrompt(draft),
-      priority: 100,
-    });
+    return resolveProfileQuestion(draft, progress);
   }
 
   const blocker = arr(summary.confirmationBlockers)[0];
