@@ -545,12 +545,7 @@ function Composer({
   );
 }
 
-function hasExistingSetupProgress({
-  assistant,
-  reviewPayload,
-  finalModel,
-  rawCurrentQuestion,
-}) {
+function hasExistingSetupProgress({ assistant, reviewPayload, finalModel }) {
   const reviewDraft = obj(reviewPayload?.review?.draft || reviewPayload?.draft);
   const reviewProfile = obj(reviewDraft.businessProfile);
   const reviewSourceMetadata = obj(reviewDraft.sourceMetadata);
@@ -560,8 +555,7 @@ function hasExistingSetupProgress({
   const assistantSourceMetadata = obj(assistantDraft.sourceMetadata);
 
   return Boolean(
-    rawCurrentQuestion ||
-      s(reviewProfile.websiteUrl) ||
+    s(reviewProfile.websiteUrl) ||
       s(assistantProfile.websiteUrl) ||
       s(reviewSourceMetadata.primarySourceUrl) ||
       s(assistantSourceMetadata.primarySourceUrl) ||
@@ -601,17 +595,15 @@ function buildIntroSignature(storageKey = "") {
   return `intro|${s(storageKey, "default")}`;
 }
 
-function buildIntroTimelineItem({ storageKey = "", hasProgress = false }) {
+function buildIntroTimelineItem({ storageKey = "" }) {
   return {
     id: `assistant-intro-${s(storageKey, "default")}`,
     type: "message",
     role: "assistant",
     signature: buildIntroSignature(storageKey),
     eyebrow: "Setup",
-    title: hasProgress ? "Let’s continue the setup" : "Let’s set up the business",
-    body: hasProgress
-      ? "Salam. Mövcud setup draftını gördüm. Gəlin qalan boşluqları birlikdə bağlayaq — mən hər dəfə yalnız ən vacib şeyi soruşacağam."
-      : SETUP_SOURCE_PROMPT,
+    title: "Let’s set up the business",
+    body: SETUP_SOURCE_PROMPT,
   };
 }
 
@@ -820,6 +812,11 @@ export default function SetupAssistantSections({
     [reviewPayload, assistant, localAnswers]
   );
 
+  const smartDraftReady = useMemo(
+    () => hasBackendSmartDraft(finalModel),
+    [finalModel]
+  );
+
   const assistantControl = useMemo(
     () => normalizeAssistantControl(reviewPayload, assistant),
     [reviewPayload, assistant]
@@ -850,31 +847,42 @@ export default function SetupAssistantSections({
         assistant,
         reviewPayload,
         finalModel,
-        rawCurrentQuestion,
       }),
-    [assistant, reviewPayload, finalModel, rawCurrentQuestion]
+    [assistant, reviewPayload, finalModel]
   );
 
-  const introItem = useMemo(() => {
-    if (!sessionHydrated) return null;
+  const shouldShowIntro = useMemo(() => {
+    if (!sessionHydrated) return false;
+    if (timeline.length > 0) return false;
+    if (rawCurrentQuestion) return false;
+    if (assistantControl.readyForApproval === true) return false;
+    if (smartDraftReady) return false;
+    if (hasExistingProgress) return false;
+    return true;
+  }, [
+    sessionHydrated,
+    timeline.length,
+    rawCurrentQuestion,
+    assistantControl.readyForApproval,
+    smartDraftReady,
+    hasExistingProgress,
+  ]);
 
-    return buildIntroTimelineItem({
-      storageKey,
-      hasProgress: hasExistingProgress,
-    });
-  }, [sessionHydrated, storageKey, hasExistingProgress]);
+  const introItem = useMemo(() => {
+    if (!shouldShowIntro) return null;
+    return buildIntroTimelineItem({ storageKey });
+  }, [shouldShowIntro, storageKey]);
 
   const renderedTimeline = useMemo(() => {
     return appendTimelineItem(timeline, introItem);
   }, [timeline, introItem]);
 
   const sourceSubmitted =
-    renderedTimeline.some((item) => item.role === "user") || hasExistingProgress;
-
-  const smartDraftReady = useMemo(
-    () => hasBackendSmartDraft(finalModel),
-    [finalModel]
-  );
+    renderedTimeline.some((item) => item.role === "user") ||
+    hasExistingProgress ||
+    Boolean(rawCurrentQuestion) ||
+    assistantControl.readyForApproval === true ||
+    smartDraftReady;
 
   const currentQuestion =
     sourceSubmitted && assistantControl.readyForApproval !== true
