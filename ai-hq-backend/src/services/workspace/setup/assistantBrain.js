@@ -172,8 +172,9 @@ function sanitizeCompanyCandidate(value = "") {
   const text = normalizedCandidate(value);
   if (!text) return "";
   if (isAcknowledgementOnly(text)) return "";
-  if (looksLikeUrlOrDomain(text) || looksLikeEmail(text) || looksLikePhone(text))
+  if (looksLikeUrlOrDomain(text) || looksLikeEmail(text) || looksLikePhone(text)) {
     return "";
+  }
   if (looksLikeGenericSourceWord(text)) return "";
 
   const words = tokenize(text);
@@ -185,8 +186,9 @@ function sanitizeDescriptionCandidate(value = "", { allowShort = false } = {}) {
   const text = normalizedCandidate(value);
   if (!text) return "";
   if (isAcknowledgementOnly(text)) return "";
-  if (looksLikeUrlOrDomain(text) || looksLikeEmail(text) || looksLikePhone(text))
+  if (looksLikeUrlOrDomain(text) || looksLikeEmail(text) || looksLikePhone(text)) {
     return "";
+  }
   if (looksLikeGenericSourceWord(text)) return "";
 
   const words = tokenize(text);
@@ -199,8 +201,9 @@ function sanitizeServiceCandidate(value = "") {
   const text = normalizedCandidate(value);
   if (!text) return "";
   if (isAcknowledgementOnly(text)) return "";
-  if (looksLikeUrlOrDomain(text) || looksLikeEmail(text) || looksLikePhone(text))
+  if (looksLikeUrlOrDomain(text) || looksLikeEmail(text) || looksLikePhone(text)) {
     return "";
+  }
   if (looksLikeHoursText(text) || looksLikePricingText(text)) return "";
 
   const lowerText = text.toLowerCase();
@@ -216,8 +219,9 @@ function sanitizeContactCandidate(value = "") {
   const text = normalizedCandidate(value);
   if (!text) return "";
   if (looksLikeEmail(text) || looksLikePhone(text)) return text;
-  if (/whatsapp|telegram|wa\.me|instagram\.com|facebook\.com|m\.me/i.test(text))
+  if (/whatsapp|telegram|wa\.me|instagram\.com|facebook\.com|m\.me/i.test(text)) {
     return text;
+  }
   return "";
 }
 
@@ -512,22 +516,22 @@ function buildSourceSignals({ session = {}, draft = {}, sources = [], review = n
       ? `${sourceTypeLabel(primarySource.sourceType)} source: ${primarySource.sourceUrl}`
       : "",
     topCandidate(companyNameCandidates)
-      ? `Source business name signal: ${topCandidate(companyNameCandidates)}`
+      ? `Business-name signal: ${topCandidate(companyNameCandidates)}`
       : "",
     topCandidate(descriptionCandidates)
-      ? `Source description signal: ${topCandidate(descriptionCandidates)}`
+      ? `Description signal: ${topCandidate(descriptionCandidates)}`
       : "",
     serviceCandidates.length
-      ? `Source service signals: ${listPreview(serviceCandidates, 4)}`
+      ? `Service signals: ${listPreview(serviceCandidates, 4)}`
       : "",
     contactCandidates.length
-      ? `Source contact signals: ${listPreview(contactCandidates, 3)}`
+      ? `Contact signals: ${listPreview(contactCandidates, 3)}`
       : "",
     hoursCandidates.length
-      ? `Source hours signals: ${listPreview(hoursCandidates, 2)}`
+      ? `Hours signals: ${listPreview(hoursCandidates, 2)}`
       : "",
     pricingCandidates.length
-      ? `Source pricing signals: ${listPreview(pricingCandidates, 2)}`
+      ? `Pricing signals: ${listPreview(pricingCandidates, 2)}`
       : "",
     Number(sourceSignalSummary.website?.pageCount || websiteKnowledge.pageCount || 0) > 0
       ? `Website pages analyzed: ${Number(
@@ -785,7 +789,7 @@ function buildConfidenceBuckets({ draftState, sourceSignals, contradictions }) {
   }
 
   if (!draftState.websiteUrl && !sourceSignals.primarySourceUrl) {
-    unclear.push("A reliable source URL is still missing.");
+    unclear.push("A reliable public source is still missing.");
   }
 
   return {
@@ -800,13 +804,13 @@ function buildRecommendation({ draftState, sourceSignals, contradictions }) {
 
   if (!draftState.businessName || !draftState.description) {
     notes.push(
-      "Do not accept filler acknowledgements as business identity. Lock the exact business name and one clean business description."
+      "Lock one exact public business identity before approval: the business name and one clean sentence describing what the business does."
     );
   }
 
   if (!draftState.services.length && sourceSignals.serviceCandidates.length) {
     notes.push(
-      "Pick only real customer-facing services. Ignore generic labels like Website or Instagram unless they are actual services."
+      "Pick only real customer-facing services. Ignore channels or generic words unless they are actual services."
     );
   }
 
@@ -815,9 +819,7 @@ function buildRecommendation({ draftState, sourceSignals, contradictions }) {
   }
 
   if (!draftState.contacts.length) {
-    notes.push(
-      "Choose one real customer contact lane so AI knows where to hand people off."
-    );
+    notes.push("Choose one real public contact lane so AI knows where to route people.");
   }
 
   if (!draftState.hours.length) {
@@ -846,11 +848,11 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
   );
   if (businessNameConflict) {
     candidates.push({
-      key: "profile_identity_conflict",
+      key: "profile",
       step: "profile",
       title: "Confirm the business identity",
       group: "business_truth",
-      prompt: `${businessNameConflict.message} Send the exact business name and one short line describing what the business does.`,
+      prompt: `${businessNameConflict.message} Send the exact public business name and one clean sentence describing what the business does.`,
       priority: 100,
     });
   }
@@ -858,11 +860,11 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
   const websiteConflict = contradictions.find((item) => item.key === "website_conflict");
   if (websiteConflict) {
     candidates.push({
-      key: "website_conflict",
+      key: "website",
       step: "website",
       title: "Confirm the main website",
       group: "business_truth",
-      prompt: websiteConflict.message,
+      prompt: `${websiteConflict.message} Send the correct main website URL.`,
       priority: 98,
     });
   }
@@ -880,7 +882,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
     }
 
     candidates.push({
-      key: "profile_identity",
+      key: "profile",
       step: "profile",
       title: "Confirm the business identity",
       group: "business_truth",
@@ -888,8 +890,8 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
         parts.length > 0
           ? `I already have source signals (${parts.join(
               " • "
-            )}). Now send the exact business name and one clean sentence describing what the business does.`
-          : "Send the exact business name and one clean sentence describing what the business does.",
+            )}). Now send the exact business name and one clean public sentence describing what the business does.`
+          : "Send the exact business name and one clean public sentence describing what the business does.",
       priority: 96,
     });
   }
@@ -900,7 +902,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       step: "website",
       title: "Add the main website",
       group: "business_truth",
-      prompt: "What is the main website URL?",
+      prompt: "Send the main website URL if the business has one.",
       priority: 90,
     });
   }
@@ -913,11 +915,11 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
       group: "business_truth",
       prompt:
         sourceSignals.serviceCandidates.length > 0
-          ? `The sources suggest these services: ${listPreview(
+          ? `The sources suggest these service signals: ${listPreview(
               sourceSignals.serviceCandidates,
               5
             )}. Send only the real customer-facing services you want AI to talk about.`
-          : "List the real core services in plain language. Ignore generic labels or channels.",
+          : "List the real core services in plain language. Ignore generic labels or channel names.",
       priority: 88,
     });
   }
@@ -926,7 +928,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
     candidates.push({
       key: "contacts",
       step: "contacts",
-      title: "Set the main customer contact lanes",
+      title: "Set the main customer contact lane",
       group: "business_truth",
       prompt:
         sourceSignals.contactCandidates.length > 0
@@ -934,7 +936,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
               sourceSignals.contactCandidates,
               3
             )}. Which public contact route should AI use first?`
-          : "Add the best public contact routes for customers, like phone, WhatsApp, or email.",
+          : "Send the main public contact route customers should be sent to first.",
       priority: 86,
     });
   }
@@ -943,7 +945,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
     candidates.push({
       key: "hours",
       step: "hours",
-      title: "Lock in structured weekly hours",
+      title: "Lock the public hours",
       group: "business_truth",
       prompt:
         sourceSignals.hoursCandidates.length > 0
@@ -951,7 +953,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
               sourceSignals.hoursCandidates,
               2
             )}. Send the public weekly hours in one line.`
-          : "Send the public weekly hours in one line, for example Mon-Fri 09:00-18:00; Sat 10:00-14:00; Sun closed.",
+          : "Send the public weekly hours in one line.",
       priority: 84,
     });
   }
@@ -960,7 +962,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
     candidates.push({
       key: "pricing",
       step: "pricing",
-      title: "Choose a safe pricing posture",
+      title: "Define the pricing posture",
       group: "business_truth",
       prompt:
         sourceSignals.pricingCandidates.length > 0
@@ -968,7 +970,7 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
               sourceSignals.pricingCandidates,
               2
             )}. How should AI answer pricing questions publicly?`
-          : "Describe how AI should answer pricing questions publicly.",
+          : "How should AI speak publicly about pricing?",
       priority: 82,
     });
   }
@@ -977,9 +979,9 @@ function buildQuestionCandidates({ draftState, sourceSignals, contradictions }) 
     candidates.push({
       key: "handoff",
       step: "handoff",
-      title: "Define when AI should escalate",
+      title: "Define the operator handoff",
       group: "business_truth",
-      prompt: "Describe when AI should escalate to an operator or manager.",
+      prompt: "Describe when AI should stop and escalate to a human.",
       priority: 80,
     });
   }
@@ -1022,54 +1024,82 @@ function buildInterviewPlan(questionCandidates = [], nextQuestion = null) {
   };
 }
 
-function buildAssistantMessage({
+function buildSourceLead(sourceSignals = {}) {
+  const label = s(sourceSignals.primarySourceLabel);
+  const url = s(sourceSignals.primarySourceUrl);
+
+  if (label && url) return `${label} source is already attached (${url})`;
+  if (label) return `${label} source is already attached`;
+  if (url) return `A source URL is already attached (${url})`;
+  return "";
+}
+
+function buildKnownState(draftState = {}) {
+  const bits = [];
+
+  if (s(draftState.businessName)) bits.push(`name: ${draftState.businessName}`);
+  if (s(draftState.description)) bits.push("description present");
+  if (arr(draftState.services).length) {
+    bits.push(`${arr(draftState.services).length} service signals`);
+  }
+  if (arr(draftState.contacts).length) bits.push("contact route present");
+  if (arr(draftState.hours).length) bits.push("hours present");
+  if (s(draftState.pricingPosture)) bits.push("pricing posture present");
+  if (s(draftState.humanHandoff)) bits.push("handoff rules present");
+
+  return bits.slice(0, 4);
+}
+
+function buildConversationalAssistantMessage({
   phase,
   nextQuestion,
   draftState,
   confidence,
   recommendations,
   sourceSignals,
+  readyForApproval,
 }) {
-  if (phase === "interview" && nextQuestion) {
-    const evidence = arr(sourceSignals.strongestEvidence).slice(0, 2);
-    const evidenceLine = evidence.length
-      ? `\n\nSource context:\n- ${evidence.join("\n- ")}`
-      : "";
-    return `${nextQuestion.prompt}${evidenceLine}`;
+  const sourceLead = buildSourceLead(sourceSignals);
+  const knownState = buildKnownState(draftState);
+
+  if (phase === "source_capture") {
+    return "Start with the best public source you have — website, Google Maps, Instagram, Facebook, or a short business note. I will first pull out what already looks real, then I will ask only the next thing that truly matters.";
   }
 
-  const summaryLines = [
-    draftState.businessName ? `Business name: ${draftState.businessName}` : "",
-    draftState.description ? `What the business is: ${draftState.description}` : "",
-    draftState.services.length
-      ? `Core services: ${listPreview(draftState.services, 6)}`
-      : "",
-    draftState.contacts.length
-      ? `Contact routes: ${listPreview(draftState.contacts, 6)}`
-      : "",
-    draftState.hours.length ? `Availability: ${listPreview(draftState.hours, 4)}` : "",
-    draftState.pricingPosture ? `Pricing posture: ${draftState.pricingPosture}` : "",
-    draftState.humanHandoff ? `Human handoff: ${draftState.humanHandoff}` : "",
-  ].filter(Boolean);
+  if (readyForApproval) {
+    const leadParts = [];
+    if (sourceLead) leadParts.push(sourceLead);
+    if (knownState.length) {
+      leadParts.push(`current setup looks solid across ${knownState.join(", ")}`);
+    }
 
-  const guidanceLines = [
-    confidence.strong.length
-      ? `What looks solid:\n- ${confidence.strong.join("\n- ")}`
-      : "",
-    confidence.unclear.length
-      ? `What still needs work:\n- ${confidence.unclear.join("\n- ")}`
-      : "",
-    confidence.contradictions.length
-      ? `What still conflicts:\n- ${confidence.contradictions.join("\n- ")}`
-      : "",
-    recommendations.length
-      ? `Recommended next cleanup:\n- ${recommendations.join("\n- ")}`
-      : "",
-  ].filter(Boolean);
+    return `${leadParts.join(". ")}. The draft is now structured enough to move into review and approval. Read it once more, then finalize if everything looks correct.`;
+  }
 
-  return [summaryLines.join("\n"), guidanceLines.join("\n\n")]
-    .filter(Boolean)
-    .join("\n\n");
+  const parts = [];
+  if (sourceLead) parts.push(sourceLead);
+
+  if (knownState.length) {
+    parts.push(`current setup already has ${knownState.join(", ")}`);
+  }
+
+  if (nextQuestion?.prompt) {
+    parts.push(`next most important gap: ${nextQuestion.prompt}`);
+  }
+
+  if (arr(confidence.unclear).length > 0) {
+    parts.push(`still unclear: ${arr(confidence.unclear).slice(0, 2).join(" ")}`);
+  }
+
+  if (arr(confidence.contradictions).length > 0) {
+    parts.push(`conflict detected: ${arr(confidence.contradictions).slice(0, 1).join(" ")}`);
+  }
+
+  if (arr(recommendations).length > 0 && !nextQuestion?.prompt) {
+    parts.push(`next cleanup: ${arr(recommendations).slice(0, 1).join(" ")}`);
+  }
+
+  return parts.join(". ").replace(/\.\./g, ".").trim();
 }
 
 export function buildSetupAssistantBrainState({
@@ -1098,6 +1128,19 @@ export function buildSetupAssistantBrainState({
   });
   const nextQuestion = questionCandidates[0] || null;
 
+  const hasAnySignal = Boolean(
+    s(draftState.businessName) ||
+      s(draftState.description) ||
+      s(draftState.websiteUrl) ||
+      arr(draftState.services).length ||
+      arr(draftState.contacts).length ||
+      arr(draftState.hours).length ||
+      s(draftState.pricingPosture) ||
+      s(draftState.humanHandoff) ||
+      s(sourceSignals.primarySourceUrl) ||
+      arr(sourceSignals.sourceTypes).length
+  );
+
   const readyForApproval =
     !nextQuestion &&
     !contradictions.some((item) => lower(item.severity) === "high") &&
@@ -1112,7 +1155,11 @@ export function buildSetupAssistantBrainState({
         draftState.humanHandoff
     );
 
-  const phase = readyForApproval ? "ready" : "interview";
+  const phase = !hasAnySignal
+    ? "source_capture"
+    : readyForApproval
+      ? "ready"
+      : "interview";
 
   return {
     phase,
@@ -1130,6 +1177,7 @@ export function buildSetupAssistantBrainState({
     draft: compactObject({
       businessName: draftState.businessName,
       whatThisBusinessIs: draftState.description,
+      websiteUrl: draftState.websiteUrl,
       coreServices: draftState.services,
       audience: draftState.audience,
       pricingPosture: draftState.pricingPosture,
@@ -1166,13 +1214,14 @@ export function buildSetupAssistantBrainState({
       languagesCandidates: sourceSignals.languagesCandidates,
     },
     readyForApproval,
-    assistantMessage: buildAssistantMessage({
+    assistantMessage: buildConversationalAssistantMessage({
       phase,
       nextQuestion,
       draftState,
       confidence,
       recommendations,
       sourceSignals,
+      readyForApproval,
     }),
   };
 }
@@ -1181,11 +1230,11 @@ export function buildSetupAssistantFirstPrompt() {
   return {
     phase: "source_capture",
     assistantMessage:
-      "Send the best public source you have first — website, Google Maps, Instagram, Facebook, or a short business note.",
+      "Start with the best public source you have — website, Google Maps, Instagram, Facebook, or a short business note. I will first pull out what already looks real, then I will ask only the next thing that truly matters.",
     nextQuestion: {
       key: "source_capture",
       step: "source_capture",
-      title: "Source",
+      title: "Start with the best source",
       prompt:
         "Send the best public source you have first — website, Google Maps, Instagram, Facebook, or a short business note.",
       group: "business_truth",
