@@ -958,16 +958,11 @@ export default function SetupAssistantSections({
     return buildQuestionSignature(rawCurrentQuestion, assistantControl.draftVersion);
   }, [rawCurrentQuestion, assistantControl.draftVersion]);
 
-  useEffect(() => {
-    if (!currentQuestionSignature) {
-      setSuppressedQuestionSignature("");
-      return;
-    }
-
-    if (suppressedQuestionSignature && suppressedQuestionSignature !== currentQuestionSignature) {
-      setSuppressedQuestionSignature("");
-    }
-  }, [currentQuestionSignature, suppressedQuestionSignature]);
+  const activeSuppressedQuestionSignature =
+    currentQuestionSignature &&
+    suppressedQuestionSignature === currentQuestionSignature
+      ? suppressedQuestionSignature
+      : "";
 
   const shouldShowIntro = useMemo(() => {
     if (!sessionHydrated) return false;
@@ -1029,7 +1024,7 @@ export default function SetupAssistantSections({
     if (!item) return null;
     if (
       s(item.signature) &&
-      s(item.signature) === s(suppressedQuestionSignature)
+      s(item.signature) === s(activeSuppressedQuestionSignature)
     ) {
       return null;
     }
@@ -1038,7 +1033,7 @@ export default function SetupAssistantSections({
     currentQuestion,
     assistantControl.draftVersion,
     timeline,
-    suppressedQuestionSignature,
+    activeSuppressedQuestionSignature,
   ]);
 
   const liveDraftItem = useMemo(() => {
