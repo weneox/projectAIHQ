@@ -29,13 +29,37 @@ const AZ_CHAR_MAP = {
 };
 
 const DAY_ALIASES = {
-  monday: ["mon", "monday", "bazar ertesi", "b e", "be"],
-  tuesday: ["tue", "tues", "tuesday", "cersenbe axsami"],
-  wednesday: ["wed", "wednesday", "cersenbe"],
-  thursday: ["thu", "thur", "thurs", "thursday", "cume axsami"],
-  friday: ["fri", "friday", "cume"],
-  saturday: ["sat", "saturday", "senbe"],
-  sunday: ["sun", "sunday", "bazar"],
+  monday: [
+    "mon",
+    "monday",
+    "bazar ertesi",
+    "b.e",
+    "b e",
+    "be",
+    "1ci gun",
+    "1 ci gun",
+  ],
+  tuesday: [
+    "tue",
+    "tues",
+    "tuesday",
+    "cersenbe axsami",
+    "2ci gun",
+    "2 ci gun",
+  ],
+  wednesday: ["wed", "wednesday", "cersenbe", "3ci gun", "3 ci gun"],
+  thursday: [
+    "thu",
+    "thur",
+    "thurs",
+    "thursday",
+    "cume axsami",
+    "4cu gun",
+    "4 cu gun",
+  ],
+  friday: ["fri", "friday", "cume", "5ci gun", "5 ci gun"],
+  saturday: ["sat", "saturday", "senbe", "6ci gun", "6 ci gun"],
+  sunday: ["sun", "sunday", "bazar", "7ci gun", "7 ci gun"],
 };
 
 const CURRENCY_ALIASES = {
@@ -54,6 +78,36 @@ const CURRENCY_ALIASES = {
   pound: "GBP",
 };
 
+const GENERIC_SERVICE_WORDS = new Set([
+  "service",
+  "services",
+  "xidmet",
+  "xidmetler",
+  "automation",
+  "avtomasiya",
+  "digital",
+  "premium",
+  "business",
+  "website",
+  "web",
+  "marketing",
+  "sales",
+  "growth",
+  "solution",
+  "solutions",
+  "consulting",
+  "support",
+  "online",
+  "instagram",
+  "facebook",
+  "whatsapp",
+  "telegram",
+  "contact",
+  "contacts",
+  "link",
+  "source",
+]);
+
 function slugify(value = "") {
   return s(value)
     .toLowerCase()
@@ -63,7 +117,7 @@ function slugify(value = "") {
 }
 
 function compactSentence(value = "", limit = 220) {
-  const text = s(value);
+  const text = s(value).replace(/\s+/g, " ").trim();
   if (!text) return "";
   return text.length > limit ? `${text.slice(0, limit - 3).trim()}...` : text;
 }
@@ -92,7 +146,6 @@ function normalizeLocaleText(value = "") {
   return mapped
     .toLowerCase()
     .replace(/[–—]/g, "-")
-    .replace(/[.,]/g, (match) => (match === "." ? " " : match))
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -120,9 +173,9 @@ const DAY_PATTERN = Object.keys(DAY_ALIAS_TO_DAY)
   .join("|");
 
 function findCurrency(text = "") {
-  const raw = s(text).toLowerCase();
+  const raw = normalizeLocaleText(text);
   for (const [needle, currency] of Object.entries(CURRENCY_ALIASES)) {
-    if (raw.includes(needle)) return currency;
+    if (raw.includes(normalizeLocaleText(needle))) return currency;
   }
   return "";
 }
@@ -130,53 +183,36 @@ function findCurrency(text = "") {
 function parseAmount(value = "") {
   const normalized = s(value)
     .replace(/,/g, ".")
-    .replace(/[^\d.]/g, "");
+    .replace(/[^0-9.]/g, "");
   const number = Number.parseFloat(normalized);
   return Number.isFinite(number) ? number : null;
 }
 
-function parseTimeToken(value = "", meridiemHint = "") {
-  const text = s(value).toLowerCase();
-  const match = text.match(/^(\d{1,2})(?::(\d{2}))?$/);
+function normalizeTimeToken(value = "") {
+  const text = s(value).replace(/\./g, ":");
+  const match = text.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
   if (!match) {
-    return {
-      formatted: "",
-      hour: null,
-      minute: null,
-      explicitMeridiem: s(meridiemHint).toLowerCase(),
-    };
+    return { formatted: "", hour: null, minute: null };
   }
 
   let hour = Number.parseInt(match[1], 10);
-  const minute = Number.parseInt(match[2] || "0", 10);
-  const meridiem = s(meridiemHint).toLowerCase();
-
-  if (meridiem === "pm" && hour < 12) hour += 12;
-  if (meridiem === "am" && hour === 12) hour = 0;
+  let minute = Number.parseInt(match[2] || "0", 10);
 
   if (!Number.isFinite(hour) || hour < 0 || hour > 23) {
-    return {
-      formatted: "",
-      hour: null,
-      minute: null,
-      explicitMeridiem: meridiem,
-    };
+    return { formatted: "", hour: null, minute: null };
   }
 
   if (!Number.isFinite(minute) || minute < 0 || minute > 59) {
-    return {
-      formatted: "",
-      hour: null,
-      minute: null,
-      explicitMeridiem: meridiem,
-    };
+    minute = 0;
   }
 
   return {
-    formatted: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+    formatted: `${String(hour).padStart(2, "0")}:${String(minute).padStart(
+      2,
+      "0"
+    )}`,
     hour,
     minute,
-    explicitMeridiem: meridiem,
   };
 }
 
@@ -184,52 +220,48 @@ function parseTimeRange(text = "") {
   const normalized = normalizeLocaleText(text);
 
   const match = normalized.match(
-    /(?:\bsaat\s*)?(\d{1,2}(?::\d{2})?)\s*(am|pm)?\s*(?:-|to|through|thru|dan|den|dek|kimi|qeder|qederki|a|ya)\s*(\d{1,2}(?::\d{2})?)\s*(am|pm)?/i
+    /(?:\bsaat\s*)?(\d{1,2}(?::\d{1,2})?)\s*(?:am|pm)?\s*(?:-|to|through|thru|dan|den|dek|kimi|qeder|qederki|a|ya)\s*(\d{1,2}(?::\d{1,2})?)\s*(?:am|pm)?/i
   );
 
   if (!match) {
     return { openTime: "", closeTime: "" };
   }
 
-  const start = parseTimeToken(match[1], match[2]);
-  const end = parseTimeToken(match[3], match[4]);
+  const start = normalizeTimeToken(match[1]);
+  const end = normalizeTimeToken(match[2]);
 
   if (!start.formatted || !end.formatted) {
     return { openTime: "", closeTime: "" };
   }
 
-  let endHour = end.hour;
-  const bothImplicit = !start.explicitMeridiem && !end.explicitMeridiem;
+  let closeHour = end.hour;
 
   if (
-    bothImplicit &&
     Number.isFinite(start.hour) &&
     Number.isFinite(end.hour) &&
-    endHour <= start.hour &&
-    endHour < 12
+    closeHour <= start.hour &&
+    closeHour < 12
   ) {
-    endHour += 12;
+    closeHour += 12;
   }
-
-  const closeTime = `${String(endHour).padStart(2, "0")}:${String(
-    end.minute
-  ).padStart(2, "0")}`;
 
   return {
     openTime: start.formatted,
-    closeTime,
+    closeTime: `${String(closeHour).padStart(2, "0")}:${String(
+      end.minute
+    ).padStart(2, "0")}`,
   };
 }
 
 function parseBreakRange(text = "") {
   const normalized = normalizeLocaleText(text);
   const match = normalized.match(
-    /(?:break|lunch|fasil[eə])\s*(?:from)?\s*(\d{1,2}(?::\d{2})?)\s*(am|pm)?\s*(?:-|to|dan|den|dek|kimi|qeder)\s*(\d{1,2}(?::\d{2})?)\s*(am|pm)?/i
+    /(?:break|lunch|fasil[eə])\s*(?:from)?\s*(\d{1,2}(?::\d{1,2})?)\s*(?:-|to|dan|den|dek|kimi|qeder)\s*(\d{1,2}(?::\d{1,2})?)/i
   );
   if (!match) return { breakStart: "", breakEnd: "" };
 
-  const start = parseTimeToken(match[1], match[2]);
-  const end = parseTimeToken(match[3], match[4]);
+  const start = normalizeTimeToken(match[1]);
+  const end = normalizeTimeToken(match[2]);
 
   return {
     breakStart: start.formatted,
@@ -245,6 +277,24 @@ function expandDayRange(start = "", end = "") {
   return [...WEEK_DAYS.slice(startIndex), ...WEEK_DAYS.slice(0, endIndex + 1)];
 }
 
+function inferDaySetFromCount(text = "") {
+  const lower = normalizeLocaleText(text);
+
+  if (/\b(heftede 5 defe|heftede 5 gun|5 gun|5 defe|weekday|weekdays|is gunleri)\b/i.test(lower)) {
+    return WEEK_DAYS.slice(0, 5);
+  }
+
+  if (/\b(heftede 6 defe|heftede 6 gun|6 gun|6 defe)\b/i.test(lower)) {
+    return WEEK_DAYS.slice(0, 6);
+  }
+
+  if (/\b(heftede 7 defe|heftede 7 gun|7 gun|7 defe|every day|daily|her gun|hergun)\b/i.test(lower)) {
+    return [...WEEK_DAYS];
+  }
+
+  return [];
+}
+
 function parseDaysFromText(text = "") {
   const lower = normalizeLocaleText(text);
   if (!lower) return [];
@@ -256,15 +306,16 @@ function parseDaysFromText(text = "") {
     return [...WEEK_DAYS];
   }
 
-  if (
-    /\b(weekdays|is gunleri|heftede 5 gun|5 gun)\b/i.test(lower)
-  ) {
+  if (/\b(weekdays|is gunleri|hefte ici|hefte ici gunleri)\b/i.test(lower)) {
     return WEEK_DAYS.slice(0, 5);
   }
 
   if (/\b(weekend|heftesonu|hefte sonu)\b/i.test(lower)) {
     return ["saturday", "sunday"];
   }
+
+  const countDays = inferDaySetFromCount(lower);
+  if (countDays.length) return countDays;
 
   const rangeMatch = lower.match(
     new RegExp(
@@ -355,16 +406,20 @@ function applyHoursLine(baseRows, line = "") {
   const lower = normalizeLocaleText(line);
   if (!lower) return;
 
-  const allDays =
-    /\b(24\/7|7\/24|24h|24 hours|all day|gece gunduz)\b/i.test(lower);
-  let days = allDays ? [...WEEK_DAYS] : parseDaysFromText(lower);
-
   const isClosed = /\b(closed|off|bagli|baqli)\b/i.test(lower);
   const appointmentOnly =
-    /\b(appointment only|yalniz rezervasiya ile|yalniz qebul ile)\b/i.test(lower);
-  const isAllDay = /\b(24\/7|7\/24|24h|24 hours|all day)\b/i.test(lower);
+    /\b(appointment only|yalniz rezervasiya ile|yalniz qebul ile|rezervasiya ile|appointment)\b/i.test(
+      lower
+    );
+  const isAllDay = /\b(24\/7|7\/24|24h|24 hours|all day|gece gunduz)\b/i.test(lower);
   const { openTime, closeTime } = parseTimeRange(lower);
   const { breakStart, breakEnd } = parseBreakRange(lower);
+
+  let days = parseDaysFromText(lower);
+
+  if (!days.length && (isAllDay || appointmentOnly || openTime || closeTime)) {
+    days = inferDaySetFromCount(lower);
+  }
 
   if (!days.length && (isAllDay || appointmentOnly || openTime || closeTime)) {
     days = WEEK_DAYS.slice(0, 5);
@@ -374,12 +429,15 @@ function applyHoursLine(baseRows, line = "") {
 
   for (const day of days) {
     const current = obj(baseRows.get(day), createDefaultHour(day));
+
+    const enabled = !isClosed && (isAllDay || appointmentOnly || Boolean(openTime && closeTime));
+
     baseRows.set(
       day,
       compactDraftObject({
         ...current,
         day,
-        enabled: !isClosed && (isAllDay || Boolean(openTime) || appointmentOnly),
+        enabled,
         closed: isClosed,
         openTime: isClosed || isAllDay || appointmentOnly ? "" : openTime,
         closeTime: isClosed || isAllDay || appointmentOnly ? "" : closeTime,
@@ -431,7 +489,8 @@ export function parseHoursNote(note = "", currentHours = []) {
 }
 
 function inferServiceCategory(text = "") {
-  const lower = s(text).toLowerCase();
+  const lower = normalizeLocaleText(text);
+
   if (/\b(tax|payroll|bookkeeping|accounting|cfo|finance)\b/i.test(lower)) {
     return "finance";
   }
@@ -456,7 +515,32 @@ function inferServiceCategory(text = "") {
   if (/\b(event|reservation|restaurant|booking)\b/i.test(lower)) {
     return "hospitality";
   }
+  if (/\b(chatbot|crm|integration|automation|avtomasiya|lead)\b/i.test(lower)) {
+    return "automation";
+  }
+
   return "general";
+}
+
+function looksLikeGenericService(text = "") {
+  const normalized = normalizeLocaleText(text);
+  if (!normalized) return true;
+
+  const words = normalized.split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+
+  if (words.length === 1 && GENERIC_SERVICE_WORDS.has(words[0])) return true;
+
+  if (
+    GENERIC_SERVICE_WORDS.has(normalized) ||
+    /\b(contact|hours|pricing|price|website|instagram|facebook|whatsapp|telegram)\b/i.test(
+      normalized
+    )
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 function parseServiceLine(line = "") {
@@ -464,17 +548,22 @@ function parseServiceLine(line = "") {
   if (!text) return null;
 
   const pairMatch = text.match(/^([^:-]+?)\s*(?:[:\-]\s*)(.+)$/);
-  const title = s(pairMatch?.[1] || text);
+  const candidateTitle = s(pairMatch?.[1] || text);
   const remainder = s(pairMatch?.[2]);
+
+  const titleWords = candidateTitle.split(/\s+/).filter(Boolean);
+  if (!titleWords.length) return null;
+  if (looksLikeGenericService(candidateTitle)) return null;
+
   const priceMatch = remainder.match(
     /((?:[$]\s*)?\d+(?:[.,]\d{1,2})?(?:\s*(?:azn|usd|eur|gbp))?)/i
   );
 
   return compactDraftObject({
-    key: slugify(title),
-    title,
+    key: slugify(candidateTitle),
+    title: candidateTitle,
     summary: priceMatch ? s(remainder.replace(priceMatch[0], "")) : remainder,
-    category: inferServiceCategory(`${title} ${remainder}`),
+    category: inferServiceCategory(`${candidateTitle} ${remainder}`),
     priceLabel: s(priceMatch?.[0]),
     availabilityStatus: "available",
   });
@@ -491,7 +580,10 @@ export function parseServicesNote(note = "", currentServices = []) {
 
   for (const item of [...arr(currentServices), ...lines]) {
     const normalized =
-      typeof item === "string" ? parseServiceLine(item) : parseServiceLine(item?.title || "");
+      typeof item === "string"
+        ? parseServiceLine(item)
+        : parseServiceLine(item?.title || item?.name || item?.label || "");
+
     const merged = normalized
       ? {
           ...normalized,
@@ -499,13 +591,24 @@ export function parseServicesNote(note = "", currentServices = []) {
           key: s(normalized.key || item?.key || slugify(normalized.title)),
           category: s(item?.category || normalized.category || "general"),
           title: s(item?.title || normalized.title),
+          summary: s(item?.summary || item?.description || normalized.summary),
+          priceLabel: s(item?.priceLabel || item?.price_label || normalized.priceLabel),
         }
-      : null;
+      : typeof item === "object" && s(item?.title) && !looksLikeGenericService(s(item.title))
+        ? compactDraftObject({
+            ...item,
+            key: s(item.key || slugify(item.title)),
+            title: s(item.title),
+            category: s(item.category || inferServiceCategory(item.title)),
+          })
+        : null;
 
     if (!merged?.title) continue;
+
     const dedupeKey = `${s(merged.key).toLowerCase()}|${s(merged.title).toLowerCase()}`;
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
+
     out.push(
       compactDraftObject({
         ...merged,
@@ -521,7 +624,6 @@ function buildPublicSummary({
   mode,
   startingAt,
   minPrice,
-  maxPrice,
   currency,
   perServicePricing,
   note,
@@ -535,7 +637,7 @@ function buildPublicSummary({
     return `Public replies can say pricing starts from ${symbol}${startingAt}.`.trim();
   }
   if (mode === "variable_by_service" && arr(perServicePricing).length) {
-    return "Public replies can share starting labels per service, but exact pricing may vary by selected service.";
+    return "Public replies can explain that pricing changes by service and the exact amount depends on the selected work.";
   }
   if (mode === "promotional" && minPrice != null) {
     return `A promotional starting price of ${symbol}${minPrice} is available, subject to terms.`.trim();
@@ -547,6 +649,32 @@ function buildPublicSummary({
     return "Public replies can explain that an exact quote requires more details.";
   }
   return compactSentence(note, 160);
+}
+
+function detectPricingMode(text = "", servicePairs = [], amounts = []) {
+  const lower = normalizeLocaleText(text);
+
+  const hasFromLanguage =
+    /\b(from|starting at|starts at|starting from|baslayir|baslangic)\b/i.test(lower);
+  const hasPromoLanguage =
+    /\b(promo|promotion|discount|sale|campaign|endirim|kampaniya)\b/i.test(lower);
+  const hasQuoteLanguage =
+    /\b(quote|depends|after inspection|after review|case by case|custom quote|deqiq qiymet|qiymet deyişir|deyisir|xidmete gore|ise gore|sorguya gore)\b/i.test(
+      lower
+    );
+  const hasOperatorOnlyLanguage =
+    /\b(call|dm|message us|contact us|operator|manager|human|muraciet edin|elaqe saxlayin)\b/i.test(
+      lower
+    );
+
+  if (servicePairs.length > 1) return "variable_by_service";
+  if (hasPromoLanguage) return "promotional";
+  if (hasOperatorOnlyLanguage && !amounts.length) return "operator_only";
+  if (hasQuoteLanguage) return "quote_required";
+  if (hasFromLanguage) return "starting_from";
+  if (amounts.length === 1) return "fixed_price";
+  if (amounts.length > 1) return "variable_by_service";
+  return "quote_required";
 }
 
 export function parsePricingNote(note = "", currentPricing = {}, currentServices = []) {
@@ -575,9 +703,12 @@ export function parsePricingNote(note = "", currentPricing = {}, currentServices
         /^([^:-]+?)\s*(?:[:\-]\s*)?((?:[$]\s*)?\d+(?:[.,]\d{1,2})?(?:\s*(?:azn|usd|eur|gbp))?)/i
       );
       if (!pair) return null;
+      const title = s(pair[1]);
+      if (looksLikeGenericService(title)) return null;
+
       return compactDraftObject({
-        serviceKey: slugify(pair[1]),
-        title: s(pair[1]),
+        serviceKey: slugify(title),
+        title,
         mode: "fixed_price",
         minPrice: parseAmount(pair[2]),
         maxPrice: parseAmount(pair[2]),
@@ -586,21 +717,7 @@ export function parsePricingNote(note = "", currentPricing = {}, currentServices
     })
     .filter(Boolean);
 
-  const hasFromLanguage = /\b(from|starting at|starts at|starting from)\b/i.test(text);
-  const hasPromoLanguage = /\b(promo|promotion|discount|sale|campaign)\b/i.test(text);
-  const hasQuoteLanguage = /\b(quote|depends|after inspection|after review|case by case|custom quote)\b/i.test(text);
-  const hasOperatorOnlyLanguage = /\b(call|dm|message us|contact us|operator|manager|human)\b/i.test(text);
-
-  let pricingMode = s(existing.pricingMode || existing.mode).toLowerCase();
-  if (servicePairs.length > 1) pricingMode = "variable_by_service";
-  else if (hasPromoLanguage) pricingMode = "promotional";
-  else if (hasOperatorOnlyLanguage && !amounts.length) pricingMode = "operator_only";
-  else if (hasQuoteLanguage) pricingMode = "quote_required";
-  else if (hasFromLanguage) pricingMode = "starting_from";
-  else if (amounts.length === 1) pricingMode = "fixed_price";
-  else if (amounts.length > 1) pricingMode = "variable_by_service";
-  else pricingMode = pricingMode || "quote_required";
-
+  const pricingMode = detectPricingMode(text, servicePairs, amounts);
   const minPrice = amounts.length ? Math.min(...amounts.map((item) => item.value)) : null;
   const maxPrice = amounts.length ? Math.max(...amounts.map((item) => item.value)) : null;
   const startingAt =
@@ -612,11 +729,13 @@ export function parsePricingNote(note = "", currentPricing = {}, currentServices
     mode: pricingMode,
     startingAt,
     minPrice,
-    maxPrice,
     currency,
     perServicePricing: servicePairs,
     note: text,
   });
+
+  const quoteLike =
+    pricingMode === "quote_required" || pricingMode === "operator_only";
 
   return compactDraftObject({
     pricingMode,
@@ -635,8 +754,7 @@ export function parsePricingNote(note = "", currentPricing = {}, currentServices
                 s(service?.title).toLowerCase() === s(item?.title).toLowerCase()
             )
           ),
-    allowPublicPriceReplies:
-      pricingMode !== "operator_only" && pricingMode !== "quote_required",
+    allowPublicPriceReplies: !quoteLike,
     requiresOperatorForExactQuote: [
       "quote_required",
       "operator_only",
@@ -647,7 +765,7 @@ export function parsePricingNote(note = "", currentPricing = {}, currentServices
     pricingConfidence:
       servicePairs.length > 1 || amounts.length > 0
         ? "medium"
-        : pricingMode === "operator_only" || pricingMode === "quote_required"
+        : quoteLike
           ? "low"
           : "medium",
     operatorEscalationRules: uniqueStrings(
@@ -655,7 +773,7 @@ export function parsePricingNote(note = "", currentPricing = {}, currentServices
         pricingMode === "quote_required" ? "Exact quote requested" : "",
         pricingMode === "operator_only" ? "Any pricing request" : "",
         pricingMode === "variable_by_service" ? "Service combination is unclear" : "",
-        hasPromoLanguage ? "Promotion applicability is unclear" : "",
+        pricingMode === "promotional" ? "Promotion applicability is unclear" : "",
       ],
       8
     ),

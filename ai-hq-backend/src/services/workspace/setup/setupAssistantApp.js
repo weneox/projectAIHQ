@@ -2244,42 +2244,61 @@ function buildSetupAssistantPatchFromOrchestrator(turn = {}, current = {}) {
   );
   const safeDraft = obj(safeTurn.draft);
   const currentDraft = normalizeStoredSetupAssistantPayload(current, current);
+  const rejectedFields = buildRejectedFieldSet(safeTurn);
+
+  const rejectProfile = hasRejectedField(rejectedFields, [
+    "profile",
+    "company",
+    "description",
+    "website",
+  ]);
+  const rejectAiBehavior = hasRejectedField(rejectedFields, [
+    "profile",
+    "audience",
+  ]);
 
   const fallbackPreviewPatch = compactDraftObject({
-    businessProfile: sanitizeBusinessProfile({
-      companyName:
-        !s(obj(acceptedPatchMerge.businessProfile).companyName) &&
-        !s(obj(currentDraft.businessProfile).companyName)
-          ? s(safeDraft.businessName)
-          : "",
-      description:
-        !s(obj(acceptedPatchMerge.businessProfile).description) &&
-        !s(obj(currentDraft.businessProfile).description)
-          ? s(safeDraft.whatThisBusinessIs)
-          : "",
-      websiteUrl:
-        !s(obj(acceptedPatchMerge.businessProfile).websiteUrl) &&
-        !s(obj(currentDraft.businessProfile).websiteUrl)
-          ? normalizeWebsiteUrl(s(safeDraft.websiteUrl))
-          : "",
-    }),
+    businessProfile: rejectProfile
+      ? {}
+      : sanitizeBusinessProfile({
+          companyName:
+            !s(obj(acceptedPatchMerge.businessProfile).companyName) &&
+            !s(obj(currentDraft.businessProfile).companyName)
+              ? s(safeDraft.businessName)
+              : "",
+          description:
+            !s(obj(acceptedPatchMerge.businessProfile).description) &&
+            !s(obj(currentDraft.businessProfile).description)
+              ? s(safeDraft.whatThisBusinessIs)
+              : "",
+          websiteUrl:
+            !s(obj(acceptedPatchMerge.businessProfile).websiteUrl) &&
+            !s(obj(currentDraft.businessProfile).websiteUrl)
+              ? normalizeWebsiteUrl(s(safeDraft.websiteUrl))
+              : "",
+        }),
     languages:
-      !arr(acceptedPatchMerge.languages).length && !arr(currentDraft.languages).length
-        ? arr(safeDraft.languages)
-        : [],
+      rejectAiBehavior ||
+      arr(acceptedPatchMerge.languages).length ||
+      arr(currentDraft.languages).length
+        ? []
+        : arr(safeDraft.languages),
     tone:
-      !s(acceptedPatchMerge.tone) && !s(currentDraft.tone)
-        ? s(safeDraft.tone)
-        : "",
+      rejectAiBehavior || s(acceptedPatchMerge.tone) || s(currentDraft.tone)
+        ? ""
+        : s(safeDraft.tone),
     greetingStyle:
-      !s(acceptedPatchMerge.greetingStyle) && !s(currentDraft.greetingStyle)
-        ? s(safeDraft.greetingStyle)
-        : "",
+      rejectAiBehavior ||
+      s(acceptedPatchMerge.greetingStyle) ||
+      s(currentDraft.greetingStyle)
+        ? ""
+        : s(safeDraft.greetingStyle),
     afterHoursBehavior:
-      !s(acceptedPatchMerge.afterHoursBehavior) &&
-      !s(currentDraft.afterHoursBehavior)
-        ? s(safeDraft.afterHoursBehavior)
-        : "",
+      rejectAiBehavior ||
+      s(acceptedPatchMerge.afterHoursBehavior) ||
+      s(currentDraft.afterHoursBehavior)
+        ? ""
+        : s(safeDraft.afterHoursBehavior),
   });
 
   return mergeDraftState(acceptedPatchMerge, fallbackPreviewPatch);
@@ -2489,6 +2508,25 @@ function normalizeChallengeField(value = "") {
 
   const raw = s(value).toLowerCase();
   return SECTION_META[raw] ? raw : "";
+}
+
+function buildRejectedFieldSet(turn = {}) {
+  const out = new Set();
+
+  for (const item of arr(obj(turn).rejectedInputs)) {
+    const key = normalizeChallengeField(
+      s(item?.suggestedField || item?.field || item?.key)
+    );
+    if (key) out.add(key);
+  }
+
+  return out;
+}
+
+function hasRejectedField(rejectedFields = new Set(), keys = []) {
+  return arr(keys).some((key) =>
+    rejectedFields.has(normalizeChallengeField(key) || s(key).toLowerCase())
+  );
 }
 
 function buildChallengeQuestion(turn = {}, currentDraft = {}) {
@@ -2935,6 +2973,7 @@ export async function updateSetupAssistantDraft(
   let mergedSetupAssistant = currentSetupAssistant;
   let nextQuestion = null;
   let brainTurn = null;
+  let clientTurn = null;
 
   if (messageMode) {
     brainTurn = await runSetupBrain({
