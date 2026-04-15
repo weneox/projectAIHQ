@@ -681,6 +681,40 @@ function hasTimelineSignature(timeline = [], signature = "") {
   return timeline.some((item) => s(item.signature) === safeSignature);
 }
 
+function isAssistantQuestionItem(item = {}) {
+  return item?.role === "assistant" && Boolean(s(item?.step));
+}
+
+function pruneAnsweredQuestionItems(timeline = [], step = "") {
+  const safeStep = s(step);
+  if (!safeStep) return timeline;
+  return timeline.filter(
+    (item) => !(isAssistantQuestionItem(item) && s(item.step) === safeStep)
+  );
+}
+
+function pruneQuestionHistoryForDraft(timeline = []) {
+  return timeline.filter((item) => !isAssistantQuestionItem(item));
+}
+
+function isContinueStyleAnswer(value = "") {
+  const text = s(value).toLowerCase();
+  return [
+    "ok",
+    "okay",
+    "ok davam",
+    "davam",
+    "continue",
+    "next",
+    "beli",
+    "bəli",
+    "he",
+    "hə",
+    "oldu",
+    "tamam",
+  ].includes(text);
+}
+
 function looksLikeUrlOrDomain(value = "") {
   const text = s(value);
   if (!text) return false;
@@ -703,7 +737,9 @@ function looksLikeHoursText(value = "") {
   if (!text) return false;
   return (
     /(mon|tue|wed|thu|fri|sat|sun|b\.e|be|cümə|şənbə|bazar)/.test(text) ||
-    /\b\d{1,2}[:.]\d{2}\b/.test(text) ||
+    /\b\d{1,2}[:.]?\d{0,2}\s*(?:-|to|dan|den|dek|qeder)\s*\d{1,2}[:.]?\d{0,2}\b/.test(
+      text
+    ) ||
     /\bclosed\b/.test(text) ||
     /\b24\/7\b/.test(text) ||
     /\bappointment\b/.test(text)
@@ -729,7 +765,11 @@ function resolveFreeformStepFromText(value = "", fallbackStep = "profile") {
   const lowerText = text.toLowerCase();
 
   if (looksLikeUrlOrDomain(text)) return "website";
-  if (looksLikePhone(text) || looksLikeEmail(text) || /whatsapp|telegram|contact/i.test(lowerText)) {
+  if (
+    looksLikePhone(text) ||
+    looksLikeEmail(text) ||
+    /whatsapp|telegram|contact/i.test(lowerText)
+  ) {
     return "contacts";
   }
   if (looksLikeHoursText(text)) return "hours";
@@ -925,7 +965,9 @@ export default function SetupAssistantSections({
     if (!liveDraftItem) return;
 
     const timer = window.setTimeout(() => {
-      setTimeline((current) => appendTimelineItem(current, liveDraftItem));
+      setTimeline((current) =>
+        appendTimelineItem(pruneQuestionHistoryForDraft(current), liveDraftItem)
+      );
       setAwaitingAssistant(false);
     }, awaitingAssistant ? 220 : 0);
 
@@ -996,16 +1038,21 @@ export default function SetupAssistantSections({
     const text = s(textValue);
     if (!text || busy || !currentQuestion) return;
 
+    const requestText = isContinueStyleAnswer(text) ? "Let's continue." : text;
+
     setLocalError("");
     setAwaitingAssistant(true);
 
     setTimeline((current) =>
-      appendTimelineItem(current, {
-        id: `answer-${currentQuestion.key}-${Date.now()}`,
-        type: "message",
-        role: "user",
-        body: text,
-      })
+      appendTimelineItem(
+        pruneAnsweredQuestionItems(current, currentQuestion.step),
+        {
+          id: `answer-${currentQuestion.key}-${Date.now()}`,
+          type: "message",
+          role: "user",
+          body: text,
+        }
+      )
     );
 
     setLocalAnswers((current) => ({
@@ -1018,7 +1065,7 @@ export default function SetupAssistantSections({
     try {
       await onParseMessage?.({
         step: currentQuestion.step,
-        text,
+        text: requestText,
       });
     } catch (error) {
       setLocalError(s(error?.message, "The answer could not be processed."));
@@ -1030,18 +1077,25 @@ export default function SetupAssistantSections({
     const text = s(textValue);
     if (!text || busy) return;
 
-    const resolvedStep = resolveFreeformStepFromText(text, lastAssistantQuestionStep);
+    const requestText = isContinueStyleAnswer(text) ? "Let's continue." : text;
+    const resolvedStep = resolveFreeformStepFromText(
+      requestText,
+      lastAssistantQuestionStep
+    );
 
     setLocalError("");
     setAwaitingAssistant(true);
 
     setTimeline((current) =>
-      appendTimelineItem(current, {
-        id: `freeform-${Date.now()}`,
-        type: "message",
-        role: "user",
-        body: text,
-      })
+      appendTimelineItem(
+        pruneAnsweredQuestionItems(current, lastAssistantQuestionStep),
+        {
+          id: `freeform-${Date.now()}`,
+          type: "message",
+          role: "user",
+          body: text,
+        }
+      )
     );
 
     setComposerValue("");
@@ -1049,7 +1103,7 @@ export default function SetupAssistantSections({
     try {
       await onParseMessage?.({
         step: resolvedStep,
-        text,
+        text: requestText,
       });
     } catch (error) {
       setLocalError(s(error?.message, "The update could not be processed."));
