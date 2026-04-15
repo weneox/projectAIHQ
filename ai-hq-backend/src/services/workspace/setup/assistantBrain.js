@@ -1063,7 +1063,7 @@ function buildConversationalAssistantMessage({
   const knownState = buildKnownState(draftState);
 
   if (phase === "source_capture") {
-    return "Start with the best public source you have — website, Google Maps, Instagram, Facebook, or a short business note. I will first pull out what already looks real, then I will ask only the next thing that truly matters.";
+    return "Send the best public source you have first — website, Google Maps, Instagram, Facebook, or a short business note. I will first pull out what already looks real, then I will ask only the next thing that truly matters.";
   }
 
   if (readyForApproval) {
@@ -1230,7 +1230,7 @@ export function buildSetupAssistantFirstPrompt() {
   return {
     phase: "source_capture",
     assistantMessage:
-      "Start with the best public source you have — website, Google Maps, Instagram, Facebook, or a short business note. I will first pull out what already looks real, then I will ask only the next thing that truly matters.",
+      "Send the best public source you have first — website, Google Maps, Instagram, Facebook, or a short business note. I will first pull out what already looks real, then I will ask only the next thing that truly matters.",
     nextQuestion: {
       key: "source_capture",
       step: "source_capture",
