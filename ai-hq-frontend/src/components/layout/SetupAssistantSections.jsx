@@ -901,6 +901,7 @@ export default function SetupAssistantSections({
   const [timeline, setTimeline] = useState(() => loadStoredTimeline(storageKey));
   const [localAnswers, setLocalAnswers] = useState({});
   const [awaitingAssistant, setAwaitingAssistant] = useState(false);
+  const [suppressedQuestionSignature, setSuppressedQuestionSignature] = useState("");
 
   const busy = saving || finalizing || capturingSource;
 
@@ -951,6 +952,22 @@ export default function SetupAssistantSections({
       }),
     [assistant, reviewPayload, finalModel]
   );
+
+  const currentQuestionSignature = useMemo(() => {
+    if (!rawCurrentQuestion) return "";
+    return buildQuestionSignature(rawCurrentQuestion, assistantControl.draftVersion);
+  }, [rawCurrentQuestion, assistantControl.draftVersion]);
+
+  useEffect(() => {
+    if (!currentQuestionSignature) {
+      setSuppressedQuestionSignature("");
+      return;
+    }
+
+    if (suppressedQuestionSignature && suppressedQuestionSignature !== currentQuestionSignature) {
+      setSuppressedQuestionSignature("");
+    }
+  }, [currentQuestionSignature, suppressedQuestionSignature]);
 
   const shouldShowIntro = useMemo(() => {
     if (!sessionHydrated) return false;
@@ -1010,8 +1027,19 @@ export default function SetupAssistantSections({
     );
 
     if (!item) return null;
+    if (
+      s(item.signature) &&
+      s(item.signature) === s(suppressedQuestionSignature)
+    ) {
+      return null;
+    }
     return hasTimelineSignature(timeline, item.signature) ? null : item;
-  }, [currentQuestion, assistantControl.draftVersion, timeline]);
+  }, [
+    currentQuestion,
+    assistantControl.draftVersion,
+    timeline,
+    suppressedQuestionSignature,
+  ]);
 
   const liveDraftItem = useMemo(() => {
     if (!questionsFinished || !smartDraftReady) return null;
@@ -1148,9 +1176,14 @@ export default function SetupAssistantSections({
     if (!text || busy || !currentQuestion) return;
 
     const requestText = isContinueStyleAnswer(text) ? "Let's continue." : text;
+    const currentSignature = buildQuestionSignature(
+      currentQuestion,
+      assistantControl.draftVersion
+    );
 
     setLocalError("");
     setAwaitingAssistant(true);
+    setSuppressedQuestionSignature(currentSignature);
 
     setTimeline((current) =>
       appendTimelineItem(
@@ -1179,6 +1212,7 @@ export default function SetupAssistantSections({
     } catch (error) {
       setLocalError(s(error?.message, "The answer could not be processed."));
       setAwaitingAssistant(false);
+      setSuppressedQuestionSignature("");
     }
   }
 
