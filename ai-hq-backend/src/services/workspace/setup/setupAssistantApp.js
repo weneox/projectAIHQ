@@ -1353,7 +1353,7 @@ function buildSetupAssistantAuthorityState({
   const assistantMessage = buildAssistantMessage(summary, question, REVIEW_MESSAGE);
 
   return {
-    mode: "structured_v3",
+    mode: "structured_v2",
     nextQuestion: question,
     confirmationBlockers: arr(summary.confirmationBlockers),
     sections: buildAssistantSections(
