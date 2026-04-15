@@ -7,7 +7,6 @@ import {
 } from "./setupInterviewQuestions.js";
 import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
-const INTRO_SEEN_STORAGE_PREFIX = "setup_assistant_intro_seen";
 const TIMELINE_STORAGE_PREFIX = "setup_assistant_timeline";
 
 function s(value, fallback = "") {
@@ -38,7 +37,9 @@ function listPreview(items = [], max = 6) {
 }
 
 function groupLabel(group = "") {
-  if (group === "operator_rules") return "Operator rules";
+  if (group === "operator_rules" || group === "ai_behavior") {
+    return "AI behavior";
+  }
   return "Business truth";
 }
 
@@ -172,12 +173,18 @@ function normalizeAssistantControl(reviewPayload = null, assistant = {}) {
   const primary = obj(reviewPayload?.assistant);
   const fallback = obj(assistant.assistant);
   const source = Object.keys(primary).length ? primary : fallback;
+  const nextQuestion = obj(source.nextQuestion);
+  const activeQuestions = arr(obj(source.interviewPlan).activeQuestions);
+  const fallbackQuestion =
+    !s(nextQuestion.key) && activeQuestions.length ? obj(activeQuestions[0]) : {};
 
   return {
-    nextQuestion: obj(source.nextQuestion),
+    nextQuestion: s(nextQuestion.key) ? nextQuestion : fallbackQuestion,
     interviewPlan: obj(source.interviewPlan),
     readyForApproval: source.readyForApproval === true,
     draftVersion: Number(source.draftVersion || 0),
+    phase: s(source.phase),
+    message: s(source.message || source.assistantMessage),
   };
 }
 
@@ -210,6 +217,7 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
     message: s(reviewAssistant.message || reviewAssistant.assistantMessage),
     readyForApproval: reviewAssistant.readyForApproval === true,
     draftVersion: Number(reviewAssistant.draftVersion || 0),
+    phase: s(reviewAssistant.phase),
     draft: resolvedDraft,
     confidence: {
       strong: arr(confidence.strong),
@@ -226,6 +234,12 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
       sourceTypes: arr(sourceSignals.sourceTypes),
       strongestEvidence: arr(sourceSignals.strongestEvidence),
       discoveredPublicClaims: arr(sourceSignals.discoveredPublicClaims),
+      companyNameCandidates: arr(sourceSignals.companyNameCandidates),
+      descriptionCandidates: arr(sourceSignals.descriptionCandidates),
+      serviceCandidates: arr(sourceSignals.serviceCandidates),
+      contactCandidates: arr(sourceSignals.contactCandidates),
+      hoursCandidates: arr(sourceSignals.hoursCandidates),
+      pricingCandidates: arr(sourceSignals.pricingCandidates),
     },
   };
 
@@ -236,26 +250,17 @@ function buildFinalViewModel({ reviewPayload = null, assistant = {}, localAnswer
 }
 
 function hasBackendSmartDraft(model = {}) {
-  const sourceSignals = obj(model.sourceSignals);
   const draft = obj(model.draft);
 
-  const hasMessage = Boolean(s(model.message));
-  const hasSourceWork =
-    Boolean(s(sourceSignals.primarySourceType)) ||
-    Boolean(s(sourceSignals.primarySourceLabel)) ||
-    Boolean(s(sourceSignals.primarySourceUrl)) ||
-    Number(sourceSignals.pageCount || 0) > 0 ||
-    arr(sourceSignals.sourceTypes).length > 0;
-
   const hasStructuredDraft =
-    Boolean(s(draft.businessName)) ||
-    Boolean(s(draft.whatThisBusinessIs)) ||
-    arr(draft.coreServices).length > 0 ||
-    Boolean(s(draft.pricingPosture)) ||
-    arr(draft.contactRoutes).length > 0 ||
+    Boolean(s(draft.businessName)) &&
+    Boolean(s(draft.whatThisBusinessIs)) &&
+    arr(draft.coreServices).length > 0 &&
+    arr(draft.contactRoutes).length > 0 &&
+    Boolean(s(draft.pricingPosture)) &&
     Boolean(s(draft.humanHandoff));
 
-  return hasStructuredDraft && (hasMessage || hasSourceWork || model.readyForApproval);
+  return model.readyForApproval === true && hasStructuredDraft;
 }
 
 function buildProgressLabel(currentQuestion = null) {
@@ -264,28 +269,8 @@ function buildProgressLabel(currentQuestion = null) {
   return groupLabel(group);
 }
 
-function getIntroStorageKey(storageKey = "") {
-  return `${INTRO_SEEN_STORAGE_PREFIX}:${s(storageKey, "default")}`;
-}
-
 function getTimelineStorageKey(storageKey = "") {
   return `${TIMELINE_STORAGE_PREFIX}:${s(storageKey, "default")}`;
-}
-
-function getIntroSeen(storageKey = "") {
-  try {
-    return window.sessionStorage.getItem(getIntroStorageKey(storageKey)) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function setIntroSeen(storageKey = "") {
-  try {
-    window.sessionStorage.setItem(getIntroStorageKey(storageKey), "1");
-  } catch {
-    return;
-  }
 }
 
 function loadStoredTimeline(storageKey = "") {
@@ -337,7 +322,6 @@ function MessageBubble({
   body = "",
   children = null,
   animate = true,
-  onAnimationComplete = null,
 }) {
   const isUser = role === "user";
 
@@ -378,12 +362,7 @@ function MessageBubble({
   if (!animate) return content;
 
   return (
-    <motion.div
-      variants={bubbleMotion}
-      initial="hidden"
-      animate="visible"
-      onAnimationComplete={onAnimationComplete || undefined}
-    >
+    <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
       {content}
     </motion.div>
   );
@@ -614,6 +593,28 @@ function buildDraftSignature(model = {}) {
   });
 }
 
+function buildStatusSignature(message = "", draftVersion = 0) {
+  return ["status", Number(draftVersion || 0), s(message)].join("|");
+}
+
+function buildIntroSignature(storageKey = "") {
+  return `intro|${s(storageKey, "default")}`;
+}
+
+function buildIntroTimelineItem({ storageKey = "", hasProgress = false }) {
+  return {
+    id: `assistant-intro-${s(storageKey, "default")}`,
+    type: "message",
+    role: "assistant",
+    signature: buildIntroSignature(storageKey),
+    eyebrow: "Setup",
+    title: hasProgress ? "Let’s continue the setup" : "Let’s set up the business",
+    body: hasProgress
+      ? "Salam. Mövcud setup draftını gördüm. Gəlin qalan boşluqları birlikdə bağlayaq — mən hər dəfə yalnız ən vacib şeyi soruşacağam."
+      : SETUP_SOURCE_PROMPT,
+  };
+}
+
 function buildQuestionTimelineItem(question = {}, draftVersion = 0) {
   const questionKey = s(question.key).toLowerCase();
   if (!questionKey || !s(question.prompt)) return null;
@@ -621,7 +622,7 @@ function buildQuestionTimelineItem(question = {}, draftVersion = 0) {
   const meta = obj(QUESTION_META_MAP[questionKey]);
 
   return {
-    id: `assistant-question-${Date.now()}`,
+    id: `assistant-question-${questionKey}-${draftVersion || Date.now()}`,
     type: "message",
     role: "assistant",
     signature: buildQuestionSignature(question, draftVersion),
@@ -630,6 +631,7 @@ function buildQuestionTimelineItem(question = {}, draftVersion = 0) {
     }),
     title: s(question.title || meta.title),
     body: s(question.prompt || meta.prompt),
+    step: s(question.step || meta.step || questionKey),
   };
 }
 
@@ -645,6 +647,21 @@ function buildDraftTimelineItem(model = {}) {
   };
 }
 
+function buildFallbackAssistantItem(model = {}) {
+  const body = s(model.message);
+  if (!body || model.readyForApproval === true) return null;
+
+  return {
+    id: `assistant-status-${Date.now()}`,
+    type: "message",
+    role: "assistant",
+    signature: buildStatusSignature(body, model.draftVersion),
+    eyebrow: "Setup",
+    title: "Let’s keep going",
+    body,
+  };
+}
+
 function appendTimelineItem(current = [], item = null) {
   if (!item) return current;
 
@@ -656,6 +673,78 @@ function appendTimelineItem(current = [], item = null) {
   }
 
   return [...current, item];
+}
+
+function hasTimelineSignature(timeline = [], signature = "") {
+  const safeSignature = s(signature);
+  if (!safeSignature) return false;
+  return timeline.some((item) => s(item.signature) === safeSignature);
+}
+
+function looksLikeUrlOrDomain(value = "") {
+  const text = s(value);
+  if (!text) return false;
+  return (
+    /^https?:\/\//i.test(text) ||
+    /^(www\.)?[a-z0-9-]+\.[a-z]{2,}(\/.*)?$/i.test(text)
+  );
+}
+
+function looksLikePhone(value = "") {
+  return /(?:\+?\d[\d()\-\s]{6,}\d)/.test(s(value));
+}
+
+function looksLikeEmail(value = "") {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(s(value));
+}
+
+function looksLikeHoursText(value = "") {
+  const text = s(value).toLowerCase();
+  if (!text) return false;
+  return (
+    /(mon|tue|wed|thu|fri|sat|sun|b\.e|be|cümə|şənbə|bazar)/.test(text) ||
+    /\b\d{1,2}[:.]\d{2}\b/.test(text) ||
+    /\bclosed\b/.test(text) ||
+    /\b24\/7\b/.test(text) ||
+    /\bappointment\b/.test(text)
+  );
+}
+
+function looksLikePricingText(value = "") {
+  const text = s(value).toLowerCase();
+  if (!text) return false;
+  return (
+    /(azn|usd|eur|gbp|\$|€|₼|£)/.test(text) ||
+    /\bprice\b/.test(text) ||
+    /\bpricing\b/.test(text) ||
+    /\bquote\b/.test(text) ||
+    /\bstarting\b/.test(text) ||
+    /\bbaşlayır\b/.test(text) ||
+    /\bqiymət\b/.test(text)
+  );
+}
+
+function resolveFreeformStepFromText(value = "", fallbackStep = "profile") {
+  const text = s(value);
+  const lowerText = text.toLowerCase();
+
+  if (looksLikeUrlOrDomain(text)) return "website";
+  if (looksLikePhone(text) || looksLikeEmail(text) || /whatsapp|telegram|contact/i.test(lowerText)) {
+    return "contacts";
+  }
+  if (looksLikeHoursText(text)) return "hours";
+  if (looksLikePricingText(text)) return "pricing";
+  if (/şikayət|complaint|refund|payment|operator|handoff|escalat/i.test(lowerText)) {
+    return "handoff";
+  }
+  if (/[,\n;]/.test(text) && text.split(/[,;\n]/).filter((item) => s(item)).length >= 2) {
+    return "services";
+  }
+  if (text.split(/\s+/).filter(Boolean).length <= 4) {
+    return "company";
+  }
+
+  return s(fallbackStep, "profile");
 }
 
 export default function SetupAssistantSections({
@@ -677,7 +766,6 @@ export default function SetupAssistantSections({
   const [localError, setLocalError] = useState("");
   const [timeline, setTimeline] = useState(() => loadStoredTimeline(storageKey));
   const [localAnswers, setLocalAnswers] = useState({});
-  const [introAnimated, setIntroAnimated] = useState(() => getIntroSeen(storageKey));
   const [awaitingAssistant, setAwaitingAssistant] = useState(false);
 
   const busy = saving || finalizing || capturingSource;
@@ -697,24 +785,22 @@ export default function SetupAssistantSections({
     [reviewPayload, assistant]
   );
 
-  const smartDraftReady = useMemo(
-    () => hasBackendSmartDraft(finalModel),
-    [finalModel]
-  );
-
   const rawCurrentQuestion = useMemo(() => {
     const nextQuestion = obj(assistantControl.nextQuestion);
-    if (!s(nextQuestion.key) || !s(nextQuestion.prompt)) return null;
+    if (!s(nextQuestion.key)) return null;
 
     const meta = obj(QUESTION_META_MAP[nextQuestion.key]);
+
+    const prompt = s(nextQuestion.prompt || meta.prompt);
+    if (!prompt) return null;
 
     return {
       key: s(nextQuestion.key),
       step: s(nextQuestion.step || meta.step || nextQuestion.key),
       title: s(nextQuestion.title || meta.title),
-      prompt: s(nextQuestion.prompt || meta.prompt),
+      prompt,
       group: s(nextQuestion.group || meta.group),
-      placeholder: s(meta.placeholder),
+      placeholder: s(nextQuestion.placeholder || meta.placeholder),
     };
   }, [assistantControl.nextQuestion]);
 
@@ -732,12 +818,26 @@ export default function SetupAssistantSections({
   const sourceSubmitted =
     timeline.some((item) => item.role === "user") || hasExistingProgress;
 
-  const currentQuestion = sourceSubmitted ? rawCurrentQuestion : null;
+  const smartDraftReady = useMemo(
+    () => hasBackendSmartDraft(finalModel),
+    [finalModel]
+  );
+
+  const currentQuestion =
+    sourceSubmitted && assistantControl.readyForApproval !== true
+      ? rawCurrentQuestion
+      : null;
 
   const questionsFinished =
     sourceSubmitted &&
+    assistantControl.readyForApproval === true &&
+    smartDraftReady;
+
+  const needsFallbackContinue =
+    sourceSubmitted &&
     !currentQuestion &&
-    (assistantControl.readyForApproval === true || smartDraftReady);
+    !questionsFinished &&
+    !awaitingAssistant;
 
   const liveQuestionItem = useMemo(() => {
     if (!currentQuestion) return null;
@@ -746,13 +846,9 @@ export default function SetupAssistantSections({
       currentQuestion,
       assistantControl.draftVersion
     );
+
     if (!item) return null;
-
-    const existsInTimeline = timeline.some(
-      (entry) => s(entry.signature) === s(item.signature)
-    );
-
-    return existsInTimeline ? null : item;
+    return hasTimelineSignature(timeline, item.signature) ? null : item;
   }, [currentQuestion, assistantControl.draftVersion, timeline]);
 
   const liveDraftItem = useMemo(() => {
@@ -760,20 +856,24 @@ export default function SetupAssistantSections({
 
     const item = buildDraftTimelineItem(finalModel);
     if (!item) return null;
-
-    const existsInTimeline = timeline.some(
-      (entry) => s(entry.signature) === s(item.signature)
-    );
-
-    return existsInTimeline ? null : item;
+    return hasTimelineSignature(timeline, item.signature) ? null : item;
   }, [questionsFinished, smartDraftReady, finalModel, timeline]);
 
-  const showIntro =
-    sessionHydrated &&
-    !sourceSubmitted &&
-    timeline.length === 0 &&
-    !awaitingAssistant &&
-    !s(localError || errorMessage);
+  const liveFallbackAssistantItem = useMemo(() => {
+    if (!needsFallbackContinue) return null;
+
+    const item = buildFallbackAssistantItem(finalModel);
+    if (!item) return null;
+    return hasTimelineSignature(timeline, item.signature) ? null : item;
+  }, [needsFallbackContinue, finalModel, timeline]);
+
+  const lastAssistantQuestionStep = useMemo(() => {
+    const reversed = [...timeline].reverse();
+    const questionItem = reversed.find(
+      (item) => item.role === "assistant" && s(item.step)
+    );
+    return s(questionItem?.step, "profile");
+  }, [timeline]);
 
   useEffect(() => {
     saveStoredTimeline(storageKey, timeline);
@@ -785,7 +885,73 @@ export default function SetupAssistantSections({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [timeline, awaitingAssistant, localError, errorMessage, liveQuestionItem, liveDraftItem]);
+  }, [
+    timeline,
+    awaitingAssistant,
+    localError,
+    errorMessage,
+    liveQuestionItem,
+    liveDraftItem,
+    liveFallbackAssistantItem,
+  ]);
+
+  useEffect(() => {
+    if (!sessionHydrated) return;
+
+    const introItem = buildIntroTimelineItem({
+      storageKey,
+      hasProgress: hasExistingProgress,
+    });
+
+    setTimeline((current) => appendTimelineItem(current, introItem));
+  }, [sessionHydrated, storageKey, hasExistingProgress]);
+
+  useEffect(() => {
+    if (!liveQuestionItem) return;
+
+    const timer = window.setTimeout(() => {
+      setTimeline((current) => appendTimelineItem(current, liveQuestionItem));
+      setAwaitingAssistant(false);
+    }, awaitingAssistant ? 220 : 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [liveQuestionItem, awaitingAssistant]);
+
+  useEffect(() => {
+    if (!liveDraftItem) return;
+
+    const timer = window.setTimeout(() => {
+      setTimeline((current) => appendTimelineItem(current, liveDraftItem));
+      setAwaitingAssistant(false);
+    }, awaitingAssistant ? 220 : 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [liveDraftItem, awaitingAssistant]);
+
+  useEffect(() => {
+    if (!liveFallbackAssistantItem) return;
+
+    const timer = window.setTimeout(() => {
+      setTimeline((current) =>
+        appendTimelineItem(current, liveFallbackAssistantItem)
+      );
+      setAwaitingAssistant(false);
+    }, awaitingAssistant ? 220 : 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [liveFallbackAssistantItem, awaitingAssistant]);
+
+  useEffect(() => {
+    if (s(localError || errorMessage)) {
+      setAwaitingAssistant(false);
+    }
+  }, [localError, errorMessage]);
 
   async function handleInitialSourceSubmit() {
     const text = s(composerValue);
@@ -814,7 +980,6 @@ export default function SetupAssistantSections({
       });
     } catch (error) {
       setLocalError(s(error?.message, "Source intake failed."));
-    } finally {
       setAwaitingAssistant(false);
     }
   }
@@ -823,24 +988,17 @@ export default function SetupAssistantSections({
     const text = s(textValue);
     if (!text || busy || !currentQuestion) return;
 
-    const committedQuestion = liveQuestionItem;
-
     setLocalError("");
     setAwaitingAssistant(true);
 
-    setTimeline((current) => {
-      let next = current;
-      if (committedQuestion) {
-        next = appendTimelineItem(next, committedQuestion);
-      }
-      next = appendTimelineItem(next, {
+    setTimeline((current) =>
+      appendTimelineItem(current, {
         id: `answer-${currentQuestion.key}-${Date.now()}`,
         type: "message",
         role: "user",
         body: text,
-      });
-      return next;
-    });
+      })
+    );
 
     setLocalAnswers((current) => ({
       ...current,
@@ -856,44 +1014,37 @@ export default function SetupAssistantSections({
       });
     } catch (error) {
       setLocalError(s(error?.message, "The answer could not be processed."));
-    } finally {
       setAwaitingAssistant(false);
     }
   }
 
-  async function handleDraftUpdate() {
-    const text = s(composerValue);
+  async function handleFreeformContinue(textValue = composerValue) {
+    const text = s(textValue);
     if (!text || busy) return;
 
-    const committedDraft = liveDraftItem;
+    const resolvedStep = resolveFreeformStepFromText(text, lastAssistantQuestionStep);
 
     setLocalError("");
     setAwaitingAssistant(true);
 
-    setTimeline((current) => {
-      let next = current;
-      if (committedDraft) {
-        next = appendTimelineItem(next, committedDraft);
-      }
-      next = appendTimelineItem(next, {
-        id: `edit-${Date.now()}`,
+    setTimeline((current) =>
+      appendTimelineItem(current, {
+        id: `freeform-${Date.now()}`,
         type: "message",
         role: "user",
         body: text,
-      });
-      return next;
-    });
+      })
+    );
 
     setComposerValue("");
 
     try {
       await onParseMessage?.({
-        step: "profile",
+        step: resolvedStep,
         text,
       });
     } catch (error) {
-      setLocalError(s(error?.message, "The draft could not be updated."));
-    } finally {
+      setLocalError(s(error?.message, "The update could not be processed."));
       setAwaitingAssistant(false);
     }
   }
@@ -902,20 +1053,6 @@ export default function SetupAssistantSections({
     <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,#ffffff,#f8fafc)]">
       <div ref={scrollRef} className="flex-1 overflow-auto px-5 pt-5">
         <div className="space-y-4 pb-4">
-          {showIntro ? (
-            <MessageBubble
-              role="assistant"
-              body={SETUP_SOURCE_PROMPT}
-              animate={!introAnimated}
-              onAnimationComplete={() => {
-                if (!introAnimated) {
-                  setIntroSeen(storageKey);
-                  setIntroAnimated(true);
-                }
-              }}
-            />
-          ) : null}
-
           <AnimatePresence initial={false}>
             {timeline.map((item) => {
               if (item.type === "draft") {
@@ -942,29 +1079,13 @@ export default function SetupAssistantSections({
             })}
           </AnimatePresence>
 
-          {liveQuestionItem ? (
-            <MessageBubble
-              role="assistant"
-              eyebrow={liveQuestionItem.eyebrow}
-              title={liveQuestionItem.title}
-              body={liveQuestionItem.body}
-              animate
-            />
-          ) : null}
-
-          {liveDraftItem ? (
-            <SmartDraftBubble
-              model={liveDraftItem.model}
-              finalizing={finalizing}
-              onFinalize={onFinalize}
-            />
-          ) : null}
-
           {awaitingAssistant ? <TypingBubble /> : null}
 
           {s(localError || errorMessage) ? (
             <MessageBubble
               role="assistant"
+              eyebrow="Setup"
+              title="I need one more try"
               body={localError || errorMessage}
               animate
             />
@@ -976,7 +1097,7 @@ export default function SetupAssistantSections({
         <Composer
           value={composerValue}
           busy={busy}
-          placeholder="Website və ya source link yaz"
+          placeholder="Website, Google Maps, Instagram, Facebook və ya qısa qeyd yaz"
           buttonLabel="Send"
           onChange={setComposerValue}
           onSubmit={handleInitialSourceSubmit}
@@ -994,14 +1115,25 @@ export default function SetupAssistantSections({
         />
       ) : null}
 
-      {questionsFinished && smartDraftReady ? (
+      {sourceSubmitted && !currentQuestion && !questionsFinished ? (
+        <Composer
+          value={composerValue}
+          busy={busy}
+          placeholder="Əlavə detal və ya düzəliş yaz"
+          buttonLabel="Send"
+          onChange={setComposerValue}
+          onSubmit={handleFreeformContinue}
+        />
+      ) : null}
+
+      {questionsFinished ? (
         <Composer
           value={composerValue}
           busy={busy}
           placeholder="Dəyişmək istədiyini yaz"
           buttonLabel="Send"
           onChange={setComposerValue}
-          onSubmit={handleDraftUpdate}
+          onSubmit={handleFreeformContinue}
         />
       ) : null}
     </div>

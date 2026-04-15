@@ -1,5 +1,5 @@
 export const SETUP_SOURCE_PROMPT =
-  "Website varsa onu göndər. Lokal biznesdirsə Google Maps də olar. Instagram/Facebook və qısa qeyd əlavə kontekst üçündür.";
+  "Salam. Gəlin biznes setup-ını düzgün quraq. Website, Google Maps, Instagram, Facebook və ya qısa qeyd göndərə bilərsən. Heç nə hazır deyilsə, mən səndən yalnız ən vacib şeyləri bir-bir soruşacağam.";
 
 export const SETUP_INTERVIEW_QUESTIONS = [
   {
@@ -7,7 +7,7 @@ export const SETUP_INTERVIEW_QUESTIONS = [
     step: "company",
     title: "Business name",
     prompt: "Biznesin adı necə görünməlidir?",
-    placeholder: "Məsələn: Saytpro",
+    placeholder: "Məsələn: Aurora Studio",
     group: "business_truth",
   },
   {
@@ -17,15 +17,15 @@ export const SETUP_INTERVIEW_QUESTIONS = [
     prompt:
       "Bu biznesi AI müştəriyə necə təqdim etməlidir? Nə edir və hansı nəticəni verir?",
     placeholder:
-      "Məsələn: Saytpro bizneslər üçün website, reklam və branding həlləri qurur.",
+      "Məsələn: Lokal bizneslər üçün website və rəqəmsal təqdimat həlləri qururuq.",
     group: "business_truth",
   },
   {
     key: "website",
     step: "website",
     title: "Website",
-    prompt: "Əsas website varsa linkini göndər.",
-    placeholder: "Məsələn: https://saytpro.az",
+    prompt: "Əsas website varsa domeni və ya linki göndər.",
+    placeholder: "Məsələn: yourbusiness.com",
     group: "business_truth",
   },
   {
@@ -54,7 +54,7 @@ export const SETUP_INTERVIEW_QUESTIONS = [
     title: "Pricing posture",
     prompt: "AI qiymət mövzusunda nə qədər açıq danışmalıdır?",
     placeholder:
-      "Məsələn: starting price deyilə bilər, amma dəqiq qiymət üçün müraciət istənməlidir",
+      "Məsələn: starting price deyilə bilər, amma dəqiq quote üçün müraciət istənməlidir",
     group: "business_truth",
   },
   {
@@ -64,7 +64,7 @@ export const SETUP_INTERVIEW_QUESTIONS = [
     prompt:
       "Müştəri sonda əsasən hara yönləndirilməlidir? Birinci prioritet route-u yaz.",
     placeholder:
-      "Məsələn: WhatsApp, telefon zəngi, form, Instagram DM",
+      "Məsələn: WhatsApp, telefon zəngi, form və ya email",
     group: "business_truth",
   },
   {
