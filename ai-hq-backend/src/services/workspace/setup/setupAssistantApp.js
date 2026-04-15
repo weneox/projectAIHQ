@@ -609,26 +609,35 @@ function sanitizeAssistantState(value = {}) {
 }
 
 function sanitizeSetupAssistantCore(value = {}) {
+  const source = obj(value);
+  const aiBehavior = obj(source.aiBehavior);
+
   return {
     businessProfile: sanitizeBusinessProfile(
-      obj(value.businessProfile || value.business_profile)
+      obj(source.businessProfile || source.business_profile)
     ),
-    services: sanitizeServices(value.services),
-    contacts: sanitizeContacts(value.contacts),
-    hours: sanitizeStructuredHours(value.hours),
+    services: sanitizeServices(source.services),
+    contacts: sanitizeContacts(source.contacts),
+    hours: sanitizeStructuredHours(source.hours),
     pricingPosture: sanitizePricingPosture(
-      obj(value.pricingPosture || value.pricing_posture || value.pricing)
+      obj(source.pricingPosture || source.pricing_posture || source.pricing)
     ),
     handoffRules: sanitizeHandoffRules(
-      obj(value.handoffRules || value.handoff_rules || value.handoff)
+      obj(source.handoffRules || source.handoff_rules || source.handoff)
     ),
     sourceMetadata: sanitizeSourceMetadata(
-      obj(value.sourceMetadata || value.source_metadata)
+      obj(source.sourceMetadata || source.source_metadata)
     ),
     assistantState: sanitizeAssistantState(
-      obj(value.assistantState || value.assistant_state)
+      obj(source.assistantState || source.assistant_state)
     ),
-    progress: sanitizeProgress(value.progress),
+    progress: sanitizeProgress(source.progress),
+    languages: uniqueStrings(source.languages || aiBehavior.languages, 8),
+    tone: s(source.tone || aiBehavior.tone),
+    greetingStyle: s(source.greetingStyle || aiBehavior.greetingStyle),
+    afterHoursBehavior: s(
+      source.afterHoursBehavior || aiBehavior.afterHoursBehavior
+    ),
   };
 }
 
@@ -704,6 +713,10 @@ function mergeSetupAssistantCore(left = {}, right = {}) {
     sourceMetadata: mergeSourceMetadata(a.sourceMetadata, b.sourceMetadata),
     assistantState: mergeAssistantState(a.assistantState, b.assistantState),
     progress: mergeProgress(a.progress, b.progress),
+    languages: b.languages.length ? uniqueStrings(b.languages, 8) : a.languages,
+    tone: s(b.tone || a.tone),
+    greetingStyle: s(b.greetingStyle || a.greetingStyle),
+    afterHoursBehavior: s(b.afterHoursBehavior || a.afterHoursBehavior),
   };
 }
 
@@ -1306,8 +1319,6 @@ function hasSetupSignalForInterview(draft = {}) {
 }
 
 function buildProfileQuestionPrompt(draft = {}) {
-  return s(obj(SECTION_META.profile).prompt);
-
   const businessProfile = obj(draft.businessProfile);
   const sourceMetadata = obj(draft.sourceMetadata);
 
@@ -1315,7 +1326,11 @@ function buildProfileQuestionPrompt(draft = {}) {
   const parts = [];
 
   if (s(sourceMetadata.primarySourceType) && s(sourceMetadata.primarySourceUrl)) {
-    parts.push(`${sourceLabel} source is already attached (${s(sourceMetadata.primarySourceUrl)})`);
+    parts.push(
+      `${sourceLabel} source is already attached (${s(
+        sourceMetadata.primarySourceUrl
+      )})`
+    );
   } else if (s(sourceMetadata.primarySourceType)) {
     parts.push(`${sourceLabel} source is already attached`);
   }
@@ -2092,14 +2107,72 @@ function isMessageModeBody(body = {}) {
   return Boolean(step && (answer || isMessageSkip(body)));
 }
 
-function buildSetupAssistantPatchFromOrchestrator(turn = {}, current = {}) {
+function mergeStringLists(primary = [], secondary = [], limit = 24) {
+  return uniqueStrings([...arr(primary), ...arr(secondary)].map((item) => s(item)), limit);
+}
+
+function buildServicePatchFromAcceptedValues(values = [], currentServices = []) {
+  const nextValues = mergeStringLists(
+    arr(currentServices).map((item) => s(item?.title || item?.name || item?.label)),
+    values,
+    24
+  );
+
+  if (!nextValues.length) return [];
+
+  return parseServicesNote(nextValues.join("; "), currentServices);
+}
+
+function buildContactPatchFromAcceptedValues(values = [], currentContacts = []) {
+  const nextValues = mergeStringLists(
+    arr(currentContacts).map((item) => s(item?.value || item?.label || item?.type)),
+    values,
+    24
+  );
+
+  if (!nextValues.length) return [];
+
+  return buildContactsFromAnswer(nextValues.join("; "));
+}
+
+function buildHoursPatchFromAcceptedValues(values = [], currentHours = []) {
+  const nextValues = uniqueStrings(arr(values).map((item) => s(item)).filter(Boolean), 12);
+  if (!nextValues.length) return currentHours;
+  return parseHoursNote(nextValues.join("; "), currentHours);
+}
+
+function buildSourceMetadataPatchFromAcceptedIdentity(identity = {}, currentSourceMetadata = {}) {
+  const websiteUrl = normalizeWebsiteUrl(s(identity.websiteUrl));
+  if (!websiteUrl) return {};
+
+  return buildAssistantSourceMetadataPatch("website", websiteUrl, currentSourceMetadata);
+}
+
+function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {}) {
   const safeTurn = obj(turn);
-  const safeDraft = obj(safeTurn.draft);
+  const acceptedPatch = obj(safeTurn.acceptedPatch);
+  const acceptedIdentity = obj(acceptedPatch.identity);
+  const acceptedAiBehavior = obj(acceptedPatch.aiBehavior);
   const currentDraft = normalizeStoredSetupAssistantPayload(current, current);
-  const serviceLines = arr(safeDraft.coreServices).map((item) => s(item)).filter(Boolean);
-  const contactLines = arr(safeDraft.contactRoutes).map((item) => s(item)).filter(Boolean);
-  const hourLines = arr(safeDraft.hours).map((item) => s(item)).filter(Boolean);
-  const pricingText = s(safeDraft.pricingPosture);
+
+  const nextServices = buildServicePatchFromAcceptedValues(
+    arr(acceptedPatch.services),
+    currentDraft.services
+  );
+
+  const nextContacts = buildContactPatchFromAcceptedValues(
+    arr(acceptedPatch.contacts),
+    currentDraft.contacts
+  );
+
+  const nextHours = buildHoursPatchFromAcceptedValues(
+    arr(acceptedPatch.hours),
+    currentDraft.hours
+  );
+
+  const pricingText = s(acceptedPatch.pricingPosture);
+  const handoffText = s(acceptedPatch.humanHandoff);
+
   const nextStep = s(
     obj(safeTurn.nextQuestion).step ||
       obj(safeTurn.nextQuestion).key ||
@@ -2107,42 +2180,50 @@ function buildSetupAssistantPatchFromOrchestrator(turn = {}, current = {}) {
       "profile"
   ).toLowerCase();
 
-  const services =
-    serviceLines.length > 0
-      ? parseServicesNote(serviceLines.join("; "), currentDraft.services)
-      : currentDraft.services;
-
   return compactDraftObject({
     businessProfile: sanitizeBusinessProfile({
       ...obj(currentDraft.businessProfile),
-      companyName: s(safeDraft.businessName),
-      description: s(safeDraft.whatThisBusinessIs),
-      websiteUrl: normalizeWebsiteUrl(s(safeDraft.websiteUrl)),
+      companyName: s(
+        acceptedIdentity.businessName || obj(currentDraft.businessProfile).companyName
+      ),
+      description: s(
+        acceptedIdentity.description || obj(currentDraft.businessProfile).description
+      ),
+      websiteUrl: normalizeWebsiteUrl(
+        s(acceptedIdentity.websiteUrl || obj(currentDraft.businessProfile).websiteUrl)
+      ),
     }),
-    services,
-    contacts:
-      contactLines.length > 0
-        ? buildContactsFromAnswer(contactLines.join("; "))
-        : currentDraft.contacts,
-    hours:
-      hourLines.length > 0
-        ? parseHoursNote(hourLines.join("; "), currentDraft.hours)
-        : currentDraft.hours,
+    services: nextServices,
+    contacts: nextContacts,
+    hours: nextHours,
     pricingPosture: pricingText
       ? sanitizePricingPosture({
           ...obj(
             parsePricingNote(
               pricingText,
               currentDraft.pricingPosture,
-              services
+              nextServices.length ? nextServices : currentDraft.services
             )
           ),
           publicSummary: pricingText,
         })
       : currentDraft.pricingPosture,
-    handoffRules: s(safeDraft.humanHandoff)
-      ? buildHandoffFromAnswer(s(safeDraft.humanHandoff))
+    handoffRules: handoffText
+      ? buildHandoffFromAnswer(handoffText)
       : currentDraft.handoffRules,
+    sourceMetadata: mergeSourceMetadata(
+      currentDraft.sourceMetadata,
+      buildSourceMetadataPatchFromAcceptedIdentity(
+        acceptedIdentity,
+        currentDraft.sourceMetadata
+      )
+    ),
+    languages: mergeStringLists(currentDraft.languages, acceptedAiBehavior.languages, 8),
+    tone: s(acceptedAiBehavior.tone || currentDraft.tone),
+    greetingStyle: s(acceptedAiBehavior.greetingStyle || currentDraft.greetingStyle),
+    afterHoursBehavior: s(
+      acceptedAiBehavior.afterHoursBehavior || currentDraft.afterHoursBehavior
+    ),
     assistantState: {
       activeSection: nextStep,
       lastUpdatedSection: nextStep,
@@ -2153,6 +2234,55 @@ function buildSetupAssistantPatchFromOrchestrator(turn = {}, current = {}) {
       updatedAt: nowIso(),
     },
   });
+}
+
+function buildSetupAssistantPatchFromOrchestrator(turn = {}, current = {}) {
+  const safeTurn = obj(turn);
+  const acceptedPatchMerge = buildSetupAssistantPatchFromAcceptedPatch(
+    safeTurn,
+    current
+  );
+  const safeDraft = obj(safeTurn.draft);
+  const currentDraft = normalizeStoredSetupAssistantPayload(current, current);
+
+  const fallbackPreviewPatch = compactDraftObject({
+    businessProfile: sanitizeBusinessProfile({
+      companyName:
+        !s(obj(acceptedPatchMerge.businessProfile).companyName) &&
+        !s(obj(currentDraft.businessProfile).companyName)
+          ? s(safeDraft.businessName)
+          : "",
+      description:
+        !s(obj(acceptedPatchMerge.businessProfile).description) &&
+        !s(obj(currentDraft.businessProfile).description)
+          ? s(safeDraft.whatThisBusinessIs)
+          : "",
+      websiteUrl:
+        !s(obj(acceptedPatchMerge.businessProfile).websiteUrl) &&
+        !s(obj(currentDraft.businessProfile).websiteUrl)
+          ? normalizeWebsiteUrl(s(safeDraft.websiteUrl))
+          : "",
+    }),
+    languages:
+      !arr(acceptedPatchMerge.languages).length && !arr(currentDraft.languages).length
+        ? arr(safeDraft.languages)
+        : [],
+    tone:
+      !s(acceptedPatchMerge.tone) && !s(currentDraft.tone)
+        ? s(safeDraft.tone)
+        : "",
+    greetingStyle:
+      !s(acceptedPatchMerge.greetingStyle) && !s(currentDraft.greetingStyle)
+        ? s(safeDraft.greetingStyle)
+        : "",
+    afterHoursBehavior:
+      !s(acceptedPatchMerge.afterHoursBehavior) &&
+      !s(currentDraft.afterHoursBehavior)
+        ? s(safeDraft.afterHoursBehavior)
+        : "",
+  });
+
+  return mergeDraftState(acceptedPatchMerge, fallbackPreviewPatch);
 }
 
 function formatSetupAssistantHoursForCanonical(hours = []) {

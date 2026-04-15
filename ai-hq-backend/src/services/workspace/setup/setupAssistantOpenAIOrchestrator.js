@@ -16,8 +16,8 @@ function getSetupAssistantRuntimeConfig() {
     25_000;
   const maxOutputTokens =
     Number(
-      cfg.ai?.openaiSetupMaxOutputTokens || cfg.ai?.openaiMaxOutputTokens || 1200
-    ) || 1200;
+      cfg.ai?.openaiSetupMaxOutputTokens || cfg.ai?.openaiMaxOutputTokens || 1600
+    ) || 1600;
 
   return {
     enabled: cfg.ai?.openaiSetupAssistantEnabled === true,
@@ -245,6 +245,39 @@ function sanitizeSourceSignals(value = {}, fallback = {}) {
   };
 }
 
+function sanitizeInterviewPlan(value = {}, fallback = {}) {
+  const source = obj(value);
+  const safeFallback = obj(fallback);
+
+  const activeQuestions = arr(source.activeQuestions || safeFallback.activeQuestions)
+    .map((item) =>
+      compactDraftObject({
+        key: s(item?.key),
+        step: s(item?.step || item?.key),
+        title: s(item?.title),
+        group: s(item?.group || "business_truth"),
+        groupLabel: s(item?.groupLabel || "Business truth"),
+        priority: Number(item?.priority || 0) || 0,
+      })
+    )
+    .filter((item) => item.key);
+
+  return compactDraftObject({
+    activeQuestionKeys: uniqueStrings(
+      source.activeQuestionKeys || activeQuestions.map((item) => item.key),
+      12
+    ),
+    activeQuestions,
+    remainingQuestionKeys: uniqueStrings(
+      source.remainingQuestionKeys ||
+        activeQuestions.map((item) => item.key),
+      12
+    ),
+    nextGroup: s(source.nextGroup || safeFallback.nextGroup),
+    nextGroupLabel: s(source.nextGroupLabel || safeFallback.nextGroupLabel),
+  });
+}
+
 function normalizeTurnResult(
   payload = {},
   {
@@ -279,6 +312,10 @@ function normalizeTurnResult(
   const normalizedAcceptedPatch = sanitizeAcceptedPatch(
     payload.acceptedPatch,
     normalizedDraft
+  );
+  const normalizedInterviewPlan = sanitizeInterviewPlan(
+    payload.interviewPlan,
+    obj(fallback.interviewPlan)
   );
 
   const readyForApproval =
@@ -317,13 +354,93 @@ function normalizeTurnResult(
     confidence: normalizedConfidence,
     recommendation: normalizedRecommendation,
     sourceSignals: normalizedSourceSignals,
-    interviewPlan: obj(payload.interviewPlan || fallback.interviewPlan),
+    interviewPlan: normalizedInterviewPlan,
     aiBehavior: compactDraftObject(
       payload.aiBehavior ||
         fallback.aiBehavior ||
         normalizedAcceptedPatch.aiBehavior
     ),
     readyForApproval,
+  };
+}
+
+function normalizeEventText(value = "") {
+  return s(value).replace(/\s+/g, " ").trim();
+}
+
+function extractRecentConversation(review = {}, latestStep = "", latestMessage = "") {
+  const root = obj(review);
+  const candidates = [
+    ...arr(root.events),
+    ...arr(root.review?.events),
+    ...arr(root.timeline),
+    ...arr(root.review?.timeline),
+  ];
+
+  const normalized = candidates
+    .map((item) => {
+      const row = obj(item);
+      const role = s(
+        row.role || row.actorRole || row.type || row.eventType
+      ).toLowerCase();
+
+      const text = normalizeEventText(
+        row.text ||
+          row.message ||
+          row.summary ||
+          row.note ||
+          row.body ||
+          row.value
+      );
+
+      return compactDraftObject({
+        role,
+        text,
+        createdAt: row.createdAt || row.created_at || null,
+      });
+    })
+    .filter((item) => item.text)
+    .slice(-10);
+
+  if (s(latestMessage)) {
+    normalized.push({
+      role: "user",
+      text: normalizeEventText(latestMessage),
+      step: s(latestStep),
+      createdAt: null,
+    });
+  }
+
+  return normalized.slice(-12);
+}
+
+function buildReadinessRubric() {
+  return {
+    identity: [
+      "Exact public business name",
+      "One clean description of what the business does",
+      "Website or other reliable public source identity",
+    ],
+    services: [
+      "Real customer-facing services only",
+      "Avoid generic labels, channels, vague capabilities",
+    ],
+    contacts: [
+      "At least one primary public customer contact lane",
+    ],
+    hours: [
+      "Public hours, or an explicit appointment-only / 24-7 posture",
+    ],
+    pricing: [
+      "Safe public pricing posture",
+      "Whether exact quotes require operator involvement",
+    ],
+    handoff: [
+      "Clear human escalation cases",
+    ],
+    aiBehavior: [
+      "Tone or language if confidently known",
+    ],
   };
 }
 
@@ -342,6 +459,10 @@ function buildSetupContext({
   const reviewDraft = obj(safeReview.review?.draft || safeReview.draft);
 
   return {
+    mission:
+      "Understand the business like a professional setup strategist, decide what is trustworthy, avoid asking for facts already covered by strong source evidence, and only ask the single best next question when needed.",
+    readinessRubric: buildReadinessRubric(),
+
     session: compactDraftObject({
       id: s(session.id),
       mode: s(session.mode),
@@ -354,6 +475,12 @@ function buildSetupContext({
       step: s(latestStep),
       text: s(latestMessage),
     }),
+
+    recentConversation: extractRecentConversation(
+      safeReview,
+      latestStep,
+      latestMessage
+    ),
 
     existingDraft: compactDraftObject({
       businessProfile: obj(reviewDraft.businessProfile || safeDraft.businessProfile),
@@ -403,13 +530,24 @@ function buildSetupContext({
 function buildSystemPrompt() {
   return [
     "You are the canonical setup brain for a business onboarding system.",
-    "Your job is to understand the business from public sources and the latest operator reply.",
+    "Behave like a professional business analyst and onboarding strategist, not like a form wizard.",
+    "Your job is to understand the business from public sources, existing draft state, and the latest operator reply.",
     "You must think before writing anything into the draft.",
+    "Do not ask for facts that are already strongly supported by sources or the existing draft.",
+    "When the latest user reply contains usable information, accept and normalize it instead of asking another shallow question.",
+    "When the user gives ambiguous, weak, generic, or invalid information, challenge it politely and explain what is still needed.",
     "Never accept acknowledgement-only inputs like ok, continue, next, tamam, oldu, bəli as business facts.",
-    "Never accept generic source words like Website, Instagram, Facebook, Source, Contact as services or business identity.",
-    "Prefer public source signals over weak operator filler.",
-    "When the user message is ambiguous, keep acceptedPatch narrow and ask one best next question.",
-    "When sources and draft conflict, explicitly report that in confidence.contradictions or rejectedInputs.",
+    "Never accept generic source words like Website, Instagram, Facebook, Source, Contact, Business as services or business identity.",
+    "Services must be real customer-facing offers, not channels, vague capabilities, adjectives, or navigation labels.",
+    "If the user gives natural language hours like 'weekdays 9 to 6' or 'həftədə 5 dəfə 9-6', infer a professional normalized schedule proposal.",
+    "If the user gives pricing naturally, convert it into a safe public pricing posture.",
+    "If the user gives handoff cues naturally, convert them into a human escalation rule.",
+    "Prefer strong source evidence over weak operator filler, but let the operator override weak source guesses when they are explicit and credible.",
+    "If sources and user claims conflict, call it out in confidence.contradictions or rejectedInputs.",
+    "assistantMessage must sound calm, professional, and helpful.",
+    "Do not dump multiple unrelated questions.",
+    "Ask only the single best next question when needed.",
+    "If enough information exists for a strong chatbot draft, set readyForApproval=true and present the draft confidently.",
     "Only output strict JSON matching the schema.",
   ].join(" ");
 }
@@ -418,15 +556,29 @@ function buildUserPrompt(context = {}) {
   return [
     "Analyze this setup turn and decide what should actually be accepted into the setup draft.",
     "",
-    "Rules:",
-    "- acceptedPatch.identity is only for clean confirmed identity facts.",
-    "- services must contain only real customer-facing services.",
-    "- contacts must contain only real public contact lanes.",
-    "- hours must contain public availability lines only.",
-    "- pricingPosture must describe how AI can speak publicly about pricing.",
-    "- humanHandoff must describe when AI should escalate to a human.",
-    "- rejectedInputs should explain why a candidate should not be accepted.",
-    "- nextQuestion should be the single best next question.",
+    "Reasoning principles:",
+    "- Treat this like high-quality onboarding for a real business chatbot.",
+    "- The operator can answer loosely. You must normalize their meaning into a professional draft.",
+    "- If the source evidence already covers a fact, avoid asking for it again.",
+    "- Ask for what is actually missing for chatbot readiness, not what is merely absent from a form.",
+    "- When a user gives a vague service like 'automation', refine or challenge it.",
+    "- When a user gives natural language hours, turn them into a clean draft proposal.",
+    "- acceptedPatch should contain only facts you are willing to write into the draft now.",
+    "- rejectedInputs should explain what was not accepted and why.",
+    "",
+    "Readiness target:",
+    "- identity: exact public name + clear business description + reliable public source identity",
+    "- services: concrete customer-facing services",
+    "- contacts: at least one real routing lane",
+    "- hours: public hours or explicit availability posture",
+    "- pricing: safe public pricing rule",
+    "- handoff: clear escalation cases",
+    "",
+    "Examples of good behavior:",
+    "- If the user says 'həftədə 5 dəfə 9-6', interpret that into a reasonable weekday schedule proposal, mention the assumption, and ask only if a specific gap matters.",
+    "- If the user says 'automation', do not blindly accept it as a service. Ask what concrete customer-facing service that means.",
+    "- If the website already makes the business identity obvious, do not keep asking for business name again.",
+    "- If the user gives enough information, stop interrogating and produce a clean draft.",
     "",
     "Context JSON:",
     JSON.stringify(context, null, 2),
@@ -628,7 +780,7 @@ async function callOpenAISetupAssistant({
   const resolvedModel = s(model, runtime.model);
   const resolvedTimeoutMs = Number(timeoutMs || runtime.timeoutMs || 25_000) || 25_000;
   const resolvedMaxOutputTokens =
-    Number(maxOutputTokens || runtime.maxOutputTokens || 1200) || 1200;
+    Number(maxOutputTokens || runtime.maxOutputTokens || 1600) || 1600;
 
   const client = getOpenAIClient();
   if (!client) {
@@ -763,9 +915,12 @@ export const __test__ = {
   buildSetupContext,
   buildSystemPrompt,
   buildUserPrompt,
+  buildReadinessRubric,
+  extractRecentConversation,
   normalizeTurnResult,
   sanitizeAcceptedPatch,
   sanitizeDraft,
+  sanitizeInterviewPlan,
   sanitizeQuestion,
   sanitizeSourceSignals,
   hasOpenAISetupAssistant,
