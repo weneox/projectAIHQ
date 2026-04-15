@@ -1319,6 +1319,8 @@ function hasSetupSignalForInterview(draft = {}) {
 }
 
 function buildProfileQuestionPrompt(draft = {}) {
+  return s(obj(SECTION_META.profile).prompt);
+
   const businessProfile = obj(draft.businessProfile);
   const sourceMetadata = obj(draft.sourceMetadata);
 
