@@ -815,8 +815,21 @@ export default function SetupAssistantSections({
     [assistant, reviewPayload, finalModel, rawCurrentQuestion]
   );
 
+  const introItem = useMemo(() => {
+    if (!sessionHydrated) return null;
+
+    return buildIntroTimelineItem({
+      storageKey,
+      hasProgress: hasExistingProgress,
+    });
+  }, [sessionHydrated, storageKey, hasExistingProgress]);
+
+  const renderedTimeline = useMemo(() => {
+    return appendTimelineItem(timeline, introItem);
+  }, [timeline, introItem]);
+
   const sourceSubmitted =
-    timeline.some((item) => item.role === "user") || hasExistingProgress;
+    renderedTimeline.some((item) => item.role === "user") || hasExistingProgress;
 
   const smartDraftReady = useMemo(
     () => hasBackendSmartDraft(finalModel),
@@ -868,12 +881,12 @@ export default function SetupAssistantSections({
   }, [needsFallbackContinue, finalModel, timeline]);
 
   const lastAssistantQuestionStep = useMemo(() => {
-    const reversed = [...timeline].reverse();
+    const reversed = [...renderedTimeline].reverse();
     const questionItem = reversed.find(
       (item) => item.role === "assistant" && s(item.step)
     );
     return s(questionItem?.step, "profile");
-  }, [timeline]);
+  }, [renderedTimeline]);
 
   useEffect(() => {
     saveStoredTimeline(storageKey, timeline);
@@ -886,7 +899,7 @@ export default function SetupAssistantSections({
       behavior: "smooth",
     });
   }, [
-    timeline,
+    renderedTimeline,
     awaitingAssistant,
     localError,
     errorMessage,
@@ -894,17 +907,6 @@ export default function SetupAssistantSections({
     liveDraftItem,
     liveFallbackAssistantItem,
   ]);
-
-  useEffect(() => {
-    if (!sessionHydrated) return;
-
-    const introItem = buildIntroTimelineItem({
-      storageKey,
-      hasProgress: hasExistingProgress,
-    });
-
-    setTimeline((current) => appendTimelineItem(current, introItem));
-  }, [sessionHydrated, storageKey, hasExistingProgress]);
 
   useEffect(() => {
     if (!liveQuestionItem) return;
@@ -948,9 +950,15 @@ export default function SetupAssistantSections({
   }, [liveFallbackAssistantItem, awaitingAssistant]);
 
   useEffect(() => {
-    if (s(localError || errorMessage)) {
+    if (!s(localError || errorMessage)) return;
+
+    const timer = window.setTimeout(() => {
       setAwaitingAssistant(false);
-    }
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [localError, errorMessage]);
 
   async function handleInitialSourceSubmit() {
@@ -1054,7 +1062,7 @@ export default function SetupAssistantSections({
       <div ref={scrollRef} className="flex-1 overflow-auto px-5 pt-5">
         <div className="space-y-4 pb-4">
           <AnimatePresence initial={false}>
-            {timeline.map((item) => {
+            {renderedTimeline.map((item) => {
               if (item.type === "draft") {
                 return (
                   <SmartDraftBubble
