@@ -1319,8 +1319,6 @@ function hasSetupSignalForInterview(draft = {}) {
 }
 
 function buildProfileQuestionPrompt(draft = {}) {
-  return s(obj(SECTION_META.profile).prompt);
-
   const businessProfile = obj(draft.businessProfile);
   const sourceMetadata = obj(draft.sourceMetadata);
 
@@ -2464,6 +2462,253 @@ function buildCanonicalReviewDraftPatchFromSetupAssistant(setup = {}) {
   };
 }
 
+function normalizeChallengeField(value = "") {
+  const key = s(value).toLowerCase().replace(/[\s_-]+/g, "");
+
+  if (
+    [
+      "identity",
+      "businessname",
+      "company",
+      "description",
+      "website",
+      "audience",
+      "profile",
+    ].includes(key)
+  ) {
+    return "profile";
+  }
+
+  if (["service", "services"].includes(key)) return "services";
+  if (["contact", "contacts", "contactroute", "routing"].includes(key)) {
+    return "contacts";
+  }
+  if (["hour", "hours", "availability"].includes(key)) return "hours";
+  if (["pricing", "price", "pricingposture"].includes(key)) return "pricing";
+  if (["handoff", "escalation", "humanhandoff"].includes(key)) return "handoff";
+
+  const raw = s(value).toLowerCase();
+  return SECTION_META[raw] ? raw : "";
+}
+
+function buildChallengeQuestion(turn = {}, currentDraft = {}) {
+  const safeTurn = obj(turn);
+  const rejectedInputs = arr(safeTurn.rejectedInputs);
+  const firstRejected = obj(rejectedInputs[0]);
+  const suggestedField = normalizeChallengeField(firstRejected.suggestedField);
+  const fallbackKey =
+    normalizeChallengeField(obj(safeTurn.nextQuestion).key) ||
+    normalizeChallengeField(obj(currentDraft.progress).currentQuestionKey) ||
+    "profile";
+
+  const key = suggestedField || fallbackKey || "profile";
+  const baseQuestion = buildAssistantQuestion(key, obj(safeTurn.nextQuestion));
+
+  return buildAssistantQuestion(key, {
+    ...baseQuestion,
+    title: s(baseQuestion.title) || "Let’s clarify this part",
+    prompt: s(baseQuestion.prompt) || s(obj(SECTION_META[key]).prompt),
+    priority: 100,
+  });
+}
+
+function shapeBrainTurnForClient(turn = {}, currentDraft = {}) {
+  const safeTurn = obj(turn);
+  const rejectedInputs = arr(safeTurn.rejectedInputs)
+    .map((item) => ({
+      input: s(item?.input),
+      reason: s(item?.reason),
+      suggestedField: s(item?.suggestedField),
+    }))
+    .filter((item) => item.input || item.reason);
+
+  const contradictions = arr(obj(safeTurn.confidence).contradictions)
+    .map((item) => s(item))
+    .filter(Boolean);
+
+  const hasChallenge = rejectedInputs.length > 0 || contradictions.length > 0;
+  if (!hasChallenge) return safeTurn;
+
+  const challengeQuestion = buildChallengeQuestion(safeTurn, currentDraft);
+  const firstRejected = obj(rejectedInputs[0]);
+  const leadLines = [];
+
+  if (s(firstRejected.input) || s(firstRejected.reason)) {
+    leadLines.push(
+      s(firstRejected.input)
+        ? `I did not accept "${s(firstRejected.input)}" as-is. ${s(firstRejected.reason)}`
+        : s(firstRejected.reason)
+    );
+  }
+
+  if (contradictions.length > 0) {
+    leadLines.push(`There is also a conflict I need to resolve: ${contradictions[0]}`);
+  }
+
+  leadLines.push(
+    `To keep the setup accurate, ${s(challengeQuestion.prompt)}`
+  );
+
+  const existingActiveQuestions = arr(obj(safeTurn.interviewPlan).activeQuestions)
+    .map((item) =>
+      compactDraftObject({
+        key: s(item?.key),
+        step: s(item?.step || item?.key),
+        title: s(item?.title),
+        group: s(item?.group || "business_truth"),
+        groupLabel: s(item?.groupLabel || "Business truth"),
+        priority: Number(item?.priority || 0) || 0,
+      })
+    )
+    .filter((item) => item.key && item.key !== s(challengeQuestion.key));
+
+  return {
+    ...safeTurn,
+    phase: "interview",
+    assistantMessage: leadLines.filter(Boolean).join(" "),
+    nextQuestion: challengeQuestion,
+    readyForApproval: false,
+    interviewPlan: {
+      activeQuestionKeys: [
+        s(challengeQuestion.key),
+        ...existingActiveQuestions.map((item) => s(item.key)),
+      ],
+      activeQuestions: [challengeQuestion, ...existingActiveQuestions],
+      remainingQuestionKeys: existingActiveQuestions.map((item) => s(item.key)),
+      nextGroup: s(challengeQuestion.group || "business_truth"),
+      nextGroupLabel: s(challengeQuestion.groupLabel || "Business truth"),
+    },
+  };
+}
+
+function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
+  const baseBody = obj(basePayload);
+  const session = obj(baseBody.session);
+  const setup = obj(baseBody.setup);
+  const assistant = obj(setup.assistant);
+
+  if (!turn) {
+    return {
+      ok: true,
+      ...baseBody,
+    };
+  }
+
+  const safeTurn = obj(turn);
+
+  const mergedAssistant = compactDraftObject({
+    ...assistant,
+    mode: "brain_v2",
+    phase: s(safeTurn.phase || assistant.phase),
+    message: s(
+      safeTurn.assistantMessage || assistant.message || assistant.assistantMessage
+    ),
+    assistantMessage: s(
+      safeTurn.assistantMessage || assistant.assistantMessage || assistant.message
+    ),
+    nextQuestion: obj(safeTurn.nextQuestion),
+    confidence: obj(safeTurn.confidence),
+    recommendation: obj(safeTurn.recommendation),
+    sourceSignals: obj(safeTurn.sourceSignals),
+    interviewPlan: obj(safeTurn.interviewPlan),
+    aiBehavior: obj(safeTurn.aiBehavior),
+    readyForApproval: safeTurn.readyForApproval === true,
+    finalizeAvailable: safeTurn.readyForApproval === true,
+    draft: obj(safeTurn.draft),
+    currentQuestionKey: s(obj(safeTurn.nextQuestion).key),
+    rejectedInputs: arr(safeTurn.rejectedInputs),
+    provider: s(safeTurn.provider),
+    model: s(safeTurn.model),
+    usedFallback: safeTurn.usedFallback === true,
+    error: s(safeTurn.error),
+    sourceInsights: arr(obj(safeTurn.sourceSignals).strongestEvidence),
+    completion: {
+      ready: safeTurn.readyForApproval === true,
+      action:
+        safeTurn.readyForApproval === true
+          ? {
+              id: "finalize_setup",
+              label: "Finish setup",
+              intent: "finalize_review",
+            }
+          : null,
+      message:
+        safeTurn.readyForApproval === true
+          ? "The draft is complete enough to move into review and approval."
+          : s(safeTurn.assistantMessage || REVIEW_MESSAGE),
+    },
+  });
+
+  const compatQuestion = buildAssistantCompatQuestion(mergedAssistant);
+  const compatFollowupQueue = buildAssistantCompatFollowupQueue(mergedAssistant);
+  const compatBusinessFacts = buildAssistantCompatBusinessFacts(mergedAssistant);
+  const compatConversationStatus =
+    buildAssistantCompatConversationStatus(mergedAssistant);
+
+  const mergedReview = {
+    ...obj(setup.review),
+    readyForApproval: safeTurn.readyForApproval === true,
+    finalizeAvailable: safeTurn.readyForApproval === true,
+    message:
+      safeTurn.readyForApproval === true
+        ? "The setup draft is complete enough to move into review and approval."
+        : s(obj(setup.review).message || REVIEW_MESSAGE),
+  };
+
+  const mergedSession = {
+    ...session,
+    currentStep:
+      s(obj(safeTurn.nextQuestion).step) ||
+      s(obj(safeTurn.nextQuestion).key) ||
+      s(session.currentStep),
+  };
+
+  return {
+    ok: true,
+    ...baseBody,
+    session: mergedSession,
+    setup: {
+      ...setup,
+      assistant: mergedAssistant,
+      review: mergedReview,
+    },
+    assistant: mergedAssistant,
+    turn: {
+      role: "assistant",
+      text: s(safeTurn.assistantMessage),
+      questionKey: s(obj(safeTurn.nextQuestion).key),
+      questionCategory: s(obj(safeTurn.nextQuestion).group),
+      payload: compactDraftObject({
+        mode: mergedAssistant.mode,
+        phase: mergedAssistant.phase,
+        nextQuestion: obj(safeTurn.nextQuestion),
+        confidence: obj(safeTurn.confidence),
+        recommendation: obj(safeTurn.recommendation),
+        sourceSignals: obj(safeTurn.sourceSignals),
+        interviewPlan: obj(safeTurn.interviewPlan),
+        aiBehavior: obj(safeTurn.aiBehavior),
+        readyForApproval: safeTurn.readyForApproval === true,
+        draft: obj(safeTurn.draft),
+        rejectedInputs: arr(safeTurn.rejectedInputs),
+        provider: s(safeTurn.provider),
+        model: s(safeTurn.model),
+        usedFallback: safeTurn.usedFallback === true,
+        error: s(safeTurn.error),
+      }),
+    },
+    question: compatQuestion,
+    primaryQuestion: compatQuestion,
+    conversationStatus: compatConversationStatus,
+    followupQueue: compatFollowupQueue,
+    businessFacts: compatBusinessFacts,
+    reasoningSummary: arr(obj(safeTurn.recommendation).notes).join(" "),
+    unknowns: arr(obj(safeTurn.confidence).unclear),
+    assistantHints: arr(obj(safeTurn.sourceSignals).strongestEvidence),
+    guardrails: [],
+    review: mergedReview,
+  };
+}
+
 export async function readSetupAssistantView(
   { db, actor },
   deps = {}
@@ -2489,11 +2734,10 @@ export async function readSetupAssistantView(
   const baseBody = obj(sessionResult.body);
   const session = obj(baseBody.session);
   const setup = obj(baseBody.setup);
-  const assistant = obj(setup.assistant);
   const draft = obj(setup.draft);
   const sources = arr(review?.sources);
 
-  const turn = await runSetupBrain({
+  const rawTurn = await runSetupBrain({
     session,
     draft,
     sources,
@@ -2502,118 +2746,11 @@ export async function readSetupAssistantView(
     latestMessage: "",
   });
 
-  const mergedAssistant = compactDraftObject({
-    ...assistant,
-    mode: "brain_v2",
-    phase: s(turn.phase || assistant.phase),
-    message: s(turn.assistantMessage || assistant.message || assistant.assistantMessage),
-    assistantMessage: s(
-      turn.assistantMessage || assistant.assistantMessage || assistant.message
-    ),
-    nextQuestion: obj(turn.nextQuestion),
-    confidence: obj(turn.confidence),
-    recommendation: obj(turn.recommendation),
-    sourceSignals: obj(turn.sourceSignals),
-    interviewPlan: obj(turn.interviewPlan),
-    aiBehavior: obj(turn.aiBehavior),
-    readyForApproval: turn.readyForApproval === true,
-    finalizeAvailable: turn.readyForApproval === true,
-    draft: obj(turn.draft),
-    currentQuestionKey: s(obj(turn.nextQuestion).key),
-    rejectedInputs: arr(turn.rejectedInputs),
-    provider: s(turn.provider),
-    model: s(turn.model),
-    usedFallback: turn.usedFallback === true,
-    error: s(turn.error),
-    sourceInsights: arr(obj(turn.sourceSignals).strongestEvidence),
-    completion: {
-      ready: turn.readyForApproval === true,
-      action:
-        turn.readyForApproval === true
-          ? {
-              id: "finalize_setup",
-              label: "Finish setup",
-              intent: "finalize_review",
-            }
-          : null,
-      message:
-        turn.readyForApproval === true
-          ? "The draft is complete enough to move into review and approval."
-          : s(turn.assistantMessage || REVIEW_MESSAGE),
-    },
-  });
-
-  const compatQuestion = buildAssistantCompatQuestion(mergedAssistant);
-  const compatFollowupQueue = buildAssistantCompatFollowupQueue(mergedAssistant);
-  const compatBusinessFacts = buildAssistantCompatBusinessFacts(mergedAssistant);
-  const compatConversationStatus =
-    buildAssistantCompatConversationStatus(mergedAssistant);
-
-  const mergedReview = {
-    ...obj(setup.review),
-    readyForApproval: turn.readyForApproval === true,
-    finalizeAvailable: turn.readyForApproval === true,
-    message:
-      turn.readyForApproval === true
-        ? "The setup draft is complete enough to move into review and approval."
-        : s(obj(setup.review).message || REVIEW_MESSAGE),
-  };
-
-  const mergedSession = {
-    ...session,
-    currentStep:
-      s(obj(turn.nextQuestion).step) ||
-      s(obj(turn.nextQuestion).key) ||
-      s(session.currentStep),
-  };
+  const clientTurn = shapeBrainTurnForClient(rawTurn, draft);
 
   return {
     status: 200,
-    body: {
-      ...baseBody,
-      ok: true,
-      session: mergedSession,
-      setup: {
-        ...setup,
-        assistant: mergedAssistant,
-        review: mergedReview,
-      },
-
-      assistant: mergedAssistant,
-      turn: {
-        role: "assistant",
-        text: s(turn.assistantMessage),
-        questionKey: s(obj(turn.nextQuestion).key),
-        questionCategory: s(obj(turn.nextQuestion).group),
-        payload: compactDraftObject({
-          mode: mergedAssistant.mode,
-          phase: mergedAssistant.phase,
-          nextQuestion: obj(turn.nextQuestion),
-          confidence: obj(turn.confidence),
-          recommendation: obj(turn.recommendation),
-          sourceSignals: obj(turn.sourceSignals),
-          interviewPlan: obj(turn.interviewPlan),
-          aiBehavior: obj(turn.aiBehavior),
-          readyForApproval: turn.readyForApproval === true,
-          draft: obj(turn.draft),
-          rejectedInputs: arr(turn.rejectedInputs),
-          provider: s(turn.provider),
-          model: s(turn.model),
-          usedFallback: turn.usedFallback === true,
-          error: s(turn.error),
-        }),
-      },
-      question: compatQuestion,
-      primaryQuestion: compatQuestion,
-      conversationStatus: compatConversationStatus,
-      followupQueue: compatFollowupQueue,
-      businessFacts: compatBusinessFacts,
-      reasoningSummary: arr(obj(turn.recommendation).notes).join(" "),
-      unknowns: arr(obj(turn.confidence).unclear),
-      assistantHints: arr(obj(turn.sourceSignals).strongestEvidence),
-      guardrails: [],
-      review: mergedReview,
-    },
+    body: buildSetupAssistantResponseBody(baseBody, clientTurn),
   };
 }
 
@@ -2809,6 +2946,11 @@ export async function updateSetupAssistantDraft(
       latestMessage: latestMessage || (isMessageSkip(body) ? "Let's continue." : ""),
     });
 
+    const clientTurn = shapeBrainTurnForClient(
+      brainTurn,
+      currentSetupAssistant
+    );
+
     const orchestratorPatch = buildSetupAssistantPatchFromOrchestrator(
       brainTurn,
       currentSetupAssistant
@@ -2968,12 +3110,16 @@ export async function updateSetupAssistantDraft(
     }
   );
 
+  const baseResponsePayload = buildSetupAssistantSessionPayload(refreshed);
+
   return {
     status: 200,
     body: {
-      ok: true,
+      ...buildSetupAssistantResponseBody(
+        baseResponsePayload,
+        messageMode ? shapeBrainTurnForClient(brainTurn, mergedSetupAssistant) : null
+      ),
       message: "Setup assistant draft updated",
-      ...buildSetupAssistantSessionPayload(refreshed),
     },
   };
 }
