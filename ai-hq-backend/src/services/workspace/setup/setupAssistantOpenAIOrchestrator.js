@@ -7,26 +7,40 @@ import {
   buildSetupAssistantFirstPrompt,
 } from "./assistantBrain.js";
 
-const DEFAULT_SETUP_MODEL = s(
-  process.env.OPENAI_SETUP_MODEL,
-  cfg.ai.openaiModel || "gpt-5"
-);
-
-const DEFAULT_TIMEOUT_MS = Number(
-  process.env.OPENAI_SETUP_TIMEOUT_MS || cfg.ai.openaiTimeoutMs || 25_000
-);
-
 let cachedClient = null;
 
+function getSetupAssistantRuntimeConfig() {
+  const model = s(cfg.ai?.openaiSetupModel, cfg.ai?.openaiModel || "gpt-5");
+  const timeoutMs =
+    Number(cfg.ai?.openaiSetupTimeoutMs || cfg.ai?.openaiTimeoutMs || 25_000) ||
+    25_000;
+  const maxOutputTokens =
+    Number(
+      cfg.ai?.openaiSetupMaxOutputTokens || cfg.ai?.openaiMaxOutputTokens || 1200
+    ) || 1200;
+
+  return {
+    enabled: cfg.ai?.openaiSetupAssistantEnabled === true,
+    forceFallback: cfg.ai?.openaiSetupForceFallback === true,
+    model,
+    timeoutMs,
+    maxOutputTokens,
+  };
+}
+
 function getOpenAIClient() {
-  const apiKey = s(cfg.ai.openaiApiKey);
-  if (!apiKey) return null;
   if (cachedClient) return cachedClient;
+
+  const apiKey = s(cfg.ai?.openaiApiKey);
+  if (!apiKey) return null;
+
   cachedClient = new OpenAI({ apiKey });
   return cachedClient;
 }
 
 function hasOpenAISetupAssistant() {
+  const runtime = getSetupAssistantRuntimeConfig();
+  if (runtime.enabled !== true) return false;
   return Boolean(getOpenAIClient());
 }
 
@@ -36,13 +50,6 @@ function safeJsonParse(value, fallback = {}) {
   } catch {
     return fallback;
   }
-}
-
-function listPreview(items = [], max = 4) {
-  const safe = [...new Set(arr(items).map((item) => s(item)).filter(Boolean))];
-  if (!safe.length) return "";
-  if (safe.length <= max) return safe.join(", ");
-  return `${safe.slice(0, max).join(", ")} +${safe.length - max}`;
 }
 
 function uniqueStrings(items = [], max = 24) {
@@ -145,7 +152,10 @@ function sanitizeAcceptedPatch(value = {}, fallbackDraft = {}) {
       source.humanHandoff || fallbackDraft.humanHandoff
     ),
     aiBehavior: compactDraftObject({
-      languages: uniqueStrings(source.aiBehavior?.languages || fallbackDraft.languages, 8),
+      languages: uniqueStrings(
+        source.aiBehavior?.languages || fallbackDraft.languages,
+        8
+      ),
       tone: s(source.aiBehavior?.tone || fallbackDraft.tone),
       greetingStyle: s(
         source.aiBehavior?.greetingStyle || fallbackDraft.greetingStyle
@@ -249,31 +259,23 @@ function normalizeTurnResult(
 ) {
   const fallback = obj(fallbackBrain);
 
-  const normalizedDraft = sanitizeDraft(
-    payload.draft,
-    obj(fallback.draft)
-  );
-
+  const normalizedDraft = sanitizeDraft(payload.draft, obj(fallback.draft));
   const normalizedQuestion = sanitizeQuestion(
     payload.nextQuestion,
     obj(fallback.nextQuestion)
   );
-
   const normalizedConfidence = sanitizeConfidence(
     payload.confidence,
     obj(fallback.confidence)
   );
-
   const normalizedRecommendation = sanitizeRecommendation(
     payload.recommendation,
     obj(fallback.recommendation)
   );
-
   const normalizedSourceSignals = sanitizeSourceSignals(
     payload.sourceSignals,
     obj(fallback.sourceSignals)
   );
-
   const normalizedAcceptedPatch = sanitizeAcceptedPatch(
     payload.acceptedPatch,
     normalizedDraft
@@ -317,7 +319,9 @@ function normalizeTurnResult(
     sourceSignals: normalizedSourceSignals,
     interviewPlan: obj(payload.interviewPlan || fallback.interviewPlan),
     aiBehavior: compactDraftObject(
-      payload.aiBehavior || fallback.aiBehavior || normalizedAcceptedPatch.aiBehavior
+      payload.aiBehavior ||
+        fallback.aiBehavior ||
+        normalizedAcceptedPatch.aiBehavior
     ),
     readyForApproval,
   };
@@ -365,15 +369,8 @@ function buildSetupContext({
       progress: obj(safeDraft.progress),
     }),
 
-    sourceSignals: sanitizeSourceSignals(
-      safeFallbackBrain.sourceSignals,
-      {}
-    ),
-
-    draftPreview: sanitizeDraft(
-      safeFallbackBrain.draft,
-      {}
-    ),
+    sourceSignals: sanitizeSourceSignals(safeFallbackBrain.sourceSignals, {}),
+    draftPreview: sanitizeDraft(safeFallbackBrain.draft, {}),
 
     currentBrainAssessment: {
       phase: s(safeFallbackBrain.phase),
@@ -623,20 +620,27 @@ const SETUP_TURN_SCHEMA = {
 
 async function callOpenAISetupAssistant({
   context = {},
-  model = DEFAULT_SETUP_MODEL,
-  timeoutMs = DEFAULT_TIMEOUT_MS,
-}) {
+  model,
+  timeoutMs,
+  maxOutputTokens,
+} = {}) {
+  const runtime = getSetupAssistantRuntimeConfig();
+  const resolvedModel = s(model, runtime.model);
+  const resolvedTimeoutMs = Number(timeoutMs || runtime.timeoutMs || 25_000) || 25_000;
+  const resolvedMaxOutputTokens =
+    Number(maxOutputTokens || runtime.maxOutputTokens || 1200) || 1200;
+
   const client = getOpenAIClient();
   if (!client) {
     throw new Error("OpenAI setup assistant is not configured.");
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const timeoutId = setTimeout(() => controller.abort(), resolvedTimeoutMs);
 
   try {
     const response = await client.responses.create({
-      model,
+      model: resolvedModel,
       input: [
         {
           role: "system",
@@ -655,7 +659,7 @@ async function callOpenAISetupAssistant({
           schema: SETUP_TURN_SCHEMA,
         },
       },
-      max_output_tokens: Number(cfg.ai.openaiMaxOutputTokens || 1200) || 1200,
+      max_output_tokens: resolvedMaxOutputTokens,
       signal: controller.signal,
     });
 
@@ -665,7 +669,7 @@ async function callOpenAISetupAssistant({
     }
 
     return {
-      model,
+      model: resolvedModel,
       payload: safeJsonParse(outputText, {}),
     };
   } finally {
@@ -701,13 +705,17 @@ export async function runSetupAssistantOpenAIOrchestrator({
     review,
   });
 
-  if (forceFallback || !hasOpenAISetupAssistant()) {
+  const runtime = getSetupAssistantRuntimeConfig();
+  const shouldForceFallback =
+    forceFallback === true || runtime.forceFallback === true;
+
+  if (shouldForceFallback || !hasOpenAISetupAssistant()) {
     return normalizeTurnResult(fallbackBrain, {
       fallbackBrain,
       latestMessage,
       latestStep,
       provider: "local_fallback",
-      model: "",
+      model: shouldForceFallback ? runtime.model : "",
       usedFallback: true,
     });
   }
@@ -725,8 +733,9 @@ export async function runSetupAssistantOpenAIOrchestrator({
   try {
     const openaiResult = await callOpenAISetupAssistant({
       context,
-      model: DEFAULT_SETUP_MODEL,
-      timeoutMs: DEFAULT_TIMEOUT_MS,
+      model: runtime.model,
+      timeoutMs: runtime.timeoutMs,
+      maxOutputTokens: runtime.maxOutputTokens,
     });
 
     return normalizeTurnResult(openaiResult.payload, {
@@ -743,7 +752,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
       latestMessage,
       latestStep,
       provider: "local_fallback",
-      model: DEFAULT_SETUP_MODEL,
+      model: runtime.model,
       usedFallback: true,
       error: s(error?.message, "openai_setup_assistant_failed"),
     });
@@ -760,4 +769,12 @@ export const __test__ = {
   sanitizeQuestion,
   sanitizeSourceSignals,
   hasOpenAISetupAssistant,
+  getSetupAssistantRuntimeConfig,
+  callOpenAISetupAssistant,
+  setCachedClient(client = null) {
+    cachedClient = client;
+  },
+  clearCachedClient() {
+    cachedClient = null;
+  },
 };
