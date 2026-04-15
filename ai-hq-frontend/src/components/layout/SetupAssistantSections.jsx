@@ -227,6 +227,80 @@ function buildCompactNotes(model = {}) {
   );
 }
 
+function buildChallengeState(model = {}) {
+  const rejectedInputs = arr(model.rejectedInputs)
+    .map((item) => ({
+      input: s(item.input),
+      reason: s(item.reason),
+      suggestedField: s(item.suggestedField),
+    }))
+    .filter((item) => item.input || item.reason);
+
+  const contradictions = arr(obj(model.confidence).contradictions)
+    .map((item) => s(item))
+    .filter(Boolean);
+
+  const hasChallenge = rejectedInputs.length > 0 || contradictions.length > 0;
+
+  return {
+    hasChallenge,
+    rejectedInputs: rejectedInputs.slice(0, 4),
+    contradictions: contradictions.slice(0, 3),
+  };
+}
+
+function ChallengeCard({ challengeState = {}, currentQuestion = null }) {
+  const rejectedInputs = arr(challengeState.rejectedInputs);
+  const contradictions = arr(challengeState.contradictions);
+
+  if (!rejectedInputs.length && !contradictions.length) return null;
+
+  return (
+    <div className="rounded-[18px] border border-[rgba(239,68,68,0.16)] bg-[linear-gradient(180deg,rgba(254,242,242,0.98),rgba(255,255,255,0.98))] px-3.5 py-3">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[rgba(153,27,27,0.82)]">
+        Dəqiqləşdirmə lazımdır
+      </div>
+
+      {contradictions.length ? (
+        <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
+          {contradictions.map((item) => (
+            <div key={item}>• {item}</div>
+          ))}
+        </div>
+      ) : null}
+
+      {rejectedInputs.length ? (
+        <div className={`${contradictions.length ? "mt-3" : "mt-2"} space-y-2 text-[14px] leading-7 text-text`}>
+          {rejectedInputs.map((item) => (
+            <div
+              key={`${item.input}|${item.reason}|${item.suggestedField}`}
+              className="rounded-[14px] border border-[rgba(15,23,42,0.06)] bg-white px-3 py-2.5"
+            >
+              {s(item.input) ? (
+                <div className="font-medium text-text">“{item.input}”</div>
+              ) : null}
+              {s(item.reason) ? (
+                <div className="mt-1 text-text-muted">{item.reason}</div>
+              ) : null}
+              {s(item.suggestedField) ? (
+                <div className="mt-1 text-[12px] font-medium text-text-subtle">
+                  Daha uyğun sahə: {item.suggestedField}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {currentQuestion ? (
+        <div className="mt-3 text-[13px] leading-6 text-text-muted">
+          Davam etmək üçün bunu daha dəqiq yaz: {buildQuestionPrompt(currentQuestion)}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function buildFinalViewModel({
   reviewPayload = null,
   assistant = {},
@@ -755,6 +829,7 @@ function buildLiveAssistantState({
   finalModel = {},
   assistantControl = {},
   smartDraftReady = false,
+  challengeState = {},
 }) {
   if (!sourceSubmitted) {
     return {
@@ -772,11 +847,19 @@ function buildLiveAssistantState({
     };
   }
 
+  if (challengeState?.hasChallenge) {
+    return {
+      title: "Bir şeyi olduğu kimi qəbul etmədim",
+      body:
+        "Bəzi hissələr zəif, qarışıq və ya uyğun görünmür. Mən onları kor-koranə drafta salmadım. Daha dəqiq yazsan, düzgün şəkildə strukturlaşdıracağam.",
+    };
+  }
+
   if (currentQuestion) {
     return {
       title: buildQuestionPrompt(currentQuestion),
       body:
-        "Bir cavabda lazım olan bütün detalları yaza bilərsən — mən onu strukturlaşdıracağam.",
+        "İstədiyin formatda yaza bilərsən — mən onu mümkün qədər düzgün başa düşüb strukturlaşdıracağam.",
     };
   }
 
@@ -894,6 +977,7 @@ export default function SetupAssistantSections({
         finalModel,
         assistantControl,
         smartDraftReady,
+        challengeState,
       }),
     [
       sourceSubmitted,
@@ -901,11 +985,17 @@ export default function SetupAssistantSections({
       finalModel,
       assistantControl,
       smartDraftReady,
+      challengeState,
     ]
   );
 
   const statusPills = useMemo(
     () => buildStatusPills(finalModel),
+    [finalModel]
+  );
+
+  const challengeState = useMemo(
+    () => buildChallengeState(finalModel),
     [finalModel]
   );
 
@@ -928,8 +1018,12 @@ export default function SetupAssistantSections({
       return "Website, Google Maps, Instagram, Facebook və ya qısa biznes qeydi yaz";
     }
 
+    if (challengeState?.hasChallenge) {
+      return "Rahat formada daha dəqiq yaz — mən uyğunlaşdıracağam";
+    }
+
     if (currentQuestion) {
-      return buildQuestionPlaceholder(currentQuestion);
+      return `${buildQuestionPlaceholder(currentQuestion)} — sərbəst formada da yaza bilərsən`;
     }
 
     if (smartDraftReady) {
@@ -937,7 +1031,7 @@ export default function SetupAssistantSections({
     }
 
     return "Əlavə detail və ya correction yaz";
-  }, [sourceSubmitted, currentQuestion, smartDraftReady]);
+  }, [sourceSubmitted, currentQuestion, smartDraftReady, challengeState]);
 
   useEffect(() => {
     setHistory(loadStoredHistory(storageKey));
@@ -1108,13 +1202,22 @@ export default function SetupAssistantSections({
               title={liveAssistant.title}
               body={liveAssistant.body}
             >
-              {statusPills.length ? (
-                <div className="flex flex-wrap gap-2">
-                  {statusPills.map((pill) => (
-                    <StatusPill key={pill}>{pill}</StatusPill>
-                  ))}
-                </div>
-              ) : null}
+              <div className="space-y-3">
+                {statusPills.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {statusPills.map((pill) => (
+                      <StatusPill key={pill}>{pill}</StatusPill>
+                    ))}
+                  </div>
+                ) : null}
+
+                {challengeState?.hasChallenge ? (
+                  <ChallengeCard
+                    challengeState={challengeState}
+                    currentQuestion={currentQuestion}
+                  />
+                ) : null}
+              </div>
             </MessageBubble>
           ) : null}
 
