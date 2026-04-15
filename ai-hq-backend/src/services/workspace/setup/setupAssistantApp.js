@@ -1990,6 +1990,7 @@ function buildSetupAssistantPatchFromOrchestrator(turn = {}, current = {}) {
   const serviceLines = arr(safeDraft.coreServices).map((item) => s(item)).filter(Boolean);
   const contactLines = arr(safeDraft.contactRoutes).map((item) => s(item)).filter(Boolean);
   const hourLines = arr(safeDraft.hours).map((item) => s(item)).filter(Boolean);
+  const pricingText = s(safeDraft.pricingPosture);
   const nextStep = s(
     obj(safeTurn.nextQuestion).step ||
       obj(safeTurn.nextQuestion).key ||
@@ -2018,12 +2019,17 @@ function buildSetupAssistantPatchFromOrchestrator(turn = {}, current = {}) {
       hourLines.length > 0
         ? parseHoursNote(hourLines.join("; "), currentDraft.hours)
         : currentDraft.hours,
-    pricingPosture: s(safeDraft.pricingPosture)
-      ? parsePricingNote(
-          s(safeDraft.pricingPosture),
-          currentDraft.pricingPosture,
-          services
-        )
+    pricingPosture: pricingText
+      ? sanitizePricingPosture({
+          ...obj(
+            parsePricingNote(
+              pricingText,
+              currentDraft.pricingPosture,
+              services
+            )
+          ),
+          publicSummary: pricingText,
+        })
       : currentDraft.pricingPosture,
     handoffRules: s(safeDraft.humanHandoff)
       ? buildHandoffFromAnswer(s(safeDraft.humanHandoff))
@@ -2567,13 +2573,60 @@ export async function updateSetupAssistantDraft(
       currentSetupAssistant
     );
 
-    mergedSetupAssistant = mergeSetupAssistantDraft(
-      currentSetupAssistant,
-      orchestratorPatch,
-      seed
-    );
+    if (brainTurn.usedFallback === true) {
+      const fallbackAnswerPatch = normalizeSetupAssistantDraftPatchBody(
+        body,
+        currentSetupAssistant
+      );
 
-    nextQuestion = obj(brainTurn.nextQuestion);
+      mergedSetupAssistant = mergeSetupAssistantDraft(
+        currentSetupAssistant,
+        orchestratorPatch,
+        seed
+      );
+      mergedSetupAssistant = mergeSetupAssistantDraft(
+        mergedSetupAssistant,
+        fallbackAnswerPatch,
+        seed
+      );
+
+      const fallbackSummary = buildSummary(mergedSetupAssistant);
+      nextQuestion = getNextQuestion(
+        fallbackSummary,
+        mergedSetupAssistant,
+        obj(mergedSetupAssistant.progress)
+      );
+
+      if (nextQuestion) {
+        mergedSetupAssistant = mergeSetupAssistantDraft(
+          mergedSetupAssistant,
+          {
+            assistantState: {
+              activeSection: s(nextQuestion.key),
+              lastUpdatedSection:
+                s(obj(fallbackAnswerPatch.assistantState).lastUpdatedSection) ||
+                s(obj(orchestratorPatch.assistantState).lastUpdatedSection),
+            },
+            progress: {
+              lastAnsweredStep:
+                s(obj(fallbackAnswerPatch.progress).lastAnsweredStep) ||
+                latestStep,
+              currentQuestionKey: s(nextQuestion.key),
+              updatedAt: nowIso(),
+            },
+          },
+          seed
+        );
+      }
+    } else {
+      mergedSetupAssistant = mergeSetupAssistantDraft(
+        currentSetupAssistant,
+        orchestratorPatch,
+        seed
+      );
+
+      nextQuestion = obj(brainTurn.nextQuestion);
+    }
   } else {
     const patch = normalizeSetupAssistantDraftPatchBody(
       body,
