@@ -1,5 +1,3 @@
-// src/config.js
-
 function s(v, d = "") {
   return String(v ?? d).trim();
 }
@@ -179,6 +177,27 @@ export const cfg = {
     openaiDebateSynthTokens: n(
       process.env.OPENAI_DEBATE_SYNTH_TOKENS,
       1400
+    ),
+
+    openaiSetupAssistantEnabled: b(
+      process.env.OPENAI_SETUP_ASSISTANT_ENABLED,
+      false
+    ),
+    openaiSetupForceFallback: b(
+      process.env.OPENAI_SETUP_FORCE_FALLBACK,
+      false
+    ),
+    openaiSetupModel: s(
+      process.env.OPENAI_SETUP_MODEL,
+      s(process.env.OPENAI_MODEL, "gpt-5")
+    ),
+    openaiSetupMaxOutputTokens: n(
+      process.env.OPENAI_SETUP_MAX_OUTPUT_TOKENS,
+      1400
+    ),
+    openaiSetupTimeoutMs: n(
+      process.env.OPENAI_SETUP_TIMEOUT_MS,
+      n(process.env.OPENAI_TIMEOUT_MS, 25_000)
     ),
 
     geminiApiKey: s(process.env.GEMINI_API_KEY, ""),

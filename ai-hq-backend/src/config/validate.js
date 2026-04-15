@@ -1,5 +1,3 @@
-// src/config/validate.js
-
 import { cfg } from "../config.js";
 import {
   createValidationIssue,
@@ -93,10 +91,7 @@ export function getConfigIssues() {
     );
   }
 
-  if (
-    isProd &&
-    String(cfg?.urls?.corsOrigin || "").trim() === "*"
-  ) {
+  if (isProd && String(cfg?.urls?.corsOrigin || "").trim() === "*") {
     pushIssue(
       issues,
       "error",
@@ -271,6 +266,108 @@ export function getConfigIssues() {
       "error",
       "ai.openaiDebateConcurrency",
       "OPENAI_DEBATE_CONCURRENCY must be at least 1."
+    );
+  }
+
+  if (cfg?.ai?.openaiSetupAssistantEnabled) {
+    if (!isNonEmpty(cfg?.ai?.openaiApiKey)) {
+      pushIssue(
+        issues,
+        env === "test" ? "warning" : "error",
+        "ai.openaiSetupAssistantEnabled",
+        "OPENAI_SETUP_ASSISTANT_ENABLED=true but OPENAI_API_KEY is missing.",
+        {
+          category: "providers",
+          envKeys: ["OPENAI_SETUP_ASSISTANT_ENABLED", "OPENAI_API_KEY"],
+        }
+      );
+    }
+
+    if (!isNonEmpty(cfg?.ai?.openaiSetupModel)) {
+      pushIssue(
+        issues,
+        "error",
+        "ai.openaiSetupModel",
+        "OPENAI_SETUP_ASSISTANT_ENABLED=true but OPENAI_SETUP_MODEL is empty.",
+        {
+          category: "providers",
+          envKeys: ["OPENAI_SETUP_MODEL"],
+        }
+      );
+    }
+
+    if (n(cfg?.ai?.openaiSetupMaxOutputTokens, 0) <= 0) {
+      pushIssue(
+        issues,
+        "error",
+        "ai.openaiSetupMaxOutputTokens",
+        "OPENAI_SETUP_MAX_OUTPUT_TOKENS must be greater than 0.",
+        {
+          category: "providers",
+          envKeys: ["OPENAI_SETUP_MAX_OUTPUT_TOKENS"],
+        }
+      );
+    }
+
+    if (n(cfg?.ai?.openaiSetupTimeoutMs, 0) < 2000) {
+      pushIssue(
+        issues,
+        "warning",
+        "ai.openaiSetupTimeoutMs",
+        "OPENAI_SETUP_TIMEOUT_MS looks too low for a setup reasoning turn.",
+        {
+          category: "providers",
+          envKeys: ["OPENAI_SETUP_TIMEOUT_MS"],
+        }
+      );
+    }
+
+    if (cfg?.ai?.openaiSetupForceFallback === true) {
+      pushIssue(
+        issues,
+        "warning",
+        "ai.openaiSetupForceFallback",
+        "OPENAI_SETUP_ASSISTANT_ENABLED=true but OPENAI_SETUP_FORCE_FALLBACK=true, so the setup brain will stay on local fallback.",
+        {
+          category: "providers",
+          envKeys: [
+            "OPENAI_SETUP_ASSISTANT_ENABLED",
+            "OPENAI_SETUP_FORCE_FALLBACK",
+          ],
+        }
+      );
+    }
+
+    if (
+      n(cfg?.ai?.openaiSetupTimeoutMs, 0) >
+      0 &&
+      n(cfg?.ai?.openaiTimeoutMs, 0) > 0 &&
+      n(cfg?.ai?.openaiSetupTimeoutMs, 0) < n(cfg?.ai?.openaiTimeoutMs, 0) / 4
+    ) {
+      pushIssue(
+        issues,
+        "warning",
+        "ai.openaiSetupTimeoutMs",
+        "OPENAI_SETUP_TIMEOUT_MS is much lower than the general OPENAI_TIMEOUT_MS and may cause setup turns to fall back too aggressively.",
+        {
+          category: "providers",
+          envKeys: ["OPENAI_SETUP_TIMEOUT_MS", "OPENAI_TIMEOUT_MS"],
+        }
+      );
+    }
+  } else if (cfg?.ai?.openaiSetupForceFallback === true) {
+    pushIssue(
+      issues,
+      "warning",
+      "ai.openaiSetupForceFallback",
+      "OPENAI_SETUP_FORCE_FALLBACK=true while OPENAI_SETUP_ASSISTANT_ENABLED=false has no practical effect.",
+      {
+        category: "providers",
+        envKeys: [
+          "OPENAI_SETUP_FORCE_FALLBACK",
+          "OPENAI_SETUP_ASSISTANT_ENABLED",
+        ],
+      }
     );
   }
 
