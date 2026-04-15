@@ -7,8 +7,7 @@ const STORAGE_PREFIX = "setup_assistant_history_v3";
 
 const QUESTION_FALLBACKS = {
   profile: {
-    prompt:
-      "Biznesin public adını və nə iş gördüyünü bir yerdə yaz.",
+    prompt: "Biznesin public adını və nə iş gördüyünü bir yerdə yaz.",
     placeholder:
       "Məsələn: Neox Studio — AI avtomasiya, website və rəqəmsal təqdimat həlləri qururuq.",
   },
@@ -249,56 +248,23 @@ function buildChallengeState(model = {}) {
   };
 }
 
-function ChallengeCard({ challengeState = {}, currentQuestion = null }) {
-  const rejectedInputs = arr(challengeState.rejectedInputs);
-  const contradictions = arr(challengeState.contradictions);
+function buildSourceCoverageState(model = {}) {
+  const coverage = obj(obj(model.sourceSignals).coverage);
 
-  if (!rejectedInputs.length && !contradictions.length) return null;
+  const items = [
+    coverage.identity ? "Biznes kimliyi" : "",
+    coverage.services ? "Xidmətlər" : "",
+    coverage.contacts ? "Əlaqə yolu" : "",
+    coverage.hours ? "İş saatları" : "",
+    coverage.pricing ? "Pricing posture" : "",
+    coverage.audience ? "Audience" : "",
+    coverage.languages ? "Dil siqnalları" : "",
+  ].filter(Boolean);
 
-  return (
-    <div className="rounded-[18px] border border-[rgba(239,68,68,0.16)] bg-[linear-gradient(180deg,rgba(254,242,242,0.98),rgba(255,255,255,0.98))] px-3.5 py-3">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[rgba(153,27,27,0.82)]">
-        Dəqiqləşdirmə lazımdır
-      </div>
-
-      {contradictions.length ? (
-        <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
-          {contradictions.map((item) => (
-            <div key={item}>• {item}</div>
-          ))}
-        </div>
-      ) : null}
-
-      {rejectedInputs.length ? (
-        <div className={`${contradictions.length ? "mt-3" : "mt-2"} space-y-2 text-[14px] leading-7 text-text`}>
-          {rejectedInputs.map((item) => (
-            <div
-              key={`${item.input}|${item.reason}|${item.suggestedField}`}
-              className="rounded-[14px] border border-[rgba(15,23,42,0.06)] bg-white px-3 py-2.5"
-            >
-              {s(item.input) ? (
-                <div className="font-medium text-text">“{item.input}”</div>
-              ) : null}
-              {s(item.reason) ? (
-                <div className="mt-1 text-text-muted">{item.reason}</div>
-              ) : null}
-              {s(item.suggestedField) ? (
-                <div className="mt-1 text-[12px] font-medium text-text-subtle">
-                  Daha uyğun sahə: {item.suggestedField}
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {currentQuestion ? (
-        <div className="mt-3 text-[13px] leading-6 text-text-muted">
-          Davam etmək üçün bunu daha dəqiq yaz: {buildQuestionPrompt(currentQuestion)}
-        </div>
-      ) : null}
-    </div>
-  );
+  return {
+    hasCoverage: items.length > 0,
+    items: items.slice(0, 7),
+  };
 }
 
 function buildFinalViewModel({
@@ -371,6 +337,7 @@ function buildFinalViewModel({
       contactCandidates: arr(sourceSignals.contactCandidates),
       hoursCandidates: arr(sourceSignals.hoursCandidates),
       pricingCandidates: arr(sourceSignals.pricingCandidates),
+      coverage: obj(sourceSignals.coverage),
     },
   };
 
@@ -791,9 +758,32 @@ function Composer({
   );
 }
 
-function buildStatusPills(finalModel = {}) {
+function SourceCoverageCard({ sourceCoverageState = {} }) {
+  const items = arr(sourceCoverageState.items);
+  if (!items.length) return null;
+
+  return (
+    <div className="rounded-[18px] border border-[rgba(15,23,42,0.06)] bg-[rgba(248,250,252,0.78)] px-3.5 py-3">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">
+        Mənbədən artıq anladım
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {items.map((item) => (
+          <MetaPill key={item}>{item}</MetaPill>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function buildStatusPills(finalModel = {}, sourceSubmitted = false) {
   const draft = obj(finalModel.draft);
   const sourceSignals = obj(finalModel.sourceSignals);
+
+  if (!sourceSubmitted) {
+    return ["Website", "Google Maps", "Instagram", "Facebook", "Qısa qeyd"];
+  }
+
   const pills = [];
 
   if (s(sourceSignals.primarySourceLabel)) {
@@ -823,6 +813,58 @@ function buildStatusPills(finalModel = {}) {
   return pills.slice(0, 5);
 }
 
+function ChallengeCard({ challengeState = {}, currentQuestion = null }) {
+  const rejectedInputs = arr(challengeState.rejectedInputs);
+  const contradictions = arr(challengeState.contradictions);
+
+  if (!rejectedInputs.length && !contradictions.length) return null;
+
+  return (
+    <div className="rounded-[18px] border border-[rgba(239,68,68,0.16)] bg-[linear-gradient(180deg,rgba(254,242,242,0.98),rgba(255,255,255,0.98))] px-3.5 py-3">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[rgba(153,27,27,0.82)]">
+        Dəqiqləşdirmə lazımdır
+      </div>
+
+      {contradictions.length ? (
+        <div className="mt-2 space-y-1.5 text-[14px] leading-7 text-text">
+          {contradictions.map((item) => (
+            <div key={item}>• {item}</div>
+          ))}
+        </div>
+      ) : null}
+
+      {rejectedInputs.length ? (
+        <div className={`${contradictions.length ? "mt-3" : "mt-2"} space-y-2 text-[14px] leading-7 text-text`}>
+          {rejectedInputs.map((item) => (
+            <div
+              key={`${item.input}|${item.reason}|${item.suggestedField}`}
+              className="rounded-[14px] border border-[rgba(15,23,42,0.06)] bg-white px-3 py-2.5"
+            >
+              {s(item.input) ? (
+                <div className="font-medium text-text">“{item.input}”</div>
+              ) : null}
+              {s(item.reason) ? (
+                <div className="mt-1 text-text-muted">{item.reason}</div>
+              ) : null}
+              {s(item.suggestedField) ? (
+                <div className="mt-1 text-[12px] font-medium text-text-subtle">
+                  Daha uyğun sahə: {item.suggestedField}
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {currentQuestion ? (
+        <div className="mt-3 text-[13px] leading-6 text-text-muted">
+          Davam etmək üçün bunu daha dəqiq yaz: {buildQuestionPrompt(currentQuestion)}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function buildLiveAssistantState({
   sourceSubmitted = false,
   currentQuestion = null,
@@ -830,12 +872,13 @@ function buildLiveAssistantState({
   assistantControl = {},
   smartDraftReady = false,
   challengeState = {},
+  sourceCoverageState = {},
 }) {
   if (!sourceSubmitted) {
     return {
-      title: "Başlayaq",
+      title: "Biz bunu səliqəli şəkildə birlikdə quraq",
       body:
-        "Website, Google Maps, Instagram, Facebook və ya qısa biznes qeydi göndər. Mən əvvəl nəyin oturduğunu çıxaracağam, sonra yalnız həqiqətən lazım olan növbəti şeyi soruşacağam.",
+        "Mən məqsədyönlü şəkildə işləyəcəyəm: əvvəl mövcud source və ya yazdıqlarından nəyin artıq aydın olduğunu çıxaracağam, sonra chatbot-un həqiqətən düzgün işləməsi üçün yalnız vacib olan hissələri tamamlayacağam. Format barədə narahat olma — website, Google Maps, Instagram, Facebook və ya sadəcə sərbəst biznes qeydi ilə başlaya bilərsən.",
     };
   }
 
@@ -858,8 +901,9 @@ function buildLiveAssistantState({
   if (currentQuestion) {
     return {
       title: buildQuestionPrompt(currentQuestion),
-      body:
-        "İstədiyin formatda yaza bilərsən — mən onu mümkün qədər düzgün başa düşüb strukturlaşdıracağam.",
+      body: sourceCoverageState?.hasCoverage
+        ? "Mənbədən artıq bir hissəni anladım, ona görə yalnız qalan vacib boşluğu soruşuram. Rahat şəkildə cavab verə bilərsən — mən onu peşəkar draft formasına salmağa çalışacağam."
+        : "Rahat şəkildə cavab verə bilərsən — mən onu mümkün qədər düzgün başa düşüb peşəkar draft formasına salmağa çalışacağam.",
     };
   }
 
@@ -969,6 +1013,16 @@ export default function SetupAssistantSections({
       ? rawCurrentQuestion
       : null;
 
+  const challengeState = useMemo(
+    () => buildChallengeState(finalModel),
+    [finalModel]
+  );
+
+  const sourceCoverageState = useMemo(
+    () => buildSourceCoverageState(finalModel),
+    [finalModel]
+  );
+
   const liveAssistant = useMemo(
     () =>
       buildLiveAssistantState({
@@ -978,6 +1032,7 @@ export default function SetupAssistantSections({
         assistantControl,
         smartDraftReady,
         challengeState,
+        sourceCoverageState,
       }),
     [
       sourceSubmitted,
@@ -986,17 +1041,13 @@ export default function SetupAssistantSections({
       assistantControl,
       smartDraftReady,
       challengeState,
+      sourceCoverageState,
     ]
   );
 
   const statusPills = useMemo(
-    () => buildStatusPills(finalModel),
-    [finalModel]
-  );
-
-  const challengeState = useMemo(
-    () => buildChallengeState(finalModel),
-    [finalModel]
+    () => buildStatusPills(finalModel, sourceSubmitted),
+    [finalModel, sourceSubmitted]
   );
 
   const lastAssistantQuestionStep = useMemo(() => {
@@ -1015,7 +1066,7 @@ export default function SetupAssistantSections({
 
   const composerPlaceholder = useMemo(() => {
     if (!sourceSubmitted) {
-      return "Website, Google Maps, Instagram, Facebook və ya qısa biznes qeydi yaz";
+      return "Məsələn: website, Instagram, Google Maps linki və ya qısa biznes qeydi yaz";
     }
 
     if (challengeState?.hasChallenge) {
@@ -1209,6 +1260,10 @@ export default function SetupAssistantSections({
                       <StatusPill key={pill}>{pill}</StatusPill>
                     ))}
                   </div>
+                ) : null}
+
+                {sourceCoverageState?.hasCoverage ? (
+                  <SourceCoverageCard sourceCoverageState={sourceCoverageState} />
                 ) : null}
 
                 {challengeState?.hasChallenge ? (
