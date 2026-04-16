@@ -144,7 +144,7 @@ export function buildSetupAssistantAuthorityState({
   );
 
   return {
-    mode: "structured_v3",
+    mode: "structured_v2",
     nextQuestion: question,
     confirmationBlockers: arr(summary.confirmationBlockers),
     sections: buildAssistantSections(

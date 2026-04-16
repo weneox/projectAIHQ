@@ -1,5 +1,5 @@
 import { arr, compactDraftObject, obj, s } from "../draftShared.js";
-import { hasNonManualSourceIdentity, sourceTypeLabel } from "./shared.js";
+import { hasNonManualSourceIdentity } from "./shared.js";
 
 export const SECTION_ORDER = [
   "profile",
@@ -21,28 +21,28 @@ export const SECTION_META = {
     ready:
       "The public business identity is already captured in a usable form.",
     prompt:
-      "Send the exact public business name and one clean public sentence describing what the business does. Add the website too if the business has one.",
+      "Confirm the business name and a reliable short description first. Add the website if the business has one.",
     placeholder:
-      "Məsələn: Neox Studio — AI avtomasiya, website və rəqəmsal təqdimat həlləri qururuq.",
+      "MÉ™sÉ™lÉ™n: Neox Studio â€” AI avtomasiya, website vÉ™ rÉ™qÉ™msal tÉ™qdimat hÉ™llÉ™ri qururuq.",
   },
   company: {
     label: "Business name",
     title: "Confirm the business name",
     prompt: "Send the exact public business name.",
-    placeholder: "Məsələn: Neox Studio",
+    placeholder: "MÉ™sÉ™lÉ™n: Neox Studio",
   },
   description: {
     label: "Business description",
     title: "Describe what the business does",
     prompt: "Send one clean public sentence describing what the business does.",
     placeholder:
-      "Məsələn: Lokal bizneslər üçün AI avtomasiya və rəqəmsal təqdimat həlləri qururuq.",
+      "MÉ™sÉ™lÉ™n: Lokal bizneslÉ™r Ã¼Ã§Ã¼n AI avtomasiya vÉ™ rÉ™qÉ™msal tÉ™qdimat hÉ™llÉ™ri qururuq.",
   },
   website: {
     label: "Website",
     title: "Add the main website",
     prompt: "Send the main website URL if the business has one.",
-    placeholder: "Məsələn: yourbusiness.com",
+    placeholder: "MÉ™sÉ™lÉ™n: yourbusiness.com",
   },
   services: {
     label: "Services",
@@ -55,7 +55,7 @@ export const SECTION_META = {
     prompt:
       "Send only the real customer-facing services you want AI to talk about.",
     placeholder:
-      "Məsələn: website hazırlanması, reklam idarəetməsi, branding",
+      "MÉ™sÉ™lÉ™n: website hazÄ±rlanmasÄ±, reklam idarÉ™etmÉ™si, branding",
   },
   hours: {
     label: "Business hours",
@@ -66,7 +66,7 @@ export const SECTION_META = {
     ready: "Public business hours are already structured.",
     prompt: "Send the public weekly hours in one line.",
     placeholder:
-      "Məsələn: B.e.–Cümə 10:00–19:00, Şənbə 11:00–16:00, Bazar bağlı",
+      "MÉ™sÉ™lÉ™n: B.e.â€“CÃ¼mÉ™ 10:00â€“19:00, ÅžÉ™nbÉ™ 11:00â€“16:00, Bazar baÄŸlÄ±",
   },
   pricing: {
     label: "Pricing posture",
@@ -78,7 +78,7 @@ export const SECTION_META = {
     ready: "Pricing posture is already defined.",
     prompt: "How should AI speak publicly about pricing?",
     placeholder:
-      "Məsələn: starting price deyilə bilər, dəqiq quote üçün müraciət istənməlidir",
+      "MÉ™sÉ™lÉ™n: starting price deyilÉ™ bilÉ™r, dÉ™qiq quote Ã¼Ã§Ã¼n mÃ¼raciÉ™t istÉ™nmÉ™lidir",
   },
   contacts: {
     label: "Contacts",
@@ -90,7 +90,7 @@ export const SECTION_META = {
     prompt:
       "Send the main public contact route customers should be sent to first.",
     placeholder:
-      "Məsələn: WhatsApp, telefon zəngi, form və ya email",
+      "MÉ™sÉ™lÉ™n: WhatsApp, telefon zÉ™ngi, form vÉ™ ya email",
   },
   handoff: {
     label: "Operator handoff",
@@ -101,7 +101,7 @@ export const SECTION_META = {
     ready: "Operator escalation rules are already present.",
     prompt: "Describe when AI should stop and escalate to a human.",
     placeholder:
-      "Məsələn: şikayət, fərdi quote, ödəniş problemi, təcili iş, anlaşılmaz sorğu",
+      "MÉ™sÉ™lÉ™n: ÅŸikayÉ™t, fÉ™rdi quote, Ã¶dÉ™niÅŸ problemi, tÉ™cili iÅŸ, anlaÅŸÄ±lmaz sorÄŸu",
   },
 };
 
@@ -125,47 +125,6 @@ export const INTENT_ONLY_RESPONSES = {
   "i want to add more detail here.": "__continue__",
 };
 
-function normalizeQuestionPrompt(value = "") {
-  return s(value).replace(/\s+/g, " ").trim();
-}
-
-function buildSourceContext(draft = {}) {
-  const safeDraft = obj(draft);
-  const businessProfile = obj(safeDraft.businessProfile);
-  const sourceMetadata = obj(safeDraft.sourceMetadata);
-
-  const sourceType = s(sourceMetadata.primarySourceType);
-  const sourceUrl = s(sourceMetadata.primarySourceUrl);
-  const sourceLabel = sourceType ? sourceTypeLabel(sourceType) : "";
-  const evidenceSummary = arr(sourceMetadata.evidenceSummary)
-    .map((item) => s(item))
-    .filter(Boolean);
-  const sourceIdentityPresent = hasNonManualSourceIdentity(sourceMetadata);
-
-  return {
-    sourceType,
-    sourceUrl,
-    sourceLabel,
-    sourceIdentityPresent,
-    evidenceSummary,
-    companyName: s(businessProfile.companyName),
-    description: s(businessProfile.description),
-    websiteUrl: s(businessProfile.websiteUrl),
-  };
-}
-
-function buildMetricLead(metric = "") {
-  const safeMetric = s(metric);
-  if (!safeMetric) return "";
-  return `Current signal: ${safeMetric}.`;
-}
-
-function buildSourceHintLead(sourceHint = "") {
-  const safeSourceHint = s(sourceHint);
-  if (!safeSourceHint) return "";
-  return `${safeSourceHint}`;
-}
-
 export function buildAssistantQuestion(key = "", overrides = {}) {
   const questionKey = s(key).toLowerCase();
   const meta = obj(SECTION_META[questionKey]);
@@ -175,7 +134,7 @@ export function buildAssistantQuestion(key = "", overrides = {}) {
     step: s(overrides.step || questionKey).toLowerCase(),
     label: s(overrides.label || meta.label),
     title: s(overrides.title || meta.title || meta.label),
-    prompt: normalizeQuestionPrompt(s(overrides.prompt || meta.prompt)),
+    prompt: s(overrides.prompt || meta.prompt),
     placeholder: s(overrides.placeholder || meta.placeholder),
     group: s(overrides.group || "business_truth"),
     groupLabel: "Business truth",
@@ -198,174 +157,135 @@ export function hasSetupSignalForInterview(draft = {}) {
       s(obj(draft.handoffRules).summary) ||
       s(sourceMetadata.primarySourceType) ||
       s(sourceMetadata.primarySourceUrl) ||
-      arr(sourceMetadata.sourceLabels).length ||
-      arr(sourceMetadata.evidenceSummary).length
+      arr(sourceMetadata.sourceLabels).length
   );
 }
 
 export function buildProfileQuestionPrompt(draft = {}) {
-  const context = buildSourceContext(draft);
-  const parts = [];
-
-  if (context.sourceIdentityPresent && context.sourceLabel && context.sourceUrl) {
-    parts.push(
-      `${context.sourceLabel} source is already attached (${context.sourceUrl}).`
-    );
-  } else if (context.sourceIdentityPresent && context.sourceLabel) {
-    parts.push(`${context.sourceLabel} source is already attached.`);
-  }
-
-  if (context.companyName) {
-    parts.push(`Current name signal: ${context.companyName}.`);
-  }
-
-  if (context.description) {
-    parts.push("A business description signal already exists.");
-  }
-
-  if (!context.companyName && !context.description && context.evidenceSummary.length) {
-    parts.push(
-      `I already have partial source signals: ${context.evidenceSummary
-        .slice(0, 2)
-        .join(" · ")}.`
-    );
-  }
-
-  const request = context.sourceIdentityPresent
-    ? "Confirm the exact public business name and one clean public sentence describing what the business does."
-    : "Send the exact public business name and one clean public sentence describing what the business does. Add the website too if the business has one.";
-
-  return normalizeQuestionPrompt(`${parts.join(" ")} ${request}`);
+  return s(obj(SECTION_META.profile).prompt);
 }
 
 export function resolveProfileQuestion(draft = {}, progress = {}) {
+  const currentQuestionKey = s(progress.currentQuestionKey).toLowerCase();
   const safeDraft = obj(draft);
   const safeProfile = obj(safeDraft.businessProfile);
-  const safeProgress = obj(progress);
-  const currentQuestionKey = s(safeProgress.currentQuestionKey).toLowerCase();
-  const sourceContext = buildSourceContext(safeDraft);
+  const safeSourceMetadata = obj(safeDraft.sourceMetadata);
+  const sourceIdentityPresent = hasNonManualSourceIdentity(safeSourceMetadata);
+  const canUseCombinedProfileQuestion =
+    sourceIdentityPresent &&
+    (Boolean(s(safeSourceMetadata.primarySourceUrl)) ||
+      arr(safeSourceMetadata.evidenceSummary).length > 0);
 
-  const title =
-    sourceContext.sourceIdentityPresent || sourceContext.companyName || sourceContext.description
-      ? "Confirm the business identity"
-      : "Set the business identity";
+  if (
+    canUseCombinedProfileQuestion &&
+    (!s(safeProfile.companyName) || !s(safeProfile.description))
+  ) {
+    return buildAssistantQuestion("profile", {
+      prompt: buildProfileQuestionPrompt(safeDraft),
+      priority: 100,
+    });
+  }
 
-  const prompt = buildProfileQuestionPrompt(safeDraft);
+  if (currentQuestionKey === "company" && !s(safeProfile.companyName)) {
+    return buildAssistantQuestion("company");
+  }
 
-  const priority =
-    currentQuestionKey === "profile" ||
-    currentQuestionKey === "company" ||
-    currentQuestionKey === "description" ||
-    currentQuestionKey === "website"
-      ? 100
-      : 96;
+  if (currentQuestionKey === "description" && !s(safeProfile.description)) {
+    return buildAssistantQuestion("description");
+  }
+
+  if (
+    currentQuestionKey === "website" &&
+    !s(safeProfile.websiteUrl) &&
+    !sourceIdentityPresent
+  ) {
+    return buildAssistantQuestion("website");
+  }
+
+  if (!s(safeProfile.companyName)) {
+    return buildAssistantQuestion("company");
+  }
+
+  if (!s(safeProfile.description)) {
+    return buildAssistantQuestion("description");
+  }
+
+  if (!s(safeProfile.websiteUrl) && !sourceIdentityPresent) {
+    return buildAssistantQuestion("website");
+  }
 
   return buildAssistantQuestion("profile", {
-    title,
-    prompt,
-    priority,
-    placeholder: s(SECTION_META.profile.placeholder),
-    step: "profile",
-  });
-}
-
-function buildServicesQuestion(blocker = {}) {
-  const sourceHintLead = buildSourceHintLead(blocker.sourceHint);
-  const metricLead = buildMetricLead(blocker.metric);
-
-  return buildAssistantQuestion("services", {
-    prompt: normalizeQuestionPrompt(
-      `${sourceHintLead} ${metricLead} Send only the real customer-facing services you want AI to talk about. Ignore channels, vague capabilities, and generic words unless they are true customer-facing offers.`
-    ),
-    priority: 88,
-  });
-}
-
-function buildContactsQuestion(blocker = {}) {
-  const metricLead = buildMetricLead(blocker.metric);
-
-  return buildAssistantQuestion("contacts", {
-    prompt: normalizeQuestionPrompt(
-      `${metricLead} Send the main public contact route customers should be sent to first.`
-    ),
-    priority: 86,
-  });
-}
-
-function buildHoursQuestion(blocker = {}) {
-  const metricLead = buildMetricLead(blocker.metric);
-
-  return buildAssistantQuestion("hours", {
-    prompt: normalizeQuestionPrompt(
-      `${metricLead} Send the public weekly hours in one line. You can write naturally and I will normalize it.`
-    ),
-    priority: 84,
-  });
-}
-
-function buildPricingQuestion(blocker = {}) {
-  const metricLead = buildMetricLead(blocker.metric);
-
-  return buildAssistantQuestion("pricing", {
-    prompt: normalizeQuestionPrompt(
-      `${metricLead} How should AI speak publicly about pricing? If exact pricing depends on the job, say that naturally and I will turn it into a safe pricing posture.`
-    ),
-    priority: 82,
-  });
-}
-
-function buildHandoffQuestion() {
-  return buildAssistantQuestion("handoff", {
-    prompt:
-      "Describe when AI should stop and escalate to a human. You can explain it naturally.",
-    priority: 80,
+    prompt: buildProfileQuestionPrompt(safeDraft),
+    priority: 100,
   });
 }
 
 export function getNextQuestion(summary = {}, draft = {}, progress = {}) {
-  const safeSummary = obj(summary);
-  const safeDraft = obj(draft);
-
-  if (safeSummary.readyForReview === true) {
+  if (summary.readyForReview === true) {
     return null;
   }
 
-  if (!hasSetupSignalForInterview(safeDraft)) {
+  if (!hasSetupSignalForInterview(draft)) {
     return null;
   }
 
-  const sectionStatus = obj(safeSummary.sectionStatus);
+  const sectionStatus = obj(summary.sectionStatus);
 
   if (sectionStatus.profile?.status !== "ready") {
-    return resolveProfileQuestion(safeDraft, progress);
+    return resolveProfileQuestion(draft, progress);
   }
 
-  const blocker = obj(arr(safeSummary.confirmationBlockers)[0]);
-  if (!s(blocker.key)) return null;
+  const blocker = arr(summary.confirmationBlockers)[0];
+  if (!blocker?.key) return null;
 
   if (blocker.key === "services") {
-    return buildServicesQuestion(blocker);
+    return buildAssistantQuestion("services", {
+      prompt:
+        s(blocker.sourceHint) || s(blocker.metric)
+          ? `${[s(blocker.sourceHint), s(blocker.metric)].filter(Boolean).join(" ")} Send only the real customer-facing services you want AI to talk about.`
+          : SECTION_META.services.prompt,
+      priority: 88,
+    });
   }
 
   if (blocker.key === "contacts") {
-    return buildContactsQuestion(blocker);
+    return buildAssistantQuestion("contacts", {
+      prompt:
+        s(blocker.metric)
+          ? `Current signal: ${s(blocker.metric)}. Send the main public contact route customers should be sent to first.`
+          : SECTION_META.contacts.prompt,
+      priority: 86,
+    });
   }
 
   if (blocker.key === "hours") {
-    return buildHoursQuestion(blocker);
+    return buildAssistantQuestion("hours", {
+      prompt:
+        s(blocker.metric)
+          ? `Current signal: ${s(blocker.metric)}. Send the public weekly hours in one line.`
+          : SECTION_META.hours.prompt,
+      priority: 84,
+    });
   }
 
   if (blocker.key === "pricing") {
-    return buildPricingQuestion(blocker);
+    return buildAssistantQuestion("pricing", {
+      prompt:
+        s(blocker.metric)
+          ? `Current signal: ${s(blocker.metric)}. How should AI speak publicly about pricing?`
+          : SECTION_META.pricing.prompt,
+      priority: 82,
+    });
   }
 
   if (blocker.key === "handoff") {
-    return buildHandoffQuestion();
+    return buildAssistantQuestion("handoff", {
+      prompt: SECTION_META.handoff.prompt,
+      priority: 80,
+    });
   }
 
   return buildAssistantQuestion(blocker.key, {
-    prompt: normalizeQuestionPrompt(
-      s(blocker.reason) || s(obj(SECTION_META[blocker.key]).prompt)
-    ),
+    prompt: s(blocker.reason) || SECTION_META[blocker.key]?.prompt,
   });
 }
