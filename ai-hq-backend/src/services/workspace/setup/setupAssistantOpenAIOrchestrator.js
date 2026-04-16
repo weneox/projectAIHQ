@@ -1,15 +1,7 @@
 import OpenAI from "openai";
 
 import { cfg } from "../../../config.js";
-import {
-  buildAssistantConfidence,
-  buildAssistantInterviewPlan,
-  buildAssistantMessage,
-  buildAssistantRecommendation,
-} from "./setupAssistantAuthorityView.js";
 import { arr, compactDraftObject, obj, s } from "./draftShared.js";
-import { getNextQuestion } from "./setupAssistantApp/questions.js";
-import { buildSummary } from "./setupAssistantApp/summary.js";
 import {
   buildSetupDraftStateFromSignals,
   buildSetupSourceCoverage,
@@ -287,10 +279,7 @@ function sanitizeInterviewPlan(value = {}, fallback = {}) {
     ),
     activeQuestions,
     remainingQuestionKeys: uniqueStrings(
-      source.remainingQuestionKeys ||
-        activeQuestions
-          .map((item) => item.key)
-          .filter((key) => !activeQuestions.find((q) => q.key === key)),
+      source.remainingQuestionKeys || [],
       12
     ),
     nextGroup: s(source.nextGroup || safeFallback.nextGroup),
@@ -359,7 +348,6 @@ function detectLikelyReplyLanguage(latestMessage = "", recentConversation = []) 
   const combined = `${latest} ${recentUser}`.trim().toLowerCase();
 
   if (!combined) return "follow_latest_user_language";
-
   if (/[əğıöşçü]/i.test(combined)) return "az";
   if (/\b(mən|sən|biz|və|üçün|deyil|niyə|harada|necə|edir|edirik|olsun)\b/i.test(combined)) {
     return "az";
@@ -427,7 +415,7 @@ function buildLocalShadowState({
   draft = {},
   sources = [],
   review = null,
-}) {
+} = {}) {
   const sourceSignals = buildSetupSourceSignals({
     session,
     draft,
@@ -948,10 +936,6 @@ async function callOpenAISetupAssistant({
 }
 
 function buildFallbackShadowTurn({
-  session = {},
-  draft = {},
-  sources = [],
-  review = null,
   shadow = {},
   latestMessage = "",
   latestStep = "",
@@ -965,46 +949,57 @@ function buildFallbackShadowTurn({
     obj(safeShadow.sourceSignals),
     {}
   );
-  const summary = buildSummary(draft, {
-    session,
-    review,
-    sources,
-  });
-  const nextQuestion = getNextQuestion(summary, draft, obj(draft.progress));
-  const interviewPlan = buildAssistantInterviewPlan(summary, nextQuestion);
-  const confidence = buildAssistantConfidence(
-    summary,
-    fallbackSourceSignals,
-    draft
-  );
-  const recommendation = buildAssistantRecommendation(
-    summary,
-    fallbackSourceSignals,
-    draft
-  );
-  const assistantMessage =
-    buildAssistantMessage(
-      summary,
-      nextQuestion,
-      "",
-      fallbackSourceSignals,
-      draft
-    ) || s(obj(nextQuestion).prompt);
+
+  const strong = [];
+  const unclear = [];
+
+  if (s(fallbackDraft.businessName)) strong.push("business_name_present");
+  else unclear.push("business_name_missing");
+
+  if (s(fallbackDraft.whatThisBusinessIs)) strong.push("business_description_present");
+  else unclear.push("business_description_missing");
+
+  if (arr(fallbackDraft.coreServices).length) strong.push("services_present");
+  else unclear.push("services_missing");
+
+  if (arr(fallbackDraft.contactRoutes).length) strong.push("contacts_present");
+  else unclear.push("contacts_missing");
+
+  if (arr(fallbackDraft.hours).length) strong.push("hours_present");
+  else unclear.push("hours_missing");
+
+  if (s(fallbackDraft.pricingPosture)) strong.push("pricing_posture_present");
+  else unclear.push("pricing_posture_missing");
+
+  if (s(fallbackDraft.humanHandoff)) strong.push("handoff_present");
+  else unclear.push("handoff_missing");
 
   return {
-    phase: s(
-      safeShadow.phase,
-      obj(nextQuestion).key === "source_capture" ? "source_capture" : "interview"
-    ),
-    assistantMessage,
-    nextQuestion: nextQuestion || null,
+    phase: s(safeShadow.phase, "interview"),
+    assistantMessage: "",
+    nextQuestion: null,
     draft: fallbackDraft,
     acceptedPatch: sanitizeAcceptedPatch({}, fallbackDraft),
     rejectedInputs: [],
-    confidence,
-    recommendation,
+    confidence: {
+      strong,
+      unclear,
+      contradictions: uniqueStrings(
+        arr(safeShadow.contradictions).map((item) => s(item.message)),
+        12
+      ),
+    },
+    recommendation: {
+      notes: [],
+    },
     sourceSignals: fallbackSourceSignals,
-    interviewPlan,
+    interviewPlan: {
+      activeQuestionKeys: [],
+      activeQuestions: [],
+      remainingQuestionKeys: [],
+      nextGroup: "business_truth",
+      nextGroupLabel: "Business truth",
+    },
     aiBehavior: {
       languages: uniqueStrings(fallbackDraft.languages, 8),
       tone: s(fallbackDraft.tone),
@@ -1146,10 +1141,6 @@ export async function runSetupAssistantOpenAIOrchestrator({
   if (shouldForceFallback || !hasOpenAISetupAssistant()) {
     return normalizeTurnResult(
       buildFallbackShadowTurn({
-        session,
-        draft,
-        sources,
-        review,
         shadow,
         latestMessage,
         latestStep,
@@ -1200,10 +1191,6 @@ export async function runSetupAssistantOpenAIOrchestrator({
   } catch (error) {
     return normalizeTurnResult(
       buildFallbackShadowTurn({
-        session,
-        draft,
-        sources,
-        review,
         shadow,
         latestMessage,
         latestStep,

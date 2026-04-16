@@ -44,14 +44,6 @@ function normalizeStep(value = "") {
   return key;
 }
 
-function looksLikeEmail(value = "") {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(s(value));
-}
-
-function looksLikePhone(value = "") {
-  return /(?:\+?\d[\d()\-\s]{6,}\d)/.test(s(value));
-}
-
 function buildContactsFromAnswer(answer = "") {
   const items = splitAnswerList(answer, 12).map((item, index) => ({
     type: inferContactType(item),
@@ -439,8 +431,8 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
             : sourceCandidate?.type
               ? {}
               : {
-                websiteUrl: normalizeWebsiteUrl(text),
-              },
+                  websiteUrl: normalizeWebsiteUrl(text),
+                },
         sourceMetadata: sourceCandidate?.type ? sourceMetadataPatch : {},
         assistantState: {
           lastUpdatedSection: "profile",

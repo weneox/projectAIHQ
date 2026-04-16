@@ -1,12 +1,4 @@
 import { arr, compactDraftObject, obj, s } from "../draftShared.js";
-import {
-  buildAssistantConfidence,
-  buildAssistantInterviewPlan,
-  buildAssistantMessage,
-  buildAssistantRecommendation,
-  buildAssistantSections,
-  buildAssistantSourceSignals,
-} from "../setupAssistantAuthorityView.js";
 import { buildSetupAssistantServiceCatalog } from "../setupAssistantCatalog.js";
 import { formatSetupAssistantHoursForCanonical } from "./canonical.js";
 import {
@@ -15,12 +7,6 @@ import {
   buildAssistantCompatFollowupQueue,
   buildAssistantCompatQuestion,
 } from "./compat.js";
-import {
-  buildAssistantQuestion,
-  getNextQuestion,
-  SECTION_META,
-  SECTION_ORDER,
-} from "./questions.js";
 import { buildSetupAssistantSeedFromReview } from "./seed.js";
 import {
   SETUP_ASSISTANT_CURRENT_STEP,
@@ -158,7 +144,7 @@ function sanitizeBrainInterviewPlan(value = {}) {
     )
     .filter((item) => item.key);
 
-  return {
+  return compactDraftObject({
     activeQuestionKeys: uniqueStrings(
       source.activeQuestionKeys || activeQuestions.map((item) => item.key),
       12
@@ -167,7 +153,7 @@ function sanitizeBrainInterviewPlan(value = {}) {
     remainingQuestionKeys: uniqueStrings(source.remainingQuestionKeys, 12),
     nextGroup: s(source.nextGroup || "business_truth"),
     nextGroupLabel: s(source.nextGroupLabel || "Business truth"),
-  };
+  });
 }
 
 function sanitizeBrainSnapshot(value = {}) {
@@ -202,67 +188,45 @@ function sanitizeBrainSnapshot(value = {}) {
   });
 }
 
-export function readStoredSetupAssistantBrainPayload(draftPayload = {}) {
-  const payload = obj(draftPayload);
-  return sanitizeBrainSnapshot(obj(payload.setupAssistantBrain));
-}
+function hasMeaningfulBrainSourceSignals(value = {}) {
+  const source = obj(value);
 
-export function buildStoredSetupAssistantBrainPayload(value = {}) {
-  return sanitizeBrainSnapshot(value);
-}
-
-export function normalizeStoredSetupAssistantBrainPayload(value = {}) {
-  return buildStoredSetupAssistantBrainPayload(value);
-}
-
-export function resolveSessionCurrentStep(
-  review = {},
-  setup = {},
-  nextQuestion = null
-) {
-  const storedSession = obj(review.session);
-  const assistantState = obj(setup.assistantState);
-
-  return (
-    s(
-      storedSession.currentStep ||
-        assistantState.activeSection ||
-        obj(setup.progress).currentQuestionKey ||
-        obj(nextQuestion).key ||
-        SETUP_ASSISTANT_CURRENT_STEP
-    ) || SETUP_ASSISTANT_CURRENT_STEP
+  return Boolean(
+    s(source.primarySourceType) ||
+      s(source.primarySourceUrl) ||
+      arr(source.sourceTypes).length ||
+      arr(source.strongestEvidence).length ||
+      arr(source.companyNameCandidates).length ||
+      arr(source.descriptionCandidates).length ||
+      arr(source.serviceCandidates).length ||
+      arr(source.contactCandidates).length ||
+      arr(source.hoursCandidates).length ||
+      arr(source.pricingCandidates).length ||
+      arr(source.audienceCandidates).length ||
+      arr(source.languagesCandidates).length
   );
 }
 
-export function safeDraftVersion(draftRow = {}) {
-  const version = Number(draftRow.version || 1);
-  return Number.isFinite(version) && version > 0 ? version : 1;
-}
+function buildSummarySections(summary = {}, servicesCatalog = {}) {
+  const sectionStatus = obj(summary.sectionStatus);
 
-export function buildStoredSetupAssistantPayload(value = {}, seed = {}) {
-  const mergedCore = mergeSetupAssistantCore(seed, value);
+  return Object.keys(sectionStatus).map((key) => {
+    const state = obj(sectionStatus[key]);
 
-  return {
-    ...mergedCore,
-    websitePrefill: deriveWebsitePrefillDraft(mergedCore),
-    namespace: SETUP_ASSISTANT_NAMESPACE,
-    sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
-  };
-}
-
-export function normalizeStoredSetupAssistantPayload(value = {}, seed = {}) {
-  return buildStoredSetupAssistantPayload(obj(value), seed);
-}
-
-export function readStoredSetupAssistantDraftPayload(draftPayload = {}) {
-  const payload = obj(draftPayload);
-  return obj(payload.setupAssistant || payload.onboarding);
-}
-
-export function stripLegacySetupAssistantPayloadKeys(draftPayload = {}) {
-  const payload = obj(draftPayload);
-  const { onboarding, ...rest } = payload;
-  return rest;
+    return {
+      key,
+      label: key,
+      title: key,
+      status: s(state.status || "missing"),
+      summary: "",
+      metric: obj(state.metric),
+      sourceCovered: state.sourceCovered === true,
+      reviewReady: state.reviewReady === true,
+      missingFields: arr(state.missingFields),
+      suggestedCount:
+        key === "services" ? arr(servicesCatalog.suggestedServices).length : 0,
+    };
+  });
 }
 
 function buildAssistantDraftPreview(
@@ -379,45 +343,67 @@ function buildMinimalConfidenceFromSetup(setup = {}) {
   };
 }
 
-function hasMeaningfulBrainSourceSignals(value = {}) {
-  const source = obj(value);
+export function readStoredSetupAssistantBrainPayload(draftPayload = {}) {
+  const payload = obj(draftPayload);
+  return sanitizeBrainSnapshot(obj(payload.setupAssistantBrain));
+}
 
-  return Boolean(
-    s(source.primarySourceType) ||
-      s(source.primarySourceUrl) ||
-      arr(source.sourceTypes).length ||
-      arr(source.strongestEvidence).length ||
-      arr(source.companyNameCandidates).length ||
-      arr(source.descriptionCandidates).length ||
-      arr(source.serviceCandidates).length ||
-      arr(source.contactCandidates).length ||
-      arr(source.hoursCandidates).length ||
-      arr(source.pricingCandidates).length ||
-      arr(source.audienceCandidates).length ||
-      arr(source.languagesCandidates).length
+export function buildStoredSetupAssistantBrainPayload(value = {}) {
+  return sanitizeBrainSnapshot(value);
+}
+
+export function normalizeStoredSetupAssistantBrainPayload(value = {}) {
+  return buildStoredSetupAssistantBrainPayload(value);
+}
+
+export function resolveSessionCurrentStep(
+  review = {},
+  setup = {},
+  nextQuestion = null
+) {
+  const storedSession = obj(review.session);
+  const assistantState = obj(setup.assistantState);
+
+  return (
+    s(
+      storedSession.currentStep ||
+        assistantState.activeSection ||
+        obj(setup.progress).currentQuestionKey ||
+        obj(nextQuestion).key ||
+        SETUP_ASSISTANT_CURRENT_STEP
+    ) || SETUP_ASSISTANT_CURRENT_STEP
   );
 }
 
-function hasMeaningfulStoredBrain(brain = {}, timelineTurn = {}) {
-  const safeBrain = obj(brain);
+export function safeDraftVersion(draftRow = {}) {
+  const version = Number(draftRow.version || 1);
+  return Number.isFinite(version) && version > 0 ? version : 1;
+}
 
-  return Boolean(
-    s(safeBrain.assistantMessage || safeBrain.message) ||
-      s(obj(safeBrain.nextQuestion).key) ||
-      arr(obj(safeBrain.interviewPlan).activeQuestionKeys).length ||
-      arr(obj(safeBrain.interviewPlan).activeQuestions).length ||
-      arr(obj(safeBrain.rejectedInputs)).length ||
-      arr(obj(safeBrain.confidence).strong).length ||
-      arr(obj(safeBrain.confidence).unclear).length ||
-      arr(obj(safeBrain.recommendation).notes).length ||
-      hasMeaningfulBrainSourceSignals(obj(safeBrain.sourceSignals)) ||
-      safeBrain.readyForApproval === true ||
-      s(safeBrain.provider) ||
-      s(safeBrain.model) ||
-      safeBrain.usedFallback === true ||
-      s(safeBrain.error) ||
-      s(timelineTurn.text)
-  );
+export function buildStoredSetupAssistantPayload(value = {}, seed = {}) {
+  const mergedCore = mergeSetupAssistantCore(seed, value);
+
+  return {
+    ...mergedCore,
+    websitePrefill: deriveWebsitePrefillDraft(mergedCore),
+    namespace: SETUP_ASSISTANT_NAMESPACE,
+    sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
+  };
+}
+
+export function normalizeStoredSetupAssistantPayload(value = {}, seed = {}) {
+  return buildStoredSetupAssistantPayload(obj(value), seed);
+}
+
+export function readStoredSetupAssistantDraftPayload(draftPayload = {}) {
+  const payload = obj(draftPayload);
+  return obj(payload.setupAssistant || payload.onboarding);
+}
+
+export function stripLegacySetupAssistantPayloadKeys(draftPayload = {}) {
+  const payload = obj(draftPayload);
+  const { onboarding, ...rest } = payload;
+  return rest;
 }
 
 function buildAssistantFromStoredBrain({
@@ -428,35 +414,16 @@ function buildAssistantFromStoredBrain({
   servicesCatalog = {},
   timeline = [],
   storedBrain = {},
-  review = {},
-  sources = [],
 } = {}) {
   const brain = sanitizeBrainSnapshot(storedBrain);
   const lastAssistantTurn =
     [...arr(timeline)].reverse().find((item) => s(item.role) === "assistant") || {};
-  const fallbackQuestion = getNextQuestion(summary, setup, {
-    ...obj(setup.progress),
-    currentQuestionKey:
-      s(obj(setup.progress).currentQuestionKey) || s(session.currentStep),
-  });
-  const nextQuestion = sanitizeBrainQuestion(
-    obj(brain.nextQuestion).key && obj(brain.nextQuestion).prompt
-      ? brain.nextQuestion
-      : fallbackQuestion
-  );
-  const fallbackSourceSignals = buildAssistantSourceSignals(setup, {
-    session,
-    review,
-    sources,
-  });
+
   const sourceSignals = sanitizeBrainSourceSignals(
     hasMeaningfulBrainSourceSignals(obj(brain.sourceSignals))
       ? brain.sourceSignals
-      : Object.keys(obj(fallbackSourceSignals)).length
-        ? fallbackSourceSignals
-        : buildMinimalSourceSignals(setup)
+      : buildMinimalSourceSignals(setup)
   );
-  const hasStoredBrain = hasMeaningfulStoredBrain(brain, lastAssistantTurn);
 
   const draftPreview =
     Object.keys(obj(brain.draft)).length > 0
@@ -465,45 +432,13 @@ function buildAssistantFromStoredBrain({
           formatHours: formatSetupAssistantHoursForCanonical,
         });
 
+  const nextQuestion = sanitizeBrainQuestion(brain.nextQuestion);
   const readyForApproval =
     brain.readyForApproval === true || summary.readyForReview === true;
-
-  const fallbackInterviewPlan = buildAssistantInterviewPlan(summary, nextQuestion, {
-    buildAssistantQuestion,
-  });
-  const hasStoredInterviewPlan = Boolean(
-    arr(obj(brain.interviewPlan).activeQuestionKeys).length ||
-      arr(obj(brain.interviewPlan).activeQuestions).length ||
-      arr(obj(brain.interviewPlan).remainingQuestionKeys).length
-  );
-  const interviewPlan = sanitizeBrainInterviewPlan(
-    hasStoredInterviewPlan ? brain.interviewPlan : fallbackInterviewPlan
-  );
-
-  const confidence =
-    arr(obj(brain.confidence).strong).length ||
-    arr(obj(brain.confidence).unclear).length ||
-    arr(obj(brain.confidence).contradictions).length
-      ? sanitizeBrainConfidence(brain.confidence)
-      : buildAssistantConfidence(summary, sourceSignals, setup);
-
-  const recommendation = arr(obj(brain.recommendation).notes).length
-    ? sanitizeBrainRecommendation(brain.recommendation)
-    : buildAssistantRecommendation(summary, sourceSignals, setup);
-
-  const sections = buildAssistantSections(
-    summary,
-    servicesCatalog,
-    SECTION_ORDER,
-    SECTION_META
-  );
 
   const phase = s(
     brain.phase ||
       lastAssistantTurn.phase ||
-      (obj(nextQuestion).key === "source_capture"
-        ? "source_capture"
-        : "") ||
       (readyForApproval
         ? "ready"
         : summary.hasAnyDraft
@@ -511,23 +446,46 @@ function buildAssistantFromStoredBrain({
           : "source_capture")
   ).toLowerCase();
 
-  const completionMessage =
-    readyForApproval === true
-      ? compactText(
-          s(
-            brain.assistantMessage ||
-              brain.message ||
-              lastAssistantTurn.text
-          ),
-          420
-        )
-      : "";
+  const interviewPlan = sanitizeBrainInterviewPlan(
+    Object.keys(obj(brain.interviewPlan)).length > 0
+      ? brain.interviewPlan
+      : {
+          activeQuestionKeys: nextQuestion.key ? [nextQuestion.key] : [],
+          activeQuestions: nextQuestion.key
+            ? [
+                {
+                  key: nextQuestion.key,
+                  step: nextQuestion.step,
+                  title: nextQuestion.title,
+                  group: nextQuestion.group || "business_truth",
+                  groupLabel: nextQuestion.groupLabel || "Business truth",
+                  priority: 1,
+                },
+              ]
+            : [],
+          remainingQuestionKeys: [],
+          nextGroup: nextQuestion.group || "",
+          nextGroupLabel: nextQuestion.groupLabel || "",
+        }
+  );
+
+  const confidence =
+    arr(obj(brain.confidence).strong).length ||
+    arr(obj(brain.confidence).unclear).length ||
+    arr(obj(brain.confidence).contradictions).length
+      ? sanitizeBrainConfidence(brain.confidence)
+      : buildMinimalConfidenceFromSetup(setup);
+
+  const recommendation =
+    arr(obj(brain.recommendation).notes).length
+      ? sanitizeBrainRecommendation(brain.recommendation)
+      : { notes: [] };
 
   return {
-    mode: hasStoredBrain ? "brain_v3" : "structured_v2",
+    mode: "brain_v3",
     nextQuestion: nextQuestion.key && nextQuestion.prompt ? nextQuestion : null,
     confirmationBlockers: arr(summary.confirmationBlockers),
-    sections,
+    sections: buildSummarySections(summary, servicesCatalog),
     completion: {
       ready: readyForApproval,
       action: readyForApproval
@@ -537,7 +495,17 @@ function buildAssistantFromStoredBrain({
             intent: "finalize_review",
           }
         : null,
-      message: completionMessage,
+      message:
+        readyForApproval === true
+          ? compactText(
+              s(
+                brain.assistantMessage ||
+                  brain.message ||
+                  lastAssistantTurn.text
+              ),
+              420
+            )
+          : "",
     },
     quickCapture: {},
     servicesCatalog,
@@ -547,21 +515,11 @@ function buildAssistantFromStoredBrain({
     ),
     phase,
     message: compactText(
-      s(
-        brain.assistantMessage ||
-          brain.message ||
-          lastAssistantTurn.text ||
-          buildAssistantMessage(summary, nextQuestion, "", sourceSignals, setup)
-      ),
+      s(brain.assistantMessage || brain.message || lastAssistantTurn.text),
       420
     ),
     assistantMessage: compactText(
-      s(
-        brain.assistantMessage ||
-          brain.message ||
-          lastAssistantTurn.text ||
-          buildAssistantMessage(summary, nextQuestion, "", sourceSignals, setup)
-      ),
+      s(brain.assistantMessage || brain.message || lastAssistantTurn.text),
       420
     ),
     timeline: arr(timeline).map(normalizeTimelineTurn),
@@ -631,8 +589,6 @@ export function buildSetupAssistantSessionPayload(review = {}) {
     servicesCatalog,
     timeline,
     storedBrain,
-    review,
-    sources: arr(review.sources),
   });
 
   const nextQuestion = obj(assistant.nextQuestion);
