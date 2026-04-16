@@ -6,9 +6,7 @@ import {
   updateSetupAssistantDraft,
   __test__ as setupAssistantAppTest,
 } from "../src/services/workspace/setup/setupAssistantApp.js";
-import {
-  runSetupAssistantOpenAIOrchestrator,
-} from "../src/services/workspace/setup/setupAssistantOpenAIOrchestrator.js";
+import { runSetupAssistantOpenAIOrchestrator } from "../src/services/workspace/setup/setupAssistantOpenAIOrchestrator.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -80,7 +78,8 @@ function createBrainTurn(overrides = {}) {
       audience: "Adults and families in Baku",
       pricingPosture: "Public replies can say consultations start from 30 AZN.",
       contactRoutes: ["+994 50 222 33 44", "hello@north.example"],
-      humanHandoff: "Escalate complaints, urgent cases, and custom treatment questions.",
+      humanHandoff:
+        "Escalate complaints, urgent cases, and custom treatment questions.",
       languages: ["az", "en"],
       tone: "warm reassuring",
       hours: ["Mon-Fri 09:00-18:00"],
@@ -172,7 +171,7 @@ function createBrainTurn(overrides = {}) {
   };
 }
 
-test("setup assistant orchestrator seeds the first prompt when no input exists", async () => {
+test("setup assistant orchestrator stays AI-native when no input exists and does not inject canned seed copy", async () => {
   const turn = await runSetupAssistantOpenAIOrchestrator({
     session: {},
     draft: {},
@@ -186,11 +185,9 @@ test("setup assistant orchestrator seeds the first prompt when no input exists",
   assert.equal(turn.ok, true);
   assert.equal(turn.phase, "source_capture");
   assert.equal(turn.usedFallback, true);
-  assert.match(
-    turn.assistantMessage,
-    /send the best public source you have first/i
-  );
-  assert.equal(s(obj(turn.nextQuestion).key), "source_capture");
+  assert.equal(turn.assistantMessage, "");
+  assert.equal(turn.nextQuestion, null);
+  assert.deepEqual(obj(turn.interviewPlan).activeQuestionKeys || [], []);
 });
 
 test("setup assistant orchestrator patch builder converts canonical draft output into stored setup state", () => {
@@ -319,11 +316,12 @@ test("message-mode setup draft update bridges orchestrator output into review dr
   assert.equal(arr(reviewPatch.contacts)[0].channel, "phone");
   assert.equal(arr(reviewPatch.contacts)[1].channel, "email");
   assert.equal(reviewPatch.sourceSummary.primarySourceType, "website");
-  assert.equal(reviewPatch.sourceSummary.primarySourceUrl, "https://north.example");
-
-  const storedSetupAssistant = obj(
-    obj(reviewPatch.draftPayload).setupAssistant
+  assert.equal(
+    reviewPatch.sourceSummary.primarySourceUrl,
+    "https://north.example"
   );
+
+  const storedSetupAssistant = obj(obj(reviewPatch.draftPayload).setupAssistant);
 
   assert.equal(
     obj(storedSetupAssistant.businessProfile).companyName,
@@ -333,7 +331,10 @@ test("message-mode setup draft update bridges orchestrator output into review dr
     obj(storedSetupAssistant.assistantState).activeSection,
     "services"
   );
-  assert.equal(obj(storedSetupAssistant.progress).currentQuestionKey, "services");
+  assert.equal(
+    obj(storedSetupAssistant.progress).currentQuestionKey,
+    "services"
+  );
 
   assert.equal(stepUpdates[0].currentStep, "services");
   assert.equal(
@@ -343,80 +344,42 @@ test("message-mode setup draft update bridges orchestrator output into review dr
 });
 
 test("read setup assistant view overlays brain payload and exposes compat response fields", async () => {
-  const baseSessionPayload = {
-    ok: true,
-    session: {
-      id: "session-setup-1",
-      status: "draft",
-      mode: "setup",
-      currentStep: "profile",
-      draftVersion: 2,
-      reviewSessionId: "session-setup-1",
-      draftOnly: true,
-      storageModel: "tenant_setup_review",
-      sourceType: "setup_assistant",
-      namespace: "setup_assistant",
+  let currentReview = createBaseReview();
+
+  const deps = {
+    getCurrentSetupReview: async () => currentReview,
+    loadCurrentSetupAssistantSession: async () => ({
+      status: 200,
+      body: {
+        ok: true,
+        ...setupAssistantAppTest.buildSetupAssistantSessionPayload(currentReview),
+      },
+    }),
+    patchSetupReviewDraft: async ({ patch }) => {
+      currentReview = {
+        ...currentReview,
+        draft: {
+          ...currentReview.draft,
+          version: Number(currentReview.draft.version || 0) + 1,
+          updatedAt: "2026-04-15T10:05:00.000Z",
+          draftPayload: {
+            ...obj(currentReview.draft.draftPayload),
+            ...obj(patch.draftPayload),
+          },
+        },
+      };
+      return currentReview.draft;
     },
-    setup: {
-      status: "draft_in_progress",
-      draftOnly: true,
-      sourceType: "setup_assistant",
-      namespace: "setup_assistant",
-      summary: {},
-      websitePrefill: {},
-      review: {
-        status: "draft_in_progress",
-        readyForReview: false,
-        readyForApproval: false,
-        finalizeAvailable: false,
-        message: "Review in progress",
-      },
-      draft: {
-        businessProfile: {},
-        services: [],
-        contacts: [],
-        hours: [],
-        pricingPosture: {},
-        handoffRules: {},
-        sourceMetadata: {},
-        assistantState: {},
-        progress: {},
-        version: 2,
-      },
-      assistant: {
-        mode: "structured_v2",
-        phase: "interview",
-        message: "Fallback question",
-        assistantMessage: "Fallback question",
-        nextQuestion: {
-          key: "company",
-          step: "company",
-          title: "Confirm the business name",
-          prompt: "What is the business name?",
-          group: "business_truth",
-          groupLabel: "Business truth",
+    updateSetupReviewSession: async (_sessionId, payload) => {
+      currentReview = {
+        ...currentReview,
+        session: {
+          ...currentReview.session,
+          ...payload,
         },
-        completion: {
-          ready: false,
-          action: null,
-          message: "Review in progress",
-        },
-        servicesCatalog: {},
-        sourceInsights: [],
-        confidence: {},
-        recommendation: { notes: [] },
-        sourceSignals: {},
-        interviewPlan: {
-          activeQuestionKeys: ["company"],
-          activeQuestions: [],
-          remainingQuestionKeys: [],
-          nextGroup: "business_truth",
-          nextGroupLabel: "Business truth",
-        },
-        draft: {},
-        readyForApproval: false,
-      },
+      };
     },
+    runSetupAssistantOpenAIOrchestrator: async () => createBrainTurn(),
   };
 
   const result = await readSetupAssistantView(
@@ -427,14 +390,7 @@ test("read setup assistant view overlays brain payload and exposes compat respon
         tenantKey: "north",
       },
     },
-    {
-      loadCurrentSetupAssistantSession: async () => ({
-        status: 200,
-        body: baseSessionPayload,
-      }),
-      getCurrentSetupReview: async () => createBaseReview(),
-      runSetupAssistantOpenAIOrchestrator: async () => createBrainTurn(),
-    }
+    deps
   );
 
   assert.equal(result.status, 200);
@@ -447,10 +403,7 @@ test("read setup assistant view overlays brain payload and exposes compat respon
   assert.equal(result.body.question.key, "services");
   assert.equal(result.body.primaryQuestion.key, "services");
   assert.equal(result.body.businessFacts.companyName, "North Clinic");
-  assert.equal(
-    result.body.conversationStatus.phase,
-    "interview"
-  );
+  assert.equal(result.body.conversationStatus.phase, "interview");
   assert.equal(arr(result.body.followupQueue).length, 1);
   assert.equal(
     arr(result.body.unknowns)[0],

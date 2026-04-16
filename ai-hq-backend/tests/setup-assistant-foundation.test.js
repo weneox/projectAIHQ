@@ -80,7 +80,94 @@ async function invokeRoute(router, method, path, req = {}) {
   return { req: fullReq, res };
 }
 
-test("setup assistant session start reuses setup review storage but returns canonical setup payloads", async () => {
+function createAiNativeBrainTurn(overrides = {}) {
+  return {
+    ok: true,
+    provider: "openai",
+    model: "gpt-5",
+    usedFallback: false,
+    error: "",
+    latestUserInput: {
+      step: "profile",
+      text: "",
+    },
+    phase: "interview",
+    assistantMessage: "",
+    nextQuestion: null,
+    draft: {
+      businessName: "",
+      whatThisBusinessIs: "",
+      websiteUrl: "",
+      coreServices: [],
+      audience: "",
+      pricingPosture: "",
+      contactRoutes: [],
+      humanHandoff: "",
+      languages: [],
+      tone: "",
+      hours: [],
+      greetingStyle: "",
+      afterHoursBehavior: "",
+    },
+    acceptedPatch: {
+      identity: {
+        businessName: "",
+        description: "",
+        websiteUrl: "",
+        audience: "",
+      },
+      services: [],
+      contacts: [],
+      hours: [],
+      pricingPosture: "",
+      humanHandoff: "",
+      aiBehavior: {
+        languages: [],
+        tone: "",
+        greetingStyle: "",
+        afterHoursBehavior: "",
+      },
+    },
+    rejectedInputs: [],
+    confidence: {
+      strong: [],
+      unclear: [],
+      contradictions: [],
+    },
+    recommendation: {
+      notes: [],
+    },
+    sourceSignals: {
+      primarySourceType: "",
+      primarySourceLabel: "",
+      primarySourceUrl: "",
+      primarySourceAuthorityClass: "",
+      pageCount: 0,
+      sourceTypes: [],
+      strongestEvidence: [],
+      discoveredPublicClaims: [],
+      companyNameCandidates: [],
+      descriptionCandidates: [],
+      serviceCandidates: [],
+      contactCandidates: [],
+      hoursCandidates: [],
+      pricingCandidates: [],
+      audienceCandidates: [],
+      languagesCandidates: [],
+    },
+    interviewPlan: {
+      activeQuestionKeys: [],
+      activeQuestions: [],
+      remainingQuestionKeys: [],
+      nextGroup: "",
+      nextGroupLabel: "",
+    },
+    readyForApproval: false,
+    ...overrides,
+  };
+}
+
+test("setup assistant session start reuses setup review storage and returns the AI-native setup payload", async () => {
   let currentReview = null;
   let createdSessionInput = null;
   const auditCalls = [];
@@ -118,8 +205,36 @@ test("setup assistant session start reuses setup review storage but returns cano
               },
             },
           },
+          sources: [],
+          events: [],
         };
         return currentReview;
+      },
+      async patchSetupReviewDraft(input) {
+        currentReview = {
+          ...currentReview,
+          draft: {
+            ...currentReview.draft,
+            version: Number(currentReview.draft.version || 0) + 1,
+            updated_at: "2026-04-06T09:05:00.000Z",
+            draftPayload: {
+              ...input.patch.draftPayload,
+            },
+          },
+        };
+        return currentReview.draft;
+      },
+      async updateSetupReviewSession(_sessionId, payload) {
+        currentReview = {
+          ...currentReview,
+          session: {
+            ...currentReview.session,
+            ...payload,
+          },
+        };
+      },
+      async runSetupAssistantOpenAIOrchestrator() {
+        return createAiNativeBrainTurn();
       },
       async auditSetupAction(...args) {
         auditCalls.push(args);
@@ -142,8 +257,9 @@ test("setup assistant session start reuses setup review storage but returns cano
     result.body.setup.draft.businessProfile.websiteUrl,
     "https://acme.example"
   );
-  assert.equal(result.body.setup.assistant.mode, "structured_v2");
+  assert.equal(result.body.setup.assistant.mode, "brain_v3");
   assert.ok(Array.isArray(result.body.setup.assistant.confirmationBlockers));
+  assert.equal(result.body.setup.assistant.nextQuestion, null);
   assert.equal(result.body.message, "Setup assistant session started");
   assert.equal(auditCalls.length, 1);
 });
@@ -283,6 +399,7 @@ test("setup assistant draft update stays inside setup review storage and returns
     "Pricing depends on treatment complexity."
   );
   assert.equal(result.body.session.namespace, "setup_assistant");
+  assert.equal(result.body.setup.assistant.mode, "brain_v3");
   assert.equal(result.body.message, "Setup assistant draft updated");
   assert.equal(auditCalls.length, 1);
 });
@@ -504,7 +621,7 @@ test("setup assistant source answers never store instagram, facebook, or google 
   );
 });
 
-test("setup assistant treats google maps as a valid source identity but still requires handoff before finalize", () => {
+test("setup assistant treats google maps as a valid source identity but still keeps finalize locked until handoff exists", () => {
   const reviewBase = {
     session: {
       id: "session-1",
@@ -559,6 +676,7 @@ test("setup assistant treats google maps as a valid source identity but still re
   const withoutHandoff = setupAssistantTest.buildSetupAssistantSessionPayload(
     reviewBase
   );
+
   const withHandoff = setupAssistantTest.buildSetupAssistantSessionPayload({
     ...reviewBase,
     draft: {
@@ -577,19 +695,29 @@ test("setup assistant treats google maps as a valid source identity but still re
   });
 
   assert.equal(withoutHandoff.setup.review.finalizeAvailable, false);
-  assert.equal(withoutHandoff.setup.assistant.nextQuestion?.key, "handoff");
+  assert.equal(withoutHandoff.setup.assistant.readyForApproval, false);
   assert.equal(withoutHandoff.setup.websitePrefill.status, "awaiting_input");
   assert.equal(
     withoutHandoff.setup.draft.sourceMetadata.primarySourceType,
     "google_maps"
   );
+  assert.equal(
+    withoutHandoff.setup.summary.sectionStatus.profile.reviewReady,
+    true
+  );
+  assert.equal(
+    withoutHandoff.setup.summary.sectionStatus.handoff.status,
+    "missing"
+  );
+  assert.equal(withoutHandoff.setup.assistant.nextQuestion, null);
 
   assert.equal(withHandoff.setup.review.finalizeAvailable, true);
+  assert.equal(withHandoff.setup.assistant.readyForApproval, true);
   assert.equal(withHandoff.setup.assistant.nextQuestion, null);
   assert.equal(withHandoff.setup.draft.businessProfile.websiteUrl || "", "");
 });
 
-test("setup assistant keeps the primary question scope canonical and does not block on extra AI-behavior fields", () => {
+test("setup assistant does not block finalize on extra AI-behavior fields once canonical truth is strong enough", () => {
   const payload = setupAssistantTest.buildSetupAssistantSessionPayload({
     session: {
       id: "session-1",
@@ -648,11 +776,17 @@ test("setup assistant keeps the primary question scope canonical and does not bl
   assert.equal(payload.setup.assistant.readyForApproval, true);
   assert.equal(payload.setup.assistant.completion.ready, true);
   assert.equal(payload.setup.assistant.nextQuestion, null);
-  assert.deepEqual(payload.setup.assistant.interviewPlan.activeQuestionKeys, []);
-  assert.equal(payload.setup.assistant.sourceSignals.primarySourceType, "instagram");
+  assert.deepEqual(
+    payload.setup.assistant.interviewPlan?.activeQuestionKeys || [],
+    []
+  );
+  assert.equal(
+    payload.setup.assistant.sourceSignals.primarySourceType,
+    "instagram"
+  );
 });
 
-test("setup assistant collapses profile follow-up into one combined question when a strong public source already exists", () => {
+test("setup assistant does not inject a hardcoded profile follow-up when a strong public source already exists", () => {
   const payload = setupAssistantTest.buildSetupAssistantSessionPayload({
     session: {
       id: "session-1",
@@ -678,7 +812,9 @@ test("setup assistant collapses profile follow-up into one combined question whe
             primarySourceType: "google_maps",
             primarySourceUrl: "https://maps.google.com/?cid=123",
             sourceLabels: ["Google Maps"],
-            evidenceSummary: ["Imported place listing with operating hours and public contact details."],
+            evidenceSummary: [
+              "Imported place listing with operating hours and public contact details.",
+            ],
           },
           progress: {
             currentQuestionKey: "description",
@@ -688,15 +824,16 @@ test("setup assistant collapses profile follow-up into one combined question whe
     },
   });
 
-  assert.equal(payload.setup.assistant.nextQuestion?.key, "profile");
-  assert.equal(payload.setup.assistant.nextQuestion?.step, "profile");
+  assert.equal(payload.setup.assistant.nextQuestion, null);
+  assert.equal(payload.setup.assistant.phase, "interview");
+  assert.equal(payload.setup.summary.sectionStatus.profile.status, "needs_review");
   assert.equal(
-    payload.setup.assistant.nextQuestion?.prompt,
-    "Confirm the business name and a reliable short description first. Add the website if the business has one."
+    payload.setup.draft.sourceMetadata.primarySourceType,
+    "google_maps"
   );
 });
 
-test("setup assistant requires a real source identity before profile is ready", () => {
+test("setup assistant requires a real source identity before profile becomes ready, without injecting a canned website question", () => {
   const payload = setupAssistantTest.buildSetupAssistantSessionPayload({
     session: {
       id: "session-1",
@@ -748,6 +885,131 @@ test("setup assistant requires a real source identity before profile is ready", 
 
   assert.equal(payload.setup.review.finalizeAvailable, false);
   assert.equal(payload.setup.summary.sectionStatus.profile.status, "needs_review");
-  assert.equal(payload.setup.assistant.nextQuestion?.key, "website");
-  assert.equal(payload.setup.assistant.nextQuestion?.step, "website");
+  assert.equal(payload.setup.summary.sectionStatus.profile.reviewReady, false);
+  assert.equal(payload.setup.assistant.readyForApproval, false);
+  assert.equal(payload.setup.assistant.nextQuestion, null);
+});
+
+test("setup assistant AI-native payload keeps compat fields available after a brain turn", () => {
+  const payload = setupAssistantTest.buildSetupAssistantSessionPayload({
+    session: {
+      id: "session-1",
+      status: "draft",
+      mode: "setup",
+      currentStep: "services",
+    },
+    draft: {
+      version: 2,
+      draftPayload: {
+        setupAssistant: {
+          businessProfile: {
+            companyName: "North Clinic",
+            description: "Cosmetic dentistry clinic in Baku",
+            websiteUrl: "https://north.example",
+          },
+          services: [
+            { key: "implants", title: "Dental implants" },
+            { key: "whitening", title: "Teeth whitening" },
+          ],
+          contacts: [
+            { type: "phone", label: "Phone", value: "+994502223344" },
+            { type: "email", label: "Email", value: "hello@north.example" },
+          ],
+          hours: [
+            {
+              day: "monday",
+              enabled: true,
+              closed: false,
+              allDay: false,
+              appointmentOnly: false,
+              openTime: "09:00",
+              closeTime: "18:00",
+              notes: "",
+            },
+          ],
+          pricingPosture: {
+            pricingMode: "from_price",
+            publicSummary: "Consultations start from 30 AZN.",
+          },
+          handoffRules: {
+            enabled: true,
+            summary: "Escalate complaints and urgent cases to a human.",
+            triggers: ["complaints", "urgent cases"],
+          },
+        },
+        setupAssistantBrain: {
+          phase: "interview",
+          assistantMessage: "Identity is clear. Now refine the service set.",
+          nextQuestion: {
+            key: "services",
+            step: "services",
+            title: "Curate the service menu",
+            prompt: "List the real customer-facing services you want AI to talk about.",
+            group: "business_truth",
+            groupLabel: "Business truth",
+          },
+          confidence: {
+            strong: ["identity_grounded"],
+            unclear: ["pricing_needs_tightening"],
+            contradictions: [],
+          },
+          recommendation: {
+            notes: ["keep_only_customer_facing_services"],
+          },
+          sourceSignals: {
+            primarySourceType: "website",
+            primarySourceLabel: "Website",
+            primarySourceUrl: "https://north.example",
+            primarySourceAuthorityClass: "website",
+            pageCount: 3,
+            sourceTypes: ["website"],
+            strongestEvidence: ["Website source: https://north.example"],
+            discoveredPublicClaims: ["Dental implants", "Teeth whitening"],
+            companyNameCandidates: ["North Clinic"],
+            descriptionCandidates: ["Cosmetic dentistry clinic in Baku"],
+            serviceCandidates: ["Dental implants", "Teeth whitening"],
+            contactCandidates: ["+994502223344", "hello@north.example"],
+            hoursCandidates: ["Mon-Fri 09:00-18:00"],
+            pricingCandidates: ["Consultations start from 30 AZN"],
+            audienceCandidates: ["Adults and families in Baku"],
+            languagesCandidates: ["az", "en"],
+          },
+          interviewPlan: {
+            activeQuestionKeys: ["services"],
+            activeQuestions: [
+              {
+                key: "services",
+                step: "services",
+                title: "Curate the service menu",
+                group: "business_truth",
+                groupLabel: "Business truth",
+                priority: 1,
+              },
+            ],
+            remainingQuestionKeys: [],
+            nextGroup: "business_truth",
+            nextGroupLabel: "Business truth",
+          },
+          aiBehavior: {
+            languages: ["az", "en"],
+            tone: "warm reassuring",
+            greetingStyle: "Warm and calm",
+            afterHoursBehavior: "Collect the request and promise a callback.",
+          },
+          readyForApproval: false,
+          provider: "openai",
+          model: "gpt-5",
+          usedFallback: false,
+          error: "",
+        },
+      },
+    },
+    sources: [],
+  });
+
+  assert.equal(payload.setup.assistant.mode, "brain_v3");
+  assert.equal(payload.setup.assistant.provider, "openai");
+  assert.equal(payload.setup.assistant.model, "gpt-5");
+  assert.equal(payload.setup.assistant.nextQuestion?.key, "services");
+  assert.equal(payload.setup.assistant.timeline.length, 0);
 });
