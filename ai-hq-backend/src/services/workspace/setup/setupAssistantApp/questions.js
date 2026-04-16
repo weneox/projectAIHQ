@@ -165,6 +165,11 @@ export function buildProfileQuestionPrompt(draft = {}) {
   const businessProfile = obj(safeDraft.businessProfile);
   const sourceMetadata = obj(safeDraft.sourceMetadata);
   const sourceIdentityPresent = hasNonManualSourceIdentity(sourceMetadata);
+
+  if (sourceIdentityPresent) {
+    return "Confirm the business name and a reliable short description first. Add the website if the business has one.";
+  }
+
   const parts = [];
 
   const sourceLead = buildSourceLead(safeDraft);
@@ -179,9 +184,7 @@ export function buildProfileQuestionPrompt(draft = {}) {
   }
 
   parts.push(
-    sourceIdentityPresent
-      ? "Confirm the exact public business name and a reliable short description. Add the website only if the business actually has one."
-      : "Send the exact public business name and one clean sentence describing what the business does. Add the website only if the business has one."
+    "Send the exact public business name and one clean sentence describing what the business does. Add the website only if the business has one."
   );
 
   return normalizeText(parts.join(" "));

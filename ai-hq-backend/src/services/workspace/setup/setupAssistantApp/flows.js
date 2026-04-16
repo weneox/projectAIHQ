@@ -46,6 +46,30 @@ function summaryContextFromReview(review = {}) {
   };
 }
 
+function stripAssistantNavigationPatch(patch = {}) {
+  const safePatch = obj(patch);
+  const { assistantState, progress, ...rest } = safePatch;
+  return rest;
+}
+
+function buildSupplementalMessagePatch(
+  currentSetupAssistant = {},
+  latestMessage = "",
+  latestStep = ""
+) {
+  if (!s(latestMessage)) return {};
+
+  return stripAssistantNavigationPatch(
+    normalizeSetupAssistantDraftPatchBody(
+      {
+        step: latestStep,
+        answer: latestMessage,
+      },
+      currentSetupAssistant
+    )
+  );
+}
+
 function resolveStartedBy(actor = {}) {
   return (
     safeUuidOrNull(actor?.user?.id) ||
@@ -427,6 +451,7 @@ export async function updateSetupAssistantDraft(
   let rawTurn = null;
   let clientTurn = null;
   let orchestratorPatch = {};
+  let supplementalPatch = {};
 
   if (messageMode) {
     rawTurn = await runSetupBrain({
@@ -443,9 +468,21 @@ export async function updateSetupAssistantDraft(
       currentSetupAssistant
     );
 
+    supplementalPatch = buildSupplementalMessagePatch(
+      currentSetupAssistant,
+      latestMessage,
+      latestStep
+    );
+
     mergedSetupAssistant = mergeSetupAssistantDraft(
       currentSetupAssistant,
       orchestratorPatch,
+      seed
+    );
+
+    mergedSetupAssistant = mergeSetupAssistantDraft(
+      mergedSetupAssistant,
+      supplementalPatch,
       seed
     );
 
@@ -605,7 +642,7 @@ export async function updateSetupAssistantDraft(
   );
 
   const updatedFields = messageMode
-    ? Object.keys(obj(orchestratorPatch))
+    ? [...Object.keys(obj(orchestratorPatch)), ...Object.keys(obj(supplementalPatch))]
     : Object.keys(normalizeSetupAssistantDraftPatchBody(body, currentSetupAssistant));
 
   await audit(
