@@ -836,7 +836,6 @@ function makeTranscriptEntry(entry = {}) {
 }
 
 function buildAssistantSnapshot({
-  sourceSubmitted,
   smartDraftReady,
   liveAssistant,
   finalModel,
@@ -992,14 +991,12 @@ export default function SetupAssistantSections({
   const currentAssistantSnapshot = useMemo(
     () =>
       buildAssistantSnapshot({
-        sourceSubmitted,
         smartDraftReady,
         liveAssistant,
         finalModel,
         currentQuestion,
       }),
     [
-      sourceSubmitted,
       smartDraftReady,
       liveAssistant,
       finalModel,
