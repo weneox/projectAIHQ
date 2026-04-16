@@ -1,152 +1,66 @@
 import { arr, obj, s } from "../draftShared.js";
-import {
-  REVIEW_MESSAGE,
-  hasNonManualSourceIdentity,
-  sourceTypeLabel,
-} from "./shared.js";
+import { REVIEW_MESSAGE } from "./shared.js";
 import { SECTION_META, SECTION_ORDER } from "./questions.js";
+import {
+  buildSetupDraftStateFromSignals,
+  buildSetupSourceCoverage,
+  buildSetupSourceSignals,
+} from "./sourceSignals.js";
 
-function normalizeEvidenceSummary(sourceMetadata = {}) {
-  return arr(sourceMetadata.evidenceSummary)
-    .map((item) => s(item).toLowerCase())
-    .filter(Boolean);
-}
+function buildCoverageContext(draft = {}) {
+  const sourceSignals = buildSetupSourceSignals({
+    session: {},
+    draft: obj(draft),
+    sources: [],
+    review: null,
+  });
 
-function evidenceIncludesAny(evidence = [], patterns = []) {
-  return arr(evidence).some((line) =>
-    arr(patterns).some((pattern) =>
-      pattern instanceof RegExp ? pattern.test(line) : line.includes(String(pattern))
-    )
-  );
-}
-
-function hasTimeLikeSignal(text = "") {
-  return /\b\d{1,2}[:.]?\d{0,2}\s*(?:-|to|dan|den|dek|qeder)\s*\d{1,2}[:.]?\d{0,2}\b/.test(
-    s(text).toLowerCase()
-  );
-}
-
-function detectSourceCoverage(draft = {}) {
-  const businessProfile = obj(draft.businessProfile);
-  const sourceMetadata = obj(draft.sourceMetadata);
-  const evidence = normalizeEvidenceSummary(sourceMetadata);
-  const sourceIdentityPresent = hasNonManualSourceIdentity(sourceMetadata);
-
-  const services =
-    evidenceIncludesAny(evidence, [
-      "service",
-      "services",
-      "offer",
-      "offers",
-      "menu",
-      "xidmet",
-      "xidmət",
-      "solution",
-      "solutions",
-    ]) || arr(draft.services).length > 0;
-
-  const contacts =
-    evidenceIncludesAny(evidence, [
-      "contact",
-      "phone",
-      "email",
-      "whatsapp",
-      "telegram",
-      "call",
-      "elaqe",
-      "əlaqə",
-      "dm",
-      "wa.me",
-      "@",
-    ]) ||
-    arr(draft.contacts).length > 0 ||
-    Boolean(s(businessProfile.primaryPhone) || s(businessProfile.primaryEmail));
-
-  const hours =
-    evidenceIncludesAny(evidence, [
-      "hours",
-      "open",
-      "closed",
-      "working hours",
-      "business hours",
-      "24/7",
-      "appointment only",
-      "schedule",
-      "saat",
-      "bagli",
-      "bağlı",
-    ]) ||
-    evidence.some((line) => hasTimeLikeSignal(line)) ||
-    arr(draft.hours).some(
-      (item) =>
-        item?.enabled === true ||
-        item?.allDay === true ||
-        item?.appointmentOnly === true ||
-        item?.closed === true ||
-        s(item?.notes)
-    );
-
-  const pricing =
-    evidenceIncludesAny(evidence, [
-      "price",
-      "pricing",
-      "quote",
-      "starting",
-      "from",
-      "discount",
-      "promo",
-      "qiymet",
-      "qiymət",
-      "azn",
-      "usd",
-      "eur",
-      "gbp",
-      "$",
-      "₼",
-      "€",
-      "£",
-    ]) ||
-    Boolean(s(obj(draft.pricingPosture).publicSummary));
-
-  const identity =
-    sourceIdentityPresent &&
-    Boolean(
-      s(businessProfile.companyName) ||
-        s(businessProfile.description) ||
-        s(businessProfile.websiteUrl) ||
-        evidence.length
-    );
+  const sourceCoverage = buildSetupSourceCoverage(sourceSignals);
+  const draftState = buildSetupDraftStateFromSignals({
+    draft: obj(draft),
+    review: null,
+    sourceSignals,
+  });
 
   return {
-    sourceIdentityPresent,
-    identity,
-    services,
-    contacts,
-    hours,
-    pricing,
+    sourceSignals,
+    sourceCoverage,
+    draftState,
   };
 }
 
-function buildProfileStatus(draft = {}, coverage = {}) {
+function buildProfileStatus(draft = {}, context = {}) {
   const businessProfile = obj(draft.businessProfile);
-  const sourceIdentityPresent = coverage.sourceIdentityPresent === true;
+  const { sourceCoverage, draftState, sourceSignals } = context;
 
-  const hasName = Boolean(s(businessProfile.companyName));
-  const hasDescription = Boolean(s(businessProfile.description));
-  const hasWebsite = Boolean(s(businessProfile.websiteUrl) || sourceIdentityPresent);
+  const hasName = Boolean(
+    s(businessProfile.companyName) || s(draftState.businessName)
+  );
+  const hasDescription = Boolean(
+    s(businessProfile.description) || s(draftState.description)
+  );
+  const hasWebsite = Boolean(
+    s(businessProfile.websiteUrl) ||
+      s(draftState.websiteUrl) ||
+      s(sourceSignals.primarySourceUrl)
+  );
 
   const completed = hasName && hasDescription && hasWebsite;
   const partial =
-    hasName || hasDescription || hasWebsite || sourceIdentityPresent;
+    completed ||
+    sourceCoverage.identity === true ||
+    hasName ||
+    hasDescription ||
+    hasWebsite;
 
   return {
     completed,
     partial,
-    sourceCovered: coverage.identity === true,
-    reviewReady: completed,
+    sourceCovered: sourceCoverage.identity === true,
+    reviewReady: completed || sourceCoverage.identity === true,
     metric: [
       hasName ? "name" : "",
-      hasWebsite ? (s(businessProfile.websiteUrl) ? "website" : "source") : "",
+      hasWebsite ? "source/website" : "",
       hasDescription ? "summary" : "",
     ]
       .filter(Boolean)
@@ -154,108 +68,115 @@ function buildProfileStatus(draft = {}, coverage = {}) {
   };
 }
 
-function buildServicesStatus(draft = {}, coverage = {}) {
-  const count = arr(draft.services).length;
-  const completed = count > 0;
-  const partial = completed || coverage.services === true;
+function buildServicesStatus(draft = {}, context = {}) {
+  const { sourceCoverage, draftState, sourceSignals } = context;
+  const explicitCount = arr(draft.services).length;
+  const derivedCount = arr(draftState.services).length;
+  const sourceCount = arr(sourceSignals.serviceCandidates).length;
+
+  const completed = explicitCount > 0 || derivedCount > 0;
+  const partial = completed || sourceCoverage.services === true;
 
   return {
     completed,
     partial,
-    sourceCovered: coverage.services === true,
-    reviewReady: completed || coverage.services === true,
+    sourceCovered: sourceCoverage.services === true,
+    reviewReady: completed || sourceCoverage.services === true,
     metric: completed
-      ? `${count} drafted`
-      : coverage.services === true
-        ? "source-covered"
+      ? `${Math.max(explicitCount, derivedCount)} drafted`
+      : sourceCoverage.services === true
+        ? `${sourceCount} source signals`
         : "not drafted",
   };
 }
 
-function buildHoursStatus(draft = {}, coverage = {}) {
-  const enabledHours = arr(draft.hours).filter(
+function buildHoursStatus(draft = {}, context = {}) {
+  const { sourceCoverage, draftState, sourceSignals } = context;
+  const explicitConfigured = arr(draft.hours).filter(
     (item) =>
       item?.enabled === true ||
       item?.allDay === true ||
       item?.appointmentOnly === true
-  );
-  const hasAnyHourState = arr(draft.hours).some(
-    (item) =>
-      item?.enabled === true ||
-      item?.allDay === true ||
-      item?.appointmentOnly === true ||
-      item?.closed === true ||
-      s(item?.notes)
-  );
+  ).length;
 
-  const completed = enabledHours.length > 0;
-  const partial = hasAnyHourState || coverage.hours === true;
+  const derivedConfigured = arr(draftState.hours).length;
+  const sourceCount = arr(sourceSignals.hoursCandidates).length;
+
+  const completed = explicitConfigured > 0 || derivedConfigured > 0;
+  const partial = completed || sourceCoverage.hours === true;
 
   return {
     completed,
     partial,
-    sourceCovered: coverage.hours === true,
-    reviewReady: completed || coverage.hours === true,
+    sourceCovered: sourceCoverage.hours === true,
+    reviewReady: completed || sourceCoverage.hours === true,
     metric: completed
-      ? `${enabledHours.length} days scheduled`
-      : coverage.hours === true
-        ? "source-covered"
+      ? `${Math.max(explicitConfigured, derivedConfigured)} days scheduled`
+      : sourceCoverage.hours === true
+        ? `${sourceCount} source signals`
         : "not scheduled",
   };
 }
 
-function buildPricingStatus(draft = {}, coverage = {}) {
+function buildPricingStatus(draft = {}, context = {}) {
   const pricing = obj(draft.pricingPosture);
-  const completed = Boolean(s(pricing.pricingMode) && s(pricing.publicSummary));
-  const partial =
-    completed ||
-    Boolean(
-      s(pricing.pricingMode) ||
-        s(pricing.publicSummary) ||
-        pricing.minPrice != null ||
-        pricing.startingAt != null
-    ) ||
-    coverage.pricing === true;
+  const { sourceCoverage, draftState, sourceSignals } = context;
+
+  const completed = Boolean(
+    s(pricing.pricingMode) ||
+      s(pricing.publicSummary) ||
+      s(draftState.pricingPosture)
+  );
+
+  const partial = completed || sourceCoverage.pricing === true;
 
   return {
     completed,
     partial,
-    sourceCovered: coverage.pricing === true,
-    reviewReady: completed || coverage.pricing === true,
+    sourceCovered: sourceCoverage.pricing === true,
+    reviewReady: completed || sourceCoverage.pricing === true,
     metric: completed
-      ? s(pricing.pricingMode)
-      : coverage.pricing === true
-        ? "source-covered"
+      ? s(pricing.pricingMode || pricing.publicSummary || draftState.pricingPosture)
+      : sourceCoverage.pricing === true
+        ? `${arr(sourceSignals.pricingCandidates).length} source signals`
         : "not set",
   };
 }
 
-function buildContactsStatus(draft = {}, coverage = {}) {
-  const count = arr(draft.contacts).length;
-  const completed = count > 0;
-  const partial = completed || coverage.contacts === true;
+function buildContactsStatus(draft = {}, context = {}) {
+  const { sourceCoverage, draftState, sourceSignals } = context;
+  const explicitCount = arr(draft.contacts).length;
+  const derivedCount = arr(draftState.contacts).length;
+  const sourceCount = arr(sourceSignals.contactCandidates).length;
+
+  const completed = explicitCount > 0 || derivedCount > 0;
+  const partial = completed || sourceCoverage.contacts === true;
 
   return {
     completed,
     partial,
-    sourceCovered: coverage.contacts === true,
-    reviewReady: completed || coverage.contacts === true,
+    sourceCovered: sourceCoverage.contacts === true,
+    reviewReady: completed || sourceCoverage.contacts === true,
     metric: completed
-      ? `${count} contact routes`
-      : coverage.contacts === true
-        ? "source-covered"
+      ? `${Math.max(explicitCount, derivedCount)} contact routes`
+      : sourceCoverage.contacts === true
+        ? `${sourceCount} source signals`
         : "no routing lane",
   };
 }
 
-function buildHandoffStatus(draft = {}) {
+function buildHandoffStatus(draft = {}, context = {}) {
   const handoff = obj(draft.handoffRules);
+  const { draftState } = context;
+
   const completed = Boolean(
     handoff.enabled === true ||
       s(handoff.summary) ||
-      arr(handoff.triggers).length
+      arr(handoff.triggers).length ||
+      s(draftState.humanHandoff)
   );
-  const partial = Boolean(s(handoff.summary) || arr(handoff.triggers).length);
+
+  const partial = completed;
 
   return {
     completed,
@@ -264,22 +185,22 @@ function buildHandoffStatus(draft = {}) {
     reviewReady: completed,
     metric: arr(handoff.triggers).length
       ? `${arr(handoff.triggers).length} triggers`
-      : s(handoff.summary)
+      : s(handoff.summary || draftState.humanHandoff)
         ? "configured"
         : "recommended",
   };
 }
 
 export function buildSectionStatus(draft = {}) {
-  const coverage = detectSourceCoverage(draft);
+  const context = buildCoverageContext(draft);
 
   const sections = {
-    profile: buildProfileStatus(draft, coverage),
-    services: buildServicesStatus(draft, coverage),
-    hours: buildHoursStatus(draft, coverage),
-    pricing: buildPricingStatus(draft, coverage),
-    contacts: buildContactsStatus(draft, coverage),
-    handoff: buildHandoffStatus(draft),
+    profile: buildProfileStatus(draft, context),
+    services: buildServicesStatus(draft, context),
+    hours: buildHoursStatus(draft, context),
+    pricing: buildPricingStatus(draft, context),
+    contacts: buildContactsStatus(draft, context),
+    handoff: buildHandoffStatus(draft, context),
   };
 
   return Object.fromEntries(
@@ -298,15 +219,16 @@ export function buildSectionStatus(draft = {}) {
 }
 
 export function buildConfirmationBlockers(draft = {}, sectionStatus = {}) {
-  const sourceMetadata = obj(draft.sourceMetadata);
-  const sourceLabel = sourceTypeLabel(sourceMetadata.primarySourceType);
+  const context = buildCoverageContext(draft);
+  const { sourceSignals, sourceCoverage } = context;
+
   const sourceHint =
-    s(sourceMetadata.primarySourceType) && s(sourceMetadata.primarySourceUrl)
-      ? `${sourceLabel} source is already attached (${s(
-          sourceMetadata.primarySourceUrl
+    s(sourceSignals.primarySourceLabel) && s(sourceSignals.primarySourceUrl)
+      ? `${s(sourceSignals.primarySourceLabel)} source is already attached (${s(
+          sourceSignals.primarySourceUrl
         )}).`
-      : s(sourceMetadata.primarySourceType)
-        ? `${sourceLabel} source is already attached.`
+      : s(sourceSignals.primarySourceLabel)
+        ? `${s(sourceSignals.primarySourceLabel)} source is already attached.`
         : "";
 
   return SECTION_ORDER.filter(
@@ -315,6 +237,36 @@ export function buildConfirmationBlockers(draft = {}, sectionStatus = {}) {
     const meta = obj(SECTION_META[key]);
     const state = obj(sectionStatus[key]);
 
+    let specificSourceHint = "";
+
+    if (key === "profile") {
+      specificSourceHint = sourceHint;
+    } else if (key === "services" && sourceCoverage.services) {
+      specificSourceHint = `Service signals already exist: ${arr(
+        sourceSignals.serviceCandidates
+      )
+        .slice(0, 4)
+        .join(", ")}.`;
+    } else if (key === "contacts" && sourceCoverage.contacts) {
+      specificSourceHint = `Contact signals already exist: ${arr(
+        sourceSignals.contactCandidates
+      )
+        .slice(0, 3)
+        .join(", ")}.`;
+    } else if (key === "hours" && sourceCoverage.hours) {
+      specificSourceHint = `Hour signals already exist: ${arr(
+        sourceSignals.hoursCandidates
+      )
+        .slice(0, 2)
+        .join(", ")}.`;
+    } else if (key === "pricing" && sourceCoverage.pricing) {
+      specificSourceHint = `Pricing signals already exist: ${arr(
+        sourceSignals.pricingCandidates
+      )
+        .slice(0, 2)
+        .join(", ")}.`;
+    }
+
     return {
       key,
       label: meta.label,
@@ -322,12 +274,7 @@ export function buildConfirmationBlockers(draft = {}, sectionStatus = {}) {
       severity: state.status === "missing" ? "high" : "medium",
       reason: state.status === "missing" ? s(meta.missing) : s(meta.review),
       metric: s(state.metric),
-      sourceHint:
-        key === "profile"
-          ? sourceHint
-          : key === "services" && arr(sourceMetadata.evidenceSummary).length
-            ? s(arr(sourceMetadata.evidenceSummary)[0])
-            : "",
+      sourceHint: specificSourceHint,
       sourceCovered: state.sourceCovered === true,
       reviewReady: state.reviewReady === true,
     };
@@ -335,6 +282,9 @@ export function buildConfirmationBlockers(draft = {}, sectionStatus = {}) {
 }
 
 export function buildSummary(draft = {}) {
+  const context = buildCoverageContext(draft);
+  const { draftState, sourceCoverage } = context;
+
   const sectionStatus = buildSectionStatus(draft);
   const completionCount = Object.values(sectionStatus).filter(
     (item) => item.status === "ready"
@@ -343,9 +293,21 @@ export function buildSummary(draft = {}) {
     (item) => item.reviewReady === true
   ).length;
   const confirmationBlockers = buildConfirmationBlockers(draft, sectionStatus);
+
   const hasAnyDraft =
     completionCount > 0 ||
-    Object.values(sectionStatus).some((item) => item.partial === true);
+    Object.values(sectionStatus).some((item) => item.partial === true) ||
+    Boolean(
+      s(draftState.businessName) ||
+        s(draftState.description) ||
+        s(draftState.websiteUrl) ||
+        arr(draftState.services).length ||
+        arr(draftState.contacts).length ||
+        arr(draftState.hours).length ||
+        s(draftState.pricingPosture) ||
+        s(draftState.humanHandoff) ||
+        sourceCoverage.primarySourceExists
+    );
 
   const readyForReview = SECTION_ORDER.every(
     (key) => obj(sectionStatus[key]).reviewReady === true
@@ -361,14 +323,17 @@ export function buildSummary(draft = {}) {
     blockerCount: confirmationBlockers.length,
     sectionStatus,
     confirmationBlockers,
-    servicesCount: arr(draft.services).length,
-    contactsCount: arr(draft.contacts).length,
-    hoursConfiguredCount: arr(draft.hours).filter(
-      (item) =>
-        item?.enabled === true ||
-        item?.allDay === true ||
-        item?.appointmentOnly === true
-    ).length,
+    servicesCount: Math.max(arr(draft.services).length, arr(draftState.services).length),
+    contactsCount: Math.max(arr(draft.contacts).length, arr(draftState.contacts).length),
+    hoursConfiguredCount: Math.max(
+      arr(draft.hours).filter(
+        (item) =>
+          item?.enabled === true ||
+          item?.allDay === true ||
+          item?.appointmentOnly === true
+      ).length,
+      arr(draftState.hours).length
+    ),
   };
 }
 
