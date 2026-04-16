@@ -552,8 +552,10 @@ test("review finalize composition stays aligned with canonical setup readiness",
   assert.equal(result.status, 409);
   assert.equal(result.body.ok, false);
   assert.equal(result.body.code, "SETUP_REVIEW_NOT_READY");
-  assert.equal(result.body.assistant.nextQuestion.key, "handoff");
+  assert.equal(result.body.assistant.nextQuestion, null);
+  assert.equal(result.body.assistant.readyForApproval, false);
   assert.equal(result.body.setup.review.finalizeAvailable, false);
+  assert.equal(result.body.setup.summary.sectionStatus.handoff.status, "missing");
   assert.equal(finalizeCalled, false);
   assert.equal(auditCalls.length, 1);
   assert.equal(auditCalls[0][5].reasonCode, "setup_review_not_ready");
@@ -598,10 +600,10 @@ test("read app injects setup status builder into truth payload loaders", async (
       },
       async setupBuilder() {
         return {
-            progress: {
-              nextRoute: "/home?assistant=setup",
-              primaryMissingStep: "approved_truth",
-            },
+          progress: {
+            nextRoute: "/home?assistant=setup",
+            primaryMissingStep: "approved_truth",
+          },
         };
       },
     }
@@ -692,9 +694,9 @@ test("read app injects setup status builder into truth payload loaders", async (
       },
       async setupBuilder() {
         return {
-            progress: {
-              nextRoute: "/truth",
-            },
+          progress: {
+            nextRoute: "/truth",
+          },
         };
       },
     }
@@ -766,10 +768,10 @@ test("truth payload contract stays compatible with shared setup truth surface", 
       },
       async setupBuilder() {
         return {
-            progress: {
-              nextRoute: "/home?assistant=setup",
-              primaryMissingStep: "approved_truth",
-            },
+          progress: {
+            nextRoute: "/home?assistant=setup",
+            primaryMissingStep: "approved_truth",
+          },
         };
       },
     }

@@ -51,7 +51,7 @@ function createReviewDraft(overrides = {}) {
   };
 }
 
-test("review flow uses the canonical setup assistant authority for next question selection", async () => {
+test("review flow keeps AI-native setup authority while preserving canonical readiness semantics", async () => {
   const payload = await loadCurrentReviewPayload(
     {
       db: {},
@@ -79,10 +79,10 @@ test("review flow uses the canonical setup assistant authority for next question
     }
   );
 
-  assert.equal(payload.assistant.nextQuestion?.key, "handoff");
-  assert.equal(payload.assistant.nextQuestion?.step, "handoff");
+  assert.equal(payload.assistant.nextQuestion, null);
   assert.equal(payload.assistant.readyForApproval, false);
   assert.ok(!("assistantBrain" in payload));
+  assert.equal(payload.assistant.sourceSignals.primarySourceType, "google_maps");
   assert.ok(
     !payload.assistant.interviewPlan.activeQuestionKeys.includes("languages")
   );
