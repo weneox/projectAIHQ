@@ -368,6 +368,10 @@ function buildInterviewPlan(questionCandidates = [], nextQuestion = null) {
 const SOURCE_CAPTURE_OPENING_MESSAGE =
   "Salam. Mən bunu səninlə rahat şəkildə yığacağam. Məqsədim chatbot-un düzgün işləməsi üçün lazım olan biznes məlumatlarını toplamaq, çatışmayan hissələri isə düşünülmüş drafta çevirməkdir. Başlamaq üçün ən yaxşı public source-u göndər: website, Google Maps, Instagram, Facebook və ya qısa biznes qeydi. Sən sərbəst yaza bilərsən, mən mümkün qədər düzgün başa düşüb strukturlaşdıracağam.";
 
+function getSourceCaptureOpeningMessage() {
+  return `${SOURCE_CAPTURE_OPENING_MESSAGE} Send the best public source you have first: website, Google Maps, Instagram, Facebook, or a short business note.`;
+}
+
 function buildConversationalAssistantMessage({
   phase,
   nextQuestion,
@@ -382,7 +386,7 @@ function buildConversationalAssistantMessage({
   const knownState = buildSetupKnownState(draftState);
 
   if (phase === "source_capture") {
-    return SOURCE_CAPTURE_OPENING_MESSAGE;
+    return getSourceCaptureOpeningMessage();
   }
 
   if (readyForApproval) {
@@ -584,7 +588,7 @@ export function buildSetupAssistantBrainState({
 export function buildSetupAssistantFirstPrompt() {
   return {
     phase: "source_capture",
-    assistantMessage: SOURCE_CAPTURE_OPENING_MESSAGE,
+    assistantMessage: getSourceCaptureOpeningMessage(),
     nextQuestion: {
       key: "source_capture",
       step: "source_capture",
