@@ -12,117 +12,94 @@ export const SECTION_ORDER = [
 
 export const SECTION_META = {
   profile: {
-    label: "Biznes kimliyi",
-    title: "Biznes kimliyini dəqiqləşdirək",
+    label: "Identity",
+    title: "Confirm the business identity",
     missing:
-      "Biznes kimliyi hələ zəifdir. Dəqiq public ad və biznesin nə etdiyini izah edən bir təmiz cümlə lazımdır.",
+      "The business identity is still not reliable enough. We need the exact public name and one clean description.",
     review:
-      "Biznes kimliyi ilə bağlı siqnallar var, amma hələ daha səliqəli təsdiq lazımdır.",
-    ready: "Biznes kimliyi istifadə oluna biləcək səviyyədədir.",
+      "There are identity signals, but they still need a final confirmation.",
+    ready: "The business identity is reliable enough to use.",
     prompt:
-      "Biznesin dəqiq public adını və nə etdiyini bir təmiz cümlə ilə yaz. Website varsa onu da əlavə et.",
+      "Confirm the exact public business name and one clean sentence describing what the business does.",
     placeholder:
-      "Məsələn: Neox Studio — AI avtomasiya, website və rəqəmsal təqdimat həlləri qururuq.",
+      "Example: Neox Studio — We build AI automation, websites, and premium digital presentation systems.",
   },
   company: {
-    label: "Biznes adı",
-    title: "Biznes adını dəqiqləşdirək",
-    prompt: "Biznesin dəqiq public adını yaz.",
-    placeholder: "Məsələn: Neox Studio",
+    label: "Business name",
+    title: "Confirm the business name",
+    prompt: "Send the exact public business name.",
+    placeholder: "Example: Neox Studio",
   },
   description: {
-    label: "Biznes təsviri",
-    title: "Biznes nə edir?",
-    prompt: "Biznesin nə etdiyini bir təmiz cümlə ilə yaz.",
+    label: "Business description",
+    title: "Confirm what the business does",
+    prompt: "Send one clean sentence describing what the business does.",
     placeholder:
-      "Məsələn: Lokal bizneslər üçün AI avtomasiya və rəqəmsal təqdimat həlləri qururuq.",
+      "Example: We build AI automation and premium digital systems for local businesses.",
   },
   website: {
     label: "Website",
-    title: "Əsas website-i əlavə et",
-    prompt: "Əsas website linkini yaz, əgər varsa.",
-    placeholder: "Məsələn: yourbusiness.com",
+    title: "Confirm the main website",
+    prompt: "Send the main website if the business has one.",
+    placeholder: "Example: yourbusiness.com",
   },
   services: {
-    label: "Xidmətlər",
-    title: "Əsas xidmətləri dəqiqləşdirək",
+    label: "Services",
+    title: "Confirm the real services",
     missing:
-      "Əsas xidmətlər hələ çatmır. AI-in rahat danışa biləcəyi real customer-facing xidmətləri yazmaq lazımdır.",
+      "The service layer is still weak. We need real customer-facing services, not vague categories or channels.",
     review:
-      "Xidmət siqnalları var, amma təsdiqdən əvvəl daha səliqəli təmizləmə lazımdır.",
-    ready: "Əsas xidmətlər artıq istifadə oluna biləcək formadadır.",
-    prompt:
-      "AI-in danışmalı olduğu real customer-facing xidmətləri yaz.",
+      "There are service signals, but they need cleanup before approval.",
+    ready: "The service layer is usable.",
+    prompt: "List the real customer-facing services in plain language.",
     placeholder:
-      "Məsələn: website hazırlanması, reklam idarəetməsi, branding",
+      "Example: website design, AI automation setup, social content production",
   },
   hours: {
-    label: "İş saatları",
-    title: "Public iş saatlarını dəqiqləşdirək",
-    missing:
-      "Public iş saatları hələ yoxdur. AI yanlış availability vəd etməməlidir.",
-    review: "Saat siqnalları var, amma hələ təsdiq lazımdır.",
-    ready: "Public iş saatları artıq strukturlaşdırılıb.",
-    prompt: "İş saatlarını bir sətirdə yaz.",
+    label: "Hours",
+    title: "Confirm the public hours",
+    missing: "Public hours are still missing or unreliable.",
+    review: "There are hour signals, but they still need confirmation.",
+    ready: "Public hours are usable.",
+    prompt: "Send the public weekly hours in one clean message.",
     placeholder:
-      "Məsələn: B.e.–Cümə 10:00–19:00, Şənbə 11:00–16:00, Bazar bağlı",
+      "Example: Monday–Friday 10:00–19:00, Saturday 11:00–16:00, Sunday closed",
   },
   pricing: {
-    label: "Qiymət mövqeyi",
-    title: "Qiymət mövqeyini müəyyənləşdirək",
-    missing:
-      "Qiymət mövqeyi hələ çatmır. AI qiymət suallarına təhlükəsiz cavab qaydasına ehtiyac duyur.",
+    label: "Pricing posture",
+    title: "Confirm the public pricing posture",
+    missing: "The public pricing posture is still missing.",
     review:
-      "Qiymətlə bağlı siqnallar var, amma public cavab qaydası hələ dəqiqləşməlidir.",
-    ready: "Qiymət mövqeyi artıq müəyyənləşdirilib.",
-    prompt: "AI qiymət barədə necə danışmalıdır?",
+      "There are pricing signals, but the public rule is not clear enough yet.",
+    ready: "The pricing posture is usable.",
+    prompt: "Explain how AI should answer pricing questions publicly.",
     placeholder:
-      "Məsələn: starting price deyilə bilər, dəqiq quote üçün müraciət istənməlidir",
+      "Example: Give a starting range publicly, but exact quotes require review.",
   },
   contacts: {
-    label: "Əlaqə yolu",
-    title: "Əsas əlaqə yolunu seçək",
-    missing: "Real public əlaqə yolu hələ çatmır.",
+    label: "Contact route",
+    title: "Confirm the main contact route",
+    missing: "The main public contact route is still missing.",
     review:
-      "Əlaqə detalları var, amma əsas yönləndirmə yolu hələ təsdiqlənməlidir.",
-    ready: "Əsas əlaqə yolu artıq mövcuddur.",
-    prompt:
-      "Müştərini ilk olaraq hara yönləndirməli olduğumuzu yaz.",
-    placeholder:
-      "Məsələn: WhatsApp, telefon zəngi, form və ya email",
+      "There are contact signals, but the primary route is not clear enough yet.",
+    ready: "The main contact route is usable.",
+    prompt: "Send the main public contact route customers should use first.",
+    placeholder: "Example: WhatsApp, phone, form, or email",
   },
   handoff: {
-    label: "İnsana ötürmə",
-    title: "İnsana ötürmə qaydasını müəyyənləşdirək",
-    missing: "İnsana ötürmə qaydaları hələ yoxdur.",
+    label: "Human handoff",
+    title: "Confirm human escalation rules",
+    missing: "Human escalation rules are still missing.",
     review:
-      "Ötürmə məntiqi var, amma sərhədlərini daha dəqiq qurmaq lazımdır.",
-    ready: "İnsana ötürmə qaydaları artıq mövcuddur.",
-    prompt: "AI hansı hallarda dayanıb insana ötürməlidir?",
+      "There are handoff signals, but the policy is not sharp enough yet.",
+    ready: "Human escalation rules are usable.",
+    prompt: "Explain when AI must stop and hand the case to a human.",
     placeholder:
-      "Məsələn: şikayət, fərdi quote, ödəniş problemi, təcili iş, anlaşılmaz sorğu",
+      "Example: complaints, custom quotes, payment issues, urgent requests, unclear cases",
   },
 };
 
-export const INTENT_ONLY_RESPONSES = {
-  "i'll share the business identity now.": "profile",
-  "i'll share the business name now.": "profile",
-  "let's start from the website.": "website",
-  "let's use instagram as a source.": "profile",
-  "i want to write the business details manually.": "profile",
-  "i'll list the services now.": "services",
-  "i want to paste a rough services note.": "services",
-  "let's define pricing posture first.": "pricing",
-  "let's skip services for now and continue.": "__skip__",
-  "i'll share the working hours now.": "hours",
-  "the business is appointment only.": "__appointment_only__",
-  "the business is open 24/7.": "__always_open__",
-  "pricing starts from a visible base amount.": "pricing",
-  "exact pricing requires a quote.": "__quote_required__",
-  "i want to define what ai can say publicly about pricing.": "pricing",
-  "let's continue.": "__continue__",
-  "i want to add more detail here.": "__continue__",
-};
+export const INTENT_ONLY_RESPONSES = {};
 
 function normalizeText(value = "") {
   return s(value).replace(/\s+/g, " ").trim();
@@ -136,13 +113,11 @@ function buildSourceLead(draft = {}) {
     .filter(Boolean);
 
   if (primarySourceUrl) {
-    return `Mənbə artıq bağlıdır (${primarySourceUrl}).`;
+    return `Existing source: ${primarySourceUrl}.`;
   }
 
   if (evidenceSummary.length) {
-    return `Mənbədən artıq bəzi siqnallar görünür: ${evidenceSummary
-      .slice(0, 2)
-      .join(" · ")}.`;
+    return `Existing source signals: ${evidenceSummary.slice(0, 2).join(" · ")}.`;
   }
 
   return "";
@@ -190,31 +165,23 @@ export function buildProfileQuestionPrompt(draft = {}) {
   const businessProfile = obj(safeDraft.businessProfile);
   const sourceMetadata = obj(safeDraft.sourceMetadata);
   const sourceIdentityPresent = hasNonManualSourceIdentity(sourceMetadata);
-
-  if (sourceIdentityPresent) {
-    return "Confirm the business name and a reliable short description first. Add the website if the business has one.";
-  }
-
-  const sourceLead = buildSourceLead(safeDraft);
-
   const parts = [];
 
-  if (sourceLead) {
-    parts.push(sourceLead);
-  }
+  const sourceLead = buildSourceLead(safeDraft);
+  if (sourceLead) parts.push(sourceLead);
 
   if (s(businessProfile.companyName)) {
-    parts.push(`Hazırda ad siqnalı var: ${s(businessProfile.companyName)}.`);
+    parts.push(`Current name signal: ${s(businessProfile.companyName)}.`);
   }
 
   if (s(businessProfile.description)) {
-    parts.push("Hazırda biznes təsviri siqnalı da var.");
+    parts.push("There is already a partial business description.");
   }
 
   parts.push(
     sourceIdentityPresent
-      ? "İndi bunu səliqəli şəkildə sabitləyək: biznesin dəqiq public adını və nə etdiyini bir təmiz cümlə ilə yaz."
-      : "Biznesin dəqiq public adını və nə etdiyini bir təmiz cümlə ilə yaz. Website varsa onu da əlavə et."
+      ? "Confirm the exact public business name and a reliable short description. Add the website only if the business actually has one."
+      : "Send the exact public business name and one clean sentence describing what the business does. Add the website only if the business has one."
   );
 
   return normalizeText(parts.join(" "));
@@ -225,9 +192,8 @@ export function resolveProfileQuestion(
   progress = {},
   profileStatus = {}
 ) {
-  const safeDraft = obj(draft);
-  const currentQuestionKey = s(progress.currentQuestionKey).toLowerCase();
   const safeProfileStatus = obj(profileStatus);
+  const currentQuestionKey = s(progress.currentQuestionKey).toLowerCase();
 
   if (
     safeProfileStatus.hasName === true &&
@@ -240,7 +206,7 @@ export function resolveProfileQuestion(
   }
 
   return buildAssistantQuestion("profile", {
-    prompt: buildProfileQuestionPrompt(safeDraft),
+    prompt: buildProfileQuestionPrompt(draft),
     priority:
       currentQuestionKey === "profile" ||
       currentQuestionKey === "company" ||
@@ -251,78 +217,24 @@ export function resolveProfileQuestion(
   });
 }
 
-function buildServicesQuestion(blocker = {}) {
+function buildQuestionFromBlocker(key = "", blocker = {}, priority = 80) {
+  const meta = obj(SECTION_META[key]);
   const parts = [];
+
   if (s(blocker.sourceHint)) parts.push(s(blocker.sourceHint));
-  if (s(blocker.metric)) parts.push(`Hazırkı siqnal: ${s(blocker.metric)}.`);
-  parts.push(
-    "AI-in danışmalı olduğu real customer-facing xidmətləri yaz. Kanal adlarını və ümumi sözləri yox, həqiqi xidmətləri yaz."
-  );
+  if (s(blocker.metric)) parts.push(`Current signal: ${s(blocker.metric)}.`);
+  if (s(blocker.reason)) parts.push(s(blocker.reason));
+  parts.push(s(meta.prompt));
 
-  return buildAssistantQuestion("services", {
+  return buildAssistantQuestion(key, {
     prompt: normalizeText(parts.join(" ")),
-    priority: 88,
-  });
-}
-
-function buildContactsQuestion(blocker = {}) {
-  const parts = [];
-  if (s(blocker.sourceHint)) parts.push(s(blocker.sourceHint));
-  if (s(blocker.metric)) parts.push(`Hazırkı siqnal: ${s(blocker.metric)}.`);
-  parts.push(
-    "Müştərini ilk olaraq hara yönləndirməli olduğumuzu yaz."
-  );
-
-  return buildAssistantQuestion("contacts", {
-    prompt: normalizeText(parts.join(" ")),
-    priority: 86,
-  });
-}
-
-function buildHoursQuestion(blocker = {}) {
-  const parts = [];
-  if (s(blocker.sourceHint)) parts.push(s(blocker.sourceHint));
-  if (s(blocker.metric)) parts.push(`Hazırkı siqnal: ${s(blocker.metric)}.`);
-  parts.push("İş saatlarını bir sətirdə yaz.");
-
-  return buildAssistantQuestion("hours", {
-    prompt: normalizeText(parts.join(" ")),
-    priority: 84,
-  });
-}
-
-function buildPricingQuestion(blocker = {}) {
-  const parts = [];
-  if (s(blocker.sourceHint)) parts.push(s(blocker.sourceHint));
-  if (s(blocker.metric)) parts.push(`Hazırkı siqnal: ${s(blocker.metric)}.`);
-  parts.push("AI qiymət barədə necə danışmalıdır?");
-
-  return buildAssistantQuestion("pricing", {
-    prompt: normalizeText(parts.join(" ")),
-    priority: 82,
-  });
-}
-
-function buildHandoffQuestion(blocker = {}) {
-  const parts = [];
-  if (s(blocker.sourceHint)) parts.push(s(blocker.sourceHint));
-  if (s(blocker.metric)) parts.push(`Hazırkı siqnal: ${s(blocker.metric)}.`);
-  parts.push("AI hansı hallarda dayanıb insana ötürməlidir?");
-
-  return buildAssistantQuestion("handoff", {
-    prompt: normalizeText(parts.join(" ")),
-    priority: 80,
+    priority,
   });
 }
 
 export function getNextQuestion(summary = {}, draft = {}, progress = {}) {
-  if (summary.readyForReview === true) {
-    return null;
-  }
-
-  if (!hasSetupSignalForInterview(draft)) {
-    return null;
-  }
+  if (summary.readyForReview === true) return null;
+  if (!hasSetupSignalForInterview(draft)) return null;
 
   const sectionStatus = obj(summary.sectionStatus);
 
@@ -334,28 +246,29 @@ export function getNextQuestion(summary = {}, draft = {}, progress = {}) {
   if (!s(blocker.key)) return null;
 
   if (blocker.key === "services") {
-    return buildServicesQuestion(blocker);
+    return buildQuestionFromBlocker("services", blocker, 88);
   }
 
   if (blocker.key === "contacts") {
-    return buildContactsQuestion(blocker);
+    return buildQuestionFromBlocker("contacts", blocker, 86);
   }
 
   if (blocker.key === "hours") {
-    return buildHoursQuestion(blocker);
+    return buildQuestionFromBlocker("hours", blocker, 84);
   }
 
   if (blocker.key === "pricing") {
-    return buildPricingQuestion(blocker);
+    return buildQuestionFromBlocker("pricing", blocker, 82);
   }
 
   if (blocker.key === "handoff") {
-    return buildHandoffQuestion(blocker);
+    return buildQuestionFromBlocker("handoff", blocker, 80);
   }
 
   return buildAssistantQuestion(blocker.key, {
     prompt: normalizeText(
       s(blocker.reason) || s(obj(SECTION_META[blocker.key]).prompt)
     ),
+    priority: 78,
   });
 }

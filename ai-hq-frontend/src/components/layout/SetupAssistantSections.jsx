@@ -10,17 +10,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
 const STORAGE_PREFIX = "setup_assistant_chat_v3";
-
-const STEP_PLACEHOLDERS = {
-  source_capture:
-    "Paste a website, Google Maps link, Instagram, Facebook, or a short business note",
-  profile: "Write the exact business identity in one clean message",
-  services: "Write only the real customer-facing services",
-  contacts: "Write the main public contact route",
-  hours: "Write the public weekly hours",
-  pricing: "Write how AI should speak about pricing publicly",
-  handoff: "Write when AI must stop and escalate to a human",
-};
+const DEFAULT_COMPOSER_PLACEHOLDER =
+  "Share the business in your own words, or paste the best public source you have.";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -59,90 +50,6 @@ function listPreview(items = [], max = 6) {
   return `${safe.slice(0, max).join(", ")} +${safe.length - max}`;
 }
 
-function looksLikeUrlOrDomain(value = "") {
-  const text = s(value);
-  if (!text) return false;
-
-  return (
-    /^https?:\/\//i.test(text) ||
-    /^(www\.)?[a-z0-9-]+\.[a-z]{2,}(\/.*)?$/i.test(text)
-  );
-}
-
-function looksLikePhone(value = "") {
-  return /(?:\+?\d[\d()\-\s]{6,}\d)/.test(s(value));
-}
-
-function looksLikeEmail(value = "") {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(s(value));
-}
-
-function looksLikeHoursText(value = "") {
-  const text = s(value).toLowerCase();
-  if (!text) return false;
-
-  return (
-    /(mon|tue|wed|thu|fri|sat|sun|b\.e|be|cümə|şənbə|bazar)/.test(text) ||
-    /\b\d{1,2}[:.]?\d{0,2}\s*(?:-|to|dan|den|dek|qeder)\s*\d{1,2}[:.]?\d{0,2}\b/.test(
-      text
-    ) ||
-    /\b24\/7\b/.test(text) ||
-    /\bappointment\b/.test(text) ||
-    /\bbağlı\b/.test(text) ||
-    /\bclosed\b/.test(text)
-  );
-}
-
-function looksLikePricingText(value = "") {
-  const text = s(value).toLowerCase();
-  if (!text) return false;
-
-  return (
-    /(azn|usd|eur|gbp|\$|€|₼|£)/.test(text) ||
-    /\bprice\b/.test(text) ||
-    /\bpricing\b/.test(text) ||
-    /\bquote\b/.test(text) ||
-    /\bqiymət\b/.test(text) ||
-    /\bstarting\b/.test(text) ||
-    /\bxidmətə görə\b/.test(text)
-  );
-}
-
-function resolveHintStepFromMessage(value = "", fallbackStep = "profile") {
-  const text = s(value);
-  const lowerText = text.toLowerCase();
-
-  if (looksLikeUrlOrDomain(text)) return "website";
-
-  if (
-    looksLikePhone(text) ||
-    looksLikeEmail(text) ||
-    /whatsapp|telegram|əlaqə|contact|email|telefon|phone/i.test(lowerText)
-  ) {
-    return "contacts";
-  }
-
-  if (looksLikeHoursText(text)) return "hours";
-  if (looksLikePricingText(text)) return "pricing";
-
-  if (
-    /şikayət|complaint|refund|payment|operator|manager|handoff|ötür/i.test(
-      lowerText
-    )
-  ) {
-    return "handoff";
-  }
-
-  if (
-    /[,\n;]/.test(text) &&
-    text.split(/[,;\n]/).filter((item) => s(item)).length >= 2
-  ) {
-    return "services";
-  }
-
-  return s(fallbackStep, "profile");
-}
-
 function normalizeQuestion(value = {}) {
   const source = obj(value);
 
@@ -151,10 +58,7 @@ function normalizeQuestion(value = {}) {
     step: s(source.step || source.key).toLowerCase(),
     title: s(source.title),
     prompt: s(source.prompt),
-    placeholder:
-      s(source.placeholder) ||
-      s(STEP_PLACEHOLDERS[s(source.step || source.key).toLowerCase()]) ||
-      "Write your answer",
+    placeholder: s(source.placeholder) || DEFAULT_COMPOSER_PLACEHOLDER,
   };
 }
 
@@ -788,16 +692,9 @@ function SetupAssistantSectionsContent({
 
   const composerPlaceholder = useMemo(() => {
     if (currentQuestion?.placeholder) return currentQuestion.placeholder;
-
-    if (!sourceSubmitted) {
-      return STEP_PLACEHOLDERS.source_capture;
-    }
-
-    return (
-      s(STEP_PLACEHOLDERS[s(currentQuestion?.step || currentQuestion?.key)]) ||
-      "Write the next detail or correction"
-    );
-  }, [currentQuestion, sourceSubmitted]);
+    if (currentQuestion?.prompt) return currentQuestion.prompt;
+    return DEFAULT_COMPOSER_PLACEHOLDER;
+  }, [currentQuestion]);
 
   useEffect(() => {
     saveStoredTranscript(storageKey, transcript);
@@ -960,10 +857,6 @@ function SetupAssistantSectionsContent({
     const text = s(composerValue);
     if (!text || busy) return;
 
-    const hintStep = resolveHintStepFromMessage(
-      text,
-      currentQuestion?.step || "profile"
-    );
     const turnId = `turn-${Date.now()}`;
 
     setLocalError("");
@@ -987,8 +880,7 @@ function SetupAssistantSectionsContent({
         message: text,
         text,
         value: text,
-        step: s(currentQuestion?.step || hintStep),
-        hintStep,
+        step: s(currentQuestion?.step || currentQuestion?.key),
         questionKey: s(currentQuestion?.key),
       });
     } catch (error) {

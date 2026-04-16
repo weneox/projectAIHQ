@@ -16,11 +16,13 @@ function getSetupAssistantRuntimeConfig() {
     25_000;
   const maxOutputTokens =
     Number(
-      cfg.ai?.openaiSetupMaxOutputTokens || cfg.ai?.openaiMaxOutputTokens || 2200
-    ) || 2200;
+      cfg.ai?.openaiSetupMaxOutputTokens || cfg.ai?.openaiMaxOutputTokens || 2600
+    ) || 2600;
+
+  const hasKey = Boolean(s(cfg.ai?.openaiApiKey));
 
   return {
-    enabled: cfg.ai?.openaiSetupAssistantEnabled === true,
+    enabled: cfg.ai?.openaiSetupAssistantEnabled === true || hasKey,
     forceFallback: cfg.ai?.openaiSetupForceFallback === true,
     model,
     timeoutMs,
@@ -277,24 +279,8 @@ function sanitizeInterviewPlan(value = {}, fallback = {}) {
   });
 }
 
-function detectLikelyReplyLanguage(latestMessage = "", recentConversation = []) {
-  const combined = [
-    s(latestMessage),
-    ...arr(recentConversation).map((item) => s(item?.text)),
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const lower = combined.toLowerCase();
-
-  if (!lower) return "match_user_language";
-  if (/[а-яёіїєґ]/i.test(combined)) return "ru";
-  if (/[\u0600-\u06FF]/.test(combined)) return "ar";
-  if (/[əğıöüşç]/i.test(combined)) return "az";
-  if (/\b(çünkü|şirket|müşteri|fiyat|hangi|merhaba)\b/i.test(lower)) return "tr";
-  if (/\b(hello|business|pricing|hours|contact|service)\b/i.test(lower)) return "en";
-
-  return "match_user_language";
+function detectLikelyReplyLanguage(_latestMessage = "", _recentConversation = []) {
+  return "follow_latest_user_language";
 }
 
 function normalizeTurnResult(
@@ -482,17 +468,18 @@ function buildSetupContext({
 
   return {
     mission:
-      "Understand the business like a strong operator-grade setup brain, extract as many grounded facts as possible from each message, avoid redundant questioning, and only ask one best next question when truly needed.",
-    readinessRubric: buildReadinessRubric(),
-
-    replyRequirements: {
-      replyLanguage: detectLikelyReplyLanguage(latestMessage, recentConversation),
+      "Act like a world-class setup strategist for a serious business AI system. Understand the business deeply, extract multiple grounded facts from one reply when justified, and only ask a next question when it is truly necessary.",
+    replyStyle: {
+      language: "follow_latest_user_language",
       maxQuestionsPerTurn: 1,
-      avoidRepeatingCoveredFacts: true,
-      avoidWizardTone: true,
-      askOnlyIfActuallyNeeded: true,
+      concise: true,
+      conversational: true,
+      nonWizard: true,
+      nonTemplate: true,
+      avoidRepetition: true,
+      avoidBoilerplate: true,
     },
-
+    readinessRubric: buildReadinessRubric(),
     session: compactDraftObject({
       id: s(session.id),
       mode: s(session.mode),
@@ -500,14 +487,11 @@ function buildSetupContext({
       status: s(session.status),
       draftVersion: Number(session.draftVersion || 0) || 0,
     }),
-
     latestUserInput: compactDraftObject({
       step: s(latestStep),
       text: s(latestMessage),
     }),
-
     recentConversation,
-
     existingDraft: compactDraftObject({
       businessProfile: obj(reviewDraft.businessProfile || safeDraft.businessProfile),
       services: arr(reviewDraft.services || safeDraft.services),
@@ -515,27 +499,19 @@ function buildSetupContext({
       hours: arr(safeDraft.hours),
       pricingPosture: obj(safeDraft.pricingPosture),
       handoffRules: obj(safeDraft.handoffRules),
-      sourceMetadata: obj(
-        reviewDraft.sourceMetadata || safeDraft.sourceMetadata
-      ),
+      sourceMetadata: obj(reviewDraft.sourceMetadata || safeDraft.sourceMetadata),
       assistantState: obj(safeDraft.assistantState),
       progress: obj(safeDraft.progress),
     }),
-
     sourceSignals: sanitizeSourceSignals(safeFallbackBrain.sourceSignals, {}),
     draftPreview: sanitizeDraft(safeFallbackBrain.draft, {}),
-
     currentBrainAssessment: {
       phase: s(safeFallbackBrain.phase),
       readyForApproval: safeFallbackBrain.readyForApproval === true,
       nextQuestion: sanitizeQuestion(safeFallbackBrain.nextQuestion, {}),
       confidence: sanitizeConfidence(safeFallbackBrain.confidence, {}),
-      recommendation: sanitizeRecommendation(
-        safeFallbackBrain.recommendation,
-        {}
-      ),
+      recommendation: sanitizeRecommendation(safeFallbackBrain.recommendation, {}),
     },
-
     sources: arr(sources)
       .map((item) =>
         compactDraftObject({
@@ -555,26 +531,22 @@ function buildSetupContext({
 
 function buildSystemPrompt() {
   return [
-    "You are the setup brain for a serious business onboarding system.",
-    "You are not a form wizard and not a questionnaire bot.",
-    "Your job is to understand the business from public sources, existing draft state, and the operator's latest natural-language reply.",
-    "Think like a business analyst, onboarding strategist, and conversation designer.",
-    "Extract as many grounded facts as you safely can from one user message.",
-    "Do not ask for one field at a time if a single user message already gives multiple facts.",
-    "Do not repeat facts already grounded by sources or the current draft.",
-    "Ask at most one best next question, and only when it is genuinely needed for chatbot readiness.",
-    "If the draft is already strong enough, stop interviewing and mark readyForApproval=true.",
-    "If the user writes in Azerbaijani, answer in Azerbaijani. If they write in English, answer in English. In general, match the user's latest language.",
-    "Avoid robotic lines like 'I will not re-ask', 'current signal', 'recommended', or wizard-sounding filler.",
-    "Avoid templatey onboarding copy.",
-    "assistantMessage must feel human, sharp, and contextual.",
-    "Services must be real customer-facing offers, not vague categories, channels, or buzzwords.",
-    "If the user gives natural-language hours, normalize them into a professional schedule proposal.",
-    "If the user gives natural-language pricing, convert it into a safe public pricing posture.",
-    "If the user gives natural-language escalation rules, convert them into a real human handoff policy.",
-    "Never accept acknowledgement-only messages like ok, continue, next, tamam, oldu, bəli as business facts.",
-    "When the latest reply is weak, challenge it briefly and precisely.",
-    "When source evidence and user claims conflict, record that in confidence.contradictions or rejectedInputs.",
+    "You are the primary setup brain for a serious business AI platform.",
+    "You are not a wizard, not a form filler, and not a scripted onboarding bot.",
+    "Your job is to understand the business deeply from sources, current draft state, and the user's latest natural-language reply.",
+    "Extract as many grounded facts as one reply safely allows.",
+    "Do not reduce a rich reply into one tiny field if the message clearly contains multiple usable facts.",
+    "Do not repeat already grounded facts.",
+    "Do not ask a follow-up unless it is genuinely necessary for runtime-safe setup readiness.",
+    "Ask at most one next question.",
+    "Always follow the user's latest language.",
+    "Never sound like a template onboarding bot.",
+    "Never use generic filler such as 'current signal', 'recommended', 'let us continue', or rigid wizard wording.",
+    "If the business has no website, do not keep pushing for a website.",
+    "If the user message is weak, challenge it briefly and specifically.",
+    "Services must be real customer-facing services, not vague labels, channels, or buzzwords.",
+    "Convert natural-language hours, pricing policy, and handoff rules into structured business-safe outputs.",
+    "If enough is already known, stop interviewing and mark readyForApproval=true.",
     "Only output strict JSON that matches the schema.",
   ].join(" ");
 }
@@ -583,26 +555,25 @@ function buildUserPrompt(context = {}) {
   return [
     "Analyze this setup turn.",
     "",
-    "Core behavior rules:",
-    "- Treat the user's message as a dense source of facts, not as a single-field answer.",
-    "- Pull multiple facts out of one message whenever justified.",
+    "Behavior rules:",
+    "- Treat the user reply as a dense business signal, not as a one-field answer.",
+    "- Pull multiple grounded facts from one message when justified.",
     "- Prefer understanding and normalization over interrogation.",
-    "- Only ask a next question when chatbot readiness still has a real blocker.",
-    "- When you ask a question, ask only one.",
-    "- Match the user's language.",
-    "- Keep assistantMessage natural, concise, and contextual.",
+    "- Ask one follow-up only when a true readiness blocker still exists.",
+    "- Keep assistantMessage natural, human, concise, and contextual.",
+    "- Match the user's latest language automatically.",
+    "- Avoid wizard tone, checklist tone, and boilerplate setup copy.",
+    "- If the user says there is no website, accept that and move on.",
+    "- If the user gives several facts at once, accept several facts at once.",
+    "- If a claim is vague, challenge it precisely instead of pretending it is good enough.",
     "",
-    "Good examples:",
-    "- If the user writes one long paragraph containing business name, services, hours, and WhatsApp, accept all of them at once.",
-    "- If the user writes something vague like 'automation', do not blindly accept it as a service. Ask what concrete customer-facing service that means.",
-    "- If the user says pricing depends on the project, convert that into a safe quote-required posture.",
-    "- If enough is known, stop asking and produce a strong ready draft.",
-    "",
-    "Bad behavior to avoid:",
-    "- Repeating setup boilerplate.",
-    "- Asking for the same thing again after it is already covered.",
-    "- Breaking one rich answer into unnecessary wizard steps.",
-    "- Sounding like a template bot.",
+    "Important acceptance rules:",
+    "- identity: exact public business name + clean description",
+    "- services: only real customer-facing offers",
+    "- contacts: real public route customers should use",
+    "- hours: public schedule or explicit appointment-only / always-open posture",
+    "- pricing: safe public answer rule",
+    "- handoff: clear cases where AI must escalate",
     "",
     "Context JSON:",
     JSON.stringify(context, null, 2),

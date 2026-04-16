@@ -133,8 +133,6 @@ function buildDefaultAssistant() {
 
 function buildFreshEntryAssistantSeed() {
   const base = buildDefaultAssistant();
-  const intro =
-    "Salam. Mən sizin setup assistantınızam. İstəsəniz əvvəl launch kanalını qoşa bilərik, ya da elə buradan biznesinizi birlikdə yığa bilərik. Siz rahat şəkildə yazın — mən vacib olan məlumatı çıxarıb setup draftını yığacağam.";
 
   return {
     ...base,
@@ -154,8 +152,8 @@ function buildFreshEntryAssistantSeed() {
     assistant: {
       ...base.assistant,
       phase: "source_capture",
-      message: intro,
-      assistantMessage: intro,
+      message: "",
+      assistantMessage: "",
     },
   };
 }
@@ -518,6 +516,40 @@ export default function FloatingAiWidget({
     setResetting(false);
     setSetupError("");
   }, [workspace.tenantKey, freshEntrySeed]);
+
+  useEffect(() => {
+    if (!panelOpen || !workspace.ready) return;
+    if (!freshEntryMode) return;
+    if (sessionQuery.isLoading || reviewQuery.isLoading) return;
+    if (hasServerVisibleSetup) return;
+
+    let alive = true;
+
+    (async () => {
+      try {
+        const response = await startSetupAssistantSession();
+        if (!alive || !response?.ok) return;
+        queryClient.setQueryData(setupAssistantSessionQueryKey, response);
+        setClientAssistant((prev) => buildAssistantFromApi(prev, response));
+        setFreshEntryMode(false);
+      } catch {
+        // keep empty seed
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [
+    panelOpen,
+    workspace.ready,
+    freshEntryMode,
+    sessionQuery.isLoading,
+    reviewQuery.isLoading,
+    hasServerVisibleSetup,
+    queryClient,
+    setupAssistantSessionQueryKey,
+  ]);
 
   const mergedReviewPayload = useMemo(
     () =>

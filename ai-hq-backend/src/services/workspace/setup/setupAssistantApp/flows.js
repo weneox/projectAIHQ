@@ -46,12 +46,6 @@ function summaryContextFromReview(review = {}) {
   };
 }
 
-function stripAssistantNavigationPatch(patch = {}) {
-  const safePatch = obj(patch);
-  const { assistantState, progress, ...rest } = safePatch;
-  return rest;
-}
-
 function resolveStartedBy(actor = {}) {
   return (
     safeUuidOrNull(actor?.user?.id) ||
@@ -413,11 +407,18 @@ export async function updateSetupAssistantDraft(
     seed
   );
 
-  const latestStep =
-    s(body.hintStep || body.step || body.questionKey || body.field).toLowerCase();
   const latestMessage = s(
     body.message || body.text || body.value || body.answer
   );
+
+  const latestStep = s(
+    body.step ||
+      body.questionKey ||
+      obj(currentSetupAssistant.progress).currentQuestionKey ||
+      obj(review.session).currentStep ||
+      "profile"
+  ).toLowerCase();
+
   const messageMode =
     body.mode === "message" || isMessageModeBody(body) || Boolean(latestMessage);
 
@@ -426,8 +427,6 @@ export async function updateSetupAssistantDraft(
   let rawTurn = null;
   let clientTurn = null;
   let orchestratorPatch = {};
-  let supplementalPatch = {};
-  let supplementalDataPatch = {};
 
   if (messageMode) {
     rawTurn = await runSetupBrain({
@@ -444,27 +443,9 @@ export async function updateSetupAssistantDraft(
       currentSetupAssistant
     );
 
-    supplementalPatch = normalizeSetupAssistantDraftPatchBody(
-      {
-        step: latestStep,
-        message: latestMessage,
-        text: latestMessage,
-        value: latestMessage,
-      },
-      currentSetupAssistant
-    );
-
-    supplementalDataPatch = stripAssistantNavigationPatch(supplementalPatch);
-
     mergedSetupAssistant = mergeSetupAssistantDraft(
       currentSetupAssistant,
       orchestratorPatch,
-      seed
-    );
-
-    mergedSetupAssistant = mergeSetupAssistantDraft(
-      mergedSetupAssistant,
-      supplementalDataPatch,
       seed
     );
 
@@ -486,15 +467,11 @@ export async function updateSetupAssistantDraft(
           assistantState: {
             activeSection: s(nextQuestion.key),
             lastUpdatedSection:
-              s(obj(supplementalPatch.assistantState).lastUpdatedSection) ||
               s(obj(orchestratorPatch.assistantState).lastUpdatedSection) ||
               s(obj(mergedSetupAssistant.assistantState).lastUpdatedSection),
           },
           progress: {
-            lastAnsweredStep:
-              s(obj(supplementalPatch.progress).lastAnsweredStep) ||
-              s(obj(orchestratorPatch.progress).lastAnsweredStep) ||
-              latestStep,
+            lastAnsweredStep: latestStep,
             currentQuestionKey: s(nextQuestion.key),
             updatedAt: nowIso(),
           },
@@ -558,7 +535,7 @@ export async function updateSetupAssistantDraft(
         {
           role: "user",
           text: latestMessage || (isMessageSkip(body) ? "continue" : ""),
-          questionKey: s(body.questionKey),
+          questionKey: latestStep,
           phase: s(clientTurn?.phase || "interview"),
           createdAt: nowIso(),
         },
@@ -628,13 +605,8 @@ export async function updateSetupAssistantDraft(
   );
 
   const updatedFields = messageMode
-    ? [
-        ...Object.keys(obj(orchestratorPatch)),
-        ...Object.keys(obj(supplementalPatch)),
-      ]
-    : Object.keys(
-        normalizeSetupAssistantDraftPatchBody(body, currentSetupAssistant)
-      );
+    ? Object.keys(obj(orchestratorPatch))
+    : Object.keys(normalizeSetupAssistantDraftPatchBody(body, currentSetupAssistant));
 
   await audit(
     db,
@@ -644,9 +616,7 @@ export async function updateSetupAssistantDraft(
     s(refreshed?.session?.id || review.session.id),
     {
       reviewSessionId: s(refreshed?.session?.id || review.session.id),
-      draftVersion: Number(
-        refreshed?.draft?.version || review?.draft?.version || 0
-      ),
+      draftVersion: Number(refreshed?.draft?.version || review?.draft?.version || 0),
       updatedFields: [...new Set(updatedFields)].filter(Boolean),
       source: "home_widget",
       sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
