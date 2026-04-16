@@ -32,9 +32,7 @@ import {
   buildSetupAssistantResponseBody,
   buildSetupAssistantSessionPayload,
   buildStoredSetupAssistantBrainPayload,
-  normalizeStoredSetupAssistantBrainPayload,
   normalizeStoredSetupAssistantPayload,
-  readStoredSetupAssistantBrainPayload,
   readStoredSetupAssistantDraftPayload,
   stripLegacySetupAssistantPayloadKeys,
 } from "./sessionPayload.js";
@@ -116,17 +114,6 @@ function buildReviewForBrain(review = {}) {
     })),
     timeline,
   };
-}
-
-function hasMeaningfulBrainSnapshot(value = {}) {
-  const brain = normalizeStoredSetupAssistantBrainPayload(value);
-
-  return Boolean(
-    s(brain.assistantMessage || brain.message) ||
-      s(obj(brain.nextQuestion).prompt) ||
-      arr(obj(brain.interviewPlan).activeQuestions).length ||
-      brain.readyForApproval === true
-  );
 }
 
 function buildSupplementalMessagePatch(
@@ -235,138 +222,13 @@ async function persistSetupAssistantState({
   return true;
 }
 
-async function ensureInitialBrainState({
-  db,
-  actor,
-  review,
-  deps = {},
-}) {
-  const runSetupBrain =
-    deps.runSetupAssistantOpenAIOrchestrator ||
-    runSetupAssistantOpenAIOrchestrator;
-  const getCurrentReviewHelper =
-    deps.getCurrentSetupReview || getCurrentSetupReview;
-
-  const existingDraftPayload = obj(review?.draft?.draftPayload);
-  const storedBrain = readStoredSetupAssistantBrainPayload(existingDraftPayload);
-
-  if (hasMeaningfulBrainSnapshot(storedBrain)) {
-    return {
-      review,
-      brainSnapshot: buildStoredSetupAssistantBrainPayload(storedBrain),
-    };
-  }
-
-  const reviewForBrain = buildReviewForBrain(review);
-  const seed = buildSetupAssistantSeedFromReview(reviewForBrain);
-  const currentSetupAssistant = normalizeStoredSetupAssistantPayload(
-    readStoredSetupAssistantDraftPayload(existingDraftPayload),
-    seed
-  );
-
-  const rawTurn = await runSetupBrain({
-    session: obj(review.session),
-    draft: currentSetupAssistant,
-    sources: arr(reviewForBrain.sources),
-    review: reviewForBrain,
-    latestStep: s(review.session?.currentStep || SETUP_ASSISTANT_CURRENT_STEP),
-    latestMessage: "",
-  });
-
-  const brainSnapshot = buildStoredSetupAssistantBrainPayload(rawTurn);
-
-  const existingTimeline = readSetupAssistantTimeline(existingDraftPayload);
-  const nextTimeline =
-    existingTimeline.length === 0 && s(rawTurn.assistantMessage || rawTurn.message)
-      ? appendSetupAssistantTimeline(existingDraftPayload, [
-          {
-            role: "assistant",
-            text: s(rawTurn.assistantMessage || rawTurn.message),
-            meta: s(obj(rawTurn.sourceSignals).primarySourceUrl),
-            questionKey: s(obj(rawTurn.nextQuestion).key),
-            phase: s(rawTurn.phase),
-            provider: s(rawTurn.provider),
-            model: s(rawTurn.model),
-            usedFallback: rawTurn.usedFallback === true,
-            error: s(rawTurn.error),
-            createdAt: nowIso(),
-          },
-        ])
-      : existingTimeline;
-
-  const persisted = await persistSetupAssistantState({
-    review,
-    actor,
-    mergedSetupAssistant: currentSetupAssistant,
-    brainSnapshot,
-    nextTimeline,
-    deps,
-  });
-
-  await maybeUpdateReviewSessionStep({
-    reviewSessionId: review.session.id,
-    nextQuestion: obj(rawTurn.nextQuestion),
-    deps,
-  });
-
-  if (persisted === false) {
-    return {
-      review,
-      brainSnapshot,
-    };
-  }
-
-  const refreshed = await getCurrentReviewHelper(actor.tenantId);
-
-  return {
-    review: refreshed,
-    brainSnapshot,
-  };
-}
-
 export async function readSetupAssistantView({ db, actor }, deps = {}) {
+  void db;
+
   const loadSession =
     deps.loadCurrentSetupAssistantSession || loadCurrentSetupAssistantSession;
-  const getCurrentReviewHelper =
-    deps.getCurrentSetupReview || getCurrentSetupReview;
 
-  const sessionResult = await loadSession({ db, actor }, deps);
-
-  if (
-    !sessionResult ||
-    Number(sessionResult.status || 500) !== 200 ||
-    sessionResult.body?.ok === false
-  ) {
-    return sessionResult;
-  }
-
-  try {
-    const currentReview = await getCurrentReviewHelper(actor.tenantId);
-    const bootstrapped = await ensureInitialBrainState({
-      db,
-      actor,
-      review: currentReview,
-      deps,
-    });
-
-    const refreshed = await loadSession({ db, actor }, deps);
-    const basePayload =
-      refreshed &&
-      Number(refreshed.status || 500) === 200 &&
-      refreshed.body?.ok !== false
-        ? refreshed.body
-        : sessionResult.body;
-
-    return {
-      status: 200,
-      body: buildSetupAssistantResponseBody(
-        basePayload,
-        bootstrapped?.brainSnapshot || null
-      ),
-    };
-  } catch {
-    return sessionResult;
-  }
+  return loadSession({ db, actor }, deps);
 }
 
 export async function startSetupAssistantSession({ db, actor }, deps = {}) {
@@ -406,15 +268,7 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
     created = true;
   }
 
-  const bootstrapped = await ensureInitialBrainState({
-    db,
-    actor,
-    review,
-    deps,
-  });
-
-  const refreshedReview = bootstrapped.review || review;
-  const payload = buildSetupAssistantSessionPayload(refreshedReview);
+  const payload = buildSetupAssistantSessionPayload(review);
 
   await audit(
     db,
@@ -423,9 +277,9 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
       ? "setup_assistant.session.started"
       : "setup_assistant.session.reused",
     "tenant_setup_review_session",
-    s(refreshedReview?.session?.id),
+    s(review?.session?.id),
     {
-      reviewSessionId: s(refreshedReview?.session?.id),
+      reviewSessionId: s(review?.session?.id),
       currentStep: s(
         payload?.session?.currentStep || SETUP_ASSISTANT_CURRENT_STEP
       ),
@@ -435,6 +289,7 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
       brainNamespace: "setupAssistantBrain",
       timelineNamespace: "setupAssistantTimeline",
       draftOnly: true,
+      fastStart: true,
     }
   );
 
@@ -455,6 +310,9 @@ export async function loadCurrentSetupAssistantSession(
   { db, actor },
   deps = {}
 ) {
+  void db;
+  void deps;
+
   const getCurrentReviewHelper =
     deps.getCurrentSetupReview || getCurrentSetupReview;
   const review = await getCurrentReviewHelper(actor.tenantId);

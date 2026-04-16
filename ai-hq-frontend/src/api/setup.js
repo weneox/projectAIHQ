@@ -9,6 +9,10 @@ const SETUP_REVIEW_ANALYZE_PATH = "/api/setup/review/current/analyze";
 const SETUP_REVIEW_DISCARD_PATH = "/api/setup/review/current/discard";
 const SETUP_REVIEW_FINALIZE_PATH = "/api/setup/review/current/finalize";
 
+const SETUP_ASSISTANT_TIMEOUT_MS = 45_000;
+const SETUP_IMPORT_TIMEOUT_MS = 75_000;
+const SETUP_REVIEW_TIMEOUT_MS = 45_000;
+
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
 }
@@ -211,33 +215,46 @@ export function saveRuntimePreferences(payload = {}) {
 }
 
 export function importWebsiteForSetup(payload = {}) {
-  return apiPost("/api/setup/import/website", payload);
+  return apiPost("/api/setup/import/website", payload, {
+    timeoutMs: SETUP_IMPORT_TIMEOUT_MS,
+  });
 }
 
 export function importGoogleMapsForSetup(payload = {}) {
-  return apiPost("/api/setup/import/google-maps", payload);
+  return apiPost("/api/setup/import/google-maps", payload, {
+    timeoutMs: SETUP_IMPORT_TIMEOUT_MS,
+  });
 }
 
 export function importSourceForSetup(payload = {}) {
-  return apiPost("/api/setup/import/source", payload);
+  return apiPost("/api/setup/import/source", payload, {
+    timeoutMs: SETUP_IMPORT_TIMEOUT_MS,
+  });
 }
 
 export function importBundleForSetup(payload = {}) {
-  return apiPost("/api/setup/import/bundle", payload);
+  return apiPost("/api/setup/import/bundle", payload, {
+    timeoutMs: SETUP_IMPORT_TIMEOUT_MS,
+  });
 }
 
 export function analyzeSetupIntake(payload = {}) {
-  return apiPost(SETUP_REVIEW_ANALYZE_PATH, payload);
+  return apiPost(SETUP_REVIEW_ANALYZE_PATH, payload, {
+    timeoutMs: SETUP_REVIEW_TIMEOUT_MS,
+  });
 }
 
 export async function startSetupAssistantSession(payload = {}) {
-  const response = await apiPost(SETUP_ASSISTANT_SESSION_START_PATH, payload);
+  const response = await apiPost(SETUP_ASSISTANT_SESSION_START_PATH, payload, {
+    timeoutMs: SETUP_ASSISTANT_TIMEOUT_MS,
+  });
   return normalizeSetupAssistantResponse(response);
 }
 
 export async function getCurrentSetupAssistantSession() {
   const response = await apiGet(SETUP_ASSISTANT_SESSION_CURRENT_PATH, {
     allowStatuses: [404],
+    timeoutMs: SETUP_ASSISTANT_TIMEOUT_MS,
   });
 
   if (
@@ -251,17 +268,27 @@ export async function getCurrentSetupAssistantSession() {
 }
 
 export async function updateCurrentSetupAssistantDraft(payload = {}) {
-  const response = await apiPatch(SETUP_ASSISTANT_SESSION_CURRENT_PATH, payload);
+  const response = await apiPatch(
+    SETUP_ASSISTANT_SESSION_CURRENT_PATH,
+    payload,
+    {
+      timeoutMs: SETUP_ASSISTANT_TIMEOUT_MS,
+    }
+  );
   return normalizeSetupAssistantResponse(response);
 }
 
 export async function sendSetupAssistantMessage(payload = {}) {
-  const response = await apiPost(SETUP_ASSISTANT_MESSAGE_PATH, payload);
+  const response = await apiPost(SETUP_ASSISTANT_MESSAGE_PATH, payload, {
+    timeoutMs: SETUP_ASSISTANT_TIMEOUT_MS,
+  });
   return normalizeSetupAssistantResponse(response);
 }
 
 export async function finalizeSetupAssistantSession(payload = {}) {
-  return apiPost(SETUP_REVIEW_FINALIZE_PATH, payload);
+  return apiPost(SETUP_REVIEW_FINALIZE_PATH, payload, {
+    timeoutMs: SETUP_REVIEW_TIMEOUT_MS,
+  });
 }
 
 export async function getCurrentSetupReview(params = {}) {
@@ -272,19 +299,27 @@ export async function getCurrentSetupReview(params = {}) {
   }
 
   const qs = query.toString();
-  const response = await apiGet(`${SETUP_REVIEW_CURRENT_PATH}${qs ? `?${qs}` : ""}`);
+  const response = await apiGet(
+    `${SETUP_REVIEW_CURRENT_PATH}${qs ? `?${qs}` : ""}`
+  );
   return normalizeReviewPayload(response);
 }
 
 export function patchCurrentSetupReview(payload = {}) {
-  return apiPatch(SETUP_REVIEW_CURRENT_PATH, payload);
+  return apiPatch(SETUP_REVIEW_CURRENT_PATH, payload, {
+    timeoutMs: SETUP_REVIEW_TIMEOUT_MS,
+  });
 }
 
 export async function discardCurrentSetupReview(payload = {}) {
-  const response = await apiPost(SETUP_REVIEW_DISCARD_PATH, payload);
+  const response = await apiPost(SETUP_REVIEW_DISCARD_PATH, payload, {
+    timeoutMs: SETUP_REVIEW_TIMEOUT_MS,
+  });
   return normalizeSetupAssistantResponse(response);
 }
 
 export function finalizeCurrentSetupReview(payload = {}) {
-  return apiPost(SETUP_REVIEW_FINALIZE_PATH, payload);
+  return apiPost(SETUP_REVIEW_FINALIZE_PATH, payload, {
+    timeoutMs: SETUP_REVIEW_TIMEOUT_MS,
+  });
 }
