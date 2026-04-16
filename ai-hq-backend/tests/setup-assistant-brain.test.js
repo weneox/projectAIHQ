@@ -396,7 +396,7 @@ test("message-mode setup draft update bridges orchestrator output into review dr
   );
 });
 
-test("read setup assistant view returns stored session payload without compat overlay wrappers", async () => {
+test("read setup assistant view returns stored session payload and preserves setup assistant brain fields", async () => {
   const turn = createBrainTurn();
   const storedSetupAssistant = createStoredSetupAssistantFromBrain(turn);
 
@@ -459,37 +459,27 @@ test("read setup assistant view returns stored session payload without compat ov
   assert.equal(result.status, 200);
   assert.equal(result.body.ok, true);
 
+  assert.equal(result.body.session.id, "session-setup-1");
+  assert.equal(result.body.session.mode, "setup");
+  assert.equal(result.body.session.currentStep, "services");
+
   assert.equal(result.body.setup.assistant.provider, "openai");
   assert.equal(result.body.setup.assistant.model, "gpt-5");
   assert.equal(result.body.setup.assistant.readyForApproval, false);
   assert.equal(result.body.setup.assistant.nextQuestion.key, "services");
+  assert.equal(result.body.setup.assistant.phase, "interview");
   assert.equal(result.body.setup.assistant.draft.businessName, "North Clinic");
+  assert.equal(
+    result.body.setup.assistant.confidence.unclear[0],
+    "Pricing still needs a stricter policy."
+  );
+  assert.equal(
+    result.body.setup.assistant.recommendation.notes[0],
+    "Keep only real customer-facing services."
+  );
+
   assert.equal(result.body.setup.review.readyForApproval, false);
   assert.equal(arr(result.body.setup.timeline).length, 1);
-
-  assert.equal(
-    Object.prototype.hasOwnProperty.call(result.body, "assistant"),
-    false
-  );
-  assert.equal(Object.prototype.hasOwnProperty.call(result.body, "turn"), false);
-  assert.equal(
-    Object.prototype.hasOwnProperty.call(result.body, "question"),
-    false
-  );
-  assert.equal(
-    Object.prototype.hasOwnProperty.call(result.body, "primaryQuestion"),
-    false
-  );
-  assert.equal(
-    Object.prototype.hasOwnProperty.call(result.body, "conversationStatus"),
-    false
-  );
-  assert.equal(
-    Object.prototype.hasOwnProperty.call(result.body, "followupQueue"),
-    false
-  );
-  assert.equal(
-    Object.prototype.hasOwnProperty.call(result.body, "businessFacts"),
-    false
-  );
+  assert.equal(result.body.setup.timeline[0].role, "assistant");
+  assert.equal(result.body.setup.timeline[0].provider, "openai");
 });
