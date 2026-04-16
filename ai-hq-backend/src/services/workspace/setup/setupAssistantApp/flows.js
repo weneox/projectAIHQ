@@ -49,6 +49,12 @@ function summaryContextFromReview(review = {}) {
   };
 }
 
+function stripAssistantNavigationPatch(patch = {}) {
+  const safePatch = obj(patch);
+  const { assistantState, progress, ...rest } = safePatch;
+  return rest;
+}
+
 function resolveStartedBy(actor = {}) {
   return (
     safeUuidOrNull(actor?.user?.id) ||
@@ -665,6 +671,7 @@ export async function updateSetupAssistantDraft(
   let clientTurn = null;
   let orchestratorPatch = {};
   let supplementalPatch = {};
+  let supplementalDataPatch = {};
 
   if (messageMode) {
     rawTurn = await runSetupBrain({
@@ -686,6 +693,7 @@ export async function updateSetupAssistantDraft(
       latestMessage,
       latestStep
     );
+    supplementalDataPatch = stripAssistantNavigationPatch(supplementalPatch);
 
     mergedSetupAssistant = mergeSetupAssistantDraft(
       currentSetupAssistant,
@@ -695,7 +703,7 @@ export async function updateSetupAssistantDraft(
 
     mergedSetupAssistant = mergeSetupAssistantDraft(
       mergedSetupAssistant,
-      supplementalPatch,
+      supplementalDataPatch,
       seed
     );
 
