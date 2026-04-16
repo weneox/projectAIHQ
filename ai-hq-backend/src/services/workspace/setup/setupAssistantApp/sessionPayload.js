@@ -9,6 +9,7 @@ import {
   buildAssistantSections,
   buildAssistantSourceSignals,
 } from "../setupAssistantAuthorityView.js";
+import { buildSetupSourceCoverage } from "./sourceSignals.js";
 import { formatSetupAssistantHoursForCanonical } from "./canonical.js";
 import {
   buildAssistantCompatBusinessFacts,
@@ -23,9 +24,6 @@ import {
   SETUP_ASSISTANT_NAMESPACE,
   SETUP_ASSISTANT_SOURCE_TYPE,
   normalizeSourceType,
-  normalizeWebsiteUrl,
-  sourceTypeLabel,
-  uniqueStrings,
 } from "./shared.js";
 import { mergeSetupAssistantCore } from "./sanitize.js";
 import {
@@ -114,6 +112,8 @@ export function buildSetupAssistantAuthorityState({
   summary = {},
   servicesCatalog = {},
   reviewState = {},
+  review = {},
+  sources = [],
 } = {}) {
   const nextQuestion = getNextQuestion(summary, setup, obj(setup.progress));
   const question = nextQuestion
@@ -122,12 +122,16 @@ export function buildSetupAssistantAuthorityState({
 
   const readyForApproval = obj(reviewState).finalizeAvailable === true;
 
-  const sourceSignals = buildAssistantSourceSignals(setup, {
-    normalizeWebsiteUrl,
-    normalizeSourceType,
-    sourceTypeLabel,
-    uniqueStrings,
+  const rawSourceSignals = buildAssistantSourceSignals(setup, {
+    session,
+    review,
+    sources,
   });
+
+  const sourceSignals = {
+    ...rawSourceSignals,
+    coverage: buildSetupSourceCoverage(rawSourceSignals),
+  };
 
   const confidence = buildAssistantConfidence(summary, sourceSignals, setup);
   const recommendation = buildAssistantRecommendation(
@@ -143,8 +147,16 @@ export function buildSetupAssistantAuthorityState({
     setup
   );
 
+  const phase = summary.hasAnyDraft
+    ? readyForApproval
+      ? "ready"
+      : "interview"
+    : s(sourceSignals.primarySourceUrl) || s(sourceSignals.primarySourceType)
+      ? "interview"
+      : "source_capture";
+
   return {
-    mode: "structured_v2",
+    mode: "structured_v3",
     nextQuestion: question,
     confirmationBlockers: arr(summary.confirmationBlockers),
     sections: buildAssistantSections(
@@ -178,11 +190,7 @@ export function buildSetupAssistantAuthorityState({
     ),
     servicesCatalog,
     sourceInsights: arr(sourceSignals.strongestEvidence),
-    phase: summary.hasAnyDraft
-      ? readyForApproval
-        ? "ready"
-        : "interview"
-      : "source_capture",
+    phase,
     message: assistantMessage,
     assistantMessage,
     draft: buildAssistantDraftPreview(setup, {
@@ -236,6 +244,8 @@ export function buildSetupAssistantSessionPayload(review = {}) {
     summary,
     servicesCatalog,
     reviewState,
+    review,
+    sources: arr(review.sources),
   });
 
   const nextQuestion = obj(assistant.nextQuestion);
