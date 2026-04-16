@@ -16,8 +16,8 @@ function getSetupAssistantRuntimeConfig() {
     25_000;
   const maxOutputTokens =
     Number(
-      cfg.ai?.openaiSetupMaxOutputTokens || cfg.ai?.openaiMaxOutputTokens || 1600
-    ) || 1600;
+      cfg.ai?.openaiSetupMaxOutputTokens || cfg.ai?.openaiMaxOutputTokens || 2200
+    ) || 2200;
 
   return {
     enabled: cfg.ai?.openaiSetupAssistantEnabled === true,
@@ -112,7 +112,10 @@ function sanitizeDraft(value = {}, fallback = {}) {
       source.whatThisBusinessIs || safeFallback.whatThisBusinessIs
     ),
     websiteUrl: s(source.websiteUrl || safeFallback.websiteUrl),
-    coreServices: uniqueStrings(source.coreServices || safeFallback.coreServices, 16),
+    coreServices: uniqueStrings(
+      source.coreServices || safeFallback.coreServices,
+      16
+    ),
     audience: s(source.audience || safeFallback.audience),
     pricingPosture: s(source.pricingPosture || safeFallback.pricingPosture),
     contactRoutes: uniqueStrings(
@@ -145,12 +148,8 @@ function sanitizeAcceptedPatch(value = {}, fallbackDraft = {}) {
     services: uniqueStrings(source.services || fallbackDraft.coreServices, 16),
     contacts: uniqueStrings(source.contacts || fallbackDraft.contactRoutes, 12),
     hours: uniqueStrings(source.hours || fallbackDraft.hours, 12),
-    pricingPosture: s(
-      source.pricingPosture || fallbackDraft.pricingPosture
-    ),
-    humanHandoff: s(
-      source.humanHandoff || fallbackDraft.humanHandoff
-    ),
+    pricingPosture: s(source.pricingPosture || fallbackDraft.pricingPosture),
+    humanHandoff: s(source.humanHandoff || fallbackDraft.humanHandoff),
     aiBehavior: compactDraftObject({
       languages: uniqueStrings(
         source.aiBehavior?.languages || fallbackDraft.languages,
@@ -278,6 +277,27 @@ function sanitizeInterviewPlan(value = {}, fallback = {}) {
   });
 }
 
+function detectLikelyReplyLanguage(latestMessage = "", recentConversation = []) {
+  const combined = [
+    s(latestMessage),
+    ...arr(recentConversation).map((item) => s(item?.text)),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const lower = combined.toLowerCase();
+
+  if (!lower) return "match_user_language";
+
+  if (/[а-яёіїєґ]/i.test(combined)) return "ru";
+  if (/[\u0600-\u06FF]/.test(combined)) return "ar";
+  if (/[əğıöüşç]/i.test(combined)) return "az";
+  if (/\b(çünkü|şirket|müşteri|fiyat|hangi|merhaba)\b/i.test(lower)) return "tr";
+  if (/\b(hello|business|pricing|hours|contact|service)\b/i.test(lower)) return "en";
+
+  return "match_user_language";
+}
+
 function normalizeTurnResult(
   payload = {},
   {
@@ -332,6 +352,11 @@ function normalizeTurnResult(
     s(fallback.assistantMessage, "")
   );
 
+  const allowNullQuestion =
+    readyForApproval === true &&
+    !s(obj(payload.nextQuestion).key) &&
+    !s(obj(payload.nextQuestion).prompt);
+
   return {
     ok: true,
     provider,
@@ -344,8 +369,9 @@ function normalizeTurnResult(
     }),
     phase,
     assistantMessage,
-    nextQuestion:
-      normalizedQuestion.key && normalizedQuestion.prompt
+    nextQuestion: allowNullQuestion
+      ? null
+      : normalizedQuestion.key && normalizedQuestion.prompt
         ? normalizedQuestion
         : null,
     draft: normalizedDraft,
@@ -400,7 +426,7 @@ function extractRecentConversation(review = {}, latestStep = "", latestMessage =
       });
     })
     .filter((item) => item.text)
-    .slice(-10);
+    .slice(-12);
 
   if (s(latestMessage)) {
     normalized.push({
@@ -411,7 +437,7 @@ function extractRecentConversation(review = {}, latestStep = "", latestMessage =
     });
   }
 
-  return normalized.slice(-12);
+  return normalized.slice(-14);
 }
 
 function buildReadinessRubric() {
@@ -419,11 +445,11 @@ function buildReadinessRubric() {
     identity: [
       "Exact public business name",
       "One clean description of what the business does",
-      "Website or other reliable public source identity",
+      "Website or another reliable public identity source",
     ],
     services: [
       "Real customer-facing services only",
-      "Avoid generic labels, channels, vague capabilities",
+      "Avoid generic labels, vague capabilities, channels, or adjectives",
     ],
     contacts: [
       "At least one primary public customer contact lane",
@@ -439,7 +465,7 @@ function buildReadinessRubric() {
       "Clear human escalation cases",
     ],
     aiBehavior: [
-      "Tone or language if confidently known",
+      "Tone or language only if confidently known",
     ],
   };
 }
@@ -457,11 +483,24 @@ function buildSetupContext({
   const safeDraft = obj(draft);
   const safeReview = obj(review);
   const reviewDraft = obj(safeReview.review?.draft || safeReview.draft);
+  const recentConversation = extractRecentConversation(
+    safeReview,
+    latestStep,
+    latestMessage
+  );
 
   return {
     mission:
-      "Understand the business like a professional setup strategist, decide what is trustworthy, avoid asking for facts already covered by strong source evidence, and only ask the single best next question when needed.",
+      "Understand the business like a strong operator-grade setup brain, extract as many grounded facts as possible from each message, avoid redundant questioning, and only ask one best next question when truly needed.",
     readinessRubric: buildReadinessRubric(),
+
+    replyRequirements: {
+      replyLanguage: detectLikelyReplyLanguage(latestMessage, recentConversation),
+      maxQuestionsPerTurn: 1,
+      avoidRepeatingCoveredFacts: true,
+      avoidWizardTone: true,
+      askOnlyIfActuallyNeeded: true,
+    },
 
     session: compactDraftObject({
       id: s(session.id),
@@ -476,11 +515,7 @@ function buildSetupContext({
       text: s(latestMessage),
     }),
 
-    recentConversation: extractRecentConversation(
-      safeReview,
-      latestStep,
-      latestMessage
-    ),
+    recentConversation,
 
     existingDraft: compactDraftObject({
       businessProfile: obj(reviewDraft.businessProfile || safeDraft.businessProfile),
@@ -529,56 +564,54 @@ function buildSetupContext({
 
 function buildSystemPrompt() {
   return [
-    "You are the canonical setup brain for a business onboarding system.",
-    "Behave like a professional business analyst and onboarding strategist, not like a form wizard.",
-    "Your job is to understand the business from public sources, existing draft state, and the latest operator reply.",
-    "You must think before writing anything into the draft.",
-    "Do not ask for facts that are already strongly supported by sources or the existing draft.",
-    "When the latest user reply contains usable information, accept and normalize it instead of asking another shallow question.",
-    "When the user gives ambiguous, weak, generic, or invalid information, challenge it politely and explain what is still needed.",
-    "Never accept acknowledgement-only inputs like ok, continue, next, tamam, oldu, bəli as business facts.",
-    "Never accept generic source words like Website, Instagram, Facebook, Source, Contact, Business as services or business identity.",
-    "Services must be real customer-facing offers, not channels, vague capabilities, adjectives, or navigation labels.",
-    "If the user gives natural language hours like 'weekdays 9 to 6' or 'həftədə 5 dəfə 9-6', infer a professional normalized schedule proposal.",
-    "If the user gives pricing naturally, convert it into a safe public pricing posture.",
-    "If the user gives handoff cues naturally, convert them into a human escalation rule.",
-    "Prefer strong source evidence over weak operator filler, but let the operator override weak source guesses when they are explicit and credible.",
-    "If sources and user claims conflict, call it out in confidence.contradictions or rejectedInputs.",
-    "assistantMessage must sound calm, professional, and helpful.",
-    "Do not dump multiple unrelated questions.",
-    "Ask only the single best next question when needed.",
-    "If enough information exists for a strong chatbot draft, set readyForApproval=true and present the draft confidently.",
-    "Only output strict JSON matching the schema.",
+    "You are the setup brain for a serious business onboarding system.",
+    "You are not a form wizard and not a questionnaire bot.",
+    "Your job is to understand the business from public sources, existing draft state, and the operator's latest natural-language reply.",
+    "Think like a business analyst, onboarding strategist, and conversation designer.",
+    "Extract as many grounded facts as you safely can from one user message.",
+    "Do not ask for one field at a time if a single user message already gives multiple facts.",
+    "Do not repeat facts already grounded by sources or the current draft.",
+    "Ask at most one best next question, and only when it is genuinely needed for chatbot readiness.",
+    "If the draft is already strong enough, stop interviewing and mark readyForApproval=true.",
+    "If the user writes in Azerbaijani, answer in Azerbaijani. If they write in English, answer in English. In general, match the user's latest language.",
+    "Avoid robotic lines like 'I will not re-ask', 'current signal', 'recommended', or wizard-sounding filler.",
+    "Avoid templatey onboarding copy.",
+    "assistantMessage must feel human, sharp, and contextual.",
+    "Services must be real customer-facing offers, not vague categories, channels, or buzzwords.",
+    "If the user gives natural-language hours, normalize them into a professional schedule proposal.",
+    "If the user gives natural-language pricing, convert it into a safe public pricing posture.",
+    "If the user gives natural-language escalation rules, convert them into a real human handoff policy.",
+    "Never accept acknowledgement-only messages like ok, continue, next, tamam, oldu, bəli as business facts.",
+    "When the latest reply is weak, challenge it briefly and precisely.",
+    "When source evidence and user claims conflict, record that in confidence.contradictions or rejectedInputs.",
+    "Only output strict JSON that matches the schema.",
   ].join(" ");
 }
 
 function buildUserPrompt(context = {}) {
   return [
-    "Analyze this setup turn and decide what should actually be accepted into the setup draft.",
+    "Analyze this setup turn.",
     "",
-    "Reasoning principles:",
-    "- Treat this like high-quality onboarding for a real business chatbot.",
-    "- The operator can answer loosely. You must normalize their meaning into a professional draft.",
-    "- If the source evidence already covers a fact, avoid asking for it again.",
-    "- Ask for what is actually missing for chatbot readiness, not what is merely absent from a form.",
-    "- When a user gives a vague service like 'automation', refine or challenge it.",
-    "- When a user gives natural language hours, turn them into a clean draft proposal.",
-    "- acceptedPatch should contain only facts you are willing to write into the draft now.",
-    "- rejectedInputs should explain what was not accepted and why.",
+    "Core behavior rules:",
+    "- Treat the user's message as a dense source of facts, not as a single-field answer.",
+    "- Pull multiple facts out of one message whenever justified.",
+    "- Prefer understanding and normalization over interrogation.",
+    "- Only ask a next question when chatbot readiness still has a real blocker.",
+    "- When you ask a question, ask only one.",
+    "- Match the user's language.",
+    "- Keep assistantMessage natural, concise, and contextual.",
     "",
-    "Readiness target:",
-    "- identity: exact public name + clear business description + reliable public source identity",
-    "- services: concrete customer-facing services",
-    "- contacts: at least one real routing lane",
-    "- hours: public hours or explicit availability posture",
-    "- pricing: safe public pricing rule",
-    "- handoff: clear escalation cases",
+    "Good examples:",
+    "- If the user writes one long paragraph containing business name, services, hours, and WhatsApp, accept all of them at once.",
+    "- If the user writes something vague like 'automation', do not blindly accept it as a service. Ask what concrete customer-facing service that means.",
+    "- If the user says pricing depends on the project, convert that into a safe quote-required posture.",
+    "- If enough is known, stop asking and produce a strong ready draft.",
     "",
-    "Examples of good behavior:",
-    "- If the user says 'həftədə 5 dəfə 9-6', interpret that into a reasonable weekday schedule proposal, mention the assumption, and ask only if a specific gap matters.",
-    "- If the user says 'automation', do not blindly accept it as a service. Ask what concrete customer-facing service that means.",
-    "- If the website already makes the business identity obvious, do not keep asking for business name again.",
-    "- If the user gives enough information, stop interrogating and produce a clean draft.",
+    "Bad behavior to avoid:",
+    "- Repeating setup boilerplate.",
+    "- Asking for the same thing again after it is already covered.",
+    "- Breaking one rich answer into unnecessary wizard steps.",
+    "- Sounding like a template bot.",
     "",
     "Context JSON:",
     JSON.stringify(context, null, 2),
@@ -607,17 +640,22 @@ const SETUP_TURN_SCHEMA = {
     },
     assistantMessage: { type: "string" },
     nextQuestion: {
-      type: "object",
-      additionalProperties: false,
-      required: ["key", "step", "title", "prompt", "group", "groupLabel"],
-      properties: {
-        key: { type: "string" },
-        step: { type: "string" },
-        title: { type: "string" },
-        prompt: { type: "string" },
-        group: { type: "string" },
-        groupLabel: { type: "string" },
-      },
+      anyOf: [
+        { type: "null" },
+        {
+          type: "object",
+          additionalProperties: false,
+          required: ["key", "step", "title", "prompt", "group", "groupLabel"],
+          properties: {
+            key: { type: "string" },
+            step: { type: "string" },
+            title: { type: "string" },
+            prompt: { type: "string" },
+            group: { type: "string" },
+            groupLabel: { type: "string" },
+          },
+        },
+      ],
     },
     draft: {
       type: "object",
@@ -778,9 +816,10 @@ async function callOpenAISetupAssistant({
 } = {}) {
   const runtime = getSetupAssistantRuntimeConfig();
   const resolvedModel = s(model, runtime.model);
-  const resolvedTimeoutMs = Number(timeoutMs || runtime.timeoutMs || 25_000) || 25_000;
+  const resolvedTimeoutMs =
+    Number(timeoutMs || runtime.timeoutMs || 25_000) || 25_000;
   const resolvedMaxOutputTokens =
-    Number(maxOutputTokens || runtime.maxOutputTokens || 1600) || 1600;
+    Number(maxOutputTokens || runtime.maxOutputTokens || 2200) || 2200;
 
   const client = getOpenAIClient();
   if (!client) {
@@ -829,6 +868,56 @@ async function callOpenAISetupAssistant({
   }
 }
 
+function buildHonestFallbackTurn(fallbackBrain = {}, latestMessage = "", latestStep = "") {
+  const fallback = obj(fallbackBrain);
+  const nextQuestion = obj(fallback.nextQuestion);
+
+  let assistantMessage = s(fallback.assistantMessage);
+
+  if (s(latestMessage)) {
+    assistantMessage =
+      assistantMessage ||
+      (nextQuestion.prompt
+        ? nextQuestion.prompt
+        : "Continue with the next most important setup detail.");
+  }
+
+  return {
+    phase: s(fallback.phase, "interview"),
+    assistantMessage,
+    nextQuestion:
+      nextQuestion.key && nextQuestion.prompt
+        ? nextQuestion
+        : null,
+    draft: obj(fallback.draft),
+    acceptedPatch: {
+      identity: {},
+      services: [],
+      contacts: [],
+      hours: [],
+      pricingPosture: "",
+      humanHandoff: "",
+      aiBehavior: {
+        languages: [],
+        tone: "",
+        greetingStyle: "",
+        afterHoursBehavior: "",
+      },
+    },
+    rejectedInputs: [],
+    confidence: obj(fallback.confidence),
+    recommendation: obj(fallback.recommendation),
+    sourceSignals: obj(fallback.sourceSignals),
+    readyForApproval: fallback.readyForApproval === true,
+    latestUserInput: {
+      step: s(latestStep),
+      text: s(latestMessage),
+    },
+    interviewPlan: obj(fallback.interviewPlan),
+    aiBehavior: obj(fallback.aiBehavior),
+  };
+}
+
 export async function runSetupAssistantOpenAIOrchestrator({
   session = {},
   draft = {},
@@ -862,7 +951,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
     forceFallback === true || runtime.forceFallback === true;
 
   if (shouldForceFallback || !hasOpenAISetupAssistant()) {
-    return normalizeTurnResult(fallbackBrain, {
+    return normalizeTurnResult(buildHonestFallbackTurn(fallbackBrain, latestMessage, latestStep), {
       fallbackBrain,
       latestMessage,
       latestStep,
@@ -899,7 +988,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
       usedFallback: false,
     });
   } catch (error) {
-    return normalizeTurnResult(fallbackBrain, {
+    return normalizeTurnResult(buildHonestFallbackTurn(fallbackBrain, latestMessage, latestStep), {
       fallbackBrain,
       latestMessage,
       latestStep,
@@ -926,6 +1015,8 @@ export const __test__ = {
   hasOpenAISetupAssistant,
   getSetupAssistantRuntimeConfig,
   callOpenAISetupAssistant,
+  detectLikelyReplyLanguage,
+  buildHonestFallbackTurn,
   setCachedClient(client = null) {
     cachedClient = client;
   },
