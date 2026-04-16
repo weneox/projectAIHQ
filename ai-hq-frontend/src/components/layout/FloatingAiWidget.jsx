@@ -2,17 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { RotateCcw, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import {
-  analyzeSetupIntake,
   discardCurrentSetupReview,
   finalizeSetupAssistantSession,
   getCurrentSetupAssistantSession,
   getCurrentSetupReview,
-  importGoogleMapsForSetup,
-  importWebsiteForSetup,
   sendSetupAssistantMessage,
   startSetupAssistantSession,
-  updateCurrentSetupAssistantDraft,
 } from "../../api/setup.js";
 import {
   buildWorkspaceScopedQueryKey,
@@ -20,7 +17,6 @@ import {
 } from "../../hooks/useWorkspaceTenantKey.js";
 import { emitLaunchSliceRefresh } from "../../lib/launchSliceRefresh.js";
 import SetupAssistantSections from "./SetupAssistantSections.jsx";
-import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -250,62 +246,6 @@ function buildMergedReviewPayload(reviewPayload = null, assistantState = {}) {
   };
 }
 
-function normalizeManualSourceType(value = "") {
-  const key = lower(value);
-  if (key === "note" || key === "manual") return "manual";
-  return key;
-}
-
-function buildManualSourceMetadata(type = "", value = "") {
-  const sourceType = normalizeManualSourceType(type);
-  const sourceUrl = sourceType === "manual" ? "" : s(value);
-  const sourceLabel =
-    sourceType === "instagram"
-      ? "Instagram"
-      : sourceType === "facebook"
-        ? "Facebook"
-        : sourceType === "manual"
-          ? "Manual note"
-          : "Source";
-
-  return {
-    primarySourceType: sourceType,
-    primarySourceUrl: sourceUrl,
-    sourceLabels: [sourceLabel],
-    evidenceSummary: [
-      sourceType === "manual"
-        ? "Manual note captured"
-        : `${sourceLabel} supplied by operator`,
-    ],
-  };
-}
-
-function buildManualAnalyzePayload(type = "", value = "") {
-  const sourceType = normalizeManualSourceType(type);
-  const input = s(value);
-
-  if (sourceType === "instagram") {
-    return {
-      manualText: `Instagram: ${input}`,
-      answers: { instagramUrl: input },
-      note: "instagram source",
-    };
-  }
-
-  if (sourceType === "facebook") {
-    return {
-      manualText: `Facebook: ${input}`,
-      answers: { facebookUrl: input },
-      note: "facebook source",
-    };
-  }
-
-  return {
-    manualText: input,
-    note: sourceType === "manual" ? "manual business note" : `${sourceType} source`,
-  };
-}
-
 function getConversationStorageKey(tenantKey = "") {
   return `setup-assistant-timeline:${lower(tenantKey || "workspace")}`;
 }
@@ -357,6 +297,7 @@ export default function FloatingAiWidget({
   assistant = null,
   presentation = "floating",
 }) {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pageMode = presentation === "page";
   const panelOpen = pageMode ? true : open;
@@ -368,7 +309,6 @@ export default function FloatingAiWidget({
   const [clientAssistant, setClientAssistant] = useState(emptySeed);
   const [saving, setSaving] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
-  const [capturingSource, setCapturingSource] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [setupError, setSetupError] = useState("");
   const lastTenantKeyRef = useRef("");
@@ -466,7 +406,6 @@ export default function FloatingAiWidget({
     setClientAssistant(emptySeed);
     setSaving(false);
     setFinalizing(false);
-    setCapturingSource(false);
     setResetting(false);
     setSetupError("");
   }, [workspace.tenantKey, emptySeed]);
@@ -559,9 +498,30 @@ export default function FloatingAiWidget({
     return nextAssistant || assistantRef.current;
   }
 
+  async function handleStartSetup() {
+    if (saving || finalizing || resetting) return null;
+
+    setSetupError("");
+    try {
+      await ensureSession();
+      await refreshWidgetWorkspaceState();
+      return true;
+    } catch (error) {
+      setSetupError(s(error?.message, "Setup could not be started."));
+      throw error;
+    }
+  }
+
+  async function handleGoToChannels() {
+    navigate("/channels");
+    if (!pageMode) {
+      onOpenChange?.(false);
+    }
+  }
+
   async function handleSetupParseMessage({ text, step }) {
     const answer = s(text);
-    if (!answer || saving || finalizing || capturingSource || resetting) return null;
+    if (!answer || saving || finalizing || resetting) return null;
 
     setSaving(true);
     setSetupError("");
@@ -570,7 +530,7 @@ export default function FloatingAiWidget({
       await ensureSession();
 
       const response = await sendSetupAssistantMessage({
-        step: s(step, "profile"),
+        step: s(step, "company"),
         answer,
       });
 
@@ -589,7 +549,7 @@ export default function FloatingAiWidget({
   }
 
   async function handleSetupFinalize() {
-    if (saving || finalizing || capturingSource || resetting) return null;
+    if (saving || finalizing || resetting) return null;
 
     setFinalizing(true);
     setSetupError("");
@@ -638,7 +598,7 @@ export default function FloatingAiWidget({
   }
 
   async function handleSetupReset() {
-    if (saving || finalizing || capturingSource || resetting) return null;
+    if (saving || finalizing || resetting) return null;
 
     setResetting(true);
     setSetupError("");
@@ -672,88 +632,6 @@ export default function FloatingAiWidget({
       throw error;
     } finally {
       setResetting(false);
-    }
-  }
-
-  async function handleSetupCaptureSource({ type, value }) {
-    const sourceValue = s(value);
-    const resolvedSource = resolveSetupSourceInput(sourceValue);
-    const sourceType =
-      lower(type) === lower(resolvedSource.type)
-        ? lower(type)
-        : lower(resolvedSource.type);
-    const normalizedSourceValue = s(resolvedSource.value || sourceValue);
-
-    if (
-      !sourceType ||
-      !sourceValue ||
-      saving ||
-      finalizing ||
-      capturingSource ||
-      resetting
-    ) {
-      return null;
-    }
-
-    setCapturingSource(true);
-    setSetupError("");
-
-    try {
-      await ensureSession();
-
-      if (sourceType === "website") {
-        const response = await importWebsiteForSetup({
-          url: normalizedSourceValue,
-          allowSessionReuse: true,
-          waitForCompletion: true,
-        });
-
-        if (response?.ok === false) {
-          throw new Error(
-            s(response?.reason || response?.error, "Website import failed")
-          );
-        }
-      } else if (sourceType === "google_maps") {
-        const response = await importGoogleMapsForSetup({
-          url: normalizedSourceValue,
-          allowSessionReuse: true,
-          waitForCompletion: true,
-        });
-
-        if (response?.ok === false) {
-          throw new Error(
-            s(response?.reason || response?.error, "Google Maps import failed")
-          );
-        }
-      } else {
-        const patchResponse = await updateCurrentSetupAssistantDraft({
-          sourceMetadata: buildManualSourceMetadata(
-            sourceType,
-            normalizedSourceValue
-          ),
-        });
-
-        setClientAssistant((prev) => buildAssistantFromApi(prev, patchResponse));
-        queryClient.setQueryData(setupAssistantSessionQueryKey, patchResponse);
-
-        const analyzeResponse = await analyzeSetupIntake(
-          buildManualAnalyzePayload(sourceType, normalizedSourceValue)
-        );
-
-        if (analyzeResponse?.ok === false) {
-          throw new Error(
-            s(analyzeResponse?.reason || analyzeResponse?.error, "Source intake failed")
-          );
-        }
-      }
-
-      await refreshWidgetWorkspaceState();
-      return await syncLatestAssistantSession();
-    } catch (error) {
-      setSetupError(s(error?.message, "Source intake failed."));
-      throw error;
-    } finally {
-      setCapturingSource(false);
     }
   }
 
@@ -805,7 +683,7 @@ export default function FloatingAiWidget({
                   <button
                     type="button"
                     onClick={handleSetupReset}
-                    disabled={resetting || saving || finalizing || capturingSource}
+                    disabled={resetting || saving || finalizing}
                     className="inline-flex h-8 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-medium text-text-muted transition-colors hover:bg-[rgba(15,23,42,0.04)] hover:text-text disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.1} />
@@ -835,11 +713,12 @@ export default function FloatingAiWidget({
                 reviewPayload={mergedReviewPayload}
                 saving={saving}
                 finalizing={finalizing}
-                capturingSource={capturingSource || resetting}
+                capturingSource={resetting}
                 errorMessage={setupError}
-                onCaptureSource={handleSetupCaptureSource}
                 onParseMessage={handleSetupParseMessage}
                 onFinalize={handleSetupFinalize}
+                onStartSetup={handleStartSetup}
+                onGoToChannels={handleGoToChannels}
               />
             </div>
           </motion.section>

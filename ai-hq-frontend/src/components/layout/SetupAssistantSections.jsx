@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ArrowUp, LoaderCircle, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowRight, ArrowUp, LoaderCircle, Sparkles } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
-const DEFAULT_COMPOSER_PLACEHOLDER = "Write a message";
+const DEFAULT_COMPOSER_PLACEHOLDER = "Mesaj yazın";
+const INITIAL_SETUP_QUESTION = "O zaman başlayaq. Şirkətinizin adı nədir?";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -392,6 +392,53 @@ function StatusNotice({ error = "", usedFallback = false }) {
   );
 }
 
+function WelcomeCard({ busy = false, onStartSetup, onGoToChannels }) {
+  return (
+    <motion.div
+      variants={bubbleMotion}
+      initial="hidden"
+      animate="visible"
+      className="rounded-[28px] border border-[rgba(15,23,42,0.06)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.96))] px-5 py-5 shadow-[0_20px_50px_rgba(15,23,42,0.06)]"
+    >
+      <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+        <Sparkles className="h-4 w-4 text-brand" />
+        Ask AI
+      </div>
+
+      <div className="mt-4 text-[24px] font-semibold tracking-[-0.04em] text-text">
+        Salam. NEOX AI HQ-yə xoş gəlmisiniz.
+      </div>
+
+      <div className="mt-2 max-w-[560px] text-[15px] leading-7 text-text-subtle">
+        İstəsəniz əvvəl kanalları qura bilərsiniz, istəsəniz də biznes setup-unuzu
+        elə indi başladaq.
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={onGoToChannels}
+          disabled={busy}
+          className="inline-flex h-11 items-center gap-2 rounded-full border border-[rgba(15,23,42,0.08)] bg-white px-4 text-[13px] font-semibold text-text transition-colors hover:bg-[rgba(15,23,42,0.03)] disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          Go to channels
+          <ArrowRight className="h-4 w-4" strokeWidth={2.1} />
+        </button>
+
+        <button
+          type="button"
+          onClick={onStartSetup}
+          disabled={busy}
+          className="inline-flex h-11 items-center gap-2 rounded-full bg-slate-950 px-4 text-[13px] font-semibold text-white shadow-[0_14px_30px_rgba(2,6,23,0.18)] transition-transform hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {busy ? "Starting..." : "Start setup"}
+          <Sparkles className="h-4 w-4" strokeWidth={2.1} />
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
 function Composer({
   value,
   busy,
@@ -453,15 +500,17 @@ function SetupAssistantSectionsContent({
   finalizing = false,
   capturingSource = false,
   errorMessage = "",
-  onCaptureSource,
   onParseMessage,
   onFinalize,
+  onStartSetup,
+  onGoToChannels,
 }) {
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
   const [composerValue, setComposerValue] = useState("");
   const [localError, setLocalError] = useState("");
   const [pendingUserMessage, setPendingUserMessage] = useState("");
+  const [setupPrimed, setSetupPrimed] = useState(false);
 
   const busy = saving || finalizing || capturingSource;
 
@@ -470,10 +519,7 @@ function SetupAssistantSectionsContent({
     [reviewPayload, assistant]
   );
 
-  const smartDraftReady = useMemo(
-    () => hasStrongDraft(finalModel),
-    [finalModel]
-  );
+  const smartDraftReady = useMemo(() => hasStrongDraft(finalModel), [finalModel]);
 
   const currentQuestion = finalModel.nextQuestion;
 
@@ -500,22 +546,30 @@ function SetupAssistantSectionsContent({
     );
   }, [finalModel]);
 
-  const sourceSubmitted = Boolean(
-    hasExistingProgress || serverTimeline.some((item) => item.role === "user")
-  );
+  useEffect(() => {
+    if (hasExistingProgress || serverTimeline.length > 0) {
+      setSetupPrimed(true);
+    }
+  }, [hasExistingProgress, serverTimeline.length]);
+
+  const showWelcome = !setupPrimed && !hasExistingProgress && serverTimeline.length === 0;
 
   const composerPlaceholder = useMemo(() => {
+    if (showWelcome) return DEFAULT_COMPOSER_PLACEHOLDER;
     if (s(currentQuestion?.prompt)) return currentQuestion.prompt;
+    if (setupPrimed && serverTimeline.length === 0 && !hasExistingProgress) {
+      return "Şirkət adınızı yazın";
+    }
     return DEFAULT_COMPOSER_PLACEHOLDER;
-  }, [currentQuestion]);
+  }, [currentQuestion, showWelcome, setupPrimed, serverTimeline.length, hasExistingProgress]);
 
   const assistantMeta = useMemo(() => buildAssistantMeta(finalModel), [finalModel]);
   const visiblePendingUserMessage = busy ? pendingUserMessage : "";
 
-  const showEphemeralAssistantBubble = Boolean(
-    sessionHydrated &&
+  const showSyntheticFirstQuestion = Boolean(
+    setupPrimed &&
       serverTimeline.length === 0 &&
-      s(finalModel.message) &&
+      !hasExistingProgress &&
       !visiblePendingUserMessage
   );
 
@@ -532,28 +586,21 @@ function SetupAssistantSectionsContent({
     localError,
     errorMessage,
     smartDraftReady,
-    showEphemeralAssistantBubble,
+    showSyntheticFirstQuestion,
+    showWelcome,
   ]);
 
-  async function handleInitialSourceSubmit() {
-    const text = s(composerValue);
-    if (!text || busy) return;
-
-    const resolvedSource = resolveSetupSourceInput(text);
-
+  async function handleStartSetupClick() {
+    if (busy) return;
     setLocalError("");
-    setPendingUserMessage(text);
-    setComposerValue("");
-
     try {
-      await onCaptureSource?.({
-        type: resolvedSource.type,
-        value: resolvedSource.value,
-        message: text,
+      await onStartSetup?.();
+      setSetupPrimed(true);
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus?.();
       });
     } catch (error) {
-      setPendingUserMessage("");
-      setLocalError(s(error?.message, "Source intake failed."));
+      setLocalError(s(error?.message, "Setup could not be started."));
     }
   }
 
@@ -571,22 +618,18 @@ function SetupAssistantSectionsContent({
         message: text,
         text,
         value: text,
-        step: s(currentQuestion?.step || currentQuestion?.key || "profile"),
-        questionKey: s(currentQuestion?.key),
+        step:
+          s(
+            currentQuestion?.step ||
+              currentQuestion?.key ||
+              (showSyntheticFirstQuestion ? "company" : "company")
+          ) || "company",
+        questionKey: s(currentQuestion?.key || (showSyntheticFirstQuestion ? "company" : "")),
       });
     } catch (error) {
       setPendingUserMessage("");
       setLocalError(s(error?.message, "Message processing failed."));
     }
-  }
-
-  function handleSubmit() {
-    if (!sourceSubmitted) {
-      handleInitialSourceSubmit();
-      return;
-    }
-
-    handleMessageSubmit();
   }
 
   return (
@@ -597,6 +640,14 @@ function SetupAssistantSectionsContent({
             error={localError || errorMessage || finalModel.error}
             usedFallback={finalModel.usedFallback === true}
           />
+
+          {showWelcome ? (
+            <WelcomeCard
+              busy={busy}
+              onStartSetup={handleStartSetupClick}
+              onGoToChannels={onGoToChannels}
+            />
+          ) : null}
 
           <AnimatePresence initial={false}>
             {serverTimeline.map((item) => (
@@ -613,7 +664,15 @@ function SetupAssistantSectionsContent({
             <ChatBubble role="user" body={visiblePendingUserMessage} />
           ) : null}
 
-          {showEphemeralAssistantBubble ? (
+          {showSyntheticFirstQuestion ? (
+            <ChatBubble role="assistant" body={INITIAL_SETUP_QUESTION} />
+          ) : null}
+
+          {!showSyntheticFirstQuestion &&
+          serverTimeline.length === 0 &&
+          s(finalModel.message) &&
+          !visiblePendingUserMessage &&
+          !showWelcome ? (
             <ChatBubble
               role="assistant"
               body={finalModel.message}
@@ -633,14 +692,14 @@ function SetupAssistantSectionsContent({
         </div>
       </div>
 
-      {sessionHydrated ? (
+      {!showWelcome && sessionHydrated ? (
         <Composer
           value={composerValue}
           busy={busy}
           placeholder={composerPlaceholder}
           textareaRef={textareaRef}
           onChange={setComposerValue}
-          onSubmit={handleSubmit}
+          onSubmit={handleMessageSubmit}
         />
       ) : null}
     </div>

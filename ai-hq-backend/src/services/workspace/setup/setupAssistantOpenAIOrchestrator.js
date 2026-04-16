@@ -2,25 +2,37 @@ import OpenAI from "openai";
 
 import { cfg } from "../../../config.js";
 import { arr, compactDraftObject, obj, s } from "./draftShared.js";
-import {
-  buildSetupDraftStateFromSignals,
-  buildSetupSourceCoverage,
-  buildSetupSourceLead,
-  buildSetupSourceSignals,
-  detectSetupSignalContradictions,
-} from "./setupAssistantApp/sourceSignals.js";
+import { normalizeWebsiteUrl } from "./setupAssistantApp/shared.js";
+
+const STEP_ORDER = [
+  "company",
+  "description",
+  "services",
+  "contacts",
+  "hours",
+  "pricing",
+  "handoff",
+];
+
+const STEP_META = {
+  company: { key: "company", step: "company", title: "Company name" },
+  description: { key: "description", step: "description", title: "Business description" },
+  services: { key: "services", step: "services", title: "Core services" },
+  contacts: { key: "contacts", step: "contacts", title: "Contact routes" },
+  hours: { key: "hours", step: "hours", title: "Working hours" },
+  pricing: { key: "pricing", step: "pricing", title: "Pricing posture" },
+  handoff: { key: "handoff", step: "handoff", title: "Human handoff rules" },
+};
 
 let cachedClient = null;
 
 function getSetupAssistantRuntimeConfig() {
   const model = s(cfg.ai?.openaiSetupModel, cfg.ai?.openaiModel || "gpt-5");
   const timeoutMs =
-    Number(cfg.ai?.openaiSetupTimeoutMs || cfg.ai?.openaiTimeoutMs || 25_000) ||
-    25_000;
+    Number(cfg.ai?.openaiSetupTimeoutMs || cfg.ai?.openaiTimeoutMs || 8_000) ||
+    8_000;
   const maxOutputTokens =
-    Number(
-      cfg.ai?.openaiSetupMaxOutputTokens || cfg.ai?.openaiMaxOutputTokens || 2600
-    ) || 2600;
+    Number(cfg.ai?.openaiSetupMaxOutputTokens || 500) || 500;
 
   const hasKey = Boolean(s(cfg.ai?.openaiApiKey));
 
@@ -64,819 +76,451 @@ function uniqueStrings(items = [], max = 24) {
   );
 }
 
-function compactText(value = "", max = 280) {
-  const text = s(value).replace(/\s+/g, " ").trim();
-  if (!text) return "";
-  return text.length <= max ? text : `${text.slice(0, max - 1).trim()}…`;
+function normalizeStep(value = "") {
+  const key = s(value).toLowerCase();
+  if (!key) return "";
+  if (key === "contact") return "contacts";
+  if (key === "price") return "pricing";
+  if (key === "pricing_posture") return "pricing";
+  if (key === "business_name") return "company";
+  if (key === "business_description") return "description";
+  return STEP_META[key] ? key : "";
 }
 
-function sanitizeQuestion(value = {}, fallback = {}) {
-  const source = obj(value);
-  const next = compactDraftObject({
-    key: s(source.key || fallback.key).toLowerCase(),
-    step: s(source.step || source.key || fallback.step || fallback.key).toLowerCase(),
-    title: s(source.title || fallback.title),
-    prompt: s(source.prompt || fallback.prompt),
-    group: s(source.group || fallback.group || "business_truth"),
-    groupLabel: s(
-      source.groupLabel || fallback.groupLabel || "Business truth"
-    ),
-  });
-
-  if (!next.key || !next.prompt) {
-    return compactDraftObject(fallback);
-  }
-
-  return next;
-}
-
-function sanitizeConfidence(value = {}, fallback = {}) {
-  const source = obj(value);
-  const safeFallback = obj(fallback);
-
-  return {
-    strong: uniqueStrings(source.strong || safeFallback.strong, 12),
-    unclear: uniqueStrings(source.unclear || safeFallback.unclear, 12),
-    contradictions: uniqueStrings(
-      source.contradictions || safeFallback.contradictions,
-      12
-    ),
-  };
-}
-
-function sanitizeRecommendation(value = {}, fallback = {}) {
-  const source = obj(value);
-  const safeFallback = obj(fallback);
-
-  return {
-    notes: uniqueStrings(source.notes || safeFallback.notes, 12),
-  };
-}
-
-function sanitizeDraft(value = {}, fallback = {}) {
-  const source = obj(value);
-  const safeFallback = obj(fallback);
+function buildQuestion(step = "") {
+  const meta = obj(STEP_META[normalizeStep(step)] || STEP_META.company);
 
   return compactDraftObject({
-    businessName: s(source.businessName || safeFallback.businessName),
-    whatThisBusinessIs: s(
-      source.whatThisBusinessIs || safeFallback.whatThisBusinessIs
-    ),
-    websiteUrl: s(source.websiteUrl || safeFallback.websiteUrl),
-    coreServices: uniqueStrings(
-      source.coreServices || safeFallback.coreServices,
-      16
-    ),
-    audience: s(source.audience || safeFallback.audience),
-    pricingPosture: s(source.pricingPosture || safeFallback.pricingPosture),
-    contactRoutes: uniqueStrings(
-      source.contactRoutes || safeFallback.contactRoutes,
-      12
-    ),
-    humanHandoff: s(source.humanHandoff || safeFallback.humanHandoff),
-    languages: uniqueStrings(source.languages || safeFallback.languages, 8),
-    tone: s(source.tone || safeFallback.tone),
-    hours: uniqueStrings(source.hours || safeFallback.hours, 12),
-    greetingStyle: s(source.greetingStyle || safeFallback.greetingStyle),
-    afterHoursBehavior: s(
-      source.afterHoursBehavior || safeFallback.afterHoursBehavior
-    ),
+    key: s(meta.key).toLowerCase(),
+    step: s(meta.step).toLowerCase(),
+    title: s(meta.title),
+    prompt: "",
+    group: "business_truth",
+    groupLabel: "Business truth",
   });
 }
 
-function sanitizeAcceptedPatch(value = {}, fallbackDraft = {}) {
-  const source = obj(value);
+function buildCurrentPreview(draft = {}, review = null) {
+  const safeDraft = obj(draft);
+  const reviewRoot = obj(review);
+  const reviewDraft = obj(reviewRoot.review?.draft || reviewRoot.draft);
 
-  return compactDraftObject({
-    identity: compactDraftObject({
-      businessName: s(source.identity?.businessName || fallbackDraft.businessName),
-      description: s(
-        source.identity?.description || fallbackDraft.whatThisBusinessIs
-      ),
-      websiteUrl: s(source.identity?.websiteUrl || fallbackDraft.websiteUrl),
-      audience: s(source.identity?.audience || fallbackDraft.audience),
-    }),
-    services: uniqueStrings(source.services || fallbackDraft.coreServices, 16),
-    contacts: uniqueStrings(source.contacts || fallbackDraft.contactRoutes, 12),
-    hours: uniqueStrings(source.hours || fallbackDraft.hours, 12),
-    pricingPosture: s(source.pricingPosture || fallbackDraft.pricingPosture),
-    humanHandoff: s(source.humanHandoff || fallbackDraft.humanHandoff),
-    aiBehavior: compactDraftObject({
-      languages: uniqueStrings(
-        source.aiBehavior?.languages || fallbackDraft.languages,
-        8
-      ),
-      tone: s(source.aiBehavior?.tone || fallbackDraft.tone),
-      greetingStyle: s(
-        source.aiBehavior?.greetingStyle || fallbackDraft.greetingStyle
-      ),
-      afterHoursBehavior: s(
-        source.aiBehavior?.afterHoursBehavior ||
-          fallbackDraft.afterHoursBehavior
-      ),
-    }),
-  });
-}
-
-function sanitizeRejectedInputs(value = []) {
-  return arr(value)
-    .map((item) =>
-      compactDraftObject({
-        input: s(item?.input),
-        reason: s(item?.reason),
-        suggestedField: s(item?.suggestedField),
-      })
-    )
-    .filter((item) => item.input || item.reason)
-    .slice(0, 12);
-}
-
-function sanitizeSourceSignals(value = {}, fallback = {}) {
-  const source = obj(value);
-  const safeFallback = obj(fallback);
-
-  return {
-    primarySourceType: s(
-      source.primarySourceType || safeFallback.primarySourceType
-    ),
-    primarySourceLabel: s(
-      source.primarySourceLabel || safeFallback.primarySourceLabel
-    ),
-    primarySourceUrl: s(
-      source.primarySourceUrl || safeFallback.primarySourceUrl
-    ),
-    primarySourceAuthorityClass: s(
-      source.primarySourceAuthorityClass ||
-        safeFallback.primarySourceAuthorityClass
-    ),
-    pageCount:
-      Number(source.pageCount || safeFallback.pageCount || 0) || 0,
-    sourceTypes: uniqueStrings(source.sourceTypes || safeFallback.sourceTypes, 8),
-    strongestEvidence: uniqueStrings(
-      source.strongestEvidence || safeFallback.strongestEvidence,
-      12
-    ),
-    discoveredPublicClaims: uniqueStrings(
-      source.discoveredPublicClaims || safeFallback.discoveredPublicClaims,
-      12
-    ),
-    companyNameCandidates: uniqueStrings(
-      source.companyNameCandidates || safeFallback.companyNameCandidates,
-      8
-    ),
-    descriptionCandidates: uniqueStrings(
-      source.descriptionCandidates || safeFallback.descriptionCandidates,
-      8
-    ),
-    serviceCandidates: uniqueStrings(
-      source.serviceCandidates || safeFallback.serviceCandidates,
-      12
-    ),
-    contactCandidates: uniqueStrings(
-      source.contactCandidates || safeFallback.contactCandidates,
-      12
-    ),
-    hoursCandidates: uniqueStrings(
-      source.hoursCandidates || safeFallback.hoursCandidates,
-      12
-    ),
-    pricingCandidates: uniqueStrings(
-      source.pricingCandidates || safeFallback.pricingCandidates,
-      12
-    ),
-    audienceCandidates: uniqueStrings(
-      source.audienceCandidates || safeFallback.audienceCandidates,
-      8
-    ),
-    languagesCandidates: uniqueStrings(
-      source.languagesCandidates || safeFallback.languagesCandidates,
-      8
-    ),
+  const businessProfile = {
+    ...obj(reviewDraft.businessProfile),
+    ...obj(safeDraft.businessProfile),
   };
-}
 
-function sanitizeInterviewPlan(value = {}, fallback = {}) {
-  const source = obj(value);
-  const safeFallback = obj(fallback);
+  const services = [
+    ...arr(reviewDraft.services),
+    ...arr(safeDraft.services),
+  ]
+    .map((item) => s(item?.title || item?.name || item?.label))
+    .filter(Boolean);
 
-  const activeQuestions = arr(source.activeQuestions || safeFallback.activeQuestions)
-    .map((item) =>
-      compactDraftObject({
-        key: s(item?.key).toLowerCase(),
-        step: s(item?.step || item?.key).toLowerCase(),
-        title: s(item?.title),
-        group: s(item?.group || "business_truth"),
-        groupLabel: s(item?.groupLabel || "Business truth"),
-        priority: Number(item?.priority || 0) || 0,
-      })
-    )
-    .filter((item) => item.key);
+  const contacts = [
+    ...arr(reviewDraft.contacts),
+    ...arr(safeDraft.contacts),
+  ]
+    .map((item) => s(item?.value || item?.label || item?.channel || item?.type))
+    .filter(Boolean);
 
-  return compactDraftObject({
-    activeQuestionKeys: uniqueStrings(
-      source.activeQuestionKeys || activeQuestions.map((item) => item.key),
-      12
-    ),
-    activeQuestions,
-    remainingQuestionKeys: uniqueStrings(
-      source.remainingQuestionKeys || [],
-      12
-    ),
-    nextGroup: s(source.nextGroup || safeFallback.nextGroup),
-    nextGroupLabel: s(source.nextGroupLabel || safeFallback.nextGroupLabel),
-  });
-}
-
-function normalizeEventText(value = "") {
-  return s(value).replace(/\s+/g, " ").trim();
-}
-
-function extractRecentConversation(review = {}, latestStep = "", latestMessage = "") {
-  const root = obj(review);
-
-  const candidates = [
-    ...arr(root.events),
-    ...arr(root.review?.events),
-    ...arr(root.timeline),
-    ...arr(root.review?.timeline),
-  ];
-
-  const normalized = candidates
+  const hours = arr(safeDraft.hours)
     .map((item) => {
       const row = obj(item);
-      const role = s(
-        row.role || row.actorRole || row.type || row.eventType
-      ).toLowerCase();
-
-      const text = normalizeEventText(
-        row.text ||
-          row.message ||
-          row.summary ||
-          row.note ||
-          row.body ||
-          row.value
-      );
-
-      return compactDraftObject({
-        role,
-        text,
-        createdAt: row.createdAt || row.created_at || null,
-      });
+      const day = s(row.day);
+      if (row.allDay === true) return [day, "24/7"].filter(Boolean).join(" ");
+      if (row.appointmentOnly === true) {
+        return [day, "appointment only"].filter(Boolean).join(" ");
+      }
+      if (row.closed === true) return [day, "closed"].filter(Boolean).join(" ");
+      if (s(row.openTime) && s(row.closeTime)) {
+        return [day, `${s(row.openTime)}-${s(row.closeTime)}`]
+          .filter(Boolean)
+          .join(" ");
+      }
+      return s(row.notes);
     })
-    .filter((item) => item.text)
-    .slice(-14);
+    .filter(Boolean);
 
-  if (s(latestMessage)) {
-    normalized.push({
-      role: "user",
-      text: normalizeEventText(latestMessage),
-      step: s(latestStep).toLowerCase(),
-      createdAt: null,
-    });
-  }
-
-  return normalized.slice(-16);
-}
-
-function detectLikelyReplyLanguage(latestMessage = "", recentConversation = []) {
-  const latest = s(latestMessage);
-  const recentUser = arr(recentConversation)
-    .filter((item) => s(item.role).toLowerCase() === "user")
-    .map((item) => s(item.text))
-    .join(" ");
-
-  const combined = `${latest} ${recentUser}`.trim().toLowerCase();
-
-  if (!combined) return "follow_latest_user_language";
-  if (/[əğıöşçü]/i.test(combined)) return "az";
-  if (/\b(mən|sən|biz|və|üçün|deyil|niyə|harada|necə|edir|edirik|olsun)\b/i.test(combined)) {
-    return "az";
-  }
-  if (/[а-яё]/i.test(combined)) return "ru";
-  if (/\b(ben|sen|biz|ve|için|değil|neden|nasıl)\b/i.test(combined)) {
-    return "tr";
-  }
-  if (/\b(the|and|what|why|how|business|setup)\b/i.test(combined)) {
-    return "en";
-  }
-
-  return "follow_latest_user_language";
-}
-
-function buildReadinessScore({
-  draftState = {},
-  sourceCoverage = {},
-  contradictions = [],
-}) {
-  const identityReady = Boolean(
-    s(draftState.businessName) &&
-      s(draftState.description) &&
-      (s(draftState.websiteUrl) || sourceCoverage.primarySourceExists === true)
+  const pricingPosture = s(
+    obj(safeDraft.pricingPosture).publicSummary ||
+      obj(reviewDraft.pricingPosture).publicSummary ||
+      businessProfile.pricingPolicy
   );
 
-  const servicesReady = arr(draftState.services).length > 0;
-  const contactsReady = arr(draftState.contacts).length > 0;
-  const hoursReady = arr(draftState.hours).length > 0;
-  const pricingReady = Boolean(s(draftState.pricingPosture));
-  const handoffReady = Boolean(s(draftState.humanHandoff));
-  const contradictionCount = arr(contradictions).length;
-
-  const readyCount = [
-    identityReady,
-    servicesReady,
-    contactsReady,
-    hoursReady,
-    pricingReady,
-    handoffReady,
-  ].filter(Boolean).length;
+  const handoffRules = s(
+    obj(safeDraft.handoffRules).summary ||
+      arr(obj(safeDraft.handoffRules).triggers).join(", ")
+  );
 
   return {
-    identityReady,
-    servicesReady,
-    contactsReady,
-    hoursReady,
-    pricingReady,
-    handoffReady,
-    readyCount,
-    contradictionCount,
-    readyForApproval:
-      contradictionCount === 0 &&
-      identityReady &&
-      servicesReady &&
-      contactsReady &&
-      hoursReady &&
-      pricingReady &&
-      handoffReady,
+    businessName: s(businessProfile.companyName),
+    whatThisBusinessIs: s(businessProfile.description),
+    websiteUrl: normalizeWebsiteUrl(s(businessProfile.websiteUrl)),
+    coreServices: uniqueStrings(services, 24),
+    contactRoutes: uniqueStrings(contacts, 24),
+    hours: uniqueStrings(hours, 24),
+    pricingPosture,
+    humanHandoff: handoffRules,
+    languages: uniqueStrings(arr(safeDraft.languages), 8),
+    tone: s(safeDraft.tone),
+    greetingStyle: s(safeDraft.greetingStyle),
+    afterHoursBehavior: s(safeDraft.afterHoursBehavior),
   };
 }
 
-function buildLocalShadowState({
-  session = {},
-  draft = {},
-  sources = [],
-  review = null,
-} = {}) {
-  const sourceSignals = buildSetupSourceSignals({
-    session,
-    draft,
-    sources,
-    review,
-  });
-
-  const sourceCoverage = buildSetupSourceCoverage(sourceSignals);
-
-  const draftState = buildSetupDraftStateFromSignals({
-    draft,
-    review,
-    sourceSignals,
-  });
-
-  const contradictions = detectSetupSignalContradictions({
-    draftState,
-    sourceSignals,
-  });
-
-  const readiness = buildReadinessScore({
-    draftState,
-    sourceCoverage,
-    contradictions,
-  });
-
-  const phase = !(
-    s(draftState.businessName) ||
-    s(draftState.description) ||
-    s(draftState.websiteUrl) ||
-    arr(draftState.services).length ||
-    arr(draftState.contacts).length ||
-    arr(draftState.hours).length ||
-    s(draftState.pricingPosture) ||
-    s(draftState.humanHandoff) ||
-    s(sourceSignals.primarySourceUrl) ||
-    arr(sourceSignals.sourceTypes).length
-  )
-    ? "source_capture"
-    : readiness.readyForApproval
-      ? "ready"
-      : "interview";
+function applyAcceptedPatchToPreview(preview = {}, acceptedPatch = {}) {
+  const identity = obj(acceptedPatch.identity);
+  const aiBehavior = obj(acceptedPatch.aiBehavior);
 
   return {
-    phase,
-    draft: {
-      businessName: s(draftState.businessName),
-      whatThisBusinessIs: s(draftState.description),
-      websiteUrl: s(draftState.websiteUrl),
-      coreServices: uniqueStrings(draftState.services, 16),
-      audience: s(draftState.audience),
-      pricingPosture: s(draftState.pricingPosture),
-      contactRoutes: uniqueStrings(draftState.contacts, 12),
-      humanHandoff: s(draftState.humanHandoff),
-      languages: uniqueStrings(draftState.languages, 8),
-      tone: s(draftState.tone),
-      hours: uniqueStrings(draftState.hours, 12),
-      greetingStyle: s(draftState.greetingStyle),
-      afterHoursBehavior: s(draftState.afterHoursBehavior),
-    },
-    sourceSignals: sanitizeSourceSignals(sourceSignals, {}),
-    sourceCoverage,
-    contradictions: arr(contradictions)
-      .map((item) =>
-        compactDraftObject({
-          key: s(item.key),
-          severity: s(item.severity),
-          message: s(item.message),
-        })
-      )
-      .filter((item) => item.message),
-    readiness,
-    sourceLead: buildSetupSourceLead(sourceSignals),
+    businessName: s(identity.businessName || preview.businessName),
+    whatThisBusinessIs: s(identity.description || preview.whatThisBusinessIs),
+    websiteUrl: normalizeWebsiteUrl(
+      s(identity.websiteUrl || preview.websiteUrl)
+    ),
+    coreServices: uniqueStrings(
+      [...arr(preview.coreServices), ...arr(acceptedPatch.services)],
+      24
+    ),
+    contactRoutes: uniqueStrings(
+      [...arr(preview.contactRoutes), ...arr(acceptedPatch.contacts)],
+      24
+    ),
+    hours: uniqueStrings(
+      [...arr(preview.hours), ...arr(acceptedPatch.hours)],
+      24
+    ),
+    pricingPosture: s(acceptedPatch.pricingPosture || preview.pricingPosture),
+    humanHandoff: s(acceptedPatch.humanHandoff || preview.humanHandoff),
+    languages: uniqueStrings(
+      [...arr(preview.languages), ...arr(aiBehavior.languages)],
+      8
+    ),
+    tone: s(aiBehavior.tone || preview.tone),
+    greetingStyle: s(aiBehavior.greetingStyle || preview.greetingStyle),
+    afterHoursBehavior: s(
+      aiBehavior.afterHoursBehavior || preview.afterHoursBehavior
+    ),
   };
 }
 
-function buildSetupContext({
-  session = {},
-  draft = {},
-  sources = [],
-  review = null,
-  latestStep = "",
-  latestMessage = "",
-}) {
-  const safeDraft = obj(draft);
-  const safeReview = obj(review);
-  const reviewDraft = obj(safeReview.review?.draft || safeReview.draft);
-  const recentConversation = extractRecentConversation(
-    safeReview,
-    latestStep,
-    latestMessage
+function stepSatisfied(step = "", preview = {}) {
+  const safeStep = normalizeStep(step);
+  const safePreview = obj(preview);
+
+  if (safeStep === "company") return Boolean(s(safePreview.businessName));
+  if (safeStep === "description") return Boolean(s(safePreview.whatThisBusinessIs));
+  if (safeStep === "services") return arr(safePreview.coreServices).length > 0;
+  if (safeStep === "contacts") return arr(safePreview.contactRoutes).length > 0;
+  if (safeStep === "hours") return arr(safePreview.hours).length > 0;
+  if (safeStep === "pricing") return Boolean(s(safePreview.pricingPosture));
+  if (safeStep === "handoff") return Boolean(s(safePreview.humanHandoff));
+
+  return false;
+}
+
+function resolveCurrentStep(session = {}, draft = {}, latestStep = "") {
+  return (
+    normalizeStep(latestStep) ||
+    normalizeStep(obj(draft.progress).currentQuestionKey) ||
+    normalizeStep(obj(draft.assistantState).activeSection) ||
+    normalizeStep(obj(session).currentStep) ||
+    "company"
   );
-  const replyLanguage = detectLikelyReplyLanguage(latestMessage, recentConversation);
-  const shadow = buildLocalShadowState({
-    session,
-    draft,
-    sources,
-    review,
-  });
+}
+
+function findNextStep(preview = {}) {
+  for (const step of STEP_ORDER) {
+    if (!stepSatisfied(step, preview)) return step;
+  }
+  return "";
+}
+
+function looksReadyForApproval(preview = {}) {
+  return STEP_ORDER.every((step) => stepSatisfied(step, preview));
+}
+
+function sanitizeExtracted(value = {}) {
+  const source = obj(value);
 
   return {
-    mission:
-      "You are the real setup brain for a serious business AI system. Understand the business deeply, extract multiple grounded facts from one reply when justified, and only ask the next question when it is truly necessary.",
-    replyRules: {
-      speakIn: replyLanguage,
-      hardRule:
-        "Always answer in the user's latest language. If the latest user language is Azerbaijani, answer in Azerbaijani. Do not default to English unless the user is speaking English.",
-      maxQuestionsPerTurn: 1,
-      concise: true,
-      conversational: true,
-      natural: true,
-      nonTemplate: true,
-      nonWizard: true,
-      avoidBoilerplate: true,
-      avoidRepeatingTheSameQuestion: true,
-      avoidReAskingKnownFacts: true,
-      noGenericSetupPhrases: true,
-    },
-    readinessDefinition: {
-      identity: [
-        "exact public business name",
-        "one clean description of what the business does",
-        "main website only if it truly exists, otherwise do not force it",
-      ],
-      services: [
-        "real customer-facing services only",
-        "no vague capabilities, no buzzwords, no channels presented as services",
-      ],
-      contacts: ["at least one real public customer contact route"],
-      hours: ["public hours or explicit appointment-only / always-open posture"],
-      pricing: ["safe public pricing answer rule"],
-      handoff: ["clear cases where AI must escalate to a human"],
-    },
-    session: compactDraftObject({
-      id: s(session.id),
-      mode: s(session.mode),
-      currentStep: s(session.currentStep),
-      status: s(session.status),
-      draftVersion: Number(session.draftVersion || 0) || 0,
+    companyName: s(source.companyName),
+    description: s(source.description),
+    services: uniqueStrings(source.services, 16),
+    contacts: uniqueStrings(source.contacts, 16),
+    hours: uniqueStrings(source.hours, 12),
+    pricingPolicy: s(source.pricingPolicy),
+    handoffRules: s(source.handoffRules),
+  };
+}
+
+function sanitizeTurnPayload(payload = {}, currentStep = "", preview = {}) {
+  const source = obj(payload);
+  const extracted = sanitizeExtracted(source.extracted);
+
+  const acceptedPatch = compactDraftObject({
+    identity: compactDraftObject({
+      businessName: s(extracted.companyName),
+      description: s(extracted.description),
+      websiteUrl: "",
+      audience: "",
     }),
-    latestUserInput: compactDraftObject({
-      step: s(latestStep).toLowerCase(),
-      text: s(latestMessage),
+    services: arr(extracted.services),
+    contacts: arr(extracted.contacts),
+    hours: arr(extracted.hours),
+    pricingPosture: s(extracted.pricingPolicy),
+    humanHandoff: s(extracted.handoffRules),
+    aiBehavior: compactDraftObject({
+      languages: [],
+      tone: s(preview.tone),
+      greetingStyle: s(preview.greetingStyle),
+      afterHoursBehavior: s(preview.afterHoursBehavior),
     }),
-    recentConversation,
-    existingDraft: compactDraftObject({
-      businessProfile: obj(reviewDraft.businessProfile || safeDraft.businessProfile),
-      services: arr(reviewDraft.services || safeDraft.services),
-      contacts: arr(reviewDraft.contacts || safeDraft.contacts),
-      hours: arr(safeDraft.hours),
-      pricingPosture: obj(safeDraft.pricingPosture),
-      handoffRules: obj(safeDraft.handoffRules),
-      sourceMetadata: obj(reviewDraft.sourceMetadata || safeDraft.sourceMetadata),
-      assistantState: obj(safeDraft.assistantState),
-      progress: obj(safeDraft.progress),
-    }),
-    shadow,
-    sources: arr(sources)
-      .map((item) =>
-        compactDraftObject({
-          sourceId: s(item.sourceId || item.id),
-          sourceType: s(item.sourceType || item.type),
-          role: s(item.role),
-          label: s(item.label),
-          url: s(item.sourceUrl || item.url || item.metadata?.sourceUrl),
-          sourceAuthorityClass: s(
-            item.sourceAuthorityClass || item.metadata?.sourceAuthorityClass
-          ),
-        })
+  });
+
+  const mergedPreview = applyAcceptedPatchToPreview(preview, acceptedPatch);
+  const validCurrentStep =
+    source.isRelevantToCurrentStep === true &&
+    (
+      stepSatisfied(currentStep, mergedPreview) ||
+      (
+        currentStep === "company" &&
+        Boolean(s(extracted.companyName))
+      ) ||
+      (
+        currentStep === "description" &&
+        Boolean(s(extracted.description))
+      ) ||
+      (
+        currentStep === "services" &&
+        arr(extracted.services).length > 0
+      ) ||
+      (
+        currentStep === "contacts" &&
+        arr(extracted.contacts).length > 0
+      ) ||
+      (
+        currentStep === "hours" &&
+        arr(extracted.hours).length > 0
+      ) ||
+      (
+        currentStep === "pricing" &&
+        Boolean(s(extracted.pricingPolicy))
+      ) ||
+      (
+        currentStep === "handoff" &&
+        Boolean(s(extracted.handoffRules))
       )
-      .slice(0, 16),
+    );
+
+  const shouldAdvance =
+    source.shouldAdvanceStep === true && validCurrentStep === true;
+
+  const nextStep = shouldAdvance ? findNextStep(mergedPreview) : currentStep;
+  const readyForApproval = looksReadyForApproval(mergedPreview);
+
+  return {
+    intent: s(source.intent).toLowerCase(),
+    replyLanguage: s(source.replyLanguage),
+    isRelevantToCurrentStep: validCurrentStep,
+    confidence: Math.max(0, Math.min(1, Number(source.confidence || 0) || 0)),
+    normalizedAnswer: s(source.normalizedAnswer),
+    acceptedPatch,
+    mergedPreview,
+    assistantReply: s(source.assistantReply),
+    invalidReason: s(source.invalidReason),
+    nextStep: nextStep || "",
+    readyForApproval,
+  };
+}
+
+function buildSourceSignals(preview = {}) {
+  const safePreview = obj(preview);
+
+  return {
+    primarySourceType: "",
+    primarySourceLabel: "",
+    primarySourceUrl: s(safePreview.websiteUrl),
+    primarySourceAuthorityClass: "",
+    pageCount: 0,
+    sourceTypes: safePreview.websiteUrl ? ["website"] : [],
+    strongestEvidence: uniqueStrings(
+      [
+        safePreview.businessName ? `Business name: ${safePreview.businessName}` : "",
+        safePreview.whatThisBusinessIs
+          ? `Description: ${safePreview.whatThisBusinessIs}`
+          : "",
+        arr(safePreview.coreServices).length
+          ? `Services: ${arr(safePreview.coreServices).slice(0, 4).join(", ")}`
+          : "",
+        arr(safePreview.contactRoutes).length
+          ? `Contacts: ${arr(safePreview.contactRoutes).slice(0, 3).join(", ")}`
+          : "",
+      ],
+      12
+    ),
+    discoveredPublicClaims: [],
+    companyNameCandidates: safePreview.businessName ? [safePreview.businessName] : [],
+    descriptionCandidates: safePreview.whatThisBusinessIs
+      ? [safePreview.whatThisBusinessIs]
+      : [],
+    serviceCandidates: uniqueStrings(arr(safePreview.coreServices), 12),
+    contactCandidates: uniqueStrings(arr(safePreview.contactRoutes), 12),
+    hoursCandidates: uniqueStrings(arr(safePreview.hours), 12),
+    pricingCandidates: safePreview.pricingPosture ? [safePreview.pricingPosture] : [],
+    audienceCandidates: [],
+    languagesCandidates: uniqueStrings(arr(safePreview.languages), 8),
+  };
+}
+
+function buildInterviewPlan(currentStep = "", nextStep = "") {
+  const active = nextStep || currentStep;
+  const question = buildQuestion(active);
+
+  return {
+    activeQuestionKeys: question?.key ? [question.key] : [],
+    activeQuestions: question?.key
+      ? [
+          {
+            key: question.key,
+            step: question.step,
+            title: question.title,
+            group: question.group,
+            groupLabel: question.groupLabel,
+            priority: 1,
+          },
+        ]
+      : [],
+    remainingQuestionKeys: question?.key ? [question.key] : [],
+    nextGroup: "business_truth",
+    nextGroupLabel: "Business truth",
   };
 }
 
 function buildSystemPrompt() {
   return [
-    "You are the primary setup reasoning brain for a premium business AI platform.",
-    "You are not a form wizard, not a scripted onboarding bot, and not a template generator.",
-    "You must understand the business deeply and speak naturally.",
-    "The biggest failure to avoid is canned setup language.",
-    "Never output robotic phrases such as 'current signal', 'next most important gap', 'source already attached', 'continue setup', 'public hours are already present', or other obvious template wording.",
-    "Never repeat the same question in slightly different form if the answer is already reasonably present.",
-    "If one user reply contains multiple facts, extract multiple facts.",
-    "Do not shrink a rich reply into one tiny field.",
-    "If the user speaks Azerbaijani, reply in Azerbaijani.",
-    "If the user speaks another language, follow that language.",
-    "Do not default to English unless the user's latest language is English.",
-    "Only ask one next question, and only when there is a real readiness blocker.",
-    "If enough is already known, set readyForApproval=true and nextQuestion=null.",
-    "Website is optional. Do not push for a website if the business truly does not have one.",
-    "Services must be real customer-facing services.",
-    "Contacts must be real public routes.",
-    "Hours and pricing must be safe and operationally believable.",
-    "Only output strict JSON matching the schema.",
+    "You are the semantic setup brain for a business onboarding assistant.",
+    "Your job is to understand the user's latest message inside the current setup step.",
+    "You are not the owner of the whole system state.",
+    "Do not generate a huge business draft.",
+    "Only decide the user's intent, relevance to the current step, extract small grounded fields, and write one short assistant reply.",
+    "If the message is unrelated to the current step, mark isRelevantToCurrentStep=false and explain briefly.",
+    "If the message partially answers the step, extract what is grounded and keep the reply concise.",
+    "Always reply in the user's latest language.",
+    "Do not use canned robotic setup language.",
+    "Do not over-extract.",
+    "Never invent pricing, hours, services, contacts, or handoff rules.",
+    "Only return strict JSON.",
   ].join(" ");
 }
 
-function buildUserPrompt(context = {}) {
+function buildUserPrompt({
+  currentStep = "",
+  question = null,
+  preview = {},
+  latestMessage = "",
+}) {
   return [
-    "Analyze this setup turn.",
+    "Current setup step:",
+    JSON.stringify({
+      currentStep,
+      currentQuestion: obj(question),
+      currentDraftPreview: preview,
+      latestUserMessage: s(latestMessage),
+    }, null, 2),
     "",
-    "Important behavior:",
-    "- Talk like a sharp human strategist, not a scripted setup tool.",
-    "- Extract grounded facts aggressively but safely.",
-    "- Ask only one question, only if necessary.",
-    "- Do not ask something that is already known from the user's reply, prior conversation, or reliable source evidence.",
-    "- Keep assistantMessage short, natural, and context-aware.",
-    "- Do not use boilerplate wording.",
-    "- If the user gave enough detail, move forward instead of interrogating.",
-    "- If the user gave weak or vague info, challenge it briefly and precisely.",
-    "",
-    "Output requirements:",
-    "- assistantMessage must be natural and non-template.",
-    "- nextQuestion must exist only if something important is still missing.",
-    "- acceptedPatch must contain only grounded values you are comfortable applying.",
-    "- rejectedInputs should capture only clearly weak / generic / unusable claims.",
-    "- readyForApproval should become true only when the setup is genuinely strong enough.",
-    "",
-    "Context JSON:",
-    JSON.stringify(context, null, 2),
+    "Rules:",
+    "- Decide whether the message is relevant to the current step.",
+    "- Extract only grounded fields.",
+    "- If the user gives extra useful information for another field, you may extract it too.",
+    "- assistantReply must be short, natural, and helpful.",
+    "- If the answer is invalid or unrelated, keep the same step.",
+    "- If the answer is good enough, ask the next setup question naturally.",
   ].join("\n");
 }
 
-const SETUP_TURN_SCHEMA = {
+const TURN_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: [
-    "phase",
-    "assistantMessage",
-    "nextQuestion",
-    "draft",
-    "acceptedPatch",
-    "rejectedInputs",
+    "intent",
+    "replyLanguage",
+    "isRelevantToCurrentStep",
     "confidence",
-    "recommendation",
-    "sourceSignals",
-    "readyForApproval",
-    "interviewPlan",
-    "aiBehavior",
+    "normalizedAnswer",
+    "extracted",
+    "assistantReply",
+    "shouldAdvanceStep",
+    "invalidReason",
   ],
   properties: {
-    phase: {
+    intent: {
       type: "string",
-      enum: ["source_capture", "interview", "ready"],
-    },
-    assistantMessage: { type: "string" },
-    nextQuestion: {
-      anyOf: [
-        { type: "null" },
-        {
-          type: "object",
-          additionalProperties: false,
-          required: ["key", "step", "title", "prompt", "group", "groupLabel"],
-          properties: {
-            key: { type: "string" },
-            step: { type: "string" },
-            title: { type: "string" },
-            prompt: { type: "string" },
-            group: { type: "string" },
-            groupLabel: { type: "string" },
-          },
-        },
+      enum: [
+        "greeting",
+        "go_to_channels",
+        "start_setup",
+        "setup_answer",
+        "correction",
+        "unrelated",
       ],
     },
-    draft: {
+    replyLanguage: { type: "string" },
+    isRelevantToCurrentStep: { type: "boolean" },
+    confidence: { type: "number" },
+    normalizedAnswer: { type: "string" },
+    extracted: {
       type: "object",
       additionalProperties: false,
       required: [
-        "businessName",
-        "whatThisBusinessIs",
-        "websiteUrl",
-        "coreServices",
-        "audience",
-        "pricingPosture",
-        "contactRoutes",
-        "humanHandoff",
-        "languages",
-        "tone",
-        "hours",
-        "greetingStyle",
-        "afterHoursBehavior",
-      ],
-      properties: {
-        businessName: { type: "string" },
-        whatThisBusinessIs: { type: "string" },
-        websiteUrl: { type: "string" },
-        coreServices: { type: "array", items: { type: "string" } },
-        audience: { type: "string" },
-        pricingPosture: { type: "string" },
-        contactRoutes: { type: "array", items: { type: "string" } },
-        humanHandoff: { type: "string" },
-        languages: { type: "array", items: { type: "string" } },
-        tone: { type: "string" },
-        hours: { type: "array", items: { type: "string" } },
-        greetingStyle: { type: "string" },
-        afterHoursBehavior: { type: "string" },
-      },
-    },
-    acceptedPatch: {
-      type: "object",
-      additionalProperties: false,
-      required: [
-        "identity",
+        "companyName",
+        "description",
         "services",
         "contacts",
         "hours",
-        "pricingPosture",
-        "humanHandoff",
-        "aiBehavior",
+        "pricingPolicy",
+        "handoffRules",
       ],
       properties: {
-        identity: {
-          type: "object",
-          additionalProperties: false,
-          required: ["businessName", "description", "websiteUrl", "audience"],
-          properties: {
-            businessName: { type: "string" },
-            description: { type: "string" },
-            websiteUrl: { type: "string" },
-            audience: { type: "string" },
-          },
-        },
+        companyName: { type: "string" },
+        description: { type: "string" },
         services: { type: "array", items: { type: "string" } },
         contacts: { type: "array", items: { type: "string" } },
         hours: { type: "array", items: { type: "string" } },
-        pricingPosture: { type: "string" },
-        humanHandoff: { type: "string" },
-        aiBehavior: {
-          type: "object",
-          additionalProperties: false,
-          required: ["languages", "tone", "greetingStyle", "afterHoursBehavior"],
-          properties: {
-            languages: { type: "array", items: { type: "string" } },
-            tone: { type: "string" },
-            greetingStyle: { type: "string" },
-            afterHoursBehavior: { type: "string" },
-          },
-        },
+        pricingPolicy: { type: "string" },
+        handoffRules: { type: "string" },
       },
     },
-    rejectedInputs: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["input", "reason", "suggestedField"],
-        properties: {
-          input: { type: "string" },
-          reason: { type: "string" },
-          suggestedField: { type: "string" },
-        },
-      },
-    },
-    confidence: {
-      type: "object",
-      additionalProperties: false,
-      required: ["strong", "unclear", "contradictions"],
-      properties: {
-        strong: { type: "array", items: { type: "string" } },
-        unclear: { type: "array", items: { type: "string" } },
-        contradictions: { type: "array", items: { type: "string" } },
-      },
-    },
-    recommendation: {
-      type: "object",
-      additionalProperties: false,
-      required: ["notes"],
-      properties: {
-        notes: { type: "array", items: { type: "string" } },
-      },
-    },
-    sourceSignals: {
-      type: "object",
-      additionalProperties: false,
-      required: [
-        "primarySourceType",
-        "primarySourceLabel",
-        "primarySourceUrl",
-        "primarySourceAuthorityClass",
-        "pageCount",
-        "sourceTypes",
-        "strongestEvidence",
-        "discoveredPublicClaims",
-        "companyNameCandidates",
-        "descriptionCandidates",
-        "serviceCandidates",
-        "contactCandidates",
-        "hoursCandidates",
-        "pricingCandidates",
-        "audienceCandidates",
-        "languagesCandidates",
-      ],
-      properties: {
-        primarySourceType: { type: "string" },
-        primarySourceLabel: { type: "string" },
-        primarySourceUrl: { type: "string" },
-        primarySourceAuthorityClass: { type: "string" },
-        pageCount: { type: "number" },
-        sourceTypes: { type: "array", items: { type: "string" } },
-        strongestEvidence: { type: "array", items: { type: "string" } },
-        discoveredPublicClaims: { type: "array", items: { type: "string" } },
-        companyNameCandidates: { type: "array", items: { type: "string" } },
-        descriptionCandidates: { type: "array", items: { type: "string" } },
-        serviceCandidates: { type: "array", items: { type: "string" } },
-        contactCandidates: { type: "array", items: { type: "string" } },
-        hoursCandidates: { type: "array", items: { type: "string" } },
-        pricingCandidates: { type: "array", items: { type: "string" } },
-        audienceCandidates: { type: "array", items: { type: "string" } },
-        languagesCandidates: { type: "array", items: { type: "string" } },
-      },
-    },
-    interviewPlan: {
-      type: "object",
-      additionalProperties: false,
-      required: [
-        "activeQuestionKeys",
-        "activeQuestions",
-        "remainingQuestionKeys",
-        "nextGroup",
-        "nextGroupLabel",
-      ],
-      properties: {
-        activeQuestionKeys: { type: "array", items: { type: "string" } },
-        activeQuestions: {
-          type: "array",
-          items: {
-            type: "object",
-            additionalProperties: false,
-            required: ["key", "step", "title", "group", "groupLabel", "priority"],
-            properties: {
-              key: { type: "string" },
-              step: { type: "string" },
-              title: { type: "string" },
-              group: { type: "string" },
-              groupLabel: { type: "string" },
-              priority: { type: "number" },
-            },
-          },
-        },
-        remainingQuestionKeys: { type: "array", items: { type: "string" } },
-        nextGroup: { type: "string" },
-        nextGroupLabel: { type: "string" },
-      },
-    },
-    aiBehavior: {
-      type: "object",
-      additionalProperties: false,
-      required: ["languages", "tone", "greetingStyle", "afterHoursBehavior"],
-      properties: {
-        languages: { type: "array", items: { type: "string" } },
-        tone: { type: "string" },
-        greetingStyle: { type: "string" },
-        afterHoursBehavior: { type: "string" },
-      },
-    },
-    readyForApproval: { type: "boolean" },
+    assistantReply: { type: "string" },
+    shouldAdvanceStep: { type: "boolean" },
+    invalidReason: { type: "string" },
   },
 };
 
+function extractJsonText(response = {}) {
+  const outputText = s(response?.output_text);
+  if (outputText) return outputText;
+
+  for (const item of arr(response?.output)) {
+    for (const content of arr(item?.content)) {
+      const text =
+        s(content?.text) ||
+        s(content?.value) ||
+        s(content?.json) ||
+        s(content?.parsed);
+      if (text) return text;
+    }
+  }
+
+  return "";
+}
+
 async function callOpenAISetupAssistant({
-  context = {},
+  currentStep = "",
+  question = null,
+  preview = {},
+  latestMessage = "",
   model,
   timeoutMs,
   maxOutputTokens,
@@ -884,9 +528,9 @@ async function callOpenAISetupAssistant({
   const runtime = getSetupAssistantRuntimeConfig();
   const resolvedModel = s(model, runtime.model);
   const resolvedTimeoutMs =
-    Number(timeoutMs || runtime.timeoutMs || 25_000) || 25_000;
+    Number(timeoutMs || runtime.timeoutMs || 8_000) || 8_000;
   const resolvedMaxOutputTokens =
-    Number(maxOutputTokens || runtime.maxOutputTokens || 2200) || 2200;
+    Number(maxOutputTokens || runtime.maxOutputTokens || 500) || 500;
 
   const client = getOpenAIClient();
   if (!client) {
@@ -902,15 +546,20 @@ async function callOpenAISetupAssistant({
       },
       {
         role: "user",
-        content: buildUserPrompt(context),
+        content: buildUserPrompt({
+          currentStep,
+          question,
+          preview,
+          latestMessage,
+        }),
       },
     ],
     text: {
       format: {
         type: "json_schema",
-        name: "setup_assistant_turn",
+        name: "setup_semantic_turn",
         strict: true,
-        schema: SETUP_TURN_SCHEMA,
+        schema: TURN_SCHEMA,
       },
     },
     max_output_tokens: resolvedMaxOutputTokens,
@@ -924,169 +573,90 @@ async function callOpenAISetupAssistant({
 
   const response = await Promise.race([responsePromise, timeoutPromise]);
 
-  const outputText = s(response?.output_text);
-  if (!outputText) {
+  const payload =
+    obj(response?.output_parsed) && Object.keys(obj(response.output_parsed)).length
+      ? response.output_parsed
+      : safeJsonParse(extractJsonText(response), {});
+
+  if (!Object.keys(obj(payload)).length) {
     throw new Error("openai_setup_assistant_empty_output");
   }
 
   return {
     model: resolvedModel,
-    payload: safeJsonParse(outputText, {}),
+    payload,
   };
 }
 
-function buildFallbackShadowTurn({
-  shadow = {},
+function buildFallbackTurn({
+  currentStep = "",
+  preview = {},
   latestMessage = "",
-  latestStep = "",
   error = "",
   model = "",
-}) {
-  const safeShadow = obj(shadow);
-  const readiness = obj(safeShadow.readiness);
-  const fallbackDraft = sanitizeDraft(obj(safeShadow.draft), {});
-  const fallbackSourceSignals = sanitizeSourceSignals(
-    obj(safeShadow.sourceSignals),
-    {}
-  );
-
-  const strong = [];
-  const unclear = [];
-
-  if (s(fallbackDraft.businessName)) strong.push("business_name_present");
-  else unclear.push("business_name_missing");
-
-  if (s(fallbackDraft.whatThisBusinessIs)) strong.push("business_description_present");
-  else unclear.push("business_description_missing");
-
-  if (arr(fallbackDraft.coreServices).length) strong.push("services_present");
-  else unclear.push("services_missing");
-
-  if (arr(fallbackDraft.contactRoutes).length) strong.push("contacts_present");
-  else unclear.push("contacts_missing");
-
-  if (arr(fallbackDraft.hours).length) strong.push("hours_present");
-  else unclear.push("hours_missing");
-
-  if (s(fallbackDraft.pricingPosture)) strong.push("pricing_posture_present");
-  else unclear.push("pricing_posture_missing");
-
-  if (s(fallbackDraft.humanHandoff)) strong.push("handoff_present");
-  else unclear.push("handoff_missing");
+} = {}) {
+  const nextStep = currentStep || findNextStep(preview) || "company";
+  const readyForApproval = looksReadyForApproval(preview);
 
   return {
-    phase: s(safeShadow.phase, "interview"),
+    ok: true,
+    provider: "local_fallback",
+    model: s(model),
+    usedFallback: true,
+    error: s(error),
+    latestUserInput: compactDraftObject({
+      step: currentStep,
+      text: latestMessage,
+    }),
+    phase: readyForApproval ? "ready" : "interview",
     assistantMessage: "",
-    nextQuestion: null,
-    draft: fallbackDraft,
-    acceptedPatch: sanitizeAcceptedPatch({}, fallbackDraft),
+    nextQuestion: readyForApproval ? null : buildQuestion(nextStep),
+    draft: preview,
+    acceptedPatch: {
+      identity: {},
+      services: [],
+      contacts: [],
+      hours: [],
+      pricingPosture: "",
+      humanHandoff: "",
+      aiBehavior: {},
+    },
     rejectedInputs: [],
     confidence: {
-      strong,
-      unclear,
-      contradictions: uniqueStrings(
-        arr(safeShadow.contradictions).map((item) => s(item.message)),
-        12
-      ),
+      strong: [],
+      unclear: [],
+      contradictions: [],
     },
     recommendation: {
       notes: [],
     },
-    sourceSignals: fallbackSourceSignals,
-    interviewPlan: {
-      activeQuestionKeys: [],
-      activeQuestions: [],
-      remainingQuestionKeys: [],
-      nextGroup: "business_truth",
-      nextGroupLabel: "Business truth",
-    },
-    aiBehavior: {
-      languages: uniqueStrings(fallbackDraft.languages, 8),
-      tone: s(fallbackDraft.tone),
-      greetingStyle: s(fallbackDraft.greetingStyle),
-      afterHoursBehavior: s(fallbackDraft.afterHoursBehavior),
-    },
-    readyForApproval: readiness.readyForApproval === true,
-    latestUserInput: compactDraftObject({
-      step: s(latestStep).toLowerCase(),
-      text: s(latestMessage),
+    sourceSignals: buildSourceSignals(preview),
+    interviewPlan: buildInterviewPlan(currentStep, nextStep),
+    aiBehavior: compactDraftObject({
+      languages: arr(preview.languages),
+      tone: s(preview.tone),
+      greetingStyle: s(preview.greetingStyle),
+      afterHoursBehavior: s(preview.afterHoursBehavior),
     }),
-    provider: "local_shadow",
-    model: s(model),
-    usedFallback: true,
-    error: s(error),
+    readyForApproval,
   };
 }
 
-function normalizeTurnResult(
-  payload = {},
-  {
-    shadow = {},
-    latestMessage = "",
-    latestStep = "",
-    provider = "openai",
-    model = "",
-    usedFallback = false,
-    error = "",
-  } = {}
-) {
-  const safeShadow = obj(shadow);
-  const fallbackDraft = sanitizeDraft(obj(safeShadow.draft), {});
-  const fallbackSourceSignals = sanitizeSourceSignals(
-    obj(safeShadow.sourceSignals),
-    {}
-  );
-
-  const normalizedDraft = sanitizeDraft(payload.draft, fallbackDraft);
-  const normalizedQuestion = sanitizeQuestion(payload.nextQuestion, {});
-  const normalizedConfidence = sanitizeConfidence(payload.confidence, {
-    strong: [],
-    unclear: [],
-    contradictions: uniqueStrings(
-      arr(safeShadow.contradictions).map((item) => s(item.message)),
-      12
-    ),
-  });
-  const normalizedRecommendation = sanitizeRecommendation(payload.recommendation, {
-    notes: [],
-  });
-  const normalizedSourceSignals = sanitizeSourceSignals(
-    payload.sourceSignals,
-    fallbackSourceSignals
-  );
-  const normalizedAcceptedPatch = sanitizeAcceptedPatch(
-    payload.acceptedPatch,
-    normalizedDraft
-  );
-  const normalizedInterviewPlan = sanitizeInterviewPlan(payload.interviewPlan, {
-    activeQuestionKeys: normalizedQuestion.key ? [normalizedQuestion.key] : [],
-    activeQuestions: normalizedQuestion.key
-      ? [
-          {
-            key: normalizedQuestion.key,
-            step: normalizedQuestion.step,
-            title: normalizedQuestion.title,
-            group: normalizedQuestion.group,
-            groupLabel: normalizedQuestion.groupLabel,
-            priority: 1,
-          },
-        ]
-      : [],
-    remainingQuestionKeys: [],
-    nextGroup: normalizedQuestion.group || "business_truth",
-    nextGroupLabel: normalizedQuestion.groupLabel || "Business truth",
-  });
-
-  const readyForApproval =
-    payload.readyForApproval === true ||
-    obj(safeShadow.readiness).readyForApproval === true;
-
-  const phase = s(
-    payload.phase,
-    readyForApproval ? "ready" : s(safeShadow.phase, "interview")
-  );
-
-  const assistantMessage = compactText(payload.assistantMessage, 420);
+function normalizeTurnResult({
+  raw = {},
+  currentStep = "",
+  preview = {},
+  latestMessage = "",
+  provider = "openai",
+  model = "",
+  usedFallback = false,
+  error = "",
+} = {}) {
+  const interpreted = sanitizeTurnPayload(raw, currentStep, preview);
+  const nextQuestion =
+    interpreted.readyForApproval === true
+      ? null
+      : buildQuestion(interpreted.nextStep || currentStep || "company");
 
   return {
     ok: true,
@@ -1095,26 +665,43 @@ function normalizeTurnResult(
     usedFallback: usedFallback === true,
     error: s(error),
     latestUserInput: compactDraftObject({
-      step: s(latestStep).toLowerCase(),
-      text: s(latestMessage),
+      step: currentStep,
+      text: latestMessage,
     }),
-    phase,
-    assistantMessage,
-    nextQuestion:
-      normalizedQuestion.key && normalizedQuestion.prompt
-        ? normalizedQuestion
-        : null,
-    draft: normalizedDraft,
-    acceptedPatch: normalizedAcceptedPatch,
-    rejectedInputs: sanitizeRejectedInputs(payload.rejectedInputs),
-    confidence: normalizedConfidence,
-    recommendation: normalizedRecommendation,
-    sourceSignals: normalizedSourceSignals,
-    interviewPlan: normalizedInterviewPlan,
-    aiBehavior: compactDraftObject(
-      payload.aiBehavior || normalizedAcceptedPatch.aiBehavior || {}
-    ),
-    readyForApproval,
+    phase: interpreted.readyForApproval === true ? "ready" : "interview",
+    assistantMessage: s(interpreted.assistantReply),
+    nextQuestion,
+    draft: interpreted.mergedPreview,
+    acceptedPatch: interpreted.acceptedPatch,
+    rejectedInputs:
+      interpreted.isRelevantToCurrentStep === true
+        ? []
+        : [
+            {
+              input: s(latestMessage),
+              reason:
+                s(interpreted.invalidReason) ||
+                "The answer did not match the current setup step.",
+              suggestedField: currentStep,
+            },
+          ],
+    confidence: {
+      strong: interpreted.isRelevantToCurrentStep === true ? [currentStep] : [],
+      unclear: interpreted.isRelevantToCurrentStep === true ? [] : [currentStep],
+      contradictions: [],
+    },
+    recommendation: {
+      notes: [],
+    },
+    sourceSignals: buildSourceSignals(interpreted.mergedPreview),
+    interviewPlan: buildInterviewPlan(currentStep, interpreted.nextStep),
+    aiBehavior: compactDraftObject({
+      languages: arr(preview.languages),
+      tone: s(preview.tone),
+      greetingStyle: s(preview.greetingStyle),
+      afterHoursBehavior: s(preview.afterHoursBehavior),
+    }),
+    readyForApproval: interpreted.readyForApproval === true,
   };
 }
 
@@ -1127,106 +714,71 @@ export async function runSetupAssistantOpenAIOrchestrator({
   latestMessage = "",
   forceFallback = false,
 } = {}) {
+  void sources;
+
   const runtime = getSetupAssistantRuntimeConfig();
-  const shadow = buildLocalShadowState({
-    session,
-    draft,
-    sources,
-    review,
-  });
+  const preview = buildCurrentPreview(draft, review);
+  const currentStep = resolveCurrentStep(session, draft, latestStep) || "company";
+  const currentQuestion = buildQuestion(currentStep);
 
   const shouldForceFallback =
     forceFallback === true || runtime.forceFallback === true;
 
   if (shouldForceFallback || !hasOpenAISetupAssistant()) {
-    return normalizeTurnResult(
-      buildFallbackShadowTurn({
-        shadow,
-        latestMessage,
-        latestStep,
-        error: shouldForceFallback
-          ? "openai_setup_assistant_forced_fallback"
-          : "openai_setup_assistant_unavailable",
-        model: runtime.model,
-      }),
-      {
-        shadow,
-        latestMessage,
-        latestStep,
-        provider: "local_shadow",
-        model: runtime.model,
-        usedFallback: true,
-        error: shouldForceFallback
-          ? "openai_setup_assistant_forced_fallback"
-          : "openai_setup_assistant_unavailable",
-      }
-    );
+    return buildFallbackTurn({
+      currentStep,
+      preview,
+      latestMessage,
+      error: shouldForceFallback
+        ? "openai_setup_assistant_forced_fallback"
+        : "openai_setup_assistant_unavailable",
+      model: runtime.model,
+    });
   }
-
-  const context = buildSetupContext({
-    session,
-    draft,
-    sources,
-    review,
-    latestStep,
-    latestMessage,
-  });
 
   try {
     const openaiResult = await callOpenAISetupAssistant({
-      context,
+      currentStep,
+      question: currentQuestion,
+      preview,
+      latestMessage,
       model: runtime.model,
       timeoutMs: runtime.timeoutMs,
       maxOutputTokens: runtime.maxOutputTokens,
     });
 
-    return normalizeTurnResult(openaiResult.payload, {
-      shadow,
+    return normalizeTurnResult({
+      raw: openaiResult.payload,
+      currentStep,
+      preview,
       latestMessage,
-      latestStep,
       provider: "openai",
       model: openaiResult.model,
       usedFallback: false,
     });
   } catch (error) {
-    return normalizeTurnResult(
-      buildFallbackShadowTurn({
-        shadow,
-        latestMessage,
-        latestStep,
-        error: s(error?.message, "openai_setup_assistant_failed"),
-        model: runtime.model,
-      }),
-      {
-        shadow,
-        latestMessage,
-        latestStep,
-        provider: "local_shadow",
-        model: runtime.model,
-        usedFallback: true,
-        error: s(error?.message, "openai_setup_assistant_failed"),
-      }
-    );
+    return buildFallbackTurn({
+      currentStep,
+      preview,
+      latestMessage,
+      error: s(error?.message, "openai_setup_assistant_failed"),
+      model: runtime.model,
+    });
   }
 }
 
 export const __test__ = {
-  buildSetupContext,
-  buildSystemPrompt,
-  buildUserPrompt,
-  extractRecentConversation,
+  buildCurrentPreview,
+  applyAcceptedPatchToPreview,
+  stepSatisfied,
+  resolveCurrentStep,
+  findNextStep,
+  looksReadyForApproval,
+  sanitizeTurnPayload,
   normalizeTurnResult,
-  sanitizeAcceptedPatch,
-  sanitizeDraft,
-  sanitizeInterviewPlan,
-  sanitizeQuestion,
-  sanitizeSourceSignals,
-  hasOpenAISetupAssistant,
+  buildFallbackTurn,
   getSetupAssistantRuntimeConfig,
-  callOpenAISetupAssistant,
-  detectLikelyReplyLanguage,
-  buildFallbackShadowTurn,
-  buildLocalShadowState,
+  hasOpenAISetupAssistant,
   setCachedClient(client = null) {
     cachedClient = client;
   },
