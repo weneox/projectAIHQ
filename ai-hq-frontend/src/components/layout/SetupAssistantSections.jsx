@@ -1,17 +1,9 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import {
-  AlertCircle,
-  ArrowRight,
-  ArrowUp,
-  LoaderCircle,
-  Sparkles,
-} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, ArrowUp, LoaderCircle, Sparkles } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { resolveSetupSourceInput } from "./setupSourceIntake.js";
 
-const STORAGE_PREFIX = "setup_assistant_chat_v3";
-const DEFAULT_COMPOSER_PLACEHOLDER =
-  "Share the business in your own words, or paste the best public source you have.";
+const DEFAULT_COMPOSER_PLACEHOLDER = "Write a message";
 
 function s(value, fallback = "") {
   return String(value ?? fallback).trim();
@@ -58,7 +50,7 @@ function normalizeQuestion(value = {}) {
     step: s(source.step || source.key).toLowerCase(),
     title: s(source.title),
     prompt: s(source.prompt),
-    placeholder: s(source.placeholder) || DEFAULT_COMPOSER_PLACEHOLDER,
+    placeholder: s(source.placeholder) || "",
   };
 }
 
@@ -143,9 +135,7 @@ function buildCanonicalAssistantState(reviewPayload = null, assistantState = {})
   const nextQuestion =
     Object.keys(obj(source.nextQuestion)).length > 0
       ? normalizeQuestion(source.nextQuestion)
-      : arr(obj(source.interviewPlan).activeQuestions).length
-        ? normalizeQuestion(arr(obj(source.interviewPlan).activeQuestions)[0])
-        : null;
+      : null;
 
   const timeline = arr(
     source.timeline ||
@@ -240,97 +230,19 @@ function hasStrongDraft(model = {}) {
 }
 
 function buildAssistantMeta(model = {}) {
-  const sourceSignals = obj(model.sourceSignals);
   const parts = [];
 
-  if (s(sourceSignals.primarySourceLabel)) {
-    parts.push(s(sourceSignals.primarySourceLabel));
-  }
-
-  if (s(sourceSignals.primarySourceUrl)) {
-    parts.push(s(sourceSignals.primarySourceUrl));
-  }
-
   if (model.usedFallback === true) {
-    parts.push("Degraded reasoning mode");
+    parts.push("Fallback mode");
+  }
+
+  if (s(model.provider) && s(model.model)) {
+    parts.push(`${s(model.provider)} · ${s(model.model)}`);
+  } else if (s(model.provider)) {
+    parts.push(s(model.provider));
   }
 
   return parts.join(" · ");
-}
-
-function getConversationStorageKey(storageKey = "") {
-  return `${STORAGE_PREFIX}:${s(storageKey, "default")}`;
-}
-
-function makeTranscriptEntry(entry = {}) {
-  return {
-    id: s(entry.id) || `msg-${Date.now()}`,
-    role: s(entry.role) || "assistant",
-    body: s(entry.body),
-    meta: s(entry.meta),
-  };
-}
-
-function loadStoredTranscript(storageKey = "") {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const raw = window.sessionStorage.getItem(getConversationStorageKey(storageKey));
-    return arr(JSON.parse(raw || "[]"))
-      .map((item, index) =>
-        makeTranscriptEntry({
-          id: s(item.id) || `msg-${index + 1}`,
-          role: s(item.role),
-          body: s(item.body),
-          meta: s(item.meta),
-        })
-      )
-      .filter((item) => item.body);
-  } catch {
-    return [];
-  }
-}
-
-function saveStoredTranscript(storageKey = "", transcript = []) {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.sessionStorage.setItem(
-      getConversationStorageKey(storageKey),
-      JSON.stringify(
-        arr(transcript).map((item) => ({
-          id: s(item.id),
-          role: s(item.role),
-          body: s(item.body),
-          meta: s(item.meta),
-        }))
-      )
-    );
-  } catch {
-    return;
-  }
-}
-
-function transcriptReducer(state, action) {
-  if (action?.type === "append") {
-    return [...arr(state), makeTranscriptEntry(action.entry)];
-  }
-
-  if (action?.type === "replace") {
-    return arr(action.entries).map(makeTranscriptEntry);
-  }
-
-  if (action?.type === "reset") {
-    return [];
-  }
-
-  return arr(state);
-}
-
-function pendingTurnReducer(_state, action) {
-  if (action?.type === "show") return true;
-  if (action?.type === "hide") return false;
-  return false;
 }
 
 function bubbleClasses(role = "assistant") {
@@ -456,10 +368,8 @@ function SmartDraftCard({ model, finalizing, onFinalize }) {
   );
 }
 
-function StatusNotice({ model }) {
-  const error = s(model.error);
-
-  if (model.usedFallback !== true && !error) {
+function StatusNotice({ error = "", usedFallback = false }) {
+  if (!usedFallback && !s(error)) {
     return null;
   }
 
@@ -470,77 +380,11 @@ function StatusNotice({ model }) {
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
             <div className="font-medium">
-              {model.usedFallback === true
-                ? "Degraded setup reasoning mode is active."
-                : "Setup assistant reported an issue."}
+              {usedFallback === true
+                ? "Fallback mode is active."
+                : "The assistant reported an issue."}
             </div>
-            {error ? <div className="mt-0.5">{compactText(error, 180)}</div> : null}
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-function IntroActionButton({
-  label = "",
-  intent = "",
-  variant = "primary",
-  onClick,
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        variant === "primary"
-          ? "inline-flex h-11 items-center justify-center rounded-full bg-slate-950 px-5 text-[13px] font-semibold text-white transition-transform hover:scale-[1.01]"
-          : "inline-flex h-11 items-center justify-center rounded-full border border-[rgba(15,23,42,0.08)] bg-white px-5 text-[13px] font-semibold text-text transition-colors hover:bg-[rgba(15,23,42,0.03)]"
-      }
-      data-intent={intent}
-    >
-      <span>{label}</span>
-      <ArrowRight className="ml-2 h-4 w-4" strokeWidth={2.2} />
-    </button>
-  );
-}
-
-function IntroAssistantCard({
-  message = "",
-  primaryAction = null,
-  secondaryAction = null,
-  onPrimaryAction,
-  onSecondaryAction,
-}) {
-  const primary = obj(primaryAction);
-  const secondary = obj(secondaryAction);
-
-  return (
-    <motion.div variants={bubbleMotion} initial="hidden" animate="visible">
-      <div className="flex justify-start">
-        <div className="max-w-[88%] rounded-[28px] rounded-bl-[10px] border border-[rgba(15,23,42,0.07)] bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,250,252,0.98))] px-5 py-5 shadow-[0_14px_32px_rgba(15,23,42,0.06)]">
-          <div className="whitespace-pre-wrap text-[15px] leading-7 text-text">
-            {message}
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-3">
-            {s(primary.label) ? (
-              <IntroActionButton
-                label={primary.label}
-                intent={primary.intent}
-                variant="secondary"
-                onClick={onPrimaryAction}
-              />
-            ) : null}
-
-            {s(secondary.label) ? (
-              <IntroActionButton
-                label={secondary.label}
-                intent={secondary.intent}
-                variant="primary"
-                onClick={onSecondaryAction}
-              />
-            ) : null}
+            {s(error) ? <div className="mt-0.5">{compactText(error, 180)}</div> : null}
           </div>
         </div>
       </div>
@@ -602,7 +446,6 @@ function Composer({
 }
 
 function SetupAssistantSectionsContent({
-  storageKey = "default",
   sessionHydrated = false,
   assistant,
   reviewPayload = null,
@@ -613,31 +456,14 @@ function SetupAssistantSectionsContent({
   onCaptureSource,
   onParseMessage,
   onFinalize,
-  onPrimaryAction,
-  onSecondaryAction,
 }) {
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
-  const pendingTurnRef = useRef(null);
-  const responseFingerprintRef = useRef("");
-  const serverTimelineFingerprintRef = useRef("");
-
   const [composerValue, setComposerValue] = useState("");
   const [localError, setLocalError] = useState("");
-  const [transcript, dispatchTranscript] = useReducer(
-    transcriptReducer,
-    storageKey,
-    loadStoredTranscript
-  );
-  const [hasPendingTurn, dispatchPendingTurn] = useReducer(
-    pendingTurnReducer,
-    false
-  );
+  const [pendingUserMessage, setPendingUserMessage] = useState("");
 
   const busy = saving || finalizing || capturingSource;
-
-  const primaryAction = obj(assistant?.primaryAction);
-  const secondaryAction = obj(assistant?.secondaryAction);
 
   const finalModel = useMemo(
     () => buildFinalViewModel(reviewPayload, assistant),
@@ -651,10 +477,8 @@ function SetupAssistantSectionsContent({
 
   const currentQuestion = finalModel.nextQuestion;
 
-  const canonicalAssistantMessage = s(finalModel.message);
-  const canonicalAssistantMeta = buildAssistantMeta(finalModel);
   const serverTimeline = useMemo(
-    () => arr(finalModel.timeline).map((item) => makeTranscriptEntry(item)),
+    () => arr(finalModel.timeline).map(normalizeTimelineEntry),
     [finalModel.timeline]
   );
 
@@ -677,52 +501,28 @@ function SetupAssistantSectionsContent({
   }, [finalModel]);
 
   const sourceSubmitted = Boolean(
-    hasExistingProgress ||
-      serverTimeline.some((item) => item.role === "user") ||
-      transcript.some((item) => item.role === "user")
-  );
-
-  const showIntroCard = Boolean(
-    sessionHydrated &&
-      !sourceSubmitted &&
-      !serverTimeline.length &&
-      transcript.length === 0 &&
-      canonicalAssistantMessage
+    hasExistingProgress || serverTimeline.some((item) => item.role === "user")
   );
 
   const composerPlaceholder = useMemo(() => {
-    if (currentQuestion?.placeholder) return currentQuestion.placeholder;
-    if (currentQuestion?.prompt) return currentQuestion.prompt;
+    if (s(currentQuestion?.prompt)) return currentQuestion.prompt;
     return DEFAULT_COMPOSER_PLACEHOLDER;
   }, [currentQuestion]);
 
-  useEffect(() => {
-    saveStoredTranscript(storageKey, transcript);
-  }, [storageKey, transcript]);
+  const assistantMeta = useMemo(() => buildAssistantMeta(finalModel), [finalModel]);
+
+  const showEphemeralAssistantBubble = Boolean(
+    sessionHydrated &&
+      serverTimeline.length === 0 &&
+      s(finalModel.message) &&
+      !pendingUserMessage
+  );
 
   useEffect(() => {
-    if (!sessionHydrated) return;
-    if (!serverTimeline.length) return;
-
-    const fingerprint = JSON.stringify(
-      serverTimeline.map((item) => ({
-        role: item.role,
-        body: item.body,
-        meta: item.meta,
-      }))
-    );
-
-    if (serverTimelineFingerprintRef.current === fingerprint) return;
-
-    serverTimelineFingerprintRef.current = fingerprint;
-    responseFingerprintRef.current = fingerprint;
-    pendingTurnRef.current = null;
-    dispatchPendingTurn({ type: "hide" });
-    dispatchTranscript({
-      type: "replace",
-      entries: serverTimeline,
-    });
-  }, [sessionHydrated, serverTimeline]);
+    if (!busy) {
+      setPendingUserMessage("");
+    }
+  }, [busy]);
 
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -731,91 +531,13 @@ function SetupAssistantSectionsContent({
       behavior: "smooth",
     });
   }, [
-    transcript,
+    serverTimeline,
+    pendingUserMessage,
     busy,
     localError,
     errorMessage,
     smartDraftReady,
-    canonicalAssistantMessage,
-    showIntroCard,
-  ]);
-
-  useEffect(() => {
-    if (!sessionHydrated) return;
-    if (!pendingTurnRef.current) return;
-    if (busy) return;
-
-    const lastTranscriptItem = transcript[transcript.length - 1];
-    const serverLast = serverTimeline[serverTimeline.length - 1];
-
-    if (
-      serverLast &&
-      serverLast.role === "assistant" &&
-      s(serverLast.body) === canonicalAssistantMessage
-    ) {
-      pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
-      return;
-    }
-
-    if (
-      lastTranscriptItem &&
-      lastTranscriptItem.role === "assistant" &&
-      s(lastTranscriptItem.body) === canonicalAssistantMessage &&
-      s(lastTranscriptItem.meta) === canonicalAssistantMeta
-    ) {
-      pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
-      return;
-    }
-
-    const fingerprint = JSON.stringify({
-      body: canonicalAssistantMessage,
-      meta: canonicalAssistantMeta,
-      questionKey: s(currentQuestion?.key),
-      phase: s(finalModel.phase),
-      ready: finalModel.readyForApproval === true,
-      provider: s(finalModel.provider),
-      model: s(finalModel.model),
-      usedFallback: finalModel.usedFallback === true,
-      error: s(finalModel.error),
-    });
-
-    if (!canonicalAssistantMessage) {
-      pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
-      return;
-    }
-
-    if (responseFingerprintRef.current === fingerprint) {
-      pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
-      return;
-    }
-
-    responseFingerprintRef.current = fingerprint;
-
-    dispatchTranscript({
-      type: "append",
-      entry: {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        body: canonicalAssistantMessage,
-        meta: canonicalAssistantMeta,
-      },
-    });
-
-    pendingTurnRef.current = null;
-    dispatchPendingTurn({ type: "hide" });
-  }, [
-    sessionHydrated,
-    busy,
-    canonicalAssistantMessage,
-    canonicalAssistantMeta,
-    currentQuestion,
-    finalModel,
-    transcript,
-    serverTimeline,
+    showEphemeralAssistantBubble,
   ]);
 
   async function handleInitialSourceSubmit() {
@@ -823,21 +545,9 @@ function SetupAssistantSectionsContent({
     if (!text || busy) return;
 
     const resolvedSource = resolveSetupSourceInput(text);
-    const turnId = `turn-${Date.now()}`;
 
     setLocalError("");
-    pendingTurnRef.current = turnId;
-    dispatchPendingTurn({ type: "show" });
-
-    dispatchTranscript({
-      type: "append",
-      entry: {
-        id: `user-source-${Date.now()}`,
-        role: "user",
-        body: text,
-      },
-    });
-
+    setPendingUserMessage(text);
     setComposerValue("");
 
     try {
@@ -847,8 +557,7 @@ function SetupAssistantSectionsContent({
         message: text,
       });
     } catch (error) {
-      pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
+      setPendingUserMessage("");
       setLocalError(s(error?.message, "Source intake failed."));
     }
   }
@@ -857,21 +566,8 @@ function SetupAssistantSectionsContent({
     const text = s(composerValue);
     if (!text || busy) return;
 
-    const turnId = `turn-${Date.now()}`;
-
     setLocalError("");
-    pendingTurnRef.current = turnId;
-    dispatchPendingTurn({ type: "show" });
-
-    dispatchTranscript({
-      type: "append",
-      entry: {
-        id: `user-message-${Date.now()}`,
-        role: "user",
-        body: text,
-      },
-    });
-
+    setPendingUserMessage(text);
     setComposerValue("");
 
     try {
@@ -880,12 +576,11 @@ function SetupAssistantSectionsContent({
         message: text,
         text,
         value: text,
-        step: s(currentQuestion?.step || currentQuestion?.key),
+        step: s(currentQuestion?.step || currentQuestion?.key || "profile"),
         questionKey: s(currentQuestion?.key),
       });
     } catch (error) {
-      pendingTurnRef.current = null;
-      dispatchPendingTurn({ type: "hide" });
+      setPendingUserMessage("");
       setLocalError(s(error?.message, "Message processing failed."));
     }
   }
@@ -899,75 +594,45 @@ function SetupAssistantSectionsContent({
     handleMessageSubmit();
   }
 
-  function handleStartSetupAction() {
-    onSecondaryAction?.(secondaryAction);
-    requestAnimationFrame(() => {
-      textareaRef.current?.focus();
-    });
-  }
-
-  function handlePrimaryActionClick() {
-    onPrimaryAction?.(primaryAction);
-  }
-
-  const showBootBubble =
-    !showIntroCard &&
-    transcript.length === 0 &&
-    serverTimeline.length === 0 &&
-    sessionHydrated &&
-    !busy &&
-    !smartDraftReady &&
-    canonicalAssistantMessage;
-
   return (
     <div className="flex h-full min-h-0 flex-col bg-[linear-gradient(180deg,#ffffff,#f8fafc)]">
       <div ref={scrollRef} className="flex-1 overflow-auto px-5 pt-5">
         <div className="space-y-4 pb-4">
-          <StatusNotice model={finalModel} />
-
-          {showIntroCard ? (
-            <IntroAssistantCard
-              message={canonicalAssistantMessage}
-              primaryAction={primaryAction}
-              secondaryAction={secondaryAction}
-              onPrimaryAction={handlePrimaryActionClick}
-              onSecondaryAction={handleStartSetupAction}
-            />
-          ) : null}
+          <StatusNotice
+            error={localError || errorMessage || finalModel.error}
+            usedFallback={finalModel.usedFallback === true}
+          />
 
           <AnimatePresence initial={false}>
-            {transcript.map((item) => (
+            {serverTimeline.map((item) => (
               <ChatBubble
                 key={item.id}
                 role={item.role}
                 body={item.body}
-                meta={item.meta}
+                meta={item.role === "assistant" ? item.meta : ""}
               />
             ))}
           </AnimatePresence>
 
-          {showBootBubble ? (
+          {pendingUserMessage ? (
+            <ChatBubble role="user" body={pendingUserMessage} />
+          ) : null}
+
+          {showEphemeralAssistantBubble ? (
             <ChatBubble
               role="assistant"
-              body={canonicalAssistantMessage}
-              meta={canonicalAssistantMeta}
+              body={finalModel.message}
+              meta={assistantMeta}
             />
           ) : null}
 
-          {hasPendingTurn && (saving || capturingSource) ? <TypingBubble /> : null}
+          {busy ? <TypingBubble /> : null}
 
           {smartDraftReady ? (
             <SmartDraftCard
               model={finalModel}
               finalizing={finalizing}
               onFinalize={onFinalize}
-            />
-          ) : null}
-
-          {s(localError || errorMessage) ? (
-            <ChatBubble
-              role="assistant"
-              body={localError || errorMessage}
             />
           ) : null}
         </div>
@@ -988,13 +653,5 @@ function SetupAssistantSectionsContent({
 }
 
 export default function SetupAssistantSections(props) {
-  const storageKey = s(props.storageKey, "default") || "default";
-
-  return (
-    <SetupAssistantSectionsContent
-      key={storageKey}
-      {...props}
-      storageKey={storageKey}
-    />
-  );
+  return <SetupAssistantSectionsContent {...props} />;
 }

@@ -3,9 +3,12 @@ import OpenAI from "openai";
 import { cfg } from "../../../config.js";
 import { arr, compactDraftObject, obj, s } from "./draftShared.js";
 import {
-  buildSetupAssistantBrainState,
-  buildSetupAssistantFirstPrompt,
-} from "./assistantBrain.js";
+  buildSetupDraftStateFromSignals,
+  buildSetupSourceCoverage,
+  buildSetupSourceLead,
+  buildSetupSourceSignals,
+  detectSetupSignalContradictions,
+} from "./setupAssistantApp/sourceSignals.js";
 
 let cachedClient = null;
 
@@ -61,11 +64,17 @@ function uniqueStrings(items = [], max = 24) {
   );
 }
 
+function compactText(value = "", max = 280) {
+  const text = s(value).replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length <= max ? text : `${text.slice(0, max - 1).trim()}…`;
+}
+
 function sanitizeQuestion(value = {}, fallback = {}) {
   const source = obj(value);
   const next = compactDraftObject({
-    key: s(source.key || fallback.key),
-    step: s(source.step || source.key || fallback.step || fallback.key),
+    key: s(source.key || fallback.key).toLowerCase(),
+    step: s(source.step || source.key || fallback.step || fallback.key).toLowerCase(),
     title: s(source.title || fallback.title),
     prompt: s(source.prompt || fallback.prompt),
     group: s(source.group || fallback.group || "business_truth"),
@@ -253,8 +262,8 @@ function sanitizeInterviewPlan(value = {}, fallback = {}) {
   const activeQuestions = arr(source.activeQuestions || safeFallback.activeQuestions)
     .map((item) =>
       compactDraftObject({
-        key: s(item?.key),
-        step: s(item?.step || item?.key),
+        key: s(item?.key).toLowerCase(),
+        step: s(item?.step || item?.key).toLowerCase(),
         title: s(item?.title),
         group: s(item?.group || "business_truth"),
         groupLabel: s(item?.groupLabel || "Business truth"),
@@ -271,108 +280,14 @@ function sanitizeInterviewPlan(value = {}, fallback = {}) {
     activeQuestions,
     remainingQuestionKeys: uniqueStrings(
       source.remainingQuestionKeys ||
-        activeQuestions.map((item) => item.key),
+        activeQuestions
+          .map((item) => item.key)
+          .filter((key) => !activeQuestions.find((q) => q.key === key)),
       12
     ),
     nextGroup: s(source.nextGroup || safeFallback.nextGroup),
     nextGroupLabel: s(source.nextGroupLabel || safeFallback.nextGroupLabel),
   });
-}
-
-function detectLikelyReplyLanguage(_latestMessage = "", _recentConversation = []) {
-  return "follow_latest_user_language";
-}
-
-function normalizeTurnResult(
-  payload = {},
-  {
-    fallbackBrain = {},
-    latestMessage = "",
-    latestStep = "",
-    provider = "fallback",
-    model = "",
-    usedFallback = false,
-    error = "",
-  } = {}
-) {
-  const fallback = obj(fallbackBrain);
-
-  const normalizedDraft = sanitizeDraft(payload.draft, obj(fallback.draft));
-  const normalizedQuestion = sanitizeQuestion(
-    payload.nextQuestion,
-    obj(fallback.nextQuestion)
-  );
-  const normalizedConfidence = sanitizeConfidence(
-    payload.confidence,
-    obj(fallback.confidence)
-  );
-  const normalizedRecommendation = sanitizeRecommendation(
-    payload.recommendation,
-    obj(fallback.recommendation)
-  );
-  const normalizedSourceSignals = sanitizeSourceSignals(
-    payload.sourceSignals,
-    obj(fallback.sourceSignals)
-  );
-  const normalizedAcceptedPatch = sanitizeAcceptedPatch(
-    payload.acceptedPatch,
-    normalizedDraft
-  );
-  const normalizedInterviewPlan = sanitizeInterviewPlan(
-    payload.interviewPlan,
-    obj(fallback.interviewPlan)
-  );
-
-  const readyForApproval =
-    payload.readyForApproval === true ||
-    (usedFallback ? fallback.readyForApproval === true : false);
-
-  const phase = s(
-    payload.phase,
-    readyForApproval ? "ready" : s(fallback.phase, "interview")
-  );
-
-  const assistantMessage = s(
-    payload.assistantMessage,
-    s(fallback.assistantMessage, "")
-  );
-
-  const allowNullQuestion =
-    readyForApproval === true &&
-    !s(obj(payload.nextQuestion).key) &&
-    !s(obj(payload.nextQuestion).prompt);
-
-  return {
-    ok: true,
-    provider,
-    model: s(model),
-    usedFallback: usedFallback === true,
-    error: s(error),
-    latestUserInput: compactDraftObject({
-      step: s(latestStep),
-      text: s(latestMessage),
-    }),
-    phase,
-    assistantMessage,
-    nextQuestion: allowNullQuestion
-      ? null
-      : normalizedQuestion.key && normalizedQuestion.prompt
-        ? normalizedQuestion
-        : null,
-    draft: normalizedDraft,
-    acceptedPatch: normalizedAcceptedPatch,
-    rejectedInputs: sanitizeRejectedInputs(payload.rejectedInputs),
-    confidence: normalizedConfidence,
-    recommendation: normalizedRecommendation,
-    sourceSignals: normalizedSourceSignals,
-    interviewPlan: normalizedInterviewPlan,
-    aiBehavior: compactDraftObject(
-      payload.aiBehavior ||
-        fallback.aiBehavior ||
-        normalizedAcceptedPatch.aiBehavior
-    ),
-    readyForApproval,
-  };
 }
 
 function normalizeEventText(value = "") {
@@ -381,6 +296,7 @@ function normalizeEventText(value = "") {
 
 function extractRecentConversation(review = {}, latestStep = "", latestMessage = "") {
   const root = obj(review);
+
   const candidates = [
     ...arr(root.events),
     ...arr(root.review?.events),
@@ -411,39 +327,172 @@ function extractRecentConversation(review = {}, latestStep = "", latestMessage =
       });
     })
     .filter((item) => item.text)
-    .slice(-12);
+    .slice(-14);
 
   if (s(latestMessage)) {
     normalized.push({
       role: "user",
       text: normalizeEventText(latestMessage),
-      step: s(latestStep),
+      step: s(latestStep).toLowerCase(),
       createdAt: null,
     });
   }
 
-  return normalized.slice(-14);
+  return normalized.slice(-16);
 }
 
-function buildReadinessRubric() {
+function detectLikelyReplyLanguage(latestMessage = "", recentConversation = []) {
+  const latest = s(latestMessage);
+  const recentUser = arr(recentConversation)
+    .filter((item) => s(item.role).toLowerCase() === "user")
+    .map((item) => s(item.text))
+    .join(" ");
+
+  const combined = `${latest} ${recentUser}`.trim().toLowerCase();
+
+  if (!combined) return "follow_latest_user_language";
+
+  if (/[əğıöşçü]/i.test(combined)) return "az";
+  if (/\b(mən|sən|biz|və|üçün|deyil|niyə|harada|necə|edir|edirik|olsun)\b/i.test(combined)) {
+    return "az";
+  }
+  if (/[а-яё]/i.test(combined)) return "ru";
+  if (/\b(ben|sen|biz|ve|için|değil|neden|nasıl)\b/i.test(combined)) {
+    return "tr";
+  }
+  if (/\b(the|and|what|why|how|business|setup)\b/i.test(combined)) {
+    return "en";
+  }
+
+  return "follow_latest_user_language";
+}
+
+function buildReadinessScore({
+  draftState = {},
+  sourceCoverage = {},
+  contradictions = [],
+}) {
+  const identityReady = Boolean(
+    s(draftState.businessName) &&
+      s(draftState.description) &&
+      (s(draftState.websiteUrl) || sourceCoverage.primarySourceExists === true)
+  );
+
+  const servicesReady = arr(draftState.services).length > 0;
+  const contactsReady = arr(draftState.contacts).length > 0;
+  const hoursReady = arr(draftState.hours).length > 0;
+  const pricingReady = Boolean(s(draftState.pricingPosture));
+  const handoffReady = Boolean(s(draftState.humanHandoff));
+  const contradictionCount = arr(contradictions).length;
+
+  const readyCount = [
+    identityReady,
+    servicesReady,
+    contactsReady,
+    hoursReady,
+    pricingReady,
+    handoffReady,
+  ].filter(Boolean).length;
+
   return {
-    identity: [
-      "Exact public business name",
-      "One clean description of what the business does",
-      "Website or another reliable public identity source",
-    ],
-    services: [
-      "Real customer-facing services only",
-      "Avoid generic labels, vague capabilities, channels, or adjectives",
-    ],
-    contacts: ["At least one primary public customer contact lane"],
-    hours: ["Public hours, or an explicit appointment-only / 24-7 posture"],
-    pricing: [
-      "Safe public pricing posture",
-      "Whether exact quotes require operator involvement",
-    ],
-    handoff: ["Clear human escalation cases"],
-    aiBehavior: ["Tone or language only if confidently known"],
+    identityReady,
+    servicesReady,
+    contactsReady,
+    hoursReady,
+    pricingReady,
+    handoffReady,
+    readyCount,
+    contradictionCount,
+    readyForApproval:
+      contradictionCount === 0 &&
+      identityReady &&
+      servicesReady &&
+      contactsReady &&
+      hoursReady &&
+      pricingReady &&
+      handoffReady,
+  };
+}
+
+function buildLocalShadowState({
+  session = {},
+  draft = {},
+  sources = [],
+  review = null,
+}) {
+  const sourceSignals = buildSetupSourceSignals({
+    session,
+    draft,
+    sources,
+    review,
+  });
+
+  const sourceCoverage = buildSetupSourceCoverage(sourceSignals);
+
+  const draftState = buildSetupDraftStateFromSignals({
+    draft,
+    review,
+    sourceSignals,
+  });
+
+  const contradictions = detectSetupSignalContradictions({
+    draftState,
+    sourceSignals,
+  });
+
+  const readiness = buildReadinessScore({
+    draftState,
+    sourceCoverage,
+    contradictions,
+  });
+
+  const phase = !(
+    s(draftState.businessName) ||
+    s(draftState.description) ||
+    s(draftState.websiteUrl) ||
+    arr(draftState.services).length ||
+    arr(draftState.contacts).length ||
+    arr(draftState.hours).length ||
+    s(draftState.pricingPosture) ||
+    s(draftState.humanHandoff) ||
+    s(sourceSignals.primarySourceUrl) ||
+    arr(sourceSignals.sourceTypes).length
+  )
+    ? "source_capture"
+    : readiness.readyForApproval
+      ? "ready"
+      : "interview";
+
+  return {
+    phase,
+    draft: {
+      businessName: s(draftState.businessName),
+      whatThisBusinessIs: s(draftState.description),
+      websiteUrl: s(draftState.websiteUrl),
+      coreServices: uniqueStrings(draftState.services, 16),
+      audience: s(draftState.audience),
+      pricingPosture: s(draftState.pricingPosture),
+      contactRoutes: uniqueStrings(draftState.contacts, 12),
+      humanHandoff: s(draftState.humanHandoff),
+      languages: uniqueStrings(draftState.languages, 8),
+      tone: s(draftState.tone),
+      hours: uniqueStrings(draftState.hours, 12),
+      greetingStyle: s(draftState.greetingStyle),
+      afterHoursBehavior: s(draftState.afterHoursBehavior),
+    },
+    sourceSignals: sanitizeSourceSignals(sourceSignals, {}),
+    sourceCoverage,
+    contradictions: arr(contradictions)
+      .map((item) =>
+        compactDraftObject({
+          key: s(item.key),
+          severity: s(item.severity),
+          message: s(item.message),
+        })
+      )
+      .filter((item) => item.message),
+    readiness,
+    sourceLead: buildSetupSourceLead(sourceSignals),
   };
 }
 
@@ -454,9 +503,7 @@ function buildSetupContext({
   review = null,
   latestStep = "",
   latestMessage = "",
-  fallbackBrain = {},
 }) {
-  const safeFallbackBrain = obj(fallbackBrain);
   const safeDraft = obj(draft);
   const safeReview = obj(review);
   const reviewDraft = obj(safeReview.review?.draft || safeReview.draft);
@@ -465,21 +512,47 @@ function buildSetupContext({
     latestStep,
     latestMessage
   );
+  const replyLanguage = detectLikelyReplyLanguage(latestMessage, recentConversation);
+  const shadow = buildLocalShadowState({
+    session,
+    draft,
+    sources,
+    review,
+  });
 
   return {
     mission:
-      "Act like a world-class setup strategist for a serious business AI system. Understand the business deeply, extract multiple grounded facts from one reply when justified, and only ask a next question when it is truly necessary.",
-    replyStyle: {
-      language: "follow_latest_user_language",
+      "You are the real setup brain for a serious business AI system. Understand the business deeply, extract multiple grounded facts from one reply when justified, and only ask the next question when it is truly necessary.",
+    replyRules: {
+      speakIn: replyLanguage,
+      hardRule:
+        "Always answer in the user's latest language. If the latest user language is Azerbaijani, answer in Azerbaijani. Do not default to English unless the user is speaking English.",
       maxQuestionsPerTurn: 1,
       concise: true,
       conversational: true,
-      nonWizard: true,
+      natural: true,
       nonTemplate: true,
-      avoidRepetition: true,
+      nonWizard: true,
       avoidBoilerplate: true,
+      avoidRepeatingTheSameQuestion: true,
+      avoidReAskingKnownFacts: true,
+      noGenericSetupPhrases: true,
     },
-    readinessRubric: buildReadinessRubric(),
+    readinessDefinition: {
+      identity: [
+        "exact public business name",
+        "one clean description of what the business does",
+        "main website only if it truly exists, otherwise do not force it",
+      ],
+      services: [
+        "real customer-facing services only",
+        "no vague capabilities, no buzzwords, no channels presented as services",
+      ],
+      contacts: ["at least one real public customer contact route"],
+      hours: ["public hours or explicit appointment-only / always-open posture"],
+      pricing: ["safe public pricing answer rule"],
+      handoff: ["clear cases where AI must escalate to a human"],
+    },
     session: compactDraftObject({
       id: s(session.id),
       mode: s(session.mode),
@@ -488,7 +561,7 @@ function buildSetupContext({
       draftVersion: Number(session.draftVersion || 0) || 0,
     }),
     latestUserInput: compactDraftObject({
-      step: s(latestStep),
+      step: s(latestStep).toLowerCase(),
       text: s(latestMessage),
     }),
     recentConversation,
@@ -503,15 +576,7 @@ function buildSetupContext({
       assistantState: obj(safeDraft.assistantState),
       progress: obj(safeDraft.progress),
     }),
-    sourceSignals: sanitizeSourceSignals(safeFallbackBrain.sourceSignals, {}),
-    draftPreview: sanitizeDraft(safeFallbackBrain.draft, {}),
-    currentBrainAssessment: {
-      phase: s(safeFallbackBrain.phase),
-      readyForApproval: safeFallbackBrain.readyForApproval === true,
-      nextQuestion: sanitizeQuestion(safeFallbackBrain.nextQuestion, {}),
-      confidence: sanitizeConfidence(safeFallbackBrain.confidence, {}),
-      recommendation: sanitizeRecommendation(safeFallbackBrain.recommendation, {}),
-    },
+    shadow,
     sources: arr(sources)
       .map((item) =>
         compactDraftObject({
@@ -531,23 +596,24 @@ function buildSetupContext({
 
 function buildSystemPrompt() {
   return [
-    "You are the primary setup brain for a serious business AI platform.",
-    "You are not a wizard, not a form filler, and not a scripted onboarding bot.",
-    "Your job is to understand the business deeply from sources, current draft state, and the user's latest natural-language reply.",
-    "Extract as many grounded facts as one reply safely allows.",
-    "Do not reduce a rich reply into one tiny field if the message clearly contains multiple usable facts.",
-    "Do not repeat already grounded facts.",
-    "Do not ask a follow-up unless it is genuinely necessary for runtime-safe setup readiness.",
-    "Ask at most one next question.",
-    "Always follow the user's latest language.",
-    "Never sound like a template onboarding bot.",
-    "Never use generic filler such as 'current signal', 'recommended', 'let us continue', or rigid wizard wording.",
-    "If the business has no website, do not keep pushing for a website.",
-    "If the user message is weak, challenge it briefly and specifically.",
-    "Services must be real customer-facing services, not vague labels, channels, or buzzwords.",
-    "Convert natural-language hours, pricing policy, and handoff rules into structured business-safe outputs.",
-    "If enough is already known, stop interviewing and mark readyForApproval=true.",
-    "Only output strict JSON that matches the schema.",
+    "You are the primary setup reasoning brain for a premium business AI platform.",
+    "You are not a form wizard, not a scripted onboarding bot, and not a template generator.",
+    "You must understand the business deeply and speak naturally.",
+    "The biggest failure to avoid is canned setup language.",
+    "Never output robotic phrases such as 'current signal', 'next most important gap', 'source already attached', 'continue setup', 'public hours are already present', or other obvious template wording.",
+    "Never repeat the same question in slightly different form if the answer is already reasonably present.",
+    "If one user reply contains multiple facts, extract multiple facts.",
+    "Do not shrink a rich reply into one tiny field.",
+    "If the user speaks Azerbaijani, reply in Azerbaijani.",
+    "If the user speaks another language, follow that language.",
+    "Do not default to English unless the user's latest language is English.",
+    "Only ask one next question, and only when there is a real readiness blocker.",
+    "If enough is already known, set readyForApproval=true and nextQuestion=null.",
+    "Website is optional. Do not push for a website if the business truly does not have one.",
+    "Services must be real customer-facing services.",
+    "Contacts must be real public routes.",
+    "Hours and pricing must be safe and operationally believable.",
+    "Only output strict JSON matching the schema.",
   ].join(" ");
 }
 
@@ -555,25 +621,22 @@ function buildUserPrompt(context = {}) {
   return [
     "Analyze this setup turn.",
     "",
-    "Behavior rules:",
-    "- Treat the user reply as a dense business signal, not as a one-field answer.",
-    "- Pull multiple grounded facts from one message when justified.",
-    "- Prefer understanding and normalization over interrogation.",
-    "- Ask one follow-up only when a true readiness blocker still exists.",
-    "- Keep assistantMessage natural, human, concise, and contextual.",
-    "- Match the user's latest language automatically.",
-    "- Avoid wizard tone, checklist tone, and boilerplate setup copy.",
-    "- If the user says there is no website, accept that and move on.",
-    "- If the user gives several facts at once, accept several facts at once.",
-    "- If a claim is vague, challenge it precisely instead of pretending it is good enough.",
+    "Important behavior:",
+    "- Talk like a sharp human strategist, not a scripted setup tool.",
+    "- Extract grounded facts aggressively but safely.",
+    "- Ask only one question, only if necessary.",
+    "- Do not ask something that is already known from the user's reply, prior conversation, or reliable source evidence.",
+    "- Keep assistantMessage short, natural, and context-aware.",
+    "- Do not use boilerplate wording.",
+    "- If the user gave enough detail, move forward instead of interrogating.",
+    "- If the user gave weak or vague info, challenge it briefly and precisely.",
     "",
-    "Important acceptance rules:",
-    "- identity: exact public business name + clean description",
-    "- services: only real customer-facing offers",
-    "- contacts: real public route customers should use",
-    "- hours: public schedule or explicit appointment-only / always-open posture",
-    "- pricing: safe public answer rule",
-    "- handoff: clear cases where AI must escalate",
+    "Output requirements:",
+    "- assistantMessage must be natural and non-template.",
+    "- nextQuestion must exist only if something important is still missing.",
+    "- acceptedPatch must contain only grounded values you are comfortable applying.",
+    "- rejectedInputs should capture only clearly weak / generic / unusable claims.",
+    "- readyForApproval should become true only when the setup is genuinely strong enough.",
     "",
     "Context JSON:",
     JSON.stringify(context, null, 2),
@@ -594,6 +657,8 @@ const SETUP_TURN_SCHEMA = {
     "recommendation",
     "sourceSignals",
     "readyForApproval",
+    "interviewPlan",
+    "aiBehavior",
   ],
   properties: {
     phase: {
@@ -766,6 +831,50 @@ const SETUP_TURN_SCHEMA = {
         languagesCandidates: { type: "array", items: { type: "string" } },
       },
     },
+    interviewPlan: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "activeQuestionKeys",
+        "activeQuestions",
+        "remainingQuestionKeys",
+        "nextGroup",
+        "nextGroupLabel",
+      ],
+      properties: {
+        activeQuestionKeys: { type: "array", items: { type: "string" } },
+        activeQuestions: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["key", "step", "title", "group", "groupLabel", "priority"],
+            properties: {
+              key: { type: "string" },
+              step: { type: "string" },
+              title: { type: "string" },
+              group: { type: "string" },
+              groupLabel: { type: "string" },
+              priority: { type: "number" },
+            },
+          },
+        },
+        remainingQuestionKeys: { type: "array", items: { type: "string" } },
+        nextGroup: { type: "string" },
+        nextGroupLabel: { type: "string" },
+      },
+    },
+    aiBehavior: {
+      type: "object",
+      additionalProperties: false,
+      required: ["languages", "tone", "greetingStyle", "afterHoursBehavior"],
+      properties: {
+        languages: { type: "array", items: { type: "string" } },
+        tone: { type: "string" },
+        greetingStyle: { type: "string" },
+        afterHoursBehavior: { type: "string" },
+      },
+    },
     readyForApproval: { type: "boolean" },
   },
 };
@@ -785,7 +894,7 @@ async function callOpenAISetupAssistant({
 
   const client = getOpenAIClient();
   if (!client) {
-    throw new Error("OpenAI setup assistant is not configured.");
+    throw new Error("openai_setup_assistant_not_configured");
   }
 
   const controller = new AbortController();
@@ -818,7 +927,7 @@ async function callOpenAISetupAssistant({
 
     const outputText = s(response.output_text);
     if (!outputText) {
-      throw new Error("OpenAI setup assistant returned an empty response.");
+      throw new Error("openai_setup_assistant_empty_output");
     }
 
     return {
@@ -830,53 +939,194 @@ async function callOpenAISetupAssistant({
   }
 }
 
-function buildHonestFallbackTurn(fallbackBrain = {}, latestMessage = "", latestStep = "") {
-  const fallback = obj(fallbackBrain);
-  const nextQuestion = obj(fallback.nextQuestion);
+function buildFallbackShadowTurn({
+  shadow = {},
+  latestMessage = "",
+  latestStep = "",
+  error = "",
+  model = "",
+}) {
+  const safeShadow = obj(shadow);
+  const readiness = obj(safeShadow.readiness);
+  const fallbackDraft = sanitizeDraft(obj(safeShadow.draft), {});
+  const fallbackSourceSignals = sanitizeSourceSignals(
+    obj(safeShadow.sourceSignals),
+    {}
+  );
 
-  let assistantMessage = s(fallback.assistantMessage);
+  const strong = [];
+  const unclear = [];
 
-  if (s(latestMessage)) {
-    assistantMessage =
-      assistantMessage ||
-      (nextQuestion.prompt
-        ? nextQuestion.prompt
-        : "Continue with the next most important setup detail.");
+  if (s(fallbackDraft.businessName)) {
+    strong.push(`name_present:${fallbackDraft.businessName}`);
+  }
+  if (s(fallbackDraft.whatThisBusinessIs)) {
+    strong.push("description_present");
+  }
+  if (arr(fallbackDraft.coreServices).length) {
+    strong.push(`services_present:${arr(fallbackDraft.coreServices).length}`);
+  }
+  if (arr(fallbackDraft.contactRoutes).length) {
+    strong.push("contacts_present");
+  }
+  if (arr(fallbackDraft.hours).length) {
+    strong.push("hours_present");
+  }
+  if (s(fallbackDraft.pricingPosture)) {
+    strong.push("pricing_present");
+  }
+  if (s(fallbackDraft.humanHandoff)) {
+    strong.push("handoff_present");
   }
 
+  if (!readiness.identityReady) unclear.push("identity_missing");
+  if (!readiness.servicesReady) unclear.push("services_missing");
+  if (!readiness.contactsReady) unclear.push("contacts_missing");
+  if (!readiness.hoursReady) unclear.push("hours_missing");
+  if (!readiness.pricingReady) unclear.push("pricing_missing");
+  if (!readiness.handoffReady) unclear.push("handoff_missing");
+
   return {
-    phase: s(fallback.phase, "interview"),
+    phase: s(safeShadow.phase, "interview"),
+    assistantMessage: "",
+    nextQuestion: null,
+    draft: fallbackDraft,
+    acceptedPatch: sanitizeAcceptedPatch({}, fallbackDraft),
+    rejectedInputs: [],
+    confidence: {
+      strong,
+      unclear,
+      contradictions: uniqueStrings(
+        arr(safeShadow.contradictions).map((item) => s(item.message)),
+        12
+      ),
+    },
+    recommendation: {
+      notes: [],
+    },
+    sourceSignals: fallbackSourceSignals,
+    interviewPlan: {
+      activeQuestionKeys: [],
+      activeQuestions: [],
+      remainingQuestionKeys: [],
+      nextGroup: "business_truth",
+      nextGroupLabel: "Business truth",
+    },
+    aiBehavior: {
+      languages: uniqueStrings(fallbackDraft.languages, 8),
+      tone: s(fallbackDraft.tone),
+      greetingStyle: s(fallbackDraft.greetingStyle),
+      afterHoursBehavior: s(fallbackDraft.afterHoursBehavior),
+    },
+    readyForApproval: readiness.readyForApproval === true,
+    latestUserInput: compactDraftObject({
+      step: s(latestStep).toLowerCase(),
+      text: s(latestMessage),
+    }),
+    provider: "local_shadow",
+    model: s(model),
+    usedFallback: true,
+    error: s(error),
+  };
+}
+
+function normalizeTurnResult(
+  payload = {},
+  {
+    shadow = {},
+    latestMessage = "",
+    latestStep = "",
+    provider = "openai",
+    model = "",
+    usedFallback = false,
+    error = "",
+  } = {}
+) {
+  const safeShadow = obj(shadow);
+  const fallbackDraft = sanitizeDraft(obj(safeShadow.draft), {});
+  const fallbackSourceSignals = sanitizeSourceSignals(
+    obj(safeShadow.sourceSignals),
+    {}
+  );
+
+  const normalizedDraft = sanitizeDraft(payload.draft, fallbackDraft);
+  const normalizedQuestion = sanitizeQuestion(payload.nextQuestion, {});
+  const normalizedConfidence = sanitizeConfidence(payload.confidence, {
+    strong: [],
+    unclear: [],
+    contradictions: uniqueStrings(
+      arr(safeShadow.contradictions).map((item) => s(item.message)),
+      12
+    ),
+  });
+  const normalizedRecommendation = sanitizeRecommendation(payload.recommendation, {
+    notes: [],
+  });
+  const normalizedSourceSignals = sanitizeSourceSignals(
+    payload.sourceSignals,
+    fallbackSourceSignals
+  );
+  const normalizedAcceptedPatch = sanitizeAcceptedPatch(
+    payload.acceptedPatch,
+    normalizedDraft
+  );
+  const normalizedInterviewPlan = sanitizeInterviewPlan(payload.interviewPlan, {
+    activeQuestionKeys: normalizedQuestion.key ? [normalizedQuestion.key] : [],
+    activeQuestions: normalizedQuestion.key
+      ? [
+          {
+            key: normalizedQuestion.key,
+            step: normalizedQuestion.step,
+            title: normalizedQuestion.title,
+            group: normalizedQuestion.group,
+            groupLabel: normalizedQuestion.groupLabel,
+            priority: 1,
+          },
+        ]
+      : [],
+    remainingQuestionKeys: [],
+    nextGroup: normalizedQuestion.group || "business_truth",
+    nextGroupLabel: normalizedQuestion.groupLabel || "Business truth",
+  });
+
+  const readyForApproval =
+    payload.readyForApproval === true ||
+    obj(safeShadow.readiness).readyForApproval === true;
+
+  const phase = s(
+    payload.phase,
+    readyForApproval ? "ready" : s(safeShadow.phase, "interview")
+  );
+
+  const assistantMessage = compactText(payload.assistantMessage, 420);
+
+  return {
+    ok: true,
+    provider,
+    model: s(model),
+    usedFallback: usedFallback === true,
+    error: s(error),
+    latestUserInput: compactDraftObject({
+      step: s(latestStep).toLowerCase(),
+      text: s(latestMessage),
+    }),
+    phase,
     assistantMessage,
     nextQuestion:
-      nextQuestion.key && nextQuestion.prompt
-        ? nextQuestion
+      normalizedQuestion.key && normalizedQuestion.prompt
+        ? normalizedQuestion
         : null,
-    draft: obj(fallback.draft),
-    acceptedPatch: {
-      identity: {},
-      services: [],
-      contacts: [],
-      hours: [],
-      pricingPosture: "",
-      humanHandoff: "",
-      aiBehavior: {
-        languages: [],
-        tone: "",
-        greetingStyle: "",
-        afterHoursBehavior: "",
-      },
-    },
-    rejectedInputs: [],
-    confidence: obj(fallback.confidence),
-    recommendation: obj(fallback.recommendation),
-    sourceSignals: obj(fallback.sourceSignals),
-    readyForApproval: fallback.readyForApproval === true,
-    latestUserInput: {
-      step: s(latestStep),
-      text: s(latestMessage),
-    },
-    interviewPlan: obj(fallback.interviewPlan),
-    aiBehavior: obj(fallback.aiBehavior),
+    draft: normalizedDraft,
+    acceptedPatch: normalizedAcceptedPatch,
+    rejectedInputs: sanitizeRejectedInputs(payload.rejectedInputs),
+    confidence: normalizedConfidence,
+    recommendation: normalizedRecommendation,
+    sourceSignals: normalizedSourceSignals,
+    interviewPlan: normalizedInterviewPlan,
+    aiBehavior: compactDraftObject(
+      payload.aiBehavior || normalizedAcceptedPatch.aiBehavior || {}
+    ),
+    readyForApproval,
   };
 }
 
@@ -889,39 +1139,38 @@ export async function runSetupAssistantOpenAIOrchestrator({
   latestMessage = "",
   forceFallback = false,
 } = {}) {
-  if (!s(latestMessage) && !arr(sources).length) {
-    const firstPrompt = buildSetupAssistantFirstPrompt();
-    return normalizeTurnResult(firstPrompt, {
-      fallbackBrain: firstPrompt,
-      latestMessage,
-      latestStep,
-      provider: "local_seed",
-      model: "",
-      usedFallback: true,
-    });
-  }
-
-  const fallbackBrain = buildSetupAssistantBrainState({
+  const runtime = getSetupAssistantRuntimeConfig();
+  const shadow = buildLocalShadowState({
     session,
     draft,
     sources,
     review,
   });
 
-  const runtime = getSetupAssistantRuntimeConfig();
   const shouldForceFallback =
     forceFallback === true || runtime.forceFallback === true;
 
   if (shouldForceFallback || !hasOpenAISetupAssistant()) {
     return normalizeTurnResult(
-      buildHonestFallbackTurn(fallbackBrain, latestMessage, latestStep),
-      {
-        fallbackBrain,
+      buildFallbackShadowTurn({
+        shadow,
         latestMessage,
         latestStep,
-        provider: "local_fallback",
-        model: shouldForceFallback ? runtime.model : "",
+        error: shouldForceFallback
+          ? "openai_setup_assistant_forced_fallback"
+          : "openai_setup_assistant_unavailable",
+        model: runtime.model,
+      }),
+      {
+        shadow,
+        latestMessage,
+        latestStep,
+        provider: "local_shadow",
+        model: runtime.model,
         usedFallback: true,
+        error: shouldForceFallback
+          ? "openai_setup_assistant_forced_fallback"
+          : "openai_setup_assistant_unavailable",
       }
     );
   }
@@ -933,7 +1182,6 @@ export async function runSetupAssistantOpenAIOrchestrator({
     review,
     latestStep,
     latestMessage,
-    fallbackBrain,
   });
 
   try {
@@ -945,7 +1193,7 @@ export async function runSetupAssistantOpenAIOrchestrator({
     });
 
     return normalizeTurnResult(openaiResult.payload, {
-      fallbackBrain,
+      shadow,
       latestMessage,
       latestStep,
       provider: "openai",
@@ -954,12 +1202,18 @@ export async function runSetupAssistantOpenAIOrchestrator({
     });
   } catch (error) {
     return normalizeTurnResult(
-      buildHonestFallbackTurn(fallbackBrain, latestMessage, latestStep),
-      {
-        fallbackBrain,
+      buildFallbackShadowTurn({
+        shadow,
         latestMessage,
         latestStep,
-        provider: "local_fallback",
+        error: s(error?.message, "openai_setup_assistant_failed"),
+        model: runtime.model,
+      }),
+      {
+        shadow,
+        latestMessage,
+        latestStep,
+        provider: "local_shadow",
         model: runtime.model,
         usedFallback: true,
         error: s(error?.message, "openai_setup_assistant_failed"),
@@ -972,7 +1226,6 @@ export const __test__ = {
   buildSetupContext,
   buildSystemPrompt,
   buildUserPrompt,
-  buildReadinessRubric,
   extractRecentConversation,
   normalizeTurnResult,
   sanitizeAcceptedPatch,
@@ -984,7 +1237,8 @@ export const __test__ = {
   getSetupAssistantRuntimeConfig,
   callOpenAISetupAssistant,
   detectLikelyReplyLanguage,
-  buildHonestFallbackTurn,
+  buildFallbackShadowTurn,
+  buildLocalShadowState,
   setCachedClient(client = null) {
     cachedClient = client;
   },

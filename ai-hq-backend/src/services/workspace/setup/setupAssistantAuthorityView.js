@@ -2,16 +2,14 @@ import { arr, obj, s } from "./draftShared.js";
 import { formatSetupAssistantHoursForCanonical } from "./setupAssistantApp/canonical.js";
 import {
   buildSetupDraftStateFromSignals,
-  buildSetupKnownState,
   buildSetupSourceCoverage,
-  buildSetupSourceLead,
   buildSetupSourceSignals,
 } from "./setupAssistantApp/sourceSignals.js";
 
-function fallbackUniqueStrings(value = [], limit = 24) {
+function uniqueStrings(items = [], limit = 24) {
   return Array.from(
     new Set(
-      arr(value)
+      arr(items)
         .map((item) => s(item))
         .filter(Boolean)
         .slice(0, limit)
@@ -19,18 +17,11 @@ function fallbackUniqueStrings(value = [], limit = 24) {
   ).slice(0, limit);
 }
 
-function listPreview(items = [], max = 4) {
-  const safe = fallbackUniqueStrings(items, 24);
-  if (!safe.length) return "";
-  if (safe.length <= max) return safe.join(", ");
-  return `${safe.slice(0, max).join(", ")} +${safe.length - max}`;
-}
-
-function sectionTone(status = "") {
-  const key = s(status).toLowerCase();
-  if (key === "ready") return "ready";
-  if (key === "needs_review") return "needs_review";
-  return "missing";
+function metricValue(value) {
+  if (typeof value === "number") return value;
+  if (typeof value === "boolean") return value;
+  if (value && typeof value === "object" && !Array.isArray(value)) return value;
+  return s(value);
 }
 
 export function buildAssistantDraftPreview(
@@ -88,85 +79,50 @@ export function buildAssistantConfidence(summary = {}, sourceSignals = {}, setup
 
   const strong = [];
   const unclear = [];
-  const contradictions = [];
+  const contradictions = uniqueStrings(
+    arr(obj(summary).confirmationBlockers)
+      .filter((item) => s(item.severity).toLowerCase() === "high")
+      .map((item) => s(item.reasonCode || item.key)),
+    12
+  );
 
-  if (sectionTone(sectionStatus.profile?.status) === "ready") {
-    strong.push("Business identity is present and looks usable.");
-  } else if (coverage.identity) {
-    strong.push("Source evidence already covers the public business identity.");
-  } else if (
-    s(sourceSignals.primarySourceUrl) ||
-    s(sourceSignals.primarySourceType)
+  if (obj(sectionStatus.profile).status === "ready") strong.push("profile_ready");
+  else if (coverage.identity) strong.push("profile_source_covered");
+  else unclear.push("profile_incomplete");
+
+  if (obj(sectionStatus.services).status === "ready") strong.push("services_ready");
+  else if (coverage.services) strong.push("services_source_covered");
+  else unclear.push("services_incomplete");
+
+  if (obj(sectionStatus.hours).status === "ready") strong.push("hours_ready");
+  else if (coverage.hours) strong.push("hours_source_covered");
+  else unclear.push("hours_incomplete");
+
+  if (obj(sectionStatus.pricing).status === "ready") strong.push("pricing_ready");
+  else if (coverage.pricing) strong.push("pricing_source_covered");
+  else unclear.push("pricing_incomplete");
+
+  if (obj(sectionStatus.contacts).status === "ready") strong.push("contacts_ready");
+  else if (coverage.contacts) strong.push("contacts_source_covered");
+  else unclear.push("contacts_incomplete");
+
+  if (obj(sectionStatus.handoff).status === "ready") strong.push("handoff_ready");
+  else if (
+    s(obj(safeSetup.handoffRules).summary) ||
+    arr(obj(safeSetup.handoffRules).triggers).length
   ) {
-    unclear.push(
-      "A source exists, but the public business identity still needs a clean confirmation."
-    );
+    strong.push("handoff_draft_present");
   } else {
-    unclear.push("The business identity still needs to be established.");
-  }
-
-  if (sectionTone(sectionStatus.services?.status) === "ready") {
-    strong.push("Core services are already structured.");
-  } else if (coverage.services) {
-    strong.push(
-      `Source evidence already covers core services: ${listPreview(
-        sourceSignals.serviceCandidates,
-        4
-      )}.`
-    );
-  } else if (sectionTone(sectionStatus.services?.status) === "needs_review") {
-    unclear.push("Service signals exist, but they still need cleanup.");
-  } else {
-    unclear.push("Core services are still missing.");
-  }
-
-  if (sectionTone(sectionStatus.hours?.status) === "ready") {
-    strong.push("Business hours are already structured.");
-  } else if (coverage.hours) {
-    strong.push("Source evidence already covers public working hours.");
-  } else if (sectionTone(sectionStatus.hours?.status) === "needs_review") {
-    unclear.push("Hour signals exist, but they still need confirmation.");
-  } else {
-    unclear.push("Public business hours are still missing.");
-  }
-
-  if (sectionTone(sectionStatus.pricing?.status) === "ready") {
-    strong.push("Pricing posture is already defined.");
-  } else if (coverage.pricing) {
-    strong.push("Source evidence already covers pricing posture.");
-  } else if (sectionTone(sectionStatus.pricing?.status) === "needs_review") {
-    unclear.push("Pricing signals exist, but public reply policy still needs refinement.");
-  } else {
-    unclear.push("Pricing posture is still undefined.");
-  }
-
-  if (sectionTone(sectionStatus.contacts?.status) === "ready") {
-    strong.push("A customer contact route is present.");
-  } else if (coverage.contacts) {
-    strong.push("Source evidence already covers a public contact route.");
-  } else if (sectionTone(sectionStatus.contacts?.status) === "needs_review") {
-    unclear.push("Contact details exist, but the main routing lane still needs confirmation.");
-  } else {
-    unclear.push("A public customer contact route is still missing.");
-  }
-
-  if (sectionTone(sectionStatus.handoff?.status) === "ready") {
-    strong.push("Operator escalation rules are present.");
-  } else if (s(obj(safeSetup.handoffRules).summary) || arr(obj(safeSetup.handoffRules).triggers).length) {
-    strong.push("Escalation logic already exists in the draft.");
-  } else if (sectionTone(sectionStatus.handoff?.status) === "needs_review") {
-    unclear.push("Escalation logic exists, but still needs stronger boundaries.");
-  } else {
-    unclear.push("Operator handoff rules are still missing.");
+    unclear.push("handoff_incomplete");
   }
 
   if (!coverage.primarySourceExists && !draftState.websiteUrl) {
-    unclear.push("A reliable public source is still missing.");
+    unclear.push("primary_source_missing");
   }
 
   return {
-    strong,
-    unclear,
+    strong: uniqueStrings(strong, 16),
+    unclear: uniqueStrings(unclear, 16),
     contradictions,
   };
 }
@@ -174,73 +130,52 @@ export function buildAssistantConfidence(summary = {}, sourceSignals = {}, setup
 export function buildAssistantRecommendation(summary = {}, sourceSignals = {}, setup = {}) {
   const blockers = arr(summary.confirmationBlockers);
   const coverage = buildSetupSourceCoverage(sourceSignals);
+  const safeSetup = obj(setup);
   const notes = [];
 
   if (!blockers.length) {
-    return {
-      notes: [],
-    };
+    return { notes: [] };
   }
 
-  for (const blocker of blockers.slice(0, 4)) {
+  for (const blocker of blockers.slice(0, 6)) {
     const key = s(blocker.key);
 
-    if (key === "profile") {
-      if (!coverage.identity) {
-        notes.push(
-          "Lock the exact public business name and one clean description before approval."
-        );
-      }
+    if (key === "profile" && !coverage.identity) {
+      notes.push("identity_requires_confirmation");
       continue;
     }
 
-    if (key === "services") {
-      if (!coverage.services) {
-        notes.push(
-          "Keep only the real customer-facing services AI should confidently talk about."
-        );
-      }
+    if (key === "services" && !coverage.services) {
+      notes.push("services_require_curated_customer_facing_list");
       continue;
     }
 
-    if (key === "hours") {
-      if (!coverage.hours) {
-        notes.push(
-          "Capture the real public hours so AI does not promise the wrong availability."
-        );
-      }
+    if (key === "hours" && !coverage.hours) {
+      notes.push("hours_require_operator_confirmation");
       continue;
     }
 
-    if (key === "pricing") {
-      if (!coverage.pricing) {
-        notes.push(
-          "Define a safe public pricing posture before AI answers price questions."
-        );
-      }
+    if (key === "pricing" && !coverage.pricing) {
+      notes.push("pricing_requires_safe_public_rule");
       continue;
     }
 
-    if (key === "contacts") {
-      if (!coverage.contacts) {
-        notes.push(
-          "Choose one primary customer contact lane so AI can hand people somewhere real."
-        );
-      }
+    if (key === "contacts" && !coverage.contacts) {
+      notes.push("contacts_require_primary_public_route");
       continue;
     }
 
-    if (key === "handoff") {
-      if (!s(obj(setup).handoffRules?.summary) && !arr(obj(setup).handoffRules?.triggers).length) {
-        notes.push(
-          "Define exactly when AI should stop and escalate to a human."
-        );
-      }
+    if (
+      key === "handoff" &&
+      !s(obj(safeSetup.handoffRules).summary) &&
+      !arr(obj(safeSetup.handoffRules).triggers).length
+    ) {
+      notes.push("handoff_requires_escalation_rules");
     }
   }
 
   return {
-    notes: fallbackUniqueStrings(notes, 6),
+    notes: uniqueStrings(notes, 12),
   };
 }
 
@@ -254,17 +189,24 @@ export function buildAssistantInterviewPlan(
   const buildQuestionSafe =
     typeof buildAssistantQuestion === "function"
       ? buildAssistantQuestion
-      : (key = "") => ({
+      : (key = "", overrides = {}) => ({
           key: s(key).toLowerCase(),
-          step: s(key).toLowerCase(),
-          title: s(key),
-          group: "business_truth",
-          groupLabel: "Business truth",
+          step: s(overrides.step || key).toLowerCase(),
+          title: s(overrides.title || key),
+          group: s(overrides.group || "business_truth"),
+          groupLabel: s(overrides.groupLabel || "Business truth"),
         });
 
   const blockerQuestions = arr(summary.confirmationBlockers)
     .filter((item) => s(item.key))
-    .map((item) => buildQuestionSafe(item.key));
+    .map((item) =>
+      buildQuestionSafe(item.key, {
+        step: item.key,
+        title: item.key,
+        group: "business_truth",
+        groupLabel: "Business truth",
+      })
+    );
 
   const activeQuestions = [
     currentQuestion.key ? currentQuestion : null,
@@ -274,99 +216,32 @@ export function buildAssistantInterviewPlan(
   ].filter(Boolean);
 
   return {
-    activeQuestionKeys: activeQuestions.map((item) => item.key),
+    activeQuestionKeys: activeQuestions.map((item) => s(item.key).toLowerCase()),
     activeQuestions: activeQuestions.map((item, index) => ({
-      key: item.key,
-      step: item.step,
-      title: item.title,
-      group: item.group || "business_truth",
-      groupLabel: item.groupLabel || "Business truth",
-      priority: Math.max(1, activeQuestions.length - index),
+      key: s(item.key).toLowerCase(),
+      step: s(item.step || item.key).toLowerCase(),
+      title: s(item.title),
+      group: s(item.group || "business_truth"),
+      groupLabel: s(item.groupLabel || "Business truth"),
+      priority: Number(item.priority || Math.max(1, activeQuestions.length - index)),
     })),
     remainingQuestionKeys: activeQuestions
-      .filter((item) => item.key !== s(currentQuestion.key))
-      .map((item) => item.key),
+      .filter((item) => s(item.key) !== s(currentQuestion.key))
+      .map((item) => s(item.key).toLowerCase()),
     nextGroup: s(currentQuestion.group || "business_truth"),
-    nextGroupLabel: currentQuestion.key ? "Business truth" : "",
+    nextGroupLabel: s(currentQuestion.groupLabel || "Business truth"),
   };
 }
 
 export function buildAssistantMessage(
-  summary = {},
+  _summary = {},
   nextQuestion = null,
-  reviewMessage = "",
-  sourceSignals = {},
-  setup = {}
+  _reviewMessage = "",
+  _sourceSignals = {},
+  _setup = {}
 ) {
   const question = obj(nextQuestion);
-  const blockers = arr(summary.confirmationBlockers);
-  const blocker = obj(blockers[0]);
-  const sourceHint = s(blocker.sourceHint);
-  const metric = s(blocker.metric);
-  const coverage = buildSetupSourceCoverage(sourceSignals);
-  const configuredState = buildSetupKnownState(
-    buildSetupDraftStateFromSignals({
-      draft: setup,
-      review: null,
-      sourceSignals,
-    })
-  );
-  const sourceLead = buildSetupSourceLead(sourceSignals);
-
-  const coveredParts = [];
-  if (coverage.identity) coveredParts.push("identity");
-  if (coverage.services) coveredParts.push("services");
-  if (coverage.contacts) coveredParts.push("contact route");
-  if (coverage.hours) coveredParts.push("hours");
-  if (coverage.pricing) coveredParts.push("pricing posture");
-
-  if (s(question.key)) {
-    const parts = [];
-
-    if (sourceLead) parts.push(sourceLead);
-    if (configuredState.length) {
-      parts.push(`Current setup already has ${configuredState.join(", ")}`);
-    }
-    if (coveredParts.length) {
-      parts.push(
-        `I will not re-ask what already looks covered by source evidence: ${coveredParts.join(
-          ", "
-        )}`
-      );
-    }
-    if (sourceHint) parts.push(sourceHint);
-    if (metric) parts.push(`Current signal: ${metric}`);
-    if (s(question.prompt)) {
-      parts.push(`Next most important gap: ${s(question.prompt)}`);
-    }
-    if (s(blocker.reason) && !s(question.prompt).includes(s(blocker.reason))) {
-      parts.push(s(blocker.reason));
-    }
-
-    return parts.filter(Boolean).join(". ");
-  }
-
-  if (summary.readyForReview === true) {
-    const parts = [];
-    if (sourceLead) parts.push(sourceLead);
-    if (configuredState.length) {
-      parts.push(`Current setup looks solid across ${configuredState.join(", ")}`);
-    }
-    parts.push(
-      "The setup draft is operationally complete enough to move into review and approval."
-    );
-    return parts.join(". ");
-  }
-
-  if (sourceLead && !s(blocker.reason)) {
-    return `${sourceLead}. ${s(reviewMessage)}`;
-  }
-
-  if (s(blocker.reason)) {
-    return s(blocker.reason);
-  }
-
-  return s(reviewMessage);
+  return s(question.prompt || "");
 }
 
 export function buildAssistantSections(
@@ -377,33 +252,19 @@ export function buildAssistantSections(
 ) {
   return arr(sectionOrder).map((key) => {
     const meta = obj(sectionMeta[key]);
-    const state = obj(summary.sectionStatus)[key];
+    const state = obj(obj(summary.sectionStatus)[key]);
     const status = s(state.status || "missing");
-    const metric = s(state.metric);
-
-    let sectionSummary = "";
-
-    if (status === "ready") {
-      sectionSummary =
-        s(meta.ready) ||
-        "This part is already structured well enough for the current draft.";
-    } else if (status === "needs_review") {
-      sectionSummary =
-        s(meta.review) ||
-        "Signals exist here, but they still need a cleaner confirmation.";
-    } else {
-      sectionSummary =
-        s(meta.missing) ||
-        "This part is still missing and should be captured before approval.";
-    }
 
     return {
       key,
-      label: meta.label,
-      title: meta.title,
+      label: s(meta.label),
+      title: s(meta.title || meta.label || key),
       status,
-      summary: sectionSummary,
-      metric,
+      summary: "",
+      metric: metricValue(state.metric),
+      sourceCovered: state.sourceCovered === true,
+      reviewReady: state.reviewReady === true,
+      missingFields: arr(state.missingFields),
       suggestedCount:
         key === "services" ? arr(servicesCatalog.suggestedServices).length : 0,
     };

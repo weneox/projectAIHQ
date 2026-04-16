@@ -1,15 +1,5 @@
 import { arr, compactDraftObject, obj, s } from "../draftShared.js";
 import { buildSetupAssistantServiceCatalog } from "../setupAssistantCatalog.js";
-import {
-  buildAssistantConfidence,
-  buildAssistantDraftPreview,
-  buildAssistantInterviewPlan,
-  buildAssistantMessage,
-  buildAssistantRecommendation,
-  buildAssistantSections,
-  buildAssistantSourceSignals,
-} from "../setupAssistantAuthorityView.js";
-import { buildSetupSourceCoverage } from "./sourceSignals.js";
 import { formatSetupAssistantHoursForCanonical } from "./canonical.js";
 import {
   buildAssistantCompatBusinessFacts,
@@ -19,20 +9,26 @@ import {
 } from "./compat.js";
 import { buildSetupAssistantSeedFromReview } from "./seed.js";
 import {
-  REVIEW_MESSAGE,
   SETUP_ASSISTANT_CURRENT_STEP,
   SETUP_ASSISTANT_NAMESPACE,
   SETUP_ASSISTANT_SOURCE_TYPE,
   normalizeSourceType,
 } from "./shared.js";
 import { mergeSetupAssistantCore } from "./sanitize.js";
-import {
-  buildAssistantQuestion,
-  SECTION_META,
-  SECTION_ORDER,
-  getNextQuestion,
-} from "./questions.js";
-import { buildReviewState, buildSummary } from "./summary.js";
+import { buildSummary } from "./summary.js";
+
+function uniqueStrings(items = [], max = 24) {
+  return [...new Set(arr(items).map((item) => s(item)).filter(Boolean))].slice(
+    0,
+    max
+  );
+}
+
+function compactText(value = "", max = 280) {
+  const text = s(value).replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length <= max ? text : `${text.slice(0, max - 1).trim()}…`;
+}
 
 function deriveWebsitePrefillDraft(core = {}) {
   const businessProfile = obj(core.businessProfile);
@@ -77,6 +73,134 @@ function readSetupAssistantTimeline(draftPayload = {}) {
     .slice(-40);
 }
 
+function sanitizeBrainQuestion(value = {}) {
+  const source = obj(value);
+
+  return compactDraftObject({
+    key: s(source.key).toLowerCase(),
+    step: s(source.step || source.key).toLowerCase(),
+    title: s(source.title),
+    prompt: s(source.prompt),
+    group: s(source.group || "business_truth"),
+    groupLabel: s(source.groupLabel || "Business truth"),
+    priority: Number(source.priority || 0) || 0,
+  });
+}
+
+function sanitizeBrainConfidence(value = {}) {
+  const source = obj(value);
+
+  return {
+    strong: uniqueStrings(source.strong, 12),
+    unclear: uniqueStrings(source.unclear, 12),
+    contradictions: uniqueStrings(source.contradictions, 12),
+  };
+}
+
+function sanitizeBrainRecommendation(value = {}) {
+  const source = obj(value);
+
+  return {
+    notes: uniqueStrings(source.notes, 12),
+  };
+}
+
+function sanitizeBrainSourceSignals(value = {}) {
+  const source = obj(value);
+
+  return {
+    primarySourceType: s(source.primarySourceType),
+    primarySourceLabel: s(source.primarySourceLabel),
+    primarySourceUrl: s(source.primarySourceUrl),
+    primarySourceAuthorityClass: s(source.primarySourceAuthorityClass),
+    pageCount: Number(source.pageCount || 0) || 0,
+    sourceTypes: uniqueStrings(source.sourceTypes, 8),
+    strongestEvidence: uniqueStrings(source.strongestEvidence, 12),
+    discoveredPublicClaims: uniqueStrings(source.discoveredPublicClaims, 12),
+    companyNameCandidates: uniqueStrings(source.companyNameCandidates, 8),
+    descriptionCandidates: uniqueStrings(source.descriptionCandidates, 8),
+    serviceCandidates: uniqueStrings(source.serviceCandidates, 12),
+    contactCandidates: uniqueStrings(source.contactCandidates, 12),
+    hoursCandidates: uniqueStrings(source.hoursCandidates, 12),
+    pricingCandidates: uniqueStrings(source.pricingCandidates, 12),
+    audienceCandidates: uniqueStrings(source.audienceCandidates, 8),
+    languagesCandidates: uniqueStrings(source.languagesCandidates, 8),
+  };
+}
+
+function sanitizeBrainInterviewPlan(value = {}) {
+  const source = obj(value);
+
+  const activeQuestions = arr(source.activeQuestions)
+    .map((item) =>
+      compactDraftObject({
+        key: s(item?.key).toLowerCase(),
+        step: s(item?.step || item?.key).toLowerCase(),
+        title: s(item?.title),
+        group: s(item?.group || "business_truth"),
+        groupLabel: s(item?.groupLabel || "Business truth"),
+        priority: Number(item?.priority || 0) || 0,
+      })
+    )
+    .filter((item) => item.key);
+
+  return compactDraftObject({
+    activeQuestionKeys: uniqueStrings(
+      source.activeQuestionKeys || activeQuestions.map((item) => item.key),
+      12
+    ),
+    activeQuestions,
+    remainingQuestionKeys: uniqueStrings(source.remainingQuestionKeys, 12),
+    nextGroup: s(source.nextGroup || "business_truth"),
+    nextGroupLabel: s(source.nextGroupLabel || "Business truth"),
+  });
+}
+
+function sanitizeBrainSnapshot(value = {}) {
+  const source = obj(value);
+
+  return compactDraftObject({
+    phase: s(source.phase).toLowerCase(),
+    assistantMessage: compactText(
+      s(source.assistantMessage || source.message),
+      420
+    ),
+    message: compactText(s(source.message || source.assistantMessage), 420),
+    nextQuestion: sanitizeBrainQuestion(source.nextQuestion),
+    draft: obj(source.draft),
+    acceptedPatch: obj(source.acceptedPatch),
+    rejectedInputs: arr(source.rejectedInputs),
+    confidence: sanitizeBrainConfidence(source.confidence),
+    recommendation: sanitizeBrainRecommendation(source.recommendation),
+    sourceSignals: sanitizeBrainSourceSignals(source.sourceSignals),
+    interviewPlan: sanitizeBrainInterviewPlan(source.interviewPlan),
+    aiBehavior: compactDraftObject({
+      languages: uniqueStrings(obj(source.aiBehavior).languages, 8),
+      tone: s(obj(source.aiBehavior).tone),
+      greetingStyle: s(obj(source.aiBehavior).greetingStyle),
+      afterHoursBehavior: s(obj(source.aiBehavior).afterHoursBehavior),
+    }),
+    readyForApproval: source.readyForApproval === true,
+    provider: s(source.provider),
+    model: s(source.model),
+    usedFallback: source.usedFallback === true,
+    error: s(source.error),
+  });
+}
+
+export function readStoredSetupAssistantBrainPayload(draftPayload = {}) {
+  const payload = obj(draftPayload);
+  return sanitizeBrainSnapshot(obj(payload.setupAssistantBrain));
+}
+
+export function buildStoredSetupAssistantBrainPayload(value = {}) {
+  return sanitizeBrainSnapshot(value);
+}
+
+export function normalizeStoredSetupAssistantBrainPayload(value = {}) {
+  return buildStoredSetupAssistantBrainPayload(value);
+}
+
 export function resolveSessionCurrentStep(
   review = {},
   setup = {},
@@ -90,7 +214,7 @@ export function resolveSessionCurrentStep(
       storedSession.currentStep ||
         assistantState.activeSection ||
         obj(setup.progress).currentQuestionKey ||
-        nextQuestion?.key ||
+        obj(nextQuestion).key ||
         SETUP_ASSISTANT_CURRENT_STEP
     ) || SETUP_ASSISTANT_CURRENT_STEP
   );
@@ -104,19 +228,9 @@ export function safeDraftVersion(draftRow = {}) {
 export function buildStoredSetupAssistantPayload(value = {}, seed = {}) {
   const mergedCore = mergeSetupAssistantCore(seed, value);
 
-  const summaryContext = {
-    review: {},
-    session: {},
-    sources: [],
-  };
-
-  const summary = buildSummary(mergedCore, summaryContext);
-  const review = buildReviewState(mergedCore, summary, summaryContext);
-
   return {
     ...mergedCore,
     websitePrefill: deriveWebsitePrefillDraft(mergedCore),
-    review,
     namespace: SETUP_ASSISTANT_NAMESPACE,
     sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
   };
@@ -137,67 +251,177 @@ export function stripLegacySetupAssistantPayloadKeys(draftPayload = {}) {
   return rest;
 }
 
-export function buildSetupAssistantAuthorityState({
+function buildAssistantDraftPreview(
+  setup = {},
+  { formatHours = null } = {}
+) {
+  const businessProfile = obj(setup.businessProfile);
+  const pricing = obj(setup.pricingPosture);
+  const handoff = obj(setup.handoffRules);
+  const formatHoursSafe =
+    typeof formatHours === "function"
+      ? formatHours
+      : formatSetupAssistantHoursForCanonical;
+
+  return {
+    businessName: s(businessProfile.companyName),
+    whatThisBusinessIs: s(businessProfile.description),
+    websiteUrl: s(businessProfile.websiteUrl),
+    coreServices: arr(setup.services)
+      .map((item) => s(item.title || item.name || item.label))
+      .filter(Boolean),
+    pricingPosture: s(pricing.publicSummary),
+    contactRoutes: arr(setup.contacts)
+      .map((item) => s(item.value || item.label || item.type))
+      .filter(Boolean),
+    humanHandoff: s(handoff.summary || arr(handoff.triggers).join(", ")),
+    hours: formatHoursSafe(setup.hours),
+    languages: arr(setup.languages)
+      .map((item) => s(item))
+      .filter(Boolean),
+    tone: s(setup.tone),
+    greetingStyle: s(setup.greetingStyle),
+    afterHoursBehavior: s(setup.afterHoursBehavior),
+  };
+}
+
+function buildMinimalSourceSignals(setup = {}) {
+  const businessProfile = obj(setup.businessProfile);
+  const sourceMetadata = obj(setup.sourceMetadata);
+  const pricing = obj(setup.pricingPosture);
+
+  const services = arr(setup.services)
+    .map((item) => s(item.title || item.name || item.label))
+    .filter(Boolean);
+
+  const contacts = arr(setup.contacts)
+    .map((item) => s(item.value || item.label || item.type))
+    .filter(Boolean);
+
+  const hours = formatSetupAssistantHoursForCanonical(setup.hours);
+
+  return {
+    primarySourceType: s(sourceMetadata.primarySourceType),
+    primarySourceLabel:
+      s(arr(sourceMetadata.sourceLabels)[0]) ||
+      (s(sourceMetadata.primarySourceType)
+        ? s(sourceMetadata.primarySourceType)
+        : ""),
+    primarySourceUrl: s(sourceMetadata.primarySourceUrl),
+    primarySourceAuthorityClass: "",
+    pageCount: 0,
+    sourceTypes: uniqueStrings(
+      s(sourceMetadata.primarySourceType)
+        ? [sourceMetadata.primarySourceType]
+        : [],
+      8
+    ),
+    strongestEvidence: uniqueStrings(arr(sourceMetadata.evidenceSummary), 12),
+    discoveredPublicClaims: uniqueStrings(arr(sourceMetadata.evidenceSummary), 12),
+    companyNameCandidates: uniqueStrings([businessProfile.companyName], 8),
+    descriptionCandidates: uniqueStrings([businessProfile.description], 8),
+    serviceCandidates: uniqueStrings(services, 12),
+    contactCandidates: uniqueStrings(contacts, 12),
+    hoursCandidates: uniqueStrings(hours, 12),
+    pricingCandidates: uniqueStrings([pricing.publicSummary], 12),
+    audienceCandidates: [],
+    languagesCandidates: uniqueStrings(arr(setup.languages), 8),
+  };
+}
+
+function buildMinimalConfidenceFromSetup(setup = {}) {
+  const draftPreview = buildAssistantDraftPreview(setup, {
+    formatHours: formatSetupAssistantHoursForCanonical,
+  });
+
+  const strong = [];
+  const unclear = [];
+
+  if (s(draftPreview.businessName)) strong.push("business_name_present");
+  else unclear.push("business_name_missing");
+
+  if (s(draftPreview.whatThisBusinessIs)) strong.push("business_description_present");
+  else unclear.push("business_description_missing");
+
+  if (arr(draftPreview.coreServices).length) strong.push("services_present");
+  else unclear.push("services_missing");
+
+  if (arr(draftPreview.contactRoutes).length) strong.push("contact_route_present");
+  else unclear.push("contact_route_missing");
+
+  if (arr(draftPreview.hours).length) strong.push("hours_present");
+  else unclear.push("hours_missing");
+
+  if (s(draftPreview.pricingPosture)) strong.push("pricing_posture_present");
+  else unclear.push("pricing_posture_missing");
+
+  if (s(draftPreview.humanHandoff)) strong.push("handoff_present");
+  else unclear.push("handoff_missing");
+
+  return {
+    strong,
+    unclear,
+    contradictions: [],
+  };
+}
+
+function buildAssistantFromStoredBrain({
   session = {},
   draftRow = {},
   setup = {},
   summary = {},
   servicesCatalog = {},
-  reviewState = {},
-  review = {},
-  sources = [],
   timeline = [],
+  storedBrain = {},
 } = {}) {
-  const nextQuestion = getNextQuestion(summary, setup, obj(setup.progress));
-  const question = nextQuestion
-    ? buildAssistantQuestion(nextQuestion.key, nextQuestion)
-    : null;
-
-  const readyForApproval = obj(reviewState).finalizeAvailable === true;
-
-  const rawSourceSignals = buildAssistantSourceSignals(setup, {
-    session,
-    review,
-    sources,
-  });
-
-  const sourceSignals = {
-    ...rawSourceSignals,
-    coverage: buildSetupSourceCoverage(rawSourceSignals),
-  };
-
-  const confidence = buildAssistantConfidence(summary, sourceSignals, setup);
-  const recommendation = buildAssistantRecommendation(
-    summary,
-    sourceSignals,
-    setup
-  );
-  const assistantMessage = buildAssistantMessage(
-    summary,
-    question,
-    REVIEW_MESSAGE,
-    sourceSignals,
-    setup
+  const brain = sanitizeBrainSnapshot(storedBrain);
+  const lastAssistantTurn =
+    [...arr(timeline)].reverse().find((item) => s(item.role) === "assistant") || {};
+  const sourceSignals = sanitizeBrainSourceSignals(
+    Object.keys(obj(brain.sourceSignals)).length
+      ? brain.sourceSignals
+      : buildMinimalSourceSignals(setup)
   );
 
-  const phase = summary.hasAnyDraft
-    ? readyForApproval
-      ? "ready"
-      : "interview"
-    : s(sourceSignals.primarySourceUrl) || s(sourceSignals.primarySourceType)
-      ? "interview"
-      : "source_capture";
+  const draftPreview =
+    Object.keys(obj(brain.draft)).length > 0
+      ? obj(brain.draft)
+      : buildAssistantDraftPreview(setup, {
+          formatHours: formatSetupAssistantHoursForCanonical,
+        });
+
+  const readyForApproval =
+    brain.readyForApproval === true || summary.readyForReview === true;
+
+  const phase = s(
+    brain.phase ||
+      lastAssistantTurn.phase ||
+      (readyForApproval
+        ? "ready"
+        : summary.hasAnyDraft
+          ? "interview"
+          : "source_capture")
+  ).toLowerCase();
+
+  const nextQuestion = sanitizeBrainQuestion(brain.nextQuestion);
+
+  const completionMessage =
+    readyForApproval === true
+      ? compactText(
+          s(
+            brain.assistantMessage ||
+              brain.message ||
+              lastAssistantTurn.text
+          ),
+          420
+        )
+      : "";
 
   return {
-    mode: "structured_v2",
-    nextQuestion: question,
-    confirmationBlockers: arr(summary.confirmationBlockers),
-    sections: buildAssistantSections(
-      summary,
-      servicesCatalog,
-      SECTION_ORDER,
-      SECTION_META
-    ),
+    mode: "brain_v3",
+    nextQuestion: nextQuestion.key && nextQuestion.prompt ? nextQuestion : null,
+    confirmationBlockers: [],
+    sections: [],
     completion: {
       ready: readyForApproval,
       action: readyForApproval
@@ -207,47 +431,55 @@ export function buildSetupAssistantAuthorityState({
             intent: "finalize_review",
           }
         : null,
-      message: readyForApproval
-        ? "The draft is complete enough to move into review and approval."
-        : REVIEW_MESSAGE,
+      message: completionMessage,
     },
-    quickCapture: Object.fromEntries(
-      SECTION_ORDER.map((key) => [
-        key,
-        {
-          step: key,
-          label: SECTION_META[key].label,
-          placeholder: SECTION_META[key].placeholder,
-        },
-      ])
-    ),
+    quickCapture: {},
     servicesCatalog,
-    sourceInsights: arr(sourceSignals.strongestEvidence),
+    sourceInsights: uniqueStrings(
+      arr(sourceSignals.strongestEvidence),
+      12
+    ),
     phase,
-    message: assistantMessage,
-    assistantMessage,
+    message: compactText(
+      s(brain.assistantMessage || brain.message || lastAssistantTurn.text),
+      420
+    ),
+    assistantMessage: compactText(
+      s(brain.assistantMessage || brain.message || lastAssistantTurn.text),
+      420
+    ),
     timeline: arr(timeline).map(normalizeTimelineTurn),
-    draft: buildAssistantDraftPreview(setup, {
-      formatHours: formatSetupAssistantHoursForCanonical,
-    }),
-    confidence,
-    recommendation,
+    draft: obj(draftPreview),
+    confidence:
+      Object.keys(obj(brain.confidence)).length > 0
+        ? sanitizeBrainConfidence(brain.confidence)
+        : buildMinimalConfidenceFromSetup(setup),
+    recommendation: sanitizeBrainRecommendation(brain.recommendation),
     sourceSignals,
-    interviewPlan: buildAssistantInterviewPlan(summary, question, {
-      buildAssistantQuestion,
-    }),
+    interviewPlan: sanitizeBrainInterviewPlan(brain.interviewPlan),
     aiBehavior: compactDraftObject({
-      languages: arr(setup.languages),
-      tone: s(setup.tone),
-      greetingStyle: s(setup.greetingStyle),
-      afterHoursBehavior: s(setup.afterHoursBehavior),
-      escalationPolicy: s(obj(setup.handoffRules).summary),
-      pricingDisclosurePolicy: s(obj(setup.pricingPosture).publicSummary),
+      languages: uniqueStrings(
+        arr(obj(brain.aiBehavior).languages || setup.languages),
+        8
+      ),
+      tone: s(obj(brain.aiBehavior).tone || setup.tone),
+      greetingStyle: s(
+        obj(brain.aiBehavior).greetingStyle || setup.greetingStyle
+      ),
+      afterHoursBehavior: s(
+        obj(brain.aiBehavior).afterHoursBehavior || setup.afterHoursBehavior
+      ),
     }),
     readyForApproval,
     finalizeAvailable: readyForApproval,
     reviewSessionId: s(session.id),
     draftVersion: safeDraftVersion(draftRow),
+    rejectedInputs: arr(brain.rejectedInputs),
+    provider: s(brain.provider || lastAssistantTurn.provider),
+    model: s(brain.model || lastAssistantTurn.model),
+    usedFallback:
+      brain.usedFallback === true || lastAssistantTurn.usedFallback === true,
+    error: s(brain.error || lastAssistantTurn.error),
   };
 }
 
@@ -270,27 +502,26 @@ export function buildSetupAssistantSessionPayload(review = {}) {
   };
 
   const summary = buildSummary(setup, summaryContext);
-  const reviewState = buildReviewState(setup, summary, summaryContext);
-
   const servicesCatalog = buildSetupAssistantServiceCatalog({
     businessProfile: setup.businessProfile,
     currentServices: setup.services,
     sourceServices: seed.services,
   });
 
-  const assistant = buildSetupAssistantAuthorityState({
+  const storedBrain = readStoredSetupAssistantBrainPayload(draftPayload);
+
+  const assistant = buildAssistantFromStoredBrain({
     session,
     draftRow,
     setup,
     summary,
     servicesCatalog,
-    reviewState,
-    review,
-    sources: arr(review.sources),
     timeline,
+    storedBrain,
   });
 
   const nextQuestion = obj(assistant.nextQuestion);
+  const readyForApproval = assistant.readyForApproval === true;
 
   return {
     session: {
@@ -319,7 +550,17 @@ export function buildSetupAssistantSessionPayload(review = {}) {
       namespace: SETUP_ASSISTANT_NAMESPACE,
       summary,
       websitePrefill: obj(setup.websitePrefill),
-      review: reviewState,
+      review: {
+        status: summary.hasAnyDraft ? "draft_in_progress" : "awaiting_input",
+        draftOnly: true,
+        sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
+        namespace: SETUP_ASSISTANT_NAMESPACE,
+        readyForReview: summary.readyForReview === true,
+        readyForApproval,
+        finalizeAvailable: summary.readyForReview === true,
+        finalized: false,
+        message: "",
+      },
       assistant,
       timeline,
       draft: {
@@ -358,38 +599,46 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
     };
   }
 
-  const safeTurn = obj(turn);
+  const safeTurn = sanitizeBrainSnapshot(turn);
 
   const mergedAssistant = compactDraftObject({
     ...assistant,
-    mode: "brain_v2",
+    mode: "brain_v3",
     phase: s(safeTurn.phase || assistant.phase),
-    message: s(
-      safeTurn.assistantMessage ||
-        assistant.message ||
-        assistant.assistantMessage
+    message: compactText(
+      s(safeTurn.assistantMessage || safeTurn.message || assistant.message),
+      420
     ),
-    assistantMessage: s(
-      safeTurn.assistantMessage ||
-        assistant.assistantMessage ||
-        assistant.message
+    assistantMessage: compactText(
+      s(
+        safeTurn.assistantMessage ||
+          safeTurn.message ||
+          assistant.assistantMessage ||
+          assistant.message
+      ),
+      420
     ),
-    nextQuestion: obj(safeTurn.nextQuestion),
-    confidence: obj(safeTurn.confidence),
-    recommendation: obj(safeTurn.recommendation),
-    sourceSignals: obj(safeTurn.sourceSignals),
-    interviewPlan: obj(safeTurn.interviewPlan),
-    aiBehavior: obj(safeTurn.aiBehavior),
+    nextQuestion:
+      obj(safeTurn.nextQuestion).key && obj(safeTurn.nextQuestion).prompt
+        ? obj(safeTurn.nextQuestion)
+        : null,
+    confidence: sanitizeBrainConfidence(safeTurn.confidence),
+    recommendation: sanitizeBrainRecommendation(safeTurn.recommendation),
+    sourceSignals: sanitizeBrainSourceSignals(safeTurn.sourceSignals),
+    interviewPlan: sanitizeBrainInterviewPlan(safeTurn.interviewPlan),
+    aiBehavior: compactDraftObject(safeTurn.aiBehavior),
     readyForApproval: safeTurn.readyForApproval === true,
     finalizeAvailable: safeTurn.readyForApproval === true,
     draft: obj(safeTurn.draft),
-    currentQuestionKey: s(obj(safeTurn.nextQuestion).key),
     rejectedInputs: arr(safeTurn.rejectedInputs),
     provider: s(safeTurn.provider),
     model: s(safeTurn.model),
     usedFallback: safeTurn.usedFallback === true,
     error: s(safeTurn.error),
-    sourceInsights: arr(obj(safeTurn.sourceSignals).strongestEvidence),
+    sourceInsights: uniqueStrings(
+      arr(obj(safeTurn.sourceSignals).strongestEvidence),
+      12
+    ),
     completion: {
       ready: safeTurn.readyForApproval === true,
       action:
@@ -402,8 +651,8 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
           : null,
       message:
         safeTurn.readyForApproval === true
-          ? "The draft is complete enough to move into review and approval."
-          : s(safeTurn.assistantMessage || REVIEW_MESSAGE),
+          ? compactText(s(safeTurn.assistantMessage || safeTurn.message), 420)
+          : "",
     },
   });
 
@@ -418,11 +667,9 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
   const mergedReview = {
     ...obj(setup.review),
     readyForApproval: safeTurn.readyForApproval === true,
-    finalizeAvailable: safeTurn.readyForApproval === true,
-    message:
-      safeTurn.readyForApproval === true
-        ? "The setup draft is complete enough to move into review and approval."
-        : s(obj(setup.review).message || REVIEW_MESSAGE),
+    finalizeAvailable:
+      safeTurn.readyForApproval === true || obj(setup.review).finalizeAvailable === true,
+    message: "",
   };
 
   const mergedSession = {
@@ -451,17 +698,17 @@ export function buildSetupAssistantResponseBody(basePayload = {}, turn = null) {
     assistant: mergedAssistant,
     turn: {
       role: "assistant",
-      text: s(safeTurn.assistantMessage),
+      text: s(safeTurn.assistantMessage || safeTurn.message),
       questionKey: s(obj(safeTurn.nextQuestion).key),
       questionCategory: s(obj(safeTurn.nextQuestion).group),
       payload: compactDraftObject({
         mode: mergedAssistant.mode,
         phase: mergedAssistant.phase,
         nextQuestion: obj(safeTurn.nextQuestion),
-        confidence: obj(safeTurn.confidence),
-        recommendation: obj(safeTurn.recommendation),
-        sourceSignals: obj(safeTurn.sourceSignals),
-        interviewPlan: obj(safeTurn.interviewPlan),
+        confidence: sanitizeBrainConfidence(safeTurn.confidence),
+        recommendation: sanitizeBrainRecommendation(safeTurn.recommendation),
+        sourceSignals: sanitizeBrainSourceSignals(safeTurn.sourceSignals),
+        interviewPlan: sanitizeBrainInterviewPlan(safeTurn.interviewPlan),
         aiBehavior: obj(safeTurn.aiBehavior),
         readyForApproval: safeTurn.readyForApproval === true,
         draft: obj(safeTurn.draft),

@@ -5,7 +5,6 @@ import {
   parseServicesNote,
   sanitizeStructuredHours,
 } from "../setupAssistantParser.js";
-import { buildRejectedFieldSet, hasRejectedField } from "./challenge.js";
 import {
   buildStoredSetupAssistantPayload,
   normalizeStoredSetupAssistantPayload,
@@ -33,87 +32,24 @@ import {
   sanitizeSourceMetadata,
 } from "./sanitize.js";
 
+function normalizeStep(value = "") {
+  const key = s(value).toLowerCase();
+
+  if (key === "contact") return "contacts";
+  if (key === "price") return "pricing";
+  if (key === "pricing_posture") return "pricing";
+  if (key === "business_name") return "company";
+  if (key === "business_description") return "description";
+
+  return key;
+}
+
 function looksLikeEmail(value = "") {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/i.test(s(value));
 }
 
 function looksLikePhone(value = "") {
   return /(?:\+?\d[\d()\-\s]{6,}\d)/.test(s(value));
-}
-
-function looksLikeHoursText(value = "") {
-  const text = s(value).toLowerCase();
-  if (!text) return false;
-
-  return (
-    /(mon|tue|wed|thu|fri|sat|sun|monday|tuesday|wednesday|thursday|friday|saturday|sunday|b\.e|be|cume|şənbə|senbe|bazar)/.test(
-      text
-    ) ||
-    /\b\d{1,2}[:.]?\d{0,2}\s*(?:-|to|dan|den|dek|qeder)\s*\d{1,2}[:.]?\d{0,2}\b/.test(
-      text
-    ) ||
-    /\b(24\/7|appointment only|closed|bagli|bağlı)\b/.test(text)
-  );
-}
-
-function looksLikePricingText(value = "") {
-  const text = s(value).toLowerCase();
-  if (!text) return false;
-
-  return (
-    /(azn|usd|eur|gbp|\$|€|₼|£)/.test(text) ||
-    /\b(price|pricing|quote|starting|from|discount|promo|qiymət|qiymet|xidmete gore|xidmətə görə)\b/.test(
-      text
-    )
-  );
-}
-
-function looksLikeHandoffText(value = "") {
-  const text = s(value).toLowerCase();
-  if (!text) return false;
-
-  return /şikayət|complaint|refund|payment|operator|manager|human|handoff|escalat|təcili|tecili|problem/i.test(
-    text
-  );
-}
-
-function looksLikeServiceList(value = "") {
-  const text = s(value);
-  if (!text) return false;
-
-  const parts = text
-    .split(/[,;\n]/)
-    .map((item) => s(item))
-    .filter(Boolean);
-
-  return parts.length >= 2;
-}
-
-function resolveSemanticAnswerStep(step = "", answer = "") {
-  const safeStep = s(step).toLowerCase();
-  const text = s(answer);
-
-  if (!text) return safeStep;
-
-  const sourceCandidate = buildRecognizedSourceCandidate(text);
-  if (sourceCandidate?.type === "website") return "website";
-  if (sourceCandidate?.type === "instagram") return "profile";
-  if (sourceCandidate?.type === "facebook") return "profile";
-  if (sourceCandidate?.type === "google_maps") return "profile";
-
-  if (looksLikeEmail(text) || looksLikePhone(text) || /whatsapp|telegram|wa\.me/i.test(text)) {
-    return "contacts";
-  }
-
-  if (looksLikeHoursText(text)) return "hours";
-  if (looksLikePricingText(text)) return "pricing";
-  if (looksLikeHandoffText(text)) return "handoff";
-
-  if (!safeStep || safeStep === "profile") {
-    if (looksLikeServiceList(text)) return "services";
-  }
-
-  return safeStep || "profile";
 }
 
 function buildContactsFromAnswer(answer = "") {
@@ -162,6 +98,7 @@ function splitProfileLines(text = "") {
 export function parseProfileAnswer(answer = "", current = {}) {
   const text = s(answer);
   const profile = obj(current.businessProfile);
+
   if (!text) return {};
 
   const websiteUrl = extractWebsiteCandidate(text);
@@ -205,11 +142,13 @@ export function parseProfileAnswer(answer = "", current = {}) {
 
   if (!profile.companyName && !profile.description) {
     const words = single.split(/\s+/).filter(Boolean);
+
     if (words.length <= 6 && !/[.!?]/.test(single)) {
       out.companyName = single;
     } else {
       out.description = single;
     }
+
     return compactDraftObject(out);
   }
 
@@ -257,7 +196,7 @@ function buildAppointmentOnlyHoursPatch() {
 }
 
 function buildStepIntentPatch(step = "") {
-  const safeStep = s(step).toLowerCase();
+  const safeStep = normalizeStep(step);
   if (!safeStep) return {};
 
   return compactDraftObject({
@@ -272,7 +211,9 @@ function buildStepIntentPatch(step = "") {
 }
 
 export function resolveIntentOnlyPatch(step = "", answer = "", current = {}) {
-  const safeStep = s(step).toLowerCase();
+  void current;
+
+  const safeStep = normalizeStep(step);
   const normalizedAnswer = s(answer).toLowerCase();
   const intent = INTENT_ONLY_RESPONSES[normalizedAnswer];
 
@@ -293,9 +234,6 @@ export function resolveIntentOnlyPatch(step = "", answer = "", current = {}) {
   }
 
   if (intent === "__continue__") {
-    if (["profile", "company", "description", "website"].includes(safeStep)) {
-      return buildStepIntentPatch("profile");
-    }
     return buildStepIntentPatch(safeStep || "profile");
   }
 
@@ -332,18 +270,6 @@ export function resolveIntentOnlyPatch(step = "", answer = "", current = {}) {
         lastUpdatedSection: "pricing",
       },
     });
-  }
-
-  if (intent === "profile" || intent === "company" || intent === "description") {
-    return buildStepIntentPatch("profile");
-  }
-
-  if (intent === "website") {
-    return buildStepIntentPatch("website");
-  }
-
-  if (intent === "services" || intent === "pricing" || intent === "hours") {
-    return buildStepIntentPatch(intent);
   }
 
   return {};
@@ -477,10 +403,11 @@ function buildSourceCandidateFromAnswer(answer = "") {
 }
 
 export function patchFromAnswer(step = "", answer = "", current = {}) {
-  const rawKey = s(step).toLowerCase();
+  const key = normalizeStep(step);
   const text = s(answer);
   const currentDraft = obj(current);
-  const key = resolveSemanticAnswerStep(rawKey, text);
+
+  if (!key || !text) return {};
 
   const sourceCandidate = buildSourceCandidateFromAnswer(text);
   const sourceMetadataPatch = sourceCandidate
@@ -490,8 +417,6 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
         currentDraft.sourceMetadata
       )
     : {};
-
-  if (!key || !text) return {};
 
   switch (key) {
     case "profile":
@@ -514,7 +439,8 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
             : {
                 websiteUrl: normalizeWebsiteUrl(text),
               },
-        sourceMetadata: sourceMetadataPatch,
+        sourceMetadata:
+          sourceCandidate?.type === "website" ? sourceMetadataPatch : {},
         assistantState: {
           lastUpdatedSection: "profile",
           activeSection: "website",
@@ -553,11 +479,13 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
         },
       });
 
-    case "contact":
     case "contacts":
       return compactDraftObject({
         contacts: buildContactsFromAnswer(text),
-        sourceMetadata: sourceMetadataPatch,
+        sourceMetadata:
+          sourceCandidate?.type && sourceCandidate?.type !== "website"
+            ? sourceMetadataPatch
+            : {},
         assistantState: {
           lastUpdatedSection: "contacts",
           activeSection: "contacts",
@@ -598,14 +526,16 @@ export function patchFromAnswer(step = "", answer = "", current = {}) {
       });
 
     default:
-      return {};
+      return compactDraftObject({
+        sourceMetadata: sourceMetadataPatch,
+      });
   }
 }
 
 function normalizeAnswerPatchBody(body = {}, current = {}) {
   const rawStep = s(body.step || body.questionKey || body.field).toLowerCase();
   const answer = s(body.answer || body.message || body.text || body.value);
-  const step = resolveSemanticAnswerStep(rawStep, answer);
+  const step = normalizeStep(rawStep);
 
   if (isMessageSkip(body)) {
     if (!step) return {};
@@ -716,19 +646,23 @@ export function mergeSetupAssistantDraft(current = {}, patch = {}, seed = {}) {
       ...existingProgress,
       ...patchProgress,
       skippedQuestions: normalizedSkipped,
-      currentQuestionKey: nextQuestionKey,
+      currentQuestionKey: normalizeStep(nextQuestionKey),
       updatedAt: nowIso(),
     }),
     assistantState: sanitizeAssistantState({
       ...obj(existing.assistantState),
       ...obj(patch.assistantState),
       activeSection:
-        s(obj(patch.assistantState).activeSection) ||
-        s(obj(existing.assistantState).activeSection) ||
-        nextQuestionKey,
+        normalizeStep(
+          s(obj(patch.assistantState).activeSection) ||
+            s(obj(existing.assistantState).activeSection) ||
+            nextQuestionKey
+        ) || "",
       lastUpdatedSection:
-        s(obj(patch.assistantState).lastUpdatedSection) ||
-        s(obj(existing.assistantState).lastUpdatedSection),
+        normalizeStep(
+          s(obj(patch.assistantState).lastUpdatedSection) ||
+            s(obj(existing.assistantState).lastUpdatedSection)
+        ) || "",
     }),
   };
 
@@ -736,7 +670,7 @@ export function mergeSetupAssistantDraft(current = {}, patch = {}, seed = {}) {
 }
 
 export function extractIncomingStep(body = {}) {
-  return s(body.step || body.questionKey || body.field).toLowerCase();
+  return normalizeStep(s(body.step || body.questionKey || body.field));
 }
 
 export function extractIncomingMessage(body = {}) {
@@ -828,12 +762,14 @@ export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {
   const pricingText = s(acceptedPatch.pricingPosture);
   const handoffText = s(acceptedPatch.humanHandoff);
 
-  const nextStep = s(
-    obj(safeTurn.nextQuestion).step ||
-      obj(safeTurn.nextQuestion).key ||
-      obj(currentDraft.progress).currentQuestionKey ||
-      "profile"
-  ).toLowerCase();
+  const nextStep = normalizeStep(
+    s(
+      obj(safeTurn.nextQuestion).step ||
+        obj(safeTurn.nextQuestion).key ||
+        obj(currentDraft.progress).currentQuestionKey ||
+        "profile"
+    )
+  );
 
   return compactDraftObject({
     businessProfile: sanitizeBusinessProfile({
@@ -896,7 +832,9 @@ export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {
       lastUpdatedSection: nextStep,
     },
     progress: {
-      lastAnsweredStep: s(obj(safeTurn.latestUserInput).step).toLowerCase(),
+      lastAnsweredStep: normalizeStep(
+        s(obj(safeTurn.latestUserInput).step).toLowerCase()
+      ),
       currentQuestionKey: nextStep,
       updatedAt: nowIso(),
     },
@@ -904,69 +842,5 @@ export function buildSetupAssistantPatchFromAcceptedPatch(turn = {}, current = {
 }
 
 export function buildSetupAssistantPatchFromOrchestrator(turn = {}, current = {}) {
-  const safeTurn = obj(turn);
-  const acceptedPatchMerge = buildSetupAssistantPatchFromAcceptedPatch(
-    safeTurn,
-    current
-  );
-  const safeDraft = obj(safeTurn.draft);
-  const currentDraft = normalizeStoredSetupAssistantPayload(current, current);
-  const rejectedFields = buildRejectedFieldSet(safeTurn);
-
-  const rejectProfile = hasRejectedField(rejectedFields, [
-    "profile",
-    "company",
-    "description",
-    "website",
-  ]);
-  const rejectAiBehavior = hasRejectedField(rejectedFields, [
-    "profile",
-    "audience",
-  ]);
-
-  const fallbackPreviewPatch = compactDraftObject({
-    businessProfile: rejectProfile
-      ? {}
-      : sanitizeBusinessProfile({
-          companyName:
-            !s(obj(acceptedPatchMerge.businessProfile).companyName) &&
-            !s(obj(currentDraft.businessProfile).companyName)
-              ? s(safeDraft.businessName)
-              : "",
-          description:
-            !s(obj(acceptedPatchMerge.businessProfile).description) &&
-            !s(obj(currentDraft.businessProfile).description)
-              ? s(safeDraft.whatThisBusinessIs)
-              : "",
-          websiteUrl:
-            !s(obj(acceptedPatchMerge.businessProfile).websiteUrl) &&
-            !s(obj(currentDraft.businessProfile).websiteUrl)
-              ? normalizeWebsiteUrl(s(safeDraft.websiteUrl))
-              : "",
-        }),
-    languages:
-      rejectAiBehavior ||
-      arr(acceptedPatchMerge.languages).length ||
-      arr(currentDraft.languages).length
-        ? []
-        : arr(safeDraft.languages),
-    tone:
-      rejectAiBehavior || s(acceptedPatchMerge.tone) || s(currentDraft.tone)
-        ? ""
-        : s(safeDraft.tone),
-    greetingStyle:
-      rejectAiBehavior ||
-      s(acceptedPatchMerge.greetingStyle) ||
-      s(currentDraft.greetingStyle)
-        ? ""
-        : s(safeDraft.greetingStyle),
-    afterHoursBehavior:
-      rejectAiBehavior ||
-      s(acceptedPatchMerge.afterHoursBehavior) ||
-      s(currentDraft.afterHoursBehavior)
-        ? ""
-        : s(safeDraft.afterHoursBehavior),
-  });
-
-  return mergeDraftState(acceptedPatchMerge, fallbackPreviewPatch);
+  return buildSetupAssistantPatchFromAcceptedPatch(turn, current);
 }

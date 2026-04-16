@@ -31,44 +31,13 @@ import {
 import {
   buildSetupAssistantResponseBody,
   buildSetupAssistantSessionPayload,
+  buildStoredSetupAssistantBrainPayload,
+  normalizeStoredSetupAssistantBrainPayload,
   normalizeStoredSetupAssistantPayload,
+  readStoredSetupAssistantBrainPayload,
   readStoredSetupAssistantDraftPayload,
   stripLegacySetupAssistantPayloadKeys,
 } from "./sessionPayload.js";
-import { getNextQuestion } from "./questions.js";
-import { buildSummary, buildReviewState } from "./summary.js";
-
-function summaryContextFromReview(review = {}) {
-  return {
-    review,
-    session: obj(review.session),
-    sources: arr(review.sources),
-  };
-}
-
-function stripAssistantNavigationPatch(patch = {}) {
-  const safePatch = obj(patch);
-  const { assistantState, progress, ...rest } = safePatch;
-  return rest;
-}
-
-function buildSupplementalMessagePatch(
-  currentSetupAssistant = {},
-  latestMessage = "",
-  latestStep = ""
-) {
-  if (!s(latestMessage)) return {};
-
-  return stripAssistantNavigationPatch(
-    normalizeSetupAssistantDraftPatchBody(
-      {
-        step: latestStep,
-        answer: latestMessage,
-      },
-      currentSetupAssistant
-    )
-  );
-}
 
 function resolveStartedBy(actor = {}) {
   return (
@@ -149,125 +118,34 @@ function buildReviewForBrain(review = {}) {
   };
 }
 
-function buildMinimalClientTurn(turn = {}, mergedSetupAssistant = {}, review = {}) {
-  const safeTurn = obj(turn);
-  const summary = buildSummary(
-    mergedSetupAssistant,
-    summaryContextFromReview(review)
-  );
-  const reviewState = buildReviewState(
-    mergedSetupAssistant,
-    summary,
-    summaryContextFromReview(review)
-  );
-  const nextQuestion = getNextQuestion(
-    summary,
-    mergedSetupAssistant,
-    obj(mergedSetupAssistant.progress)
-  );
+function hasMeaningfulBrainSnapshot(value = {}) {
+  const brain = normalizeStoredSetupAssistantBrainPayload(value);
 
-  const readyForApproval =
-    safeTurn.readyForApproval === true || reviewState.finalizeAvailable === true;
-
-  const phase = s(
-    safeTurn.phase,
-    readyForApproval
-      ? "ready"
-      : summary.hasAnyDraft
-        ? "interview"
-        : "source_capture"
+  return Boolean(
+    s(brain.assistantMessage || brain.message) ||
+      s(obj(brain.nextQuestion).prompt) ||
+      arr(obj(brain.interviewPlan).activeQuestions).length ||
+      brain.readyForApproval === true
   );
-
-  const assistantMessage = s(
-    safeTurn.assistantMessage,
-    readyForApproval
-      ? "The setup draft is complete enough to move into review and approval."
-      : s(obj(nextQuestion).prompt) ||
-          "Continue with the next most important business detail."
-  );
-
-  return {
-    ok: true,
-    provider: s(safeTurn.provider),
-    model: s(safeTurn.model),
-    usedFallback: safeTurn.usedFallback === true,
-    error: s(safeTurn.error),
-    latestUserInput: obj(safeTurn.latestUserInput),
-    phase,
-    assistantMessage,
-    nextQuestion:
-      obj(safeTurn.nextQuestion).key || obj(safeTurn.nextQuestion).prompt
-        ? obj(safeTurn.nextQuestion)
-        : nextQuestion
-          ? {
-              ...obj(nextQuestion),
-              key: s(nextQuestion.key),
-              step: s(nextQuestion.step || nextQuestion.key),
-              title: s(nextQuestion.title),
-              prompt: s(nextQuestion.prompt),
-              group: s(nextQuestion.group || "business_truth"),
-              groupLabel: s(
-                nextQuestion.groupLabel || "Business truth"
-              ),
-            }
-          : null,
-    draft: obj(safeTurn.draft),
-    acceptedPatch: obj(safeTurn.acceptedPatch),
-    rejectedInputs: arr(safeTurn.rejectedInputs),
-    confidence: obj(safeTurn.confidence),
-    recommendation: obj(safeTurn.recommendation),
-    sourceSignals: obj(safeTurn.sourceSignals),
-    interviewPlan: obj(safeTurn.interviewPlan),
-    aiBehavior: obj(safeTurn.aiBehavior),
-    readyForApproval,
-  };
 }
 
-export async function readSetupAssistantView({ db, actor }, deps = {}) {
-  const loadSession =
-    deps.loadCurrentSetupAssistantSession || loadCurrentSetupAssistantSession;
-  const getCurrentReviewHelper =
-    deps.getCurrentSetupReview || getCurrentSetupReview;
-  const runSetupBrain =
-    deps.runSetupAssistantOpenAIOrchestrator ||
-    runSetupAssistantOpenAIOrchestrator;
+function buildSupplementalMessagePatch(
+  currentSetupAssistant = {},
+  latestMessage = "",
+  latestStep = ""
+) {
+  if (!s(latestMessage)) return {};
 
-  const sessionResult = await loadSession({ db, actor }, deps);
-
-  if (
-    !sessionResult ||
-    Number(sessionResult.status || 500) !== 200 ||
-    sessionResult.body?.ok === false
-  ) {
-    return sessionResult;
-  }
-
-  const review = await getCurrentReviewHelper(actor.tenantId);
-  const reviewForBrain = buildReviewForBrain(review);
-  const baseBody = obj(sessionResult.body);
-  const session = obj(baseBody.session);
-  const setup = obj(baseBody.setup);
-  const draft = obj(setup.draft);
-  const sources = arr(reviewForBrain?.sources);
-
-  const rawTurn = await runSetupBrain({
-    session,
-    draft,
-    sources,
-    review: reviewForBrain,
-    latestStep: s(session.currentStep),
-    latestMessage: "",
-  });
-
-  const clientTurn = buildMinimalClientTurn(rawTurn, draft, reviewForBrain);
-
-  return {
-    status: 200,
-    body: buildSetupAssistantResponseBody(baseBody, clientTurn),
-  };
+  return normalizeSetupAssistantDraftPatchBody(
+    {
+      step: latestStep,
+      answer: latestMessage,
+    },
+    currentSetupAssistant
+  );
 }
 
-export async function maybeUpdateReviewSessionStep({
+async function maybeUpdateReviewSessionStep({
   reviewSessionId,
   nextQuestion,
   deps = {},
@@ -297,14 +175,170 @@ export async function maybeUpdateReviewSessionStep({
   }
 }
 
+async function persistSetupAssistantState({
+  review = {},
+  actor,
+  mergedSetupAssistant = {},
+  brainSnapshot = {},
+  nextTimeline = [],
+  deps = {},
+}) {
+  const patchReviewDraft =
+    deps.patchSetupReviewDraft ||
+    deps.patchReview ||
+    patchSetupReviewDraft;
+
+  const nextDraftPayload = mergeDraftState(
+    stripLegacySetupAssistantPayloadKeys(obj(review?.draft?.draftPayload)),
+    {
+      setupAssistant: {
+        ...mergedSetupAssistant,
+        updatedAt: nowIso(),
+        namespace: SETUP_ASSISTANT_NAMESPACE,
+        sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
+      },
+      setupAssistantBrain: buildStoredSetupAssistantBrainPayload(brainSnapshot),
+      setupAssistantTimeline: arr(nextTimeline),
+    }
+  );
+
+  const canonicalReviewDraftPatch =
+    buildCanonicalReviewDraftPatchFromSetupAssistant(mergedSetupAssistant);
+
+  await patchReviewDraft({
+    sessionId: review.session.id,
+    tenantId: actor.tenantId,
+    patch: {
+      draftPayload: nextDraftPayload,
+      ...canonicalReviewDraftPatch,
+    },
+    bumpVersion: true,
+  });
+}
+
+async function ensureInitialBrainState({
+  db,
+  actor,
+  review,
+  deps = {},
+}) {
+  const runSetupBrain =
+    deps.runSetupAssistantOpenAIOrchestrator ||
+    runSetupAssistantOpenAIOrchestrator;
+  const getCurrentReviewHelper =
+    deps.getCurrentSetupReview || getCurrentSetupReview;
+
+  const existingDraftPayload = obj(review?.draft?.draftPayload);
+  const storedBrain = readStoredSetupAssistantBrainPayload(existingDraftPayload);
+
+  if (hasMeaningfulBrainSnapshot(storedBrain)) {
+    return {
+      review,
+      brainSnapshot: buildStoredSetupAssistantBrainPayload(storedBrain),
+    };
+  }
+
+  const reviewForBrain = buildReviewForBrain(review);
+  const seed = buildSetupAssistantSeedFromReview(reviewForBrain);
+  const currentSetupAssistant = normalizeStoredSetupAssistantPayload(
+    readStoredSetupAssistantDraftPayload(existingDraftPayload),
+    seed
+  );
+
+  const rawTurn = await runSetupBrain({
+    session: obj(review.session),
+    draft: currentSetupAssistant,
+    sources: arr(reviewForBrain.sources),
+    review: reviewForBrain,
+    latestStep: s(review.session?.currentStep || SETUP_ASSISTANT_CURRENT_STEP),
+    latestMessage: "",
+  });
+
+  const brainSnapshot = buildStoredSetupAssistantBrainPayload(rawTurn);
+
+  const existingTimeline = readSetupAssistantTimeline(existingDraftPayload);
+  const nextTimeline =
+    existingTimeline.length === 0 && s(rawTurn.assistantMessage || rawTurn.message)
+      ? appendSetupAssistantTimeline(existingDraftPayload, [
+          {
+            role: "assistant",
+            text: s(rawTurn.assistantMessage || rawTurn.message),
+            meta: s(obj(rawTurn.sourceSignals).primarySourceUrl),
+            questionKey: s(obj(rawTurn.nextQuestion).key),
+            phase: s(rawTurn.phase),
+            provider: s(rawTurn.provider),
+            model: s(rawTurn.model),
+            usedFallback: rawTurn.usedFallback === true,
+            error: s(rawTurn.error),
+            createdAt: nowIso(),
+          },
+        ])
+      : existingTimeline;
+
+  await persistSetupAssistantState({
+    review,
+    actor,
+    mergedSetupAssistant: currentSetupAssistant,
+    brainSnapshot,
+    nextTimeline,
+    deps,
+  });
+
+  await maybeUpdateReviewSessionStep({
+    reviewSessionId: review.session.id,
+    nextQuestion: obj(rawTurn.nextQuestion),
+    deps,
+  });
+
+  const refreshed = await getCurrentReviewHelper(actor.tenantId);
+
+  return {
+    review: refreshed,
+    brainSnapshot,
+  };
+}
+
+export async function readSetupAssistantView({ db, actor }, deps = {}) {
+  const loadSession =
+    deps.loadCurrentSetupAssistantSession || loadCurrentSetupAssistantSession;
+  const getCurrentReviewHelper =
+    deps.getCurrentSetupReview || getCurrentSetupReview;
+
+  const sessionResult = await loadSession({ db, actor }, deps);
+
+  if (
+    !sessionResult ||
+    Number(sessionResult.status || 500) !== 200 ||
+    sessionResult.body?.ok === false
+  ) {
+    return sessionResult;
+  }
+
+  try {
+    const currentReview = await getCurrentReviewHelper(actor.tenantId);
+    await ensureInitialBrainState({
+      db,
+      actor,
+      review: currentReview,
+      deps,
+    });
+  } catch {
+    return sessionResult;
+  }
+
+  const refreshed = await loadSession({ db, actor }, deps);
+  return refreshed;
+}
+
 export async function startSetupAssistantSession({ db, actor }, deps = {}) {
-  const getCurrentReview = deps.getCurrentSetupReview || getCurrentSetupReview;
+  const getCurrentReviewHelper =
+    deps.getCurrentSetupReview || getCurrentSetupReview;
   const getOrCreateSession =
     deps.getOrCreateActiveSetupReviewSession ||
     getOrCreateActiveSetupReviewSession;
   const audit = deps.auditSetupAction || auditSetupAction;
 
-  let review = await getCurrentReview(actor.tenantId);
+  let review = await getCurrentReviewHelper(actor.tenantId);
   let created = false;
 
   if (!review?.session?.id) {
@@ -318,6 +352,7 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
       metadata: {
         setupAssistantShell: true,
         setupAssistantNamespace: "draftPayload.setupAssistant",
+        setupAssistantBrainNamespace: "draftPayload.setupAssistantBrain",
         setupAssistantTimelineNamespace: "draftPayload.setupAssistantTimeline",
         setupAssistantDraftOnly: true,
         runtimeActivationDeferred: true,
@@ -327,11 +362,20 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
       },
       ensureDraft: true,
     });
-    review = await getCurrentReview(actor.tenantId);
+
+    review = await getCurrentReviewHelper(actor.tenantId);
     created = true;
   }
 
-  const payload = buildSetupAssistantSessionPayload(review);
+  const bootstrapped = await ensureInitialBrainState({
+    db,
+    actor,
+    review,
+    deps,
+  });
+
+  const refreshedReview = bootstrapped.review || review;
+  const payload = buildSetupAssistantSessionPayload(refreshedReview);
 
   await audit(
     db,
@@ -340,15 +384,16 @@ export async function startSetupAssistantSession({ db, actor }, deps = {}) {
       ? "setup_assistant.session.started"
       : "setup_assistant.session.reused",
     "tenant_setup_review_session",
-    s(review?.session?.id),
+    s(refreshedReview?.session?.id),
     {
-      reviewSessionId: s(review?.session?.id),
+      reviewSessionId: s(refreshedReview?.session?.id),
       currentStep: s(
         payload?.session?.currentStep || SETUP_ASSISTANT_CURRENT_STEP
       ),
       source: "home_widget",
       sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
       namespace: SETUP_ASSISTANT_NAMESPACE,
+      brainNamespace: "setupAssistantBrain",
       timelineNamespace: "setupAssistantTimeline",
       draftOnly: true,
     }
@@ -371,8 +416,9 @@ export async function loadCurrentSetupAssistantSession(
   { db, actor },
   deps = {}
 ) {
-  const getCurrentReview = deps.getCurrentSetupReview || getCurrentSetupReview;
-  const review = await getCurrentReview(actor.tenantId);
+  const getCurrentReviewHelper =
+    deps.getCurrentSetupReview || getCurrentSetupReview;
+  const review = await getCurrentReviewHelper(actor.tenantId);
 
   if (!review?.session?.id) {
     return {
@@ -400,17 +446,14 @@ export async function updateSetupAssistantDraft(
   { db, actor, body = {} },
   deps = {}
 ) {
-  const getCurrentReview = deps.getCurrentSetupReview || getCurrentSetupReview;
-  const patchReviewDraft =
-    deps.patchSetupReviewDraft ||
-    deps.patchReview ||
-    patchSetupReviewDraft;
+  const getCurrentReviewHelper =
+    deps.getCurrentSetupReview || getCurrentSetupReview;
   const audit = deps.auditSetupAction || auditSetupAction;
   const runSetupBrain =
     deps.runSetupAssistantOpenAIOrchestrator ||
     runSetupAssistantOpenAIOrchestrator;
 
-  const review = await getCurrentReview(actor.tenantId);
+  const review = await getCurrentReviewHelper(actor.tenantId);
 
   if (!review?.session?.id) {
     return {
@@ -426,6 +469,7 @@ export async function updateSetupAssistantDraft(
   const reviewForBrain = buildReviewForBrain(review);
   const existingDraftPayload = obj(review?.draft?.draftPayload);
   const seed = buildSetupAssistantSeedFromReview(reviewForBrain);
+
   const currentSetupAssistant = normalizeStoredSetupAssistantPayload(
     readStoredSetupAssistantDraftPayload(existingDraftPayload),
     seed
@@ -447,11 +491,10 @@ export async function updateSetupAssistantDraft(
     body.mode === "message" || isMessageModeBody(body) || Boolean(latestMessage);
 
   let mergedSetupAssistant = currentSetupAssistant;
-  let nextQuestion = null;
   let rawTurn = null;
-  let clientTurn = null;
-  let orchestratorPatch = {};
-  let supplementalPatch = {};
+  let responseTurn = null;
+  let updatedFields = [];
+  let nextTimeline = readSetupAssistantTimeline(existingDraftPayload);
 
   if (messageMode) {
     rawTurn = await runSetupBrain({
@@ -463,12 +506,12 @@ export async function updateSetupAssistantDraft(
       latestMessage: latestMessage || (isMessageSkip(body) ? "continue" : ""),
     });
 
-    orchestratorPatch = buildSetupAssistantPatchFromOrchestrator(
+    const orchestratorPatch = buildSetupAssistantPatchFromOrchestrator(
       rawTurn,
       currentSetupAssistant
     );
 
-    supplementalPatch = buildSupplementalMessagePatch(
+    const supplementalPatch = buildSupplementalMessagePatch(
       currentSetupAssistant,
       latestMessage,
       latestStep
@@ -486,49 +529,43 @@ export async function updateSetupAssistantDraft(
       seed
     );
 
-    const postMergeSummary = buildSummary(
-      mergedSetupAssistant,
-      summaryContextFromReview(reviewForBrain)
-    );
+    responseTurn = buildStoredSetupAssistantBrainPayload(rawTurn);
 
-    nextQuestion = getNextQuestion(
-      postMergeSummary,
-      mergedSetupAssistant,
-      obj(mergedSetupAssistant.progress)
-    );
+    nextTimeline = appendSetupAssistantTimeline(existingDraftPayload, [
+      {
+        role: "user",
+        text: latestMessage || (isMessageSkip(body) ? "continue" : ""),
+        questionKey: latestStep,
+        phase: s(rawTurn.phase || "interview"),
+        createdAt: nowIso(),
+      },
+      {
+        role: "assistant",
+        text: s(rawTurn.assistantMessage || rawTurn.message),
+        meta: s(obj(rawTurn.sourceSignals).primarySourceUrl),
+        questionKey: s(obj(rawTurn.nextQuestion).key),
+        phase: s(rawTurn.phase),
+        provider: s(rawTurn.provider),
+        model: s(rawTurn.model),
+        usedFallback: rawTurn.usedFallback === true,
+        error: s(rawTurn.error),
+        createdAt: nowIso(),
+      },
+    ]);
 
-    if (nextQuestion) {
-      mergedSetupAssistant = mergeSetupAssistantDraft(
-        mergedSetupAssistant,
-        {
-          assistantState: {
-            activeSection: s(nextQuestion.key),
-            lastUpdatedSection:
-              s(obj(orchestratorPatch.assistantState).lastUpdatedSection) ||
-              s(obj(mergedSetupAssistant.assistantState).lastUpdatedSection),
-          },
-          progress: {
-            lastAnsweredStep: latestStep,
-            currentQuestionKey: s(nextQuestion.key),
-            updatedAt: nowIso(),
-          },
-        },
-        seed
-      );
-    }
-
-    clientTurn = buildMinimalClientTurn(
-      rawTurn,
-      mergedSetupAssistant,
-      reviewForBrain
-    );
+    updatedFields = [
+      ...Object.keys(obj(orchestratorPatch)),
+      ...Object.keys(obj(supplementalPatch)),
+      "setupAssistantBrain",
+      "setupAssistantTimeline",
+    ];
   } else {
-    const patch = normalizeSetupAssistantDraftPatchBody(
+    const directPatch = normalizeSetupAssistantDraftPatchBody(
       body,
       currentSetupAssistant
     );
 
-    if (!Object.keys(patch).length) {
+    if (!Object.keys(directPatch).length) {
       return {
         status: 400,
         body: {
@@ -541,109 +578,56 @@ export async function updateSetupAssistantDraft(
 
     mergedSetupAssistant = mergeSetupAssistantDraft(
       currentSetupAssistant,
-      patch,
+      directPatch,
       seed
     );
 
-    const nextSummary = buildSummary(
-      mergedSetupAssistant,
-      summaryContextFromReview(reviewForBrain)
+    rawTurn = await runSetupBrain({
+      session: obj(review.session),
+      draft: mergedSetupAssistant,
+      sources: arr(reviewForBrain.sources),
+      review: reviewForBrain,
+      latestStep,
+      latestMessage: "",
+    });
+
+    const brainDerivedPatch = buildSetupAssistantPatchFromOrchestrator(
+      rawTurn,
+      mergedSetupAssistant
     );
 
-    nextQuestion = getNextQuestion(
-      nextSummary,
+    mergedSetupAssistant = mergeSetupAssistantDraft(
       mergedSetupAssistant,
-      obj(mergedSetupAssistant.progress)
+      brainDerivedPatch,
+      seed
     );
 
-    clientTurn = buildMinimalClientTurn(
-      {
-        phase: nextSummary.readyForReview === true ? "ready" : "interview",
-        nextQuestion,
-        readyForApproval: nextSummary.readyForReview === true,
-      },
-      mergedSetupAssistant,
-      reviewForBrain
-    );
+    responseTurn = buildStoredSetupAssistantBrainPayload(rawTurn);
+
+    updatedFields = [
+      ...Object.keys(obj(directPatch)),
+      ...Object.keys(obj(brainDerivedPatch)),
+      "setupAssistantBrain",
+    ];
   }
 
-  const nextTimeline = messageMode
-    ? appendSetupAssistantTimeline(existingDraftPayload, [
-        {
-          role: "user",
-          text: latestMessage || (isMessageSkip(body) ? "continue" : ""),
-          questionKey: latestStep,
-          phase: s(clientTurn?.phase || "interview"),
-          createdAt: nowIso(),
-        },
-        {
-          role: "assistant",
-          text: s(clientTurn?.assistantMessage),
-          meta: s(obj(clientTurn?.sourceSignals).primarySourceUrl),
-          questionKey: s(obj(clientTurn?.nextQuestion).key),
-          phase: s(clientTurn?.phase),
-          provider: s(clientTurn?.provider),
-          model: s(clientTurn?.model),
-          usedFallback: clientTurn?.usedFallback === true,
-          error: s(clientTurn?.error),
-          createdAt: nowIso(),
-        },
-      ])
-    : readSetupAssistantTimeline(existingDraftPayload);
-
-  const nextDraftPayload = mergeDraftState(
-    stripLegacySetupAssistantPayloadKeys(existingDraftPayload),
-    {
-      setupAssistant: {
-        ...mergedSetupAssistant,
-        updatedAt: nowIso(),
-        namespace: SETUP_ASSISTANT_NAMESPACE,
-        sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
-      },
-      setupAssistantTimeline: nextTimeline,
-    }
-  );
-
-  const canonicalReviewDraftPatch =
-    buildCanonicalReviewDraftPatchFromSetupAssistant(mergedSetupAssistant);
-
-  await patchReviewDraft({
-    sessionId: review.session.id,
-    tenantId: actor.tenantId,
-    patch: {
-      draftPayload: nextDraftPayload,
-      ...canonicalReviewDraftPatch,
-    },
-    bumpVersion: true,
-  });
-
-  const effectiveNextQuestion =
-    obj(clientTurn?.nextQuestion).key || obj(clientTurn?.nextQuestion).prompt
-      ? obj(clientTurn?.nextQuestion)
-      : obj(nextQuestion);
-
-  await maybeUpdateReviewSessionStep({
-    reviewSessionId: review.session.id,
-    nextQuestion: effectiveNextQuestion,
+  await persistSetupAssistantState({
+    review,
+    actor,
+    mergedSetupAssistant,
+    brainSnapshot: responseTurn,
+    nextTimeline,
     deps,
   });
 
-  const refreshed = await getCurrentReview(actor.tenantId);
-  const refreshedForBrain = buildReviewForBrain(refreshed);
+  await maybeUpdateReviewSessionStep({
+    reviewSessionId: review.session.id,
+    nextQuestion: obj(responseTurn.nextQuestion),
+    deps,
+  });
+
+  const refreshed = await getCurrentReviewHelper(actor.tenantId);
   const baseResponsePayload = buildSetupAssistantSessionPayload(refreshed);
-
-  const responseTurn = buildMinimalClientTurn(
-    clientTurn,
-    normalizeStoredSetupAssistantPayload(
-      readStoredSetupAssistantDraftPayload(obj(refreshed?.draft?.draftPayload)),
-      buildSetupAssistantSeedFromReview(refreshedForBrain)
-    ),
-    refreshedForBrain
-  );
-
-  const updatedFields = messageMode
-    ? [...Object.keys(obj(orchestratorPatch)), ...Object.keys(obj(supplementalPatch))]
-    : Object.keys(normalizeSetupAssistantDraftPatchBody(body, currentSetupAssistant));
 
   await audit(
     db,
@@ -658,12 +642,13 @@ export async function updateSetupAssistantDraft(
       source: "home_widget",
       sourceType: SETUP_ASSISTANT_SOURCE_TYPE,
       namespace: SETUP_ASSISTANT_NAMESPACE,
+      brainNamespace: "setupAssistantBrain",
       timelineNamespace: "setupAssistantTimeline",
       timelineLength: nextTimeline.length,
       draftOnly: true,
       messageMode,
       skipped: isMessageSkip(body),
-      nextQuestion: s(effectiveNextQuestion?.key),
+      nextQuestion: s(obj(responseTurn).nextQuestion?.key),
       canonicalBridge: true,
       brainProvider: s(responseTurn?.provider),
       brainModel: s(responseTurn?.model),

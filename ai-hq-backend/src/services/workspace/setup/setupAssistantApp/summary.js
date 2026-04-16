@@ -1,11 +1,18 @@
 import { arr, obj, s } from "../draftShared.js";
-import { REVIEW_MESSAGE } from "./shared.js";
-import { SECTION_META, SECTION_ORDER } from "./questions.js";
 import {
   buildSetupDraftStateFromSignals,
   buildSetupSourceCoverage,
   buildSetupSourceSignals,
 } from "./sourceSignals.js";
+
+export const SETUP_SUMMARY_SECTION_ORDER = [
+  "profile",
+  "services",
+  "hours",
+  "pricing",
+  "contacts",
+  "handoff",
+];
 
 function normalizeSummaryContext(context = {}) {
   return {
@@ -39,9 +46,9 @@ function buildCoverageContext(draft = {}, context = {}) {
   };
 }
 
-function buildProfileStatus(draft = {}, context = {}) {
+function buildProfileStatus(draft = {}, coverageContext = {}) {
   const businessProfile = obj(draft.businessProfile);
-  const { sourceCoverage, draftState, sourceSignals } = context;
+  const { sourceCoverage, draftState, sourceSignals } = coverageContext;
 
   const hasName = Boolean(
     s(businessProfile.companyName) || s(draftState.businessName)
@@ -66,23 +73,25 @@ function buildProfileStatus(draft = {}, context = {}) {
   return {
     completed,
     partial,
-    hasName,
-    hasDescription,
-    hasWebsite,
-    sourceCovered: sourceCoverage.identity === true,
+    status: completed ? "ready" : partial ? "needs_review" : "missing",
     reviewReady: completed || sourceCoverage.identity === true,
-    metric: [
-      hasName ? "name" : "",
-      hasWebsite ? "source/website" : "",
-      hasDescription ? "summary" : "",
-    ]
-      .filter(Boolean)
-      .join(" / "),
+    sourceCovered: sourceCoverage.identity === true,
+    missingFields: [
+      hasName ? "" : "business_name",
+      hasDescription ? "" : "business_description",
+      hasWebsite ? "" : "website_or_primary_source",
+    ].filter(Boolean),
+    metric: {
+      hasName,
+      hasDescription,
+      hasWebsite,
+    },
   };
 }
 
-function buildServicesStatus(draft = {}, context = {}) {
-  const { sourceCoverage, draftState, sourceSignals } = context;
+function buildServicesStatus(draft = {}, coverageContext = {}) {
+  const { sourceCoverage, draftState, sourceSignals } = coverageContext;
+
   const explicitCount = arr(draft.services).length;
   const derivedCount = arr(draftState.services).length;
   const sourceCount = arr(sourceSignals.serviceCandidates).length;
@@ -93,18 +102,21 @@ function buildServicesStatus(draft = {}, context = {}) {
   return {
     completed,
     partial,
-    sourceCovered: sourceCoverage.services === true,
+    status: completed ? "ready" : partial ? "needs_review" : "missing",
     reviewReady: completed || sourceCoverage.services === true,
-    metric: completed
-      ? `${Math.max(explicitCount, derivedCount)} drafted`
-      : sourceCoverage.services === true
-        ? `${sourceCount} source signals`
-        : "not drafted",
+    sourceCovered: sourceCoverage.services === true,
+    missingFields: completed ? [] : ["services"],
+    metric: {
+      explicitCount,
+      derivedCount,
+      sourceCount,
+    },
   };
 }
 
-function buildHoursStatus(draft = {}, context = {}) {
-  const { sourceCoverage, draftState, sourceSignals } = context;
+function buildHoursStatus(draft = {}, coverageContext = {}) {
+  const { sourceCoverage, draftState, sourceSignals } = coverageContext;
+
   const explicitConfigured = arr(draft.hours).filter(
     (item) =>
       item?.enabled === true ||
@@ -121,19 +133,21 @@ function buildHoursStatus(draft = {}, context = {}) {
   return {
     completed,
     partial,
-    sourceCovered: sourceCoverage.hours === true,
+    status: completed ? "ready" : partial ? "needs_review" : "missing",
     reviewReady: completed || sourceCoverage.hours === true,
-    metric: completed
-      ? `${Math.max(explicitConfigured, derivedConfigured)} days scheduled`
-      : sourceCoverage.hours === true
-        ? `${sourceCount} source signals`
-        : "not scheduled",
+    sourceCovered: sourceCoverage.hours === true,
+    missingFields: completed ? [] : ["hours"],
+    metric: {
+      explicitConfigured,
+      derivedConfigured,
+      sourceCount,
+    },
   };
 }
 
-function buildPricingStatus(draft = {}, context = {}) {
+function buildPricingStatus(draft = {}, coverageContext = {}) {
   const pricing = obj(draft.pricingPosture);
-  const { sourceCoverage, draftState, sourceSignals } = context;
+  const { sourceCoverage, draftState, sourceSignals } = coverageContext;
 
   const completed = Boolean(
     s(pricing.pricingMode) ||
@@ -146,22 +160,21 @@ function buildPricingStatus(draft = {}, context = {}) {
   return {
     completed,
     partial,
-    sourceCovered: sourceCoverage.pricing === true,
+    status: completed ? "ready" : partial ? "needs_review" : "missing",
     reviewReady: completed || sourceCoverage.pricing === true,
-    metric: completed
-      ? s(
-          pricing.pricingMode ||
-            pricing.publicSummary ||
-            draftState.pricingPosture
-        )
-      : sourceCoverage.pricing === true
-        ? `${arr(sourceSignals.pricingCandidates).length} source signals`
-        : "not set",
+    sourceCovered: sourceCoverage.pricing === true,
+    missingFields: completed ? [] : ["pricing_posture"],
+    metric: {
+      hasPricingMode: Boolean(s(pricing.pricingMode)),
+      hasPublicSummary: Boolean(s(pricing.publicSummary)),
+      sourceCount: arr(sourceSignals.pricingCandidates).length,
+    },
   };
 }
 
-function buildContactsStatus(draft = {}, context = {}) {
-  const { sourceCoverage, draftState, sourceSignals } = context;
+function buildContactsStatus(draft = {}, coverageContext = {}) {
+  const { sourceCoverage, draftState, sourceSignals } = coverageContext;
+
   const explicitCount = arr(draft.contacts).length;
   const derivedCount = arr(draftState.contacts).length;
   const sourceCount = arr(sourceSignals.contactCandidates).length;
@@ -172,19 +185,21 @@ function buildContactsStatus(draft = {}, context = {}) {
   return {
     completed,
     partial,
-    sourceCovered: sourceCoverage.contacts === true,
+    status: completed ? "ready" : partial ? "needs_review" : "missing",
     reviewReady: completed || sourceCoverage.contacts === true,
-    metric: completed
-      ? `${Math.max(explicitCount, derivedCount)} contact routes`
-      : sourceCoverage.contacts === true
-        ? `${sourceCount} source signals`
-        : "no routing lane",
+    sourceCovered: sourceCoverage.contacts === true,
+    missingFields: completed ? [] : ["contact_route"],
+    metric: {
+      explicitCount,
+      derivedCount,
+      sourceCount,
+    },
   };
 }
 
-function buildHandoffStatus(draft = {}, context = {}) {
+function buildHandoffStatus(draft = {}, coverageContext = {}) {
   const handoff = obj(draft.handoffRules);
-  const { draftState } = context;
+  const { draftState } = coverageContext;
 
   const completed = Boolean(
     handoff.enabled === true ||
@@ -193,25 +208,26 @@ function buildHandoffStatus(draft = {}, context = {}) {
       s(draftState.humanHandoff)
   );
 
-  const partial = completed;
-
   return {
     completed,
-    partial,
-    sourceCovered: false,
+    partial: completed,
+    status: completed ? "ready" : "missing",
     reviewReady: completed,
-    metric: arr(handoff.triggers).length
-      ? `${arr(handoff.triggers).length} triggers`
-      : s(handoff.summary || draftState.humanHandoff)
-        ? "configured"
-        : "recommended",
+    sourceCovered: false,
+    missingFields: completed ? [] : ["handoff_rules"],
+    metric: {
+      enabled: handoff.enabled === true,
+      hasSummary: Boolean(s(handoff.summary)),
+      triggerCount: arr(handoff.triggers).length,
+      hasDerivedRule: Boolean(s(draftState.humanHandoff)),
+    },
   };
 }
 
 export function buildSectionStatus(draft = {}, context = {}) {
   const coverageContext = buildCoverageContext(draft, context);
 
-  const sections = {
+  return {
     profile: buildProfileStatus(draft, coverageContext),
     services: buildServicesStatus(draft, coverageContext),
     hours: buildHoursStatus(draft, coverageContext),
@@ -219,20 +235,19 @@ export function buildSectionStatus(draft = {}, context = {}) {
     contacts: buildContactsStatus(draft, coverageContext),
     handoff: buildHandoffStatus(draft, coverageContext),
   };
+}
 
-  return Object.fromEntries(
-    Object.entries(sections).map(([key, value]) => [
-      key,
-      {
-        ...value,
-        status: value.completed
-          ? "ready"
-          : value.partial
-            ? "needs_review"
-            : "missing",
-      },
-    ])
-  );
+function normalizeBlockerSeverity(key = "", state = {}) {
+  const safeState = obj(state);
+
+  if (safeState.status === "missing") {
+    if (key === "profile") return "high";
+    if (key === "services") return "high";
+    if (key === "contacts") return "high";
+    return "medium";
+  }
+
+  return "medium";
 }
 
 export function buildConfirmationBlockers(
@@ -241,63 +256,55 @@ export function buildConfirmationBlockers(
   context = {}
 ) {
   const coverageContext = buildCoverageContext(draft, context);
-  const { sourceSignals, sourceCoverage } = coverageContext;
 
-  const sourceHint =
-    s(sourceSignals.primarySourceLabel) && s(sourceSignals.primarySourceUrl)
-      ? `${s(sourceSignals.primarySourceLabel)} source is already attached (${s(
-          sourceSignals.primarySourceUrl
-        )}).`
-      : s(sourceSignals.primarySourceLabel)
-        ? `${s(sourceSignals.primarySourceLabel)} source is already attached.`
-        : "";
-
-  return SECTION_ORDER.filter(
+  return SETUP_SUMMARY_SECTION_ORDER.filter(
     (key) => obj(sectionStatus[key]).reviewReady !== true
   ).map((key) => {
-    const meta = obj(SECTION_META[key]);
     const state = obj(sectionStatus[key]);
-
-    let specificSourceHint = "";
-
-    if (key === "profile") {
-      specificSourceHint = sourceHint;
-    } else if (key === "services" && sourceCoverage.services) {
-      specificSourceHint = `Service signals already exist: ${arr(
-        sourceSignals.serviceCandidates
-      )
-        .slice(0, 4)
-        .join(", ")}.`;
-    } else if (key === "contacts" && sourceCoverage.contacts) {
-      specificSourceHint = `Contact signals already exist: ${arr(
-        sourceSignals.contactCandidates
-      )
-        .slice(0, 3)
-        .join(", ")}.`;
-    } else if (key === "hours" && sourceCoverage.hours) {
-      specificSourceHint = `Hour signals already exist: ${arr(
-        sourceSignals.hoursCandidates
-      )
-        .slice(0, 2)
-        .join(", ")}.`;
-    } else if (key === "pricing" && sourceCoverage.pricing) {
-      specificSourceHint = `Pricing signals already exist: ${arr(
-        sourceSignals.pricingCandidates
-      )
-        .slice(0, 2)
-        .join(", ")}.`;
-    }
 
     return {
       key,
-      label: meta.label,
-      title: meta.title,
-      severity: state.status === "missing" ? "high" : "medium",
-      reason: state.status === "missing" ? s(meta.missing) : s(meta.review),
-      metric: s(state.metric),
-      sourceHint: specificSourceHint,
+      severity: normalizeBlockerSeverity(key, state),
+      reasonCode: `${key}_${state.status || "missing"}`,
       sourceCovered: state.sourceCovered === true,
       reviewReady: state.reviewReady === true,
+      missingFields: arr(state.missingFields),
+      metric: obj(state.metric),
+      sourceSignalsPreview:
+        key === "profile"
+          ? {
+              companyNameCandidates: arr(
+                coverageContext.sourceSignals.companyNameCandidates
+              ).slice(0, 4),
+              descriptionCandidates: arr(
+                coverageContext.sourceSignals.descriptionCandidates
+              ).slice(0, 4),
+            }
+          : key === "services"
+            ? {
+                serviceCandidates: arr(
+                  coverageContext.sourceSignals.serviceCandidates
+                ).slice(0, 6),
+              }
+            : key === "contacts"
+              ? {
+                  contactCandidates: arr(
+                    coverageContext.sourceSignals.contactCandidates
+                  ).slice(0, 4),
+                }
+              : key === "hours"
+                ? {
+                    hoursCandidates: arr(
+                      coverageContext.sourceSignals.hoursCandidates
+                    ).slice(0, 4),
+                  }
+                : key === "pricing"
+                  ? {
+                      pricingCandidates: arr(
+                        coverageContext.sourceSignals.pricingCandidates
+                      ).slice(0, 4),
+                    }
+                  : {},
     };
   });
 }
@@ -313,6 +320,7 @@ export function buildSummary(draft = {}, context = {}) {
   const reviewReadyCount = Object.values(sectionStatus).filter(
     (item) => item.reviewReady === true
   ).length;
+
   const confirmationBlockers = buildConfirmationBlockers(
     draft,
     sectionStatus,
@@ -334,7 +342,7 @@ export function buildSummary(draft = {}, context = {}) {
         sourceCoverage.primarySourceExists
     );
 
-  const readyForReview = SECTION_ORDER.every(
+  const readyForReview = SETUP_SUMMARY_SECTION_ORDER.every(
     (key) => obj(sectionStatus[key]).reviewReady === true
   );
 
@@ -344,7 +352,7 @@ export function buildSummary(draft = {}, context = {}) {
     readyForApproval: false,
     completionCount,
     reviewReadyCount,
-    totalSections: SECTION_ORDER.length,
+    totalSections: SETUP_SUMMARY_SECTION_ORDER.length,
     blockerCount: confirmationBlockers.length,
     sectionStatus,
     confirmationBlockers,
@@ -368,15 +376,14 @@ export function buildSummary(draft = {}, context = {}) {
   };
 }
 
-export function buildReviewState(draft = {}, summary = {}, _context = {}) {
+export function buildReviewState(_draft = {}, summary = {}, _context = {}) {
+  const readyForReview = summary.readyForReview === true;
+
   return {
     status: summary.hasAnyDraft ? "draft_in_progress" : "awaiting_input",
-    readyForReview: summary.readyForReview === true,
+    readyForReview,
     readyForApproval: false,
-    finalizeAvailable: summary.readyForReview === true,
-    message:
-      summary.readyForReview === true
-        ? "The setup draft is operationally complete enough to move into review and approval."
-        : REVIEW_MESSAGE,
+    finalizeAvailable: readyForReview,
+    message: "",
   };
 }
