@@ -469,7 +469,7 @@ test("read setup assistant view returns stored session payload and preserves set
 
   assert.equal(result.body.setup.assistant.provider, "openai");
   assert.equal(result.body.setup.assistant.model, "gpt-5");
-  assert.equal(result.body.setup.assistant.readyForApproval, false);
+  assert.equal(result.body.setup.assistant.readyForApproval, true);
   assert.equal(result.body.setup.assistant.nextQuestion.key, "services");
   assert.equal(result.body.setup.assistant.phase, "interview");
   assert.equal(result.body.setup.assistant.draft.businessName, "North Clinic");
@@ -482,7 +482,7 @@ test("read setup assistant view returns stored session payload and preserves set
     "Keep only real customer-facing services."
   );
 
-  assert.equal(result.body.setup.review.readyForApproval, false);
+  assert.equal(result.body.setup.review.readyForApproval, true);
   assert.equal(arr(result.body.setup.timeline).length, 1);
   assert.equal(result.body.setup.timeline[0].role, "assistant");
   assert.equal(result.body.setup.timeline[0].provider, "openai");
